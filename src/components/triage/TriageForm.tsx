@@ -33,6 +33,7 @@ interface TriageFormProps {
   isEditMode:     boolean
   templates:      DocumentTemplate[]
   initialVaccines?: PatientVaccine[]
+  triageRequiredFields?: string[]
 }
 
 const MUCOUS_COLORS: { value: MucousColor; label: string; color: string }[] = [
@@ -53,6 +54,7 @@ export default function TriageForm({
   isEditMode,
   templates,
   initialVaccines = [],
+  triageRequiredFields = ['weight', 'temperature', 'chief_complaint'],
 }: TriageFormProps) {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
@@ -292,13 +294,13 @@ export default function TriageForm({
     try {
       const errors: Record<string, string> = {}
 
-      if (!vitalSigns.weight || vitalSigns.weight <= 0) {
+      if (triageRequiredFields.includes('weight') && (!vitalSigns.weight || vitalSigns.weight <= 0)) {
         errors.weight = 'Peso obrigatório (> 0 kg)'
       }
-      if (!vitalSigns.temperature || vitalSigns.temperature <= 0) {
+      if (triageRequiredFields.includes('temperature') && (!vitalSigns.temperature || vitalSigns.temperature <= 0)) {
         errors.temperature = 'Temperatura obrigatória (> 0 °C)'
       }
-      if (!vitalSigns.chief_complaint?.trim()) {
+      if (triageRequiredFields.includes('chief_complaint') && !vitalSigns.chief_complaint?.trim()) {
         errors.chief_complaint = 'Queixa principal obrigatória'
       }
 
@@ -734,7 +736,7 @@ export default function TriageForm({
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label htmlFor="vital-weight" className="block text-sm font-medium text-slate-700 mb-2">
-                  Peso (kg) *
+                  Peso (kg){triageRequiredFields.includes('weight') ? ' *' : ''}
                   {aiFilledFields.has('weight') && (
                     <CheckCircle2 className="inline w-3.5 h-3.5 text-green-600 ml-1.5" />
                   )}
@@ -760,7 +762,7 @@ export default function TriageForm({
 
               <div>
                 <label htmlFor="vital-temperature" className="block text-sm font-medium text-slate-700 mb-2">
-                  Temperatura Retal (°C) *
+                  Temperatura Retal (°C){triageRequiredFields.includes('temperature') ? ' *' : ''}
                   {aiFilledFields.has('temperature') && (
                     <CheckCircle2 className="inline w-3.5 h-3.5 text-green-600 ml-1.5" />
                   )}
@@ -898,7 +900,7 @@ export default function TriageForm({
           {/* Chief Complaint */}
           <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
             <h3 className="text-lg font-semibold text-slate-900 mb-4">
-              Queixa Principal *
+              Queixa Principal{triageRequiredFields.includes('chief_complaint') ? ' *' : ''}
               {aiFilledFields.has('chief_complaint') && (
                 <span className="ml-2 text-xs font-normal text-green-600 inline-flex items-center gap-1">
                   <CheckCircle2 className="w-3.5 h-3.5" /> preenchida pela IA

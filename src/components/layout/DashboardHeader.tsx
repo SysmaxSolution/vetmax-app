@@ -6,6 +6,7 @@ import { LogOut, Home, Stethoscope, TestTubes, Users, BarChart3, PawPrint, BedDo
 import type { UserRole } from '@/types'
 import { useState } from 'react'
 import { ClinicSwitcher } from '@/components/layout/ClinicSwitcher'
+import { ImageLightbox } from '@/components/ui/ImageLightbox'
 import type { UserClinicInfo } from '@/lib/actions/clinic-switcher'
 import { updateClinicStatus } from '@/lib/actions/clinic-status'
 import type { ClinicStatus } from '@/lib/actions/clinic-status'
@@ -76,7 +77,7 @@ export default function DashboardHeader({
   const isActive = (href: string) =>
     href === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(href)
 
-  const hasMultipleClinics = userClinics && userClinics.length > 1
+  const hasMultipleClinics = (isSysmax && userClinics && userClinics.length >= 1) || (userClinics && userClinics.length > 1)
   const [currentStatus, setCurrentStatus] = useState<string>(clinicStatus ?? 'active')
   const [savingStatus, setSavingStatus] = useState(false)
 
@@ -98,7 +99,7 @@ export default function DashboardHeader({
   return (
     <div className="bg-white border-b border-slate-200 sticky top-0 z-50 print:hidden">
       {/* Brand + Clínica + Usuário */}
-      <div className="mx-auto max-w-4xl px-6 py-3 flex items-center justify-between">
+      <div className="mx-auto max-w-4xl px-3 sm:px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           {hasMultipleClinics ? (
             <ClinicSwitcher
@@ -110,7 +111,7 @@ export default function DashboardHeader({
           ) : (
             <>
               {logoUrl ? (
-                <img src={logoUrl} alt={clinicName} className="h-8 w-auto max-w-[120px] object-contain rounded" />
+                <ImageLightbox src={logoUrl} alt={clinicName} className="h-8 w-auto max-w-[120px] object-contain rounded" />
               ) : (
                 <>
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
@@ -152,7 +153,8 @@ export default function DashboardHeader({
       </div>
 
       {/* Navegação */}
-      <div className="mx-auto max-w-4xl px-6 flex items-center overflow-x-auto gap-1">
+      <div className="mx-auto max-w-4xl px-3 sm:px-6 flex items-center gap-1 overflow-x-auto scrollbar-hide
+                      [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         {tabs.map((tab) => {
           const showBadge = tab.href === '/dashboard/pharmacy' && lowStockCount > 0
           return (
@@ -161,7 +163,7 @@ export default function DashboardHeader({
               href={tab.href}
               id={tab.id}
               data-testid={tab.id}
-              className={`relative flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
+              className={`relative flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
                 isActive(tab.href)
                   ? 'bg-slate-900 text-white shadow-sm'
                   : 'text-slate-600 hover:text-slate-900'

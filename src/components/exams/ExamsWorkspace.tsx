@@ -97,6 +97,7 @@ interface Props {
 
 export default function ExamsWorkspace({ queue, history, examRequests, clinicId }: Props) {
   useRealtimeSync({ table: 'consultations', clinicId })
+  useRealtimeSync({ table: 'exam_requests', clinicId })
 
   const [tab, setTab] = useState<'fila' | 'historico'>('fila')
   const [showNewExamModal, setShowNewExamModal] = useState(false)
@@ -123,7 +124,7 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <main className="mx-auto max-w-4xl px-6 py-8 space-y-6">
+      <main className="mx-auto max-w-4xl px-3 sm:px-6 py-6 sm:py-8 space-y-6">
 
         {/* Header */}
         <div className="flex items-start justify-between gap-4">

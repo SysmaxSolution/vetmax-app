@@ -26,6 +26,7 @@ export interface TimelineEvent {
   visit_reason?: string
   vet_name?: string | null
   vet_crmv?: string | null
+  performed_by?: string | null
   checkin?: {
     visit_reason: string
     payment_status: string

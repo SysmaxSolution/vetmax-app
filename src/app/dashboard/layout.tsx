@@ -120,7 +120,7 @@ export default async function DashboardLayout({
         logoUrl={clinicConfig?.logo_url ?? null}
         activeModules={activeModules.length > 0 ? activeModules : null}
         lowStockCount={lowStockCount}
-        userClinics={userClinics.length > 1 ? userClinics : undefined}
+        userClinics={isSysmax ? userClinics : (userClinics.length > 1 ? userClinics : undefined)}
         isSysmax={isSysmax}
         clinicStatus={clinicStatus}
       />

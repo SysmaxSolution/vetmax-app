@@ -1,6 +1,8 @@
 'use client'
 
-import type { TimelineEvent } from '@/lib/actions/timeline'
+import { useState } from 'react'
+import { Filter } from 'lucide-react'
+import type { TimelineEvent, TimelineEventType } from '@/lib/actions/timeline'
 import type { PrintState } from '@/components/vet/DocumentsSection'
 import type { ExtractedField } from '@/types'
 
@@ -445,7 +447,17 @@ function isToday(iso: string) {
   return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate()
 }
 
+const EVENT_TYPE_LABELS: Record<string, string> = {
+  checkin: 'Check-in', triage: 'Triagem', consultation: 'Consulta', medication: 'Medicação',
+  document: 'Documento', completed: 'Concluída', appointment: 'Agendamento', attachment: 'Anexo',
+  hospitalization_evolution: 'Internação', whatsapp_notification: 'WhatsApp',
+}
+
 export default function PetTimeline({ events, onPrint, onEdit }: Props) {
+  const [filterType, setFilterType] = useState<TimelineEventType | 'all'>('all')
+  const [filterDate, setFilterDate] = useState('')
+  const [showFilters, setShowFilters] = useState(false)
+
   if (events.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -456,10 +468,58 @@ export default function PetTimeline({ events, onPrint, onEdit }: Props) {
     )
   }
 
-  const groups = groupByDay(events)
+  // Available event types for filter
+  const availableTypes = [...new Set(events.map(e => e.type))]
+
+  // Apply filters
+  let filtered = events
+  if (filterType !== 'all') filtered = filtered.filter(e => e.type === filterType)
+  if (filterDate) filtered = filtered.filter(e => e.date.startsWith(filterDate))
+
+  const groups = groupByDay(filtered)
 
   return (
     <div className="space-y-6">
+      {/* Filtros */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <button
+          onClick={() => setShowFilters(v => !v)}
+          className={`flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-lg transition-colors ${
+            (filterType !== 'all' || filterDate) ? 'bg-teal-100 text-teal-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+          }`}
+        >
+          <Filter className="h-3 w-3" />
+          Filtros
+        </button>
+        {showFilters && (
+          <>
+            <select
+              value={filterType}
+              onChange={e => setFilterType(e.target.value as TimelineEventType | 'all')}
+              className="text-xs border border-slate-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-teal-500"
+            >
+              <option value="all">Todos os tipos</option>
+              {availableTypes.map(t => (
+                <option key={t} value={t}>{EVENT_TYPE_LABELS[t] ?? t}</option>
+              ))}
+            </select>
+            <input
+              type="date"
+              value={filterDate}
+              onChange={e => setFilterDate(e.target.value)}
+              className="text-xs border border-slate-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-teal-500"
+            />
+            {(filterType !== 'all' || filterDate) && (
+              <button
+                onClick={() => { setFilterType('all'); setFilterDate('') }}
+                className="text-[10px] text-red-500 hover:text-red-700 font-medium"
+              >
+                Limpar
+              </button>
+            )}
+          </>
+        )}
+      </div>
       {groups.map(([dateLabel, dayEvents]) => (
         <div key={dateLabel}>
           {/* Data header */}
@@ -483,9 +543,16 @@ export default function PetTimeline({ events, onPrint, onEdit }: Props) {
                     <EventDot type={event.type} />
                   </div>
                   <div className="flex-1 min-w-0 pb-1">
-                    {/* Timestamp + Edit button for today's consultation events */}
+                    {/* Timestamp + performed_by + Edit button */}
                     <div className="flex items-center justify-between mb-1.5">
-                      <p className="text-xs text-slate-400">{formatTime(event.date)}</p>
+                      <p className="text-xs text-slate-400">
+                        {formatTime(event.date)}
+                        {(event.performed_by || event.vet_name) && (
+                          <span className="ml-2 text-slate-500 font-medium">
+                            por {event.performed_by ?? event.vet_name}
+                          </span>
+                        )}
+                      </p>
                       {onEdit && event.consultation_id && isToday(event.date) &&
                         (event.type === 'checkin' || event.type === 'triage' || event.type === 'consultation' || event.type === 'completed') && (
                         <button

@@ -235,6 +235,59 @@ export async function confirmArrival(
   }
 }
 
+// ─── Contagem de atendimentos por profissional (hoje) ─────────────────────────
+
+export interface ProfessionalCount {
+  vet_id: string
+  vet_name: string
+  count: number
+}
+
+export async function getTodayCountsByProfessional(): Promise<ProfessionalCount[] | { error: string }> {
+  try {
+    const auth = await getUserClinic()
+    if ('error' in auth) return auth
+
+    const supabase = await createClient()
+    const todayStart = new Date()
+    todayStart.setHours(0, 0, 0, 0)
+
+    const { data, error } = await supabase
+      .from('consultations')
+      .select('vet_id')
+      .eq('clinic_id', auth.clinicId)
+      .not('vet_id', 'is', null)
+      .gte('created_at', todayStart.toISOString())
+
+    if (error) return { error: error.message }
+    if (!data?.length) return []
+
+    // Count by vet_id
+    const countMap: Record<string, number> = {}
+    for (const c of data) {
+      if (c.vet_id) countMap[c.vet_id] = (countMap[c.vet_id] ?? 0) + 1
+    }
+
+    // Fetch vet names
+    const vetIds = Object.keys(countMap)
+    const { data: vets } = await supabase
+      .from('profiles')
+      .select('id, full_name')
+      .in('id', vetIds)
+
+    const vetNames: Record<string, string> = {}
+    for (const v of vets ?? []) vetNames[v.id] = v.full_name
+
+    return vetIds.map(id => ({
+      vet_id: id,
+      vet_name: vetNames[id] ?? 'MV',
+      count: countMap[id],
+    })).sort((a, b) => b.count - a.count)
+  } catch {
+    return { error: 'Erro ao buscar contagens por profissional.' }
+  }
+}
+
 // ─── Upcoming appointments for pet feed ───────────────────────────────────────
 
 export async function getPetUpcomingAppointments(

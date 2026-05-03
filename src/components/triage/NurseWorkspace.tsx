@@ -61,7 +61,7 @@ export default function NurseWorkspace({ queue, history, clinicId }: NurseWorksp
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <main className="mx-auto max-w-4xl px-6 py-8 space-y-6">
+      <main className="mx-auto max-w-4xl px-3 sm:px-6 py-6 sm:py-8 space-y-6">
 
         {/* Header */}
         <div>

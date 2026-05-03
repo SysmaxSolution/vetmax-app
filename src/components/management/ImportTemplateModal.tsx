@@ -386,11 +386,17 @@ export default function ImportTemplateModal({
                               <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">
                                 {field.type}
                               </span>
-                              {field.required && (
-                                <span className="text-xs px-2 py-0.5 rounded bg-red-50 text-red-700">
-                                  Obrigatório
-                                </span>
-                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleToggleRequired(idx)}
+                                className={`text-xs px-2 py-0.5 rounded cursor-pointer transition-colors ${
+                                  field.required
+                                    ? 'bg-red-50 text-red-700 hover:bg-red-100'
+                                    : 'bg-slate-50 text-slate-400 hover:bg-slate-100'
+                                }`}
+                              >
+                                {field.required ? 'Obrigatório' : 'Opcional'}
+                              </button>
                             </div>
                             <p className="text-sm text-slate-600">{field.description}</p>
                             <p className="text-xs text-slate-500 mt-1">

@@ -6,7 +6,9 @@ import { ChevronLeft, ChevronRight, CalendarDays, Plus, Scissors, X } from 'luci
 import {
   confirmArrival,
   cancelAppointment,
+  getTodayCountsByProfessional,
   type AppointmentItem,
+  type ProfessionalCount,
 } from '@/lib/actions/appointments'
 import { cancelGroomingSession } from '@/lib/actions/grooming'
 import {
@@ -251,8 +253,11 @@ export default function CalendarWorkspace({ clinicName }: Props) {
   const [loadMonth, setLoadMonth] = useState(false)
   const [loadDay,   setLoadDay]   = useState(false)
   const [showModal, setShowModal] = useState(false)
+  const [kanbanMode, setKanbanMode] = useState(false)
+  const [kanbanGroupBy, setKanbanGroupBy] = useState<'professional' | 'type'>('professional')
   const [toast,     setToast]     = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
   const [cancelGroomingTarget, setCancelGroomingTarget] = useState<UnifiedCalendarEvent | null>(null)
+  const [vetCounts, setVetCounts] = useState<ProfessionalCount[]>([])
   const [isPending, startTransition] = useTransition()
 
   function showToast(msg: string, type: 'success' | 'error' = 'success') {
@@ -276,6 +281,9 @@ export default function CalendarWorkspace({ clinicName }: Props) {
     getUnifiedMonthCounts(viewYear, viewMonth).then(res => {
       setLoadMonth(false)
       if (!('error' in res)) setCounts(res)
+    })
+    getTodayCountsByProfessional().then(res => {
+      if (!('error' in res)) setVetCounts(res)
     })
   }, [viewYear, viewMonth])
 
@@ -459,6 +467,22 @@ export default function CalendarWorkspace({ clinicName }: Props) {
           </button>
         </div>
 
+        {/* Atendimentos por profissional (hoje) */}
+        {vetCounts.length > 0 && (
+          <div className="flex items-center gap-3 flex-wrap bg-white rounded-xl border border-slate-200 px-4 py-2.5">
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">Atendimentos hoje</span>
+            {vetCounts.map(vc => (
+              <span key={vc.vet_id} className="flex items-center gap-1.5 text-xs">
+                <span className="font-semibold text-slate-700">{vc.vet_name}</span>
+                <span className="bg-teal-100 text-teal-700 rounded-full px-2 py-0.5 font-bold text-[10px]">{vc.count}</span>
+              </span>
+            ))}
+            <span className="ml-auto text-xs font-bold text-slate-900">
+              Total: {vetCounts.reduce((s, v) => s + v.count, 0)}
+            </span>
+          </div>
+        )}
+
         {/* Calendar + Day panel */}
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
 
@@ -504,6 +528,7 @@ export default function CalendarWorkspace({ clinicName }: Props) {
                   <button
                     key={i}
                     onClick={() => setSelDate(dateStr)}
+                    onDoubleClick={() => { setSelDate(dateStr); setKanbanMode(true) }}
                     className={`relative flex flex-col items-center justify-center rounded-xl py-2 px-1 min-h-[52px] transition-all ${
                       isSel
                         ? 'bg-slate-900 text-white shadow-sm'
@@ -555,6 +580,16 @@ export default function CalendarWorkspace({ clinicName }: Props) {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{selWeekday}</p>
                 <h3 className="text-sm font-bold text-slate-900">{selFormatted}</h3>
+                {events.length > 0 && (
+                  <button
+                    onClick={() => setKanbanMode(v => !v)}
+                    className={`mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full transition-colors ${
+                      kanbanMode ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                    }`}
+                  >
+                    {kanbanMode ? '← Lista' : '▦ Kanban'}
+                  </button>
+                )}
               </div>
               {events.length > 0 && (
                 <div className="text-right">
@@ -589,9 +624,62 @@ export default function CalendarWorkspace({ clinicName }: Props) {
               ))}
             </div>
 
-            {/* Events list */}
+            {/* Events list / Kanban */}
             <div className="flex-1">
-              {loadDay ? (
+              {kanbanMode && displayed.length > 0 ? (
+                /* ── KANBAN MODE ── */
+                <div className="space-y-3">
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={() => setKanbanGroupBy('professional')}
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${kanbanGroupBy === 'professional' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}
+                    >
+                      Por Especialidade
+                    </button>
+                    <button
+                      onClick={() => setKanbanGroupBy('type')}
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${kanbanGroupBy === 'type' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}
+                    >
+                      Por Tipo
+                    </button>
+                  </div>
+                  {(() => {
+                    const groups: Record<string, UnifiedCalendarEvent[]> = {}
+                    for (const ev of displayed) {
+                      const key = kanbanGroupBy === 'type'
+                        ? (ev.type === 'appointment' ? (VISIT_REASON_LABELS[ev.reason ?? ''] ?? 'Consulta') : 'Banho e Tosa')
+                        : (ev.reason ? (VISIT_REASON_LABELS[ev.reason] ?? ev.reason) : 'Geral')
+                      if (!groups[key]) groups[key] = []
+                      groups[key].push(ev)
+                    }
+                    return Object.entries(groups).map(([label, items]) => (
+                      <div key={label} className="rounded-xl border border-indigo-100 bg-indigo-50/30 p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-bold text-indigo-700">{label}</span>
+                          <span className="text-[10px] font-bold bg-indigo-100 text-indigo-600 rounded-full px-1.5 py-0.5">{items.length}</span>
+                        </div>
+                        <div className="space-y-1.5">
+                          {items.map(ev => (
+                            <div
+                              key={ev.id}
+                              className="rounded-lg bg-white border border-slate-100 px-3 py-2 cursor-pointer hover:border-indigo-200 transition-colors"
+                              onClick={() => {
+                                if (ev.type === 'appointment') handleConfirmArrival(ev.sourceId)
+                                else router.push('/dashboard/grooming')
+                              }}
+                            >
+                              <p className="text-xs font-semibold text-slate-900">
+                                {SPECIES_EMOJI[ev.petSpecies] ?? '🐾'} {ev.petName}
+                              </p>
+                              <p className="text-[10px] text-slate-500">{ev.tutorName} · {ev.datetime.split('T')[1]?.substring(0, 5) ?? ''}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))
+                  })()}
+                </div>
+              ) : loadDay ? (
                 <div className="flex items-center justify-center py-12">
                   <svg className="h-6 w-6 animate-spin text-slate-300" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>

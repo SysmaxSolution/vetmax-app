@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useTransition, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { findPetConsultation, type MentorPetResult } from '@/lib/actions/mentor'
 import { useMentor, TOURS, INTENT_MAP } from './MentorContext'
@@ -301,7 +302,11 @@ export function MentorChat() {
 
   // ─────────────────────────────────────────────────────────────────────────
 
-  return (
+  // Portal to document.body to avoid stacking context issues (fixed elements
+  // inside transformed parents lose their viewport-relative positioning)
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <>
       {/* ── Floating Button ── */}
       <button
@@ -503,6 +508,7 @@ export function MentorChat() {
           </div>
         </div>
       )}
-    </>
+    </>,
+    document.body
   )
 }

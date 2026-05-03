@@ -29,6 +29,17 @@ export async function validateSchedulingSlot(data: {
     return { valid: false, reason: 'Clínica não encontrada' }
   }
 
+  // 1b. Check if immediate booking is allowed
+  const { data: clinicSettings } = await supabase
+    .from('clinic_settings')
+    .select('allow_immediate_booking')
+    .eq('clinic_id', data.clinic_id)
+    .single()
+
+  if (clinicSettings?.allow_immediate_booking) {
+    return { valid: true }
+  }
+
   // 2. Parse requested date and time
   const requestedDate = new Date(`${data.scheduled_date}T${data.scheduled_time}:00`)
   if (isNaN(requestedDate.getTime())) {

@@ -2,7 +2,9 @@
 
 import { Resend } from 'resend'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+function getResend() {
+  return new Resend(process.env.RESEND_API_KEY ?? '')
+}
 
 interface SendInviteParams {
   to:         string
@@ -24,7 +26,7 @@ export async function sendInviteEmail(params: SendInviteParams): Promise<{ error
   const roleLabel = ROLE_LABELS[role] ?? role
 
   try {
-    const { error } = await resend.emails.send({
+    const { error } = await getResend().emails.send({
       from: 'VetMax <noreply@sysmaxsolutions.com>',
       to,
       subject: `Convite para ingressar na ${clinicName} — VetMax`,

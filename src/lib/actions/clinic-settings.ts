@@ -237,6 +237,52 @@ export async function updateClinicVoiceTriggers(
   return { success: true }
 }
 
+// ─── Clinic Settings (tabela clinic_settings — 0055+) ────────────────────────
+
+export interface ClinicSettingsConfig {
+  allow_immediate_booking: boolean
+  checkin_required_fields: string[]
+  triage_required_fields: string[]
+}
+
+const SETTINGS_DEFAULTS: ClinicSettingsConfig = {
+  allow_immediate_booking: false,
+  checkin_required_fields: ['address', 'emergency_contact'],
+  triage_required_fields: ['weight', 'temperature', 'chief_complaint'],
+}
+
+export async function getClinicSettingsConfig(): Promise<ClinicSettingsConfig | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('clinic_id')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
+
+  const { data: settings } = await supabase
+    .from('clinic_settings')
+    .select('allow_immediate_booking, checkin_required_fields, triage_required_fields')
+    .eq('clinic_id', profile.clinic_id)
+    .single()
+
+  if (!settings) return SETTINGS_DEFAULTS
+
+  return {
+    allow_immediate_booking: settings.allow_immediate_booking ?? SETTINGS_DEFAULTS.allow_immediate_booking,
+    checkin_required_fields: Array.isArray(settings.checkin_required_fields)
+      ? settings.checkin_required_fields
+      : SETTINGS_DEFAULTS.checkin_required_fields,
+    triage_required_fields: Array.isArray(settings.triage_required_fields)
+      ? settings.triage_required_fields
+      : SETTINGS_DEFAULTS.triage_required_fields,
+  }
+}
+
 // ─── Remove Logo ──────────────────────────────────────────────────────────────
 
 export async function removeClinicLogo(): Promise<{ success: true } | { error: string }> {

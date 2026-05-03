@@ -5,17 +5,18 @@ import { X, Search, CalendarDays, Scissors, Tag, DollarSign, Loader2, Save, Cale
 import { getPatientsList, type PatientsListItem } from '@/lib/actions/timeline'
 import { createAppointment } from '@/lib/actions/appointments'
 import { createGroomingSession, getGroomingCatalog, updateGroomingPricing, type GroomingCatalogItem, type GroomingServicePrice } from '@/lib/actions/grooming'
+import { useModules } from '@/components/providers/ModulesProvider'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const VISIT_REASON_OPTIONS = [
-  { value: 'consultation', label: 'Consulta'        },
-  { value: 'follow_up',    label: 'Retorno'         },
-  { value: 'emergency',    label: 'Emergência'      },
-  { value: 'vaccination',  label: 'Vacinação'       },
-  { value: 'exam',         label: 'Exame'           },
-  { value: 'surgery',      label: 'Cirurgia'        },
-  { value: 'grooming',     label: '✂️ Banho e Tosa' },
+  { value: 'consultation', label: 'Consulta',         moduleKey: 'consultation' },
+  { value: 'follow_up',    label: 'Retorno',          moduleKey: 'consultation' },
+  { value: 'emergency',    label: 'Emergência',       moduleKey: null },
+  { value: 'vaccination',  label: 'Vacinação',        moduleKey: null },
+  { value: 'exam',         label: 'Exame',            moduleKey: 'exams' },
+  { value: 'surgery',      label: 'Cirurgia',         moduleKey: 'consultation' },
+  { value: 'grooming',     label: '✂️ Banho e Tosa', moduleKey: 'grooming' },
 ]
 
 const DEFAULT_SERVICES = [
@@ -64,6 +65,7 @@ function mapMotivoToReason(motivo: string): string {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, defaultDate, defaultReason }: Props) {
+  const activeModules = useModules()
   const [step, setStep]               = useState<'search' | 'form'>(defaultPet ? 'form' : 'search')
   const [selectedPet, setSelectedPet] = useState<PatientsListItem | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -304,9 +306,11 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
                 onChange={e => { setReason(e.target.value); setError(null) }}
                 className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
               >
-                {VISIT_REASON_OPTIONS.map(o => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
+                {VISIT_REASON_OPTIONS
+                  .filter(o => !o.moduleKey || activeModules.length === 0 || activeModules.includes(o.moduleKey))
+                  .map(o => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
               </select>
             </div>
 

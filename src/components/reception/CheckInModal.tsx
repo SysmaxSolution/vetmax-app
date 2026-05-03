@@ -34,6 +34,7 @@ interface Props {
     scheduled_date: string | null
   }
   clinicChecklist?: string[]
+  checkinRequiredFields?: string[]
   onClose: () => void
   onSuccess: (data: { consultationId: string; patientName: string; tutorName: string }) => void
 }
@@ -48,6 +49,7 @@ export function CheckInModal({
   mode,
   existingConsultation,
   clinicChecklist = ['Assinar termo de responsabilidade clínica'],
+  checkinRequiredFields = ['address', 'emergency_contact'],
   onClose,
   onSuccess,
 }: Props) {
@@ -72,15 +74,14 @@ export function CheckInModal({
   const isScheduled = mode === 'scheduled_checkin'
   const isNewCheckIn = mode === 'new_checkin'
 
-  // Validações de obrigatoriedade
-  const hasAddress = address.trim().length > 0
-  const hasEmergencyContact = emergencyContact.trim().length > 0
+  // Validações de obrigatoriedade — configuráveis por clínica
+  const addressRequired = checkinRequiredFields.includes('address')
+  const emergencyRequired = checkinRequiredFields.includes('emergency_contact')
+  const hasAddress = !addressRequired || address.trim().length > 0
+  const hasEmergencyContact = !emergencyRequired || emergencyContact.trim().length > 0
   const checklistRequired = clinicChecklist.length > 0
   const allChecklistChecked = checklistRequired ? checkedItems.size === clinicChecklist.length : true
 
-  // Botão só habilita se:
-  // 1. Se é edit → só precisa do checklist
-  // 2. Se é new/scheduled → precisa address + emergency contact + checklist
   const canSubmit = isEdit
     ? allChecklistChecked && !isPending
     : (hasAddress && hasEmergencyContact && allChecklistChecked && !isPending)
@@ -112,12 +113,12 @@ export function CheckInModal({
     e.preventDefault()
     setError(null)
 
-    // Validações — Endereço e Contato são SEMPRE obrigatórios
-    if (!address.trim()) {
+    // Validações — condicionais conforme configuração da clínica
+    if (addressRequired && !address.trim()) {
       setError('Endereço completo é obrigatório.')
       return
     }
-    if (!emergencyContact.trim()) {
+    if (emergencyRequired && !emergencyContact.trim()) {
       setError('Contato de emergência é obrigatório.')
       return
     }
@@ -278,31 +279,31 @@ export function CheckInModal({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Endereço Completo *</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Endereço Completo{addressRequired ? ' *' : ''}</label>
                 <input
                   type="text"
                   value={address}
                   onChange={e => setAddress(e.target.value)}
                   placeholder="Rua, número, complemento, cidade"
                   className={`w-full rounded-lg border px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
-                    !hasAddress ? 'border-red-300 bg-red-50' : 'border-slate-300'
+                    addressRequired && !hasAddress ? 'border-red-300 bg-red-50' : 'border-slate-300'
                   }`}
                 />
-                {!hasAddress && <p className="text-xs text-red-600 mt-1">Obrigatório para confirmar</p>}
+                {addressRequired && !hasAddress && <p className="text-xs text-red-600 mt-1">Obrigatório para confirmar</p>}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Contato de Emergência *</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Contato de Emergência{emergencyRequired ? ' *' : ''}</label>
                 <input
                   type="text"
                   value={emergencyContact}
                   onChange={e => setEmergencyContact(e.target.value)}
                   placeholder="Nome e Telefone (ex: Maria - 11 99999-0000)"
                   className={`w-full rounded-lg border px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
-                    !hasEmergencyContact ? 'border-red-300 bg-red-50' : 'border-slate-300'
+                    emergencyRequired && !hasEmergencyContact ? 'border-red-300 bg-red-50' : 'border-slate-300'
                   }`}
                 />
-                {!hasEmergencyContact && <p className="text-xs text-red-600 mt-1">Obrigatório para confirmar</p>}
+                {emergencyRequired && !hasEmergencyContact && <p className="text-xs text-red-600 mt-1">Obrigatório para confirmar</p>}
               </div>
             </div>
 

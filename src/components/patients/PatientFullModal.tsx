@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useTransition } from 'react'
 import Link from 'next/link'
 import { X, Save, Loader2, User, Dog, MapPin, PhoneCall, Syringe, Camera, Shield, Trash2, Plus, AlertTriangle, Cpu } from 'lucide-react'
+import { ImageLightbox } from '@/components/ui/ImageLightbox'
 import { updateFullProfile, uploadPetPhoto } from '@/lib/actions/pets'
 import { registerTutorAndPet, addPatientToTutor, getTutorByCpf, recordConsent } from '@/lib/actions/tutors'
 import ConsentModal from '@/components/reception/ConsentModal'
@@ -14,6 +15,7 @@ import VaccinationCard from '@/components/vet/VaccinationCard'
 import { BehaviorTagsSelector } from '@/components/ui/BehaviorTagsBadges'
 import type { PatientsListItem } from '@/lib/actions/timeline'
 import type { PatientSpecies } from '@/types'
+import { REPRODUCTIVE_STATUS_OPTIONS } from '@/types'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -26,14 +28,6 @@ const SPECIES_OPTIONS = [
   { value: 'reptile', label: 'Réptil' },
   { value: 'fish',    label: 'Peixe' },
   { value: 'exotic',  label: 'Silvestre/Exótico' },
-]
-
-const REPRODUCTIVE_OPTIONS = [
-  { value: 'Macho Inteiro',   label: 'Macho Inteiro' },
-  { value: 'Macho Castrado',  label: 'Macho Castrado' },
-  { value: 'Fêmea Inteira',   label: 'Fêmea Inteira' },
-  { value: 'Fêmea Castrada',  label: 'Fêmea Castrada' },
-  { value: 'Desconhecido',    label: 'Desconhecido' },
 ]
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -167,6 +161,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
   const [petName,             setPetName]             = useState(patient?.name ?? '')
   const [species,             setSpecies]             = useState<string>(patient?.species ?? 'dog')
   const [breed,               setBreed]               = useState(patient?.breed ?? '')
+  const [birthDate,           setBirthDate]           = useState(patient?.birth_date ?? '')
   const [reproductiveStatus,  setReproductiveStatus]  = useState(patient?.reproductive_status ?? 'Desconhecido')
   const [tags,                setTags]                = useState<string[]>(patient?.behavior_tags ?? [])
   const [allergies,           setAllergies]           = useState(patient?.allergies ?? '')
@@ -278,7 +273,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
       patient.id,
       patient.tutor.id,
       {
-        name: petName, species, breed, reproductive_status: reproductiveStatus, behavior_tags: tags,
+        name: petName, species, breed, birth_date: birthDate || null, reproductive_status: reproductiveStatus, behavior_tags: tags,
         allergies: allergies || null, chronic_diseases: chronicDiseases || null, microchip_id: microchipId || null,
       },
       { name: tutorName, phone: tutorPhone, cpf: tutorCpf, email: tutorEmail, address: tutorAddress, emergency_contact: emergencyContact }
@@ -503,7 +498,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
               <div className="flex items-center gap-5">
                 <div className="relative h-20 w-20 flex-shrink-0 rounded-2xl overflow-hidden border-2 border-slate-200 bg-slate-100">
                   {(photoUrl || pendingPhotoPreview) ? (
-                    <img src={photoUrl ?? pendingPhotoPreview!} alt={petName} className="h-full w-full object-cover" />
+                    <ImageLightbox src={photoUrl ?? pendingPhotoPreview!} alt={petName} className="h-full w-full object-cover" />
                   ) : (
                     <div className="h-full w-full flex items-center justify-center text-3xl text-slate-300">
                       {petName[0]?.toUpperCase() ?? '?'}
@@ -547,9 +542,10 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                 <FieldInput label="Nome do Pet *" value={petName} onChange={setPetName} placeholder="Ex: Thor, Luna..." data-mentor-step="pet-name-input" />
                 <FieldSelect label="Espécie" value={species} options={SPECIES_OPTIONS} onChange={setSpecies} data-mentor-step="pet-species-select" />
               </div>
-              <div className="grid grid-cols-2 gap-5">
+              <div className="grid grid-cols-3 gap-5">
                 <FieldInput label="Raça" value={breed} onChange={setBreed} placeholder="Ex: Labrador" data-mentor-step="pet-breed-input" />
-                <FieldSelect label="Estado Reprodutivo" value={reproductiveStatus} options={REPRODUCTIVE_OPTIONS} onChange={setReproductiveStatus} data-mentor-step="pet-reproductive-select" />
+                <FieldInput label="Data de Nascimento" value={birthDate} onChange={setBirthDate} type="date" data-mentor-step="pet-birth-date" />
+                <FieldSelect label="Estado Reprodutivo" value={reproductiveStatus} options={REPRODUCTIVE_STATUS_OPTIONS} onChange={setReproductiveStatus} data-mentor-step="pet-reproductive-select" />
               </div>
               <div data-mentor-step="pet-behavior-tags">
                 <label className="block text-[10px] font-bold text-slate-400 uppercase mb-3 tracking-widest">Tags de Comportamento</label>

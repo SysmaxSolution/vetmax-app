@@ -494,7 +494,7 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
         </div>
       )}
 
-      <main className="mx-auto max-w-4xl px-6 py-8 space-y-8">
+      <main className="mx-auto max-w-4xl px-3 sm:px-6 py-6 sm:py-8 space-y-8">
 
         <ReceptionSubNav />
 

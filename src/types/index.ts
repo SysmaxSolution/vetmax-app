@@ -7,6 +7,17 @@ export type PatientSpecies = 'dog' | 'cat' | 'bird' | 'rabbit' | 'rodent' | 'rep
 
 export type PatientGender = 'male' | 'female' | 'unknown'
 
+// Padrão CFMV para status reprodutivo
+export type ReproductiveStatus = 'Macho Inteiro' | 'Macho Castrado' | 'Fêmea Inteira' | 'Fêmea Castrada' | 'Desconhecido'
+
+export const REPRODUCTIVE_STATUS_OPTIONS: { value: ReproductiveStatus; label: string }[] = [
+  { value: 'Macho Inteiro',   label: 'Macho Inteiro' },
+  { value: 'Macho Castrado',  label: 'Macho Castrado' },
+  { value: 'Fêmea Inteira',   label: 'Fêmea Inteira' },
+  { value: 'Fêmea Castrada',  label: 'Fêmea Castrada' },
+  { value: 'Desconhecido',    label: 'Desconhecido' },
+]
+
 export type ConsultationStatus =
   | 'scheduled_future'
   | 'reception'
