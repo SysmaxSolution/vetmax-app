@@ -1,0 +1,174 @@
+================================================================================
+GROOMING_SPEC.md — RESUMO EXECUTIVO
+Data: 2026-04-23 | Versão: 1.0 | Status: Ready for Development
+================================================================================
+
+ENTREGA COMPLETA:
+✅ 9 User Stories (US-G001 a US-G009) com critérios de aceitação
+✅ 5 Regras de Negócio categorizadas
+✅ Máquina de Estados com 8 estados + 8 transições principais
+✅ 3 Touch Points de integração com Recepção definidos
+✅ Tabela RBAC completa (6 roles × 30+ ações)
+✅ Implementation Roadmap (5 phases, ~6-7 semanas)
+
+================================================================================
+9 USER STORIES
+================================================================================
+
+EPIC 1: Agendamento por Slots Rigorosos
+  US-G001: Criar slots de 1 hora com capacity configurável
+  US-G002: Agendar pet em slot disponível (bloqueia overbooking)
+  US-G003: Visualizar disponibilidade de profissional (agenda semanal)
+
+EPIC 2: Check-in/Checkout Integrado com Recepção
+  US-G004: Check-in de pet para Grooming (confirmação tutor, termo)
+  US-G005: Checkout de pet do Grooming (validação pagamento, recibo)
+
+EPIC 3: Fluxo de Status Transparente
+  US-G006: Rastrear status em tempo real (8 estados, timeline)
+  US-G007: Atribuição de profissional (Minha Fila, transições)
+
+EPIC 4: Integrações e Validações
+  US-G008: Validar prontuário do pet (alergias, comportamento)
+  US-G009: Vincular produtos de estoque (consumo, relatório)
+
+================================================================================
+5 REGRAS DE NEGÓCIO
+================================================================================
+
+RN-SLOTS:
+  • Duração: 1 hora (configurável: 1h, 1.5h, 2h)
+  • Capacity: 3 pets (min 1, max 5)
+  • Overbooking proibido (hard-block)
+  • Fila de espera FIFO se lotado
+
+RN-STATUS:
+  • Sequência: scheduled → arrived → bathing → grooming → drying → waiting_pickup → paid → delivered
+  • Cada transição requer papel específico
+  • Nenhuma transição "para trás"
+  • Audit log imutável com timestamps UTC
+
+RN-PROFISSIONAIS:
+  • Tipos: banhista, tosador, multi_skill
+  • Campo assigned_to em grooming_sessions
+  • Não pode ter 2 slots sobrepostos
+
+RN-INTEGRAÇÃO-RECEPÇÃO:
+  • Agendados visíveis em Recepção
+  • Check-in atualiza patient_reception.status
+  • Checkout libera saída + gera recibo
+  • Cancelamento libera slot + notifica fila
+
+RN-PREÇOS:
+  • Catálogo em clinic_catalog (item_type='grooming')
+  • Variação por porte (P=1x, M=1.2x, G=1.5x)
+  • Desconto % ou fixo
+  • Breakdown em JSONB
+
+================================================================================
+MÁQUINA DE ESTADOS (8 ESTADOS + 8 TRANSIÇÕES)
+================================================================================
+
+ESTADOS:
+  1. scheduled → 2. arrived → 3. bathing → 4. grooming → 5. drying
+  → 6. waiting_pickup → 7. paid → 8. delivered (TERMINAL)
+  + cancelled (TERMINAL)
+
+TRANSIÇÕES PRINCIPAIS:
+  scheduled → arrived       | RECEPCIONISTA | check-in
+  arrived → bathing         | RECEPCIONISTA/BANHISTA | assinar termo
+  bathing → grooming        | BANHISTA | banho concluído
+  grooming → drying         | TOSADOR | tosa concluída
+  drying → waiting_pickup   | BANHISTA/SECADOR | secagem pronta
+  waiting_pickup → paid     | RECEPCIONISTA | pagamento ok
+  waiting_pickup → paid     | GERENTE | isentar pagamento
+  paid → delivered          | RECEPCIONISTA | entrega ao tutor
+
+================================================================================
+3 TOUCH POINTS DE INTEGRAÇÃO COM RECEPÇÃO
+================================================================================
+
+TOUCH POINT 1 — Agendamento e Visualização
+  • Tutor/Recepcionista seleciona slot disponível
+  • Pet aparece em "Agendados" na Recepção
+  • SMS ao tutor: "Agendamento confirmado"
+
+TOUCH POINT 2 — Check-in (Chegada)
+  • Recepcionista busca pet, confirma tutor
+  • Tutor assina termo eletrônico
+  • Checklist obrigatória (alergias, comportamento, emergência)
+  • Status: scheduled → arrived
+  • Notificação ao profissional
+
+TOUCH POINT 3 — Checkout (Entrega)
+  • Valida pagamento confirmado
+  • Status: waiting_pickup → paid → delivered
+  • Recibo gerado (JSON/PDF)
+  • SMS: "Pet retirado com sucesso. Avaliação: [stars]"
+
+================================================================================
+TABELA RBAC (6 ROLES × 30+ AÇÕES)
+================================================================================
+
+TUTOR:
+  ✅ Ver slots próprios, agendar pets próprios
+  ✅ Ver status own pet, cancelar <24h
+  ❌ Check-in, checkout, ver agneda completa
+
+RECEPCIONISTA:
+  ✅ Criar/editar slots, agendar, cancelar
+  ✅ Check-in, checkout, confirmar pagamento
+  ✅ Visualizar todos os pets, registrar documentos
+
+BANHISTA/TOSADOR:
+  ✅ Ver "Minha Fila" (pets assigned)
+  ✅ Marcar transições (bathing/grooming/drying)
+  ✅ Adicionar evolução, foto, registrar produtos
+  ❌ Criar slots, checkout, confirmar pagamento
+
+GERENTE:
+  ✅ Acesso completo
+  ✅ Isentar pagamento, relatórios, audit log
+  ✅ Deletar documentos, Analytics
+
+ADMIN:
+  ✅ Acesso total + configurações de tenant
+
+================================================================================
+IMPLEMENTATION ROADMAP (5 PHASES, ~6-7 SEMANAS)
+================================================================================
+
+Phase 1.0 — Infrastructure (1 semana)
+  → Migrations 0041-0042
+  → RLS policies, índices, função RPC
+
+Phase 1.1 — Core Features (2 semanas)
+  → US-G001 a US-G005 (slots, agendamento, check-in/checkout)
+
+Phase 1.2 — Status Tracking (1.5 semana)
+  → US-G006, US-G007 (rastreamento, atribuição profissional)
+
+Phase 1.3 — Validações & Integrações (1.5 semana)
+  → US-G008, US-G009 (prontuário, produtos estoque)
+
+Phase 1.4 — Polish & Deploy (1 semana)
+  → UI/UX, testes E2E, documentação, produção
+
+================================================================================
+ARQUIVOS GERADOS
+================================================================================
+
+✅ /c/Sysmax/vetmax-app/GROOMING_SPEC.md (1209 linhas, 48KB)
+   Documento completo com 9 US, 5 RN, máquina de estados, RBAC, roadmap
+
+✅ /c/Sysmax/vetmax-app/GROOMING_SPEC_SUMMARY.txt
+   Sumário executivo para referência rápida
+
+================================================================================
+STATUS
+================================================================================
+
+Product Manager: Mozart Fase 1 (PM_AGENT)
+Data: 2026-04-23
+Versão: 1.0
+Status: Ready for Development (Phase 1.0 Infrastructure)

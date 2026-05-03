@@ -1,0 +1,524 @@
+'use client'
+
+import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
+import { useRouter } from 'next/navigation'
+import {
+  ArrowLeft, Mic, MicOff, Loader2, AlertCircle,
+  FlaskConical, FileText, ChevronRight, X,
+} from 'lucide-react'
+import { returnToVet } from '@/lib/actions/exams'
+import { Toast } from '@/components/ui/toast'
+import { PetAvatar } from '@/components/ui/PetAvatar'
+import DocumentsSection, { type PrintState } from '@/components/vet/DocumentsSection'
+import AttachmentsSection from '@/components/ui/AttachmentsSection'
+import WhatsAppNotificationModal from '@/components/whatsapp/WhatsAppNotificationModal'
+import type { VetConsultationDetail } from '@/lib/actions/vet'
+import type { DocumentTemplate } from '@/types'
+import type { PatientDocument } from '@/lib/actions/documents'
+import type { Attachment } from '@/lib/actions/attachments'
+
+// ─── Labels ──────────────────────────────────────────────────────────────────
+
+const SPECIES_LABELS: Record<string, string> = {
+  dog: 'Canino', cat: 'Felino', bird: 'Ave', rabbit: 'Coelho',
+  rodent: 'Roedor', reptile: 'Réptil', fish: 'Peixe', exotic: 'Exótico',
+}
+const GENDER_LABELS: Record<string, string> = {
+  male: 'Macho', female: 'Fêmea', unknown: 'Não informado',
+}
+const MUCOUS_LABELS: Record<string, string> = {
+  pink: 'Rosa (Normal)', pale: 'Pálida', icteric: 'Ictérica', cyanotic: 'Cianótica',
+}
+
+// ─── Props ────────────────────────────────────────────────────────────────────
+
+interface Props {
+  consultation:        VetConsultationDetail
+  clinicName?:         string
+  templates?:          DocumentTemplate[]
+  initialDocuments?:   PatientDocument[]
+  initialAttachments?: Attachment[]
+}
+
+// ─── Helper ───────────────────────────────────────────────────────────────────
+
+function calcAge(birthDate: string | null): string {
+  if (!birthDate) return 'Não informada'
+  const birth = new Date(birthDate)
+  const today = new Date()
+  const months = (today.getFullYear() - birth.getFullYear()) * 12 + (today.getMonth() - birth.getMonth())
+  if (months < 12) return `${months} ${months === 1 ? 'mês' : 'meses'}`
+  const years = Math.floor(months / 12)
+  return `${years} ${years === 1 ? 'ano' : 'anos'}`
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export default function ExamDetail({
+  consultation,
+  clinicName = 'VetMax',
+  templates = [],
+  initialDocuments = [],
+  initialAttachments = [],
+}: Props) {
+  const router = useRouter()
+  const { patient, tutor, vital_signs } = consultation
+
+  // Voice state
+  const [isRecording,    setIsRecording]    = useState(false)
+  const [liveTranscript, setLiveTranscript] = useState('')
+  const recognitionRef     = useRef<any>(null)
+  const finalTranscriptRef = useRef('')
+
+  // Exam notes for the vet
+  const [examNotes,    setExamNotes]    = useState('')
+  const [isReturning,  setIsReturning]  = useState(false)
+  const [showConfirm,  setShowConfirm]  = useState(false)
+  const [showWhatsApp, setShowWhatsApp] = useState(false)
+
+  // Document suggestions from voice dictation
+  const [examSuggestions, setExamSuggestions] = useState<Array<{ tipo: string; motivo: string; title: string; summary: string }>>([])
+
+  // Toast & print
+  const [toast,     setToast]     = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [printData, setPrintData] = useState<PrintState | null>(null)
+
+  useEffect(() => {
+    const handleAfterPrint = () => setPrintData(null)
+    window.addEventListener('afterprint', handleAfterPrint)
+    return () => window.removeEventListener('afterprint', handleAfterPrint)
+  }, [])
+
+  const handlePrint = (data: PrintState) => {
+    setPrintData(data)
+    setTimeout(() => window.print(), 500)
+  }
+
+  // ─── Voice recording → creates laudo suggestion ────────────────────────────
+  const startRecording = () => {
+    const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition
+    if (!SpeechRecognition) {
+      setToast({ type: 'error', message: 'Navegador não suporta reconhecimento de voz. Use Chrome.' })
+      return
+    }
+    finalTranscriptRef.current = ''
+    const recognition = new SpeechRecognition()
+    recognition.lang = 'pt-BR'
+    recognition.continuous = true
+    recognition.interimResults = true
+
+    recognition.onstart = () => setIsRecording(true)
+
+    recognition.onresult = (event: any) => {
+      let interim = ''
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) {
+          finalTranscriptRef.current += event.results[i][0].transcript + ' '
+        } else {
+          interim += event.results[i][0].transcript
+        }
+      }
+      setLiveTranscript(finalTranscriptRef.current + interim)
+    }
+
+    recognition.onerror = (event: any) => {
+      setIsRecording(false)
+      setLiveTranscript('')
+      if (event.error !== 'aborted') {
+        setToast({ type: 'error', message: `Erro de reconhecimento: ${event.error}` })
+      }
+    }
+
+    recognition.onend = () => {
+      setIsRecording(false)
+      const transcript = finalTranscriptRef.current.trim()
+      setLiveTranscript('')
+      if (!transcript) return
+
+      // Transcript vira sugestão de laudo para DocumentsSection
+      setExamSuggestions(prev => [...prev, { tipo: 'laudo', motivo: transcript, title: 'Laudo por Voz', summary: transcript }])
+      setToast({ type: 'success', message: 'Transcrição capturada. Clique em "Gerar" para preencher o laudo com IA.' })
+    }
+
+    recognitionRef.current = recognition
+    recognition.start()
+  }
+
+  const stopRecording = () => recognitionRef.current?.stop()
+
+  // ─── Devolver ao Médico ────────────────────────────────────────────────────
+  const handleReturn = async () => {
+    setIsReturning(true)
+    setShowConfirm(false)
+    const res = await returnToVet(consultation.id, examNotes)
+    setIsReturning(false)
+    if ('error' in res) {
+      setToast({ type: 'error', message: res.error })
+      return
+    }
+    setToast({ type: 'success', message: `${patient.name} devolvido ao médico veterinário.` })
+    if (tutor?.phone) {
+      setShowWhatsApp(true)
+    } else {
+      setTimeout(() => router.push('/dashboard/exams'), 1200)
+    }
+  }
+
+  // ─── Print portal ──────────────────────────────────────────────────────────
+  const printPortal = printData ? createPortal(
+    <div className="vetmax-print-root" style={{ position: 'static', width: '100%', minHeight: '100vh', background: 'white', color: '#000', fontFamily: 'Arial, sans-serif', padding: '40px 56px', boxSizing: 'border-box' }}>
+      <div style={{ maxWidth: 720, margin: '0 auto' }}>
+        <div style={{ borderBottom: '2px solid black', paddingBottom: 20, marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <p style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 2, color: '#6b7280', marginBottom: 4 }}>{clinicName} — Laboratório / Exames</p>
+            <h1 style={{ fontSize: 24, fontWeight: 700, color: '#000', lineHeight: 1.2, margin: 0 }}>
+              {({ laudo: 'Laudo', receita: 'Receita', encaminhamento: 'Encaminhamento', termo: 'Termo', exame: 'Exame', outro: 'Outro' } as Record<string, string>)[printData.type] ?? printData.type}
+            </h1>
+            <p style={{ fontSize: 13, color: '#4b5563', marginTop: 4 }}>{printData.name.split('—')[0].trim()}</p>
+          </div>
+          <p style={{ fontSize: 13, color: '#6b7280', textAlign: 'right' }}>{new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 32px', marginBottom: 24, paddingBottom: 20, borderBottom: '1px solid #d1d5db', fontSize: 13 }}>
+          <div><strong>Pet: </strong>{patient.name}</div>
+          <div><strong>Tutor: </strong>{tutor.name}</div>
+          <div><strong>Espécie: </strong>{patient.species}{patient.breed ? ` — ${patient.breed}` : ''}</div>
+          <div><strong>CPF Tutor: </strong>{tutor.cpf}</div>
+        </div>
+        <div style={{ marginBottom: 40 }}>
+          {printData.extracted_fields.map(f => {
+            const val = printData.fields[f.field_name]
+            if (val === null || val === undefined || val === '') return null
+            return (
+              <div key={f.field_name} style={{ marginBottom: 20 }}>
+                <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#6b7280', marginBottom: 4 }}>{f.label}</p>
+                <p style={{ fontSize: 13, color: '#000', lineHeight: 1.6, borderBottom: '1px solid #e5e7eb', paddingBottom: 12, margin: 0 }}>
+                  {typeof val === 'boolean' ? (val ? 'Sim' : 'Não') : String(val)}
+                </p>
+              </div>
+            )
+          })}
+        </div>
+        <div style={{ marginTop: 64, display: 'flex', gap: 64 }}>
+          <div style={{ flex: 1, textAlign: 'center' }}>
+            <hr style={{ borderColor: '#000', marginBottom: 8, width: 256, margin: '0 auto 8px' }} />
+            <p style={{ fontSize: 11, fontWeight: 600, color: '#374151' }}>Responsável Técnico</p>
+            <p style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>CRMV: ______________________</p>
+          </div>
+          <div style={{ flex: 1, textAlign: 'center' }}>
+            <hr style={{ borderColor: '#000', marginBottom: 8, width: 256, margin: '0 auto 8px' }} />
+            <p style={{ fontSize: 11, fontWeight: 600, color: '#374151' }}>Tutor / Responsável</p>
+            <p style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>CPF: {tutor.cpf}</p>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
+  ) : null
+
+  // ─── Render ────────────────────────────────────────────────────────────────
+  return (
+    <>
+      {printPortal}
+      {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
+
+      {/* WhatsApp — Exame Concluído */}
+      <WhatsAppNotificationModal
+        isOpen={showWhatsApp}
+        onClose={() => { setShowWhatsApp(false); router.push('/dashboard/exams') }}
+        trigger="exam_completed"
+        context={{
+          petName:    patient.name,
+          tutorName:  tutor.name,
+          tutorPhone: tutor.phone ?? '',
+          examType:   consultation.visit_reason ?? 'exame',
+        }}
+        consultationId={consultation.id}
+        patientId={patient.id}
+      />
+
+      {/* Modal de confirmação */}
+      {showConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <h2 className="text-base font-bold text-slate-900">Devolver ao Médico?</h2>
+            <p className="text-sm text-slate-500">
+              {patient.name} voltará para o painel do Médico Veterinário com os documentos gerados.
+            </p>
+            {examNotes.trim() && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-700">
+                <strong>Notas para o MV:</strong> {examNotes}
+              </div>
+            )}
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => setShowConfirm(false)} className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">
+                Cancelar
+              </button>
+              <button onClick={handleReturn} disabled={isReturning} className="flex-1 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2">
+                {isReturning ? <Loader2 className="h-4 w-4 animate-spin" /> : <ChevronRight className="h-4 w-4" />}
+                {isReturning ? 'Devolvendo...' : 'Confirmar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="space-y-5">
+
+        {/* Cabeçalho */}
+        <div className="flex items-center justify-between">
+          <button onClick={() => router.back()} className="flex items-center gap-2 text-slate-600 hover:text-slate-900 font-medium text-sm transition-colors">
+            <ArrowLeft className="w-4 h-4" />Voltar
+          </button>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium text-blue-700 bg-blue-100 px-2.5 py-1 rounded-full flex items-center gap-1">
+              <FlaskConical className="w-3 h-3" />Laboratório / Exames
+            </span>
+          </div>
+        </div>
+
+        {/* Alertas */}
+        {(patient.allergies || patient.medical_history) && (
+          <div className="space-y-2">
+            {patient.allergies && (
+              <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl p-4">
+                <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-red-700 text-sm">Alergias Conhecidas</p>
+                  <p className="text-red-600 text-sm mt-0.5">{patient.allergies}</p>
+                </div>
+              </div>
+            )}
+            {patient.medical_history && (
+              <div className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-xl p-4">
+                <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-blue-700 text-sm">Histórico Médico/Cirúrgico</p>
+                  <p className="text-blue-600 text-sm mt-0.5">{patient.medical_history}</p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Painel de Contexto */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="border-b border-slate-100 px-6 py-4 flex items-center gap-3">
+            <PetAvatar name={patient.name} species={patient.species} photoUrl={patient.photo_url} size="sm" />
+            <div>
+              <h2 className="text-base font-semibold text-slate-900">{patient.name}</h2>
+              <p className="text-xs text-slate-500">
+                {SPECIES_LABELS[patient.species] ?? patient.species}
+                {patient.breed ? ` — ${patient.breed}` : ''}
+              </p>
+            </div>
+          </div>
+
+          <div className="p-6 grid grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Animal</p>
+              {patient.gender && <InfoRow label="Sexo" value={GENDER_LABELS[patient.gender] ?? patient.gender} />}
+              <InfoRow label="Castrado" value={patient.neutered ? 'Sim' : 'Não'} />
+              {patient.reproductive_status && (
+                <InfoRow label="Status Reprodutivo" value={patient.reproductive_status} />
+              )}
+              <InfoRow label="Idade" value={calcAge(patient.birth_date)} />
+              {patient.medical_history && (
+                <InfoRow label="Histórico Médico" value={patient.medical_history} />
+              )}
+            </div>
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Sinais Vitais (Triagem)</p>
+              {vital_signs ? (
+                <>
+                  <InfoRow label="Peso" value={`${vital_signs.weight} kg`} />
+                  <InfoRow label="Temperatura" value={`${vital_signs.temperature}°C`} />
+                  {vital_signs.heart_rate > 0 && (
+                    <InfoRow label="FC" value={`${vital_signs.heart_rate} bpm`} />
+                  )}
+                  {vital_signs.mucous_color && (
+                    <InfoRow label="Mucosas" value={MUCOUS_LABELS[vital_signs.mucous_color] ?? vital_signs.mucous_color} />
+                  )}
+                </>
+              ) : (
+                <p className="text-sm text-slate-400 italic">Triagem não realizada</p>
+              )}
+            </div>
+          </div>
+
+          {vital_signs?.chief_complaint && (
+            <div className="border-t border-slate-100 px-6 py-4">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Queixa Principal (Triagem)</p>
+              <p className="text-sm text-slate-700 leading-relaxed">{vital_signs.chief_complaint}</p>
+            </div>
+          )}
+
+          <div className="border-t border-slate-100 px-6 py-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs text-slate-500">Tutor</p>
+              <p className="text-sm font-medium text-slate-800">{tutor.name}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-slate-500">{tutor.phone}</p>
+              <p className="text-xs text-slate-400">CPF {tutor.cpf}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Notas do MV (read-only context) */}
+        {consultation.vet_notes && (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200">
+            <div className="border-b border-slate-100 px-6 py-4 flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100">
+                <FileText className="h-4 w-4 text-slate-600" />
+              </div>
+              <div>
+                <h2 className="text-base font-semibold text-slate-900">Notas do Médico Veterinário</h2>
+                <p className="text-xs text-slate-500">Contexto clínico para os exames</p>
+              </div>
+            </div>
+            <div className="px-6 py-4">
+              <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{consultation.vet_notes}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Motor de Voz — Ditado do Laudo */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200">
+          <div className="border-b border-slate-100 px-6 py-4 flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50">
+              <Mic className="h-4 w-4 text-blue-600" />
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-slate-900">Ditado do Laudo</h2>
+              <p className="text-xs text-slate-500">
+                Grave os achados do exame — a IA usará a transcrição para preencher o laudo
+              </p>
+            </div>
+          </div>
+          <div className="p-6 space-y-4">
+
+            {/* Live transcript */}
+            {(isRecording || liveTranscript) && (
+              <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-slate-600 italic min-h-[56px]">
+                {liveTranscript || <span className="text-slate-400">Ouvindo... fale normalmente.</span>}
+              </div>
+            )}
+
+            {/* Sugestões geradas pela voz */}
+            {examSuggestions.length > 0 && (
+              <div className="space-y-2">
+                {examSuggestions.map((s, i) => (
+                  <div key={i} className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-blue-700 mb-0.5">Transcrição capturada</p>
+                      <p className="text-sm text-slate-700 leading-relaxed line-clamp-2">{s.motivo}</p>
+                    </div>
+                    <button
+                      onClick={() => setExamSuggestions(prev => prev.filter((_, idx) => idx !== i))}
+                      className="text-blue-400 hover:text-blue-600 p-1 flex-shrink-0"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+                <p className="text-xs text-slate-400 italic">
+                  Role para baixo e clique em &quot;Gerar Novo Documento&quot; para usar a transcrição como contexto da IA
+                </p>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={isRecording ? stopRecording : startRecording}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all ${
+                isRecording
+                  ? 'bg-red-100 text-red-700 hover:bg-red-200 animate-pulse'
+                  : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+              }`}
+            >
+              {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+              {isRecording ? 'Parar Ditado' : 'Iniciar Ditado'}
+            </button>
+          </div>
+        </div>
+
+        {/* Documentos — componente reutilizado do Consultório */}
+        <DocumentsSection
+          consultation={consultation}
+          clinicName={clinicName}
+          templates={templates}
+          initialDocuments={initialDocuments}
+          pendingSuggestions={examSuggestions}
+          onSuggestionDismiss={i =>
+            setExamSuggestions(prev => prev.filter((_, idx) => idx !== i))
+          }
+          onPrint={handlePrint}
+        />
+
+        {/* Anexos */}
+        <AttachmentsSection
+          patientId={consultation.patient.id}
+          consultationId={consultation.id}
+          initialAttachments={initialAttachments}
+        />
+
+        {/* Notas para o Médico Veterinário */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200">
+          <div className="border-b border-slate-100 px-6 py-4 flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50">
+              <FileText className="h-4 w-4 text-amber-600" />
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-slate-900">Recado para o Médico Veterinário</h2>
+              <p className="text-xs text-slate-500">Mensagem interna — ficará visível no painel do MV</p>
+            </div>
+          </div>
+          <div className="p-6">
+            <textarea
+              value={examNotes}
+              onChange={e => setExamNotes(e.target.value)}
+              placeholder="Ex: As imagens do Raio-X ficaram um pouco escuras, mas o laudo está anexo. Recomendo repetir em 48h."
+              rows={4}
+              className="w-full px-4 py-3 border border-slate-300 rounded-xl outline-none resize-none text-sm text-slate-700 leading-relaxed focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+            />
+          </div>
+        </div>
+
+        {/* Botão de Devolução */}
+        <div className="bg-white rounded-xl shadow-sm border border-blue-200">
+          <div className="p-6 flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-base font-semibold text-slate-900">Concluir Exames</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Devolve {patient.name} ao painel do Médico Veterinário com os laudos gerados
+              </p>
+            </div>
+            <button
+              onClick={() => setShowConfirm(true)}
+              disabled={isReturning}
+              className="flex items-center gap-2 px-6 py-3 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-all disabled:opacity-50 shadow-sm flex-shrink-0"
+            >
+              {isReturning
+                ? <><Loader2 className="w-4 h-4 animate-spin" />Devolvendo...</>
+                : <><ChevronRight className="w-4 h-4" />Concluir e Devolver ao Médico</>
+              }
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </>
+  )
+}
+
+// ─── Sub-componente ───────────────────────────────────────────────────────────
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-xs text-slate-500">{label}</span>
+      <span className="text-xs font-medium text-slate-700 text-right max-w-[60%] truncate">{value}</span>
+    </div>
+  )
+}

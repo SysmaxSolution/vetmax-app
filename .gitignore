@@ -1,0 +1,10 @@
+node_modules/
+.next/
+.env
+.env.local
+.env*.local
+dist/
+
+# Claude Code — nunca commitar permissões locais (podem conter tokens inline)
+.claude/settings.local.json
+.vercel

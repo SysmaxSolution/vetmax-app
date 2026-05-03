@@ -1,0 +1,152 @@
+{
+  "clinics": {
+    "clinicA": {
+      "id": "11111111-1111-1111-1111-111111111111",
+      "name": "Clínica Alfa Veterinária"
+    },
+    "clinicB": {
+      "id": "22222222-2222-2222-2222-222222222222",
+      "name": "Clínica Beta Veterinária"
+    }
+  },
+  "users": {
+    "adminA": {
+      "email": "admin@clinica-alfa.test",
+      "password": "TestPassword@123",
+      "role": "admin",
+      "clinic_id": "11111111-1111-1111-1111-111111111111",
+      "full_name": "Admin Alfa"
+    },
+    "accountantA": {
+      "email": "contador@clinica-alfa.test",
+      "password": "TestPassword@123",
+      "role": "admin",
+      "clinic_id": "11111111-1111-1111-1111-111111111111",
+      "full_name": "Contador Alfa"
+    },
+    "vetA": {
+      "email": "vet@clinica-alfa.test",
+      "password": "TestPassword@123",
+      "role": "vet",
+      "clinic_id": "11111111-1111-1111-1111-111111111111",
+      "full_name": "Dr. Vet Alfa",
+      "crmv": "SP12345"
+    },
+    "assistantA": {
+      "email": "assistente@clinica-alfa.test",
+      "password": "TestPassword@123",
+      "role": "assistant",
+      "clinic_id": "11111111-1111-1111-1111-111111111111",
+      "full_name": "Assistente Alfa"
+    },
+    "receptionistA": {
+      "email": "recepcao@clinica-alfa.test",
+      "password": "TestPassword@123",
+      "role": "receptionist",
+      "clinic_id": "11111111-1111-1111-1111-111111111111",
+      "full_name": "Recepcionista Alfa"
+    },
+    "adminB": {
+      "email": "admin@clinica-beta.test",
+      "password": "TestPassword@123",
+      "role": "admin",
+      "clinic_id": "22222222-2222-2222-2222-222222222222",
+      "full_name": "Admin Beta"
+    }
+  },
+  "tutors": {
+    "tutorA1": {
+      "id": "aaaa1111-0000-0000-0000-000000000001",
+      "clinic_id": "11111111-1111-1111-1111-111111111111",
+      "name": "Carlos Tutor Silva",
+      "cpf": "111.222.333-44",
+      "email": "carlos@test.com",
+      "phone": "11999990001"
+    }
+  },
+  "patients": {
+    "petA1": {
+      "id": "bbbb1111-0000-0000-0000-000000000001",
+      "clinic_id": "11111111-1111-1111-1111-111111111111",
+      "tutor_id": "aaaa1111-0000-0000-0000-000000000001",
+      "name": "Rex",
+      "species": "dog",
+      "breed": "Labrador",
+      "gender": "male",
+      "neutered": false
+    }
+  },
+  "productPrices": {
+    "groomingBath": {
+      "clinic_id": "11111111-1111-1111-1111-111111111111",
+      "name": "Banho Completo",
+      "item_type": "grooming",
+      "price": 85.00,
+      "is_active": true
+    },
+    "groomingTosa": {
+      "clinic_id": "11111111-1111-1111-1111-111111111111",
+      "name": "Tosa Higiênica",
+      "item_type": "grooming",
+      "price": 60.00,
+      "is_active": true
+    },
+    "clinicBPrice": {
+      "clinic_id": "22222222-2222-2222-2222-222222222222",
+      "name": "Banho Simples",
+      "item_type": "grooming",
+      "price": 70.00,
+      "is_active": true
+    }
+  },
+  "groomingSessions": {
+    "session1": {
+      "id": "cccc1111-0000-0000-0000-000000000001",
+      "clinic_id": "11111111-1111-1111-1111-111111111111",
+      "patient_id": "bbbb1111-0000-0000-0000-000000000001",
+      "tutor_id": "aaaa1111-0000-0000-0000-000000000001",
+      "services_requested": ["Banho Completo", "Tosa Higiênica"],
+      "current_status": "waiting_pickup",
+      "scheduled_at": null,
+      "price_total": 145.00,
+      "payment_status": "pending",
+      "service_prices": [
+        { "name": "Banho Completo", "price": 85.00 },
+        { "name": "Tosa Higiênica", "price": 60.00 }
+      ]
+    }
+  },
+  "clinicSettings": {
+    "clinicA": {
+      "clinic_id": "11111111-1111-1111-1111-111111111111",
+      "business_hours": {
+        "monday": { "open": "08:00", "close": "18:00" },
+        "tuesday": { "open": "08:00", "close": "18:00" },
+        "wednesday": { "open": "08:00", "close": "18:00" },
+        "thursday": { "open": "08:00", "close": "18:00" },
+        "friday": { "open": "08:00", "close": "18:00" },
+        "saturday": { "open": "08:00", "close": "12:00" },
+        "sunday": null
+      },
+      "working_days": [1, 2, 3, 4, 5, 6],
+      "holiday_work": false
+    }
+  },
+  "csvImportFixtures": {
+    "validCsv": "name,category,price\nBanho Completo,services,85.00\nTosa Higiênica,services,60.00\nConsulta Geral,exams,150.00",
+    "csvWithSpecialChars": "name,category,price\nBanho & Tosa — Premium,services,95.50\n\"Serviço \"\"Especial\"\"\",services,200.00\nÀgua Oxigenada (3%),grooming_supplies,12.75",
+    "csvWithInvalidValues": "name,category,price\nServiço Válido,services,50.00\nPreço Negativo,services,-10.00\nCategoria Inválida,invalid_cat,30.00\nPreço Texto,services,abc\n,services,50.00\nNome Longo aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,services,50.00"
+  },
+  "slots": {
+    "slot1": {
+      "id": "dddd1111-0000-0000-0000-000000000001",
+      "clinic_id": "11111111-1111-1111-1111-111111111111",
+      "date": "2026-05-05",
+      "start_time": "09:00",
+      "end_time": "10:00",
+      "capacity": 2,
+      "booked_count": 0,
+      "status": "available"
+    }
+  }
+}

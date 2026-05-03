@@ -1,0 +1,197 @@
+'use client'
+
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import { LogOut, Home, Stethoscope, TestTubes, Users, BarChart3, PawPrint, BedDouble, Package, Scissors, Banknote } from 'lucide-react'
+import type { UserRole } from '@/types'
+import { useState } from 'react'
+import { ClinicSwitcher } from '@/components/layout/ClinicSwitcher'
+import type { UserClinicInfo } from '@/lib/actions/clinic-switcher'
+import { updateClinicStatus } from '@/lib/actions/clinic-status'
+import type { ClinicStatus } from '@/lib/actions/clinic-status'
+
+// ─── Tab definitions ──────────────────────────────────────────────────────────
+
+interface Tab {
+  label:      string
+  href:       string
+  icon:       React.ComponentType<{ className: string }>
+  roles:      UserRole[]
+  moduleKey?: string
+  id?:        string
+}
+
+const ALL_TABS: Tab[] = [
+  { label: 'Recepção',    href: '/dashboard/reception',        icon: Home,        roles: ['receptionist','admin','vet','assistant'], moduleKey: 'reception' },
+  { label: 'Caixa',       href: '/dashboard/cashier',          icon: Banknote,    roles: ['admin','accountant' as UserRole],         id: 'nav-cashier' },
+  { label: 'Pacientes',   href: '/dashboard/patients',         icon: PawPrint,    roles: ['receptionist','admin','vet','assistant'] },
+  { label: 'Triagem',     href: '/dashboard/triage',           icon: Users,       roles: ['assistant','admin'],                      moduleKey: 'triage' },
+  { label: 'Consultório', href: '/dashboard/vet',              icon: Stethoscope, roles: ['vet','admin'],                            moduleKey: 'consultation' },
+  { label: 'Exames',      href: '/dashboard/exams',            icon: TestTubes,   roles: ['assistant','vet','admin'],                moduleKey: 'exams' },
+  { label: 'Internação',  href: '/dashboard/hospitalization',  icon: BedDouble,   roles: ['vet','admin','assistant'],                moduleKey: 'hospitalization' },
+  { label: 'Banho e Tosa',href: '/dashboard/grooming',         icon: Scissors,    roles: ['receptionist','admin','assistant'],       moduleKey: 'grooming' },
+  { label: 'Estoque',     href: '/dashboard/pharmacy',         icon: Package,     roles: ['admin'],                                  moduleKey: 'pharmacy' },
+  { label: 'Gestão',      href: '/dashboard/management',       icon: BarChart3,   roles: ['admin'] },
+]
+
+// ─── Props ────────────────────────────────────────────────────────────────────
+
+interface DashboardHeaderProps {
+  userName:       string
+  clinicName:     string
+  clinicId:       string
+  userRole:       UserRole
+  logoUrl?:       string | null
+  activeModules?: string[] | null
+  lowStockCount?: number
+  userClinics?:   UserClinicInfo[]
+  isSysmax?:      boolean
+  clinicStatus?:  string
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export default function DashboardHeader({
+  userName,
+  clinicName,
+  clinicId,
+  userRole,
+  logoUrl,
+  activeModules,
+  lowStockCount = 0,
+  userClinics,
+  isSysmax = false,
+  clinicStatus,
+}: DashboardHeaderProps) {
+  const pathname = usePathname()
+
+  const tabs = ALL_TABS.filter(tab => {
+    if (!tab.roles.includes(userRole)) return false
+    if (tab.moduleKey && activeModules) {
+      return activeModules.includes(tab.moduleKey)
+    }
+    return true
+  })
+
+  const isActive = (href: string) =>
+    href === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(href)
+
+  const hasMultipleClinics = userClinics && userClinics.length > 1
+  const [currentStatus, setCurrentStatus] = useState<string>(clinicStatus ?? 'active')
+  const [savingStatus, setSavingStatus] = useState(false)
+
+  const STATUS_OPTIONS: { value: ClinicStatus; label: string; color: string }[] = [
+    { value: 'active',    label: 'Ativa',     color: 'bg-green-100 text-green-700' },
+    { value: 'pending',   label: 'Pendente',  color: 'bg-amber-100 text-amber-700' },
+    { value: 'suspended', label: 'Bloqueada', color: 'bg-red-100 text-red-700' },
+  ]
+
+  async function handleStatusChange(newStatus: ClinicStatus) {
+    setSavingStatus(true)
+    const res = await updateClinicStatus(clinicId, newStatus)
+    setSavingStatus(false)
+    if (!res.error) {
+      setCurrentStatus(newStatus)
+    }
+  }
+
+  return (
+    <div className="bg-white border-b border-slate-200 sticky top-0 z-50 print:hidden">
+      {/* Brand + Clínica + Usuário */}
+      <div className="mx-auto max-w-4xl px-6 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {hasMultipleClinics ? (
+            <ClinicSwitcher
+              currentClinicId={clinicId}
+              clinicName={clinicName}
+              clinics={userClinics}
+              logoUrl={logoUrl}
+            />
+          ) : (
+            <>
+              {logoUrl ? (
+                <img src={logoUrl} alt={clinicName} className="h-8 w-auto max-w-[120px] object-contain rounded" />
+              ) : (
+                <>
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
+                    <span className="text-sm font-bold text-white">V</span>
+                  </div>
+                  <div>
+                    <h1 className="text-sm font-semibold text-slate-900">VetMax</h1>
+                    <p className="text-xs text-slate-500">{clinicName}</p>
+                  </div>
+                </>
+              )}
+              {logoUrl && <p className="text-xs text-slate-500 ml-1">{clinicName}</p>}
+            </>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          {isSysmax && (
+            <select
+              value={currentStatus}
+              onChange={e => handleStatusChange(e.target.value as ClinicStatus)}
+              disabled={savingStatus}
+              className={`text-xs font-semibold px-2.5 py-1 rounded-lg border-0 outline-none cursor-pointer disabled:opacity-50 ${
+                STATUS_OPTIONS.find(s => s.value === currentStatus)?.color ?? 'bg-slate-100 text-slate-600'
+              }`}
+            >
+              {STATUS_OPTIONS.map(s => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
+            </select>
+          )}
+          <span className="text-sm text-slate-600">
+            {isSysmax ? (
+              <span className="font-semibold text-purple-700">SysMax</span>
+            ) : (
+              <>Olá, <span className="font-semibold text-slate-900">{userName}</span></>
+            )}
+          </span>
+        </div>
+      </div>
+
+      {/* Navegação */}
+      <div className="mx-auto max-w-4xl px-6 flex items-center overflow-x-auto gap-1">
+        {tabs.map((tab) => {
+          const showBadge = tab.href === '/dashboard/pharmacy' && lowStockCount > 0
+          return (
+            <Link
+              key={tab.href}
+              href={tab.href}
+              id={tab.id}
+              data-testid={tab.id}
+              className={`relative flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
+                isActive(tab.href)
+                  ? 'bg-slate-900 text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <tab.icon className="w-4 h-4" />
+              <span className="hidden sm:inline">{tab.label}</span>
+              {showBadge && (
+                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+                  {lowStockCount > 9 ? '9+' : lowStockCount}
+                </span>
+              )}
+            </Link>
+          )
+        })}
+
+        <div className="flex-1" />
+
+        <button
+          onClick={async () => {
+            try { await fetch('/auth/logout', { method: 'POST' }) } catch {}
+            window.location.href = '/login'
+          }}
+          className="flex items-center gap-2 px-3 py-2 rounded-lg text-slate-600 hover:text-slate-900 text-sm font-medium whitespace-nowrap transition-all"
+          title="Sair"
+        >
+          <LogOut className="w-4 h-4" />
+          <span className="hidden sm:inline">Sair</span>
+        </button>
+      </div>
+    </div>
+  )
+}

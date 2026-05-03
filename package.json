@@ -1,0 +1,53 @@
+{
+  "name": "vetmax-app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack --port 4000",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "db:migrate": "node scripts/migrate.js",
+    "test": "jest",
+    "test:unit": "jest --testPathPattern='tests/unit'",
+    "test:integration": "jest --testPathPattern='tests/integration'",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed",
+    "test:all": "npm run test:integration && npm run test:e2e",
+    "test:race": "jest --testPathPattern='concurrency-race-condition' --runInBand",
+    "test:csv": "jest --testPathPattern='csv-import-sanity' --runInBand",
+    "test:rls": "jest --testPathPattern='rls-roles' --runInBand"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.82.0",
+    "@supabase/ssr": "^0.10.0",
+    "@supabase/supabase-js": "^2.101.1",
+    "jspdf": "^4.2.1",
+    "lucide-react": "^1.7.0",
+    "next": "^16.2.4",
+    "pdf2json": "^4.0.2",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "resend": "^6.12.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "@tailwindcss/postcss": "^4",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^20",
+    "@types/pg": "^8.20.0",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "csv-parse": "^5.6.0",
+    "dotenv": "^16.4.7",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.2",
+    "jest": "^29",
+    "pg": "^8.20.0",
+    "tailwindcss": "^4",
+    "ts-jest": "^29",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  }
+}

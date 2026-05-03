@@ -1,0 +1,297 @@
+# 🧬 MASTER BLUEPRINT VETMAX: Arquitetura, Fluxos e Visão de Futuro
+> Atualizado em 2026-04-19 | Sysmax Solutions
+> Status Geral: Convênios & Anti-Glosa 100% completo (migrations 0034-0037). Sprint atual: P0 Banho e Tosa — Faturamento + Agendamento (migration 0040).
+
+## 1. O DNA do Sistema (Premissas Universais)
+* **Dualidade de Entidades:** O Tutor é o cliente (responsável legal/financeiro, regido pela LGPD). O Pet é o paciente (responsável clínico, regido pelo CFMV). ✅ Implementado.
+* **Motor Principal (Voice-to-Template):** A digitação é substituída pela escuta ativa da IA, que mapeia conversas e preenche laudos automaticamente baseados em templates da clínica. ✅ Implementado.
+* **Prontuário Global (Feed Cronológico):** Layout padrão de tela com "Feed Cronológico" do paciente (linha do tempo de check-ins, triagens, consultas, documentos e vacinas). ✅ Implementado.
+* **Multi-tenancy Inegociável:** Toda tabela e query possui e filtra por `clinic_id` usando Supabase RLS. ✅ Implementado.
+
+## 2. O Motor de Inteligência: "Cadastro Vivo" ✅ (Implementado 2026-04-16)
+* **Escuta Ativa Contínua:** Durante a consulta, a IA identifica dados soltos na fala (ex: "Tomou a V10 mês passado" ou "É cardiopata").
+* **Alerta de Atualização:** O sistema NÃO altera o banco silenciosamente. Ao fim do atendimento, a IA exibe um pop-up: *"Identifiquei novas informações. Deseja atualizar o cadastro permanente?"*.
+* **Status:** ✅ `LiveRegistrationModal.tsx` integrado ao `ConsultationDetail.tsx`. Modal exibe sugestões da IA com confirmação explícita do MV antes de persistir.
+
+## 3. MÓDULO 1: Recepção (O Ponto de Controle)
+* **Resumo:** A porta de entrada blindada. Foco em evitar duplicidade e garantir clareza financeira.
+* **O que já temos (✅):** Busca inteligente, Modal Unificado de Edição (Abas: Paciente, Tutor/Financeiro, Vacinas) com sync em tempo real, importador de CSV blindado contra duplicidade. Check-in obrigatório.
+* **Foto do Pet (✅ 2026-04-16):** Upload via Supabase Storage (bucket `pet-photos`), botão no `EditPetModal`, `uploadPetPhoto()` em `pets.ts`.
+* **O que falta (🚀):** Integração profunda do status financeiro com o novo módulo de Contas a Receber.
+
+## 4. MÓDULO 2: Triagem (Enfermaria)
+* **Resumo:** A transição técnica entre a rua e o médico. Coleta de sinais vitais obrigatórios.
+* **O que já temos (✅):** Fila de espera, bloqueio de avanço sem peso/temperatura, queixa principal por voz, alertas visuais para animais agressivos/alérgicos, carteira de vacinação inline.
+* **O que falta (🚀):** Sugestão de IA para preencher campos vitais baseados apenas no áudio do auxiliar.
+
+## 5. MÓDULO 3: Consultório Médico (O Cérebro Clínico)
+* **Resumo:** O ambiente sem digitação. O veterinário foca no animal enquanto a IA estrutura o prontuário.
+* **O que já temos (✅):** Painel de contexto alimentado pela triagem, prontuário por voz (blocos), geração de documentos via templates PDF, diagnóstico diferencial via IA (Haiku).
+* **Calculadora de Prescrição (✅ 2026-04-18):** `/api/prescription-calculator` — Claude Haiku calcula dose pelo peso do pet. Botão "⚡ Calcular (IA)" inline no formulário de medicação.
+* **Receituário Azul (✅ 2026-04-18):** Migration 0029, lista de 30+ DCBs, badge "Receita Azul", auto-detecção por nome em `ClinicalActionsSection`.
+* **O que falta (🚀):** * **Processamento RAG Iterativo:** IA cruzar áudios de diferentes blocos para manter contexto global.
+
+## 6. MÓDULO 4: Gestão Avançada (Painel do Diretor)
+* **Resumo:** O centro de comando administrativo. Onde o software é moldado para cada clínica.
+* **O que já temos (✅):** RBAC (Role-Based Access Control), Feature Flags (ligar/desligar módulos), Gestão de Usuários (convites por token), Upload de PDFs com extração de campos via IA.
+* **Radar Kanban:** ✅ Implementado em `/dashboard/management/kanban`. Visão macro de todos os pets na clínica por status de atendimento (admin only).
+* **Audit Trail (✅ 2026-04-18):** `logAudit()` instrumentado em 13 actions críticas: pets (3), vet (2), triage (2), consultations (3), templates (2), hospitalizations (3), pharmacy (3).
+
+## 6c. MÓDULO 7: WhatsApp — Notificações para Tutores ✅ Completo (2026-04-17)
+* **11 Triggers:** `triage_called`, `triage_completed`, `documents_sent`, `exam_completed`, `hospitalization_update`, `hospitalization_discharge`, `hospitalization_evolution_saved`, `hospitalization_status_changed`, `sent_to_review`, `consultation_finished`, `hospitalization_started`.
+* **IA geradora de mensagens:** Claude Haiku recebe o contexto do trigger e gera a mensagem em PT-BR. Médico pode editar antes de enviar.
+* **Suporte a Anexos:** Seleção de arquivos do Supabase Storage com signed URLs (expira em 1h) para envio via WhatsApp.
+* **Configuração por Clínica:** `WhatsappSettings.tsx` no painel de Gestão. Campos sensíveis (instance_id, token, client_token) mascarados na exibição.
+* **Gate Global:** `WhatsAppGateProvider.tsx` — botão de WhatsApp só aparece para clínicas com configuração ativa (`is_active = true`).
+* **Provedor:** Z-API (padrão) ou Sysmax. `provider_name` na tabela `clinic_whatsapp_settings`.
+* **Log de Mensagens:** Tabela `whatsapp_notifications` registra trigger, destinatário, status de envio e timestamp.
+* **Migrations:** `0026_whatsapp_notifications`, `0027_clinic_whatsapp_settings`, `0028_add_consultation_finished_trigger`.
+* **API Keepalive:** `/api/keepalive?token=<KEEPALIVE_SECRET>` — ping mínimo no Supabase para evitar pausa do projeto no free tier (chamado pelo Windows Task Scheduler a cada 5 dias).
+
+## 6b. MÓDULO 5: Internação (Mapa de Leitos) ✅ Completo (2026-04-16)
+* **Kanban de 4 colunas:** Observação, Enfermaria, UTI, Alta.
+* **Drag & Drop com gatilho de Evolução:** mover um card entre alas abre obrigatoriamente o modal de Evolução de Plantão. O card só muda de coluna após a ficha ser salva.
+* **Evolução por Voz:** `extractHospitalizationVoice` extrai notas + medicações estruturadas + estado do animal.
+* **Pre-fill inteligente:** UTI → Piorou | Enfermaria → Melhorou | Observação → Estável.
+* **Alta Inteligente:** Alta Definitiva (encerra internação) ou Revisão Clínica (devolve para fila do MV).
+* **Alta Formal (✅ 2026-04-16):** `generateDischargeSummary()` em `reports.ts`. `printDischargePdf()` gera PDF no Kanban com diagnóstico final, evolução completa, medicações, logs de movimentação e assinatura do MV.
+* **Receituário de Alta (✅ 2026-04-16):** `PrescriptionModal.tsx` + `generatePrescriptionPdf()` — documento de receita gerado com jsPDF após a alta, com campos do pet, tutor, medicações estruturadas e CRMV do MV. Compartilhável via Storage Supabase.
+* **Central de Documentos (✅ 2026-04-16):** Migration `0025_hospitalization_documents` — bucket `clinical-documents` + tabela `hospitalization_documents` com RLS e metadados de upload por internação.
+
+## 6d. MÓDULO 10: Convênios & Escudo Anti-Glosa ✅ COMPLETO (2026-04-18)
+
+> Resolve o maior gargalo financeiro das clínicas: retrabalho e glosas de planos de saúde pet.
+
+**Cadastro de Convênios (`insurance_providers`):**
+- Multi-tenant: cada clínica cadastra seus próprios convênios (Pet Love, Petcard, etc.)
+- Campos: `name`, `plan_types` (JSONB), `portal_url`, `contact_info`
+
+**Vínculo Pet ↔ Convênio (`pet_insurance`):**
+- Liga `patients` a um convênio ativo com `member_id`, `plan_type`, `coverage_status`, `valid_until`
+- Exibido no TutorProfile da Recepção e no painel de contexto do Consultório
+
+**Knowledge Base Anti-Glosa (`insurance_rules`):**
+- Regras por procedimento e convênio: `requires_justification`, `requires_prior_auth`, `limited_frequency`, `not_covered`
+- `severity`: `blocking` | `warning` | `info`
+- `justification_template`: texto modelo para o MV preencher no prontuário
+- Alimentada manualmente pela clínica
+
+**IA Auditora (`insurance-audit.ts` — Claude Haiku):**
+- Intercepta `updateConsultation()` antes de salvar
+- Recebe: `vet_notes`, `exam_orders`, `medications` + `insurance_rules` do convênio ativo
+- Retorna: `{ result: 'approved|warnings|issues_found', suggestions: [{procedure, issue, suggestion, template}] }`
+- Salva em `insurance_audit_log` com timestamp e confirmação do MV
+
+**InsuranceAuditBanner (Consultório):**
+- Verde: aprovado
+- Amarelo: avisos + sugestão com botão "Copiar"
+- Vermelho: bloqueante — exige "Salvar mesmo assim com justificativa"
+
+**InsuranceExportPanel (Checkout / Recepção):**
+- Exibe dados mastigados: member_id, plano, procedimentos com código TUSS
+- Botão "Copiar para portal" e "Exportar JSON" para preenchimento manual no portal terceiro
+
+**Banco de Dados (Migrations 0034-0037):**
+```
+insurance_providers  (clinic_id, name, plan_types JSONB, portal_url, contact_info JSONB)
+pet_insurance        (clinic_id, patient_id, tutor_id, provider_id, plan_type, member_id, coverage_status, valid_until)
+insurance_rules      (clinic_id, provider_id, procedure_name, rule_type, rule_description, justification_template, severity)
+insurance_audit_log  (clinic_id, consultation_id, patient_id, provider_id, audit_result, ai_suggestions JSONB, vet_acknowledged)
+-- + colunas em consultations: insurance_id, insurance_verified_at, insurance_override_reason
+```
+
+**Estrutura de Arquivos:**
+```
+src/lib/actions/insurance-providers.ts
+src/lib/actions/pet-insurance.ts
+src/lib/actions/insurance-rules.ts
+src/lib/actions/insurance-audit.ts
+src/components/consultation/InsuranceAuditBanner.tsx
+src/components/reception/InsuranceExportPanel.tsx
+src/app/(dashboard)/settings/insurance/page.tsx
+```
+
+**Plano de sprints:**
+- Sprint 1: migrations 0034-0037 + CRUD providers + vínculo pet + editor de regras
+- Sprint 2: `runInsuranceAudit()` + `InsuranceAuditBanner` + `InsuranceExportPanel`
+
+---
+
+## 7. MÓDULO 6: Financeiro e BI 🚀 (Backlog)
+* **Motor Financeiro:** Criação das tabelas de fluxo de caixa conectadas ao checkout da recepção.
+* **Dashboard BI:** Gráficos inteligentes consumindo a base importada de pacientes (Faturamento previsto, espécies mais atendidas, funil de conversão de exames).
+
+## 7a. MÓDULO 8: Banho e Tosa ✅ Workflow Completo · 🔄 P0 em andamento (2026-04-19)
+> Workflow operacional 100% funcional. P0 (Faturamento + Agendamento) em implementação.
+
+**Implementado (Completo):**
+- Kanban 5 colunas com drag-and-drop + real-time sync
+- Assistente de voz hands-free (wake words customizáveis, parser IA, auto-status)
+- Fotos/documentos por sessão (bucket `grooming-documents`, migration 0038)
+- Triggers WhatsApp: `grooming_ready_for_pickup`, `grooming_delivered`
+- Multi-tenant correto (RLS em todas as tabelas)
+
+**P0 — Em andamento (migration 0040):**
+- **Faturamento:** `price_total`, `service_prices JSONB`, `payment_status` em `grooming_sessions`. Preços do `clinic_catalog` (tipo 'grooming'). Total dinâmico no check-in. Aba Cobrança no modal de detalhes.
+- **Agendamento:** UI para `scheduled_at` (campo já existe no DB). Coluna "Agendados" pré-kanban. Date/time picker no check-in. Confirmação de chegada.
+
+**P1 — Backlog próxima sprint:**
+- Atribuição de profissional (`assigned_to`)
+- Analytics/KPIs do setor
+- Audit log de mudanças de status
+
+**P2/P3 — Backlog futuro:**
+- Integração com prontuário clínico (alergias, histórico)
+- Produtos vinculados ao estoque
+- Feedback/Avaliação do tutor (star rating)
+- Busca e filtros avançados
+- Mobile responsiveness
+
+**Banco de Dados (Migrations aplicadas):**
+```
+0032 — grooming_sessions  (clinic_id, patient_id, tutor_id, status, services_requested, box_number, scheduled_at)
+0033 — grooming_records   (session_id, services_applied JSONB, products_used JSONB, behavior, voice_transcription)
+0038 — grooming_documents (bucket grooming-documents + tabela com RLS)
+0039 — voice_triggers     (voice_start/stop_triggers em clinics)
+0040 — grooming_pricing   (price_total, service_prices, discount_percent, payment_status) ← em andamento
+```
+
+**Estrutura de Arquivos:**
+```
+src/app/dashboard/grooming/page.tsx
+src/components/grooming/GroomingKanban.tsx
+src/components/grooming/GroomingDetailModal.tsx
+src/components/grooming/GroomingCheckinModal.tsx
+src/lib/actions/grooming.ts
+src/lib/actions/grooming-intent.ts
+src/hooks/useGroomingVoiceAssistant.ts
+```
+
+---
+
+## 7b. MÓDULO 9: Hotel Pet 🚀 (Backlog — ⭐⭐⭐⭐ Difícil)
+> Versão estendida da Internação com lógica financeira (tarifário), múltiplos tipos de hospedagem e inventário de itens.
+
+**Tipos de Hospedagem:**
+- **Daycare** — diurno, sem pernoite
+- **Pernoite** — uma ou mais noites em quarto/box
+- **Pet Sitting** — cuidador vai ao domicílio (sem ocupação de quarto)
+
+**Adaptação da Recepção:**
+- Quando Módulo Hotel (`hotel`) ativo em `active_modules`, a recepção exibe nova aba/opção: "Check-in Hotel"
+- Formulário de check-in captura: tipo, datas, quarto desejado, itens trazidos pelo tutor
+
+**Kanban / Calendário de Ocupação:**
+- Visualização em modo Kanban (por status) e Calendário (por datas/quartos)
+- Status: `confirmed` → `checked_in` → `in_stay` → `ready_checkout` → `checked_out`
+- Cards exibem ícone de tipo (sol/lua/casa), nome do pet e data de saída prevista
+
+**Evoluções por Voz (Voice-to-Action):**
+- `extractHotelVoice()` — Claude Haiku extrai: refeição ingerida, horário, comportamento, higiene realizada, atividades físicas, observações gerais
+- Estrutura: `StructuredHotelRecord` com campos `feeding[]`, `hygiene[]`, `activities[]`, `notes`
+
+**Inventário de Itens da Estadia:**
+- Ao check-in, recepcionista registra itens trazidos: ração, remédios, brinquedos, coleira, etc.
+- Check-out valida devolução de todos os itens registrados
+
+**Controle de Alimentação e Higienização:**
+- Registro estruturado por turno (manhã/tarde/noite)
+- Alimentação: tipo de ração, quantidade, horário, aceitação
+- Higienização: banho, escovação, limpeza de ouvidos — registrado com timestamp
+
+**Tarifário Flexível:**
+- Tabela `hotel_tariffs`: tipo de hospedagem × porte do pet × temporada (normal/alta/feriado) × duração mínima
+- Cálculo automático do valor estimado ao fazer check-in
+- Integração com `billing` no checkout da Recepção
+
+**Agendamento por Temporada:**
+- `CalendarWorkspace` adaptado: bloqueia quartos em datas configuradas como lotadas
+- Configuração de "alta temporada" (feriados, fins de semana longos) com tarifas majoradas
+- Limite de ocupação por tipo de quarto
+
+**Configuração no Painel de Gestão:**
+- Aba "Hotel" em `ManagementWorkspace`: cadastro de quartos/boxes, tipos, capacidade, fotos
+- Aba "Tarifário": regras de preço por tipo × porte × temporada
+
+**Banco de Dados (Migrations 0038-0041 — aguardam conclusão do Módulo Convênios):**
+```
+hotel_rooms       (clinic_id, name, type, capacity, size_category, is_active)
+hotel_tariffs     (clinic_id, stay_type, pet_size, season_type, price_per_unit, min_units, max_units)
+hotel_stays       (clinic_id, patient_id, tutor_id, room_id, stay_type, status, checkin_at, checkout_at, estimated_value, items_inventory JSONB, notes)
+hotel_stay_records (stay_id, clinic_id, record_type[feeding/hygiene/activity/note], voice_transcription, structured_data JSONB, photo_url, created_by, created_at)
+```
+
+**Estrutura de Arquivos:**
+```
+src/app/(dashboard)/hotel/page.tsx                   ← HotelWorkspace (Kanban + Calendário)
+src/components/hotel/HotelStayDetailModal.tsx         ← Modal de estadia (padrão HospitalizationDetailModal)
+src/components/hotel/HotelInventoryModal.tsx          ← Inventário de itens da estadia
+src/components/hotel/HotelCheckinModal.tsx            ← Check-in com tipo, datas, quarto, inventário inicial
+src/lib/actions/hotel.ts                             ← CRUD stays, rooms, tariffs + extractHotelVoice()
+```
+
+**Integrações:**
+- WhatsApp triggers: `hotel_checkin`, `hotel_daily_update`, `hotel_checkout`
+- Relatório de estadia gerado em PDF ao checkout (padrão Alta Formal da Internação)
+
+---
+
+## 📋 Próximas Atividades (Backlog Ordenado)
+
+### ✅ Sprint (concluída 2026-04-16)
+1. ~~**Alta Formal**~~ ✅ — `generateDischargeSummary()` + `printDischargePdf()` no Kanban.
+2. ~~**Receituário de Alta**~~ ✅ — `PrescriptionModal.tsx` + `generatePrescriptionPdf()` + bucket `clinical-documents` (migration 0025).
+3. ~~**Foto do Pet**~~ ✅ — `uploadPetPhoto()` + UI no `EditPetModal`.
+4. ~~**Cadastro Vivo**~~ ✅ — `LiveRegistrationModal` integrado ao `ConsultationDetail`.
+
+### ✅ Sprint (concluída 2026-04-17)
+5. ~~**Módulo WhatsApp**~~ ✅ — `WhatsAppNotificationModal.tsx` (11 triggers, IA, anexos), `WhatsappSettings.tsx` (credenciais mascaradas), `WhatsAppGateProvider.tsx`, `whatsapp.ts` (actions), migrations 0026/0027/0028.
+6. ~~**API Keepalive**~~ ✅ — `/api/keepalive` protegido por token para manter Supabase free tier ativo.
+
+---
+
+### ✅ Sprint Alta Prioridade (concluída 2026-04-18)
+
+| # | Feature | Status |
+|---|---------|--------|
+| 1 | **Receituário Azul** | ✅ Migration 0029, lista 30+ DCBs, badge "Receita Azul", auto-detecção por nome em `ClinicalActionsSection` |
+| 2 | **Calculadora de Prescrição** | ✅ `/api/prescription-calculator` (Claude Haiku), botão inline "⚡ Calcular (IA)", preenche campo Dose automaticamente |
+| 3 | **Audit Trail** | ✅ `logAudit()` em 13 actions: pets (3), vet (2), triage (2), consultations (3), templates (2), hospitalizations (3), pharmacy (3) |
+
+### ✅ Concluído (2026-04-18)
+
+| # | Feature | Status |
+|---|---------|--------|
+| — | **Tags Comportamentais Ricas** | ✅ Badges em Recepção, Triagem, Consultório, Exames. |
+| — | **Módulo Banho e Tosa (workflow)** | ✅ Kanban, voz, documentos, WhatsApp. Migrations 0032-0033, 0038-0039. |
+| — | **Módulo Convênios & Anti-Glosa** | ✅ DB + CRUD + IA Auditora + Banner + ExportPanel. Migrations 0034-0037. |
+
+### 🔴 Sprint Atual — P0 Banho e Tosa (2026-04-19)
+
+| # | Feature | Dificuldade | Detalhes |
+|---|---------|-------------|----------|
+| 1 | **Faturamento Grooming** | ⭐⭐ Médio | Migration 0040, preços do catálogo, total no check-in, aba Cobrança no modal. |
+| 2 | **Agendamento Grooming** | ⭐⭐ Médio | Date/time picker no check-in, coluna "Agendados" no Kanban, confirmação de chegada. |
+
+### 🟡 Média Prioridade
+
+| # | Feature | Dificuldade | Estimativa | Detalhes |
+|---|---------|-------------|------------|----------|
+| 5 | **Módulo Financeiro / BI** | ⭐⭐⭐⭐ Difícil | ~2-3 sprints | Fluxo de caixa (tabelas `billing` existem, migration 0011), dashboard gráficos (faturamento, espécies, funil). Requer `recharts` ou similar, novas queries agregadas, nova rota `/dashboard/finance` |
+
+### 🟢 Futuro (Prioridade Baixa)
+
+| # | Feature | Dificuldade | Estimativa | Detalhes |
+|---|---------|-------------|------------|----------|
+| 6 | **Módulo Hotel Pet** | ⭐⭐⭐⭐ Difícil | ~2-3 sprints | Check-in Daycare/Pernoite/Pet Sitting. Inventário, alimentação, higienização, tarifário flexível, agendamento por temporada. Migrations 0038-0041 (aguardam Convênios). |
+| 7 | **Emissão de Recibo** | ⭐ Muito Fácil | ~1h | Recibo simplificado no checkout usando `jsPDF`. Dados já existem em `billing` |
+| 8 | **Processamento RAG Iterativo** | ⭐⭐⭐⭐⭐ Muito Difícil | ~2 sprints | IA conecta áudios de diferentes blocos da mesma consulta para manter contexto global. Requer embedding, vector store e redesign do fluxo de transcrição |
+| 9 | **Integração com Labs** | ⭐⭐⭐⭐ Difícil | ~1 sprint | Upload de laudos externos via PACS/API de laboratório. Requer mapeamento de parceiros e formato DICOM/HL7 |
+| 10 | **Subscription Plans** | ⭐⭐⭐ Médio | ~1 sprint | Tabela `subscription_plans` + gate de features por plano. Requer integração com gateway de pagamento (Stripe/Asaas) |
+
+---
+## 🎯 Diretrizes para a Inteligência Artificial (Claude/Cursor)
+1. **Sempre leia o `STATUS.md`** antes de propor arquiteturas para não reconstruir o que já existe.
+2. **Priorize a economia de contexto:** Responda com diffs, não reescreva arquivos completos se não for necessário.
+3. Respeite as nomenclaturas de banco de dados (`patients`, `tutors`, `consultations`). Nunca sugira criar campos sem verificar se já existem nas tipagens.
+4. **Internação está completa** — não recrie `HospitalizationKanban`, `HospitalizationDetailModal` ou `AdmitPetModal`. Estenda os existentes.

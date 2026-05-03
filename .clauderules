@@ -1,0 +1,4 @@
+# Security & Privacy Shield
+- **Zero PII Policy:** Nunca inclua CPFs, nomes reais ou telefones de tutores em exemplos de código ou logs.
+- **Secret Masking:** Se detectar chaves que comecem com `sk-` ou `ghp_`, mascare-as imediatamente como `[REDACTED]`.
+- **Environment Isolation:** Nunca sugira alterações no arquivo `.env.local` que envolvam expor chaves no código client-side.

@@ -1,0 +1,599 @@
+'use server'
+
+import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { revalidatePath } from 'next/cache'
+import { logAudit } from './audit'
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export type HospitalizationStatus =
+  | 'observation'
+  | 'ward'
+  | 'icu'
+  | 'ready_for_discharge'
+  | 'discharged'
+
+export type HospitalizationCard = {
+  id:              string
+  clinic_id:       string
+  patient_id:      string
+  consultation_id: string | null
+  status:          HospitalizationStatus
+  reason:          string | null
+  notes:           string | null
+  created_at:      string
+  discharged_at:   string | null
+  patient: {
+    id:            string
+    name:          string
+    species:       string
+    breed:         string | null
+    photo_url:     string | null
+    behavior_tags: string[]
+  }
+  tutor?: {
+    name:  string
+    phone: string
+  }
+}
+
+export type HospitalizationBoard = {
+  observation:         HospitalizationCard[]
+  ward:                HospitalizationCard[]
+  icu:                 HospitalizationCard[]
+  ready_for_discharge: HospitalizationCard[]
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+async function getClinicId(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
+  const { data } = await supabase
+    .from('profiles')
+    .select('clinic_id')
+    .eq('id', userId)
+    .single()
+  return data?.clinic_id ?? null
+}
+
+// ─── Quadro Kanban ────────────────────────────────────────────────────────────
+
+export async function getHospitalizationsBoard(): Promise<HospitalizationBoard | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const clinicId = await getClinicId(supabase, user.id)
+  if (!clinicId) return { error: 'Perfil sem clínica.' }
+
+  const { data, error } = await supabase
+    .from('hospitalizations')
+    .select(`
+      id, clinic_id, patient_id, consultation_id, status, reason, notes, created_at, discharged_at,
+      patients ( id, name, species, breed, photo_url, behavior_tags, tutors ( name, phone ) )
+    `)
+    .eq('clinic_id', clinicId)
+    .neq('status', 'discharged')
+    .order('created_at', { ascending: true })
+
+  if (error) return { error: 'Erro ao buscar internações: ' + error.message }
+
+  const board: HospitalizationBoard = {
+    observation:         [],
+    ward:                [],
+    icu:                 [],
+    ready_for_discharge: [],
+  }
+
+  for (const h of data ?? []) {
+    const p = h.patients as any
+    const t = p?.tutors as any
+    const card: HospitalizationCard = {
+      id:              h.id,
+      clinic_id:       h.clinic_id,
+      patient_id:      h.patient_id,
+      consultation_id: h.consultation_id ?? null,
+      status:          h.status as HospitalizationStatus,
+      reason:          h.reason ?? null,
+      notes:           h.notes ?? null,
+      created_at:      h.created_at,
+      discharged_at:   h.discharged_at ?? null,
+      patient: {
+        id:            p?.id ?? '',
+        name:          p?.name ?? '—',
+        species:       p?.species ?? '',
+        breed:         p?.breed ?? null,
+        photo_url:     p?.photo_url ?? null,
+        behavior_tags: Array.isArray(p?.behavior_tags) ? p.behavior_tags : [],
+      },
+      tutor: t ? { name: t.name ?? '—', phone: t.phone ?? '' } : undefined,
+    }
+    if (h.status in board) {
+      board[h.status as keyof HospitalizationBoard].push(card)
+    }
+  }
+
+  return board
+}
+
+// ─── Internar Paciente ────────────────────────────────────────────────────────
+
+export async function createHospitalization(data: {
+  patient_id:      string
+  consultation_id?: string
+  status:          HospitalizationStatus
+  reason:          string
+}): Promise<{ id: string } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const clinicId = await getClinicId(supabase, user.id)
+  if (!clinicId) return { error: 'Perfil sem clínica.' }
+
+  if (!data.reason.trim()) return { error: 'Motivo da internação é obrigatório.' }
+
+  const admin = createAdminClient()
+
+  // Impede duplicatas: se já existe internação ativa, bloqueia.
+  // Se existe uma internação encerrada (saiu para revisão e voltou), REATIVA-a.
+  if (data.consultation_id) {
+    const { data: active } = await admin
+      .from('hospitalizations')
+      .select('id')
+      .eq('consultation_id', data.consultation_id)
+      .neq('status', 'discharged')
+      .maybeSingle()
+    if (active) return { error: 'Este paciente já possui uma internação ativa.' }
+
+    const { data: previous } = await admin
+      .from('hospitalizations')
+      .select('id')
+      .eq('consultation_id', data.consultation_id)
+      .eq('status', 'discharged')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (previous) {
+      // Reativa o leito existente — todo o histórico de evoluções é preservado
+      await admin
+        .from('hospitalizations')
+        .update({ status: data.status, discharged_at: null, updated_at: new Date().toISOString() })
+        .eq('id', previous.id)
+      revalidatePath('/dashboard/hospitalization')
+      revalidatePath('/dashboard/vet')
+      return { id: previous.id }
+    }
+  }
+
+  const { data: result, error } = await admin
+    .from('hospitalizations')
+    .insert({
+      clinic_id:       clinicId,
+      patient_id:      data.patient_id,
+      consultation_id: data.consultation_id ?? null,
+      status:          data.status,
+      reason:          data.reason.trim(),
+    })
+    .select('id')
+    .single()
+
+  if (error || !result) return { error: 'Erro ao internar paciente: ' + (error?.message ?? '') }
+
+  // Remove o paciente do Kanban de Consultório atualizando o status da consulta
+  if (data.consultation_id) {
+    const { error: updateErr } = await admin
+      .from('consultations')
+      .update({ status: 'hospitalized' })
+      .eq('id', data.consultation_id)
+      .eq('clinic_id', clinicId)
+    if (updateErr) return { error: 'Internação criada, mas falha ao atualizar fila: ' + updateErr.message }
+  }
+
+  await logAudit({ action: 'CREATE_HOSPITALIZATION', entity_type: 'hospitalizations', entity_id: result.id, details: { patient_id: data.patient_id, status: data.status, reason: data.reason } })
+
+  revalidatePath('/dashboard/hospitalization')
+  revalidatePath('/dashboard/vet')
+  return { id: result.id }
+}
+
+// ─── Mover Card entre Colunas ─────────────────────────────────────────────────
+
+export async function updateHospitalizationStatus(
+  id:     string,
+  status: HospitalizationStatus
+): Promise<{ success: true } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const clinicId = await getClinicId(supabase, user.id)
+  if (!clinicId) return { error: 'Perfil sem clínica.' }
+
+  const admin = createAdminClient()
+  const payload: Record<string, any> = {
+    status,
+    updated_at: new Date().toISOString(),
+  }
+  if (status === 'discharged') {
+    payload.discharged_at = new Date().toISOString()
+  }
+
+  const { error } = await admin
+    .from('hospitalizations')
+    .update(payload)
+    .eq('id', id)
+    .eq('clinic_id', clinicId)
+
+  if (error) return { error: 'Erro ao mover internação: ' + error.message }
+
+  await logAudit({ action: 'UPDATE_HOSPITALIZATION_STATUS', entity_type: 'hospitalizations', entity_id: id, details: { status } })
+
+  revalidatePath('/dashboard/hospitalization')
+  return { success: true }
+}
+
+// ─── Ocupação para o Dashboard ────────────────────────────────────────────────
+
+export async function getHospitalizationOccupancy(): Promise<
+  { active: number; by_status: Record<string, number> } | { error: string }
+> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const clinicId = await getClinicId(supabase, user.id)
+  if (!clinicId) return { error: 'Perfil sem clínica.' }
+
+  const { data, error } = await supabase
+    .from('hospitalizations')
+    .select('status')
+    .eq('clinic_id', clinicId)
+    .neq('status', 'discharged')
+
+  if (error) return { error: error.message }
+
+  const by_status: Record<string, number> = {}
+  for (const h of data ?? []) {
+    by_status[h.status] = (by_status[h.status] ?? 0) + 1
+  }
+
+  return { active: data?.length ?? 0, by_status }
+}
+// ─── Evolução Clínica (Registos Diários) ──────────────────────────────────────
+
+export type StructuredMed = {
+  name: string
+  dose: string
+  route: string
+  notes: string
+}
+
+export type HospitalizationRecord = {
+  id: string
+  hospitalization_id: string
+  user_name: string
+  notes: string
+  medications: StructuredMed[] // Agora é um array estruturado
+  improvement_level: 'piorou' | 'estavel' | 'melhorou'
+  created_at: string
+}
+
+export async function addClinicalEvolution(data: {
+  hospitalization_id: string
+  notes: string
+  medications: StructuredMed[]
+  improvement_level: 'piorou' | 'estavel' | 'melhorou'
+}): Promise<{ success: true } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const { data: profile } = await supabase.from('profiles').select('full_name, clinic_id').eq('id', user.id).single()
+  const admin = createAdminClient()
+  
+  const { data: insertedRecord, error } = await admin.from('hospitalization_records').insert({
+    hospitalization_id: data.hospitalization_id,
+    clinic_id:         profile?.clinic_id,
+    user_id:           user.id,
+    user_name:         profile?.full_name ?? 'Veterinário',
+    notes:             data.notes,
+    medications:       data.medications, // Array JSONB vai direto
+    improvement_level: data.improvement_level,
+  }).select('id').single()
+
+  if (error) return { error: 'Erro ao salvar evolução: ' + error.message }
+
+  // Abatimento automático de estoque para cada medicação da evolução
+  if (profile?.clinic_id && insertedRecord?.id && data.medications.length > 0) {
+    const { deductStockForMedication } = await import('./stock')
+    for (const med of data.medications) {
+      if (med.name?.trim()) {
+        await deductStockForMedication({
+          clinicId:       profile.clinic_id,
+          userId:         user.id,
+          medicationName: med.name,
+          source:         'HOSPITALIZATION',
+          referenceId:    insertedRecord.id,
+        })
+      }
+    }
+  }
+
+  revalidatePath('/dashboard/hospitalization')
+  return { success: true }
+}
+
+// ─── Log de Movimentações ─────────────────────────────────────────────────────
+
+export async function addHospitalizationLog(data: {
+  hospitalization_id: string
+  from_status:        HospitalizationStatus | string
+  to_status:          HospitalizationStatus | string
+}): Promise<{ success: true } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('full_name, clinic_id')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
+
+  const admin = createAdminClient()
+  const { error } = await admin.from('hospitalization_logs').insert({
+    clinic_id:          profile.clinic_id,
+    hospitalization_id: data.hospitalization_id,
+    user_name:          profile.full_name ?? 'Usuário',
+    from_status:        data.from_status,
+    to_status:          data.to_status,
+  })
+
+  if (error) return { error: 'Erro ao registrar log: ' + error.message }
+  return { success: true }
+}
+
+// ─── Alta Definitiva ──────────────────────────────────────────────────────────
+
+export async function confirmDischarge(
+  hospitalizationId: string,
+  consultationId:    string | null
+): Promise<{ success: true } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const clinicId = await getClinicId(supabase, user.id)
+  if (!clinicId) return { error: 'Perfil sem clínica.' }
+
+  const admin = createAdminClient()
+  const now   = new Date().toISOString()
+
+  const { error: hospErr } = await admin
+    .from('hospitalizations')
+    .update({ status: 'discharged', discharged_at: now, discharge_at: now, updated_at: now })
+    .eq('id', hospitalizationId)
+    .eq('clinic_id', clinicId)
+
+  if (hospErr) return { error: 'Erro ao encerrar internação: ' + hospErr.message }
+
+  if (consultationId) {
+    await admin
+      .from('consultations')
+      .update({ status: 'completed' })
+      .eq('id', consultationId)
+      .eq('clinic_id', clinicId)
+  }
+
+  await logAudit({ action: 'DISCHARGE', entity_type: 'hospitalizations', entity_id: hospitalizationId, details: { consultation_id: consultationId } })
+
+  revalidatePath('/dashboard/hospitalization')
+  revalidatePath('/dashboard/vet')
+  return { success: true }
+}
+
+// ─── Central de Documentos ────────────────────────────────────────────────────
+
+export type HospDocument = {
+  id:                 string
+  hospitalization_id: string
+  file_name:          string
+  file_type:          string  // 'pdf' | 'image' | 'other'
+  storage_path:       string
+  user_name:          string
+  created_at:         string
+}
+
+export async function getHospitalizationDocuments(
+  hospitalizationId: string
+): Promise<HospDocument[] | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const { data, error } = await supabase
+    .from('hospitalization_documents')
+    .select('id, hospitalization_id, file_name, file_type, storage_path, user_name, created_at')
+    .eq('hospitalization_id', hospitalizationId)
+    .order('created_at', { ascending: false })
+
+  if (error) return { error: error.message }
+  return (data ?? []) as HospDocument[]
+}
+
+export async function saveHospitalizationDocument(data: {
+  hospitalization_id: string
+  file_name:          string
+  file_type:          string
+  storage_path:       string
+}): Promise<{ id: string } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('full_name, clinic_id')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
+
+  const admin = createAdminClient()
+
+  const { data: doc, error } = await admin
+    .from('hospitalization_documents')
+    .insert({
+      clinic_id:          profile.clinic_id,
+      hospitalization_id: data.hospitalization_id,
+      file_name:          data.file_name,
+      file_type:          data.file_type,
+      storage_path:       data.storage_path,
+      user_id:            user.id,
+      user_name:          profile.full_name ?? 'Usuário',
+    })
+    .select('id')
+    .single()
+
+  if (error || !doc) return { error: 'Erro ao salvar documento: ' + (error?.message ?? '') }
+
+  // Log automático no feed da Linha do Tempo
+  await admin.from('hospitalization_records').insert({
+    hospitalization_id: data.hospitalization_id,
+    clinic_id:          profile.clinic_id,
+    user_id:            user.id,
+    user_name:          profile.full_name ?? 'Usuário',
+    notes:              `📎 Documento "${data.file_name}" anexado.`,
+    medications:        [],
+    improvement_level:  'estavel',
+  })
+
+  revalidatePath('/dashboard/hospitalization')
+  return { id: doc.id }
+}
+
+export async function deleteHospitalizationDocument(
+  docId:       string,
+  storagePath: string
+): Promise<{ success: true } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  // Verifica posse via RLS antes de usar admin
+  const { data: doc } = await supabase
+    .from('hospitalization_documents')
+    .select('id')
+    .eq('id', docId)
+    .single()
+
+  if (!doc) return { error: 'Documento não encontrado ou sem permissão.' }
+
+  const admin = createAdminClient()
+
+  const { error: storageErr } = await admin.storage
+    .from('clinical-documents')
+    .remove([storagePath])
+
+  if (storageErr) return { error: 'Erro ao remover arquivo: ' + storageErr.message }
+
+  const { error: dbErr } = await admin
+    .from('hospitalization_documents')
+    .delete()
+    .eq('id', docId)
+
+  if (dbErr) return { error: 'Erro ao remover registro: ' + dbErr.message }
+
+  revalidatePath('/dashboard/hospitalization')
+  return { success: true }
+}
+
+// ─── Feed de Internação para Revisão Pós-Internação ──────────────────────────
+
+export type InternationFeedData = {
+  id:            string
+  reason:        string | null
+  created_at:    string
+  discharged_at: string | null
+  records:       HospitalizationRecord[]
+}
+
+export async function getHospitalizationByConsultation(
+  consultationId: string
+): Promise<InternationFeedData | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const { data: hosp, error } = await supabase
+    .from('hospitalizations')
+    .select('id, reason, created_at, discharged_at')
+    .eq('consultation_id', consultationId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) return { error: error.message }
+  if (!hosp)  return { error: 'Internação não encontrada.' }
+
+  const { data: recs, error: recErr } = await supabase
+    .from('hospitalization_records')
+    .select('id, hospitalization_id, user_name, notes, medications, improvement_level, created_at')
+    .eq('hospitalization_id', hosp.id)
+    .order('created_at', { ascending: false })
+
+  if (recErr) return { error: recErr.message }
+
+  return {
+    id:            hosp.id,
+    reason:        hosp.reason,
+    created_at:    hosp.created_at,
+    discharged_at: hosp.discharged_at,
+    records:       (recs ?? []) as HospitalizationRecord[],
+  }
+}
+
+// ─── Revisão Clínica Pós-Internação ──────────────────────────────────────────
+
+export async function sendToVetReview(
+  hospitalizationId: string,
+  consultationId:    string | null
+): Promise<{ success: true } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const clinicId = await getClinicId(supabase, user.id)
+  if (!clinicId) return { error: 'Perfil sem clínica.' }
+
+  const admin = createAdminClient()
+  const now   = new Date().toISOString()
+
+  // Libera o leito (encerra a internação)
+  const { error: hospErr } = await admin
+    .from('hospitalizations')
+    .update({ status: 'discharged', discharged_at: now, discharge_at: now, updated_at: now })
+    .eq('id', hospitalizationId)
+    .eq('clinic_id', clinicId)
+
+  if (hospErr) return { error: 'Erro ao encerrar internação: ' + hospErr.message }
+
+  // Devolve o animal para a fila do MV
+  if (consultationId) {
+    const { error: consErr } = await admin
+      .from('consultations')
+      .update({ status: 'revisao_pos_internacao' })
+      .eq('id', consultationId)
+      .eq('clinic_id', clinicId)
+
+    if (consErr) return { error: 'Internação encerrada, mas falha ao mover para revisão: ' + consErr.message }
+  }
+
+  revalidatePath('/dashboard/hospitalization')
+  revalidatePath('/dashboard/vet')
+  return { success: true }
+}
