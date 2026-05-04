@@ -7,11 +7,13 @@ import {
   CheckSquare, Square, Pencil, Tag, Sparkles, PlusCircle,
 } from 'lucide-react'
 import { saveTemplate } from '@/lib/actions/templates'
+import TemplateLayoutEditor, { layoutToHtml, htmlToLayout, type LayoutElement } from './TemplateLayoutEditor'
 import type { DocumentTemplate, ExtractedField, FieldType, TemplateType } from '@/types'
 
 interface ImportTemplateModalProps {
   onClose: () => void
   onSuccess: (template: DocumentTemplate) => void
+  clinicLogoUrl?: string | null
 }
 
 type Step = 'upload' | 'review' | 'adding_field' | 'editor'
@@ -366,6 +368,7 @@ function DraggableField({
 export default function ImportTemplateModal({
   onClose,
   onSuccess,
+  clinicLogoUrl,
 }: ImportTemplateModalProps) {
   const [step, setStep] = useState<Step>('upload')
   const [form, setForm] = useState<FormState>({
@@ -397,6 +400,9 @@ export default function ImportTemplateModal({
     selectedText: string
     count: number
   } | null>(null)
+
+  // Layout editor state
+  const [layoutElements, setLayoutElements] = useState<LayoutElement[]>([])
 
   const [newField, setNewField] = useState<ExtractedField>({
     field_name: '',
@@ -465,11 +471,14 @@ export default function ImportTemplateModal({
         templateHtml: data.template_html || null,
       }))
 
-      // If we have HTML layout, go straight to editor; otherwise review fields
+      // If we have HTML layout, parse into layout elements and go to editor
       if (data.template_html) {
         setHtmlSource(data.template_html)
+        setLayoutElements(htmlToLayout(data.template_html, data.fields))
         setStep('editor')
       } else {
+        // No HTML — initialize layout elements from fields for editor access
+        setLayoutElements([])
         setStep('review')
       }
     } catch (err) {
@@ -539,6 +548,7 @@ export default function ImportTemplateModal({
 
   const handleSaveHtmlSource = () => {
     setForm(prev => ({ ...prev, templateHtml: htmlSource }))
+    setLayoutElements(htmlToLayout(htmlSource, form.extractedFields))
     setEditingHtml(false)
   }
 
@@ -729,8 +739,12 @@ export default function ImportTemplateModal({
       setError('Adicione pelo menos um campo'); return
     }
 
+    // Convert layout elements to HTML if we have them
+    let finalHtml = layoutElements.length > 0
+      ? layoutToHtml(layoutElements)
+      : form.templateHtml
+
     // If watermark was set, inject into HTML
-    let finalHtml = form.templateHtml
     if (finalHtml && watermark) {
       const watermarkDiv = `<div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-35deg);font-size:4rem;color:rgba(0,0,0,${watermarkOpacity / 100});font-weight:bold;letter-spacing:0.15em;pointer-events:none;z-index:9999;white-space:nowrap;">${watermark}</div>`
       finalHtml = finalHtml.replace(/<\/div>\s*$/, `${watermarkDiv}</div>`)
@@ -906,8 +920,14 @@ export default function ImportTemplateModal({
                   })()}
                   <button
                     onClick={() => {
-                      if (!form.templateHtml) setHtmlSource('')
-                      else setHtmlSource(form.templateHtml)
+                      if (form.templateHtml) {
+                        setHtmlSource(form.templateHtml)
+                        setLayoutElements(htmlToLayout(form.templateHtml, form.extractedFields))
+                      } else {
+                        setHtmlSource('')
+                        // Initialize with empty — editor will build defaults from fields
+                        setLayoutElements([])
+                      }
                       setStep('editor')
                     }}
                     className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50 transition-colors"
@@ -1020,7 +1040,7 @@ export default function ImportTemplateModal({
                       viewMode === 'visual' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'
                     }`}
                   >
-                    <Eye className="w-3.5 h-3.5" />Visual
+                    <Eye className="w-3.5 h-3.5" />Layout
                   </button>
                   <button
                     onClick={() => setViewMode('fields')}
@@ -1060,22 +1080,25 @@ export default function ImportTemplateModal({
                 <div className="flex-1" />
 
                 {/* Edit HTML source */}
-                {viewMode === 'visual' && (
-                  <button
-                    onClick={() => {
-                      if (editingHtml) {
-                        handleSaveHtmlSource()
-                      } else {
-                        setHtmlSource(form.templateHtml || '')
-                        setEditingHtml(true)
-                      }
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-                  >
-                    <Code className="w-3.5 h-3.5" />
-                    {editingHtml ? 'Salvar HTML' : 'Editar HTML'}
-                  </button>
-                )}
+                <button
+                  onClick={() => {
+                    if (editingHtml) {
+                      handleSaveHtmlSource()
+                    } else {
+                      // Sync layout → HTML before opening source editor
+                      const currentHtml = layoutElements.length > 0
+                        ? layoutToHtml(layoutElements)
+                        : (form.templateHtml || '')
+                      setHtmlSource(currentHtml)
+                      setEditingHtml(true)
+                      setViewMode('visual')
+                    }
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  <Code className="w-3.5 h-3.5" />
+                  {editingHtml ? 'Salvar HTML' : 'Editar HTML'}
+                </button>
               </div>
 
               {/* AI Suggestion panel */}
@@ -1088,18 +1111,19 @@ export default function ImportTemplateModal({
               )}
 
               {/* Editor content */}
-              <div className="flex-1 overflow-auto px-4 py-4">
-                {viewMode === 'visual' && !editingHtml && form.templateHtml && (
-                  <HtmlPreview
-                    html={form.templateHtml}
+              <div className="flex-1 overflow-auto px-4 py-4" style={{ minHeight: '500px' }}>
+                {viewMode === 'visual' && !editingHtml && (
+                  <TemplateLayoutEditor
+                    elements={layoutElements}
+                    onChange={setLayoutElements}
                     fields={form.extractedFields}
                     watermark={watermark}
                     watermarkOpacity={watermarkOpacity}
-                    onTextSelected={handleTextSelected}
+                    clinicLogoUrl={clinicLogoUrl}
                   />
                 )}
 
-                {viewMode === 'visual' && editingHtml && (
+                {editingHtml && (
                   <textarea
                     value={htmlSource}
                     onChange={e => setHtmlSource(e.target.value)}
@@ -1108,15 +1132,7 @@ export default function ImportTemplateModal({
                   />
                 )}
 
-                {viewMode === 'visual' && !editingHtml && !form.templateHtml && (
-                  <div className="text-center py-16">
-                    <FileText className="w-12 h-12 text-slate-200 mx-auto mb-3" />
-                    <p className="text-sm text-slate-500">Nenhum layout HTML disponivel</p>
-                    <p className="text-xs text-slate-400 mt-1">O documento sera gerado no formato padrao</p>
-                  </div>
-                )}
-
-                {viewMode === 'fields' && (
+                {viewMode === 'fields' && !editingHtml && (
                   <div className="space-y-2">
                     {form.extractedFields.length > 0 && (() => {
                       const allRequired = form.extractedFields.every(f => f.required)

@@ -23,6 +23,9 @@ import ConveniosTab from './ConveniosTab'
 import BusinessHoursTab from './BusinessHoursTab'
 import PricingTab from './PricingTab'
 import ModulesTab from './ModulesTab'
+import RoomsTab from './RoomsTab'
+import { updateUserPhone, updateUserSpecialties } from '@/lib/actions/user-management'
+import type { Room } from '@/lib/actions/rooms'
 import type { WhatsAppSettingsDisplay } from '@/lib/actions/whatsapp'
 import type { ProductPrice } from '@/lib/actions/core-management'
 
@@ -32,6 +35,8 @@ interface ClinicUser {
   full_name: string
   role: UserRole
   crmv: string | null
+  phone: string | null
+  specialties: string[] | null
 }
 
 interface ManagementWorkspaceProps {
@@ -47,6 +52,7 @@ interface ManagementWorkspaceProps {
   initialClinicConfig:      ClinicConfig | null
   initialWhatsAppSettings:  WhatsAppSettingsDisplay | null
   initialProductPrices?:    ProductPrice[]
+  initialRooms?:            Room[]
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -90,13 +96,51 @@ const INVITE_ROLE_OPTIONS: { value: InvitationRole; label: string }[] = [
   { value: 'pharmacist',   label: 'Técnico' },
 ]
 
-type ActiveTab = 'templates' | 'clinica' | 'usuarios' | 'catalogo' | 'configuracoes' | 'convenios'
+type ActiveTab = 'templates' | 'clinica' | 'usuarios' | 'catalogo' | 'configuracoes' | 'convenios' | 'salas'
+
+// ─── Inline Field Helper ─────────────────────────────────────────────────────
+
+function UserInlineField({ label, value, placeholder, onSave }: {
+  label: string; value: string; placeholder: string; onSave: (val: string) => Promise<void>
+}) {
+  const [editing, setEditing] = useState(false)
+  const [val, setVal] = useState(value)
+  const [saving, setSaving] = useState(false)
+
+  async function save() {
+    setSaving(true)
+    await onSave(val)
+    setSaving(false)
+    setEditing(false)
+  }
+
+  if (!editing) {
+    return (
+      <div className="flex items-center gap-1 mt-0.5">
+        <span className="text-[10px] text-slate-400">{label}:</span>
+        <span className="text-[10px] text-slate-600">{value || '—'}</span>
+        <button onClick={() => { setVal(value); setEditing(true) }} className="text-[10px] text-teal-600 hover:text-teal-700 underline ml-1">editar</button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-1 mt-0.5">
+      <input value={val} onChange={e => setVal(e.target.value)} placeholder={placeholder}
+        className="text-xs px-2 py-0.5 rounded border border-teal-400 bg-teal-50 outline-none w-36"
+        onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false) }}
+      />
+      <button onClick={save} disabled={saving} className="text-[10px] bg-teal-600 text-white px-1.5 py-0.5 rounded disabled:opacity-50">{saving ? '...' : 'OK'}</button>
+      <button onClick={() => setEditing(false)} className="text-[10px] text-slate-400 hover:text-slate-600">✕</button>
+    </div>
+  )
+}
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ManagementWorkspace({
   initialTemplates, clinicData, users, initialInvitations, userLimit, currentUserId, userEmail, userFullName,
-  initialCatalog, initialClinicConfig, initialWhatsAppSettings, initialProductPrices = [],
+  initialCatalog, initialClinicConfig, initialWhatsAppSettings, initialProductPrices = [], initialRooms = [],
 }: ManagementWorkspaceProps) {
   const searchParams = useSearchParams()
   const activeTab = (searchParams.get('tab') as ActiveTab | null) ?? 'templates'
@@ -617,6 +661,11 @@ export default function ManagementWorkspace({
         </div>
       )}
 
+      {/* ── Tab: Salas/Boxes ── */}
+      {activeTab === 'salas' && (
+        <RoomsTab initialRooms={initialRooms} />
+      )}
+
       {/* ── Tab: Usuários ── */}
       {activeTab === 'usuarios' && (
         <div className="space-y-5">
@@ -794,6 +843,24 @@ export default function ManagementWorkspace({
                         <button onClick={() => setEditingCrmvUserId(null)} className="text-[10px] text-slate-400 hover:text-slate-600">✕</button>
                       </div>
                     )}
+                    {/* Phone */}
+                    <UserInlineField
+                      label="Tel"
+                      value={u.phone ?? ''}
+                      placeholder="(11) 99999-0000"
+                      onSave={async (val) => { await updateUserPhone(u.id, val) }}
+                    />
+                    {/* Specialties */}
+                    {(u.role === 'vet' || u.role === 'assistant') && (
+                      <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                        {(u.specialties ?? []).map((s, i) => (
+                          <span key={i} className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-medium">{s}</span>
+                        ))}
+                        {(u.specialties ?? []).length === 0 && (
+                          <span className="text-[10px] text-slate-400 italic">Sem especialidade</span>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <select
                     value={u.role}
@@ -853,7 +920,7 @@ export default function ManagementWorkspace({
 
       {/* Modal de Importação de Template */}
       {showModal && (
-        <ImportTemplateModal onClose={() => setShowModal(false)} onSuccess={handleTemplateAdded} />
+        <ImportTemplateModal onClose={() => setShowModal(false)} onSuccess={handleTemplateAdded} clinicLogoUrl={logoUrl} />
       )}
     </>
   )
