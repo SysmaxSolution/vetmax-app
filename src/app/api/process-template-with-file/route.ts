@@ -264,7 +264,7 @@ export async function POST(request: NextRequest) {
       // Use Claude Vision for images
       const base64 = Buffer.from(buffer).toString('base64')
       fieldsMessage = await anthropic.messages.create({
-        model: 'claude-sonnet-4-5-20250514',
+        model: 'claude-sonnet-4-6',
         max_tokens: 4096,
         messages: [{
           role: 'user',
@@ -282,7 +282,7 @@ export async function POST(request: NextRequest) {
       })
     } else {
       fieldsMessage = await anthropic.messages.create({
-        model: 'claude-sonnet-4-5-20250514',
+        model: 'claude-sonnet-4-6',
         max_tokens: 4096,
         messages: [{
           role: 'user',
@@ -337,7 +337,7 @@ export async function POST(request: NextRequest) {
       if (isImage) {
         const base64 = Buffer.from(buffer).toString('base64')
         layoutMessage = await anthropic.messages.create({
-          model: 'claude-sonnet-4-5-20250514',
+          model: 'claude-sonnet-4-6',
           max_tokens: 8192,
           messages: [{
             role: 'user',
@@ -355,7 +355,7 @@ export async function POST(request: NextRequest) {
         })
       } else {
         layoutMessage = await anthropic.messages.create({
-          model: 'claude-sonnet-4-5-20250514',
+          model: 'claude-sonnet-4-6',
           max_tokens: 8192,
           messages: [{
             role: 'user',
