@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 })
 
     const body = await request.json()
-    const { name, type } = body
+    const { name, type, hint_text } = body
 
     if (!name || !type) {
       return NextResponse.json(
@@ -49,7 +49,19 @@ export async function POST(request: NextRequest) {
     }
 
     // Prompt para Claude - MUITO específico para gerar JSON válido
-    const prompt = `Gere um array JSON com campos de um documento veterinário.
+    const prompt = hint_text
+      ? `Analise o seguinte texto extraido de um documento veterinario e identifique o campo estruturado que ele representa.
+
+TEXTO SELECIONADO: "${hint_text}"
+Tipo de documento: ${type}
+
+Responda APENAS com JSON valido, nada mais. Sem markdown. Sem explicacoes.
+Gere exatamente 1 campo que melhor represente o texto selecionado.
+
+Schema: [{"field_name":"CAMPO_EM_SNAKE_CASE","label":"Label em PT-BR","type":"text|number|date|select|boolean|textarea","description":"Descricao curta","required":true|false}]
+
+APENAS JSON VALIDO.`
+      : `Gere um array JSON com campos de um documento veterinário.
 Nome: ${name}
 Tipo: ${type}
 

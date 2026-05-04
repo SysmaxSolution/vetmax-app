@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import {
   X, Upload, Plus, Trash2, Loader, Eye, Code, GripVertical,
   Droplets, ChevronLeft, ChevronRight, Move, Type, FileText,
-  CheckSquare, Square, Pencil,
+  CheckSquare, Square, Pencil, Tag, Sparkles, PlusCircle,
 } from 'lucide-react'
 import { saveTemplate } from '@/lib/actions/templates'
 import type { DocumentTemplate, ExtractedField, FieldType, TemplateType } from '@/types'
@@ -57,19 +57,193 @@ function WatermarkOverlay({ text, opacity }: { text: string; opacity: number }) 
   )
 }
 
-// ── HTML Preview with field placeholders highlighted ─────────────────────────
+// ── Text Selection Context Menu ─────────────────────────────────────────────
+
+function TextSelectionMenu({
+  x,
+  y,
+  selectedText,
+  onNameField,
+  onReadWithAI,
+  onCreateField,
+  onClose,
+  isLoadingAI,
+}: {
+  x: number
+  y: number
+  selectedText: string
+  onNameField: () => void
+  onReadWithAI: () => void
+  onCreateField: () => void
+  onClose: () => void
+  isLoadingAI: boolean
+}) {
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) onClose()
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [onClose])
+
+  return (
+    <div
+      ref={menuRef}
+      className="fixed z-[60] bg-white rounded-xl shadow-2xl border border-slate-200 py-1.5 min-w-[220px] animate-in fade-in zoom-in-95 duration-150"
+      style={{ left: Math.min(x, window.innerWidth - 240), top: Math.min(y, window.innerHeight - 180) }}
+    >
+      <div className="px-3 py-1.5 border-b border-slate-100">
+        <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Texto selecionado</p>
+        <p className="text-xs text-slate-700 font-medium truncate mt-0.5">
+          &quot;{selectedText.length > 50 ? selectedText.slice(0, 50) + '...' : selectedText}&quot;
+        </p>
+      </div>
+      <button
+        onClick={onNameField}
+        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition-colors text-left"
+      >
+        <Tag className="w-4 h-4 flex-shrink-0" />
+        <div>
+          <span className="font-medium">Nomear Campo</span>
+          <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">Usar como label de um campo existente</p>
+        </div>
+      </button>
+      <button
+        onClick={onReadWithAI}
+        disabled={isLoadingAI}
+        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-slate-700 hover:bg-purple-50 hover:text-purple-700 transition-colors text-left disabled:opacity-50"
+      >
+        {isLoadingAI
+          ? <Loader className="w-4 h-4 flex-shrink-0 animate-spin" />
+          : <Sparkles className="w-4 h-4 flex-shrink-0" />}
+        <div>
+          <span className="font-medium">{isLoadingAI ? 'Analisando...' : 'Ler com IA'}</span>
+          <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">Identificar campo faltante com IA</p>
+        </div>
+      </button>
+      <button
+        onClick={onCreateField}
+        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-slate-700 hover:bg-green-50 hover:text-green-700 transition-colors text-left"
+      >
+        <PlusCircle className="w-4 h-4 flex-shrink-0" />
+        <div>
+          <span className="font-medium">Criar Campo</span>
+          <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">Novo campo a partir do texto</p>
+        </div>
+      </button>
+    </div>
+  )
+}
+
+// ── Name Field Picker (select which existing field to rename) ───────────────
+
+function NameFieldPicker({
+  fields,
+  selectedText,
+  onPick,
+  onClose,
+}: {
+  fields: ExtractedField[]
+  selectedText: string
+  onPick: (index: number) => void
+  onClose: () => void
+}) {
+  return (
+    <div className="fixed inset-0 z-[70] bg-black/30 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-xl max-w-sm w-full max-h-[60vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="px-4 py-3 border-b border-slate-200">
+          <h3 className="text-sm font-semibold text-slate-900">Nomear Campo</h3>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Selecione qual campo renomear para &quot;{selectedText.slice(0, 40)}{selectedText.length > 40 ? '...' : ''}&quot;
+          </p>
+        </div>
+        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+          {fields.map((f, i) => (
+            <button
+              key={`${f.field_name}-${i}`}
+              onClick={() => onPick(i)}
+              className="w-full flex items-center gap-2 px-3 py-2 text-left rounded-lg hover:bg-blue-50 transition-colors"
+            >
+              <span className="text-xs px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 flex-shrink-0">{f.type}</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-slate-800 truncate">{f.label}</p>
+                <p className="text-xs text-slate-400 truncate">{f.field_name}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+        <div className="px-4 py-3 border-t border-slate-200">
+          <button onClick={onClose} className="w-full px-3 py-1.5 text-xs font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── AI Field Suggestion Result ──────────────────────────────────────────────
+
+function AISuggestionPanel({
+  suggestion,
+  onAccept,
+  onDiscard,
+}: {
+  suggestion: ExtractedField
+  onAccept: () => void
+  onDiscard: () => void
+}) {
+  return (
+    <div className="mx-4 mb-3 p-3 rounded-lg bg-purple-50 border border-purple-200">
+      <div className="flex items-start gap-2">
+        <Sparkles className="w-4 h-4 text-purple-600 mt-0.5 flex-shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-semibold text-purple-900">Campo identificado pela IA</p>
+          <div className="mt-1.5 space-y-0.5">
+            <p className="text-xs text-purple-800"><strong>Label:</strong> {suggestion.label}</p>
+            <p className="text-xs text-purple-800"><strong>Campo:</strong> <code className="font-mono bg-purple-100 px-1 rounded">{suggestion.field_name}</code></p>
+            <p className="text-xs text-purple-800"><strong>Tipo:</strong> {suggestion.type}</p>
+            <p className="text-xs text-purple-700">{suggestion.description}</p>
+          </div>
+          <div className="flex gap-2 mt-2">
+            <button
+              onClick={onAccept}
+              className="flex items-center gap-1 px-3 py-1 text-xs font-medium bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+            >
+              <PlusCircle className="w-3 h-3" />Adicionar Campo
+            </button>
+            <button
+              onClick={onDiscard}
+              className="px-3 py-1 text-xs font-medium text-purple-600 border border-purple-300 rounded-lg hover:bg-purple-100 transition-colors"
+            >
+              Descartar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── HTML Preview with field placeholders highlighted + text selection ────────
 
 function HtmlPreview({
   html,
   fields,
   watermark,
   watermarkOpacity,
+  onTextSelected,
 }: {
   html: string
   fields: ExtractedField[]
   watermark: string
   watermarkOpacity: number
+  onTextSelected: (text: string, x: number, y: number) => void
 }) {
+  const containerRef = useRef<HTMLDivElement>(null)
+
   // Replace {{field_name}} placeholders with highlighted spans
   let processedHtml = html
   for (const field of fields) {
@@ -78,13 +252,31 @@ function HtmlPreview({
     processedHtml = processedHtml.replace(new RegExp(placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), replacement)
   }
 
+  const handleMouseUp = useCallback(() => {
+    const sel = window.getSelection()
+    if (!sel || sel.isCollapsed) return
+    const text = sel.toString().trim()
+    if (!text || text.length < 2) return
+
+    const range = sel.getRangeAt(0)
+    const rect = range.getBoundingClientRect()
+    onTextSelected(text, rect.left + rect.width / 2, rect.bottom + 8)
+  }, [onTextSelected])
+
   return (
     <div className="relative bg-white border border-slate-200 rounded-lg overflow-hidden">
       <WatermarkOverlay text={watermark} opacity={watermarkOpacity} />
+      <div className="absolute top-2 right-2 z-10">
+        <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-600 font-medium">
+          Selecione texto para opcoes
+        </span>
+      </div>
       <div
-        className="p-6 prose prose-sm max-w-none"
+        ref={containerRef}
+        className="p-6 prose prose-sm max-w-none select-text cursor-text"
         style={{ minHeight: '400px', maxHeight: '600px', overflow: 'auto' }}
         dangerouslySetInnerHTML={{ __html: processedHtml }}
+        onMouseUp={handleMouseUp}
       />
     </div>
   )
@@ -191,6 +383,12 @@ export default function ImportTemplateModal({
   const [watermarkOpacity, setWatermarkOpacity] = useState(15)
   const [editingHtml, setEditingHtml] = useState(false)
   const [htmlSource, setHtmlSource] = useState('')
+
+  // Text selection state
+  const [selectionMenu, setSelectionMenu] = useState<{ text: string; x: number; y: number } | null>(null)
+  const [showNamePicker, setShowNamePicker] = useState(false)
+  const [aiSuggestion, setAiSuggestion] = useState<ExtractedField | null>(null)
+  const [isLoadingAI, setIsLoadingAI] = useState(false)
 
   const [newField, setNewField] = useState<ExtractedField>({
     field_name: '',
@@ -320,6 +518,112 @@ export default function ImportTemplateModal({
   const handleSaveHtmlSource = () => {
     setForm(prev => ({ ...prev, templateHtml: htmlSource }))
     setEditingHtml(false)
+  }
+
+  // ── Text selection handlers ───────────────────────────────────────────
+
+  const handleTextSelected = useCallback((text: string, x: number, y: number) => {
+    setSelectionMenu({ text, x, y })
+    setAiSuggestion(null)
+  }, [])
+
+  const handleNameField = () => {
+    setShowNamePicker(true)
+  }
+
+  const handleNameFieldPick = (index: number) => {
+    if (!selectionMenu) return
+    const fields = [...form.extractedFields]
+    fields[index] = { ...fields[index], label: selectionMenu.text }
+    setForm(prev => ({ ...prev, extractedFields: fields }))
+    setShowNamePicker(false)
+    setSelectionMenu(null)
+    window.getSelection()?.removeAllRanges()
+  }
+
+  const handleReadWithAI = async () => {
+    if (!selectionMenu) return
+    setIsLoadingAI(true)
+    try {
+      const response = await fetch('/api/process-template', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: `Analise de campo: ${selectionMenu.text}`,
+          type: form.type,
+          hint_text: selectionMenu.text,
+        }),
+      })
+
+      // Fallback: use a simpler inline analysis if API returns fields
+      if (response.ok) {
+        const data = await response.json()
+        if (data.fields && data.fields.length > 0) {
+          // Find the most relevant field from AI response
+          const best = data.fields[0] as ExtractedField
+          setAiSuggestion(best)
+          setSelectionMenu(null)
+          window.getSelection()?.removeAllRanges()
+          return
+        }
+      }
+
+      // Manual fallback: generate field from selected text
+      const snakeName = selectionMenu.text
+        .toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9\s]/g, '')
+        .trim()
+        .replace(/\s+/g, '_')
+        .slice(0, 40)
+
+      setAiSuggestion({
+        field_name: snakeName || 'campo_novo',
+        label: selectionMenu.text,
+        type: 'text',
+        description: `Campo identificado a partir do texto "${selectionMenu.text}"`,
+        required: false,
+      })
+      setSelectionMenu(null)
+      window.getSelection()?.removeAllRanges()
+    } catch (err) {
+      console.error('Erro ao analisar com IA:', err)
+      setError('Erro ao analisar texto com IA')
+      setSelectionMenu(null)
+    } finally {
+      setIsLoadingAI(false)
+    }
+  }
+
+  const handleCreateFieldFromSelection = () => {
+    if (!selectionMenu) return
+    const snakeName = selectionMenu.text
+      .toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s]/g, '')
+      .trim()
+      .replace(/\s+/g, '_')
+      .slice(0, 40)
+
+    setNewField({
+      field_name: snakeName || 'campo_novo',
+      label: selectionMenu.text,
+      type: 'text',
+      description: '',
+      required: false,
+    })
+    setSelectionMenu(null)
+    window.getSelection()?.removeAllRanges()
+    setStep('adding_field')
+  }
+
+  const handleAcceptAISuggestion = () => {
+    if (!aiSuggestion) return
+    setForm(prev => ({
+      ...prev,
+      extractedFields: [...prev.extractedFields, aiSuggestion],
+    }))
+    setAiSuggestion(null)
   }
 
   // ── Save template ─────────────────────────────────────────────────────
@@ -679,6 +983,15 @@ export default function ImportTemplateModal({
                 )}
               </div>
 
+              {/* AI Suggestion panel */}
+              {aiSuggestion && (
+                <AISuggestionPanel
+                  suggestion={aiSuggestion}
+                  onAccept={handleAcceptAISuggestion}
+                  onDiscard={() => setAiSuggestion(null)}
+                />
+              )}
+
               {/* Editor content */}
               <div className="flex-1 overflow-auto px-4 py-4">
                 {viewMode === 'visual' && !editingHtml && form.templateHtml && (
@@ -687,6 +1000,7 @@ export default function ImportTemplateModal({
                     fields={form.extractedFields}
                     watermark={watermark}
                     watermarkOpacity={watermarkOpacity}
+                    onTextSelected={handleTextSelected}
                   />
                 )}
 
@@ -830,6 +1144,30 @@ export default function ImportTemplateModal({
           )}
         </div>
       </div>
+
+      {/* ── Text Selection Context Menu ── */}
+      {selectionMenu && (
+        <TextSelectionMenu
+          x={selectionMenu.x}
+          y={selectionMenu.y}
+          selectedText={selectionMenu.text}
+          onNameField={handleNameField}
+          onReadWithAI={handleReadWithAI}
+          onCreateField={handleCreateFieldFromSelection}
+          onClose={() => { setSelectionMenu(null); window.getSelection()?.removeAllRanges() }}
+          isLoadingAI={isLoadingAI}
+        />
+      )}
+
+      {/* ── Name Field Picker Modal ── */}
+      {showNamePicker && selectionMenu && (
+        <NameFieldPicker
+          fields={form.extractedFields}
+          selectedText={selectionMenu.text}
+          onPick={handleNameFieldPick}
+          onClose={() => setShowNamePicker(false)}
+        />
+      )}
     </div>
   )
 }
