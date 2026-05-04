@@ -200,6 +200,12 @@ export interface ExtractedField {
   type: FieldType
   description: string     // Contexto para IA, ex: "Resumo da suspeita clínica"
   required: boolean
+  // Coordenadas visuais sobre a imagem do documento (% da pagina)
+  x_percent?: number
+  y_percent?: number
+  width_percent?: number
+  height_percent?: number
+  page?: number           // Indice da pagina (0-based)
 }
 
 export interface DocumentTemplate {
@@ -210,6 +216,7 @@ export interface DocumentTemplate {
   file_url?: string | null
   extracted_fields: ExtractedField[]
   template_html?: string | null
+  page_images?: string[] | null  // Base64 data URLs das paginas do documento original
   created_at: string
   updated_at?: string
 }
@@ -235,4 +242,5 @@ export interface SaveTemplatePayload {
   type: TemplateType
   extracted_fields: ExtractedField[]
   template_html?: string | null
+  page_images?: string[] | null
 }

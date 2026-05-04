@@ -15,6 +15,7 @@ export type PatientDocument = {
   template_type: string | null
   template_extracted_fields: ExtractedField[] | null
   template_html: string | null
+  page_images: string[] | null
   document_name: string
   content_data: Record<string, any>
   created_at: string
@@ -41,7 +42,7 @@ export async function getPatientDocuments(
 
   const { data, error } = await supabase
     .from('patient_documents')
-    .select('id, template_id, template_name, template_type, template_extracted_fields, template_html, document_name, content_data, created_at, document_templates(name, type)')
+    .select('id, template_id, template_name, template_type, template_extracted_fields, template_html, page_images, document_name, content_data, created_at, document_templates(name, type)')
     .eq('consultation_id', consultationId)
     .eq('clinic_id', profile.clinic_id)
     .order('created_at', { ascending: false })
@@ -55,6 +56,7 @@ export async function getPatientDocuments(
     template_type:               d.template_type,
     template_extracted_fields:   d.template_extracted_fields ?? null,
     template_html:               d.template_html ?? null,
+    page_images:                 d.page_images ?? null,
     document_name:               d.document_name,
     content_data:                d.content_data ?? {},
     created_at:                  d.created_at,
@@ -250,6 +252,7 @@ export async function savePatientDocument(data: {
   template_type: string
   template_extracted_fields: ExtractedField[]
   template_html?: string | null
+  page_images?: string[] | null
   document_name: string
   content_data: Record<string, any>
 }): Promise<{ id: string } | { error: string }> {
@@ -278,6 +281,7 @@ export async function savePatientDocument(data: {
       template_type:               data.template_type,
       template_extracted_fields:   data.template_extracted_fields,
       template_html:               data.template_html || null,
+      page_images:                 data.page_images || null,
       document_name:               data.document_name,
       content_data:                data.content_data,
     })

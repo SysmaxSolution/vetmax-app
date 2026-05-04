@@ -16,62 +16,40 @@ const anthropic = new Anthropic({
 
 function repairAndParseJson(raw: string): any[] {
   let str = raw.trim()
+  str = str.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim()
 
-  // Strip markdown code blocks
-  str = str.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')
-  str = str.trim()
-
-  // Try direct parse first
   try { return JSON.parse(str) } catch {}
 
-  // Extract the array portion if surrounded by text
   const arrayMatch = str.match(/\[[\s\S]*\]/)
   if (arrayMatch) {
     str = arrayMatch[0]
     try { return JSON.parse(str) } catch {}
   }
 
-  // Aggressive cleanup for common Claude issues
   str = str
-    // Fix unescaped newlines inside JSON string values
     .replace(/(?<=:\s*"[^"]*)\n/g, '\\n')
-    // Fix unescaped control characters
     .replace(/[\x00-\x1f]/g, (ch) => {
       if (ch === '\n') return '\\n'
       if (ch === '\r') return '\\r'
       if (ch === '\t') return '\\t'
       return ''
     })
-    // Remove trailing commas
     .replace(/,\s*]/g, ']')
     .replace(/,\s*}/g, '}')
-    // Fix single quotes used as JSON delimiters
     .replace(/'/g, '"')
 
   try { return JSON.parse(str) } catch {}
 
-  // Last resort: try to fix truncated JSON by closing open brackets
   let balanced = str
-  const openBrackets = (balanced.match(/\[/g) || []).length
-  const closeBrackets = (balanced.match(/\]/g) || []).length
-  const openBraces = (balanced.match(/\{/g) || []).length
-  const closeBraces = (balanced.match(/\}/g) || []).length
-
-  // If truncated mid-string, close the string
   const quoteCount = (balanced.match(/(?<!\\)"/g) || []).length
-  if (quoteCount % 2 !== 0) {
-    balanced += '"'
-  }
-
-  // Close any open braces/brackets
-  for (let i = 0; i < openBraces - closeBraces; i++) balanced += '}'
-  // Remove trailing comma before we close the array
+  if (quoteCount % 2 !== 0) balanced += '"'
+  const ob = (balanced.match(/\{/g) || []).length - (balanced.match(/\}/g) || []).length
+  for (let i = 0; i < ob; i++) balanced += '}'
   balanced = balanced.replace(/,\s*$/, '')
-  for (let i = 0; i < openBrackets - closeBrackets; i++) balanced += ']'
-
+  const ab = (balanced.match(/\[/g) || []).length - (balanced.match(/\]/g) || []).length
+  for (let i = 0; i < ab; i++) balanced += ']'
   try { return JSON.parse(balanced) } catch {}
 
-  // Final attempt: extract individual objects with regex
   const objects: any[] = []
   const objRegex = /\{[^{}]*\}/g
   let match
@@ -81,27 +59,20 @@ function repairAndParseJson(raw: string): any[] {
       if (obj.field_name && obj.label) objects.push(obj)
     } catch {}
   }
-
   if (objects.length > 0) return objects
-
   throw new Error('Impossivel extrair JSON valido da resposta da IA')
 }
 
-// ── DOCX text + HTML extraction ─────────────────────────────────────────────
+// ── DOCX extraction ─────────────────────────────────────────────────────────
 
 async function extractDocxContent(buffer: ArrayBuffer): Promise<{ text: string; html: string }> {
   const mammoth = require('mammoth')
   const nodeBuffer = Buffer.from(buffer)
-
   const [textResult, htmlResult] = await Promise.all([
     mammoth.extractRawText({ buffer: nodeBuffer }),
     mammoth.convertToHtml({ buffer: nodeBuffer }),
   ])
-
-  return {
-    text: textResult.value || '',
-    html: htmlResult.value || '',
-  }
+  return { text: textResult.value || '', html: htmlResult.value || '' }
 }
 
 // ── PDF text extraction ─────────────────────────────────────────────────────
@@ -109,32 +80,26 @@ async function extractDocxContent(buffer: ArrayBuffer): Promise<{ text: string; 
 async function extractPdfText(buffer: ArrayBuffer): Promise<string> {
   const tempPath = join(tmpdir(), `pdf_${Date.now()}_${Math.random().toString(36).slice(2)}.pdf`)
   writeFileSync(tempPath, Buffer.from(buffer))
-
   try {
-    const text = await new Promise<string>((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('PDF parse timeout (30s)')), 30_000)
+    return await new Promise<string>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('PDF parse timeout')), 30_000)
       const pdfParser = new PDFParser(null, 1)
-
       pdfParser.on('pdfParser_dataError', (data: any) => {
         clearTimeout(timeout)
         reject(new Error(`PDF Parse Error: ${data.parserError || 'Unknown'}`))
       })
-
       pdfParser.on('pdfParser_dataReady', () => {
         clearTimeout(timeout)
         try { resolve(pdfParser.getRawTextContent()) } catch (e) { reject(e) }
       })
-
       pdfParser.loadPDF(tempPath)
     })
-
-    return text
   } finally {
     try { unlinkSync(tempPath) } catch {}
   }
 }
 
-// ── Image to base64 for Claude Vision ───────────────────────────────────────
+// ── Media type helper ───────────────────────────────────────────────────────
 
 function getMediaType(fileName: string): 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' {
   const ext = fileName.toLowerCase().split('.').pop()
@@ -144,54 +109,55 @@ function getMediaType(fileName: string): 'image/jpeg' | 'image/png' | 'image/web
   return 'image/jpeg'
 }
 
-// ── Claude prompt for field extraction ──────────────────────────────────────
+// ── Claude Vision prompt: extract fields WITH coordinates ───────────────────
 
-const FIELDS_PROMPT = `Voce e um especialista em analise de documentos veterinarios brasileiros.
+const VISION_FIELDS_PROMPT = `Voce e um especialista em analise de documentos veterinarios.
 
-TAREFA:
-Analise o documento e extraia TODOS os campos editaveis/preenchíveis.
-Objetivo: capturar 99% dos campos (exceto logos/imagens/assinaturas).
+TAREFA: Analise esta imagem de documento e extraia TODOS os campos editaveis/preenchíveis COM suas coordenadas visuais.
 
 INSTRUCOES:
-1. Leia CADA linha do documento
-2. Identifique labels de campos (ex: "Paciente:", "Peso:", "Diagnostico:")
-3. Para CADA campo, crie um objeto com:
-   - field_name: snake_case (ex: "paciente_nome", "peso_kg")
-   - label: Exatamente como aparece no documento
+1. Identifique CADA label de campo (ex: "Paciente:", "Peso:", "Diagnostico:")
+2. Para CADA campo, retorne:
+   - field_name: snake_case unico
+   - label: texto do label exatamente como aparece
    - type: text | number | date | select | boolean | textarea
-   - description: Resumo curto do campo
-   - required: true se preenchido, false se vazio
-4. Incluir: dados do paciente, tutor, veterinario, medicoes, resultados, observacoes
-5. NAO incluir: logos, assinaturas, rodapes, numeros de pagina
+   - description: descricao curta
+   - required: true/false
+   - x_percent: posicao X do VALOR do campo em % da largura (0-100), onde o usuario preencheria
+   - y_percent: posicao Y do VALOR do campo em % da altura (0-100)
+   - width_percent: largura da area de preenchimento em % (geralmente 15-40)
+   - height_percent: altura da area em % (geralmente 2-4 para campos simples, 5-15 para textarea)
+3. As coordenadas devem indicar onde o VALOR sera preenchido, nao onde o label esta
+4. Inclua TODOS os campos: dados do paciente, tutor, vet, medicoes, resultados, observacoes
+5. NAO inclua: logos, assinaturas digitais, rodapes fixos, numeros de pagina
 
-FORMATO: APENAS um array JSON valido. Sem markdown. Sem explicacoes.
-Exemplo: [{"field_name":"x","label":"X","type":"text","description":"desc","required":true}]`
+FORMATO: APENAS um array JSON. Sem markdown. Sem explicacoes.
+[{"field_name":"x","label":"X","type":"text","description":"desc","required":true,"x_percent":30,"y_percent":15,"width_percent":25,"height_percent":3}]`
 
-// ── Claude prompt for HTML layout extraction ────────────────────────────────
+// ── Text-only field extraction (fallback) ───────────────────────────────────
 
-const LAYOUT_PROMPT = `Voce e um especialista em replicacao visual de documentos.
+const TEXT_FIELDS_PROMPT = `Voce e um especialista em analise de documentos veterinarios.
 
-TAREFA:
-Analise o documento fornecido e gere um template HTML que reproduza FIELMENTE o layout visual original.
+TAREFA: Extraia TODOS os campos editaveis/preenchíveis do documento.
 
-REGRAS:
-1. Use HTML + CSS inline para replicar o layout exato do documento
-2. Para cada campo editavel, use {{nome_do_campo}} como placeholder
-3. Mantenha fontes, tamanhos, espacamentos, bordas, cabecalhos e rodapes
-4. Use tabelas HTML quando o documento tiver layout tabular
-5. Inclua cabecalho da clinica, areas de assinatura, linhas divisorias
-6. Nao inclua logos como imagem, use placeholder {{logo_clinica}}
-7. O HTML deve ser auto-contido (CSS inline, nao externo)
-8. Use mm como unidade base e considere A4 (210mm x 297mm)
+Para CADA campo retorne:
+- field_name: snake_case
+- label: exatamente como aparece
+- type: text | number | date | select | boolean | textarea
+- description: resumo curto
+- required: true/false
 
-FORMATO: Retorne APENAS o HTML puro. Sem markdown. Sem explicacoes. Comece com <div> e termine com </div>.`
+FORMATO: APENAS um array JSON. Sem markdown.
+[{"field_name":"x","label":"X","type":"text","description":"desc","required":true}]`
 
 /**
  * POST /api/process-template-with-file
- * Processa um documento REAL (PDF/DOCX/Imagem) para extrair campos + layout HTML
  *
- * Body: FormData com arquivo + name + type
- * Response: { fields: ExtractedField[], template_html?: string }
+ * Aceita dois modos:
+ * 1. FormData com file (upload direto) — extrai texto e usa IA
+ * 2. FormData com file + page_images[] (frontend converteu PDF→imagens) — usa Vision com coordenadas
+ *
+ * Response: { fields, template_html?, page_images? }
  */
 export async function POST(request: NextRequest) {
   try {
@@ -203,187 +169,249 @@ export async function POST(request: NextRequest) {
     const file = formData.get('file') as File | null
     const templateName = formData.get('name') as string | null
     const templateType = formData.get('type') as string | null
+    // Page images from frontend PDF→canvas conversion (data:image/jpeg;base64,...)
+    const pageImagesRaw = formData.getAll('page_images') as string[]
 
     if (!file) return NextResponse.json({ error: 'Arquivo nao fornecido' }, { status: 400 })
     if (!templateName || !templateType) return NextResponse.json({ error: 'Nome e tipo sao obrigatorios' }, { status: 400 })
+    if (!process.env.ANTHROPIC_API_KEY) return NextResponse.json({ error: 'Chave de API nao configurada' }, { status: 500 })
 
-    if (!process.env.ANTHROPIC_API_KEY) {
-      return NextResponse.json({ error: 'Chave de API nao configurada' }, { status: 500 })
-    }
-
-    console.log(`[process-template] Arquivo: ${file.name} (${file.size} bytes, tipo: ${file.type})`)
+    console.log(`[process-template] Arquivo: ${file.name} (${file.size} bytes), page_images: ${pageImagesRaw.length}`)
 
     const buffer = await file.arrayBuffer()
-    const isDocx = file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || file.name.endsWith('.docx')
+    const isDocx = file.name.endsWith('.docx')
     const isPdf = file.type === 'application/pdf' || file.name.endsWith('.pdf')
     const isImage = file.type.startsWith('image/') || /\.(png|jpe?g|webp|gif)$/i.test(file.name)
 
-    let extractedText = ''
-    let originalHtml = ''
+    // ── MODE A: We have page images (PDF was converted to images in frontend) ──
+    if (pageImagesRaw.length > 0) {
+      console.log(`[process-template] Modo Vision: ${pageImagesRaw.length} pagina(s)`)
 
-    // ── Extract content based on file type ───────────────────────────────
+      // Send first page (or all pages concatenated info) to Claude Vision
+      const firstPageData = pageImagesRaw[0]
+      const base64 = firstPageData.includes(',')
+        ? firstPageData.split(',')[1]
+        : firstPageData
 
-    if (isDocx) {
-      console.log('[process-template] Extraindo conteudo DOCX via mammoth...')
-      const docxContent = await extractDocxContent(buffer)
-      extractedText = docxContent.text
-      originalHtml = docxContent.html
-      console.log(`[process-template] DOCX extraido: ${extractedText.length} chars texto, ${originalHtml.length} chars HTML`)
+      const mediaType = firstPageData.includes('image/png') ? 'image/png' as const : 'image/jpeg' as const
 
-      if (extractedText.length < 20) {
-        return NextResponse.json({ error: 'DOCX parece vazio ou sem texto.' }, { status: 400 })
-      }
-    } else if (isPdf) {
-      console.log('[process-template] Extraindo texto de PDF...')
-      extractedText = await extractPdfText(buffer)
-      console.log(`[process-template] PDF extraido: ${extractedText.length} chars`)
-
-      if (extractedText.length < 50) {
-        return NextResponse.json(
-          { error: 'PDF parece vazio ou contem apenas imagens. Use um PDF com texto editavel.' },
-          { status: 400 }
-        )
-      }
-    } else if (isImage) {
-      console.log('[process-template] Imagem detectada — usando Claude Vision...')
-      // Para imagens, enviaremos diretamente ao Claude Vision
-      extractedText = '__IMAGE_MODE__'
-    } else {
-      return NextResponse.json(
-        { error: `Tipo de arquivo nao suportado: ${file.type}. Use PDF, DOCX, PNG ou JPG.` },
-        { status: 400 }
-      )
-    }
-
-    // ── Call Claude for field extraction ─────────────────────────────────
-
-    console.log('[process-template] Chamando Claude para extração de campos...')
-
-    let fieldsMessage
-    if (isImage) {
-      // Use Claude Vision for images
-      const base64 = Buffer.from(buffer).toString('base64')
-      fieldsMessage = await anthropic.messages.create({
+      // Extract fields with coordinates using Vision
+      const visionResponse = await anthropic.messages.create({
         model: 'claude-sonnet-4-6',
-        max_tokens: 4096,
+        max_tokens: 8192,
         messages: [{
           role: 'user',
           content: [
-            {
-              type: 'image',
-              source: { type: 'base64', media_type: getMediaType(file.name), data: base64 },
-            },
-            {
-              type: 'text',
-              text: `${FIELDS_PROMPT}\n\nNome do template: ${templateName}\nTipo: ${templateType}`,
-            },
+            { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
+            { type: 'text', text: `${VISION_FIELDS_PROMPT}\n\nNome: ${templateName}\nTipo: ${templateType}` },
           ],
         }],
       })
-    } else {
-      fieldsMessage = await anthropic.messages.create({
+
+      const visionRaw = visionResponse.content[0]
+      if (visionRaw.type !== 'text') {
+        return NextResponse.json({ error: 'Resposta inesperada da IA' }, { status: 500 })
+      }
+
+      let fields: any[]
+      try {
+        fields = repairAndParseJson(visionRaw.text)
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        console.error('[process-template] Vision JSON parse falhou:', msg)
+        return NextResponse.json({ error: `Erro ao processar resposta da IA: ${msg}` }, { status: 500 })
+      }
+
+      // Validate & sanitize
+      const validTypes = ['text', 'number', 'date', 'select', 'boolean', 'textarea']
+      fields = fields.filter(f => f.field_name && f.label)
+      for (const f of fields) {
+        if (!validTypes.includes(f.type)) f.type = 'text'
+        if (!f.description) f.description = f.label
+        if (typeof f.required !== 'boolean') f.required = f.required === 'true' || f.required === true
+        // Ensure coordinate fields exist with defaults
+        if (typeof f.x_percent !== 'number') f.x_percent = 30
+        if (typeof f.y_percent !== 'number') f.y_percent = 10
+        if (typeof f.width_percent !== 'number') f.width_percent = 25
+        if (typeof f.height_percent !== 'number') f.height_percent = 3
+      }
+
+      // If multiple pages, process page 2+ for additional fields
+      if (pageImagesRaw.length > 1) {
+        for (let p = 1; p < pageImagesRaw.length; p++) {
+          try {
+            const pageBase64 = pageImagesRaw[p].includes(',')
+              ? pageImagesRaw[p].split(',')[1]
+              : pageImagesRaw[p]
+            const pageMediaType = pageImagesRaw[p].includes('image/png') ? 'image/png' as const : 'image/jpeg' as const
+
+            const pageResponse = await anthropic.messages.create({
+              model: 'claude-sonnet-4-6',
+              max_tokens: 8192,
+              messages: [{
+                role: 'user',
+                content: [
+                  { type: 'image', source: { type: 'base64', media_type: pageMediaType, data: pageBase64 } },
+                  { type: 'text', text: `${VISION_FIELDS_PROMPT}\n\nEsta e a pagina ${p + 1} do documento "${templateName}". Campos ja identificados na pagina anterior: ${fields.map(f => f.field_name).join(', ')}. Extraia APENAS os campos NOVOS desta pagina.` },
+                ],
+              }],
+            })
+
+            const pageRaw = pageResponse.content[0]
+            if (pageRaw.type === 'text') {
+              try {
+                const pageFields = repairAndParseJson(pageRaw.text)
+                for (const f of pageFields) {
+                  if (!validTypes.includes(f.type)) f.type = 'text'
+                  if (!f.description) f.description = f.label
+                  if (typeof f.required !== 'boolean') f.required = f.required === 'true'
+                  f.page = p // Mark which page this field belongs to
+                  if (typeof f.x_percent !== 'number') f.x_percent = 30
+                  if (typeof f.y_percent !== 'number') f.y_percent = 10
+                  if (typeof f.width_percent !== 'number') f.width_percent = 25
+                  if (typeof f.height_percent !== 'number') f.height_percent = 3
+                }
+                fields.push(...pageFields.filter(f => f.field_name && f.label))
+              } catch {}
+            }
+          } catch (pageErr) {
+            console.warn(`[process-template] Erro ao processar pagina ${p + 1}:`, pageErr)
+          }
+        }
+      }
+
+      console.log(`[process-template] Vision: ${fields.length} campos com coordenadas`)
+
+      return NextResponse.json({
+        fields,
+        page_images: pageImagesRaw,
+        template_html: null,
+      })
+    }
+
+    // ── MODE B: Direct file upload (no page images) — image files ──────────
+    if (isImage) {
+      const base64 = Buffer.from(buffer).toString('base64')
+      const mediaType = getMediaType(file.name)
+      const dataUrl = `data:${mediaType};base64,${base64}`
+
+      const visionResponse = await anthropic.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 8192,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
+            { type: 'text', text: `${VISION_FIELDS_PROMPT}\n\nNome: ${templateName}\nTipo: ${templateType}` },
+          ],
+        }],
+      })
+
+      const visionRaw = visionResponse.content[0]
+      if (visionRaw.type !== 'text') return NextResponse.json({ error: 'Resposta inesperada' }, { status: 500 })
+
+      let fields: any[]
+      try { fields = repairAndParseJson(visionRaw.text) } catch (e) {
+        return NextResponse.json({ error: `Erro parse: ${e}` }, { status: 500 })
+      }
+
+      const validTypes = ['text', 'number', 'date', 'select', 'boolean', 'textarea']
+      fields = fields.filter(f => f.field_name && f.label)
+      for (const f of fields) {
+        if (!validTypes.includes(f.type)) f.type = 'text'
+        if (!f.description) f.description = f.label
+        if (typeof f.required !== 'boolean') f.required = f.required === 'true'
+        if (typeof f.x_percent !== 'number') f.x_percent = 30
+        if (typeof f.y_percent !== 'number') f.y_percent = 10
+        if (typeof f.width_percent !== 'number') f.width_percent = 25
+        if (typeof f.height_percent !== 'number') f.height_percent = 3
+      }
+
+      return NextResponse.json({
+        fields,
+        page_images: [dataUrl],
+        template_html: null,
+      })
+    }
+
+    // ── MODE C: DOCX — extract text + HTML ─────────────────────────────────
+    if (isDocx) {
+      const docxContent = await extractDocxContent(buffer)
+      if (docxContent.text.length < 20) {
+        return NextResponse.json({ error: 'DOCX vazio.' }, { status: 400 })
+      }
+
+      const response = await anthropic.messages.create({
         model: 'claude-sonnet-4-6',
         max_tokens: 4096,
         messages: [{
           role: 'user',
-          content: `${FIELDS_PROMPT}\n\nNome do template: ${templateName}\nTipo: ${templateType}\n\nDOCUMENTO:\n${extractedText}`,
+          content: `${TEXT_FIELDS_PROMPT}\n\nNome: ${templateName}\nTipo: ${templateType}\n\nDOCUMENTO:\n${docxContent.text}`,
         }],
+      })
+
+      const raw = response.content[0]
+      if (raw.type !== 'text') return NextResponse.json({ error: 'Resposta inesperada' }, { status: 500 })
+
+      let fields: any[]
+      try { fields = repairAndParseJson(raw.text) } catch (e) {
+        return NextResponse.json({ error: `Erro parse: ${e}` }, { status: 500 })
+      }
+
+      const validTypes = ['text', 'number', 'date', 'select', 'boolean', 'textarea']
+      fields = fields.filter(f => f.field_name && f.label)
+      for (const f of fields) {
+        if (!validTypes.includes(f.type)) f.type = 'text'
+        if (!f.description) f.description = f.label
+        if (typeof f.required !== 'boolean') f.required = f.required === 'true'
+      }
+
+      return NextResponse.json({
+        fields,
+        template_html: docxContent.html || null,
+        page_images: null,
       })
     }
 
-    const fieldsRaw = fieldsMessage.content[0]
-    if (fieldsRaw.type !== 'text') {
-      return NextResponse.json({ error: 'Resposta inesperada da IA' }, { status: 500 })
-    }
-
-    console.log(`[process-template] Resposta campos (${fieldsRaw.text.length} chars)`)
-
-    // ── Parse fields with robust JSON repair ────────────────────────────
-    let fields: ExtractedField[]
-    try {
-      fields = repairAndParseJson(fieldsRaw.text)
-    } catch (parseError) {
-      const msg = parseError instanceof Error ? parseError.message : String(parseError)
-      console.error('[process-template] JSON parse falhou:', msg)
-      console.error('[process-template] Resposta bruta:', fieldsRaw.text.substring(0, 1000))
-      return NextResponse.json({ error: `Erro ao processar resposta da IA: ${msg}` }, { status: 500 })
-    }
-
-    if (!Array.isArray(fields) || fields.length === 0) {
-      return NextResponse.json({ error: 'Nenhum campo identificado no documento' }, { status: 500 })
-    }
-
-    // ── Validate & sanitize fields ──────────────────────────────────────
-    const validFieldTypes = ['text', 'number', 'date', 'select', 'boolean', 'textarea']
-    fields = fields.filter(f => f.field_name && f.label && f.type)
-    for (const field of fields) {
-      if (!validFieldTypes.includes(field.type)) field.type = 'text'
-      if (!field.description) field.description = field.label
-      if (typeof field.required !== 'boolean') {
-        field.required = field.required === 'true' || field.required === true
-      }
-    }
-
-    console.log(`[process-template] ${fields.length} campos validados`)
-
-    // ── Call Claude for HTML layout ─────────────────────────────────────
-
-    let templateHtml = originalHtml || ''
-
-    // Always generate layout HTML from Claude (even for DOCX, mammoth HTML is basic)
-    console.log('[process-template] Gerando HTML de layout fiel ao documento...')
-    try {
-      let layoutMessage
-      if (isImage) {
-        const base64 = Buffer.from(buffer).toString('base64')
-        layoutMessage = await anthropic.messages.create({
-          model: 'claude-sonnet-4-6',
-          max_tokens: 8192,
-          messages: [{
-            role: 'user',
-            content: [
-              {
-                type: 'image',
-                source: { type: 'base64', media_type: getMediaType(file.name), data: base64 },
-              },
-              {
-                type: 'text',
-                text: `${LAYOUT_PROMPT}\n\nCampos identificados (use estes nomes como placeholders {{nome}}):\n${fields.map(f => `- {{${f.field_name}}} = ${f.label}`).join('\n')}`,
-              },
-            ],
-          }],
-        })
-      } else {
-        layoutMessage = await anthropic.messages.create({
-          model: 'claude-sonnet-4-6',
-          max_tokens: 8192,
-          messages: [{
-            role: 'user',
-            content: `${LAYOUT_PROMPT}\n\nDOCUMENTO ORIGINAL:\n${extractedText}\n\nCampos identificados (use estes nomes como placeholders {{nome}}):\n${fields.map(f => `- {{${f.field_name}}} = ${f.label}`).join('\n')}`,
-          }],
-        })
+    // ── MODE D: PDF without page images (fallback text extraction) ─────────
+    if (isPdf) {
+      const extractedText = await extractPdfText(buffer)
+      if (extractedText.length < 50) {
+        return NextResponse.json({ error: 'PDF vazio ou sem texto. Use a versao com pre-visualizacao.' }, { status: 400 })
       }
 
-      const layoutRaw = layoutMessage.content[0]
-      if (layoutRaw.type === 'text') {
-        let html = layoutRaw.text.trim()
-        // Strip markdown code blocks if present
-        html = html.replace(/^```(?:html)?\s*/i, '').replace(/\s*```$/i, '')
-        templateHtml = html.trim()
-        console.log(`[process-template] Layout HTML gerado: ${templateHtml.length} chars`)
+      const response = await anthropic.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 4096,
+        messages: [{
+          role: 'user',
+          content: `${TEXT_FIELDS_PROMPT}\n\nNome: ${templateName}\nTipo: ${templateType}\n\nDOCUMENTO:\n${extractedText}`,
+        }],
+      })
+
+      const raw = response.content[0]
+      if (raw.type !== 'text') return NextResponse.json({ error: 'Resposta inesperada' }, { status: 500 })
+
+      let fields: any[]
+      try { fields = repairAndParseJson(raw.text) } catch (e) {
+        return NextResponse.json({ error: `Erro parse: ${e}` }, { status: 500 })
       }
-    } catch (layoutError) {
-      console.warn('[process-template] Erro ao gerar layout HTML (nao-critico):', layoutError)
-      // Non-fatal — we still have the fields
+
+      const validTypes = ['text', 'number', 'date', 'select', 'boolean', 'textarea']
+      fields = fields.filter(f => f.field_name && f.label)
+      for (const f of fields) {
+        if (!validTypes.includes(f.type)) f.type = 'text'
+        if (!f.description) f.description = f.label
+        if (typeof f.required !== 'boolean') f.required = f.required === 'true'
+      }
+
+      return NextResponse.json({ fields, template_html: null, page_images: null })
     }
 
-    return NextResponse.json({
-      fields,
-      template_html: templateHtml || null,
-    })
+    return NextResponse.json({ error: 'Tipo de arquivo nao suportado.' }, { status: 400 })
   } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : String(error)
-    console.error('[process-template] Erro geral:', errorMsg)
-    return NextResponse.json({ error: `Erro ao processar documento: ${errorMsg}` }, { status: 500 })
+    const msg = error instanceof Error ? error.message : String(error)
+    console.error('[process-template] Erro geral:', msg)
+    return NextResponse.json({ error: `Erro ao processar documento: ${msg}` }, { status: 500 })
   }
 }

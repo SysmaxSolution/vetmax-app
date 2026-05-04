@@ -48,6 +48,7 @@ export type PrintState = {
   extracted_fields: ExtractedField[]
   hasControlledMeds?: boolean
   template_html?: string | null
+  page_images?: string[] | null
 }
 
 interface Props {
@@ -81,6 +82,7 @@ type DraftState = {
   edited_fields: Record<string, any>
   is_system_template: boolean
   template_html?: string | null
+  page_images?: string[] | null
   // Re-open mode
   doc_id?: string
   is_saved?: boolean
@@ -238,6 +240,7 @@ export default function DocumentsSection({
       edited_fields:      { ...doc.content_data },
       is_system_template: doc.template_id ? isSystemTemplate(doc.template_id) : true,
       template_html:      doc.template_html ?? null,
+      page_images:        doc.page_images ?? null,
       doc_id:             doc.id,
       is_saved:           true,
       document_name:      doc.document_name,
@@ -265,6 +268,7 @@ export default function DocumentsSection({
         edited_fields:      { ...result.fields },
         is_system_template: result.is_system_template,
         template_html:      selectedTpl?.template_html ?? null,
+        page_images:        selectedTpl?.page_images ?? null,
         is_saved:           false,
       })
       setShowModal(false)
@@ -296,6 +300,7 @@ export default function DocumentsSection({
     extracted_fields:  d.extracted_fields,
     hasControlledMeds,
     template_html:     d.template_html ?? null,
+    page_images:       d.page_images ?? null,
   })
 
   // ── Save new document + upload PDF + trigger print ────────────────────────
@@ -318,6 +323,7 @@ export default function DocumentsSection({
         template_type:             draft.template_type,
         template_extracted_fields: draft.extracted_fields,
         template_html:             draft.template_html ?? null,
+        page_images:               draft.page_images ?? null,
         document_name:             pd.name,
         content_data:              draft.edited_fields,
       })
@@ -367,6 +373,7 @@ export default function DocumentsSection({
       template_type:               draft.template_type,
       template_extracted_fields:   draft.extracted_fields,
       template_html:               draft.template_html ?? null,
+      page_images:                 draft.page_images ?? null,
       document_name:               pd.name,
       content_data:                draft.edited_fields,
       created_at:                  new Date().toISOString(),

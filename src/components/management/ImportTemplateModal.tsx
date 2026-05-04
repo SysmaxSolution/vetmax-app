@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { saveTemplate, updateTemplate } from '@/lib/actions/templates'
 import TemplateLayoutEditor, { layoutToHtml, htmlToLayout, type LayoutElement } from './TemplateLayoutEditor'
+import { pdfToImages } from '@/lib/pdf-to-images'
 import type { DocumentTemplate, ExtractedField, FieldType, TemplateType } from '@/types'
 
 interface ImportTemplateModalProps {
@@ -24,6 +25,7 @@ interface FormState {
   type: TemplateType
   extractedFields: ExtractedField[]
   templateHtml: string | null
+  pageImages: string[] | null  // base64 data URLs das paginas do documento original
 }
 
 const FIELD_TYPES: FieldType[] = ['text', 'number', 'date', 'select', 'boolean', 'textarea']
@@ -379,6 +381,7 @@ export default function ImportTemplateModal({
     type: editTemplate?.type ?? 'laudo',
     extractedFields: editTemplate?.extracted_fields ?? [],
     templateHtml: editTemplate?.template_html ?? null,
+    pageImages: editTemplate?.page_images ?? null,
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -453,6 +456,32 @@ export default function ImportTemplateModal({
         formData.append('name', form.name)
         formData.append('type', form.type)
 
+        // For PDF files, convert to images in the browser first (pdfjs-dist)
+        const isPdf = selectedFile.type === 'application/pdf' || selectedFile.name.endsWith('.pdf')
+        if (isPdf) {
+          try {
+            console.log('[ImportTemplate] Convertendo PDF para imagens...')
+            const images = await pdfToImages(selectedFile, 2)
+            console.log(`[ImportTemplate] ${images.length} pagina(s) convertidas`)
+            for (const img of images) {
+              formData.append('page_images', img)
+            }
+          } catch (pdfErr) {
+            console.warn('[ImportTemplate] Falha ao converter PDF para imagens, enviando sem:', pdfErr)
+          }
+        }
+
+        // For image files, add as page_images too
+        const isImage = selectedFile.type.startsWith('image/')
+        if (isImage) {
+          const reader = new FileReader()
+          const dataUrl = await new Promise<string>((resolve) => {
+            reader.onload = () => resolve(reader.result as string)
+            reader.readAsDataURL(selectedFile!)
+          })
+          formData.append('page_images', dataUrl)
+        }
+
         response = await fetch('/api/process-template-with-file', {
           method: 'POST',
           body: formData,
@@ -473,22 +502,18 @@ export default function ImportTemplateModal({
       const data = await response.json()
       if (!data.fields) throw new Error('Nenhum campo retornado')
 
+      const pageImages = data.page_images || null
+
       setForm(prev => ({
         ...prev,
         extractedFields: data.fields,
         templateHtml: data.template_html || null,
+        pageImages,
       }))
 
-      // If we have HTML layout, parse into layout elements and go to editor
-      if (data.template_html) {
-        setHtmlSource(data.template_html)
-        setLayoutElements(htmlToLayout(data.template_html, data.fields))
-        setStep('editor')
-      } else {
-        // No HTML — initialize layout elements from fields for editor access
-        setLayoutElements([])
-        setStep('review')
-      }
+      // Always go to editor — preview tab will show original document
+      setLayoutElements([])
+      setStep('editor')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro desconhecido')
     } finally {
@@ -765,6 +790,7 @@ export default function ImportTemplateModal({
         type: form.type,
         extracted_fields: form.extractedFields,
         template_html: finalHtml,
+        page_images: form.pageImages,
       }
 
       const result = isEditMode
@@ -781,6 +807,7 @@ export default function ImportTemplateModal({
         file_url: null,
         extracted_fields: form.extractedFields,
         template_html: finalHtml,
+        page_images: form.pageImages,
         created_at: editTemplate?.created_at ?? new Date().toISOString(),
       })
     } catch (err) {
@@ -1130,8 +1157,56 @@ export default function ImportTemplateModal({
               {/* ── Tab Content ── */}
               <div className="flex-1 overflow-auto px-4 py-4" style={{ minHeight: '500px' }}>
 
-                {/* Tab 1: Pre-visualizar — read-only original document */}
-                {viewMode === 'preview' && form.templateHtml && (
+                {/* Tab 1: Pre-visualizar — original document images or HTML */}
+                {viewMode === 'preview' && form.pageImages && form.pageImages.length > 0 && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                      <ScanEye className="w-4 h-4 text-blue-600" />
+                      <p className="text-xs text-blue-700 font-medium">
+                        Documento original — {form.pageImages.length} pagina(s). Os campos serao sobrepostos sobre esta imagem.
+                      </p>
+                    </div>
+                    {form.pageImages.map((img, idx) => (
+                      <div key={idx} className="relative bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
+                        {watermark && (
+                          <div className="absolute inset-0 pointer-events-none overflow-hidden z-10" style={{ opacity: watermarkOpacity / 100 }}>
+                            <div className="absolute top-1/2 left-1/2 text-slate-400 font-bold whitespace-nowrap select-none"
+                              style={{ fontSize: '3rem', transform: 'translate(-50%, -50%) rotate(-35deg)', letterSpacing: '0.15em' }}>
+                              {watermark}
+                            </div>
+                          </div>
+                        )}
+                        {form.pageImages!.length > 1 && (
+                          <div className="absolute top-2 left-2 z-10 bg-black/60 text-white text-[10px] font-medium px-2 py-0.5 rounded">
+                            Pagina {idx + 1}
+                          </div>
+                        )}
+                        <img src={img} alt={`Pagina ${idx + 1}`} className="w-full h-auto" />
+                        {/* Overlay field indicators */}
+                        {form.extractedFields
+                          .filter(f => (f.page ?? 0) === idx && f.x_percent != null)
+                          .map(f => (
+                            <div
+                              key={f.field_name}
+                              className="absolute border-2 border-blue-400 bg-blue-100/40 rounded cursor-pointer group"
+                              style={{
+                                left: `${f.x_percent}%`,
+                                top: `${f.y_percent}%`,
+                                width: `${f.width_percent}%`,
+                                height: `${f.height_percent}%`,
+                              }}
+                              title={`${f.label} (${f.field_name})`}
+                            >
+                              <span className="absolute -top-5 left-0 text-[9px] font-semibold text-blue-700 bg-blue-100 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                                {f.label}
+                              </span>
+                            </div>
+                          ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {viewMode === 'preview' && (!form.pageImages || form.pageImages.length === 0) && form.templateHtml && (
                   <HtmlPreview
                     html={form.templateHtml}
                     fields={form.extractedFields}
@@ -1140,7 +1215,7 @@ export default function ImportTemplateModal({
                     onTextSelected={handleTextSelected}
                   />
                 )}
-                {viewMode === 'preview' && !form.templateHtml && (
+                {viewMode === 'preview' && (!form.pageImages || form.pageImages.length === 0) && !form.templateHtml && (
                   <div className="text-center py-16 bg-white border border-slate-200 rounded-lg">
                     <ScanEye className="w-12 h-12 text-slate-200 mx-auto mb-3" />
                     <p className="text-sm font-medium text-slate-500">Nenhuma pre-visualizacao disponivel</p>
