@@ -6,7 +6,7 @@ import {
   Droplets, ChevronLeft, ChevronRight, Move, Type, FileText,
   CheckSquare, Square, Pencil, Tag, Sparkles, PlusCircle,
 } from 'lucide-react'
-import { saveTemplate } from '@/lib/actions/templates'
+import { saveTemplate, updateTemplate } from '@/lib/actions/templates'
 import TemplateLayoutEditor, { layoutToHtml, htmlToLayout, type LayoutElement } from './TemplateLayoutEditor'
 import type { DocumentTemplate, ExtractedField, FieldType, TemplateType } from '@/types'
 
@@ -14,6 +14,7 @@ interface ImportTemplateModalProps {
   onClose: () => void
   onSuccess: (template: DocumentTemplate) => void
   clinicLogoUrl?: string | null
+  editTemplate?: DocumentTemplate | null
 }
 
 type Step = 'upload' | 'review' | 'adding_field' | 'editor'
@@ -369,13 +370,15 @@ export default function ImportTemplateModal({
   onClose,
   onSuccess,
   clinicLogoUrl,
+  editTemplate,
 }: ImportTemplateModalProps) {
-  const [step, setStep] = useState<Step>('upload')
+  const isEditMode = !!editTemplate
+  const [step, setStep] = useState<Step>(isEditMode ? 'editor' : 'upload')
   const [form, setForm] = useState<FormState>({
-    name: '',
-    type: 'laudo',
-    extractedFields: [],
-    templateHtml: null,
+    name: editTemplate?.name ?? '',
+    type: editTemplate?.type ?? 'laudo',
+    extractedFields: editTemplate?.extracted_fields ?? [],
+    templateHtml: editTemplate?.template_html ?? null,
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -401,8 +404,13 @@ export default function ImportTemplateModal({
     count: number
   } | null>(null)
 
-  // Layout editor state
-  const [layoutElements, setLayoutElements] = useState<LayoutElement[]>([])
+  // Layout editor state — initialize from editTemplate if available
+  const [layoutElements, setLayoutElements] = useState<LayoutElement[]>(() => {
+    if (editTemplate?.template_html) {
+      return htmlToLayout(editTemplate.template_html, editTemplate.extracted_fields)
+    }
+    return []
+  })
 
   const [newField, setNewField] = useState<ExtractedField>({
     field_name: '',
@@ -752,24 +760,28 @@ export default function ImportTemplateModal({
 
     setLoading(true)
     try {
-      const result = await saveTemplate({
+      const payload = {
         name: form.name,
         type: form.type,
         extracted_fields: form.extractedFields,
         template_html: finalHtml,
-      })
+      }
+
+      const result = isEditMode
+        ? await updateTemplate(editTemplate!.id, payload)
+        : await saveTemplate(payload)
 
       if ('error' in result) { setError(result.error); return }
 
       onSuccess({
         id: result.id,
-        clinic_id: '',
+        clinic_id: editTemplate?.clinic_id ?? '',
         name: form.name,
         type: form.type,
         file_url: null,
         extracted_fields: form.extractedFields,
         template_html: finalHtml,
-        created_at: new Date().toISOString(),
+        created_at: editTemplate?.created_at ?? new Date().toISOString(),
       })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao salvar')

@@ -144,3 +144,48 @@ export async function deleteTemplate(id: string): Promise<{ success: boolean } |
 
   return { success: true }
 }
+
+/**
+ * Atualizar template de documento existente
+ * Apenas admin pode atualizar
+ */
+export async function updateTemplate(
+  id: string,
+  payload: SaveTemplatePayload
+): Promise<{ id: string } | { error: string }> {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('clinic_id, role')
+    .eq('id', user.id)
+    .single()
+  if (!profile?.clinic_id) return { error: 'Perfil sem clínica vinculada.' }
+  if (profile.role !== 'admin') return { error: 'Apenas admin pode editar templates.' }
+
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('document_templates')
+    .update({
+      name: payload.name,
+      type: payload.type,
+      extracted_fields: payload.extracted_fields,
+      template_html: payload.template_html || null,
+    })
+    .eq('id', id)
+    .eq('clinic_id', profile.clinic_id)
+    .select('id')
+    .single()
+
+  if (error || !data) {
+    return { error: 'Erro ao atualizar template: ' + (error?.message || 'desconhecido') }
+  }
+
+  await logAudit({ action: 'UPDATE_TEMPLATE', entity_type: 'document_templates', entity_id: data.id, details: { name: payload.name, type: payload.type } })
+
+  revalidatePath('/dashboard/management')
+  return { id: data.id }
+}

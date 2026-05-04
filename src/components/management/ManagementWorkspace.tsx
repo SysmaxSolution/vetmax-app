@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import {
   BarChart3, Plus, Trash2, Building2, Users, Save, X,
   FileText, CheckCircle2, Mail, Copy, Check, Link as LinkIcon, Shield, Settings,
-  Upload, Image, Loader2, Send,
+  Upload, Image, Loader2, Send, Pencil,
 } from 'lucide-react'
 import { useRef } from 'react'
 import { deleteTemplate } from '@/lib/actions/templates'
@@ -146,6 +146,7 @@ export default function ManagementWorkspace({
   const activeTab = (searchParams.get('tab') as ActiveTab | null) ?? 'templates'
   const [templates, setTemplates] = useState<DocumentTemplate[]>(initialTemplates)
   const [showModal, setShowModal] = useState(false)
+  const [editingTemplate, setEditingTemplate] = useState<DocumentTemplate | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
@@ -247,9 +248,16 @@ export default function ManagementWorkspace({
   }
 
   const handleTemplateAdded = (t: DocumentTemplate) => {
-    setTemplates([t, ...templates])
-    setShowModal(false)
-    setToast({ type: 'success', message: `Modelo "${t.name}" salvo com sucesso!` })
+    if (editingTemplate) {
+      // Update existing template in list
+      setTemplates(prev => prev.map(tpl => tpl.id === t.id ? t : tpl))
+      setEditingTemplate(null)
+      setToast({ type: 'success', message: `Modelo "${t.name}" atualizado com sucesso!` })
+    } else {
+      setTemplates([t, ...templates])
+      setShowModal(false)
+      setToast({ type: 'success', message: `Modelo "${t.name}" salvo com sucesso!` })
+    }
   }
 
   // ── Clinic handlers ────────────────────────────────────────────────────────
@@ -427,11 +435,19 @@ export default function ManagementWorkspace({
                           )}
                         </div>
                       </div>
-                      <button onClick={() => handleDeleteTemplate(template.id)}
-                        disabled={deletingId === template.id}
-                        className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <button onClick={() => setEditingTemplate(template)}
+                          className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Editar Layout">
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => handleDeleteTemplate(template.id)}
+                          disabled={deletingId === template.id}
+                          className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                          title="Excluir Template">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )
@@ -921,6 +937,16 @@ export default function ManagementWorkspace({
       {/* Modal de Importação de Template */}
       {showModal && (
         <ImportTemplateModal onClose={() => setShowModal(false)} onSuccess={handleTemplateAdded} clinicLogoUrl={logoUrl} />
+      )}
+
+      {/* Modal de Edição de Layout do Template */}
+      {editingTemplate && (
+        <ImportTemplateModal
+          onClose={() => setEditingTemplate(null)}
+          onSuccess={handleTemplateAdded}
+          clinicLogoUrl={logoUrl}
+          editTemplate={editingTemplate}
+        />
       )}
     </>
   )
