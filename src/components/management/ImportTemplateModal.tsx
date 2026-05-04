@@ -80,17 +80,17 @@ function TextSelectionMenu({
 }) {
   const menuRef = useRef<HTMLDivElement>(null)
 
+  // Close on Escape only — mousedown is handled by parent to avoid race conditions
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) onClose()
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
   }, [onClose])
 
   return (
     <div
       ref={menuRef}
+      data-selection-menu
       className="fixed z-[60] bg-white rounded-xl shadow-2xl border border-slate-200 py-1.5 min-w-[220px] animate-in fade-in zoom-in-95 duration-150"
       style={{ left: Math.min(x, window.innerWidth - 240), top: Math.min(y, window.innerHeight - 180) }}
     >
@@ -253,14 +253,17 @@ function HtmlPreview({
   }
 
   const handleMouseUp = useCallback(() => {
-    const sel = window.getSelection()
-    if (!sel || sel.isCollapsed) return
-    const text = sel.toString().trim()
-    if (!text || text.length < 2) return
+    // Small delay so the browser finishes updating the selection
+    setTimeout(() => {
+      const sel = window.getSelection()
+      if (!sel || sel.isCollapsed) return
+      const text = sel.toString().trim()
+      if (!text || text.length < 2) return
 
-    const range = sel.getRangeAt(0)
-    const rect = range.getBoundingClientRect()
-    onTextSelected(text, rect.left + rect.width / 2, rect.bottom + 8)
+      const range = sel.getRangeAt(0)
+      const rect = range.getBoundingClientRect()
+      onTextSelected(text, rect.left + rect.width / 2, rect.bottom + 8)
+    }, 50)
   }, [onTextSelected])
 
   return (
@@ -389,6 +392,11 @@ export default function ImportTemplateModal({
   const [showNamePicker, setShowNamePicker] = useState(false)
   const [aiSuggestion, setAiSuggestion] = useState<ExtractedField | null>(null)
   const [isLoadingAI, setIsLoadingAI] = useState(false)
+  const [duplicateConfirm, setDuplicateConfirm] = useState<{
+    fieldName: string
+    selectedText: string
+    count: number
+  } | null>(null)
 
   const [newField, setNewField] = useState<ExtractedField>({
     field_name: '',
@@ -504,10 +512,24 @@ export default function ImportTemplateModal({
       .replace(/\s+/g, '_')
       .replace(/[^a-z0-9_]/g, '')
 
+    const sourceText = (newField as any)._sourceText as string | undefined
+    const clean = { ...newField, field_name: fieldName }
+    delete (clean as any)._sourceText
+
     setForm(prev => ({
       ...prev,
-      extractedFields: [...prev.extractedFields, { ...newField, field_name: fieldName }],
+      extractedFields: [...prev.extractedFields, clean],
     }))
+
+    // Replace text in HTML with placeholder if created from selection
+    if (sourceText && form.templateHtml) {
+      replaceTextInHtml(sourceText, fieldName, false)
+      const occurrences = countOccurrences(sourceText, form.templateHtml)
+      if (occurrences > 1) {
+        setDuplicateConfirm({ fieldName, selectedText: sourceText, count: occurrences - 1 })
+      }
+    }
+
     setNewField({ field_name: '', label: '', type: 'text', description: '', required: false })
     setStep(form.templateHtml ? 'editor' : 'review')
     setError(null)
@@ -520,12 +542,64 @@ export default function ImportTemplateModal({
     setEditingHtml(false)
   }
 
+  // ── Text selection helpers ─────────────────────────────────────────────
+
+  /** Count occurrences of text in HTML (ignoring tags) */
+  const countOccurrences = (text: string, html: string): number => {
+    if (!html || !text) return 0
+    const escaped = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const matches = html.match(new RegExp(escaped, 'g'))
+    return matches ? matches.length : 0
+  }
+
+  /** Replace selected text with {{field_name}} placeholder in HTML */
+  const replaceTextInHtml = (text: string, fieldName: string, replaceAll: boolean) => {
+    if (!form.templateHtml) return
+    const escaped = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const placeholder = `{{${fieldName}}}`
+    const updated = replaceAll
+      ? form.templateHtml.replace(new RegExp(escaped, 'g'), placeholder)
+      : form.templateHtml.replace(new RegExp(escaped), placeholder)
+    setForm(prev => ({ ...prev, templateHtml: updated }))
+    setHtmlSource(updated)
+  }
+
+  const toSnakeName = (text: string) =>
+    text.toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s]/g, '')
+      .trim()
+      .replace(/\s+/g, '_')
+      .slice(0, 40) || 'campo_novo'
+
   // ── Text selection handlers ───────────────────────────────────────────
 
   const handleTextSelected = useCallback((text: string, x: number, y: number) => {
+    // Always reset to a fresh menu for each new selection
     setSelectionMenu({ text, x, y })
+    setShowNamePicker(false)
     setAiSuggestion(null)
+    setDuplicateConfirm(null)
   }, [])
+
+  // Close menu when clicking outside (not on the menu itself)
+  useEffect(() => {
+    if (!selectionMenu) return
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      // Don't close if clicking inside the menu or its children
+      if (target.closest('[data-selection-menu]')) return
+      setSelectionMenu(null)
+    }
+    // Use capture phase with a delay so mouseup fires first
+    const timer = setTimeout(() => {
+      document.addEventListener('click', handleClick)
+    }, 100)
+    return () => {
+      clearTimeout(timer)
+      document.removeEventListener('click', handleClick)
+    }
+  }, [selectionMenu])
 
   const handleNameField = () => {
     setShowNamePicker(true)
@@ -533,9 +607,21 @@ export default function ImportTemplateModal({
 
   const handleNameFieldPick = (index: number) => {
     if (!selectionMenu) return
+    const selectedText = selectionMenu.text
     const fields = [...form.extractedFields]
-    fields[index] = { ...fields[index], label: selectionMenu.text }
+    const fieldName = fields[index].field_name
+    fields[index] = { ...fields[index], label: selectedText }
     setForm(prev => ({ ...prev, extractedFields: fields }))
+
+    // Replace first occurrence in HTML
+    replaceTextInHtml(selectedText, fieldName, false)
+
+    // Check for duplicates
+    const occurrences = countOccurrences(selectedText, form.templateHtml || '')
+    if (occurrences > 1) {
+      setDuplicateConfirm({ fieldName, selectedText, count: occurrences - 1 })
+    }
+
     setShowNamePicker(false)
     setSelectionMenu(null)
     window.getSelection()?.removeAllRanges()
@@ -543,47 +629,40 @@ export default function ImportTemplateModal({
 
   const handleReadWithAI = async () => {
     if (!selectionMenu) return
+    const savedText = selectionMenu.text
     setIsLoadingAI(true)
     try {
       const response = await fetch('/api/process-template', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: `Analise de campo: ${selectionMenu.text}`,
+          name: `Analise de campo: ${savedText}`,
           type: form.type,
-          hint_text: selectionMenu.text,
+          hint_text: savedText,
         }),
       })
 
-      // Fallback: use a simpler inline analysis if API returns fields
+      let suggestion: ExtractedField | null = null
+
       if (response.ok) {
         const data = await response.json()
         if (data.fields && data.fields.length > 0) {
-          // Find the most relevant field from AI response
-          const best = data.fields[0] as ExtractedField
-          setAiSuggestion(best)
-          setSelectionMenu(null)
-          window.getSelection()?.removeAllRanges()
-          return
+          suggestion = data.fields[0] as ExtractedField
         }
       }
 
-      // Manual fallback: generate field from selected text
-      const snakeName = selectionMenu.text
-        .toLowerCase()
-        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-z0-9\s]/g, '')
-        .trim()
-        .replace(/\s+/g, '_')
-        .slice(0, 40)
+      if (!suggestion) {
+        suggestion = {
+          field_name: toSnakeName(savedText),
+          label: savedText,
+          type: 'text',
+          description: `Campo identificado a partir do texto "${savedText}"`,
+          required: false,
+        }
+      }
 
-      setAiSuggestion({
-        field_name: snakeName || 'campo_novo',
-        label: selectionMenu.text,
-        type: 'text',
-        description: `Campo identificado a partir do texto "${selectionMenu.text}"`,
-        required: false,
-      })
+      // Attach the original selected text so we can replace it later
+      setAiSuggestion({ ...suggestion, _sourceText: savedText } as any)
       setSelectionMenu(null)
       window.getSelection()?.removeAllRanges()
     } catch (err) {
@@ -597,21 +676,17 @@ export default function ImportTemplateModal({
 
   const handleCreateFieldFromSelection = () => {
     if (!selectionMenu) return
-    const snakeName = selectionMenu.text
-      .toLowerCase()
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9\s]/g, '')
-      .trim()
-      .replace(/\s+/g, '_')
-      .slice(0, 40)
+    const selectedText = selectionMenu.text
+    const snakeName = toSnakeName(selectedText)
 
     setNewField({
-      field_name: snakeName || 'campo_novo',
-      label: selectionMenu.text,
+      field_name: snakeName,
+      label: selectedText,
       type: 'text',
       description: '',
       required: false,
-    })
+      _sourceText: selectedText,
+    } as any)
     setSelectionMenu(null)
     window.getSelection()?.removeAllRanges()
     setStep('adding_field')
@@ -619,11 +694,31 @@ export default function ImportTemplateModal({
 
   const handleAcceptAISuggestion = () => {
     if (!aiSuggestion) return
+    const sourceText = (aiSuggestion as any)._sourceText as string | undefined
+    const clean = { ...aiSuggestion }
+    delete (clean as any)._sourceText
+
     setForm(prev => ({
       ...prev,
-      extractedFields: [...prev.extractedFields, aiSuggestion],
+      extractedFields: [...prev.extractedFields, clean],
     }))
+
+    // Replace text in HTML with placeholder
+    if (sourceText && form.templateHtml) {
+      replaceTextInHtml(sourceText, clean.field_name, false)
+      const occurrences = countOccurrences(sourceText, form.templateHtml)
+      if (occurrences > 1) {
+        setDuplicateConfirm({ fieldName: clean.field_name, selectedText: sourceText, count: occurrences - 1 })
+      }
+    }
+
     setAiSuggestion(null)
+  }
+
+  const handleConfirmDuplicateReplace = () => {
+    if (!duplicateConfirm) return
+    replaceTextInHtml(duplicateConfirm.selectedText, duplicateConfirm.fieldName, true)
+    setDuplicateConfirm(null)
   }
 
   // ── Save template ─────────────────────────────────────────────────────
@@ -1167,6 +1262,40 @@ export default function ImportTemplateModal({
           onPick={handleNameFieldPick}
           onClose={() => setShowNamePicker(false)}
         />
+      )}
+
+      {/* ── Duplicate Replacement Confirmation ── */}
+      {duplicateConfirm && (
+        <div className="fixed inset-0 z-[70] bg-black/30 flex items-center justify-center p-4" onClick={() => setDuplicateConfirm(null)}>
+          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full" onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-slate-200">
+              <h3 className="text-sm font-semibold text-slate-900">Campo encontrado em mais locais</h3>
+            </div>
+            <div className="px-5 py-4">
+              <p className="text-sm text-slate-700">
+                O texto <strong>&quot;{duplicateConfirm.selectedText.slice(0, 40)}{duplicateConfirm.selectedText.length > 40 ? '...' : ''}&quot;</strong> foi
+                encontrado em mais <strong>{duplicateConfirm.count}</strong> {duplicateConfirm.count === 1 ? 'local' : 'locais'} no documento.
+              </p>
+              <p className="text-sm text-slate-600 mt-2">
+                Deseja substituir todas as ocorrencias pelo campo <code className="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-xs">{`{{${duplicateConfirm.fieldName}}}`}</code>?
+              </p>
+            </div>
+            <div className="px-5 py-3 border-t border-slate-200 flex gap-2 justify-end">
+              <button
+                onClick={() => setDuplicateConfirm(null)}
+                className="px-4 py-2 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                Apenas este
+              </button>
+              <button
+                onClick={handleConfirmDuplicateReplace}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Substituir todos ({duplicateConfirm.count + 1})
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
