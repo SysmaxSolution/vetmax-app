@@ -4,6 +4,7 @@ import { useState, useRef, useCallback } from 'react'
 import {
   X, Upload, Plus, Trash2, Loader, Eye, Code, GripVertical,
   Droplets, ChevronLeft, ChevronRight, Move, Type, FileText,
+  CheckSquare, Square, Pencil,
 } from 'lucide-react'
 import { saveTemplate } from '@/lib/actions/templates'
 import type { DocumentTemplate, ExtractedField, FieldType, TemplateType } from '@/types'
@@ -482,6 +483,41 @@ export default function ImportTemplateModal({
           {/* ── Step: Review Fields ── */}
           {step === 'review' && (
             <div className="px-6 py-6 space-y-4">
+              {/* Toolbar: toggle all required + edit layout */}
+              {form.extractedFields.length > 0 && (
+                <div className="flex items-center justify-between gap-2">
+                  {(() => {
+                    const allRequired = form.extractedFields.every(f => f.required)
+                    return (
+                      <button
+                        onClick={() => {
+                          const newVal = !allRequired
+                          setForm(prev => ({
+                            ...prev,
+                            extractedFields: prev.extractedFields.map(f => ({ ...f, required: newVal })),
+                          }))
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+                      >
+                        {allRequired
+                          ? <><Square className="w-3.5 h-3.5" />Desmarcar todos obrigatorios</>
+                          : <><CheckSquare className="w-3.5 h-3.5" />Marcar todos obrigatorios</>}
+                      </button>
+                    )
+                  })()}
+                  <button
+                    onClick={() => {
+                      if (!form.templateHtml) setHtmlSource('')
+                      else setHtmlSource(form.templateHtml)
+                      setStep('editor')
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50 transition-colors"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />Editar Layout
+                  </button>
+                </div>
+              )}
+
               <div className="space-y-1.5">
                 {form.extractedFields.map((field, idx) => (
                   <DraggableField
@@ -673,6 +709,25 @@ export default function ImportTemplateModal({
 
                 {viewMode === 'fields' && (
                   <div className="space-y-2">
+                    {form.extractedFields.length > 0 && (() => {
+                      const allRequired = form.extractedFields.every(f => f.required)
+                      return (
+                        <button
+                          onClick={() => {
+                            const newVal = !allRequired
+                            setForm(prev => ({
+                              ...prev,
+                              extractedFields: prev.extractedFields.map(f => ({ ...f, required: newVal })),
+                            }))
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors mb-1"
+                        >
+                          {allRequired
+                            ? <><Square className="w-3.5 h-3.5" />Desmarcar todos obrigatorios</>
+                            : <><CheckSquare className="w-3.5 h-3.5" />Marcar todos obrigatorios</>}
+                        </button>
+                      )
+                    })()}
                     {form.extractedFields.map((field, idx) => (
                       <DraggableField
                         key={`${field.field_name}-${idx}`}
@@ -728,24 +783,14 @@ export default function ImportTemplateModal({
           )}
 
           {step === 'review' && (
-            <>
-              {form.templateHtml && (
-                <button
-                  onClick={() => setStep('editor')}
-                  className="px-4 py-2 rounded-lg border border-blue-600 text-blue-700 text-sm font-medium hover:bg-blue-50 flex items-center gap-2"
-                >
-                  <Eye className="w-4 h-4" />Editor Visual
-                </button>
-              )}
-              <button
-                onClick={handleSaveTemplate}
-                disabled={loading || form.extractedFields.length === 0}
-                className="flex-1 px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {loading && <Loader className="w-4 h-4 animate-spin" />}
-                Confirmar e Salvar
-              </button>
-            </>
+            <button
+              onClick={handleSaveTemplate}
+              disabled={loading || form.extractedFields.length === 0}
+              className="flex-1 px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {loading && <Loader className="w-4 h-4 animate-spin" />}
+              Confirmar e Salvar
+            </button>
           )}
 
           {step === 'adding_field' && (
