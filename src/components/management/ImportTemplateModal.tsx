@@ -4,7 +4,7 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import {
   X, Upload, Plus, Trash2, Loader, Eye, Code, GripVertical,
   Droplets, ChevronLeft, ChevronRight, Move, Type, FileText,
-  CheckSquare, Square, Pencil, Tag, Sparkles, PlusCircle,
+  CheckSquare, Square, Pencil, Tag, Sparkles, PlusCircle, ScanEye, LayoutGrid, List,
 } from 'lucide-react'
 import { saveTemplate, updateTemplate } from '@/lib/actions/templates'
 import TemplateLayoutEditor, { layoutToHtml, htmlToLayout, type LayoutElement } from './TemplateLayoutEditor'
@@ -387,7 +387,7 @@ export default function ImportTemplateModal({
   const [filePreview, setFilePreview] = useState<{ name: string; size: number } | null>(null)
 
   // Editor state
-  const [viewMode, setViewMode] = useState<'visual' | 'fields'>('visual')
+  const [viewMode, setViewMode] = useState<'preview' | 'layout' | 'fields'>('preview')
   const [watermark, setWatermark] = useState('')
   const [watermarkOpacity, setWatermarkOpacity] = useState(15)
   const [editingHtml, setEditingHtml] = useState(false)
@@ -1040,77 +1040,82 @@ export default function ImportTemplateModal({
             </div>
           )}
 
-          {/* ── Step: Visual Editor ── */}
+          {/* ── Step: Visual Editor (3 tabs) ── */}
           {step === 'editor' && (
             <div className="flex flex-col h-full">
-              {/* Editor toolbar */}
+              {/* ── Tab Bar ── */}
               <div className="flex items-center gap-2 px-4 py-2 bg-slate-50 border-b border-slate-200 flex-shrink-0">
                 <div className="flex items-center bg-white rounded-lg border border-slate-200 p-0.5">
                   <button
-                    onClick={() => { setViewMode('visual'); setEditingHtml(false) }}
+                    onClick={() => { setViewMode('preview'); setEditingHtml(false) }}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                      viewMode === 'visual' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                      viewMode === 'preview' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'
                     }`}
                   >
-                    <Eye className="w-3.5 h-3.5" />Layout
+                    <ScanEye className="w-3.5 h-3.5" />Pre-visualizar
                   </button>
                   <button
-                    onClick={() => setViewMode('fields')}
+                    onClick={() => { setViewMode('layout'); setEditingHtml(false) }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                      viewMode === 'layout' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <LayoutGrid className="w-3.5 h-3.5" />Layout
+                  </button>
+                  <button
+                    onClick={() => { setViewMode('fields'); setEditingHtml(false) }}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                       viewMode === 'fields' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'
                     }`}
                   >
-                    <Type className="w-3.5 h-3.5" />Campos
+                    <List className="w-3.5 h-3.5" />Campos
                   </button>
                 </div>
 
-                <div className="h-5 w-px bg-slate-300 mx-1" />
-
-                {/* Watermark controls */}
-                <div className="flex items-center gap-2">
-                  <Droplets className="w-3.5 h-3.5 text-slate-400" />
-                  <input
-                    type="text"
-                    value={watermark}
-                    onChange={e => setWatermark(e.target.value)}
-                    placeholder="Marca d'agua..."
-                    className="w-28 px-2 py-1 text-xs border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
-                  {watermark && (
-                    <input
-                      type="range"
-                      min="5"
-                      max="50"
-                      value={watermarkOpacity}
-                      onChange={e => setWatermarkOpacity(Number(e.target.value))}
-                      className="w-16 h-1"
-                      title={`Opacidade: ${watermarkOpacity}%`}
-                    />
-                  )}
-                </div>
+                {/* Watermark (visible on preview + layout) */}
+                {(viewMode === 'preview' || viewMode === 'layout') && (
+                  <>
+                    <div className="h-5 w-px bg-slate-300 mx-1" />
+                    <div className="flex items-center gap-2">
+                      <Droplets className="w-3.5 h-3.5 text-slate-400" />
+                      <input
+                        type="text"
+                        value={watermark}
+                        onChange={e => setWatermark(e.target.value)}
+                        placeholder="Marca d'agua..."
+                        className="w-28 px-2 py-1 text-xs border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                      {watermark && (
+                        <input type="range" min="5" max="50" value={watermarkOpacity}
+                          onChange={e => setWatermarkOpacity(Number(e.target.value))}
+                          className="w-16 h-1" title={`Opacidade: ${watermarkOpacity}%`} />
+                      )}
+                    </div>
+                  </>
+                )}
 
                 <div className="flex-1" />
 
-                {/* Edit HTML source */}
-                <button
-                  onClick={() => {
-                    if (editingHtml) {
-                      handleSaveHtmlSource()
-                    } else {
-                      // Sync layout → HTML before opening source editor
-                      const currentHtml = layoutElements.length > 0
-                        ? layoutToHtml(layoutElements)
-                        : (form.templateHtml || '')
-                      setHtmlSource(currentHtml)
-                      setEditingHtml(true)
-                      setViewMode('visual')
-                    }
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-                >
-                  <Code className="w-3.5 h-3.5" />
-                  {editingHtml ? 'Salvar HTML' : 'Editar HTML'}
-                </button>
+                {/* Edit HTML source (layout tab only) */}
+                {viewMode === 'layout' && (
+                  <button
+                    onClick={() => {
+                      if (editingHtml) {
+                        handleSaveHtmlSource()
+                      } else {
+                        const currentHtml = layoutElements.length > 0
+                          ? layoutToHtml(layoutElements)
+                          : (form.templateHtml || '')
+                        setHtmlSource(currentHtml)
+                        setEditingHtml(true)
+                      }
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                  >
+                    <Code className="w-3.5 h-3.5" />
+                    {editingHtml ? 'Salvar HTML' : 'Editar HTML'}
+                  </button>
+                )}
               </div>
 
               {/* AI Suggestion panel */}
@@ -1122,9 +1127,35 @@ export default function ImportTemplateModal({
                 />
               )}
 
-              {/* Editor content */}
+              {/* ── Tab Content ── */}
               <div className="flex-1 overflow-auto px-4 py-4" style={{ minHeight: '500px' }}>
-                {viewMode === 'visual' && !editingHtml && (
+
+                {/* Tab 1: Pre-visualizar — read-only original document */}
+                {viewMode === 'preview' && form.templateHtml && (
+                  <HtmlPreview
+                    html={form.templateHtml}
+                    fields={form.extractedFields}
+                    watermark={watermark}
+                    watermarkOpacity={watermarkOpacity}
+                    onTextSelected={handleTextSelected}
+                  />
+                )}
+                {viewMode === 'preview' && !form.templateHtml && (
+                  <div className="text-center py-16 bg-white border border-slate-200 rounded-lg">
+                    <ScanEye className="w-12 h-12 text-slate-200 mx-auto mb-3" />
+                    <p className="text-sm font-medium text-slate-500">Nenhuma pre-visualizacao disponivel</p>
+                    <p className="text-xs text-slate-400 mt-1">Importe um arquivo (PDF, DOCX, imagem) para ver o documento original</p>
+                    <button
+                      onClick={() => { setStep('upload') }}
+                      className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+                    >
+                      <Upload className="w-3.5 h-3.5" />Importar Arquivo
+                    </button>
+                  </div>
+                )}
+
+                {/* Tab 2: Layout — drag-and-drop canvas */}
+                {viewMode === 'layout' && !editingHtml && (
                   <TemplateLayoutEditor
                     elements={layoutElements}
                     onChange={setLayoutElements}
@@ -1134,8 +1165,7 @@ export default function ImportTemplateModal({
                     clinicLogoUrl={clinicLogoUrl}
                   />
                 )}
-
-                {editingHtml && (
+                {viewMode === 'layout' && editingHtml && (
                   <textarea
                     value={htmlSource}
                     onChange={e => setHtmlSource(e.target.value)}
@@ -1144,7 +1174,8 @@ export default function ImportTemplateModal({
                   />
                 )}
 
-                {viewMode === 'fields' && !editingHtml && (
+                {/* Tab 3: Campos — field management list */}
+                {viewMode === 'fields' && (
                   <div className="space-y-2">
                     {form.extractedFields.length > 0 && (() => {
                       const allRequired = form.extractedFields.every(f => f.required)
