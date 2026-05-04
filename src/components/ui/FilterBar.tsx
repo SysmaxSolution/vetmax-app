@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Filter, X } from 'lucide-react'
+import { DatePicker } from '@/components/ui/DatePicker'
 
 export interface FilterBarKPI {
   label: string
@@ -106,11 +107,10 @@ export function FilterBar({
                   ))}
                 </select>
               ) : f.type === 'date' ? (
-                <input
-                  type="date"
+                <DatePicker
                   value={values[f.key] ?? ''}
-                  onChange={e => updateFilter(f.key, e.target.value)}
-                  className="text-xs border border-slate-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                  onChange={v => updateFilter(f.key, v)}
+                  className="text-xs"
                 />
               ) : (
                 <input

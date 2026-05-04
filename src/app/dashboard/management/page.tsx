@@ -7,6 +7,7 @@ import { getCatalog, seedDefaultCatalog } from '@/lib/actions/catalog'
 import { getClinicConfig } from '@/lib/actions/clinic-settings'
 import { getWhatsAppSettings } from '@/lib/actions/whatsapp'
 import { listProductPrices } from '@/lib/actions/core-management'
+import { getRooms } from '@/lib/actions/rooms'
 import ManagementWorkspace from '@/components/management/ManagementWorkspace'
 import { Suspense } from 'react'
 import type { DocumentTemplate } from '@/types'
@@ -31,7 +32,7 @@ export default async function ManagementPage() {
 
   const clinicName = (profile.clinics as unknown as { name: string } | null)?.name ?? 'Minha Clínica'
 
-  const [templatesResult, clinicResult, usersResult, invitationsResult, catalogResult, configResult, whatsAppResult, productPricesResult] = await Promise.all([
+  const [templatesResult, clinicResult, usersResult, invitationsResult, catalogResult, configResult, whatsAppResult, productPricesResult, roomsResult] = await Promise.all([
     getTemplates(),
     admin
       .from('clinics')
@@ -40,7 +41,7 @@ export default async function ManagementPage() {
       .single(),
     admin
       .from('profiles')
-      .select('id, full_name, role, crmv')
+      .select('id, full_name, role, crmv, phone, specialties')
       .eq('clinic_id', profile.clinic_id)
       .eq('is_sysmax', false)
       .order('full_name'),
@@ -49,6 +50,7 @@ export default async function ManagementPage() {
     getClinicConfig(),
     getWhatsAppSettings(),
     listProductPrices(),
+    getRooms(),
   ])
 
   const templates: DocumentTemplate[] = 'error' in templatesResult ? [] : templatesResult
@@ -60,6 +62,7 @@ export default async function ManagementPage() {
   const initialClinicConfig = 'error' in configResult ? null : configResult
   const initialWhatsAppSettings = whatsAppResult
   const initialProductPrices = 'error' in productPricesResult ? [] : productPricesResult
+  const initialRooms = Array.isArray(roomsResult) ? roomsResult : []
 
   // Seed defaults se o catálogo estiver vazio
   if (initialCatalog.length === 0 && profile.clinic_id) {
@@ -83,6 +86,7 @@ export default async function ManagementPage() {
         initialClinicConfig={initialClinicConfig}
         initialWhatsAppSettings={initialWhatsAppSettings}
         initialProductPrices={initialProductPrices}
+        initialRooms={initialRooms}
       />
     </Suspense>
   )

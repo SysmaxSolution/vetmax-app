@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Clock, Save, Loader2, ToggleLeft, ToggleRight, Sun } from 'lucide-react'
 import { updateClinicConfig, type BusinessHours, type ClinicConfig } from '@/lib/actions/clinic-settings'
+import { TimePicker } from '@/components/ui/DatePicker'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -137,25 +138,21 @@ export default function BusinessHoursTab({ initialConfig, onToast }: Props) {
                   <div className="flex items-center gap-3 flex-1">
                     <div className="flex items-center gap-2">
                       <label className="text-xs text-slate-500 w-12">Abre</label>
-                      <input
+                      <TimePicker
                         id={`open-${day.key}`}
-                        data-testid={`open-${day.key}`}
-                        type="time"
                         value={entry!.open}
-                        onChange={e => setTime(day.key, 'open', e.target.value)}
-                        className="border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 w-28"
+                        onChange={v => setTime(day.key, 'open', v)}
+                        className="w-28"
                       />
                     </div>
                     <span className="text-slate-400 text-xs">até</span>
                     <div className="flex items-center gap-2">
                       <label className="text-xs text-slate-500 w-12">Fecha</label>
-                      <input
+                      <TimePicker
                         id={`close-${day.key}`}
-                        data-testid={`close-${day.key}`}
-                        type="time"
                         value={entry!.close}
-                        onChange={e => setTime(day.key, 'close', e.target.value)}
-                        className="border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 w-28"
+                        onChange={v => setTime(day.key, 'close', v)}
+                        className="w-28"
                       />
                     </div>
                   </div>

@@ -874,3 +874,23 @@ export async function searchPatientsForTriage(
     tutor: tutorMap[p.tutor_id] ?? { id: p.tutor_id, name: '—', cpf: '', phone: '' },
   }))
 }
+
+// ─── Update Patient Reproductive Status ─────────────────────────────────────
+
+export async function updatePatientReproductiveStatus(
+  patientId: string,
+  status: string
+): Promise<{ success: true } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const { error } = await supabase
+    .from('patients')
+    .update({ reproductive_status: status || null })
+    .eq('id', patientId)
+
+  if (error) return { error: error.message }
+  revalidatePath('/dashboard/triage')
+  return { success: true }
+}

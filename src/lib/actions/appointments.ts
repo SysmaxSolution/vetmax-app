@@ -26,6 +26,7 @@ export interface CreateAppointmentPayload {
   appointment_datetime: string   // 'YYYY-MM-DDTHH:MM:00' — naive local time
   reason:               string
   notes?:               string
+  professional_id?:     string
 }
 
 export interface UpcomingAppointment {
@@ -67,6 +68,7 @@ export async function createAppointment(
     appointment_datetime: payload.appointment_datetime,
     reason:               payload.reason,
     notes:                payload.notes ?? null,
+    professional_id:      payload.professional_id ?? null,
     status:               'scheduled',
     created_by:           auth.userId,
   })

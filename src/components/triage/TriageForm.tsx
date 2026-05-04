@@ -6,6 +6,7 @@ import {
   submitTriageAndMoveToDoctor,
   updateTriageVitalSigns,
   extractFieldsFromTranscription,
+  updatePatientReproductiveStatus,
   type TriageConsultationDetail,
 } from '@/lib/actions/triage'
 import { addVaccine, type PatientVaccine } from '@/lib/actions/vaccines'
@@ -21,8 +22,10 @@ import {
   CheckCircle2,
   Syringe,
 } from 'lucide-react'
-import type { VitalSigns, MucousColor, CRT, DocumentTemplate, ExtractedField } from '@/types'
+import type { VitalSigns, MucousColor, CRT, DocumentTemplate, ExtractedField, ReproductiveStatus } from '@/types'
+import { REPRODUCTIVE_STATUS_OPTIONS } from '@/types'
 import { Toast } from '@/components/ui/toast'
+import { DatePicker } from '@/components/ui/DatePicker'
 import VaccinationCard from '@/components/vet/VaccinationCard'
 import VaccineStatusBadges from '@/components/vet/VaccineStatusBadges'
 import { BehaviorTagsBadges } from '@/components/ui/BehaviorTagsBadges'
@@ -404,12 +407,7 @@ export default function TriageForm({
             <option value="false">Não</option>
           </select>
         ) : field.type === 'date' ? (
-          <input
-            type="date"
-            value={String(value)}
-            onChange={(e) => handleChange(e.target.value)}
-            className={`${baseClass} ${borderClass}`}
-          />
+          <DatePicker value={String(value)} onChange={v => handleChange(v)} />
         ) : (
           <input
             type="text"
@@ -583,11 +581,21 @@ export default function TriageForm({
               <span className="font-medium text-slate-700">Tutor:</span> {consultation.tutor.name}
             </p>
             <p className="text-sm text-slate-600">{consultation.tutor.phone}</p>
-            {consultation.patient.reproductive_status && (
-              <p className="text-sm text-slate-600 mt-0.5">
-                <span className="font-medium">Status Reprodutivo:</span> {consultation.patient.reproductive_status}
-              </p>
-            )}
+            <div className="mt-1">
+              <label className="text-xs font-medium text-slate-600">Status Reprodutivo</label>
+              <select
+                value={consultation.patient.reproductive_status ?? ''}
+                onChange={async (e) => {
+                  await updatePatientReproductiveStatus(consultation.patient.id, e.target.value)
+                }}
+                className="mt-0.5 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-700 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+              >
+                <option value="">Selecione...</option>
+                {REPRODUCTIVE_STATUS_OPTIONS.map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
             {consultation.patient.medical_history && (
               <div className="mt-2 flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg p-2.5">
                 <AlertCircle className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />

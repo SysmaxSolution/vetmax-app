@@ -3,6 +3,8 @@
  * Hierarquia de fallback: photo_url → emoji da espécie → inicial da espécie
  */
 
+import { ImageLightbox } from './ImageLightbox'
+
 const SPECIES_EMOJI: Record<string, string> = {
   dog:     '🐕',
   cat:     '🐱',
@@ -38,10 +40,10 @@ export function PetAvatar({ name, species, photoUrl, size = 'md', className = ''
       className={`flex-shrink-0 overflow-hidden rounded-full bg-slate-100 flex items-center justify-center ${s.wrapper} ${className}`}
     >
       {photoUrl ? (
-        <img
+        <ImageLightbox
           src={photoUrl}
           alt={name}
-          className={`${s.img} object-cover`}
+          className={`${s.img} object-cover rounded-full`}
         />
       ) : (
         <span className={s.text}>{emoji}</span>

@@ -8,6 +8,8 @@ import PatientFullModal from '@/components/patients/PatientFullModal'
 import { CheckInModal } from './CheckInModal'
 import PetTimelineModal from '@/components/pet/PetTimelineModal'
 import NewAppointmentModal from './NewAppointmentModal'
+import AgendaKanban from './AgendaKanban'
+import { getAgendaBoard, type AgendaColumn } from '@/lib/actions/agenda'
 import ReceptionSubNav from './ReceptionSubNav'
 import WhatsAppNotificationModal from '@/components/whatsapp/WhatsAppNotificationModal'
 import { BehaviorTagsBadges } from '@/components/ui/BehaviorTagsBadges'
@@ -77,6 +79,7 @@ interface Props {
   userName: string
   clinicChecklist?: string[]
   clinicId: string
+  checkinRequiredFields?: string[]
 }
 
 // ─── TutorProfile: mostra Tutor + lista de Pets com botão de novo Pet ─────────
@@ -270,9 +273,14 @@ function QueueCard({ item, onMoveToTriage }: { item: ReceptionQueueItem; onMoveT
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, userName, clinicChecklist = [], clinicId }: Props) {
+export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, userName, clinicChecklist = [], clinicId, checkinRequiredFields }: Props) {
   const [queue, setQueue] = useState<ReceptionQueueItem[]>(initialQueue)
   const [history, setHistory] = useState<ReceptionHistoryItem[]>(initialHistory)
+
+  // Kanban view state
+  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list')
+  const [kanbanColumns, setKanbanColumns] = useState<AgendaColumn[]>([])
+  const [loadingKanban, setLoadingKanban] = useState(false)
 
   useRealtimeSync({ table: 'consultations', clinicId })
 
@@ -497,6 +505,43 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
       <main className="mx-auto max-w-4xl px-3 sm:px-6 py-6 sm:py-8 space-y-8">
 
         <ReceptionSubNav />
+
+        {/* ── View Toggle: Lista / Kanban ── */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setViewMode('list')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+              viewMode === 'list' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            Lista
+          </button>
+          <button
+            onClick={async () => {
+              setViewMode('kanban')
+              if (kanbanColumns.length === 0) {
+                setLoadingKanban(true)
+                const result = await getAgendaBoard()
+                if (!('error' in result)) setKanbanColumns(result)
+                setLoadingKanban(false)
+              }
+            }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+              viewMode === 'kanban' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            Kanban
+          </button>
+        </div>
+
+        {/* ── Kanban View ── */}
+        {viewMode === 'kanban' && (
+          loadingKanban ? (
+            <div className="flex items-center justify-center py-12 text-sm text-slate-500">Carregando Kanban...</div>
+          ) : (
+            <AgendaKanban initialColumns={kanbanColumns} clinicId={clinicId} />
+          )
+        )}
 
         {/* ── BUSCA ── */}
         <section>
@@ -770,6 +815,7 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
               : undefined
           }
           clinicChecklist={clinicChecklist}
+          checkinRequiredFields={checkinRequiredFields}
           onClose={() => setCheckInModal(null)}
           onSuccess={handleCheckInSuccess}
         />

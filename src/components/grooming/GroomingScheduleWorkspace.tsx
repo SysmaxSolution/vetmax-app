@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Calendar, Clock, Scissors, ChevronRight, AlertCircle } from 'lucide-react'
 import { validateSchedulingSlot } from '@/lib/actions/scheduling-validation'
+import { DatePicker, TimePicker } from '@/components/ui/DatePicker'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -123,13 +124,11 @@ export default function GroomingScheduleWorkspace({ clinicId }: Props) {
                 <Calendar className="h-4 w-4 text-slate-500" />
                 Data do Agendamento
               </label>
-              <input
+              <DatePicker
                 id="schedule-date"
-                type="date"
                 value={selectedDate}
                 min={new Date().toISOString().slice(0, 10)}
-                onChange={e => { setSelectedDate(e.target.value); setSlotAvailable(null); setError('') }}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                onChange={v => { setSelectedDate(v); setSlotAvailable(null); setError('') }}
               />
             </div>
 
@@ -139,12 +138,10 @@ export default function GroomingScheduleWorkspace({ clinicId }: Props) {
                 <Clock className="h-4 w-4 text-slate-500" />
                 Horário
               </label>
-              <input
+              <TimePicker
                 id="schedule-time"
-                type="time"
                 value={selectedTime}
-                onChange={e => { setSelectedTime(e.target.value); setSlotAvailable(null); setError('') }}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                onChange={v => { setSelectedTime(v); setSlotAvailable(null); setError('') }}
               />
             </div>
 

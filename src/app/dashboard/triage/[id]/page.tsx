@@ -1,5 +1,6 @@
 import { getTriageConsultation, getTriageRecordById } from '@/lib/actions/triage'
 import { getTemplates } from '@/lib/actions/templates'
+import { getClinicSettingsConfig } from '@/lib/actions/clinic-settings'
 import { getPatientVaccines } from '@/lib/actions/vaccines'
 import TriageForm from '@/components/triage/TriageForm'
 import { redirect } from 'next/navigation'
@@ -36,11 +37,14 @@ export default async function TriageScreen({
 
   if (!profile?.clinic_id) redirect('/onboarding')
 
-  const [consultationResult, triageRecordResult, templatesResult] = await Promise.all([
+  const [consultationResult, triageRecordResult, templatesResult, settingsResult] = await Promise.all([
     getTriageConsultation(id),
     getTriageRecordById(id),
     getTemplates(),
+    getClinicSettingsConfig(),
   ])
+
+  const triageRequiredFields = 'error' in settingsResult ? ['weight', 'temperature', 'chief_complaint'] : settingsResult.triage_required_fields
 
   // Prefer consultation data; fall back to triage_record
   const result = !('error' in consultationResult)
@@ -84,6 +88,7 @@ export default async function TriageScreen({
         isEditMode={isEditMode}
         templates={templates}
         initialVaccines={initialVaccines}
+        triageRequiredFields={triageRequiredFields}
       />
     </div>
   )

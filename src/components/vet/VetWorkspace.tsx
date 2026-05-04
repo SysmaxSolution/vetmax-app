@@ -228,34 +228,36 @@ export default function VetWorkspace({ queue, completed, clinicId }: VetWorkspac
                 </div>
               ) : (
                 completed.map((item) => (
-                  <div key={item.id} className="flex items-center gap-4 px-5 py-4 hover:bg-slate-50/50 transition-colors">
-                    {/* Avatar */}
-                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-lg overflow-hidden">
-                      {item.patient.photo_url
-                        ? <img src={item.patient.photo_url} alt={item.patient.name} className="h-full w-full object-cover" />
-                        : SPECIES_EMOJI[item.patient.species] ?? '🐾'}
-                    </div>
-
-                    {/* Info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="font-semibold text-slate-900">{item.patient.name}</p>
-                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_BADGE[item.status] ?? 'bg-slate-100 text-slate-600'}`}>
-                          {STATUS_LABEL[item.status] ?? item.status}
-                        </span>
+                  <div key={item.id} className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 px-4 sm:px-5 py-4 hover:bg-slate-50/50 transition-colors">
+                    <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
+                      {/* Avatar */}
+                      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-lg overflow-hidden">
+                        {item.patient.photo_url
+                          ? <img src={item.patient.photo_url} alt={item.patient.name} className="h-full w-full object-cover" />
+                          : SPECIES_EMOJI[item.patient.species] ?? '🐾'}
                       </div>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        {SPECIES_LABELS[item.patient.species] ?? item.patient.species} · Tutor: {item.tutor.name}
-                      </p>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        {VISIT_REASON_LABELS[item.visit_reason] ?? item.visit_reason}
-                      </p>
+
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-semibold text-slate-900">{item.patient.name}</p>
+                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_BADGE[item.status] ?? 'bg-slate-100 text-slate-600'}`}>
+                            {STATUS_LABEL[item.status] ?? item.status}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {SPECIES_LABELS[item.patient.species] ?? item.patient.species} · Tutor: {item.tutor.name}
+                        </p>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          {VISIT_REASON_LABELS[item.visit_reason] ?? item.visit_reason}
+                        </p>
+                      </div>
                     </div>
 
                     {/* Ação */}
                     <Link
                       href={`/dashboard/vet/${item.id}`}
-                      className="flex-shrink-0 flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-colors"
+                      className="flex-shrink-0 flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-colors ml-[52px] sm:ml-0"
                     >
                       <Pencil className="h-3.5 w-3.5" />
                       Editar Consulta

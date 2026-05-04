@@ -153,8 +153,7 @@ export default function DashboardHeader({
       </div>
 
       {/* Navegação */}
-      <div className="mx-auto max-w-4xl px-3 sm:px-6 flex items-center gap-1 overflow-x-auto scrollbar-hide
-                      [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+      <div className="mx-auto max-w-4xl px-3 sm:px-6 flex flex-wrap items-center gap-1">
         {tabs.map((tab) => {
           const showBadge = tab.href === '/dashboard/pharmacy' && lowStockCount > 0
           return (
@@ -163,7 +162,7 @@ export default function DashboardHeader({
               href={tab.href}
               id={tab.id}
               data-testid={tab.id}
-              className={`relative flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
+              className={`relative flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                 isActive(tab.href)
                   ? 'bg-slate-900 text-white shadow-sm'
                   : 'text-slate-600 hover:text-slate-900'
@@ -187,7 +186,7 @@ export default function DashboardHeader({
             try { await fetch('/auth/logout', { method: 'POST' }) } catch {}
             window.location.href = '/login'
           }}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg text-slate-600 hover:text-slate-900 text-sm font-medium whitespace-nowrap transition-all"
+          className="flex items-center gap-2 px-3 py-2 rounded-lg text-slate-600 hover:text-slate-900 text-sm font-medium transition-all"
           title="Sair"
         >
           <LogOut className="w-4 h-4" />

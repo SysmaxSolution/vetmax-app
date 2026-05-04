@@ -365,13 +365,17 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
                 onChange={e => setExamType(e.target.value)}
                 className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="hemogram">Hemograma</option>
-                <option value="urinalysis">Urinálise</option>
-                <option value="xray">Raio-X</option>
-                <option value="ultrasound">Ultrassom</option>
-                <option value="biochemistry">Bioquímico</option>
-                <option value="culture">Cultura</option>
-                <option value="other">Outro</option>
+                <option value="hemograma">Hemograma Completo</option>
+                <option value="bioquimico">Perfil Bioquímico</option>
+                <option value="urinanalise">Urinálise</option>
+                <option value="coproparasitologico">Coproparasitológico</option>
+                <option value="ultrassom">Ultrassom</option>
+                <option value="raio_x">Raio-X</option>
+                <option value="eletrocardiograma">Eletrocardiograma (ECG)</option>
+                <option value="citologia">Citologia</option>
+                <option value="cultura">Cultura e Antibiograma</option>
+                <option value="teste_rapido">Teste Rápido (FIV/FeLV/4DX)</option>
+                <option value="outro">Outro</option>
               </select>
             </div>
             <div className="flex gap-2">

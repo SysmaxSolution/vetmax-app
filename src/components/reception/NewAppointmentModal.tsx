@@ -6,6 +6,8 @@ import { getPatientsList, type PatientsListItem } from '@/lib/actions/timeline'
 import { createAppointment } from '@/lib/actions/appointments'
 import { createGroomingSession, getGroomingCatalog, updateGroomingPricing, type GroomingCatalogItem, type GroomingServicePrice } from '@/lib/actions/grooming'
 import { useModules } from '@/components/providers/ModulesProvider'
+import { DatePicker, TimePicker, DateTimePicker } from '@/components/ui/DatePicker'
+import { getClinicProfessionals, type ClinicProfessional } from '@/lib/actions/professionals'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -78,6 +80,15 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
   const [notes,      setNotes]      = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error,      setError]      = useState<string | null>(null)
+  const [professionalId, setProfessionalId] = useState('')
+  const [professionals, setProfessionals]   = useState<ClinicProfessional[]>([])
+
+  // Load professionals on mount
+  useEffect(() => {
+    getClinicProfessionals().then(res => {
+      if (!('error' in res)) setProfessionals(res)
+    })
+  }, [])
 
   // ── Grooming inline fields ──
   const [groomingServices,  setGroomingServices]  = useState<string[]>([])
@@ -196,6 +207,7 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
       appointment_datetime: `${date}T${time}:00`,
       reason,
       notes:                notes.trim() || undefined,
+      professional_id:      professionalId || undefined,
     })
 
     setSubmitting(false)
@@ -314,6 +326,25 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
               </select>
             </div>
 
+            {/* Professional selector (non-grooming only) */}
+            {!isGrooming && professionals.length > 0 && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Profissional (opcional)</label>
+                <select
+                  value={professionalId}
+                  onChange={e => setProfessionalId(e.target.value)}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                >
+                  <option value="">Sem preferência</option>
+                  {professionals.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.full_name} {p.crmv ? `(CRMV: ${p.crmv})` : `(${p.role === 'vet' ? 'MV' : 'Aux.'})`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             {/* ══ BANHO E TOSA — campos inline ══ */}
             {isGrooming && (
               <>
@@ -354,12 +385,10 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">
                     Data e Horário
                   </label>
-                  <input
-                    type="datetime-local"
+                  <DateTimePicker
                     value={groomingDate}
-                    onChange={e => setGroomingDate(e.target.value)}
-                    min={new Date().toISOString().slice(0, 16)}
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                    onChange={setGroomingDate}
+                    placeholder="Selecionar data e hora"
                   />
                   <p className="text-[10px] text-teal-600 mt-1 flex items-center gap-1">
                     <Calendar className="h-3 w-3" />
@@ -432,23 +461,18 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-semibold text-slate-600 mb-1.5">Data</label>
-                    <input
-                      type="date"
+                    <DatePicker
                       value={date}
+                      onChange={setDate}
                       min={todayStr()}
-                      onChange={e => setDate(e.target.value)}
                       required
-                      className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
                     />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-600 mb-1.5">Horário</label>
-                    <input
-                      type="time"
+                    <TimePicker
                       value={time}
-                      onChange={e => setTime(e.target.value)}
-                      required
-                      className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                      onChange={setTime}
                     />
                   </div>
                 </div>

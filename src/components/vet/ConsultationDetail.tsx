@@ -665,7 +665,7 @@ export default function ConsultationDetail({
         </div>
 
         {/* Dados do paciente */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 32px', marginBottom: 24, paddingBottom: 20, borderBottom: '1px solid #d1d5db', fontSize: 13 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '4px 32px', marginBottom: 24, paddingBottom: 20, borderBottom: '1px solid #d1d5db', fontSize: 13 }}>
           <div><strong>Pet: </strong>{patient.name}</div>
           <div><strong>Tutor: </strong>{tutor.name}</div>
           <div>
@@ -1055,7 +1055,7 @@ export default function ConsultationDetail({
             </button>
           </div>
 
-          <div className="p-6 grid grid-cols-2 gap-6">
+          <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
             {/* Coluna: Info do Pet */}
             <div className="space-y-2">
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Animal</p>
@@ -1699,7 +1699,7 @@ export default function ConsultationDetail({
                         className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
                       />
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block text-xs font-semibold text-slate-600 mb-1">
                           Frequência{newIsControlled && <span className="text-red-500 ml-0.5">*</span>}

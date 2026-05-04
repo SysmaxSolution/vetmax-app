@@ -173,12 +173,19 @@ export default function LoginPage() {
           </form>
         </div>
 
-        <p className="text-sm text-slate-500 text-center mt-6">
-          Novo no VetMax?{' '}
-          <Link href="/register" className="text-teal-600 font-bold hover:underline">
-            Criar uma conta
-          </Link>
-        </p>
+        <div className="text-sm text-slate-500 text-center mt-6 space-y-2">
+          <p>
+            <Link href="/forgot-password" className="text-teal-600 hover:underline">
+              Esqueceu sua senha?
+            </Link>
+          </p>
+          <p>
+            Novo no VetMax?{' '}
+            <Link href="/register" className="text-teal-600 font-bold hover:underline">
+              Criar uma conta
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   )

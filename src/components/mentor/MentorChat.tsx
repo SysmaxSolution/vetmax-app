@@ -333,10 +333,10 @@ export function MentorChat() {
       {/* ── Chat Panel ── */}
       {open && (
         <div
-          className="fixed bottom-24 right-6 z-[9998] flex flex-col rounded-3xl border border-slate-100 bg-white"
+          className="fixed bottom-24 right-4 sm:right-6 z-[9998] flex flex-col rounded-3xl border border-slate-100 bg-white"
           style={{
-            width: 340,
-            maxHeight: 560,
+            width: 'min(340px, calc(100vw - 32px))',
+            maxHeight: 'min(560px, calc(100vh - 140px))',
             boxShadow: '0 32px 64px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.04)',
           }}
         >

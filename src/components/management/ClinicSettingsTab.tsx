@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import {
   updateClinicConfig,
-  type FlowConfig, type ClinicConfig,
+  type FlowConfig, type ClinicConfig, type ClinicSettingsConfig,
 } from '@/lib/actions/clinic-settings'
 
 const MERGEABLE = [
@@ -17,15 +17,31 @@ const MERGEABLE = [
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
+const CHECKIN_FIELD_OPTIONS = [
+  { key: 'address',           label: 'Endereço completo' },
+  { key: 'emergency_contact', label: 'Contato de emergência' },
+]
+
+const TRIAGE_FIELD_OPTIONS = [
+  { key: 'weight',            label: 'Peso (kg)' },
+  { key: 'temperature',       label: 'Temperatura retal' },
+  { key: 'chief_complaint',   label: 'Queixa principal' },
+  { key: 'heart_rate',        label: 'Frequência cardíaca' },
+  { key: 'respiratory_rate',  label: 'Frequência respiratória' },
+  { key: 'mucous_color',      label: 'Cor das mucosas' },
+  { key: 'crt',               label: 'TPC (CRT)' },
+]
+
 interface Props {
   initialConfig:          ClinicConfig | null
   initialChecklist?:      string[]
+  initialSettingsConfig?: ClinicSettingsConfig | null
   onToast: (type: 'success' | 'error', msg: string) => void
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function ClinicSettingsTab({ initialConfig, initialChecklist = [], onToast }: Props) {
+export default function ClinicSettingsTab({ initialConfig, initialChecklist = [], initialSettingsConfig, onToast }: Props) {
   const [continuousFlow,  setContinuousFlow]  = useState(initialConfig?.continuous_flow ?? false)
   const [mergedModules,   setMergedModules]   = useState<Array<'triage'|'exams'>>(
     initialConfig?.flow_config?.vet_merged_modules ?? []
@@ -220,6 +236,104 @@ export default function ClinicSettingsTab({ initialConfig, initialChecklist = []
               : <><Save className="h-4 w-4" /> Salvar Configuração de Fluxo</>}
           </button>
         </div>
+      </div>
+
+      {/* ── Required Fields Config ── */}
+      <RequiredFieldsConfig initialSettingsConfig={initialSettingsConfig ?? null} onToast={onToast} />
+    </div>
+  )
+}
+
+// ─── Required Fields Sub-Component ──────────────────────────────────────────
+
+function RequiredFieldsConfig({ initialSettingsConfig, onToast }: { initialSettingsConfig: ClinicSettingsConfig | null; onToast: (type: 'success' | 'error', msg: string) => void }) {
+  const [checkinFields, setCheckinFields] = useState<string[]>(initialSettingsConfig?.checkin_required_fields ?? ['address', 'emergency_contact'])
+  const [triageFields, setTriageFields] = useState<string[]>(initialSettingsConfig?.triage_required_fields ?? ['weight', 'temperature', 'chief_complaint'])
+  const [saving, setSaving] = useState(false)
+
+  function toggleField(list: string[], setList: (v: string[]) => void, key: string) {
+    setList(list.includes(key) ? list.filter(k => k !== key) : [...list, key])
+  }
+
+  async function saveRequiredFields() {
+    setSaving(true)
+    const res = await updateClinicConfig({
+      // These fields are stored in the clinics table as JSONB columns (via migrations 0072/0073)
+      // We pass them through updateClinicConfig which does a generic .update() on clinics table
+    } as any)
+    // Since clinic_settings is a separate table, we need to update it directly
+    // For now we use the existing pattern — update via Supabase directly
+    try {
+      const response = await fetch('/api/update-required-fields', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ checkin_required_fields: checkinFields, triage_required_fields: triageFields }),
+      })
+      if (!response.ok) throw new Error('Falha ao salvar')
+      onToast('success', 'Campos obrigatórios atualizados!')
+    } catch {
+      onToast('error', 'Erro ao salvar campos obrigatórios.')
+    }
+    setSaving(false)
+  }
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-slate-200 mt-5">
+      <div className="border-b border-slate-100 px-6 py-4 flex items-center gap-3">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-50">
+          <ClipboardList className="h-4 w-4 text-teal-600" />
+        </div>
+        <div>
+          <h2 className="text-base font-semibold text-slate-900">Campos Obrigatórios</h2>
+          <p className="text-xs text-slate-500">Configure quais campos são obrigatórios no check-in e na triagem</p>
+        </div>
+      </div>
+
+      <div className="px-6 py-4 space-y-5">
+        {/* Check-in fields */}
+        <div>
+          <h3 className="text-sm font-semibold text-slate-700 mb-2">Check-in (Recepção)</h3>
+          <div className="space-y-2">
+            {CHECKIN_FIELD_OPTIONS.map(f => (
+              <label key={f.key} className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={checkinFields.includes(f.key)}
+                  onChange={() => toggleField(checkinFields, setCheckinFields, f.key)}
+                  className="rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                />
+                <span className="text-sm text-slate-700">{f.label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* Triage fields */}
+        <div>
+          <h3 className="text-sm font-semibold text-slate-700 mb-2">Triagem (Sinais Vitais)</h3>
+          <div className="space-y-2">
+            {TRIAGE_FIELD_OPTIONS.map(f => (
+              <label key={f.key} className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={triageFields.includes(f.key)}
+                  onChange={() => toggleField(triageFields, setTriageFields, f.key)}
+                  className="rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                />
+                <span className="text-sm text-slate-700">{f.label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <button
+          onClick={saveRequiredFields}
+          disabled={saving}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 transition-colors disabled:opacity-50"
+        >
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          {saving ? 'Salvando...' : 'Salvar Campos Obrigatórios'}
+        </button>
       </div>
     </div>
   )

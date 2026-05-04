@@ -5,6 +5,7 @@ import {
   FileText, Plus, Loader2, Sparkles, Printer, CheckCircle2,
   X, FileCheck, AlertCircle, Wand2, Save, Search, ShieldAlert,
 } from 'lucide-react'
+import { DatePicker } from '@/components/ui/DatePicker'
 import {
   generateDocumentDraft, savePatientDocument, updatePatientDocument,
   type PatientDocument,
@@ -139,9 +140,7 @@ function FieldInput({
           <option value="false">Não</option>
         </select>
       ) : field.type === 'date' ? (
-        <input type="date" value={value ?? ''}
-          onChange={e => onChange(e.target.value)}
-          className={`${base} ${borderClass}`} />
+        <DatePicker value={value ?? ''} onChange={v => onChange(v)} />
       ) : (
         <input type="text" value={value ?? ''}
           onChange={e => onChange(e.target.value)}
@@ -605,7 +604,7 @@ export default function DocumentsSection({
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {draft.extracted_fields.map(field => (
                 <FieldInput key={field.field_name} field={field}
                   value={draft.edited_fields[field.field_name] ?? null}

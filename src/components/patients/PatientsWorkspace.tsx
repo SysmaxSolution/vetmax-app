@@ -53,45 +53,47 @@ function PatientCard({
   const age = calcAge(patient.birth_date)
 
   return (
-    <div className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white px-5 py-4 hover:shadow-sm hover:border-slate-300 transition-all">
-      {/* Avatar */}
-      <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full text-2xl overflow-hidden ${sp.color.replace('text-', 'bg-').replace('700', '100')}`}>
-        {patient.photo_url
-          ? <img src={patient.photo_url} alt={patient.name} className="h-full w-full object-cover" />
-          : sp.emoji}
-      </div>
+    <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 rounded-xl border border-slate-200 bg-white px-4 sm:px-5 py-4 hover:shadow-sm hover:border-slate-300 transition-all">
+      <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
+        {/* Avatar */}
+        <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full text-2xl overflow-hidden ${sp.color.replace('text-', 'bg-').replace('700', '100')}`}>
+          {patient.photo_url
+            ? <img src={patient.photo_url} alt={patient.name} className="h-full w-full object-cover" />
+            : sp.emoji}
+        </div>
 
-      {/* Info */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <p className="font-semibold text-slate-900">{patient.name}</p>
-          <span className={`text-xs font-medium rounded-full px-2 py-0.5 ${sp.color}`}>
-            {sp.label}
-          </span>
-          {patient.neutered && (
-            <span className="text-xs rounded-full bg-teal-50 text-teal-600 px-2 py-0.5 font-medium">Castrado(a)</span>
-          )}
+        {/* Info */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="font-semibold text-slate-900">{patient.name}</p>
+            <span className={`text-xs font-medium rounded-full px-2 py-0.5 ${sp.color}`}>
+              {sp.label}
+            </span>
+            {patient.neutered && (
+              <span className="text-xs rounded-full bg-teal-50 text-teal-600 px-2 py-0.5 font-medium">Castrado(a)</span>
+            )}
+          </div>
+          <div className="mt-0.5 flex items-center gap-2 flex-wrap">
+            {patient.breed && <span className="text-xs text-slate-500">{patient.breed}</span>}
+            {patient.gender && patient.gender !== 'unknown' && (
+              <span className="text-xs text-slate-400">{GENDER_LABELS[patient.gender]}</span>
+            )}
+            {age && <span className="text-xs text-slate-400">{age}</span>}
+          </div>
+          <p className="mt-1 text-xs text-slate-500 truncate">
+            Tutor: <span className="font-medium text-slate-700">{patient.tutor.name}</span>
+            {patient.tutor.cpf && (
+              <span className="ml-1.5 text-slate-400">· CPF {formatCpf(patient.tutor.cpf)}</span>
+            )}
+            {patient.tutor.phone && (
+              <span className="ml-1.5 text-slate-400">· {patient.tutor.phone}</span>
+            )}
+          </p>
         </div>
-        <div className="mt-0.5 flex items-center gap-2 flex-wrap">
-          {patient.breed && <span className="text-xs text-slate-500">{patient.breed}</span>}
-          {patient.gender && patient.gender !== 'unknown' && (
-            <span className="text-xs text-slate-400">{GENDER_LABELS[patient.gender]}</span>
-          )}
-          {age && <span className="text-xs text-slate-400">{age}</span>}
-        </div>
-        <p className="mt-1 text-xs text-slate-500">
-          Tutor: <span className="font-medium text-slate-700">{patient.tutor.name}</span>
-          {patient.tutor.cpf && (
-            <span className="ml-1.5 text-slate-400">· CPF {formatCpf(patient.tutor.cpf)}</span>
-          )}
-          {patient.tutor.phone && (
-            <span className="ml-1.5 text-slate-400">· {patient.tutor.phone}</span>
-          )}
-        </p>
       </div>
 
       {/* Ações */}
-      <div className="flex-shrink-0 flex items-center gap-2">
+      <div className="flex-shrink-0 flex items-center gap-2 pl-14 sm:pl-0">
         <button
           type="button"
           onClick={() => onEdit(patient)}
@@ -99,7 +101,8 @@ function PatientCard({
           title="Editar cadastro"
         >
           <Pencil className="h-3.5 w-3.5" />
-          Editar Cadastro
+          <span className="hidden xs:inline">Editar Cadastro</span>
+          <span className="xs:hidden">Editar</span>
         </button>
         <button
           type="button"
@@ -109,7 +112,8 @@ function PatientCard({
           <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
           </svg>
-          Ver Histórico
+          <span className="hidden xs:inline">Ver Histórico</span>
+          <span className="xs:hidden">Histórico</span>
         </button>
       </div>
     </div>
@@ -198,7 +202,7 @@ export default function PatientsWorkspace({ initialPatients, clinicName }: Props
       )}
 
       {/* Page Header */}
-      <div className="mb-6 flex items-start justify-between gap-4">
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">Pacientes</h1>
           <p className="mt-0.5 text-sm text-slate-500">

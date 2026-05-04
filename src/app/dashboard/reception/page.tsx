@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import { getReceptionQueue, getReceptionHistory } from '@/lib/actions/consultations'
+import { getClinicSettingsConfig } from '@/lib/actions/clinic-settings'
 import { ReceptionWorkspace } from '@/components/reception/ReceptionWorkspace'
 
 export default async function ReceptionPage() {
@@ -39,6 +40,10 @@ export default async function ReceptionPage() {
 
   const clinicChecklist = (clinic?.reception_checklist as string[] | null) ?? []
 
+  // Fetch configurable required fields for check-in
+  const settingsResult = await getClinicSettingsConfig()
+  const checkinRequiredFields = 'error' in settingsResult ? ['address', 'emergency_contact'] : settingsResult.checkin_required_fields
+
   return (
     <div className="max-w-4xl mx-auto px-6 py-8">
       <ReceptionWorkspace
@@ -48,6 +53,7 @@ export default async function ReceptionPage() {
         userName={profile.full_name}
         clinicChecklist={clinicChecklist}
         clinicId={profile.clinic_id}
+        checkinRequiredFields={checkinRequiredFields}
       />
     </div>
   )

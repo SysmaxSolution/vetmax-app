@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { X, Scissors, Loader2, Save, Calendar, DollarSign, Tag } from 'lucide-react'
 import { createGroomingSession, getGroomingCatalog, updateGroomingPricing } from '@/lib/actions/grooming'
 import type { GroomingCatalogItem, GroomingServicePrice } from '@/lib/actions/grooming'
+import { DateTimePicker } from '@/components/ui/DatePicker'
 
 // ─── Serviços disponíveis (fallback sem catálogo) ─────────────────────────────
 
@@ -189,12 +190,10 @@ export default function GroomingCheckinModal({
             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1 flex items-center gap-1">
               <Calendar className="h-3 w-3" /> Agendamento (opcional)
             </label>
-            <input
-              type="datetime-local"
+            <DateTimePicker
               value={scheduledAt}
-              onChange={e => setScheduledAt(e.target.value)}
-              min={new Date().toISOString().slice(0, 16)}
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+              onChange={setScheduledAt}
+              placeholder="Selecionar data e hora"
             />
             {isScheduling && (
               <p className="text-[10px] text-teal-600 mt-1 flex items-center gap-1">

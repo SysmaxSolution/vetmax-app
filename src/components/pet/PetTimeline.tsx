@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Filter } from 'lucide-react'
+import { DatePicker } from '@/components/ui/DatePicker'
 import type { TimelineEvent, TimelineEventType } from '@/lib/actions/timeline'
 import type { PrintState } from '@/components/vet/DocumentsSection'
 import type { ExtractedField } from '@/types'
@@ -503,11 +504,10 @@ export default function PetTimeline({ events, onPrint, onEdit }: Props) {
                 <option key={t} value={t}>{EVENT_TYPE_LABELS[t] ?? t}</option>
               ))}
             </select>
-            <input
-              type="date"
+            <DatePicker
               value={filterDate}
-              onChange={e => setFilterDate(e.target.value)}
-              className="text-xs border border-slate-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-teal-500"
+              onChange={setFilterDate}
+              className="text-xs"
             />
             {(filterType !== 'all' || filterDate) && (
               <button

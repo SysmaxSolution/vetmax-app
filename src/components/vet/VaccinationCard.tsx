@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Syringe, Plus, Trash2, Loader2, AlertTriangle, CheckCircle2, Calendar, X, Pencil, Check } from 'lucide-react'
 import { addVaccine, deleteVaccine, updateVaccine, type PatientVaccine } from '@/lib/actions/vaccines'
+import { DatePicker } from '@/components/ui/DatePicker'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -249,23 +250,11 @@ export default function VaccinationCard({
             </div>
             <div>
               <label className="text-xs font-medium text-slate-600 mb-1 block">Data de Aplicação</label>
-              <input
-                type="date"
-                value={date}
-                onChange={e => setDate(e.target.value)}
-                onKeyDown={e => blockEnter(e)}
-                className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20"
-              />
+              <DatePicker value={date} onChange={setDate} />
             </div>
             <div>
               <label className="text-xs font-medium text-slate-600 mb-1 block">Próxima Dose</label>
-              <input
-                type="date"
-                value={nextDue}
-                onChange={e => setNextDue(e.target.value)}
-                onKeyDown={e => blockEnter(e)}
-                className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20"
-              />
+              <DatePicker value={nextDue} onChange={setNextDue} />
             </div>
             <div className="col-span-2">
               <label className="text-xs font-medium text-slate-600 mb-1 block">Observações</label>
@@ -324,13 +313,11 @@ export default function VaccinationCard({
                       </div>
                       <div>
                         <label className="text-xs font-medium text-slate-600 mb-1 block">Data de Aplicação</label>
-                        <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)}
-                          className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20" />
+                        <DatePicker value={editDate} onChange={setEditDate} />
                       </div>
                       <div>
                         <label className="text-xs font-medium text-slate-600 mb-1 block">Próxima Dose</label>
-                        <input type="date" value={editNextDue} onChange={e => setEditNextDue(e.target.value)}
-                          className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20" />
+                        <DatePicker value={editNextDue} onChange={setEditNextDue} />
                       </div>
                       <div className="col-span-2">
                         <label className="text-xs font-medium text-slate-600 mb-1 block">Observações</label>
