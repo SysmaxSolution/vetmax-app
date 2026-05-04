@@ -100,32 +100,39 @@ Gere 4-6 campos realistas. APENAS JSON VÁLIDO.`
     // Fazer parsing do JSON retornado
     let fields: ExtractedField[]
     try {
-      // Limpar a resposta
       let jsonStr = content.text.trim()
       console.log('Resposta bruta da IA (primeiros 300 chars):', jsonStr.substring(0, 300))
 
-      // Remover markdown code blocks
-      if (jsonStr.startsWith('```json')) jsonStr = jsonStr.slice(7)
-      if (jsonStr.startsWith('```')) jsonStr = jsonStr.slice(3)
-      if (jsonStr.endsWith('```')) jsonStr = jsonStr.slice(0, -3)
+      // Robust JSON extraction & repair
+      jsonStr = jsonStr.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim()
 
-      jsonStr = jsonStr.trim()
-
-      // Tenta fazer parsing direto
       try {
         fields = JSON.parse(jsonStr)
-      } catch (initialParseError) {
-        // Se falhar, tenta limpar strings com problemas
-        console.warn('Erro inicial de parsing, tentando limpar...')
+      } catch {
+        // Extract array portion
+        const arrayMatch = jsonStr.match(/\[[\s\S]*\]/)
+        if (arrayMatch) jsonStr = arrayMatch[0]
 
-        // Remover escapes inválidos e normalizar
+        // Aggressive cleanup
         jsonStr = jsonStr
-          .replace(/\\'/g, "'")  // \' -> '
-          .replace(/\\/g, '\\\\') // Normalizar backslashes
-          .replace(/[\n\r]/g, ' ') // Remover quebras de linha
+          .replace(/(?<=:\s*"[^"]*)\n/g, '\\n')
+          .replace(/[\x00-\x1f]/g, (ch) => ch === '\n' ? '\\n' : ch === '\r' ? '\\r' : ch === '\t' ? '\\t' : '')
+          .replace(/,\s*]/g, ']')
+          .replace(/,\s*}/g, '}')
 
-        // Tentar novamente
-        fields = JSON.parse(jsonStr)
+        try {
+          fields = JSON.parse(jsonStr)
+        } catch {
+          // Fix truncated JSON
+          const quoteCount = (jsonStr.match(/(?<!\\)"/g) || []).length
+          if (quoteCount % 2 !== 0) jsonStr += '"'
+          const ob = (jsonStr.match(/\{/g) || []).length - (jsonStr.match(/\}/g) || []).length
+          for (let i = 0; i < ob; i++) jsonStr += '}'
+          jsonStr = jsonStr.replace(/,\s*$/, '')
+          const ab = (jsonStr.match(/\[/g) || []).length - (jsonStr.match(/\]/g) || []).length
+          for (let i = 0; i < ab; i++) jsonStr += ']'
+          fields = JSON.parse(jsonStr)
+        }
       }
 
       console.log(`✅ Campos extraídos com sucesso: ${fields.length} campos`)

@@ -209,6 +209,7 @@ export interface DocumentTemplate {
   type: TemplateType
   file_url?: string | null
   extracted_fields: ExtractedField[]
+  template_html?: string | null
   created_at: string
   updated_at?: string
 }
@@ -233,4 +234,5 @@ export interface SaveTemplatePayload {
   name: string
   type: TemplateType
   extracted_fields: ExtractedField[]
+  template_html?: string | null
 }

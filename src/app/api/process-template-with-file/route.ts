@@ -12,340 +12,378 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 })
 
+// ── Robust JSON extraction & repair ────────────────────────────────────────
+
+function repairAndParseJson(raw: string): any[] {
+  let str = raw.trim()
+
+  // Strip markdown code blocks
+  str = str.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')
+  str = str.trim()
+
+  // Try direct parse first
+  try { return JSON.parse(str) } catch {}
+
+  // Extract the array portion if surrounded by text
+  const arrayMatch = str.match(/\[[\s\S]*\]/)
+  if (arrayMatch) {
+    str = arrayMatch[0]
+    try { return JSON.parse(str) } catch {}
+  }
+
+  // Aggressive cleanup for common Claude issues
+  str = str
+    // Fix unescaped newlines inside JSON string values
+    .replace(/(?<=:\s*"[^"]*)\n/g, '\\n')
+    // Fix unescaped control characters
+    .replace(/[\x00-\x1f]/g, (ch) => {
+      if (ch === '\n') return '\\n'
+      if (ch === '\r') return '\\r'
+      if (ch === '\t') return '\\t'
+      return ''
+    })
+    // Remove trailing commas
+    .replace(/,\s*]/g, ']')
+    .replace(/,\s*}/g, '}')
+    // Fix single quotes used as JSON delimiters
+    .replace(/'/g, '"')
+
+  try { return JSON.parse(str) } catch {}
+
+  // Last resort: try to fix truncated JSON by closing open brackets
+  let balanced = str
+  const openBrackets = (balanced.match(/\[/g) || []).length
+  const closeBrackets = (balanced.match(/\]/g) || []).length
+  const openBraces = (balanced.match(/\{/g) || []).length
+  const closeBraces = (balanced.match(/\}/g) || []).length
+
+  // If truncated mid-string, close the string
+  const quoteCount = (balanced.match(/(?<!\\)"/g) || []).length
+  if (quoteCount % 2 !== 0) {
+    balanced += '"'
+  }
+
+  // Close any open braces/brackets
+  for (let i = 0; i < openBraces - closeBraces; i++) balanced += '}'
+  // Remove trailing comma before we close the array
+  balanced = balanced.replace(/,\s*$/, '')
+  for (let i = 0; i < openBrackets - closeBrackets; i++) balanced += ']'
+
+  try { return JSON.parse(balanced) } catch {}
+
+  // Final attempt: extract individual objects with regex
+  const objects: any[] = []
+  const objRegex = /\{[^{}]*\}/g
+  let match
+  while ((match = objRegex.exec(str)) !== null) {
+    try {
+      const obj = JSON.parse(match[0])
+      if (obj.field_name && obj.label) objects.push(obj)
+    } catch {}
+  }
+
+  if (objects.length > 0) return objects
+
+  throw new Error('Impossivel extrair JSON valido da resposta da IA')
+}
+
+// ── DOCX text + HTML extraction ─────────────────────────────────────────────
+
+async function extractDocxContent(buffer: ArrayBuffer): Promise<{ text: string; html: string }> {
+  const mammoth = require('mammoth')
+  const nodeBuffer = Buffer.from(buffer)
+
+  const [textResult, htmlResult] = await Promise.all([
+    mammoth.extractRawText({ buffer: nodeBuffer }),
+    mammoth.convertToHtml({ buffer: nodeBuffer }),
+  ])
+
+  return {
+    text: textResult.value || '',
+    html: htmlResult.value || '',
+  }
+}
+
+// ── PDF text extraction ─────────────────────────────────────────────────────
+
+async function extractPdfText(buffer: ArrayBuffer): Promise<string> {
+  const tempPath = join(tmpdir(), `pdf_${Date.now()}_${Math.random().toString(36).slice(2)}.pdf`)
+  writeFileSync(tempPath, Buffer.from(buffer))
+
+  try {
+    const text = await new Promise<string>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('PDF parse timeout (30s)')), 30_000)
+      const pdfParser = new PDFParser(null, 1)
+
+      pdfParser.on('pdfParser_dataError', (data: any) => {
+        clearTimeout(timeout)
+        reject(new Error(`PDF Parse Error: ${data.parserError || 'Unknown'}`))
+      })
+
+      pdfParser.on('pdfParser_dataReady', () => {
+        clearTimeout(timeout)
+        try { resolve(pdfParser.getRawTextContent()) } catch (e) { reject(e) }
+      })
+
+      pdfParser.loadPDF(tempPath)
+    })
+
+    return text
+  } finally {
+    try { unlinkSync(tempPath) } catch {}
+  }
+}
+
+// ── Image to base64 for Claude Vision ───────────────────────────────────────
+
+function getMediaType(fileName: string): 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' {
+  const ext = fileName.toLowerCase().split('.').pop()
+  if (ext === 'png') return 'image/png'
+  if (ext === 'webp') return 'image/webp'
+  if (ext === 'gif') return 'image/gif'
+  return 'image/jpeg'
+}
+
+// ── Claude prompt for field extraction ──────────────────────────────────────
+
+const FIELDS_PROMPT = `Voce e um especialista em analise de documentos veterinarios brasileiros.
+
+TAREFA:
+Analise o documento e extraia TODOS os campos editaveis/preenchíveis.
+Objetivo: capturar 99% dos campos (exceto logos/imagens/assinaturas).
+
+INSTRUCOES:
+1. Leia CADA linha do documento
+2. Identifique labels de campos (ex: "Paciente:", "Peso:", "Diagnostico:")
+3. Para CADA campo, crie um objeto com:
+   - field_name: snake_case (ex: "paciente_nome", "peso_kg")
+   - label: Exatamente como aparece no documento
+   - type: text | number | date | select | boolean | textarea
+   - description: Resumo curto do campo
+   - required: true se preenchido, false se vazio
+4. Incluir: dados do paciente, tutor, veterinario, medicoes, resultados, observacoes
+5. NAO incluir: logos, assinaturas, rodapes, numeros de pagina
+
+FORMATO: APENAS um array JSON valido. Sem markdown. Sem explicacoes.
+Exemplo: [{"field_name":"x","label":"X","type":"text","description":"desc","required":true}]`
+
+// ── Claude prompt for HTML layout extraction ────────────────────────────────
+
+const LAYOUT_PROMPT = `Voce e um especialista em replicacao visual de documentos.
+
+TAREFA:
+Analise o documento fornecido e gere um template HTML que reproduza FIELMENTE o layout visual original.
+
+REGRAS:
+1. Use HTML + CSS inline para replicar o layout exato do documento
+2. Para cada campo editavel, use {{nome_do_campo}} como placeholder
+3. Mantenha fontes, tamanhos, espacamentos, bordas, cabecalhos e rodapes
+4. Use tabelas HTML quando o documento tiver layout tabular
+5. Inclua cabecalho da clinica, areas de assinatura, linhas divisorias
+6. Nao inclua logos como imagem, use placeholder {{logo_clinica}}
+7. O HTML deve ser auto-contido (CSS inline, nao externo)
+8. Use mm como unidade base e considere A4 (210mm x 297mm)
+
+FORMATO: Retorne APENAS o HTML puro. Sem markdown. Sem explicacoes. Comece com <div> e termine com </div>.`
+
 /**
  * POST /api/process-template-with-file
- * Processa um documento REAL (arquivo enviado) para extrair campos
+ * Processa um documento REAL (PDF/DOCX/Imagem) para extrair campos + layout HTML
  *
- * Body: FormData com arquivo
- * Response: { fields: ExtractedField[] } ou { error: string }
- *
- * Este endpoint:
- * 1. Recebe arquivo PDF/DOCX/Imagem
- * 2. Extrai texto do arquivo
- * 3. Analisa com Claude para mapear TODOS os campos
- * 4. Retorna campos estruturados
+ * Body: FormData com arquivo + name + type
+ * Response: { fields: ExtractedField[], template_html?: string }
  */
 export async function POST(request: NextRequest) {
-  let tempFilePath: string | null = null
-
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 })
+    if (!user) return NextResponse.json({ error: 'Nao autenticado.' }, { status: 401 })
 
-    // 1. Parsear FormData
     const formData = await request.formData()
     const file = formData.get('file') as File | null
     const templateName = formData.get('name') as string | null
     const templateType = formData.get('type') as string | null
 
-    if (!file) {
-      return NextResponse.json(
-        { error: 'Arquivo não fornecido' },
-        { status: 400 }
-      )
+    if (!file) return NextResponse.json({ error: 'Arquivo nao fornecido' }, { status: 400 })
+    if (!templateName || !templateType) return NextResponse.json({ error: 'Nome e tipo sao obrigatorios' }, { status: 400 })
+
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return NextResponse.json({ error: 'Chave de API nao configurada' }, { status: 500 })
     }
 
-    if (!templateName || !templateType) {
-      return NextResponse.json(
-        { error: 'Nome e tipo são obrigatórios' },
-        { status: 400 }
-      )
-    }
+    console.log(`[process-template] Arquivo: ${file.name} (${file.size} bytes, tipo: ${file.type})`)
 
-    // Nota: tempFilePath é null aqui, então não precisa cleanup
+    const buffer = await file.arrayBuffer()
+    const isDocx = file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || file.name.endsWith('.docx')
+    const isPdf = file.type === 'application/pdf' || file.name.endsWith('.pdf')
+    const isImage = file.type.startsWith('image/') || /\.(png|jpe?g|webp|gif)$/i.test(file.name)
 
-    console.log(`📄 Processando arquivo: ${file.name} (${file.size} bytes)`)
-
-    // 2. Extrair texto do PDF
     let extractedText = ''
+    let originalHtml = ''
 
-    if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
-      try {
-        const buffer = await file.arrayBuffer()
-        console.log(`📄 Extraindo texto de PDF (${buffer.byteLength} bytes)...`)
+    // ── Extract content based on file type ───────────────────────────────
 
-        // Salvar arquivo temporário para pdf2json processar
-        tempFilePath = join(tmpdir(), `pdf_${Date.now()}_${Math.random().toString(36).slice(2)}.pdf`)
-        writeFileSync(tempFilePath, Buffer.from(buffer))
+    if (isDocx) {
+      console.log('[process-template] Extraindo conteudo DOCX via mammoth...')
+      const docxContent = await extractDocxContent(buffer)
+      extractedText = docxContent.text
+      originalHtml = docxContent.html
+      console.log(`[process-template] DOCX extraido: ${extractedText.length} chars texto, ${originalHtml.length} chars HTML`)
 
-        // Usar pdf2json para extrair texto
-        const extractedPromise = new Promise<string>((resolve, reject) => {
-          const pdfParser = new PDFParser(null, 1)
+      if (extractedText.length < 20) {
+        return NextResponse.json({ error: 'DOCX parece vazio ou sem texto.' }, { status: 400 })
+      }
+    } else if (isPdf) {
+      console.log('[process-template] Extraindo texto de PDF...')
+      extractedText = await extractPdfText(buffer)
+      console.log(`[process-template] PDF extraido: ${extractedText.length} chars`)
 
-          pdfParser.on('pdfParser_dataError', (data: any) => {
-            reject(new Error(`PDF Parse Error: ${data.parserError || 'Unknown error'}`))
-          })
-
-          pdfParser.on('pdfParser_dataReady', () => {
-            try {
-              const text = pdfParser.getRawTextContent()
-              resolve(text)
-            } catch (error) {
-              reject(error)
-            }
-          })
-
-          pdfParser.loadPDF(tempFilePath!)
-        })
-
-        extractedText = await extractedPromise
-        console.log(`✅ PDF extraído: ${extractedText.length} caracteres`)
-
-        if (extractedText.length < 100) {
-          console.warn('⚠️ PDF extraído tem muito pouco texto')
-          // Cleanup arquivo temporário
-          if (tempFilePath) {
-            try {
-              unlinkSync(tempFilePath)
-            } catch (e) {
-              console.warn('⚠️ Erro ao deletar arquivo temporário:', e)
-            }
-          }
-          return NextResponse.json(
-            { error: 'PDF parece estar vazio ou contém apenas imagens. Por favor, use um PDF com texto editável.' },
-            { status: 400 }
-          )
-        }
-      } catch (pdfError) {
-        const errorMsg = pdfError instanceof Error ? pdfError.message : String(pdfError)
-        console.error('❌ Erro ao extrair PDF:', errorMsg)
-        // Cleanup arquivo temporário
-        if (tempFilePath) {
-          try {
-            unlinkSync(tempFilePath)
-          } catch (e) {
-            console.warn('⚠️ Erro ao deletar arquivo temporário:', e)
-          }
-        }
+      if (extractedText.length < 50) {
         return NextResponse.json(
-          { error: `Erro ao ler PDF: ${errorMsg}. Certifique-se de que o PDF contém texto editável.` },
+          { error: 'PDF parece vazio ou contem apenas imagens. Use um PDF com texto editavel.' },
           { status: 400 }
         )
       }
+    } else if (isImage) {
+      console.log('[process-template] Imagem detectada — usando Claude Vision...')
+      // Para imagens, enviaremos diretamente ao Claude Vision
+      extractedText = '__IMAGE_MODE__'
     } else {
-      // Para arquivos não-PDF, usar apenas o nome
-      console.warn(`⚠️ Arquivo tipo ${file.type} não é PDF. Usando estratégia de nome/tipo apenas.`)
-      extractedText = `Documento: ${templateName}\nTipo: ${templateType}`
-    }
-
-    if (!extractedText.trim()) {
-      // Cleanup arquivo temporário
-      if (tempFilePath) {
-        try {
-          unlinkSync(tempFilePath)
-        } catch (e) {
-          console.warn('⚠️ Erro ao deletar arquivo temporário:', e)
-        }
-      }
       return NextResponse.json(
-        { error: 'Arquivo vazio ou sem conteúdo de texto' },
+        { error: `Tipo de arquivo nao suportado: ${file.type}. Use PDF, DOCX, PNG ou JPG.` },
         { status: 400 }
       )
     }
 
-    // 3. Verificar se ANTHROPIC_API_KEY está configurada
-    if (!process.env.ANTHROPIC_API_KEY) {
-      console.error('ANTHROPIC_API_KEY não configurada')
-      // Cleanup arquivo temporário
-      if (tempFilePath) {
-        try {
-          unlinkSync(tempFilePath)
-        } catch (e) {
-          console.warn('⚠️ Erro ao deletar arquivo temporário:', e)
-        }
-      }
-      return NextResponse.json(
-        { error: 'Erro de configuração: chave de API não configurada' },
-        { status: 500 }
-      )
-    }
+    // ── Call Claude for field extraction ─────────────────────────────────
 
-    // 4. Montar prompt AGRESSIVO para extrair TODOS os campos
-    const prompt = `Você é um especialista em análise de documentos veterinários brasileiros.
+    console.log('[process-template] Chamando Claude para extração de campos...')
 
-DOCUMENTO FORNECIDO:
-${extractedText}
-
-TAREFA:
-Analise o documento acima e extraia TODOS os campos estruturados.
-Objetivo: capturar 99% dos campos (exceto logos/imagens/assinaturas).
-
-INSTRUÇÕES OBRIGATÓRIAS:
-1. Leia CADA linha do documento
-2. Identifique labels/nomes de campos (ex: "Paciente:", "Peso:", "Frequência cardíaca:")
-3. Para CADA campo encontrado, crie um objeto JSON com:
-   - field_name: SNAKE_CASE (ex: "paciente_nome", "peso_kg", "frequencia_cardiaca_bpm")
-   - label: Exatamente como aparece no documento em PT-BR
-   - type: text (padrão) | number | date | select (para listas) | boolean
-   - description: Resumo do campo (ex: "Nome do paciente", "Peso em kg", "Frequência cardíaca em bpm")
-   - required: true se está preenchido, false se vazio/opcional
-
-4. Incluir TUDO que é campo/informação:
-   - Dados do paciente (nome, idade, sexo, espécie, raça)
-   - Dados do proprietário/tutor
-   - Dados do veterinário
-   - Cada medição/valor numérico
-   - Cada análise/resultado
-   - Cada achado clínico
-   - Cada observação/nota
-
-5. NÃO incluir: logos, assinaturas, rodapés, números de página, datas de impressão
-
-FORMATO DE RESPOSTA:
-APENAS um array JSON válido, sem markdown, sem explicações adicionais.
-
-[
-  {"field_name":"paciente_nome","label":"Paciente","type":"text","description":"Nome do paciente animal","required":true},
-  {"field_name":"peso_kg","label":"Peso","type":"number","description":"Peso em quilogramas","required":true},
-  ... continue para CADA campo ...
-]
-
-IMPORTANTE: Seja AGRESSIVO. Se o documento tem 50 campos, gere 50 campos. Não omita nada.`
-
-    console.log('🤖 Chamando Claude para análise de documento...')
-
-    // 5. Chamar Claude com modelo melhorado (Opus para documentos complexos)
-    let message
-    try {
-      message = await anthropic.messages.create({
-        model: 'claude-opus-4-6', // Usar Opus para documentos reais complexos
-        max_tokens: 4000, // Mais tokens para documentos longos
-        messages: [
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
+    let fieldsMessage
+    if (isImage) {
+      // Use Claude Vision for images
+      const base64 = Buffer.from(buffer).toString('base64')
+      fieldsMessage = await anthropic.messages.create({
+        model: 'claude-sonnet-4-5-20250514',
+        max_tokens: 4096,
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type: 'image',
+              source: { type: 'base64', media_type: getMediaType(file.name), data: base64 },
+            },
+            {
+              type: 'text',
+              text: `${FIELDS_PROMPT}\n\nNome do template: ${templateName}\nTipo: ${templateType}`,
+            },
+          ],
+        }],
       })
-      console.log(`✅ Resposta do Claude recebida (${message.content[0].type === 'text' ? message.content[0].text.length : 0} chars)`)
-    } catch (claudeError) {
-      console.error('Erro ao chamar Claude API:', claudeError)
-      const errorMsg = claudeError instanceof Error ? claudeError.message : String(claudeError)
-      // Cleanup arquivo temporário
-      if (tempFilePath) {
-        try {
-          unlinkSync(tempFilePath)
-        } catch (e) {
-          console.warn('⚠️ Erro ao deletar arquivo temporário:', e)
-        }
-      }
-      return NextResponse.json(
-        { error: `Erro ao chamar IA: ${errorMsg}` },
-        { status: 503 }
-      )
+    } else {
+      fieldsMessage = await anthropic.messages.create({
+        model: 'claude-sonnet-4-5-20250514',
+        max_tokens: 4096,
+        messages: [{
+          role: 'user',
+          content: `${FIELDS_PROMPT}\n\nNome do template: ${templateName}\nTipo: ${templateType}\n\nDOCUMENTO:\n${extractedText}`,
+        }],
+      })
     }
 
-    // 6. Extrair e fazer parsing do JSON
-    const content = message.content[0]
-    if (content.type !== 'text') {
-      // Cleanup arquivo temporário
-      if (tempFilePath) {
-        try {
-          unlinkSync(tempFilePath)
-        } catch (e) {
-          console.warn('⚠️ Erro ao deletar arquivo temporário:', e)
-        }
-      }
-      return NextResponse.json(
-        { error: 'Resposta inesperada da IA' },
-        { status: 500 }
-      )
+    const fieldsRaw = fieldsMessage.content[0]
+    if (fieldsRaw.type !== 'text') {
+      return NextResponse.json({ error: 'Resposta inesperada da IA' }, { status: 500 })
     }
 
+    console.log(`[process-template] Resposta campos (${fieldsRaw.text.length} chars)`)
+
+    // ── Parse fields with robust JSON repair ────────────────────────────
     let fields: ExtractedField[]
     try {
-      let jsonStr = content.text.trim()
-      console.log(`📝 Respondido pela IA (primeiros 500 chars): ${jsonStr.substring(0, 500)}`)
-
-      // Remover markdown code blocks
-      if (jsonStr.startsWith('```json')) jsonStr = jsonStr.slice(7)
-      if (jsonStr.startsWith('```')) jsonStr = jsonStr.slice(3)
-      if (jsonStr.endsWith('```')) jsonStr = jsonStr.slice(0, -3)
-
-      jsonStr = jsonStr.trim()
-
-      // Tentar parsing direto
-      try {
-        fields = JSON.parse(jsonStr)
-      } catch (initialParseError) {
-        console.warn('⚠️ Erro inicial de parsing, tentando limpar...')
-        // Tentar normalizações
-        jsonStr = jsonStr
-          .replace(/[\n\r]/g, ' ') // Remover quebras de linha
-          .replace(/,\s*]/g, ']') // Remover vírgula antes de ]
-          .replace(/,\s*}/g, '}') // Remover vírgula antes de }
-
-        fields = JSON.parse(jsonStr)
-      }
-
-      console.log(`✅ ${fields.length} campos extraídos com sucesso!`)
-
-      if (fields.length === 0) {
-        throw new Error('Nenhum campo foi identificado no documento')
-      }
-
-      // 7. Validar campos
-      const validFieldTypes = ['text', 'number', 'date', 'select', 'boolean', 'textarea']
-      for (let i = 0; i < fields.length; i++) {
-        const field = fields[i]
-
-        if (!field.field_name || !field.label || !field.type || !field.description) {
-          console.warn(`⚠️ Campo ${i + 1} incompleto, pulando...`)
-          fields.splice(i, 1)
-          i--
-          continue
-        }
-
-        if (!validFieldTypes.includes(field.type)) {
-          field.type = 'text' // Fallback para text
-        }
-
-        if (typeof field.required !== 'boolean') {
-          field.required = field.required === 'true' || field.required === true
-        }
-      }
-
-      console.log(`✅ Após validação: ${fields.length} campos`)
-      // Cleanup arquivo temporário
-      if (tempFilePath) {
-        try {
-          unlinkSync(tempFilePath)
-        } catch (e) {
-          console.warn('⚠️ Erro ao deletar arquivo temporário:', e)
-        }
-      }
-      return NextResponse.json({ fields })
+      fields = repairAndParseJson(fieldsRaw.text)
     } catch (parseError) {
-      const errorMsg = parseError instanceof Error ? parseError.message : String(parseError)
-      console.error('❌ Erro ao fazer parsing:', { errorMsg, responseLength: content.text.length })
-      // Cleanup arquivo temporário
-      if (tempFilePath) {
-        try {
-          unlinkSync(tempFilePath)
-        } catch (e) {
-          console.warn('⚠️ Erro ao deletar arquivo temporário:', e)
-        }
-      }
-      return NextResponse.json(
-        { error: `Erro ao processar resposta: ${errorMsg}` },
-        { status: 500 }
-      )
+      const msg = parseError instanceof Error ? parseError.message : String(parseError)
+      console.error('[process-template] JSON parse falhou:', msg)
+      console.error('[process-template] Resposta bruta:', fieldsRaw.text.substring(0, 1000))
+      return NextResponse.json({ error: `Erro ao processar resposta da IA: ${msg}` }, { status: 500 })
     }
+
+    if (!Array.isArray(fields) || fields.length === 0) {
+      return NextResponse.json({ error: 'Nenhum campo identificado no documento' }, { status: 500 })
+    }
+
+    // ── Validate & sanitize fields ──────────────────────────────────────
+    const validFieldTypes = ['text', 'number', 'date', 'select', 'boolean', 'textarea']
+    fields = fields.filter(f => f.field_name && f.label && f.type)
+    for (const field of fields) {
+      if (!validFieldTypes.includes(field.type)) field.type = 'text'
+      if (!field.description) field.description = field.label
+      if (typeof field.required !== 'boolean') {
+        field.required = field.required === 'true' || field.required === true
+      }
+    }
+
+    console.log(`[process-template] ${fields.length} campos validados`)
+
+    // ── Call Claude for HTML layout ─────────────────────────────────────
+
+    let templateHtml = originalHtml || ''
+
+    // Always generate layout HTML from Claude (even for DOCX, mammoth HTML is basic)
+    console.log('[process-template] Gerando HTML de layout fiel ao documento...')
+    try {
+      let layoutMessage
+      if (isImage) {
+        const base64 = Buffer.from(buffer).toString('base64')
+        layoutMessage = await anthropic.messages.create({
+          model: 'claude-sonnet-4-5-20250514',
+          max_tokens: 8192,
+          messages: [{
+            role: 'user',
+            content: [
+              {
+                type: 'image',
+                source: { type: 'base64', media_type: getMediaType(file.name), data: base64 },
+              },
+              {
+                type: 'text',
+                text: `${LAYOUT_PROMPT}\n\nCampos identificados (use estes nomes como placeholders {{nome}}):\n${fields.map(f => `- {{${f.field_name}}} = ${f.label}`).join('\n')}`,
+              },
+            ],
+          }],
+        })
+      } else {
+        layoutMessage = await anthropic.messages.create({
+          model: 'claude-sonnet-4-5-20250514',
+          max_tokens: 8192,
+          messages: [{
+            role: 'user',
+            content: `${LAYOUT_PROMPT}\n\nDOCUMENTO ORIGINAL:\n${extractedText}\n\nCampos identificados (use estes nomes como placeholders {{nome}}):\n${fields.map(f => `- {{${f.field_name}}} = ${f.label}`).join('\n')}`,
+          }],
+        })
+      }
+
+      const layoutRaw = layoutMessage.content[0]
+      if (layoutRaw.type === 'text') {
+        let html = layoutRaw.text.trim()
+        // Strip markdown code blocks if present
+        html = html.replace(/^```(?:html)?\s*/i, '').replace(/\s*```$/i, '')
+        templateHtml = html.trim()
+        console.log(`[process-template] Layout HTML gerado: ${templateHtml.length} chars`)
+      }
+    } catch (layoutError) {
+      console.warn('[process-template] Erro ao gerar layout HTML (nao-critico):', layoutError)
+      // Non-fatal — we still have the fields
+    }
+
+    return NextResponse.json({
+      fields,
+      template_html: templateHtml || null,
+    })
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error)
-    console.error('❌ Erro geral:', { errorMsg })
-    // Cleanup arquivo temporário
-    if (tempFilePath) {
-      try {
-        unlinkSync(tempFilePath)
-      } catch (e) {
-        console.warn('⚠️ Erro ao deletar arquivo temporário:', e)
-      }
-    }
-    return NextResponse.json(
-      { error: `Erro ao processar documento: ${errorMsg}` },
-      { status: 500 }
-    )
+    console.error('[process-template] Erro geral:', errorMsg)
+    return NextResponse.json({ error: `Erro ao processar documento: ${errorMsg}` }, { status: 500 })
   }
 }
