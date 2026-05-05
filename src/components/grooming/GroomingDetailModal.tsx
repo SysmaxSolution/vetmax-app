@@ -179,7 +179,9 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
       // 1. Parseia intenção + extrai dados estruturados em uma única chamada
       const intent = await parseGroomingIntent(transcript, card.status)
 
-      const obsText  = !('error' in intent) ? intent.observation_text           : transcript
+      const rawObs   = !('error' in intent) ? intent.observation_text           : ''
+      // Fallback: se a IA devolveu observation_text vazio, usar o transcript original
+      const obsText  = rawObs.trim() || transcript
       const newSvcs  = !('error' in intent) ? (intent.extracted_services ?? []) : []
       const newProds = !('error' in intent) ? (intent.extracted_products ?? []) : []
 
@@ -201,20 +203,15 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
         services_applied:    mergedSvcs,
         products_used:       mergedProds,
         behavior:            beh || undefined,
-        observations:        obsText || undefined,
+        observations:        obsText,
       })
 
       // 5. Move o card Kanban se a IA detectou mudança de status
-      let shouldOpenWA = false
       if (!('error' in intent) && intent.new_status && intent.action === 'MOVE_AND_SAVE') {
         const dbStatus = INTENT_TO_DB_STATUS[intent.new_status]
         if (dbStatus && dbStatus !== card.status) {
           await updateGroomingStatus(card.id, dbStatus)
-          // Atualização otimista: move o card no Kanban sem fechar o modal
           onStatusChange?.(dbStatus)
-        }
-        if (intent.new_status === 'READY_FOR_PICKUP') {
-          shouldOpenWA = true
         }
       }
 
@@ -224,13 +221,11 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
       setSaveToast('Evolução salva pelo assistente de voz!')
       setTimeout(() => setSaveToast(null), 3500)
 
-      if (shouldOpenWA) {
-        // Garante que autoSend começa como false — evita disparo prematuro
+      // SEMPRE oferece WhatsApp se tutor tiver telefone (espelha submit manual)
+      if (card.tutor?.phone) {
         setVoiceConfirmedWA(false)
         setWhatsappPending(true)
       }
-      // Sem WhatsApp: NÃO chamar onSaved() — o groomer pode querer continuar
-      // registrando. O Kanban atualiza via Realtime (revalidatePath no server).
     } catch (err) {
       console.error('[handleAutoSave] erro ao salvar evolução:', err)
       setIsParsingIntent(false)
@@ -238,7 +233,7 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
       setTimeout(() => setErrorToast(null), 4000)
       // Modal permanece aberto — nunca fechar no catch
     }
-  }, [card.id, card.status, selectedServices, products, behavior, loadRecords])
+  }, [card.id, card.status, card.tutor?.phone, selectedServices, products, behavior, loadRecords])
 
   const handleVoiceWA = useCallback(() => { setVoiceConfirmedWA(true) }, [])
 
@@ -328,13 +323,10 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
     setSaveToast('Registro salvo com sucesso!')
     setTimeout(() => setSaveToast(null), 3000)
 
-    // WhatsApp: se tutor tiver telefone, exibe o modal ANTES de fechar.
-    // O onSaved (que fecha o card no Kanban) é deferido para o onClose do WhatsApp.
+    // WhatsApp: se tutor tiver telefone, exibe o modal de notificação.
+    // O card NUNCA fecha automaticamente — o profissional fecha manualmente pelo X.
     if (card.tutor?.phone) {
       setWhatsappPending(true)
-      // NÃO chamar onSaved() aqui — será chamado no onClose do WhatsApp
-    } else {
-      onSaved?.()
     }
   }
 
@@ -1041,7 +1033,7 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
       {whatsappPending && card.tutor?.phone && (
         <WhatsAppNotificationModal
           isOpen={whatsappPending}
-          onClose={() => { setWhatsappPending(false); setVoiceConfirmedWA(false); onSaved?.() }}
+          onClose={() => { setWhatsappPending(false); setVoiceConfirmedWA(false) }}
           trigger="grooming_ready_for_pickup"
           autoSend={voiceConfirmedWA}
           context={{
