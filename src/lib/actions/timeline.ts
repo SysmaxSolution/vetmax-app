@@ -16,6 +16,7 @@ export type TimelineEventType =
   | 'appointment'
   | 'attachment'
   | 'hospitalization_evolution'
+  | 'grooming_evolution'
   | 'whatsapp_notification'
 
 export interface TimelineEvent {
@@ -83,6 +84,15 @@ export interface TimelineEvent {
     medications:       Array<{ name: string; dosage?: string; route?: string }>
     user_name:         string
   }
+  grooming_evolution?: {
+    id:               string
+    session_id:       string
+    services_applied: string[]
+    products_used:    string[]
+    behavior:         string | null
+    observations:     string | null
+    user_name:        string
+  }
   whatsapp_notification?: {
     id:           string
     trigger_type: string
@@ -103,6 +113,7 @@ const SORT_ORDER: Record<TimelineEventType, number> = {
   triage:                    5,
   checkin:                   6,
   hospitalization_evolution: 7,
+  grooming_evolution:        7.5,
   whatsapp_notification:     8,
 }
 
@@ -142,9 +153,7 @@ export async function getPetTimeline(
       return { error: 'Erro ao buscar consultas: ' + cError.message }
     }
 
-    if (!consultations?.length) return []
-
-    const consultationIds = consultations.map(c => c.id)
+    const consultationIds = (consultations ?? []).map(c => c.id)
 
     // 2. Nomes dos veterinários
     const vetIds = [...new Set(
@@ -160,16 +169,27 @@ export async function getPetTimeline(
 
     const hospitalizationIds = (hospitalizations ?? []).map(h => h.id)
 
-    const [vetsResult, medsResult, docsResult, attachResult, hospEvResult, waResult] = await Promise.all([
+    // Grooming sessions linked to this pet (for fetching grooming records)
+    const { data: groomingSessions } = await supabase
+      .from('grooming_sessions')
+      .select('id')
+      .eq('patient_id', petId)
+      .eq('clinic_id', clinicId)
+
+    const groomingSessionIds = (groomingSessions ?? []).map(g => g.id)
+
+    const [vetsResult, medsResult, docsResult, attachResult, hospEvResult, groomEvResult, waResult] = await Promise.all([
       vetIds.length > 0
         ? supabase.from('profiles').select('id, full_name, crmv').in('id', vetIds)
         : Promise.resolve({ data: [], error: null }),
-      supabase
-        .from('applied_medications')
-        .select('id, consultation_id, medication_name, dosage, route, notes, created_at')
-        .in('consultation_id', consultationIds)
-        .eq('clinic_id', clinicId)
-        .order('created_at', { ascending: false }),
+      consultationIds.length > 0
+        ? supabase
+            .from('applied_medications')
+            .select('id, consultation_id, medication_name, dosage, route, notes, created_at')
+            .in('consultation_id', consultationIds)
+            .eq('clinic_id', clinicId)
+            .order('created_at', { ascending: false })
+        : Promise.resolve({ data: [], error: null }),
       supabase
         .from('patient_documents')
         .select('id, consultation_id, document_name, template_name, template_type, template_extracted_fields, content_data, created_at')
@@ -190,12 +210,22 @@ export async function getPetTimeline(
             .eq('clinic_id', clinicId)
             .order('created_at', { ascending: false })
         : Promise.resolve({ data: [], error: null }),
-      supabase
-        .from('whatsapp_notifications')
-        .select('id, consultation_id, trigger_type, message, tutor_name, tutor_phone, sent_at')
-        .in('consultation_id', consultationIds)
-        .eq('clinic_id', clinicId)
-        .order('sent_at', { ascending: false }),
+      groomingSessionIds.length > 0
+        ? supabase
+            .from('grooming_records')
+            .select('id, session_id, services_applied, products_used, behavior, observations, user_name, created_at')
+            .in('session_id', groomingSessionIds)
+            .eq('clinic_id', clinicId)
+            .order('created_at', { ascending: false })
+        : Promise.resolve({ data: [], error: null }),
+      consultationIds.length > 0
+        ? supabase
+            .from('whatsapp_notifications')
+            .select('id, consultation_id, trigger_type, message, tutor_name, tutor_phone, sent_at')
+            .in('consultation_id', consultationIds)
+            .eq('clinic_id', clinicId)
+            .order('sent_at', { ascending: false })
+        : Promise.resolve({ data: [], error: null }),
     ])
 
     if (medsResult.error) {
@@ -209,6 +239,9 @@ export async function getPetTimeline(
     }
     if (hospEvResult.error) {
       console.error('[getPetTimeline] hospitalization_records query error:', hospEvResult.error)
+    }
+    if (groomEvResult.error) {
+      console.error('[getPetTimeline] grooming_records query error:', groomEvResult.error)
     }
     if (waResult.error) {
       console.error('[getPetTimeline] whatsapp_notifications query error:', waResult.error)
@@ -372,7 +405,25 @@ export async function getPetTimeline(
       })
     }
 
-    // 8. Logs de WhatsApp
+    // 8. Evoluções de Banho e Tosa (Grooming)
+    for (const gr of groomEvResult.data ?? []) {
+      events.push({
+        id:   `groomev-${gr.id}`,
+        type: 'grooming_evolution',
+        date: gr.created_at,
+        grooming_evolution: {
+          id:               gr.id,
+          session_id:       gr.session_id,
+          services_applied: Array.isArray(gr.services_applied) ? gr.services_applied : [],
+          products_used:    Array.isArray(gr.products_used) ? gr.products_used : [],
+          behavior:         gr.behavior ?? null,
+          observations:     gr.observations ?? null,
+          user_name:        gr.user_name ?? '',
+        },
+      })
+    }
+
+    // 9. Logs de WhatsApp
     for (const wa of waResult.data ?? []) {
       events.push({
         id:              `wa-${wa.id}`,

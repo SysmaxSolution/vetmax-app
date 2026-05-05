@@ -228,9 +228,9 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
         // Garante que autoSend começa como false — evita disparo prematuro
         setVoiceConfirmedWA(false)
         setWhatsappPending(true)
-      } else {
-        onSaved?.()
       }
+      // Sem WhatsApp: NÃO chamar onSaved() — o groomer pode querer continuar
+      // registrando. O Kanban atualiza via Realtime (revalidatePath no server).
     } catch (err) {
       console.error('[handleAutoSave] erro ao salvar evolução:', err)
       setIsParsingIntent(false)
@@ -238,7 +238,7 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
       setTimeout(() => setErrorToast(null), 4000)
       // Modal permanece aberto — nunca fechar no catch
     }
-  }, [card.id, card.status, selectedServices, products, behavior, loadRecords, onSaved])
+  }, [card.id, card.status, selectedServices, products, behavior, loadRecords])
 
   const handleVoiceWA = useCallback(() => { setVoiceConfirmedWA(true) }, [])
 
@@ -327,10 +327,15 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
 
     setSaveToast('Registro salvo com sucesso!')
     setTimeout(() => setSaveToast(null), 3000)
-    onSaved?.()
 
-    // Sugerir WhatsApp se tutor tiver telefone
-    if (card.tutor?.phone) setWhatsappPending(true)
+    // WhatsApp: se tutor tiver telefone, exibe o modal ANTES de fechar.
+    // O onSaved (que fecha o card no Kanban) é deferido para o onClose do WhatsApp.
+    if (card.tutor?.phone) {
+      setWhatsappPending(true)
+      // NÃO chamar onSaved() aqui — será chamado no onClose do WhatsApp
+    } else {
+      onSaved?.()
+    }
   }
 
   // ─── Upload de documentos ──────────────────────────────────────────────────

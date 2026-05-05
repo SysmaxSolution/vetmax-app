@@ -121,8 +121,10 @@ function EventDot({ type }: { type: TimelineEvent['type'] }) {
     appointment:              { bg: 'bg-indigo-500',  icon: '📅' },
     attachment:               { bg: 'bg-rose-500',    icon: '📎' },
     hospitalization_evolution:{ bg: 'bg-orange-500',  icon: '🏥' },
+    grooming_evolution:       { bg: 'bg-teal-500',    icon: '✂️' },
     whatsapp_notification:    { bg: 'bg-green-500',   icon: '📱' },
   }[type]
+  if (!cfg) return <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-sm shadow-sm ring-2 ring-white bg-slate-400">❓</div>
   return (
     <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-sm shadow-sm ring-2 ring-white ${cfg.bg}`}>
       {cfg.icon}
@@ -406,6 +408,46 @@ function HospitalizationEvolutionCard({ event }: { event: TimelineEvent }) {
   )
 }
 
+const BEHAVIOR_LABELS: Record<string, { label: string; color: string }> = {
+  tranquilo: { label: 'Tranquilo', color: 'bg-emerald-100 text-emerald-700' },
+  ansioso:   { label: 'Ansioso',   color: 'bg-amber-100 text-amber-700' },
+  agitado:   { label: 'Agitado',   color: 'bg-orange-100 text-orange-700' },
+  agressivo: { label: 'Agressivo', color: 'bg-rose-100 text-rose-700' },
+}
+
+function GroomingEvolutionCard({ event }: { event: TimelineEvent }) {
+  const gr = event.grooming_evolution!
+  const behCfg = gr.behavior ? BEHAVIOR_LABELS[gr.behavior] : null
+  return (
+    <div className="rounded-xl border border-teal-100 bg-teal-50 px-4 py-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold uppercase tracking-wide text-teal-600">✂️ Banho e Tosa</p>
+        {behCfg && (
+          <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${behCfg.color}`}>
+            {behCfg.label}
+          </span>
+        )}
+      </div>
+      {gr.services_applied.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {gr.services_applied.map((s, i) => (
+            <span key={i} className="rounded-full bg-teal-200 px-2 py-0.5 text-xs font-medium text-teal-800">{s}</span>
+          ))}
+        </div>
+      )}
+      {gr.products_used.length > 0 && (
+        <p className="text-xs text-teal-700">Produtos: {gr.products_used.join(', ')}</p>
+      )}
+      {gr.observations && (
+        <p className="text-xs text-teal-800 leading-relaxed">{gr.observations}</p>
+      )}
+      {gr.user_name && (
+        <p className="text-xs text-teal-400">Registrado por: {gr.user_name}</p>
+      )}
+    </div>
+  )
+}
+
 function WhatsAppNotificationCard({ event }: { event: TimelineEvent }) {
   const wa = event.whatsapp_notification!
   const triggerLabel = TRIGGER_LABELS[wa.trigger_type] ?? wa.trigger_type
@@ -573,6 +615,7 @@ export default function PetTimeline({ events, onPrint, onEdit }: Props) {
                     {event.type === 'completed'                 && <CompletedCard event={event} />}
                     {event.type === 'appointment'               && <AppointmentCard event={event} />}
                     {event.type === 'hospitalization_evolution' && <HospitalizationEvolutionCard event={event} />}
+                    {event.type === 'grooming_evolution'        && <GroomingEvolutionCard event={event} />}
                     {event.type === 'whatsapp_notification'     && <WhatsAppNotificationCard event={event} />}
                   </div>
                 </div>
