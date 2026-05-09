@@ -26,8 +26,10 @@ export async function POST() {
 
   // Nome da instância = prefixo do clinic_id sem hífens (8 chars)
   const instanceName = 'vet' + profile.clinic_id.replace(/-/g, '').substring(0, 8)
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
-  const webhookUrl = `${appUrl}/api/webhooks/whatsapp/${profile.clinic_id}`
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '')
+  const webhookUrl = appUrl.startsWith('http')
+    ? `${appUrl}/api/webhooks/whatsapp/${profile.clinic_id}`
+    : undefined
 
   const admin = createAdminClient()
 
@@ -46,7 +48,9 @@ export async function POST() {
     }
   } else {
     // Instância existe — garante que o webhook está atualizado
-    await evolutionSetWebhook({ creds: { apiUrl, instanceId: instanceName, apiKey }, webhookUrl })
+    if (webhookUrl) {
+      await evolutionSetWebhook({ creds: { apiUrl, instanceId: instanceName, apiKey }, webhookUrl })
+    }
   }
 
   // Upsert em clinic_whatsapp_settings com as credenciais da Evolution API
