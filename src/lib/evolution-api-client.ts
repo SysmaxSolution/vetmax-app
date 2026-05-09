@@ -27,21 +27,12 @@ export async function evolutionSendText(
   phone: string,
   message: string,
 ): Promise<void> {
-  // Para @lid, tenta resolver o JID real via contact store da Evolution API
-  let resolved = phone
-  if (phone.includes('@lid')) {
-    const realJid = await resolveJidFromLid(creds, phone)
-    if (realJid) {
-      resolved = realJid.replace('@s.whatsapp.net', '')
-    }
-  }
-
-  const number = formatPhone(resolved)
+  const number = formatPhone(phone)
   const url    = `${creds.apiUrl}/message/sendText/${creds.instanceId}`
-  // Evolution API v1.8.x expects { number, textMessage: { text } }
+  // v2.x passa JIDs @lid diretamente para o Baileys sem verificação onWhatsApp
   const body   = JSON.stringify({ number, textMessage: { text: message } })
 
-  console.info(`[Evolution] sendText → number="${number}" (raw="${phone}") | ${url}`)
+  console.info(`[Evolution] sendText → number="${number}" | ${url}`)
 
   const res          = await fetch(url, { method: 'POST', headers: buildHeaders(creds.apiKey), body })
   const responseText = await res.text()
@@ -52,61 +43,6 @@ export async function evolutionSendText(
   }
 
   console.info(`[Evolution] sendText OK ${res.status}: ${responseText.substring(0, 200)}`)
-}
-
-// Tenta obter o JID @s.whatsapp.net de um contato identificado por @lid.
-// O Baileys mantém esse mapeamento internamente; tentamos várias formas de consultá-lo.
-async function resolveJidFromLid(creds: EvolutionCreds, lid: string): Promise<string | null> {
-  const headers   = buildHeaders(creds.apiKey)
-  const base      = creds.apiUrl
-  const inst      = creds.instanceId
-  const lidNumber = lid.replace('@lid', '')  // Algumas versões gravam sem o sufixo
-
-  // Estratégia 1: GET /contact/findContacts com variações de campo e valor
-  const queries = [
-    { remoteJid: lid },
-    { id:        lid },
-    { lid:       lid },
-    { lid:       lidNumber },
-  ]
-  for (const where of queries) {
-    try {
-      const enc = encodeURIComponent(JSON.stringify(where))
-      const res = await fetch(`${base}/contact/findContacts/${inst}?where=${enc}`, { headers })
-      if (res.ok) {
-        const raw      = await res.json()
-        const contacts = (Array.isArray(raw) ? raw : (raw?.data ?? raw?.contacts ?? [])) as Record<string, unknown>[]
-        for (const c of contacts) {
-          const jid = (c.remoteJid ?? c.jid ?? c.id) as string | undefined
-          if (jid?.includes('@s.whatsapp.net')) {
-            console.info(`[Evolution] @lid ${lid} → ${jid} (findContacts where=${JSON.stringify(where)})`)
-            return jid
-          }
-        }
-      }
-    } catch { /* tenta próxima variação */ }
-  }
-
-  // Estratégia 2: GET /contact/fetchContacts — todos os contatos, busca por campo lid
-  try {
-    const res = await fetch(`${base}/contact/fetchContacts/${inst}`, { headers })
-    if (res.ok) {
-      const raw      = await res.json()
-      const contacts = (Array.isArray(raw) ? raw : (raw?.data ?? raw?.contacts ?? [])) as Record<string, unknown>[]
-      for (const c of contacts) {
-        if (c.lid === lid || c.lid === lidNumber || c.remoteJid === lid) {
-          const jid = (c.remoteJid ?? c.jid ?? c.id) as string | undefined
-          if (jid?.includes('@s.whatsapp.net')) {
-            console.info(`[Evolution] @lid ${lid} → ${jid} (fetchContacts by lid)`)
-            return jid
-          }
-        }
-      }
-    }
-  } catch { /* ignora */ }
-
-  console.warn(`[Evolution] @lid ${lid} (${lidNumber}) — JID real não encontrado`)
-  return null
 }
 
 // ─── Instance Management ──────────────────────────────────────────────────────

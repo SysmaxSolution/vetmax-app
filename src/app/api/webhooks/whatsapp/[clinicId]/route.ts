@@ -220,13 +220,7 @@ async function processInboundMessage(params: {
   }
 
   // 9. Envia resposta via Evolution API
-  const sent = await sendBotReply(clinicId, phone, result.reply, admin)
-
-  // 10. @lid sem suporte a envio direto → escala para atendimento humano
-  if (!sent && phone.includes('@lid')) {
-    console.warn(`[WPP Bot] @lid ${phone} — Evolution API não suporta envio; escalando para humano`)
-    await admin.from('whatsapp_conversations').update({ status: 'human' }).eq('id', conversation.id)
-  }
+  await sendBotReply(clinicId, phone, result.reply, admin)
 }
 
 // ─── Envio via Evolution API ──────────────────────────────────────────────────
@@ -236,10 +230,10 @@ async function sendBotReply(
   phone:    string,
   text:     string,
   admin:    ReturnType<typeof createAdminClient>,
-): Promise<boolean> {
+): Promise<void> {
   const apiUrl = process.env.EVOLUTION_API_URL
   const apiKey = process.env.EVOLUTION_API_KEY
-  if (!apiUrl || !apiKey) { console.warn('[WPP Bot] EVOLUTION_API_URL não configurado'); return false }
+  if (!apiUrl || !apiKey) { console.warn('[WPP Bot] EVOLUTION_API_URL não configurado'); return }
 
   const { data: settings } = await admin
     .from('clinic_whatsapp_settings')
@@ -248,14 +242,12 @@ async function sendBotReply(
     .maybeSingle()
 
   const instanceName = settings?.evolution_instance_name
-  if (!instanceName) { console.warn('[WPP Bot] Instância não encontrada para clínica', clinicId); return false }
+  if (!instanceName) { console.warn('[WPP Bot] Instância não encontrada para clínica', clinicId); return }
 
   try {
     await evolutionSendText({ apiUrl, instanceId: instanceName, apiKey }, phone, text)
     console.info(`[WPP Bot] mensagem enviada para ${phone}`)
-    return true
   } catch (err) {
     console.error('[WPP Bot] Erro ao enviar mensagem:', err)
-    return false
   }
 }
