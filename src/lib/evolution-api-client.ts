@@ -74,18 +74,13 @@ export async function evolutionCreateInstance(params: {
   instanceName: string
   webhookUrl?:  string
 }): Promise<{ ok: true } | { ok: false; status: number; body: string }> {
+  // v1.8.4: webhook aceita string (URL) no create; eventos configurados via /webhook/set depois
   const body: Record<string, unknown> = {
     instanceName: params.instanceName,
     qrcode:       true,
   }
   if (params.webhookUrl) {
-    body.webhook = {
-      enabled:         true,
-      url:             params.webhookUrl,
-      webhookByEvents: false,
-      webhookBase64:   false,
-      events:          ['QRCODE_UPDATED', 'CONNECTION_UPDATE', 'MESSAGES_UPSERT'],
-    }
+    body.webhook = params.webhookUrl
   }
   try {
     const res = await fetch(`${params.apiUrl}/instance/create`, {

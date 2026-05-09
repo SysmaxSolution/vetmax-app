@@ -46,6 +46,10 @@ export async function POST() {
         apiResponse: created.body,
       }, { status: 502 })
     }
+    // Configura eventos do webhook separadamente (v1.8.4)
+    if (webhookUrl) {
+      await evolutionSetWebhook({ creds: { apiUrl, instanceId: instanceName, apiKey }, webhookUrl })
+    }
   } else {
     // Instância existe — garante que o webhook está atualizado
     if (webhookUrl) {
