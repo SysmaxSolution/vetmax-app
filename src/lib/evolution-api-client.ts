@@ -73,16 +73,18 @@ export async function evolutionCreateInstance(params: {
   apiKey:       string
   instanceName: string
   webhookUrl?:  string
-}): Promise<boolean> {
+}): Promise<{ ok: true } | { ok: false; status: number; body: string }> {
   const body: Record<string, unknown> = {
     instanceName: params.instanceName,
     qrcode:       true,
   }
   if (params.webhookUrl) {
     body.webhook = {
-      enabled: true,
-      url:     params.webhookUrl,
-      events:  ['QRCODE_UPDATED', 'CONNECTION_UPDATE', 'MESSAGES_UPSERT'],
+      enabled:         true,
+      url:             params.webhookUrl,
+      webhookByEvents: false,
+      webhookBase64:   false,
+      events:          ['QRCODE_UPDATED', 'CONNECTION_UPDATE', 'MESSAGES_UPSERT'],
     }
   }
   try {
@@ -91,9 +93,11 @@ export async function evolutionCreateInstance(params: {
       headers: buildHeaders(params.apiKey),
       body:    JSON.stringify(body),
     })
-    return res.ok
-  } catch {
-    return false
+    if (res.ok) return { ok: true }
+    const text = await res.text().catch(() => '(sem corpo)')
+    return { ok: false, status: res.status, body: text }
+  } catch (err) {
+    return { ok: false, status: 0, body: String(err) }
   }
 }
 

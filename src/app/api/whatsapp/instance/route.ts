@@ -36,8 +36,13 @@ export async function POST() {
 
   if (currentState === 'not_created') {
     const created = await evolutionCreateInstance({ apiUrl, apiKey, instanceName, webhookUrl })
-    if (!created) {
-      return NextResponse.json({ error: 'Falha ao criar instância na Evolution API.' }, { status: 502 })
+    if (!created.ok) {
+      console.error('[WhatsApp Instance] Falha ao criar instância:', created.status, created.body)
+      return NextResponse.json({
+        error:       'Falha ao criar instância na Evolution API.',
+        apiStatus:   created.status,
+        apiResponse: created.body,
+      }, { status: 502 })
     }
   } else {
     // Instância existe — garante que o webhook está atualizado
