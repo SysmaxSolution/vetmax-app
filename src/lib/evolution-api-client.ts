@@ -16,10 +16,39 @@ function buildHeaders(apiKey: string): Record<string, string> {
 }
 
 function formatPhone(raw: string): string {
-  // Se já é um JID completo (contém @), usa como está (ex: 5511...@s.whatsapp.net ou @lid)
+  // @lid não é um número de telefone — retorna como está para falhar explicitamente no caller
   if (raw.includes('@')) return raw
   const digits = raw.replace(/\D/g, '')
   return digits.startsWith('55') && digits.length >= 12 ? digits : '55' + digits
+}
+
+// Tenta resolver um JID @lid para o JID real @s.whatsapp.net via cache de contatos da instância.
+// Retorna null se não encontrado — o caller decide o fallback.
+export async function evolutionFetchContactByLid(
+  creds: EvolutionCreds,
+  lidJid: string,
+): Promise<string | null> {
+  try {
+    const url = `${creds.apiUrl}/chat/findContacts/${creds.instanceId}`
+    const res = await fetch(url, {
+      method:  'POST',
+      headers: buildHeaders(creds.apiKey),
+      body:    JSON.stringify({ where: { id: lidJid } }),
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    const contacts: Record<string, unknown>[] = Array.isArray(data) ? data : []
+    // Procura um JID real (não @lid) para o mesmo contato
+    for (const c of contacts) {
+      const id = c.id as string | undefined
+      if (id && id.endsWith('@s.whatsapp.net')) return id
+      const phone = c.phone as string | undefined
+      if (phone) return phone.includes('@') ? phone : `${phone}@s.whatsapp.net`
+    }
+    return null
+  } catch {
+    return null
+  }
 }
 
 export async function evolutionSendText(
