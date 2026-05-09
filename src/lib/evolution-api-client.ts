@@ -54,33 +54,58 @@ export async function evolutionSendText(
   console.info(`[Evolution] sendText OK ${res.status}: ${responseText.substring(0, 200)}`)
 }
 
-// Tenta obter o JID @s.whatsapp.net de um contato identificado por @lid,
-// consultando o contact store interno da Evolution API.
+// Tenta obter o JID @s.whatsapp.net de um contato identificado por @lid.
+// O Baileys mantém esse mapeamento internamente; tentamos várias formas de consultá-lo.
 async function resolveJidFromLid(creds: EvolutionCreds, lid: string): Promise<string | null> {
-  const headers = buildHeaders(creds.apiKey)
-  const base    = creds.apiUrl
-  const inst    = creds.instanceId
+  const headers   = buildHeaders(creds.apiKey)
+  const base      = creds.apiUrl
+  const inst      = creds.instanceId
+  const lidNumber = lid.replace('@lid', '')  // Algumas versões gravam sem o sufixo
 
-  // Tenta GET /contact/findContacts com diferentes campos de filtro
-  for (const field of ['remoteJid', 'id', 'lid']) {
+  // Estratégia 1: GET /contact/findContacts com variações de campo e valor
+  const queries = [
+    { remoteJid: lid },
+    { id:        lid },
+    { lid:       lid },
+    { lid:       lidNumber },
+  ]
+  for (const where of queries) {
     try {
-      const where = encodeURIComponent(JSON.stringify({ [field]: lid }))
-      const res   = await fetch(`${base}/contact/findContacts/${inst}?where=${where}`, { headers })
+      const enc = encodeURIComponent(JSON.stringify(where))
+      const res = await fetch(`${base}/contact/findContacts/${inst}?where=${enc}`, { headers })
       if (res.ok) {
-        const data     = await res.json()
-        const contacts = (Array.isArray(data) ? data : (data?.data ?? data?.contacts ?? [])) as Record<string, unknown>[]
+        const raw      = await res.json()
+        const contacts = (Array.isArray(raw) ? raw : (raw?.data ?? raw?.contacts ?? [])) as Record<string, unknown>[]
         for (const c of contacts) {
           const jid = (c.remoteJid ?? c.jid ?? c.id) as string | undefined
           if (jid?.includes('@s.whatsapp.net')) {
-            console.info(`[Evolution] @lid ${lid} → ${jid} (findContacts field=${field})`)
+            console.info(`[Evolution] @lid ${lid} → ${jid} (findContacts where=${JSON.stringify(where)})`)
             return jid
           }
         }
       }
-    } catch { /* tenta próximo campo */ }
+    } catch { /* tenta próxima variação */ }
   }
 
-  console.warn(`[Evolution] @lid ${lid} — JID real não encontrado no contact store`)
+  // Estratégia 2: GET /contact/fetchContacts — todos os contatos, busca por campo lid
+  try {
+    const res = await fetch(`${base}/contact/fetchContacts/${inst}`, { headers })
+    if (res.ok) {
+      const raw      = await res.json()
+      const contacts = (Array.isArray(raw) ? raw : (raw?.data ?? raw?.contacts ?? [])) as Record<string, unknown>[]
+      for (const c of contacts) {
+        if (c.lid === lid || c.lid === lidNumber || c.remoteJid === lid) {
+          const jid = (c.remoteJid ?? c.jid ?? c.id) as string | undefined
+          if (jid?.includes('@s.whatsapp.net')) {
+            console.info(`[Evolution] @lid ${lid} → ${jid} (fetchContacts by lid)`)
+            return jid
+          }
+        }
+      }
+    }
+  } catch { /* ignora */ }
+
+  console.warn(`[Evolution] @lid ${lid} (${lidNumber}) — JID real não encontrado`)
   return null
 }
 
