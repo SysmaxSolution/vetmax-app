@@ -103,8 +103,8 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  console.info(`[Campaign Cron] hora=${currentHour} enviados=${totalSent}`)
-  return NextResponse.json({ ok: true, totalSent, currentHour })
+  console.info(`[Campaign Cron] enviados=${totalSent}`)
+  return NextResponse.json({ ok: true, totalSent })
 }
 
 // ─── Queries de elegibilidade ─────────────────────────────────────────────────
