@@ -51,9 +51,10 @@ export async function POST(
 
   // ── QRCODE_UPDATED ─────────────────────────────────────────────────────────
   if (event === 'QRCODE_UPDATED') {
-    const base64 = (body?.data as Record<string, unknown>)?.qrcode?.base64 as string | undefined
-      ?? (body?.data as Record<string, unknown>)?.base64 as string | undefined
-    console.info(`[WPP Webhook] clinicId=${clinicId} QRCODE_UPDATED base64=${base64 ? 'sim' : 'não'}`)
+    const data    = body?.data as Record<string, unknown> | undefined
+    const qrObj   = data?.qrcode as Record<string, unknown> | undefined
+    const base64  = (qrObj?.base64 ?? data?.base64) as string | undefined
+    console.info(`[WPP Webhook] clinicId=${clinicId} QRCODE_UPDATED base64=${base64 ? 'sim' : 'não'} dataKeys=${Object.keys(data ?? {}).join(',')}`)
     if (base64) {
       await admin.from('clinic_whatsapp_settings')
         .update({ qr_code: base64 })
