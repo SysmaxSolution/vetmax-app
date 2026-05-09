@@ -64,7 +64,7 @@ export async function listSuppliers(filters?: {
   is_active?: boolean
 }): Promise<Supplier[] | { error: string }> {
   const ctx = await getCtx()
-  if ('error' in ctx) return ctx
+  if ('error' in ctx) return { error: ctx.error as string }
 
   let query = ctx.supabase
     .from('suppliers')
@@ -90,7 +90,7 @@ export async function listSuppliers(filters?: {
 
 export async function searchSuppliers(query: string): Promise<Supplier[] | { error: string }> {
   const ctx = await getCtx()
-  if ('error' in ctx) return ctx
+  if ('error' in ctx) return { error: ctx.error as string }
 
   const term = query.trim()
   if (term.length < 2) return []
@@ -114,7 +114,7 @@ export async function upsertSupplier(
   input: SupplierInput,
 ): Promise<{ id: string } | { error: string }> {
   const ctx = await getCtx()
-  if ('error' in ctx) return ctx
+  if ('error' in ctx) return { error: ctx.error as string }
 
   if (!['admin','owner','manager'].includes(ctx.role)) {
     return { error: 'Apenas administradores e gerentes podem cadastrar fornecedores' }
@@ -184,7 +184,7 @@ export async function deactivateSupplier(
   supplierId: string,
 ): Promise<{ success: true } | { error: string }> {
   const ctx = await getCtx()
-  if ('error' in ctx) return ctx
+  if ('error' in ctx) return { error: ctx.error as string }
 
   if (!['admin','owner','manager'].includes(ctx.role)) {
     return { error: 'Apenas administradores e gerentes podem desativar fornecedores' }
@@ -208,7 +208,7 @@ export async function reactivateSupplier(
   supplierId: string,
 ): Promise<{ success: true } | { error: string }> {
   const ctx = await getCtx()
-  if ('error' in ctx) return ctx
+  if ('error' in ctx) return { error: ctx.error as string }
 
   if (!['admin','owner','manager'].includes(ctx.role)) {
     return { error: 'Apenas administradores e gerentes podem reativar fornecedores' }

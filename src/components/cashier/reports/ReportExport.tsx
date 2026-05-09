@@ -89,104 +89,108 @@ export default function ReportExport({ data, periodLabel, clinicName }: Props) {
   async function handlePdf() {
     setLoadingPdf(true)
     try {
-      const { pdf, Document, Page, Text, View, StyleSheet } = await import('@react-pdf/renderer')
+      const { jsPDF } = await import('jspdf')
+      // A4 landscape: 297mm × 210mm
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+      const W = 297, H = 210
+      const margin = 12
+      const colX   = [margin, margin+18, margin+48, margin+72, margin+108, margin+138, margin+158, margin+174]
+      const colW   = [18, 30, 24, 36, 30, 20, 16, 30]
+      const rowH   = 6
+      let y        = margin
 
-      const styles = StyleSheet.create({
-        page:        { padding: 30, fontSize: 9, fontFamily: 'Helvetica' },
-        header:      { marginBottom: 16, borderBottom: 1, borderBottomColor: '#0f766e', paddingBottom: 8 },
-        title:       { fontSize: 16, fontWeight: 'bold', color: '#0f766e' },
-        subtitle:    { fontSize: 10, color: '#475569', marginTop: 2 },
-        kpis:        { flexDirection: 'row', gap: 8, marginBottom: 12 },
-        kpi:         { flex: 1, padding: 8, border: 1, borderColor: '#e2e8f0', borderRadius: 4 },
-        kpiLabel:    { fontSize: 8, color: '#64748b', marginBottom: 2 },
-        kpiValue:    { fontSize: 12, fontWeight: 'bold' },
-        sectionTitle:{ fontSize: 10, fontWeight: 'bold', marginBottom: 6, marginTop: 8, color: '#1e293b' },
-        table:       { display: 'flex', flexDirection: 'column' },
-        tableRow:    { flexDirection: 'row', borderBottom: 0.5, borderBottomColor: '#e2e8f0', paddingVertical: 3 },
-        tableHeader: { flexDirection: 'row', borderBottom: 1, borderBottomColor: '#0f766e', paddingVertical: 4, backgroundColor: '#f0fdfa' },
-        cellSm:      { width: '8%' },
-        cellMd:      { width: '14%' },
-        cellLg:      { width: '20%' },
-        cellAmount:  { width: '14%', textAlign: 'right' },
-        bold:        { fontWeight: 'bold' },
-        green:       { color: '#059669' },
-        red:         { color: '#dc2626' },
-        footer:      { position: 'absolute', bottom: 20, left: 30, right: 30, fontSize: 8, color: '#94a3b8', textAlign: 'center' },
+      function addPage() {
+        doc.addPage()
+        y = margin
+        drawTableHeader()
+      }
+
+      // ── Header ──────────────────────────────────────────────────────────────
+      doc.setFontSize(14)
+      doc.setTextColor(15, 118, 110)
+      doc.text(`${clinicName} — Relatório de Caixa`, margin, y + 5)
+      doc.setFontSize(8)
+      doc.setTextColor(100, 116, 139)
+      doc.text(`Período: ${periodLabel}  ·  ${data.totals.count} lançamentos  ·  Gerado em ${new Date().toLocaleString('pt-BR')}`, margin, y + 10)
+      doc.setDrawColor(15, 118, 110)
+      doc.line(margin, y + 12, W - margin, y + 12)
+      y += 16
+
+      // ── KPIs ────────────────────────────────────────────────────────────────
+      const kpis = [
+        { label: 'Entradas', value: fmt(data.totals.inflows), color: [5, 150, 105] as [number,number,number] },
+        { label: 'Saídas',   value: fmt(data.totals.outflows), color: [220, 38, 38] as [number,number,number] },
+        { label: 'Saldo',    value: fmt(data.totals.balance), color: data.totals.balance >= 0 ? [5, 150, 105] as [number,number,number] : [220, 38, 38] as [number,number,number] },
+      ]
+      const kpiW = 40, kpiH = 12, kpiGap = 6
+      kpis.forEach((k, i) => {
+        const kx = margin + i * (kpiW + kpiGap)
+        doc.setDrawColor(226, 232, 240)
+        doc.setFillColor(248, 250, 252)
+        doc.roundedRect(kx, y, kpiW, kpiH, 2, 2, 'FD')
+        doc.setFontSize(7)
+        doc.setTextColor(100, 116, 139)
+        doc.text(k.label, kx + 3, y + 4)
+        doc.setFontSize(10)
+        doc.setTextColor(...k.color)
+        doc.text(k.value, kx + 3, y + 10)
+      })
+      y += kpiH + 6
+
+      // ── Table ───────────────────────────────────────────────────────────────
+      const headers = ['Tipo','Data/Hora','Módulo','Pet/Forn.','Tutor','Forma','Status','Valor']
+
+      function drawTableHeader() {
+        doc.setFillColor(240, 253, 250)
+        doc.rect(margin, y, W - margin * 2, rowH, 'F')
+        doc.setFontSize(7)
+        doc.setTextColor(15, 118, 110)
+        headers.forEach((h, i) => doc.text(h, colX[i] + 1, y + 4))
+        doc.setDrawColor(15, 118, 110)
+        doc.line(margin, y + rowH, W - margin, y + rowH)
+        y += rowH
+      }
+
+      drawTableHeader()
+
+      const rows = data.rows.slice(0, 1500)
+      rows.forEach((r) => {
+        if (y + rowH > H - 14) addPage()
+        const isIn = r.entry_type === 'inflow'
+        doc.setFontSize(6.5)
+        doc.setTextColor(51, 65, 85)
+        doc.text(isIn ? 'Entrada' : 'Saída', colX[0] + 1, y + 4)
+        doc.text(fmtDate(r.occurred_at).slice(0, 14), colX[1] + 1, y + 4)
+        doc.text((MODULE_LABELS[r.source_module] ?? r.source_module).slice(0, 12), colX[2] + 1, y + 4)
+        const pet = (r.patient_name || r.supplier_name || r.description || '—').slice(0, 18)
+        doc.text(pet, colX[3] + 1, y + 4)
+        doc.text((r.tutor_name || '—').slice(0, 14), colX[4] + 1, y + 4)
+        doc.text(r.payment_method ? (PAYMENT_LABELS[r.payment_method] ?? r.payment_method).slice(0, 8) : '—', colX[5] + 1, y + 4)
+        doc.text((r.status ?? '').slice(0, 8), colX[6] + 1, y + 4)
+        doc.setTextColor(...(isIn ? [5, 150, 105] as [number,number,number] : [220, 38, 38] as [number,number,number]))
+        doc.text(`${isIn ? '+' : '-'} ${fmt(Math.abs(Number(r.amount)))}`, colX[7] + 1, y + 4)
+        doc.setDrawColor(226, 232, 240)
+        doc.line(margin, y + rowH, W - margin, y + rowH)
+        y += rowH
       })
 
-      const Doc = (
-        <Document>
-          <Page size="A4" orientation="landscape" style={styles.page}>
-            <View style={styles.header}>
-              <Text style={styles.title}>{clinicName} — Relatório de Caixa</Text>
-              <Text style={styles.subtitle}>Período: {periodLabel} · Total de lançamentos: {data.totals.count}</Text>
-            </View>
+      if (data.rows.length > 1500) {
+        y += 4
+        doc.setFontSize(7)
+        doc.setTextColor(220, 38, 38)
+        doc.text(`PDF limitado a 1500 lançamentos. Use CSV para todos os ${data.rows.length} registros.`, margin, y)
+      }
 
-            <View style={styles.kpis}>
-              <View style={styles.kpi}>
-                <Text style={styles.kpiLabel}>Entradas</Text>
-                <Text style={[styles.kpiValue, styles.green]}>{fmt(data.totals.inflows)}</Text>
-              </View>
-              <View style={styles.kpi}>
-                <Text style={styles.kpiLabel}>Saídas</Text>
-                <Text style={[styles.kpiValue, styles.red]}>{fmt(data.totals.outflows)}</Text>
-              </View>
-              <View style={styles.kpi}>
-                <Text style={styles.kpiLabel}>Saldo</Text>
-                <Text style={[styles.kpiValue, data.totals.balance >= 0 ? styles.green : styles.red]}>
-                  {fmt(data.totals.balance)}
-                </Text>
-              </View>
-            </View>
+      // ── Footer (all pages) ────────────────────────────────────────────────
+      const total = (doc as unknown as { internal: { getNumberOfPages: () => number } }).internal.getNumberOfPages()
+      for (let p = 1; p <= total; p++) {
+        doc.setPage(p)
+        doc.setFontSize(7)
+        doc.setTextColor(148, 163, 184)
+        doc.text(`${clinicName} · Página ${p} de ${total}`, W / 2, H - 5, { align: 'center' })
+      }
 
-            <Text style={styles.sectionTitle}>Lançamentos</Text>
-            <View style={styles.table}>
-              <View style={styles.tableHeader}>
-                <Text style={[styles.cellSm, styles.bold]}>Tipo</Text>
-                <Text style={[styles.cellMd, styles.bold]}>Data</Text>
-                <Text style={[styles.cellMd, styles.bold]}>Módulo</Text>
-                <Text style={[styles.cellLg, styles.bold]}>Pet/Fornecedor</Text>
-                <Text style={[styles.cellMd, styles.bold]}>Tutor</Text>
-                <Text style={[styles.cellSm, styles.bold]}>Forma</Text>
-                <Text style={[styles.cellSm, styles.bold]}>Status</Text>
-                <Text style={[styles.cellAmount, styles.bold]}>Valor</Text>
-              </View>
-              {data.rows.slice(0, 1500).map((r, i) => (
-                <View key={r.entry_id || i} style={styles.tableRow}>
-                  <Text style={styles.cellSm}>{r.entry_type === 'inflow' ? 'Entrada' : 'Saída'}</Text>
-                  <Text style={styles.cellMd}>{fmtDate(r.occurred_at)}</Text>
-                  <Text style={styles.cellMd}>{MODULE_LABELS[r.source_module] ?? r.source_module}</Text>
-                  <Text style={styles.cellLg}>{r.patient_name || r.supplier_name || r.description || '—'}</Text>
-                  <Text style={styles.cellMd}>{r.tutor_name || '—'}</Text>
-                  <Text style={styles.cellSm}>
-                    {r.payment_method ? (PAYMENT_LABELS[r.payment_method] ?? r.payment_method) : '—'}
-                  </Text>
-                  <Text style={styles.cellSm}>{r.status}</Text>
-                  <Text style={[
-                    styles.cellAmount,
-                    r.entry_type === 'inflow' ? styles.green : styles.red,
-                  ]}>
-                    {r.entry_type === 'inflow' ? '+' : '−'} {fmt(Math.abs(Number(r.amount)))}
-                  </Text>
-                </View>
-              ))}
-            </View>
-
-            {data.rows.length > 1500 && (
-              <Text style={{ fontSize: 8, color: '#dc2626', marginTop: 8 }}>
-                ⚠ PDF limitado a 1500 lançamentos. Use CSV para o conjunto completo ({data.rows.length} linhas).
-              </Text>
-            )}
-
-            <Text style={styles.footer} render={({ pageNumber, totalPages }) => (
-              `${clinicName} · Gerado em ${new Date().toLocaleString('pt-BR')} · Página ${pageNumber} de ${totalPages}`
-            )} fixed />
-          </Page>
-        </Document>
-      )
-
-      const blob = await pdf(Doc).toBlob()
-      downloadBlob(blob, `caixa-relatorio-${periodLabel.replace(/\//g, '-')}.pdf`)
+      doc.save(`caixa-relatorio-${periodLabel.replace(/\//g, '-')}.pdf`)
     } finally {
       setLoadingPdf(false)
     }

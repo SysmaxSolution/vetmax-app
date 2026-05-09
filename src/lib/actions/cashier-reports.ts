@@ -67,7 +67,7 @@ export async function generateCashierReport(
   filters: CashierReportFilters,
 ): Promise<CashierReportSummary | { error: string }> {
   const ctx = await getCtx()
-  if ('error' in ctx) return ctx
+  if ('error' in ctx) return { error: ctx.error as string }
 
   if (!['admin','owner','manager','accountant'].includes(ctx.role)) {
     return { error: 'Acesso negado aos relatórios' }
