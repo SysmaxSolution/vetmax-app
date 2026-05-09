@@ -40,12 +40,25 @@ export async function POST(
   if (event === 'CONNECTION_UPDATE') {
     const state = (body?.data as Record<string, unknown>)?.state as string | undefined
     console.info(`[WPP Webhook] clinicId=${clinicId} CONNECTION_UPDATE state=${state}`)
+    // Quando conectado, limpa o QR salvo (já não é mais necessário)
+    if (state === 'open') {
+      await admin.from('clinic_whatsapp_settings')
+        .update({ qr_code: null })
+        .eq('clinic_id', clinicId)
+    }
     return NextResponse.json({ received: true })
   }
 
   // ── QRCODE_UPDATED ─────────────────────────────────────────────────────────
   if (event === 'QRCODE_UPDATED') {
-    console.info(`[WPP Webhook] clinicId=${clinicId} QRCODE_UPDATED`)
+    const base64 = (body?.data as Record<string, unknown>)?.qrcode?.base64 as string | undefined
+      ?? (body?.data as Record<string, unknown>)?.base64 as string | undefined
+    console.info(`[WPP Webhook] clinicId=${clinicId} QRCODE_UPDATED base64=${base64 ? 'sim' : 'não'}`)
+    if (base64) {
+      await admin.from('clinic_whatsapp_settings')
+        .update({ qr_code: base64 })
+        .eq('clinic_id', clinicId)
+    }
     return NextResponse.json({ received: true })
   }
 
