@@ -17,7 +17,7 @@ export function MentorButton() {
       <button
         onClick={() => setOpen(v => !v)}
         aria-label="Modo Mentor — ajuda guiada"
-        className="fixed bottom-6 right-6 z-50 flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg hover:bg-blue-700 active:scale-95 transition-all duration-150"
+        className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg hover:bg-blue-700 active:scale-95 transition-all duration-150"
       >
         {open
           ? <X className="h-5 w-5" />
@@ -26,7 +26,7 @@ export function MentorButton() {
 
       {/* Popover panel */}
       {open && (
-        <div className="fixed bottom-20 right-6 z-50 w-72 rounded-2xl border border-slate-200 bg-white shadow-2xl">
+        <div className="fixed bottom-20 right-4 sm:right-6 z-50 w-[calc(100vw-2rem)] max-w-[288px] sm:w-72 rounded-2xl border border-slate-200 bg-white shadow-2xl">
           <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100">
               <HelpCircle className="h-4 w-4 text-blue-600" />

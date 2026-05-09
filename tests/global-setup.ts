@@ -4,6 +4,7 @@ import path from 'path';
 
 export default async function globalSetup() {
   dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
+  dotenv.config({ path: path.resolve(process.cwd(), 'vetmax-app', '.env.local') });
   console.log('\n[SETUP] Seeding test database...');
   await seedClinics();
   await seedUsers();

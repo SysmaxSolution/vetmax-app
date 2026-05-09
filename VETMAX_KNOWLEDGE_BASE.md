@@ -3,9 +3,9 @@
      Use this file to answer any natural language question about system workflows, module usage,
      UI actions, inter-module relationships, and user tips. -->
 
-**version**: 1.0.0
-**last-updated**: 2026-04-26
-**scope**: All active VetMax modules — Recepção, Triagem, Consultório, Exames, Internação, Banho & Tosa, Caixa Central, Gestão, Farmácia, Pacientes, Mentor
+**version**: 1.1.0
+**last-updated**: 2026-05-09
+**scope**: All active VetMax modules — Recepção, Triagem, Consultório, Exames, Internação, Banho & Tosa, Caixa Central, Gestão, Farmácia, Pacientes, WhatsApp, Mentor
 **audience**: Mentor AI, support agents, onboarding staff
 
 ---
@@ -504,7 +504,53 @@ Diretório completo de pets cadastrados na clínica. Permite busca, edição de 
 
 ---
 
-## MODULE 11 — MENTOR (AI ASSISTANT)
+## MODULE 11 — WHATSAPP
+<!-- AI-CONTEXT: Integrated WhatsApp channel. Manages conversations, sends notifications, and links contacts to tutors. -->
+
+### Objective
+Canal de WhatsApp integrado à clínica via Evolution API v2.x. Exibe conversas ativas, permite envio de mensagens e vincula contatos a tutores cadastrados.
+
+### Connection States
+| State | Description |
+|---|---|
+| `open` | Conectado — mensagens enviadas e recebidas normalmente |
+| `connecting` | Reconectando — aguardar |
+| `close` | Desconectado — escanear QR code |
+
+### Happy Path — Conectar WhatsApp
+1. **Acessar** `/dashboard/whatsapp`.
+2. **QR Code** — Se estado for `close`, QR code aparece automaticamente.
+3. **Escanear** com o WhatsApp Business do celular da clínica.
+4. **Estado `open`** — Canal ativo, conversas sincronizadas.
+
+### Happy Path — Responder Mensagem
+1. **Lista de conversas** (painel esquerdo) — conversas ordenadas por última mensagem.
+2. **Selecionar conversa** — painel de chat abre à direita (ou ocupa toda a tela em mobile).
+3. **Campo de mensagem** → digitar → Enter ou botão enviar.
+4. **Vinculação** (opcional) — Se contato não está vinculado a tutor, botão "Vincular Tutor" aparece no topo do chat.
+
+### Mobile UX — Toggle de Visualização
+Em telas < 1024px, o módulo WhatsApp exibe **um painel por vez** (lista OU chat):
+- **Visualização padrão**: lista de conversas.
+- **Ao clicar em uma conversa**: painel de chat ocupa toda a tela.
+- **Botão "← Conversas"** (topo do chat): retorna à lista.
+
+### UI Dictionary — Buttons & Actions
+| Button / Action | Function | System Impact |
+|---|---|---|
+| **"← Conversas"** (mobile) | Retorna à lista de conversas | Alterna `mobileView: 'chat'` → `'list'` |
+| **"Vincular Tutor"** | Associa contato a tutor cadastrado | Atualiza mapping no banco |
+| **Campo de mensagem** | Digitar e enviar mensagem | POST via Evolution API v2.x |
+| **QR Code** | Escanear para conectar canal | Estado salvo via webhook `QRCODE_UPDATED` |
+
+### Integration Notes
+- **API**: Evolution API v2.x — endpoint `/message/sendText/{instance}`.
+- **Webhook**: `QRCODE_UPDATED` salva QR code no banco para renderização.
+- **LID Resolution**: contatos com `@lid` são resolvidos via `fetchContacts` antes do envio.
+
+---
+
+## MODULE 12 — MENTOR (AI ASSISTANT)
 <!-- AI-CONTEXT: This is the Mentor module self-description — used when users ask "what can Mentor do?". -->
 
 ### Objective
@@ -524,16 +570,29 @@ Assistente de onboarding e ajuda contextual em tempo real. Localiza animais no s
 - "Procura o [nome]"
 
 ### Available Tours
-| Tour ID | Label | What it Shows |
-|---|---|---|
-| `recepcao` | Recepção | Check-in e fila de espera |
-| `sala-espera` | Sala de Espera | Fila e novo check-in |
-| `triagem` | Triagem | Fila, voz, concluir triagem |
-| `consulta` | Consultório | Gravação, SOAP, salvar prontuário |
-| `exames` | Exames | Fila de exames, registrar resultado |
-| `internacao` | Internação | Lista internados, dar alta hospitalar |
-| `grooming` | Banho & Tosa | Fila kanban, registro por voz |
-| `alta` | Alta | Quadro kanban, coluna de alta |
+| Tour ID | Label | Module Path | What it Shows |
+|---|---|---|---|
+| `recepcao` | Recepção | `/dashboard/reception` | Check-in e fila de espera |
+| `sala-espera` | Sala de Espera | `/dashboard/reception` | Fila e novo check-in |
+| `triagem` | Triagem | `/dashboard/triage` | Fila, voz, concluir triagem |
+| `consulta` | Consultório | `/dashboard/vet` | Gravação, SOAP, salvar prontuário |
+| `exames` | Exames | `/dashboard/exams` | Fila de exames, registrar resultado |
+| `internacao` | Internação | `/dashboard/hospitalization` | Lista internados, dar alta hospitalar |
+| `grooming` | Banho & Tosa | `/dashboard/grooming` | Fila kanban, registro por voz |
+| `alta` | Alta | `/dashboard/reception` | Quadro kanban, coluna de alta |
+| `cadastro-pet` | Cadastro de Pet | `/dashboard/patients` | Formulário de cadastro de novo pet |
+
+### Tour Step Behavior — Important Notes
+- O **spotlight** do Mentor ilumina o elemento via atributo `data-mentor-step="<target>"` **antes** de exibir o balão de texto.
+- A mensagem do balão é exibida **somente após** o elemento-alvo estar visível no DOM.
+- Se o elemento não for encontrado em 5 segundos (`waitForElement` via MutationObserver), o tour exibe aviso de fallback.
+- `reception-checkin-btn` — aparece apenas após o usuário realizar uma busca de tutor; **não está no DOM** na tela inicial vazia.
+- `reception-queue` — sempre presente no DOM, mesmo com fila vazia.
+
+### Mentor Button — Mobile Position
+Em telas pequenas (< 640px), o botão flutuante do Mentor ajusta sua posição:
+- **Botão**: `bottom-4 right-4` em mobile / `bottom-6 right-6` em `sm:` e acima.
+- **Popover**: largura `calc(100vw - 2rem)` em mobile (máximo `max-w-xs`) / `w-72` em `sm:` e acima.
 
 ### Intent Keywords → Tour Mapping
 | Keywords | Tour Activated |
@@ -545,6 +604,43 @@ Assistente de onboarding e ajuda contextual em tempo real. Localiza animais no s
 | exame, laboratório, laudo, resultado | `exames` |
 | internação, internar, hospitalizar, UTI | `internacao` |
 | banho, tosa, grooming, tosador | `grooming` |
+| cadastro, novo pet, registrar animal | `cadastro-pet` |
+
+---
+
+## MOBILE & RESPONSIVE SUPPORT
+<!-- AI-CONTEXT: Describes how each module adapts to mobile screens (< 640px). Updated in v1.1.0. -->
+
+O VetMax foi projetado para funcionar em celulares e tablets sem perda de funcionalidade.
+Todos os módulos passaram por auditoria responsiva (2026-05). As adaptações por módulo:
+
+### Padrões Responsivos Aplicados (Tailwind CSS v4)
+
+| Componente | Problema Anterior | Correção |
+|---|---|---|
+| `triage/[id]/page.tsx` | `px-6` fixo → conteúdo cortado em mobile | `px-3 sm:px-6 py-6 sm:py-8` |
+| `TriageForm.tsx` | `grid-cols-2` → campos sobrepostos | `grid-cols-1 sm:grid-cols-2` |
+| `CashierPageClient.tsx` | Tabs do Caixa sem scroll → overflow oculto | `overflow-x-auto` no wrapper + `hidden sm:inline` nos labels |
+| `ManagementWorkspace.tsx` | Dados da clínica em 2 colunas → quebrava | `grid-cols-1 sm:grid-cols-2` |
+| `MentorButton.tsx` | Botão fora da tela em mobile | `bottom-4 right-4 sm:bottom-6 sm:right-6` |
+| `ConversationsPageClient.tsx` | Painel lado a lado → ilegível | Toggle mobile list/chat + botão "← Conversas" |
+| `CheckoutWorkspace.tsx` | InvoiceCard horizontal → sobreposição | `flex-col sm:flex-row` no wrapper |
+
+### Dispositivos Testados (Playwright)
+| Device | Viewport | Project |
+|---|---|---|
+| iPhone SE | 375×667 | `mobile-iphone-se` |
+| iPhone 12 Pro | 390×844 | `mobile-iphone-12` |
+| Pixel 5 | 393×851 | `mobile-pixel5` |
+| Samsung Galaxy S21 | 360×800 | `mobile-samsung-s21` |
+| iPad Mini | 768×1024 | `tablet-ipad-mini` |
+| iPad Pro | 1024×1366 | `tablet-ipad-pro` |
+
+### Regra Geral de UX Mobile
+- Grids de 2 colunas → `grid-cols-1 sm:grid-cols-2` (breakpoint 640px).
+- Padding fixo `px-6` → `px-3 sm:px-6` em todos os containers de módulo.
+- Elementos com texto longo em tabs → `hidden sm:inline` no label, ícone sempre visível.
+- Painéis lado a lado em mobile → toggle de estado com navegação por botão.
 
 ---
 
@@ -622,8 +718,62 @@ A: Na Gestão → aba "Clínica" → toggle do módulo "Grooming" → salvar. O 
 A: Ao arrastar o card do animal para a coluna "Entregue" no módulo Grooming, um modal de pagamento aparece. Ao confirmar, o valor é automaticamente lançado no Caixa Central.
 
 **Q: Posso usar voz em qual módulo?**
-A: Sim, em três módulos: **Triagem** (sinais vitais), **Consultório** (anamnese e SOAP) e **Banho & Tosa** (observações do serviço). Clique no ícone de microfone em cada um.
+A: Sim, em três módulos: **Triagem** (sinais vitais), **Consultório** (anamnese e SOAP) e **Banho & Tosa** (observações do serviço). Clique no ícone de microfone em cada um. O Mentor também aceita perguntas por voz.
+
+**Q: O VetMax funciona em celular?**
+A: Sim. Todos os módulos têm layout responsivo testado em iPhone SE (375px) até iPad Pro (1024px). O menu lateral, grids de formulários, tabs e painéis se adaptam automaticamente à largura da tela.
+
+**Q: No WhatsApp, como vejo o chat em telas pequenas?**
+A: Em telas menores que 1024px, toque na conversa desejada na lista para abrir o chat em tela cheia. Para voltar à lista de conversas, toque em "← Conversas" no topo.
+
+**Q: O botão do Mentor some em celular?**
+A: Não. Em telas pequenas o botão se reposiciona para `bottom-4 right-4` (mais próximo da borda). O popover de opções ocupa quase toda a largura da tela para facilitar o toque.
+
+**Q: Onde fica o tour de Cadastro de Pet?**
+A: O Mentor possui um tour `cadastro-pet` que guia o cadastro em `/dashboard/patients`. Para acioná-lo, pergunte ao Mentor: "Como cadastro um novo pet?" ou "Registrar animal".
+
+**Q: O que é o `data-mentor-step`?**
+A: É um atributo HTML nos elementos interativos da UI que o Mentor usa para posicionar o spotlight (destaque) exatamente sobre o botão ou campo relevante de cada passo do tour. O Mentor **sempre** ilumina o elemento antes de exibir a mensagem explicativa.
 
 ---
 
-*END OF VETMAX_KNOWLEDGE_BASE — Version 1.0.0*
+## TEST INFRASTRUCTURE (Developer Reference)
+<!-- AI-CONTEXT: Ignore this section when answering user-facing questions. Only relevant for QA and developers. -->
+
+### Playwright E2E Tests
+| Arquivo | Testes | Cobertura |
+|---|---|---|
+| `tests/e2e/responsive-mobile.spec.ts` | 60 | Login, todos os módulos, 6 viewports mobile/tablet |
+| `tests/e2e/mentor-module-process.spec.ts` | 16 | Tours do Mentor: sequência, spotlight, balão, próximo passo |
+
+**Executar:**
+```bash
+NODE_PATH="C:/SysMax/vetmax-app/node_modules" \
+  vetmax-app/node_modules/.bin/playwright.cmd test --project=chromium
+```
+
+### Pytest API Tests
+| Arquivo | Testes | Cobertura |
+|---|---|---|
+| `tests/pytest/test_mentor_api.py` | 13 | Auth 401, validação, estrutura de resposta, mapeamento de intent |
+| `tests/pytest/test_mobile_process.py` | 22 | Redirect de rotas protegidas, UAs mobile, headers, rotas de tour |
+
+**Executar (servidor rodando):**
+```bash
+python -m pytest tests/pytest/ -v -k "not slow"
+```
+
+### Window Helpers para Debug do Mentor (console do browser)
+```javascript
+window.__MENTOR_START_TOUR('triagem')    // inicia tour diretamente
+window.__MENTOR_NEXT_STEP()             // avança um passo
+window.__MENTOR_JUMP_TO('triage-voice') // pula para step específico
+```
+
+### MentorTour — Atributos de Teste
+- `data-testid="mentor-overlay"` — overlay escuro ao redor do elemento destacado.
+- `data-testid="mentor-balloon"` — balão com título e texto do passo atual.
+
+---
+
+*END OF VETMAX_KNOWLEDGE_BASE — Version 1.1.0*
