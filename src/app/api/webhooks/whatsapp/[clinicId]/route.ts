@@ -66,15 +66,11 @@ export async function POST(
     if (fromMe) return NextResponse.json({ received: true })
     if (!jid || jid.endsWith('@g.us')) return NextResponse.json({ received: true })
 
-    // Evolution API v1.8.x envia o JID real (@s.whatsapp.net) em body.sender quando remoteJid é @lid
-    const bodySender = body?.sender as string | undefined
-    const isLid      = jid.includes('@lid')
-    const phone      = isLid && bodySender?.includes('@s.whatsapp.net')
-      ? bodySender.replace('@s.whatsapp.net', '')
-      : jid.replace('@s.whatsapp.net', '')
+    // body.sender = número da clínica (instância), não do remetente — não usar para phone
+    const phone = jid.replace('@s.whatsapp.net', '')   // @lid permanece como @lid (resolvido no envio)
 
-    if (isLid) {
-      console.info(`[WPP Webhook] @lid resolvido: ${jid} → sender=${bodySender ?? 'não encontrado'} phone=${phone}`)
+    if (jid.includes('@lid')) {
+      console.info(`[WPP Webhook] @lid detectado: ${jid} — resolução tentada no momento do envio`)
     }
 
     const pushName = msgData.pushName as string | null ?? null

@@ -27,12 +27,21 @@ export async function evolutionSendText(
   phone: string,
   message: string,
 ): Promise<void> {
-  const number = formatPhone(phone)
+  // Para @lid, tenta resolver o JID real via contact store da Evolution API
+  let resolved = phone
+  if (phone.includes('@lid')) {
+    const realJid = await resolveJidFromLid(creds, phone)
+    if (realJid) {
+      resolved = realJid.replace('@s.whatsapp.net', '')
+    }
+  }
+
+  const number = formatPhone(resolved)
   const url    = `${creds.apiUrl}/message/sendText/${creds.instanceId}`
   // Evolution API v1.8.x expects { number, textMessage: { text } }
   const body   = JSON.stringify({ number, textMessage: { text: message } })
 
-  console.info(`[Evolution] sendText → number="${number}" | ${url}`)
+  console.info(`[Evolution] sendText → number="${number}" (raw="${phone}") | ${url}`)
 
   const res          = await fetch(url, { method: 'POST', headers: buildHeaders(creds.apiKey), body })
   const responseText = await res.text()
@@ -43,6 +52,36 @@ export async function evolutionSendText(
   }
 
   console.info(`[Evolution] sendText OK ${res.status}: ${responseText.substring(0, 200)}`)
+}
+
+// Tenta obter o JID @s.whatsapp.net de um contato identificado por @lid,
+// consultando o contact store interno da Evolution API.
+async function resolveJidFromLid(creds: EvolutionCreds, lid: string): Promise<string | null> {
+  const headers = buildHeaders(creds.apiKey)
+  const base    = creds.apiUrl
+  const inst    = creds.instanceId
+
+  // Tenta GET /contact/findContacts com diferentes campos de filtro
+  for (const field of ['remoteJid', 'id', 'lid']) {
+    try {
+      const where = encodeURIComponent(JSON.stringify({ [field]: lid }))
+      const res   = await fetch(`${base}/contact/findContacts/${inst}?where=${where}`, { headers })
+      if (res.ok) {
+        const data     = await res.json()
+        const contacts = (Array.isArray(data) ? data : (data?.data ?? data?.contacts ?? [])) as Record<string, unknown>[]
+        for (const c of contacts) {
+          const jid = (c.remoteJid ?? c.jid ?? c.id) as string | undefined
+          if (jid?.includes('@s.whatsapp.net')) {
+            console.info(`[Evolution] @lid ${lid} → ${jid} (findContacts field=${field})`)
+            return jid
+          }
+        }
+      }
+    } catch { /* tenta próximo campo */ }
+  }
+
+  console.warn(`[Evolution] @lid ${lid} — JID real não encontrado no contact store`)
+  return null
 }
 
 // ─── Instance Management ──────────────────────────────────────────────────────
