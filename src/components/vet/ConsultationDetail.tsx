@@ -292,6 +292,9 @@ export default function ConsultationDetail({
     recognition.continuous = true
     recognition.interimResults = true
 
+    // Flag de no-speech: microfone não captou fala (comum em notebooks)
+    let noSpeech = false
+
     recognition.onstart = () => setIsRecording(true)
 
     recognition.onresult = (event: any) => {
@@ -312,6 +315,11 @@ export default function ConsultationDetail({
 
     recognition.onerror = (event: any) => {
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
+      if (event.error === 'no-speech') {
+        // Microfone não captou fala (comum em notebooks) — reinicia no onend
+        noSpeech = true
+        return
+      }
       setIsRecording(false)
       setLiveTranscript('')
       if (event.error !== 'aborted') {
@@ -321,6 +329,14 @@ export default function ConsultationDetail({
 
     recognition.onend = async () => {
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
+
+      // Reinicia silenciosamente se foi no-speech e o usuário não parou manualmente
+      if (noSpeech && recognitionRef.current) {
+        noSpeech = false
+        setTimeout(() => recognition.start(), 150)
+        return
+      }
+
       setIsRecording(false)
       const transcript = finalTranscriptRef.current.trim()
       setLiveTranscript('')
@@ -471,7 +487,10 @@ export default function ConsultationDetail({
 
   const stopRecording = () => {
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
-    recognitionRef.current?.stop()
+    // Nula a ref antes do stop para sinalizar parada manual ao onend
+    const rec = recognitionRef.current
+    recognitionRef.current = null
+    rec?.stop()
   }
 
   // ─── Handlers para ClinicalActionsSection (controlado) ─────────────────────

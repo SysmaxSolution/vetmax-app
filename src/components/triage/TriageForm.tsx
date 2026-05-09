@@ -129,6 +129,10 @@ export default function TriageForm({
       const prevSaved = savedTranscript
       finalTranscriptRef.current = ''
 
+      // Flag de no-speech: microfone não captou fala (comum em notebooks)
+      // Ao invés de encerrar, reinicia silenciosamente no onend
+      let noSpeech = false
+
       recognition.onstart = () => {
         setIsRecording(true)
         setLiveTranscript(prevSaved)
@@ -153,6 +157,11 @@ export default function TriageForm({
 
       recognition.onerror = (event: any) => {
         if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
+        if (event.error === 'no-speech') {
+          // Microfone não captou fala (comum em notebooks) — reinicia no onend
+          noSpeech = true
+          return
+        }
         setToastMessage({
           type: 'error',
           message: `Erro de reconhecimento: ${event.error}`,
@@ -162,6 +171,15 @@ export default function TriageForm({
 
       recognition.onend = async () => {
         if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
+
+        // Reinicia silenciosamente se foi no-speech e o usuário não parou manualmente
+        // (recognitionRef.current === null indica parada manual via stopRecording)
+        if (noSpeech && recognitionRef.current) {
+          noSpeech = false
+          setTimeout(() => recognition.start(), 150)
+          return
+        }
+
         setIsRecording(false)
         const newChunk = finalTranscriptRef.current.trim()
         // Concatenação não-destrutiva: preserva o que já estava salvo
@@ -191,9 +209,10 @@ export default function TriageForm({
 
   const stopRecording = () => {
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
-    if (recognitionRef.current) {
-      recognitionRef.current.stop()
-    }
+    // Nula a ref antes do stop para sinalizar parada manual ao onend
+    const rec = recognitionRef.current
+    recognitionRef.current = null
+    rec?.stop()
   }
 
   // ─── AI: Extract Vital Signs + Vaccines from Transcription ──────────────────
