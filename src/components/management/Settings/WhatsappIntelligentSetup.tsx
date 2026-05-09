@@ -24,8 +24,13 @@ export default function WhatsappIntelligentSetup({ onToast }: Props) {
   const [countdown, setCountdown]              = useState(POLL_INTERVAL_MS / 1000)
   const [loadingStatus, setLoadingStatus]      = useState(true)
 
-  const pollTimer  = useRef<ReturnType<typeof setInterval> | null>(null)
-  const countTimer = useRef<ReturnType<typeof setInterval> | null>(null)
+  const pollTimer         = useRef<ReturnType<typeof setInterval> | null>(null)
+  const countTimer        = useRef<ReturnType<typeof setInterval> | null>(null)
+  const onToastRef        = useRef(onToast)
+  const connectedToasted  = useRef(false)   // garante que o toast "conectado" dispara só 1x
+
+  // Mantém onToastRef sempre atualizado sem re-executar effects
+  onToastRef.current = onToast
 
   // ── Polling helpers ────────────────────────────────────────────────────────
 
@@ -79,14 +84,16 @@ export default function WhatsappIntelligentSetup({ onToast }: Props) {
     return () => { mounted = false; stopPolling() }
   }, [fetchStatus, fetchQr, startPolling, stopPolling])
 
-  // Para polling quando conectado
+  // Para polling quando conectado — usa ref para evitar loop infinito de re-render
   useEffect(() => {
-    if (connectionState === 'open') {
-      stopPolling()
-      setQrBase64(null)
-      onToast('success', 'WhatsApp Inteligente conectado!')
+    if (connectionState !== 'open') return
+    stopPolling()
+    setQrBase64(null)
+    if (!connectedToasted.current) {
+      connectedToasted.current = true
+      onToastRef.current('success', 'WhatsApp Inteligente conectado!')
     }
-  }, [connectionState, stopPolling, onToast])
+  }, [connectionState, stopPolling])
 
   // ── Conectar / Reconectar ──────────────────────────────────────────────────
 
