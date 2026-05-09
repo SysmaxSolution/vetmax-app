@@ -531,7 +531,7 @@ export default function ManagementWorkspace({
 
             <div className="p-6">
               {!isEditingClinic ? (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <InfoField label="Nome da Clínica" value={clinicName} />
                   <InfoField label="CNPJ" value={clinicCnpj} />
                   <InfoField label="Endereço" value={clinicAddress} />
@@ -539,7 +539,7 @@ export default function ManagementWorkspace({
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <EditField label="Nome da Clínica" value={clinicName} onChange={setClinicName} placeholder="Ex: Clínica Veterinária ABC" />
                     <EditField label="CNPJ" value={clinicCnpj} onChange={setClinicCnpj} placeholder="00.000.000/0001-00" />
                     <EditField label="Endereço" value={clinicAddress} onChange={setClinicAddress} placeholder="Rua, número, bairro" />

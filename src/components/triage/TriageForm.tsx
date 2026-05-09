@@ -723,7 +723,7 @@ export default function TriageForm({
                   <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
                     Campos do Template: {selectedTemplate.name}
                   </p>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {selectedTemplate.extracted_fields.map(renderTemplateField)}
                   </div>
                 </div>
@@ -741,7 +741,7 @@ export default function TriageForm({
               <span className="text-xs text-slate-400">* Campos obrigatórios</span>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label htmlFor="vital-weight" className="block text-sm font-medium text-slate-700 mb-2">
                   Peso (kg){triageRequiredFields.includes('weight') ? ' *' : ''}

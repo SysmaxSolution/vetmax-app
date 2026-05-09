@@ -56,7 +56,7 @@ export default async function TriageScreen({
 
   if ('error' in result) {
     return (
-      <div className="max-w-4xl mx-auto px-6 py-10">
+      <div className="max-w-4xl mx-auto px-3 sm:px-6 py-6 sm:py-10">
         <div className="rounded-xl border-2 border-red-400 bg-red-50 p-8">
           <h1 className="text-2xl font-bold text-red-900 mb-2">
             🚨 ERRO AO CARREGAR TRIAGEM
@@ -82,7 +82,7 @@ export default async function TriageScreen({
   const initialVaccines = 'error' in vaccinesResult ? [] : vaccinesResult
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-8">
+    <div className="max-w-4xl mx-auto px-3 sm:px-6 py-6 sm:py-8">
       <TriageForm
         consultation={result}
         isEditMode={isEditMode}

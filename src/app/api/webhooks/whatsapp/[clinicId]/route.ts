@@ -141,12 +141,50 @@ async function processInboundMessage(params: {
     return
   }
 
+  // 2. Busca ou cria conversa — quando bot inativo cria como 'human' para atendimento manual
+  let { data: conversation } = await admin
+    .from('whatsapp_conversations')
+    .select('id, status, tutor_name')
+    .eq('clinic_id', clinicId)
+    .eq('tutor_phone', phone)
+    .neq('status', 'closed')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (!conversation) {
+    const { data: newConv } = await admin
+      .from('whatsapp_conversations')
+      .insert({ clinic_id: clinicId, tutor_phone: phone, tutor_name: tutorName, status: botConfig.is_active ? 'bot' : 'human' })
+      .select('id, status, tutor_name')
+      .single()
+    conversation = newConv
+  } else if (!conversation.tutor_name && tutorName) {
+    await admin.from('whatsapp_conversations').update({ tutor_name: tutorName }).eq('id', conversation.id)
+  }
+
+  if (!conversation) { console.error('[WPP Bot] Falha ao criar conversa'); return }
+
+  // 3. Salva mensagem inbound
+  await admin.from('whatsapp_messages').insert({
+    conversation_id: conversation.id,
+    clinic_id:       clinicId,
+    direction:       'inbound',
+    content:         messageText,
+    sent_by:         'client',
+  })
+
+  await admin.from('whatsapp_conversations')
+    .update({ last_message_at: new Date().toISOString() })
+    .eq('id', conversation.id)
+
+  // 4. Bot inativo: mensagem salva, clínica responde manualmente — sem IA
   if (!botConfig.is_active) {
-    console.info(`[WPP Bot] clinicId=${clinicId} — bot inativo (is_active=false), ignorando`)
+    console.info(`[WPP Bot] clinicId=${clinicId} — bot inativo, mensagem salva para atendimento manual`)
     return
   }
 
-  // 2. Verifica horário de funcionamento (UTC — Vercel roda em UTC)
+  // 5. Verifica horário de funcionamento (UTC — Vercel roda em UTC)
   if (botConfig.working_hours_start && botConfig.working_hours_end) {
     const now        = new Date()
     const [hStart, mStart] = botConfig.working_hours_start.split(':').map(Number)
@@ -163,50 +201,13 @@ async function processInboundMessage(params: {
     }
   }
 
-  // 3. Busca ou cria conversa
-  let { data: conversation } = await admin
-    .from('whatsapp_conversations')
-    .select('id, status, tutor_name')
-    .eq('clinic_id', clinicId)
-    .eq('tutor_phone', phone)
-    .neq('status', 'closed')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  if (!conversation) {
-    const { data: newConv } = await admin
-      .from('whatsapp_conversations')
-      .insert({ clinic_id: clinicId, tutor_phone: phone, tutor_name: tutorName, status: 'bot' })
-      .select('id, status, tutor_name')
-      .single()
-    conversation = newConv
-  } else if (!conversation.tutor_name && tutorName) {
-    await admin.from('whatsapp_conversations').update({ tutor_name: tutorName }).eq('id', conversation.id)
-  }
-
-  if (!conversation) { console.error('[WPP Bot] Falha ao criar conversa'); return }
-
-  // 4. Salva mensagem inbound
-  await admin.from('whatsapp_messages').insert({
-    conversation_id: conversation.id,
-    clinic_id:       clinicId,
-    direction:       'inbound',
-    content:         messageText,
-    sent_by:         'client',
-  })
-
-  await admin.from('whatsapp_conversations')
-    .update({ last_message_at: new Date().toISOString() })
-    .eq('id', conversation.id)
-
-  // 5. Se conversa em modo 'human', não chama o bot
+  // 6. Se conversa em modo 'human', não chama o bot
   if (conversation.status === 'human') {
     console.info(`[WPP Bot] clinicId=${clinicId} — conversa em modo human, ignorando bot`)
     return
   }
 
-  // 6. Chama o agente IA
+  // 7. Chama o agente IA
   console.info(`[WPP Bot] clinicId=${clinicId} — chamando agente IA`)
   const result = await runWhatsappAgent({
     clinicId,
@@ -219,7 +220,7 @@ async function processInboundMessage(params: {
 
   console.info(`[WPP Bot] resposta="${result.reply.substring(0, 80)}" handoff=${result.handoff}`)
 
-  // 7. Salva resposta no banco
+  // 8. Salva resposta no banco
   await admin.from('whatsapp_messages').insert({
     conversation_id: conversation.id,
     clinic_id:       clinicId,
@@ -228,12 +229,12 @@ async function processInboundMessage(params: {
     sent_by:         'bot',
   })
 
-  // 8. Se handoff, atualiza status da conversa
+  // 9. Se handoff, atualiza status da conversa
   if (result.handoff) {
     await admin.from('whatsapp_conversations').update({ status: 'human' }).eq('id', conversation.id)
   }
 
-  // 9. Envia resposta via Evolution API
+  // 10. Envia resposta via Evolution API
   await sendBotReply(clinicId, phone, result.reply, admin)
 }
 

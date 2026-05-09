@@ -32,36 +32,38 @@ function InvoiceCard({
   onCheckout: (id: string) => void
 }) {
   return (
-    <div className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white px-5 py-4 hover:shadow-sm hover:border-slate-300 transition-all">
-      {/* Avatar */}
-      <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-amber-50 text-2xl">
-        {SPECIES_EMOJI[invoice.patient.species] ?? '🐾'}
-      </div>
-
-      {/* Info */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <p className="font-semibold text-slate-900">{invoice.patient.name}</p>
-          <span className="text-xs text-slate-400">·</span>
-          <span className="text-xs text-slate-500">{invoice.tutor.name}</span>
+    <div className="flex flex-col sm:flex-row sm:items-center gap-4 rounded-xl border border-slate-200 bg-white px-5 py-4 hover:shadow-sm hover:border-slate-300 transition-all">
+      <div className="flex items-center gap-4 min-w-0 flex-1">
+        {/* Avatar */}
+        <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-amber-50 text-2xl">
+          {SPECIES_EMOJI[invoice.patient.species] ?? '🐾'}
         </div>
-        <div className="mt-0.5 flex items-center gap-3">
-          <span className="text-xs text-slate-400">Alta às {fmtTime(invoice.created_at)}</span>
-          {invoice.tutor.phone && (
-            <span className="text-xs text-slate-400">{invoice.tutor.phone}</span>
-          )}
+
+        {/* Info */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="font-semibold text-slate-900">{invoice.patient.name}</p>
+            <span className="text-xs text-slate-400">·</span>
+            <span className="text-xs text-slate-500 truncate">{invoice.tutor.name}</span>
+          </div>
+          <div className="mt-0.5 flex items-center gap-3 flex-wrap">
+            <span className="text-xs text-slate-400">Alta às {fmtTime(invoice.created_at)}</span>
+            {invoice.tutor.phone && (
+              <span className="text-xs text-slate-400">{invoice.tutor.phone}</span>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Total + Ação */}
-      <div className="flex items-center gap-4 flex-shrink-0">
+      <div className="flex items-center justify-between sm:justify-end gap-4">
         <div className="text-right">
           <p className="text-xs text-slate-400">Total</p>
           <p className="text-lg font-bold text-slate-900">{fmt(invoice.total_amount)}</p>
         </div>
         <button
           onClick={() => onCheckout(invoice.id)}
-          className="flex items-center gap-1.5 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 transition-colors shadow-sm"
+          className="flex items-center gap-1.5 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 transition-colors shadow-sm flex-shrink-0"
         >
           <Receipt className="h-4 w-4" />
           Receber

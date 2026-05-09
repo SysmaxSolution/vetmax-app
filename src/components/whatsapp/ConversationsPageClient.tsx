@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useTransition } from 'react'
 import { MessageCircle, Send, RefreshCw, Bot, User, X, ArrowLeft } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
 import {
   getWhatsappConversations,
   getConversationMessages,
@@ -48,8 +49,10 @@ function displayPhone(raw: string | null): string {
 
 export default function ConversationsPageClient({
   initialConversations,
+  clinicId,
 }: {
   initialConversations: WppConversation[]
+  clinicId: string
 }) {
   const [conversations, setConversations] = useState(initialConversations)
   const [filter,        setFilter]        = useState<FilterStatus>('all')
@@ -60,7 +63,11 @@ export default function ConversationsPageClient({
   const [toast,         setToast]         = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
   const [isPending,     startTransition]  = useTransition()
   const [mobileView,    setMobileView]    = useState<'list' | 'chat'>('list')
-  const endRef = useRef<HTMLDivElement>(null)
+  const endRef        = useRef<HTMLDivElement>(null)
+  const selectedIdRef = useRef<string | null>(null)
+
+  // Mantém ref sincronizada com state para uso nos callbacks do Realtime
+  useEffect(() => { selectedIdRef.current = selectedId }, [selectedId])
 
   const selectedConv = conversations.find(c => c.id === selectedId) ?? null
   const humanCount   = conversations.filter(c => c.status === 'human').length
@@ -68,22 +75,55 @@ export default function ConversationsPageClient({
   // Scroll to bottom when messages change
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
-  // Poll conversation list every 15s
+  // Supabase Realtime — atualizações instantâneas sem polling
+  // Requer replication habilitada para as tabelas no Supabase Dashboard > Database > Replication
+  useEffect(() => {
+    if (!clinicId) return
+    const supabase = createClient()
+
+    const channel = supabase.channel(`wpp-${clinicId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'whatsapp_conversations', filter: `clinic_id=eq.${clinicId}` },
+        async () => {
+          const res = await getWhatsappConversations()
+          if (Array.isArray(res)) setConversations(res)
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'whatsapp_messages', filter: `clinic_id=eq.${clinicId}` },
+        async (payload) => {
+          const newMsg = payload.new as Record<string, unknown>
+          const sid = selectedIdRef.current
+          if (sid && newMsg.conversation_id === sid) {
+            const res = await getConversationMessages(sid)
+            if (Array.isArray(res)) setMessages(res)
+          }
+          const convRes = await getWhatsappConversations()
+          if (Array.isArray(convRes)) setConversations(convRes)
+        },
+      )
+      .subscribe()
+
+    return () => { void supabase.removeChannel(channel) }
+  }, [clinicId])
+
+  // Polling de fallback (intervalo aumentado pois Realtime cobre atualizações em tempo real)
   useEffect(() => {
     const id = setInterval(async () => {
       const res = await getWhatsappConversations()
       if (Array.isArray(res)) setConversations(res)
-    }, 15000)
+    }, 30000)
     return () => clearInterval(id)
   }, [])
 
-  // Poll messages every 8s when a conversation is open
   useEffect(() => {
     if (!selectedId) return
     const id = setInterval(async () => {
       const res = await getConversationMessages(selectedId)
       if (Array.isArray(res)) setMessages(res)
-    }, 8000)
+    }, 20000)
     return () => clearInterval(id)
   }, [selectedId])
 

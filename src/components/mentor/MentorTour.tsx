@@ -145,6 +145,7 @@ function StepBalloon({
 
   return (
     <div
+      data-testid="mentor-balloon"
       className="fixed z-[10000] rounded-2xl overflow-hidden"
       style={{
         ...posStyle,
@@ -497,7 +498,7 @@ export function MentorTour() {
   const PAD = 8
 
   return (
-    <div className="fixed inset-0 z-[9990]" style={{ pointerEvents: 'none' }}>
+    <div data-testid="mentor-overlay" className="fixed inset-0 z-[9990]" style={{ pointerEvents: 'none' }}>
       {box ? (
         <>
           {(() => {
