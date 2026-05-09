@@ -26,10 +26,16 @@ export async function POST() {
 
   // Nome da instância = prefixo do clinic_id sem hífens (8 chars)
   const instanceName = 'vet' + profile.clinic_id.replace(/-/g, '').substring(0, 8)
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '')
-  const webhookUrl = appUrl.startsWith('http')
-    ? `${appUrl}/api/webhooks/whatsapp/${profile.clinic_id}`
-    : undefined
+  // VERCEL_PROJECT_PRODUCTION_URL é provido automaticamente pela Vercel (sem protocolo, ex: vetmax-one.vercel.app)
+  // Tem prioridade sobre NEXT_PUBLIC_APP_URL (que pode conter IP de dev local)
+  const productionUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : null
+  const configuredUrl = process.env.NEXT_PUBLIC_APP_URL?.startsWith('http')
+    ? process.env.NEXT_PUBLIC_APP_URL
+    : null
+  const appUrl = (productionUrl ?? configuredUrl ?? '').replace(/\/$/, '')
+  const webhookUrl = appUrl ? `${appUrl}/api/webhooks/whatsapp/${profile.clinic_id}` : undefined
 
   const admin = createAdminClient()
 
