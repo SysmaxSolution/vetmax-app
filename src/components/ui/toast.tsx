@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { CheckCircle2, AlertCircle, X } from 'lucide-react'
 
 interface ToastProps {
@@ -11,10 +11,15 @@ interface ToastProps {
 }
 
 export function Toast({ type, message, onClose, duration = 4000 }: ToastProps) {
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+
   useEffect(() => {
-    const timer = setTimeout(onClose, duration)
+    const timer = setTimeout(() => onCloseRef.current(), duration)
     return () => clearTimeout(timer)
-  }, [onClose, duration])
+  // `duration` raramente muda; `onCloseRef` é estável — evita reset do timer a cada re-render
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [duration])
 
   return (
     <div className="fixed bottom-6 right-6 z-[200] animate-in fade-in slide-in-from-bottom-5 duration-300">

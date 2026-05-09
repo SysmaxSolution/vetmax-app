@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useTransition } from 'react'
+import { useState, useEffect } from 'react'
 import { ToggleLeft, ToggleRight, Save, Loader2, Clock, History } from 'lucide-react'
 import {
   getCampaigns,
@@ -115,8 +115,6 @@ export default function WhatsappCampaignSettings({
     const res   = await saveCampaign(state)
     if ('error' in res) { onToast('error', res.error); return }
     onToast('success', 'Campanha salva!')
-    const updated = await getCampaigns()
-    setCampaigns(updated)
   }
 
   if (loading) return (
@@ -190,7 +188,12 @@ function CampaignCard({
   onChange: (patch: Partial<Campaign>) => void
   onSave:   () => Promise<void>
 }) {
-  const [saving, startSave] = useTransition()
+  const [saving, setSaving] = useState(false)
+
+  async function handleClick() {
+    setSaving(true)
+    try { await onSave() } finally { setSaving(false) }
+  }
 
   return (
     <div className={`rounded-xl border p-4 space-y-3 ${
@@ -244,7 +247,7 @@ function CampaignCard({
         </label>
 
         <button
-          onClick={() => startSave(onSave)}
+          onClick={handleClick}
           disabled={saving}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors ml-auto"
         >

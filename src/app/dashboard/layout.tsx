@@ -110,12 +110,13 @@ export default async function DashboardLayout({
 
   const activeModules = (clinicConfig?.active_modules as string[] | null) ?? []
 
+  // Conta todas as conversas ativas (bot + human) para badge no módulo WhatsApp
   const whatsappHandoffCount = activeModules.includes('whatsapp_intelligent')
     ? ((await admin
         .from('whatsapp_conversations')
         .select('id', { count: 'exact', head: true })
         .eq('clinic_id', profile.clinic_id)
-        .eq('status', 'human')
+        .neq('status', 'closed')
       ).count ?? 0)
     : 0
 
