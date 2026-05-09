@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { CheckCircle2, AlertCircle, LayoutDashboard, Receipt, ArrowDownCircle, Settings } from 'lucide-react'
+import { CheckCircle2, AlertCircle, LayoutDashboard, Receipt, ArrowDownCircle, Settings, FileBarChart } from 'lucide-react'
 import { listCashierEntries, getCashierSummary } from '@/lib/actions/core-management'
 import { getCashierDashboard, getCurrentSession, listOutflows } from '@/lib/actions/cashier-sessions'
 import type { CentralCashierEntry, CashierSummary } from '@/lib/actions/core-management'
@@ -13,13 +13,15 @@ import CashierDashboardCards from './CashierDashboardCards'
 import CashierTabReceivables from './CashierTabReceivables'
 import CashierTabOutflows from './CashierTabOutflows'
 import CashierTabSession from './CashierTabSession'
+import CashierTabReports from './CashierTabReports'
 
-type Tab = 'overview' | 'receivables' | 'outflows' | 'session'
+type Tab = 'overview' | 'receivables' | 'outflows' | 'session' | 'reports'
 
 const TABS: { key: Tab; label: string; icon: React.ElementType }[] = [
   { key: 'overview',    label: 'Visão Geral',  icon: LayoutDashboard  },
   { key: 'receivables', label: 'Recebimentos', icon: Receipt          },
   { key: 'outflows',    label: 'Saídas',       icon: ArrowDownCircle  },
+  { key: 'reports',     label: 'Relatórios',   icon: FileBarChart     },
   { key: 'session',     label: 'Sessão',       icon: Settings         },
 ]
 
@@ -33,6 +35,7 @@ interface Props {
   initialGroomingSessions: PendingGroomingPayment[]
   userRole:                string
   clinicId:                string
+  clinicName:              string
   today:                   string
   firstOfMonth:            string
 }
@@ -40,7 +43,7 @@ interface Props {
 export default function CashierPageClient({
   initialEntries, initialSummary, initialDashboard, initialSession,
   initialInvoices, initialOutflows, initialGroomingSessions,
-  userRole, clinicId, today, firstOfMonth,
+  userRole, clinicId, clinicName, today, firstOfMonth,
 }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('overview')
   const [entries,   setEntries]   = useState<CentralCashierEntry[]>(initialEntries)
@@ -154,6 +157,14 @@ export default function CashierPageClient({
           userRole={userRole}
           onRefresh={refresh}
           onToast={showToast}
+        />
+      )}
+
+      {activeTab === 'reports' && (
+        <CashierTabReports
+          clinicName={clinicName}
+          initialFrom={firstOfMonth}
+          initialTo={today}
         />
       )}
     </div>

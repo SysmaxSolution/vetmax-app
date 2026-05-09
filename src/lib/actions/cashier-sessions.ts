@@ -27,6 +27,7 @@ export interface CashierOutflow {
   amount: number
   category: 'sangria' | 'despesa_operacional' | 'fornecedor' | 'estorno' | 'other'
   description: string
+  supplier_id?: string | null
   created_by: string
   created_at: string
 }
@@ -35,6 +36,7 @@ export interface CashierDashboard {
   total_inflows: number
   total_outflows: number
   net_balance: number
+  pending_amount: number
   pending_count: number
   session_id?: string
   session_status?: string
@@ -241,6 +243,7 @@ export async function registerOutflow(data: {
   category: CashierOutflow['category']
   description: string
   session_id?: string
+  supplier_id?: string | null
 }): Promise<{ id: string } | { error: string }> {
   const ctx = await getClinicContext()
   if ('error' in ctx) return ctx
@@ -261,6 +264,7 @@ export async function registerOutflow(data: {
       amount:      data.amount,
       category:    data.category,
       description: data.description.trim(),
+      supplier_id: data.supplier_id ?? null,
       created_by:  ctx.user_id,
     })
     .select('id')
@@ -367,13 +371,14 @@ export async function getCashierDashboard(
   const row = Array.isArray(data) ? data[0] : data
   if (!row) return {
     total_inflows: 0, total_outflows: 0, net_balance: 0,
-    pending_count: 0, by_payment_method: {},
+    pending_amount: 0, pending_count: 0, by_payment_method: {},
   }
 
   return {
     total_inflows:       Number(row.total_inflows ?? 0),
     total_outflows:      Number(row.total_outflows ?? 0),
     net_balance:         Number(row.net_balance ?? 0),
+    pending_amount:      Number(row.pending_amount ?? 0),
     pending_count:       Number(row.pending_count ?? 0),
     session_id:          row.session_id ?? undefined,
     session_status:      row.session_status ?? undefined,

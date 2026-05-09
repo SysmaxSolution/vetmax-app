@@ -3,6 +3,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { evolutionSendText, evolutionSendMedia } from '@/lib/evolution-api-client'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -193,7 +194,7 @@ export type WhatsAppContext = {
 
 export type WhatsAppSettingsDisplay = {
   id:                  string
-  providerName:        'z-api' | 'sysmax'
+  providerName:        'z-api' | 'sysmax' | 'evolution-api'
   apiUrl:              string | null
   instanceIdMasked:    string   // primeiros 4 chars + ********
   tokenMasked:         string   // primeiros 4 chars + ********
@@ -273,7 +274,7 @@ export async function isWhatsAppEnabled(): Promise<boolean> {
 }
 
 export type SaveWhatsAppSettingsInput = {
-  providerName:  'z-api' | 'sysmax'
+  providerName:  'z-api' | 'sysmax' | 'evolution-api'
   apiUrl:        string | null
   instanceId:    string    // valor completo ou '' para não alterar (sentinel vazio = preservar)
   token:         string
@@ -656,6 +657,67 @@ export async function sendWhatsAppMessage(params: {
 
   const phone = formatBRPhone(params.phone)
 
+  // ── Evolution API ─────────────────────────────────────────────────────────
+  if (creds.provider === 'evolution-api') {
+    if (!creds.apiUrl) return { error: 'Evolution API: URL da instância não configurada.' }
+
+    const evolutionCreds = {
+      apiUrl:     creds.apiUrl,
+      instanceId: creds.instanceId,
+      apiKey:     creds.token,
+    }
+
+    try {
+      const validAttachments = (params.attachments ?? []).filter(a => a.signedUrl)
+      const singleAttachment = validAttachments.length === 1
+
+      if (!singleAttachment) {
+        await evolutionSendText(evolutionCreds, phone, params.message)
+      }
+
+      await logNotification(params)
+
+      const failedAttachments: string[] = []
+
+      if (validAttachments.length > 0) {
+        await new Promise(r => setTimeout(r, 1500))
+
+        const results = await Promise.allSettled(
+          validAttachments.map((a, i) =>
+            new Promise<void>((resolve, reject) =>
+              setTimeout(async () => {
+                try {
+                  await evolutionSendMedia(evolutionCreds, phone, {
+                    mediaUrl: a.signedUrl,
+                    fileName: a.name,
+                    mimeType: a.mimeType,
+                    caption:  singleAttachment ? params.message : a.name.replace(/\.[^.]+$/, ''),
+                  })
+                  resolve()
+                } catch (e) { reject(e) }
+              }, i * 1500)
+            )
+          )
+        )
+        results.forEach((r, i) => {
+          if (r.status === 'rejected') {
+            const errMsg = (r.reason as any)?.message ?? String(r.reason)
+            console.error(`[WhatsApp/Evolution] Falha ao enviar anexo "${validAttachments[i].name}": ${errMsg}`)
+            failedAttachments.push(validAttachments[i].name)
+          }
+        })
+      }
+
+      return failedAttachments.length > 0
+        ? { success: true, failedAttachments }
+        : { success: true }
+    } catch (err: any) {
+      console.error('[WhatsApp/Evolution] Erro:', err)
+      return { error: 'Erro Evolution API: ' + (err?.message ?? String(err)) }
+    }
+  }
+
+  // ── Z-API / Sysmax ────────────────────────────────────────────────────────
   // Z-API: URL canônica usando instanceId e token (token vai na URL, não no header)
   const url = creds.provider === 'z-api'
     ? `https://api.z-api.io/instances/${creds.instanceId}/token/${creds.token}/send-text`

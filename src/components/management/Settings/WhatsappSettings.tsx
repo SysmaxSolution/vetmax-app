@@ -73,7 +73,7 @@ export default function WhatsappSettings({ initial, onToast }: Props) {
   // everSaved: true se já existe config no banco (atualiza após primeiro save)
   const [everSaved, setEverSaved] = useState(!!initial)
 
-  const [provider,    setProvider]    = useState<'z-api' | 'sysmax'>(initial?.providerName ?? 'z-api')
+  const [provider,    setProvider]    = useState<'z-api' | 'sysmax' | 'evolution-api'>(initial?.providerName ?? 'z-api')
   const [apiUrl,      setApiUrl]      = useState(initial?.apiUrl ?? '')
   const [instanceId,  setInstanceId]  = useState('')
   const [token,       setToken]       = useState('')
@@ -103,7 +103,7 @@ export default function WhatsappSettings({ initial, onToast }: Props) {
 
     const result = await saveWhatsAppSettings({
       providerName:     provider,
-      apiUrl:           provider === 'sysmax' ? (apiUrl || null) : null,
+      apiUrl:           (provider === 'sysmax' || provider === 'evolution-api') ? (apiUrl || null) : null,
       instanceId:       editInstance   ? instanceId   : '',
       token:            editToken      ? token        : '',
       clientToken:      editClientToken ? (clientToken || null) : null,
@@ -181,12 +181,13 @@ export default function WhatsappSettings({ initial, onToast }: Props) {
             className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white"
           >
             <option value="z-api">Z-API</option>
+            <option value="evolution-api">Evolution API (self-hosted)</option>
             <option value="sysmax">Sysmax API</option>
           </select>
         </div>
 
-        {/* URL da API — somente para Sysmax */}
-        {provider === 'sysmax' && (
+        {/* URL da API — Sysmax e Evolution API */}
+        {(provider === 'sysmax' || provider === 'evolution-api') && (
           <div>
             <label className="block text-xs font-semibold text-slate-500 mb-1.5">
               URL da API <span className="text-red-500">*</span>
@@ -195,10 +196,15 @@ export default function WhatsappSettings({ initial, onToast }: Props) {
               type="url"
               value={apiUrl}
               onChange={e => setApiUrl(e.target.value)}
-              placeholder="https://api.sysmax.com.br/whatsapp"
-              required={provider === 'sysmax'}
+              placeholder={provider === 'evolution-api' ? 'http://localhost:8080' : 'https://api.sysmax.com.br/whatsapp'}
+              required={provider === 'sysmax' || provider === 'evolution-api'}
               className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
             />
+            {provider === 'evolution-api' && (
+              <p className="text-xs text-slate-400 mt-1">
+                URL do servidor Evolution API. Em produção, use a URL pública (ex: https://wpp.suaempresa.com.br).
+              </p>
+            )}
           </div>
         )}
 
@@ -233,32 +239,32 @@ export default function WhatsappSettings({ initial, onToast }: Props) {
         {/* Token de Acesso */}
         {everSaved && !editToken ? (
           <MaskedField
-            label="Token de Acesso"
+            label={provider === 'evolution-api' ? 'API Key' : 'Token de Acesso'}
             masked={tokenMasked ?? ''}
             value={token}
             editing={false}
             onEdit={() => { setEditToken(true); setToken('') }}
             onChange={setToken}
-            placeholder="Token do Z-API ou chave da Sysmax API"
+            placeholder={provider === 'evolution-api' ? 'API Key configurada no container' : 'Token do Z-API ou chave da Sysmax API'}
             required
           />
         ) : (
           <div>
             <label className="block text-xs font-semibold text-slate-500 mb-1.5">
-              Token de Acesso <span className="text-red-500">*</span>
+              {provider === 'evolution-api' ? 'API Key' : 'Token de Acesso'} <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
               value={token}
               onChange={e => setToken(e.target.value)}
-              placeholder="Token do Z-API ou chave da Sysmax API"
+              placeholder={provider === 'evolution-api' ? 'API Key configurada no container' : 'Token do Z-API ou chave da Sysmax API'}
               required
               className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent font-mono"
             />
           </div>
         )}
 
-        {/* Client Token (Z-API security token — opcional) */}
+        {/* Client Token — exclusivo do Z-API */}
         {provider === 'z-api' && (
           everSaved && !editClientToken && ctMasked ? (
             <MaskedField

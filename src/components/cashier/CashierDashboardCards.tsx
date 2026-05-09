@@ -24,16 +24,17 @@ interface Props {
 export default function CashierDashboardCards({ dashboard }: Props) {
   const {
     total_inflows, total_outflows, net_balance,
-    pending_count, by_payment_method,
+    pending_amount, pending_count, by_payment_method,
   } = dashboard
 
   const cards = [
     {
-      label:   'Entradas',
+      label:   'Recebimentos',
       value:   fmt(total_inflows),
       icon:    <TrendingUp className="h-4 w-4 text-emerald-600" />,
       bg:      'bg-emerald-50',
       val_cls: 'text-emerald-700',
+      suffix:  'baixados',
     },
     {
       label:   'Saídas',
@@ -41,6 +42,7 @@ export default function CashierDashboardCards({ dashboard }: Props) {
       icon:    <TrendingDown className="h-4 w-4 text-red-500" />,
       bg:      'bg-red-50',
       val_cls: 'text-red-600',
+      suffix:  'baixadas',
     },
     {
       label:   'Saldo Líquido',
@@ -48,14 +50,15 @@ export default function CashierDashboardCards({ dashboard }: Props) {
       icon:    <DollarSign className="h-4 w-4 text-blue-600" />,
       bg:      'bg-blue-50',
       val_cls: net_balance >= 0 ? 'text-blue-700' : 'text-red-600',
+      suffix:  'do dia',
     },
     {
       label:   'Pendentes',
-      value:   String(pending_count),
+      value:   fmt(pending_amount),
       icon:    <AlertCircle className="h-4 w-4 text-amber-500" />,
       bg:      'bg-amber-50',
-      val_cls: pending_count > 0 ? 'text-amber-700' : 'text-slate-500',
-      suffix:  'lançamentos',
+      val_cls: pending_amount > 0 ? 'text-amber-700' : 'text-slate-500',
+      suffix:  pending_count === 1 ? '1 lançamento a baixar' : `${pending_count} lançamentos a baixar`,
     },
   ]
 

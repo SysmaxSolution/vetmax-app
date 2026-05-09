@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { Loader2, X } from 'lucide-react'
 import { registerOutflow, type CashierOutflow } from '@/lib/actions/cashier-sessions'
+import type { Supplier } from '@/lib/actions/suppliers'
+import SupplierAutocomplete from '@/components/registry/suppliers/SupplierAutocomplete'
 
 const CATEGORY_OPTIONS: { value: CashierOutflow['category']; label: string }[] = [
   { value: 'sangria',             label: 'Sangria de Caixa' },
@@ -23,7 +25,10 @@ export default function CashierOutflowModal({ sessionId, onClose, onSuccess, onT
   const [amount,      setAmount]      = useState('')
   const [category,    setCategory]    = useState<CashierOutflow['category']>('sangria')
   const [description, setDescription] = useState('')
+  const [supplier,    setSupplier]    = useState<Supplier | null>(null)
   const [loading,     setLoading]     = useState(false)
+
+  const showSupplierField = category === 'fornecedor'
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -37,6 +42,10 @@ export default function CashierOutflowModal({ sessionId, onClose, onSuccess, onT
       onToast('Descrição é obrigatória', 'error')
       return
     }
+    if (showSupplierField && !supplier) {
+      onToast('Selecione ou cadastre um fornecedor', 'error')
+      return
+    }
 
     setLoading(true)
     const res = await registerOutflow({
@@ -44,6 +53,7 @@ export default function CashierOutflowModal({ sessionId, onClose, onSuccess, onT
       category,
       description: description.trim(),
       session_id:  sessionId,
+      supplier_id: showSupplierField ? supplier?.id : null,
     })
     setLoading(false)
 
@@ -69,7 +79,11 @@ export default function CashierOutflowModal({ sessionId, onClose, onSuccess, onT
             <label className="text-xs font-semibold text-slate-600 block mb-1.5">Categoria</label>
             <select
               value={category}
-              onChange={e => setCategory(e.target.value as CashierOutflow['category'])}
+              onChange={e => {
+                const next = e.target.value as CashierOutflow['category']
+                setCategory(next)
+                if (next !== 'fornecedor') setSupplier(null)
+              }}
               className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             >
               {CATEGORY_OPTIONS.map(o => (
@@ -77,6 +91,23 @@ export default function CashierOutflowModal({ sessionId, onClose, onSuccess, onT
               ))}
             </select>
           </div>
+
+          {showSupplierField && (
+            <div>
+              <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                Fornecedor <span className="text-red-500">*</span>
+              </label>
+              <SupplierAutocomplete
+                value={supplier}
+                onChange={setSupplier}
+                placeholder="Buscar fornecedor cadastrado..."
+                required
+              />
+              <p className="mt-1 text-xs text-slate-400">
+                Se não encontrar, digite o nome e clique em &quot;Cadastrar como novo fornecedor&quot;.
+              </p>
+            </div>
+          )}
 
           <div>
             <label className="text-xs font-semibold text-slate-600 block mb-1.5">Valor (R$)</label>

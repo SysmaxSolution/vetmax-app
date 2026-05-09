@@ -19,12 +19,14 @@ export default async function CashierPage() {
   const admin = createAdminClient()
   const { data: profile } = await admin
     .from('profiles')
-    .select('full_name, role, clinic_id')
+    .select('full_name, role, clinic_id, clinics(name)')
     .eq('id', user.id)
     .single()
 
   if (!profile?.clinic_id) redirect('/onboarding')
   if (!ALLOWED_ROLES.includes(profile.role)) redirect('/dashboard')
+
+  const clinicName = (profile.clinics as unknown as { name: string } | null)?.name ?? 'Minha Clínica'
 
   const today        = new Date().toISOString().split('T')[0]
   const firstOfMonth = today.slice(0, 7) + '-01'
@@ -58,6 +60,7 @@ export default async function CashierPage() {
       initialGroomingSessions={groomingSessions}
       userRole={profile.role}
       clinicId={profile.clinic_id}
+      clinicName={clinicName}
       today={today}
       firstOfMonth={firstOfMonth}
     />
