@@ -27,15 +27,12 @@ export async function evolutionSendText(
   phone: string,
   message: string,
 ): Promise<void> {
-  // Resolve @lid JIDs before sending (Evolution API may not route @lid for outbound)
-  const resolvedPhone = phone.includes('@lid')
-    ? await resolveJidFromLid(creds, phone)
-    : formatPhone(phone)
+  const number = formatPhone(phone)
+  const url    = `${creds.apiUrl}/message/sendText/${creds.instanceId}`
+  // Evolution API v1.8.x expects { number, textMessage: { text } }
+  const body   = JSON.stringify({ number, textMessage: { text: message } })
 
-  const url  = `${creds.apiUrl}/message/sendText/${creds.instanceId}`
-  const body = JSON.stringify({ number: resolvedPhone, text: message })
-
-  console.info(`[Evolution] sendText → number="${resolvedPhone}" (raw="${phone}") | ${url}`)
+  console.info(`[Evolution] sendText → number="${number}" | ${url}`)
 
   const res          = await fetch(url, { method: 'POST', headers: buildHeaders(creds.apiKey), body })
   const responseText = await res.text()
@@ -46,36 +43,6 @@ export async function evolutionSendText(
   }
 
   console.info(`[Evolution] sendText OK ${res.status}: ${responseText.substring(0, 200)}`)
-}
-
-// Tenta resolver um JID @lid para o JID @s.whatsapp.net correspondente.
-// A Evolution API mantém internamente o mapeamento lid→phone após receber mensagens.
-async function resolveJidFromLid(creds: EvolutionCreds, lid: string): Promise<string> {
-  try {
-    const url = `${creds.apiUrl}/contact/findContacts/${creds.instanceId}`
-    const res = await fetch(url, {
-      method:  'POST',
-      headers: buildHeaders(creds.apiKey),
-      body:    JSON.stringify({ where: { id: lid } }),
-    })
-    if (res.ok) {
-      const data = await res.json()
-      const contacts: Array<{ id?: string; remoteJid?: string }> = Array.isArray(data)
-        ? data
-        : (data?.contacts ?? data?.data ?? [])
-      const contact = contacts.find(c => c.id === lid || c.remoteJid === lid)
-      const resolved = contact?.remoteJid ?? contact?.id
-      if (resolved && !resolved.includes('@lid')) {
-        console.info(`[Evolution] @lid resolved: ${lid} → ${resolved}`)
-        return resolved
-      }
-    }
-  } catch (err) {
-    console.warn(`[Evolution] resolveJidFromLid falhou para ${lid}:`, err)
-  }
-  // Fallback: tenta usar o lid diretamente (algumas versões da Evolution API aceitam)
-  console.warn(`[Evolution] Usando @lid diretamente (não resolvido): ${lid}`)
-  return lid
 }
 
 // ─── Instance Management ──────────────────────────────────────────────────────
