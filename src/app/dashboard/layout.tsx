@@ -110,6 +110,15 @@ export default async function DashboardLayout({
 
   const activeModules = (clinicConfig?.active_modules as string[] | null) ?? []
 
+  const whatsappHandoffCount = activeModules.includes('whatsapp_intelligent')
+    ? ((await admin
+        .from('whatsapp_conversations')
+        .select('id', { count: 'exact', head: true })
+        .eq('clinic_id', profile.clinic_id)
+        .eq('status', 'human')
+      ).count ?? 0)
+    : 0
+
   return (
     <section className="min-h-screen bg-slate-50">
       <DashboardHeader
@@ -120,6 +129,7 @@ export default async function DashboardLayout({
         logoUrl={clinicConfig?.logo_url ?? null}
         activeModules={activeModules.length > 0 ? activeModules : null}
         lowStockCount={lowStockCount}
+        whatsappHandoffCount={whatsappHandoffCount}
         userClinics={isSysmax ? userClinics : (userClinics.length > 1 ? userClinics : undefined)}
         isSysmax={isSysmax}
         clinicStatus={clinicStatus}

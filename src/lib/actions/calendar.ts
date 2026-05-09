@@ -18,6 +18,7 @@ export interface UnifiedCalendarEvent {
   sourceId: string
   reason?: string         // appointment reason
   services?: string[]     // grooming services
+  source?: string         // 'manual' | 'whatsapp'
 }
 
 // ─── Auth helper ──────────────────────────────────────────────────────────────
@@ -62,6 +63,7 @@ export async function getUnifiedCalendarEvents(
         reason,
         status,
         notes,
+        source,
         patients:pet_id ( id, name, species ),
         tutors:tutor_id ( id, name )
       `)
@@ -111,6 +113,7 @@ export async function getUnifiedCalendarEvents(
       petSpecies: pet?.species ?? '',
       sourceId:   a.id,
       reason:     a.reason,
+      source:     (a as unknown as { source?: string }).source ?? 'manual',
     })
   }
 

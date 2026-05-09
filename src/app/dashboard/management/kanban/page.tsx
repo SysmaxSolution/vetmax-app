@@ -5,11 +5,13 @@ import Link from 'next/link'
 import {
   DollarSign, Stethoscope, CalendarDays, AlertCircle,
   ClipboardList, FlaskConical, Receipt, ArrowRight, TrendingUp, BedDouble,
-  Scissors, Package,
+  Scissors, Package, MessageCircle,
 } from 'lucide-react'
 import WeeklyChart from '@/components/director/WeeklyChart'
+import WhatsappDirectorPanel from '@/components/director/WhatsappDirectorPanel'
 import { getDashboardMetrics, getActionCenter } from '@/lib/actions/dashboard'
 import { getHospitalizationOccupancy } from '@/lib/actions/hospitalizations'
+import { getWhatsappDirectorStats } from '@/lib/actions/whatsapp-director'
 
 export const metadata = { title: 'Painel do Diretor | VetMax' }
 
@@ -118,12 +120,17 @@ export default async function DirectorPanelPage() {
       .single(),
   ])
 
+  const activeModulesRaw: string[] = (clinicResult.data?.active_modules as string[] | null) ?? []
+  const wppStats = activeModulesRaw.includes('whatsapp_intelligent')
+    ? await getWhatsappDirectorStats(profile.clinic_id)
+    : null
+
   const metrics        = 'error' in metricsResult   ? null : metricsResult
   const action         = 'error' in actionResult     ? null : actionResult
   const occupancy      = 'error' in occupancyResult  ? null : occupancyResult
-  const activeModules: string[] = (clinicResult.data?.active_modules as string[] | null) ?? [
-    'reception', 'triage', 'consultation', 'exams', 'hospitalization', 'pharmacy', 'grooming',
-  ]
+  const activeModules: string[] = activeModulesRaw.length > 0
+    ? activeModulesRaw
+    : ['reception', 'triage', 'consultation', 'exams', 'hospitalization', 'pharmacy', 'grooming']
 
   const has = (mod: string) => activeModules.includes(mod)
 
@@ -297,10 +304,26 @@ export default async function DirectorPanelPage() {
                 color="bg-amber-100 text-amber-600"
                 emptyLabel="Caixa zerado"
               />
+              {has('whatsapp_intelligent') && (
+                <ActionItem
+                  label="WhatsApp — Handoffs"
+                  count={wppStats?.awaiting_human ?? 0}
+                  href="/dashboard/whatsapp"
+                  icon={MessageCircle}
+                  color="bg-emerald-100 text-emerald-600"
+                  emptyLabel="Nenhum handoff pendente"
+                />
+              )}
             </div>
           )}
         </div>
       </div>
+
+      {/* ── WhatsApp Inteligente ───────────────────────────────────────────── */}
+      {has('whatsapp_intelligent') && wppStats && (
+        <WhatsappDirectorPanel stats={wppStats} />
+      )}
+
     </div>
   )
 }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, ChevronRight, CalendarDays, Plus, Scissors, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CalendarDays, Plus, Scissors, X, MessageCircle } from 'lucide-react'
 import {
   confirmArrival,
   cancelAppointment,
@@ -181,6 +181,11 @@ function EventCard({
             <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${statusCfg.color}`}>
               {statusCfg.label}
             </span>
+            {event.source === 'whatsapp' && (
+              <span className="rounded-full px-2 py-0.5 text-[10px] font-bold bg-green-100 text-green-700 flex items-center gap-0.5">
+                <MessageCircle className="h-2.5 w-2.5" />WhatsApp
+              </span>
+            )}
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
             {event.tutorName}

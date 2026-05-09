@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LogOut, Home, Stethoscope, TestTubes, Users, BarChart3, PawPrint, BedDouble, Package, Scissors, Banknote } from 'lucide-react'
+import { LogOut, Home, Stethoscope, TestTubes, Users, BarChart3, PawPrint, BedDouble, Package, Scissors, Banknote, FolderKanban, MessageCircle } from 'lucide-react'
 import type { UserRole } from '@/types'
 import { useState } from 'react'
 import { ClinicSwitcher } from '@/components/layout/ClinicSwitcher'
@@ -32,7 +32,9 @@ const ALL_TABS: Tab[] = [
   { label: 'Internação',  href: '/dashboard/hospitalization',  icon: BedDouble,   roles: ['vet','admin','assistant'],                moduleKey: 'hospitalization' },
   { label: 'Banho e Tosa',href: '/dashboard/grooming',         icon: Scissors,    roles: ['receptionist','admin','assistant'],       moduleKey: 'grooming' },
   { label: 'Estoque',     href: '/dashboard/pharmacy',         icon: Package,     roles: ['admin'],                                  moduleKey: 'pharmacy' },
-  { label: 'Gestão',      href: '/dashboard/management',       icon: BarChart3,   roles: ['admin'] },
+  { label: 'Cadastros',   href: '/dashboard/registry',         icon: FolderKanban,roles: ['admin','accountant' as UserRole,'receptionist'] },
+  { label: 'Gestão',      href: '/dashboard/management',       icon: BarChart3,     roles: ['admin'] },
+  { label: 'WhatsApp',   href: '/dashboard/whatsapp',         icon: MessageCircle, roles: ['receptionist','admin','vet','assistant'], moduleKey: 'whatsapp_intelligent' },
 ]
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -44,10 +46,11 @@ interface DashboardHeaderProps {
   userRole:       UserRole
   logoUrl?:       string | null
   activeModules?: string[] | null
-  lowStockCount?: number
-  userClinics?:   UserClinicInfo[]
-  isSysmax?:      boolean
-  clinicStatus?:  string
+  lowStockCount?:        number
+  whatsappHandoffCount?: number
+  userClinics?:          UserClinicInfo[]
+  isSysmax?:             boolean
+  clinicStatus?:         string
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -60,6 +63,7 @@ export default function DashboardHeader({
   logoUrl,
   activeModules,
   lowStockCount = 0,
+  whatsappHandoffCount = 0,
   userClinics,
   isSysmax = false,
   clinicStatus,
@@ -155,7 +159,10 @@ export default function DashboardHeader({
       {/* Navegação */}
       <div className="mx-auto max-w-4xl px-3 sm:px-6 flex flex-wrap items-center gap-1">
         {tabs.map((tab) => {
-          const showBadge = tab.href === '/dashboard/pharmacy' && lowStockCount > 0
+          const badgeCount =
+            tab.href === '/dashboard/pharmacy' ? lowStockCount :
+            tab.href === '/dashboard/whatsapp'  ? whatsappHandoffCount : 0
+          const showBadge = badgeCount > 0
           return (
             <Link
               key={tab.href}
@@ -172,7 +179,7 @@ export default function DashboardHeader({
               <span className="hidden sm:inline">{tab.label}</span>
               {showBadge && (
                 <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
-                  {lowStockCount > 9 ? '9+' : lowStockCount}
+                  {badgeCount > 9 ? '9+' : badgeCount}
                 </span>
               )}
             </Link>

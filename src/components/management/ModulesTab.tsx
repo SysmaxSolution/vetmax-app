@@ -3,10 +3,11 @@
 import { useState, useRef } from 'react'
 import {
   ToggleLeft, ToggleRight, Loader2, Save, Shield, AlertTriangle, Eye, EyeOff,
-  Hotel, Syringe, FlaskConical, Scissors, ShoppingBag, Stethoscope, ClipboardList, MessageCircle, Sparkles,
+  Hotel, Syringe, FlaskConical, Scissors, ShoppingBag, Stethoscope, ClipboardList, MessageCircle, Sparkles, Bot,
 } from 'lucide-react'
 import { updateClinicConfig, type ClinicConfig } from '@/lib/actions/clinic-settings'
 import WhatsappSettings from './Settings/WhatsappSettings'
+import WhatsappIntelligentSetup from './Settings/WhatsappIntelligentSetup'
 import type { WhatsAppSettingsDisplay } from '@/lib/actions/whatsapp'
 
 // ─── Module definitions ───────────────────────────────────────────────────────
@@ -28,7 +29,8 @@ const MODULES: ModuleDef[] = [
   { key: 'pharmacy',        label: 'Estoque',               desc: 'Estoque de medicamentos e insumos',        icon: <ShoppingBag    className="h-5 w-5" />, color: 'text-orange-600 bg-orange-50' },
   { key: 'grooming',        label: 'Banho e Tosa',          desc: 'Fila de grooming com registros por voz',   icon: <Scissors       className="h-5 w-5" />, color: 'text-pink-600 bg-pink-50'    },
   { key: 'whatsapp',        label: 'WhatsApp',              desc: 'Notificações e mensagens via WhatsApp',    icon: <MessageCircle  className="h-5 w-5" />, color: 'text-green-600 bg-green-50'  },
-  { key: 'mentor',          label: 'Modo Mentor',           desc: 'Botão "?" flutuante com tour guiado em todas as telas', icon: <Sparkles className="h-5 w-5" />, color: 'text-blue-600 bg-blue-50'    },
+  { key: 'mentor',              label: 'Modo Mentor',               desc: 'Botão "?" flutuante com tour guiado em todas as telas',                    icon: <Sparkles      className="h-5 w-5" />, color: 'text-blue-600 bg-blue-50'      },
+  { key: 'whatsapp_intelligent', label: 'WhatsApp Inteligente (Bot)', desc: 'Bot IA responde, agenda consultas e faz campanhas de reativação via WhatsApp', icon: <Bot           className="h-5 w-5" />, color: 'text-emerald-600 bg-emerald-50' },
 ]
 
 // Master key is stored in env and compared client-side only for UX purposes.
@@ -90,7 +92,8 @@ export default function ModulesTab({ initialConfig, initialWhatsAppSettings, onT
   }
 
   const pendingMod = MODULES.find(m => m.key === pendingToggle?.key)
-  const whatsappActive = activeModules.includes('whatsapp')
+  const whatsappActive            = activeModules.includes('whatsapp')
+  const whatsappIntelligentActive = activeModules.includes('whatsapp_intelligent')
 
   return (
     <div className="space-y-4">
@@ -235,12 +238,17 @@ export default function ModulesTab({ initialConfig, initialWhatsAppSettings, onT
         </div>
       </div>
 
-      {/* Configurações do WhatsApp — visível somente quando módulo está ativo */}
+      {/* Configurações do WhatsApp (notificações) — visível quando módulo 'whatsapp' ativo */}
       {whatsappActive && (
         <WhatsappSettings
           initial={initialWhatsAppSettings ?? null}
           onToast={onToast}
         />
+      )}
+
+      {/* WhatsApp Inteligente — setup de QR Code e bot IA */}
+      {whatsappIntelligentActive && (
+        <WhatsappIntelligentSetup onToast={onToast} />
       )}
     </div>
   )

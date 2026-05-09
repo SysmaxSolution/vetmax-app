@@ -1,0 +1,331 @@
+import Anthropic from '@anthropic-ai/sdk'
+import { createAdminClient } from '@/lib/supabase/admin'
+
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+// ─── Tool definitions ─────────────────────────────────────────────────────────
+
+const TOOLS: Anthropic.Tool[] = [
+  {
+    name: 'get_clinic_info',
+    description: 'Retorna informações da clínica: nome, endereço, telefone e lista de serviços com preços.',
+    input_schema: { type: 'object' as const, properties: {}, required: [] },
+  },
+  {
+    name: 'get_price',
+    description: 'Busca o preço de um serviço ou produto pelo nome.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        service: { type: 'string', description: 'Nome do serviço ou produto a pesquisar' },
+      },
+      required: ['service'],
+    },
+  },
+  {
+    name: 'get_availability',
+    description: 'Verifica horários disponíveis para agendamento em uma data específica.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        date: { type: 'string', description: 'Data no formato YYYY-MM-DD' },
+      },
+      required: ['date'],
+    },
+  },
+  {
+    name: 'book_appointment',
+    description: 'Agenda uma consulta veterinária para o tutor. Use após confirmar data, horário, nome do pet e motivo com o tutor.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        date:        { type: 'string', description: 'Data da consulta no formato YYYY-MM-DD' },
+        time:        { type: 'string', description: 'Horário no formato HH:MM (ex: 09:00)' },
+        pet_name:    { type: 'string', description: 'Nome do pet/animal' },
+        pet_species: { type: 'string', description: 'Espécie: dog, cat, bird, exotic, rabbit, rodent, reptile ou fish' },
+        reason:      { type: 'string', description: 'Motivo: consultation, follow_up, vaccination, exam, surgery' },
+        notes:       { type: 'string', description: 'Observações adicionais (opcional)' },
+      },
+      required: ['date', 'time', 'pet_name'],
+    },
+  },
+  {
+    name: 'request_human_handoff',
+    description: 'Transfere a conversa para um atendente humano. Use quando: urgência médica, frustração do tutor, pergunta fora do escopo ou pedido explícito.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        reason: { type: 'string', description: 'Motivo da transferência' },
+      },
+      required: ['reason'],
+    },
+  },
+]
+
+// ─── Tool executors ───────────────────────────────────────────────────────────
+
+async function execGetClinicInfo(clinicId: string): Promise<string> {
+  const admin = createAdminClient()
+  const [clinicRes, catalogRes] = await Promise.all([
+    admin.from('clinics').select('name, address, phone').eq('id', clinicId).single(),
+    admin.from('clinic_catalog').select('name, item_type, price').eq('clinic_id', clinicId).eq('is_active', true).order('item_type').limit(25),
+  ])
+  const c = clinicRes.data
+  if (!c) return 'Informações da clínica não disponíveis.'
+  const services = (catalogRes.data ?? [])
+    .map(s => `  • ${s.name}: R$ ${Number(s.price).toFixed(2).replace('.', ',')}`)
+    .join('\n')
+  return [
+    `Clínica: ${c.name}`,
+    `Endereço: ${c.address ?? 'não informado'}`,
+    `Telefone: ${c.phone ?? 'não informado'}`,
+    `Serviços:\n${services || '  (nenhum cadastrado)'}`,
+  ].join('\n')
+}
+
+async function execGetPrice(clinicId: string, service: string): Promise<string> {
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from('clinic_catalog')
+    .select('name, price')
+    .eq('clinic_id', clinicId)
+    .eq('is_active', true)
+    .ilike('name', `%${service}%`)
+    .limit(5)
+  if (!data?.length) return `Serviço "${service}" não encontrado no catálogo.`
+  return data.map(s => `${s.name}: R$ ${Number(s.price).toFixed(2).replace('.', ',')}`).join('\n')
+}
+
+async function execGetAvailability(clinicId: string, date: string): Promise<string> {
+  const admin = createAdminClient()
+  const dayStart = `${date}T00:00:00`
+  const dayEnd   = `${date}T23:59:59`
+
+  const { data: appts } = await admin
+    .from('appointments')
+    .select('appointment_datetime')
+    .eq('clinic_id', clinicId)
+    .gte('appointment_datetime', dayStart)
+    .lte('appointment_datetime', dayEnd)
+    .neq('status', 'cancelled')
+
+  const bookedHours = new Set(
+    (appts ?? []).map(a => new Date(a.appointment_datetime).getHours())
+  )
+
+  // Horário padrão 08–18h (hora cheia)
+  const allSlots  = Array.from({ length: 10 }, (_, i) => i + 8)
+  const available = allSlots.filter(h => !bookedHours.has(h))
+
+  if (!available.length) return `Sem horários disponíveis em ${date}.`
+  const slots = available.map(h => `  • ${String(h).padStart(2, '0')}:00`).join('\n')
+  return `Horários disponíveis em ${date}:\n${slots}`
+}
+
+async function execBookAppointment(params: {
+  clinicId:   string
+  tutorPhone: string
+  tutorName:  string | null
+  petName:    string
+  petSpecies: string
+  date:       string
+  time:       string
+  reason:     string
+  notes:      string
+}): Promise<string> {
+  const admin = createAdminClient()
+  const { clinicId, tutorPhone, tutorName, petName, petSpecies, date, time, reason, notes } = params
+
+  // 1. Find or create tutor by phone
+  let tutorId: string
+  const { data: existingTutor } = await admin
+    .from('tutors')
+    .select('id')
+    .eq('clinic_id', clinicId)
+    .eq('phone', tutorPhone)
+    .maybeSingle()
+
+  if (existingTutor) {
+    tutorId = existingTutor.id
+  } else {
+    const { data: newTutor, error: tutorErr } = await admin
+      .from('tutors')
+      .insert({
+        clinic_id: clinicId,
+        name:      tutorName ?? 'Tutor WhatsApp',
+        cpf:       `WPP-${tutorPhone}`,
+        phone:     tutorPhone,
+      })
+      .select('id')
+      .single()
+    if (tutorErr || !newTutor) return `Erro ao registrar tutor: ${tutorErr?.message ?? 'desconhecido'}`
+    tutorId = newTutor.id
+  }
+
+  // 2. Find or create patient by name + tutor
+  const validSpecies = ['dog','cat','bird','exotic','rabbit','rodent','reptile','fish']
+  const species = validSpecies.includes(petSpecies) ? petSpecies : 'dog'
+
+  let petId: string
+  const { data: existingPet } = await admin
+    .from('patients')
+    .select('id')
+    .eq('clinic_id', clinicId)
+    .eq('tutor_id', tutorId)
+    .ilike('name', petName)
+    .maybeSingle()
+
+  if (existingPet) {
+    petId = existingPet.id
+  } else {
+    const { data: newPet, error: petErr } = await admin
+      .from('patients')
+      .insert({ clinic_id: clinicId, tutor_id: tutorId, name: petName, species })
+      .select('id')
+      .single()
+    if (petErr || !newPet) return `Erro ao registrar pet: ${petErr?.message ?? 'desconhecido'}`
+    petId = newPet.id
+  }
+
+  // 3. Create appointment
+  const datetime = `${date}T${time}:00`
+  const { error: apptErr } = await admin
+    .from('appointments')
+    .insert({
+      clinic_id:            clinicId,
+      pet_id:               petId,
+      tutor_id:             tutorId,
+      appointment_datetime: datetime,
+      reason:               reason || 'consultation',
+      notes:                notes || null,
+      status:               'scheduled',
+      source:               'whatsapp',
+    })
+
+  if (apptErr) return `Erro ao criar agendamento: ${apptErr.message}`
+
+  const dateLabel = new Date(`${date}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  return `Agendamento confirmado! ${petName} está marcado para ${dateLabel} às ${time}. Até lá!`
+}
+
+// ─── Main agent ───────────────────────────────────────────────────────────────
+
+export type AgentResult = {
+  reply:   string
+  handoff: boolean
+  handoffReason?: string
+}
+
+export async function runWhatsappAgent(params: {
+  clinicId:          string
+  conversationId:    string
+  userMessage:       string
+  tutorName:         string | null
+  tutorPhone:        string
+  personalityPrompt?: string | null
+}): Promise<AgentResult> {
+  const admin = createAdminClient()
+
+  // Histórico recente da conversa (últimas 10 mensagens)
+  const { data: history } = await admin
+    .from('whatsapp_messages')
+    .select('direction, content')
+    .eq('conversation_id', params.conversationId)
+    .order('created_at', { ascending: false })
+    .limit(10)
+
+  const messages: Anthropic.MessageParam[] = (history ?? [])
+    .reverse()
+    .map(m => ({
+      role:    m.direction === 'inbound' ? 'user' : 'assistant',
+      content: m.content,
+    }))
+
+  // Adiciona a mensagem atual
+  messages.push({ role: 'user', content: params.userMessage })
+
+  // Prompt de sistema
+  const { data: clinic } = await admin.from('clinics').select('name').eq('id', params.clinicId).single()
+  const clinicName = clinic?.name ?? 'a clínica'
+  const tutorGreeting = params.tutorName ? `O nome do tutor nesta conversa é ${params.tutorName}.` : ''
+
+  const defaultPersonality = `Você é o assistente virtual de ${clinicName} no WhatsApp.
+Seja cordial, conciso e profissional. Use linguagem informal-cordial (sem asteriscos, sem emojis em excesso).
+Responda apenas sobre: serviços veterinários, preços, horários e agendamentos.
+Para emergências ou pedidos fora do escopo, transfira para um atendente humano.`
+
+  const systemPrompt = [
+    params.personalityPrompt ?? defaultPersonality,
+    tutorGreeting,
+    'Hoje é ' + new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }) + '.',
+    'Use as ferramentas disponíveis quando precisar de dados reais antes de responder.',
+  ].filter(Boolean).join('\n')
+
+  // Agentic loop — máximo 5 iterações
+  let currentMessages = [...messages]
+
+  for (let iter = 0; iter < 5; iter++) {
+    const response = await anthropic.messages.create({
+      model:      'claude-haiku-4-5-20251001',
+      max_tokens: 512,
+      system:     systemPrompt,
+      tools:      TOOLS,
+      messages:   currentMessages,
+    })
+
+    // Verifica handoff imediato (stop_reason = tool_use com request_human_handoff)
+    const toolUses = response.content.filter(b => b.type === 'tool_use')
+
+    if (toolUses.some(b => b.type === 'tool_use' && b.name === 'request_human_handoff')) {
+      const handoffBlock = toolUses.find(b => b.type === 'tool_use' && b.name === 'request_human_handoff')!
+      const reason = (handoffBlock as Anthropic.ToolUseBlock).input as { reason: string }
+      return { reply: 'Vou te transferir para um de nossos atendentes. Em breve alguém entrará em contato!', handoff: true, handoffReason: reason.reason }
+    }
+
+    // stop_reason = end_turn → resposta final
+    if (response.stop_reason === 'end_turn') {
+      const textBlock = response.content.find(b => b.type === 'text')
+      const reply = textBlock?.type === 'text' ? textBlock.text.trim() : ''
+      return { reply: reply || 'Desculpe, não consegui processar sua mensagem.', handoff: false }
+    }
+
+    // stop_reason = tool_use → executa ferramentas e continua
+    if (response.stop_reason === 'tool_use') {
+      const toolResults: Anthropic.ToolResultBlockParam[] = []
+
+      for (const block of toolUses) {
+        if (block.type !== 'tool_use') continue
+        const input = block.input as Record<string, string>
+        let result = ''
+
+        if (block.name === 'get_clinic_info')  result = await execGetClinicInfo(params.clinicId)
+        if (block.name === 'get_price')         result = await execGetPrice(params.clinicId, input.service)
+        if (block.name === 'get_availability')  result = await execGetAvailability(params.clinicId, input.date)
+        if (block.name === 'book_appointment')  result = await execBookAppointment({
+          clinicId:   params.clinicId,
+          tutorPhone: params.tutorPhone,
+          tutorName:  params.tutorName,
+          petName:    input.pet_name,
+          petSpecies: input.pet_species ?? 'dog',
+          date:       input.date,
+          time:       input.time,
+          reason:     input.reason ?? 'consultation',
+          notes:      input.notes ?? '',
+        })
+
+        toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: result })
+      }
+
+      currentMessages = [
+        ...currentMessages,
+        { role: 'assistant', content: response.content },
+        { role: 'user',      content: toolResults },
+      ]
+      continue
+    }
+
+    break
+  }
+
+  return { reply: 'Desculpe, não consegui processar sua solicitação no momento.', handoff: false }
+}
