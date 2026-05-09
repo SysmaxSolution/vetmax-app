@@ -70,6 +70,10 @@ export async function POST(
     const pushName = msgData.pushName as string | null ?? null
     const msgObj   = msgData.message as Record<string, unknown> | undefined
 
+    if (jid.includes('@lid')) {
+      console.warn(`[WPP Webhook] JID @lid detectado: ${jid} — será resolvido na Evolution API antes do envio`)
+    }
+
     // Extrai texto da mensagem (suporta conversation, extendedTextMessage e imageMessage com caption)
     const messageText =
       (msgObj?.conversation as string | undefined) ??
