@@ -29,8 +29,8 @@ export async function evolutionSendText(
 ): Promise<void> {
   const number = formatPhone(phone)
   const url    = `${creds.apiUrl}/message/sendText/${creds.instanceId}`
-  // v2.x passa JIDs @lid diretamente para o Baileys sem verificação onWhatsApp
-  const body   = JSON.stringify({ number, textMessage: { text: message } })
+  // v2.x: campo "text" direto (v1.x usava textMessage: { text })
+  const body   = JSON.stringify({ number, text: message })
 
   console.info(`[Evolution] sendText → number="${number}" | ${url}`)
 
