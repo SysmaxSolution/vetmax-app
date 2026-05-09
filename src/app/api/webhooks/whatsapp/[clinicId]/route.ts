@@ -4,9 +4,13 @@ import { runWhatsappAgent } from '@/lib/ai/whatsapp-agent'
 import { evolutionSendText } from '@/lib/evolution-api-client'
 
 // POST /api/webhooks/whatsapp/[clinicId]
-// Recebe eventos da Evolution API (v1.8.4).
-// Sprint 1: CONNECTION_UPDATE, QRCODE_UPDATED (log)
-// Sprint 2: MESSAGES_UPSERT → bot IA responde
+// Recebe eventos da Evolution API v1.8.4.
+// Normaliza nomes de eventos (uppercase/lowercase) para compatibilidade.
+
+// v1.8.x pode enviar "messages.upsert" ou "MESSAGES_UPSERT"
+function normalizeEvent(event: string | undefined): string {
+  return (event ?? '').toUpperCase().replace(/\./g, '_')
+}
 
 export async function POST(
   request: NextRequest,
@@ -18,7 +22,10 @@ export async function POST(
   try { body = await request.json() }
   catch { return NextResponse.json({ error: 'Payload inválido.' }, { status: 400 }) }
 
-  const event = body?.event as string | undefined
+  const rawEvent = body?.event as string | undefined
+  const event    = normalizeEvent(rawEvent)
+
+  console.info(`[WPP Webhook] clinicId=${clinicId} event="${rawEvent}" normalized="${event}"`)
 
   // ── Valida clínica ─────────────────────────────────────────────────────────
   const admin = createAdminClient()
@@ -49,9 +56,11 @@ export async function POST(
     const msgData: Record<string, unknown> = Array.isArray(rawData) ? rawData[0] : (rawData as Record<string, unknown>)
     if (!msgData) return NextResponse.json({ received: true })
 
-    const key     = msgData.key as Record<string, unknown> | undefined
-    const fromMe  = key?.fromMe as boolean | undefined
-    const jid     = key?.remoteJid as string | undefined
+    const key    = msgData.key as Record<string, unknown> | undefined
+    const fromMe = key?.fromMe as boolean | undefined
+    const jid    = key?.remoteJid as string | undefined
+
+    console.info(`[WPP Webhook] MESSAGES_UPSERT jid=${jid} fromMe=${fromMe}`)
 
     // Ignora mensagens do próprio bot e de grupos
     if (fromMe) return NextResponse.json({ received: true })
@@ -61,11 +70,14 @@ export async function POST(
     const pushName = msgData.pushName as string | null ?? null
     const msgObj   = msgData.message as Record<string, unknown> | undefined
 
-    // Extrai texto da mensagem (suporta conversation e extendedTextMessage)
+    // Extrai texto da mensagem (suporta conversation, extendedTextMessage e imageMessage com caption)
     const messageText =
       (msgObj?.conversation as string | undefined) ??
       ((msgObj?.extendedTextMessage as Record<string, unknown> | undefined)?.text as string | undefined) ??
+      ((msgObj?.imageMessage as Record<string, unknown> | undefined)?.caption as string | undefined) ??
       null
+
+    console.info(`[WPP Webhook] phone=${phone} pushName=${pushName} messageText="${messageText?.substring(0, 50)}"`)
 
     if (!messageText?.trim()) return NextResponse.json({ received: true })
 
@@ -78,6 +90,8 @@ export async function POST(
     return NextResponse.json({ received: true })
   }
 
+  // Evento não reconhecido — loga para diagnóstico
+  console.info(`[WPP Webhook] clinicId=${clinicId} evento ignorado: "${rawEvent}"`)
   return NextResponse.json({ received: true })
 }
 
@@ -92,31 +106,39 @@ async function processInboundMessage(params: {
 }) {
   const { clinicId, phone, tutorName, messageText, admin } = params
 
-  // 1. Busca config do bot — se inativo, não responde
+  // 1. Busca config do bot
   const { data: botConfig } = await admin
     .from('whatsapp_bot_config')
     .select('personality_prompt, can_book, can_inform_prices, working_hours_start, working_hours_end, is_active')
     .eq('clinic_id', clinicId)
     .maybeSingle()
 
-  if (botConfig && !botConfig.is_active) {
-    console.info(`[WPP Bot] clinicId=${clinicId} — bot inativo, ignorando mensagem`)
+  console.info(`[WPP Bot] clinicId=${clinicId} is_active=${botConfig?.is_active ?? 'sem config'}`)
+
+  // Sem config salva → bot ainda não foi configurado, não responde
+  if (!botConfig) {
+    console.info(`[WPP Bot] clinicId=${clinicId} — configuração não encontrada, ignorando`)
     return
   }
 
-  // 2. Verifica horário de funcionamento (se configurado)
-  if (botConfig?.working_hours_start && botConfig?.working_hours_end) {
+  if (!botConfig.is_active) {
+    console.info(`[WPP Bot] clinicId=${clinicId} — bot inativo (is_active=false), ignorando`)
+    return
+  }
+
+  // 2. Verifica horário de funcionamento (UTC — Vercel roda em UTC)
+  if (botConfig.working_hours_start && botConfig.working_hours_end) {
     const now        = new Date()
     const [hStart, mStart] = botConfig.working_hours_start.split(':').map(Number)
     const [hEnd,   mEnd  ] = botConfig.working_hours_end.split(':').map(Number)
-    const nowMins    = now.getHours() * 60 + now.getMinutes()
+    const nowMins    = now.getUTCHours() * 60 + now.getUTCMinutes()
     const startMins  = hStart * 60 + mStart
     const endMins    = hEnd   * 60 + mEnd
 
+    console.info(`[WPP Bot] horário UTC=${now.getUTCHours()}:${String(now.getUTCMinutes()).padStart(2,'0')} janela=${botConfig.working_hours_start}-${botConfig.working_hours_end}`)
+
     if (nowMins < startMins || nowMins > endMins) {
-      const startLabel = botConfig.working_hours_start
-      const endLabel   = botConfig.working_hours_end
-      await sendBotReply(clinicId, phone, `Nosso horário de atendimento é das ${startLabel} às ${endLabel}. Assim que abrirmos, responderei sua mensagem!`, admin)
+      await sendBotReply(clinicId, phone, `Nosso horário de atendimento é das ${botConfig.working_hours_start} às ${botConfig.working_hours_end}. Assim que abrirmos, responderei sua mensagem!`, admin)
       return
     }
   }
@@ -158,21 +180,24 @@ async function processInboundMessage(params: {
     .update({ last_message_at: new Date().toISOString() })
     .eq('id', conversation.id)
 
-  // 5. Se conversa em modo 'human', não chama o bot (Sprint 4 notifica o humano)
+  // 5. Se conversa em modo 'human', não chama o bot
   if (conversation.status === 'human') {
     console.info(`[WPP Bot] clinicId=${clinicId} — conversa em modo human, ignorando bot`)
     return
   }
 
   // 6. Chama o agente IA
+  console.info(`[WPP Bot] clinicId=${clinicId} — chamando agente IA`)
   const result = await runWhatsappAgent({
     clinicId,
     conversationId:    conversation.id,
     userMessage:       messageText,
     tutorName:         tutorName ?? conversation.tutor_name,
     tutorPhone:        phone,
-    personalityPrompt: botConfig?.personality_prompt ?? null,
+    personalityPrompt: botConfig.personality_prompt ?? null,
   })
+
+  console.info(`[WPP Bot] resposta="${result.reply.substring(0, 80)}" handoff=${result.handoff}`)
 
   // 7. Salva resposta no banco
   await admin.from('whatsapp_messages').insert({
@@ -213,9 +238,10 @@ async function sendBotReply(
   const instanceName = settings?.evolution_instance_name
   if (!instanceName) { console.warn('[WPP Bot] Instância não encontrada para clínica', clinicId); return }
 
-  await evolutionSendText(
-    { apiUrl, instanceId: instanceName, apiKey },
-    phone,
-    text,
-  )
+  try {
+    await evolutionSendText({ apiUrl, instanceId: instanceName, apiKey }, phone, text)
+    console.info(`[WPP Bot] mensagem enviada para ${phone}`)
+  } catch (err) {
+    console.error('[WPP Bot] Erro ao enviar mensagem:', err)
+  }
 }
