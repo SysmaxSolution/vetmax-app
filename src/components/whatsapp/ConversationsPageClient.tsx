@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useTransition } from 'react'
-import { MessageCircle, Send, RefreshCw, Bot, User, X } from 'lucide-react'
+import { MessageCircle, Send, RefreshCw, Bot, User, X, ArrowLeft } from 'lucide-react'
 import {
   getWhatsappConversations,
   getConversationMessages,
@@ -32,6 +32,18 @@ function timeLabel(iso: string): string {
   return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
 }
 
+// Formata tutor_phone para exibição: remove sufixos WhatsApp e máscara brasileira
+function displayPhone(raw: string | null): string {
+  if (!raw) return ''
+  if (raw.endsWith('@lid')) return 'WhatsApp'
+  const digits = raw.replace('@s.whatsapp.net', '').replace(/\D/g, '')
+  if (digits.startsWith('55') && digits.length === 13)
+    return `(${digits.slice(2, 4)}) ${digits.slice(4, 9)}-${digits.slice(9)}`
+  if (digits.startsWith('55') && digits.length === 12)
+    return `(${digits.slice(2, 4)}) ${digits.slice(4, 8)}-${digits.slice(8)}`
+  return digits || raw
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ConversationsPageClient({
@@ -47,6 +59,7 @@ export default function ConversationsPageClient({
   const [loadingMsgs,   setLoadingMsgs]   = useState(false)
   const [toast,         setToast]         = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
   const [isPending,     startTransition]  = useTransition()
+  const [mobileView,    setMobileView]    = useState<'list' | 'chat'>('list')
   const endRef = useRef<HTMLDivElement>(null)
 
   const selectedConv = conversations.find(c => c.id === selectedId) ?? null
@@ -81,6 +94,7 @@ export default function ConversationsPageClient({
 
   async function selectConversation(id: string) {
     setSelectedId(id)
+    setMobileView('chat')
     setMessages([])
     setReplyText('')
     setLoadingMsgs(true)
@@ -185,10 +199,10 @@ export default function ConversationsPageClient({
         {/* 2-panel layout */}
         <div
           className="grid grid-cols-1 lg:grid-cols-5 gap-0 rounded-2xl border border-slate-200 bg-white overflow-hidden"
-          style={{ minHeight: '580px' }}
+          style={{ minHeight: '400px' }}
         >
           {/* ── Left: conversation list ── */}
-          <div className="lg:col-span-2 border-r border-slate-200 flex flex-col">
+          <div className={`lg:col-span-2 border-r border-slate-200 flex-col ${mobileView === 'chat' ? 'hidden lg:flex' : 'flex'}`}>
             {/* Filter tabs */}
             <div className="flex items-center gap-1 px-3 pt-3 pb-2 border-b border-slate-100 flex-wrap">
               {([
@@ -236,14 +250,14 @@ export default function ConversationsPageClient({
                           conv.status === 'bot'    ? 'bg-blue-100 text-blue-700'   :
                           'bg-slate-100 text-slate-400'
                         }`}>
-                          {(conv.tutor_name ?? conv.tutor_phone).charAt(0).toUpperCase()}
+                          {(conv.tutor_name || displayPhone(conv.tutor_phone)).charAt(0).toUpperCase()}
                         </div>
                         <div className="min-w-0">
                           <p className="text-sm font-semibold text-slate-900 truncate">
-                            {conv.tutor_name ?? conv.tutor_phone}
+                            {conv.tutor_name || displayPhone(conv.tutor_phone) || 'Desconhecido'}
                           </p>
                           {conv.tutor_name && (
-                            <p className="text-[11px] text-slate-400">{conv.tutor_phone}</p>
+                            <p className="text-[11px] text-slate-400">{displayPhone(conv.tutor_phone)}</p>
                           )}
                         </div>
                       </div>
@@ -263,7 +277,7 @@ export default function ConversationsPageClient({
           </div>
 
           {/* ── Right: message thread ── */}
-          <div className="lg:col-span-3 flex flex-col">
+          <div className={`lg:col-span-3 flex-col ${mobileView === 'list' ? 'hidden lg:flex' : 'flex'}`}>
             {!selectedConv ? (
               <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
                 <MessageCircle className="h-12 w-12 text-slate-200 mb-3" />
@@ -274,9 +288,17 @@ export default function ConversationsPageClient({
               <>
                 {/* Conversation header */}
                 <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between gap-3 flex-wrap">
-                  <div>
-                    <p className="font-semibold text-slate-900">{selectedConv.tutor_name ?? selectedConv.tutor_phone}</p>
-                    <p className="text-xs text-slate-400">{selectedConv.tutor_phone}</p>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <button
+                      onClick={() => setMobileView('list')}
+                      className="flex lg:hidden items-center gap-1 text-slate-500 hover:text-slate-900 text-sm font-medium flex-shrink-0"
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                    </button>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-slate-900 truncate">{selectedConv.tutor_name || displayPhone(selectedConv.tutor_phone) || 'Desconhecido'}</p>
+                      <p className="text-xs text-slate-400">{displayPhone(selectedConv.tutor_phone)}</p>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className={`text-xs font-bold rounded-full px-2.5 py-1 ${STATUS_CFG[selectedConv.status].color}`}>
