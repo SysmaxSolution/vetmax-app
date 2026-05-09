@@ -16,6 +16,8 @@ function buildHeaders(apiKey: string): Record<string, string> {
 }
 
 function formatPhone(raw: string): string {
+  // Se já é um JID completo (contém @), usa como está (ex: 5511...@s.whatsapp.net ou @lid)
+  if (raw.includes('@')) return raw
   const digits = raw.replace(/\D/g, '')
   return digits.startsWith('55') && digits.length >= 12 ? digits : '55' + digits
 }

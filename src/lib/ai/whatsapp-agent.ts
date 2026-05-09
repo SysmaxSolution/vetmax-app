@@ -265,13 +265,27 @@ Para emergências ou pedidos fora do escopo, transfira para um atendente humano.
   let currentMessages = [...messages]
 
   for (let iter = 0; iter < 5; iter++) {
-    const response = await anthropic.messages.create({
-      model:      'claude-haiku-4-5-20251001',
-      max_tokens: 512,
-      system:     systemPrompt,
-      tools:      TOOLS,
-      messages:   currentMessages,
-    })
+    let response: Awaited<ReturnType<typeof anthropic.messages.create>>
+    try {
+      response = await anthropic.messages.create({
+        model:      'claude-haiku-4-5-20251001',
+        max_tokens: 512,
+        system:     systemPrompt,
+        tools:      TOOLS,
+        messages:   currentMessages,
+      })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      const isCredits = msg.includes('credit balance') || msg.includes('insufficient_quota')
+      console.error('[WPP Agent] Erro Anthropic API:', isCredits ? 'créditos insuficientes' : msg)
+      return {
+        reply:   isCredits
+          ? 'No momento estamos com dificuldades técnicas. Um atendente entrará em contato em breve!'
+          : 'Desculpe, ocorreu um erro interno. Um atendente irá te atender em breve.',
+        handoff: true,
+        handoffReason: isCredits ? 'anthropic_no_credits' : 'anthropic_error',
+      }
+    }
 
     // Verifica handoff imediato (stop_reason = tool_use com request_human_handoff)
     const toolUses = response.content.filter(b => b.type === 'tool_use')
