@@ -4,7 +4,7 @@ import { evolutionSendText } from '@/lib/evolution-api-client'
 import { generateCampaignMessage } from '@/lib/ai/campaign-agent'
 
 // GET /api/cron/whatsapp-campaigns
-// Invocado pelo Vercel Cron todo início de hora.
+// Invocado pelo Vercel Cron diariamente às 09:00 UTC.
 // Dispara campanhas de reativação para cada clínica com módulo whatsapp_intelligent.
 
 export async function GET(request: NextRequest) {
@@ -17,8 +17,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const currentHour = new Date().getUTCHours()
-  const admin       = createAdminClient()
+  const admin = createAdminClient()
   const apiUrl      = process.env.EVOLUTION_API_URL
   const apiKey      = process.env.EVOLUTION_API_KEY
 
@@ -40,13 +39,12 @@ export async function GET(request: NextRequest) {
   let totalSent = 0
 
   for (const clinic of clinics) {
-    // ── Campanhas ativas para esta hora ──────────────────────────────────────
+    // ── Campanhas ativas ──────────────────────────────────────────────────────
     const { data: campaigns } = await admin
       .from('whatsapp_campaigns')
       .select('id, trigger_type, days_threshold, is_active, send_hour')
       .eq('clinic_id', clinic.id)
       .eq('is_active', true)
-      .eq('send_hour', currentHour)
 
     if (!campaigns?.length) continue
 
