@@ -66,19 +66,15 @@ export async function POST(
     if (fromMe) return NextResponse.json({ received: true })
     if (!jid || jid.endsWith('@g.us')) return NextResponse.json({ received: true })
 
-    // Tenta encontrar um JID @s.whatsapp.net no payload (presente em alguns layouts da Evolution API)
-    const altJid = (['sender', 'remoteJid', 'jid'] as const)
-      .map(k => msgData[k])
-      .find((v): v is string => typeof v === 'string' && v.includes('@s.whatsapp.net'))
-      ?? ((key?.participant as string | undefined)?.includes('@s.whatsapp.net') ? key?.participant as string : undefined)
-
-    const isLid   = jid.includes('@lid')
-    const phone   = isLid && altJid ? altJid.replace('@s.whatsapp.net', '') : jid.replace('@s.whatsapp.net', '')
+    // Evolution API v1.8.x envia o JID real (@s.whatsapp.net) em body.sender quando remoteJid é @lid
+    const bodySender = body?.sender as string | undefined
+    const isLid      = jid.includes('@lid')
+    const phone      = isLid && bodySender?.includes('@s.whatsapp.net')
+      ? bodySender.replace('@s.whatsapp.net', '')
+      : jid.replace('@s.whatsapp.net', '')
 
     if (isLid) {
-      console.warn(`[WPP Webhook] JID @lid detectado: ${jid} | altJid=${altJid ?? 'nenhum'}`)
-      console.info(`[WPP Webhook] payload keys: ${Object.keys(msgData).join(', ')}`)
-      console.info(`[WPP Webhook] payload (lid): ${JSON.stringify(body).substring(0, 800)}`)
+      console.info(`[WPP Webhook] @lid resolvido: ${jid} → sender=${bodySender ?? 'não encontrado'} phone=${phone}`)
     }
 
     const pushName = msgData.pushName as string | null ?? null
