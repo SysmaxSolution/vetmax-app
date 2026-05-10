@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useRef, useTransition } from 'react'
 import Link from 'next/link'
-import { X, Save, Loader2, User, Dog, MapPin, PhoneCall, Syringe, Camera, Shield, Trash2, Plus, AlertTriangle, Cpu } from 'lucide-react'
+import { X, Save, Loader2, User, Dog, MapPin, PhoneCall, Syringe, Camera, Shield, Trash2, Plus, AlertTriangle, Cpu, Paperclip, FileText, Upload, ExternalLink } from 'lucide-react'
 import { ImageLightbox } from '@/components/ui/ImageLightbox'
 import { DateInput } from '@/components/ui/DatePicker'
 import { updateFullProfile, uploadPetPhoto, softDeletePatient } from '@/lib/actions/pets'
+import { uploadAttachment, getAttachments, deleteAttachment, type Attachment } from '@/lib/actions/attachments'
 import { registerTutorAndPet, addPatientToTutor, getTutorByCpf, recordConsent } from '@/lib/actions/tutors'
 import ConsentModal from '@/components/reception/ConsentModal'
 import SMSConsentToggle from '@/components/reception/SMSConsentToggle'
@@ -146,7 +147,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
 
   const locked = false // abas sempre acessíveis; Vacinas/Convênio carregam patId assim que disponível
 
-  const [tab, setTab] = useState<'pet' | 'tutor' | 'vacinas' | 'convenio'>('pet')
+  const [tab, setTab] = useState<'pet' | 'tutor' | 'vacinas' | 'convenio' | 'documentos'>('pet')
   const [saving, setSaving] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -208,6 +209,12 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
   const [insCoverage,      setInsCoverage]      = useState<'active' | 'suspended' | 'cancelled'>('active')
   const selectedProvider = providers.find(p => p.id === insProviderId)
 
+  // ── Documentos ──
+  const [attachments,       setAttachments]      = useState<Attachment[] | null>(null)
+  const [loadingDocs,       setLoadingDocs]      = useState(false)
+  const [uploadingDoc,      setUploadingDoc]     = useState(false)
+  const docInputRef = useRef<HTMLInputElement>(null)
+
   // ─── CPF Lookup effect (só modo criação de novo tutor) ───────────────────────
   useEffect(() => {
     if (isEdit || isPetOnly) return
@@ -248,6 +255,18 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
       })
     }
   }, [tab, patient?.id, createdPatientId, vaccines, isEdit])
+
+  // ─── Documentos lazy load ─────────────────────────────────────────────────────
+  useEffect(() => {
+    const patId = isEdit ? patient.id : createdPatientId
+    if (tab === 'documentos' && attachments === null && patId) {
+      setLoadingDocs(true)
+      getAttachments(patId).then(res => {
+        setAttachments(Array.isArray(res) ? res : [])
+        setLoadingDocs(false)
+      })
+    }
+  }, [tab, patient?.id, createdPatientId, attachments, isEdit])
 
   // ─── Convênio lazy load ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -492,6 +511,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
             <TabButton active={tab === 'tutor'}   onClick={() => setTab('tutor')}   icon={<User    className="h-4 w-4" />} label="Tutor" />
             <TabButton active={tab === 'vacinas'} onClick={() => setTab('vacinas')} icon={<Syringe  className="h-4 w-4" />} label="Vacinas" />
             <TabButton active={tab === 'convenio'} onClick={() => setTab('convenio')} icon={<Shield  className="h-4 w-4" />} label="Convênio" />
+            <TabButton active={tab === 'documentos'} onClick={() => setTab('documentos')} icon={<Paperclip className="h-4 w-4" />} label="Documentos" />
           </div>
         </div>
 
@@ -843,6 +863,100 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                           </button>
                         )}
                       </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+          {/* ── Aba Documentos ── */}
+          {tab === 'documentos' && (
+            <div className="p-4 space-y-4">
+              {!createdPatientId && !isEdit ? (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  <Paperclip className="h-10 w-10 text-slate-300 mb-3" />
+                  <p className="text-sm font-bold text-slate-400">Documentos disponíveis após criar o cadastro</p>
+                </div>
+              ) : (
+                <>
+                  {/* Botão upload */}
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-slate-500">Arquivos do pet (PDF, imagem, laudo...)</p>
+                    <button
+                      type="button"
+                      onClick={() => docInputRef.current?.click()}
+                      disabled={uploadingDoc}
+                      className="flex items-center gap-1.5 rounded-xl bg-teal-600 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-50 transition-colors"
+                    >
+                      {uploadingDoc ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                      {uploadingDoc ? 'Enviando...' : 'Enviar Arquivo'}
+                    </button>
+                    <input
+                      ref={docInputRef}
+                      type="file"
+                      className="hidden"
+                      accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0]
+                        if (!file) return
+                        const patId = isEdit ? patient.id : createdPatientId
+                        if (!patId) return
+                        setUploadingDoc(true)
+                        const fd = new FormData()
+                        fd.append('file', file)
+                        const res = await uploadAttachment(fd, patId)
+                        setUploadingDoc(false)
+                        e.target.value = ''
+                        if ('error' in res) return
+                        setAttachments(prev => prev ? [res, ...prev] : [res])
+                      }}
+                    />
+                  </div>
+
+                  {/* Lista de anexos */}
+                  {loadingDocs ? (
+                    <div className="flex justify-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+                    </div>
+                  ) : !attachments || attachments.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-center border border-dashed border-slate-200 rounded-xl">
+                      <FileText className="h-8 w-8 text-slate-300 mb-2" />
+                      <p className="text-sm text-slate-400">Nenhum documento enviado</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {attachments.map(att => (
+                        <div key={att.id} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 hover:border-slate-300 transition-colors">
+                          <FileText className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                          <span className="flex-1 text-sm text-slate-700 truncate">{att.file_name}</span>
+                          <span className="text-xs text-slate-400 flex-shrink-0">
+                            {new Date(att.created_at).toLocaleDateString('pt-BR')}
+                          </span>
+                          <a
+                            href={att.signed_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex-shrink-0 text-teal-600 hover:text-teal-700"
+                            title="Abrir"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                          </a>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (!confirm(`Excluir "${att.file_name}"?`)) return
+                              const res = await deleteAttachment(att.id, att.storage_path)
+                              if (!('error' in res)) {
+                                setAttachments(prev => prev ? prev.filter(a => a.id !== att.id) : prev)
+                              }
+                            }}
+                            className="flex-shrink-0 text-red-400 hover:text-red-600"
+                            title="Excluir"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </>
