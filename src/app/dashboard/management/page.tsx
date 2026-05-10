@@ -58,6 +58,7 @@ export default async function ManagementPage() {
   const users = usersResult.data ?? []
   const invitations = invitationsResult
   const userLimit: number = clinicData?.user_limit ?? 10
+  const activeModules: string[] = (clinicData?.active_modules as string[] | null) ?? []
   const initialCatalog = 'error' in catalogResult ? [] : catalogResult
   const initialClinicConfig = 'error' in configResult ? null : configResult
   const initialWhatsAppSettings = whatsAppResult
@@ -87,6 +88,7 @@ export default async function ManagementPage() {
         initialWhatsAppSettings={initialWhatsAppSettings}
         initialProductPrices={initialProductPrices}
         initialRooms={initialRooms}
+        activeModules={activeModules}
       />
     </Suspense>
   )

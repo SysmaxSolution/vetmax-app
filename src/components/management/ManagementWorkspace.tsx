@@ -24,7 +24,7 @@ import BusinessHoursTab from './BusinessHoursTab'
 import PricingTab from './PricingTab'
 import ModulesTab from './ModulesTab'
 import RoomsTab from './RoomsTab'
-import { updateUserPhone, updateUserSpecialties } from '@/lib/actions/user-management'
+import { updateUserPhone, updateUserSpecialties, getUserModuleAccess, setUserModuleAccess } from '@/lib/actions/user-management'
 import type { Room } from '@/lib/actions/rooms'
 import type { WhatsAppSettingsDisplay } from '@/lib/actions/whatsapp'
 import type { ProductPrice } from '@/lib/actions/core-management'
@@ -53,6 +53,7 @@ interface ManagementWorkspaceProps {
   initialWhatsAppSettings:  WhatsAppSettingsDisplay | null
   initialProductPrices?:    ProductPrice[]
   initialRooms?:            Room[]
+  activeModules?:           string[]
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -141,6 +142,7 @@ function UserInlineField({ label, value, placeholder, onSave }: {
 export default function ManagementWorkspace({
   initialTemplates, clinicData, users, initialInvitations, userLimit, currentUserId, userEmail, userFullName,
   initialCatalog, initialClinicConfig, initialWhatsAppSettings, initialProductPrices = [], initialRooms = [],
+  activeModules = [],
 }: ManagementWorkspaceProps) {
   const searchParams = useSearchParams()
   const activeTab = (searchParams.get('tab') as ActiveTab | null) ?? 'templates'
@@ -181,6 +183,45 @@ export default function ManagementWorkspace({
     if ('error' in res) { setToast({ type: 'error', message: res.error }); return }
     setLogoUrl(null)
     setToast({ type: 'success', message: 'Logo removida.' })
+  }
+
+  // G-08: RBAC por módulo — mapa userId → módulos desativados
+  const [userModuleOverrides, setUserModuleOverrides] = useState<Record<string, Record<string, boolean>>>({})
+  const [loadingModulesForUser, setLoadingModulesForUser] = useState<string | null>(null)
+  const [expandedModulesUser, setExpandedModulesUser] = useState<string | null>(null)
+
+  const MODULE_LABELS: Record<string, string> = {
+    grooming: 'Banho e Tosa', consultation: 'Consultório', exams: 'Exames',
+    hospitalization: 'Internação', pharmacy: 'Farmácia', whatsapp_intelligent: 'WhatsApp IA',
+  }
+
+  async function handleExpandModules(userId: string) {
+    if (expandedModulesUser === userId) { setExpandedModulesUser(null); return }
+    setExpandedModulesUser(userId)
+    if (userModuleOverrides[userId]) return
+    setLoadingModulesForUser(userId)
+    const res = await getUserModuleAccess(userId)
+    setLoadingModulesForUser(null)
+    if ('error' in res) return
+    const map: Record<string, boolean> = {}
+    for (const r of res) map[r.module_name] = r.enabled
+    setUserModuleOverrides(prev => ({ ...prev, [userId]: map }))
+  }
+
+  async function handleToggleModule(userId: string, moduleName: string, currentEnabled: boolean) {
+    const newEnabled = !currentEnabled
+    setUserModuleOverrides(prev => ({
+      ...prev,
+      [userId]: { ...(prev[userId] ?? {}), [moduleName]: newEnabled },
+    }))
+    const res = await setUserModuleAccess(userId, moduleName, newEnabled)
+    if ('error' in res) {
+      setToast({ type: 'error', message: res.error })
+      setUserModuleOverrides(prev => ({
+        ...prev,
+        [userId]: { ...(prev[userId] ?? {}), [moduleName]: currentEnabled },
+      }))
+    }
   }
 
   // CRMV edit state
@@ -875,6 +916,45 @@ export default function ManagementWorkspace({
                         ))}
                         {(u.specialties ?? []).length === 0 && (
                           <span className="text-[10px] text-slate-400 italic">Sem especialidade</span>
+                        )}
+                      </div>
+                    )}
+                    {/* G-08: RBAC por módulo (não mostrar para o próprio admin) */}
+                    {u.id !== currentUserId && activeModules.length > 0 && (
+                      <div className="mt-1">
+                        <button
+                          type="button"
+                          onClick={() => handleExpandModules(u.id)}
+                          className="text-[10px] text-teal-600 hover:text-teal-700 underline flex items-center gap-0.5"
+                        >
+                          {expandedModulesUser === u.id ? '▲' : '▼'} Acesso a Módulos
+                        </button>
+                        {expandedModulesUser === u.id && (
+                          <div className="mt-1 flex flex-wrap gap-1.5">
+                            {loadingModulesForUser === u.id ? (
+                              <span className="text-[10px] text-slate-400 italic">Carregando...</span>
+                            ) : (
+                              activeModules.map(mod => {
+                                const overrides = userModuleOverrides[u.id] ?? {}
+                                const enabled = overrides[mod] !== undefined ? overrides[mod] : true
+                                return (
+                                  <button
+                                    key={mod}
+                                    type="button"
+                                    onClick={() => handleToggleModule(u.id, mod, enabled)}
+                                    className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border transition-colors ${
+                                      enabled
+                                        ? 'bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100'
+                                        : 'bg-red-50 text-red-500 border-red-200 hover:bg-red-100'
+                                    }`}
+                                    title={enabled ? 'Clique para revogar acesso' : 'Clique para liberar acesso'}
+                                  >
+                                    {enabled ? '✓' : '✗'} {MODULE_LABELS[mod] ?? mod}
+                                  </button>
+                                )
+                              })
+                            )}
+                          </div>
                         )}
                       </div>
                     )}

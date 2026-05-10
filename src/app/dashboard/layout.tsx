@@ -108,7 +108,21 @@ export default async function DashboardLayout({
     )
   }
 
-  const activeModules = (clinicConfig?.active_modules as string[] | null) ?? []
+  const clinicModules = (clinicConfig?.active_modules as string[] | null) ?? []
+
+  // G-08: Aplicar RBAC por usuário — busca overrides do usuário e filtra módulos
+  const { data: userModuleRows } = await admin
+    .from('user_module_access')
+    .select('module_name, enabled')
+    .eq('clinic_id', profile.clinic_id)
+    .eq('user_id', user.id)
+
+  const userDisabled = new Set(
+    (userModuleRows ?? [])
+      .filter((r: any) => r.enabled === false)
+      .map((r: any) => r.module_name as string)
+  )
+  const activeModules = clinicModules.filter(m => !userDisabled.has(m))
 
   // Conta todas as conversas ativas (bot + human) para badge no módulo WhatsApp
   const whatsappHandoffCount = activeModules.includes('whatsapp_intelligent')
