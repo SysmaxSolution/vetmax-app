@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { X, Save, Loader2, User, Dog, MapPin, PhoneCall, Syringe, Camera, Shield, Trash2, Plus, AlertTriangle, Cpu } from 'lucide-react'
 import { ImageLightbox } from '@/components/ui/ImageLightbox'
 import { DateInput } from '@/components/ui/DatePicker'
-import { updateFullProfile, uploadPetPhoto } from '@/lib/actions/pets'
+import { updateFullProfile, uploadPetPhoto, softDeletePatient } from '@/lib/actions/pets'
 import { registerTutorAndPet, addPatientToTutor, getTutorByCpf, recordConsent } from '@/lib/actions/tutors'
 import ConsentModal from '@/components/reception/ConsentModal'
 import SMSConsentToggle from '@/components/reception/SMSConsentToggle'
@@ -150,6 +150,10 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
   const [saving, setSaving] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deleteReason, setDeleteReason]       = useState('')
+  const [deleting, setDeleting]               = useState(false)
+  const [deleteError, setDeleteError]         = useState<string | null>(null)
 
   // ── Foto ──
   const [photoUrl, setPhotoUrl] = useState<string | null>(patient?.photo_url ?? null)
@@ -848,10 +852,24 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
         </div>
 
         {/* ── Footer ── */}
-        <div className="p-4 bg-white border-t border-slate-100 flex justify-end gap-3">
-          <button onClick={onClose} className="px-4 py-2 text-sm font-bold text-slate-400 hover:text-slate-600">
-            {!isEdit && createdPatientId ? 'Fechar' : 'Sair'}
-          </button>
+        <div className="p-4 bg-white border-t border-slate-100 flex justify-between gap-3">
+          {/* Arquivar pet (soft delete, apenas edição) */}
+          {isEdit && (
+            <button
+              type="button"
+              onClick={() => setShowDeleteModal(true)}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+              title="Arquivar pet (soft delete com motivo)"
+            >
+              <Trash2 className="h-4 w-4" />
+              Arquivar
+            </button>
+          )}
+
+          <div className="flex gap-3 ml-auto">
+            <button onClick={onClose} className="px-4 py-2 text-sm font-bold text-slate-400 hover:text-slate-600">
+              {!isEdit && createdPatientId ? 'Fechar' : 'Sair'}
+            </button>
 
           {/* Modo edição: salva */}
           {isEdit && (
@@ -876,8 +894,65 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
               CONCLUIR CADASTRO
             </button>
           )}
+          </div>
         </div>
       </div>
+
+      {/* Modal: Arquivar Pet */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm mx-4 p-6 space-y-4">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-500" />
+              <h2 className="text-base font-semibold text-slate-900">Arquivar Pet</h2>
+            </div>
+            <p className="text-sm text-slate-600">
+              O pet será arquivado e removido das filas. O histórico clínico é preservado para fins de auditoria.
+            </p>
+            {deleteError && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{deleteError}</p>}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Motivo do Arquivamento <span className="text-rose-500">*</span>
+              </label>
+              <textarea
+                value={deleteReason}
+                onChange={e => setDeleteReason(e.target.value)}
+                placeholder="Ex: Óbito, mudança de cidade, tutor solicitou remoção..."
+                rows={3}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                autoFocus
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => { setShowDeleteModal(false); setDeleteReason(''); setDeleteError(null) }}
+                className="flex-1 px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={deleting || !deleteReason.trim()}
+                onClick={async () => {
+                  if (!patient?.id || !deleteReason.trim()) return
+                  setDeleting(true)
+                  setDeleteError(null)
+                  const res = await softDeletePatient(patient.id, deleteReason.trim())
+                  setDeleting(false)
+                  if ('error' in res) { setDeleteError(res.error); return }
+                  setShowDeleteModal(false)
+                  onClose()
+                }}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                <Trash2 className="h-4 w-4" />
+                {deleting ? 'Arquivando...' : 'Confirmar Arquivamento'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
     </>
   )

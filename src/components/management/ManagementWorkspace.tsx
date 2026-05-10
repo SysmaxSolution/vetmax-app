@@ -459,10 +459,17 @@ export default function ManagementWorkspace({
 
       {/* ── Tab: Catálogo ── */}
       {activeTab === 'catalogo' && (
-        <CatalogTab
-          initialItems={initialCatalog}
-          onToast={(type, message) => setToast({ type, message })}
-        />
+        <div className="space-y-6">
+          <CatalogTab
+            initialItems={initialCatalog}
+            onToast={(type, message) => setToast({ type, message })}
+          />
+          {/* Tabela de Preços (CSV import) — migrado de Configurações G-07 */}
+          <PricingTab
+            initialItems={initialProductPrices}
+            onToast={(type, message) => setToast({ type, message })}
+          />
+        </div>
       )}
 
       {/* ── Tab: Convênios ── */}
@@ -483,12 +490,6 @@ export default function ManagementWorkspace({
           {/* Horário Comercial */}
           <BusinessHoursTab
             initialConfig={initialClinicConfig}
-            onToast={(type, message) => setToast({ type, message })}
-          />
-
-          {/* Preços Core (importação por planilha) */}
-          <PricingTab
-            initialItems={initialProductPrices}
             onToast={(type, message) => setToast({ type, message })}
           />
 

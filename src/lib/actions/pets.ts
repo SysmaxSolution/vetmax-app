@@ -331,6 +331,60 @@ export interface UpdateTutorData {
   emergency_contact?: string | null
 }
 
+// ─── Soft Delete de Pet com Motivo (G-05) ────────────────────────────────────
+
+export async function softDeletePatient(
+  patientId: string,
+  reason: string
+): Promise<{ success: true } | { error: string }> {
+  if (!reason.trim()) return { error: 'Motivo do arquivamento é obrigatório.' }
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('clinic_id')
+    .eq('id', user.id)
+    .single()
+  if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
+
+  // Bloquear se houver consulta ativa (não concluída / não cancelada)
+  const { data: active } = await supabase
+    .from('consultations')
+    .select('id')
+    .eq('patient_id', patientId)
+    .eq('clinic_id', profile.clinic_id)
+    .not('status', 'in', '("completed","cancelled")')
+    .limit(1)
+    .maybeSingle()
+
+  if (active) return { error: 'O pet possui atendimento ativo. Conclua ou cancele antes de arquivar.' }
+
+  const admin = createAdminClient()
+  const now = new Date().toISOString()
+  const { error } = await admin
+    .from('patients')
+    .update({ deleted_at: now, delete_reason: reason.trim() })
+    .eq('id', patientId)
+    .eq('clinic_id', profile.clinic_id)
+    .is('deleted_at', null)
+
+  if (error) return { error: 'Erro ao arquivar pet: ' + error.message }
+
+  await logAudit({
+    action:      'SOFT_DELETE_PATIENT',
+    entity_type: 'patients',
+    entity_id:   patientId,
+    details:     { reason: reason.trim(), deleted_at: now },
+  })
+
+  revalidatePath('/dashboard/reception')
+  revalidatePath('/dashboard/vet')
+  return { success: true }
+}
+
 export async function updateFullProfile(
   petId: string,
   tutorId: string,
