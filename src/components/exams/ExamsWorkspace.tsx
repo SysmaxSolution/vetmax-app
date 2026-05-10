@@ -143,6 +143,7 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
   const [examPatientSearch, setExamPatientSearch] = useState('')
   const [examPatientResults, setExamPatientResults] = useState<TriagePatientSearchResult[]>([])
   const [examPatientSelected, setExamPatientSelected] = useState<TriagePatientSearchResult | null>(null)
+  const [examNotes, setExamNotes] = useState('Exame solicitado manualmente no módulo de Exames.')
   const [isPending, startTransition] = useTransition()
   const [hospItem, setHospItem] = useState<ExamQueueItem | null>(null)
   const [hospReason, setHospReason] = useState('')
@@ -403,7 +404,7 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold text-slate-900">Solicitar Novo Exame</h2>
-              <button onClick={() => { setShowNewExamModal(false); setExamSuccess(''); setExamError(''); setExamPatientSearch(''); setExamPatientResults([]); setExamPatientSelected(null) }} className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => { setShowNewExamModal(false); setExamSuccess(''); setExamError(''); setExamPatientSearch(''); setExamPatientResults([]); setExamPatientSelected(null); setExamNotes('Exame solicitado manualmente no módulo de Exames.') }} className="text-slate-400 hover:text-slate-600">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -433,6 +434,16 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
                   ))}
                 </div>
               )}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Nota Clínica</label>
+              <textarea
+                value={examNotes}
+                onChange={e => setExamNotes(e.target.value)}
+                rows={2}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                placeholder="Motivo ou observação clínica..."
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Tipo de Exame</label>
@@ -473,6 +484,7 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
                       patient_id: examPatientSelected.id,
                       tutor_id: examPatientSelected.tutor.id,
                       exam_type: examType,
+                      notes: examNotes.trim() || 'Exame solicitado manualmente no módulo de Exames.',
                     })
                     if ('error' in result) {
                       setExamError(result.error)
@@ -482,7 +494,7 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
                   }
                   setExamSuccess('Exame solicitado com sucesso! Adicionado à fila.')
                   setExamLoading(false)
-                  setTimeout(() => { setShowNewExamModal(false); setExamSuccess(''); setExamPatientSearch(''); setExamPatientResults([]); setExamPatientSelected(null) }, 1500)
+                  setTimeout(() => { setShowNewExamModal(false); setExamSuccess(''); setExamPatientSearch(''); setExamPatientResults([]); setExamPatientSelected(null); setExamNotes('Exame solicitado manualmente no módulo de Exames.') }, 1500)
                 }}
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50"
               >

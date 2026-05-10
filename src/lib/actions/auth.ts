@@ -248,6 +248,9 @@ export async function signUpWithClinic(
     password,
     options: {
       emailRedirectTo: `${appUrl}/auth/callback`,
+      // Armazena dados no user_metadata para o trigger Postgres (G-01)
+      // acessar mesmo quando o callback falha em mobile (sem cookie PKCE)
+      data: { full_name: fullName, clinic_name: clinicName },
     },
   })
 

@@ -249,9 +249,13 @@ function QueueCard({ item, onMoveToTriage }: { item: ReceptionQueueItem; onMoveT
   const hasPendingPayment = item.payment_status === 'pending'
   const age = calcAge(item.patient.birth_date ?? null)
   return (
-    <div className={`flex items-center gap-4 rounded-2xl border bg-white px-5 py-4 shadow-sm hover:shadow transition-shadow ${
-      hasPendingPayment ? 'border-red-300' : 'border-slate-200'
-    }`}>
+    <div
+      title="Duplo clique para chamar triagem"
+      onDoubleClick={() => onMoveToTriage(item.id)}
+      className={`flex items-center gap-4 rounded-2xl border bg-white px-5 py-4 shadow-sm hover:shadow transition-shadow cursor-pointer select-none ${
+        hasPendingPayment ? 'border-red-300' : 'border-slate-200'
+      }`}
+    >
       <PetAvatar name={item.patient.name} species={item.patient.species} photoUrl={item.patient.photo_url} size="md" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">

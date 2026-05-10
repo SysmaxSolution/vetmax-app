@@ -407,8 +407,9 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
     setSaveToast('Registro salvo com sucesso!')
     setTimeout(() => setSaveToast(null), 3000)
 
-    // WhatsApp: determina trigger pelo status atual; nunca fecha o modal.
-    if (card.tutor?.phone) {
+    // WhatsApp: só abre no submit manual quando pet está pronto para retirada/entregue.
+    // Salvas intermediárias de evolução NÃO disparam WA (evita duplo disparo com voz).
+    if (card.tutor?.phone && (currentCardStatus === 'waiting_pickup' || currentCardStatus === 'delivered')) {
       const trigger: WhatsAppTrigger = currentCardStatus === 'delivered' ? 'grooming_delivered' : 'grooming_ready_for_pickup'
       setWaTrigger(trigger)
       setWhatsappPending(true)

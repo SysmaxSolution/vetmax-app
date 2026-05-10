@@ -24,7 +24,7 @@ export async function GET(request: Request) {
       if (user) {
         const admin = createAdminClient()
 
-        // Verifica se já existe perfil com clinic_id (usuário existente / re-confirmação)
+        // Verifica se já existe perfil com clinic_id (trigger Postgres pode ter criado)
         const { data: profile } = await admin
           .from('profiles')
           .select('clinic_id')
@@ -32,9 +32,7 @@ export async function GET(request: Request) {
           .single()
 
         if (!profile?.clinic_id) {
-          // Novo cadastro — busca dados salvos antes da confirmação de e-mail.
-          // O Supabase sobrescreve user_metadata após confirmation, por isso
-          // usamos a tabela pending_registrations como fonte de verdade.
+          // Trigger Postgres ainda não rodou ou dados ausentes — tenta criar aqui
           const { data: pending } = await admin
             .from('pending_registrations')
             .select('full_name, clinic_name')
@@ -58,19 +56,12 @@ export async function GET(request: Request) {
                 full_name: fullName,
                 role:      'admin',
               })
-
-              // Registra vínculo multi-clínica
               await admin.from('user_clinics').upsert({
                 user_id:   user.id,
                 clinic_id: clinic.id,
                 role:      'admin',
               }, { onConflict: 'user_id,clinic_id' })
-
-              // Remove registro temporário após uso
-              await admin
-                .from('pending_registrations')
-                .delete()
-                .eq('email', user.email!)
+              await admin.from('pending_registrations').delete().eq('email', user.email!)
             }
           }
 
@@ -81,6 +72,10 @@ export async function GET(request: Request) {
         return NextResponse.redirect(`${origin}/dashboard`)
       }
     }
+
+    // Falha no PKCE (mobile: in-app browser sem cookie) — trigger Postgres já criou a clínica.
+    // Redireciona para tela de e-mail confirmado que orienta o usuário a fazer login.
+    return NextResponse.redirect(`${origin}/email-confirmado`)
   }
 
   return NextResponse.redirect(`${origin}/login?error=auth_callback_failed`)
