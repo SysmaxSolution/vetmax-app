@@ -46,7 +46,7 @@ export default defineConfig({
         ...devices['iPhone SE'],
         hasTouch: true,
       },
-      testMatch: /responsive-mobile\.spec\.ts/,
+      testMatch: /(responsive-mobile|sprint-master-mobile)\.spec\.ts/,
     },
     {
       name: 'mobile-iphone-12',
@@ -54,7 +54,7 @@ export default defineConfig({
         ...devices['iPhone 12 Pro'],
         hasTouch: true,
       },
-      testMatch: /responsive-mobile\.spec\.ts/,
+      testMatch: /(responsive-mobile|sprint-master-mobile)\.spec\.ts/,
     },
     {
       name: 'mobile-pixel5',
@@ -62,7 +62,7 @@ export default defineConfig({
         ...devices['Pixel 5'],
         hasTouch: true,
       },
-      testMatch: /responsive-mobile\.spec\.ts/,
+      testMatch: /(responsive-mobile|sprint-master-mobile)\.spec\.ts/,
     },
     {
       name: 'mobile-samsung-s21',
@@ -73,7 +73,7 @@ export default defineConfig({
         isMobile: true,
         hasTouch: true,
       },
-      testMatch: /responsive-mobile\.spec\.ts/,
+      testMatch: /(responsive-mobile|sprint-master-mobile)\.spec\.ts/,
     },
 
     // ── Tablets ────────────────────────────────────────────────────────────────
@@ -85,7 +85,7 @@ export default defineConfig({
         isMobile: true,
         hasTouch: true,
       },
-      testMatch: /responsive-mobile\.spec\.ts/,
+      testMatch: /(responsive-mobile|sprint-master-mobile)\.spec\.ts/,
     },
     {
       name: 'tablet-ipad-pro',
@@ -95,7 +95,7 @@ export default defineConfig({
         isMobile: true,
         hasTouch: true,
       },
-      testMatch: /responsive-mobile\.spec\.ts/,
+      testMatch: /(responsive-mobile|sprint-master-mobile)\.spec\.ts/,
     },
   ],
 
