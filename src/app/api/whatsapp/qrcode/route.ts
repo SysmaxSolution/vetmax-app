@@ -34,16 +34,29 @@ export async function GET() {
     return NextResponse.json({ base64: settings.qr_code, instanceName })
   }
 
-  // Sem QR salvo — instância pode estar conectada ou ainda iniciando
+  // Sem QR salvo — tenta obter direto da Evolution API e captura base64 da resposta
   const apiUrl = process.env.EVOLUTION_API_URL
   const apiKey = process.env.EVOLUTION_API_KEY
   if (apiUrl && apiKey) {
-    // Dispara reconexão para que o Evolution gere novo QRCODE_UPDATED via webhook
     try {
-      await fetch(`${apiUrl}/instance/connect/${instanceName}`, {
+      const evoRes = await fetch(`${apiUrl}/instance/connect/${instanceName}`, {
         headers: { apikey: apiKey },
       })
-    } catch { /* ignora — o webhook chegará em breve */ }
+      if (!evoRes.ok) {
+        return NextResponse.json(
+          { error: `Serviço WhatsApp indisponível (HTTP ${evoRes.status}). Verifique se o container Evolution e o tunnel Cloudflare estão ativos.` },
+          { status: 503 },
+        )
+      }
+      const data   = await evoRes.json()
+      const base64 = data?.base64 ?? data?.qrcode?.base64 ?? null
+      if (base64) return NextResponse.json({ base64, instanceName })
+    } catch {
+      return NextResponse.json(
+        { error: 'Erro ao conectar ao serviço WhatsApp. Verifique o tunnel Cloudflare (cloudflared tunnel run vetmax-wpp).' },
+        { status: 503 },
+      )
+    }
   }
 
   return NextResponse.json(
