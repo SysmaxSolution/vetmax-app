@@ -507,7 +507,8 @@ export async function savePrescription(params: {
   duration_days?:    number        // CFMV obrigatório para controlados
   is_controlled?:    boolean       // Medicamento controlado (receituário azul)
   prescription_type?: 'standard' | 'blue_receipt' | 'yellow_receipt' | 'special'
-}): Promise<{ id: string; medication: string; dose: string | null; is_controlled: boolean; prescription_type: string } | { error: string }> {
+  route_of_administration?: 'oral' | 'iv' | 'im' | 'subcutaneo' | 'topico' | 'inalacao' | 'outro'
+}): Promise<{ id: string; medication: string; dose: string | null; is_controlled: boolean; prescription_type: string; route_of_administration: string } | { error: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Não autenticado.' }
@@ -547,15 +548,16 @@ export async function savePrescription(params: {
   // Não-controlados: insert direto
   const admin = createAdminClient()
   const { data, error } = await admin.from('prescriptions').insert({
-    clinic_id:         profile.clinic_id,
-    consultation_id:   params.consultation_id,
-    medication:        params.medication,
-    dose:              params.dose ?? null,
-    frequency:         params.frequency ?? null,
-    duration_days:     params.duration_days ?? null,
-    is_controlled:     false,
-    prescription_type: params.prescription_type ?? 'standard',
-  }).select('id, medication, dose, is_controlled, prescription_type').single()
+    clinic_id:                profile.clinic_id,
+    consultation_id:          params.consultation_id,
+    medication:               params.medication,
+    dose:                     params.dose ?? null,
+    frequency:                params.frequency ?? null,
+    duration_days:            params.duration_days ?? null,
+    is_controlled:            false,
+    prescription_type:        params.prescription_type ?? 'standard',
+    route_of_administration:  params.route_of_administration ?? 'oral',
+  }).select('id, medication, dose, is_controlled, prescription_type, route_of_administration').single()
 
   if (error) return { error: 'Erro ao salvar prescrição: ' + error.message }
   return data

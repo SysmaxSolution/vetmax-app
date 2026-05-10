@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback, useEffect } from 'react'
+import { buildWakeRe, buildStopRe } from '@/lib/voice-triggers'
 
 export type VoiceAssistantState = 'IDLE' | 'RECORDING' | 'CONFIRM_WA'
 
@@ -51,42 +52,6 @@ export function useGroomingVoiceAssistant({ onAutoSave, onSendWA, startTriggers,
     wakeWordReRef.current = buildWakeRe(startTriggers ?? [])
     saveCmdReRef.current  = buildStopRe(stopTriggers  ?? [])
   }, [startTriggers, stopTriggers])
-
-  // ─── Builders de RegEx ───────────────────────────────────────────────────────
-
-  function esc(s: string) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') }
-
-  function buildWakeRe(custom: string[]): RegExp {
-    const d = [
-      'vet ?max', 'pet ?max', 'bet ?max', 'vet ?mas', 'ver ?max',
-      'assistente',
-      'gravar evolu[çc][ãa]o',
-      'iniciar grava[çc][ãa]o',
-      'come[çc]ar grava[çc][ãa]o',
-      'come[çc]ar registro',
-      'ativar assistente',
-      'ligar microfone',
-      'iniciar registro',
-      'gravar observa[çc][ãa]o',
-    ]
-    return new RegExp('\\b(' + [...d, ...custom.map(esc)].join('|') + ')\\b', 'i')
-  }
-
-  function buildStopRe(custom: string[]): RegExp {
-    const d = [
-      'salvar evolu[çc][ãa]o',
-      'finalizar',
-      'pode salvar',
-      'encerrar grava[çc][ãa]o',
-      'terminar grava[çc][ãa]o',
-      'parar grava[çc][ãa]o',
-      'concluir',
-      'encerrar registro',
-      'terminar registro',
-      'pronto[,.]?\\s*(?:pode)?\\s*(?:salvar)?',
-    ]
-    return new RegExp('(' + [...d, ...custom.map(esc)].join('|') + ')', 'i')
-  }
 
   // ─── Áudio ───────────────────────────────────────────────────────────────────
 

@@ -7,7 +7,7 @@ import {
   User, ClipboardList, Mic, MicOff, Plus, Trash2, Clock,
   Paperclip, FileText, Image as ImageIcon, File, Upload, ExternalLink,
   Brain, AlertTriangle, CheckCircle, Siren, MessageSquare, Volume2, VolumeX,
-  ChevronDown, ChevronUp,
+  ChevronDown, ChevronUp, MessageCircle,
 } from 'lucide-react'
 import {
   addClinicalEvolution,
@@ -536,9 +536,26 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
               <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">{card.patient.species} • {card.patient.breed || 'SRD'}</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-400">
-            <X className="h-6 w-6" />
-          </button>
+          <div className="flex items-center gap-2">
+            {card.status === 'ready_for_discharge' && card.tutor?.phone && (
+              <button
+                type="button"
+                onClick={() => setWhatsappPending({
+                  trigger: 'hospitalization_discharge',
+                  notes: records[0]?.notes ?? '',
+                  statusSaved: 'melhorou',
+                  medNames: records[0]?.medications?.map((m: any) => m.name).filter(Boolean) ?? [],
+                })}
+                className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-full transition-colors shadow-sm"
+              >
+                <MessageCircle className="h-3.5 w-3.5" />
+                Enviar Relatório de Alta
+              </button>
+            )}
+            <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-400">
+              <X className="h-6 w-6" />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 lg:grid-cols-2 gap-8">

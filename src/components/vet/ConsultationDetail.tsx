@@ -255,12 +255,13 @@ export default function ConsultationDetail({
 
   // Aba de desfecho (pré-selecionada pela IA de voz)
   const [outcomeTab, setOutcomeTab] = useState<'alta' | 'exames' | 'internacao' | 'prescricao' | 'eutanasia'>('alta')
-  const [prescriptions, setPrescriptions] = useState<Array<{ id: string; medication: string; dose: string }>>([])
+  const [prescriptions, setPrescriptions] = useState<Array<{ id: string; medication: string; dose: string; route_of_administration?: string }>>([])
   const [newMedication, setNewMedication] = useState('')
   const [newDose, setNewDose] = useState('')
   const [newFrequency, setNewFrequency] = useState('')
   const [newDurationDays, setNewDurationDays] = useState<string>('')
   const [newIsControlled, setNewIsControlled] = useState(false)
+  const [newRoute, setNewRoute] = useState<'oral' | 'iv' | 'im' | 'subcutaneo' | 'topico' | 'inalacao' | 'outro'>('oral')
   const [prescriptionSaved, setPrescriptionSaved] = useState(false)
   const [showEuthanasiaModal, setShowEuthanasiaModal] = useState(false)
 
@@ -1686,17 +1687,43 @@ export default function ConsultationDetail({
                   {prescriptionSaved && (
                     <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">Prescrição salva!</p>
                   )}
-                  <div className="space-y-2">
-                    {prescriptions.map(p => (
-                      <div key={p.id} className="flex items-center gap-3 rounded-lg border border-slate-200 px-4 py-2.5">
-                        <Pill className="h-4 w-4 text-violet-600 flex-shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-slate-900">{p.medication}</p>
-                          <p className="text-xs text-slate-500">{p.dose}</p>
-                        </div>
+                  {/* Prescrições agrupadas por via de administração */}
+                  {prescriptions.length > 0 && (() => {
+                    const ROUTE_LABELS: Record<string, string> = {
+                      oral: 'Via Oral', iv: 'Intravenoso (IV)', im: 'Intramuscular (IM)',
+                      subcutaneo: 'Subcutâneo (SC)', topico: 'Tópico', inalacao: 'Inalação', outro: 'Outra via',
+                    }
+                    const grouped = prescriptions.reduce<Record<string, typeof prescriptions>>((acc, p) => {
+                      const key = p.route_of_administration ?? 'oral'
+                      if (!acc[key]) acc[key] = []
+                      acc[key].push(p)
+                      return acc
+                    }, {})
+                    const routeOrder = ['oral','iv','im','subcutaneo','topico','inalacao','outro']
+                    const sortedKeys = Object.keys(grouped).sort((a, b) => routeOrder.indexOf(a) - routeOrder.indexOf(b))
+                    return (
+                      <div className="space-y-3">
+                        {sortedKeys.map(route => (
+                          <div key={route}>
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-violet-500 mb-1">
+                              {ROUTE_LABELS[route] ?? route}
+                            </p>
+                            <div className="space-y-1.5">
+                              {grouped[route].map(p => (
+                                <div key={p.id} className="flex items-center gap-3 rounded-lg border border-slate-200 px-4 py-2.5">
+                                  <Pill className="h-4 w-4 text-violet-600 flex-shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-semibold text-slate-900">{p.medication}</p>
+                                    <p className="text-xs text-slate-500">{p.dose}</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    )
+                  })()}
                   <div className="space-y-3 border-t border-slate-100 pt-4">
                     <div>
                       <label className="block text-xs font-semibold text-slate-600 mb-1">Medicamento</label>
@@ -1717,6 +1744,22 @@ export default function ConsultationDetail({
                         placeholder="Ex: 1 comprimido a cada 12h por 7 dias"
                         className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
                       />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Via de Administração</label>
+                      <select
+                        value={newRoute}
+                        onChange={e => setNewRoute(e.target.value as typeof newRoute)}
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 bg-white"
+                      >
+                        <option value="oral">Via Oral</option>
+                        <option value="iv">Intravenoso (IV)</option>
+                        <option value="im">Intramuscular (IM)</option>
+                        <option value="subcutaneo">Subcutâneo (SC)</option>
+                        <option value="topico">Tópico</option>
+                        <option value="inalacao">Inalação</option>
+                        <option value="outro">Outra via</option>
+                      </select>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
@@ -1786,24 +1829,26 @@ export default function ConsultationDetail({
                       onClick={async () => {
                         if (!newMedication.trim()) return
                         const result = await savePrescription({
-                          consultation_id: consultation.id,
-                          medication:      newMedication.trim(),
-                          dose:            newDose.trim() || undefined,
-                          frequency:       newFrequency.trim() || undefined,
-                          duration_days:   newDurationDays ? parseInt(newDurationDays) : undefined,
-                          is_controlled:   newIsControlled,
-                          prescription_type: newIsControlled ? 'blue_receipt' : 'standard',
+                          consultation_id:        consultation.id,
+                          medication:             newMedication.trim(),
+                          dose:                   newDose.trim() || undefined,
+                          frequency:              newFrequency.trim() || undefined,
+                          duration_days:          newDurationDays ? parseInt(newDurationDays) : undefined,
+                          is_controlled:          newIsControlled,
+                          prescription_type:      newIsControlled ? 'blue_receipt' : 'standard',
+                          route_of_administration: newRoute,
                         })
                         if ('error' in result) {
                           setToast({ type: 'error', message: result.error })
                           return
                         }
-                        setPrescriptions(prev => [...prev, { id: result.id, medication: result.medication, dose: result.dose ?? '' }])
+                        setPrescriptions(prev => [...prev, { id: result.id, medication: result.medication, dose: result.dose ?? '', route_of_administration: result.route_of_administration }])
                         setNewMedication('')
                         setNewDose('')
                         setNewFrequency('')
                         setNewDurationDays('')
                         setNewIsControlled(false)
+                        setNewRoute('oral')
                         setPrescriptionSaved(true)
                         setTimeout(() => setPrescriptionSaved(false), 2000)
                       }}
