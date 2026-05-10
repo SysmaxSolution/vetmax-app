@@ -1620,10 +1620,10 @@ export default function ConsultationDetail({
             </div>
 
             {/* Tab headers */}
-            <div className="flex border-b border-slate-100">
+            <div className="flex border-b border-slate-100 overflow-x-auto">
               <button
                 onClick={() => setOutcomeTab('alta')}
-                className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold transition-colors ${
+                className={`flex flex-shrink-0 items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold transition-colors ${
                   outcomeTab === 'alta'
                     ? 'border-b-2 border-slate-800 text-slate-900'
                     : 'text-slate-500 hover:text-slate-700'
@@ -1634,7 +1634,7 @@ export default function ConsultationDetail({
               </button>
               <button
                 onClick={() => setOutcomeTab('exames')}
-                className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold transition-colors ${
+                className={`flex flex-shrink-0 items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold transition-colors ${
                   outcomeTab === 'exames'
                     ? 'border-b-2 border-blue-600 text-blue-700'
                     : 'text-slate-500 hover:text-slate-700'
@@ -1647,7 +1647,7 @@ export default function ConsultationDetail({
                 role="tab"
                 aria-selected={outcomeTab === 'prescricao'}
                 onClick={() => setOutcomeTab('prescricao')}
-                className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold transition-colors ${
+                className={`flex flex-shrink-0 items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold transition-colors ${
                   outcomeTab === 'prescricao'
                     ? 'border-b-2 border-violet-600 text-violet-700'
                     : 'text-slate-500 hover:text-slate-700'
@@ -1658,7 +1658,7 @@ export default function ConsultationDetail({
               </button>
               <button
                 onClick={() => setOutcomeTab('internacao')}
-                className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold transition-colors ${
+                className={`flex flex-shrink-0 items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold transition-colors ${
                   outcomeTab === 'internacao'
                     ? 'border-b-2 border-rose-600 text-rose-700'
                     : 'text-slate-500 hover:text-slate-700'
@@ -1669,7 +1669,7 @@ export default function ConsultationDetail({
               </button>
               <button
                 onClick={() => setOutcomeTab('eutanasia')}
-                className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold transition-colors ${
+                className={`flex flex-shrink-0 items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold transition-colors ${
                   outcomeTab === 'eutanasia'
                     ? 'border-b-2 border-red-700 text-red-800'
                     : 'text-slate-400 hover:text-red-600'

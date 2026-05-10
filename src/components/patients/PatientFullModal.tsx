@@ -87,7 +87,7 @@ function TabButton({ active, locked, onClick, icon, label }: {
       onClick={onClick}
       disabled={locked}
       title={locked ? 'Salve o cadastro primeiro para acessar esta aba' : undefined}
-      className={`flex items-center gap-2 px-5 py-3 text-xs font-bold border-b-2 transition-all ${
+      className={`flex flex-shrink-0 items-center gap-1.5 px-2 sm:px-5 py-2 sm:py-3 text-xs font-bold border-b-2 transition-all ${
         locked
           ? 'border-transparent text-slate-300 cursor-not-allowed'
           : active
@@ -96,7 +96,7 @@ function TabButton({ active, locked, onClick, icon, label }: {
       }`}
     >
       {icon}
-      {label}
+      <span className="hidden sm:inline">{label}</span>
       {locked && <span className="ml-1 text-[9px] bg-slate-100 text-slate-400 rounded-full px-1.5 py-0.5 font-medium">após salvar</span>}
     </button>
   )
@@ -506,7 +506,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
           </div>
 
           {/* ── Tabs ── */}
-          <div className="flex gap-1 mb-[-1px]">
+          <div className="flex gap-1 mb-[-1px] overflow-x-auto">
             <TabButton active={tab === 'pet'}     onClick={() => setTab('pet')}     icon={<Dog     className="h-4 w-4" />} label="Paciente" />
             <TabButton active={tab === 'tutor'}   onClick={() => setTab('tutor')}   icon={<User    className="h-4 w-4" />} label="Tutor" />
             <TabButton active={tab === 'vacinas'} onClick={() => setTab('vacinas')} icon={<Syringe  className="h-4 w-4" />} label="Vacinas" />
@@ -516,7 +516,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
         </div>
 
         {/* ── Body ── */}
-        <div className="flex-1 overflow-y-auto p-8">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-8">
 
           {/* ══ ABA: PACIENTE ══ */}
           {tab === 'pet' && (
@@ -566,11 +566,11 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <FieldInput label="Nome do Pet *" value={petName} onChange={setPetName} placeholder="Ex: Thor, Luna..." data-mentor-step="pet-name-input" />
                 <FieldSelect label="Espécie" value={species} options={SPECIES_OPTIONS} onChange={setSpecies} data-mentor-step="pet-species-select" />
               </div>
-              <div className="grid grid-cols-3 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
                 <FieldInput label="Raça" value={breed} onChange={setBreed} placeholder="Ex: Labrador" data-mentor-step="pet-breed-input" />
                 <div>
                   <div className="flex items-center justify-between mb-1.5 ml-1">
@@ -737,7 +737,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
               )}
 
               <FieldInput label="Nome do Responsável *" value={tutorName} onChange={setTutorName} icon={<User className="h-4 w-4 text-slate-400" />} placeholder="Ex: Maria Silva" />
-              <div className="grid grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <FieldInput label="Celular *" value={tutorPhone} onChange={(v: string) => setTutorPhone(formatPhone(v))} placeholder="(00) 00000-0000" />
                 {/* Em edição, CPF fica aqui junto ao telefone */}
                 {isEdit && (

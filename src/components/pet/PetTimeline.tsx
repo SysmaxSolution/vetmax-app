@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Filter } from 'lucide-react'
+import { Filter, X } from 'lucide-react'
 import { DatePicker } from '@/components/ui/DatePicker'
 import type { TimelineEvent, TimelineEventType } from '@/lib/actions/timeline'
 import type { PrintState } from '@/components/vet/DocumentsSection'
@@ -269,7 +269,7 @@ function DocumentCard({
         </div>
         {hasFields && onPrint && (
           <button
-            onClick={handlePrint}
+            onClick={e => { e.stopPropagation(); handlePrint() }}
             className="flex-shrink-0 flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-purple-700 transition-colors"
           >
             <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
@@ -347,6 +347,7 @@ function AttachmentCard({ event }: { event: TimelineEvent }) {
             href={a.signed_url}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={e => e.stopPropagation()}
             className="flex-shrink-0 rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700 transition-colors"
           >
             Abrir
@@ -496,10 +497,296 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
   hospitalization_evolution: 'Internação', whatsapp_notification: 'WhatsApp',
 }
 
+// ─── Event Detail Modal ───────────────────────────────────────────────────────
+
+function EventDetailModal({ event, onClose }: { event: TimelineEvent; onClose: () => void }) {
+  const typeLabel = EVENT_TYPE_LABELS[event.type] ?? event.type
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100 flex-shrink-0">
+          <EventDot type={event.type} />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-slate-800">{typeLabel}</p>
+            <p className="text-xs text-slate-400">
+              {formatDate(event.date)} às {formatTime(event.date)}
+              {(event.performed_by ?? event.vet_name) && (
+                <span className="ml-2">· por {event.performed_by ?? event.vet_name}</span>
+              )}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 hover:bg-slate-100 rounded-full transition-colors flex-shrink-0"
+          >
+            <X className="h-4 w-4 text-slate-500" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="overflow-y-auto p-5 space-y-4">
+
+          {event.type === 'checkin' && event.checkin && (
+            <div className="space-y-2">
+              <p className="text-sm text-slate-700">
+                Motivo: <span className="font-semibold">{VISIT_REASON_LABELS[event.checkin.visit_reason] ?? event.checkin.visit_reason}</span>
+              </p>
+              <p className="text-sm text-slate-700">
+                Pagamento:{' '}
+                <span className={`font-semibold ${
+                  event.checkin.payment_status === 'paid' ? 'text-green-700' :
+                  event.checkin.payment_status === 'courtesy' ? 'text-purple-700' : 'text-amber-700'
+                }`}>
+                  {PAYMENT_STATUS_LABELS[event.checkin.payment_status] ?? event.checkin.payment_status}
+                </span>
+              </p>
+            </div>
+          )}
+
+          {event.type === 'triage' && event.triage && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                {event.triage.weight > 0 && <VitalItem label="Peso" value={`${event.triage.weight} kg`} />}
+                {event.triage.temperature > 0 && <VitalItem label="Temp. Retal" value={`${event.triage.temperature} °C`} />}
+                {event.triage.heart_rate > 0 && <VitalItem label="FC" value={`${event.triage.heart_rate} bpm`} />}
+                {event.triage.respiratory_rate > 0 && <VitalItem label="FR" value={`${event.triage.respiratory_rate} rpm`} />}
+                {event.triage.mucous_color && <VitalItem label="Mucosas" value={MUCOUS_LABELS[event.triage.mucous_color] ?? event.triage.mucous_color} />}
+                {event.triage.crt && <VitalItem label="TPC" value={event.triage.crt} />}
+              </div>
+              {event.triage.chief_complaint && (
+                <div>
+                  <p className="text-xs font-semibold text-amber-700 mb-1">Queixa Principal</p>
+                  <p className="text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">{event.triage.chief_complaint}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {event.type === 'consultation' && event.consultation && (() => {
+            const c = event.consultation!
+            return (
+              <div className="space-y-4">
+                {event.vet_name && (
+                  <p className="text-xs text-blue-600 font-medium">
+                    MV {event.vet_name}{event.vet_crmv ? ` · CRMV ${event.vet_crmv}` : ''}
+                  </p>
+                )}
+                {c.suggested_diagnosis && (() => {
+                  const diagText = formatDiagnosis(c.suggested_diagnosis)
+                  return diagText ? (
+                    <div>
+                      <p className="text-xs font-semibold text-blue-700 mb-1">Diagnóstico Sugerido</p>
+                      <p className="text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">{diagText}</p>
+                    </div>
+                  ) : null
+                })()}
+                {c.vet_notes && (
+                  <div>
+                    <p className="text-xs font-semibold text-blue-700 mb-1">Notas Clínicas</p>
+                    <p className="text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">{c.vet_notes}</p>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+
+          {event.type === 'medication' && event.medication && (
+            <div className="space-y-2">
+              <p className="text-base font-bold text-green-900">{event.medication.medication_name}</p>
+              {event.medication.dosage && (
+                <p className="text-sm text-slate-700">Dose: <span className="font-medium">{event.medication.dosage}</span></p>
+              )}
+              {event.medication.route && (
+                <p className="text-sm text-slate-700">Via: <span className="font-medium">{ROUTE_LABELS[event.medication.route] ?? event.medication.route}</span></p>
+              )}
+              {event.medication.notes && (
+                <div>
+                  <p className="text-xs font-semibold text-green-700 mb-1">Observações</p>
+                  <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{event.medication.notes}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {event.type === 'document' && event.document && (
+            <div className="space-y-3">
+              <p className="text-base font-bold text-purple-900">{event.document.document_name}</p>
+              {event.document.template_type && (
+                <span className="inline-block rounded-full bg-purple-100 px-3 py-1 text-xs font-medium text-purple-700">
+                  {TEMPLATE_TYPE_LABELS[event.document.template_type] ?? event.document.template_type}
+                </span>
+              )}
+            </div>
+          )}
+
+          {event.type === 'completed' && (
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center flex-shrink-0">
+                <svg className="h-5 w-5 text-teal-600" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                </svg>
+              </div>
+              <div>
+                <p className="font-semibold text-teal-800">Alta — Consulta Concluída</p>
+                {event.vet_name && <p className="text-sm text-teal-600 mt-0.5">MV responsável: {event.vet_name}</p>}
+              </div>
+            </div>
+          )}
+
+          {event.type === 'appointment' && event.appointment && (() => {
+            const a = event.appointment
+            const datePart = a.datetime.split('T')[0]
+            const timePart = a.datetime.split('T')[1]?.substring(0, 5) ?? ''
+            const dateLabel = new Date(datePart + 'T12:00:00').toLocaleDateString('pt-BR', {
+              weekday: 'long', day: '2-digit', month: 'long', year: 'numeric',
+            })
+            const statusCfg = APPOINTMENT_STATUS_LABELS[a.status] ?? { label: a.status, color: 'bg-slate-100 text-slate-600' }
+            return (
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-indigo-900 capitalize">{dateLabel}</p>
+                {timePart && <p className="text-xs text-indigo-600">Horário: {timePart}</p>}
+                <p className="text-xs text-indigo-700">{VISIT_REASON_LABELS[a.reason] ?? a.reason}</p>
+                <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusCfg.color}`}>{statusCfg.label}</span>
+                {a.notes && <p className="text-sm text-slate-700 italic mt-1">{a.notes}</p>}
+              </div>
+            )
+          })()}
+
+          {event.type === 'attachment' && event.attachment && (() => {
+            const a = event.attachment
+            const isImage = a.file_type.startsWith('image/')
+            return (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  {isImage ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={a.signed_url} alt={a.file_name} className="h-20 w-20 rounded-xl object-cover border border-rose-200 flex-shrink-0" />
+                  ) : (
+                    <div className="h-16 w-16 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-center text-3xl flex-shrink-0">📄</div>
+                  )}
+                  <div>
+                    <p className="font-semibold text-rose-900">{a.file_name}</p>
+                    <p className="text-xs text-rose-500 mt-0.5">{a.file_type}</p>
+                  </div>
+                </div>
+                {a.signed_url && (
+                  <a
+                    href={a.signed_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 transition-colors"
+                  >
+                    Abrir arquivo
+                  </a>
+                )}
+              </div>
+            )
+          })()}
+
+          {event.type === 'hospitalization_evolution' && event.hospitalization_evolution && (() => {
+            const ev = event.hospitalization_evolution!
+            const statusCfg = IMPROVEMENT_LABELS[ev.improvement_level] ?? { label: ev.improvement_level, color: 'bg-slate-100 text-slate-600' }
+            return (
+              <div className="space-y-3">
+                <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusCfg.color}`}>
+                  {statusCfg.label}
+                </span>
+                {ev.notes && (
+                  <div>
+                    <p className="text-xs font-semibold text-orange-700 mb-1">Evolução Clínica</p>
+                    <p className="text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">{ev.notes}</p>
+                  </div>
+                )}
+                {ev.medications.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-orange-700 mb-2">Medicações</p>
+                    <div className="space-y-1.5">
+                      {ev.medications.map((m, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-orange-900">{m.name}</span>
+                          {m.dosage && <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs text-orange-700">{m.dosage}</span>}
+                          {m.route && <span className="text-xs text-orange-600">{m.route}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {ev.user_name && <p className="text-xs text-slate-400 mt-2">Registrado por: {ev.user_name}</p>}
+              </div>
+            )
+          })()}
+
+          {event.type === 'grooming_evolution' && event.grooming_evolution && (() => {
+            const gr = event.grooming_evolution!
+            const behCfg = gr.behavior ? BEHAVIOR_LABELS[gr.behavior] : null
+            return (
+              <div className="space-y-3">
+                {behCfg && (
+                  <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${behCfg.color}`}>
+                    {behCfg.label}
+                  </span>
+                )}
+                {gr.services_applied.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-teal-700 mb-1">Serviços</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {gr.services_applied.map((s, i) => (
+                        <span key={i} className="rounded-full bg-teal-100 px-2.5 py-0.5 text-xs font-medium text-teal-800">{s}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {gr.products_used.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-teal-700 mb-1">Produtos</p>
+                    <p className="text-sm text-slate-700">{gr.products_used.join(', ')}</p>
+                  </div>
+                )}
+                {gr.observations && (
+                  <div>
+                    <p className="text-xs font-semibold text-teal-700 mb-1">Observações</p>
+                    <p className="text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">{gr.observations}</p>
+                  </div>
+                )}
+                {gr.user_name && <p className="text-xs text-slate-400">Registrado por: {gr.user_name}</p>}
+              </div>
+            )
+          })()}
+
+          {event.type === 'whatsapp_notification' && event.whatsapp_notification && (
+            <div className="space-y-3">
+              <span className="inline-block rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
+                {TRIGGER_LABELS[event.whatsapp_notification.trigger_type] ?? event.whatsapp_notification.trigger_type}
+              </span>
+              <div>
+                <p className="text-xs font-semibold text-green-700 mb-1">Mensagem</p>
+                <p className="text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">{event.whatsapp_notification.message}</p>
+              </div>
+              {event.whatsapp_notification.tutor_name && (
+                <p className="text-xs text-slate-400">Destinatário: {event.whatsapp_notification.tutor_name}</p>
+              )}
+            </div>
+          )}
+
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function PetTimeline({ events, onPrint, onEdit }: Props) {
   const [filterType, setFilterType] = useState<TimelineEventType | 'all'>('all')
   const [filterDate, setFilterDate] = useState('')
   const [showFilters, setShowFilters] = useState(false)
+  const [expandedEvent, setExpandedEvent] = useState<TimelineEvent | null>(null)
 
   if (events.length === 0) {
     return (
@@ -523,6 +810,9 @@ export default function PetTimeline({ events, onPrint, onEdit }: Props) {
 
   return (
     <div className="space-y-6">
+      {expandedEvent && (
+        <EventDetailModal event={expandedEvent} onClose={() => setExpandedEvent(null)} />
+      )}
       {/* Filtros */}
       <div className="flex items-center gap-2 flex-wrap">
         <button
@@ -605,18 +895,26 @@ export default function PetTimeline({ events, onPrint, onEdit }: Props) {
                         </button>
                       )}
                     </div>
-                    {/* Card */}
-                    {event.type === 'checkin'                   && <CheckInCard event={event} />}
-                    {event.type === 'triage'                    && <TriageCard event={event} />}
-                    {event.type === 'consultation'              && <ConsultationCard event={event} />}
-                    {event.type === 'medication'                && <MedicationCard event={event} />}
-                    {event.type === 'document'                  && <DocumentCard event={event} onPrint={onPrint} />}
-                    {event.type === 'attachment'                && <AttachmentCard event={event} />}
-                    {event.type === 'completed'                 && <CompletedCard event={event} />}
-                    {event.type === 'appointment'               && <AppointmentCard event={event} />}
-                    {event.type === 'hospitalization_evolution' && <HospitalizationEvolutionCard event={event} />}
-                    {event.type === 'grooming_evolution'        && <GroomingEvolutionCard event={event} />}
-                    {event.type === 'whatsapp_notification'     && <WhatsAppNotificationCard event={event} />}
+                    {/* Card — clicável para ver detalhes completos */}
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setExpandedEvent(event)}
+                      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setExpandedEvent(event) }}
+                      className="cursor-pointer rounded-xl hover:ring-2 hover:ring-teal-400/50 hover:ring-offset-1 focus:outline-none focus:ring-2 focus:ring-teal-400/50 transition-all"
+                    >
+                      {event.type === 'checkin'                   && <CheckInCard event={event} />}
+                      {event.type === 'triage'                    && <TriageCard event={event} />}
+                      {event.type === 'consultation'              && <ConsultationCard event={event} />}
+                      {event.type === 'medication'                && <MedicationCard event={event} />}
+                      {event.type === 'document'                  && <DocumentCard event={event} onPrint={onPrint} />}
+                      {event.type === 'attachment'                && <AttachmentCard event={event} />}
+                      {event.type === 'completed'                 && <CompletedCard event={event} />}
+                      {event.type === 'appointment'               && <AppointmentCard event={event} />}
+                      {event.type === 'hospitalization_evolution' && <HospitalizationEvolutionCard event={event} />}
+                      {event.type === 'grooming_evolution'        && <GroomingEvolutionCard event={event} />}
+                      {event.type === 'whatsapp_notification'     && <WhatsAppNotificationCard event={event} />}
+                    </div>
                   </div>
                 </div>
               ))}
