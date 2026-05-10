@@ -1,11 +1,12 @@
-# start-services.ps1 — Inicia Evolution API (Docker) e Cloudflare Tunnel
-# Pode ser chamado manualmente ou pelo watchdog/Task Scheduler
+﻿# start-services.ps1 - Inicia Docker Desktop, Evolution API e Cloudflare Tunnel
+# Pode ser chamado manualmente ou pelo watchdog
 
 $scriptDir  = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $composeDir = $scriptDir
 $logFile    = "$scriptDir\services.log"
+$dockerExe  = "C:\Program Files\Docker\Docker\Docker Desktop.exe"
 
-# Resolução robusta do cloudflared: tenta WinGet primeiro, depois PATH
+# Resolucao robusta do cloudflared: tenta WinGet primeiro, depois PATH
 $cfExe = "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\Cloudflare.cloudflared_Microsoft.Winget.Source_8wekyb3d8bbwe\cloudflared.exe"
 if (-not (Test-Path $cfExe)) {
     $cfFound = Get-Command cloudflared -ErrorAction SilentlyContinue
@@ -18,7 +19,44 @@ function Write-Log($msg) {
     Add-Content -Path $logFile -Value $line -Encoding UTF8
 }
 
-# ── Evolution API (Docker Compose) ──────────────────────────────────────────
+# --- Docker Desktop ----------------------------------------------------------
+Write-Log "[Docker] Verificando daemon..."
+$dockerOk = $false
+try {
+    docker info 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 0) { $dockerOk = $true }
+} catch {}
+
+if (-not $dockerOk) {
+    Write-Log "[Docker] Daemon nao esta rodando. Iniciando Docker Desktop..."
+    if (Test-Path $dockerExe) {
+        Start-Process $dockerExe
+        Write-Log "[Docker] Aguardando daemon ficar disponivel (ate 120s)..."
+        $waited = 0
+        while ($waited -lt 120) {
+            Start-Sleep -Seconds 5
+            $waited += 5
+            docker info 2>$null | Out-Null
+            if ($LASTEXITCODE -eq 0) {
+                Write-Log "[Docker] Daemon disponivel apos ${waited}s."
+                $dockerOk = $true
+                break
+            }
+            Write-Log "[Docker] Aguardando... (${waited}s / 120s)"
+        }
+        if (-not $dockerOk) {
+            Write-Log "[Docker] ERRO: Docker daemon nao ficou disponivel em 120s. Abortando."
+            exit 1
+        }
+    } else {
+        Write-Log "[Docker] ERRO: Docker Desktop nao encontrado em $dockerExe"
+        exit 1
+    }
+} else {
+    Write-Log "[Docker] Daemon OK."
+}
+
+# --- Evolution API (Docker Compose) -----------------------------------------
 Write-Log "[Evolution] Verificando containers..."
 $apiRunning = docker ps --filter "name=evolution-api" --filter "status=running" -q 2>$null
 if (-not $apiRunning) {
@@ -26,9 +64,8 @@ if (-not $apiRunning) {
     Set-Location $composeDir
     docker compose up -d 2>&1 | ForEach-Object { Write-Log "[Evolution] $_" }
 
-    # Aguarda a Evolution API responder (até 90s)
     Write-Log "[Evolution] Aguardando API responder na porta 8080..."
-    $maxWait  = 90
+    $maxWait  = 120
     $waited   = 0
     $apiReady = $false
     while ($waited -lt $maxWait) {
@@ -44,14 +81,14 @@ if (-not $apiRunning) {
         }
     }
     if (-not $apiReady) {
-        Write-Log "[Evolution] AVISO: API nao respondeu em ${maxWait}s — verifique os logs do container."
+        Write-Log "[Evolution] AVISO: API nao respondeu em ${maxWait}s - verifique logs do container."
         docker logs --tail 30 evolution-api 2>&1 | ForEach-Object { Write-Log "[Evolution-log] $_" }
     }
 } else {
-    Write-Log "[Evolution] Containers ja estao rodando — OK"
+    Write-Log "[Evolution] Containers ja estao rodando - OK"
 }
 
-# ── Cloudflare Tunnel ────────────────────────────────────────────────────────
+# --- Cloudflare Tunnel -------------------------------------------------------
 Write-Log "[Cloudflared] Verificando processo..."
 $cfRunning = Get-Process cloudflared -ErrorAction SilentlyContinue
 if (-not $cfRunning) {
@@ -65,7 +102,7 @@ if (-not $cfRunning) {
         Write-Log "[Cloudflared] Processo iniciado em background."
     }
 } else {
-    Write-Log "[Cloudflared] Ja esta rodando (PID $($cfRunning.Id)) — OK"
+    Write-Log "[Cloudflared] Ja esta rodando (PID $($cfRunning.Id)) - OK"
 }
 
 Write-Log "[SysMax] Inicializacao concluida."

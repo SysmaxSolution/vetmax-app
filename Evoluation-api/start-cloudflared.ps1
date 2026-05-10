@@ -1,6 +1,6 @@
-# start-cloudflared.ps1 — Inicia o tunnel Cloudflare com loop de auto-restart
+﻿# start-cloudflared.ps1 - Inicia o tunnel Cloudflare com loop de auto-restart
 
-# Resolução robusta do cloudflared: tenta WinGet primeiro, depois PATH
+# Resolucao robusta do cloudflared: tenta WinGet primeiro, depois PATH
 $cfExe = "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\Cloudflare.cloudflared_Microsoft.Winget.Source_8wekyb3d8bbwe\cloudflared.exe"
 if (-not (Test-Path $cfExe)) {
     $cfFound = Get-Command cloudflared -ErrorAction SilentlyContinue
@@ -13,7 +13,7 @@ if (-not (Test-Path $cfExe)) {
 }
 
 Write-Host "[cloudflared] Usando: $cfExe"
-Write-Host "[cloudflared] Iniciando tunnel wpp.sysmaxsolutions.com -> localhost:8080 (HTTP/2, auto-restart)..."
+Write-Host "[cloudflared] Iniciando tunnel wpp.sysmaxsolutions.com -> localhost:8080 (auto-restart)..."
 
 while ($true) {
     & $cfExe tunnel --protocol http2 --no-autoupdate run
