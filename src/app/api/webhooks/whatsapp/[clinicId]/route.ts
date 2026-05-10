@@ -202,13 +202,23 @@ async function processInboundMessage(params: {
     .update({ last_message_at: new Date().toISOString() })
     .eq('id', conversation.id)
 
-  // 4. Bot inativo: mensagem salva, clínica responde manualmente — sem IA
+  // 4. @lid irresolvível: não conseguimos enviar resposta automática — garante modo human e sai
+  if (phone.includes('@lid')) {
+    if (conversation.status !== 'human') {
+      await admin.from('whatsapp_conversations').update({ status: 'human' }).eq('id', conversation.id)
+      console.info(`[WPP Bot] clinicId=${clinicId} — conversa @lid movida para modo human`)
+    }
+    console.info(`[WPP Bot] clinicId=${clinicId} — phone @lid irresolvível, mensagem salva para atendimento manual`)
+    return
+  }
+
+  // 5. Bot inativo: mensagem salva, clínica responde manualmente — sem IA
   if (!botConfig.is_active) {
     console.info(`[WPP Bot] clinicId=${clinicId} — bot inativo, mensagem salva para atendimento manual`)
     return
   }
 
-  // 5. Verifica horário de funcionamento (UTC — Vercel roda em UTC)
+  // 6. Verifica horário de funcionamento (UTC — Vercel roda em UTC)
   if (botConfig.working_hours_start && botConfig.working_hours_end) {
     const now        = new Date()
     const [hStart, mStart] = botConfig.working_hours_start.split(':').map(Number)
@@ -225,13 +235,13 @@ async function processInboundMessage(params: {
     }
   }
 
-  // 6. Se conversa em modo 'human', não chama o bot
+  // 7. Se conversa em modo 'human', não chama o bot
   if (conversation.status === 'human') {
     console.info(`[WPP Bot] clinicId=${clinicId} — conversa em modo human, ignorando bot`)
     return
   }
 
-  // 7. Chama o agente IA
+  // 8. Chama o agente IA
   console.info(`[WPP Bot] clinicId=${clinicId} — chamando agente IA`)
   const result = await runWhatsappAgent({
     clinicId,
@@ -244,7 +254,7 @@ async function processInboundMessage(params: {
 
   console.info(`[WPP Bot] resposta="${result.reply.substring(0, 80)}" handoff=${result.handoff}`)
 
-  // 8. Salva resposta no banco
+  // 9. Salva resposta no banco
   await admin.from('whatsapp_messages').insert({
     conversation_id: conversation.id,
     clinic_id:       clinicId,
@@ -253,12 +263,12 @@ async function processInboundMessage(params: {
     sent_by:         'bot',
   })
 
-  // 9. Se handoff, atualiza status da conversa
+  // 10. Se handoff, atualiza status da conversa
   if (result.handoff) {
     await admin.from('whatsapp_conversations').update({ status: 'human' }).eq('id', conversation.id)
   }
 
-  // 10. Envia resposta via Evolution API
+  // 11. Envia resposta via Evolution API
   const sent = await sendBotReply(clinicId, phone, result.reply, admin)
   if (!sent && phone.includes('@lid')) {
     // @lid irresolvível: move para atendimento humano para não entrar em loop
