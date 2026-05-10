@@ -109,7 +109,7 @@ export default function VetWorkspace({ queue, completed, clinicId }: VetWorkspac
 
         {/* ── Fila de Espera ───────────────────────────────────────────────── */}
         {tab === 'fila' && (
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200">
+          <div data-mentor-step="vet-queue" className="bg-white rounded-xl shadow-sm border border-slate-200">
             <div className="border-b border-slate-200 px-6 py-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100">

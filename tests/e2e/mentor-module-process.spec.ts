@@ -28,21 +28,23 @@ const TOURS: Record<string, TourDef> = {
   recepcao: {
     path: '/dashboard/reception',
     steps: [
-      { target: 'reception-checkin-btn', title: 'Check-in do Animal' },
-      { target: 'reception-queue',       title: 'Fila de Espera' },
+      { target: 'reception-search-input', title: 'Busca de Tutor ou Pet' },
+      { target: 'reception-new-btn',      title: 'Novo Cadastro' },
+      { target: 'reception-queue',        title: 'Fila de Espera' },
     ],
   },
   'sala-espera': {
     path: '/dashboard/reception',
     steps: [
-      { target: 'reception-queue',       title: 'Sala de Espera' },
-      { target: 'reception-checkin-btn', title: 'Novo Check-in' },
+      { target: 'reception-queue',   title: 'Sala de Espera' },
+      { target: 'reception-new-btn', title: 'Novo Check-in' },
     ],
   },
   triagem: {
     path: '/dashboard/triage',
     steps: [
       { target: 'nurse-queue',      title: 'Fila de Triagem' },
+      { target: 'triage-add-btn',   title: 'Adicionar Manualmente' },
       { target: 'triage-voice-btn', title: 'Triagem por Voz' },
       { target: 'triage-save-btn',  title: 'Concluir Triagem' },
     ],
@@ -50,51 +52,53 @@ const TOURS: Record<string, TourDef> = {
   consulta: {
     path: '/dashboard/vet',
     steps: [
-      { target: 'vet-record-btn',   title: 'Gravar Consulta' },
-      { target: 'vet-soap-section', title: 'Prontuário SOAP' },
-      { target: 'vet-save-btn',     title: 'Salvar Prontuário' },
+      { target: 'vet-queue',           title: 'Fila do Consultório' },
+      { target: 'vet-notes-textarea',  title: 'Anotações Clínicas (SOAP)' },
+      { target: 'vet-save-notes-btn',  title: 'Salvar Prontuário' },
     ],
   },
   exames: {
     path: '/dashboard/exams',
     steps: [
-      { target: 'exams-queue',      title: 'Fila de Exames' },
-      { target: 'exams-result-btn', title: 'Registrar Resultado' },
+      { target: 'exams-queue',            title: 'Fila de Exames' },
+      { target: 'exams-request-btn',      title: 'Solicitar Exame' },
+      { target: 'exams-result-textarea',  title: 'Registrar Laudo' },
     ],
   },
   internacao: {
     path: '/dashboard/hospitalization',
     steps: [
-      { target: 'hospitalization-list',          title: 'Lista de Internados' },
-      { target: 'hospitalization-discharge-btn', title: 'Dar Alta Hospitalar' },
+      { target: 'hospitalization-list', title: 'Quadro de Internados' },
+      { target: 'hosp-discharge-btn',   title: 'Dar Alta Hospitalar' },
     ],
   },
   grooming: {
     path: '/dashboard/grooming',
     steps: [
-      { target: 'grooming-queue',     title: 'Fila do Banho e Tosa' },
+      { target: 'grooming-queue',     title: 'Kanban de Banho e Tosa' },
       { target: 'grooming-voice-btn', title: 'Registro por Voz' },
     ],
   },
   alta: {
     path: '/dashboard/reception',
     steps: [
-      { target: 'kanban-board',          title: 'Quadro de Atendimentos' },
-      { target: 'kanban-col-completed',  title: 'Coluna Alta' },
+      { target: 'reception-kanban-toggle', title: 'Ativar Visualização Kanban' },
+      { target: 'kanban-board',            title: 'Quadro de Atendimentos' },
+      { target: 'kanban-col-completed',    title: 'Coluna Alta' },
     ],
   },
   'cadastro-pet': {
     path: '/dashboard/patients',
     steps: [
-      { target: 'btn-novo-paciente',      title: 'Abrir Cadastro de Novo Pet', waitForNext: true },
-      { target: 'pet-name-input',         title: 'Nome do Pet' },
-      { target: 'pet-species-select',     title: 'Espécie' },
-      { target: 'pet-breed-input',        title: 'Raça' },
-      { target: 'pet-reproductive-select',title: 'Estado Reprodutivo' },
-      { target: 'pet-behavior-tags',      title: 'Tags de Comportamento' },
-      { target: 'pet-allergies',          title: 'Alergias Conhecidas' },
-      { target: 'pet-chronic-diseases',   title: 'Doenças Crônicas' },
-      { target: 'pet-microchip',          title: 'Microchip ID' },
+      { target: 'btn-novo-paciente',       title: 'Abrir Cadastro de Novo Pet', waitForNext: true },
+      { target: 'pet-name-input',          title: 'Nome do Pet' },
+      { target: 'pet-species-select',      title: 'Espécie' },
+      { target: 'pet-breed-input',         title: 'Raça' },
+      { target: 'pet-reproductive-select', title: 'Estado Reprodutivo' },
+      { target: 'pet-behavior-tags',       title: 'Tags de Comportamento' },
+      { target: 'pet-allergies',           title: 'Alergias Conhecidas' },
+      { target: 'pet-chronic-diseases',    title: 'Doenças Crônicas' },
+      { target: 'pet-microchip',           title: 'Microchip ID' },
     ],
   },
 }
@@ -228,12 +232,15 @@ test.describe('MENTOR-003 — Tour: triagem', () => {
     const count0 = await assertStep(page, steps[0], steps[1].title)
     expect(count0, 'nurse-queue deve estar na DOM').toBeGreaterThan(0)
 
-    // Passos 1 e 2 dependem de um animal na fila — soft-check
+    // Passos 1, 2 e 3 dependem de um animal na fila — soft-check
     await advanceStep(page)
     await assertStep(page, steps[1], steps[2].title)
 
     await advanceStep(page)
-    await assertStep(page, steps[2])
+    await assertStep(page, steps[2], steps[3].title)
+
+    await advanceStep(page)
+    await assertStep(page, steps[3])
     await expect(page.getByTestId('mentor-balloon').getByRole('button', { name: /concluir/i })).toBeVisible()
   })
 })
@@ -485,9 +492,11 @@ test.describe('MENTOR-010 — Spotlight aparece junto com o balão (sem delay vi
   })
 
   test('spotlight sobre reception-queue — elemento está na DOM quando balão exibe', async ({ page }) => {
-    // Avança para o passo 1 (reception-queue) que sempre está na DOM independente de dados
+    // Avança para o passo 2 (reception-queue) que sempre está na DOM independente de dados
     await startTour(page, 'recepcao')
     await assertStep(page, TOURS.recepcao.steps[0])
+    await advanceStep(page)
+    await assertStep(page, TOURS.recepcao.steps[1])
     await advanceStep(page)
 
     const balloon = page.getByTestId('mentor-balloon')

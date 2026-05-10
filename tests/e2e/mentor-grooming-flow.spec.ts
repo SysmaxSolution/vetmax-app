@@ -27,7 +27,7 @@ async function loginAs(page: Page, role: keyof typeof ROLE_MAP) {
   const user = fixtures.users[ROLE_MAP[role]]
   await page.goto(`${BASE}/login`)
   await page.getByLabel(/e-?mail/i).fill(user.email)
-  await page.getByLabel(/senha/i).fill(user.password)
+  await page.locator('#password').fill(user.password)
   await page.getByRole('button', { name: /entrar/i }).click()
   await page.waitForURL(/\/(dashboard|reception|grooming|management|onboarding)/, { timeout: 30_000 })
 }
@@ -91,7 +91,7 @@ test.describe('Mentor — Fluxo Banho e Tosa (módulos clínicos desativados)', 
     await expect(groomingChip).toBeVisible({ timeout: 5_000 })
     await groomingChip.click()
 
-    await expectTourBalloon(page, /fila do banho e tosa/i)
+    await expectTourBalloon(page, /kanban de banho e tosa/i)
     await assertBalloonInViewport(page)
     await advanceTourToEnd(page)
 
@@ -115,7 +115,7 @@ test.describe('Mentor — Fluxo Banho e Tosa (módulos clínicos desativados)', 
     await expect(actionBtn).toBeVisible({ timeout: 8_000 })
     await actionBtn.click()
 
-    await expectTourBalloon(page, /fila do banho e tosa/i)
+    await expectTourBalloon(page, /kanban de banho e tosa/i)
     await assertBalloonInViewport(page)
 
     // Avança para o passo de Registro por Voz
@@ -165,12 +165,12 @@ test.describe('Mentor — Fluxo Banho e Tosa (módulos clínicos desativados)', 
       {
         url: '/dashboard/reception',
         chipPattern: /recepção/i,
-        firstStepTitle: /check-in do animal/i,
+        firstStepTitle: /busca de tutor ou pet/i,
       },
       {
         url: '/dashboard/grooming',
         chipPattern: /banho.*tosa/i,
-        firstStepTitle: /fila do banho e tosa/i,
+        firstStepTitle: /kanban de banho e tosa/i,
       },
     ]
 

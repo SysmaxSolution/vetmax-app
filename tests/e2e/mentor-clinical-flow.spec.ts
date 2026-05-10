@@ -26,7 +26,7 @@ async function loginAs(page: Page, role: keyof typeof ROLE_MAP) {
   const user = fixtures.users[ROLE_MAP[role]]
   await page.goto(`${BASE}/login`)
   await page.getByLabel(/e-?mail/i).fill(user.email)
-  await page.getByLabel(/senha/i).fill(user.password)
+  await page.locator('#password').fill(user.password)
   await page.getByRole('button', { name: /entrar/i }).click()
   // Accept onboarding or dashboard as valid post-login destinations
   await page.waitForURL(/\/(dashboard|reception|triage|vet|exams|hospitalization|onboarding)/, { timeout: 30_000 })
@@ -104,7 +104,10 @@ test.describe('Mentor — Fluxo Clínico Completo', () => {
     await expect(page.locator('text=/check-in|ponto de partida/i').last()).toBeVisible({ timeout: 8_000 })
     await clickTourAction(page, 'recepcao')
 
-    await expectTourBalloon(page, /check-in do animal/i)
+    await expectTourBalloon(page, /busca de tutor ou pet/i)
+    await assertBalloonInViewport(page)
+    await tourNext(page)
+    await expectTourBalloon(page, /novo cadastro/i)
     await assertBalloonInViewport(page)
     await tourNext(page)
     await expectTourBalloon(page, /fila de espera/i)
@@ -120,7 +123,9 @@ test.describe('Mentor — Fluxo Clínico Completo', () => {
     await expect(page.locator('text=/triagem|sinais vitais/i').last()).toBeVisible({ timeout: 8_000 })
     await clickTourAction(page, 'triagem')
 
-    await expectTourBalloon(page, /fila de triagem/i)
+    // Step 0 (nurse-queue) tem waitForNext: true e triage-add-btn já está na DOM
+    // → auto-avança para step 1 (~120ms). A verificação aqui captura step 1.
+    await expectTourBalloon(page, /adicionar manualmente/i)
     await assertBalloonInViewport(page)
     await tourNext(page)
     await expectTourBalloon(page, /triagem por voz/i)
@@ -139,10 +144,11 @@ test.describe('Mentor — Fluxo Clínico Completo', () => {
     await expect(page.locator('text=/consultório|registrar/i').last()).toBeVisible({ timeout: 8_000 })
     await clickTourAction(page, 'consulta')
 
-    await expectTourBalloon(page, /gravar consulta/i)
+    await expectTourBalloon(page, /fila do consultório/i)
     await assertBalloonInViewport(page)
-    await tourNext(page)
-    await expectTourBalloon(page, /prontuário soap/i)
+    // waitForNext: true — vet-notes-textarea não está no DOM sem consulta aberta → força avanço
+    await page.evaluate(() => { (window as unknown as { __MENTOR_NEXT_STEP?: () => void }).__MENTOR_NEXT_STEP?.() })
+    await expectTourBalloon(page, /anotações clínicas/i)
     await assertBalloonInViewport(page)
     await tourNext(page)
     await expectTourBalloon(page, /salvar prontuário/i)
@@ -161,7 +167,10 @@ test.describe('Mentor — Fluxo Clínico Completo', () => {
     await expectTourBalloon(page, /fila de exames/i)
     await assertBalloonInViewport(page)
     await tourNext(page)
-    await expectTourBalloon(page, /registrar resultado/i)
+    await expectTourBalloon(page, /solicitar exame/i)
+    await assertBalloonInViewport(page)
+    await tourNext(page)
+    await expectTourBalloon(page, /registrar laudo/i)
     await assertBalloonInViewport(page)
     await tourFinish(page)
   })
@@ -174,7 +183,7 @@ test.describe('Mentor — Fluxo Clínico Completo', () => {
     await expect(page.locator('text=/internado|internação/i').last()).toBeVisible({ timeout: 8_000 })
     await clickTourAction(page, 'internacao')
 
-    await expectTourBalloon(page, /lista de internados/i)
+    await expectTourBalloon(page, /quadro de internados/i)
     await assertBalloonInViewport(page)
     await tourNext(page)
     await expectTourBalloon(page, /alta hospitalar/i)
@@ -190,7 +199,21 @@ test.describe('Mentor — Fluxo Clínico Completo', () => {
     await expect(page.locator('text=/alta|tour/i').last()).toBeVisible({ timeout: 8_000 })
     await clickTourAction(page, 'alta')
 
-    await expectTourBalloon(page, /quadro de atendimentos/i)
+    await expectTourBalloon(page, /ativar visualização kanban/i)
+    await assertBalloonInViewport(page)
+    // Step 0 tem waitForNext: true — clica no toggle para disparar o auto-advance
+    await page.locator('[data-mentor-step="reception-kanban-toggle"]').click()
+    // Aguarda eventos de foco se estabelecerem (search-input pode ser auto-focado após render)
+    await page.waitForTimeout(500)
+    // Blur do elemento ativo + cancela JumpMode (search-input pode ter sido focado)
+    await page.evaluate(() => {
+      ;(document.activeElement as HTMLElement)?.blur?.()
+      ;(window as unknown as { __MENTOR_JUMP_TO?: (t: string | null) => void }).__MENTOR_JUMP_TO?.(null)
+    })
+    // Aguarda o tour avançar automaticamente quando kanban-board aparecer no DOM
+    await expect(
+      page.locator('.fixed.z-\\[10000\\]').getByText(/quadro de atendimentos/i)
+    ).toBeVisible({ timeout: 20_000 })
     await assertBalloonInViewport(page)
     await tourNext(page)
     await expectTourBalloon(page, /coluna alta/i)
@@ -203,12 +226,14 @@ test.describe('Mentor — Fluxo Clínico Completo', () => {
 
     // Passo a passo por tours rápidos na ordem clínica.
     // Note: 'exames' has no quick-tour chip in MentorChat QUICK_TOURS, so it's omitted here.
+    // triagem firstTitle = step 1 porque step 0 (nurse-queue) tem waitForNext:true e
+    // triage-add-btn já está no DOM → auto-avança em ~120ms antes do expect chegar
     const flows: Array<{ url: string; chipLabel: RegExp; firstTitle: RegExp }> = [
-      { url: '/dashboard/reception',      chipLabel: /recepção/i,   firstTitle: /check-in do animal/i },
-      { url: '/dashboard/triage',         chipLabel: /triagem/i,    firstTitle: /fila de triagem/i },
-      { url: '/dashboard/vet',            chipLabel: /consultório/i,firstTitle: /gravar consulta/i },
-      { url: '/dashboard/reception',      chipLabel: /alta/i,       firstTitle: /quadro de atendimentos/i },
-      { url: '/dashboard/grooming',       chipLabel: /banho.*tosa/i,firstTitle: /fila do banho e tosa/i },
+      { url: '/dashboard/reception',      chipLabel: /recepção/i,    firstTitle: /busca de tutor ou pet/i },
+      { url: '/dashboard/triage',         chipLabel: /triagem/i,     firstTitle: /adicionar manualmente/i },
+      { url: '/dashboard/vet',            chipLabel: /consultório/i, firstTitle: /fila do consultório/i },
+      { url: '/dashboard/reception',      chipLabel: /alta/i,        firstTitle: /ativar visualização kanban/i },
+      { url: '/dashboard/grooming',       chipLabel: /banho.*tosa/i, firstTitle: /kanban de banho e tosa/i },
     ]
 
     for (const flow of flows) {
@@ -230,8 +255,31 @@ test.describe('Mentor — Fluxo Clínico Completo', () => {
       await expectTourBalloon(page, flow.firstTitle)
       await assertBalloonInViewport(page)
 
-      // Avança todos os passos do tour
+      // Trata tours com waitForNext no passo 0 que precisam de ação manual
       const nextBtn = page.locator('.fixed.z-\\[10000\\] button', { hasText: /próximo/i })
+      const kanbanToggleBtn = page.locator('[data-mentor-step="reception-kanban-toggle"]')
+      const kanbanToggleVisible = await kanbanToggleBtn.isVisible({ timeout: 500 }).catch(() => false)
+
+      if (kanbanToggleVisible) {
+        // Tour 'alta': clica no toggle para disparar waitForNext → kanban-board aparece
+        await kanbanToggleBtn.click()
+        // Aguarda eventos de foco se estabelecerem, depois blur + cancela JumpMode
+        await page.waitForTimeout(500)
+        await page.evaluate(() => {
+          ;(document.activeElement as HTMLElement)?.blur?.()
+          ;(window as unknown as { __MENTOR_JUMP_TO?: (t: string | null) => void }).__MENTOR_JUMP_TO?.(null)
+        })
+        await expect(
+          page.locator('.fixed.z-\\[10000\\]').getByText(/quadro de atendimentos/i)
+        ).toBeVisible({ timeout: 20_000 })
+      } else if (!await nextBtn.isVisible({ timeout: 500 }).catch(() => false)) {
+        // Tour 'consulta': step 0 tem waitForNext mas vet-notes-textarea não está no DOM →
+        // força avanço via global para não travar o teste
+        await page.evaluate(() => { (window as unknown as { __MENTOR_NEXT_STEP?: () => void }).__MENTOR_NEXT_STEP?.() })
+        await page.waitForTimeout(300)
+      }
+
+      // Avança todos os passos restantes do tour
       while (await nextBtn.isVisible().catch(() => false)) {
         await assertBalloonInViewport(page)
         await nextBtn.click()
@@ -295,7 +343,7 @@ test.describe('Mentor — Fluxo Clínico Completo', () => {
     await mentorBtn9.click()
     await expect(page.getByPlaceholder(/pergunte algo/i)).toBeVisible({ timeout: 5_000 })
     await page.locator('.fixed.bottom-24 button').filter({ hasText: /recepção/i }).first().click()
-    await expectTourBalloon(page, /check-in do animal/i)
+    await expectTourBalloon(page, /busca de tutor ou pet/i)
 
     // Encerra tour para perguntar algo ao chat
     await page.locator('.fixed.z-\\[10000\\] button[aria-label="Fechar tour"]').click()

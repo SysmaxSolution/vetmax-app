@@ -517,6 +517,7 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
             Lista
           </button>
           <button
+            data-mentor-step="reception-kanban-toggle"
             onClick={async () => {
               setViewMode('kanban')
               if (kanbanColumns.length === 0) {
@@ -551,6 +552,7 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
               <p className="text-sm text-slate-500">Pesquise por CPF do Tutor, nome do Tutor ou nome do Pet</p>
             </div>
             <button
+              data-mentor-step="reception-new-btn"
               onClick={() => setModal({ type: 'new_tutor_and_pet' })}
               title="Alt+N"
               className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition-colors hover:shadow-md flex-shrink-0"
@@ -570,6 +572,7 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
               }
             </div>
             <input
+              data-mentor-step="reception-search-input"
               value={query}
               onChange={e => setQuery(e.target.value)}
               placeholder="CPF, nome do tutor ou nome do pet..."

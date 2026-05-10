@@ -189,7 +189,7 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
 
         {/* ── Fila de Exames ───────────────────────────────────────────────── */}
         {tab === 'fila' && (
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200">
+          <div data-mentor-step="exams-queue" className="bg-white rounded-xl shadow-sm border border-slate-200">
             <div className="border-b border-slate-100 px-6 py-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50">

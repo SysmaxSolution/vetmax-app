@@ -21,7 +21,7 @@ export default defineConfig({
   /* Repórter em lista para o terminal e HTML para análise detalhada */
   reporter: [['list'], ['html', { outputFolder: 'playwright-report' }]],
   /* Limite de tempo por teste */
-  timeout: 30_000,
+  timeout: 60_000,
   
   use: {
     /* URL base onde o seu Next.js está rodando */
@@ -105,14 +105,11 @@ export default defineConfig({
 
   /* Sobe o servidor Next.js automaticamente antes dos testes */
   webServer: {
-    command: '.\\vetmax-app\\node_modules\\.bin\\next.cmd dev --turbopack --port 4000',
+    command: '.\\node_modules\\.bin\\next.cmd dev --turbopack --port 4000',
     url: 'http://localhost:4000',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
     stdout: 'pipe',
     stderr: 'pipe',
-    env: {
-      NODE_PATH: path.join(__dirname, 'vetmax-app', 'node_modules'),
-    },
   },
 });

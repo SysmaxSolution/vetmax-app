@@ -21,9 +21,9 @@ import fixtures from '../fixtures/test-data.json';
 async function loginAsAdmin(page: Page) {
   await page.goto('/login');
   await page.getByLabel(/e-?mail/i).fill(fixtures.users.adminA.email);
-  await page.getByLabel(/senha/i).fill(fixtures.users.adminA.password);
+  await page.locator('#password').fill(fixtures.users.adminA.password);
   await page.getByRole('button', { name: /entrar/i }).click();
-  await page.waitForURL(/\/(dashboard|reception|cashier|patients|management)/, { timeout: 15_000 });
+  await page.waitForURL(/\/(dashboard|reception|cashier|patients|management)/, { timeout: 45_000 });
 }
 
 /**

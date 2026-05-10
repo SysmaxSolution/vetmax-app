@@ -26,7 +26,7 @@ async function loginAs(page: Page, role: keyof typeof ROLE_MAP) {
   const user = fixtures.users[ROLE_MAP[role]]
   await page.goto(`${BASE}/login`)
   await page.getByLabel(/e-?mail/i).fill(user.email)
-  await page.getByLabel(/senha/i).fill(user.password)
+  await page.locator('#password').fill(user.password)
   await page.getByRole('button', { name: /entrar/i }).click()
   await page.waitForURL(/\/(dashboard|reception|triage|vet|onboarding)/, { timeout: 30_000 })
 }
@@ -199,8 +199,8 @@ test.describe('Mentor — Resiliência e Variações', () => {
     await page.keyboard.press('Enter')
     await page.waitForTimeout(500)
 
-    // Número de mensagens não deve ter aumentado além da saudação
-    const msgs = page.locator('[class*="bg-slate-100"]')
+    // Número de mensagens no chat não deve ter aumentado além da saudação
+    const msgs = page.locator('[data-testid="mentor-chat-messages"] [class*="bg-slate-100"]')
     const count = await msgs.count()
     expect(count).toBeLessThanOrEqual(2) // saudação + no máximo 1
 

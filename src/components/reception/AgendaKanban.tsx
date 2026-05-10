@@ -99,7 +99,7 @@ export default function AgendaKanban({ initialColumns, clinicId }: Props) {
   }
 
   return (
-    <div className="space-y-3">
+    <div data-mentor-step="kanban-board" className="space-y-3">
       {error && (
         <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-2 text-sm text-red-600">
           <AlertCircle className="h-4 w-4" />
@@ -115,6 +115,7 @@ export default function AgendaKanban({ initialColumns, clinicId }: Props) {
           return (
             <div
               key={col.key}
+              {...(col.key === 'completed' ? { 'data-mentor-step': 'kanban-col-completed' } : {})}
               onDragOver={e => handleDragOver(e, col.key)}
               onDragLeave={handleDragLeave}
               onDrop={e => handleDrop(e, col.key)}

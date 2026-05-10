@@ -84,11 +84,14 @@ interface SpeechRecognitionEvent extends Event {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function MentorChat() {
+  const [mounted, setMounted]      = useState(false)
   const [open, setOpen]           = useState(false)
   const [messages, setMessages]   = useState<Message[]>([GREET])
   const [input, setInput]         = useState('')
   const [listening, setListening] = useState(false)
   const [isPending, startTransition] = useTransition()
+
+  useEffect(() => { setMounted(true) }, [])
 
   const { startTour } = useMentor()
   const router        = useRouter()
@@ -304,7 +307,7 @@ export function MentorChat() {
 
   // Portal to document.body to avoid stacking context issues (fixed elements
   // inside transformed parents lose their viewport-relative positioning)
-  if (typeof document === 'undefined') return null
+  if (!mounted) return null
 
   return createPortal(
     <>
@@ -359,7 +362,7 @@ export function MentorChat() {
           </div>
 
           {/* ── Messages ── */}
-          <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2.5" style={{ minHeight: 0 }}>
+          <div data-testid="mentor-chat-messages" className="flex-1 overflow-y-auto px-3 py-3 space-y-2.5" style={{ minHeight: 0 }}>
             {messages.map(msg => (
               <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 {msg.role === 'mentor' && (

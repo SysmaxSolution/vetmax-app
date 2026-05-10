@@ -99,7 +99,7 @@ function StepBalloon({
       const spaceBelow = window.innerHeight - vBottom - GAP - MARGIN
       const spaceAbove = vTop - GAP - MARGIN
 
-      if (spaceBelow >= 60 || spaceBelow >= spaceAbove) {
+      if (spaceBelow >= 150 || spaceBelow >= spaceAbove) {
         // Ancora pelo topo: balão começa onde o alvo termina + GAP
         posStyle = { top: vBottom + GAP }
       } else {
@@ -111,7 +111,7 @@ function StepBalloon({
       const spaceAbove = vTop - GAP - MARGIN
       const spaceBelow = window.innerHeight - vBottom - GAP - MARGIN
 
-      if (spaceAbove >= 60 || spaceAbove >= spaceBelow) {
+      if (spaceAbove >= 150 || spaceAbove >= spaceBelow) {
         posStyle = { bottom: window.innerHeight - vTop + GAP }
       } else {
         posStyle = { top: vBottom + GAP }
@@ -136,9 +136,12 @@ function StepBalloon({
   // Clamp horizontal
   left = Math.max(MARGIN, Math.min(left, window.innerWidth - BALLOON_W - MARGIN))
 
-  // Se posStyle usa `top`, clamp para não sair pelo topo
+  // Clamp vertical: evita overflow tanto pelo topo quanto pelo fundo (balão ~220px)
+  const EST_H = 220
   if ('top' in posStyle && typeof posStyle.top === 'number') {
-    posStyle = { top: Math.max(MARGIN, posStyle.top) }
+    posStyle = { top: Math.max(MARGIN, Math.min(posStyle.top, window.innerHeight - EST_H - MARGIN)) }
+  } else if ('bottom' in posStyle && typeof posStyle.bottom === 'number') {
+    posStyle = { bottom: Math.max(MARGIN, Math.min(posStyle.bottom, window.innerHeight - EST_H - MARGIN)) }
   }
 
   const isLast = index === total - 1

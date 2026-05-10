@@ -13,7 +13,7 @@ import { test, expect, type Page } from '@playwright/test'
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-const BASE_URL = process.env.TEST_BASE_URL ?? 'http://localhost:9000'
+const BASE_URL = process.env.TEST_BASE_URL ?? 'http://localhost:4000'
 
 const ADMIN = {
   email:    'admin@clinica-alfa.test',
