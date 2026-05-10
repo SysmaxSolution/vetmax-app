@@ -38,6 +38,8 @@ export default function AgendaKanban({ initialColumns, clinicId }: Props) {
   const [columns, setColumns] = useState<AgendaColumn[]>(initialColumns)
   const [dragOverCol, setDragOverCol] = useState<ConsultationStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [checkingInId, setCheckingInId] = useState<string | null>(null)
+  const [successId, setSuccessId] = useState<string | null>(null)
 
   useEffect(() => { setColumns(initialColumns) }, [initialColumns])
 
@@ -55,6 +57,31 @@ export default function AgendaKanban({ initialColumns, clinicId }: Props) {
 
   function handleDragLeave() {
     setDragOverCol(null)
+  }
+
+  async function handleDoubleClickCheckIn(card: AgendaCard) {
+    if (navigator.maxTouchPoints > 0) return  // não disparar em touch
+    if (card.status !== 'scheduled') return
+    if (checkingInId) return
+
+    setCheckingInId(card.id)
+    const result = await moveAgendaCard(card.id, 'reception')
+    if ('error' in result) {
+      setError(result.error)
+      setTimeout(() => setError(null), 3000)
+    } else {
+      setColumns(prev => prev.map(col => ({
+        ...col,
+        cards: col.key === 'scheduled'
+          ? col.cards.filter(c => c.id !== card.id)
+          : col.key === 'reception'
+            ? [...col.cards, { ...card, status: 'reception' as ConsultationStatus }]
+            : col.cards,
+      })))
+      setSuccessId(card.id)
+      setTimeout(() => setSuccessId(null), 1500)
+    }
+    setCheckingInId(null)
   }
 
   async function handleDrop(e: React.DragEvent, targetStatus: ConsultationStatus) {
@@ -144,7 +171,11 @@ export default function AgendaKanban({ initialColumns, clinicId }: Props) {
                       key={card.id}
                       draggable
                       onDragStart={e => handleDragStart(e, card)}
-                      className="bg-white rounded-lg border border-slate-200 p-2.5 cursor-grab active:cursor-grabbing shadow-sm hover:shadow transition-shadow"
+                      onDoubleClick={() => handleDoubleClickCheckIn(card)}
+                      title={col.key === 'scheduled' ? 'Duplo clique para fazer check-in' : undefined}
+                      className={`bg-white rounded-lg border p-2.5 shadow-sm hover:shadow transition-all ${
+                        col.key === 'scheduled' ? 'cursor-pointer hover:border-amber-400 hover:bg-amber-50' : 'cursor-grab active:cursor-grabbing border-slate-200'
+                      } ${checkingInId === card.id ? 'opacity-50 animate-pulse' : ''} ${successId === card.id ? 'border-emerald-400 bg-emerald-50' : ''}`}
                     >
                       <div className="flex items-center gap-2">
                         <PetAvatar
@@ -164,6 +195,9 @@ export default function AgendaKanban({ initialColumns, clinicId }: Props) {
                         </span>
                         <span className="text-[10px] text-slate-400">{formatTime(card.created_at)}</span>
                       </div>
+                      {col.key === 'scheduled' && (
+                        <p className="text-[10px] text-indigo-400 mt-1 text-center font-medium">2× clique = check-in</p>
+                      )}
                       {card.vet && (
                         <p className="text-[10px] text-teal-600 mt-1 truncate">
                           Dr(a). {card.vet.full_name}

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Syringe, Plus, Trash2, Loader2, AlertTriangle, CheckCircle2, Calendar, X, Pencil, Check } from 'lucide-react'
 import { addVaccine, deleteVaccine, updateVaccine, type PatientVaccine } from '@/lib/actions/vaccines'
-import { DatePicker } from '@/components/ui/DatePicker'
+import { DateInput } from '@/components/ui/DatePicker'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -250,11 +250,11 @@ export default function VaccinationCard({
             </div>
             <div>
               <label className="text-xs font-medium text-slate-600 mb-1 block">Data de Aplicação</label>
-              <DatePicker value={date} onChange={setDate} />
+              <DateInput value={date} onChange={setDate} />
             </div>
             <div>
               <label className="text-xs font-medium text-slate-600 mb-1 block">Próxima Dose</label>
-              <DatePicker value={nextDue} onChange={setNextDue} />
+              <DateInput value={nextDue} onChange={setNextDue} />
             </div>
             <div className="col-span-2">
               <label className="text-xs font-medium text-slate-600 mb-1 block">Observações</label>
@@ -313,11 +313,11 @@ export default function VaccinationCard({
                       </div>
                       <div>
                         <label className="text-xs font-medium text-slate-600 mb-1 block">Data de Aplicação</label>
-                        <DatePicker value={editDate} onChange={setEditDate} />
+                        <DateInput value={editDate} onChange={setEditDate} />
                       </div>
                       <div>
                         <label className="text-xs font-medium text-slate-600 mb-1 block">Próxima Dose</label>
-                        <DatePicker value={editNextDue} onChange={setEditNextDue} />
+                        <DateInput value={editNextDue} onChange={setEditNextDue} />
                       </div>
                       <div className="col-span-2">
                         <label className="text-xs font-medium text-slate-600 mb-1 block">Observações</label>

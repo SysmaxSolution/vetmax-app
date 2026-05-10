@@ -6,7 +6,7 @@ import { getPatientsList, type PatientsListItem } from '@/lib/actions/timeline'
 import { createAppointment } from '@/lib/actions/appointments'
 import { createGroomingSession, getGroomingCatalog, updateGroomingPricing, type GroomingCatalogItem, type GroomingServicePrice } from '@/lib/actions/grooming'
 import { useModules } from '@/components/providers/ModulesProvider'
-import { DatePicker, TimePicker, DateTimePicker } from '@/components/ui/DatePicker'
+import { DateInput, TimePicker, DateTimePicker } from '@/components/ui/DatePicker'
 import { getClinicProfessionals, type ClinicProfessional } from '@/lib/actions/professionals'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -461,11 +461,12 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-semibold text-slate-600 mb-1.5">Data</label>
-                    <DatePicker
+                    <DateInput
                       value={date}
                       onChange={setDate}
                       min={todayStr()}
                       required
+                      placeholder="DD/MM/AAAA"
                     />
                   </div>
                   <div>

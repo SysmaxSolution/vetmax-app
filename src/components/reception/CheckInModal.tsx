@@ -3,7 +3,7 @@
 import { useState, useTransition, useRef, useEffect } from 'react'
 import { checkInPatientWithContacts, updateConsultation } from '@/lib/actions/consultations'
 import type { VisitReason, PaymentStatus } from '@/types'
-import { DatePicker } from '@/components/ui/DatePicker'
+import { DateInput } from '@/components/ui/DatePicker'
 
 const VISIT_REASON_OPTIONS: { value: VisitReason; label: string; emoji: string; color: string }[] = [
   { value: 'consultation', label: 'Consulta', emoji: '👨‍⚕️', color: 'bg-slate-100 text-slate-700' },
@@ -259,11 +259,12 @@ export function CheckInModal({
             {isScheduled && (
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Data de Agendamento *</label>
-                <DatePicker
+                <DateInput
                   value={scheduledDate}
                   onChange={setScheduledDate}
                   required={isScheduled}
                   min={new Date().toISOString().split('T')[0]}
+                  placeholder="DD/MM/AAAA"
                 />
               </div>
             )}

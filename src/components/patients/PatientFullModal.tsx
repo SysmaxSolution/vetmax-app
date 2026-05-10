@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useTransition } from 'react'
 import Link from 'next/link'
 import { X, Save, Loader2, User, Dog, MapPin, PhoneCall, Syringe, Camera, Shield, Trash2, Plus, AlertTriangle, Cpu } from 'lucide-react'
 import { ImageLightbox } from '@/components/ui/ImageLightbox'
-import { DatePicker } from '@/components/ui/DatePicker'
+import { DateInput } from '@/components/ui/DatePicker'
 import { updateFullProfile, uploadPetPhoto } from '@/lib/actions/pets'
 import { registerTutorAndPet, addPatientToTutor, getTutorByCpf, recordConsent } from '@/lib/actions/tutors'
 import ConsentModal from '@/components/reception/ConsentModal'
@@ -547,7 +547,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                 <FieldInput label="Raça" value={breed} onChange={setBreed} placeholder="Ex: Labrador" data-mentor-step="pet-breed-input" />
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5 ml-1 tracking-wider">Data de Nascimento</label>
-                  <DatePicker value={birthDate} onChange={setBirthDate} />
+                  <DateInput value={birthDate} onChange={setBirthDate} placeholder="DD/MM/AAAA" />
                 </div>
                 <FieldSelect label="Estado Reprodutivo" value={reproductiveStatus} options={REPRODUCTIVE_STATUS_OPTIONS} onChange={setReproductiveStatus} data-mentor-step="pet-reproductive-select" />
               </div>
