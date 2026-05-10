@@ -44,6 +44,7 @@ const TRIGGER_TITLES: Record<WhatsAppTrigger, string> = {
   hospitalization_started:         'Avisar Tutor — Pet Admitido na Internação',
   grooming_ready_for_pickup:       'Avisar Tutor — Pet Pronto para Retirada',
   grooming_delivered:              'Mensagem de Agradecimento — Entrega Realizada',
+  appointment_scheduled:           'Confirmação de Agendamento',
 }
 
 const TRIGGER_SUBTITLES: Record<WhatsAppTrigger, string> = {
@@ -60,6 +61,7 @@ const TRIGGER_SUBTITLES: Record<WhatsAppTrigger, string> = {
   hospitalization_started:         'Informar motivo, ala e que a equipe está cuidando com atenção',
   grooming_ready_for_pickup:       'Avisar que o serviço foi concluído e o pet está esperando',
   grooming_delivered:              'Agradecer a visita e convidar para a próxima sessão',
+  appointment_scheduled:           'Confirmar data, horário e orientar sobre pontualidade',
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────

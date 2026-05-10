@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
 import Link from 'next/link'
-import { FlaskConical, CheckCircle2, Clock, History, Pencil, Plus, X } from 'lucide-react'
+import { FlaskConical, CheckCircle2, Clock, History, Pencil, Plus, X, LogOut, BedDouble } from 'lucide-react'
 import type { ExamQueueItem, ExamHistoryItem, ExamRequest } from '@/lib/actions/exams'
-import { requestExam, saveExamResult } from '@/lib/actions/exams'
+import { requestExam, saveExamResult, dischargeFromExams } from '@/lib/actions/exams'
+import { createHospitalization } from '@/lib/actions/hospitalizations'
 import { searchPatientsForTriage, type TriagePatientSearchResult } from '@/lib/actions/triage'
 import { useRealtimeSync } from '@/hooks/useRealtimeSync'
 import { BehaviorTagsBadges } from '@/components/ui/BehaviorTagsBadges'
@@ -42,7 +43,15 @@ function calcWaiting(createdAt: string): string {
 
 // ─── ExamCard ─────────────────────────────────────────────────────────────────
 
-function ExamCard({ item }: { item: ExamQueueItem }) {
+function ExamCard({
+  item,
+  onDischarge,
+  onSendToHospitalization,
+}: {
+  item: ExamQueueItem
+  onDischarge: (id: string, name: string) => void
+  onSendToHospitalization: (item: ExamQueueItem) => void
+}) {
   return (
     <div className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white px-5 py-4 hover:shadow-sm hover:border-blue-200 transition-all">
       {/* Avatar */}
@@ -72,14 +81,34 @@ function ExamCard({ item }: { item: ExamQueueItem }) {
         </div>
       </div>
 
-      {/* Ação */}
-      <Link
-        href={`/dashboard/exams/${item.id}`}
-        className="flex-shrink-0 flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition-colors shadow-sm"
-      >
-        <FlaskConical className="h-4 w-4" />
-        Iniciar Exame
-      </Link>
+      {/* Ações */}
+      <div className="flex flex-col gap-2 flex-shrink-0">
+        <Link
+          href={`/dashboard/exams/${item.id}`}
+          className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors shadow-sm"
+        >
+          <FlaskConical className="h-4 w-4" />
+          Iniciar Exame
+        </Link>
+        <button
+          type="button"
+          onClick={() => onDischarge(item.id, item.patient.name)}
+          title="Pet não retorna ao consultório — concluir atendimento"
+          className="flex items-center gap-1.5 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-colors"
+        >
+          <LogOut className="h-4 w-4" />
+          Dar Alta
+        </button>
+        <button
+          type="button"
+          onClick={() => onSendToHospitalization(item)}
+          title="Encaminhar para internação"
+          className="flex items-center gap-1.5 rounded-xl border border-indigo-200 px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50 transition-colors"
+        >
+          <BedDouble className="h-4 w-4" />
+          Internar
+        </button>
+      </div>
     </div>
   )
 }
@@ -105,6 +134,7 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
   const [examLoading, setExamLoading] = useState(false)
   const [examSuccess, setExamSuccess] = useState('')
   const [examError, setExamError] = useState('')
+  const [localQueue, setLocalQueue] = useState<ExamQueueItem[]>(queue)
   const [localExamRequests, setLocalExamRequests] = useState<ExamRequest[]>(examRequests)
   const [resultModalId, setResultModalId] = useState<string | null>(null)
   const [resultText, setResultText] = useState('')
@@ -113,6 +143,40 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
   const [examPatientSearch, setExamPatientSearch] = useState('')
   const [examPatientResults, setExamPatientResults] = useState<TriagePatientSearchResult[]>([])
   const [examPatientSelected, setExamPatientSelected] = useState<TriagePatientSearchResult | null>(null)
+  const [isPending, startTransition] = useTransition()
+  const [hospItem, setHospItem] = useState<ExamQueueItem | null>(null)
+  const [hospReason, setHospReason] = useState('')
+  const [hospLoading, setHospLoading] = useState(false)
+
+  async function handleDischarge(consultationId: string, petName: string) {
+    if (!confirm(`Dar alta para ${petName}? O atendimento será concluído sem retorno ao consultório.`)) return
+    startTransition(async () => {
+      const res = await dischargeFromExams(consultationId)
+      if ('error' in res) { setExamError(res.error); return }
+      setLocalQueue(prev => prev.filter(i => i.id !== consultationId))
+      setExamSuccess(`✓ Alta de ${petName} registrada.`)
+      setTimeout(() => setExamSuccess(''), 3500)
+    })
+  }
+
+  async function handleHospSubmit() {
+    if (!hospItem) return
+    if (!hospReason.trim()) { setExamError('Informe o motivo da internação.'); return }
+    setHospLoading(true)
+    const res = await createHospitalization({
+      patient_id:      hospItem.patient.id,
+      consultation_id: hospItem.id,
+      status:          'observation',
+      reason:          hospReason.trim(),
+    })
+    setHospLoading(false)
+    if ('error' in res) { setExamError(res.error); return }
+    setLocalQueue(prev => prev.filter(i => i.id !== hospItem.id))
+    setHospItem(null)
+    setHospReason('')
+    setExamSuccess(`✓ ${hospItem.patient.name} encaminhado(a) para internação.`)
+    setTimeout(() => setExamSuccess(''), 3500)
+  }
 
   async function handleExamPatientSearch(q: string) {
     setExamPatientSearch(q)
@@ -201,15 +265,20 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
                 </div>
               </div>
               <span className={`rounded-full px-3 py-1 text-sm font-semibold ${
-                queue.length > 0
+                localQueue.length > 0
                   ? 'bg-blue-100 text-blue-700'
                   : 'bg-slate-100 text-slate-500'
               }`}>
-                {queue.length} paciente{queue.length !== 1 ? 's' : ''}
+                {localQueue.length} paciente{localQueue.length !== 1 ? 's' : ''}
               </span>
             </div>
 
-            {queue.length === 0 && localExamRequests.length === 0 ? (
+            {examSuccess && (
+              <div className="mx-4 mt-4 rounded-xl bg-green-50 border border-green-200 px-4 py-2.5 text-sm text-green-700 font-medium">
+                {examSuccess}
+              </div>
+            )}
+            {localQueue.length === 0 && localExamRequests.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-green-50">
                   <CheckCircle2 className="h-7 w-7 text-green-400" />
@@ -221,8 +290,13 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
               </div>
             ) : (
               <div className="p-4 space-y-2">
-                {queue.map(item => (
-                  <ExamCard key={item.id} item={item} />
+                {localQueue.map(item => (
+                  <ExamCard
+                    key={item.id}
+                    item={item}
+                    onDischarge={handleDischarge}
+                    onSendToHospitalization={setHospItem}
+                  />
                 ))}
                 {localExamRequests.map(req => (
                   <div
@@ -466,6 +540,58 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50"
               >
                 {resultLoading ? 'Salvando...' : 'Registrar Resultado'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Internar Paciente */}
+      {hospItem && (
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <BedDouble className="h-5 w-5 text-indigo-600" />
+                <h2 className="text-base font-semibold text-slate-900">Encaminhar para Internação</h2>
+              </div>
+              <button onClick={() => { setHospItem(null); setHospReason(''); setExamError('') }} className="text-slate-400 hover:text-slate-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <p className="text-sm text-slate-600">
+              Animal: <span className="font-semibold">{hospItem.patient.name}</span>
+            </p>
+            {examError && <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{examError}</p>}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Motivo da Internação <span className="text-rose-500">*</span>
+              </label>
+              <textarea
+                value={hospReason}
+                onChange={e => setHospReason(e.target.value)}
+                placeholder="Ex: Necessita de observação pós-exame, hidratação IV..."
+                rows={3}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                autoFocus
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => { setHospItem(null); setHospReason(''); setExamError('') }}
+                className="flex-1 px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={hospLoading || !hospReason.trim()}
+                onClick={handleHospSubmit}
+                className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                <BedDouble className="h-4 w-4" />
+                {hospLoading ? 'Internando...' : 'Confirmar Internação'}
               </button>
             </div>
           </div>

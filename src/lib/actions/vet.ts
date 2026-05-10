@@ -299,6 +299,43 @@ export async function getVetConsultation(
   }
 }
 
+// ─── Incluir Paciente Diretamente no Consultório (C-02) ──────────────────────
+export async function addPatientDirectToVet(params: {
+  patient_id:   string
+  tutor_id:     string
+  visit_reason: string
+}): Promise<{ id: string } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('clinic_id')
+    .eq('id', user.id)
+    .single()
+  if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
+
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('consultations')
+    .insert({
+      clinic_id:       profile.clinic_id,
+      patient_id:      params.patient_id,
+      visit_reason:    params.visit_reason,
+      status:          'in_progress',
+      payment_status:  'pending',
+      is_reviewed_by_vet: false,
+    })
+    .select('id')
+    .single()
+
+  if (error || !data) return { error: 'Erro ao incluir paciente: ' + (error?.message ?? '') }
+
+  revalidatePath('/dashboard/vet')
+  return { id: data.id }
+}
+
 // ─── Reabrir Consulta Concluída ───────────────────────────────────────────────
 export async function reopenConsultation(
   consultationId: string

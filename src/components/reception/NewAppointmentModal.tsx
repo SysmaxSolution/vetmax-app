@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { X, Search, CalendarDays, Scissors, Tag, DollarSign, Loader2, Save, Calendar } from 'lucide-react'
+import { X, Search, CalendarDays, Scissors, Tag, DollarSign, Loader2, Save, Calendar, MessageCircle } from 'lucide-react'
 import { getPatientsList, type PatientsListItem } from '@/lib/actions/timeline'
 import { createAppointment } from '@/lib/actions/appointments'
 import { createGroomingSession, getGroomingCatalog, updateGroomingPricing, type GroomingCatalogItem, type GroomingServicePrice } from '@/lib/actions/grooming'
+import { sendWhatsAppMessage } from '@/lib/actions/whatsapp'
 import { useModules } from '@/components/providers/ModulesProvider'
 import { DateInput, TimePicker, DateTimePicker } from '@/components/ui/DatePicker'
 import { getClinicProfessionals, type ClinicProfessional } from '@/lib/actions/professionals'
@@ -78,8 +79,9 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
   const [time,       setTime]       = useState('09:00')
   const [reason,     setReason]     = useState(defaultReason ? mapMotivoToReason(defaultReason) : 'consultation')
   const [notes,      setNotes]      = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const [error,      setError]      = useState<string | null>(null)
+  const [submitting, setSubmitting]         = useState(false)
+  const [error,      setError]              = useState<string | null>(null)
+  const [sendConfirmation, setSendConfirmation] = useState(true)
   const [professionalId, setProfessionalId] = useState('')
   const [professionals, setProfessionals]   = useState<ClinicProfessional[]>([])
 
@@ -211,8 +213,19 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
     })
 
     setSubmitting(false)
-    if ('error' in result) { setError(result.error) }
-    else { onSuccess?.(petName); onClose() }
+    if ('error' in result) { setError(result.error); return }
+
+    const tutorPhone = selectedPet?.tutor.phone ?? ''
+    if (sendConfirmation && tutorPhone) {
+      const [yyyy, mm, dd] = date.split('-')
+      const dateLabel = `${dd}/${mm}/${yyyy}`
+      const reasonLabel = VISIT_REASON_OPTIONS.find(o => o.value === reason)?.label ?? reason
+      const msg = `Olá, ${tutorName}! 🐾\nAgendamento confirmado: *${petName}* (${reasonLabel}) em *${dateLabel}* às *${time}*.\nEm caso de dúvidas, entre em contato conosco. Até breve!`
+      sendWhatsAppMessage({ phone: tutorPhone, message: msg, trigger: 'appointment_scheduled', tutorId, tutorName })
+        .catch(() => {/* best-effort */})
+    }
+
+    onSuccess?.(petName); onClose()
   }
 
   const currentPetName   = defaultPet?.name      ?? selectedPet?.name
@@ -489,6 +502,22 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
                   />
                 </div>
               </>
+            )}
+
+            {/* Toggle confirmação WhatsApp (apenas consultas) */}
+            {!isGrooming && (
+              <label className="flex items-center gap-3 cursor-pointer select-none">
+                <div
+                  onClick={() => setSendConfirmation(p => !p)}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${sendConfirmation ? 'bg-teal-500' : 'bg-slate-200'}`}
+                >
+                  <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${sendConfirmation ? 'translate-x-4' : 'translate-x-1'}`} />
+                </div>
+                <span className="flex items-center gap-1.5 text-sm text-slate-600">
+                  <MessageCircle className="h-3.5 w-3.5 text-teal-500" />
+                  Enviar confirmação ao tutor via WhatsApp
+                </span>
+              </label>
             )}
 
             {error && (

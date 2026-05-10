@@ -147,6 +147,34 @@ export async function getExamsHistory(): Promise<ExamHistoryItem[] | { error: st
 
 // ─── Devolver ao Médico (waiting_exam → in_progress) ─────────────────────────
 
+export async function dischargeFromExams(
+  consultationId: string
+): Promise<{ success: true } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('clinic_id')
+    .eq('id', user.id)
+    .single()
+  if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
+
+  const { error } = await supabase
+    .from('consultations')
+    .update({ status: 'completed', updated_at: new Date().toISOString() })
+    .eq('id', consultationId)
+    .eq('clinic_id', profile.clinic_id)
+    .eq('status', 'waiting_exam')
+
+  if (error) return { error: 'Erro ao dar alta: ' + error.message }
+
+  revalidatePath('/dashboard/exams')
+  revalidatePath('/dashboard/reception')
+  return { success: true }
+}
+
 export async function returnToVet(
   consultationId: string,
   examNotes?: string

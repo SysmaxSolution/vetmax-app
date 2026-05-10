@@ -23,6 +23,7 @@ export type WhatsAppTrigger =
   | 'hospitalization_started'
   | 'grooming_ready_for_pickup'
   | 'grooming_delivered'
+  | 'appointment_scheduled'
 
 // ─── Attachable Items ─────────────────────────────────────────────────────────
 
@@ -554,6 +555,10 @@ Gere uma mensagem de alta calorosa para o tutor ${ctx.tutorName} contendo:
 (d) as orientações de cuidado em casa de forma clara e prática.
 Tom: acolhedor, positivo, levemente comemorativo. Máx. 3 parágrafos.`
   },
+
+  appointment_scheduled: (ctx) =>
+    `O pet ${ctx.petName} (tutor: ${ctx.tutorName}) teve um novo agendamento criado na clínica.
+    Gere uma mensagem curta e amigável confirmando o agendamento, pedindo para chegar com alguns minutos de antecedência. Tom: acolhedor e profissional.`,
 }
 
 export async function generateWhatsAppMessage(

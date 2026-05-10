@@ -213,6 +213,7 @@ export type ReceptionQueueItem = {
     name: string
     species: string
     breed: string | null
+    birth_date: string | null
     photo_url: string | null
     behavior_tags: string[]
   }
@@ -243,7 +244,7 @@ export async function getReceptionQueue(): Promise<ReceptionQueueItem[] | { erro
     .from('consultations')
     .select(`
       id, status, created_at, payment_status, payment_method,
-      patients ( id, name, species, breed, photo_url, behavior_tags,
+      patients ( id, name, species, breed, birth_date, photo_url, behavior_tags,
         tutors ( id, name, phone )
       )
     `)
@@ -265,6 +266,7 @@ export async function getReceptionQueue(): Promise<ReceptionQueueItem[] | { erro
       name:          c.patients?.name ?? '—',
       species:       c.patients?.species ?? '',
       breed:         c.patients?.breed ?? null,
+      birth_date:    c.patients?.birth_date ?? null,
       photo_url:     c.patients?.photo_url ?? null,
       behavior_tags: Array.isArray(c.patients?.behavior_tags) ? c.patients.behavior_tags : [],
     },

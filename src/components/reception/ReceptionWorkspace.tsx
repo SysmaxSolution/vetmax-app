@@ -232,9 +232,22 @@ function TutorProfile({
   )
 }
 
+// ─── Age helper ──────────────────────────────────────────────────────────────
+function calcAge(birthDate: string | null): string | null {
+  if (!birthDate) return null
+  const born = new Date(birthDate)
+  const now   = new Date()
+  const months = (now.getFullYear() - born.getFullYear()) * 12 + (now.getMonth() - born.getMonth())
+  if (months < 1)  return '< 1 mês'
+  if (months < 12) return `${months} ${months === 1 ? 'mês' : 'meses'}`
+  const years = Math.floor(months / 12)
+  return `${years} ${years === 1 ? 'ano' : 'anos'}`
+}
+
 // ─── Queue Card ───────────────────────────────────────────────────────────────
 function QueueCard({ item, onMoveToTriage }: { item: ReceptionQueueItem; onMoveToTriage: (id: string) => void }) {
   const hasPendingPayment = item.payment_status === 'pending'
+  const age = calcAge(item.patient.birth_date ?? null)
   return (
     <div className={`flex items-center gap-4 rounded-2xl border bg-white px-5 py-4 shadow-sm hover:shadow transition-shadow ${
       hasPendingPayment ? 'border-red-300' : 'border-slate-200'
@@ -244,13 +257,18 @@ function QueueCard({ item, onMoveToTriage }: { item: ReceptionQueueItem; onMoveT
         <div className="flex items-center gap-2 flex-wrap">
           <p className="font-semibold text-slate-900">{item.patient.name}</p>
           <SpeciesBadge species={item.patient.species} />
+          {age && <span className="text-xs text-slate-500 bg-slate-100 rounded-full px-2 py-0.5">{age}</span>}
           {item.patient.breed && <span className="text-xs text-slate-400">{item.patient.breed}</span>}
           <BehaviorTagsBadges tags={item.patient.behavior_tags} size="xs" />
         </div>
         <p className="text-sm text-slate-500 mt-0.5">
           Tutor: <span className="font-medium text-slate-700">{item.tutor.name}</span>
-          <span className="mx-1.5 text-slate-300">·</span>
-          <span className="text-xs">{item.tutor.phone}</span>
+          {item.tutor.phone && (
+            <>
+              <span className="mx-1.5 text-slate-300">·</span>
+              <a href={`tel:${item.tutor.phone}`} className="text-xs text-blue-600 hover:underline">{item.tutor.phone}</a>
+            </>
+          )}
         </p>
         {hasPendingPayment && (
           <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-700 ring-1 ring-red-300 animate-pulse">
