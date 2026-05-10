@@ -321,6 +321,51 @@ export async function addClinicalEvolution(data: {
     }
   }
 
+  // I-01: Verificar regras de transição automática
+  if (profile?.clinic_id) {
+    const { data: hosp } = await admin
+      .from('hospitalizations')
+      .select('status')
+      .eq('id', data.hospitalization_id)
+      .eq('clinic_id', profile.clinic_id)
+      .single()
+
+    if (hosp?.status) {
+      // Verificar regra específica da clínica; fallback para regras padrão
+      const { data: rule } = await admin
+        .from('hospitalization_transitions')
+        .select('to_status')
+        .eq('clinic_id', profile.clinic_id)
+        .eq('from_status', hosp.status)
+        .eq('evolution_status', data.improvement_level)
+        .eq('enabled', true)
+        .maybeSingle()
+
+      // Regras padrão (se não houver configuração da clínica)
+      const DEFAULT_RULES: Record<string, Record<string, string>> = {
+        icu:         { melhorou: 'ward' },
+        ward:        { melhorou: 'ready_for_discharge', piorou: 'icu' },
+        observation: { melhorou: 'ward', piorou: 'icu' },
+      }
+      const toStatus = rule?.to_status ?? DEFAULT_RULES[hosp.status]?.[data.improvement_level]
+
+      if (toStatus && toStatus !== hosp.status) {
+        await admin
+          .from('hospitalizations')
+          .update({ status: toStatus, updated_at: new Date().toISOString() })
+          .eq('id', data.hospitalization_id)
+          .eq('clinic_id', profile.clinic_id)
+
+        await logAudit({
+          action:      'AUTO_TRANSITION_HOSPITALIZATION',
+          entity_type: 'hospitalizations',
+          entity_id:   data.hospitalization_id,
+          details:     { from: hosp.status, to: toStatus, trigger: data.improvement_level },
+        })
+      }
+    }
+  }
+
   revalidatePath('/dashboard/hospitalization')
   return { success: true }
 }
