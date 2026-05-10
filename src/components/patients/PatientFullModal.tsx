@@ -163,6 +163,9 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
   const [species,             setSpecies]             = useState<string>(patient?.species ?? 'dog')
   const [breed,               setBreed]               = useState(patient?.breed ?? '')
   const [birthDate,           setBirthDate]           = useState(patient?.birth_date ?? '')
+  const [birthDateMode,       setBirthDateMode]       = useState<'date' | 'age'>('date')
+  const [ageValue,            setAgeValue]            = useState('')
+  const [ageUnit,             setAgeUnit]             = useState<'A' | 'M'>('A')
   const [reproductiveStatus,  setReproductiveStatus]  = useState(patient?.reproductive_status ?? 'Desconhecido')
   const [tags,                setTags]                = useState<string[]>(patient?.behavior_tags ?? [])
   const [allergies,           setAllergies]           = useState(patient?.allergies ?? '')
@@ -293,10 +296,10 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
     setCreateError(null)
     if (!petName.trim()) { setCreateError('Nome do Pet é obrigatório.'); return }
     if (!isEdit && !isPetOnly) {
-      if (!tutorName.trim()) { setCreateError('Preencha o nome do tutor na aba Recepção.'); return }
+      if (!tutorName.trim()) { setCreateError('Preencha o nome do tutor na aba Tutor.'); return }
       const cpfDigits = tutorCpf.replace(/\D/g, '')
-      if (cpfDigits.length !== 11) { setCreateError('CPF inválido na aba Recepção — deve ter 11 dígitos.'); return }
-      if (!tutorPhone.trim()) { setCreateError('Celular do tutor é obrigatório na aba Recepção.'); return }
+      if (cpfDigits.length !== 11) { setCreateError('CPF inválido na aba Tutor — deve ter 11 dígitos.'); return }
+      if (!tutorPhone.trim()) { setCreateError('Celular do tutor é obrigatório na aba Tutor.'); return }
     }
 
     // LGPD: para novo tutor (não encontrado por CPF), exige consentimento
@@ -482,7 +485,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
           {/* ── Tabs ── */}
           <div className="flex gap-1 mb-[-1px]">
             <TabButton active={tab === 'pet'}     onClick={() => setTab('pet')}     icon={<Dog     className="h-4 w-4" />} label="Paciente" />
-            <TabButton active={tab === 'tutor'}   onClick={() => setTab('tutor')}   icon={<User    className="h-4 w-4" />} label="Recepção" />
+            <TabButton active={tab === 'tutor'}   onClick={() => setTab('tutor')}   icon={<User    className="h-4 w-4" />} label="Tutor" />
             <TabButton active={tab === 'vacinas'} onClick={() => setTab('vacinas')} icon={<Syringe  className="h-4 w-4" />} label="Vacinas" />
             <TabButton active={tab === 'convenio'} onClick={() => setTab('convenio')} icon={<Shield  className="h-4 w-4" />} label="Convênio" />
           </div>
@@ -546,8 +549,57 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
               <div className="grid grid-cols-3 gap-5">
                 <FieldInput label="Raça" value={breed} onChange={setBreed} placeholder="Ex: Labrador" data-mentor-step="pet-breed-input" />
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5 ml-1 tracking-wider">Data de Nascimento</label>
-                  <DateInput value={birthDate} onChange={setBirthDate} placeholder="DD/MM/AAAA" />
+                  <div className="flex items-center justify-between mb-1.5 ml-1">
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Nascimento</label>
+                    <div className="flex rounded-lg overflow-hidden border border-slate-200 text-[9px] font-bold">
+                      <button type="button" onClick={() => setBirthDateMode('age')}
+                        className={`px-2 py-0.5 transition-colors ${birthDateMode === 'age' ? 'bg-teal-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`}>
+                        Idade
+                      </button>
+                      <button type="button" onClick={() => setBirthDateMode('date')}
+                        className={`px-2 py-0.5 transition-colors ${birthDateMode === 'date' ? 'bg-teal-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`}>
+                        Data
+                      </button>
+                    </div>
+                  </div>
+                  {birthDateMode === 'date' ? (
+                    <DateInput value={birthDate} onChange={setBirthDate} placeholder="DD/MM/AAAA" />
+                  ) : (
+                    <div className="flex gap-1">
+                      <input
+                        type="number" min="0" max="99"
+                        value={ageValue}
+                        onChange={e => {
+                          const n = e.target.value
+                          setAgeValue(n)
+                          const num = parseInt(n, 10)
+                          if (!isNaN(num) && num >= 0) {
+                            const today = new Date()
+                            const born = ageUnit === 'A'
+                              ? new Date(today.getFullYear() - num, today.getMonth(), today.getDate())
+                              : new Date(today.getFullYear(), today.getMonth() - num, today.getDate())
+                            const iso = `${born.getFullYear()}-${String(born.getMonth()+1).padStart(2,'0')}-${String(born.getDate()).padStart(2,'0')}`
+                            setBirthDate(iso)
+                          }
+                        }}
+                        placeholder="Ex: 3"
+                        className="flex-1 rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-900 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                      />
+                      <select
+                        value={ageUnit}
+                        onChange={e => setAgeUnit(e.target.value as 'A' | 'M')}
+                        className="rounded-xl border border-slate-300 px-2 py-2.5 text-sm text-slate-700 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                      >
+                        <option value="A">Anos</option>
+                        <option value="M">Meses</option>
+                      </select>
+                    </div>
+                  )}
+                  {birthDateMode === 'age' && birthDate && (
+                    <p className="text-[10px] text-slate-400 mt-0.5 ml-1">
+                      Nascimento estimado: {new Date(birthDate).toLocaleDateString('pt-BR')}
+                    </p>
+                  )}
                 </div>
                 <FieldSelect label="Estado Reprodutivo" value={reproductiveStatus} options={REPRODUCTIVE_STATUS_OPTIONS} onChange={setReproductiveStatus} data-mentor-step="pet-reproductive-select" />
               </div>

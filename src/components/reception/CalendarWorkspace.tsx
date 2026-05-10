@@ -653,7 +653,7 @@ export default function CalendarWorkspace({ clinicName }: Props) {
                     for (const ev of displayed) {
                       const key = kanbanGroupBy === 'type'
                         ? (ev.type === 'appointment' ? (VISIT_REASON_LABELS[ev.reason ?? ''] ?? 'Consulta') : 'Banho e Tosa')
-                        : (ev.reason ? (VISIT_REASON_LABELS[ev.reason] ?? ev.reason) : 'Geral')
+                        : (ev.reason ? (VISIT_REASON_LABELS[ev.reason] ?? ev.reason) : 'Banho e Tosa')
                       if (!groups[key]) groups[key] = []
                       groups[key].push(ev)
                     }

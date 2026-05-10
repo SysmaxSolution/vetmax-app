@@ -38,25 +38,26 @@ import { getClinicVoiceTriggers, updateClinicVoiceTriggers } from '@/lib/actions
 
 // ─── Fluxo de status (mobile: botões de progressão) ──────────────────────────
 
-const STATUS_FLOW: GroomingStatus[] = ['received', 'bathing', 'grooming', 'waiting_pickup', 'delivered']
+// B-04: ordem profissional padrão — Tosa primeiro, depois Banho
+const STATUS_FLOW: GroomingStatus[] = ['received', 'grooming', 'bathing', 'waiting_pickup', 'delivered']
 const STATUS_LABELS: Record<GroomingStatus, string> = {
   received:       'Recebido',
-  bathing:        'Em Banho',
   grooming:       'Em Tosa',
+  bathing:        'Em Banho',
   waiting_pickup: 'Aguardando Retirada',
   delivered:      'Entregue',
 }
 const STATUS_COLORS: Record<GroomingStatus, string> = {
   received:       'bg-slate-100 text-slate-700',
-  bathing:        'bg-blue-100 text-blue-700',
   grooming:       'bg-violet-100 text-violet-700',
+  bathing:        'bg-blue-100 text-blue-700',
   waiting_pickup: 'bg-amber-100 text-amber-700',
   delivered:      'bg-emerald-100 text-emerald-700',
 }
 const STATUS_NEXT_BTN: Record<GroomingStatus, string> = {
-  received:       'bg-blue-600 hover:bg-blue-700',
-  bathing:        'bg-violet-600 hover:bg-violet-700',
-  grooming:       'bg-amber-500 hover:bg-amber-600',
+  received:       'bg-violet-600 hover:bg-violet-700',
+  grooming:       'bg-blue-600 hover:bg-blue-700',
+  bathing:        'bg-amber-500 hover:bg-amber-600',
   waiting_pickup: 'bg-emerald-600 hover:bg-emerald-700',
   delivered:      '',
 }
