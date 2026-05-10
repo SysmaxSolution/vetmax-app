@@ -273,12 +273,18 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
       setWaTrigger(resolvedTrigger)
 
       setIsParsingIntent(false)
+      // Limpa o formulário para evitar duplo envio manual após gravação por voz
+      setSelectedServices([])
+      setProducts([])
+      setBehavior('')
+      setObservations('')
+
       // Atualiza timeline ANTES de abrir o modal do WhatsApp
       await loadRecords()
       setSaveToast('Evolução salva pelo assistente de voz!')
       setTimeout(() => setSaveToast(null), 3500)
 
-      // SEMPRE oferece WhatsApp se tutor tiver telefone (espelha submit manual)
+      // Oferece WhatsApp somente após salvar com sucesso (único disparo)
       if (card.tutor?.phone) {
         setVoiceConfirmedWA(false)
         setWhatsappPending(true)

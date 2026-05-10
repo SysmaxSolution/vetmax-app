@@ -272,20 +272,42 @@ export async function requestExam(params: {
   if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
 
   const admin = createAdminClient()
+
+  // Cria consulta no fluxo unificado (igual ao Consultório) para que o pet apareça
+  // na fila de exames (getExamsQueue consulta consultations com status waiting_exam)
+  const { data: consultation, error: consultErr } = await admin
+    .from('consultations')
+    .insert({
+      clinic_id:      profile.clinic_id,
+      patient_id:     params.patient_id,
+      visit_reason:   'exam',
+      status:         'waiting_exam',
+      payment_status: 'pending',
+    })
+    .select('id')
+    .single()
+
+  if (consultErr || !consultation) {
+    return { error: 'Erro ao criar consulta de exame: ' + (consultErr?.message ?? '') }
+  }
+
   const { data, error } = await admin
     .from('exam_requests')
     .insert({
-      clinic_id:  profile.clinic_id,
-      patient_id: params.patient_id,
-      tutor_id:   params.tutor_id,
-      exam_type:  params.exam_type,
-      status:     'pending',
+      clinic_id:       profile.clinic_id,
+      patient_id:      params.patient_id,
+      tutor_id:        params.tutor_id,
+      exam_type:       params.exam_type,
+      consultation_id: consultation.id,
+      notes:           params.notes ?? 'Exame solicitado manualmente no módulo de Exames.',
+      status:          'pending',
     })
     .select('id')
     .single()
 
   if (error) return { error: 'Erro ao solicitar exame: ' + error.message }
   revalidatePath('/dashboard/exams')
+  revalidatePath('/dashboard/reception')
   return { id: data.id }
 }
 

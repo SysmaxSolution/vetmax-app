@@ -38,11 +38,11 @@ export async function GET(request: Request) {
           const { data: pending } = await admin
             .from('pending_registrations')
             .select('full_name, clinic_name')
-            .eq('email', user.email!)
+            .ilike('email', user.email!)
             .single()
 
-          const fullName   = pending?.full_name   ?? user.email?.split('@')[0] ?? 'Admin'
-          const clinicName = pending?.clinic_name ?? ''
+          const fullName   = pending?.full_name   ?? (user.user_metadata?.full_name   as string | undefined) ?? user.email?.split('@')[0] ?? 'Admin'
+          const clinicName = pending?.clinic_name ?? (user.user_metadata?.clinic_name as string | undefined) ?? ''
 
           if (clinicName) {
             const { data: clinic, error: clinicErr } = await admin

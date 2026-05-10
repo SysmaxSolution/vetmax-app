@@ -73,11 +73,24 @@ export async function checkInPatientWithContacts(
 
   if (!profile?.clinic_id) return { error: 'Perfil sem clínica vinculada.' }
 
-  // Validações
-  if (!data.address?.trim()) return { error: 'Endereço é obrigatório.' }
-  if (!data.emergency_contact?.trim()) return { error: 'Contato de emergência é obrigatório.' }
-
   const admin = createAdminClient()
+
+  // Validação dinâmica conforme configuração da clínica
+  const { data: settingsRow } = await admin
+    .from('clinic_settings')
+    .select('checkin_required_fields')
+    .eq('clinic_id', profile.clinic_id)
+    .single()
+  const requiredFields: string[] = Array.isArray(settingsRow?.checkin_required_fields)
+    ? settingsRow.checkin_required_fields
+    : ['address', 'emergency_contact']
+
+  if (requiredFields.includes('address') && !data.address?.trim()) {
+    return { error: 'Endereço é obrigatório.' }
+  }
+  if (requiredFields.includes('emergency_contact') && !data.emergency_contact?.trim()) {
+    return { error: 'Contato de emergência é obrigatório.' }
+  }
 
   // 1. Atualizar dados do tutor (endereço + contato de emergência)
   const { error: tutorErr } = await admin

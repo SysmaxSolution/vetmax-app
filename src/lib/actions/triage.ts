@@ -330,14 +330,25 @@ export async function submitTriageAndMoveToDoctor(
 
   const admin = createAdminClient()
 
-  // Validações básicas
+  // weight e temperature: sempre obrigatórios (CFMV — incontornável)
   if (!vitalSigns.weight || vitalSigns.weight <= 0) {
     return { error: 'Peso é obrigatório e deve ser > 0.' }
   }
   if (!vitalSigns.temperature || vitalSigns.temperature <= 0) {
-    return { error: 'Temperatura é obrigatória e deve ser > 0.' }
+    return { error: 'Temperatura retal é obrigatória e deve ser > 0.' }
   }
-  if (!vitalSigns.chief_complaint?.trim()) {
+
+  // Campos adicionais: validados conforme configuração da clínica
+  const { data: triageSettings } = await admin
+    .from('clinic_settings')
+    .select('triage_required_fields')
+    .eq('clinic_id', profile.clinic_id)
+    .single()
+  const triageRequiredFields: string[] = Array.isArray(triageSettings?.triage_required_fields)
+    ? triageSettings.triage_required_fields
+    : ['weight', 'temperature', 'chief_complaint']
+
+  if (triageRequiredFields.includes('chief_complaint') && !vitalSigns.chief_complaint?.trim()) {
     return { error: 'Queixa principal é obrigatória.' }
   }
 
