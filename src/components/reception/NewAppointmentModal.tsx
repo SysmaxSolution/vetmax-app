@@ -8,7 +8,7 @@ import { createGroomingSession, getGroomingCatalog, updateGroomingPricing, type 
 import { sendWhatsAppMessage } from '@/lib/actions/whatsapp'
 import { useModules } from '@/components/providers/ModulesProvider'
 import { DateInput, TimePicker, DateTimePicker } from '@/components/ui/DatePicker'
-import { getClinicProfessionals, type ClinicProfessional } from '@/lib/actions/professionals'
+import { getClinicProfessionals, checkProfessionalAvailability, type ClinicProfessional } from '@/lib/actions/professionals'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -82,8 +82,9 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
   const [submitting, setSubmitting]         = useState(false)
   const [error,      setError]              = useState<string | null>(null)
   const [sendConfirmation, setSendConfirmation] = useState(true)
-  const [professionalId, setProfessionalId] = useState('')
-  const [professionals, setProfessionals]   = useState<ClinicProfessional[]>([])
+  const [professionalId, setProfessionalId]             = useState('')
+  const [professionals, setProfessionals]               = useState<ClinicProfessional[]>([])
+  const [availabilityWarning, setAvailabilityWarning]   = useState<string | null>(null)
 
   // Load professionals on mount
   useEffect(() => {
@@ -91,6 +92,15 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
       if (!('error' in res)) setProfessionals(res)
     })
   }, [])
+
+  // G-11: valida disponibilidade quando profissional + data + hora mudam
+  useEffect(() => {
+    if (!professionalId || !date || !time) { setAvailabilityWarning(null); return }
+    checkProfessionalAvailability(professionalId, date, time).then(res => {
+      if ('error' in res) { setAvailabilityWarning(null); return }
+      setAvailabilityWarning(res.available ? null : (res.reason ?? 'Profissional pode não estar disponível neste horário.'))
+    })
+  }, [professionalId, date, time])
 
   // ── Grooming inline fields ──
   const [groomingServices,  setGroomingServices]  = useState<string[]>([])
@@ -355,6 +365,11 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
                     </option>
                   ))}
                 </select>
+                {availabilityWarning && (
+                  <p className="mt-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+                    ⚠️ {availabilityWarning}
+                  </p>
+                )}
               </div>
             )}
 

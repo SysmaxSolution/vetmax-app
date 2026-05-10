@@ -125,3 +125,31 @@ export async function updateUserSpecialties(
   revalidatePath('/dashboard/management')
   return { success: true }
 }
+
+export async function updateUserNickname(
+  userId: string,
+  nickname: string
+): Promise<{ success: true } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('clinic_id, role')
+    .eq('id', user.id)
+    .single()
+  if (!profile?.clinic_id) return { error: 'Clínica não encontrada.' }
+  if (profile.role !== 'admin' && user.id !== userId) return { error: 'Sem permissão.' }
+
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('profiles')
+    .update({ nickname: nickname.trim() || null })
+    .eq('id', userId)
+    .eq('clinic_id', profile.clinic_id)
+
+  if (error) return { error: error.message }
+  revalidatePath('/dashboard/management')
+  return { success: true }
+}

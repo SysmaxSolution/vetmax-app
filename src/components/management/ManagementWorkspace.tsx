@@ -24,7 +24,7 @@ import BusinessHoursTab from './BusinessHoursTab'
 import PricingTab from './PricingTab'
 import ModulesTab from './ModulesTab'
 import RoomsTab from './RoomsTab'
-import { updateUserPhone, updateUserSpecialties, getUserModuleAccess, setUserModuleAccess } from '@/lib/actions/user-management'
+import { updateUserPhone, updateUserSpecialties, getUserModuleAccess, setUserModuleAccess, updateUserNickname } from '@/lib/actions/user-management'
 import type { Room } from '@/lib/actions/rooms'
 import type { WhatsAppSettingsDisplay } from '@/lib/actions/whatsapp'
 import type { ProductPrice } from '@/lib/actions/core-management'
@@ -37,6 +37,7 @@ interface ClinicUser {
   crmv: string | null
   phone: string | null
   specialties: string[] | null
+  nickname: string | null
 }
 
 interface ManagementWorkspaceProps {
@@ -907,6 +908,13 @@ export default function ManagementWorkspace({
                       value={u.phone ?? ''}
                       placeholder="(11) 99999-0000"
                       onSave={async (val) => { await updateUserPhone(u.id, val) }}
+                    />
+                    {/* Apelido (G-10) */}
+                    <UserInlineField
+                      label="Apelido"
+                      value={u.nickname ?? ''}
+                      placeholder="Ex: Dr. Carlos"
+                      onSave={async (val) => { await updateUserNickname(u.id, val) }}
                     />
                     {/* Specialties */}
                     {(u.role === 'vet' || u.role === 'assistant') && (
