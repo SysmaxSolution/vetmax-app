@@ -210,7 +210,8 @@ export default function GroomingKanban({ initialBoard, clinicId }: Props) {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 min-h-[500px]">
+      <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0 pb-1">
+      <div data-mentor-step="grooming-queue" className="flex gap-3 min-w-[1080px] md:min-w-0 md:grid md:grid-cols-3 lg:grid-cols-6 min-h-[500px] pb-2 md:pb-0 snap-x snap-mandatory md:snap-none">
         {COLUMNS.map(col => {
           const cards      = board[col.status]
           const isDragOver = dragOverCol === col.status
@@ -222,7 +223,7 @@ export default function GroomingKanban({ initialBoard, clinicId }: Props) {
               onDragOver={e => handleDragOver(e, col.status as GroomingStatus)}
               onDragLeave={() => setDragOverCol(null)}
               onDrop={e => handleDrop(e, col.status as GroomingStatus)}
-              className={`flex flex-col rounded-2xl border-2 transition-all ${col.bg} ${
+              className={`w-44 md:w-auto flex-none md:flex-auto snap-start flex flex-col rounded-2xl border-2 transition-all ${col.bg} ${
                 isDragOver ? `${col.border} ring-2 ring-teal-400 ring-offset-2 scale-[1.01]` : 'border-transparent'
               }`}
             >
@@ -263,11 +264,12 @@ export default function GroomingKanban({ initialBoard, clinicId }: Props) {
             </div>
           )
         })}
-      </div>
+      </div>{/* fim grid/inner */}
+      </div>{/* fim scroll container */}
 
       {/* Legenda */}
       <p className="text-xs text-slate-400 text-center">
-        💡 Arraste os cards para mover entre etapas · Clique para registrar serviços por voz
+        💡 No celular, deslize ← → para ver todas as etapas · Clique no card para registrar evolução
       </p>
 
       {/* Modal de Detalhe */}
@@ -275,7 +277,7 @@ export default function GroomingKanban({ initialBoard, clinicId }: Props) {
         <GroomingDetailModal
           card={selectedCard}
           onClose={() => setSelectedCard(null)}
-          onSaved={() => setSelectedCard(null)}
+          onSaved={() => {}}
           onStatusChange={(newStatus) => {
             // Atualização otimista: move o card localmente sem esperar Realtime
             setBoard(prev => {

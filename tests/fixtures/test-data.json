@@ -106,6 +106,7 @@
       "patient_id": "bbbb1111-0000-0000-0000-000000000001",
       "tutor_id": "aaaa1111-0000-0000-0000-000000000001",
       "services_requested": ["Banho Completo", "Tosa Higiênica"],
+      "status": "waiting_pickup",
       "current_status": "waiting_pickup",
       "scheduled_at": null,
       "price_total": 145.00,

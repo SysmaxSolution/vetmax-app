@@ -5,8 +5,9 @@ import {
   X, Scissors, History, Loader2, Save, Mic, MicOff,
   User, Clock, Plus, Trash2, CheckCircle, Paperclip,
   ImageIcon, FileText, Upload, Wifi, WifiOff, Settings,
-  DollarSign, Tag, BadgeCheck, Ban, ExternalLink,
+  DollarSign, Tag, BadgeCheck, Ban, ExternalLink, ChevronRight,
 } from 'lucide-react'
+import type { WhatsAppTrigger } from '@/lib/actions/whatsapp'
 import { createClient } from '@/lib/supabase/client'
 import {
   addGroomingRecord,
@@ -34,6 +35,31 @@ const INTENT_TO_DB_STATUS: Record<string, GroomingStatus> = {
   DELIVERED:        'delivered',
 }
 import { getClinicVoiceTriggers, updateClinicVoiceTriggers } from '@/lib/actions/clinic-settings'
+
+// ─── Fluxo de status (mobile: botões de progressão) ──────────────────────────
+
+const STATUS_FLOW: GroomingStatus[] = ['received', 'bathing', 'grooming', 'waiting_pickup', 'delivered']
+const STATUS_LABELS: Record<GroomingStatus, string> = {
+  received:       'Recebido',
+  bathing:        'Em Banho',
+  grooming:       'Em Tosa',
+  waiting_pickup: 'Aguardando Retirada',
+  delivered:      'Entregue',
+}
+const STATUS_COLORS: Record<GroomingStatus, string> = {
+  received:       'bg-slate-100 text-slate-700',
+  bathing:        'bg-blue-100 text-blue-700',
+  grooming:       'bg-violet-100 text-violet-700',
+  waiting_pickup: 'bg-amber-100 text-amber-700',
+  delivered:      'bg-emerald-100 text-emerald-700',
+}
+const STATUS_NEXT_BTN: Record<GroomingStatus, string> = {
+  received:       'bg-blue-600 hover:bg-blue-700',
+  bathing:        'bg-violet-600 hover:bg-violet-700',
+  grooming:       'bg-amber-500 hover:bg-amber-600',
+  waiting_pickup: 'bg-emerald-600 hover:bg-emerald-700',
+  delivered:      '',
+}
 import { useGroomingVoiceAssistant } from '@/hooks/useGroomingVoiceAssistant'
 import WhatsAppNotificationModal from '@/components/whatsapp/WhatsAppNotificationModal'
 
@@ -105,6 +131,11 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
   // WhatsApp
   const [whatsappPending,   setWhatsappPending]   = useState(false)
   const [voiceConfirmedWA,  setVoiceConfirmedWA]  = useState(false)
+  const [waTrigger, setWaTrigger] = useState<WhatsAppTrigger>('grooming_ready_for_pickup')
+
+  // Status progressão mobile
+  const [currentCardStatus, setCurrentCardStatus] = useState<GroomingStatus>(card.status)
+  const [isAdvancingStatus, setIsAdvancingStatus] = useState(false)
 
   // Voice triggers (personalizáveis por clínica)
   const [startTriggers,  setStartTriggers]  = useState<string[]>([])
@@ -209,11 +240,37 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
       // 5. Move o card Kanban se a IA detectou mudança de status
       if (!('error' in intent) && intent.new_status && intent.action === 'MOVE_AND_SAVE') {
         const dbStatus = INTENT_TO_DB_STATUS[intent.new_status]
-        if (dbStatus && dbStatus !== card.status) {
+        if (dbStatus && dbStatus !== currentCardStatus) {
           await updateGroomingStatus(card.id, dbStatus)
+          setCurrentCardStatus(dbStatus)
           onStatusChange?.(dbStatus)
         }
       }
+
+      // 6. Auto-popula preços do catálogo para serviços detectados por voz
+      if (newSvcs.length > 0 && catalog.length > 0) {
+        const matchedPrices = newSvcs
+          .map(svc => {
+            const found = catalog.find(c => c.name.toLowerCase() === svc.toLowerCase())
+            return found ? { name: found.name, price: found.price } : null
+          })
+          .filter((p): p is GroomingServicePrice => p !== null && p.price > 0)
+
+        if (matchedPrices.length > 0) {
+          const merged = [
+            ...servicePrices.filter(sp => !matchedPrices.some(mp => mp.name.toLowerCase() === sp.name.toLowerCase())),
+            ...matchedPrices,
+          ]
+          setServicePrices(merged)
+          await updateGroomingPricing(card.id, merged, discountPct)
+        }
+      }
+
+      // 7. Determina trigger de WhatsApp baseado no novo status detectado
+      const detectedStatus = !('error' in intent) ? intent.new_status : null
+      const resolvedTrigger: WhatsAppTrigger =
+        detectedStatus === 'DELIVERED' ? 'grooming_delivered' : 'grooming_ready_for_pickup'
+      setWaTrigger(resolvedTrigger)
 
       setIsParsingIntent(false)
       // Atualiza timeline ANTES de abrir o modal do WhatsApp
@@ -272,6 +329,26 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
     setVoiceConfigOpen(false)
   }
 
+  // ─── Progressão de status mobile ──────────────────────────────────────────
+
+  async function handleStatusAdvance(nextStatus: GroomingStatus) {
+    setIsAdvancingStatus(true)
+    const result = await updateGroomingStatus(card.id, nextStatus)
+    if ('error' in result) {
+      setErrorToast('Erro ao avançar etapa: ' + result.error)
+      setTimeout(() => setErrorToast(null), 4000)
+    } else {
+      setCurrentCardStatus(nextStatus)
+      onStatusChange?.(nextStatus)
+      if (nextStatus === 'waiting_pickup' || nextStatus === 'delivered') {
+        const trigger: WhatsAppTrigger = nextStatus === 'delivered' ? 'grooming_delivered' : 'grooming_ready_for_pickup'
+        setWaTrigger(trigger)
+        if (card.tutor?.phone) setWhatsappPending(true)
+      }
+    }
+    setIsAdvancingStatus(false)
+  }
+
   // ─── Push-to-talk legado removido — voz unificada no useGroomingVoiceAssistant ───
 
   // ─── Produtos ─────────────────────────────────────────────────────────────
@@ -323,9 +400,10 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
     setSaveToast('Registro salvo com sucesso!')
     setTimeout(() => setSaveToast(null), 3000)
 
-    // WhatsApp: se tutor tiver telefone, exibe o modal de notificação.
-    // O card NUNCA fecha automaticamente — o profissional fecha manualmente pelo X.
+    // WhatsApp: determina trigger pelo status atual; nunca fecha o modal.
     if (card.tutor?.phone) {
+      const trigger: WhatsAppTrigger = currentCardStatus === 'delivered' ? 'grooming_delivered' : 'grooming_ready_for_pickup'
+      setWaTrigger(trigger)
       setWhatsappPending(true)
     }
   }
@@ -421,21 +499,22 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
         </div>
       )}
 
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/60 backdrop-blur-sm">
+        <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-4xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col">
 
           {/* Header */}
-          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-2xl bg-teal-600 flex items-center justify-center text-white shadow-lg shadow-teal-200">
-                <Scissors className="h-6 w-6" />
+          <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+            <div className="flex items-center gap-3">
+              <div className="h-9 w-9 sm:h-12 sm:w-12 flex-shrink-0 rounded-xl sm:rounded-2xl bg-teal-600 flex items-center justify-center text-white shadow-lg shadow-teal-200">
+                <Scissors className="h-4 w-4 sm:h-6 sm:w-6" />
               </div>
-              <div>
-                <h2 className="text-xl font-bold text-slate-900 leading-tight">
-                  Banho e Tosa: <span className="text-teal-600">{card.patient.name}</span>
+              <div className="min-w-0">
+                <h2 className="text-base sm:text-xl font-bold text-slate-900 leading-tight truncate">
+                  <span className="text-teal-600">{card.patient.name}</span>
+                  <span className="text-slate-400 font-normal text-sm hidden sm:inline"> — Banho e Tosa</span>
                 </h2>
-                <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">
-                  {card.patient.species} • {card.patient.breed || 'SRD'} • Tutor: {card.tutor.name}
+                <p className="text-[10px] sm:text-xs text-slate-500 font-medium uppercase tracking-wider truncate">
+                  {card.patient.species} • {card.patient.breed || 'SRD'} • {card.tutor.name}
                 </p>
               </div>
             </div>
@@ -457,8 +536,33 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
             </div>
           </div>
 
+          {/* Barra de Progressão de Status — Mobile First */}
+          {currentCardStatus !== 'delivered' && (() => {
+            const idx = STATUS_FLOW.indexOf(currentCardStatus)
+            const nextStatus = idx >= 0 && idx < STATUS_FLOW.length - 1 ? STATUS_FLOW[idx + 1] : null
+            if (!nextStatus) return null
+            return (
+              <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50/70 flex items-center gap-3 flex-wrap">
+                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold ${STATUS_COLORS[currentCardStatus]}`}>
+                  Etapa atual: {STATUS_LABELS[currentCardStatus]}
+                </span>
+                <ChevronRight className="h-3 w-3 text-slate-300 hidden sm:block" />
+                <button
+                  type="button"
+                  onClick={() => handleStatusAdvance(nextStatus)}
+                  disabled={isAdvancingStatus}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-white text-[11px] font-bold transition-all disabled:opacity-50 shadow-sm ${STATUS_NEXT_BTN[currentCardStatus]}`}
+                >
+                  {isAdvancingStatus
+                    ? <><Loader2 className="h-3 w-3 animate-spin" /> Avançando...</>
+                    : <><ChevronRight className="h-3 w-3" /> Avançar para {STATUS_LABELS[nextStatus]}</>}
+                </button>
+              </div>
+            )
+          })()}
+
           {/* Body */}
-          <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
 
             {/* ── Coluna Esquerda: Formulário ── */}
             <div className="space-y-5">
@@ -502,6 +606,7 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
                   </h3>
                   <button
                     type="button"
+                    data-mentor-step="grooming-voice-btn"
                     onClick={assistant.manualToggle}
                     title={
                       assistant.state === 'IDLE'
@@ -533,7 +638,7 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
                     <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 mb-2 block">
                       Comportamento do Animal
                     </label>
-                    <div className="grid grid-cols-4 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       {BEHAVIOR_OPTIONS.map(opt => (
                         <button
                           key={opt.id}
@@ -1034,7 +1139,7 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
         <WhatsAppNotificationModal
           isOpen={whatsappPending}
           onClose={() => { setWhatsappPending(false); setVoiceConfirmedWA(false) }}
-          trigger="grooming_ready_for_pickup"
+          trigger={waTrigger}
           autoSend={voiceConfirmedWA}
           context={{
             petName:          card.patient.name,
