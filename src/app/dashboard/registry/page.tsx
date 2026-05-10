@@ -1,10 +1,10 @@
-import { createClient } from '@/lib/supabase/server'
+﻿import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import { listSuppliers } from '@/lib/actions/suppliers'
 import RegistryWorkspace from '@/components/registry/RegistryWorkspace'
 
-export const metadata = { title: 'Cadastros Gerais | VetMax' }
+export const metadata = { title: 'Cadastros Gerais | SysVetMax' }
 
 const ALLOWED_ROLES = ['admin', 'owner', 'manager', 'accountant', 'receptionist']
 

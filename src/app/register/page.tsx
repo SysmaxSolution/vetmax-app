@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState } from 'react'
 import Link from 'next/link'
@@ -59,7 +59,7 @@ export default function RegisterPage() {
             <path strokeLinecap="round" strokeLinejoin="round" d="M15.182 15.182a4.5 4.5 0 0 1-6.364 0M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
           </svg>
         </div>
-        <h1 className="text-2xl font-black text-slate-900">VetMax</h1>
+        <h1 className="text-2xl font-black text-slate-900">SysVetMax</h1>
         <p className="text-sm text-slate-500 font-medium">Crie a conta da sua clínica</p>
       </div>
 

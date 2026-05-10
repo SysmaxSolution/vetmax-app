@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState } from 'react'
 import { X, HelpCircle } from 'lucide-react'
@@ -57,7 +57,7 @@ export function MentorButton() {
 
           <div className="border-t border-slate-100 px-4 py-2.5">
             <p className="text-[10px] text-slate-400 text-center">
-              Modo Mentor — VetMax by Sysmax Solutions
+              Modo Mentor — SysVetMax by Sysmax Solutions
             </p>
           </div>
         </div>

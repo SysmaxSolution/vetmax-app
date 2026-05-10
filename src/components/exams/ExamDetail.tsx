@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
@@ -57,7 +57,7 @@ function calcAge(birthDate: string | null): string {
 
 export default function ExamDetail({
   consultation,
-  clinicName = 'VetMax',
+  clinicName = 'SysVetMax',
   templates = [],
   initialDocuments = [],
   initialAttachments = [],

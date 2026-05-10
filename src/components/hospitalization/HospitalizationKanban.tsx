@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
@@ -397,7 +397,7 @@ export default function HospitalizationKanban({ initialBoard, clinicId }: Props)
         </div>
       )}
 
-      <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 min-h-[600px]">
+      <section data-mentor-step="hospitalization-list" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 min-h-[600px]">
         {COLUMNS.map(col => {
           const cards      = board[col.status]
           const isDragOver = dragOverCol === col.status
@@ -682,7 +682,7 @@ function printDischargePdf(s: DischargeSummary) {
     ${recordsHtml}
     ${logsHtml}
     <div style="margin-top:28px;border-top:1px solid #e2e8f0;padding-top:10px;text-align:center;color:#94a3b8;font-size:9px">
-      Gerado em ${fmt(new Date().toISOString())} · VetMax — Sistema de Gestão Veterinária · CFMV
+      Gerado em ${fmt(new Date().toISOString())} · SysVetMax — Sistema de Gestão Veterinária · CFMV
     </div>
   </body></html>`
 

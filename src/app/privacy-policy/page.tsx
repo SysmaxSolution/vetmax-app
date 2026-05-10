@@ -1,9 +1,9 @@
-import type { Metadata } from 'next'
+﻿import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Shield, ArrowLeft, FileText, Clock, Mail } from 'lucide-react'
 
 export const metadata: Metadata = {
-  title: 'Política de Privacidade — VetMax',
+  title: 'Política de Privacidade — SysVetMax',
   description: 'Política de Privacidade e tratamento de dados pessoais conforme LGPD (Lei 13.709/2018) e CFMV.',
 }
 
@@ -26,7 +26,7 @@ export default function PrivacyPolicyPage() {
           </Link>
           <div className="flex items-center gap-2 ml-auto">
             <Shield className="h-5 w-5 text-teal-600" />
-            <span className="text-sm font-bold text-slate-700">VetMax — Privacidade</span>
+            <span className="text-sm font-bold text-slate-700">SysVetMax — Privacidade</span>
           </div>
         </div>
       </header>
@@ -50,7 +50,7 @@ export default function PrivacyPolicyPage() {
 
           <div className="bg-teal-50 border border-teal-200 rounded-2xl px-6 py-4">
             <p className="text-sm text-teal-800 leading-relaxed">
-              Esta política descreve como o <strong>VetMax</strong> coleta, usa e protege os dados pessoais
+              Esta política descreve como o <strong>SysVetMax</strong> coleta, usa e protege os dados pessoais
               dos tutores e animais cadastrados, em conformidade com a{' '}
               <strong>Lei Geral de Proteção de Dados Pessoais (LGPD — Lei nº 13.709/2018)</strong> e a{' '}
               <strong>Resolução CFMV nº 1.138/2016</strong>.
@@ -63,8 +63,8 @@ export default function PrivacyPolicyPage() {
 
           <Section title="1. Controlador dos Dados" id="controlador">
             <p>
-              O controlador dos dados é a <strong>clínica veterinária</strong> que contrata o VetMax como
-              plataforma de gestão. O VetMax atua como <strong>operador de dados</strong>, processando
+              O controlador dos dados é a <strong>clínica veterinária</strong> que contrata o SysVetMax como
+              plataforma de gestão. O SysVetMax atua como <strong>operador de dados</strong>, processando
               informações exclusivamente conforme as instruções do controlador.
             </p>
             <p className="mt-3">
@@ -218,7 +218,7 @@ export default function PrivacyPolicyPage() {
               Para quaisquer questões sobre privacidade, acesso ou eliminação de dados:
             </p>
             <div className="mt-3 bg-slate-50 rounded-xl p-5 border border-slate-200 space-y-2">
-              <p className="text-sm"><strong>Encarregado de Dados (DPO):</strong> VetMax Privacy Team</p>
+              <p className="text-sm"><strong>Encarregado de Dados (DPO):</strong> SysVetMax Privacy Team</p>
               <p className="text-sm">
                 <strong>E-mail:</strong>{' '}
                 <a href={`mailto:${DPO_EMAIL}`} className="text-teal-600 hover:underline">{DPO_EMAIL}</a>
@@ -237,7 +237,7 @@ export default function PrivacyPolicyPage() {
         {/* Footer */}
         <footer className="mt-16 pt-8 border-t border-slate-200 text-center">
           <p className="text-xs text-slate-400">
-            VetMax · Política de Privacidade v1.0 · {LAST_UPDATED}
+            SysVetMax · Política de Privacidade v1.0 · {LAST_UPDATED}
           </p>
           <p className="text-xs text-slate-400 mt-1">
             Em conformidade com LGPD (Lei 13.709/2018) · CFMV Res. 1.138/2016 · Marco Civil da Internet

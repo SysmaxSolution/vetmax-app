@@ -1,11 +1,11 @@
-import { getTriageQueue, getTriageHistory, getTriageRecordsQueue } from '@/lib/actions/triage'
+﻿import { getTriageQueue, getTriageHistory, getTriageRecordsQueue } from '@/lib/actions/triage'
 import NurseWorkspace from '@/components/triage/NurseWorkspace'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export const metadata = {
-  title: 'Triagem Veterinária | VetMax',
+  title: 'Triagem Veterinária | SysVetMax',
 }
 
 export default async function TriagePage() {

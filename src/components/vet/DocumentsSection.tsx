@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import {
@@ -157,7 +157,7 @@ function FieldInput({
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function DocumentsSection({
-  consultation, clinicName = 'VetMax', templates, initialDocuments,
+  consultation, clinicName = 'SysVetMax', templates, initialDocuments,
   pendingSuggestions = [], onSuggestionDismiss, onDocSaved, onPrint,
   onPdfUploadingChange, onAttachmentAdded, onError,
   autoTriggerSuggestion, onAutoTriggerHandled,

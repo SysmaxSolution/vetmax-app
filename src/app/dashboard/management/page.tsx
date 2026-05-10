@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+﻿import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import { getTemplates } from '@/lib/actions/templates'
@@ -12,7 +12,7 @@ import ManagementWorkspace from '@/components/management/ManagementWorkspace'
 import { Suspense } from 'react'
 import type { DocumentTemplate } from '@/types'
 
-export const metadata = { title: 'Gestão | VetMax' }
+export const metadata = { title: 'Gestão | SysVetMax' }
 
 export default async function ManagementPage() {
   const supabase = await createClient()

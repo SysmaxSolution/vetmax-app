@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useActionState, useState } from 'react'
 import { login, selectClinic } from '@/lib/actions/auth'
@@ -117,11 +117,15 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
           <div className="mb-3 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-600 shadow-lg">
-            <svg className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.182 15.182a4.5 4.5 0 0 1-6.364 0M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM9.75 9.75c0 .414-.168.75-.375.75S9 10.164 9 9.75 9.168 9 9.375 9s.375.336.375.75Zm-.375 0h.008v.015h-.008V9.75Zm5.625 0c0 .414-.168.75-.375.75s-.375-.336-.375-.75.168-.75.375-.75.375.336.375.75Zm-.375 0h.008v.015h-.008V9.75Z" />
+            <svg className="h-8 w-8" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+              <ellipse cx="27" cy="32" rx="10" ry="13" fill="white" transform="rotate(-18 27 32)"/>
+              <ellipse cx="44" cy="23" rx="10" ry="13" fill="white" transform="rotate(-6 44 23)"/>
+              <ellipse cx="61" cy="23" rx="10" ry="13" fill="white" transform="rotate(6 61 23)"/>
+              <ellipse cx="78" cy="32" rx="10" ry="13" fill="white" transform="rotate(18 78 32)"/>
+              <ellipse cx="52" cy="67" rx="26" ry="22" fill="white"/>
             </svg>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">VetMax</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">SysVetMax</h1>
           <p className="mt-1 text-sm text-slate-500">Acesse sua clínica veterinária</p>
         </div>
 
@@ -180,7 +184,7 @@ export default function LoginPage() {
             </Link>
           </p>
           <p>
-            Novo no VetMax?{' '}
+            Novo no SysVetMax?{' '}
             <Link href="/register" className="text-teal-600 font-bold hover:underline">
               Criar uma conta
             </Link>

@@ -1,9 +1,9 @@
-import { createClient } from '@/lib/supabase/server'
+﻿import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import CalendarWorkspace from '@/components/reception/CalendarWorkspace'
 
-export const metadata = { title: 'Agenda | VetMax' }
+export const metadata = { title: 'Agenda | SysVetMax' }
 
 export default async function CalendarPage() {
   const supabase = await createClient()

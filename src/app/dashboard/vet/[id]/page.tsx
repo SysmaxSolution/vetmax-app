@@ -10,7 +10,7 @@ import { getPatientVaccines } from '@/lib/actions/vaccines'
 import ConsultationDetail from '@/components/vet/ConsultationDetail'
 import type { FlowConfig } from '@/lib/actions/clinic-settings'
 
-export const metadata = { title: 'Consultório | VetMax' }
+export const metadata = { title: 'Consultório | SysVetMax' }
 
 interface Props {
   params: Promise<{ id: string }>

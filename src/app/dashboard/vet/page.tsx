@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+﻿import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import VetWorkspace from '@/components/vet/VetWorkspace'
@@ -7,7 +7,7 @@ import { getVetQueue, getVetCompleted } from '@/lib/actions/vet'
 export const dynamic = 'force-dynamic'
 
 export const metadata = {
-  title: 'Consultório | VetMax',
+  title: 'Consultório | SysVetMax',
 }
 
 export default async function VetPage() {

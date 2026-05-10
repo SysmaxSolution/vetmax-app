@@ -1,8 +1,8 @@
-import type { Metadata } from 'next'
+﻿import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'VetMax — HIS Veterinário',
+  title: 'SysVetMax — HIS Veterinário',
   description: 'Sistema de Informação Hospitalar Veterinário com IA e transcrição por voz',
 }
 

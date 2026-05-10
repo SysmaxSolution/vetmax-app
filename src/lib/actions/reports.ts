@@ -1,4 +1,4 @@
-'use server'
+﻿'use server'
 
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -126,7 +126,7 @@ export async function generateDischargeSummary(
       name:  tutor?.name  ?? '—',
       phone: tutor?.phone ?? null,
     },
-    clinic_name: clinic?.name ?? 'VetMax',
+    clinic_name: clinic?.name ?? 'SysVetMax',
     records: (records ?? []).map((r: any) => ({
       created_at:        r.created_at,
       user_name:         r.user_name,
@@ -198,7 +198,7 @@ export async function generatePrescriptionPdf(
 
   return {
     hospitalization_id: hosp.id,
-    clinic_name:        clinic?.name    ?? 'VetMax',
+    clinic_name:        clinic?.name    ?? 'SysVetMax',
     vet_name:           profile.full_name,
     vet_crmv:           (profile as any).crmv ?? null,
     patient: {

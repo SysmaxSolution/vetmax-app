@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+﻿import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { evolutionCreateInstance, evolutionGetConnectionState, evolutionSetWebhook } from '@/lib/evolution-api-client'
@@ -26,7 +26,7 @@ export async function POST() {
 
   // Nome da instância = prefixo do clinic_id sem hífens (8 chars)
   const instanceName = 'vet' + profile.clinic_id.replace(/-/g, '').substring(0, 8)
-  // VERCEL_PROJECT_PRODUCTION_URL é provido automaticamente pela Vercel (sem protocolo, ex: vetmax-one.vercel.app)
+  // VERCEL_PROJECT_PRODUCTION_URL é provido automaticamente pela Vercel (sem protocolo, ex: SysVetMax-one.vercel.app)
   // Tem prioridade sobre NEXT_PUBLIC_APP_URL (que pode conter IP de dev local)
   const productionUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
     ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`

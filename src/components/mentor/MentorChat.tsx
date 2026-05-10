@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useRef, useEffect, useTransition, useCallback } from 'react'
 import { createPortal } from 'react-dom'
@@ -53,7 +53,7 @@ function userMsg(text: string): Message {
 }
 
 const GREET: Message = mentorMsg(
-  'Olá! Sou o Mentor do VetMax. Posso te ajudar a:\n• Localizar um animal ("Cadê o Bituca?")\n• Iniciar um tour guiado ("Como dou alta?")\n• Navegar pelo sistema ("Me mostra a triagem")'
+  'Olá! Sou o Mentor do SysVetMax. Posso te ajudar a:\n• Localizar um animal ("Cadê o Bituca?")\n• Iniciar um tour guiado ("Como dou alta?")\n• Navegar pelo sistema ("Me mostra a triagem")'
 )
 
 // ─── Speech Recognition types ─────────────────────────────────────────────────
@@ -352,7 +352,7 @@ export function MentorChat() {
                 <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-blue-600 bg-emerald-400" />
               </div>
               <div>
-                <p className="text-sm font-bold text-white leading-none">Mentor VetMax</p>
+                <p className="text-sm font-bold text-white leading-none">Mentor SysVetMax</p>
                 <p className="mt-0.5 text-[11px] text-blue-200">Assistente de onboarding</p>
               </div>
             </div>

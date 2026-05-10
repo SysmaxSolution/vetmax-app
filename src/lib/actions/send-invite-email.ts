@@ -1,4 +1,4 @@
-'use server'
+﻿'use server'
 
 import { Resend } from 'resend'
 
@@ -27,9 +27,9 @@ export async function sendInviteEmail(params: SendInviteParams): Promise<{ error
 
   try {
     const { error } = await getResend().emails.send({
-      from: 'VetMax <noreply@sysmaxsolutions.com>',
+      from: 'SysVetMax <noreply@sysmaxsolutions.com>',
       to,
-      subject: `Convite para ingressar na ${clinicName} — VetMax`,
+      subject: `Convite para ingressar na ${clinicName} — SysVetMax`,
       html: `
 <!DOCTYPE html>
 <html>
@@ -38,7 +38,7 @@ export async function sendInviteEmail(params: SendInviteParams): Promise<{ error
   <div style="max-width:480px;margin:40px auto;background:#fff;border-radius:16px;border:1px solid #e2e8f0;overflow:hidden;">
 
     <div style="background:#0d9488;padding:32px 24px;text-align:center;">
-      <h1 style="margin:0;color:#fff;font-size:24px;font-weight:700;">VetMax</h1>
+      <h1 style="margin:0;color:#fff;font-size:24px;font-weight:700;">SysVetMax</h1>
       <p style="margin:8px 0 0;color:#ccfbf1;font-size:14px;">Plataforma Veterinária Inteligente</p>
     </div>
 

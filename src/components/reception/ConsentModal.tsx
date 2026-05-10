@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState } from 'react'
 import { Shield, X, FileText, CheckCircle, ExternalLink } from 'lucide-react'
@@ -12,7 +12,7 @@ interface Props {
 const CONSENT_VERSION = '1.0'
 
 const CONSENT_TEXT = `
-TERMOS DE CONSENTIMENTO E POLÍTICA DE PRIVACIDADE — VetMax
+TERMOS DE CONSENTIMENTO E POLÍTICA DE PRIVACIDADE — SysVetMax
 
 Prezado(a) Tutor(a),
 

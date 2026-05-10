@@ -1,8 +1,8 @@
-import { createClient } from '@/lib/supabase/server'
+﻿import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 
-export const metadata = { title: 'Painel | VetMax' }
+export const metadata = { title: 'Painel | SysVetMax' }
 
 export default async function DashboardPage() {
   const supabase = await createClient()

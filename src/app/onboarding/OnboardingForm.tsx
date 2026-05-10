@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useActionState } from 'react'
 import { completeOnboarding } from '@/lib/actions/onboarding'
@@ -37,7 +37,7 @@ export function OnboardingForm({ clinicId, clinicName, token }: Props) {
           ) : (
             <>
               <h1 className="text-2xl font-bold text-slate-900">Configurar sua clínica</h1>
-              <p className="mt-1 text-sm text-slate-500">Configure o VetMax para começar a usar</p>
+              <p className="mt-1 text-sm text-slate-500">Configure o SysVetMax para começar a usar</p>
             </>
           )}
         </div>

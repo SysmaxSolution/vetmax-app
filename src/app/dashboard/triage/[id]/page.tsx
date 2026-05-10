@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export const metadata = {
-  title: 'Triagem - VetMax',
+  title: 'Triagem - SysVetMax',
 }
 
 interface TriageScreenProps {

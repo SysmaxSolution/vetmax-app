@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useRef } from 'react'
 import {
@@ -35,7 +35,7 @@ const MODULES: ModuleDef[] = [
 
 // Master key is stored in env and compared client-side only for UX purposes.
 // Real enforcement happens server-side via RLS + module guard.
-const MASTER_KEY_ENV = process.env.NEXT_PUBLIC_MODULE_MASTER_KEY ?? 'VETMAX-MASTER-2024'
+const MASTER_KEY_ENV = process.env.NEXT_PUBLIC_MODULE_MASTER_KEY ?? 'vetmax-MASTER-2024'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 

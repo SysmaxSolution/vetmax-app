@@ -1,10 +1,10 @@
-import { createClient } from '@/lib/supabase/server'
+﻿import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import PatientsWorkspace from '@/components/patients/PatientsWorkspace'
 import { getPatientsList } from '@/lib/actions/timeline'
 
-export const metadata = { title: 'Pacientes | VetMax' }
+export const metadata = { title: 'Pacientes | SysVetMax' }
 
 export default async function PatientsPage() {
   const supabase = await createClient()

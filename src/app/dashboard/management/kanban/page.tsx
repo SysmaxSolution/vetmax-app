@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+﻿import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
@@ -13,7 +13,7 @@ import { getDashboardMetrics, getActionCenter } from '@/lib/actions/dashboard'
 import { getHospitalizationOccupancy } from '@/lib/actions/hospitalizations'
 import { getWhatsappDirectorStats } from '@/lib/actions/whatsapp-director'
 
-export const metadata = { title: 'Painel do Diretor | VetMax' }
+export const metadata = { title: 'Painel do Diretor | SysVetMax' }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

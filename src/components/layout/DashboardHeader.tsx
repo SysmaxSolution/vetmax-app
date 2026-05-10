@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -122,7 +122,7 @@ export default function DashboardHeader({
                     <span className="text-sm font-bold text-white">V</span>
                   </div>
                   <div>
-                    <h1 className="text-sm font-semibold text-slate-900">VetMax</h1>
+                    <h1 className="text-sm font-semibold text-slate-900">SysVetMax</h1>
                     <p className="text-xs text-slate-500">{clinicName}</p>
                   </div>
                 </>

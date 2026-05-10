@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useActionState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
@@ -568,7 +568,7 @@ export default function ManagementWorkspace({
               </div>
               <div>
                 <h2 className="text-base font-semibold text-slate-900">Identidade Visual (White-label)</h2>
-                <p className="text-xs text-slate-500">Logo que substitui "VetMax" no menu e nos documentos</p>
+                <p className="text-xs text-slate-500">Logo que substitui "SysVetMax" no menu e nos documentos</p>
               </div>
             </div>
             <div className="p-6">

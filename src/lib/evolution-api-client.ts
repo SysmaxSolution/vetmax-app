@@ -1,4 +1,4 @@
-// Evolution API v1.8.4 client — self-hosted WhatsApp gateway
+﻿// Evolution API v1.8.4 client — self-hosted WhatsApp gateway
 
 export type EvolutionCreds = {
   apiUrl:     string   // e.g. http://localhost:8080

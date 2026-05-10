@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useRef } from 'react'
 import {
@@ -205,7 +205,7 @@ export default function PricingTab({ initialItems, onToast }: Props) {
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
-    a.href = url; a.download = 'template_precos_vetmax.csv'
+    a.href = url; a.download = 'template_precos_SysVetMax.csv'
     a.click(); URL.revokeObjectURL(url)
   }
 

@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState } from 'react'
 import { UploadCloud, FileType, Loader2, CheckCircle2, AlertCircle, Download } from 'lucide-react'
@@ -18,7 +18,7 @@ export default function CsvImporter() {
     const blob = new Blob([headers + example], { type: 'text/csv;charset=utf-8;' })
     const link = document.createElement('a')
     link.href = URL.createObjectURL(blob)
-    link.download = "vetmax_modelo_importacao.csv"
+    link.download = "SysVetMax_modelo_importacao.csv"
     link.click()
   }
 

@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
@@ -126,7 +126,7 @@ interface Props {
 
 export default function ConsultationDetail({
   consultation,
-  clinicName = 'VetMax',
+  clinicName = 'SysVetMax',
   clinicId,
   templates = [],
   initialDocuments = [],

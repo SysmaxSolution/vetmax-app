@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+﻿import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
 import { readFileSync } from 'fs'
@@ -7,7 +7,7 @@ import { join } from 'path'
 /**
  * POST /api/mentor-chat
  * Recebe uma pergunta em linguagem natural do usuário e retorna
- * uma resposta do Mentor baseada na VETMAX_KNOWLEDGE_BASE.md.
+ * uma resposta do Mentor baseada na VetMax_KNOWLEDGE_BASE.md.
  *
  * Body: { question: string }
  * Response: { answer: string }
@@ -21,7 +21,7 @@ let knowledgeBase: string | null = null
 function getKnowledgeBase(): string {
   if (knowledgeBase) return knowledgeBase
   try {
-    const kbPath = join(process.cwd(), 'VETMAX_KNOWLEDGE_BASE.md')
+    const kbPath = join(process.cwd(), 'VetMax_KNOWLEDGE_BASE.md')
     knowledgeBase = readFileSync(kbPath, 'utf-8')
     return knowledgeBase
   } catch {
@@ -42,9 +42,9 @@ const AVAILABLE_TOURS: Record<string, string> = {
   'cadastro-pet': 'Cadastro de Pet (nome, alergias, doenças crônicas, microchip)',
 }
 
-const SYSTEM_PROMPT = `Você é o Mentor do VetMax, um assistente de ajuda inteligente para uma clínica veterinária.
+const SYSTEM_PROMPT = `Você é o Mentor do SysVetMax, um assistente de ajuda inteligente para uma clínica veterinária.
 
-Você tem acesso à base de conhecimento completa do sistema VetMax abaixo. Use APENAS as informações contidas nessa base para responder perguntas.
+Você tem acesso à base de conhecimento completa do sistema SysVetMax abaixo. Use APENAS as informações contidas nessa base para responder perguntas.
 
 REGRAS OBRIGATÓRIAS:
 1. Responda SEMPRE em português brasileiro.
@@ -59,7 +59,7 @@ REGRAS OBRIGATÓRIAS:
 TOURS DISPONÍVEIS:
 ${Object.entries(AVAILABLE_TOURS).map(([id, label]) => `- ${id}: ${label}`).join('\n')}
 
-BASE DE CONHECIMENTO DO VETMAX:
+BASE DE CONHECIMENTO DO SysVetMax:
 ---
 {KNOWLEDGE_BASE}
 ---`

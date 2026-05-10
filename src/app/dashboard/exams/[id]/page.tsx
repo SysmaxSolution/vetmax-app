@@ -7,7 +7,7 @@ import { getPatientDocuments } from '@/lib/actions/documents'
 import { getAttachments } from '@/lib/actions/attachments'
 import ExamDetail from '@/components/exams/ExamDetail'
 
-export const metadata = { title: 'Exames — Laudo | VetMax' }
+export const metadata = { title: 'Exames — Laudo | SysVetMax' }
 
 interface Props {
   params: Promise<{ id: string }>

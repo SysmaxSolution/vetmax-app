@@ -1,5 +1,5 @@
-/**
- * PetAvatar — Avatar centralizado para pets em toda a aplicação VetMax.
+﻿/**
+ * PetAvatar — Avatar centralizado para pets em toda a aplicação SysVetMax.
  * Hierarquia de fallback: photo_url → emoji da espécie → inicial da espécie
  */
 

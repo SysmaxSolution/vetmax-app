@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState } from 'react'
 import {
@@ -200,7 +200,7 @@ export default function PrescriptionModal({ data, card, onClose }: Props) {
     doc.setFontSize(6.5)
     doc.setTextColor(150)
     doc.text(
-      'Documento gerado pela VetMax • CFMV Resolução 1084/2012 • Válido somente com assinatura do Médico Veterinário responsável.',
+      'Documento gerado pela SysVetMax • CFMV Resolução 1084/2012 • Válido somente com assinatura do Médico Veterinário responsável.',
       pageW / 2, footY,
       { align: 'center', maxWidth: pageW - margin * 2 },
     )
@@ -252,7 +252,7 @@ export default function PrescriptionModal({ data, card, onClose }: Props) {
       const pdfUrl = signed?.signedUrl ?? '(ver arquivo em anexo)'
       const phone  = data.tutor.phone?.replace(/\D/g, '')
       const msg    = encodeURIComponent(
-        `Olá ${data.tutor.name}, segue a receita digital de ${data.patient.name} gerada pela VetMax.\n\nAcesse em: ${pdfUrl}\n\nReceituário emitido em: ${new Date(data.issued_at).toLocaleDateString('pt-BR')}\nMV ${data.vet_name}${data.vet_crmv ? ` — CRMV ${data.vet_crmv}` : ''}`
+        `Olá ${data.tutor.name}, segue a receita digital de ${data.patient.name} gerada pela SysVetMax.\n\nAcesse em: ${pdfUrl}\n\nReceituário emitido em: ${new Date(data.issued_at).toLocaleDateString('pt-BR')}\nMV ${data.vet_name}${data.vet_crmv ? ` — CRMV ${data.vet_crmv}` : ''}`
       )
       const waUrl = phone
         ? `https://wa.me/55${phone}?text=${msg}`

@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useRef, useEffect } from 'react'
 import { ChevronDown, Check } from 'lucide-react'
@@ -47,7 +47,7 @@ export function ClinicSwitcher({ currentClinicId, clinicName, clinics, logoUrl }
         className="flex items-center gap-1 text-left group"
       >
         <div>
-          {!logoUrl && <h1 className="text-sm font-semibold text-slate-900">VetMax</h1>}
+          {!logoUrl && <h1 className="text-sm font-semibold text-slate-900">SysVetMax</h1>}
           <p className="text-xs text-slate-500 group-hover:text-teal-600 transition-colors">{clinicName}</p>
         </div>
         <ChevronDown className={`h-3 w-3 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />

@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react'
 
@@ -43,22 +43,30 @@ export interface TourMeta {
   steps: TourStep[]
 }
 
-// ─── Tours — mapeados para o VetMax ──────────────────────────────────────────
+// ─── Tours — mapeados para o SysVetMax ──────────────────────────────────────────
 
 export const TOURS: Record<string, TourMeta> = {
   recepcao: {
     requiredPath: '/dashboard/reception',
     steps: [
       {
-        target:    'reception-checkin-btn',
-        title:     'Check-in do Animal',
-        body:      'Clique aqui para iniciar o atendimento. Você vai buscar o tutor e escolher o animal para a consulta.',
+        target:    'reception-search-input',
+        title:     'Busca de Tutor ou Pet',
+        body:      'Digite o CPF, nome do tutor ou nome do pet para localizar o cadastro. Selecione o resultado para ver os pets vinculados.',
         placement: 'bottom',
+        info:      'Campo de busca — pesquise por CPF, nome do tutor ou nome do pet.',
+      },
+      {
+        target:    'reception-new-btn',
+        title:     'Novo Cadastro',
+        body:      'Tutor não cadastrado? Clique aqui (ou Alt+N) para registrar um novo tutor e pet. Após cadastrar, faça o check-in.',
+        placement: 'bottom',
+        info:      'Botão de novo cadastro — cria tutor + pet e já encaminha para check-in.',
       },
       {
         target:    'reception-queue',
         title:     'Fila de Espera',
-        body:      'Animais com check-in feito aparecem aqui. Quando a triagem estiver livre, chame o próximo.',
+        body:      'Após o check-in, o pet aparece aqui. Clique em "Chamar Triagem →" quando o auxiliar estiver disponível.',
         placement: 'right',
         ctaLabel:  'Entendido — finalizar tour',
       },
@@ -71,13 +79,14 @@ export const TOURS: Record<string, TourMeta> = {
       {
         target:    'reception-queue',
         title:     'Sala de Espera',
-        body:      'Animais aguardando triagem aparecem aqui em ordem de chegada.',
+        body:      'Pets com check-in feito aguardam triagem aqui, em ordem de chegada. Clique em "Chamar Triagem →" para chamar o próximo.',
         placement: 'right',
+        info:      'Fila de espera — pets aguardando triagem em ordem de chegada.',
       },
       {
-        target:    'reception-checkin-btn',
+        target:    'reception-new-btn',
         title:     'Novo Check-in',
-        body:      'Para adicionar um novo animal à fila, clique aqui e siga os passos do check-in.',
+        body:      'Para adicionar um novo pet à fila, clique aqui para buscar o cadastro ou criar um novo tutor e pet.',
         placement: 'bottom',
         ctaLabel:  'Entendido — finalizar tour',
       },
@@ -88,21 +97,31 @@ export const TOURS: Record<string, TourMeta> = {
     requiredPath: '/dashboard/triage',
     steps: [
       {
-        target:    'nurse-queue',
-        title:     'Fila de Triagem',
-        body:      'Aqui ficam os animais aguardando triagem. Clique em um nome para abrir a ficha.',
-        placement: 'right',
+        target:      'nurse-queue',
+        title:       'Fila de Triagem',
+        body:        'Pets encaminhados pela recepção aparecem aqui. Clique no nome de um pet para abrir a ficha de triagem e registrar os sinais vitais.',
+        placement:   'right',
+        info:        'Fila de triagem — clique em um animal para abrir a ficha.',
+        waitForNext: true,
+      },
+      {
+        target:    'triage-add-btn',
+        title:     'Adicionar Manualmente',
+        body:      'Precisa adicionar um pet sem check-in? Use este botão para incluí-lo diretamente na fila de triagem.',
+        placement: 'bottom',
+        info:      'Botão de adição manual — para pets sem check-in prévio.',
       },
       {
         target:    'triage-voice-btn',
         title:     'Triagem por Voz',
-        body:      'Clique no microfone e fale os sinais vitais em voz alta. A IA preenche os campos automaticamente.',
+        body:      'Dentro da ficha do pet, clique no microfone e fale os sinais vitais em voz alta. A IA preenche os campos automaticamente.',
         placement: 'bottom',
+        info:      'Área de triagem por voz — disponível ao abrir a ficha de um animal.',
       },
       {
         target:    'triage-save-btn',
         title:     'Concluir Triagem',
-        body:      'Após confirmar os dados, clique aqui para enviar o animal para a fila do veterinário.',
+        body:      'Após confirmar peso, temperatura e demais dados, clique aqui para enviar o pet à fila do médico veterinário.',
         placement: 'top',
         ctaLabel:  'Entendido — finalizar tour',
       },
@@ -113,21 +132,25 @@ export const TOURS: Record<string, TourMeta> = {
     requiredPath: '/dashboard/vet',
     steps: [
       {
-        target:    'vet-record-btn',
-        title:     'Gravar Consulta',
-        body:      'O MV inicia a gravação por voz aqui. A IA transcreve e gera o SOAP automaticamente.',
-        placement: 'bottom',
+        target:      'vet-queue',
+        title:       'Fila do Consultório',
+        body:        'Pets com triagem concluída aguardam atendimento aqui. Clique no nome do pet para abrir o prontuário eletrônico.',
+        placement:   'bottom',
+        info:        'Fila do consultório — clique em um pet para abrir o prontuário.',
+        waitForNext: true,
       },
       {
-        target:    'vet-soap-section',
-        title:     'Prontuário SOAP',
-        body:      'Revise o texto gerado pela IA. Ajuste conforme necessário antes de salvar.',
+        target:    'vet-notes-textarea',
+        title:     'Anotações Clínicas (SOAP)',
+        body:      'Registre a evolução clínica aqui. Você pode ditar por voz ou digitar diretamente. O campo aceita formatação SOAP.',
         placement: 'right',
+        info:      'Campo de anotações — suporta entrada por voz e digitação.',
+        autoAdvance: true,
       },
       {
-        target:    'vet-save-btn',
+        target:    'vet-save-notes-btn',
         title:     'Salvar Prontuário',
-        body:      'Marque a caixa de responsabilidade e salve. O animal é liberado para alta.',
+        body:      'Após revisar as anotações, clique aqui para salvar. O prontuário fica registrado no histórico do pet.',
         placement: 'top',
         ctaLabel:  'Entendido — finalizar tour',
       },
@@ -140,15 +163,24 @@ export const TOURS: Record<string, TourMeta> = {
       {
         target:    'exams-queue',
         title:     'Fila de Exames',
-        body:      'Animais aguardando laudo aparecem aqui. Clique para abrir a solicitação.',
-        placement: 'right',
+        body:      'Pets encaminhados pelo MV para exames aparecem aqui. Clique em um card para abrir a solicitação e registrar o laudo.',
+        placement: 'bottom',
+        info:      'Fila de exames — pets aguardando laudo do laboratório.',
       },
       {
-        target:    'exams-result-btn',
-        title:     'Registrar Resultado',
-        body:      'Insira o resultado e clique aqui para devolver o animal ao fluxo.',
+        target:    'exams-request-btn',
+        title:     'Solicitar Exame',
+        body:      'Precisa solicitar um exame adicional? Clique aqui para criar uma solicitação avulsa para qualquer pet.',
+        placement: 'bottom',
+        info:      'Botão de solicitação — cria uma requisição de exame manual.',
+      },
+      {
+        target:    'exams-result-textarea',
+        title:     'Registrar Laudo',
+        body:      'Digite o resultado do exame neste campo. Após salvar, o pet retorna automaticamente ao fluxo clínico.',
         placement: 'top',
         ctaLabel:  'Entendido — finalizar tour',
+        autoAdvance: true,
       },
     ],
   },
@@ -158,14 +190,15 @@ export const TOURS: Record<string, TourMeta> = {
     steps: [
       {
         target:    'hospitalization-list',
-        title:     'Lista de Internados',
-        body:      'Todos os animais internados aparecem aqui. Cada card mostra o status atual e os cuidados pendentes.',
-        placement: 'right',
+        title:     'Quadro de Internados',
+        body:      'Todos os pets internados aparecem neste quadro Kanban, divididos por ala (Observação, Enfermaria, UTI). Arraste para mover entre alas.',
+        placement: 'bottom',
+        info:      'Kanban de internação — cada coluna representa uma ala clínica.',
       },
       {
-        target:    'hospitalization-discharge-btn',
+        target:    'hosp-discharge-btn',
         title:     'Dar Alta Hospitalar',
-        body:      'Quando o animal estiver estável, clique aqui para registrar a alta e retornar ao fluxo normal.',
+        body:      'Quando o pet estiver estável e pronto para alta, o botão "Dar Alta" aparece no card. Clique nele para iniciar o processo de alta.',
         placement: 'top',
         ctaLabel:  'Entendido — finalizar tour',
       },
@@ -177,14 +210,15 @@ export const TOURS: Record<string, TourMeta> = {
     steps: [
       {
         target:    'grooming-queue',
-        title:     'Fila do Banho e Tosa',
-        body:      'Animais agendados aparecem aqui. Arraste para mudar de etapa ou clique para detalhes.',
-        placement: 'right',
+        title:     'Kanban de Banho e Tosa',
+        body:      'Pets agendados ou em serviço aparecem neste quadro. Arraste os cards para mudar de etapa ou clique para abrir o registro do serviço.',
+        placement: 'bottom',
+        info:      'Kanban de grooming — acompanhe o fluxo de cada pet em tempo real.',
       },
       {
         target:    'grooming-voice-btn',
         title:     'Registro por Voz',
-        body:      'Fale observações sobre o serviço. A IA transcreve e preenche as notas automaticamente.',
+        body:      'Ao abrir um card, use este botão (ou diga "Assistente") para registrar observações por voz. A IA preenche serviços, produtos e notas automaticamente.',
         placement: 'bottom',
         ctaLabel:  'Entendido — finalizar tour',
       },
@@ -195,15 +229,24 @@ export const TOURS: Record<string, TourMeta> = {
     requiredPath: '/dashboard/reception',
     steps: [
       {
+        target:      'reception-kanban-toggle',
+        title:       'Ativar Visualização Kanban',
+        body:        'Clique em "Kanban" para ver o quadro completo de atendimentos do dia, com todas as etapas do fluxo clínico.',
+        placement:   'bottom',
+        info:        'Botão para ativar a visualização Kanban da recepção.',
+        waitForNext: true,
+      },
+      {
         target:    'kanban-board',
         title:     'Quadro de Atendimentos',
-        body:      'Cada coluna representa uma etapa. Mova os cards ou clique para detalhar.',
+        body:      'Cada coluna representa uma etapa do fluxo: Agendado, Recepção, Triagem, Consultório, Exames, Alta. Mova os cards ou clique para detalhar.',
         placement: 'bottom',
+        info:      'Kanban do dia — visão geral de todos os atendimentos em andamento.',
       },
       {
         target:    'kanban-col-completed',
         title:     'Coluna Alta',
-        body:      'Animais com alta têm o prontuário oficial finalizado pelo MV. O processo está concluído.',
+        body:      'Pets com prontuário finalizado pelo MV e pagamento confirmado aparecem aqui. O atendimento está concluído.',
         placement: 'bottom',
         ctaLabel:  'Entendido — finalizar tour',
       },

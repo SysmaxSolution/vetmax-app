@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+﻿import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import { listCashierEntries, getCashierSummary } from '@/lib/actions/core-management'
@@ -7,7 +7,7 @@ import { getPendingInvoices } from '@/lib/actions/billing'
 import { getPendingGroomingSessions } from '@/lib/actions/grooming'
 import CashierPageClient from '@/components/cashier/CashierPageClient'
 
-export const metadata = { title: 'Caixa | VetMax' }
+export const metadata = { title: 'Caixa | SysVetMax' }
 
 const ALLOWED_ROLES = ['admin', 'owner', 'manager', 'accountant', 'receptionist']
 

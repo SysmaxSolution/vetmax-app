@@ -1,10 +1,10 @@
-import { createClient } from '@/lib/supabase/server'
+﻿import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import ExamsWorkspace from '@/components/exams/ExamsWorkspace'
 import { getExamsQueue, getExamsHistory, getExamRequests } from '@/lib/actions/exams'
 
-export const metadata = { title: 'Exames | VetMax' }
+export const metadata = { title: 'Exames | SysVetMax' }
 
 export default async function ExamsPage() {
   const supabase = await createClient()

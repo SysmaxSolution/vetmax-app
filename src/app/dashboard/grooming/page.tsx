@@ -1,10 +1,10 @@
-import { createClient } from '@/lib/supabase/server'
+﻿import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import { getGroomingBoard } from '@/lib/actions/grooming'
 import GroomingKanban from '@/components/grooming/GroomingKanban'
 
-export const metadata = { title: 'Banho e Tosa | VetMax' }
+export const metadata = { title: 'Banho e Tosa | SysVetMax' }
 
 export default async function GroomingPage() {
   const supabase = await createClient()

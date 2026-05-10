@@ -1,4 +1,4 @@
-'use server'
+﻿'use server'
 
 import Anthropic from '@anthropic-ai/sdk'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -262,7 +262,7 @@ Medicações: ${medsText}`
     ? (docs ?? []).map(d => `• ${d.file_name} (${d.file_type})`).join('\n')
     : 'Nenhum documento.'
 
-  const prompt = `Você é o Assistente Clínico do VetMax, apoio ao Médico Veterinário. Responda de forma concisa e objetiva em português, com linguagem técnica veterinária.
+  const prompt = `Você é o Assistente Clínico do SysVetMax, apoio ao Médico Veterinário. Responda de forma concisa e objetiva em português, com linguagem técnica veterinária.
 
 ## Prontuário
 **Pet:** ${petInfo}

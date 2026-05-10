@@ -1,4 +1,4 @@
-// VetMax — TypeScript Types
+﻿// SysVetMax — TypeScript Types
 // Espelha o schema: supabase/migrations/0001_initial_schema.sql
 
 export type UserRole = 'admin' | 'vet' | 'assistant' | 'receptionist' | 'pharmacist' | 'pending'

@@ -1,7 +1,7 @@
-import Link from 'next/link'
+﻿import Link from 'next/link'
 import { CheckCircle2, Mail } from 'lucide-react'
 
-export const metadata = { title: 'E-mail confirmado | VetMax' }
+export const metadata = { title: 'E-mail confirmado | SysVetMax' }
 
 export default function EmailConfirmadoPage() {
   return (
@@ -15,7 +15,7 @@ export default function EmailConfirmadoPage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.182 15.182a4.5 4.5 0 0 1-6.364 0M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">VetMax</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">SysVetMax</h1>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm text-center">
