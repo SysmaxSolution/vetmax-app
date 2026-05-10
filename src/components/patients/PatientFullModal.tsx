@@ -945,7 +945,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                             type="button"
                             onClick={async () => {
                               if (!confirm(`Excluir "${att.file_name}"?`)) return
-                              const res = await deleteAttachment(att.id, att.storage_path)
+                              const res = await deleteAttachment(att.id)
                               if (!('error' in res)) {
                                 setAttachments(prev => prev ? prev.filter(a => a.id !== att.id) : prev)
                               }
