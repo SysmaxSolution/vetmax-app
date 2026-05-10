@@ -542,7 +542,7 @@ export async function savePrescription(params: {
       p_prescription_type: params.prescription_type ?? 'blue_receipt',
     })
     if (rpcError) return { error: 'Erro ao salvar prescrição controlada: ' + rpcError.message }
-    return rpcData as { id: string; medication: string; dose: string | null; is_controlled: boolean; prescription_type: string }
+    return rpcData as { id: string; medication: string; dose: string | null; is_controlled: boolean; prescription_type: string; route_of_administration: string }
   }
 
   // Não-controlados: insert direto
