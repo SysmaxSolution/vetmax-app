@@ -1,13 +1,12 @@
 ﻿import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
-import { readFileSync } from 'fs'
-import { join } from 'path'
+import { VETMAX_KNOWLEDGE_BASE } from '@/lib/mentor/knowledge-base'
 
 /**
  * POST /api/mentor-chat
  * Recebe uma pergunta em linguagem natural do usuário e retorna
- * uma resposta do Mentor baseada na VetMax_KNOWLEDGE_BASE.md.
+ * uma resposta do Mentor baseada na VetMax_KNOWLEDGE_BASE.
  *
  * Body: { question: string }
  * Response: { answer: string }
@@ -15,18 +14,8 @@ import { join } from 'path'
 
 const client = new Anthropic()
 
-// Load knowledge base once at module initialization
-let knowledgeBase: string | null = null
-
 function getKnowledgeBase(): string {
-  if (knowledgeBase) return knowledgeBase
-  try {
-    const kbPath = join(process.cwd(), 'VetMax_KNOWLEDGE_BASE.md')
-    knowledgeBase = readFileSync(kbPath, 'utf-8')
-    return knowledgeBase
-  } catch {
-    return ''
-  }
+  return VETMAX_KNOWLEDGE_BASE
 }
 
 // Tour IDs disponíveis no sistema (mantido em sync com MentorContext.TOURS)
@@ -78,14 +67,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Pergunta vazia.' }, { status: 400 })
     }
 
-    const kb = getKnowledgeBase()
-    if (!kb) {
-      return NextResponse.json(
-        { answer: 'Base de conhecimento não disponível. Tente os tours guiados ou entre em contato com o suporte.' },
-      )
-    }
-
-    const systemPrompt = SYSTEM_PROMPT.replace('{KNOWLEDGE_BASE}', kb)
+    const systemPrompt = SYSTEM_PROMPT.replace('{KNOWLEDGE_BASE}', getKnowledgeBase())
 
     const message = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',

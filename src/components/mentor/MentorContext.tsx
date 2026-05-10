@@ -358,6 +358,11 @@ export const INTENT_MAP: IntentMap[] = [
     response: 'Certo! O check-in é o ponto de partida. Vou mostrar como registrar a chegada de um animal...',
   },
   {
+    keywords: ['agendar', 'agendamento', 'marcar consulta', 'consulta futura', 'agendar consulta', 'horário', 'reservar'],
+    tourId: 'recepcao',
+    response: 'Para agendar uma consulta, acesse a Recepção, busque o tutor e clique em "Agendar". Vou te mostrar o caminho...',
+  },
+  {
     keywords: ['consulta', 'veterinário', 'consultório', 'prontuário', 'soap', 'diagnóstico'],
     tourId: 'consulta',
     response: 'Entendido! Vou te guiar pelo consultório e como registrar a consulta com IA...',

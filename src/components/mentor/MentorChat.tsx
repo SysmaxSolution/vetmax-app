@@ -155,6 +155,9 @@ export function MentorChat() {
       /procur[ae]\s+o?\s*(.+)/i,
       /encontr[ae]\s+o?\s*(.+)/i,
       /qual\s+(?:o\s+)?status\s+(?:do|da|de)\s+(.+)/i,
+      /como\s+est[aá]\s+o?\s*a?\s*(.+)/i,
+      /como\s+vai\s+o?\s*a?\s*(.+)/i,
+      /t[aá]\s+bem\s+o?\s*a?\s*(.+)/i,
     ]
 
     for (const pattern of petSearchPatterns) {
