@@ -173,8 +173,8 @@ async function processInboundMessage(params: {
     .limit(1)
     .maybeSingle()
 
-  // @lid não resolvido = não conseguimos enviar resposta automática → sempre human
-  const initialStatus = (botConfig.is_active && !phone.includes('@lid')) ? 'bot' : 'human'
+  // @lid com Evolution API patchada → pode enviar normalmente; bot ativo = modo bot
+  const initialStatus = botConfig.is_active ? 'bot' : 'human'
 
   if (!conversation) {
     const { data: newConv } = await admin
@@ -202,17 +202,7 @@ async function processInboundMessage(params: {
     .update({ last_message_at: new Date().toISOString() })
     .eq('id', conversation.id)
 
-  // 4. @lid irresolvível: não conseguimos enviar resposta automática — garante modo human e sai
-  if (phone.includes('@lid')) {
-    if (conversation.status !== 'human') {
-      await admin.from('whatsapp_conversations').update({ status: 'human' }).eq('id', conversation.id)
-      console.info(`[WPP Bot] clinicId=${clinicId} — conversa @lid movida para modo human`)
-    }
-    console.info(`[WPP Bot] clinicId=${clinicId} — phone @lid irresolvível, mensagem salva para atendimento manual`)
-    return
-  }
-
-  // 5. Bot inativo: mensagem salva, clínica responde manualmente — sem IA
+  // 4. Bot inativo: mensagem salva, clínica responde manualmente — sem IA
   if (!botConfig.is_active) {
     console.info(`[WPP Bot] clinicId=${clinicId} — bot inativo, mensagem salva para atendimento manual`)
     return
@@ -268,12 +258,11 @@ async function processInboundMessage(params: {
     await admin.from('whatsapp_conversations').update({ status: 'human' }).eq('id', conversation.id)
   }
 
-  // 11. Envia resposta via Evolution API
+  // 11. Envia resposta via Evolution API — @lid suportado pelo patch no container
   const sent = await sendBotReply(clinicId, phone, result.reply, admin)
-  if (!sent && phone.includes('@lid')) {
-    // @lid irresolvível: move para atendimento humano para não entrar em loop
+  if (!sent) {
     await admin.from('whatsapp_conversations').update({ status: 'human' }).eq('id', conversation.id)
-    console.warn(`[WPP Bot] @lid ${phone} não pode receber resposta automática — conversa movida para atendimento humano`)
+    console.warn(`[WPP Bot] Falha ao enviar para ${phone} — conversa movida para atendimento humano`)
   }
 }
 

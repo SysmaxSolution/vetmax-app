@@ -33,7 +33,7 @@ export async function evolutionFetchContactByLid(
     const res = await fetch(url, {
       method:  'POST',
       headers: buildHeaders(creds.apiKey),
-      body:    JSON.stringify({ where: { id: lidJid } }),
+      body:    JSON.stringify({ where: { remoteJid: lidJid } }),
     })
     if (!res.ok) return null
     const data = await res.json()
