@@ -260,23 +260,18 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
         }
       }
 
-      // 6. Auto-popula preços do catálogo para serviços detectados por voz
-      if (newSvcs.length > 0 && catalog.length > 0) {
-        const matchedPrices = newSvcs
-          .map(svc => {
-            const found = catalog.find(c => c.name.toLowerCase() === svc.toLowerCase())
-            return found ? { name: found.name, price: found.price } : null
-          })
-          .filter((p): p is GroomingServicePrice => p !== null && p.price > 0)
-
-        if (matchedPrices.length > 0) {
-          const merged = [
-            ...servicePrices.filter(sp => !matchedPrices.some(mp => mp.name.toLowerCase() === sp.name.toLowerCase())),
-            ...matchedPrices,
-          ]
-          setServicePrices(merged)
-          await updateGroomingPricing(card.id, merged, discountPct)
-        }
+      // 6. Merge todos os serviços e produtos detectados na aba Cobrança
+      const allNewItems = [...mergedSvcs, ...mergedProds]
+      if (allNewItems.length > 0) {
+        setServicePrices(prev => {
+          const result = [...prev]
+          for (const name of allNewItems) {
+            if (result.some(p => p.name.toLowerCase() === name.toLowerCase())) continue
+            const catItem = catalog.find(c => c.name.toLowerCase() === name.toLowerCase())
+            result.push({ name, price: catItem?.price ?? 0 })
+          }
+          return result
+        })
       }
 
       // 7. Determina trigger de WhatsApp baseado no novo status detectado
@@ -407,6 +402,19 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
     setIsSubmitting(false)
 
     if ('error' in result) { alert('Erro ao salvar: ' + result.error); return }
+
+    // Merge itens aplicados na aba Cobrança antes de limpar o formulário
+    const appliedServices = selectedServices
+    const appliedProducts = products
+    setServicePrices(prev => {
+      const result = [...prev]
+      for (const name of [...appliedServices, ...appliedProducts]) {
+        if (result.some(p => p.name.toLowerCase() === name.toLowerCase())) continue
+        const catItem = catalog.find(c => c.name.toLowerCase() === name.toLowerCase())
+        result.push({ name, price: catItem?.price ?? 0 })
+      }
+      return result
+    })
 
     // Reset form
     setSelectedServices([])
@@ -1006,41 +1014,40 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
                           <Tag className="h-3 w-3" /> Serviços e Preços
                         </p>
                         <div className="space-y-2">
-                          {servicePrices.length === 0
-                            ? card.services_requested.map(svc => (
-                                <div key={svc} className="flex items-center gap-2">
-                                  <span className="flex-1 text-xs text-slate-700">{svc}</span>
-                                  <input
-                                    type="number" min="0" step="0.01"
-                                    placeholder="0.00"
-                                    className="w-24 text-xs border border-slate-200 rounded-lg px-2 py-1 text-right focus:border-teal-500 focus:outline-none"
-                                    onChange={e => {
-                                      const price = parseFloat(e.target.value) || 0
-                                      setServicePrices(prev => {
-                                        const exists = prev.find(p => p.name === svc)
-                                        if (exists) return prev.map(p => p.name === svc ? { ...p, price } : p)
-                                        return [...prev, { name: svc, price }]
-                                      })
-                                    }}
-                                  />
-                                </div>
-                              ))
-                            : servicePrices.map((sp, i) => (
-                                <div key={sp.name} className="flex items-center gap-2">
-                                  <span className="flex-1 text-xs text-slate-700">{sp.name}</span>
-                                  <input
-                                    type="number" min="0" step="0.01"
-                                    value={sp.price || ''}
-                                    placeholder="0.00"
-                                    className="w-24 text-xs border border-slate-200 rounded-lg px-2 py-1 text-right focus:border-teal-500 focus:outline-none"
-                                    onChange={e => {
-                                      const price = parseFloat(e.target.value) || 0
-                                      setServicePrices(prev => prev.map((p, j) => j === i ? { ...p, price } : p))
-                                    }}
-                                  />
-                                </div>
-                              ))
-                          }
+                          {servicePrices.length === 0 ? (
+                            <p className="text-xs text-slate-400 italic py-1">
+                              Os itens serão adicionados automaticamente ao salvar o registro.
+                            </p>
+                          ) : (
+                            servicePrices.map((sp, i) => (
+                              <div key={i} className="flex items-center gap-1.5">
+                                <input
+                                  type="text"
+                                  value={sp.name}
+                                  onChange={e => setServicePrices(prev => prev.map((p, j) => j === i ? { ...p, name: e.target.value } : p))}
+                                  className="flex-1 text-xs border border-slate-200 rounded-lg px-2 py-1 focus:border-teal-500 focus:outline-none min-w-0"
+                                />
+                                <input
+                                  type="number" min="0" step="0.01"
+                                  value={sp.price || ''}
+                                  placeholder="0.00"
+                                  className="w-20 text-xs border border-slate-200 rounded-lg px-2 py-1 text-right focus:border-teal-500 focus:outline-none flex-shrink-0"
+                                  onChange={e => {
+                                    const price = parseFloat(e.target.value) || 0
+                                    setServicePrices(prev => prev.map((p, j) => j === i ? { ...p, price } : p))
+                                  }}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setServicePrices(prev => prev.filter((_, j) => j !== i))}
+                                  className="p-1.5 rounded-lg text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-colors flex-shrink-0"
+                                  title="Remover item"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            ))
+                          )}
                         </div>
                       </div>
 
