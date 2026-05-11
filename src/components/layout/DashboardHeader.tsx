@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LogOut, Home, Stethoscope, TestTubes, Users, BarChart3, PawPrint, BedDouble, Package, Scissors, Banknote, FolderKanban, MessageCircle } from 'lucide-react'
+import { LogOut, Home, Stethoscope, TestTubes, Users, BarChart3, PawPrint, BedDouble, Package, Scissors, Banknote, FolderKanban, MessageCircle, ShoppingCart } from 'lucide-react'
 import type { UserRole } from '@/types'
 import { useState } from 'react'
 import { ClinicSwitcher } from '@/components/layout/ClinicSwitcher'
@@ -32,6 +32,7 @@ const ALL_TABS: Tab[] = [
   { label: 'Internação',  href: '/dashboard/hospitalization',  icon: BedDouble,   roles: ['vet','admin','assistant'],                moduleKey: 'hospitalization' },
   { label: 'Banho e Tosa',href: '/dashboard/grooming',         icon: Scissors,    roles: ['receptionist','admin','assistant'],       moduleKey: 'grooming' },
   { label: 'Estoque',     href: '/dashboard/pharmacy',         icon: Package,     roles: ['admin'],                                  moduleKey: 'pharmacy' },
+  { label: 'Vendas',      href: '/dashboard/sales',            icon: ShoppingCart,roles: ['receptionist','admin','assistant'],            moduleKey: 'sales' },
   { label: 'Cadastros',   href: '/dashboard/registry',         icon: FolderKanban,roles: ['admin','accountant' as UserRole,'receptionist'] },
   { label: 'Gestão',      href: '/dashboard/management',       icon: BarChart3,     roles: ['admin'] },
   { label: 'WhatsApp',   href: '/dashboard/whatsapp',         icon: MessageCircle, roles: ['receptionist','admin','vet','assistant'], moduleKey: 'whatsapp_intelligent' },
