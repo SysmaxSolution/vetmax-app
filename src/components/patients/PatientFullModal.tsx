@@ -320,16 +320,11 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
   const handleCreate = () => {
     setCreateError(null)
     if (!petName.trim()) { setCreateError('Nome do Pet é obrigatório.'); return }
-    if (!isEdit && !isPetOnly) {
-      if (!tutorName.trim()) { setCreateError('Preencha o nome do tutor na aba Tutor.'); return }
-      const cpfDigits = tutorCpf.replace(/\D/g, '')
-      if (cpfDigits.length !== 11) { setCreateError('CPF inválido na aba Tutor — deve ter 11 dígitos.'); return }
-      if (!tutorPhone.trim()) { setCreateError('Celular do tutor é obrigatório na aba Tutor.'); return }
-    }
 
-    // LGPD: para novo tutor (não encontrado por CPF), exige consentimento
+    // LGPD: para novo tutor com algum dado pessoal, exige consentimento
     const isNewTutor = !isEdit && !isPetOnly && !foundTutorId
-    if (isNewTutor && !consentGiven) {
+    const hasTutorData = !!(tutorName.trim() || tutorPhone.trim() || tutorEmail.trim() || tutorCpf.trim())
+    if (isNewTutor && hasTutorData && !consentGiven) {
       setShowConsent(true)
       return
     }
@@ -698,10 +693,20 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
           {tab === 'tutor' && (
             <div className="space-y-6">
 
+              {/* Aviso: dados opcionais */}
+              {!isEdit && (
+                <div className="flex items-start gap-2.5 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3">
+                  <AlertTriangle className="h-4 w-4 text-sky-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-sky-700">
+                    Os dados do tutor são <strong>opcionais</strong> neste momento. Você pode salvar o cadastro do pet agora e preencher as informações do responsável posteriormente.
+                  </p>
+                </div>
+              )}
+
               {/* CPF com lookup — só no modo criação de novo tutor */}
               {!isEdit && !isPetOnly && (
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5 ml-1 tracking-wider">CPF *</label>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5 ml-1 tracking-wider">CPF</label>
                   <div className="relative">
                     <input
                       value={tutorCpf}
@@ -738,9 +743,9 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                 </div>
               )}
 
-              <FieldInput label="Nome do Responsável *" value={tutorName} onChange={setTutorName} icon={<User className="h-4 w-4 text-slate-400" />} placeholder="Ex: Maria Silva" />
+              <FieldInput label="Nome do Responsável" value={tutorName} onChange={setTutorName} icon={<User className="h-4 w-4 text-slate-400" />} placeholder="Ex: Maria Silva" />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <FieldInput label="Celular *" value={tutorPhone} onChange={(v: string) => setTutorPhone(formatPhone(v))} placeholder="(00) 00000-0000" />
+                <FieldInput label="Celular" value={tutorPhone} onChange={(v: string) => setTutorPhone(formatPhone(v))} placeholder="(00) 00000-0000" />
                 {/* Em edição, CPF fica aqui junto ao telefone */}
                 {isEdit && (
                   <FieldInput label="CPF" value={tutorCpf} onChange={setTutorCpf} placeholder="000.000.000-00" />

@@ -190,31 +190,42 @@ export async function registerTutorAndPet(
   const clinicId = profile.clinic_id
   const admin = createAdminClient()
 
-  // Validações
-  const cpfDigits = tutorData.cpf.replace(/\D/g, '')
-  if (cpfDigits.length !== 11) return { error: 'CPF inválido — deve ter 11 dígitos.' }
-  if (!tutorData.name.trim())  return { error: 'Nome do Tutor é obrigatório.' }
-  if (!tutorData.phone.trim()) return { error: 'Celular do Tutor é obrigatório.' }
   if (!patientData.name.trim()) return { error: 'Nome do Pet é obrigatório.' }
 
-  // 1. Upsert Tutor (se CPF já existir na clínica, retorna o existente)
-  const { data: tutor, error: tutorErr } = await admin
-    .from('tutors')
-    .upsert(
-      {
-        clinic_id: clinicId,
-        name:      tutorData.name.trim(),
-        cpf:       cpfDigits,
-        email:     tutorData.email?.trim() || null,
-        phone:     tutorData.phone.trim(),
-        address:   tutorData.address?.trim() || null,
-      },
-      { onConflict: 'clinic_id,cpf' }
-    )
-    .select('id')
-    .single()
+  // 1. Salvar Tutor
+  //    Com CPF → upsert (encontra existente ou cria novo)
+  //    Sem CPF → insert simples (dados incompletos, tutor preenchido depois)
+  const cpfDigits = (tutorData.cpf ?? '').replace(/\D/g, '')
 
-  if (tutorErr || !tutor) return { error: 'Erro ao salvar Tutor: ' + (tutorErr?.message ?? '') }
+  const tutorRow = {
+    clinic_id: clinicId,
+    name:      tutorData.name?.trim() || null,
+    cpf:       cpfDigits.length === 11 ? cpfDigits : null,
+    email:     tutorData.email?.trim() || null,
+    phone:     tutorData.phone?.trim() || null,
+    address:   tutorData.address?.trim() || null,
+  }
+
+  let tutor: { id: string } | null = null
+  if (cpfDigits.length === 11) {
+    const { data, error: tutorErr } = await admin
+      .from('tutors')
+      .upsert(tutorRow, { onConflict: 'clinic_id,cpf' })
+      .select('id')
+      .single()
+    if (tutorErr || !data) return { error: 'Erro ao salvar Tutor: ' + (tutorErr?.message ?? '') }
+    tutor = data
+  } else {
+    const { data, error: tutorErr } = await admin
+      .from('tutors')
+      .insert(tutorRow)
+      .select('id')
+      .single()
+    if (tutorErr || !data) return { error: 'Erro ao salvar Tutor: ' + (tutorErr?.message ?? '') }
+    tutor = data
+  }
+
+  if (!tutor) return { error: 'Erro ao salvar Tutor.' }
 
   // 2. Inserir Pet vinculado ao Tutor
   const { data: patient, error: patErr } = await admin

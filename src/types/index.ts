@@ -142,10 +142,10 @@ export interface ConsultationFull extends ConsultationWithPatient {
 // ── Payloads de criação ──────────────────────────────────────────────────────
 
 export interface CreateTutorPayload {
-  name: string
-  cpf: string
+  name?: string
+  cpf?: string
   email?: string
-  phone: string
+  phone?: string
   address?: string
 }
 
