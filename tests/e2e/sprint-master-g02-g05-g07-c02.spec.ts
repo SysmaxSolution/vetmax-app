@@ -40,9 +40,10 @@ test.describe('G-02: Branding SysVetMax — ícone e nome do site', () => {
   });
 
   test('G-02-02: Meta og:title contém "SysVetMax"', async ({ page }) => {
-    await page.goto('/login').catch(() => {});
+    await page.goto('/login', { waitUntil: 'commit' }).catch(() => {});
     await page.waitForTimeout(1_000);
-    const ogTitle = await page.locator('meta[property="og:title"]').getAttribute('content').catch(() => '');
+    // timeout curto: meta tag pode não existir — não bloquear 30s esperando
+    const ogTitle = await page.locator('meta[property="og:title"]').getAttribute('content', { timeout: 2_000 }).catch(() => '');
     const siteTitle = await page.title().catch(() => '');
     console.log(`G-02-02: og:title="${ogTitle}", title="${siteTitle}"`);
     const hasBranding = (ogTitle ?? '').includes('SysVetMax') || siteTitle.includes('SysVetMax');
@@ -304,8 +305,10 @@ test.describe('C-02: Botão "Incluir Paciente" no Consultório', () => {
       await page.waitForTimeout(500);
     }
 
-    // Confirmar inclusão
-    const confirmBtn = page.getByRole('button', { name: /incluir|confirmar|adicionar/i }).first();
+    // Confirmar inclusão — escopo dentro do modal para não clicar no botão da workspace
+    const dialog = page.getByRole('dialog').first();
+    const confirmBtn = dialog.getByRole('button', { name: /incluir|confirmar|adicionar/i }).first()
+      .or(page.getByRole('button', { name: /incluir|confirmar|adicionar/i }).last());
     if (!(await confirmBtn.isVisible({ timeout: 3_000 }).catch(() => false))) {
       console.log('C-02-03: SKIP — Botão de confirmar não encontrado'); test.skip(); return;
     }
