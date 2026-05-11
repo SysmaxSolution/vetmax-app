@@ -810,7 +810,7 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
             </div>
 
             {/* ── Coluna Direita: Timeline + Documentos ── */}
-            <div className="bg-slate-50/50 rounded-2xl border border-slate-100 flex flex-col overflow-hidden order-1 lg:order-2">
+            <div className="bg-slate-50/50 rounded-2xl border border-slate-100 flex flex-col min-h-[420px] lg:min-h-0 lg:overflow-hidden order-1 lg:order-2">
               {/* Tabs */}
               <div className="border-b border-slate-200 bg-slate-100/80 flex">
                 <button
