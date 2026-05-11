@@ -40,14 +40,12 @@ async function enableModule(clinicId: string, module: string) {
 interface SeedOptions {
   status?: string;
   tutorPhone?: string | null;
-  diagnosis?: string;
 }
 
 async function seedHospitalization(opts: SeedOptions = {}): Promise<string> {
   const {
     status = 'ready_for_discharge',
     tutorPhone,
-    diagnosis = 'Gastroenterite aguda — diagnóstico E2E I-02',
   } = opts;
 
   const tutorData: Record<string, unknown> = { ...fixtures.tutors.tutorA1 };
@@ -62,8 +60,8 @@ async function seedHospitalization(opts: SeedOptions = {}): Promise<string> {
     patient_id: fixtures.patients.petA1.id,
     tutor_id: fixtures.tutors.tutorA1.id,
     status,
-    reason: 'Internação E2E Sprint Master I-02',
-    diagnosis,
+    reason: 'Internação E2E Sprint Master I-02 — diagnóstico: Gastroenterite aguda',
+    // `diagnosis` não existe como coluna — incluído no campo `reason`
   }]).select('id').single();
 
   if (error) throw error;
@@ -141,14 +139,14 @@ test.describe('TC-I02-01: Botão aparece quando status ready_for_discharge e tut
 
 // ─── TC-I02-02: Botão NÃO aparece quando status é "stable" ──────────────────
 
-test.describe('TC-I02-02: Botão NÃO aparece quando status é stable', () => {
+test.describe('TC-I02-02: Botão NÃO aparece quando status não é ready_for_discharge', () => {
   let hospId: string;
 
   test.beforeEach(async () => {
     await seedTutorsAndPets();
     await enableModule(fixtures.clinics.clinicA.id, 'hospitalization');
     hospId = await seedHospitalization({
-      status: 'stable',
+      status: 'observation', // 'stable' não é enum válido — usar 'observation' para testar ausência do botão
       tutorPhone: fixtures.tutors.tutorA1.phone,
     });
   });
@@ -158,7 +156,7 @@ test.describe('TC-I02-02: Botão NÃO aparece quando status é stable', () => {
     await admin.from('tutors').update({ phone: fixtures.tutors.tutorA1.phone }).eq('id', fixtures.tutors.tutorA1.id);
   });
 
-  test('Botão Relatório de Alta não aparece com status stable', async ({ page }) => {
+  test('Botão Relatório de Alta não aparece com status observation (não pronto para alta)', async ({ page }) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
 
     const opened = await openHospitalizationCard(page, hospId);
@@ -296,15 +294,13 @@ test.describe('TC-I02-04: Clicar no botão abre popup de confirmação WA', () =
 
 test.describe('TC-I02-05: Mensagem WA contém nome do pet e diagnóstico', () => {
   let hospId: string;
-  const diagnosis = 'Gastroenterite aguda — diagnóstico I02-05';
-
   test.beforeEach(async () => {
     await seedTutorsAndPets();
     await enableModule(fixtures.clinics.clinicA.id, 'hospitalization');
     hospId = await seedHospitalization({
       status: 'ready_for_discharge',
       tutorPhone: fixtures.tutors.tutorA1.phone,
-      diagnosis,
+      // `diagnosis` removido — coluna não existe em hospitalizations; incluído em `reason`
     });
   });
 

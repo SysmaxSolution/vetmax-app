@@ -192,7 +192,7 @@ test.describe('TC-I01-02: Evolução estável mantém card na coluna Estável', 
   test.beforeEach(async () => {
     await seedTutorsAndPets();
     await enableModule(fixtures.clinics.clinicA.id, 'hospitalization');
-    hospId = await seedHospitalization({ status: 'stable' });
+    hospId = await seedHospitalization({ status: 'observation' }); // 'stable' não é enum válido
   });
 
   test.afterEach(async () => {
