@@ -138,13 +138,18 @@ export async function evolutionSetWebhook(params: {
   webhookUrl: string
 }): Promise<boolean> {
   try {
+    // v2.x: corpo deve ser { webhook: { ... } }
     const res = await fetch(`${params.creds.apiUrl}/webhook/set/${params.creds.instanceId}`, {
       method:  'POST',
       headers: buildHeaders(params.creds.apiKey),
       body: JSON.stringify({
-        enabled: true,
-        url:     params.webhookUrl,
-        events:  ['QRCODE_UPDATED', 'CONNECTION_UPDATE', 'MESSAGES_UPSERT'],
+        webhook: {
+          enabled: true,
+          url:     params.webhookUrl,
+          events:  ['QRCODE_UPDATED', 'CONNECTION_UPDATE', 'MESSAGES_UPSERT'],
+          webhookByEvents: false,
+          webhookBase64:   false,
+        },
       }),
     })
     return res.ok
