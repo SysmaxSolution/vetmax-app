@@ -182,7 +182,8 @@ export async function updatePetProfile(
     if ('photo_url' in data) updateObj.photo_url = data.photo_url ?? null
     if (data.behavior_tags !== undefined) updateObj.behavior_tags = data.behavior_tags
 
-    const { error } = await supabase
+    const adminC = createAdminClient()
+    const { error } = await adminC
       .from('patients')
       .update(updateObj)
       .eq('id', petId)
