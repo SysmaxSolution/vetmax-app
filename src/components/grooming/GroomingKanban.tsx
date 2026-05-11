@@ -31,8 +31,8 @@ const COLUMNS: {
 }[] = [
   { status: 'scheduled',      label: 'Agendados',          emoji: '📅', bg: 'bg-indigo-50',   border: 'border-indigo-200',  badge: 'bg-indigo-100 text-indigo-700',  headerColor: 'bg-indigo-500'  },
   { status: 'received',       label: 'Recebido',           emoji: '📋', bg: 'bg-slate-50',    border: 'border-slate-200',   badge: 'bg-slate-100 text-slate-700',    headerColor: 'bg-slate-500'   },
-  { status: 'bathing',        label: 'Em Banho',           emoji: '🛁', bg: 'bg-blue-50',     border: 'border-blue-200',    badge: 'bg-blue-100 text-blue-700',      headerColor: 'bg-blue-500'    },
   { status: 'grooming',       label: 'Em Tosa',            emoji: '✂️', bg: 'bg-violet-50',   border: 'border-violet-200',  badge: 'bg-violet-100 text-violet-700',  headerColor: 'bg-violet-500'  },
+  { status: 'bathing',        label: 'Em Banho',           emoji: '🛁', bg: 'bg-blue-50',     border: 'border-blue-200',    badge: 'bg-blue-100 text-blue-700',      headerColor: 'bg-blue-500'    },
   { status: 'waiting_pickup', label: 'Aguardando Retirada',emoji: '⏳', bg: 'bg-amber-50',    border: 'border-amber-200',   badge: 'bg-amber-100 text-amber-700',    headerColor: 'bg-amber-500'   },
   { status: 'delivered',      label: 'Entregue',           emoji: '✅', bg: 'bg-emerald-50',  border: 'border-emerald-200', badge: 'bg-emerald-100 text-emerald-700',headerColor: 'bg-emerald-500' },
 ]

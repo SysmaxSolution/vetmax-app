@@ -93,15 +93,17 @@ test.describe('B-04: Ordem das etapas — Tosa antes de Banho', () => {
     await sessionCard.click();
     await page.waitForTimeout(1_000);
 
-    const bodyText = await page.locator('body').textContent() ?? '';
-    const posTosa  = bodyText.search(/em tosa|iniciar tosa|tosa/i);
-    const posBanho = bodyText.search(/em banho|iniciar banho|banho/i);
+    // Buscar apenas dentro do modal aberto para evitar matches no nav/sidebar
+    const modal = page.getByRole('dialog').first();
+    const modalText = await modal.textContent().catch(async () => page.locator('body').textContent()) ?? '';
+    const posTosa  = modalText.search(/em tosa|iniciar tosa/i);
+    const posBanho = modalText.search(/em banho|iniciar banho/i);
 
     console.log(`B-04-02: No modal — Tosa em ${posTosa}, Banho em ${posBanho}`);
     if (posTosa !== -1 && posBanho !== -1) {
       expect(posTosa).toBeLessThan(posBanho);
     } else {
-      console.log('B-04-02: SKIP — Botões de progressão não encontrados no modal');
+      console.log('B-04-02: SKIP — Botões de progressão específicos não encontrados no modal');
       test.skip();
     }
   });

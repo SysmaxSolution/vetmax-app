@@ -126,12 +126,12 @@ test.describe('R-03: Opção "Banho e Tosa" substitui "Geral" no agendamento', (
   test('R-03-02: Constante VISIT_REASON_OPTIONS contém value grooming com label Banho e Tosa', async () => {
     // Teste de contrato — verifica diretamente na DB que agendamentos com motivo grooming são criáveis
     const { error } = await admin.from('appointments').insert([{
-      clinic_id:    fixtures.clinics.clinicA.id,
-      patient_id:   fixtures.patients.petA1.id,
-      tutor_id:     fixtures.tutors.tutorA1.id,
-      scheduled_at: new Date(Date.now() + 86_400_000).toISOString(),
-      visit_reason: 'grooming',
-      status:       'scheduled',
+      clinic_id:            fixtures.clinics.clinicA.id,
+      pet_id:               fixtures.patients.petA1.id,
+      tutor_id:             fixtures.tutors.tutorA1.id,
+      appointment_datetime: new Date(Date.now() + 86_400_000).toISOString(),
+      reason:               'grooming',
+      status:               'scheduled',
     }]).select('id').single();
 
     if (error) {
@@ -145,7 +145,7 @@ test.describe('R-03: Opção "Banho e Tosa" substitui "Geral" no agendamento', (
     await admin.from('appointments')
       .delete()
       .eq('clinic_id', fixtures.clinics.clinicA.id)
-      .eq('visit_reason', 'grooming');
+      .eq('reason', 'grooming');
   });
 });
 
