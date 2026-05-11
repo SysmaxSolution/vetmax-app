@@ -18,7 +18,8 @@ export async function searchTutorsAndPatients(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Não autenticado.' }
 
-  const { data: profile } = await supabase
+  const admin = createAdminClient()
+  const { data: profile } = await admin
     .from('profiles')
     .select('clinic_id')
     .eq('id', user.id)
@@ -29,7 +30,6 @@ export async function searchTutorsAndPatients(
   const q = query.trim()
   if (q.length < 2) return []
 
-  const admin = createAdminClient()
   const clinicId = profile.clinic_id
 
   // Detectar se parece um CPF (só dígitos com 6+ caracteres)
@@ -121,7 +121,8 @@ export async function getTutorByCpf(cpf: string): Promise<
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Não autenticado.' }
 
-  const { data: profile } = await supabase
+  const admin = createAdminClient()
+  const { data: profile } = await admin
     .from('profiles')
     .select('clinic_id')
     .eq('id', user.id)
@@ -131,8 +132,6 @@ export async function getTutorByCpf(cpf: string): Promise<
 
   const cpfDigits = cpf.replace(/\D/g, '')
   if (cpfDigits.length !== 11) return null
-
-  const admin = createAdminClient()
   const { data } = await admin
     .from('tutors')
     .select('id, name, cpf, phone, email, address, emergency_contact')
@@ -179,7 +178,8 @@ export async function registerTutorAndPet(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Não autenticado.' }
 
-  const { data: profile } = await supabase
+  const admin = createAdminClient()
+  const { data: profile } = await admin
     .from('profiles')
     .select('clinic_id')
     .eq('id', user.id)
@@ -188,7 +188,6 @@ export async function registerTutorAndPet(
   if (!profile?.clinic_id) return { error: 'Perfil sem clínica vinculada.' }
 
   const clinicId = profile.clinic_id
-  const admin = createAdminClient()
 
   if (!patientData.name.trim()) return { error: 'Nome do Pet é obrigatório.' }
 
@@ -263,7 +262,8 @@ export async function addPatientToTutor(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Não autenticado.' }
 
-  const { data: profile } = await supabase
+  const admin = createAdminClient()
+  const { data: profile } = await admin
     .from('profiles')
     .select('clinic_id')
     .eq('id', user.id)
@@ -272,8 +272,6 @@ export async function addPatientToTutor(
   if (!profile?.clinic_id) return { error: 'Perfil sem clínica vinculada.' }
 
   if (!patientData.name.trim()) return { error: 'Nome do Pet é obrigatório.' }
-
-  const admin = createAdminClient()
 
   const { data: patient, error } = await admin
     .from('patients')
@@ -309,7 +307,8 @@ export async function recordConsent(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Não autenticado.' }
 
-  const { data: profile } = await supabase
+  const admin = createAdminClient()
+  const { data: profile } = await admin
     .from('profiles')
     .select('clinic_id')
     .eq('id', user.id)

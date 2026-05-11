@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { getPetUpcomingAppointments } from '@/lib/actions/appointments'
 import type { ExtractedField } from '@/types'
 
@@ -510,7 +511,9 @@ export async function getPatientsList(
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: 'Não autenticado.' }
 
-    const { data: profile } = await supabase
+    // Usa admin para evitar falha de RLS no lookup do clinic_id
+    const admin = createAdminClient()
+    const { data: profile } = await admin
       .from('profiles')
       .select('clinic_id')
       .eq('id', user.id)

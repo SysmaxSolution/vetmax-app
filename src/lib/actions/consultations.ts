@@ -14,15 +14,14 @@ export async function checkInPatientAdvanced(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Não autenticado.' }
 
-  const { data: profile } = await supabase
+  const admin = createAdminClient()
+  const { data: profile } = await admin
     .from('profiles')
     .select('clinic_id')
     .eq('id', user.id)
     .single()
 
   if (!profile?.clinic_id) return { error: 'Perfil sem clínica vinculada.' }
-
-  const admin = createAdminClient()
 
   // Determinar status baseado no tipo de visita
   const status = data.scheduled_date ? 'scheduled_future' : 'reception'
@@ -65,15 +64,14 @@ export async function checkInPatientWithContacts(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Não autenticado.' }
 
-  const { data: profile } = await supabase
+  const admin = createAdminClient()
+  const { data: profile } = await admin
     .from('profiles')
     .select('clinic_id')
     .eq('id', user.id)
     .single()
 
   if (!profile?.clinic_id) return { error: 'Perfil sem clínica vinculada.' }
-
-  const admin = createAdminClient()
 
   // Validação dinâmica conforme configuração da clínica
   const { data: settingsRow } = await admin
@@ -146,11 +144,10 @@ export async function updateConsultation(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Não autenticado.' }
 
-  const { data: profile } = await supabase
+  const admin = createAdminClient()
+  const { data: profile } = await admin
     .from('profiles').select('clinic_id').eq('id', user.id).single()
   if (!profile?.clinic_id) return { error: 'Clínica não encontrada.' }
-
-  const admin = createAdminClient()
 
   // 1. Se houver dados de tutor, atualizar tutor também (escopo por clinic_id)
   if (updates.tutorId && (updates.address || updates.emergency_contact)) {
@@ -231,7 +228,8 @@ export async function getReceptionQueue(): Promise<ReceptionQueueItem[] | { erro
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Não autenticado.' }
 
-  const { data: profile } = await supabase
+  const admin = createAdminClient()
+  const { data: profile } = await admin
     .from('profiles')
     .select('clinic_id')
     .eq('id', user.id)
@@ -329,7 +327,8 @@ export async function getReceptionHistory(): Promise<ReceptionHistoryItem[] | { 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Não autenticado.' }
 
-  const { data: profile } = await supabase
+  const admin = createAdminClient()
+  const { data: profile } = await admin
     .from('profiles')
     .select('clinic_id')
     .eq('id', user.id)
@@ -385,11 +384,14 @@ export async function moveToTriage(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Não autenticado.' }
 
+  const adminC = createAdminClient()
+  const { data: prof } = await adminC.from('profiles').select('clinic_id').eq('id', user.id).single()
+
   const { error } = await supabase
     .from('consultations')
     .update({ status: 'triage', updated_at: new Date().toISOString() })
     .eq('id', consultationId)
-    .eq('clinic_id', (await supabase.from('profiles').select('clinic_id').eq('id', user.id).single()).data?.clinic_id)
+    .eq('clinic_id', prof?.clinic_id)
 
   if (error) return { error: 'Erro ao mover para triagem: ' + error.message }
   revalidatePath('/dashboard/reception')
