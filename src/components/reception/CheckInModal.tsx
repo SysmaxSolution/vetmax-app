@@ -264,43 +264,49 @@ export function CheckInModal({
               </div>
             )}
 
-            {/* ── Endereço e Contato de Emergência (Obrigatórios — Sempre Visíveis) ── */}
-            <div className="rounded-xl border border-teal-200 bg-teal-50 p-4 space-y-4">
-              <div className="flex items-center gap-2">
-                <svg className="h-5 w-5 text-blue-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                </svg>
-                <p className="text-sm font-semibold text-teal-700">Informações do Tutor</p>
-              </div>
+            {/* ── Informações do Tutor — visível apenas se houver campos obrigatórios configurados ── */}
+            {(addressRequired || emergencyRequired) && (
+              <div className="rounded-xl border border-teal-200 bg-teal-50 p-4 space-y-4">
+                <div className="flex items-center gap-2">
+                  <svg className="h-5 w-5 text-blue-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                  </svg>
+                  <p className="text-sm font-semibold text-teal-700">Informações do Tutor</p>
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Endereço Completo{addressRequired ? ' *' : ''}</label>
-                <input
-                  type="text"
-                  value={address}
-                  onChange={e => setAddress(e.target.value)}
-                  placeholder="Rua, número, complemento, cidade"
-                  className={`w-full rounded-lg border px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
-                    addressRequired && !hasAddress ? 'border-red-300 bg-red-50' : 'border-slate-300'
-                  }`}
-                />
-                {addressRequired && !hasAddress && <p className="text-xs text-red-600 mt-1">Obrigatório para confirmar</p>}
-              </div>
+                {addressRequired && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">Endereço Completo *</label>
+                    <input
+                      type="text"
+                      value={address}
+                      onChange={e => setAddress(e.target.value)}
+                      placeholder="Rua, número, complemento, cidade"
+                      className={`w-full rounded-lg border px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
+                        !hasAddress ? 'border-red-300 bg-red-50' : 'border-slate-300'
+                      }`}
+                    />
+                    {!hasAddress && <p className="text-xs text-red-600 mt-1">Obrigatório para confirmar</p>}
+                  </div>
+                )}
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Contato de Emergência{emergencyRequired ? ' *' : ''}</label>
-                <input
-                  type="text"
-                  value={emergencyContact}
-                  onChange={e => setEmergencyContact(e.target.value)}
-                  placeholder="Nome e Telefone (ex: Maria - 11 99999-0000)"
-                  className={`w-full rounded-lg border px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
-                    emergencyRequired && !hasEmergencyContact ? 'border-red-300 bg-red-50' : 'border-slate-300'
-                  }`}
-                />
-                {emergencyRequired && !hasEmergencyContact && <p className="text-xs text-red-600 mt-1">Obrigatório para confirmar</p>}
+                {emergencyRequired && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">Contato de Emergência *</label>
+                    <input
+                      type="text"
+                      value={emergencyContact}
+                      onChange={e => setEmergencyContact(e.target.value)}
+                      placeholder="Nome e Telefone (ex: Maria - 11 99999-0000)"
+                      className={`w-full rounded-lg border px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
+                        !hasEmergencyContact ? 'border-red-300 bg-red-50' : 'border-slate-300'
+                      }`}
+                    />
+                    {!hasEmergencyContact && <p className="text-xs text-red-600 mt-1">Obrigatório para confirmar</p>}
+                  </div>
+                )}
               </div>
-            </div>
+            )}
 
             {/* ── Checklist Procedimentos ── */}
             {clinicChecklist.length > 0 && (

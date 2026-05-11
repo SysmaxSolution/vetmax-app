@@ -14,7 +14,7 @@ import ReceptionSubNav from './ReceptionSubNav'
 import WhatsAppNotificationModal from '@/components/whatsapp/WhatsAppNotificationModal'
 import { BehaviorTagsBadges } from '@/components/ui/BehaviorTagsBadges'
 import { PetAvatar } from '@/components/ui/PetAvatar'
-import { useModule } from '@/components/providers/ModulesProvider'
+import { useModules } from '@/components/providers/ModulesProvider'
 import GroomingCheckinModal from '@/components/grooming/GroomingCheckinModal'
 import type { ReceptionQueueItem, ReceptionHistoryItem } from '@/lib/actions/consultations'
 import type { SearchResult } from '@/lib/actions/tutors'
@@ -102,7 +102,10 @@ function TutorProfile({
   onGroomingCheckin?: (patientId: string, patientName: string, tutorId: string, tutorName: string) => void
   onGroomingSchedule?: (patientId: string, patientName: string, tutorId: string, tutorName: string) => void
 }) {
-  const groomingActive = useModule('grooming')
+  const activeModules = useModules()
+  const groomingActive    = activeModules.length === 0 || activeModules.includes('grooming')
+  const consultationActive = activeModules.length === 0 ||
+    ['consultation', 'triage', 'exams', 'hospitalization'].some(m => activeModules.includes(m))
   const [data, setData] = useState<Awaited<ReturnType<typeof getTutorWithPatients>> | null>(null)
 
   useEffect(() => {
@@ -190,19 +193,23 @@ function TutorProfile({
                     >
                       Feed
                     </button>
-                    <button
-                      data-mentor-step="reception-checkin-btn"
-                      onClick={() => onSelectPatient(p.id, p.name, data.tutor.id, data.tutor.name, data.tutor.address || null, data.tutor.emergency_contact || null)}
-                      className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 transition-colors"
-                    >
-                      Check-in
-                    </button>
-                    <button
-                      onClick={() => onScheduleAppointment(p.id, p.name, data.tutor.id, data.tutor.name, data.tutor.address || null, data.tutor.emergency_contact || null, p.species)}
-                      className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
-                    >
-                      Agendar
-                    </button>
+                    {consultationActive && (
+                      <button
+                        data-mentor-step="reception-checkin-btn"
+                        onClick={() => onSelectPatient(p.id, p.name, data.tutor.id, data.tutor.name, data.tutor.address || null, data.tutor.emergency_contact || null)}
+                        className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 transition-colors"
+                      >
+                        Check-in
+                      </button>
+                    )}
+                    {consultationActive && (
+                      <button
+                        onClick={() => onScheduleAppointment(p.id, p.name, data.tutor.id, data.tutor.name, data.tutor.address || null, data.tutor.emergency_contact || null, p.species)}
+                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+                      >
+                        Agendar
+                      </button>
+                    )}
                     {groomingActive && onGroomingCheckin && (
                       <button
                         onClick={() => onGroomingCheckin(p.id, p.name, data.tutor.id, data.tutor.name)}
