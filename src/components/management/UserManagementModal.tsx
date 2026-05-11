@@ -31,6 +31,7 @@ const MODULE_OPTIONS: { key: string; label: string }[] = [
   { key: 'hospitalization',      label: 'Internação' },
   { key: 'pharmacy',             label: 'Farmácia' },
   { key: 'grooming',             label: 'Banho e Tosa' },
+  { key: 'sales',                label: 'Vendas (PDV)' },
   { key: 'whatsapp',             label: 'WhatsApp' },
   { key: 'mentor',               label: 'Mentor IA' },
   { key: 'whatsapp_intelligent', label: 'WhatsApp IA' },

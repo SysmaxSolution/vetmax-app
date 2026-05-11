@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react'
 import {
   ToggleLeft, ToggleRight, Loader2, Save, Shield, AlertTriangle, Eye, EyeOff,
-  Hotel, Syringe, FlaskConical, Scissors, ShoppingBag, Stethoscope, ClipboardList, MessageCircle, Sparkles, Bot,
+  Hotel, Syringe, FlaskConical, Scissors, ShoppingBag, Stethoscope, ClipboardList, MessageCircle, Sparkles, Bot, ShoppingCart,
 } from 'lucide-react'
 import { updateClinicConfig, type ClinicConfig } from '@/lib/actions/clinic-settings'
 import WhatsappSettings from './Settings/WhatsappSettings'
@@ -28,6 +28,7 @@ const MODULES: ModuleDef[] = [
   { key: 'hospitalization', label: 'Internação',            desc: 'Gestão de internados e alta hospitalar',   icon: <Hotel          className="h-5 w-5" />, color: 'text-amber-600 bg-amber-50'  },
   { key: 'pharmacy',        label: 'Estoque',               desc: 'Estoque de medicamentos e insumos',        icon: <ShoppingBag    className="h-5 w-5" />, color: 'text-orange-600 bg-orange-50' },
   { key: 'grooming',        label: 'Banho e Tosa',          desc: 'Fila de grooming com registros por voz',   icon: <Scissors       className="h-5 w-5" />, color: 'text-pink-600 bg-pink-50'    },
+  { key: 'sales',           label: 'Vendas (PDV)',          desc: 'Ponto de venda, carrinho e recibos',       icon: <ShoppingCart   className="h-5 w-5" />, color: 'text-violet-600 bg-violet-50' },
   { key: 'whatsapp',        label: 'WhatsApp',              desc: 'Notificações e mensagens via WhatsApp',    icon: <MessageCircle  className="h-5 w-5" />, color: 'text-green-600 bg-green-50'  },
   { key: 'mentor',              label: 'Modo Mentor',               desc: 'Botão "?" flutuante com tour guiado em todas as telas',                    icon: <Sparkles      className="h-5 w-5" />, color: 'text-blue-600 bg-blue-50'      },
   { key: 'whatsapp_intelligent', label: 'WhatsApp Inteligente (Bot)', desc: 'Bot IA responde, agenda consultas e faz campanhas de reativação via WhatsApp', icon: <Bot           className="h-5 w-5" />, color: 'text-emerald-600 bg-emerald-50' },
