@@ -308,8 +308,8 @@ export function CheckInModal({
               </div>
             )}
 
-            {/* ── Checklist Procedimentos ── */}
-            {clinicChecklist.length > 0 && (
+            {/* ── Checklist Procedimentos — só exibe se houver campos obrigatórios configurados ── */}
+            {clinicChecklist.length > 0 && checkinRequiredFields.length > 0 && (
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <div className="mb-3 flex items-center gap-2">
                   <svg className="h-5 w-5 text-slate-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
