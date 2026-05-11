@@ -554,11 +554,11 @@ test.describe('TC-REG-12 (Crítico): Caixa lista lançamentos após P-05', () =>
     // Seed de um lançamento no caixa para garantir que tem dados
     await Promise.resolve(admin.from('central_cashier').upsert([{
       clinic_id: CLINIC_A_ID,
-      description: 'Lançamento E2E REG-12',
+      source_module: 'consultation',
+      source_id: require('crypto').randomUUID(),
       amount: 100.00,
-      type: 'income',
-      status: 'confirmed',
-      date: new Date().toISOString().split('T')[0],
+      status: 'recorded',
+      reason: 'Lançamento E2E REG-12',
     }])).then(() => {}).catch(() => {}); // ignorar se a estrutura for diferente
   });
 

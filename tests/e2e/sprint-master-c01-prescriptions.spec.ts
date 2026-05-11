@@ -33,7 +33,7 @@ type RouteOfAdministration = typeof VALID_ROUTES[number];
 async function loginAs(page: Page, email: string, password: string) {
   await page.goto('/login');
   await page.getByLabel(/e-?mail/i).fill(email);
-  await page.getByLabel(/senha/i).fill(password);
+  await page.locator('#password').fill(password);
   await page.getByRole('button', { name: /entrar/i }).click();
   await page.waitForURL(/\/(dashboard|reception|vet|onboarding)/, { timeout: 30_000 });
 }

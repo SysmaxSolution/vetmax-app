@@ -27,7 +27,7 @@ const admin = createAdminClient();
 async function loginAs(page: Page, email: string, password: string) {
   await page.goto('/login');
   await page.getByLabel(/e-?mail/i).fill(email);
-  await page.getByLabel(/senha/i).fill(password);
+  await page.locator('#password').fill(password);
   await page.getByRole('button', { name: /entrar/i }).click();
   await page.waitForURL(/\/(dashboard|reception|vet|onboarding)/, { timeout: 30_000 });
 }
@@ -54,14 +54,11 @@ async function seedCashierEntry(overrides: Record<string, unknown> = {}): Promis
   const today = getTodayISO();
   const { data, error } = await admin.from('central_cashier').insert([{
     clinic_id: fixtures.clinics.clinicA.id,
-    patient_id: fixtures.patients.petA1.id,
-    tutor_id: fixtures.tutors.tutorA1.id,
-    description: 'Lançamento Teste P05',
+    source_module: 'consultation',
+    source_id: require('crypto').randomUUID(),
     amount: 150.00,
-    payment_method: 'pix',
-    payment_status: 'paid',
-    transaction_date: today,
-    item_type: 'consultation',
+    status: 'recorded',
+    reason: 'Lançamento Teste P05',
     ...overrides,
   }]).select('id').single();
   if (error) throw error;
@@ -206,19 +203,16 @@ test.describe('TC-P05-03: Filtrar por intervalo de datas retorna lançamentos co
     await enableModule(fixtures.clinics.clinicA.id, 'billing');
     await seedTutorsAndPets();
     // Lançamento de hoje
-    entryId = await seedCashierEntry({ description: 'Lançamento HOJE P05' });
+    entryId = await seedCashierEntry({ reason: 'Lançamento HOJE P05' });
     // Lançamento de 30 dias atrás (fora do filtro)
     const past = getDateISO(-30);
     const { data } = await admin.from('central_cashier').insert([{
       clinic_id: fixtures.clinics.clinicA.id,
-      patient_id: fixtures.patients.petA1.id,
-      tutor_id: fixtures.tutors.tutorA1.id,
-      description: 'Lançamento ANTIGO P05 — não deve aparecer',
+      source_module: 'consultation',
+      source_id: require('crypto').randomUUID(),
       amount: 50.00,
-      payment_method: 'dinheiro',
-      payment_status: 'paid',
-      transaction_date: past,
-      item_type: 'consultation',
+      status: 'recorded',
+      reason: 'Lançamento ANTIGO P05 — não deve aparecer',
     }]).select('id').single();
     if (!data?.id) return;
     entryOldId = data.id;
