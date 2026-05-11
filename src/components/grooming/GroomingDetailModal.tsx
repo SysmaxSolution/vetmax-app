@@ -5,12 +5,13 @@ import {
   X, Scissors, History, Loader2, Save, Mic, MicOff,
   User, Clock, Plus, Trash2, CheckCircle, Paperclip,
   ImageIcon, FileText, Upload, Wifi, WifiOff, Settings,
-  DollarSign, Tag, BadgeCheck, Ban, ExternalLink, ChevronRight,
+  DollarSign, Tag, BadgeCheck, Ban, ExternalLink, ChevronRight, Pencil,
 } from 'lucide-react'
 import type { WhatsAppTrigger } from '@/lib/actions/whatsapp'
 import { createClient } from '@/lib/supabase/client'
 import {
   addGroomingRecord,
+  updateGroomingRecord,
   extractGroomingVoice,
   updateGroomingStatus,
   updateGroomingPricing,
@@ -145,6 +146,14 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
   const [registerProductName, setRegisterProductName] = useState('')
   const [registerProductPrice, setRegisterProductPrice] = useState('')
   const [registerProductSaving, setRegisterProductSaving] = useState(false)
+
+  // Edição inline de registros do feed
+  const [editingRecordId, setEditingRecordId]         = useState<string | null>(null)
+  const [editObs, setEditObs]                         = useState('')
+  const [editServices, setEditServices]               = useState<string[]>([])
+  const [editProducts, setEditProducts]               = useState<string[]>([])
+  const [editBehavior, setEditBehavior]               = useState('')
+  const [isSavingEdit, setIsSavingEdit]               = useState(false)
 
   // Novo item na aba Cobrança
   const [newBillingItemName, setNewBillingItemName] = useState('')
@@ -877,7 +886,36 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
                   ) : (
                     <div className="space-y-5">
                       {records.map(record => {
-                        const bOpt = BEHAVIOR_OPTIONS.find(b => b.id === record.behavior)
+                        const bOpt    = BEHAVIOR_OPTIONS.find(b => b.id === record.behavior)
+                        const isEditing = editingRecordId === record.id
+
+                        function startEdit() {
+                          setEditingRecordId(record.id)
+                          setEditObs(record.observations ?? '')
+                          setEditServices(record.services_applied ?? [])
+                          setEditProducts(record.products_used ?? [])
+                          setEditBehavior(record.behavior ?? '')
+                          setEditProductInput('')
+                        }
+
+                        async function saveEdit() {
+                          setIsSavingEdit(true)
+                          const res = await updateGroomingRecord(record.id, {
+                            services_applied: editServices,
+                            products_used:    editProducts,
+                            behavior:         editBehavior || undefined,
+                            observations:     editObs.trim() || undefined,
+                          })
+                          setIsSavingEdit(false)
+                          if ('error' in res) {
+                            setErrorToast('Erro ao editar: ' + res.error)
+                            setTimeout(() => setErrorToast(null), 4000)
+                            return
+                          }
+                          setEditingRecordId(null)
+                          await loadRecords()
+                        }
+
                         return (
                           <div key={record.id} className="relative pl-8 border-l-2 border-slate-200 pb-2">
                             <div className="absolute -left-[11px] top-1 h-5 w-5 rounded-full border-4 border-slate-50 bg-teal-500 flex items-center justify-center shadow-sm" />
@@ -889,7 +927,7 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
                                   </div>
                                   <div>
                                     <span className="text-xs font-bold text-slate-800 block">{record.user_name}</span>
-                                    {bOpt && (
+                                    {bOpt && !isEditing && (
                                       <span className={`text-[10px] font-bold capitalize ${bOpt.color}`}>{bOpt.label}</span>
                                     )}
                                     {record.voice_transcription && (
@@ -897,41 +935,105 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
                                     )}
                                   </div>
                                 </div>
-                                <div className="text-right">
-                                  <div className="flex items-center gap-1 text-slate-700 font-bold text-xs justify-end">
-                                    <Clock className="h-3 w-3 text-teal-500" />
-                                    {new Date(record.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                <div className="flex items-center gap-2">
+                                  <div className="text-right">
+                                    <div className="flex items-center gap-1 text-slate-700 font-bold text-xs justify-end">
+                                      <Clock className="h-3 w-3 text-teal-500" />
+                                      {new Date(record.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                    </div>
+                                    <span className="text-[10px] text-slate-400">
+                                      {new Date(record.created_at).toLocaleDateString('pt-BR')}
+                                    </span>
                                   </div>
-                                  <span className="text-[10px] text-slate-400">
-                                    {new Date(record.created_at).toLocaleDateString('pt-BR')}
-                                  </span>
+                                  {!isEditing && (
+                                    <button
+                                      type="button"
+                                      onClick={startEdit}
+                                      title="Editar registro"
+                                      className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-teal-600 transition-colors flex-shrink-0"
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </button>
+                                  )}
                                 </div>
                               </div>
 
-                              {record.services_applied?.length > 0 && (
-                                <div className="mb-2">
-                                  <span className="text-[10px] font-bold text-slate-400 uppercase">Serviços:</span>
-                                  <div className="flex flex-wrap gap-1 mt-1">
-                                    {record.services_applied.map((s, i) => (
-                                      <span key={i} className="bg-teal-50 border border-teal-200 text-teal-700 rounded-full px-2 py-0.5 text-[10px] font-semibold">
-                                        {s}
-                                      </span>
+                              {isEditing ? (
+                                <div className="space-y-3">
+                                  {/* Comportamento */}
+                                  <div className="grid grid-cols-4 gap-1.5">
+                                    {BEHAVIOR_OPTIONS.map(opt => (
+                                      <button
+                                        key={opt.id}
+                                        type="button"
+                                        onClick={() => setEditBehavior(editBehavior === opt.id ? '' : opt.id)}
+                                        className={`py-1 rounded-lg border-2 text-[10px] font-bold transition-all ${
+                                          editBehavior === opt.id
+                                            ? `${opt.border} ${opt.bg} shadow-sm`
+                                            : 'border-transparent bg-slate-50 opacity-60'
+                                        }`}
+                                      >
+                                        {opt.label}
+                                      </button>
                                     ))}
                                   </div>
+                                  {/* Serviços */}
+                                  <div className="flex flex-wrap gap-1">
+                                    {SERVICES_LIST.map(svc => {
+                                      const sel = editServices.includes(svc)
+                                      return (
+                                        <button key={svc} type="button"
+                                          onClick={() => setEditServices(prev => sel ? prev.filter(s => s !== svc) : [...prev, svc])}
+                                          className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-all ${sel ? 'bg-teal-600 border-teal-600 text-white' : 'bg-white border-slate-200 text-slate-600'}`}
+                                        >{svc}</button>
+                                      )
+                                    })}
+                                  </div>
+                                  {/* Observações */}
+                                  <textarea
+                                    value={editObs}
+                                    onChange={e => setEditObs(e.target.value)}
+                                    rows={3}
+                                    className="w-full rounded-xl border-slate-200 text-sm focus:ring-teal-500 focus:border-teal-500 resize-none"
+                                    placeholder="Observações..."
+                                  />
+                                  <div className="flex gap-2">
+                                    <button type="button" onClick={() => setEditingRecordId(null)}
+                                      className="flex-1 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                                    >Cancelar</button>
+                                    <button type="button" onClick={saveEdit} disabled={isSavingEdit}
+                                      className="flex-1 py-2 rounded-xl bg-teal-600 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-50 flex items-center justify-center gap-1"
+                                    >
+                                      {isSavingEdit ? <><Loader2 className="h-3 w-3 animate-spin" />Salvando…</> : <><Save className="h-3 w-3" />Salvar Edição</>}
+                                    </button>
+                                  </div>
                                 </div>
-                              )}
-
-                              {record.products_used?.length > 0 && (
-                                <div className="mb-2">
-                                  <span className="text-[10px] font-bold text-slate-400 uppercase">Produtos:</span>
-                                  <p className="text-xs text-slate-600 mt-0.5">{record.products_used.join(', ')}</p>
-                                </div>
-                              )}
-
-                              {record.observations && (
-                                <p className="text-sm text-slate-600 leading-relaxed mt-1 whitespace-pre-wrap">
-                                  {record.observations}
-                                </p>
+                              ) : (
+                                <>
+                                  {record.services_applied?.length > 0 && (
+                                    <div className="mb-2">
+                                      <span className="text-[10px] font-bold text-slate-400 uppercase">Serviços:</span>
+                                      <div className="flex flex-wrap gap-1 mt-1">
+                                        {record.services_applied.map((s, i) => (
+                                          <span key={i} className="bg-teal-50 border border-teal-200 text-teal-700 rounded-full px-2 py-0.5 text-[10px] font-semibold">
+                                            {s}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                  {record.products_used?.length > 0 && (
+                                    <div className="mb-2">
+                                      <span className="text-[10px] font-bold text-slate-400 uppercase">Produtos:</span>
+                                      <p className="text-xs text-slate-600 mt-0.5">{record.products_used.join(', ')}</p>
+                                    </div>
+                                  )}
+                                  {record.observations && (
+                                    <p className="text-sm text-slate-600 leading-relaxed mt-1 whitespace-pre-wrap">
+                                      {record.observations}
+                                    </p>
+                                  )}
+                                </>
                               )}
                             </div>
                           </div>

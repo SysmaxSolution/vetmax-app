@@ -326,6 +326,36 @@ export async function addGroomingRecord(data: {
   return { id: record.id }
 }
 
+export async function updateGroomingRecord(
+  recordId: string,
+  data: {
+    services_applied: string[]
+    products_used:    string[]
+    behavior?:        string
+    observations?:    string
+  },
+): Promise<{ ok: true } | { error: string }> {
+  const ctx = await getClinicAndUser()
+  if ('error' in ctx) return ctx
+  const { supabase } = ctx
+
+  const { error } = await supabase
+    .from('grooming_records')
+    .update({
+      services_applied: data.services_applied,
+      products_used:    data.products_used,
+      behavior:         data.behavior ?? null,
+      observations:     data.observations ?? null,
+    })
+    .eq('id', recordId)
+    .eq('clinic_id', ctx.clinicId)
+
+  if (error) return { error: 'Erro ao editar registro: ' + error.message }
+
+  revalidatePath('/dashboard/grooming')
+  return { ok: true }
+}
+
 // ─── Documentos / Fotos ───────────────────────────────────────────────────────
 
 export type GroomingDocument = {
