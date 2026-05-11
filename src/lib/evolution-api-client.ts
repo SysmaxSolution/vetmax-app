@@ -113,18 +113,10 @@ export async function evolutionCreateInstance(params: {
   instanceName: string
   webhookUrl?:  string
 }): Promise<{ ok: true } | { ok: false; status: number; body: string }> {
-  // v2.x: integration obrigatório; webhook aninhado no body do create
+  // v1.8.4: apenas instanceName + qrcode; webhook é configurado separadamente
   const body: Record<string, unknown> = {
     instanceName: params.instanceName,
-    integration:  'WHATSAPP-BAILEYS',
     qrcode:       true,
-  }
-  if (params.webhookUrl) {
-    body.webhook = {
-      url:     params.webhookUrl,
-      enabled: true,
-      events:  ['QRCODE_UPDATED', 'CONNECTION_UPDATE', 'MESSAGES_UPSERT'],
-    }
   }
   try {
     const res = await fetch(`${params.apiUrl}/instance/create`, {

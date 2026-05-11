@@ -70,9 +70,9 @@ export async function POST() {
     .upsert({
       clinic_id:               profile.clinic_id,
       provider_name:           'evolution-api',
-      api_url:                 null,   // gerenciado via EVOLUTION_API_URL (env)
+      api_url:                 '',   // credencial gerenciada via EVOLUTION_API_URL (env)
       instance_id:             instanceName,
-      token:                   null,   // gerenciado via EVOLUTION_API_KEY (env)
+      token:                   '',   // credencial gerenciada via EVOLUTION_API_KEY (env)
       client_token:            null,
       is_active:               true,
       evolution_instance_name: instanceName,
