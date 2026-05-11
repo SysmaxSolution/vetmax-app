@@ -492,12 +492,12 @@ export type PatientsListItem = {
   microchip_id: string | null
   tutor: {
     id:                string
-    name:              string
-    cpf:               string
-    phone:             string
-    email?:            string
-    address?:          string
-    emergency_contact?: string
+    name:              string | null
+    cpf:               string | null
+    phone:             string | null
+    email?:            string | null
+    address?:          string | null
+    emergency_contact?: string | null
   }
   last_visit: string | null
 }
@@ -524,6 +524,7 @@ export async function getPatientsList(
       .from('patients')
       .select('id, name, species, breed, gender, neutered, birth_date, birth_date_estimated, coat_color, reproductive_status, medical_history, photo_url, behavior_tags, allergies, chronic_diseases, microchip_id, tutor_id')
       .eq('clinic_id', clinicId)
+      .is('deleted_at', null)
       .order('name')
 
     if (query && query.trim().length >= 2) {
@@ -536,7 +537,7 @@ export async function getPatientsList(
 
     // ... dentro de getPatientsList no timeline.ts
 
-    const tutorIds = [...new Set(patients.map(p => p.tutor_id))]
+    const tutorIds = [...new Set(patients.map(p => p.tutor_id).filter(Boolean))] as string[]
     const { data: tutors } = await supabase
       .from('tutors')
       .select('id, name, cpf, phone, email, address, emergency_contact') // Adicionado address e emergency

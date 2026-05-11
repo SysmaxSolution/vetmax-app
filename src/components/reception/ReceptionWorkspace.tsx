@@ -134,11 +134,14 @@ function TutorProfile({
       <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-5 py-4">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-200 text-sm font-bold text-slate-700">
-            {data.tutor.name.charAt(0).toUpperCase()}
+            {(data.tutor.name ?? '?').charAt(0).toUpperCase()}
           </div>
           <div>
-            <p className="font-semibold text-slate-900">{data.tutor.name}</p>
-            <p className="text-xs text-slate-500">{data.tutor.phone} · CPF: {data.tutor.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')}</p>
+            <p className="font-semibold text-slate-900">{data.tutor.name ?? '—'}</p>
+            <p className="text-xs text-slate-500">
+              {data.tutor.phone ?? ''}
+              {data.tutor.cpf ? ` · CPF: ${data.tutor.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')}` : ''}
+            </p>
           </div>
         </div>
         <button onClick={onClose} className="rounded-full p-1.5 text-slate-400 hover:bg-slate-200 transition-colors">
@@ -155,7 +158,7 @@ function TutorProfile({
             Pets vinculados ({data.patients.length})
           </p>
           <button
-            onClick={() => onAddPet(data.tutor.id, data.tutor.name)}
+            onClick={() => onAddPet(data.tutor.id, data.tutor.name ?? '')}
             className="flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-600 hover:bg-blue-100 transition-colors"
           >
             <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
@@ -187,7 +190,7 @@ function TutorProfile({
                   </div>
                   <div className="flex gap-1.5 flex-wrap">
                     <button
-                      onClick={() => onViewFeed(p.id, p.name, p.species, data.tutor.name, data.tutor.cpf, data.tutor.id)}
+                      onClick={() => onViewFeed(p.id, p.name, p.species, data.tutor.name ?? '', data.tutor.cpf ?? '', data.tutor.id)}
                       className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
                       title="Ver histórico do pet"
                     >
@@ -196,7 +199,7 @@ function TutorProfile({
                     {consultationActive && (
                       <button
                         data-mentor-step="reception-checkin-btn"
-                        onClick={() => onSelectPatient(p.id, p.name, data.tutor.id, data.tutor.name, data.tutor.address || null, data.tutor.emergency_contact || null)}
+                        onClick={() => onSelectPatient(p.id, p.name, data.tutor.id, data.tutor.name ?? '', data.tutor.address || null, data.tutor.emergency_contact || null)}
                         className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 transition-colors"
                       >
                         Check-in
@@ -204,7 +207,7 @@ function TutorProfile({
                     )}
                     {consultationActive && (
                       <button
-                        onClick={() => onScheduleAppointment(p.id, p.name, data.tutor.id, data.tutor.name, data.tutor.address || null, data.tutor.emergency_contact || null, p.species)}
+                        onClick={() => onScheduleAppointment(p.id, p.name, data.tutor.id, data.tutor.name ?? '', data.tutor.address || null, data.tutor.emergency_contact || null, p.species)}
                         className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
                       >
                         Agendar
@@ -212,7 +215,7 @@ function TutorProfile({
                     )}
                     {groomingActive && onGroomingCheckin && (
                       <button
-                        onClick={() => onGroomingCheckin(p.id, p.name, data.tutor.id, data.tutor.name)}
+                        onClick={() => onGroomingCheckin(p.id, p.name, data.tutor.id, data.tutor.name ?? '')}
                         className="rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 transition-colors"
                         title="Check-in imediato para Banho e Tosa"
                       >
@@ -221,7 +224,7 @@ function TutorProfile({
                     )}
                     {groomingActive && onGroomingSchedule && (
                       <button
-                        onClick={() => onGroomingSchedule(p.id, p.name, data.tutor.id, data.tutor.name)}
+                        onClick={() => onGroomingSchedule(p.id, p.name, data.tutor.id, data.tutor.name ?? '')}
                         className="rounded-lg border border-teal-300 bg-teal-50 px-3 py-1.5 text-xs font-semibold text-teal-700 hover:bg-teal-100 transition-colors"
                         title="Agendar Banho e Tosa para data futura"
                       >
@@ -638,10 +641,10 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
                   className="w-full flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50 border-b border-slate-100 last:border-0 transition-colors text-left"
                 >
                   <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-bold text-slate-600">
-                    {result.tutor.name.charAt(0).toUpperCase()}
+                    {(result.tutor.name ?? '?').charAt(0).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-slate-900">{result.tutor.name}</p>
+                    <p className="font-medium text-slate-900">{result.tutor.name ?? '—'}</p>
                     <div className="flex flex-wrap gap-2 mt-1">
                       {result.patients.length === 0
                         ? <span className="text-xs text-slate-400">Nenhum pet cadastrado</span>

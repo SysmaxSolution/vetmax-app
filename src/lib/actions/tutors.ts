@@ -7,7 +7,7 @@ import type { CreateTutorPayload, CreatePatientPayload } from '@/types'
 // ─── Busca inteligente: CPF do Tutor, Nome do Tutor ou Nome do Pet ────────────
 export type SearchResult = {
   type: 'tutor_with_patients'
-  tutor: { id: string; name: string; cpf: string; phone: string; email: string | null }
+  tutor: { id: string; name: string | null; cpf: string | null; phone: string | null; email: string | null }
   patients: { id: string; name: string; species: string; breed: string | null }[]
 }
 
@@ -115,7 +115,7 @@ export async function searchTutorsAndPatients(
 
 // ─── Busca Tutor por CPF (para pré-preenchimento no cadastro) ────────────────
 export async function getTutorByCpf(cpf: string): Promise<
-  { id: string; name: string; cpf: string; phone: string; email: string | null; address: string | null; emergency_contact: string | null } | null | { error: string }
+  { id: string; name: string | null; cpf: string | null; phone: string | null; email: string | null; address: string | null; emergency_contact: string | null } | null | { error: string }
 > {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -145,7 +145,7 @@ export async function getTutorByCpf(cpf: string): Promise<
 
 // ─── Busca Tutor por ID com todos os seus Pets (para perfil) ─────────────────
 export async function getTutorWithPatients(tutorId: string): Promise<
-  { tutor: { id: string; name: string; cpf: string; phone: string; email: string | null; address: string | null; emergency_contact: string | null }; patients: { id: string; name: string; species: string; breed: string | null; neutered: boolean; gender: string | null; photo_url: string | null }[] } | { error: string }
+  { tutor: { id: string; name: string | null; cpf: string | null; phone: string | null; email: string | null; address: string | null; emergency_contact: string | null }; patients: { id: string; name: string; species: string; breed: string | null; neutered: boolean; gender: string | null; photo_url: string | null }[] } | { error: string }
 > {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

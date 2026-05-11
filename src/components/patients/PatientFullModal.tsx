@@ -231,8 +231,8 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
       const result = await getTutorByCpf(digits)
       if (result && !('error' in result)) {
         setFoundTutorId(result.id)
-        setTutorName(result.name)
-        setTutorPhone(formatPhone(result.phone))
+        setTutorName(result.name ?? '')
+        setTutorPhone(result.phone ? formatPhone(result.phone) : '')
         setTutorEmail(result.email ?? '')
         setTutorAddress(result.address ?? '')
         setCpfLookupStatus('found')

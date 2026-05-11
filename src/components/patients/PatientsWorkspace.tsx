@@ -81,7 +81,7 @@ function PatientCard({
             {age && <span className="text-xs text-slate-400">{age}</span>}
           </div>
           <p className="mt-1 text-xs text-slate-500 truncate">
-            Tutor: <span className="font-medium text-slate-700">{patient.tutor.name}</span>
+            Tutor: <span className="font-medium text-slate-700">{patient.tutor.name ?? '—'}</span>
             {patient.tutor.cpf && (
               <span className="ml-1.5 text-slate-400">· CPF {formatCpf(patient.tutor.cpf)}</span>
             )}
@@ -180,8 +180,8 @@ export default function PatientsWorkspace({ initialPatients, clinicName }: Props
           petName={feedPet.name}
           petSpecies={feedPet.species}
           clinicName={clinicName}
-          tutorName={feedPet.tutor.name}
-          tutorCpf={feedPet.tutor.cpf}
+          tutorName={feedPet.tutor.name ?? ''}
+          tutorCpf={feedPet.tutor.cpf ?? ''}
           tutorId={feedPet.tutor.id}
           onClose={() => setFeedPet(null)}
         />
