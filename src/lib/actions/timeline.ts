@@ -525,7 +525,7 @@ export async function getPatientsList(
 
     let patientsQuery = admin
       .from('patients')
-      .select('id, name, species, breed, gender, neutered, birth_date, coat_color, reproductive_status, medical_history, photo_url, behavior_tags, allergies, chronic_diseases, microchip_id, tutor_id')
+      .select('id, name, species, breed, gender, neutered, birth_date, birth_date_estimated, coat_color, reproductive_status, medical_history, photo_url, behavior_tags, allergies, chronic_diseases, microchip_id, tutor_id')
       .eq('clinic_id', clinicId)
       .is('deleted_at', null)
       .order('name')
