@@ -180,7 +180,7 @@ export function CheckInModal({
       <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
 
         {/* Header — FIXO */}
-        <div className={`px-6 py-5 flex-shrink-0 ${isEmergency ? 'bg-gradient-to-r from-red-600 to-red-700' : 'bg-gradient-to-r from-teal-600 to-teal-700'}`}>
+        <div className={`px-4 sm:px-6 py-4 sm:py-5 flex-shrink-0 ${isEmergency ? 'bg-gradient-to-r from-red-600 to-red-700' : 'bg-gradient-to-r from-teal-600 to-teal-700'}`}>
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold text-white">
@@ -202,7 +202,7 @@ export function CheckInModal({
 
         {/* Body — SCROLL INTERNO */}
         <div className="flex-1 overflow-y-auto">
-          <form ref={formRef} onSubmit={handleSubmit} className="px-6 pt-5 pb-6 space-y-5">
+          <form ref={formRef} onSubmit={handleSubmit} className="px-4 sm:px-6 pt-5 pb-6 space-y-5">
 
             {/* ── Motivo da Visita ── */}
             <div>
@@ -343,7 +343,7 @@ export function CheckInModal({
         </div>
 
         {/* Footer — FIXO */}
-        <div className="border-t border-slate-200 bg-white px-6 py-4 flex-shrink-0 flex gap-3">
+        <div className="border-t border-slate-200 bg-white px-4 sm:px-6 py-4 flex-shrink-0 flex gap-3">
           <button
             type="button"
             onClick={onClose}

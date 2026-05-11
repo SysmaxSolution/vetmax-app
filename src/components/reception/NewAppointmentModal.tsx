@@ -247,10 +247,10 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4 overflow-y-auto"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
 
         {/* Header */}
-        <div className={`flex items-center justify-between px-6 py-4 border-b border-slate-100 ${isGrooming && step === 'form' ? 'bg-teal-50' : ''}`}>
+        <div className={`flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-4 border-b border-slate-100 ${isGrooming && step === 'form' ? 'bg-teal-50' : ''}`}>
           <div className="flex items-center gap-3">
             <div className={`flex h-9 w-9 items-center justify-center rounded-full ${isGrooming && step === 'form' ? 'bg-teal-600' : 'bg-teal-100'}`}>
               {isGrooming && step === 'form'
@@ -276,7 +276,7 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
 
         {/* Step 1: Search pet */}
         {step === 'search' && (
-          <div className="px-6 py-5 space-y-4">
+          <div className="px-4 sm:px-6 py-5 space-y-4 overflow-y-auto flex-1">
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1.5">Buscar Animal</label>
               <div className="relative">
@@ -322,7 +322,7 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
 
         {/* Step 2: Form */}
         {step === 'form' && (
-          <form onSubmit={handleSubmit} className={`px-6 py-5 space-y-4 ${isGrooming ? 'max-h-[75vh] overflow-y-auto' : ''}`}>
+          <form onSubmit={handleSubmit} className="px-4 sm:px-6 py-5 space-y-4 overflow-y-auto flex-1">
             {!defaultPet && (
               <button
                 type="button"
@@ -486,7 +486,7 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
             {/* ══ CONSULTA — campos de data/hora e notas ══ */}
             {!isGrooming && (
               <>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-semibold text-slate-600 mb-1.5">Data</label>
                     <DateInput

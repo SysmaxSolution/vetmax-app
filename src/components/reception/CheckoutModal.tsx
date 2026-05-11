@@ -128,10 +128,10 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
       className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4 overflow-y-auto"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden my-4">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden my-4 flex flex-col max-h-[90vh]">
 
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+        <div className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-4 border-b border-slate-100">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-teal-100">
               <Receipt className="h-5 w-5 text-teal-600" />
@@ -149,7 +149,7 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
           </button>
         </div>
 
-        <div className="px-6 py-5 space-y-5">
+        <div className="px-4 sm:px-6 py-5 space-y-5 overflow-y-auto flex-1">
 
           {/* Itens — estilo cupom fiscal */}
           <div>
@@ -281,7 +281,7 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
           {/* Método de Pagamento */}
           <div>
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Método de Pagamento</p>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {PAYMENT_OPTIONS.map(opt => (
                 <button
                   key={opt.value}
