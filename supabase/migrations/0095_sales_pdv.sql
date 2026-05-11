@@ -80,6 +80,7 @@ CREATE INDEX IF NOT EXISTS idx_sale_items_stock_item
 
 ALTER TABLE sales ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "sales_clinic_isolation" ON sales;
 CREATE POLICY "sales_clinic_isolation"
   ON sales FOR ALL TO authenticated
   USING  (clinic_id = get_user_clinic_id())
@@ -91,6 +92,7 @@ CREATE POLICY "sales_clinic_isolation"
 
 ALTER TABLE sale_items ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "sale_items_clinic_isolation" ON sale_items;
 CREATE POLICY "sale_items_clinic_isolation"
   ON sale_items FOR ALL TO authenticated
   USING  (clinic_id = get_user_clinic_id())
