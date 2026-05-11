@@ -27,7 +27,6 @@ import RoomsTab from './RoomsTab'
 import { updateUserPhone, updateUserSpecialties, getUserModuleAccess, setUserModuleAccess, updateUserNickname } from '@/lib/actions/user-management'
 import type { ClinicUserFull } from '@/lib/actions/user-management'
 import type { Room } from '@/lib/actions/rooms'
-import type { WhatsAppSettingsDisplay } from '@/lib/actions/whatsapp'
 import type { ProductPrice } from '@/lib/actions/core-management'
 import UserManagementModal from './UserManagementModal'
 
@@ -45,7 +44,6 @@ interface ManagementWorkspaceProps {
   initialCatalog:           CatalogItem[]
   initialClinicConfig:      ClinicConfig | null
   initialSettingsConfig?:   ClinicSettingsConfig | null
-  initialWhatsAppSettings:  WhatsAppSettingsDisplay | null
   initialProductPrices?:    ProductPrice[]
   initialRooms?:            Room[]
   activeModules?:           string[]
@@ -136,7 +134,7 @@ function UserInlineField({ label, value, placeholder, onSave }: {
 
 export default function ManagementWorkspace({
   initialTemplates, clinicData, users, initialInvitations, userLimit, currentUserId, userEmail, userFullName,
-  initialCatalog, initialClinicConfig, initialSettingsConfig = null, initialWhatsAppSettings, initialProductPrices = [], initialRooms = [],
+  initialCatalog, initialClinicConfig, initialSettingsConfig = null, initialProductPrices = [], initialRooms = [],
   activeModules = [],
 }: ManagementWorkspaceProps) {
   const searchParams = useSearchParams()
@@ -523,7 +521,6 @@ export default function ManagementWorkspace({
           {/* Módulos (com master key) */}
           <ModulesTab
             initialConfig={initialClinicConfig}
-            initialWhatsAppSettings={initialWhatsAppSettings}
             onToast={(type, message) => setToast({ type, message })}
           />
 

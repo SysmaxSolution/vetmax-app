@@ -5,7 +5,6 @@ import { getTemplates } from '@/lib/actions/templates'
 import { getClinicInvitations } from '@/lib/actions/invitations'
 import { getCatalog, seedDefaultCatalog } from '@/lib/actions/catalog'
 import { getClinicConfig, getClinicSettingsConfig } from '@/lib/actions/clinic-settings'
-import { getWhatsAppSettings } from '@/lib/actions/whatsapp'
 import { listProductPrices } from '@/lib/actions/core-management'
 import { getRooms } from '@/lib/actions/rooms'
 import ManagementWorkspace from '@/components/management/ManagementWorkspace'
@@ -32,7 +31,7 @@ export default async function ManagementPage() {
 
   const clinicName = (profile.clinics as unknown as { name: string } | null)?.name ?? 'Minha Clínica'
 
-  const [templatesResult, clinicResult, usersResult, invitationsResult, catalogResult, configResult, whatsAppResult, productPricesResult, roomsResult, settingsConfigResult] = await Promise.all([
+  const [templatesResult, clinicResult, usersResult, invitationsResult, catalogResult, configResult, productPricesResult, roomsResult, settingsConfigResult] = await Promise.all([
     getTemplates(),
     admin
       .from('clinics')
@@ -48,7 +47,6 @@ export default async function ManagementPage() {
     getClinicInvitations(),
     getCatalog(),
     getClinicConfig(),
-    getWhatsAppSettings(),
     listProductPrices(),
     getRooms(),
     getClinicSettingsConfig(),
@@ -63,7 +61,6 @@ export default async function ManagementPage() {
   const initialCatalog = 'error' in catalogResult ? [] : catalogResult
   const initialClinicConfig = 'error' in configResult ? null : configResult
   const initialSettingsConfig = 'error' in settingsConfigResult ? null : settingsConfigResult
-  const initialWhatsAppSettings = whatsAppResult
   const initialProductPrices = 'error' in productPricesResult ? [] : productPricesResult
   const initialRooms = Array.isArray(roomsResult) ? roomsResult : []
 
@@ -88,7 +85,6 @@ export default async function ManagementPage() {
         initialCatalog={initialCatalog}
         initialClinicConfig={initialClinicConfig}
         initialSettingsConfig={initialSettingsConfig}
-        initialWhatsAppSettings={initialWhatsAppSettings}
         initialProductPrices={initialProductPrices}
         initialRooms={initialRooms}
         activeModules={activeModules}

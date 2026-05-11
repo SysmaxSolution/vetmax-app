@@ -67,11 +67,17 @@ export function DatePicker({
 
   function calcPosition() {
     if (!triggerRef.current) return
-    const rect = triggerRef.current.getBoundingClientRect()
-    const spaceBelow = window.innerHeight - rect.bottom
-    const popupH = 320
-    const top = spaceBelow >= popupH ? rect.bottom + 4 : rect.top - popupH - 4
-    setPopupStyle({ position: 'fixed', top, left: rect.left, minWidth: rect.width, zIndex: 9999 })
+    const rect    = triggerRef.current.getBoundingClientRect()
+    const popupH  = popupRef.current?.offsetHeight ?? 300
+    const popupW  = popupRef.current?.offsetWidth  ?? 280
+    const below   = window.innerHeight - rect.bottom
+    const above   = rect.top
+    const openBelow = below >= popupH + 4 || below >= above
+    const rawTop  = openBelow ? rect.bottom + 4 : rect.top - popupH - 4
+    const top     = Math.max(8, Math.min(rawTop, window.innerHeight - popupH - 8))
+    const rawLeft = rect.left
+    const left    = Math.max(8, Math.min(rawLeft, window.innerWidth - popupW - 8))
+    setPopupStyle({ position: 'fixed', top, left, minWidth: rect.width, zIndex: 9999 })
   }
 
   useEffect(() => {
@@ -213,11 +219,18 @@ export function DateInput({
 
   function calcPosition() {
     if (!calBtnRef.current) return
-    const rect = calBtnRef.current.getBoundingClientRect()
-    const spaceBelow = window.innerHeight - rect.bottom
-    const popupH = 320
-    const top = spaceBelow >= popupH ? rect.bottom + 4 : rect.top - popupH - 4
-    setPopupStyle({ position: 'fixed', top, right: window.innerWidth - rect.right, zIndex: 9999 })
+    const rect   = calBtnRef.current.getBoundingClientRect()
+    const popupH = popupRef.current?.offsetHeight ?? 300
+    const popupW = popupRef.current?.offsetWidth  ?? 280
+    const below  = window.innerHeight - rect.bottom
+    const above  = rect.top
+    const openBelow = below >= popupH + 4 || below >= above
+    const rawTop = openBelow ? rect.bottom + 4 : rect.top - popupH - 4
+    const top    = Math.max(8, Math.min(rawTop, window.innerHeight - popupH - 8))
+    // âncora borda direita do botão; garante que o popup não saia pela esquerda
+    const rightFromVp = window.innerWidth - rect.right
+    const right  = Math.max(8, Math.min(rightFromVp, window.innerWidth - popupW - 8))
+    setPopupStyle({ position: 'fixed', top, right, zIndex: 9999 })
   }
 
   useEffect(() => {

@@ -6,9 +6,7 @@ import {
   Hotel, Syringe, FlaskConical, Scissors, ShoppingBag, Stethoscope, ClipboardList, MessageCircle, Sparkles, Bot, ShoppingCart,
 } from 'lucide-react'
 import { updateClinicConfig, type ClinicConfig } from '@/lib/actions/clinic-settings'
-import WhatsappSettings from './Settings/WhatsappSettings'
 import WhatsappIntelligentSetup from './Settings/WhatsappIntelligentSetup'
-import type { WhatsAppSettingsDisplay } from '@/lib/actions/whatsapp'
 
 // ─── Module definitions ───────────────────────────────────────────────────────
 
@@ -41,14 +39,13 @@ const MASTER_KEY_ENV = process.env.NEXT_PUBLIC_MODULE_MASTER_KEY ?? 'vetmax-MAST
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface Props {
-  initialConfig:         ClinicConfig | null
-  initialWhatsAppSettings?: WhatsAppSettingsDisplay | null
-  onToast:               (type: 'success' | 'error', msg: string) => void
+  initialConfig: ClinicConfig | null
+  onToast:       (type: 'success' | 'error', msg: string) => void
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function ModulesTab({ initialConfig, initialWhatsAppSettings, onToast }: Props) {
+export default function ModulesTab({ initialConfig, onToast }: Props) {
   const [activeModules, setActiveModules] = useState<string[]>(
     initialConfig?.active_modules ?? ['reception', 'triage', 'consultation', 'exams']
   )
@@ -239,16 +236,8 @@ export default function ModulesTab({ initialConfig, initialWhatsAppSettings, onT
         </div>
       </div>
 
-      {/* Configurações do WhatsApp (notificações) — visível quando módulo 'whatsapp' ativo */}
-      {whatsappActive && (
-        <WhatsappSettings
-          initial={initialWhatsAppSettings ?? null}
-          onToast={onToast}
-        />
-      )}
-
-      {/* WhatsApp Inteligente — setup de QR Code e bot IA */}
-      {whatsappIntelligentActive && (
+      {/* Setup WhatsApp — visível quando qualquer módulo WhatsApp está ativo */}
+      {(whatsappActive || whatsappIntelligentActive) && (
         <WhatsappIntelligentSetup onToast={onToast} />
       )}
     </div>

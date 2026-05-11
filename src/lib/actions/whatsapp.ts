@@ -596,7 +596,9 @@ function formatBRPhone(raw: string): string {
   return '55' + digits
 }
 
-/** Busca credenciais ativas da clínica do usuário logado. */
+/** Busca credenciais ativas da clínica do usuário logado.
+ *  Para a Evolution API (provedor gerenciado pela plataforma) as credenciais
+ *  vêm das variáveis de ambiente do servidor — nunca são expostas ao banco. */
 async function getActiveCredentials(): Promise<{
   instanceId: string
   token: string
@@ -623,6 +625,20 @@ async function getActiveCredentials(): Promise<{
     .single()
 
   if (!data) return null
+
+  // Para Evolution API gerenciada: sempre usa as env vars da plataforma.
+  // Assim as chaves de API nunca precisam ser armazenadas por clínica.
+  if (data.provider_name === 'evolution-api') {
+    const platformApiUrl = process.env.EVOLUTION_API_URL ?? data.api_url
+    const platformApiKey = process.env.EVOLUTION_API_KEY ?? data.token
+    return {
+      instanceId:  data.instance_id,
+      token:       platformApiKey ?? '',
+      clientToken: null,
+      apiUrl:      platformApiUrl ?? null,
+      provider:    'evolution-api',
+    }
+  }
 
   return {
     instanceId:  data.instance_id,

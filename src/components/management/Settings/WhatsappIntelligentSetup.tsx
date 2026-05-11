@@ -425,19 +425,8 @@ function DisconnectedView({ state, qrBase64, instanceName, countdown, connecting
         <div className="flex items-start gap-2.5 p-3.5 rounded-lg bg-red-50 border border-red-200">
           <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
           <div className="text-xs text-red-800">
-            <p className="font-semibold mb-0.5">Serviço WhatsApp indisponível (502/503)</p>
-            <p>O container Evolution API ou o tunnel Cloudflare não está respondendo.</p>
-            <p className="mt-1 font-mono bg-red-100 rounded px-1.5 py-0.5 inline-block">cloudflared tunnel run vetmax-wpp</p>
-          </div>
-        </div>
-      )}
-
-      {state === 'not_created' && !serviceDown && (
-        <div className="flex items-start gap-2.5 p-3.5 rounded-lg bg-blue-50 border border-blue-200">
-          <AlertCircle className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
-          <div className="text-xs text-blue-800">
-            <p className="font-semibold mb-0.5">Antes de conectar:</p>
-            <p>Certifique-se de que o Cloudflare Tunnel está ativo (<span className="font-mono">cloudflared tunnel run vetmax-wpp</span>).</p>
+            <p className="font-semibold mb-0.5">Serviço WhatsApp temporariamente indisponível</p>
+            <p>Tente novamente em alguns instantes ou entre em contato com o suporte.</p>
           </div>
         </div>
       )}
@@ -450,7 +439,6 @@ function DisconnectedView({ state, qrBase64, instanceName, countdown, connecting
           <p className="text-xs text-slate-500">
             Atualizando em <span className="font-semibold text-slate-700">{countdown}s</span>
           </p>
-          {instanceName && <p className="text-xs text-slate-400 font-mono">Instância: {instanceName}</p>}
         </div>
       ) : state === 'connecting' ? (
         <div className="flex flex-col items-center gap-3 py-8">

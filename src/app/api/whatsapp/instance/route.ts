@@ -63,15 +63,16 @@ export async function POST() {
     }
   }
 
-  // Upsert em clinic_whatsapp_settings com as credenciais da Evolution API
+  // Upsert em clinic_whatsapp_settings — apenas metadados da instância.
+  // Credenciais da plataforma (apiUrl, apiKey) ficam somente nas env vars do servidor.
   const { error: dbError } = await admin
     .from('clinic_whatsapp_settings')
     .upsert({
       clinic_id:               profile.clinic_id,
       provider_name:           'evolution-api',
-      api_url:                 apiUrl,
+      api_url:                 null,   // gerenciado via EVOLUTION_API_URL (env)
       instance_id:             instanceName,
-      token:                   apiKey,
+      token:                   null,   // gerenciado via EVOLUTION_API_KEY (env)
       client_token:            null,
       is_active:               true,
       evolution_instance_name: instanceName,
