@@ -309,23 +309,8 @@ export async function deleteStockItem(stockItemId: string): Promise<{ success: t
 
 // ─── Funções para tabela stock_items ─────────────────────────────────────────
 
-export type StockCategory =
-  | 'medication'
-  | 'controlled_medication'
-  | 'clinic_product'
-  | 'petshop'
-  | 'grooming_supply'
-  | 'aesthetics'
-  | 'other'
-  // Serviços e procedimentos (is_service = true)
-  | 'service'
-  | 'exam'
-
-export const SERVICE_CATEGORIES: StockCategory[] = ['service', 'exam']
-export const PRODUCT_CATEGORIES: StockCategory[] = [
-  'medication', 'controlled_medication', 'clinic_product',
-  'petshop', 'grooming_supply', 'aesthetics', 'other',
-]
+import type { StockCategory } from '@/lib/stock-constants'
+export type { StockCategory } from '@/lib/stock-constants'
 
 export type StockItemV2 = {
   id:           string

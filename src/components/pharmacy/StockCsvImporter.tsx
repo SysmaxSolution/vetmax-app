@@ -2,7 +2,8 @@
 
 import { useState, useRef } from 'react'
 import { Upload, Download, X, AlertTriangle, Check, Loader2, FileText } from 'lucide-react'
-import { bulkImportStockItems, type BulkImportRow, PRODUCT_CATEGORIES, SERVICE_CATEGORIES, type StockCategory } from '@/lib/actions/stock'
+import { bulkImportStockItems, type BulkImportRow } from '@/lib/actions/stock'
+import { PRODUCT_CATEGORIES, SERVICE_CATEGORIES, type StockCategory } from '@/lib/stock-constants'
 
 // ─── Templates ────────────────────────────────────────────────────────────────
 
