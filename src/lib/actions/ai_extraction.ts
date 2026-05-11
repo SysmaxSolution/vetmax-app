@@ -243,7 +243,7 @@ export async function askPatientHistory(
   const petInfo = `${pet?.name ?? 'Animal'} — ${pet?.species ?? ''}${pet?.breed ? ` (${pet.breed})` : ''}`
 
   const statusMap: Record<string, string> = {
-    observation: 'Observação', ward: 'Enfermaria', icu: 'UTI',
+    observation: 'Observação', ward: 'Enfermaria', icu: 'UTA',
     ready_for_discharge: 'Aguardando Alta', discharged: 'Alta',
   }
 

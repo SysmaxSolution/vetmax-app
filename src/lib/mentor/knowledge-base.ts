@@ -307,7 +307,7 @@ Gerenciar animais internados em um quadro Kanban visual, registrar evoluções d
 |---|---|---|---|
 | **Observação** | 👁️ | \`observation\` | Monitoramento inicial |
 | **Enfermaria** | 🏥 | \`ward\` | Estável, cuidados de rotina |
-| **UTI** | 🚨 | \`icu\` | Cuidados intensivos |
+| **UTA** | 🚨 | \`icu\` | Unidade de Terapia Animal (U.T.A) — cuidados intensivos |
 | **Pronto para Alta** | 🏠 | \`ready_for_discharge\` | Liberado clinicamente |
 
 ### Inter-Module Relationships
@@ -665,7 +665,7 @@ Assistente de onboarding e ajuda contextual em tempo real. Localiza animais no s
 | agendar, agendamento, marcar consulta, consulta futura | \`recepcao\` |
 | consulta, veterinário, soap, diagnóstico | \`consulta\` |
 | exame, laboratório, laudo, resultado | \`exames\` |
-| internação, internar, hospitalizar, UTI | \`internacao\` |
+| internação, internar, hospitalizar, UTI, UTA, U.T.A | \`internacao\` |
 | banho, tosa, grooming, tosador | \`grooming\` |
 | cadastro, novo pet, registrar animal | \`cadastro-pet\` |
 

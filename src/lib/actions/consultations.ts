@@ -387,7 +387,7 @@ export async function moveToTriage(
   const adminC = createAdminClient()
   const { data: prof } = await adminC.from('profiles').select('clinic_id').eq('id', user.id).single()
 
-  const { error } = await supabase
+  const { error } = await adminC
     .from('consultations')
     .update({ status: 'triage', updated_at: new Date().toISOString() })
     .eq('id', consultationId)
@@ -396,5 +396,28 @@ export async function moveToTriage(
   if (error) return { error: 'Erro ao mover para triagem: ' + error.message }
   revalidatePath('/dashboard/reception')
   revalidatePath('/dashboard/triage')
+  return null
+}
+
+// ─── Enviar consulta diretamente ao Consultório (sem triagem) ─────────────────
+export async function moveDirectToVet(
+  consultationId: string
+): Promise<{ error: string } | null> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const adminC = createAdminClient()
+  const { data: prof } = await adminC.from('profiles').select('clinic_id').eq('id', user.id).single()
+
+  const { error } = await adminC
+    .from('consultations')
+    .update({ status: 'in_progress', updated_at: new Date().toISOString() })
+    .eq('id', consultationId)
+    .eq('clinic_id', prof?.clinic_id)
+
+  if (error) return { error: 'Erro ao enviar ao consultório: ' + error.message }
+  revalidatePath('/dashboard/reception')
+  revalidatePath('/dashboard/vet')
   return null
 }

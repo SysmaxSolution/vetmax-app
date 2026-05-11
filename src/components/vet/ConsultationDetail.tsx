@@ -22,6 +22,7 @@ import DocumentsSection, { type PrintState } from '@/components/vet/DocumentsSec
 import ClinicalActionsSection from '@/components/vet/ClinicalActionsSection'
 import PetTimelineModal from '@/components/pet/PetTimelineModal'
 import NewAppointmentModal from '@/components/reception/NewAppointmentModal'
+import { buildStopRe } from '@/lib/voice-triggers'
 import AttachmentsSection from '@/components/ui/AttachmentsSection'
 import MergedTriageSection, { type TriageVitals } from '@/components/vet/MergedTriageSection'
 import AdmitPetModal from '@/components/hospitalization/AdmitPetModal'
@@ -305,6 +306,7 @@ export default function ConsultationDetail({
 
     recognition.onstart = () => setIsRecording(true)
 
+    const stopRe = buildStopRe()
     recognition.onresult = (event: any) => {
       let interim = ''
       for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -313,6 +315,14 @@ export default function ConsultationDetail({
         } else {
           interim += event.results[i][0].transcript
         }
+      }
+      // Auto-stop via comando de voz (ex: "finalizar", "salvar evolução")
+      const fullText = finalTranscriptRef.current + interim
+      if (stopRe.test(fullText)) {
+        // Remove o comando do texto final antes de parar
+        finalTranscriptRef.current = finalTranscriptRef.current.replace(stopRe, '').trim()
+        recognition.stop()
+        return
       }
       // Auto-stop: reinicia o timer de 15s a cada resultado de fala
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)

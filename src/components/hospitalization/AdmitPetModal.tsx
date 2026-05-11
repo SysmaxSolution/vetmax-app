@@ -21,8 +21,8 @@ const WARD_OPTIONS: { value: HospitalizationStatus; label: string; description: 
   },
   {
     value:       'icu',
-    label:       'UTI',
-    description: 'Cuidados intensivos — paciente em estado crítico',
+    label:       'UTA',
+    description: 'Unidade de Terapia Animal — cuidados intensivos',
     color:       'border-red-300 bg-red-50 text-red-700',
   },
 ]

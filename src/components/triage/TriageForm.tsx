@@ -27,6 +27,7 @@ import { REPRODUCTIVE_STATUS_OPTIONS } from '@/types'
 import { Toast } from '@/components/ui/toast'
 import { DatePicker } from '@/components/ui/DatePicker'
 import VaccinationCard from '@/components/vet/VaccinationCard'
+import { buildStopRe } from '@/lib/voice-triggers'
 import VaccineStatusBadges from '@/components/vet/VaccineStatusBadges'
 import { BehaviorTagsBadges } from '@/components/ui/BehaviorTagsBadges'
 import WhatsAppNotificationModal from '@/components/whatsapp/WhatsAppNotificationModal'
@@ -142,6 +143,7 @@ export default function TriageForm({
         setLiveTranscript(prevSaved)
       }
 
+      const stopRe = buildStopRe()
       recognition.onresult = (event: any) => {
         let interim = ''
         for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -150,6 +152,13 @@ export default function TriageForm({
           } else {
             interim = event.results[i][0].transcript
           }
+        }
+        // Auto-stop via comando de voz (ex: "finalizar", "salvar evolução")
+        const fullText = finalTranscriptRef.current + interim
+        if (stopRe.test(fullText)) {
+          finalTranscriptRef.current = finalTranscriptRef.current.replace(stopRe, '').trim()
+          recognition.stop()
+          return
         }
         // Auto-stop: reinicia o timer de 15s a cada resultado de fala
         if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)

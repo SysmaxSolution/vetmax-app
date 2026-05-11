@@ -2,12 +2,13 @@
 
 import { useState, useTransition } from 'react'
 import Link from 'next/link'
-import { Clock, CheckCircle2, ArrowRight, Stethoscope, AlertCircle, Weight, Thermometer, History, Pencil, Plus, X, Search } from 'lucide-react'
+import { Clock, CheckCircle2, ArrowRight, Stethoscope, AlertCircle, Weight, Thermometer, History, Pencil, Plus, X, Search, UserPlus } from 'lucide-react'
 import type { VetQueueItem, VetCompletedItem } from '@/lib/actions/vet'
 import { addPatientDirectToVet } from '@/lib/actions/vet'
 import { searchPatientsForTriage, type TriagePatientSearchResult } from '@/lib/actions/triage'
 import { useRealtimeSync } from '@/hooks/useRealtimeSync'
 import { BehaviorTagsBadges } from '@/components/ui/BehaviorTagsBadges'
+import PatientFullModal from '@/components/patients/PatientFullModal'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -66,6 +67,7 @@ export default function VetWorkspace({ queue, completed, clinicId }: VetWorkspac
 
   const [tab, setTab] = useState<'fila' | 'historico'>('fila')
   const [showAddModal, setShowAddModal]       = useState(false)
+  const [addTab, setAddTab]                   = useState<'buscar' | 'novo'>('buscar')
   const [addSearch, setAddSearch]             = useState('')
   const [addResults, setAddResults]           = useState<TriagePatientSearchResult[]>([])
   const [addSelected, setAddSelected]         = useState<TriagePatientSearchResult | null>(null)
@@ -73,6 +75,8 @@ export default function VetWorkspace({ queue, completed, clinicId }: VetWorkspac
   const [addLoading, setAddLoading]           = useState(false)
   const [addError, setAddError]               = useState('')
   const [addSuccess, setAddSuccess]           = useState('')
+  const [showNewPatientModal, setShowNewPatientModal] = useState(false)
+  const [pendingNewPetId, setPendingNewPetId] = useState<string | null>(null)
   const [, startTransition] = useTransition()
 
   async function handleAddSearch(q: string) {
@@ -341,78 +345,149 @@ export default function VetWorkspace({ queue, completed, clinicId }: VetWorkspac
                 <Plus className="h-5 w-5 text-blue-600" />
                 <h2 className="text-base font-semibold text-slate-900">Incluir Paciente no Consultório</h2>
               </div>
-              <button onClick={() => { setShowAddModal(false); setAddSearch(''); setAddResults([]); setAddSelected(null); setAddError('') }} className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => { setShowAddModal(false); setAddTab('buscar'); setAddSearch(''); setAddResults([]); setAddSelected(null); setAddError('') }} className="text-slate-400 hover:text-slate-600">
                 <X className="h-5 w-5" />
               </button>
             </div>
+
+            {/* Abas */}
+            <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
+              <button
+                type="button"
+                onClick={() => { setAddTab('buscar'); setAddError('') }}
+                className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${addTab === 'buscar' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                <Search className="h-3.5 w-3.5" /> Buscar Existente
+              </button>
+              <button
+                type="button"
+                onClick={() => { setAddTab('novo'); setAddError('') }}
+                className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${addTab === 'novo' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                <UserPlus className="h-3.5 w-3.5" /> Novo Cadastro
+              </button>
+            </div>
+
             {addSuccess && <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">{addSuccess}</p>}
             {addError && <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{addError}</p>}
-            <div className="relative">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Buscar Animal</label>
-              <div className="relative">
-                <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
-                  <Search className="h-4 w-4 text-slate-400" />
+
+            {addTab === 'buscar' && (
+              <>
+                <div className="relative">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Buscar Animal</label>
+                  <div className="relative">
+                    <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
+                      <Search className="h-4 w-4 text-slate-400" />
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Nome do pet ou tutor..."
+                      value={addSelected ? `${addSelected.name} — ${addSelected.tutor.name}` : addSearch}
+                      onChange={e => handleAddSearch(e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg pl-10 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      autoFocus
+                    />
+                  </div>
+                  {addResults.length > 0 && !addSelected && (
+                    <div className="absolute z-10 top-full left-0 right-0 bg-white border border-slate-200 rounded-lg shadow-lg mt-1 max-h-40 overflow-y-auto">
+                      {addResults.map(r => (
+                        <button
+                          key={r.id}
+                          type="button"
+                          onClick={() => { setAddSelected(r); setAddResults([]) }}
+                          className="w-full text-left px-4 py-2 hover:bg-slate-50 text-sm border-b border-slate-100 last:border-0"
+                        >
+                          <span className="font-semibold">{r.name}</span>
+                          <span className="text-slate-500 ml-2">Tutor: {r.tutor.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <input
-                  type="text"
-                  placeholder="Nome do pet ou tutor..."
-                  value={addSelected ? `${addSelected.name} — ${addSelected.tutor.name}` : addSearch}
-                  onChange={e => handleAddSearch(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg pl-10 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  autoFocus
-                />
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Motivo da Visita</label>
+                  <select
+                    value={addReason}
+                    onChange={e => setAddReason(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {VISIT_REASON_OPTIONS.map(o => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  O pet entrará diretamente no Consultório. Vitais devem ser coletados durante a consulta.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setShowAddModal(false); setAddTab('buscar'); setAddSearch(''); setAddResults([]); setAddSelected(null); setAddError('') }}
+                    className="flex-1 px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={addLoading || !addSelected}
+                    onClick={handleAddSubmit}
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
+                  >
+                    <Plus className="h-4 w-4" />
+                    {addLoading ? 'Incluindo...' : 'Incluir na Fila'}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {addTab === 'novo' && (
+              <div className="space-y-3">
+                <p className="text-sm text-slate-600">
+                  Cadastre tutor e pet e inicie a consulta imediatamente.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => { setShowAddModal(false); setShowNewPatientModal(true) }}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors"
+                >
+                  <UserPlus className="h-4 w-4" />
+                  Abrir Formulário de Cadastro
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowAddModal(false); setAddTab('buscar') }}
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Cancelar
+                </button>
               </div>
-              {addResults.length > 0 && !addSelected && (
-                <div className="absolute z-10 top-full left-0 right-0 bg-white border border-slate-200 rounded-lg shadow-lg mt-1 max-h-40 overflow-y-auto">
-                  {addResults.map(r => (
-                    <button
-                      key={r.id}
-                      type="button"
-                      onClick={() => { setAddSelected(r); setAddResults([]) }}
-                      className="w-full text-left px-4 py-2 hover:bg-slate-50 text-sm border-b border-slate-100 last:border-0"
-                    >
-                      <span className="font-semibold">{r.name}</span>
-                      <span className="text-slate-500 ml-2">Tutor: {r.tutor.name}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Motivo da Visita</label>
-              <select
-                value={addReason}
-                onChange={e => setAddReason(e.target.value)}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {VISIT_REASON_OPTIONS.map(o => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </div>
-            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-              O pet entrará diretamente no Consultório. Vitais devem ser coletados durante a consulta.
-            </p>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => { setShowAddModal(false); setAddSearch(''); setAddResults([]); setAddSelected(null); setAddError('') }}
-                className="flex-1 px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                disabled={addLoading || !addSelected}
-                onClick={handleAddSubmit}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
-              >
-                <Plus className="h-4 w-4" />
-                {addLoading ? 'Incluindo...' : 'Incluir na Fila'}
-              </button>
-            </div>
+            )}
           </div>
         </div>
+      )}
+
+      {/* PatientFullModal para novo cadastro direto do Consultório */}
+      {showNewPatientModal && (
+        <PatientFullModal
+          mode="new_tutor_and_pet"
+          onClose={() => setShowNewPatientModal(false)}
+          onSuccess={async (result) => {
+            setShowNewPatientModal(false)
+            if (result?.patientId) {
+              setAddLoading(true)
+              const res = await addPatientDirectToVet({
+                patient_id:   result.patientId,
+                tutor_id:     result.tutorId ?? '',
+                visit_reason: 'consultation',
+              })
+              setAddLoading(false)
+              if (!('error' in res)) {
+                setAddSuccess(`✓ ${result.patientName ?? 'Pet'} incluído na fila!`)
+                setTimeout(() => setAddSuccess(''), 3000)
+              }
+            }
+          }}
+        />
       )}
     </div>
   )

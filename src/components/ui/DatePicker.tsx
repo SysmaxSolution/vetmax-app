@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { DayPicker } from 'react-day-picker'
 import { format, parse, isValid } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -19,6 +20,26 @@ interface DatePickerProps {
   name?: string
 }
 
+const DAY_PICKER_CLASSES = {
+  root:            'text-sm',
+  months:          'flex flex-col',
+  month:           'space-y-2',
+  month_caption:   'flex justify-center pt-1 relative items-center',
+  caption_label:   'text-sm font-semibold text-slate-900',
+  nav:             'flex items-center gap-1',
+  button_previous: 'absolute left-1 h-7 w-7 bg-transparent hover:bg-slate-100 rounded-lg flex items-center justify-center text-slate-600',
+  button_next:     'absolute right-1 h-7 w-7 bg-transparent hover:bg-slate-100 rounded-lg flex items-center justify-center text-slate-600',
+  weekdays:        'flex',
+  weekday:         'text-slate-500 w-9 font-medium text-[0.8rem] text-center',
+  week:            'flex mt-1',
+  day:             'h-9 w-9 text-center text-sm relative flex items-center justify-center rounded-lg hover:bg-teal-50 transition-colors cursor-pointer',
+  day_button:      'h-9 w-9 flex items-center justify-center rounded-lg',
+  selected:        'bg-teal-600 text-white hover:bg-teal-700 font-semibold',
+  today:           'font-bold text-teal-600',
+  outside:         'text-slate-300',
+  disabled:        'text-slate-300 cursor-not-allowed hover:bg-transparent',
+}
+
 export function DatePicker({
   value,
   onChange,
@@ -32,7 +53,9 @@ export function DatePicker({
   name,
 }: DatePickerProps) {
   const [open, setOpen] = useState(false)
-  const containerRef = useRef<HTMLDivElement>(null)
+  const [popupStyle, setPopupStyle] = useState<React.CSSProperties>({})
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const popupRef   = useRef<HTMLDivElement>(null)
 
   const selectedDate = value ? parse(value, 'yyyy-MM-dd', new Date()) : undefined
   const displayValue = selectedDate && isValid(selectedDate)
@@ -42,31 +65,47 @@ export function DatePicker({
   const minDate = min ? parse(min, 'yyyy-MM-dd', new Date()) : undefined
   const maxDate = max ? parse(max, 'yyyy-MM-dd', new Date()) : undefined
 
+  function calcPosition() {
+    if (!triggerRef.current) return
+    const rect = triggerRef.current.getBoundingClientRect()
+    const spaceBelow = window.innerHeight - rect.bottom
+    const popupH = 320
+    const top = spaceBelow >= popupH ? rect.bottom + 4 : rect.top - popupH - 4
+    setPopupStyle({ position: 'fixed', top, left: rect.left, minWidth: rect.width, zIndex: 9999 })
+  }
+
   useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false)
-      }
+    if (!open) return
+    calcPosition()
+    function handleOutside(e: MouseEvent) {
+      if (
+        triggerRef.current?.contains(e.target as Node) ||
+        popupRef.current?.contains(e.target as Node)
+      ) return
+      setOpen(false)
     }
-    if (open) {
-      document.addEventListener('mousedown', handleClickOutside)
-      return () => document.removeEventListener('mousedown', handleClickOutside)
+    function handleScroll() { calcPosition() }
+    document.addEventListener('mousedown', handleOutside)
+    window.addEventListener('scroll', handleScroll, true)
+    window.addEventListener('resize', handleScroll)
+    return () => {
+      document.removeEventListener('mousedown', handleOutside)
+      window.removeEventListener('scroll', handleScroll, true)
+      window.removeEventListener('resize', handleScroll)
     }
   }, [open])
 
   function handleSelect(date: Date | undefined) {
-    if (date) {
-      onChange(format(date, 'yyyy-MM-dd'))
-    }
+    if (date) onChange(format(date, 'yyyy-MM-dd'))
     setOpen(false)
   }
 
   return (
-    <div ref={containerRef} className={`relative ${className}`}>
-      {/* Hidden input for form compatibility */}
+    <div className={`relative ${className}`}>
       {name && <input type="hidden" name={name} value={value} />}
 
       <button
+        ref={triggerRef}
         type="button"
         id={id}
         disabled={disabled}
@@ -90,8 +129,8 @@ export function DatePicker({
         )}
       </button>
 
-      {open && !disabled && (
-        <div className="absolute z-[60] mt-1 rounded-xl border border-slate-200 bg-white shadow-lg p-3 animate-in fade-in slide-in-from-top-2 duration-150">
+      {open && !disabled && typeof window !== 'undefined' && createPortal(
+        <div ref={popupRef} style={popupStyle} className="rounded-xl border border-slate-200 bg-white shadow-xl p-3 animate-in fade-in duration-150">
           <DayPicker
             mode="single"
             selected={selectedDate}
@@ -102,28 +141,11 @@ export function DatePicker({
               ...(minDate ? [{ before: minDate }] : []),
               ...(maxDate ? [{ after: maxDate }] : []),
             ]}
-            classNames={{
-              root:          'text-sm',
-              months:        'flex flex-col',
-              month:         'space-y-2',
-              month_caption: 'flex justify-center pt-1 relative items-center',
-              caption_label: 'text-sm font-semibold text-slate-900',
-              nav:           'flex items-center gap-1',
-              button_previous: 'absolute left-1 h-7 w-7 bg-transparent hover:bg-slate-100 rounded-lg flex items-center justify-center text-slate-600',
-              button_next:     'absolute right-1 h-7 w-7 bg-transparent hover:bg-slate-100 rounded-lg flex items-center justify-center text-slate-600',
-              weekdays:      'flex',
-              weekday:       'text-slate-500 w-9 font-medium text-[0.8rem] text-center',
-              week:          'flex mt-1',
-              day:           'h-9 w-9 text-center text-sm relative flex items-center justify-center rounded-lg hover:bg-teal-50 transition-colors cursor-pointer',
-              day_button:    'h-9 w-9 flex items-center justify-center rounded-lg',
-              selected:      'bg-teal-600 text-white hover:bg-teal-700 font-semibold',
-              today:         'font-bold text-teal-600',
-              outside:       'text-slate-300',
-              disabled:      'text-slate-300 cursor-not-allowed hover:bg-transparent',
-            }}
+            classNames={DAY_PICKER_CLASSES}
             required={required}
           />
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )
@@ -183,15 +205,37 @@ export function DateInput({
 
   const [inputVal, setInputVal] = useState(isoToDisplay(value))
   const [open, setOpen]         = useState(false)
-  const containerRef            = useRef<HTMLDivElement>(null)
+  const [popupStyle, setPopupStyle] = useState<React.CSSProperties>({})
+  const calBtnRef  = useRef<HTMLButtonElement>(null)
+  const popupRef   = useRef<HTMLDivElement>(null)
 
   useEffect(() => { setInputVal(isoToDisplay(value)) }, [value])
 
+  function calcPosition() {
+    if (!calBtnRef.current) return
+    const rect = calBtnRef.current.getBoundingClientRect()
+    const spaceBelow = window.innerHeight - rect.bottom
+    const popupH = 320
+    const top = spaceBelow >= popupH ? rect.bottom + 4 : rect.top - popupH - 4
+    setPopupStyle({ position: 'fixed', top, right: window.innerWidth - rect.right, zIndex: 9999 })
+  }
+
   useEffect(() => {
-    function onOutside(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false)
+    if (!open) return
+    calcPosition()
+    function handleOutside(e: MouseEvent) {
+      if (calBtnRef.current?.contains(e.target as Node) || popupRef.current?.contains(e.target as Node)) return
+      setOpen(false)
     }
-    if (open) { document.addEventListener('mousedown', onOutside); return () => document.removeEventListener('mousedown', onOutside) }
+    function handleScroll() { calcPosition() }
+    document.addEventListener('mousedown', handleOutside)
+    window.addEventListener('scroll', handleScroll, true)
+    window.addEventListener('resize', handleScroll)
+    return () => {
+      document.removeEventListener('mousedown', handleOutside)
+      window.removeEventListener('scroll', handleScroll, true)
+      window.removeEventListener('resize', handleScroll)
+    }
   }, [open])
 
   const minDate = min ? parse(min, 'yyyy-MM-dd', new Date()) : undefined
@@ -219,7 +263,7 @@ export function DateInput({
   }
 
   return (
-    <div ref={containerRef} className={`relative ${className}`}>
+    <div className={`relative ${className}`}>
       {name && <input type="hidden" name={name} value={value} />}
       <div className="flex items-center gap-1">
         <input
@@ -237,6 +281,7 @@ export function DateInput({
           }`}
         />
         <button
+          ref={calBtnRef}
           type="button"
           disabled={disabled}
           onClick={() => setOpen(v => !v)}
@@ -247,8 +292,8 @@ export function DateInput({
         </button>
       </div>
 
-      {open && !disabled && (
-        <div className="absolute z-[60] mt-1 right-0 rounded-xl border border-slate-200 bg-white shadow-lg p-3 animate-in fade-in slide-in-from-top-2 duration-150">
+      {open && !disabled && typeof window !== 'undefined' && createPortal(
+        <div ref={popupRef} style={popupStyle} className="rounded-xl border border-slate-200 bg-white shadow-xl p-3 animate-in fade-in duration-150">
           <DayPicker
             mode="single"
             selected={isValid(selectedDate) ? selectedDate : undefined}
@@ -259,27 +304,10 @@ export function DateInput({
               ...(minDate ? [{ before: minDate }] : []),
               ...(maxDate ? [{ after: maxDate }] : []),
             ]}
-            classNames={{
-              root:            'text-sm',
-              months:          'flex flex-col',
-              month:           'space-y-2',
-              month_caption:   'flex justify-center pt-1 relative items-center',
-              caption_label:   'text-sm font-semibold text-slate-900',
-              nav:             'flex items-center gap-1',
-              button_previous: 'absolute left-1 h-7 w-7 bg-transparent hover:bg-slate-100 rounded-lg flex items-center justify-center text-slate-600',
-              button_next:     'absolute right-1 h-7 w-7 bg-transparent hover:bg-slate-100 rounded-lg flex items-center justify-center text-slate-600',
-              weekdays:        'flex',
-              weekday:         'text-slate-500 w-9 font-medium text-[0.8rem] text-center',
-              week:            'flex mt-1',
-              day:             'h-9 w-9 text-center text-sm relative flex items-center justify-center rounded-lg hover:bg-teal-50 transition-colors cursor-pointer',
-              day_button:      'h-9 w-9 flex items-center justify-center rounded-lg',
-              selected:        'bg-teal-600 text-white hover:bg-teal-700 font-semibold',
-              today:           'font-bold text-teal-600',
-              outside:         'text-slate-300',
-              disabled:        'text-slate-300 cursor-not-allowed hover:bg-transparent',
-            }}
+            classNames={DAY_PICKER_CLASSES}
           />
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )
@@ -297,16 +325,43 @@ interface TimePickerProps {
 }
 
 export function TimePicker({ value, onChange, disabled, className = '', id, name }: TimePickerProps) {
+  const [raw, setRaw] = useState(value || '09:00')
+  useEffect(() => { setRaw(value || '09:00') }, [value])
+
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const digits = e.target.value.replace(/\D/g, '').slice(0, 4)
+    let masked = digits
+    if (digits.length > 2) masked = `${digits.slice(0, 2)}:${digits.slice(2)}`
+    setRaw(masked)
+    if (masked.length === 5) {
+      const hh = parseInt(masked.slice(0, 2))
+      const mm = parseInt(masked.slice(3, 5))
+      if (hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) onChange(masked)
+    }
+  }
+
+  function handleBlur() {
+    const parts = raw.split(':')
+    if (parts.length === 2 && parts[0].length === 2 && parts[1].length === 2) return
+    setRaw(value || '09:00')
+  }
+
   return (
-    <input
-      type="time"
-      id={id}
-      name={name}
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      disabled={disabled}
-      className={`rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-900 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 disabled:bg-slate-100 disabled:text-slate-500 ${className}`}
-    />
+    <>
+      {name && <input type="hidden" name={name} value={value} />}
+      <input
+        id={id}
+        type="text"
+        value={raw}
+        onChange={handleChange}
+        onBlur={handleBlur}
+        disabled={disabled}
+        placeholder="HH:MM"
+        maxLength={5}
+        inputMode="numeric"
+        className={`rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-900 text-center font-mono focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 disabled:bg-slate-100 disabled:text-slate-500 ${className}`}
+      />
+    </>
   )
 }
 

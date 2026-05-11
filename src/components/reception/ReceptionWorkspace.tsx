@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useTransition } from 'react'
 import { useRealtimeSync } from '@/hooks/useRealtimeSync'
 import { searchTutorsAndPatients, getTutorWithPatients, addPatientToTutor } from '@/lib/actions/tutors'
-import { checkInPatient, moveToTriage, getReceptionHistory } from '@/lib/actions/consultations'
+import { checkInPatient, moveToTriage, moveDirectToVet, getReceptionHistory } from '@/lib/actions/consultations'
 import PatientFullModal from '@/components/patients/PatientFullModal'
 import { CheckInModal } from './CheckInModal'
 import PetTimelineModal from '@/components/pet/PetTimelineModal'
@@ -255,12 +255,12 @@ function calcAge(birthDate: string | null): string | null {
 }
 
 // ─── Queue Card ───────────────────────────────────────────────────────────────
-function QueueCard({ item, onMoveToTriage }: { item: ReceptionQueueItem; onMoveToTriage: (id: string) => void }) {
+function QueueCard({ item, onMoveToTriage, triageActive }: { item: ReceptionQueueItem; onMoveToTriage: (id: string) => void; triageActive: boolean }) {
   const hasPendingPayment = item.payment_status === 'pending'
   const age = calcAge(item.patient.birth_date ?? null)
   return (
     <div
-      title="Duplo clique para chamar triagem"
+      title={triageActive ? 'Duplo clique para chamar triagem' : 'Duplo clique para enviar ao consultório'}
       onDoubleClick={() => onMoveToTriage(item.id)}
       className={`flex items-center gap-4 rounded-2xl border bg-white px-5 py-4 shadow-sm hover:shadow transition-shadow cursor-pointer select-none ${
         hasPendingPayment ? 'border-red-300' : 'border-slate-200'
@@ -306,9 +306,9 @@ function QueueCard({ item, onMoveToTriage }: { item: ReceptionQueueItem; onMoveT
         <button
           data-mentor-step="reception-call-triage-btn"
           onClick={() => onMoveToTriage(item.id)}
-          className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 transition-colors"
+          className={`rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-colors ${triageActive ? 'bg-blue-600 hover:bg-blue-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}
         >
-          Chamar Triagem →
+          {triageActive ? 'Chamar Triagem →' : 'Enviar ao Consultório →'}
         </button>
       </div>
     </div>
@@ -469,9 +469,18 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
     })
   }
 
+  const triageActive = activeModules.length === 0 || activeModules.includes('triage')
+
   function handleMoveToTriage(consultationId: string) {
     startTransition(async () => {
       const item = queue.find(c => c.id === consultationId)
+      if (!triageActive) {
+        const err = await moveDirectToVet(consultationId)
+        if (err) { showToast(err.error, 'error'); return }
+        setQueue(q => q.filter(c => c.id !== consultationId))
+        showToast('Pet encaminhado direto ao Consultório.')
+        return
+      }
       const err = await moveToTriage(consultationId)
       if (err) { showToast(err.error, 'error'); return }
       setQueue(q => q.filter(c => c.id !== consultationId))
@@ -731,7 +740,7 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
           ) : (
             <div data-mentor-step="reception-queue" className="space-y-3">
               {queue.map(item => (
-                <QueueCard key={item.id} item={item} onMoveToTriage={handleMoveToTriage} />
+                <QueueCard key={item.id} item={item} onMoveToTriage={handleMoveToTriage} triageActive={triageActive} />
               ))}
             </div>
           )}

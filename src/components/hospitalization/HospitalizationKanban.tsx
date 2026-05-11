@@ -24,7 +24,7 @@ import WhatsAppNotificationModal from '@/components/whatsapp/WhatsAppNotificatio
 const WARD_LABELS: Record<string, string> = {
   observation: 'Observação',
   ward:        'Enfermaria',
-  icu:         'UTI',
+  icu:         'UTA',
 }
 
 // ─── Status padrão de evolução por ala ───────────────────────────────────────
@@ -66,7 +66,7 @@ const COLUMNS: {
   },
   {
     status:      'icu',
-    label:       'UTI',
+    label:       'UTA',
     emoji:       '🚨',
     bg:          'bg-rose-50',
     border:      'border-rose-200',
@@ -634,7 +634,7 @@ function KanbanCard({ card, onDragStart, onDragEnd, onDischarge, onOpen }: CardP
 
 function printDischargePdf(s: DischargeSummary) {
   const statusLabels: Record<string, string> = {
-    observation: 'Observação', ward: 'Enfermaria', icu: 'UTI',
+    observation: 'Observação', ward: 'Enfermaria', icu: 'UTA',
     ready_for_discharge: 'Aguardando Alta', discharged: 'Alta',
   }
   const levelColor: Record<string, string> = {
