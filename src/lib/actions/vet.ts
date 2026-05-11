@@ -320,12 +320,14 @@ export async function addPatientDirectToVet(params: {
   const { data, error } = await admin
     .from('consultations')
     .insert({
-      clinic_id:       profile.clinic_id,
-      patient_id:      params.patient_id,
-      visit_reason:    params.visit_reason,
-      status:          'in_progress',
-      payment_status:  'pending',
+      clinic_id:          profile.clinic_id,
+      patient_id:         params.patient_id,
+      visit_reason:       params.visit_reason,
+      status:             'in_progress',
+      payment_status:     'pending',
       is_reviewed_by_vet: false,
+      inclusion_source:   'direct_inclusion',
+      vet_notes:          'Pet incluso sem consulta — exame solicitado diretamente.',
     })
     .select('id')
     .single()

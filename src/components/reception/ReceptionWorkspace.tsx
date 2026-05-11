@@ -593,7 +593,28 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
           loadingKanban ? (
             <div className="flex items-center justify-center py-12 text-sm text-slate-500">Carregando Kanban...</div>
           ) : (
-            <AgendaKanban initialColumns={kanbanColumns} clinicId={clinicId} />
+            <AgendaKanban
+              initialColumns={kanbanColumns}
+              clinicId={clinicId}
+              checkinRequiredFields={checkinRequiredFields}
+              onScheduledCheckin={card => {
+                startTransition(async () => {
+                  const tutorData = await getTutorWithPatients(card.tutor.id)
+                  setCheckInModal({
+                    mode: 'scheduled_checkin',
+                    patientId:             card.patient.id,
+                    patientName:           card.patient.name,
+                    tutorId:               card.tutor.id,
+                    tutorName:             card.tutor.name,
+                    tutorAddress:          !('error' in tutorData) ? tutorData.tutor.address : null,
+                    tutorEmergencyContact: !('error' in tutorData) ? tutorData.tutor.emergency_contact : null,
+                    consultationId:        card.id,
+                    visitReason:           card.visit_reason as VisitReason,
+                    scheduledDate:         card.scheduled_date,
+                  })
+                })
+              }}
+            />
           )
         )}
 

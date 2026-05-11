@@ -18,6 +18,7 @@ export interface AgendaCard {
     photo_url: string | null
   }
   tutor: {
+    id: string
     name: string
   }
   vet: {
@@ -54,7 +55,7 @@ export async function getAgendaBoard(date?: string): Promise<AgendaColumn[] | { 
     .select(`
       id, status, visit_reason, created_at, scheduled_date,
       patients!inner(id, name, species, photo_url),
-      tutors:patients!inner(tutor:tutors(name)),
+      tutors:patients!inner(tutor:tutors(id, name)),
       vet:profiles(id, full_name)
     `)
     .in('status', KANBAN_COLUMNS.map(c => c.key))
@@ -90,7 +91,7 @@ export async function getAgendaBoard(date?: string): Promise<AgendaColumn[] | { 
         species: c.patients?.species ?? 'dog',
         photo_url: c.patients?.photo_url ?? null,
       },
-      tutor: { name: c.patients?.tutors?.name ?? '—' },
+      tutor: { id: c.patients?.tutor_id ?? '', name: c.patients?.tutors?.name ?? '—' },
       vet: c.profiles ? { id: c.profiles.id, full_name: c.profiles.full_name } : null,
     }))
 
@@ -112,7 +113,7 @@ export async function getAgendaBoard(date?: string): Promise<AgendaColumn[] | { 
       species: c.patients?.species ?? 'dog',
       photo_url: c.patients?.photo_url ?? null,
     },
-    tutor: { name: c.tutors?.tutor?.name ?? '—' },
+    tutor: { id: c.tutors?.tutor?.id ?? '', name: c.tutors?.tutor?.name ?? '—' },
     vet: c.vet ? { id: c.vet.id, full_name: c.vet.full_name } : null,
   }))
 

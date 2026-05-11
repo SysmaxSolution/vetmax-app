@@ -30,11 +30,13 @@ const VISIT_REASON_LABELS: Record<string, string> = {
 interface Props {
   initialColumns: AgendaColumn[]
   clinicId: string
+  checkinRequiredFields?: string[]
+  onScheduledCheckin?: (card: AgendaCard) => void
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export default function AgendaKanban({ initialColumns, clinicId }: Props) {
+export default function AgendaKanban({ initialColumns, clinicId, checkinRequiredFields, onScheduledCheckin }: Props) {
   const [columns, setColumns] = useState<AgendaColumn[]>(initialColumns)
   const [dragOverCol, setDragOverCol] = useState<ConsultationStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -63,6 +65,12 @@ export default function AgendaKanban({ initialColumns, clinicId }: Props) {
     if (navigator.maxTouchPoints > 0) return  // não disparar em touch
     if (card.status !== 'scheduled') return
     if (checkingInId) return
+
+    // Fallback G-09: se houver campos obrigatórios configurados, abre o modal
+    if (checkinRequiredFields && checkinRequiredFields.length > 0 && onScheduledCheckin) {
+      onScheduledCheckin(card)
+      return
+    }
 
     setCheckingInId(card.id)
     const result = await moveAgendaCard(card.id, 'reception')
