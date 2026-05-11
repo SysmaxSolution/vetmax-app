@@ -145,18 +145,19 @@ export async function createFullPatient(
 }
 
 export interface UpdatePetData {
-  name?:                string
-  species?:             string
-  breed?:               string | null
-  birth_date?:          string | null
-  coat_color?:          string | null
-  reproductive_status?: string | null
-  medical_history?:     string | null
-  photo_url?:           string | null
-  behavior_tags?:       string[]
-  allergies?:           string | null
-  chronic_diseases?:    string | null
-  microchip_id?:        string | null
+  name?:                  string
+  species?:               string
+  breed?:                 string | null
+  birth_date?:            string | null
+  birth_date_estimated?:  boolean
+  coat_color?:            string | null
+  reproductive_status?:   string | null
+  medical_history?:       string | null
+  photo_url?:             string | null
+  behavior_tags?:         string[]
+  allergies?:             string | null
+  chronic_diseases?:      string | null
+  microchip_id?:          string | null
 }
 
 export async function updatePetProfile(

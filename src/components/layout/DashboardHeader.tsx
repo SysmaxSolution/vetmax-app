@@ -147,13 +147,13 @@ export default function DashboardHeader({
               ))}
             </select>
           )}
-          <span className="text-sm text-slate-600">
-            {isSysmax ? (
-              <span className="font-semibold text-purple-700">SysMax</span>
-            ) : (
-              <>Olá, <span className="font-semibold text-slate-900">{userName}</span></>
-            )}
-          </span>
+          {isSysmax ? (
+            <span className="text-sm font-semibold text-purple-700">SysMax</span>
+          ) : (
+            <Link href="/dashboard/profile" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">
+              Olá, <span className="font-semibold">{userName}</span>
+            </Link>
+          )}
         </div>
       </div>
 

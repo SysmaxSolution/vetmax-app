@@ -265,14 +265,37 @@ export default function ClinicalActionsSection({
         </div>
       )}
 
-      {/* Lista */}
+      {/* Lista agrupada por via de aplicação (C-01) */}
       {medications.length === 0 ? (
         <div className="px-6 py-8 text-center text-slate-400 text-sm">
           Nenhuma medicação registrada.{!isFinalized && <> Use o microfone ou clique em "Adicionar".</>}
         </div>
-      ) : (
+      ) : (() => {
+        // Agrupa por via; sem via vai para 'other'
+        const groups: Record<string, typeof medications> = {}
+        for (const med of medications) {
+          const key = med.route || 'other'
+          if (!groups[key]) groups[key] = []
+          groups[key].push(med)
+        }
+        // Ordem de exibição: oral primeiro, depois IV, IM, SC, topical, other
+        const ORDER = ['oral', 'IV', 'IM', 'SC', 'topical', 'other']
+        const sortedKeys = [...new Set([...ORDER, ...Object.keys(groups)])].filter(k => groups[k])
+
+        return (
         <div className="divide-y divide-slate-100">
-          {medications.map(med => (
+          {sortedKeys.map(routeKey => (
+            <div key={routeKey}>
+              {/* Cabeçalho do grupo */}
+              <div className="px-6 py-1.5 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  {ROUTE_LABELS[routeKey] ?? routeKey}
+                </span>
+                {routeKey !== 'oral' && routeKey !== 'topical' && routeKey !== 'other' && (
+                  <span className="text-[9px] font-semibold text-blue-600 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded uppercase tracking-wide">{routeKey}</span>
+                )}
+              </div>
+              {groups[routeKey].map(med => (
             <div key={med.id}>
               {editingId === med.id ? (
                 <div className="px-6 py-4 bg-emerald-50/40 border-l-2 border-emerald-400 space-y-3">
@@ -367,8 +390,11 @@ export default function ClinicalActionsSection({
               )}
             </div>
           ))}
+            </div>
+          ))}
         </div>
-      )}
+        )
+      })()}
     </div>
   )
 }

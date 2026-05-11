@@ -56,6 +56,7 @@ export default async function ExamDetailPage({ params }: Props) {
         templates={templates}
         initialDocuments={initialDocuments}
         initialAttachments={initialAttachments}
+        userRole={profile.role}
       />
     </div>
   )

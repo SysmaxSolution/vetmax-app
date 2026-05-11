@@ -126,6 +126,33 @@ export async function updateUserSpecialties(
   return { success: true }
 }
 
+export async function updateOwnProfile(data: {
+  full_name?: string
+  nickname?:  string
+  phone?:     string
+  crmv?:      string
+  specialties?: string[]
+  photo_url?: string | null
+}): Promise<{ success: true } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const patch: Record<string, unknown> = {}
+  if (data.full_name   !== undefined) patch.full_name   = data.full_name.trim() || null
+  if (data.nickname    !== undefined) patch.nickname    = data.nickname.trim()  || null
+  if (data.phone       !== undefined) patch.phone       = data.phone.trim()     || null
+  if (data.crmv        !== undefined) patch.crmv        = data.crmv.trim().toUpperCase() || null
+  if (data.specialties !== undefined) patch.specialties = data.specialties
+  if ('photo_url' in data)            patch.photo_url   = data.photo_url
+
+  const { error } = await supabase.from('profiles').update(patch).eq('id', user.id)
+  if (error) return { error: error.message }
+  revalidatePath('/dashboard/profile')
+  revalidatePath('/dashboard')
+  return { success: true }
+}
+
 export async function updateUserNickname(
   userId: string,
   nickname: string

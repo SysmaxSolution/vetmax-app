@@ -5,14 +5,16 @@ import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft, Mic, MicOff, Loader2, AlertCircle,
-  FlaskConical, FileText, ChevronRight, X,
+  FlaskConical, FileText, ChevronRight, X, BedDouble, LogOut,
 } from 'lucide-react'
-import { returnToVet } from '@/lib/actions/exams'
+import { returnToVet, dischargeFromExams } from '@/lib/actions/exams'
 import { Toast } from '@/components/ui/toast'
 import { PetAvatar } from '@/components/ui/PetAvatar'
 import DocumentsSection, { type PrintState } from '@/components/vet/DocumentsSection'
 import AttachmentsSection from '@/components/ui/AttachmentsSection'
 import WhatsAppNotificationModal from '@/components/whatsapp/WhatsAppNotificationModal'
+import { RemoveFromQueueModal } from '@/components/ui/RemoveFromQueueModal'
+import AdmitPetModal from '@/components/hospitalization/AdmitPetModal'
 import type { VetConsultationDetail } from '@/lib/actions/vet'
 import type { DocumentTemplate } from '@/types'
 import type { PatientDocument } from '@/lib/actions/documents'
@@ -39,6 +41,7 @@ interface Props {
   templates?:          DocumentTemplate[]
   initialDocuments?:   PatientDocument[]
   initialAttachments?: Attachment[]
+  userRole?:           string
 }
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
@@ -61,6 +64,7 @@ export default function ExamDetail({
   templates = [],
   initialDocuments = [],
   initialAttachments = [],
+  userRole,
 }: Props) {
   const router = useRouter()
   const { patient, tutor, vital_signs } = consultation
@@ -72,10 +76,13 @@ export default function ExamDetail({
   const finalTranscriptRef = useRef('')
 
   // Exam notes for the vet
-  const [examNotes,    setExamNotes]    = useState('')
-  const [isReturning,  setIsReturning]  = useState(false)
-  const [showConfirm,  setShowConfirm]  = useState(false)
-  const [showWhatsApp, setShowWhatsApp] = useState(false)
+  const [examNotes,     setExamNotes]     = useState('')
+  const [isReturning,   setIsReturning]   = useState(false)
+  const [showConfirm,   setShowConfirm]   = useState(false)
+  const [showWhatsApp,  setShowWhatsApp]  = useState(false)
+  const [showRemoveModal,  setShowRemoveModal]  = useState(false)
+  const [showAdmitModal,   setShowAdmitModal]   = useState(false)
+  const [isDischargingExam, setIsDischargingExam] = useState(false)
 
   // Document suggestions from voice dictation
   const [examSuggestions, setExamSuggestions] = useState<Array<{ tipo: string; motivo: string; title: string; summary: string }>>([])
@@ -163,6 +170,16 @@ export default function ExamDetail({
     } else {
       setTimeout(() => router.push('/dashboard/exams'), 1200)
     }
+  }
+
+  // ─── Dar Alta diretamente dos Exames (E-03) ───────────────────────────────
+  const handleExamDischarge = async () => {
+    setIsDischargingExam(true)
+    const res = await dischargeFromExams(consultation.id)
+    setIsDischargingExam(false)
+    if ('error' in res) { setToast({ type: 'error', message: res.error }); return }
+    setToast({ type: 'success', message: `Alta de ${patient.name} concluída.` })
+    setTimeout(() => router.push('/dashboard/exams'), 1200)
   }
 
   // ─── Print portal ──────────────────────────────────────────────────────────
@@ -267,9 +284,19 @@ export default function ExamDetail({
 
         {/* Cabeçalho */}
         <div className="flex items-center justify-between">
-          <button onClick={() => router.back()} className="flex items-center gap-2 text-slate-600 hover:text-slate-900 font-medium text-sm transition-colors">
-            <ArrowLeft className="w-4 h-4" />Voltar
-          </button>
+          <div className="flex items-center gap-3">
+            <button onClick={() => router.back()} className="flex items-center gap-2 text-slate-600 hover:text-slate-900 font-medium text-sm transition-colors">
+              <ArrowLeft className="w-4 h-4" />Voltar
+            </button>
+            {userRole === 'admin' && (
+              <button
+                onClick={() => setShowRemoveModal(true)}
+                className="text-xs font-medium text-red-600 hover:text-red-700 border border-red-200 hover:border-red-400 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                Remover da Fila
+              </button>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             <span className="text-xs font-medium text-blue-700 bg-blue-100 px-2.5 py-1 rounded-full flex items-center gap-1">
               <FlaskConical className="w-3 h-3" />Laboratório / Exames
@@ -485,29 +512,68 @@ export default function ExamDetail({
           </div>
         </div>
 
-        {/* Botão de Devolução */}
+        {/* Botões de Desfecho */}
         <div className="bg-white rounded-xl shadow-sm border border-blue-200">
-          <div className="p-6 flex items-center justify-between gap-4">
-            <div>
-              <h2 className="text-base font-semibold text-slate-900">Concluir Exames</h2>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Devolve {patient.name} ao painel do Médico Veterinário com os laudos gerados
-              </p>
+          <div className="p-6">
+            <h2 className="text-base font-semibold text-slate-900 mb-1">Desfecho dos Exames</h2>
+            <p className="text-xs text-slate-500 mb-4">Selecione o próximo passo para {patient.name}</p>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={handleExamDischarge}
+                disabled={isDischargingExam || isReturning}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-green-300 text-green-700 text-sm font-semibold hover:bg-green-50 disabled:opacity-50 transition-colors"
+              >
+                {isDischargingExam ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogOut className="w-4 h-4" />}
+                Dar Alta
+              </button>
+              <button
+                onClick={() => setShowAdmitModal(true)}
+                disabled={isDischargingExam || isReturning}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-amber-300 text-amber-700 text-sm font-semibold hover:bg-amber-50 disabled:opacity-50 transition-colors"
+              >
+                <BedDouble className="w-4 h-4" />
+                Internar
+              </button>
+              <button
+                onClick={() => setShowConfirm(true)}
+                disabled={isReturning || isDischargingExam}
+                className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 shadow-sm transition-colors ml-auto"
+              >
+                {isReturning
+                  ? <><Loader2 className="w-4 h-4 animate-spin" />Devolvendo...</>
+                  : <><ChevronRight className="w-4 h-4" />Devolver ao Médico</>
+                }
+              </button>
             </div>
-            <button
-              onClick={() => setShowConfirm(true)}
-              disabled={isReturning}
-              className="flex items-center gap-2 px-6 py-3 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-all disabled:opacity-50 shadow-sm flex-shrink-0"
-            >
-              {isReturning
-                ? <><Loader2 className="w-4 h-4 animate-spin" />Devolvendo...</>
-                : <><ChevronRight className="w-4 h-4" />Concluir e Devolver ao Médico</>
-              }
-            </button>
           </div>
         </div>
 
       </div>
+
+      {showRemoveModal && (
+        <RemoveFromQueueModal
+          consultationId={consultation.id}
+          patientId={patient.id}
+          patientName={patient.name}
+          module="exams"
+          redirectTo="/dashboard/exams"
+          onClose={() => setShowRemoveModal(false)}
+        />
+      )}
+
+      {showAdmitModal && (
+        <AdmitPetModal
+          patientId={patient.id}
+          patientName={patient.name}
+          consultationId={consultation.id}
+          onClose={() => setShowAdmitModal(false)}
+          onSuccess={(_reason, _status) => {
+            setShowAdmitModal(false)
+            setToast({ type: 'success', message: `${patient.name} internado com sucesso! Acesse o Kanban de Internação.` })
+            setTimeout(() => router.push('/dashboard/exams'), 1500)
+          }}
+        />
+      )}
     </>
   )
 }

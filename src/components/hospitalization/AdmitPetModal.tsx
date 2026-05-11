@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useTransition } from 'react'
-import { X, BedDouble, Loader2, AlertTriangle } from 'lucide-react'
+import { useState, useTransition, useRef } from 'react'
+import { X, BedDouble, Loader2, AlertTriangle, Mic, Square } from 'lucide-react'
 import { createHospitalization, type HospitalizationStatus } from '@/lib/actions/hospitalizations'
 
 // ─── Opções de Ala ────────────────────────────────────────────────────────────
@@ -46,10 +46,31 @@ export default function AdmitPetModal({
   onClose,
   onSuccess,
 }: Props) {
-  const [status,     setStatus]     = useState<HospitalizationStatus>('observation')
-  const [reason,     setReason]     = useState('')
-  const [error,      setError]      = useState<string | null>(null)
-  const [isPending,  startTransition] = useTransition()
+  const [status,      setStatus]      = useState<HospitalizationStatus>('observation')
+  const [reason,      setReason]      = useState('')
+  const [error,       setError]       = useState<string | null>(null)
+  const [isPending,   startTransition] = useTransition()
+  const [isRecording, setIsRecording] = useState(false)
+  const recognitionRef = useRef<any>(null)
+
+  function toggleVoice() {
+    if (isRecording) { recognitionRef.current?.stop(); return }
+    const SR = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition
+    if (!SR) return
+    const rec = new SR()
+    rec.lang = 'pt-BR'
+    rec.continuous = true
+    rec.interimResults = false
+    rec.onstart  = () => setIsRecording(true)
+    rec.onend    = () => setIsRecording(false)
+    rec.onerror  = () => setIsRecording(false)
+    rec.onresult = (e: any) => {
+      const transcript = Array.from(e.results).map((r: any) => r[0].transcript).join(' ')
+      setReason(prev => prev ? `${prev} ${transcript}` : transcript)
+    }
+    recognitionRef.current = rec
+    rec.start()
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -134,15 +155,32 @@ export default function AdmitPetModal({
 
           {/* Motivo */}
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1.5">
-              Motivo da Internação <span className="text-red-500">*</span>
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-sm font-semibold text-slate-700">
+                Motivo da Internação <span className="text-red-500">*</span>
+              </label>
+              <button
+                type="button"
+                onClick={toggleVoice}
+                title={isRecording ? 'Parar gravação' : 'Ditar motivo por voz'}
+                className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                  isRecording
+                    ? 'bg-red-100 text-red-700 hover:bg-red-200 animate-pulse'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {isRecording ? <Square className="h-3 w-3" /> : <Mic className="h-3 w-3" />}
+                {isRecording ? 'Parar' : 'Ditar'}
+              </button>
+            </div>
             <textarea
               value={reason}
               onChange={e => setReason(e.target.value)}
               rows={3}
               placeholder="Ex: Gastroenterite hemorrágica severa, necessita fluidoterapia e monitoramento..."
-              className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm resize-none focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500/20"
+              className={`w-full rounded-xl border px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-rose-500/20 ${
+                isRecording ? 'border-red-300 focus:border-red-500 bg-red-50/30' : 'border-slate-300 focus:border-rose-500'
+              }`}
             />
           </div>
 

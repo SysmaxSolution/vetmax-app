@@ -7,8 +7,8 @@ import { revalidatePath } from 'next/cache'
 
 export type GroomingStatus =
   | 'received'
-  | 'bathing'
   | 'grooming'
+  | 'bathing'
   | 'waiting_pickup'
   | 'delivered'
 
@@ -276,7 +276,7 @@ export async function updateGroomingStatus(
     status,
     current_status: STATUS_TO_CURRENT[status] ?? status,
   }
-  if (status === 'bathing')    patch.started_at   = new Date().toISOString()
+  if (status === 'grooming')   patch.started_at   = new Date().toISOString()
   if (status === 'delivered')  patch.completed_at = new Date().toISOString()
 
   const { error } = await supabase

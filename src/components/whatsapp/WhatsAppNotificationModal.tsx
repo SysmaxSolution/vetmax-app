@@ -45,6 +45,7 @@ const TRIGGER_TITLES: Record<WhatsAppTrigger, string> = {
   grooming_ready_for_pickup:       'Avisar Tutor — Pet Pronto para Retirada',
   grooming_delivered:              'Mensagem de Agradecimento — Entrega Realizada',
   appointment_scheduled:           'Confirmação de Agendamento',
+  sale_receipt:                    'Enviar Recibo de Venda ao Tutor',
 }
 
 const TRIGGER_SUBTITLES: Record<WhatsAppTrigger, string> = {
@@ -62,6 +63,7 @@ const TRIGGER_SUBTITLES: Record<WhatsAppTrigger, string> = {
   grooming_ready_for_pickup:       'Avisar que o serviço foi concluído e o pet está esperando',
   grooming_delivered:              'Agradecer a visita e convidar para a próxima sessão',
   appointment_scheduled:           'Confirmar data, horário e orientar sobre pontualidade',
+  sale_receipt:                    'Comprovante de venda com itens e forma de pagamento',
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -148,6 +150,46 @@ export default function WhatsAppNotificationModal({
     if (!autoSend || !message || isGenerating || isSending || sent) return
     handleSendRef.current()
   }, [autoSend, message, isGenerating, isSending, sent])
+
+  // B-02 — Reconhecimento de voz para "sim"/"não" no modal
+  const voiceRecogRef   = useRef<any>(null)
+  const voiceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [listeningVoice, setListeningVoice] = useState(false)
+
+  useEffect(() => {
+    if (!isOpen || sent || isGenerating || autoSend) return
+    const SR = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition
+    if (!SR) return
+
+    const rec = new SR()
+    rec.lang = 'pt-BR'
+    rec.continuous = false
+    rec.interimResults = false
+
+    rec.onstart  = () => setListeningVoice(true)
+    rec.onend    = () => setListeningVoice(false)
+    rec.onerror  = () => setListeningVoice(false)
+
+    rec.onresult = (e: any) => {
+      const transcript = e.results[0]?.[0]?.transcript?.toLowerCase().trim() ?? ''
+      const yes = /^(sim|pode|manda|envia|confirma|ok|pode mandar|pode enviar)/.test(transcript)
+      const no  = /^(não|nao|agora não|agora nao|não quero|cancel)/.test(transcript)
+      if (yes) handleSendRef.current()
+      else if (no) onClose()
+    }
+
+    voiceRecogRef.current = rec
+    rec.start()
+
+    voiceTimeoutRef.current = setTimeout(() => {
+      try { rec.stop() } catch {}
+    }, 10000)
+
+    return () => {
+      if (voiceTimeoutRef.current) clearTimeout(voiceTimeoutRef.current)
+      try { voiceRecogRef.current?.stop() } catch {}
+    }
+  }, [isOpen, sent, isGenerating]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function toggleItem(id: string) {
     // Itens legados não têm signedUrl e nunca devem ser selecionados
@@ -369,24 +411,31 @@ export default function WhatsAppNotificationModal({
 
         {/* Footer */}
         {!sent && !isGenerating && (
-          <div className="flex gap-3 px-5 pb-5">
-            <button
-              onClick={onClose}
-              className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
-            >
-              Agora não
-            </button>
-            <button
-              onClick={handleSend}
-              disabled={isSending || !message.trim()}
-              className="flex-1 py-2.5 rounded-xl bg-green-600 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
-            >
-              {isSending ? (
-                <><Loader2 className="w-4 h-4 animate-spin" /> Enviando...</>
-              ) : (
-                <><Send className="w-4 h-4" /> Enviar WhatsApp</>
-              )}
-            </button>
+          <div className="px-5 pb-5 space-y-2">
+            {listeningVoice && (
+              <p className="text-center text-xs text-green-600 animate-pulse">
+                🎙️ Diga <strong>"Sim"</strong> para enviar ou <strong>"Não"</strong> para cancelar...
+              </p>
+            )}
+            <div className="flex gap-3">
+              <button
+                onClick={onClose}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                Agora não
+              </button>
+              <button
+                onClick={handleSend}
+                disabled={isSending || !message.trim()}
+                className="flex-1 py-2.5 rounded-xl bg-green-600 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+              >
+                {isSending ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Enviando...</>
+                ) : (
+                  <><Send className="w-4 h-4" /> Enviar WhatsApp</>
+                )}
+              </button>
+            </div>
           </div>
         )}
       </div>

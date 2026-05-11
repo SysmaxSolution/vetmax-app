@@ -30,6 +30,7 @@ import VaccinationCard from '@/components/vet/VaccinationCard'
 import VaccineStatusBadges from '@/components/vet/VaccineStatusBadges'
 import { BehaviorTagsBadges } from '@/components/ui/BehaviorTagsBadges'
 import WhatsAppNotificationModal from '@/components/whatsapp/WhatsAppNotificationModal'
+import { RemoveFromQueueModal } from '@/components/ui/RemoveFromQueueModal'
 
 interface TriageFormProps {
   consultation:   TriageConsultationDetail
@@ -37,6 +38,7 @@ interface TriageFormProps {
   templates:      DocumentTemplate[]
   initialVaccines?: PatientVaccine[]
   triageRequiredFields?: string[]
+  userRole?: string
 }
 
 const MUCOUS_COLORS: { value: MucousColor; label: string; color: string }[] = [
@@ -58,11 +60,13 @@ export default function TriageForm({
   templates,
   initialVaccines = [],
   triageRequiredFields = ['weight', 'temperature', 'chief_complaint'],
+  userRole,
 }: TriageFormProps) {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
   const [showWhatsApp, setShowWhatsApp] = useState(false)
+  const [showRemoveModal, setShowRemoveModal] = useState(false)
   const [isExtractingFields, setIsExtractingFields] = useState(false)
   const recognitionRef = useRef<any>(null)
   const finalTranscriptRef = useRef('')
@@ -967,6 +971,16 @@ export default function TriageForm({
             Cancelar
           </button>
 
+          {userRole === 'admin' && (
+            <button
+              type="button"
+              onClick={() => setShowRemoveModal(true)}
+              className="px-4 py-2.5 border border-red-300 text-red-600 font-medium rounded-lg hover:bg-red-50 transition-colors text-sm"
+            >
+              Remover da Fila
+            </button>
+          )}
+
           <button
             data-mentor-step="triage-save-btn"
             form="triage-form"
@@ -988,6 +1002,17 @@ export default function TriageForm({
           </button>
         </div>
       </div>
+
+      {showRemoveModal && (
+        <RemoveFromQueueModal
+          consultationId={consultation.id}
+          patientId={consultation.patient.id}
+          patientName={consultation.patient.name}
+          module="triage"
+          redirectTo="/dashboard/triage"
+          onClose={() => setShowRemoveModal(false)}
+        />
+      )}
     </>
   )
 }

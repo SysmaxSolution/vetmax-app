@@ -281,6 +281,16 @@ function QueueCard({ item, onMoveToTriage }: { item: ReceptionQueueItem; onMoveT
             </>
           )}
         </p>
+        <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+          {item.tutor.address && (
+            <span className="text-xs text-slate-400 truncate max-w-[180px]" title={item.tutor.address}>📍 {item.tutor.address}</span>
+          )}
+          {item.patient.last_visit && (
+            <span className="text-xs text-slate-400">
+              Última visita: {new Date(item.patient.last_visit).toLocaleDateString('pt-BR')}
+            </span>
+          )}
+        </div>
         {hasPendingPayment && (
           <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-700 ring-1 ring-red-300 animate-pulse">
             <span className="h-1.5 w-1.5 rounded-full bg-red-500" />

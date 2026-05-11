@@ -25,8 +25,10 @@ import NewAppointmentModal from '@/components/reception/NewAppointmentModal'
 import AttachmentsSection from '@/components/ui/AttachmentsSection'
 import MergedTriageSection, { type TriageVitals } from '@/components/vet/MergedTriageSection'
 import AdmitPetModal from '@/components/hospitalization/AdmitPetModal'
+import ExamRequestModal from '@/components/exams/ExamRequestModal'
 import EuthanasiaModal from '@/components/vet/EuthanasiaModal'
 import WhatsAppNotificationModal from '@/components/whatsapp/WhatsAppNotificationModal'
+import { RemoveFromQueueModal } from '@/components/ui/RemoveFromQueueModal'
 import { getHospitalizationByConsultation, type InternationFeedData } from '@/lib/actions/hospitalizations'
 import VaccinationCard from '@/components/vet/VaccinationCard'
 import VaccineStatusBadges from '@/components/vet/VaccineStatusBadges'
@@ -122,6 +124,7 @@ interface Props {
   initialAttachments?: Attachment[]
   initialVaccines?:    PatientVaccine[]
   flowConfig?:         FlowConfig
+  userRole?:           string
 }
 
 export default function ConsultationDetail({
@@ -134,6 +137,7 @@ export default function ConsultationDetail({
   initialAttachments = [],
   initialVaccines = [],
   flowConfig = { vet_merged_modules: [] },
+  userRole,
 }: Props) {
   const router = useRouter()
   const { patient, tutor, vital_signs, past_consultations } = consultation
@@ -217,10 +221,13 @@ export default function ConsultationDetail({
   // Cadastro Vivo — modal aberto automaticamente ao fim da gravação
   const [liveRegData, setLiveRegData] = useState<ExtractedData | null>(null)
 
+  const [showRemoveFromQueueModal, setShowRemoveFromQueueModal] = useState(false)
+
   // Discharge checklist modal
   const [showDischargeModal, setShowDischargeModal] = useState(false)
   const [showFeed, setShowFeed] = useState(false)
-  const [showAdmitModal, setShowAdmitModal] = useState(false)
+  const [showAdmitModal,       setShowAdmitModal]       = useState(false)
+  const [showExamRequestModal, setShowExamRequestModal] = useState(false)
   // Bloqueia a alta enquanto o PDF está sendo gerado/enviado ao storage
   const [isPdfUploading, setIsPdfUploading] = useState(false)
   // Último PDF gerado para injetar na lista de Anexos em tempo real
@@ -982,13 +989,23 @@ export default function ConsultationDetail({
 
         {/* ── Cabeçalho ──────────────────────────────────────────────────── */}
         <div className="flex items-center justify-between">
-          <button
-            onClick={() => router.back()}
-            className="flex items-center gap-2 text-slate-600 hover:text-slate-900 font-medium text-sm transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Voltar
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => router.back()}
+              className="flex items-center gap-2 text-slate-600 hover:text-slate-900 font-medium text-sm transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Voltar
+            </button>
+            {userRole === 'admin' && consultation.status === 'in_progress' && (
+              <button
+                onClick={() => setShowRemoveFromQueueModal(true)}
+                className="text-xs font-medium text-red-600 hover:text-red-700 border border-red-200 hover:border-red-400 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                Remover da Fila
+              </button>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">
               {VISIT_REASON_LABELS[consultation.visit_reason] ?? consultation.visit_reason}
@@ -1918,7 +1935,7 @@ export default function ConsultationDetail({
                   <button
                     type="button"
                     data-mentor-step="vet-send-to-exams-btn"
-                    onClick={() => handleFinalize('waiting_exam')}
+                    onClick={() => setShowExamRequestModal(true)}
                     disabled={isFinalizing}
                     className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-600 text-white font-semibold text-sm hover:bg-blue-700 transition-all disabled:opacity-50"
                   >
@@ -2019,6 +2036,20 @@ export default function ConsultationDetail({
         />
       )}
 
+      {/* Modal de Solicitação de Exames (E-01) */}
+      {showExamRequestModal && (
+        <ExamRequestModal
+          patientId={patient.id}
+          patientName={patient.name}
+          tutorId={tutor.id}
+          onClose={() => setShowExamRequestModal(false)}
+          onSuccess={() => {
+            setShowExamRequestModal(false)
+            handleFinalize('waiting_exam')
+          }}
+        />
+      )}
+
       {/* Modal de Internação */}
       {showAdmitModal && (
         <AdmitPetModal
@@ -2051,6 +2082,17 @@ export default function ConsultationDetail({
           }}
         />
       )}
+      {showRemoveFromQueueModal && (
+        <RemoveFromQueueModal
+          consultationId={consultation.id}
+          patientId={patient.id}
+          patientName={patient.name}
+          module="vet"
+          redirectTo="/dashboard/vet"
+          onClose={() => setShowRemoveFromQueueModal(false)}
+        />
+      )}
+
     {/* ── Modal Mágico: Cadastro Vivo ───────────────────────────────── */}
       {profileUpdates && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">

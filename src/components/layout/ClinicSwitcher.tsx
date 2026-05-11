@@ -1,7 +1,7 @@
 ﻿'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { ChevronDown, Check } from 'lucide-react'
+import { ChevronDown, Check, AlertCircle } from 'lucide-react'
 import type { UserClinicInfo } from '@/lib/actions/clinic-switcher'
 import { switchClinic } from '@/lib/actions/clinic-switcher'
 
@@ -15,6 +15,7 @@ interface ClinicSwitcherProps {
 export function ClinicSwitcher({ currentClinicId, clinicName, clinics, logoUrl }: ClinicSwitcherProps) {
   const [open, setOpen] = useState(false)
   const [switching, setSwitching] = useState<string | null>(null)
+  const [switchError, setSwitchError] = useState<string | null>(null)
   const ref = useRef<HTMLDivElement>(null)
 
   // Fecha dropdown ao clicar fora
@@ -29,7 +30,15 @@ export function ClinicSwitcher({ currentClinicId, clinicName, clinics, logoUrl }
   async function handleSwitch(clinicId: string) {
     if (clinicId === currentClinicId) { setOpen(false); return }
     setSwitching(clinicId)
-    await switchClinic(clinicId)
+    setSwitchError(null)
+    const res = await switchClinic(clinicId)
+    if ('error' in res) {
+      setSwitching(null)
+      setSwitchError(res.error)
+      return
+    }
+    // Hard navigation garante re-execução completa dos Server Components com os novos dados de perfil
+    window.location.href = '/dashboard'
   }
 
   return (
@@ -56,8 +65,15 @@ export function ClinicSwitcher({ currentClinicId, clinicName, clinics, logoUrl }
       {open && (
         <div className="absolute left-0 top-full mt-1 w-64 rounded-xl border border-slate-200 bg-white py-1 shadow-lg z-[60]">
           <p className="px-3 py-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Suas Clínicas</p>
+          {switchError && (
+            <div className="mx-3 mb-1 flex items-center gap-1.5 rounded-lg bg-red-50 px-2.5 py-1.5 text-xs text-red-700">
+              <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+              {switchError}
+            </div>
+          )}
           {clinics.map((clinic) => {
             const isCurrent = clinic.id === currentClinicId
+            const isLoading = switching === clinic.id
             return (
               <button
                 key={clinic.id}
@@ -69,14 +85,17 @@ export function ClinicSwitcher({ currentClinicId, clinicName, clinics, logoUrl }
                     : 'text-slate-700 hover:bg-slate-50'
                 }`}
               >
-                <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md bg-slate-100 text-xs font-bold text-slate-600">
-                  {clinic.name.charAt(0).toUpperCase()}
+                <div className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md text-xs font-bold ${
+                  isLoading ? 'bg-teal-100 text-teal-700' : 'bg-slate-100 text-slate-600'
+                }`}>
+                  {isLoading
+                    ? <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-teal-600 border-t-transparent" />
+                    : clinic.name.charAt(0).toUpperCase()
+                  }
                 </div>
                 <span className="flex-1 truncate">{clinic.name}</span>
-                {isCurrent && <Check className="h-3.5 w-3.5 text-teal-600" />}
-                {switching === clinic.id && (
-                  <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-teal-600 border-t-transparent" />
-                )}
+                {isCurrent && !isLoading && <Check className="h-3.5 w-3.5 text-teal-600" />}
+                {isLoading && <span className="text-[10px] text-teal-600 font-medium">Acessando…</span>}
               </button>
             )
           })}

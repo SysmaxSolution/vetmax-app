@@ -216,11 +216,13 @@ export type ReceptionQueueItem = {
     birth_date: string | null
     photo_url: string | null
     behavior_tags: string[]
+    last_visit: string | null
   }
   tutor: {
     id: string
     name: string
     phone: string
+    address: string | null
   }
 }
 
@@ -245,7 +247,7 @@ export async function getReceptionQueue(): Promise<ReceptionQueueItem[] | { erro
     .select(`
       id, status, created_at, payment_status, payment_method,
       patients ( id, name, species, breed, birth_date, photo_url, behavior_tags,
-        tutors ( id, name, phone )
+        tutors ( id, name, phone, address )
       )
     `)
     .eq('clinic_id', profile.clinic_id)
@@ -254,6 +256,26 @@ export async function getReceptionQueue(): Promise<ReceptionQueueItem[] | { erro
     .order('created_at', { ascending: true })
 
   if (error) return { error: 'Erro ao buscar fila: ' + error.message }
+
+  // Busca última visita para cada pet
+  const patientIds = [...new Set((data ?? []).map((c: any) => c.patients?.id).filter(Boolean))]
+  let lastVisitMap: Record<string, string> = {}
+  if (patientIds.length > 0) {
+    const { data: visits } = await supabase
+      .from('consultations')
+      .select('patient_id, created_at')
+      .in('patient_id', patientIds)
+      .eq('clinic_id', profile.clinic_id)
+      .eq('status', 'completed')
+      .order('created_at', { ascending: false })
+    if (visits) {
+      for (const v of visits) {
+        if (v.patient_id && !lastVisitMap[v.patient_id]) {
+          lastVisitMap[v.patient_id] = v.created_at
+        }
+      }
+    }
+  }
 
   return (data ?? []).map((c: any) => ({
     id:             c.id,
@@ -269,11 +291,13 @@ export async function getReceptionQueue(): Promise<ReceptionQueueItem[] | { erro
       birth_date:    c.patients?.birth_date ?? null,
       photo_url:     c.patients?.photo_url ?? null,
       behavior_tags: Array.isArray(c.patients?.behavior_tags) ? c.patients.behavior_tags : [],
+      last_visit:    lastVisitMap[c.patients?.id] ?? null,
     },
     tutor: {
-      id:    c.patients?.tutors?.id ?? '',
-      name:  c.patients?.tutors?.name ?? '—',
-      phone: c.patients?.tutors?.phone ?? '',
+      id:      c.patients?.tutors?.id ?? '',
+      name:    c.patients?.tutors?.name ?? '—',
+      phone:   c.patients?.tutors?.phone ?? '',
+      address: c.patients?.tutors?.address ?? null,
     },
   }))
 }

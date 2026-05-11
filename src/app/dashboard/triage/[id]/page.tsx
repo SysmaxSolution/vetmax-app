@@ -89,6 +89,7 @@ export default async function TriageScreen({
         templates={templates}
         initialVaccines={initialVaccines}
         triageRequiredFields={triageRequiredFields}
+        userRole={profile.role}
       />
     </div>
   )

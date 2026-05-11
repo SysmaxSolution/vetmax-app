@@ -3,7 +3,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { cookies } from 'next/headers'
-import { redirect } from 'next/navigation'
 
 const SYSMAX_EMAIL = 'sysmax@sysmaxsolutions.com'
 
@@ -63,7 +62,7 @@ export async function getUserClinics(): Promise<UserClinicInfo[]> {
     }))
 }
 
-export async function switchClinic(clinicId: string): Promise<{ error?: string }> {
+export async function switchClinic(clinicId: string): Promise<{ success: true } | { error: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Sessão inválida.' }
@@ -72,8 +71,7 @@ export async function switchClinic(clinicId: string): Promise<{ error?: string }
   const isSysmax = user.email?.toLowerCase() === SYSMAX_EMAIL
 
   if (isSysmax) {
-    // SysMax: acessa qualquer clínica como admin
-    await admin.from('profiles').upsert({
+    const { error } = await admin.from('profiles').upsert({
       id:        user.id,
       clinic_id: clinicId,
       full_name: 'SysMax Suporte',
@@ -81,9 +79,11 @@ export async function switchClinic(clinicId: string): Promise<{ error?: string }
       is_sysmax: true,
     }, { onConflict: 'id' })
 
+    if (error) return { error: 'Erro ao trocar clínica: ' + error.message }
+
     const cookieStore = await cookies()
     cookieStore.set(ROLE_COOKIE, 'admin', ROLE_COOKIE_OPTIONS)
-    redirect('/dashboard')
+    return { success: true }
   }
 
   // Usuário normal: valida vínculo
@@ -96,13 +96,14 @@ export async function switchClinic(clinicId: string): Promise<{ error?: string }
 
   if (!link) return { error: 'Sem acesso a esta clínica.' }
 
-  await admin
+  const { error } = await admin
     .from('profiles')
     .update({ clinic_id: clinicId, role: link.role })
     .eq('id', user.id)
 
+  if (error) return { error: 'Erro ao trocar clínica: ' + error.message }
+
   const cookieStore = await cookies()
   cookieStore.set(ROLE_COOKIE, link.role, ROLE_COOKIE_OPTIONS)
-
-  redirect('/dashboard')
+  return { success: true }
 }

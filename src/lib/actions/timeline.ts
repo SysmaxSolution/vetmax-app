@@ -481,6 +481,7 @@ export type PatientsListItem = {
   gender: string | null
   neutered: boolean
   birth_date: string | null
+  birth_date_estimated: boolean
   coat_color: string | null
   reproductive_status: string | null
   medical_history: string | null
@@ -521,7 +522,7 @@ export async function getPatientsList(
 
     let patientsQuery = supabase
       .from('patients')
-      .select('id, name, species, breed, gender, neutered, birth_date, coat_color, reproductive_status, medical_history, photo_url, behavior_tags, allergies, chronic_diseases, microchip_id, tutor_id')
+      .select('id, name, species, breed, gender, neutered, birth_date, birth_date_estimated, coat_color, reproductive_status, medical_history, photo_url, behavior_tags, allergies, chronic_diseases, microchip_id, tutor_id')
       .eq('clinic_id', clinicId)
       .order('name')
 
@@ -553,8 +554,9 @@ export async function getPatientsList(
       breed:               p.breed,
       gender:              p.gender,
       neutered:            p.neutered,
-      birth_date:          p.birth_date,
-      coat_color:          p.coat_color ?? null,
+      birth_date:           p.birth_date,
+      birth_date_estimated: p.birth_date_estimated ?? false,
+      coat_color:           p.coat_color ?? null,
       reproductive_status: p.reproductive_status ?? null,
       medical_history:     p.medical_history ?? null,
       photo_url:           p.photo_url ?? null,

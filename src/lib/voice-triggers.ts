@@ -3,6 +3,8 @@
 // Palavras de ativação e encerramento de voz — padrão global SysVetMax.
 // Importe aqui ao adicionar wake-word support em qualquer módulo.
 
+import Fuse from 'fuse.js'
+
 function esc(s: string) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') }
 
 const DEFAULT_WAKE_WORDS = [
@@ -41,4 +43,20 @@ export function buildWakeRe(custom: string[] = []): RegExp {
 
 export function buildStopRe(custom: string[] = []): RegExp {
   return new RegExp('(' + [...DEFAULT_STOP_WORDS, ...custom.map(esc)].join('|') + ')', 'i')
+}
+
+/**
+ * Testa se o texto transcrito corresponde a algum gatilho personalizado via fuzzy matching.
+ * Usa Fuse.js com threshold 0.35 para tolerar erros de pronúncia/transcrição.
+ * Complementa buildWakeRe/buildStopRe para gatilhos de clínica que não são regex.
+ */
+export function fuzzyMatchCustom(text: string, triggers: string[]): boolean {
+  if (!triggers.length || !text.trim()) return false
+  const fuse = new Fuse(triggers, { includeScore: true, threshold: 0.35 })
+  // Testa o texto completo e também cada segmento de 3+ palavras para maior recall
+  const segments = [text, ...text.split(' ').reduce<string[]>((acc, _, i, arr) => {
+    if (i + 2 < arr.length) acc.push(arr.slice(i, i + 3).join(' '))
+    return acc
+  }, [])]
+  return segments.some(seg => fuse.search(seg).some(r => (r.score ?? 1) <= 0.35))
 }
