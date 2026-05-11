@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react'
 import {
   Plus, Pencil, Trash2, ToggleLeft, ToggleRight, Loader2, X, Check,
-  Tag, Upload, AlertCircle, Download,
+  Tag, Upload, AlertCircle, Download, ExternalLink,
 } from 'lucide-react'
 import {
   listProductPrices, upsertProductPrice, deactivateProductPrice,
@@ -220,6 +220,21 @@ export default function PricingTab({ initialItems, onToast }: Props) {
 
   return (
     <div className="space-y-4">
+      {/* Aviso de unificação com o módulo Estoque */}
+      <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+        <AlertCircle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-semibold text-amber-800">Tabela unificada com o módulo Estoque</p>
+          <p className="text-xs text-amber-700 mt-0.5">
+            Serviços, exames e procedimentos agora podem ser gerenciados diretamente em{' '}
+            <a href="/dashboard/pharmacy" className="underline font-semibold inline-flex items-center gap-0.5 hover:text-amber-900">
+              Estoque → Serviços <ExternalLink className="h-3 w-3" />
+            </a>.
+            Esta tela continuará funcionando para compatibilidade, mas novos cadastros devem ser feitos no Estoque.
+          </p>
+        </div>
+      </div>
+
       {/* Hidden CSV input */}
       <input
         ref={fileRef}

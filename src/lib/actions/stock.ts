@@ -317,6 +317,15 @@ export type StockCategory =
   | 'grooming_supply'
   | 'aesthetics'
   | 'other'
+  // Serviços e procedimentos (is_service = true)
+  | 'service'
+  | 'exam'
+
+export const SERVICE_CATEGORIES: StockCategory[] = ['service', 'exam']
+export const PRODUCT_CATEGORIES: StockCategory[] = [
+  'medication', 'controlled_medication', 'clinic_product',
+  'petshop', 'grooming_supply', 'aesthetics', 'other',
+]
 
 export type StockItemV2 = {
   id:           string
@@ -330,7 +339,7 @@ export type StockItemV2 = {
   last_restock: string | null
   created_at:   string
   updated_at:   string
-  // Novos campos (migration 0099)
+  // migration 0099
   is_controlled: boolean
   brand:         string | null
   sku:           string | null
@@ -338,9 +347,11 @@ export type StockItemV2 = {
   batch_number:  string | null
   expiry_date:   string | null
   supplier:      string | null
+  // migration 0100
+  is_service:    boolean
 }
 
-const STOCK_V2_FIELDS = 'id, clinic_id, name, category, quantity, unit, min_quantity, unit_price, last_restock, created_at, updated_at, is_controlled, brand, sku, barcode, batch_number, expiry_date, supplier'
+const STOCK_V2_FIELDS = 'id, clinic_id, name, category, quantity, unit, min_quantity, unit_price, last_restock, created_at, updated_at, is_controlled, brand, sku, barcode, batch_number, expiry_date, supplier, is_service'
 
 export async function getPharmacyStockV2(): Promise<StockItemV2[] | { error: string }> {
   const ctx = await getClinicAndUser()
@@ -384,6 +395,7 @@ export async function addStockItemV2(input: {
   batch_number?:  string | null
   expiry_date?:   string | null
   supplier?:      string | null
+  is_service?:    boolean
 }): Promise<StockItemV2 | { error: string }> {
   const ctx = await getClinicAndUser()
   if (!ctx) return { error: 'Não autenticado.' }
@@ -402,6 +414,7 @@ export async function addStockItemV2(input: {
       unit_price:    input.unit_price ?? 0,
       last_restock:  input.quantity > 0 ? new Date().toISOString() : null,
       is_controlled: input.is_controlled ?? false,
+      is_service:    input.is_service ?? false,
       brand:         input.brand?.trim() || null,
       sku:           input.sku?.trim() || null,
       barcode:       input.barcode?.trim() || null,
@@ -443,6 +456,7 @@ export async function updateStockItemV2(
   if ('batch_number' in input) patch.batch_number = input.batch_number?.trim() || null
   if ('expiry_date'  in input) patch.expiry_date  = input.expiry_date          || null
   if ('supplier'     in input) patch.supplier     = input.supplier?.trim()     || null
+  if (input.is_service !== undefined) patch.is_service = input.is_service
 
   const { data, error } = await admin
     .from('stock_items')
@@ -565,6 +579,63 @@ export async function deleteStockItemV2(itemId: string): Promise<{ success: true
 
   revalidatePath('/dashboard/pharmacy')
   return { success: true }
+}
+
+// ─── Importação em massa (CSV) ────────────────────────────────────────────────
+
+export type BulkImportRow = {
+  name:          string
+  category:      StockCategory
+  quantity:      number
+  unit:          string
+  unit_price:    number
+  min_quantity:  number
+  is_service:    boolean
+  is_controlled: boolean
+  brand:         string | null
+  sku:           string | null
+  barcode:       string | null
+  batch_number:  string | null
+  expiry_date:   string | null
+  supplier:      string | null
+}
+
+export async function bulkImportStockItems(
+  rows: BulkImportRow[]
+): Promise<{ inserted: number; skipped: number } | { error: string }> {
+  const ctx = await getClinicAndUser()
+  if (!ctx) return { error: 'Não autenticado.' }
+
+  const admin = createAdminClient()
+  let inserted = 0
+  let skipped  = 0
+
+  for (const row of rows) {
+    const { error } = await admin.from('stock_items').insert({
+      clinic_id:     ctx.clinic_id,
+      name:          row.name.trim(),
+      category:      row.category,
+      quantity:      row.is_service ? 0 : row.quantity,
+      unit:          row.unit || 'un',
+      min_quantity:  row.is_service ? 0 : row.min_quantity,
+      unit_price:    row.unit_price,
+      is_service:    row.is_service,
+      is_controlled: row.is_controlled,
+      brand:         row.brand || null,
+      sku:           row.sku || null,
+      barcode:       row.barcode || null,
+      batch_number:  row.batch_number || null,
+      expiry_date:   row.expiry_date || null,
+      supplier:      row.supplier || null,
+      last_restock:  !row.is_service && row.quantity > 0 ? new Date().toISOString() : null,
+    })
+    if (error?.code === '23505') skipped++  // duplicata
+    else if (error) return { error: `Erro em "${row.name}": ${error.message}` }
+    else inserted++
+  }
+
+  revalidatePath('/dashboard/pharmacy')
+  return { inserted, skipped }
 }
 
 export async function dispenseStockItem(
