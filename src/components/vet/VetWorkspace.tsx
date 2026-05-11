@@ -212,6 +212,11 @@ export default function VetWorkspace({ queue, completed, clinicId }: VetWorkspac
                               🏥 Análise Pós-Internação
                             </span>
                           )}
+                          {!item.vital_signs && (
+                            <span className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                              Sem triagem prévia
+                            </span>
+                          )}
                         </div>
                         <p className="text-sm text-slate-500">
                           Tutor: <span className="font-medium text-slate-600">{item.tutor.name}</span>

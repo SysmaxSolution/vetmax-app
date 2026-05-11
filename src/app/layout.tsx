@@ -4,6 +4,11 @@ import './globals.css'
 export const metadata: Metadata = {
   title: 'SysVetMax — HIS Veterinário',
   description: 'Sistema de Informação Hospitalar Veterinário com IA e transcrição por voz',
+  openGraph: {
+    title: 'SysVetMax — HIS Veterinário',
+    description: 'Sistema de Informação Hospitalar Veterinário com IA e transcrição por voz',
+    type: 'website',
+  },
 }
 
 export default function RootLayout({
