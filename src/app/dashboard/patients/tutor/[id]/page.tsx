@@ -28,10 +28,11 @@ export const metadata: Metadata = {
 }
 
 interface PageProps {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
 export default async function TutorRightsDashboard({ params }: PageProps) {
+  const { id } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -54,7 +55,7 @@ export default async function TutorRightsDashboard({ params }: PageProps) {
   const { data: tutor } = await supabase
     .from('tutors')
     .select('id, name, email, phone, cpf, whatsapp_consent, created_at')
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('clinic_id', profile.clinic_id)
     .single()
 
@@ -64,12 +65,12 @@ export default async function TutorRightsDashboard({ params }: PageProps) {
   const { data: pets } = await supabase
     .from('pets')
     .select('id, name, species, breed')
-    .eq('tutor_id', params.id)
+    .eq('tutor_id', id)
     .eq('clinic_id', profile.clinic_id)
     .order('name')
 
   const [accessReport, retentionPolicies] = await Promise.all([
-    getDataSubjectReport(params.id),
+    getDataSubjectReport(id),
     getRetentionPolicies(),
   ])
 
