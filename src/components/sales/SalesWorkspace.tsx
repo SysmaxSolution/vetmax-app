@@ -1,13 +1,14 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { ShoppingCart, RotateCcw, Tag, AlertCircle } from 'lucide-react'
+import { ShoppingCart, RotateCcw, Tag, AlertCircle, UserCircle } from 'lucide-react'
 import ProductSearch from './ProductSearch'
 import SalesCart, { cartSubtotal, type CartItem } from './SalesCart'
 import CheckoutModal from './CheckoutModal'
 import ReceiptModal from './ReceiptModal'
 import SalesHistoryTable from './SalesHistoryTable'
-import type { Sale } from '@/lib/actions/sales'
+import TutorSearch from './TutorSearch'
+import type { Sale, SaleTutor } from '@/lib/actions/sales'
 
 interface SalesWorkspaceProps {
   clinicId:   string
@@ -20,6 +21,7 @@ export default function SalesWorkspace({ clinicId, clinicName, dailySales }: Sal
   const [cart,         setCart]         = useState<CartItem[]>([])
   const [discount,     setDiscount]     = useState(0)
   const [discountInput, setDiscountInput] = useState('')
+  const [tutor,        setTutor]        = useState<SaleTutor | null>(null)
   const [showCheckout, setShowCheckout] = useState(false)
   const [receipt,      setReceipt]      = useState<Sale | null>(null)
   const [sales,        setSales]        = useState<Sale[]>(dailySales)
@@ -47,6 +49,7 @@ export default function SalesWorkspace({ clinicId, clinicName, dailySales }: Sal
     setCart([])
     setDiscount(0)
     setDiscountInput('')
+    setTutor(null)
   }
 
   return (
@@ -93,6 +96,13 @@ export default function SalesWorkspace({ clinicId, clinicName, dailySales }: Sal
               <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-4">
                 <h2 className="text-sm font-semibold text-slate-700">Adicionar produto</h2>
                 <ProductSearch onAdd={item => setCart(prev => [...prev, item])} />
+                <div>
+                  <label className="flex items-center gap-1.5 text-xs font-medium text-slate-500 mb-1.5">
+                    <UserCircle className="h-3.5 w-3.5" />
+                    Tutor (opcional)
+                  </label>
+                  <TutorSearch selected={tutor} onSelect={setTutor} />
+                </div>
               </div>
 
               <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-3">
@@ -184,6 +194,7 @@ export default function SalesWorkspace({ clinicId, clinicName, dailySales }: Sal
           clinicId={clinicId}
           items={cart}
           discount={discount}
+          tutor={tutor}
           onSuccess={handleSaleSuccess}
           onClose={() => setShowCheckout(false)}
         />
@@ -193,6 +204,7 @@ export default function SalesWorkspace({ clinicId, clinicName, dailySales }: Sal
         <ReceiptModal
           sale={receipt}
           clinicName={clinicName}
+          tutor={tutor}
           onClose={() => setReceipt(null)}
         />
       )}

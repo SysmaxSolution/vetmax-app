@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
+import { sendWhatsAppMessage } from './whatsapp'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -264,4 +265,76 @@ export async function getSalesSummary(
       count:  v.count,
     })),
   }
+}
+
+// ─── Buscar tutores para vincular à venda ─────────────────────────────────────
+
+export interface SaleTutor {
+  id:    string
+  name:  string
+  phone: string
+}
+
+export async function searchSalesTutors(query: string): Promise<SaleTutor[]> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('clinic_id')
+    .eq('id', user.id)
+    .single()
+  if (!profile?.clinic_id) return []
+
+  const { data } = await supabase
+    .from('tutors')
+    .select('id, name, phone')
+    .eq('clinic_id', profile.clinic_id)
+    .ilike('name', `%${query.trim()}%`)
+    .order('name')
+    .limit(10)
+
+  return (data ?? []).map((t: any) => ({
+    id:    t.id,
+    name:  t.name,
+    phone: t.phone ?? '',
+  }))
+}
+
+// ─── Enviar recibo por WhatsApp ───────────────────────────────────────────────
+
+export async function sendSaleReceipt(params: {
+  tutorId:    string
+  tutorName:  string
+  tutorPhone: string
+  saleId:     string
+  total:      number
+  items:      { description: string; quantity: number; unit_price: number }[]
+  clinicName: string
+  paymentMethod: string
+}): Promise<{ success: boolean } | { error: string }> {
+  const PAYMENT_LABELS: Record<string, string> = {
+    cash: 'Dinheiro', credit: 'Cartão Crédito', debit: 'Cartão Débito',
+    pix: 'Pix', convenio: 'Convênio', other: 'Outro',
+  }
+
+  const itemLines = params.items
+    .map(i => `• ${i.description} (${i.quantity}x) — R$ ${(i.quantity * i.unit_price).toFixed(2)}`)
+    .join('\n')
+
+  const message =
+    `Olá, ${params.tutorName}! Segue o comprovante da sua compra em ${params.clinicName}.\n\n` +
+    `${itemLines}\n\n` +
+    `Total: R$ ${params.total.toFixed(2)}\n` +
+    `Pagamento: ${PAYMENT_LABELS[params.paymentMethod] ?? params.paymentMethod}\n\n` +
+    `Obrigado pela preferência! 🐾`
+
+  return sendWhatsAppMessage({
+    phone:     params.tutorPhone,
+    message,
+    trigger:   'sale_receipt',
+    tutorName: params.tutorName,
+    tutorId:   params.tutorId,
+  })
 }

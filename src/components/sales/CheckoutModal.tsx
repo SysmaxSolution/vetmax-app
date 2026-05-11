@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { X, CreditCard, Banknote, QrCode, Handshake, CheckCircle2 } from 'lucide-react'
-import { createSale, type CreateSaleParams } from '@/lib/actions/sales'
+import { createSale, type CreateSaleParams, type SaleTutor } from '@/lib/actions/sales'
 import { cartSubtotal, PAYMENT_LABELS, type CartItem } from './SalesCart'
 import type { Sale } from '@/lib/actions/sales'
 
@@ -10,6 +10,7 @@ interface CheckoutModalProps {
   clinicId:    string
   items:       CartItem[]
   discount:    number
+  tutor?:      SaleTutor | null
   onSuccess:   (sale: Sale) => void
   onClose:     () => void
 }
@@ -25,7 +26,7 @@ const PAYMENT_OPTIONS: { method: PaymentMethod; label: string; icon: React.Compo
 ]
 
 export default function CheckoutModal({
-  clinicId, items, discount, onSuccess, onClose,
+  clinicId, items, discount, tutor, onSuccess, onClose,
 }: CheckoutModalProps) {
   const [method,   setMethod]  = useState<PaymentMethod>('cash')
   const [received, setReceived] = useState('')
@@ -54,6 +55,7 @@ export default function CheckoutModal({
         })),
         payment_method:  method,
         discount_amount: discount,
+        tutor_id:        tutor?.id ?? null,
       }
 
       const result = await createSale(params)

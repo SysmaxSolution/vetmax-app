@@ -24,6 +24,7 @@ export type WhatsAppTrigger =
   | 'grooming_ready_for_pickup'
   | 'grooming_delivered'
   | 'appointment_scheduled'
+  | 'sale_receipt'
 
 // ─── Attachable Items ─────────────────────────────────────────────────────────
 
@@ -183,6 +184,8 @@ export type WhatsAppContext = {
   // grooming_ready_for_pickup / grooming_delivered
   groomingServices?: string[]
   groomingBox?:      string
+  // sale_receipt
+  saleTotal?:        string
   // consultation_finished
   vetNotes?:                    string
   diagnosisSummary?:            string
@@ -559,6 +562,10 @@ Tom: acolhedor, positivo, levemente comemorativo. Máx. 3 parágrafos.`
   appointment_scheduled: (ctx) =>
     `O pet ${ctx.petName} (tutor: ${ctx.tutorName}) teve um novo agendamento criado na clínica.
     Gere uma mensagem curta e amigável confirmando o agendamento, pedindo para chegar com alguns minutos de antecedência. Tom: acolhedor e profissional.`,
+
+  sale_receipt: (ctx) =>
+    `O tutor ${ctx.tutorName} realizou uma compra na clínica agora. Valor: R$ ${ctx.saleTotal ?? '0,00'}.
+    Gere uma mensagem curta de agradecimento pela compra, mencionando o nome da clínica. Tom: cordial e objetivo. Máx. 2 linhas.`,
 }
 
 export async function generateWhatsAppMessage(
