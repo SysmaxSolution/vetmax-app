@@ -24,6 +24,7 @@ import {
   type GroomingCatalogItem,
   type GroomingServicePrice,
 } from '@/lib/actions/grooming'
+import { saveCatalogItem } from '@/lib/actions/catalog'
 import { parseGroomingIntent } from '@/lib/actions/grooming-intent'
 import type { GroomingStatus } from '@/lib/actions/grooming'
 
@@ -137,6 +138,17 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
   // Status progressão mobile
   const [currentCardStatus, setCurrentCardStatus] = useState<GroomingStatus>(card.status)
   const [isAdvancingStatus, setIsAdvancingStatus] = useState(false)
+
+  // Cadastro de produto não registrado
+  const [pendingUnregisteredProducts, setPendingUnregisteredProducts] = useState<string[]>([])
+  const [showRegisterProductModal, setShowRegisterProductModal] = useState(false)
+  const [registerProductName, setRegisterProductName] = useState('')
+  const [registerProductPrice, setRegisterProductPrice] = useState('')
+  const [registerProductSaving, setRegisterProductSaving] = useState(false)
+
+  // Novo item na aba Cobrança
+  const [newBillingItemName, setNewBillingItemName] = useState('')
+  const [newBillingItemPrice, setNewBillingItemPrice] = useState('')
 
   // Voice triggers (personalizáveis por clínica)
   const [startTriggers,  setStartTriggers]  = useState<string[]>([])
@@ -407,6 +419,19 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
     setSaveToast('Registro salvo com sucesso!')
     setTimeout(() => setSaveToast(null), 3000)
 
+    // Verifica produtos não cadastrados no catálogo e oferece cadastro
+    if (products.length > 0 && catalog.length > 0) {
+      const unregistered = products.filter(
+        p => !catalog.some(c => c.name.toLowerCase() === p.toLowerCase())
+      )
+      if (unregistered.length > 0) {
+        setPendingUnregisteredProducts(unregistered)
+        setRegisterProductName(unregistered[0])
+        setRegisterProductPrice('')
+        setShowRegisterProductModal(true)
+      }
+    }
+
     // WhatsApp: só abre no submit manual quando pet está pronto para retirada/entregue.
     // Salvas intermediárias de evolução NÃO disparam WA (evita duplo disparo com voz).
     if (card.tutor?.phone && (currentCardStatus === 'waiting_pickup' || currentCardStatus === 'delivered')) {
@@ -573,7 +598,7 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
 
             {/* ── Coluna Esquerda: Formulário ── */}
-            <div className="space-y-5">
+            <div className="space-y-5 order-2 lg:order-1">
 
               {/* Serviços solicitados */}
               {card.services_requested.length > 0 && (
@@ -785,7 +810,7 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
             </div>
 
             {/* ── Coluna Direita: Timeline + Documentos ── */}
-            <div className="bg-slate-50/50 rounded-2xl border border-slate-100 flex flex-col overflow-hidden">
+            <div className="bg-slate-50/50 rounded-2xl border border-slate-100 flex flex-col overflow-hidden order-1 lg:order-2">
               {/* Tabs */}
               <div className="border-b border-slate-200 bg-slate-100/80 flex">
                 <button
@@ -1019,6 +1044,57 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
                         </div>
                       </div>
 
+                      {/* Adicionar novo item */}
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-2 flex items-center gap-1">
+                          <Plus className="h-3 w-3" /> Adicionar Serviço / Produto
+                        </p>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={newBillingItemName}
+                            onChange={e => setNewBillingItemName(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault()
+                                const name = newBillingItemName.trim()
+                                const price = parseFloat(newBillingItemPrice.replace(',', '.')) || 0
+                                if (!name) return
+                                setServicePrices(prev => [...prev, { name, price }])
+                                setNewBillingItemName('')
+                                setNewBillingItemPrice('')
+                              }
+                            }}
+                            placeholder="Nome do serviço ou produto"
+                            className="flex-1 text-xs border border-slate-200 rounded-lg px-2 py-1.5 focus:border-teal-500 focus:outline-none"
+                          />
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={newBillingItemPrice}
+                            onChange={e => setNewBillingItemPrice(e.target.value)}
+                            placeholder="R$"
+                            className="w-20 text-xs border border-slate-200 rounded-lg px-2 py-1.5 text-right focus:border-teal-500 focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const name = newBillingItemName.trim()
+                              const price = parseFloat(newBillingItemPrice.replace(',', '.')) || 0
+                              if (!name) return
+                              setServicePrices(prev => [...prev, { name, price }])
+                              setNewBillingItemName('')
+                              setNewBillingItemPrice('')
+                            }}
+                            disabled={!newBillingItemName.trim()}
+                            className="px-2.5 py-1.5 rounded-lg bg-teal-50 border border-teal-200 text-teal-700 hover:bg-teal-100 transition-colors disabled:opacity-40"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
                       {/* Desconto */}
                       <div>
                         <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">
@@ -1160,6 +1236,115 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
           }}
           patientId={card.patient.id}
         />
+      )}
+
+      {/* Modal de Cadastro de Produto Não Registrado */}
+      {showRegisterProductModal && pendingUnregisteredProducts.length > 0 && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Tag className="h-4 w-4 text-teal-600" /> Produto Não Cadastrado
+              </h3>
+              <button
+                onClick={() => { setShowRegisterProductModal(false); setPendingUnregisteredProducts([]) }}
+                className="p-1.5 hover:bg-slate-100 rounded-full text-slate-400"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <p className="text-sm text-slate-600">
+              O produto <strong className="text-slate-900">&ldquo;{registerProductName}&rdquo;</strong> não está no catálogo.
+              Deseja cadastrá-lo agora?
+            </p>
+
+            {pendingUnregisteredProducts.length > 1 && (
+              <p className="text-xs text-slate-400">
+                {pendingUnregisteredProducts.length} produtos não cadastrados. Você pode cadastrar um por vez.
+              </p>
+            )}
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Nome</label>
+                <input
+                  type="text"
+                  value={registerProductName}
+                  onChange={e => setRegisterProductName(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Preço (R$)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={registerProductPrice}
+                  onChange={e => setRegisterProductPrice(e.target.value)}
+                  placeholder="0,00"
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => {
+                  const remaining = pendingUnregisteredProducts.slice(1)
+                  if (remaining.length > 0) {
+                    setPendingUnregisteredProducts(remaining)
+                    setRegisterProductName(remaining[0])
+                    setRegisterProductPrice('')
+                  } else {
+                    setShowRegisterProductModal(false)
+                    setPendingUnregisteredProducts([])
+                  }
+                }}
+                className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                Pular
+              </button>
+              <button
+                onClick={async () => {
+                  if (!registerProductName.trim()) return
+                  setRegisterProductSaving(true)
+                  const price = parseFloat(registerProductPrice.replace(',', '.')) || 0
+                  const res = await saveCatalogItem({
+                    item_type: 'grooming',
+                    name: registerProductName.trim(),
+                    price,
+                  })
+                  setRegisterProductSaving(false)
+                  if ('error' in res) {
+                    setErrorToast('Erro ao cadastrar: ' + res.error)
+                    setTimeout(() => setErrorToast(null), 4000)
+                  } else {
+                    setCatalog(prev => [...prev, { id: res.id, name: res.name, price: res.price }])
+                    setSaveToast(`"${res.name}" cadastrado no catálogo!`)
+                    setTimeout(() => setSaveToast(null), 3000)
+                  }
+                  const remaining = pendingUnregisteredProducts.slice(1)
+                  if (remaining.length > 0) {
+                    setPendingUnregisteredProducts(remaining)
+                    setRegisterProductName(remaining[0])
+                    setRegisterProductPrice('')
+                  } else {
+                    setShowRegisterProductModal(false)
+                    setPendingUnregisteredProducts([])
+                  }
+                }}
+                disabled={registerProductSaving || !registerProductName.trim()}
+                className="flex-1 rounded-xl bg-teal-600 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {registerProductSaving
+                  ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando...</>
+                  : <><Plus className="h-4 w-4" /> Cadastrar</>}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Modal de Configurações de Voz */}
