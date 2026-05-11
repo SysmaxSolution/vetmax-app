@@ -523,7 +523,7 @@ export async function getPatientsList(
 
     const clinicId = profile.clinic_id
 
-    let patientsQuery = supabase
+    let patientsQuery = admin
       .from('patients')
       .select('id, name, species, breed, gender, neutered, birth_date, birth_date_estimated, coat_color, reproductive_status, medical_history, photo_url, behavior_tags, allergies, chronic_diseases, microchip_id, tutor_id')
       .eq('clinic_id', clinicId)
@@ -538,12 +538,10 @@ export async function getPatientsList(
     if (pError) return { error: 'Erro ao buscar pacientes: ' + pError.message }
     if (!patients?.length) return []
 
-    // ... dentro de getPatientsList no timeline.ts
-
     const tutorIds = [...new Set(patients.map(p => p.tutor_id).filter(Boolean))] as string[]
-    const { data: tutors } = await supabase
+    const { data: tutors } = await admin
       .from('tutors')
-      .select('id, name, cpf, phone, email, address, emergency_contact') // Adicionado address e emergency
+      .select('id, name, cpf, phone, email, address, emergency_contact')
       .in('id', tutorIds)
 
     const tutorMap: Record<string, any> = {}

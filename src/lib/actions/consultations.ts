@@ -240,7 +240,7 @@ export async function getReceptionQueue(): Promise<ReceptionQueueItem[] | { erro
   const todayStart = new Date()
   todayStart.setHours(0, 0, 0, 0)
 
-  const { data, error } = await supabase
+  const { data, error } = await admin
     .from('consultations')
     .select(`
       id, status, created_at, payment_status, payment_method,
@@ -259,7 +259,7 @@ export async function getReceptionQueue(): Promise<ReceptionQueueItem[] | { erro
   const patientIds = [...new Set((data ?? []).map((c: any) => c.patients?.id).filter(Boolean))]
   let lastVisitMap: Record<string, string> = {}
   if (patientIds.length > 0) {
-    const { data: visits } = await supabase
+    const { data: visits } = await admin
       .from('consultations')
       .select('patient_id, created_at')
       .in('patient_id', patientIds)
@@ -339,7 +339,7 @@ export async function getReceptionHistory(): Promise<ReceptionHistoryItem[] | { 
   const todayStart = new Date()
   todayStart.setHours(0, 0, 0, 0)
 
-  const { data, error } = await supabase
+  const { data, error } = await admin
     .from('consultations')
     .select(`
       id, status, visit_reason, payment_status, created_at, updated_at,
