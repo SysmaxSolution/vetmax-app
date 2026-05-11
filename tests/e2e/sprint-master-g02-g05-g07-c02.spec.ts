@@ -307,10 +307,9 @@ test.describe('C-02: Botão "Incluir Paciente" no Consultório', () => {
 
     // Confirmar inclusão — escopo dentro do modal para não clicar no botão da workspace
     const dialog = page.getByRole('dialog').first();
-    const confirmBtn = dialog.getByRole('button', { name: /incluir|confirmar|adicionar/i }).first()
-      .or(page.getByRole('button', { name: /incluir|confirmar|adicionar/i }).last());
-    if (!(await confirmBtn.isVisible({ timeout: 3_000 }).catch(() => false))) {
-      console.log('C-02-03: SKIP — Botão de confirmar não encontrado'); test.skip(); return;
+    const confirmBtn = dialog.getByRole('button', { name: /incluir|confirmar|adicionar/i }).first();
+    if (!(await confirmBtn.isVisible({ timeout: 5_000 }).catch(() => false))) {
+      console.log('C-02-03: SKIP — Botão de confirmar não encontrado no modal'); test.skip(); return;
     }
 
     // Contar entries antes

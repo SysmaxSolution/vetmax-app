@@ -95,7 +95,7 @@ test.describe('B-04: Ordem das etapas — Tosa antes de Banho', () => {
 
     // Buscar apenas dentro do modal aberto para evitar matches no nav/sidebar
     const modal = page.getByRole('dialog').first();
-    const modalText = await modal.textContent().catch(async () => page.locator('body').textContent()) ?? '';
+    const modalText = await modal.textContent({ timeout: 5_000 }).catch(() => '') ?? '';
     const posTosa  = modalText.search(/em tosa|iniciar tosa/i);
     const posBanho = modalText.search(/em banho|iniciar banho/i);
 
