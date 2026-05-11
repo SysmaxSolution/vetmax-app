@@ -291,6 +291,7 @@ function QueueCard({ item, onMoveToTriage }: { item: ReceptionQueueItem; onMoveT
       <div className="flex flex-col items-end gap-2 flex-shrink-0">
         <span className="text-xs text-slate-400">{formatTime(item.created_at)}</span>
         <button
+          data-mentor-step="reception-call-triage-btn"
           onClick={() => onMoveToTriage(item.id)}
           className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 transition-colors"
         >

@@ -5,8 +5,11 @@
  * que o elemento pode ser destacado pelo spotlight, e que a sequência completa
  * do tour roda sem nenhum step com alvo ausente.
  *
- * Regra de falha: se count === 0 para qualquer step, o teste falha com
- * mensagem descritiva indicando qual componente precisa do data-mentor-step.
+ * Regra de falha: se count === 0 para qualquer step mustExist:true, o teste
+ * falha com mensagem descritiva indicando qual componente precisa do atributo.
+ *
+ * waitForNext corrigido: steps com waitForNext:true não devem ter o próximo
+ * alvo já no DOM quando o step inicia — o sistema aguarda a ação do usuário.
  */
 
 import { test, expect, type Page } from '@playwright/test'
@@ -23,11 +26,11 @@ const ADMIN = {
 // ─── Tour definitions — espelho de MentorContext.tsx após correção ────────────
 
 interface StepDef {
-  target:      string
-  title:       string
-  waitForNext? :boolean
+  target:       string
+  title:        string
+  waitForNext?: boolean
   autoAdvance?: boolean
-  mustExist?:  boolean   // false = soft check (elemento pode não aparecer sem dados)
+  mustExist?:   boolean
 }
 
 interface TourDef {
@@ -39,55 +42,60 @@ const TOURS: Record<string, TourDef> = {
   recepcao: {
     path: '/dashboard/reception',
     steps: [
-      { target: 'reception-search-input', title: 'Busca de Tutor ou Pet',  mustExist: true },
-      { target: 'reception-new-btn',      title: 'Novo Cadastro',          mustExist: true },
-      { target: 'reception-queue',        title: 'Fila de Espera',         mustExist: true },
+      { target: 'reception-search-input', title: 'Busca de Tutor ou Pet',  mustExist: true,  waitForNext: true },
+      { target: 'reception-checkin-btn',  title: 'Confirmar Check-in',     mustExist: false },
+      { target: 'reception-queue',        title: 'Fila de Espera',         mustExist: true  },
+      { target: 'reception-new-btn',      title: 'Tutor Não Cadastrado?',  mustExist: true  },
     ],
   },
   'sala-espera': {
     path: '/dashboard/reception',
     steps: [
-      { target: 'reception-queue',   title: 'Sala de Espera', mustExist: true },
-      { target: 'reception-new-btn', title: 'Novo Check-in',  mustExist: true },
+      { target: 'reception-queue',            title: 'Fila de Espera',       mustExist: true  },
+      { target: 'reception-call-triage-btn',  title: 'Chamar para Triagem',  mustExist: false },
+      { target: 'reception-new-btn',          title: 'Novo Check-in',        mustExist: true  },
     ],
   },
   triagem: {
     path: '/dashboard/triage',
     steps: [
-      { target: 'nurse-queue',    title: 'Fila de Triagem',      mustExist: true,  waitForNext: true },
-      { target: 'triage-add-btn', title: 'Adicionar Manualmente', mustExist: true },
-      { target: 'triage-voice-btn', title: 'Triagem por Voz',    mustExist: false },
-      { target: 'triage-save-btn',  title: 'Concluir Triagem',   mustExist: false },
+      { target: 'triage-add-btn',   title: 'Adicionar Pet Manualmente',        mustExist: true  },
+      { target: 'nurse-queue',      title: 'Fila de Triagem',                  mustExist: true,  waitForNext: true },
+      { target: 'triage-voice-btn', title: 'Registrar Sinais Vitais por Voz',  mustExist: false },
+      { target: 'triage-save-btn',  title: 'Concluir Triagem',                 mustExist: false },
     ],
   },
   consulta: {
     path: '/dashboard/vet',
     steps: [
-      { target: 'vet-queue',         title: 'Fila do Consultório',        mustExist: true,  waitForNext: true },
-      { target: 'vet-notes-textarea', title: 'Anotações Clínicas (SOAP)', mustExist: false, autoAdvance: true },
-      { target: 'vet-save-notes-btn', title: 'Salvar Prontuário',         mustExist: false },
+      { target: 'vet-queue',          title: 'Fila do Consultório',        mustExist: true,  waitForNext: true },
+      { target: 'vet-notes-textarea', title: 'Anotações Clínicas (SOAP)',  mustExist: false, autoAdvance: true },
+      { target: 'vet-save-notes-btn', title: 'Salvar Prontuário',          mustExist: false },
     ],
   },
   exames: {
     path: '/dashboard/exams',
     steps: [
-      { target: 'exams-queue',           title: 'Fila de Exames',    mustExist: true },
-      { target: 'exams-request-btn',     title: 'Solicitar Exame',   mustExist: true },
-      { target: 'exams-result-textarea', title: 'Registrar Laudo',   mustExist: false, autoAdvance: true },
+      { target: 'exams-request-btn',     title: 'Solicitar Exame',    mustExist: true               },
+      { target: 'exams-queue',           title: 'Fila de Exames',     mustExist: true,  waitForNext: true },
+      { target: 'exams-result-textarea', title: 'Registrar Laudo',    mustExist: false, autoAdvance: true },
     ],
   },
   internacao: {
     path: '/dashboard/hospitalization',
     steps: [
-      { target: 'hospitalization-list', title: 'Quadro de Internados',   mustExist: true },
-      { target: 'hosp-discharge-btn',   title: 'Dar Alta Hospitalar',    mustExist: false },
+      { target: 'hospitalization-list',   title: 'Quadro de Internados',       mustExist: true,  waitForNext: true },
+      { target: 'hosp-save-evolution-btn', title: 'Registrar Evolução Clínica', mustExist: false },
+      { target: 'hosp-discharge-btn',     title: 'Dar Alta Hospitalar',        mustExist: false },
     ],
   },
   grooming: {
     path: '/dashboard/grooming',
     steps: [
-      { target: 'grooming-queue',     title: 'Kanban de Banho e Tosa', mustExist: true },
-      { target: 'grooming-voice-btn', title: 'Registro por Voz',       mustExist: false },
+      { target: 'grooming-queue',               title: 'Kanban de Banho e Tosa',   mustExist: true,  waitForNext: true },
+      { target: 'grooming-voice-btn',           title: 'Registro por Voz',          mustExist: false },
+      { target: 'grooming-observations-textarea', title: 'Observações do Serviço',  mustExist: false, autoAdvance: true },
+      { target: 'grooming-save-record-btn',     title: 'Salvar Registro',           mustExist: false },
     ],
   },
   alta: {
@@ -101,15 +109,15 @@ const TOURS: Record<string, TourDef> = {
   'cadastro-pet': {
     path: '/dashboard/patients',
     steps: [
-      { target: 'btn-novo-paciente',       title: 'Abrir Cadastro de Novo Pet', mustExist: true,  waitForNext: true },
-      { target: 'pet-name-input',          title: 'Nome do Pet',                mustExist: false, autoAdvance: true },
-      { target: 'pet-species-select',      title: 'Espécie',                    mustExist: false, autoAdvance: true },
-      { target: 'pet-breed-input',         title: 'Raça',                       mustExist: false, autoAdvance: true },
-      { target: 'pet-reproductive-select', title: 'Estado Reprodutivo',         mustExist: false, autoAdvance: true },
-      { target: 'pet-behavior-tags',       title: 'Tags de Comportamento',      mustExist: false },
-      { target: 'pet-allergies',           title: 'Alergias Conhecidas',        mustExist: false, autoAdvance: true },
-      { target: 'pet-chronic-diseases',    title: 'Doenças Crônicas',           mustExist: false, autoAdvance: true },
-      { target: 'pet-microchip',           title: 'Microchip ID',               mustExist: false, autoAdvance: true },
+      { target: 'btn-novo-paciente',       title: 'Abrir Cadastro de Novo Pet',  mustExist: true,  waitForNext: true },
+      { target: 'pet-name-input',          title: 'Nome do Pet',                 mustExist: false, autoAdvance: true },
+      { target: 'pet-species-select',      title: 'Espécie',                     mustExist: false, autoAdvance: true },
+      { target: 'pet-breed-input',         title: 'Raça',                        mustExist: false, autoAdvance: true },
+      { target: 'pet-reproductive-select', title: 'Estado Reprodutivo',          mustExist: false, autoAdvance: true },
+      { target: 'pet-behavior-tags',       title: 'Tags de Comportamento',       mustExist: false },
+      { target: 'pet-allergies',           title: 'Alergias Conhecidas',         mustExist: false, autoAdvance: true },
+      { target: 'pet-chronic-diseases',    title: 'Doenças Crônicas',            mustExist: false, autoAdvance: true },
+      { target: 'pet-microchip',           title: 'Microchip ID',                mustExist: false, autoAdvance: true },
     ],
   },
 }
@@ -117,7 +125,6 @@ const TOURS: Record<string, TourDef> = {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 async function loginAsAdmin(page: Page) {
-  // Retry goto para absorver sobrecarga transitória do servidor (ERR_ABORTED)
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       await page.goto(`${BASE_URL}/login`, { timeout: 20_000 })
@@ -140,22 +147,23 @@ async function waitForMentorGlobals(page: Page) {
   )
 }
 
+type MentorWindow = { __MENTOR_START_TOUR: (id: string) => void; __MENTOR_NEXT_STEP: () => void }
+
 async function startTour(page: Page, tourId: string) {
   await page.evaluate((id: string) => {
-    (window as Window & { __MENTOR_START_TOUR: (id: string) => void }).__MENTOR_START_TOUR(id)
+    (window as unknown as MentorWindow).__MENTOR_START_TOUR(id)
   }, tourId)
 }
 
 async function advanceStep(page: Page) {
   await page.evaluate(() => {
-    (window as Window & { __MENTOR_NEXT_STEP: () => void }).__MENTOR_NEXT_STEP()
+    (window as unknown as MentorWindow).__MENTOR_NEXT_STEP()
   })
 }
 
 /**
  * Verifica o step atual: balão visível, título correto, elemento no DOM.
  * Falha hard se mustExist=true e o elemento não estiver no DOM.
- * Retorna a contagem de elementos encontrados.
  */
 async function assertStep(page: Page, step: StepDef, nextTitle?: string): Promise<number> {
   const balloon = page.getByTestId('mentor-balloon')
@@ -177,15 +185,28 @@ async function assertStep(page: Page, step: StepDef, nextTitle?: string): Promis
       `Adicione o atributo no componente correto para o passo "${step.title}".`,
     ).toBeGreaterThan(0)
   } else {
-    console.info(`    ↳ [data-mentor-step="${step.target}"] na DOM: ${count > 0 ? '✓' : '— (sem dados de teste)'}`)
+    console.info(`    ↳ [data-mentor-step="${step.target}"] no DOM: ${count > 0 ? '✓' : '— (soft check / sem dados)'}`)
   }
 
   return count
 }
 
+/**
+ * Para steps com waitForNext:true, verifica que o PRÓXIMO alvo NÃO está
+ * no DOM quando o step inicia (bug de avanço imediato).
+ */
+async function assertNextTargetAbsent(page: Page, nextTarget: string) {
+  const count = await page.locator(`[data-mentor-step="${nextTarget}"]`).count()
+  expect(
+    count,
+    `[MENTOR-AUDIT] data-mentor-step="${nextTarget}" já está no DOM ao iniciar o step ` +
+    `com waitForNext:true. O tour avançaria imediatamente sem ação do usuário.`,
+  ).toBe(0)
+}
+
 // ─── AUDIT-001: Recepção ──────────────────────────────────────────────────────
 
-test.describe('AUDIT-001 — Tour: recepcao (3 passos corrigidos)', () => {
+test.describe('AUDIT-001 — Tour: recepcao (4 passos corrigidos)', () => {
   test.beforeEach(async ({ page }) => {
     await loginAsAdmin(page)
     await page.goto(`${BASE_URL}/dashboard/reception`)
@@ -193,7 +214,39 @@ test.describe('AUDIT-001 — Tour: recepcao (3 passos corrigidos)', () => {
     await waitForMentorGlobals(page)
   })
 
-  test('todos os 3 steps têm elementos no DOM', async ({ page }) => {
+  test('step 0: reception-search-input existe e está habilitado', async ({ page }) => {
+    await startTour(page, 'recepcao')
+    const el = page.locator('[data-mentor-step="reception-search-input"]')
+    await expect(el).toBeVisible({ timeout: 5_000 })
+    await expect(el).toBeEnabled()
+  })
+
+  test('step 0 waitForNext: reception-checkin-btn não está no DOM ao iniciar', async ({ page }) => {
+    await startTour(page, 'recepcao')
+    await assertStep(page, TOURS.recepcao.steps[0])
+    await assertNextTargetAbsent(page, 'reception-checkin-btn')
+  })
+
+  test('step 2: reception-queue existe (fila vazia aceita)', async ({ page }) => {
+    await startTour(page, 'recepcao')
+    await advanceStep(page) // skip step 0
+    await advanceStep(page) // skip step 1 (checkin-btn, soft)
+    const el = page.locator('[data-mentor-step="reception-queue"]')
+    await expect(el).toBeVisible({ timeout: 5_000 })
+  })
+
+  test('step 3: reception-new-btn existe e está clicável', async ({ page }) => {
+    await startTour(page, 'recepcao')
+    await advanceStep(page)
+    await advanceStep(page)
+    await advanceStep(page)
+    const el = page.locator('[data-mentor-step="reception-new-btn"]')
+    await expect(el).toBeVisible({ timeout: 5_000 })
+    await expect(el).toBeEnabled()
+    await expect(page.getByTestId('mentor-balloon').getByRole('button', { name: /concluir/i })).toBeVisible()
+  })
+
+  test('todos os 4 steps têm balão visível com título correto', async ({ page }) => {
     const { steps } = TOURS.recepcao
     await startTour(page, 'recepcao')
 
@@ -205,26 +258,11 @@ test.describe('AUDIT-001 — Tour: recepcao (3 passos corrigidos)', () => {
 
     await expect(page.getByTestId('mentor-balloon').getByRole('button', { name: /concluir/i })).toBeVisible()
   })
-
-  test('step 0: campo de busca existe e recebe foco ao ser destacado', async ({ page }) => {
-    await startTour(page, 'recepcao')
-    const el = page.locator('[data-mentor-step="reception-search-input"]')
-    await expect(el).toBeVisible({ timeout: 5_000 })
-    await expect(el).toBeEnabled()
-  })
-
-  test('step 1: botão Novo Cadastro existe e está clicável', async ({ page }) => {
-    await startTour(page, 'recepcao')
-    await advanceStep(page)
-    const el = page.locator('[data-mentor-step="reception-new-btn"]')
-    await expect(el).toBeVisible({ timeout: 5_000 })
-    await expect(el).toBeEnabled()
-  })
 })
 
 // ─── AUDIT-002: Sala de Espera ─────────────────────────────────────────────────
 
-test.describe('AUDIT-002 — Tour: sala-espera (target corrigido no step 1)', () => {
+test.describe('AUDIT-002 — Tour: sala-espera (3 passos com reception-call-triage-btn)', () => {
   test.beforeEach(async ({ page }) => {
     await loginAsAdmin(page)
     await page.goto(`${BASE_URL}/dashboard/reception`)
@@ -232,7 +270,28 @@ test.describe('AUDIT-002 — Tour: sala-espera (target corrigido no step 1)', ()
     await waitForMentorGlobals(page)
   })
 
-  test('step 1 agora aponta para reception-new-btn (sempre visível)', async ({ page }) => {
+  test('step 0: reception-queue sempre visível', async ({ page }) => {
+    await startTour(page, 'sala-espera')
+    const el = page.locator('[data-mentor-step="reception-queue"]')
+    await expect(el).toBeVisible({ timeout: 5_000 })
+  })
+
+  test('step 1: reception-call-triage-btn — soft check (requer item na fila)', async ({ page }) => {
+    const { steps } = TOURS['sala-espera']
+    await startTour(page, 'sala-espera')
+    await advanceStep(page)
+    const count = await assertStep(page, steps[1], steps[2].title)
+    console.info(`    ↳ reception-call-triage-btn no DOM: ${count > 0 ? '✓' : '— (fila vazia, sem cards)'}`)
+  })
+
+  test('step 2: reception-new-btn existe e é o último', async ({ page }) => {
+    await startTour(page, 'sala-espera')
+    await advanceStep(page)
+    await advanceStep(page)
+    await expect(page.getByTestId('mentor-balloon').getByRole('button', { name: /concluir/i })).toBeVisible()
+  })
+
+  test('fluxo completo dos 3 steps', async ({ page }) => {
     const { steps } = TOURS['sala-espera']
     await startTour(page, 'sala-espera')
 
@@ -248,7 +307,7 @@ test.describe('AUDIT-002 — Tour: sala-espera (target corrigido no step 1)', ()
 
 // ─── AUDIT-003: Triagem ───────────────────────────────────────────────────────
 
-test.describe('AUDIT-003 — Tour: triagem (nurse-queue e triage-add-btn obrigatórios)', () => {
+test.describe('AUDIT-003 — Tour: triagem (waitForNext corrigido — nurse-queue → triage-voice-btn)', () => {
   test.beforeEach(async ({ page }) => {
     await loginAsAdmin(page)
     await page.goto(`${BASE_URL}/dashboard/triage`)
@@ -256,16 +315,24 @@ test.describe('AUDIT-003 — Tour: triagem (nurse-queue e triage-add-btn obrigat
     await waitForMentorGlobals(page)
   })
 
-  test('steps 0 e 1 (na listagem) sempre existem no DOM', async ({ page }) => {
+  test('step 0: triage-add-btn sempre presente no DOM', async ({ page }) => {
     const { steps } = TOURS.triagem
     await startTour(page, 'triagem')
-
-    await assertStep(page, steps[0], steps[1].title)
-    await advanceStep(page)
-    await assertStep(page, steps[1], steps[2].title)
+    const count = await assertStep(page, steps[0], steps[1].title)
+    expect(count, 'triage-add-btn deve estar presente na página de triagem').toBeGreaterThan(0)
   })
 
-  test('steps 2 e 3 (na ficha individual) — soft check sem dados', async ({ page }) => {
+  test('step 1: nurse-queue presente e waitForNext aponta para triage-voice-btn (não no DOM)', async ({ page }) => {
+    await startTour(page, 'triagem')
+    await advanceStep(page)
+    const { steps } = TOURS.triagem
+    const count = await assertStep(page, steps[1], steps[2].title)
+    expect(count, 'nurse-queue deve estar presente na página de triagem').toBeGreaterThan(0)
+    // triage-voice-btn é dentro do TriageForm — NÃO deve estar no DOM ainda
+    await assertNextTargetAbsent(page, 'triage-voice-btn')
+  })
+
+  test('steps 2 e 3 — soft check (dentro do TriageForm, requer clicar em um pet)', async ({ page }) => {
     const { steps } = TOURS.triagem
     await startTour(page, 'triagem')
 
@@ -281,7 +348,7 @@ test.describe('AUDIT-003 — Tour: triagem (nurse-queue e triage-add-btn obrigat
 
 // ─── AUDIT-004: Consulta ──────────────────────────────────────────────────────
 
-test.describe('AUDIT-004 — Tour: consulta (targets corrigidos para elementos reais)', () => {
+test.describe('AUDIT-004 — Tour: consulta (vet-queue sempre presente, waitForNext correto)', () => {
   test.beforeEach(async ({ page }) => {
     await loginAsAdmin(page)
     await page.goto(`${BASE_URL}/dashboard/vet`)
@@ -289,18 +356,20 @@ test.describe('AUDIT-004 — Tour: consulta (targets corrigidos para elementos r
     await waitForMentorGlobals(page)
   })
 
-  test('step 0 (vet-queue) sempre existe no DOM', async ({ page }) => {
+  test('step 0: vet-queue existe e waitForNext aponta para vet-notes-textarea (não no DOM)', async ({ page }) => {
     const { steps } = TOURS.consulta
     await startTour(page, 'consulta')
     const count = await assertStep(page, steps[0], steps[1].title)
     expect(count, 'vet-queue deve estar presente na página /dashboard/vet').toBeGreaterThan(0)
+    // vet-notes-textarea é dentro de ConsultationDetail — não deve estar no DOM antes de abrir
+    await assertNextTargetAbsent(page, 'vet-notes-textarea')
   })
 
   test('steps 1 e 2 — soft check (dependem de consulta aberta)', async ({ page }) => {
     const { steps } = TOURS.consulta
     await startTour(page, 'consulta')
 
-    await advanceStep(page) // skip vet-queue
+    await advanceStep(page)
     await assertStep(page, steps[1], steps[2].title)
 
     await advanceStep(page)
@@ -311,7 +380,7 @@ test.describe('AUDIT-004 — Tour: consulta (targets corrigidos para elementos r
 
 // ─── AUDIT-005: Exames ────────────────────────────────────────────────────────
 
-test.describe('AUDIT-005 — Tour: exames (exams-queue e exams-request-btn corrigidos)', () => {
+test.describe('AUDIT-005 — Tour: exames (exams-request-btn primeiro, waitForNext na fila)', () => {
   test.beforeEach(async ({ page }) => {
     await loginAsAdmin(page)
     await page.goto(`${BASE_URL}/dashboard/exams`)
@@ -319,26 +388,29 @@ test.describe('AUDIT-005 — Tour: exames (exams-queue e exams-request-btn corri
     await waitForMentorGlobals(page)
   })
 
-  test('steps 0 e 1 (exams-queue e exams-request-btn) sempre presentes', async ({ page }) => {
+  test('step 0: exams-request-btn presente e clicável', async ({ page }) => {
     const { steps } = TOURS.exames
     await startTour(page, 'exames')
-
-    const count0 = await assertStep(page, steps[0], steps[1].title)
-    expect(count0, 'exams-queue deve existir na página de exames').toBeGreaterThan(0)
-
-    await advanceStep(page)
-
-    const count1 = await assertStep(page, steps[1], steps[2].title)
-    expect(count1, 'exams-request-btn deve existir na página de exames').toBeGreaterThan(0)
+    const count = await assertStep(page, steps[0], steps[1].title)
+    expect(count, 'exams-request-btn deve existir na página de exames').toBeGreaterThan(0)
+    await expect(page.locator('[data-mentor-step="exams-request-btn"]')).toBeEnabled()
   })
 
-  test('step 2 (exams-result-textarea) — soft check (requer modal aberto)', async ({ page }) => {
+  test('step 1: exams-queue presente e waitForNext aponta para exams-result-textarea (dentro de modal)', async ({ page }) => {
     const { steps } = TOURS.exames
     await startTour(page, 'exames')
+    await advanceStep(page)
+    const count = await assertStep(page, steps[1], steps[2].title)
+    expect(count, 'exams-queue deve existir na página de exames').toBeGreaterThan(0)
+    // exams-result-textarea está dentro de modal condicional — não deve estar no DOM
+    await assertNextTargetAbsent(page, 'exams-result-textarea')
+  })
 
+  test('step 2: exams-result-textarea — soft check (requer modal de resultado aberto)', async ({ page }) => {
+    const { steps } = TOURS.exames
+    await startTour(page, 'exames')
     await advanceStep(page)
     await advanceStep(page)
-
     await assertStep(page, steps[2])
     await expect(page.getByTestId('mentor-balloon').getByRole('button', { name: /concluir/i })).toBeVisible()
   })
@@ -346,7 +418,7 @@ test.describe('AUDIT-005 — Tour: exames (exams-queue e exams-request-btn corri
 
 // ─── AUDIT-006: Internação ────────────────────────────────────────────────────
 
-test.describe('AUDIT-006 — Tour: internacao (hospitalization-list corrigido)', () => {
+test.describe('AUDIT-006 — Tour: internacao (3 passos com hosp-save-evolution-btn)', () => {
   test.beforeEach(async ({ page }) => {
     await loginAsAdmin(page)
     await page.goto(`${BASE_URL}/dashboard/hospitalization`)
@@ -354,27 +426,35 @@ test.describe('AUDIT-006 — Tour: internacao (hospitalization-list corrigido)',
     await waitForMentorGlobals(page)
   })
 
-  test('step 0 (hospitalization-list) sempre presente', async ({ page }) => {
+  test('step 0: hospitalization-list presente e waitForNext aponta para hosp-save-evolution-btn', async ({ page }) => {
     const { steps } = TOURS.internacao
     await startTour(page, 'internacao')
-
     const count = await assertStep(page, steps[0], steps[1].title)
     expect(count, 'hospitalization-list deve existir na página de internação').toBeGreaterThan(0)
+    // hosp-save-evolution-btn está dentro de HospitalizationDetailModal — não deve estar no DOM
+    await assertNextTargetAbsent(page, 'hosp-save-evolution-btn')
   })
 
-  test('step 1 (hosp-discharge-btn) — soft check (requer animal pronto para alta)', async ({ page }) => {
+  test('step 1: hosp-save-evolution-btn — soft check (dentro do modal de detalhe)', async ({ page }) => {
     const { steps } = TOURS.internacao
     await startTour(page, 'internacao')
-
     await advanceStep(page)
-    await assertStep(page, steps[1])
+    await assertStep(page, steps[1], steps[2].title)
+  })
+
+  test('step 2: hosp-discharge-btn — soft check (apenas para pets com status Alta Pronta)', async ({ page }) => {
+    const { steps } = TOURS.internacao
+    await startTour(page, 'internacao')
+    await advanceStep(page)
+    await advanceStep(page)
+    await assertStep(page, steps[2])
     await expect(page.getByTestId('mentor-balloon').getByRole('button', { name: /concluir/i })).toBeVisible()
   })
 })
 
 // ─── AUDIT-007: Grooming ──────────────────────────────────────────────────────
 
-test.describe('AUDIT-007 — Tour: grooming (grooming-queue e grooming-voice-btn corrigidos)', () => {
+test.describe('AUDIT-007 — Tour: grooming (4 passos, waitForNext no Kanban)', () => {
   test.beforeEach(async ({ page }) => {
     await loginAsAdmin(page)
     await page.goto(`${BASE_URL}/dashboard/grooming`)
@@ -382,27 +462,34 @@ test.describe('AUDIT-007 — Tour: grooming (grooming-queue e grooming-voice-btn
     await waitForMentorGlobals(page)
   })
 
-  test('step 0 (grooming-queue) sempre presente', async ({ page }) => {
+  test('step 0: grooming-queue presente e waitForNext aponta para grooming-voice-btn (dentro do modal)', async ({ page }) => {
     const { steps } = TOURS.grooming
     await startTour(page, 'grooming')
-
     const count = await assertStep(page, steps[0], steps[1].title)
     expect(count, 'grooming-queue deve existir na página de grooming').toBeGreaterThan(0)
+    // grooming-voice-btn está dentro de GroomingDetailModal — não deve estar no DOM
+    await assertNextTargetAbsent(page, 'grooming-voice-btn')
   })
 
-  test('step 1 (grooming-voice-btn) — soft check (dentro de um card aberto)', async ({ page }) => {
+  test('steps 1-3 — soft check (dentro do GroomingDetailModal, requer card aberto)', async ({ page }) => {
     const { steps } = TOURS.grooming
     await startTour(page, 'grooming')
 
+    await advanceStep(page) // skip step 0
+    await assertStep(page, steps[1], steps[2].title)
+
     await advanceStep(page)
-    await assertStep(page, steps[1])
+    await assertStep(page, steps[2], steps[3].title)
+
+    await advanceStep(page)
+    await assertStep(page, steps[3])
     await expect(page.getByTestId('mentor-balloon').getByRole('button', { name: /concluir/i })).toBeVisible()
   })
 })
 
 // ─── AUDIT-008: Alta ──────────────────────────────────────────────────────────
 
-test.describe('AUDIT-008 — Tour: alta (kanban toggle como passo 0 corrigido)', () => {
+test.describe('AUDIT-008 — Tour: alta (kanban toggle como passo 0)', () => {
   test.beforeEach(async ({ page }) => {
     await loginAsAdmin(page)
     await page.goto(`${BASE_URL}/dashboard/reception`)
@@ -410,34 +497,30 @@ test.describe('AUDIT-008 — Tour: alta (kanban toggle como passo 0 corrigido)',
     await waitForMentorGlobals(page)
   })
 
-  test('step 0 (reception-kanban-toggle) sempre presente na listagem', async ({ page }) => {
+  test('step 0: reception-kanban-toggle presente na listagem', async ({ page }) => {
     const { steps } = TOURS.alta
     await startTour(page, 'alta')
-
     const count = await assertStep(page, steps[0], steps[1].title)
     expect(count, 'reception-kanban-toggle deve existir na recepção').toBeGreaterThan(0)
   })
 
-  test('ao clicar no toggle, kanban-board aparece e tour avança', async ({ page }) => {
+  test('ao clicar no toggle, kanban-board aparece e tour avança automaticamente', async ({ page }) => {
     const { steps } = TOURS.alta
     await startTour(page, 'alta')
 
     await expect(page.locator('[data-mentor-step="reception-kanban-toggle"]')).toBeVisible()
     await page.locator('[data-mentor-step="reception-kanban-toggle"]').click()
 
-    // Aguarda kanban-board aparecer no DOM (fetch do Supabase pode demorar)
     await expect(page.locator('[data-mentor-step="kanban-board"]')).toBeVisible({ timeout: 20_000 })
 
-    // Com kanban-board no DOM, waitForNext deve avançar o tour automaticamente
     await expect(
       page.getByTestId('mentor-balloon').getByText(steps[1].title, { exact: true }),
     ).toBeVisible({ timeout: 15_000 })
   })
 
-  test('step 2 (kanban-col-completed) — soft check (requer Kanban ativo)', async ({ page }) => {
+  test('step 2: kanban-col-completed — soft check (requer Kanban ativo)', async ({ page }) => {
     const { steps } = TOURS.alta
     await startTour(page, 'alta')
-
     await advanceStep(page)
     await advanceStep(page)
     await assertStep(page, steps[2])
@@ -447,7 +530,7 @@ test.describe('AUDIT-008 — Tour: alta (kanban toggle como passo 0 corrigido)',
 
 // ─── AUDIT-009: Cadastro de Pet ───────────────────────────────────────────────
 
-test.describe('AUDIT-009 — Tour: cadastro-pet (validação de regressão)', () => {
+test.describe('AUDIT-009 — Tour: cadastro-pet (9 passos, validação completa)', () => {
   test.beforeEach(async ({ page }) => {
     await loginAsAdmin(page)
     await page.goto(`${BASE_URL}/dashboard/patients`)
@@ -455,23 +538,20 @@ test.describe('AUDIT-009 — Tour: cadastro-pet (validação de regressão)', ()
     await waitForMentorGlobals(page)
   })
 
-  test('step 0 (btn-novo-paciente) sempre presente e clicável', async ({ page }) => {
+  test('step 0: btn-novo-paciente presente, clicável e waitForNext aponta para pet-name-input', async ({ page }) => {
     const { steps } = TOURS['cadastro-pet']
     await startTour(page, 'cadastro-pet')
-
     const count = await assertStep(page, steps[0], steps[1].title)
     expect(count, 'btn-novo-paciente deve existir na página de pacientes').toBeGreaterThan(0)
-
-    const btn = page.locator('[data-mentor-step="btn-novo-paciente"]')
-    await expect(btn).toBeVisible()
-    await expect(btn).toBeEnabled()
+    await expect(page.locator('[data-mentor-step="btn-novo-paciente"]')).toBeEnabled()
+    // pet-name-input está dentro do modal — não deve estar no DOM antes de clicar
+    await assertNextTargetAbsent(page, 'pet-name-input')
   })
 
-  test('após clicar em btn-novo-paciente, modal abre e step 1 aparece automaticamente', async ({ page }) => {
+  test('ao clicar em btn-novo-paciente, modal abre e step 1 (pet-name-input) aparece', async ({ page }) => {
     const { steps } = TOURS['cadastro-pet']
     await startTour(page, 'cadastro-pet')
 
-    await expect(page.locator('[data-mentor-step="btn-novo-paciente"]')).toBeVisible({ timeout: 8_000 })
     await page.locator('[data-mentor-step="btn-novo-paciente"]').click()
 
     await expect(
@@ -509,26 +589,26 @@ test.describe('AUDIT-009 — Tour: cadastro-pet (validação de regressão)', ()
   })
 })
 
-// ─── AUDIT-010: Varredura global de targets ───────────────────────────────────
+// ─── AUDIT-010: Varredura global — mustExist:true no DOM ─────────────────────
 
-test.describe('AUDIT-010 — Varredura: todos os targets "mustExist" estão no DOM', () => {
-  test('recepção: reception-search-input, reception-new-btn, reception-queue', async ({ page }) => {
+test.describe('AUDIT-010 — Varredura: todos os targets mustExist:true no DOM', () => {
+  test('recepção: search-input, new-btn, queue, kanban-toggle', async ({ page }) => {
     await loginAsAdmin(page)
     await page.goto(`${BASE_URL}/dashboard/reception`)
     await page.waitForLoadState('load')
 
-    for (const target of ['reception-search-input', 'reception-new-btn', 'reception-queue']) {
+    for (const target of ['reception-search-input', 'reception-new-btn', 'reception-queue', 'reception-kanban-toggle']) {
       const count = await page.locator(`[data-mentor-step="${target}"]`).count()
       expect(count, `${target} deve estar na DOM da página de recepção`).toBeGreaterThan(0)
     }
   })
 
-  test('triagem: nurse-queue, triage-add-btn', async ({ page }) => {
+  test('triagem: triage-add-btn, nurse-queue', async ({ page }) => {
     await loginAsAdmin(page)
     await page.goto(`${BASE_URL}/dashboard/triage`)
     await page.waitForLoadState('load')
 
-    for (const target of ['nurse-queue', 'triage-add-btn']) {
+    for (const target of ['triage-add-btn', 'nurse-queue']) {
       const count = await page.locator(`[data-mentor-step="${target}"]`).count()
       expect(count, `${target} deve estar na DOM da página de triagem`).toBeGreaterThan(0)
     }
@@ -543,12 +623,12 @@ test.describe('AUDIT-010 — Varredura: todos os targets "mustExist" estão no D
     expect(count, 'vet-queue deve estar na DOM da página do veterinário').toBeGreaterThan(0)
   })
 
-  test('exames: exams-queue, exams-request-btn', async ({ page }) => {
+  test('exames: exams-request-btn, exams-queue', async ({ page }) => {
     await loginAsAdmin(page)
     await page.goto(`${BASE_URL}/dashboard/exams`)
     await page.waitForLoadState('load')
 
-    for (const target of ['exams-queue', 'exams-request-btn']) {
+    for (const target of ['exams-request-btn', 'exams-queue']) {
       const count = await page.locator(`[data-mentor-step="${target}"]`).count()
       expect(count, `${target} deve estar na DOM da página de exames`).toBeGreaterThan(0)
     }
@@ -572,21 +652,77 @@ test.describe('AUDIT-010 — Varredura: todos os targets "mustExist" estão no D
     expect(count, 'grooming-queue deve estar na DOM da página de grooming').toBeGreaterThan(0)
   })
 
-  test('alta: reception-kanban-toggle', async ({ page }) => {
-    await loginAsAdmin(page)
-    await page.goto(`${BASE_URL}/dashboard/reception`)
-    await page.waitForLoadState('load')
-
-    const count = await page.locator('[data-mentor-step="reception-kanban-toggle"]').count()
-    expect(count, 'reception-kanban-toggle deve estar na DOM da recepção').toBeGreaterThan(0)
-  })
-
-  test('cadastro-pet: btn-novo-paciente', async ({ page }) => {
+  test('pacientes: btn-novo-paciente', async ({ page }) => {
     await loginAsAdmin(page)
     await page.goto(`${BASE_URL}/dashboard/patients`)
     await page.waitForLoadState('load')
 
     const count = await page.locator('[data-mentor-step="btn-novo-paciente"]').count()
     expect(count, 'btn-novo-paciente deve estar na DOM da página de pacientes').toBeGreaterThan(0)
+  })
+})
+
+// ─── AUDIT-011: waitForNext — validação anti-avanço-imediato ─────────────────
+
+test.describe('AUDIT-011 — Anti-Regressão: waitForNext não avança imediatamente', () => {
+  test('triagem step 1 (nurse-queue): triage-voice-btn ausente no DOM ao iniciar', async ({ page }) => {
+    await loginAsAdmin(page)
+    await page.goto(`${BASE_URL}/dashboard/triage`)
+    await page.waitForLoadState('load')
+    await waitForMentorGlobals(page)
+    await startTour(page, 'triagem')
+    await advanceStep(page) // vai para step 1 (nurse-queue com waitForNext)
+
+    // Confirma que triage-voice-btn NÃO está no DOM (está dentro do TriageForm fechado)
+    const count = await page.locator('[data-mentor-step="triage-voice-btn"]').count()
+    expect(count, 'triage-voice-btn NÃO deve estar no DOM com TriageForm fechado').toBe(0)
+
+    // Tour NÃO deve ter avançado automaticamente
+    const balloon = page.getByTestId('mentor-balloon')
+    await expect(balloon.getByText('Fila de Triagem', { exact: true })).toBeVisible({ timeout: 3_000 })
+  })
+
+  test('exames step 1 (exams-queue): exams-result-textarea ausente no DOM ao iniciar', async ({ page }) => {
+    await loginAsAdmin(page)
+    await page.goto(`${BASE_URL}/dashboard/exams`)
+    await page.waitForLoadState('load')
+    await waitForMentorGlobals(page)
+    await startTour(page, 'exames')
+    await advanceStep(page) // vai para step 1 (exams-queue com waitForNext)
+
+    // Confirma que exams-result-textarea NÃO está no DOM (modal fechado)
+    const count = await page.locator('[data-mentor-step="exams-result-textarea"]').count()
+    expect(count, 'exams-result-textarea NÃO deve estar no DOM com modal fechado').toBe(0)
+
+    const balloon = page.getByTestId('mentor-balloon')
+    await expect(balloon.getByText('Fila de Exames', { exact: true })).toBeVisible({ timeout: 3_000 })
+  })
+
+  test('internacao step 0 (hospitalization-list): hosp-save-evolution-btn ausente no DOM', async ({ page }) => {
+    await loginAsAdmin(page)
+    await page.goto(`${BASE_URL}/dashboard/hospitalization`)
+    await page.waitForLoadState('load')
+    await waitForMentorGlobals(page)
+    await startTour(page, 'internacao')
+
+    const count = await page.locator('[data-mentor-step="hosp-save-evolution-btn"]').count()
+    expect(count, 'hosp-save-evolution-btn NÃO deve estar no DOM com modal fechado').toBe(0)
+
+    const balloon = page.getByTestId('mentor-balloon')
+    await expect(balloon.getByText('Quadro de Internados', { exact: true })).toBeVisible({ timeout: 3_000 })
+  })
+
+  test('grooming step 0 (grooming-queue): grooming-voice-btn ausente no DOM', async ({ page }) => {
+    await loginAsAdmin(page)
+    await page.goto(`${BASE_URL}/dashboard/grooming`)
+    await page.waitForLoadState('load')
+    await waitForMentorGlobals(page)
+    await startTour(page, 'grooming')
+
+    const count = await page.locator('[data-mentor-step="grooming-voice-btn"]').count()
+    expect(count, 'grooming-voice-btn NÃO deve estar no DOM com modal de card fechado').toBe(0)
+
+    const balloon = page.getByTestId('mentor-balloon')
+    await expect(balloon.getByText('Kanban de Banho e Tosa', { exact: true })).toBeVisible({ timeout: 3_000 })
   })
 })
