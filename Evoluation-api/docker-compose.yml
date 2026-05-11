@@ -48,9 +48,9 @@ services:
         sed -i '/^DATABASE_CONNECTION_URI=/d' /evolution/.env
         echo 'DATABASE_CONNECTION_URI=postgresql://postgres:Sysmax2026@evolution-postgres:5432/evolution?schema=public' >> /evolution/.env
         SVC=/evolution/dist/api/integrations/channel/whatsapp/whatsapp.baileys.service.js
-        sed -i 's/let t={groups:\[\],broadcast:\[\],users:\[\]}/let t={groups:[],broadcast:[],users:[],lid:[]}/' $SVC
-        sed -i 's/g===\"status@broadcast\"?t\.broadcast\.push({number:u,jid:g}):t\.users\.push({number:u,jid:g})/g==="status@broadcast"?t.broadcast.push({number:u,jid:g}):g.includes("@lid")?t.lid.push({number:u,jid:g}):t.users.push({number:u,jid:g})/g' $SVC
-        sed -i 's/s\.push(\.\.\.t\.broadcast\.map(({jid:u,number:g})=>new Ze(u,!1,g)))/s.push(...t.broadcast.map(({jid:u,number:g})=>new Ze(u,!1,g)));s.push(...t.lid.map(({jid:u,number:g})=>new Ze(u,!0,g)))/' $SVC
+        sed -i 's/let t={groups:\[\],broadcast:\[\],users:\[\]}/let t={groups:[],broadcast:[],users:[],lid:[]}/' $$SVC
+        sed -i 's/g===\"status@broadcast\"?t\.broadcast\.push({number:u,jid:g}):t\.users\.push({number:u,jid:g})/g==="status@broadcast"?t.broadcast.push({number:u,jid:g}):g.includes("@lid")?t.lid.push({number:u,jid:g}):t.users.push({number:u,jid:g})/g' $$SVC
+        sed -i 's/s\.push(\.\.\.t\.broadcast\.map(({jid:u,number:g})=>new Ze(u,!1,g)))/s.push(...t.broadcast.map(({jid:u,number:g})=>new Ze(u,!1,g)));s.push(...t.lid.map(({jid:u,number:g})=>new Ze(u,!0,g)))/' $$SVC
         npm run db:deploy && npm run db:generate && npm run start:prod
     environment:
       - SERVER_URL=https://wpp.sysmaxsolutions.com

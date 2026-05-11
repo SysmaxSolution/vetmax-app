@@ -44,7 +44,7 @@ export async function GET() {
       })
       if (!evoRes.ok) {
         return NextResponse.json(
-          { error: `Serviço WhatsApp indisponível (HTTP ${evoRes.status}). Verifique se o container Evolution e o tunnel Cloudflare estão ativos.` },
+          { error: `Serviço WhatsApp temporariamente indisponível (${evoRes.status}). Tente novamente em instantes.` },
           { status: 503 },
         )
       }
@@ -53,7 +53,7 @@ export async function GET() {
       if (base64) return NextResponse.json({ base64, instanceName })
     } catch {
       return NextResponse.json(
-        { error: 'Erro ao conectar ao serviço WhatsApp. Verifique o tunnel Cloudflare (cloudflared tunnel run vetmax-wpp).' },
+        { error: 'Serviço WhatsApp temporariamente indisponível. Tente novamente em instantes.' },
         { status: 503 },
       )
     }
