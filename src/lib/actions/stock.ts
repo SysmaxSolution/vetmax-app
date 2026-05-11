@@ -309,19 +309,38 @@ export async function deleteStockItem(stockItemId: string): Promise<{ success: t
 
 // ─── Funções para tabela stock_items ─────────────────────────────────────────
 
+export type StockCategory =
+  | 'medication'
+  | 'controlled_medication'
+  | 'clinic_product'
+  | 'petshop'
+  | 'grooming_supply'
+  | 'aesthetics'
+  | 'other'
+
 export type StockItemV2 = {
-  id: string
-  clinic_id: string
-  name: string
-  category: string
-  quantity: number
-  unit: string
+  id:           string
+  clinic_id:    string
+  name:         string
+  category:     StockCategory
+  quantity:     number
+  unit:         string
   min_quantity: number
-  unit_price: number
+  unit_price:   number
   last_restock: string | null
-  created_at: string
-  updated_at: string
+  created_at:   string
+  updated_at:   string
+  // Novos campos (migration 0099)
+  is_controlled: boolean
+  brand:         string | null
+  sku:           string | null
+  barcode:       string | null
+  batch_number:  string | null
+  expiry_date:   string | null
+  supplier:      string | null
 }
+
+const STOCK_V2_FIELDS = 'id, clinic_id, name, category, quantity, unit, min_quantity, unit_price, last_restock, created_at, updated_at, is_controlled, brand, sku, barcode, batch_number, expiry_date, supplier'
 
 export async function getPharmacyStockV2(): Promise<StockItemV2[] | { error: string }> {
   const ctx = await getClinicAndUser()
@@ -329,7 +348,7 @@ export async function getPharmacyStockV2(): Promise<StockItemV2[] | { error: str
 
   const { data, error } = await ctx.supabase
     .from('stock_items')
-    .select('id, clinic_id, name, category, quantity, unit, min_quantity, unit_price, last_restock, created_at, updated_at')
+    .select(STOCK_V2_FIELDS)
     .eq('clinic_id', ctx.clinic_id)
     .order('name', { ascending: true })
 
@@ -343,7 +362,7 @@ export async function getLowStockItemsV2(): Promise<StockItemV2[] | { error: str
 
   const { data, error } = await ctx.supabase
     .from('stock_items')
-    .select('id, clinic_id, name, category, quantity, unit, min_quantity, unit_price, last_restock, created_at, updated_at')
+    .select(STOCK_V2_FIELDS)
     .eq('clinic_id', ctx.clinic_id)
     .order('name', { ascending: true })
 
@@ -352,12 +371,19 @@ export async function getLowStockItemsV2(): Promise<StockItemV2[] | { error: str
 }
 
 export async function addStockItemV2(input: {
-  name: string
-  quantity: number
-  unit: string
-  min_quantity: number
-  category?: string
-  unit_price?: number
+  name:           string
+  quantity:       number
+  unit:           string
+  min_quantity:   number
+  category?:      StockCategory
+  unit_price?:    number
+  is_controlled?: boolean
+  brand?:         string | null
+  sku?:           string | null
+  barcode?:       string | null
+  batch_number?:  string | null
+  expiry_date?:   string | null
+  supplier?:      string | null
 }): Promise<StockItemV2 | { error: string }> {
   const ctx = await getClinicAndUser()
   if (!ctx) return { error: 'Não autenticado.' }
@@ -367,16 +393,23 @@ export async function addStockItemV2(input: {
   const { data, error } = await admin
     .from('stock_items')
     .insert({
-      clinic_id:    ctx.clinic_id,
-      name:         input.name.trim(),
-      quantity:     input.quantity,
-      unit:         input.unit,
-      min_quantity: input.min_quantity,
-      category:     input.category ?? 'medication',
-      unit_price:   input.unit_price ?? 0,
-      last_restock: input.quantity > 0 ? new Date().toISOString() : null,
+      clinic_id:     ctx.clinic_id,
+      name:          input.name.trim(),
+      quantity:      input.quantity,
+      unit:          input.unit,
+      min_quantity:  input.min_quantity,
+      category:      input.category ?? 'medication',
+      unit_price:    input.unit_price ?? 0,
+      last_restock:  input.quantity > 0 ? new Date().toISOString() : null,
+      is_controlled: input.is_controlled ?? false,
+      brand:         input.brand?.trim() || null,
+      sku:           input.sku?.trim() || null,
+      barcode:       input.barcode?.trim() || null,
+      batch_number:  input.batch_number?.trim() || null,
+      expiry_date:   input.expiry_date || null,
+      supplier:      input.supplier?.trim() || null,
     })
-    .select('id, clinic_id, name, category, quantity, unit, min_quantity, unit_price, last_restock, created_at, updated_at')
+    .select(STOCK_V2_FIELDS)
     .single()
 
   if (error) {
@@ -386,6 +419,152 @@ export async function addStockItemV2(input: {
 
   revalidatePath('/dashboard/pharmacy')
   return data as StockItemV2
+}
+
+export async function updateStockItemV2(
+  itemId: string,
+  input: Partial<Omit<StockItemV2, 'id' | 'clinic_id' | 'created_at' | 'updated_at' | 'last_restock' | 'quantity'>>
+): Promise<StockItemV2 | { error: string }> {
+  const ctx = await getClinicAndUser()
+  if (!ctx) return { error: 'Não autenticado.' }
+
+  const admin = createAdminClient()
+
+  const patch: Record<string, unknown> = {}
+  if (input.name          !== undefined) patch.name          = input.name.trim()
+  if (input.category      !== undefined) patch.category      = input.category
+  if (input.unit          !== undefined) patch.unit          = input.unit
+  if (input.min_quantity  !== undefined) patch.min_quantity  = input.min_quantity
+  if (input.unit_price    !== undefined) patch.unit_price    = input.unit_price
+  if (input.is_controlled !== undefined) patch.is_controlled = input.is_controlled
+  if ('brand'        in input) patch.brand        = input.brand?.trim()        || null
+  if ('sku'          in input) patch.sku          = input.sku?.trim()          || null
+  if ('barcode'      in input) patch.barcode      = input.barcode?.trim()      || null
+  if ('batch_number' in input) patch.batch_number = input.batch_number?.trim() || null
+  if ('expiry_date'  in input) patch.expiry_date  = input.expiry_date          || null
+  if ('supplier'     in input) patch.supplier     = input.supplier?.trim()     || null
+
+  const { data, error } = await admin
+    .from('stock_items')
+    .update(patch)
+    .eq('id', itemId)
+    .eq('clinic_id', ctx.clinic_id)
+    .select(STOCK_V2_FIELDS)
+    .single()
+
+  if (error) return { error: 'Erro ao atualizar item: ' + error.message }
+
+  revalidatePath('/dashboard/pharmacy')
+  return data as StockItemV2
+}
+
+export async function restockItemV2(
+  itemId:      string,
+  quantityToAdd: number,
+  notes?:      string
+): Promise<{ success: true; new_quantity: number } | { error: string }> {
+  const ctx = await getClinicAndUser()
+  if (!ctx) return { error: 'Não autenticado.' }
+
+  const admin = createAdminClient()
+
+  const { data: current } = await admin
+    .from('stock_items')
+    .select('id, name, quantity, clinic_id')
+    .eq('id', itemId)
+    .eq('clinic_id', ctx.clinic_id)
+    .single()
+
+  if (!current) return { error: 'Item não encontrado.' }
+
+  const qtyBefore = Number(current.quantity)
+  const qtyAfter  = qtyBefore + quantityToAdd
+
+  const { error } = await admin
+    .from('stock_items')
+    .update({ quantity: qtyAfter, last_restock: new Date().toISOString() })
+    .eq('id', itemId)
+    .eq('clinic_id', ctx.clinic_id)
+
+  if (error) return { error: 'Erro ao repor estoque: ' + error.message }
+
+  await admin.from('stock_movements').insert({
+    clinic_id:       ctx.clinic_id,
+    medication_name: current.name,
+    movement_type:   'CREDIT',
+    quantity_change: quantityToAdd,
+    quantity_before: qtyBefore,
+    quantity_after:  qtyAfter,
+    source:          'RESTOCK',
+    notes:           notes ?? null,
+    created_by:      ctx.user.id,
+  })
+
+  revalidatePath('/dashboard/pharmacy')
+  return { success: true, new_quantity: qtyAfter }
+}
+
+export async function adjustStockItemV2(
+  itemId:      string,
+  newQuantity: number,
+  notes:       string
+): Promise<{ success: true } | { error: string }> {
+  const ctx = await getClinicAndUser()
+  if (!ctx) return { error: 'Não autenticado.' }
+
+  const admin = createAdminClient()
+
+  const { data: current } = await admin
+    .from('stock_items')
+    .select('name, quantity, clinic_id')
+    .eq('id', itemId)
+    .eq('clinic_id', ctx.clinic_id)
+    .single()
+
+  if (!current) return { error: 'Item não encontrado.' }
+
+  const qtyBefore = Number(current.quantity)
+
+  const { error } = await admin
+    .from('stock_items')
+    .update({ quantity: newQuantity })
+    .eq('id', itemId)
+    .eq('clinic_id', ctx.clinic_id)
+
+  if (error) return { error: 'Erro ao ajustar estoque: ' + error.message }
+
+  await admin.from('stock_movements').insert({
+    clinic_id:       ctx.clinic_id,
+    medication_name: current.name,
+    movement_type:   'ADJUSTMENT',
+    quantity_change: newQuantity - qtyBefore,
+    quantity_before: qtyBefore,
+    quantity_after:  newQuantity,
+    source:          'MANUAL_ADJUSTMENT',
+    notes,
+    created_by:      ctx.user.id,
+  })
+
+  revalidatePath('/dashboard/pharmacy')
+  return { success: true }
+}
+
+export async function deleteStockItemV2(itemId: string): Promise<{ success: true } | { error: string }> {
+  const ctx = await getClinicAndUser()
+  if (!ctx) return { error: 'Não autenticado.' }
+
+  const admin = createAdminClient()
+
+  const { error } = await admin
+    .from('stock_items')
+    .delete()
+    .eq('id', itemId)
+    .eq('clinic_id', ctx.clinic_id)
+
+  if (error) return { error: 'Erro ao remover item: ' + error.message }
+
+  revalidatePath('/dashboard/pharmacy')
+  return { success: true }
 }
 
 export async function dispenseStockItem(
