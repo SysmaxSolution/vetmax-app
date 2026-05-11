@@ -291,12 +291,7 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
       await loadRecords()
       setSaveToast('Evolução salva pelo assistente de voz!')
       setTimeout(() => setSaveToast(null), 3500)
-
-      // Oferece WhatsApp somente após salvar com sucesso (único disparo)
-      if (card.tutor?.phone) {
-        setVoiceConfirmedWA(false)
-        setWhatsappPending(true)
-      }
+      // WhatsApp é oferecido via voz pelo hook (CONFIRM_WA) — sem disparo duplicado aqui
     } catch (err) {
       console.error('[handleAutoSave] erro ao salvar evolução:', err)
       setIsParsingIntent(false)
@@ -306,7 +301,10 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
     }
   }, [card.id, card.status, card.tutor?.phone, selectedServices, products, behavior, loadRecords])
 
-  const handleVoiceWA = useCallback(() => { setVoiceConfirmedWA(true) }, [])
+  const handleVoiceWA = useCallback(() => {
+    setVoiceConfirmedWA(true)
+    if (card.tutor?.phone) setWhatsappPending(true)
+  }, [card.tutor?.phone])
 
   const assistant = useGroomingVoiceAssistant({
     onAutoSave:    handleAutoSave,

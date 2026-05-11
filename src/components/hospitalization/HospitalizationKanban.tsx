@@ -119,7 +119,8 @@ export default function HospitalizationKanban({ initialBoard, clinicId }: Props)
     fromStatus: HospitalizationStatus
     toStatus:   HospitalizationStatus
   } | null>(null)
-  const [whatsappReview, setWhatsappReview] = useState<HospitalizationCard | null>(null)
+  const [whatsappReview,     setWhatsappReview]     = useState<HospitalizationCard | null>(null)
+  const [whatsappDischarge,  setWhatsappDischarge]  = useState<HospitalizationCard | null>(null)
 
   useRealtimeSync({ table: 'hospitalizations', clinicId })
 
@@ -328,6 +329,7 @@ export default function HospitalizationKanban({ initialBoard, clinicId }: Props)
     } else {
       setDischargeSuccessMsg(`Alta concedida! Paciente ${card.patient.name} recebeu alta com sucesso.`)
       setTimeout(() => setDischargeSuccessMsg(''), 5000)
+      if (card.tutor?.phone) setWhatsappDischarge(card)
     }
 
     setIsModalProcessing(false)
@@ -528,6 +530,24 @@ export default function HospitalizationKanban({ initialBoard, clinicId }: Props)
           }}
           hospitalizationId={whatsappReview.id}
           patientId={whatsappReview.patient.id}
+        />
+      )}
+
+      {/* I-02: WhatsApp — Alta da Internação */}
+      {whatsappDischarge && whatsappDischarge.tutor?.phone && (
+        <WhatsAppNotificationModal
+          isOpen
+          onClose={() => setWhatsappDischarge(null)}
+          trigger="hospitalization_discharge"
+          context={{
+            petName:    whatsappDischarge.patient.name,
+            tutorName:  whatsappDischarge.tutor.name,
+            tutorPhone: whatsappDischarge.tutor.phone,
+            species:    whatsappDischarge.patient.species,
+            breed:      whatsappDischarge.patient.breed ?? undefined,
+          }}
+          hospitalizationId={whatsappDischarge.id}
+          patientId={whatsappDischarge.patient.id}
         />
       )}
 

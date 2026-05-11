@@ -168,7 +168,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
   const [species,             setSpecies]             = useState<string>(patient?.species ?? 'dog')
   const [breed,               setBreed]               = useState(patient?.breed ?? '')
   const [birthDate,           setBirthDate]           = useState(patient?.birth_date ?? '')
-  const [birthDateMode,       setBirthDateMode]       = useState<'date' | 'age'>('date')
+  const [birthDateMode,       setBirthDateMode]       = useState<'date' | 'age'>(patient?.birth_date_estimated ? 'age' : 'date')
   const [ageValue,            setAgeValue]            = useState('')
   const [ageUnit,             setAgeUnit]             = useState<'A' | 'M'>('A')
   const [reproductiveStatus,  setReproductiveStatus]  = useState(patient?.reproductive_status ?? 'Desconhecido')
@@ -300,7 +300,9 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
       patient.id,
       patient.tutor.id,
       {
-        name: petName, species, breed, birth_date: birthDate || null, reproductive_status: reproductiveStatus, behavior_tags: tags,
+        name: petName, species, breed, birth_date: birthDate || null,
+        birth_date_estimated: birthDateMode === 'age',
+        reproductive_status: reproductiveStatus, behavior_tags: tags,
         allergies: allergies || null, chronic_diseases: chronicDiseases || null, microchip_id: microchipId || null,
       },
       { name: tutorName, phone: tutorPhone, cpf: tutorCpf, email: tutorEmail, address: tutorAddress, emergency_contact: emergencyContact }

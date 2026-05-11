@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { buildWakeRe, buildStopRe } from '@/lib/voice-triggers'
+import { buildWakeRe, buildStopRe, fuzzyMatchCustom } from '@/lib/voice-triggers'
 
 export type VoiceAssistantState = 'IDLE' | 'RECORDING' | 'CONFIRM_WA'
 
@@ -141,7 +141,7 @@ export function useGroomingVoiceAssistant({ onAutoSave, onSendWA, startTriggers,
       if (curState === 'IDLE') {
         for (let i = event.resultIndex; i < event.results.length; i++) {
           const chunk = event.results[i][0].transcript
-          if (wakeWordReRef.current.test(chunk)) {
+          if (wakeWordReRef.current.test(chunk) || fuzzyMatchCustom(chunk, startTriggers ?? [])) {
             recordingStartRef.current  = i + 1   // ignora resultados anteriores ao wake word
             finalTranscriptRef.current = ''
             setState('RECORDING')
@@ -174,7 +174,7 @@ export function useGroomingVoiceAssistant({ onAutoSave, onSendWA, startTriggers,
         const fullText = (finalTranscriptRef.current + (interim ? ' ' + interim : '')).trim()
 
         // Verifica save command no texto completo (final + interim)
-        if (saveCmdReRef.current.test(fullText)) {
+        if (saveCmdReRef.current.test(fullText) || fuzzyMatchCustom(fullText, stopTriggers ?? [])) {
           triggerSave(fullText)
           return
         }
