@@ -1,4 +1,4 @@
-﻿// Evolution API v1.8.4 client — self-hosted WhatsApp gateway
+﻿// Evolution API v2.2.3 client — self-hosted WhatsApp gateway
 
 export type EvolutionCreds = {
   apiUrl:     string   // e.g. http://localhost:8080
@@ -113,9 +113,10 @@ export async function evolutionCreateInstance(params: {
   instanceName: string
   webhookUrl?:  string
 }): Promise<{ ok: true } | { ok: false; status: number; body: string }> {
-  // v1.8.4: apenas instanceName + qrcode; webhook é configurado separadamente
+  // v2.x: integration obrigatório; webhook configurado separadamente via /webhook/set
   const body: Record<string, unknown> = {
     instanceName: params.instanceName,
+    integration:  'WHATSAPP-BAILEYS',
     qrcode:       true,
   }
   try {
