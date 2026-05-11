@@ -13,7 +13,7 @@ import { createInvitation, createAndSendInvitation, revokeInvitation } from '@/l
 import { uploadClinicLogo, removeClinicLogo } from '@/lib/actions/clinic-settings'
 import type { DocumentTemplate, TemplateType, UserRole, Invitation, InvitationRole } from '@/types'
 import type { CatalogItem } from '@/lib/actions/catalog'
-import type { ClinicConfig } from '@/lib/actions/clinic-settings'
+import type { ClinicConfig, ClinicSettingsConfig } from '@/lib/actions/clinic-settings'
 import ImportTemplateModal from './ImportTemplateModal'
 import CatalogTab from './CatalogTab'
 import ClinicSettingsTab from './ClinicSettingsTab'
@@ -51,6 +51,7 @@ interface ManagementWorkspaceProps {
   userFullName:        string
   initialCatalog:           CatalogItem[]
   initialClinicConfig:      ClinicConfig | null
+  initialSettingsConfig?:   ClinicSettingsConfig | null
   initialWhatsAppSettings:  WhatsAppSettingsDisplay | null
   initialProductPrices?:    ProductPrice[]
   initialRooms?:            Room[]
@@ -142,7 +143,7 @@ function UserInlineField({ label, value, placeholder, onSave }: {
 
 export default function ManagementWorkspace({
   initialTemplates, clinicData, users, initialInvitations, userLimit, currentUserId, userEmail, userFullName,
-  initialCatalog, initialClinicConfig, initialWhatsAppSettings, initialProductPrices = [], initialRooms = [],
+  initialCatalog, initialClinicConfig, initialSettingsConfig = null, initialWhatsAppSettings, initialProductPrices = [], initialRooms = [],
   activeModules = [],
 }: ManagementWorkspaceProps) {
   const searchParams = useSearchParams()
@@ -539,6 +540,7 @@ export default function ManagementWorkspace({
           <ClinicSettingsTab
             initialConfig={initialClinicConfig}
             initialChecklist={(clinicData?.reception_checklist as string[] | null) ?? []}
+            initialSettingsConfig={initialSettingsConfig}
             onToast={(type, message) => setToast({ type, message })}
           />
 

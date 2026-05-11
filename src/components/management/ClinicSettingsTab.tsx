@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import {
   updateClinicConfig,
+  updateRequiredFields,
   type FlowConfig, type ClinicConfig, type ClinicSettingsConfig,
 } from '@/lib/actions/clinic-settings'
 
@@ -257,24 +258,10 @@ function RequiredFieldsConfig({ initialSettingsConfig, onToast }: { initialSetti
 
   async function saveRequiredFields() {
     setSaving(true)
-    const res = await updateClinicConfig({
-      // These fields are stored in the clinics table as JSONB columns (via migrations 0072/0073)
-      // We pass them through updateClinicConfig which does a generic .update() on clinics table
-    } as any)
-    // Since clinic_settings is a separate table, we need to update it directly
-    // For now we use the existing pattern — update via Supabase directly
-    try {
-      const response = await fetch('/api/update-required-fields', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ checkin_required_fields: checkinFields, triage_required_fields: triageFields }),
-      })
-      if (!response.ok) throw new Error('Falha ao salvar')
-      onToast('success', 'Campos obrigatórios atualizados!')
-    } catch {
-      onToast('error', 'Erro ao salvar campos obrigatórios.')
-    }
+    const res = await updateRequiredFields(checkinFields, triageFields)
     setSaving(false)
+    if ('error' in res) { onToast('error', res.error); return }
+    onToast('success', 'Campos obrigatórios atualizados!')
   }
 
   return (
