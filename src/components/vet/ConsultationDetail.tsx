@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { useRealtimeRow } from '@/hooks/useRealtimeSync'
@@ -8,6 +8,7 @@ import {
   ArrowLeft, AlertCircle, Mic, MicOff, Loader2, Sparkles,
   FlaskConical, Pill, CheckSquare, Square, Calendar, Save,
   Stethoscope, Clock, ChevronRight, Info, Syringe, FileText, X, BedDouble, RotateCcw, Plus, HeartCrack,
+  Settings,
 } from 'lucide-react'
 import { saveVetNotes, finalizeConsultation, reopenConsultation, savePrescription, type VetConsultationDetail } from '@/lib/actions/vet'
 import InsuranceAuditBanner from '@/components/consultation/InsuranceAuditBanner'
@@ -22,7 +23,7 @@ import DocumentsSection, { type PrintState } from '@/components/vet/DocumentsSec
 import ClinicalActionsSection from '@/components/vet/ClinicalActionsSection'
 import PetTimelineModal from '@/components/pet/PetTimelineModal'
 import NewAppointmentModal from '@/components/reception/NewAppointmentModal'
-import { buildStopRe } from '@/lib/voice-triggers'
+import { useClinicalVoiceAssistant } from '@/hooks/useClinicalVoiceAssistant'
 import AttachmentsSection from '@/components/ui/AttachmentsSection'
 import MergedTriageSection, { type TriageVitals } from '@/components/vet/MergedTriageSection'
 import AdmitPetModal from '@/components/hospitalization/AdmitPetModal'
@@ -40,6 +41,7 @@ import type { DocumentTemplate } from '@/types'
 import type { PatientDocument } from '@/lib/actions/documents'
 import type { Attachment } from '@/lib/actions/attachments'
 import type { FlowConfig } from '@/lib/actions/clinic-settings'
+import { getClinicVoiceTriggers, updateClinicVoiceTriggers } from '@/lib/actions/clinic-settings'
 
 // ─── Labels ──────────────────────────────────────────────────────────────────
 
@@ -152,7 +154,6 @@ export default function ConsultationDetail({
   const [auditResult, setAuditResult] = useState<AuditResult | null>(null)
 
   // UI state
-  const [isRecording, setIsRecording] = useState(false)
   const [isLoadingDiag, setIsLoadingDiag] = useState(false)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [isFinalizing, setIsFinalizing] = useState(false)
@@ -171,16 +172,20 @@ export default function ConsultationDetail({
     },
   })
 
-  const recognitionRef     = useRef<any>(null)
-  const finalTranscriptRef = useRef('')
-  const silenceTimerRef    = useRef<ReturnType<typeof setTimeout> | null>(null)
   const notasRef          = useRef<HTMLTextAreaElement>(null)
   const lastSavedNotesRef = useRef(consultation.vet_notes ?? '')
   const debounceRef       = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [hasNotesError,      setHasNotesError]      = useState(false)
   const [notesErrorPulsing,  setNotesErrorPulsing]  = useState(false)
-  const [liveTranscript,     setLiveTranscript]     = useState('')
   const [isExtractingVoice,  setIsExtractingVoice]  = useState(false)
+
+  // Handsfree voice assistant
+  const [startTriggers,  setStartTriggers]  = useState<string[]>([])
+  const [stopTriggers,   setStopTriggers]   = useState<string[]>([])
+  const [voiceConfigOpen, setVoiceConfigOpen] = useState(false)
+  const [configSaving,   setConfigSaving]   = useState(false)
+  const [newStartInput,  setNewStartInput]  = useState('')
+  const [newStopInput,   setNewStopInput]   = useState('')
   const [isReopening, setIsReopening] = useState(false)
   const isFinalized = consultation.status === 'completed' || consultation.status === 'hospitalized'
 
@@ -288,227 +293,166 @@ export default function ConsultationDetail({
     setTimeout(() => window.print(), 500)
   }
 
-  // ─── Gravação de Voz (Single Voice Engine) ─────────────────────────────────
-  const startRecording = () => {
-    const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition
-    if (!SpeechRecognition) {
-      setToast({ type: 'error', message: 'Navegador não suporta reconhecimento de voz. Use Chrome.' })
+  // ─── Handsfree Voice Assistant ─────────────────────────────────────────────
+
+  const vetNotesRef = useRef(vetNotes)
+  useEffect(() => { vetNotesRef.current = vetNotes }, [vetNotes])
+
+  const handleVoiceAutoSave = useCallback(async (transcript: string) => {
+    setIsExtractingVoice(true)
+    const result = await extractFullVoice(
+      transcript,
+      {
+        name:      patient.name,
+        species:   patient.species,
+        weight:    vital_signs?.weight,
+        allergies: patient.allergies ?? undefined,
+        vet_notes: vetNotesRef.current,
+      },
+      flowConfig
+    )
+    setIsExtractingVoice(false)
+
+    if ('error' in result) {
+      setToast({ type: 'error', message: result.error })
       return
     }
-    finalTranscriptRef.current = ''
-    const recognition = new SpeechRecognition()
-    recognition.lang = 'pt-BR'
-    recognition.continuous = true
-    recognition.interimResults = true
 
-    // Flag de no-speech: microfone não captou fala (comum em notebooks)
-    let noSpeech = false
-
-    recognition.onstart = () => setIsRecording(true)
-
-    const stopRe = buildStopRe()
-    recognition.onresult = (event: any) => {
-      let interim = ''
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        if (event.results[i].isFinal) {
-          finalTranscriptRef.current += event.results[i][0].transcript + ' '
-        } else {
-          interim += event.results[i][0].transcript
-        }
-      }
-      // Auto-stop via comando de voz (ex: "finalizar", "salvar evolução")
-      const fullText = finalTranscriptRef.current + interim
-      if (stopRe.test(fullText)) {
-        // Remove o comando do texto final antes de parar
-        finalTranscriptRef.current = finalTranscriptRef.current.replace(stopRe, '').trim()
-        recognition.stop()
-        return
-      }
-      // Auto-stop: reinicia o timer de 15s a cada resultado de fala
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
-      silenceTimerRef.current = setTimeout(() => recognition.stop(), 15_000)
-
-      setLiveTranscript(finalTranscriptRef.current + interim)
+    // 1. Notas clínicas → prontuário + auto-save imediato
+    if (result.notas_clinicas.trim()) {
+      const newNotes = vetNotesRef.current ? `${vetNotesRef.current}\n\n${result.notas_clinicas}` : result.notas_clinicas
+      setVetNotes(newNotes)
+      autoSave(newNotes)
     }
 
-    recognition.onerror = (event: any) => {
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
-      if (event.error === 'no-speech') {
-        // Microfone não captou fala (comum em notebooks) — reinicia no onend
-        noSpeech = true
-        return
-      }
-      setIsRecording(false)
-      setLiveTranscript('')
-      if (event.error !== 'aborted') {
-        setToast({ type: 'error', message: `Erro de reconhecimento: ${event.error}` })
-      }
+    // 2. Medicações → salvar no DB e atualizar estado
+    const newMeds: AppliedMedication[] = []
+    for (const m of result.medicacoes_aplicadas) {
+      const res = await addAppliedMedication({
+        consultation_id: consultation.id,
+        medication_name: m.medication_name,
+        dosage: m.dosage ?? undefined,
+        route:  m.route  ?? undefined,
+        notes:  m.notes  ?? undefined,
+      })
+      if (!('error' in res)) newMeds.push(res)
+    }
+    if (newMeds.length > 0) setClinicalMeds(prev => [...prev, ...newMeds])
+
+    // 3. Documentos → enfileirar sugestões para DocumentsSection
+    if (result.documentos_sugeridos.length > 0) {
+      setPendingDocSuggestions(prev => [...prev, ...result.documentos_sugeridos])
     }
 
-    recognition.onend = async () => {
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
+    // 4. Agendamentos sugeridos pela IA
+    if (result.agendamentos_sugeridos.length > 0) {
+      setPendingApptSuggestions(prev => [...prev, ...result.agendamentos_sugeridos])
+    }
 
-      // Reinicia silenciosamente se foi no-speech e o usuário não parou manualmente
-      if (noSpeech && recognitionRef.current) {
-        noSpeech = false
-        setTimeout(() => recognition.start(), 150)
-        return
-      }
+    // 5. Sinais Vitais (Fluxo Contínuo — Triagem mesclada)
+    if (result.sinais_vitais) {
+      const sv = result.sinais_vitais
+      setMergedVitals({
+        weight:           sv.weight           ?? undefined,
+        temperature:      sv.temperature      ?? undefined,
+        heart_rate:       sv.heart_rate       ?? undefined,
+        respiratory_rate: sv.respiratory_rate ?? undefined,
+        chief_complaint:  sv.chief_complaint  ?? undefined,
+      })
+    }
 
-      setIsRecording(false)
-      const transcript = finalTranscriptRef.current.trim()
-      setLiveTranscript('')
-      if (!transcript) return
+    // 6. Laudo de Exame (Fluxo Contínuo — Exames mesclados)
+    if (result.laudo_exame?.trim()) {
+      setMergedExamNotes(prev => prev ? `${prev}\n\n${result.laudo_exame}` : result.laudo_exame!)
+    }
 
-      setIsExtractingVoice(true)
-      const result = await extractFullVoice(
-        transcript,
-        {
-          name:      patient.name,
-          species:   patient.species,
-          weight:    vital_signs?.weight,
-          allergies: patient.allergies ?? undefined,
-          vet_notes: vetNotes,
-        },
-        flowConfig
-      )
-      setIsExtractingVoice(false)
-
-      if ('error' in result) {
-        setToast({ type: 'error', message: result.error })
-        return
-      }
-
-      // 1. Notas clínicas → prontuário + auto-save imediato
-      if (result.notas_clinicas.trim()) {
-        const newNotes = vetNotes ? `${vetNotes}\n\n${result.notas_clinicas}` : result.notas_clinicas
-        setVetNotes(newNotes)
-        autoSave(newNotes)
-      }
-
-      // 2. Medicações → salvar no DB e atualizar estado
-      const newMeds: AppliedMedication[] = []
-      for (const m of result.medicacoes_aplicadas) {
-        const res = await addAppliedMedication({
+    // 7. Vacinas aplicadas → salvar no DB
+    let savedVaccineCount = 0
+    if (result.vaccines_applied && result.vaccines_applied.length > 0) {
+      for (const v of result.vaccines_applied) {
+        const res = await addVaccine({
+          patient_id:      consultation.patient.id,
           consultation_id: consultation.id,
-          medication_name: m.medication_name,
-          dosage: m.dosage ?? undefined,
-          route:  m.route  ?? undefined,
-          notes:  m.notes  ?? undefined,
+          vaccine_name:    v.vaccine_name,
+          next_due_date:   v.next_due_date ?? undefined,
+          notes:           v.notes ?? undefined,
         })
-        if (!('error' in res)) newMeds.push(res)
-      }
-      if (newMeds.length > 0) setClinicalMeds(prev => [...prev, ...newMeds])
-
-      // 3. Documentos → enfileirar sugestões para DocumentsSection
-      if (result.documentos_sugeridos.length > 0) {
-        setPendingDocSuggestions(prev => [...prev, ...result.documentos_sugeridos])
-      }
-
-      // 4. Agendamentos sugeridos pela IA
-      if (result.agendamentos_sugeridos.length > 0) {
-        setPendingApptSuggestions(prev => [...prev, ...result.agendamentos_sugeridos])
-      }
-
-      // 5. Sinais Vitais (Fluxo Contínuo — Triagem mesclada)
-      if (result.sinais_vitais) {
-        const sv = result.sinais_vitais
-        setMergedVitals({
-          weight:           sv.weight           ?? undefined,
-          temperature:      sv.temperature      ?? undefined,
-          heart_rate:       sv.heart_rate       ?? undefined,
-          respiratory_rate: sv.respiratory_rate ?? undefined,
-          chief_complaint:  sv.chief_complaint  ?? undefined,
-        })
-      }
-
-      // 6. Laudo de Exame (Fluxo Contínuo — Exames mesclados)
-      if (result.laudo_exame?.trim()) {
-        setMergedExamNotes(prev => prev ? `${prev}\n\n${result.laudo_exame}` : result.laudo_exame!)
-      }
-
-      // 7. Vacinas aplicadas → salvar no DB
-      let savedVaccineCount = 0
-      if (result.vaccines_applied && result.vaccines_applied.length > 0) {
-        for (const v of result.vaccines_applied) {
-          const res = await addVaccine({
-            patient_id:      consultation.patient.id,
-            consultation_id: consultation.id,
-            vaccine_name:    v.vaccine_name,
-            next_due_date:   v.next_due_date ?? undefined,
-            notes:           v.notes ?? undefined,
-          })
-          if (!('error' in res)) savedVaccineCount++
-        }
-      }
-      // 8. Cadastro Vivo (Live Registration)
-      if (result.pet_profile_updates && (
-        result.pet_profile_updates.medical_history ||
-        result.pet_profile_updates.reproductive_status ||
-        result.pet_profile_updates.coat_color ||
-        (result.pet_profile_updates.behavior_tags && result.pet_profile_updates.behavior_tags.length > 0)
-      )) {
-        setProfileUpdates(result.pet_profile_updates)
-      }
-      // 9. Roteamento por Voz (Auto-Ação) + pré-selecionar aba de desfecho
-      if (result.suggested_routing === 'discharge') {
-        setOutcomeTab('alta')
-        setTimeout(() => setShowDischargeModal(true), 2000)
-      } else if (result.suggested_routing === 'hospitalization') {
-        setOutcomeTab('internacao')
-        setTimeout(() => setShowAdmitModal(true), 2000)
-      } else if (result.suggested_routing === 'waiting_exam') {
-        setOutcomeTab('exames')
-      }
-
-      
-     
-      // Toast resumo
-      const parts: string[] = []
-      if (result.notas_clinicas.trim())                                          parts.push('prontuário preenchido')
-      if (newMeds.length > 0)                                                    parts.push(`${newMeds.length} med(s) registrada(s)`)
-      if (result.documentos_sugeridos.length > 0)                               parts.push(`${result.documentos_sugeridos.length} doc(s) sugerido(s)`)
-      if (result.agendamentos_sugeridos.length > 0)                             parts.push(`${result.agendamentos_sugeridos.length} agendamento(s)`)
-      if (savedVaccineCount > 0)                                                parts.push(`${savedVaccineCount} vacina(s) registrada(s)`)
-      if (result.sinais_vitais && Object.values(result.sinais_vitais).some(v => v != null && v !== 0 && v !== '')) parts.push('sinais vitais extraídos')
-      if (result.laudo_exame?.trim())                                           parts.push('laudo preenchido')
-      if (result.suggested_routing === 'discharge')                              parts.push('alta detectada')
-      setToast({ type: 'success', message: `IA Unificada: ${parts.join(' · ')}.` })
-
-      // 10. Cadastro Vivo — disparar modal (com deduplicação)
-      const liveData = await extractPatientDataFromTranscript(transcript)
-      if (liveData) {
-        const existingVaccineNames = new Set(
-          initialVaccines.map(v => v.vaccine_name.toLowerCase())
-        )
-        const existingBehaviorTags = new Set(
-          (patient.behavior_tags ?? []).map((t: string) => t.toLowerCase())
-        )
-        const newVaccines = liveData.vaccines.filter(
-          v => !existingVaccineNames.has(v.name.toLowerCase())
-        )
-        const newBehavior = liveData.behavior.filter(
-          b => !existingBehaviorTags.has(b.toLowerCase())
-        )
-        if (newVaccines.length > 0 || newBehavior.length > 0) {
-          setLiveRegData({ ...liveData, vaccines: newVaccines, behavior: newBehavior })
-        }
-        if (liveData.suggestedOutcome) {
-          setOutcomeTab(liveData.suggestedOutcome)
-        }
+        if (!('error' in res)) savedVaccineCount++
       }
     }
+    // 8. Cadastro Vivo (Live Registration)
+    if (result.pet_profile_updates && (
+      result.pet_profile_updates.medical_history ||
+      result.pet_profile_updates.reproductive_status ||
+      result.pet_profile_updates.coat_color ||
+      (result.pet_profile_updates.behavior_tags && result.pet_profile_updates.behavior_tags.length > 0)
+    )) {
+      setProfileUpdates(result.pet_profile_updates)
+    }
+    // 9. Roteamento por Voz (Auto-Ação) + pré-selecionar aba de desfecho
+    if (result.suggested_routing === 'discharge') {
+      setOutcomeTab('alta')
+      setTimeout(() => setShowDischargeModal(true), 2000)
+    } else if (result.suggested_routing === 'hospitalization') {
+      setOutcomeTab('internacao')
+      setTimeout(() => setShowAdmitModal(true), 2000)
+    } else if (result.suggested_routing === 'waiting_exam') {
+      setOutcomeTab('exames')
+    }
 
-    recognitionRef.current = recognition
-    recognition.start()
-  }
+    // Toast resumo
+    const parts: string[] = []
+    if (result.notas_clinicas.trim())                                          parts.push('prontuário preenchido')
+    if (newMeds.length > 0)                                                    parts.push(`${newMeds.length} med(s) registrada(s)`)
+    if (result.documentos_sugeridos.length > 0)                               parts.push(`${result.documentos_sugeridos.length} doc(s) sugerido(s)`)
+    if (result.agendamentos_sugeridos.length > 0)                             parts.push(`${result.agendamentos_sugeridos.length} agendamento(s)`)
+    if (savedVaccineCount > 0)                                                parts.push(`${savedVaccineCount} vacina(s) registrada(s)`)
+    if (result.sinais_vitais && Object.values(result.sinais_vitais).some(v => v != null && v !== 0 && v !== '')) parts.push('sinais vitais extraídos')
+    if (result.laudo_exame?.trim())                                           parts.push('laudo preenchido')
+    if (result.suggested_routing === 'discharge')                              parts.push('alta detectada')
+    setToast({ type: 'success', message: `IA Unificada: ${parts.join(' · ')}.` })
 
-  const stopRecording = () => {
-    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
-    // Nula a ref antes do stop para sinalizar parada manual ao onend
-    const rec = recognitionRef.current
-    recognitionRef.current = null
-    rec?.stop()
+    // 10. Cadastro Vivo — disparar modal (com deduplicação)
+    const liveData = await extractPatientDataFromTranscript(transcript)
+    if (liveData) {
+      const existingVaccineNames = new Set(initialVaccines.map(v => v.vaccine_name.toLowerCase()))
+      const existingBehaviorTags = new Set((patient.behavior_tags ?? []).map((t: string) => t.toLowerCase()))
+      const newVaccines = liveData.vaccines.filter(v => !existingVaccineNames.has(v.name.toLowerCase()))
+      const newBehavior = liveData.behavior.filter(b => !existingBehaviorTags.has(b.toLowerCase()))
+      if (newVaccines.length > 0 || newBehavior.length > 0) {
+        setLiveRegData({ ...liveData, vaccines: newVaccines, behavior: newBehavior })
+      }
+      if (liveData.suggestedOutcome) setOutcomeTab(liveData.suggestedOutcome)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const voiceAssistant = useClinicalVoiceAssistant({
+    onAutoSave: handleVoiceAutoSave,
+    startTriggers,
+    stopTriggers,
+  })
+  const isRecording = voiceAssistant.state === 'RECORDING'
+  const liveTranscript = voiceAssistant.transcript
+
+  useEffect(() => {
+    getClinicVoiceTriggers().then(res => {
+      if (!('error' in res)) {
+        setStartTriggers(res.startTriggers)
+        setStopTriggers(res.stopTriggers)
+      }
+    })
+  }, [])
+
+  useEffect(() => {
+    voiceAssistant.activate()
+    return () => voiceAssistant.deactivate()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function saveVoiceConfig() {
+    setConfigSaving(true)
+    await updateClinicVoiceTriggers(startTriggers, stopTriggers)
+    setConfigSaving(false)
+    setVoiceConfigOpen(false)
   }
 
   // ─── Handlers para ClinicalActionsSection (controlado) ─────────────────────
@@ -1262,10 +1206,18 @@ export default function ConsultationDetail({
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50">
               <Stethoscope className="h-4 w-4 text-blue-600" />
             </div>
-            <div>
+            <div className="flex-1">
               <h2 className="text-base font-semibold text-slate-900">Prontuário Veterinário</h2>
-              <p className="text-xs text-slate-500">Anamnese, exame físico e conduta — CFMV Res. 1138/2016</p>
+              <p className="text-xs text-slate-500">Diga <strong>"Assistente"</strong> para ditar — CFMV Res. 1138/2016</p>
             </div>
+            <button
+              type="button"
+              onClick={() => setVoiceConfigOpen(true)}
+              title="Configurações de Voz"
+              className="p-1.5 rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+            >
+              <Settings className="h-4 w-4" />
+            </button>
           </div>
 
           <div className="p-6 space-y-4">
@@ -1308,33 +1260,29 @@ export default function ConsultationDetail({
 
             {/* Barra de ações do prontuário */}
             <div className="flex flex-wrap items-center gap-3">
-              {/* Gravar Voz — botões explícitos Iniciar / Parar */}
-              {!isFinalized && !isRecording && (
+              {/* Gravar Voz — handsfree (wake word) + failsafe manual */}
+              {!isFinalized && (
                 <button
                   type="button"
-                  onClick={startRecording}
+                  onClick={() => voiceAssistant.manualToggle()}
                   disabled={isExtractingVoice}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm bg-green-100 text-green-700 hover:bg-green-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                    isRecording
+                      ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                      : 'bg-green-100 text-green-700 hover:bg-green-200'
+                  }`}
                 >
-                  <Mic className="w-4 h-4" />
-                  Iniciar Gravação
-                </button>
-              )}
-              {!isFinalized && isRecording && (
-                <button
-                  type="button"
-                  onClick={stopRecording}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm bg-red-100 text-red-700 hover:bg-red-200 transition-all"
-                >
-                  <Square className="w-4 h-4 fill-current" />
-                  Parar Gravação
+                  {isRecording ? <><Square className="w-4 h-4 fill-current" /> Parar</> : <><Mic className="w-4 h-4" /> Gravar</>}
                 </button>
               )}
               {isRecording && (
                 <span className="flex items-center gap-1.5 text-xs text-red-600">
                   <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                  Gravando... (para após 15s de silêncio)
+                  Gravando... (ou diga "Finalizar")
                 </span>
+              )}
+              {!isRecording && !isFinalized && (
+                <span className="text-xs text-slate-400">Diga <em>"Assistente"</em> para ativar</span>
               )}
 
               {/* Sugerir Diagnóstico IA */}
@@ -2157,6 +2105,67 @@ export default function ConsultationDetail({
                 Ignorar
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Configurações de Voz */}
+      {voiceConfigOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Settings className="h-4 w-4 text-teal-600" /> Configurações de Voz
+              </h3>
+              <button onClick={() => setVoiceConfigOpen(false)} className="p-1.5 hover:bg-slate-100 rounded-full text-slate-400">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Frases para Iniciar Gravação</p>
+              <p className="text-[10px] text-slate-400 mb-2">Padrão: "Assistente", "Vet Max", "Gravar evolução", "Iniciar gravação"</p>
+              <div className="flex gap-2 mb-2">
+                <input type="text" value={newStartInput} onChange={e => setNewStartInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && newStartInput.trim()) { e.preventDefault(); setStartTriggers(prev => [...new Set([...prev, newStartInput.trim().toLowerCase()])]); setNewStartInput('') } }}
+                  placeholder='Ex: "iniciar consulta"'
+                  className="flex-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs focus:border-teal-500 focus:outline-none" />
+                <button type="button" onClick={() => { if (!newStartInput.trim()) return; setStartTriggers(prev => [...new Set([...prev, newStartInput.trim().toLowerCase()])]); setNewStartInput('') }}
+                  className="px-2.5 py-1.5 rounded-lg bg-teal-50 border border-teal-200 text-teal-700 hover:bg-teal-100"><Plus className="h-3.5 w-3.5" /></button>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {startTriggers.map(t => (
+                  <span key={t} className="flex items-center gap-1 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-0.5 text-xs text-emerald-700">
+                    {t}<button type="button" onClick={() => setStartTriggers(prev => prev.filter(x => x !== t))} className="text-emerald-400 hover:text-rose-500"><X className="h-3 w-3" /></button>
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Frases para Salvar e Finalizar</p>
+              <p className="text-[10px] text-slate-400 mb-2">Padrão: "Finalizar", "Pode salvar", "Salvar evolução"</p>
+              <div className="flex gap-2 mb-2">
+                <input type="text" value={newStopInput} onChange={e => setNewStopInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && newStopInput.trim()) { e.preventDefault(); setStopTriggers(prev => [...new Set([...prev, newStopInput.trim().toLowerCase()])]); setNewStopInput('') } }}
+                  placeholder='Ex: "salvar prontuário"'
+                  className="flex-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs focus:border-teal-500 focus:outline-none" />
+                <button type="button" onClick={() => { if (!newStopInput.trim()) return; setStopTriggers(prev => [...new Set([...prev, newStopInput.trim().toLowerCase()])]); setNewStopInput('') }}
+                  className="px-2.5 py-1.5 rounded-lg bg-teal-50 border border-teal-200 text-teal-700 hover:bg-teal-100"><Plus className="h-3.5 w-3.5" /></button>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {stopTriggers.map(t => (
+                  <span key={t} className="flex items-center gap-1 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-0.5 text-xs text-amber-700">
+                    {t}<button type="button" onClick={() => setStopTriggers(prev => prev.filter(x => x !== t))} className="text-amber-400 hover:text-rose-500"><X className="h-3 w-3" /></button>
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <button type="button" onClick={saveVoiceConfig} disabled={configSaving}
+              className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 rounded-xl text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+              {configSaving ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando…</> : <><Save className="h-4 w-4" /> Salvar Configurações</>}
+            </button>
           </div>
         </div>
       )}

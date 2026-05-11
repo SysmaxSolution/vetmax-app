@@ -1,12 +1,15 @@
 ﻿'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft, Mic, MicOff, Loader2, AlertCircle,
   FlaskConical, FileText, ChevronRight, X, BedDouble, LogOut,
+  Settings, Plus, Save,
 } from 'lucide-react'
+import { useClinicalVoiceAssistant } from '@/hooks/useClinicalVoiceAssistant'
+import { getClinicVoiceTriggers, updateClinicVoiceTriggers } from '@/lib/actions/clinic-settings'
 import { returnToVet, dischargeFromExams } from '@/lib/actions/exams'
 import { Toast } from '@/components/ui/toast'
 import { PetAvatar } from '@/components/ui/PetAvatar'
@@ -69,12 +72,6 @@ export default function ExamDetail({
   const router = useRouter()
   const { patient, tutor, vital_signs } = consultation
 
-  // Voice state
-  const [isRecording,    setIsRecording]    = useState(false)
-  const [liveTranscript, setLiveTranscript] = useState('')
-  const recognitionRef     = useRef<any>(null)
-  const finalTranscriptRef = useRef('')
-
   // Exam notes for the vet
   const [examNotes,     setExamNotes]     = useState('')
   const [isReturning,   setIsReturning]   = useState(false)
@@ -91,6 +88,49 @@ export default function ExamDetail({
   const [toast,     setToast]     = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [printData, setPrintData] = useState<PrintState | null>(null)
 
+  // Handsfree voice assistant
+  const [startTriggers,  setStartTriggers]  = useState<string[]>([])
+  const [stopTriggers,   setStopTriggers]   = useState<string[]>([])
+  const [voiceConfigOpen, setVoiceConfigOpen] = useState(false)
+  const [configSaving,   setConfigSaving]   = useState(false)
+  const [newStartInput,  setNewStartInput]  = useState('')
+  const [newStopInput,   setNewStopInput]   = useState('')
+
+  const handleVoiceAutoSave = useCallback((transcript: string) => {
+    if (!transcript.trim()) return
+    setExamSuggestions(prev => [...prev, { tipo: 'laudo', motivo: transcript, title: 'Laudo por Voz', summary: transcript }])
+    setToast({ type: 'success', message: 'Transcrição capturada. Clique em "Gerar" para preencher o laudo com IA.' })
+  }, [])
+
+  const voiceAssistant = useClinicalVoiceAssistant({
+    onAutoSave: handleVoiceAutoSave,
+    startTriggers,
+    stopTriggers,
+  })
+  const isRecording = voiceAssistant.state === 'RECORDING'
+  const liveTranscript = voiceAssistant.transcript
+
+  useEffect(() => {
+    getClinicVoiceTriggers().then(res => {
+      if (!('error' in res)) {
+        setStartTriggers(res.startTriggers)
+        setStopTriggers(res.stopTriggers)
+      }
+    })
+  }, [])
+
+  useEffect(() => {
+    voiceAssistant.activate()
+    return () => voiceAssistant.deactivate()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function saveVoiceConfig() {
+    setConfigSaving(true)
+    await updateClinicVoiceTriggers(startTriggers, stopTriggers)
+    setConfigSaving(false)
+    setVoiceConfigOpen(false)
+  }
+
   useEffect(() => {
     const handleAfterPrint = () => setPrintData(null)
     window.addEventListener('afterprint', handleAfterPrint)
@@ -101,58 +141,6 @@ export default function ExamDetail({
     setPrintData(data)
     setTimeout(() => window.print(), 500)
   }
-
-  // ─── Voice recording → creates laudo suggestion ────────────────────────────
-  const startRecording = () => {
-    const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition
-    if (!SpeechRecognition) {
-      setToast({ type: 'error', message: 'Navegador não suporta reconhecimento de voz. Use Chrome.' })
-      return
-    }
-    finalTranscriptRef.current = ''
-    const recognition = new SpeechRecognition()
-    recognition.lang = 'pt-BR'
-    recognition.continuous = true
-    recognition.interimResults = true
-
-    recognition.onstart = () => setIsRecording(true)
-
-    recognition.onresult = (event: any) => {
-      let interim = ''
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        if (event.results[i].isFinal) {
-          finalTranscriptRef.current += event.results[i][0].transcript + ' '
-        } else {
-          interim += event.results[i][0].transcript
-        }
-      }
-      setLiveTranscript(finalTranscriptRef.current + interim)
-    }
-
-    recognition.onerror = (event: any) => {
-      setIsRecording(false)
-      setLiveTranscript('')
-      if (event.error !== 'aborted') {
-        setToast({ type: 'error', message: `Erro de reconhecimento: ${event.error}` })
-      }
-    }
-
-    recognition.onend = () => {
-      setIsRecording(false)
-      const transcript = finalTranscriptRef.current.trim()
-      setLiveTranscript('')
-      if (!transcript) return
-
-      // Transcript vira sugestão de laudo para DocumentsSection
-      setExamSuggestions(prev => [...prev, { tipo: 'laudo', motivo: transcript, title: 'Laudo por Voz', summary: transcript }])
-      setToast({ type: 'success', message: 'Transcrição capturada. Clique em "Gerar" para preencher o laudo com IA.' })
-    }
-
-    recognitionRef.current = recognition
-    recognition.start()
-  }
-
-  const stopRecording = () => recognitionRef.current?.stop()
 
   // ─── Devolver ao Médico ────────────────────────────────────────────────────
   const handleReturn = async () => {
@@ -416,12 +404,20 @@ export default function ExamDetail({
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50">
               <Mic className="h-4 w-4 text-blue-600" />
             </div>
-            <div>
+            <div className="flex-1">
               <h2 className="text-base font-semibold text-slate-900">Ditado do Laudo</h2>
               <p className="text-xs text-slate-500">
-                Grave os achados do exame — a IA usará a transcrição para preencher o laudo
+                Diga <strong>"Assistente"</strong> para ditar — a IA usará a transcrição para o laudo
               </p>
             </div>
+            <button
+              type="button"
+              onClick={() => setVoiceConfigOpen(true)}
+              title="Configurações de Voz"
+              className="p-1.5 rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+            >
+              <Settings className="h-4 w-4" />
+            </button>
           </div>
           <div className="p-6 space-y-4">
 
@@ -455,18 +451,29 @@ export default function ExamDetail({
               </div>
             )}
 
-            <button
-              type="button"
-              onClick={isRecording ? stopRecording : startRecording}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all ${
-                isRecording
-                  ? 'bg-red-100 text-red-700 hover:bg-red-200 animate-pulse'
-                  : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-              }`}
-            >
-              {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-              {isRecording ? 'Parar Ditado' : 'Iniciar Ditado'}
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => voiceAssistant.manualToggle()}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all ${
+                  isRecording
+                    ? 'bg-red-100 text-red-700 hover:bg-red-200 animate-pulse'
+                    : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                }`}
+              >
+                {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                {isRecording ? 'Parar Ditado' : 'Iniciar Ditado'}
+              </button>
+              {!isRecording && (
+                <span className="text-xs text-slate-400">ou diga <em>"Assistente"</em></span>
+              )}
+              {isRecording && (
+                <span className="flex items-center gap-1.5 text-xs text-red-600">
+                  <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                  Gravando... (diga "Finalizar" para parar)
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -573,6 +580,67 @@ export default function ExamDetail({
             setTimeout(() => router.push('/dashboard/exams'), 1500)
           }}
         />
+      )}
+
+      {/* Modal de Configurações de Voz */}
+      {voiceConfigOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Settings className="h-4 w-4 text-teal-600" /> Configurações de Voz
+              </h3>
+              <button onClick={() => setVoiceConfigOpen(false)} className="p-1.5 hover:bg-slate-100 rounded-full text-slate-400">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Frases para Iniciar Gravação</p>
+              <p className="text-[10px] text-slate-400 mb-2">Padrão: "Assistente", "Vet Max", "Gravar evolução", "Iniciar gravação"</p>
+              <div className="flex gap-2 mb-2">
+                <input type="text" value={newStartInput} onChange={e => setNewStartInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && newStartInput.trim()) { e.preventDefault(); setStartTriggers(prev => [...new Set([...prev, newStartInput.trim().toLowerCase()])]); setNewStartInput('') } }}
+                  placeholder='Ex: "iniciar laudo"'
+                  className="flex-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs focus:border-teal-500 focus:outline-none" />
+                <button type="button" onClick={() => { if (!newStartInput.trim()) return; setStartTriggers(prev => [...new Set([...prev, newStartInput.trim().toLowerCase()])]); setNewStartInput('') }}
+                  className="px-2.5 py-1.5 rounded-lg bg-teal-50 border border-teal-200 text-teal-700 hover:bg-teal-100"><Plus className="h-3.5 w-3.5" /></button>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {startTriggers.map(t => (
+                  <span key={t} className="flex items-center gap-1 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-0.5 text-xs text-emerald-700">
+                    {t}<button type="button" onClick={() => setStartTriggers(prev => prev.filter(x => x !== t))} className="text-emerald-400 hover:text-rose-500"><X className="h-3 w-3" /></button>
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Frases para Salvar e Finalizar</p>
+              <p className="text-[10px] text-slate-400 mb-2">Padrão: "Finalizar", "Pode salvar", "Salvar evolução"</p>
+              <div className="flex gap-2 mb-2">
+                <input type="text" value={newStopInput} onChange={e => setNewStopInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && newStopInput.trim()) { e.preventDefault(); setStopTriggers(prev => [...new Set([...prev, newStopInput.trim().toLowerCase()])]); setNewStopInput('') } }}
+                  placeholder='Ex: "gravar laudo"'
+                  className="flex-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs focus:border-teal-500 focus:outline-none" />
+                <button type="button" onClick={() => { if (!newStopInput.trim()) return; setStopTriggers(prev => [...new Set([...prev, newStopInput.trim().toLowerCase()])]); setNewStopInput('') }}
+                  className="px-2.5 py-1.5 rounded-lg bg-teal-50 border border-teal-200 text-teal-700 hover:bg-teal-100"><Plus className="h-3.5 w-3.5" /></button>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {stopTriggers.map(t => (
+                  <span key={t} className="flex items-center gap-1 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-0.5 text-xs text-amber-700">
+                    {t}<button type="button" onClick={() => setStopTriggers(prev => prev.filter(x => x !== t))} className="text-amber-400 hover:text-rose-500"><X className="h-3 w-3" /></button>
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <button type="button" onClick={saveVoiceConfig} disabled={configSaving}
+              className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 rounded-xl text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+              {configSaving ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando…</> : <><Save className="h-4 w-4" /> Salvar Configurações</>}
+            </button>
+          </div>
+        </div>
       )}
     </>
   )
