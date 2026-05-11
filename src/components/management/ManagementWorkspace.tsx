@@ -25,20 +25,13 @@ import PricingTab from './PricingTab'
 import ModulesTab from './ModulesTab'
 import RoomsTab from './RoomsTab'
 import { updateUserPhone, updateUserSpecialties, getUserModuleAccess, setUserModuleAccess, updateUserNickname } from '@/lib/actions/user-management'
+import type { ClinicUserFull } from '@/lib/actions/user-management'
 import type { Room } from '@/lib/actions/rooms'
 import type { WhatsAppSettingsDisplay } from '@/lib/actions/whatsapp'
 import type { ProductPrice } from '@/lib/actions/core-management'
+import UserManagementModal from './UserManagementModal'
 
-
-interface ClinicUser {
-  id: string
-  full_name: string
-  role: UserRole
-  crmv: string | null
-  phone: string | null
-  specialties: string[] | null
-  nickname: string | null
-}
+type ClinicUser = ClinicUserFull
 
 interface ManagementWorkspaceProps {
   initialTemplates:    DocumentTemplate[]
@@ -264,6 +257,10 @@ export default function ManagementWorkspace({
       setSavingCrmv(false)
     }
   }
+
+  // Modal de usuário (G-08 + G-10)
+  const [userModalTarget, setUserModalTarget] = useState<ClinicUserFull | null | undefined>(undefined)
+  // undefined = fechado, null = novo usuário, objeto = editar
 
   // Invite state
   const [invitations, setInvitations] = useState<Invitation[]>(initialInvitations)
@@ -841,12 +838,14 @@ export default function ManagementWorkspace({
                   <p className="text-xs text-slate-500">Gerencie roles e permissões</p>
                 </div>
               </div>
-              <button
-                onClick={() => { setShowInviteForm(true); setGeneratedUrl(null) }}
-                disabled={users.length >= userLimit}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-teal-600 text-white text-sm font-medium hover:bg-teal-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-                <Mail className="w-4 h-4" />Convidar
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { setShowInviteForm(true); setGeneratedUrl(null) }}
+                  disabled={users.length >= userLimit}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-medium hover:bg-slate-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                  <Mail className="w-4 h-4" />Convidar
+                </button>
+              </div>
             </div>
 
             <div className="divide-y divide-slate-100">
@@ -969,17 +968,26 @@ export default function ManagementWorkspace({
                       </div>
                     )}
                   </div>
-                  <select
-                    value={u.role}
-                    onChange={e => handleChangeRole(u.id, e.target.value as UserRole)}
-                    disabled={u.id === currentUserId}
-                    className={`text-xs font-semibold px-3 py-1.5 rounded-lg border-0 outline-none cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${ROLE_BADGE[u.role] ?? 'bg-slate-100 text-slate-600'}`}
-                  >
-                    <option value="admin">Administrador</option>
-                    <option value="vet">Médico Veterinário</option>
-                    <option value="assistant">Auxiliar Veterinário</option>
-                    <option value="receptionist">Recepcionista</option>
-                  </select>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <select
+                      value={u.role}
+                      onChange={e => handleChangeRole(u.id, e.target.value as UserRole)}
+                      disabled={u.id === currentUserId}
+                      className={`text-xs font-semibold px-3 py-1.5 rounded-lg border-0 outline-none cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${ROLE_BADGE[u.role] ?? 'bg-slate-100 text-slate-600'}`}
+                    >
+                      <option value="admin">Administrador</option>
+                      <option value="vet">Médico Veterinário</option>
+                      <option value="assistant">Auxiliar Veterinário</option>
+                      <option value="receptionist">Recepcionista</option>
+                    </select>
+                    <button
+                      onClick={() => setUserModalTarget(u as ClinicUserFull)}
+                      title="Editar usuário"
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-teal-600 hover:bg-teal-50 transition-colors"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -1037,6 +1045,18 @@ export default function ManagementWorkspace({
           onSuccess={handleTemplateAdded}
           clinicLogoUrl={logoUrl}
           editTemplate={editingTemplate}
+        />
+      )}
+
+      {/* Modal Usuário (G-08 + G-10) */}
+      {userModalTarget !== undefined && (
+        <UserManagementModal
+          user={userModalTarget}
+          rooms={initialRooms}
+          activeModules={activeModules}
+          currentUserId={currentUserId}
+          onClose={() => setUserModalTarget(undefined)}
+          onSaved={() => { setUserModalTarget(undefined); window.location.reload() }}
         />
       )}
     </>
