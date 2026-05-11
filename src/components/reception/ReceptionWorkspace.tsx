@@ -366,6 +366,7 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
   } | null>(null)
   const [isPending, startTransition] = useTransition()
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const activeModules = useModules()
 
   function showToast(msg: string, type: 'success' | 'error' = 'success') {
     setToast({ msg, type })
