@@ -44,7 +44,7 @@ async function seedHospitalization(overrides: Record<string, unknown> = {}): Pro
     clinic_id: fixtures.clinics.clinicA.id,
     patient_id: fixtures.patients.petA1.id,
     tutor_id: fixtures.tutors.tutorA1.id,
-    status: 'hospitalized',
+    status: 'observation',
     reason: 'Internação para observação — Teste G04',
     ...overrides,
   }]).select('id').single();

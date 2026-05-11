@@ -312,7 +312,6 @@ test.describe('TC-DOC-05: Relatório de alta contém dados do pet', () => {
       tutor_id: fixtures.tutors.tutorA1.id,
       status: 'ready_for_discharge',
       diagnosis: 'Diagnóstico E2E teste TC-DOC-05',
-      admission_date: new Date().toISOString(),
     }]).select('id').single();
     if (error) {
       console.log('TC-DOC-05: Não foi possível criar internação:', error.message);

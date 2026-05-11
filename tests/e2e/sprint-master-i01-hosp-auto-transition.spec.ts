@@ -58,7 +58,6 @@ async function seedHospitalization(opts: SeedHospitalizationOptions = {}): Promi
     patient_id: fixtures.patients.petA1.id,
     tutor_id: fixtures.tutors.tutorA1.id,
     status,
-    admission_date: new Date().toISOString(),
     reason: 'Internação E2E Sprint Master I-01',
   }]).select('id').single();
 

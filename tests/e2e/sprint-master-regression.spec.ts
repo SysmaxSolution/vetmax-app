@@ -110,7 +110,7 @@ test.describe('TC-REG-02: Fila de recepção exibe pacientes', () => {
   let consultationId: string;
 
   test.beforeAll(async () => {
-    consultationId = await seedConsultation({ status: 'waiting' });
+    consultationId = await seedConsultation({ status: 'reception' });
   });
 
   test.afterAll(async () => {
@@ -750,7 +750,7 @@ test.describe('TC-REG-15: Duplo clique rápido em triagem não duplica card na f
   let consultationId: string;
 
   test.beforeAll(async () => {
-    consultationId = await seedConsultation({ status: 'waiting' });
+    consultationId = await seedConsultation({ status: 'reception' });
   });
 
   test.afterAll(async () => {

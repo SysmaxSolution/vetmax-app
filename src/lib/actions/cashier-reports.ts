@@ -87,7 +87,7 @@ export async function generateCashierReport(
   const { data, error } = await ctx.supabase.rpc('rpc_cashier_report', {
     p_clinic_id: ctx.clinic_id,
     p_from:      filters.from,
-    p_to:        filters.to,
+    p_to:        filters.to + 'T23:59:59',
     p_filters:   rpcFilters,
   })
 

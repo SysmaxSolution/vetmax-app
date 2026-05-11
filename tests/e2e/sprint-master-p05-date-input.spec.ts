@@ -358,7 +358,7 @@ test.describe('TC-P05-05 (Crítico): Selecionar hoje como data fim não exclui l
   test.beforeEach(async () => {
     await enableModule(fixtures.clinics.clinicA.id, 'billing');
     await seedTutorsAndPets();
-    entryId = await seedCashierEntry({ description: 'Lançamento DO DIA P05-05' });
+    entryId = await seedCashierEntry({ reason: 'Lançamento DO DIA P05-05' });
   });
 
   test.afterEach(async () => {

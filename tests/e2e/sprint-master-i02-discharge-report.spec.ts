@@ -62,7 +62,6 @@ async function seedHospitalization(opts: SeedOptions = {}): Promise<string> {
     patient_id: fixtures.patients.petA1.id,
     tutor_id: fixtures.tutors.tutorA1.id,
     status,
-    admission_date: new Date().toISOString(),
     reason: 'Internação E2E Sprint Master I-02',
     diagnosis,
   }]).select('id').single();

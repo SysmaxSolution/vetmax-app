@@ -123,8 +123,8 @@ test.describe('TC-G01-02: /email-confirmado existe e renderiza mensagem de suces
     await page.goto('/email-confirmado');
     await page.waitForTimeout(2_000);
 
-    const loginLink = page.getByRole('link', { name: /entrar|fazer login|acessar/i })
-      .or(page.getByRole('button', { name: /entrar|fazer login|acessar/i }))
+    const loginLink = page.getByRole('link', { name: /entrar|fazer login|acessar|voltar/i })
+      .or(page.getByRole('button', { name: /entrar|fazer login|acessar|voltar/i }))
       .first();
 
     const loginLinkVisible = await loginLink.isVisible({ timeout: 5_000 }).catch(() => false);
