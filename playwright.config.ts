@@ -105,7 +105,7 @@ export default defineConfig({
 
   /* Sobe o servidor Next.js automaticamente antes dos testes */
   webServer: {
-    command: 'node_modules/.bin/next dev --port 4000',
+    command: 'node node_modules/next/dist/bin/next dev --port 4000',
     url: 'http://localhost:4000',
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
