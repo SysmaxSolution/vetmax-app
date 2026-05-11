@@ -1,3 +1,4 @@
+import { loginViaApi } from '../helpers/session'
 /**
  * E2E — Unificação do Módulo Caixa
  *
@@ -17,11 +18,7 @@ import fixtures from '../fixtures/test-data.json';
 const admin = createAdminClient();
 
 async function loginAs(page: Page, email: string, password: string) {
-  await page.goto('/login');
-  await page.getByLabel(/e-?mail/i).fill(email);
-  await page.getByLabel(/senha/i).fill(password);
-  await page.getByRole('button', { name: /entrar/i }).click();
-  await page.waitForURL(/\/(dashboard|cashier|reception|triage)/, { timeout: 15_000 });
+  await loginViaApi(page, email, password)
 }
 
 // ─── TC-UNI-01: Aba Caixa removida da Recepção ────────────────────────────────

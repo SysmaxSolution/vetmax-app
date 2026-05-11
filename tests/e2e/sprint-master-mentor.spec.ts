@@ -19,6 +19,7 @@
  */
 
 import { test, expect, type Page } from '@playwright/test';
+import { loginViaApi } from '../helpers/session';
 import { createAdminClient } from '../helpers/supabase-test-client';
 import { seedTutorsAndPets } from '../helpers/db-seed';
 import fixtures from '../fixtures/test-data.json';
@@ -39,11 +40,7 @@ const MENTOR_API = '/api/mentor-chat';
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 async function loginAs(page: Page, email: string, password: string): Promise<void> {
-  await page.goto('/login');
-  await page.getByLabel(/e-?mail/i).fill(email);
-  await page.locator('#password').fill(password);
-  await page.getByRole('button', { name: /entrar/i }).click();
-  await page.waitForURL(/\/(dashboard|reception|vet|onboarding)/, { timeout: 25_000 });
+  await loginViaApi(page, email, password)
 }
 
 async function enableModule(clinicId: string, module: string): Promise<void> {

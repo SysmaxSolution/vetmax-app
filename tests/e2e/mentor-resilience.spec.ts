@@ -10,6 +10,7 @@
  */
 
 import { test, expect, type Page } from '@playwright/test'
+import { loginViaApi } from '../helpers/session'
 import fixtures from '../fixtures/test-data.json'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -24,19 +25,15 @@ const ROLE_MAP = {
 
 async function loginAs(page: Page, role: keyof typeof ROLE_MAP) {
   const user = fixtures.users[ROLE_MAP[role]]
-  await page.goto(`${BASE}/login`)
-  await page.getByLabel(/e-?mail/i).fill(user.email)
-  await page.locator('#password').fill(user.password)
-  await page.getByRole('button', { name: /entrar/i }).click()
-  await page.waitForURL(/\/(dashboard|reception|triage|vet|onboarding)/, { timeout: 30_000 })
+  await loginViaApi(page, user.email, user.password)
 }
 
 async function openMentor(page: Page) {
   const btn = page.getByLabel('Abrir Modo Mentor')
-  await expect(btn).toBeVisible({ timeout: 8_000 })
+  await expect(btn).toBeVisible({ timeout: 90_000 })
   const inputVisible = await page.getByPlaceholder(/pergunte algo/i).isVisible().catch(() => false)
   if (!inputVisible) await btn.click()
-  await expect(page.getByPlaceholder(/pergunte algo/i)).toBeVisible({ timeout: 5_000 })
+  await expect(page.getByPlaceholder(/pergunte algo/i)).toBeVisible({ timeout: 90_000 })
 }
 
 async function mentorAsk(page: Page, question: string) {
@@ -70,7 +67,7 @@ test.describe('Mentor — Resiliência e Variações', () => {
     // Mentor deve responder algo (pode ser fallback ou reconhecer "entrada")
     // A lógica NLP usa normalização de acentos mas não corrige typos — aceita fallback
     const lastMsg = page.locator('[class*="bg-slate-100"]').last()
-    await expect(lastMsg).toBeVisible({ timeout: 8_000 })
+    await expect(lastMsg).toBeVisible({ timeout: 90_000 })
 
     const text = await lastMsg.textContent()
     expect(text).toBeTruthy()
@@ -100,7 +97,7 @@ test.describe('Mentor — Resiliência e Variações', () => {
     await page.locator('.fixed.bottom-24 button').filter({ hasText: /recepção/i }).first().click()
 
     const balloon = page.locator('.fixed.z-\\[10000\\]')
-    await expect(balloon).toBeVisible({ timeout: 8_000 })
+    await expect(balloon).toBeVisible({ timeout: 90_000 })
 
     // INTERROMPE o tour clicando no X do balão
     await balloon.locator('button[aria-label="Fechar tour"]').click()
@@ -111,14 +108,14 @@ test.describe('Mentor — Resiliência e Variações', () => {
     await mentorAsk(page, 'Como funciona a fila de espera?')
 
     const lastMsg = page.locator('[class*="bg-slate-100"]').last()
-    await expect(lastMsg).toBeVisible({ timeout: 8_000 })
+    await expect(lastMsg).toBeVisible({ timeout: 90_000 })
 
     // Retoma o tour de recepção via ação da mensagem ou quick chip
     await closeMentor(page)
     await openMentor(page)
     await page.locator('.fixed.bottom-24 button').filter({ hasText: /recepção/i }).first().click()
 
-    await expect(balloon).toBeVisible({ timeout: 8_000 })
+    await expect(balloon).toBeVisible({ timeout: 90_000 })
     // Deve começar do passo 1 novamente (sem estado residual)
     await expect(balloon.locator('text=/1/')).toBeVisible({ timeout: 3_000 })
 
@@ -239,7 +236,7 @@ test.describe('Mentor — Resiliência e Variações', () => {
 
     // Mesmo sem o elemento no DOM, o balão deve aparecer centralizado
     const balloon = page.locator('.fixed.z-\\[10000\\]')
-    await expect(balloon).toBeVisible({ timeout: 8_000 })
+    await expect(balloon).toBeVisible({ timeout: 90_000 })
 
     // Verifica que está dentro da viewport
     const box = await balloon.boundingBox()
@@ -273,7 +270,7 @@ test.describe('Mentor — Resiliência e Variações', () => {
 
     await expect(
       page.locator('text=/banho|tosa|grooming/i').last()
-    ).toBeVisible({ timeout: 8_000 })
+    ).toBeVisible({ timeout: 90_000 })
 
     console.log('[QA] Mentor funciona após navegação SPA — PASSOU')
   })

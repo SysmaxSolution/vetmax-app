@@ -1,3 +1,4 @@
+import { loginViaApi } from '../helpers/session'
 /**
  * E2E — Fase 6: MentorTour JumpMode — Stress Test Brutal
  *
@@ -19,11 +20,7 @@ import fixtures from '../fixtures/test-data.json';
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 async function loginAsAdmin(page: Page) {
-  await page.goto('/login');
-  await page.getByLabel(/e-?mail/i).fill(fixtures.users.adminA.email);
-  await page.locator('#password').fill(fixtures.users.adminA.password);
-  await page.getByRole('button', { name: /entrar/i }).click();
-  await page.waitForURL(/\/(dashboard|reception|cashier|patients|management)/, { timeout: 45_000 });
+  await loginViaApi(page, fixtures.users.adminA.email, fixtures.users.adminA.password)
 }
 
 /**

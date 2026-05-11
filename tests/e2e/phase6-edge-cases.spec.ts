@@ -1,3 +1,4 @@
+import { loginViaApi } from '../helpers/session'
 /**
  * E2E — Fase 6: Edge Cases Críticos (Rede Lenta, Offline, Validações Backend)
  *
@@ -23,11 +24,7 @@ const admin = createAdminClient();
 // ─── Login helper ─────────────────────────────────────────────────────────────
 
 async function loginAs(page: Page, email: string, password: string) {
-  await page.goto('/login');
-  await page.getByLabel(/e-?mail/i).fill(email);
-  await page.getByLabel(/senha/i).fill(password);
-  await page.getByRole('button', { name: /entrar/i }).click();
-  await page.waitForURL(/\/(dashboard|cashier|reception|triage|management|grooming)/, { timeout: 15_000 });
+  await loginViaApi(page, email, password)
 }
 
 // ─── Seed helpers ─────────────────────────────────────────────────────────────

@@ -19,6 +19,7 @@
  */
 
 import { test, expect, type Page } from '@playwright/test';
+import { loginViaApi } from '../helpers/session';
 import { createAdminClient, createUserClient, getAccessToken } from '../helpers/supabase-test-client';
 import { seedTutorsAndPets, seedGroomingSession } from '../helpers/db-seed';
 import fixtures from '../fixtures/test-data.json';
@@ -105,11 +106,7 @@ function requireB() {
 test.describe('TC-RLS-ADV-001: URL forçada /dashboard/management da Clínica A por admin da Clínica B', () => {
   test('Admin B tentando acessar /dashboard/management da Clínica A é redirecionado', async ({ page }) => {
     // Login como admin B
-    await page.goto('/login');
-    await page.getByLabel(/e-?mail/i).fill(fixtures.users.adminB.email);
-    await page.getByLabel(/senha/i).fill(fixtures.users.adminB.password);
-    await page.getByRole('button', { name: /entrar/i }).click();
-    await page.waitForURL(/\/(dashboard|reception|cashier|grooming|management)/, { timeout: 15_000 });
+    await loginViaApi(page, fixtures.users.adminB.email, fixtures.users.adminB.password);
 
     // Força URL de management (pertence ao contexto de clinicA de forma implicita, mas
     // a rota não pertence a uma clínica específica — teste que o role guard e RLS bloqueiam
@@ -127,11 +124,7 @@ test.describe('TC-RLS-ADV-001: URL forçada /dashboard/management da Clínica A 
 
 test.describe('TC-RLS-ADV-012: Role vet bloqueado em /dashboard/management', () => {
   test('Vet da Clínica A não acessa /dashboard/management — redireciona', async ({ page }) => {
-    await page.goto('/login');
-    await page.getByLabel(/e-?mail/i).fill(fixtures.users.vetA.email);
-    await page.getByLabel(/senha/i).fill(fixtures.users.vetA.password);
-    await page.getByRole('button', { name: /entrar/i }).click();
-    await page.waitForURL(/\/(dashboard|vet|reception|grooming)/, { timeout: 15_000 });
+    await loginViaApi(page, fixtures.users.vetA.email, fixtures.users.vetA.password);
 
     await page.goto('/dashboard/management');
     await page.waitForTimeout(2_500);
@@ -143,11 +136,7 @@ test.describe('TC-RLS-ADV-012: Role vet bloqueado em /dashboard/management', () 
 
 test.describe('TC-RLS-ADV-013: Role vet bloqueado em /dashboard/cashier', () => {
   test('Vet da Clínica A é bloqueado em /dashboard/cashier', async ({ page }) => {
-    await page.goto('/login');
-    await page.getByLabel(/e-?mail/i).fill(fixtures.users.vetA.email);
-    await page.getByLabel(/senha/i).fill(fixtures.users.vetA.password);
-    await page.getByRole('button', { name: /entrar/i }).click();
-    await page.waitForURL(/\/(dashboard|vet|reception|grooming)/, { timeout: 15_000 });
+    await loginViaApi(page, fixtures.users.vetA.email, fixtures.users.vetA.password);
 
     await page.goto('/dashboard/cashier');
     await page.waitForTimeout(2_500);
@@ -311,12 +300,8 @@ test.describe('TC-RLS-ADV-008: POST /api/update-clinic sem autenticação → 40
 
 test.describe('TC-RLS-ADV-009: POST /api/update-clinic como receptionist → 403', () => {
   test('Receptionist logado recebe 403 ao tentar editar clínica', async ({ page, request }) => {
-    // Login via browser para obter cookie de sessão
-    await page.goto('/login');
-    await page.getByLabel(/e-?mail/i).fill(fixtures.users.receptionistA.email);
-    await page.getByLabel(/senha/i).fill(fixtures.users.receptionistA.password);
-    await page.getByRole('button', { name: /entrar/i }).click();
-    await page.waitForURL(/\/(dashboard|reception)/, { timeout: 15_000 });
+    // Login via API para obter cookie de sessão
+    await loginViaApi(page, fixtures.users.receptionistA.email, fixtures.users.receptionistA.password);
 
     // Fazer chamada de API com o contexto autenticado do browser
     const res = await page.request.post('/api/update-clinic', {
@@ -330,11 +315,7 @@ test.describe('TC-RLS-ADV-009: POST /api/update-clinic como receptionist → 403
 test.describe('TC-RLS-ADV-010: POST /api/update-clinic com clinic_id forjado no body → ignorado', () => {
   test('Server usa clinic_id do profile — body clinic_id é ignorado', async ({ page }) => {
     // Login como admin A
-    await page.goto('/login');
-    await page.getByLabel(/e-?mail/i).fill(fixtures.users.adminA.email);
-    await page.getByLabel(/senha/i).fill(fixtures.users.adminA.password);
-    await page.getByRole('button', { name: /entrar/i }).click();
-    await page.waitForURL(/\/(dashboard|management|reception)/, { timeout: 15_000 });
+    await loginViaApi(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
 
     // Tentar atualizar com clinic_id da Clínica B no body
     const res = await page.request.post('/api/update-clinic', {

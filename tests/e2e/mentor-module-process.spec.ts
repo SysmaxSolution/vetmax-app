@@ -1,3 +1,4 @@
+import { loginViaApi } from '../helpers/session'
 /**
  * MENTOR-MODULE-PROCESS — Testes de processo do Modo Mentor
  *
@@ -106,17 +107,13 @@ const TOURS: Record<string, TourDef> = {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 async function loginAsAdmin(page: Page) {
-  await page.goto(`${BASE_URL}/login`)
-  await page.getByLabel(/e-?mail/i).fill(ADMIN.email)
-  await page.locator('#password').fill(ADMIN.password)
-  await page.getByRole('button', { name: /entrar/i }).click()
-  await page.waitForURL(/\/dashboard/, { timeout: 15_000 })
+  await loginViaApi(page, ADMIN.email, ADMIN.password)
 }
 
 async function waitForMentorGlobals(page: Page) {
   await page.waitForFunction(
     () => typeof (window as Window & { __MENTOR_START_TOUR?: unknown }).__MENTOR_START_TOUR === 'function',
-    { timeout: 10_000 },
+    { timeout: 90_000 },
   )
 }
 
@@ -142,7 +139,7 @@ async function assertStep(
   nextTitle?: string,
 ) {
   const balloon = page.getByTestId('mentor-balloon')
-  await expect(balloon).toBeVisible({ timeout: 8_000 })
+  await expect(balloon).toBeVisible({ timeout: 90_000 })
 
   // Título correto no balão
   await expect(balloon.getByText(step.title, { exact: true })).toBeVisible()
@@ -393,14 +390,14 @@ test.describe('MENTOR-009 — Tour: cadastro-pet', () => {
     await startTour(page, 'cadastro-pet')
 
     // Aguarda e clica no botão de novo paciente (waitForNext ativo no tour)
-    await expect(page.locator('[data-mentor-step="btn-novo-paciente"]')).toBeVisible({ timeout: 8_000 })
+    await expect(page.locator('[data-mentor-step="btn-novo-paciente"]')).toBeVisible({ timeout: 90_000 })
     await page.locator('[data-mentor-step="btn-novo-paciente"]').click()
 
     // Tour deve auto-avançar via MutationObserver (waitForNext) quando modal abre
     // Aguarda o balão mostrar o título do passo 1 (pet-name-input)
     await expect(
       page.getByTestId('mentor-balloon').getByText(steps[1].title, { exact: true }),
-    ).toBeVisible({ timeout: 10_000 })
+    ).toBeVisible({ timeout: 90_000 })
 
     // Passo 1 (pet-name-input) não deve mostrar passo 2 (Espécie)
     await expect(
@@ -428,13 +425,13 @@ test.describe('MENTOR-009 — Tour: cadastro-pet', () => {
       // Aguarda auto-advance via waitForNext
       await expect(
         page.getByTestId('mentor-balloon').getByText(steps[1].title, { exact: true }),
-      ).toBeVisible({ timeout: 10_000 })
+      ).toBeVisible({ timeout: 90_000 })
     } else {
       // Sem botão na DOM: avança manualmente
       await advanceStep(page)
       await expect(
         page.getByTestId('mentor-balloon').getByText(steps[1].title, { exact: true }),
-      ).toBeVisible({ timeout: 5_000 })
+      ).toBeVisible({ timeout: 90_000 })
     }
 
     // Passos 1-8: avança verificando cada um

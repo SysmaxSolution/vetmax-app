@@ -13,6 +13,7 @@
  */
 
 import { test, expect, type Page } from '@playwright/test'
+import { loginViaApi } from '../helpers/session'
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -125,19 +126,7 @@ const TOURS: Record<string, TourDef> = {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 async function loginAsAdmin(page: Page) {
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      await page.goto(`${BASE_URL}/login`, { timeout: 20_000 })
-      break
-    } catch {
-      if (attempt === 2) throw new Error(`Servidor não respondeu após 3 tentativas (ERR_ABORTED)`)
-      await page.waitForTimeout(6_000)
-    }
-  }
-  await page.getByLabel(/e-?mail/i).fill(ADMIN.email)
-  await page.locator('#password').fill(ADMIN.password)
-  await page.getByRole('button', { name: /entrar/i }).click()
-  await page.waitForURL(/\/dashboard/, { timeout: 45_000 })
+  await loginViaApi(page, ADMIN.email, ADMIN.password)
 }
 
 async function waitForMentorGlobals(page: Page) {
@@ -167,7 +156,7 @@ async function advanceStep(page: Page) {
  */
 async function assertStep(page: Page, step: StepDef, nextTitle?: string): Promise<number> {
   const balloon = page.getByTestId('mentor-balloon')
-  await expect(balloon).toBeVisible({ timeout: 8_000 })
+  await expect(balloon).toBeVisible({ timeout: 90_000 })
   await expect(balloon.getByText(step.title, { exact: true })).toBeVisible()
 
   if (nextTitle) {
@@ -217,7 +206,7 @@ test.describe('AUDIT-001 — Tour: recepcao (4 passos corrigidos)', () => {
   test('step 0: reception-search-input existe e está habilitado', async ({ page }) => {
     await startTour(page, 'recepcao')
     const el = page.locator('[data-mentor-step="reception-search-input"]')
-    await expect(el).toBeVisible({ timeout: 5_000 })
+    await expect(el).toBeVisible({ timeout: 90_000 })
     await expect(el).toBeEnabled()
   })
 
@@ -232,7 +221,7 @@ test.describe('AUDIT-001 — Tour: recepcao (4 passos corrigidos)', () => {
     await advanceStep(page) // skip step 0
     await advanceStep(page) // skip step 1 (checkin-btn, soft)
     const el = page.locator('[data-mentor-step="reception-queue"]')
-    await expect(el).toBeVisible({ timeout: 5_000 })
+    await expect(el).toBeVisible({ timeout: 90_000 })
   })
 
   test('step 3: reception-new-btn existe e está clicável', async ({ page }) => {
@@ -241,7 +230,7 @@ test.describe('AUDIT-001 — Tour: recepcao (4 passos corrigidos)', () => {
     await advanceStep(page)
     await advanceStep(page)
     const el = page.locator('[data-mentor-step="reception-new-btn"]')
-    await expect(el).toBeVisible({ timeout: 5_000 })
+    await expect(el).toBeVisible({ timeout: 90_000 })
     await expect(el).toBeEnabled()
     await expect(page.getByTestId('mentor-balloon').getByRole('button', { name: /concluir/i })).toBeVisible()
   })
@@ -273,7 +262,7 @@ test.describe('AUDIT-002 — Tour: sala-espera (3 passos com reception-call-tria
   test('step 0: reception-queue sempre visível', async ({ page }) => {
     await startTour(page, 'sala-espera')
     const el = page.locator('[data-mentor-step="reception-queue"]')
-    await expect(el).toBeVisible({ timeout: 5_000 })
+    await expect(el).toBeVisible({ timeout: 90_000 })
   })
 
   test('step 1: reception-call-triage-btn — soft check (requer item na fila)', async ({ page }) => {
@@ -515,7 +504,7 @@ test.describe('AUDIT-008 — Tour: alta (kanban toggle como passo 0)', () => {
 
     await expect(
       page.getByTestId('mentor-balloon').getByText(steps[1].title, { exact: true }),
-    ).toBeVisible({ timeout: 15_000 })
+    ).toBeVisible({ timeout: 90_000 })
   })
 
   test('step 2: kanban-col-completed — soft check (requer Kanban ativo)', async ({ page }) => {

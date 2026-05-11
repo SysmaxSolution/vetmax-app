@@ -1,3 +1,4 @@
+import { loginViaApi } from '../helpers/session'
 /**
  * E2E — Módulo Exames
  *
@@ -26,11 +27,7 @@ const admin = createAdminClient();
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 async function loginAs(page: Page, email: string, password: string) {
-  await page.goto('/login');
-  await page.getByLabel(/e-?mail/i).fill(email);
-  await page.getByLabel(/senha/i).fill(password);
-  await page.getByRole('button', { name: /entrar/i }).click();
-  await page.waitForURL(/\/(dashboard|reception|exams|onboarding)/, { timeout: 30_000 });
+  await loginViaApi(page, email, password)
 }
 
 async function enableModule(clinicId: string, module: string) {

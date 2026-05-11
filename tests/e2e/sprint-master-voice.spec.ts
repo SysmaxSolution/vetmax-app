@@ -14,6 +14,7 @@
  */
 
 import { test, expect, type Page } from '@playwright/test';
+import { loginViaApi } from '../helpers/session';
 
 // ─── Declaração de tipos para window globals injetados via addInitScript ────────
 declare global {
@@ -131,11 +132,7 @@ const MOCK_SPEECH_UNDEFINED_SCRIPT = `
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 async function loginAs(page: Page, email: string, password: string): Promise<void> {
-  await page.goto('/login');
-  await page.getByLabel(/e-?mail/i).fill(email);
-  await page.locator('#password').fill(password);
-  await page.getByRole('button', { name: /entrar/i }).click();
-  await page.waitForURL(/\/(dashboard|reception|vet|onboarding)/, { timeout: 25_000 });
+  await loginViaApi(page, email, password)
 }
 
 async function openHospitalizationEvolutionModal(page: Page): Promise<boolean> {

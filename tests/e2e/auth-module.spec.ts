@@ -1,3 +1,4 @@
+import { loginViaApi } from '../helpers/session'
 /**
  * E2E — Módulo de Autenticação
  * Sessão 1 · Fase 1 (Fundação)
@@ -28,15 +29,11 @@ const admin = createAdminClient()
 // ─── Helper de login ──────────────────────────────────────────────────────────
 
 async function loginAs(page: Page, email: string, password: string) {
-  await page.goto('/login')
-  await page.getByLabel(/e-?mail/i).fill(email)
-  await page.getByLabel(/senha/i).fill(password)
-  await page.getByRole('button', { name: /entrar/i }).click()
-  await page.waitForURL(/\/(dashboard|reception|patients|onboarding)/, { timeout: 20_000 })
+  await loginViaApi(page, email, password)
 }
 
 async function loginAsAdmin(page: Page) {
-  await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password)
+  await loginViaApi(page, fixtures.users.adminA.email, fixtures.users.adminA.password)
 }
 
 // ─── TC-AUTH-001: E-mail inválido bloqueado ───────────────────────────────────

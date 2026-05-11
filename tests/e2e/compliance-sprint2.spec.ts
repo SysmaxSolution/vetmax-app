@@ -1,3 +1,4 @@
+import { loginViaApi } from '../helpers/session'
 /**
  * E2E — Sprint 2 Conformidade Legal
  *
@@ -21,11 +22,7 @@ import fixtures from '../fixtures/test-data.json';
 const admin = createAdminClient();
 
 async function loginAs(page: Page, email: string, password: string) {
-  await page.goto('/login');
-  await page.getByLabel(/e-?mail/i).fill(email);
-  await page.getByLabel(/senha/i).fill(password);
-  await page.getByRole('button', { name: /entrar/i }).click();
-  await page.waitForURL(/\/(dashboard|reception|patients)/);
+  await loginViaApi(page, email, password)
 }
 
 // ─── TC-RET-01/02/03: Políticas de retenção ───────────────────────────────────

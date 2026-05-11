@@ -1,3 +1,4 @@
+import { loginViaApi } from '../helpers/session'
 /**
  * E2E — Jornada do Usuário (UI-Driven)
  *
@@ -21,11 +22,7 @@ const admin = createAdminClient()
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 async function loginAsAdmin(page: Page) {
-  await page.goto('/login')
-  await page.getByLabel(/e-?mail/i).fill(fixtures.users.adminA.email)
-  await page.getByLabel(/senha/i).fill(fixtures.users.adminA.password)
-  await page.getByRole('button', { name: /entrar/i }).click()
-  await page.waitForURL(/\/(dashboard|management|reception|onboarding)/, { timeout: 30_000 })
+  await loginViaApi(page, fixtures.users.adminA.email, fixtures.users.adminA.password)
 }
 
 async function loginAsReceptionist(page: Page) {

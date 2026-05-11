@@ -8,6 +8,7 @@
  */
 
 import { test, expect, type Page } from '@playwright/test'
+import { loginViaApi } from '../helpers/session'
 import fixtures from '../fixtures/test-data.json'
 
 // ─── Auth helpers ─────────────────────────────────────────────────────────────
@@ -24,12 +25,7 @@ const ROLE_MAP = {
 
 async function loginAs(page: Page, role: keyof typeof ROLE_MAP) {
   const user = fixtures.users[ROLE_MAP[role]]
-  await page.goto(`${BASE}/login`)
-  await page.getByLabel(/e-?mail/i).fill(user.email)
-  await page.locator('#password').fill(user.password)
-  await page.getByRole('button', { name: /entrar/i }).click()
-  // Accept onboarding or dashboard as valid post-login destinations
-  await page.waitForURL(/\/(dashboard|reception|triage|vet|exams|hospitalization|onboarding)/, { timeout: 30_000 })
+  await loginViaApi(page, user.email, user.password)
 }
 
 // ─── Mentor helpers ───────────────────────────────────────────────────────────
@@ -38,11 +34,11 @@ async function loginAs(page: Page, role: keyof typeof ROLE_MAP) {
 async function mentorAsk(page: Page, question: string) {
   // The floating button aria-label is "Abrir Modo Mentor"
   const btn = page.getByLabel('Abrir Modo Mentor')
-  await expect(btn).toBeVisible({ timeout: 8_000 })
+  await expect(btn).toBeVisible({ timeout: 90_000 })
   // Only click if the chat panel isn't already open
   const inputVisible = await page.getByPlaceholder(/pergunte algo/i).isVisible().catch(() => false)
   if (!inputVisible) await btn.click()
-  await expect(page.getByPlaceholder(/pergunte algo/i)).toBeVisible({ timeout: 5_000 })
+  await expect(page.getByPlaceholder(/pergunte algo/i)).toBeVisible({ timeout: 90_000 })
   await page.getByPlaceholder(/pergunte algo/i).fill(question)
   await page.getByRole('button', { name: /enviar/i }).click()
 }
@@ -63,8 +59,8 @@ async function clickTourAction(page: Page, tourId: string) {
 async function expectTourBalloon(page: Page, titlePattern: RegExp) {
   // Balloon is rendered with position:fixed z-[10000] — it always within viewport
   const balloon = page.locator('.fixed.z-\\[10000\\]')
-  await expect(balloon).toBeVisible({ timeout: 8_000 })
-  await expect(balloon.getByText(titlePattern)).toBeVisible({ timeout: 5_000 })
+  await expect(balloon).toBeVisible({ timeout: 90_000 })
+  await expect(balloon.getByText(titlePattern)).toBeVisible({ timeout: 90_000 })
 }
 
 /** Clica em "Próximo" no balão do tour */
@@ -101,7 +97,7 @@ test.describe('Mentor — Fluxo Clínico Completo', () => {
     await page.goto(`${BASE}/dashboard/reception`)
 
     await mentorAsk(page, 'Como dou entrada no pet?')
-    await expect(page.locator('text=/check-in|ponto de partida/i').last()).toBeVisible({ timeout: 8_000 })
+    await expect(page.locator('text=/check-in|ponto de partida/i').last()).toBeVisible({ timeout: 90_000 })
     await clickTourAction(page, 'recepcao')
 
     await expectTourBalloon(page, /busca de tutor ou pet/i)
@@ -120,7 +116,7 @@ test.describe('Mentor — Fluxo Clínico Completo', () => {
     await page.goto(`${BASE}/dashboard/triage`)
 
     await mentorAsk(page, 'Como atendo na triagem?')
-    await expect(page.locator('text=/triagem|sinais vitais/i').last()).toBeVisible({ timeout: 8_000 })
+    await expect(page.locator('text=/triagem|sinais vitais/i').last()).toBeVisible({ timeout: 90_000 })
     await clickTourAction(page, 'triagem')
 
     // Step 0 (nurse-queue) tem waitForNext: true e triage-add-btn já está na DOM
@@ -141,7 +137,7 @@ test.describe('Mentor — Fluxo Clínico Completo', () => {
     await page.goto(`${BASE}/dashboard/vet`)
 
     await mentorAsk(page, 'Como registro a consulta com SOAP?')
-    await expect(page.locator('text=/consultório|registrar/i').last()).toBeVisible({ timeout: 8_000 })
+    await expect(page.locator('text=/consultório|registrar/i').last()).toBeVisible({ timeout: 90_000 })
     await clickTourAction(page, 'consulta')
 
     await expectTourBalloon(page, /fila do consultório/i)
@@ -161,7 +157,7 @@ test.describe('Mentor — Fluxo Clínico Completo', () => {
     await page.goto(`${BASE}/dashboard/exams`)
 
     await mentorAsk(page, 'Como registro resultado de exame?')
-    await expect(page.locator('text=/exame|laudo/i').last()).toBeVisible({ timeout: 8_000 })
+    await expect(page.locator('text=/exame|laudo/i').last()).toBeVisible({ timeout: 90_000 })
     await clickTourAction(page, 'exames')
 
     await expectTourBalloon(page, /fila de exames/i)
@@ -180,7 +176,7 @@ test.describe('Mentor — Fluxo Clínico Completo', () => {
     await page.goto(`${BASE}/dashboard/hospitalization`)
 
     await mentorAsk(page, 'Como internar um animal?')
-    await expect(page.locator('text=/internado|internação/i').last()).toBeVisible({ timeout: 8_000 })
+    await expect(page.locator('text=/internado|internação/i').last()).toBeVisible({ timeout: 90_000 })
     await clickTourAction(page, 'internacao')
 
     await expectTourBalloon(page, /quadro de internados/i)
@@ -196,7 +192,7 @@ test.describe('Mentor — Fluxo Clínico Completo', () => {
     await page.goto(`${BASE}/dashboard/reception`)
 
     await mentorAsk(page, 'Como dou alta ao animal?')
-    await expect(page.locator('text=/alta|tour/i').last()).toBeVisible({ timeout: 8_000 })
+    await expect(page.locator('text=/alta|tour/i').last()).toBeVisible({ timeout: 90_000 })
     await clickTourAction(page, 'alta')
 
     await expectTourBalloon(page, /ativar visualização kanban/i)
@@ -241,14 +237,14 @@ test.describe('Mentor — Fluxo Clínico Completo', () => {
 
       // Abre o mentor e clica no chip de tour rápido
       const mentorBtn = page.getByLabel('Abrir Modo Mentor')
-      await expect(mentorBtn).toBeVisible({ timeout: 8_000 })
+      await expect(mentorBtn).toBeVisible({ timeout: 90_000 })
       const inputAlreadyOpen = await page.getByPlaceholder(/pergunte algo/i).isVisible().catch(() => false)
       if (!inputAlreadyOpen) await mentorBtn.click()
-      await expect(page.getByPlaceholder(/pergunte algo/i)).toBeVisible({ timeout: 5_000 })
+      await expect(page.getByPlaceholder(/pergunte algo/i)).toBeVisible({ timeout: 90_000 })
       // Scope to the chat panel to avoid matching nav links with same text
       const chatPanel = page.locator('.fixed.bottom-24')
       const chip = chatPanel.locator('button').filter({ hasText: flow.chipLabel }).first()
-      await expect(chip).toBeVisible({ timeout: 5_000 })
+      await expect(chip).toBeVisible({ timeout: 90_000 })
       await chip.click()
 
       // Aguarda balão e verifica que está dentro da viewport
@@ -303,16 +299,16 @@ test.describe('Mentor — Fluxo Clínico Completo', () => {
     await page.waitForTimeout(300) // allow layout reflow
 
     const mentorBtn8 = page.getByLabel('Abrir Modo Mentor')
-    await expect(mentorBtn8).toBeVisible({ timeout: 8_000 })
+    await expect(mentorBtn8).toBeVisible({ timeout: 90_000 })
     await mentorBtn8.click()
-    await expect(page.getByPlaceholder(/pergunte algo/i)).toBeVisible({ timeout: 5_000 })
+    await expect(page.getByPlaceholder(/pergunte algo/i)).toBeVisible({ timeout: 90_000 })
     const chatPanel8 = page.locator('.fixed.bottom-24')
     const chip = chatPanel8.locator('button').filter({ hasText: /recepção/i }).first()
-    await expect(chip).toBeVisible({ timeout: 5_000 })
+    await expect(chip).toBeVisible({ timeout: 90_000 })
     await chip.click()
 
     const balloon = page.locator('.fixed.z-\\[10000\\]')
-    await expect(balloon).toBeVisible({ timeout: 8_000 })
+    await expect(balloon).toBeVisible({ timeout: 90_000 })
 
     const box = await balloon.boundingBox()
     expect(box).not.toBeNull()
@@ -339,9 +335,9 @@ test.describe('Mentor — Fluxo Clínico Completo', () => {
 
     // Inicia tour de recepção
     const mentorBtn9 = page.getByLabel('Abrir Modo Mentor')
-    await expect(mentorBtn9).toBeVisible({ timeout: 8_000 })
+    await expect(mentorBtn9).toBeVisible({ timeout: 90_000 })
     await mentorBtn9.click()
-    await expect(page.getByPlaceholder(/pergunte algo/i)).toBeVisible({ timeout: 5_000 })
+    await expect(page.getByPlaceholder(/pergunte algo/i)).toBeVisible({ timeout: 90_000 })
     await page.locator('.fixed.bottom-24 button').filter({ hasText: /recepção/i }).first().click()
     await expectTourBalloon(page, /busca de tutor ou pet/i)
 

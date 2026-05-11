@@ -1,3 +1,4 @@
+import { loginViaApi } from '../helpers/session'
 /**
  * E2E — Módulo Caixa Central (Cashier)
  *
@@ -11,17 +12,13 @@
 
 import { test, expect, Page } from '@playwright/test';
 import { createAdminClient } from '../helpers/supabase-test-client';
-import { seedGroomingSession } from '../helpers/db-seed';
+import { seedGroomingSession, seedClinics } from '../helpers/db-seed';
 import fixtures from '../fixtures/test-data.json';
 
 const admin = createAdminClient();
 
 async function loginAs(page: Page, email: string, password: string) {
-  await page.goto('/login');
-  await page.getByLabel(/e-?mail/i).fill(email);
-  await page.getByLabel(/senha/i).fill(password);
-  await page.getByRole('button', { name: /entrar/i }).click();
-  await page.waitForURL(/\/(dashboard|cashier|reception|triage)/, { timeout: 15_000 });
+  await loginViaApi(page, email, password)
 }
 
 function randomUUID(): string {
@@ -32,6 +29,7 @@ function randomUUID(): string {
 }
 
 async function seedCashierEntry(overrides: Record<string, unknown> = {}): Promise<string> {
+  await seedClinics(); // BUG-003: garante que a clínica existe antes do insert FK
   const { data, error } = await admin.from('central_cashier').insert([{
     clinic_id: fixtures.clinics.clinicA.id,
     source_module: 'grooming',

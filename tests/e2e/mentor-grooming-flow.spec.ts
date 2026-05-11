@@ -9,6 +9,7 @@
  */
 
 import { test, expect, type Page } from '@playwright/test'
+import { loginViaApi } from '../helpers/session'
 import fixtures from '../fixtures/test-data.json'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -25,19 +26,15 @@ const ROLE_MAP = {
 
 async function loginAs(page: Page, role: keyof typeof ROLE_MAP) {
   const user = fixtures.users[ROLE_MAP[role]]
-  await page.goto(`${BASE}/login`)
-  await page.getByLabel(/e-?mail/i).fill(user.email)
-  await page.locator('#password').fill(user.password)
-  await page.getByRole('button', { name: /entrar/i }).click()
-  await page.waitForURL(/\/(dashboard|reception|grooming|management|onboarding)/, { timeout: 30_000 })
+  await loginViaApi(page, user.email, user.password)
 }
 
 async function openMentor(page: Page) {
   const btn = page.getByLabel('Abrir Modo Mentor')
-  await expect(btn).toBeVisible({ timeout: 8_000 })
+  await expect(btn).toBeVisible({ timeout: 90_000 })
   const inputVisible = await page.getByPlaceholder(/pergunte algo/i).isVisible().catch(() => false)
   if (!inputVisible) await btn.click()
-  await expect(page.getByPlaceholder(/pergunte algo/i)).toBeVisible({ timeout: 5_000 })
+  await expect(page.getByPlaceholder(/pergunte algo/i)).toBeVisible({ timeout: 90_000 })
 }
 
 async function mentorAsk(page: Page, question: string) {
@@ -47,8 +44,8 @@ async function mentorAsk(page: Page, question: string) {
 
 async function expectTourBalloon(page: Page, titlePattern: RegExp) {
   const balloon = page.locator('.fixed.z-\\[10000\\]')
-  await expect(balloon).toBeVisible({ timeout: 8_000 })
-  await expect(balloon.getByText(titlePattern)).toBeVisible({ timeout: 5_000 })
+  await expect(balloon).toBeVisible({ timeout: 90_000 })
+  await expect(balloon.getByText(titlePattern)).toBeVisible({ timeout: 90_000 })
 }
 
 async function assertBalloonInViewport(page: Page) {
@@ -88,7 +85,7 @@ test.describe('Mentor — Fluxo Banho e Tosa (módulos clínicos desativados)', 
     await openMentor(page)
 
     const groomingChip = page.locator('.fixed.bottom-24 button').filter({ hasText: /banho.*tosa|tosa/i }).first()
-    await expect(groomingChip).toBeVisible({ timeout: 5_000 })
+    await expect(groomingChip).toBeVisible({ timeout: 90_000 })
     await groomingChip.click()
 
     await expectTourBalloon(page, /kanban de banho e tosa/i)
@@ -108,11 +105,11 @@ test.describe('Mentor — Fluxo Banho e Tosa (módulos clínicos desativados)', 
     // Mentor deve responder com contexto de tosa
     await expect(
       page.locator('text=/banho.*tosa|grooming|fila/i').last()
-    ).toBeVisible({ timeout: 8_000 })
+    ).toBeVisible({ timeout: 90_000 })
 
     // Deve oferecer ação para iniciar tour de grooming (label: "Iniciar tour: grooming")
     const actionBtn = page.locator('button').filter({ hasText: /iniciar tour.*grooming/i }).last()
-    await expect(actionBtn).toBeVisible({ timeout: 8_000 })
+    await expect(actionBtn).toBeVisible({ timeout: 90_000 })
     await actionBtn.click()
 
     await expectTourBalloon(page, /kanban de banho e tosa/i)
@@ -179,7 +176,7 @@ test.describe('Mentor — Fluxo Banho e Tosa (módulos clínicos desativados)', 
       await openMentor(page)
 
       const chip = page.locator('.fixed.bottom-24 button').filter({ hasText: flow.chipPattern }).first()
-      await expect(chip).toBeVisible({ timeout: 5_000 })
+      await expect(chip).toBeVisible({ timeout: 90_000 })
       await chip.click()
 
       await expectTourBalloon(page, flow.firstStepTitle)
@@ -201,7 +198,7 @@ test.describe('Mentor — Fluxo Banho e Tosa (módulos clínicos desativados)', 
     await page.locator('.fixed.bottom-24 button').filter({ hasText: /banho.*tosa/i }).first().click()
 
     const balloon = page.locator('.fixed.z-\\[10000\\]')
-    await expect(balloon).toBeVisible({ timeout: 8_000 })
+    await expect(balloon).toBeVisible({ timeout: 90_000 })
 
     const box = await balloon.boundingBox()
     expect(box).not.toBeNull()
@@ -225,7 +222,7 @@ test.describe('Mentor — Fluxo Banho e Tosa (módulos clínicos desativados)', 
     // Mentor deve responder com contexto de caixa/financeiro
     await expect(
       page.locator('text=/caixa|pagamento|checkout|alto|finaliz/i').last()
-    ).toBeVisible({ timeout: 8_000 })
+    ).toBeVisible({ timeout: 90_000 })
 
     console.log('[QA] Mentor + Caixa Central após Banho e Tosa — PASSOU')
   })

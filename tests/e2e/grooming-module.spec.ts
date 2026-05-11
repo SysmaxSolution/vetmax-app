@@ -1,3 +1,4 @@
+import { loginViaApi } from '../helpers/session'
 /**
  * E2E — Módulo Banho e Tosa (Grooming) — Suite Completa
  *
@@ -22,11 +23,7 @@ const adminSupabase = createAdminClient();
 // ─── Helper: Login ────────────────────────────────────────────────────────────
 
 async function loginAs(page: Page, email: string, password: string) {
-  await page.goto('/login');
-  await page.getByLabel(/e-?mail/i).fill(email);
-  await page.getByLabel(/senha/i).fill(password);
-  await page.getByRole('button', { name: /entrar/i }).click();
-  await page.waitForURL(/\/(reception|dashboard|grooming)/);
+  await loginViaApi(page, email, password)
 }
 
 // ─── Helper: Ativar módulo grooming na clínica ────────────────────────────────
