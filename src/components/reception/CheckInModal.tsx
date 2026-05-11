@@ -84,8 +84,8 @@ export function CheckInModal({
   const allChecklistChecked = checklistRequired ? checkedItems.size === clinicChecklist.length : true
 
   const canSubmit = isEdit
-    ? allChecklistChecked && !isPending
-    : (hasAddress && hasEmergencyContact && allChecklistChecked && !isPending)
+    ? !isPending
+    : (hasAddress && hasEmergencyContact && !isPending)
 
   // Enter → confirmar (quando formulário está válido)
   useEffect(() => {
@@ -121,11 +121,6 @@ export function CheckInModal({
     }
     if (emergencyRequired && !emergencyContact.trim()) {
       setError('Contato de emergência é obrigatório.')
-      return
-    }
-
-    if (!allChecklistChecked) {
-      setError('Complete todos os itens do checklist para continuar.')
       return
     }
 
@@ -330,7 +325,7 @@ export function CheckInModal({
                   ))}
                 </div>
                 {!allChecklistChecked && (
-                  <p className="mt-2 text-xs text-slate-500">Complete todos os itens para continuar.</p>
+                  <p className="mt-2 text-xs text-slate-400 italic">Marque os itens conforme realizado.</p>
                 )}
               </div>
             )}

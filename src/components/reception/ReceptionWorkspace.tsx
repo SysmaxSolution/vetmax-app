@@ -169,12 +169,12 @@ function TutorProfile({
             {data.patients.map(p => {
               const sp = SPECIES_LABELS[p.species] ?? { emoji: '🐾', label: p.species, color: 'bg-slate-100 text-slate-600' }
               return (
-                <div key={p.id} className="flex items-center justify-between rounded-xl border border-slate-100 px-4 py-3 hover:border-slate-200 hover:bg-slate-50 transition-colors">
-                  <div className="flex items-center gap-3">
+                <div key={p.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-xl border border-slate-100 px-4 py-3 hover:border-slate-200 hover:bg-slate-50 transition-colors">
+                  <div className="flex items-center gap-3 min-w-0">
                     <PetAvatar name={p.name} species={p.species} photoUrl={p.photo_url} size="sm" />
-                    <div>
-                      <p className="font-medium text-slate-900">{p.name}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
+                    <div className="min-w-0">
+                      <p className="font-medium text-slate-900 truncate">{p.name}</p>
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                         <span className={`text-xs font-medium rounded-full px-2 py-0.5 ${sp.color}`}>{sp.label}</span>
                         {p.breed && <span className="text-xs text-slate-500">{p.breed}</span>}
                         {p.gender && p.gender !== 'unknown' && <span className="text-xs text-slate-400">{GENDER_LABELS[p.gender]}</span>}
@@ -182,7 +182,7 @@ function TutorProfile({
                       </div>
                     </div>
                   </div>
-                  <div className="flex gap-2 flex-shrink-0 flex-wrap justify-end">
+                  <div className="flex gap-1.5 flex-wrap">
                     <button
                       onClick={() => onViewFeed(p.id, p.name, p.species, data.tutor.name, data.tutor.cpf, data.tutor.id)}
                       className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
