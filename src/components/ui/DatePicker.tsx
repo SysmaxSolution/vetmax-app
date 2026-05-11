@@ -68,37 +68,40 @@ export function DatePicker({
   function calcPosition() {
     if (!triggerRef.current) return
     const rect    = triggerRef.current.getBoundingClientRect()
+    const vp      = window.visualViewport
+    const vpH     = vp ? vp.height : window.innerHeight
+    const vpW     = window.innerWidth
     const popupH  = popupRef.current?.offsetHeight ?? 300
-    const popupW  = popupRef.current?.offsetWidth  ?? 280
-    const below   = window.innerHeight - rect.bottom
+    const popupW  = Math.min(popupRef.current?.offsetWidth ?? 280, vpW - 16)
+    const below   = vpH - rect.bottom
     const above   = rect.top
     const openBelow = below >= popupH + 4 || below >= above
     const rawTop  = openBelow ? rect.bottom + 4 : rect.top - popupH - 4
-    const top     = Math.max(8, Math.min(rawTop, window.innerHeight - popupH - 8))
+    const top     = Math.max(8, Math.min(rawTop, vpH - popupH - 8))
     const rawLeft = rect.left
-    const left    = Math.max(8, Math.min(rawLeft, window.innerWidth - popupW - 8))
-    setPopupStyle({ position: 'fixed', top, left, minWidth: rect.width, zIndex: 9999 })
+    const left    = Math.max(8, Math.min(rawLeft, vpW - popupW - 8))
+    setPopupStyle({ position: 'fixed', top, left, maxWidth: vpW - 16, zIndex: 9999 })
   }
 
   useEffect(() => {
     if (!open) return
     calcPosition()
-    function handleOutside(e: MouseEvent) {
-      if (
-        triggerRef.current?.contains(e.target as Node) ||
-        popupRef.current?.contains(e.target as Node)
-      ) return
+    function handleOutside(e: Event) {
+      const target = (e as PointerEvent).target as Node
+      if (triggerRef.current?.contains(target) || popupRef.current?.contains(target)) return
       setOpen(false)
     }
     function handleScroll() { setOpen(false) }
     function handleResize() { calcPosition() }
-    document.addEventListener('mousedown', handleOutside)
+    document.addEventListener('pointerdown', handleOutside)
     window.addEventListener('scroll', handleScroll, true)
     window.addEventListener('resize', handleResize)
+    window.visualViewport?.addEventListener('resize', handleResize)
     return () => {
-      document.removeEventListener('mousedown', handleOutside)
+      document.removeEventListener('pointerdown', handleOutside)
       window.removeEventListener('scroll', handleScroll, true)
       window.removeEventListener('resize', handleResize)
+      window.visualViewport?.removeEventListener('resize', handleResize)
     }
   }, [open])
 
@@ -223,35 +226,41 @@ export function DateInput({
     const anchor = wrapperRef.current || calBtnRef.current
     if (!anchor) return
     const rect   = anchor.getBoundingClientRect()
+    const vp     = window.visualViewport
+    const vpH    = vp ? vp.height : window.innerHeight
+    const vpW    = window.innerWidth
     const popupH = popupRef.current?.offsetHeight ?? 300
-    const popupW = popupRef.current?.offsetWidth  ?? 280
-    const below  = window.innerHeight - rect.bottom
+    const popupW = Math.min(popupRef.current?.offsetWidth ?? 280, vpW - 16)
+    const below  = vpH - rect.bottom
     const above  = rect.top
     const openBelow = below >= popupH + 4 || below >= above
     const rawTop = openBelow ? rect.bottom + 4 : rect.top - popupH - 4
-    const top    = Math.max(8, Math.min(rawTop, window.innerHeight - popupH - 8))
+    const top    = Math.max(8, Math.min(rawTop, vpH - popupH - 8))
     // alinha borda direita do popup com borda direita do container
     const rawLeft = rect.right - popupW
-    const left   = Math.max(8, Math.min(rawLeft, window.innerWidth - popupW - 8))
-    setPopupStyle({ position: 'fixed', top, left, zIndex: 9999 })
+    const left   = Math.max(8, Math.min(rawLeft, vpW - popupW - 8))
+    setPopupStyle({ position: 'fixed', top, left, maxWidth: vpW - 16, zIndex: 9999 })
   }
 
   useEffect(() => {
     if (!open) return
     calcPosition()
-    function handleOutside(e: MouseEvent) {
-      if (calBtnRef.current?.contains(e.target as Node) || popupRef.current?.contains(e.target as Node)) return
+    function handleOutside(e: Event) {
+      const target = (e as PointerEvent).target as Node
+      if (calBtnRef.current?.contains(target) || popupRef.current?.contains(target)) return
       setOpen(false)
     }
     function handleScroll() { setOpen(false) }
     function handleResize() { calcPosition() }
-    document.addEventListener('mousedown', handleOutside)
+    document.addEventListener('pointerdown', handleOutside)
     window.addEventListener('scroll', handleScroll, true)
     window.addEventListener('resize', handleResize)
+    window.visualViewport?.addEventListener('resize', handleResize)
     return () => {
-      document.removeEventListener('mousedown', handleOutside)
+      document.removeEventListener('pointerdown', handleOutside)
       window.removeEventListener('scroll', handleScroll, true)
       window.removeEventListener('resize', handleResize)
+      window.visualViewport?.removeEventListener('resize', handleResize)
     }
   }, [open])
 
