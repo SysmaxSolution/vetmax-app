@@ -895,7 +895,7 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
                           setEditServices(record.services_applied ?? [])
                           setEditProducts(record.products_used ?? [])
                           setEditBehavior(record.behavior ?? '')
-                          setEditProductInput('')
+                          setProductsInput('')
                         }
 
                         async function saveEdit() {
