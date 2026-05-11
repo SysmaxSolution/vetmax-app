@@ -90,14 +90,15 @@ export function DatePicker({
       ) return
       setOpen(false)
     }
-    function handleScroll() { calcPosition() }
+    function handleScroll() { setOpen(false) }
+    function handleResize() { calcPosition() }
     document.addEventListener('mousedown', handleOutside)
     window.addEventListener('scroll', handleScroll, true)
-    window.addEventListener('resize', handleScroll)
+    window.addEventListener('resize', handleResize)
     return () => {
       document.removeEventListener('mousedown', handleOutside)
       window.removeEventListener('scroll', handleScroll, true)
-      window.removeEventListener('resize', handleScroll)
+      window.removeEventListener('resize', handleResize)
     }
   }, [open])
 
@@ -212,14 +213,16 @@ export function DateInput({
   const [inputVal, setInputVal] = useState(isoToDisplay(value))
   const [open, setOpen]         = useState(false)
   const [popupStyle, setPopupStyle] = useState<React.CSSProperties>({})
+  const wrapperRef = useRef<HTMLDivElement>(null)
   const calBtnRef  = useRef<HTMLButtonElement>(null)
   const popupRef   = useRef<HTMLDivElement>(null)
 
   useEffect(() => { setInputVal(isoToDisplay(value)) }, [value])
 
   function calcPosition() {
-    if (!calBtnRef.current) return
-    const rect   = calBtnRef.current.getBoundingClientRect()
+    const anchor = wrapperRef.current || calBtnRef.current
+    if (!anchor) return
+    const rect   = anchor.getBoundingClientRect()
     const popupH = popupRef.current?.offsetHeight ?? 300
     const popupW = popupRef.current?.offsetWidth  ?? 280
     const below  = window.innerHeight - rect.bottom
@@ -227,10 +230,10 @@ export function DateInput({
     const openBelow = below >= popupH + 4 || below >= above
     const rawTop = openBelow ? rect.bottom + 4 : rect.top - popupH - 4
     const top    = Math.max(8, Math.min(rawTop, window.innerHeight - popupH - 8))
-    // âncora borda direita do botão; garante que o popup não saia pela esquerda
-    const rightFromVp = window.innerWidth - rect.right
-    const right  = Math.max(8, Math.min(rightFromVp, window.innerWidth - popupW - 8))
-    setPopupStyle({ position: 'fixed', top, right, zIndex: 9999 })
+    // alinha borda direita do popup com borda direita do container
+    const rawLeft = rect.right - popupW
+    const left   = Math.max(8, Math.min(rawLeft, window.innerWidth - popupW - 8))
+    setPopupStyle({ position: 'fixed', top, left, zIndex: 9999 })
   }
 
   useEffect(() => {
@@ -240,14 +243,15 @@ export function DateInput({
       if (calBtnRef.current?.contains(e.target as Node) || popupRef.current?.contains(e.target as Node)) return
       setOpen(false)
     }
-    function handleScroll() { calcPosition() }
+    function handleScroll() { setOpen(false) }
+    function handleResize() { calcPosition() }
     document.addEventListener('mousedown', handleOutside)
     window.addEventListener('scroll', handleScroll, true)
-    window.addEventListener('resize', handleScroll)
+    window.addEventListener('resize', handleResize)
     return () => {
       document.removeEventListener('mousedown', handleOutside)
       window.removeEventListener('scroll', handleScroll, true)
-      window.removeEventListener('resize', handleScroll)
+      window.removeEventListener('resize', handleResize)
     }
   }, [open])
 
@@ -278,7 +282,7 @@ export function DateInput({
   return (
     <div className={`relative ${className}`}>
       {name && <input type="hidden" name={name} value={value} />}
-      <div className="flex items-center gap-1">
+      <div ref={wrapperRef} className="flex items-center gap-1">
         <input
           type="text"
           id={id}
@@ -289,7 +293,7 @@ export function DateInput({
           required={required}
           inputMode="numeric"
           maxLength={10}
-          className={`flex-1 rounded-xl border px-3 py-2.5 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 ${
+          className={`flex-1 min-w-0 rounded-xl border px-3 py-2.5 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 ${
             disabled ? 'bg-slate-100 text-slate-500 cursor-not-allowed border-slate-200' : 'bg-white border-slate-300 text-slate-900 hover:border-teal-400'
           }`}
         />
@@ -298,7 +302,7 @@ export function DateInput({
           type="button"
           disabled={disabled}
           onClick={() => setOpen(v => !v)}
-          className="p-2.5 rounded-xl border border-slate-300 bg-white hover:border-teal-400 hover:bg-teal-50 transition-colors disabled:opacity-50"
+          className="shrink-0 p-2.5 rounded-xl border border-slate-300 bg-white hover:border-teal-400 hover:bg-teal-50 transition-colors disabled:opacity-50"
           title="Abrir calendário"
         >
           <Calendar className="h-4 w-4 text-slate-400" />
