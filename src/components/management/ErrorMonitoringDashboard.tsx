@@ -20,6 +20,8 @@ type ErrorLog = {
   source: string
   occurrence_count: number
   created_at: string
+  clinic_id:   string | null
+  clinic_name: string | null
 }
 
 type FixPlan = {
@@ -257,6 +259,7 @@ function ErrorLogsTab({ errors }: { errors: ErrorLog[] }) {
         <thead>
           <tr className="text-xs text-slate-500 uppercase tracking-wide border-b border-slate-100">
             <th className="pb-2 pr-4 font-semibold text-left">Prioridade</th>
+            <th className="pb-2 pr-4 font-semibold text-left">Clínica</th>
             <th className="pb-2 pr-4 font-semibold text-left">Módulo</th>
             <th className="pb-2 pr-4 font-semibold text-left">Rota</th>
             <th className="pb-2 pr-4 font-semibold text-left">Erro</th>
@@ -276,15 +279,20 @@ function ErrorLogsTab({ errors }: { errors: ErrorLog[] }) {
                     {priority}
                   </span>
                 </td>
+                <td className="py-2.5 pr-4 max-w-[140px]">
+                  <span className="text-xs text-slate-700 truncate block" title={err.clinic_name ?? undefined}>
+                    {err.clinic_name ?? <span className="text-slate-400 italic">global</span>}
+                  </span>
+                </td>
                 <td className="py-2.5 pr-4">
                   <span className="text-xs font-medium text-slate-600 bg-slate-100 rounded px-1.5 py-0.5">
                     {err.module ?? '—'}
                   </span>
                 </td>
-                <td className="py-2.5 pr-4 font-mono text-xs text-slate-500 max-w-[160px] truncate">
+                <td className="py-2.5 pr-4 font-mono text-xs text-slate-500 max-w-[140px] truncate">
                   {err.path}
                 </td>
-                <td className="py-2.5 pr-4 text-xs text-slate-700 max-w-[280px]">
+                <td className="py-2.5 pr-4 text-xs text-slate-700 max-w-[240px]">
                   <p className="truncate">{err.error_message}</p>
                 </td>
                 <td className="py-2.5 pr-4">

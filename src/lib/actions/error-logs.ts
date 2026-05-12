@@ -83,7 +83,10 @@ export async function logClientError(
   }
 }
 
-/** Retorna erros não resolvidos da clínica do usuário autenticado. */
+/** Retorna erros não resolvidos.
+ *  - is_sysmax=true → todos os erros de todas as clínicas (usa admin client, bypass RLS)
+ *  - demais usuários  → somente erros da clínica logada
+ */
 export async function getUnresolvedErrors(): Promise<
   {
     id: string
@@ -95,33 +98,59 @@ export async function getUnresolvedErrors(): Promise<
     source: string
     occurrence_count: number
     created_at: string
+    clinic_id:   string | null
+    clinic_name: string | null
   }[] | { error: string }
 > {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Não autenticado.' }
 
-  const { data: profile } = await supabase
+  const admin = createAdminClient()
+  const { data: profile } = await admin
     .from('profiles')
-    .select('clinic_id')
+    .select('clinic_id, is_sysmax')
     .eq('id', user.id)
     .single()
 
   if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
 
-  const { data, error } = await supabase
+  const isSysmax = profile.is_sysmax === true
+
+  // Admin client bypassa a RLS clinic_isolation_error_logs
+  let query = admin
     .from('error_logs')
-    .select('id, path, error_message, severity, priority, module, source, occurrence_count, created_at')
-    .eq('clinic_id', profile.clinic_id)
+    .select('id, path, error_message, severity, priority, module, source, occurrence_count, created_at, clinic_id, clinics(name)')
     .eq('resolved', false)
     .order('created_at', { ascending: false })
-    .limit(100)
+    .limit(isSysmax ? 500 : 100)
 
+  if (!isSysmax) {
+    query = query.eq('clinic_id', profile.clinic_id)
+  }
+
+  const { data, error } = await query
   if (error) return { error: 'Erro ao buscar logs: ' + error.message }
-  return data ?? []
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((row: any) => ({
+    id:               row.id,
+    path:             row.path,
+    error_message:    row.error_message,
+    severity:         row.severity,
+    priority:         row.priority,
+    module:           row.module,
+    source:           row.source,
+    occurrence_count: row.occurrence_count,
+    created_at:       row.created_at,
+    clinic_id:        row.clinic_id   ?? null,
+    clinic_name:      row.clinics?.name ?? null,
+  }))
 }
 
-/** Server Action para marcar um erro como resolvido. */
+/** Server Action para marcar um erro como resolvido.
+ *  is_sysmax pode resolver erros de qualquer clínica.
+ */
 export async function resolveError(
   errorId: string
 ): Promise<{ success: true } | { error: string }> {
@@ -130,21 +159,30 @@ export async function resolveError(
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: 'Não autenticado.' }
 
-    const { data: profile } = await supabase
+    const admin = createAdminClient()
+    const { data: profile } = await admin
       .from('profiles')
-      .select('clinic_id, role')
+      .select('clinic_id, role, is_sysmax')
       .eq('id', user.id)
       .single()
 
     if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
-    if (!['admin', 'manager'].includes(profile.role)) return { error: 'Sem permissão.' }
 
-    const { error } = await supabase
+    const isSysmax = profile.is_sysmax === true
+    if (!isSysmax && !['admin', 'manager'].includes(profile.role)) {
+      return { error: 'Sem permissão.' }
+    }
+
+    let query = admin
       .from('error_logs')
       .update({ resolved: true })
       .eq('id', errorId)
-      .eq('clinic_id', profile.clinic_id)
 
+    if (!isSysmax) {
+      query = query.eq('clinic_id', profile.clinic_id)
+    }
+
+    const { error } = await query
     if (error) return { error: 'Erro ao resolver: ' + error.message }
     return { success: true }
   } catch {
