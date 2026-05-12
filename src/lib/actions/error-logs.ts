@@ -152,8 +152,8 @@ export async function resolveError(
   }
 }
 
-/** Busca os planos de correção (admin/manager). */
-export async function getFixPlans(statusFilter?: string): Promise<
+/** Busca os planos de correção (admin/manager). Aceita um ou múltiplos status. */
+export async function getFixPlans(statusFilter?: string | string[]): Promise<
   {
     id: string
     title: string
@@ -178,7 +178,13 @@ export async function getFixPlans(statusFilter?: string): Promise<
     .order('created_at', { ascending: false })
     .limit(50)
 
-  if (statusFilter) query = query.eq('status', statusFilter)
+  if (statusFilter) {
+    if (Array.isArray(statusFilter)) {
+      query = query.in('status', statusFilter)
+    } else {
+      query = query.eq('status', statusFilter)
+    }
+  }
 
   const { data, error } = await query
   if (error) return { error: 'Erro ao buscar planos: ' + error.message }

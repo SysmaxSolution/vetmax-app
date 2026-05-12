@@ -3,18 +3,19 @@
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
 import {
-  FileText, BarChart3, Shield, Building2, Users, Settings, LayoutGrid, Palette,
+  FileText, BarChart3, Shield, Building2, Users, Settings, LayoutGrid, Palette, Activity,
 } from 'lucide-react'
 
 const TABS = [
-  { label: 'Modelos',        href: '/dashboard/management',                   icon: FileText,     exact: true },
-  { label: 'Tabela de Preços', href: '/dashboard/management?tab=catalogo',    icon: BarChart3,    exact: false, tab: 'catalogo' },
-  { label: 'Convênios',      href: '/dashboard/management?tab=convenios',     icon: Shield,       exact: false, tab: 'convenios' },
-  { label: 'Clínica',        href: '/dashboard/management?tab=clinica',       icon: Building2,    exact: false, tab: 'clinica' },
-  { label: 'Usuários',       href: '/dashboard/management?tab=usuarios',      icon: Users,        exact: false, tab: 'usuarios' },
-  { label: 'Configurações',  href: '/dashboard/management?tab=configuracoes', icon: Settings,     exact: false, tab: 'configuracoes' },
-  { label: 'Aparência',      href: '/dashboard/management?tab=aparencia',     icon: Palette,      exact: false, tab: 'aparencia' },
-  { label: 'Painel do Diretor', href: '/dashboard/management/kanban',         icon: LayoutGrid,   exact: false, kanban: true },
+  { label: 'Modelos',           href: '/dashboard/management',                      icon: FileText,   exact: true },
+  { label: 'Tabela de Preços',  href: '/dashboard/management?tab=catalogo',         icon: BarChart3,  exact: false, tab: 'catalogo' },
+  { label: 'Convênios',         href: '/dashboard/management?tab=convenios',        icon: Shield,     exact: false, tab: 'convenios' },
+  { label: 'Clínica',           href: '/dashboard/management?tab=clinica',          icon: Building2,  exact: false, tab: 'clinica' },
+  { label: 'Usuários',          href: '/dashboard/management?tab=usuarios',         icon: Users,      exact: false, tab: 'usuarios' },
+  { label: 'Configurações',     href: '/dashboard/management?tab=configuracoes',    icon: Settings,   exact: false, tab: 'configuracoes' },
+  { label: 'Aparência',         href: '/dashboard/management?tab=aparencia',        icon: Palette,    exact: false, tab: 'aparencia' },
+  { label: 'Monitoramento',     href: '/dashboard/management?tab=monitoramento',    icon: Activity,   exact: false, tab: 'monitoramento' },
+  { label: 'Painel do Diretor', href: '/dashboard/management/kanban',               icon: LayoutGrid, exact: false, kanban: true },
 ]
 
 export default function ManagementNav() {

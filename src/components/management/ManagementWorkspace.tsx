@@ -25,6 +25,7 @@ import PricingTab from './PricingTab'
 import ModulesTab from './ModulesTab'
 import RoomsTab from './RoomsTab'
 import AppearanceTab from './AppearanceTab'
+import ErrorMonitoringDashboard from './ErrorMonitoringDashboard'
 import { updateUserPhone, updateUserSpecialties, getUserModuleAccess, setUserModuleAccess, updateUserNickname } from '@/lib/actions/user-management'
 import type { ClinicUserFull } from '@/lib/actions/user-management'
 import type { Room } from '@/lib/actions/rooms'
@@ -91,7 +92,7 @@ const INVITE_ROLE_OPTIONS: { value: InvitationRole; label: string }[] = [
   { value: 'pharmacist',   label: 'Técnico' },
 ]
 
-type ActiveTab = 'templates' | 'clinica' | 'usuarios' | 'catalogo' | 'configuracoes' | 'convenios' | 'salas' | 'aparencia'
+type ActiveTab = 'templates' | 'clinica' | 'usuarios' | 'catalogo' | 'configuracoes' | 'convenios' | 'salas' | 'aparencia' | 'monitoramento'
 
 // ─── Inline Field Helper ─────────────────────────────────────────────────────
 
@@ -725,6 +726,11 @@ export default function ManagementWorkspace({
       {/* ── Tab: Aparência ── */}
       {activeTab === 'aparencia' && (
         <AppearanceTab />
+      )}
+
+      {/* ── Tab: Monitoramento de Erros (G-07-D) ── */}
+      {activeTab === 'monitoramento' && (
+        <ErrorMonitoringDashboard />
       )}
 
       {/* ── Tab: Usuários ── */}
