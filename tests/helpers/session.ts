@@ -32,7 +32,7 @@ function isStorageStateExpired(cookies: Record<string, unknown>[]): boolean {
   if (!authCookie?.value) return true
   try {
     const raw = (authCookie.value as string).replace(/^base64-/, '')
-    const session = JSON.parse(Buffer.from(raw, 'base64').toString('utf-8')) as { expires_at?: number }
+    const session = JSON.parse(Buffer.from(raw, 'base64url').toString('utf-8')) as { expires_at?: number }
     if (!session.expires_at) return true
     return session.expires_at < Math.floor(Date.now() / 1000) + 90
   } catch {
@@ -63,8 +63,8 @@ export async function injectFreshSession(
   const sessionPayload = JSON.stringify({
     access_token, token_type: 'bearer', expires_in, expires_at, refresh_token, user,
   })
-  // @supabase/ssr lê cookies no formato: "base64-" + base64(json)
-  const cookieValue = 'base64-' + Buffer.from(sessionPayload).toString('base64')
+  // @supabase/ssr usa base64URL (sem +/ do padrão): "base64-" + base64url(json)
+  const cookieValue = 'base64-' + Buffer.from(sessionPayload).toString('base64url')
 
   const domain = new URL(BASE_URL).hostname
   await context.clearCookies()
