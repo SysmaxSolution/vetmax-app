@@ -3,12 +3,12 @@
 import { useState } from 'react'
 import {
   X, ToggleLeft, ToggleRight, Cpu,
-  Save, Loader2, CheckCircle2, ClipboardList, Plus,
+  Save, Loader2, CheckCircle2, ClipboardList, Plus, Sparkles, FileText,
 } from 'lucide-react'
 import {
   updateClinicConfig,
   updateRequiredFields,
-  type FlowConfig, type ClinicConfig, type ClinicSettingsConfig,
+  type FlowConfig, type ClinicConfig, type ClinicSettingsConfig, type AiTranscriptionMode,
 } from '@/lib/actions/clinic-settings'
 
 const MERGEABLE = [
@@ -43,15 +43,19 @@ interface Props {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ClinicSettingsTab({ initialConfig, initialChecklist = [], initialSettingsConfig, onToast }: Props) {
-  const [continuousFlow,  setContinuousFlow]  = useState(initialConfig?.continuous_flow ?? false)
-  const [mergedModules,   setMergedModules]   = useState<Array<'triage'|'exams'>>(
+  const [continuousFlow,      setContinuousFlow]      = useState(initialConfig?.continuous_flow ?? false)
+  const [mergedModules,       setMergedModules]       = useState<Array<'triage'|'exams'>>(
     initialConfig?.flow_config?.vet_merged_modules ?? []
   )
+  const [aiMode,              setAiMode]              = useState<AiTranscriptionMode>(
+    initialConfig?.ai_transcription_mode ?? 'ai_assisted'
+  )
+  const [savingAiMode,        setSavingAiMode]        = useState(false)
 
-  const [checklist,       setChecklist]       = useState<string[]>(initialChecklist)
-  const [newCheckItem,    setNewCheckItem]    = useState('')
-  const [savingChecklist, setSavingChecklist] = useState(false)
-  const [savingFlow,      setSavingFlow]      = useState(false)
+  const [checklist,           setChecklist]           = useState<string[]>(initialChecklist)
+  const [newCheckItem,        setNewCheckItem]        = useState('')
+  const [savingChecklist,     setSavingChecklist]     = useState(false)
+  const [savingFlow,          setSavingFlow]          = useState(false)
 
   // ── Continuous flow ─────────────────────────────────────────────────────────
 
@@ -91,6 +95,16 @@ export default function ClinicSettingsTab({ initialConfig, initialChecklist = []
     setSavingChecklist(false)
     if ('error' in res) { onToast('error', res.error); return }
     onToast('success', 'Checklist de check-in salvo!')
+  }
+
+  // ── AI Transcription Mode ───────────────────────────────────────────────────
+
+  async function saveAiMode() {
+    setSavingAiMode(true)
+    const res = await updateClinicConfig({ ai_transcription_mode: aiMode })
+    setSavingAiMode(false)
+    if ('error' in res) { onToast('error', res.error); return }
+    onToast('success', 'Comportamento da IA atualizado!')
   }
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -162,6 +176,96 @@ export default function ClinicSettingsTab({ initialConfig, initialChecklist = []
             {savingChecklist
               ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando...</>
               : <><Save className="h-4 w-4" /> Salvar Checklist</>}
+          </button>
+        </div>
+      </div>
+
+      {/* ── Sessão 2: Comportamento da IA ────────────────────────────────────── */}
+      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+        <div className="border-b border-slate-100 px-6 py-4 flex items-center gap-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-50">
+            <Sparkles className="h-4 w-4 text-violet-600" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">Comportamento da IA nas Gravações</h3>
+            <p className="text-xs text-slate-500">
+              Define como o sistema processa o áudio ditado em todas as telas (Triagem, Consultório, Exames, Internação)
+            </p>
+          </div>
+        </div>
+
+        <div className="px-6 py-5 space-y-3">
+          {/* Opção 1 — Apenas Transcrição */}
+          <button
+            type="button"
+            onClick={() => setAiMode('transcribe_only')}
+            className={`w-full flex items-start gap-4 rounded-xl border-2 px-4 py-4 text-left transition-all ${
+              aiMode === 'transcribe_only'
+                ? 'border-violet-400 bg-violet-50'
+                : 'border-slate-200 bg-white hover:border-slate-300'
+            }`}
+          >
+            <div className={`mt-0.5 h-4 w-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
+              aiMode === 'transcribe_only' ? 'border-violet-500' : 'border-slate-300'
+            }`}>
+              {aiMode === 'transcribe_only' && <div className="h-2 w-2 rounded-full bg-violet-500" />}
+            </div>
+            <div className="flex items-start gap-3 min-w-0">
+              <FileText className={`h-4 w-4 flex-shrink-0 mt-0.5 ${aiMode === 'transcribe_only' ? 'text-violet-600' : 'text-slate-400'}`} />
+              <div>
+                <p className={`text-sm font-semibold ${aiMode === 'transcribe_only' ? 'text-violet-900' : 'text-slate-700'}`}>
+                  Apenas Transcrição
+                </p>
+                <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                  O texto é registrado exatamente como foi falado, sem nenhuma alteração ou reformulação pela IA.
+                  Ideal para clínicas que preferem controle total sobre o conteúdo registrado.
+                </p>
+              </div>
+            </div>
+          </button>
+
+          {/* Opção 2 — IA Assistida */}
+          <button
+            type="button"
+            onClick={() => setAiMode('ai_assisted')}
+            className={`w-full flex items-start gap-4 rounded-xl border-2 px-4 py-4 text-left transition-all ${
+              aiMode === 'ai_assisted'
+                ? 'border-violet-400 bg-violet-50'
+                : 'border-slate-200 bg-white hover:border-slate-300'
+            }`}
+          >
+            <div className={`mt-0.5 h-4 w-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
+              aiMode === 'ai_assisted' ? 'border-violet-500' : 'border-slate-300'
+            }`}>
+              {aiMode === 'ai_assisted' && <div className="h-2 w-2 rounded-full bg-violet-500" />}
+            </div>
+            <div className="flex items-start gap-3 min-w-0">
+              <Sparkles className={`h-4 w-4 flex-shrink-0 mt-0.5 ${aiMode === 'ai_assisted' ? 'text-violet-600' : 'text-slate-400'}`} />
+              <div>
+                <p className={`text-sm font-semibold ${aiMode === 'ai_assisted' ? 'text-violet-900' : 'text-slate-700'}`}>
+                  Transcrição com Preenchimento Técnico
+                </p>
+                <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                  Após a gravação, a IA analisa o relato oral e preenche os campos clínicos automaticamente
+                  com linguagem técnica formal (conforme CFMV). Extrai sinais vitais, motivos de internação, laudos e mais.
+                </p>
+                {aiMode === 'ai_assisted' && (
+                  <span className="inline-flex items-center gap-1 mt-2 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700">
+                    <Sparkles className="h-2.5 w-2.5" /> Recomendado
+                  </span>
+                )}
+              </div>
+            </div>
+          </button>
+
+          <button
+            onClick={saveAiMode}
+            disabled={savingAiMode}
+            className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-violet-600 py-2.5 text-sm font-semibold text-white hover:bg-violet-700 transition-colors disabled:opacity-50"
+          >
+            {savingAiMode
+              ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando...</>
+              : <><Save className="h-4 w-4" /> Salvar Comportamento da IA</>}
           </button>
         </div>
       </div>

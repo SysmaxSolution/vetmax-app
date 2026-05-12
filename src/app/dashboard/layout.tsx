@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import DashboardHeader from '@/components/layout/DashboardHeader'
 import { WhatsAppGateProvider } from '@/components/providers/WhatsAppGateProvider'
 import { ModulesProvider } from '@/components/providers/ModulesProvider'
+import { ClinicConfigProvider } from '@/components/providers/ClinicConfigProvider'
 import { MentorGlobalWrapper } from '@/components/mentor/MentorGlobalWrapper'
 import { Suspense } from 'react'
 import { UnauthorizedBanner } from '@/components/ui/UnauthorizedBanner'
@@ -44,7 +45,7 @@ export default async function DashboardLayout({
   const [{ data: clinicData }, whatsAppRow, clinicsResult] = await Promise.all([
     admin
       .from('clinics')
-      .select('logo_url, active_modules, status')
+      .select('logo_url, active_modules, status, ai_transcription_mode')
       .eq('id', profile.clinic_id)
       .single(),
     supabase
@@ -149,11 +150,13 @@ export default async function DashboardLayout({
         isSysmax={isSysmax}
         clinicStatus={clinicStatus}
       />
-      <ModulesProvider modules={activeModules}>
-        <WhatsAppGateProvider enabled={whatsAppEnabled}>
-          {children}
-        </WhatsAppGateProvider>
-      </ModulesProvider>
+      <ClinicConfigProvider aiTranscriptionMode={(clinicData as any)?.ai_transcription_mode ?? 'ai_assisted'}>
+        <ModulesProvider modules={activeModules}>
+          <WhatsAppGateProvider enabled={whatsAppEnabled}>
+            {children}
+          </WhatsAppGateProvider>
+        </ModulesProvider>
+      </ClinicConfigProvider>
       <MentorGlobalWrapper />
       <Suspense fallback={null}>
         <UnauthorizedBanner />

@@ -42,6 +42,7 @@ import type { PatientDocument } from '@/lib/actions/documents'
 import type { Attachment } from '@/lib/actions/attachments'
 import type { FlowConfig } from '@/lib/actions/clinic-settings'
 import { getClinicVoiceTriggers, updateClinicVoiceTriggers } from '@/lib/actions/clinic-settings'
+import { useAiTranscriptionMode } from '@/components/providers/ClinicConfigProvider'
 
 // ─── Labels ──────────────────────────────────────────────────────────────────
 
@@ -143,6 +144,7 @@ export default function ConsultationDetail({
   userRole,
 }: Props) {
   const router = useRouter()
+  const aiMode = useAiTranscriptionMode()
   const { patient, tutor, vital_signs, past_consultations } = consultation
 
   // Estado do prontuário
@@ -299,6 +301,14 @@ export default function ConsultationDetail({
   useEffect(() => { vetNotesRef.current = vetNotes }, [vetNotes])
 
   const handleVoiceAutoSave = useCallback(async (transcript: string) => {
+    // Modo "Apenas Transcrição" — anexa diretamente ao prontuário sem extração por IA
+    if (aiMode === 'transcribe_only') {
+      const newNotes = vetNotesRef.current ? `${vetNotesRef.current}\n\n${transcript}` : transcript
+      setVetNotes(newNotes)
+      autoSave(newNotes)
+      return
+    }
+
     setIsExtractingVoice(true)
     const result = await extractFullVoice(
       transcript,
@@ -413,18 +423,20 @@ export default function ConsultationDetail({
     setToast({ type: 'success', message: `IA Unificada: ${parts.join(' · ')}.` })
 
     // 10. Cadastro Vivo — disparar modal (com deduplicação)
-    const liveData = await extractPatientDataFromTranscript(transcript)
-    if (liveData) {
-      const existingVaccineNames = new Set(initialVaccines.map(v => v.vaccine_name.toLowerCase()))
-      const existingBehaviorTags = new Set((patient.behavior_tags ?? []).map((t: string) => t.toLowerCase()))
-      const newVaccines = liveData.vaccines.filter(v => !existingVaccineNames.has(v.name.toLowerCase()))
-      const newBehavior = liveData.behavior.filter(b => !existingBehaviorTags.has(b.toLowerCase()))
-      if (newVaccines.length > 0 || newBehavior.length > 0) {
-        setLiveRegData({ ...liveData, vaccines: newVaccines, behavior: newBehavior })
+    if (aiMode === 'ai_assisted') {
+      const liveData = await extractPatientDataFromTranscript(transcript)
+      if (liveData) {
+        const existingVaccineNames = new Set(initialVaccines.map(v => v.vaccine_name.toLowerCase()))
+        const existingBehaviorTags = new Set((patient.behavior_tags ?? []).map((t: string) => t.toLowerCase()))
+        const newVaccines = liveData.vaccines.filter(v => !existingVaccineNames.has(v.name.toLowerCase()))
+        const newBehavior = liveData.behavior.filter(b => !existingBehaviorTags.has(b.toLowerCase()))
+        if (newVaccines.length > 0 || newBehavior.length > 0) {
+          setLiveRegData({ ...liveData, vaccines: newVaccines, behavior: newBehavior })
+        }
+        if (liveData.suggestedOutcome) setOutcomeTab(liveData.suggestedOutcome)
       }
-      if (liveData.suggestedOutcome) setOutcomeTab(liveData.suggestedOutcome)
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [aiMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const voiceAssistant = useClinicalVoiceAssistant({
     onAutoSave: handleVoiceAutoSave,

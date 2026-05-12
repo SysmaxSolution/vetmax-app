@@ -32,6 +32,7 @@ import { DatePicker } from '@/components/ui/DatePicker'
 import VaccinationCard from '@/components/vet/VaccinationCard'
 import { useClinicalVoiceAssistant } from '@/hooks/useClinicalVoiceAssistant'
 import { getClinicVoiceTriggers, updateClinicVoiceTriggers } from '@/lib/actions/clinic-settings'
+import { useAiTranscriptionMode } from '@/components/providers/ClinicConfigProvider'
 import VaccineStatusBadges from '@/components/vet/VaccineStatusBadges'
 import { BehaviorTagsBadges } from '@/components/ui/BehaviorTagsBadges'
 import WhatsAppNotificationModal from '@/components/whatsapp/WhatsAppNotificationModal'
@@ -68,6 +69,7 @@ export default function TriageForm({
   userRole,
 }: TriageFormProps) {
   const router = useRouter()
+  const aiMode = useAiTranscriptionMode()
   const [isLoading, setIsLoading] = useState(false)
   const [showWhatsApp, setShowWhatsApp] = useState(false)
   const [showRemoveModal, setShowRemoveModal] = useState(false)
@@ -126,8 +128,8 @@ export default function TriageForm({
     const fullTranscript = [savedTranscriptRef.current, newChunk].filter(Boolean).join(' ')
     setSavedTranscript(fullTranscript)
     if (!newChunk.trim()) return
-    await extractAndFillVitalSigns(newChunk)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    if (aiMode === 'ai_assisted') await extractAndFillVitalSigns(newChunk)
+  }, [aiMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const assistant = useClinicalVoiceAssistant({
     onAutoSave: handleVoiceAutoSave,

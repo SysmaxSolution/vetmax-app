@@ -4,6 +4,7 @@ import { useState, useTransition, useRef } from 'react'
 import { X, BedDouble, Loader2, AlertTriangle, Mic, Square, Sparkles } from 'lucide-react'
 import { createHospitalization, type HospitalizationStatus } from '@/lib/actions/hospitalizations'
 import { extractAdmissionReason } from '@/lib/actions/ai_extraction'
+import { useAiTranscriptionMode } from '@/components/providers/ClinicConfigProvider'
 
 // ─── Opções de Ala ────────────────────────────────────────────────────────────
 
@@ -47,6 +48,7 @@ export default function AdmitPetModal({
   onClose,
   onSuccess,
 }: Props) {
+  const aiMode = useAiTranscriptionMode()
   const [status,          setStatus]          = useState<HospitalizationStatus>('observation')
   const [reason,          setReason]          = useState('')
   const [error,           setError]           = useState<string | null>(null)
@@ -78,7 +80,7 @@ export default function AdmitPetModal({
     rec.onend = async () => {
       setIsRecording(false)
       const raw = voiceAccumRef.current.trim()
-      if (raw.length > 10) {
+      if (raw.length > 10 && aiMode === 'ai_assisted') {
         setExtracting(true)
         const extracted = await extractAdmissionReason(raw)
         setExtracting(false)

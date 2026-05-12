@@ -27,6 +27,7 @@ import PrescriptionModal from './PrescriptionModal'
 import WhatsAppNotificationModal from '@/components/whatsapp/WhatsAppNotificationModal'
 import { useClinicalVoiceAssistant } from '@/hooks/useClinicalVoiceAssistant'
 import { getClinicVoiceTriggers, updateClinicVoiceTriggers } from '@/lib/actions/clinic-settings'
+import { useAiTranscriptionMode } from '@/components/providers/ClinicConfigProvider'
 
 interface Props {
   card:             HospitalizationCard
@@ -36,6 +37,7 @@ interface Props {
 }
 
 export default function HospitalizationDetailModal({ card, onClose, prefilledStatus, onSaved }: Props) {
+  const aiMode = useAiTranscriptionMode()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [records, setRecords] = useState<HospitalizationRecord[]>([])
   const [loadingRecords, setLoadingRecords] = useState(true)
@@ -142,6 +144,10 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
 
   const handleVoiceAutoSave = useCallback(async (transcript: string) => {
     if (!transcript.trim()) return
+    if (aiMode === 'transcribe_only') {
+      setNotes(prev => prev + (prev ? ' ' : '') + transcript)
+      return
+    }
     setIsProcessingVoice(true)
     try {
       const iaResult = await extractHospitalizationVoice(transcript.trim())
@@ -160,7 +166,7 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
     } finally {
       setIsProcessingVoice(false)
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [aiMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const voiceAssistant = useClinicalVoiceAssistant({
     onAutoSave: handleVoiceAutoSave,

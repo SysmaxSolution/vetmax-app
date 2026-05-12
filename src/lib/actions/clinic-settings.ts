@@ -22,14 +22,17 @@ export type BusinessHours = {
   sunday:    BusinessHourEntry
 }
 
+export type AiTranscriptionMode = 'transcribe_only' | 'ai_assisted'
+
 export type ClinicConfig = {
-  logo_url:        string | null
-  active_modules:  string[]
-  continuous_flow: boolean
-  flow_config:     FlowConfig
-  business_hours:  BusinessHours | null
-  working_days:    number[]
-  holiday_work:    boolean
+  logo_url:              string | null
+  active_modules:        string[]
+  continuous_flow:       boolean
+  flow_config:           FlowConfig
+  business_hours:        BusinessHours | null
+  working_days:          number[]
+  holiday_work:          boolean
+  ai_transcription_mode: AiTranscriptionMode
 }
 
 // ─── Read ─────────────────────────────────────────────────────────────────────
@@ -50,33 +53,35 @@ export async function getClinicConfig(): Promise<ClinicConfig | { error: string 
   const admin = createAdminClient()
   const { data, error } = await admin
     .from('clinics')
-    .select('logo_url, active_modules, continuous_flow, flow_config, business_hours, working_days, holiday_work')
+    .select('logo_url, active_modules, continuous_flow, flow_config, business_hours, working_days, holiday_work, ai_transcription_mode')
     .eq('id', profile.clinic_id)
     .single()
 
   if (error || !data) return { error: 'Erro ao buscar configurações.' }
 
   return {
-    logo_url:        data.logo_url ?? null,
-    active_modules:  (data.active_modules as string[]) ?? ['reception','triage','consultation','exams','hospitalization','pharmacy'],
-    continuous_flow: (data.continuous_flow as boolean) ?? false,
-    flow_config:     (data.flow_config as FlowConfig) ?? { vet_merged_modules: [] },
-    business_hours:  (data.business_hours as BusinessHours) ?? null,
-    working_days:    (data.working_days as number[]) ?? [1,2,3,4,5],
-    holiday_work:    (data.holiday_work as boolean) ?? false,
+    logo_url:              data.logo_url ?? null,
+    active_modules:        (data.active_modules as string[]) ?? ['reception','triage','consultation','exams','hospitalization','pharmacy'],
+    continuous_flow:       (data.continuous_flow as boolean) ?? false,
+    flow_config:           (data.flow_config as FlowConfig) ?? { vet_merged_modules: [] },
+    business_hours:        (data.business_hours as BusinessHours) ?? null,
+    working_days:          (data.working_days as number[]) ?? [1,2,3,4,5],
+    holiday_work:          (data.holiday_work as boolean) ?? false,
+    ai_transcription_mode: (data.ai_transcription_mode as AiTranscriptionMode) ?? 'ai_assisted',
   }
 }
 
 // ─── Update modules, flow, business hours ─────────────────────────────────────
 
 export async function updateClinicConfig(payload: {
-  active_modules?:      string[]
-  continuous_flow?:     boolean
-  flow_config?:         FlowConfig
-  reception_checklist?: string[]
-  business_hours?:      BusinessHours
-  working_days?:        number[]
-  holiday_work?:        boolean
+  active_modules?:       string[]
+  continuous_flow?:      boolean
+  flow_config?:          FlowConfig
+  reception_checklist?:  string[]
+  business_hours?:       BusinessHours
+  working_days?:         number[]
+  holiday_work?:         boolean
+  ai_transcription_mode?: AiTranscriptionMode
 }): Promise<{ success: true } | { error: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
