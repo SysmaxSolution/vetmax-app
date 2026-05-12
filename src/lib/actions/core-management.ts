@@ -230,7 +230,8 @@ export async function listCashierEntries(filters?: {
   if (filters?.source_module) query = query.eq('source_module', filters.source_module)
   if (filters?.status) query = query.eq('status', filters.status)
   if (filters?.from_date) query = query.gte('created_at', filters.from_date)
-  if (filters?.to_date) query = query.lte('created_at', filters.to_date)
+  // Append end-of-day to include all records created during to_date (timestamp vs date comparison)
+  if (filters?.to_date) query = query.lte('created_at', filters.to_date + 'T23:59:59.999Z')
 
   const { data, error } = await query.order('created_at', { ascending: false }).limit(500)
 
@@ -259,7 +260,8 @@ export async function getCashierSummary(period: {
     .select('amount, status')
     .eq('clinic_id', ctx.clinic_id)
     .gte('created_at', period.from_date)
-    .lte('created_at', period.to_date)
+    // Append end-of-day to include all records created during to_date (timestamp vs date comparison)
+    .lte('created_at', period.to_date + 'T23:59:59.999Z')
 
   if (error) return { error: `Erro ao buscar: ${error.message}` }
 
