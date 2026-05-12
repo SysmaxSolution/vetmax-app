@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { ErrorPriority } from '@/lib/error-logger'
+import { sendP0FixPlanAlert } from '@/lib/p0-alert'
 
 /** Erros com >= N ocorrências recebem plano automático no ciclo */
 export const AUTO_PLAN_THRESHOLD = 5
@@ -268,6 +269,15 @@ Gere o plano técnico de correção completo para este erro de produção.`
   }
 
   console.info(`[fix-planner] ✅ Plano criado — "${inserted.title}" (${cluster.priority}) id=${inserted.id} logs=${cluster.affectedLogIds.length}`)
+
+  // Notifica o Diretor via WhatsApp para aprovação bidirecional
+  await sendP0FixPlanAlert({
+    fixPlanId:    inserted.id,
+    fixPlanTitle: inserted.title,
+    errorSummary: `${cluster.errorMessage.slice(0, 280)} — ${cluster.occurrenceCount} ocorrência(s)`,
+    priority:     cluster.priority,
+  })
+
   return { planId: inserted.id, title: inserted.title, status: 'created' }
 }
 
