@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { useClinicalVoiceAssistant } from '@/hooks/useClinicalVoiceAssistant'
 import { getClinicVoiceTriggers, updateClinicVoiceTriggers } from '@/lib/actions/clinic-settings'
+import { useAiTranscriptionMode } from '@/components/providers/ClinicConfigProvider'
 import { returnToVet, dischargeFromExams } from '@/lib/actions/exams'
 import { Toast } from '@/components/ui/toast'
 import { PetAvatar } from '@/components/ui/PetAvatar'
@@ -70,6 +71,7 @@ export default function ExamDetail({
   userRole,
 }: Props) {
   const router = useRouter()
+  const aiMode = useAiTranscriptionMode()
   const { patient, tutor, vital_signs } = consultation
 
   // Exam notes for the vet
@@ -99,8 +101,13 @@ export default function ExamDetail({
   const handleVoiceAutoSave = useCallback((transcript: string) => {
     if (!transcript.trim()) return
     setExamSuggestions(prev => [...prev, { tipo: 'laudo', motivo: transcript, title: 'Laudo por Voz', summary: transcript }])
-    setToast({ type: 'success', message: 'Transcrição capturada. Clique em "Gerar" para preencher o laudo com IA.' })
-  }, [])
+    setToast({
+      type: 'success',
+      message: aiMode === 'ai_assisted'
+        ? 'Transcrição capturada. Clique em "Gerar" para preencher o laudo com IA.'
+        : 'Transcrição capturada. O texto foi registrado exatamente como ditado.',
+    })
+  }, [aiMode])
 
   const voiceAssistant = useClinicalVoiceAssistant({
     onAutoSave: handleVoiceAutoSave,
@@ -445,9 +452,11 @@ export default function ExamDetail({
                     </button>
                   </div>
                 ))}
-                <p className="text-xs text-slate-400 italic">
-                  Role para baixo e clique em &quot;Gerar Novo Documento&quot; para usar a transcrição como contexto da IA
-                </p>
+                {aiMode === 'ai_assisted' && (
+                  <p className="text-xs text-slate-400 italic">
+                    Role para baixo e clique em &quot;Gerar Novo Documento&quot; para usar a transcrição como contexto da IA
+                  </p>
+                )}
               </div>
             )}
 
