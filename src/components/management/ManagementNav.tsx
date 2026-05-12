@@ -18,7 +18,7 @@ const TABS = [
   { label: 'Painel do Diretor', href: '/dashboard/management/kanban',               icon: LayoutGrid, exact: false, kanban: true },
 ]
 
-export default function ManagementNav() {
+export default function ManagementNav({ showMonitoramento = false }: { showMonitoramento?: boolean }) {
   const pathname    = usePathname()
   const searchParams = useSearchParams()
   const currentTab  = searchParams.get('tab')
@@ -29,9 +29,11 @@ export default function ManagementNav() {
     return pathname === '/dashboard/management' && currentTab === tab.tab
   }
 
+  const visibleTabs = TABS.filter(tab => tab.tab !== 'monitoramento' || showMonitoramento)
+
   return (
     <div className="flex gap-1 bg-white rounded-xl border border-slate-200 p-1 shadow-sm flex-wrap">
-      {TABS.map(tab => {
+      {visibleTabs.map(tab => {
         const active = isActive(tab)
         return (
           <Link

@@ -49,6 +49,7 @@ interface ManagementWorkspaceProps {
   initialProductPrices?:    ProductPrice[]
   initialRooms?:            Room[]
   activeModules?:           string[]
+  isSysmax?:                boolean
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -137,7 +138,7 @@ function UserInlineField({ label, value, placeholder, onSave }: {
 export default function ManagementWorkspace({
   initialTemplates, clinicData, users, initialInvitations, userLimit, currentUserId, userEmail, userFullName,
   initialCatalog, initialClinicConfig, initialSettingsConfig = null, initialProductPrices = [], initialRooms = [],
-  activeModules = [],
+  activeModules = [], isSysmax = false,
 }: ManagementWorkspaceProps) {
   const searchParams = useSearchParams()
   const activeTab = (searchParams.get('tab') as ActiveTab | null) ?? 'templates'
@@ -728,8 +729,8 @@ export default function ManagementWorkspace({
         <AppearanceTab />
       )}
 
-      {/* ── Tab: Monitoramento de Erros (G-07-D) ── */}
-      {activeTab === 'monitoramento' && (
+      {/* ── Tab: Monitoramento de Erros (G-07-D) — restrito a is_sysmax ── */}
+      {activeTab === 'monitoramento' && isSysmax && (
         <ErrorMonitoringDashboard />
       )}
 

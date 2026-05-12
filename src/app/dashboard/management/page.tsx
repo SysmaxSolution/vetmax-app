@@ -22,7 +22,7 @@ export default async function ManagementPage() {
   const admin = createAdminClient()
   const { data: profile } = await admin
     .from('profiles')
-    .select('full_name, role, clinic_id, clinics(name)')
+    .select('full_name, role, clinic_id, is_sysmax, clinics(name)')
     .eq('id', user.id)
     .single()
   if (!profile?.clinic_id) redirect('/onboarding')
@@ -88,6 +88,7 @@ export default async function ManagementPage() {
         initialProductPrices={initialProductPrices}
         initialRooms={initialRooms}
         activeModules={activeModules}
+        isSysmax={!!profile.is_sysmax}
       />
     </Suspense>
   )
