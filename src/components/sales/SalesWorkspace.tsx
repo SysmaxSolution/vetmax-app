@@ -19,6 +19,7 @@ interface SalesWorkspaceProps {
 export default function SalesWorkspace({ clinicId, clinicName, dailySales }: SalesWorkspaceProps) {
   const [tab,          setTab]          = useState<'pdv' | 'historico'>('pdv')
   const [cart,         setCart]         = useState<CartItem[]>([])
+  const [addCount,     setAddCount]     = useState(0)   // dispara refocus no ProductSearch
   const [discount,     setDiscount]     = useState(0)
   const [discountInput, setDiscountInput] = useState('')
   const [tutor,        setTutor]        = useState<SaleTutor | null>(null)
@@ -95,7 +96,10 @@ export default function SalesWorkspace({ clinicId, clinicName, dailySales }: Sal
             <div className="lg:col-span-3 space-y-4">
               <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-4">
                 <h2 className="text-sm font-semibold text-slate-700">Adicionar produto</h2>
-                <ProductSearch onAdd={item => setCart(prev => [...prev, item])} />
+                <ProductSearch
+                  onAdd={item => { setCart(prev => [...prev, item]); setAddCount(c => c + 1) }}
+                  refocusTrigger={addCount}
+                />
                 <div>
                   <label className="flex items-center gap-1.5 text-xs font-medium text-slate-500 mb-1.5">
                     <UserCircle className="h-3.5 w-3.5" />

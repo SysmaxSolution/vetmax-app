@@ -44,7 +44,7 @@ export async function onRequestError(
       errorMessage: error.message,
       stackTrace:   error.stack,
       source:       'server',
-      module:       inferModule(path),
+      module:       inferModule(path) ?? undefined,
     })
   } catch (loggingErr) {
     // Nunca deixar o logger derrubar a requisição

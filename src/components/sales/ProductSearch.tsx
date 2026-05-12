@@ -1,13 +1,15 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Search, Plus, Package } from 'lucide-react'
-import { searchSalesProducts, type StockProduct } from '@/lib/actions/sales'
+import { Search, Plus, Package, Sparkles } from 'lucide-react'
+import { searchSalesProducts, isEAN, type StockProduct } from '@/lib/actions/sales'
 import type { CartItem } from './SalesCart'
+import QuickAddProductModal from './QuickAddProductModal'
 
 interface ProductSearchProps {
-  onAdd:     (item: CartItem) => void
-  disabled?: boolean
+  onAdd:         (item: CartItem) => void
+  disabled?:     boolean
+  refocusTrigger?: number   // incrementar após cada addProduct para re-focar
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -15,20 +17,25 @@ const CATEGORY_LABELS: Record<string, string> = {
   supply:          'Insumo',
   grooming_supply: 'B&T',
   other:           'Outro',
+  petshop:         'Petshop',
+  service:         'Serviço',
+  exam:            'Exame',
 }
 
-export default function ProductSearch({ onAdd, disabled = false }: ProductSearchProps) {
-  const [query,    setQuery]    = useState('')
-  const [results,  setResults]  = useState<StockProduct[]>([])
-  const [open,     setOpen]     = useState(false)
-  const [loading,  setLoading]  = useState(false)
+export default function ProductSearch({ onAdd, disabled = false, refocusTrigger }: ProductSearchProps) {
+  const [query,      setQuery]      = useState('')
+  const [results,    setResults]    = useState<StockProduct[]>([])
+  const [open,       setOpen]       = useState(false)
+  const [loading,    setLoading]    = useState(false)
+  const [notFound,   setNotFound]   = useState(false)
+  const [quickAdd,   setQuickAdd]   = useState(false)
   const [manualDesc, setManualDesc] = useState('')
   const [manualPrice, setManualPrice] = useState('')
-  const [showManual, setShowManual]   = useState(false)
+  const [showManual, setShowManual] = useState(false)
   const inputRef  = useRef<HTMLInputElement>(null)
   const timerRef  = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // F2 atalho para focar busca
+  // F2 — focar busca
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
       if (e.key === 'F2') { e.preventDefault(); inputRef.current?.focus() }
@@ -37,20 +44,44 @@ export default function ProductSearch({ onAdd, disabled = false }: ProductSearch
     return () => window.removeEventListener('keydown', handleKey)
   }, [])
 
+  // Refoco automático após adição ao carrinho
+  useEffect(() => {
+    if (refocusTrigger !== undefined && refocusTrigger > 0) {
+      setTimeout(() => inputRef.current?.focus(), 50)
+    }
+  }, [refocusTrigger])
+
   const search = useCallback(async (q: string) => {
-    if (q.trim().length < 2) { setResults([]); setOpen(false); return }
+    const trimmed = q.trim()
+    if (trimmed.length < 2) {
+      setResults([])
+      setOpen(false)
+      setNotFound(false)
+      return
+    }
     setLoading(true)
-    const r = await searchSalesProducts(q)
+    setNotFound(false)
+    const r = await searchSalesProducts(trimmed)
     setResults(r)
-    setOpen(r.length > 0)
+    if (r.length > 0) {
+      setOpen(true)
+      setNotFound(false)
+    } else {
+      setOpen(false)
+      // Só mostrar notFound se o usuário digitou algo substancial (3+ chars ou EAN)
+      setNotFound(trimmed.length >= 3 || isEAN(trimmed))
+    }
     setLoading(false)
   }, [])
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const q = e.target.value
     setQuery(q)
+    setNotFound(false)
     if (timerRef.current) clearTimeout(timerRef.current)
-    timerRef.current = setTimeout(() => search(q), 300)
+    // EAN: busca imediata após 8+ dígitos; texto: debounce 300ms
+    const delay = isEAN(q.trim()) && q.trim().length >= 8 ? 0 : 300
+    timerRef.current = setTimeout(() => search(q), delay)
   }
 
   function addProduct(p: StockProduct) {
@@ -65,6 +96,7 @@ export default function ProductSearch({ onAdd, disabled = false }: ProductSearch
     setQuery('')
     setResults([])
     setOpen(false)
+    setNotFound(false)
     inputRef.current?.focus()
   }
 
@@ -82,11 +114,20 @@ export default function ProductSearch({ onAdd, disabled = false }: ProductSearch
     setManualDesc('')
     setManualPrice('')
     setShowManual(false)
+    inputRef.current?.focus()
+  }
+
+  function handleQuickAdded(item: CartItem) {
+    onAdd(item)
+    setQuery('')
+    setNotFound(false)
+    setQuickAdd(false)
+    inputRef.current?.focus()
   }
 
   return (
     <div className="space-y-2">
-      {/* Busca por produto cadastrado */}
+      {/* Busca principal */}
       <div className="relative">
         <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
           {loading
@@ -96,8 +137,9 @@ export default function ProductSearch({ onAdd, disabled = false }: ProductSearch
         </div>
         <input
           ref={inputRef}
+          autoFocus
           type="text"
-          placeholder="Buscar produto... (F2)"
+          placeholder={`Buscar produto ou EAN... (F2)`}
           value={query}
           disabled={disabled}
           onChange={handleChange}
@@ -105,6 +147,8 @@ export default function ProductSearch({ onAdd, disabled = false }: ProductSearch
           onBlur={() => setTimeout(() => setOpen(false), 150)}
           className="w-full border border-slate-300 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
         />
+
+        {/* Dropdown de resultados */}
         {open && (
           <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
             {results.map(p => (
@@ -124,6 +168,29 @@ export default function ProductSearch({ onAdd, disabled = false }: ProductSearch
           </div>
         )}
       </div>
+
+      {/* Produto não encontrado → oferecer cadastro rápido */}
+      {notFound && !open && (
+        <div className="flex items-center gap-2 rounded-xl border border-dashed border-emerald-300 bg-emerald-50 px-3 py-2.5">
+          <Sparkles className="h-4 w-4 text-emerald-600 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium text-emerald-800">
+              "{query}" não está no estoque
+            </p>
+            <p className="text-xs text-emerald-600">
+              {isEAN(query.trim()) ? 'Buscando dados fiscais na base pública...' : 'Cadastre com 1 clique'}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setQuickAdd(true)}
+            className="flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 flex-shrink-0"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Cadastrar
+          </button>
+        </div>
+      )}
 
       {/* Item manual */}
       {showManual ? (
@@ -171,6 +238,15 @@ export default function ProductSearch({ onAdd, disabled = false }: ProductSearch
           <Plus className="h-3.5 w-3.5" />
           Adicionar item manual
         </button>
+      )}
+
+      {/* QuickAdd Modal */}
+      {quickAdd && (
+        <QuickAddProductModal
+          query={query}
+          onClose={() => setQuickAdd(false)}
+          onAdded={handleQuickAdded}
+        />
       )}
     </div>
   )

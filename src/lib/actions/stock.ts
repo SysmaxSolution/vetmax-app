@@ -334,9 +334,15 @@ export type StockItemV2 = {
   supplier:      string | null
   // migration 0100
   is_service:    boolean
+  // migration 0111 (fiscal)
+  ncm:              string | null
+  ncm_description:  string | null
+  cfop:             string | null
+  unit_com:         string | null
+  supplier_id:      string | null
 }
 
-const STOCK_V2_FIELDS = 'id, clinic_id, name, category, quantity, unit, min_quantity, unit_price, last_restock, created_at, updated_at, is_controlled, brand, sku, barcode, batch_number, expiry_date, supplier, is_service'
+const STOCK_V2_FIELDS = 'id, clinic_id, name, category, quantity, unit, min_quantity, unit_price, last_restock, created_at, updated_at, is_controlled, brand, sku, barcode, batch_number, expiry_date, supplier, is_service, ncm, ncm_description, cfop, unit_com, supplier_id'
 
 export async function getPharmacyStockV2(): Promise<StockItemV2[] | { error: string }> {
   const ctx = await getClinicAndUser()
@@ -380,7 +386,11 @@ export async function addStockItemV2(input: {
   batch_number?:  string | null
   expiry_date?:   string | null
   supplier?:      string | null
-  is_service?:    boolean
+  is_service?:       boolean
+  ncm?:              string | null
+  ncm_description?:  string | null
+  cfop?:             string | null
+  unit_com?:         string | null
 }): Promise<StockItemV2 | { error: string }> {
   const ctx = await getClinicAndUser()
   if (!ctx) return { error: 'Não autenticado.' }
@@ -390,22 +400,26 @@ export async function addStockItemV2(input: {
   const { data, error } = await admin
     .from('stock_items')
     .insert({
-      clinic_id:     ctx.clinic_id,
-      name:          input.name.trim(),
-      quantity:      input.quantity,
-      unit:          input.unit,
-      min_quantity:  input.min_quantity,
-      category:      input.category ?? 'medication',
-      unit_price:    input.unit_price ?? 0,
-      last_restock:  input.quantity > 0 ? new Date().toISOString() : null,
-      is_controlled: input.is_controlled ?? false,
-      is_service:    input.is_service ?? false,
-      brand:         input.brand?.trim() || null,
-      sku:           input.sku?.trim() || null,
-      barcode:       input.barcode?.trim() || null,
-      batch_number:  input.batch_number?.trim() || null,
-      expiry_date:   input.expiry_date || null,
-      supplier:      input.supplier?.trim() || null,
+      clinic_id:       ctx.clinic_id,
+      name:            input.name.trim(),
+      quantity:        input.quantity,
+      unit:            input.unit,
+      min_quantity:    input.min_quantity,
+      category:        input.category ?? 'medication',
+      unit_price:      input.unit_price ?? 0,
+      last_restock:    input.quantity > 0 ? new Date().toISOString() : null,
+      is_controlled:   input.is_controlled ?? false,
+      is_service:      input.is_service ?? false,
+      brand:           input.brand?.trim() || null,
+      sku:             input.sku?.trim() || null,
+      barcode:         input.barcode?.trim() || null,
+      batch_number:    input.batch_number?.trim() || null,
+      expiry_date:     input.expiry_date || null,
+      supplier:        input.supplier?.trim() || null,
+      ncm:             input.ncm?.trim() || null,
+      ncm_description: input.ncm_description?.trim() || null,
+      cfop:            input.cfop?.trim() || null,
+      unit_com:        input.unit_com?.trim() || null,
     })
     .select(STOCK_V2_FIELDS)
     .single()
@@ -440,8 +454,12 @@ export async function updateStockItemV2(
   if ('barcode'      in input) patch.barcode      = input.barcode?.trim()      || null
   if ('batch_number' in input) patch.batch_number = input.batch_number?.trim() || null
   if ('expiry_date'  in input) patch.expiry_date  = input.expiry_date          || null
-  if ('supplier'     in input) patch.supplier     = input.supplier?.trim()     || null
+  if ('supplier'         in input) patch.supplier         = input.supplier?.trim()         || null
   if (input.is_service !== undefined) patch.is_service = input.is_service
+  if ('ncm'             in input) patch.ncm             = (input as any).ncm?.trim()             || null
+  if ('ncm_description' in input) patch.ncm_description = (input as any).ncm_description?.trim() || null
+  if ('cfop'            in input) patch.cfop            = (input as any).cfop?.trim()            || null
+  if ('unit_com'        in input) patch.unit_com        = (input as any).unit_com?.trim()        || null
 
   const { data, error } = await admin
     .from('stock_items')

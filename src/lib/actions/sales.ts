@@ -74,6 +74,19 @@ export interface StockProduct {
 
 // ─── Buscar produtos do estoque para autocomplete ─────────────────────────────
 
+function isEAN(q: string): boolean {
+  return /^\d{8,14}$/.test(q.trim())
+}
+
+async function getClinicId(): Promise<string | null> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+  const { data: profile } = await supabase
+    .from('profiles').select('clinic_id').eq('id', user.id).single()
+  return profile?.clinic_id ?? null
+}
+
 export async function searchSalesProducts(query: string): Promise<StockProduct[]> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -86,11 +99,33 @@ export async function searchSalesProducts(query: string): Promise<StockProduct[]
     .single()
   if (!profile?.clinic_id) return []
 
+  const q = query.trim()
+
+  // Se parece EAN: busca barcode primeiro
+  if (isEAN(q)) {
+    const { data: byBarcode } = await supabase
+      .from('stock_items')
+      .select('id, name, category, unit_price, quantity, unit')
+      .eq('clinic_id', profile.clinic_id)
+      .eq('barcode', q)
+      .limit(5)
+    if (byBarcode && byBarcode.length > 0) {
+      return byBarcode.map((p: any) => ({
+        id:         p.id,
+        name:       p.name,
+        category:   p.category,
+        unit_price: Number(p.unit_price ?? 0),
+        quantity:   Number(p.quantity ?? 0),
+        unit:       p.unit ?? 'un',
+      }))
+    }
+  }
+
   const { data } = await supabase
     .from('stock_items')
     .select('id, name, category, unit_price, quantity, unit')
     .eq('clinic_id', profile.clinic_id)
-    .ilike('name', `%${query.trim()}%`)
+    .ilike('name', `%${q}%`)
     .order('name')
     .limit(20)
 
@@ -103,6 +138,8 @@ export async function searchSalesProducts(query: string): Promise<StockProduct[]
     unit:       p.unit ?? 'un',
   }))
 }
+
+export { isEAN }
 
 // ─── Criar venda via RPC ──────────────────────────────────────────────────────
 

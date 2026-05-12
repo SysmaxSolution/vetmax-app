@@ -14,6 +14,7 @@ import {
   dispenseStockItem, deleteStockItemV2,
 } from '@/lib/actions/stock'
 import StockCsvImporter from './StockCsvImporter'
+import { EnrichNcmModal } from './EnrichNcmModal'
 
 // ─── Categorias de Produtos ───────────────────────────────────────────────────
 
@@ -124,6 +125,7 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole }: Pro
   const [dispenseItem, setDispenseItem] = useState<StockItemV2 | null>(null)
   const [adjustItem, setAdjustItem]     = useState<StockItemV2 | null>(null)
   const [csvImportOpen, setCsvImportOpen] = useState(false)
+  const [enrichItem,   setEnrichItem]   = useState<StockItemV2 | null>(null)
 
   const [toast, setToast]    = useState<{ ok: boolean; msg: string } | null>(null)
   const [, startTx]          = useTransition()
@@ -377,6 +379,7 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole }: Pro
               onRestock={setRestockItem}
               onDispense={setDispenseItem}
               onAdjust={setAdjustItem}
+              onEnrich={setEnrichItem}
             />
         }
       </div>
@@ -413,6 +416,19 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole }: Pro
         </SimpleModal>
       )}
 
+      {/* Modal: Enriquecer NCM/EAN */}
+      {enrichItem && (
+        <EnrichNcmModal
+          item={enrichItem}
+          onClose={() => setEnrichItem(null)}
+          onSaved={updated => {
+            setStock(prev => prev.map(i => i.id === updated.id ? updated : i))
+            setEnrichItem(null)
+            showToast('Dados fiscais salvos!')
+          }}
+        />
+      )}
+
       {/* Importação CSV */}
       {csvImportOpen && (
         <StockCsvImporter
@@ -431,7 +447,7 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole }: Pro
 
 // ─── Tabela de Produtos ───────────────────────────────────────────────────────
 
-function ProductsTable({ filtered, userRole, onEdit, onDelete, onRestock, onDispense, onAdjust }: {
+function ProductsTable({ filtered, userRole, onEdit, onDelete, onRestock, onDispense, onAdjust, onEnrich }: {
   filtered:  StockItemV2[]
   userRole:  'admin' | 'vet'
   onEdit:    (item: StockItemV2) => void
@@ -439,6 +455,7 @@ function ProductsTable({ filtered, userRole, onEdit, onDelete, onRestock, onDisp
   onRestock: (item: StockItemV2) => void
   onDispense:(item: StockItemV2) => void
   onAdjust:  (item: StockItemV2) => void
+  onEnrich?: (item: StockItemV2) => void
 }) {
   if (filtered.length === 0) {
     return (
@@ -526,6 +543,11 @@ function ProductsTable({ filtered, userRole, onEdit, onDelete, onRestock, onDisp
                       <ActionBtn title="Repor"     color="blue"  onClick={() => onRestock(item)}><RefreshCw className="h-3.5 w-3.5" /></ActionBtn>
                       <ActionBtn title="Dispensar" color="green" onClick={() => onDispense(item)}><ArrowDownToLine className="h-3.5 w-3.5" /></ActionBtn>
                       {userRole === 'admin' && <>
+                        {onEnrich && !(item as any).ncm && !item.barcode && (
+                          <ActionBtn title="Enriquecer NCM/EAN" color="teal" onClick={() => onEnrich(item)}>
+                            <Sparkles className="h-3.5 w-3.5" />
+                          </ActionBtn>
+                        )}
                         <ActionBtn title="Editar"  color="teal"  onClick={() => onEdit(item)}><Pencil className="h-3.5 w-3.5" /></ActionBtn>
                         <ActionBtn title="Ajustar" color="amber" onClick={() => onAdjust(item)}><Package className="h-3.5 w-3.5" /></ActionBtn>
                         <ActionBtn title="Remover" color="red"   onClick={() => onDelete(item.id)}><Trash2 className="h-3.5 w-3.5" /></ActionBtn>
