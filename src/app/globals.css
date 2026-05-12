@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* Variável injetada pelo ThemeProvider para cor de fundo personalizada pelo usuário (Fase 4) */
+:root {
+  --vetmax-user-bg: transparent;
+}
+
 @media print {
   /* Libera o corpo para impressão */
   html, body {

@@ -11,6 +11,7 @@ import type { UserClinicInfo } from '@/lib/actions/clinic-switcher'
 import { updateClinicStatus } from '@/lib/actions/clinic-status'
 import type { ClinicStatus } from '@/lib/actions/clinic-status'
 import { setSurgeryMode } from '@/lib/actions/surgery-mode'
+import { getTabTheme, getModuleFromPath, MODULE_THEME } from '@/lib/module-theme'
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
 
@@ -95,6 +96,9 @@ export default function DashboardHeader({
 
   const isActive = (href: string) =>
     href === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(href)
+
+  const activeModuleKey = getModuleFromPath(pathname)
+  const activeModuleTheme = activeModuleKey ? MODULE_THEME[activeModuleKey] : null
 
   const hasMultipleClinics = (isSysmax && userClinics && userClinics.length >= 1) || (userClinics && userClinics.length > 1)
   const [currentStatus, setCurrentStatus] = useState<string>(clinicStatus ?? 'active')
@@ -203,8 +207,8 @@ export default function DashboardHeader({
               data-testid={tab.id}
               className={`relative flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                 isActive(tab.href)
-                  ? 'bg-slate-900 text-white shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? `${getTabTheme(tab.href).active} text-white shadow-sm`
+                  : `text-slate-600 ${getTabTheme(tab.href).hover}`
               }`}
             >
               <tab.icon className="w-4 h-4" />
@@ -232,6 +236,8 @@ export default function DashboardHeader({
           <span className="hidden sm:inline">Sair</span>
         </button>
       </div>
+      {/* Indicador de módulo ativo — 3px colorido na base do header */}
+      <div className={`h-[3px] w-full transition-colors duration-300 ${activeModuleTheme?.active ?? 'bg-slate-200'}`} />
     </div>
   )
 }

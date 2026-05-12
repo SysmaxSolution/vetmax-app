@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
 import {
-  FileText, BarChart3, Shield, Building2, Users, Settings, LayoutGrid,
+  FileText, BarChart3, Shield, Building2, Users, Settings, LayoutGrid, Palette,
 } from 'lucide-react'
 
 const TABS = [
@@ -13,6 +13,7 @@ const TABS = [
   { label: 'Clínica',        href: '/dashboard/management?tab=clinica',       icon: Building2,    exact: false, tab: 'clinica' },
   { label: 'Usuários',       href: '/dashboard/management?tab=usuarios',      icon: Users,        exact: false, tab: 'usuarios' },
   { label: 'Configurações',  href: '/dashboard/management?tab=configuracoes', icon: Settings,     exact: false, tab: 'configuracoes' },
+  { label: 'Aparência',      href: '/dashboard/management?tab=aparencia',     icon: Palette,      exact: false, tab: 'aparencia' },
   { label: 'Painel do Diretor', href: '/dashboard/management/kanban',         icon: LayoutGrid,   exact: false, kanban: true },
 ]
 

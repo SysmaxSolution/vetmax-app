@@ -5,6 +5,7 @@ import DashboardHeader from '@/components/layout/DashboardHeader'
 import { WhatsAppGateProvider } from '@/components/providers/WhatsAppGateProvider'
 import { ModulesProvider } from '@/components/providers/ModulesProvider'
 import { ClinicConfigProvider } from '@/components/providers/ClinicConfigProvider'
+import { ThemeProvider } from '@/components/providers/ThemeProvider'
 import { MentorGlobalWrapper } from '@/components/mentor/MentorGlobalWrapper'
 import { Suspense } from 'react'
 import { UnauthorizedBanner } from '@/components/ui/UnauthorizedBanner'
@@ -26,7 +27,7 @@ export default async function DashboardLayout({
 
   const { data: profile } = await admin
     .from('profiles')
-    .select('full_name, role, clinic_id, is_sysmax, is_in_surgery, clinics(name)')
+    .select('full_name, role, clinic_id, is_sysmax, is_in_surgery, ui_preferences, clinics(name)')
     .eq('id', user.id)
     .single()
 
@@ -151,13 +152,15 @@ export default async function DashboardLayout({
         clinicStatus={clinicStatus}
         isSurgeryMode={!!(profile as any).is_in_surgery}
       />
-      <ClinicConfigProvider aiTranscriptionMode={(clinicData as any)?.ai_transcription_mode ?? 'ai_assisted'}>
-        <ModulesProvider modules={activeModules}>
-          <WhatsAppGateProvider enabled={whatsAppEnabled}>
-            {children}
-          </WhatsAppGateProvider>
-        </ModulesProvider>
-      </ClinicConfigProvider>
+      <ThemeProvider initialPreferences={(profile as any).ui_preferences ?? null}>
+        <ClinicConfigProvider aiTranscriptionMode={(clinicData as any)?.ai_transcription_mode ?? 'ai_assisted'}>
+          <ModulesProvider modules={activeModules}>
+            <WhatsAppGateProvider enabled={whatsAppEnabled}>
+              {children}
+            </WhatsAppGateProvider>
+          </ModulesProvider>
+        </ClinicConfigProvider>
+      </ThemeProvider>
       <MentorGlobalWrapper />
       <Suspense fallback={null}>
         <UnauthorizedBanner />

@@ -6,7 +6,7 @@ const ROLE_COOKIE = 'vetmax-role'
 
 export async function POST() {
   const supabase = await createClient()
-  await supabase.auth.signOut({ scope: 'global' })
+  await supabase.auth.signOut({ scope: 'local' })
 
   const cookieStore = await cookies()
   cookieStore.delete(ROLE_COOKIE)

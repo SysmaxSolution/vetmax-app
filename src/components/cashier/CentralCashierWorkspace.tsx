@@ -244,6 +244,7 @@ export default function CentralCashierWorkspace({ initialEntries, summary, userR
       <div
         id="cashier-entries-table"
         data-testid="cashier-entries-table"
+        data-filtermod={filterMod}
         className="bg-white rounded-xl border border-slate-200 overflow-hidden"
       >
         <div className="overflow-x-auto">

@@ -595,7 +595,9 @@ function KanbanCard({ card, onDragStart, onDragEnd, onDischarge, onOpen }: CardP
             <h4 className="font-bold text-slate-900 text-sm truncate">{card.patient.name}</h4>
             {card.status === 'ready_for_discharge' && (
               <button
-                onClick={(e) => { e.stopPropagation(); onDischarge(card) }}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDischarge(card) }}
+                onPointerDown={(e) => e.stopPropagation()}
+                draggable={false}
                 data-mentor-step="hosp-discharge-btn"
                 className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors text-xs font-semibold"
                 title="Dar Alta"

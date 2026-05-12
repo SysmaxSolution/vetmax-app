@@ -122,8 +122,7 @@ export async function getGroomingBoard(): Promise<GroomingBoard | { error: strin
     `)
     .eq('clinic_id', clinicId)
     .or('status.neq.delivered,payment_status.eq.pending')
-    .neq('current_status', 'cancelled')
-    .neq('current_status', 'archived')
+    .or('current_status.is.null,and(current_status.neq.cancelled,current_status.neq.archived)')
     .order('created_at', { ascending: true })
 
   if (error) return { error: 'Erro ao buscar sessões: ' + error.message }

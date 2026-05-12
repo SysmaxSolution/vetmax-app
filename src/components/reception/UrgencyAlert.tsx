@@ -57,7 +57,7 @@ export function UrgencyAlert({ clinicId }: { clinicId: string }) {
   }, [clinicId])
 
   const handleRealtimeEvent = useCallback((payload: { new: Record<string, unknown> }) => {
-    const log = payload.new as UrgencyLog
+    const log = payload.new as unknown as UrgencyLog
     if (!log?.id) return
     setAlerts(prev => prev.some(a => a.id === log.id) ? prev : [log, ...prev])
     playAlertSound()

@@ -335,10 +335,10 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
   const handleConsentAccept = () => {
     setConsentGiven(true)
     setShowConsent(false)
-    doCreate()
+    doCreate(true) // passa flag explícito — React ainda não commitou setConsentGiven
   }
 
-  const doCreate = () => {
+  const doCreate = (consentJustGiven = false) => {
     startTransition(async () => {
       const petPayload = {
         name:    petName,
@@ -367,15 +367,16 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
       setCreatedPatientId(result.patientId)
       setCreatedTutorId(result.tutorId)
 
-      // LGPD: registrar consentimento para novo tutor criado
-      if (!isEdit && !isPetOnly && !foundTutorId && consentGiven) {
-        await recordConsent(result.tutorId, 'granted')
-      }
-
       // Upload da foto pendente (selecionada antes da criação)
       await uploadPendingPhoto(result.patientId)
-      // Avança para Vacinas automaticamente
+      // Avança para Vacinas imediatamente — não bloqueia na gravação do consentimento
       setTab('vacinas')
+
+      // LGPD: registrar consentimento para novo tutor criado (fire-and-forget)
+      // usa consentJustGiven para contornar batching do React 18 (setConsentGiven ainda não commitou)
+      if (!isEdit && !isPetOnly && !foundTutorId && (consentGiven || consentJustGiven)) {
+        recordConsent(result.tutorId, 'granted').catch(() => {})
+      }
     })
   }
 

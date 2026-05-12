@@ -24,6 +24,7 @@ import BusinessHoursTab from './BusinessHoursTab'
 import PricingTab from './PricingTab'
 import ModulesTab from './ModulesTab'
 import RoomsTab from './RoomsTab'
+import AppearanceTab from './AppearanceTab'
 import { updateUserPhone, updateUserSpecialties, getUserModuleAccess, setUserModuleAccess, updateUserNickname } from '@/lib/actions/user-management'
 import type { ClinicUserFull } from '@/lib/actions/user-management'
 import type { Room } from '@/lib/actions/rooms'
@@ -90,7 +91,7 @@ const INVITE_ROLE_OPTIONS: { value: InvitationRole; label: string }[] = [
   { value: 'pharmacist',   label: 'Técnico' },
 ]
 
-type ActiveTab = 'templates' | 'clinica' | 'usuarios' | 'catalogo' | 'configuracoes' | 'convenios' | 'salas'
+type ActiveTab = 'templates' | 'clinica' | 'usuarios' | 'catalogo' | 'configuracoes' | 'convenios' | 'salas' | 'aparencia'
 
 // ─── Inline Field Helper ─────────────────────────────────────────────────────
 
@@ -431,8 +432,8 @@ export default function ManagementWorkspace({
                 {templates.length} modelo{templates.length !== 1 ? 's' : ''}
               </span>
               <button onClick={() => setShowModal(true)}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors">
-                <Plus className="w-4 h-4" />Importar Novo Modelo
+                className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors">
+                <Plus className="w-4 h-4" /><span className="hidden sm:inline">Importar Novo Modelo</span>
               </button>
             </div>
           </div>
@@ -719,6 +720,11 @@ export default function ManagementWorkspace({
       {/* ── Tab: Salas/Boxes ── */}
       {activeTab === 'salas' && (
         <RoomsTab initialRooms={initialRooms} />
+      )}
+
+      {/* ── Tab: Aparência ── */}
+      {activeTab === 'aparencia' && (
+        <AppearanceTab />
       )}
 
       {/* ── Tab: Usuários ── */}
