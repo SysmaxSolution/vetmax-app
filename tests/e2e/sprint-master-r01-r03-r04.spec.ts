@@ -1,4 +1,4 @@
-/**
+﻿/**
  * E2E — Sprint Master Recepção: R-01, R-03, R-04
  *
  * R-01: Desativar módulo B&T oculta botões "Check-in B&T" e "Agendar B&T" na Recepção
@@ -47,7 +47,7 @@ async function setGroomingModule(enabled: boolean) {
 let _serverAlive = true
 test.beforeAll(async ({ browser }) => {
   const _ctx = await browser.newContext(); const _pg = await _ctx.newPage()
-  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
+  _serverAlive = await _pg.goto(process.env.TEST_BASE_URL ?? 'http://localhost:4000', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
   await _ctx.close(); if (!_serverAlive) console.log('[SKIP ALL] sprint-master-r01-r03-r04.spec.ts — servidor fora do ar')
 })
 test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })

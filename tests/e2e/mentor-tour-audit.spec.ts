@@ -17,6 +17,9 @@ import { loginViaApi } from '../helpers/session'
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
+// loginViaApi(~30s) + goto(~10s) + waitForLoadState(up to 30s) + waitForMentorGlobals(10s) > 60s default
+test.setTimeout(180_000)
+
 const BASE_URL = process.env.TEST_BASE_URL ?? 'http://localhost:4000'
 
 const ADMIN = {

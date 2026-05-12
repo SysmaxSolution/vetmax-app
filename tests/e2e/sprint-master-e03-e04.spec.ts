@@ -1,4 +1,4 @@
-/**
+﻿/**
  * E2E — Sprint Master Exames: E-03, E-04
  *
  * E-03: Botão "Dar Alta" na aba Exames (para pets que não retornam ao Consultório)
@@ -56,7 +56,7 @@ async function navigateToExams(page: Page): Promise<boolean> {
 let _serverAlive = true
 test.beforeAll(async ({ browser }) => {
   const _ctx = await browser.newContext(); const _pg = await _ctx.newPage()
-  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
+  _serverAlive = await _pg.goto(process.env.TEST_BASE_URL ?? 'http://localhost:4000', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
   await _ctx.close(); if (!_serverAlive) console.log('[SKIP ALL] sprint-master-e03-e04.spec.ts — servidor fora do ar')
 })
 test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * E2E — Sprint Master I-01: Transição Automática Internação
  *
  * TC-I01-01: Evolução com status "melhorou" move card para coluna "Pronto para Alta"
@@ -129,7 +129,7 @@ async function addEvolution(page: Page, evolutionStatus: string): Promise<boolea
 let _serverAlive = true
 test.beforeAll(async ({ browser }) => {
   const _ctx = await browser.newContext(); const _pg = await _ctx.newPage()
-  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
+  _serverAlive = await _pg.goto(process.env.TEST_BASE_URL ?? 'http://localhost:4000', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
   await _ctx.close(); if (!_serverAlive) console.log('[SKIP ALL] sprint-master-i01-hosp-auto-transition.spec.ts — servidor fora do ar')
 })
 test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })

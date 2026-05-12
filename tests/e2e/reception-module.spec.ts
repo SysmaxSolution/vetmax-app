@@ -1,4 +1,4 @@
-import { loginViaApi } from '../helpers/session'
+﻿import { loginViaApi } from '../helpers/session'
 /**
  * E2E — Módulo de Recepção
  * Sessão 2 · Fase 2 (Recepção & Triagem)
@@ -66,7 +66,7 @@ let _serverAlive = true
 test.beforeAll(async ({ browser }) => {
   const _ctx = await browser.newContext()
   const _pg = await _ctx.newPage()
-  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 })
+  _serverAlive = await _pg.goto(process.env.TEST_BASE_URL ?? 'http://localhost:4000', { waitUntil: 'domcontentloaded', timeout: 8_000 })
     .then(() => true).catch(() => false)
   await _ctx.close()
   if (!_serverAlive) console.log('[SKIP ALL] reception-module — servidor fora do ar')

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * E2E — Sprint Master C-01: Via de Administração em Prescrições
  *
  * TC-C01-01: Select "Via de Administração" está presente no formulário de prescrição
@@ -76,7 +76,7 @@ async function openPrescriptionForm(page: Page, consultationId: string): Promise
 let _serverAlive = true
 test.beforeAll(async ({ browser }) => {
   const _ctx = await browser.newContext(); const _pg = await _ctx.newPage()
-  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
+  _serverAlive = await _pg.goto(process.env.TEST_BASE_URL ?? 'http://localhost:4000', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
   await _ctx.close(); if (!_serverAlive) console.log('[SKIP ALL] sprint-master-c01-prescriptions.spec.ts — servidor fora do ar')
 })
 test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
