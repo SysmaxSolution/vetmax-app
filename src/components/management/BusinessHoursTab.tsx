@@ -113,51 +113,74 @@ export default function BusinessHoursTab({ initialConfig, onToast }: Props) {
               <div
                 key={day.key}
                 data-testid={`day-row-${day.key}`}
-                className={`flex items-center gap-4 px-6 py-3 transition-colors ${isOpen ? 'bg-white' : 'bg-slate-50'}`}
+                className={`px-4 sm:px-6 py-3 transition-colors ${isOpen ? 'bg-white' : 'bg-slate-50'}`}
               >
-                {/* Toggle dia ativo */}
-                <button
-                  id={`toggle-day-${day.key}`}
-                  data-testid={`toggle-day-${day.key}`}
-                  onClick={() => toggleDay(day.key)}
-                  className={`flex-shrink-0 transition-colors ${isOpen ? 'text-teal-600' : 'text-slate-300'}`}
-                  title={isOpen ? 'Clique para fechar este dia' : 'Clique para abrir este dia'}
-                >
-                  {isOpen
-                    ? <ToggleRight className="h-6 w-6" />
-                    : <ToggleLeft  className="h-6 w-6" />}
-                </button>
+                {/* Linha superior: toggle + nome do dia */}
+                <div className="flex items-center gap-3">
+                  <button
+                    id={`toggle-day-${day.key}`}
+                    data-testid={`toggle-day-${day.key}`}
+                    onClick={() => toggleDay(day.key)}
+                    className={`flex-shrink-0 transition-colors ${isOpen ? 'text-teal-600' : 'text-slate-300'}`}
+                    title={isOpen ? 'Clique para fechar este dia' : 'Clique para abrir este dia'}
+                  >
+                    {isOpen
+                      ? <ToggleRight className="h-6 w-6" />
+                      : <ToggleLeft  className="h-6 w-6" />}
+                  </button>
 
-                {/* Label */}
-                <span className={`w-36 text-sm font-medium ${isOpen ? 'text-slate-800' : 'text-slate-400'}`}>
-                  {day.label}
-                </span>
+                  <span className={`min-w-[8rem] text-sm font-medium ${isOpen ? 'text-slate-800' : 'text-slate-400'}`}>
+                    {day.label}
+                  </span>
 
-                {/* Horários */}
-                {isOpen ? (
-                  <div className="flex items-center gap-3 flex-1">
-                    <div className="flex items-center gap-2">
-                      <label className="text-xs text-slate-500 w-12">Abre</label>
+                  {/* Desktop: horários inline; mobile: "Fechado" inline */}
+                  {!isOpen && (
+                    <span className="text-xs text-slate-400 italic">Fechado</span>
+                  )}
+                  {isOpen && (
+                    <div className="hidden sm:flex items-center gap-2">
+                      <label className="text-xs text-slate-500">Abre</label>
                       <TimePicker
                         id={`open-${day.key}`}
                         value={entry!.open}
                         onChange={v => setTime(day.key, 'open', v)}
-                        className="w-28"
+                        className="w-24"
                       />
-                    </div>
-                    <span className="text-slate-400 text-xs">até</span>
-                    <div className="flex items-center gap-2">
-                      <label className="text-xs text-slate-500 w-12">Fecha</label>
+                      <span className="text-slate-400 text-xs">até</span>
+                      <label className="text-xs text-slate-500">Fecha</label>
                       <TimePicker
                         id={`close-${day.key}`}
                         value={entry!.close}
                         onChange={v => setTime(day.key, 'close', v)}
-                        className="w-28"
+                        className="w-24"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Mobile: horários abaixo do nome do dia */}
+                {isOpen && (
+                  <div className="sm:hidden mt-2 pl-9 flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center gap-1.5">
+                      <label className="text-xs text-slate-500">Abre</label>
+                      <TimePicker
+                        id={`open-${day.key}-m`}
+                        value={entry!.open}
+                        onChange={v => setTime(day.key, 'open', v)}
+                        className="w-24"
+                      />
+                    </div>
+                    <span className="text-slate-400 text-xs">até</span>
+                    <div className="flex items-center gap-1.5">
+                      <label className="text-xs text-slate-500">Fecha</label>
+                      <TimePicker
+                        id={`close-${day.key}-m`}
+                        value={entry!.close}
+                        onChange={v => setTime(day.key, 'close', v)}
+                        className="w-24"
                       />
                     </div>
                   </div>
-                ) : (
-                  <span className="text-xs text-slate-400 italic flex-1">Fechado</span>
                 )}
               </div>
             )
