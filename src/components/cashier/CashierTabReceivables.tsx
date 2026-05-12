@@ -1,11 +1,12 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { Receipt, RefreshCw, ShoppingBag, Scissors } from 'lucide-react'
+import { Receipt, RefreshCw, ShoppingBag, Scissors, Ban } from 'lucide-react'
 import { getPendingInvoices, type InvoiceWithDetails } from '@/lib/actions/billing'
 import {
   getPendingGroomingSessions,
   processGroomingPaymentFromCashier,
+  updateGroomingPaymentStatus,
   type PendingGroomingPayment,
 } from '@/lib/actions/grooming'
 import { useRealtimeSync } from '@/hooks/useRealtimeSync'
@@ -141,10 +142,12 @@ function GroomingPaymentModal({
   session,
   onClose,
   onSuccess,
+  onWaived,
 }: {
   session: PendingGroomingPayment
   onClose: () => void
   onSuccess: (petName: string, total: number) => void
+  onWaived: (petName: string) => void
 }) {
   const [method,    setMethod]    = useState<'pix' | 'credit' | 'debit' | 'cash'>('pix')
   const [loading,   setLoading]   = useState(false)
@@ -157,6 +160,15 @@ function GroomingPaymentModal({
     setLoading(false)
     if ('error' in res) { setError(res.error); return }
     onSuccess(session.patient_name, session.price_total)
+  }
+
+  async function handleWaive() {
+    setLoading(true)
+    setError(null)
+    const res = await updateGroomingPaymentStatus(session.id, 'waived')
+    setLoading(false)
+    if ('error' in res) { setError(res.error); return }
+    onWaived(session.patient_name)
   }
 
   return (
@@ -207,13 +219,22 @@ function GroomingPaymentModal({
           <div className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</div>
         )}
 
-        <div className="flex gap-3">
+        <div className="flex gap-2 flex-wrap">
           <button
             onClick={onClose}
             disabled={loading}
             className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
           >
             Cancelar
+          </button>
+          <button
+            onClick={handleWaive}
+            disabled={loading}
+            className="flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-700 hover:bg-amber-100 transition-colors disabled:opacity-50"
+            title="Marcar como cortesia — sem cobrança"
+          >
+            <Ban className="h-4 w-4" />
+            Cortesia
           </button>
           <button
             onClick={handleConfirm}
@@ -274,12 +295,17 @@ export default function CashierTabReceivables({
   }
 
   function handleGroomingSuccess(petName: string, total: number) {
+    const id = activeGrooming?.id
     setActiveGrooming(null)
-    setGroomingSessions(prev => prev.filter(s => s.id !== activeGrooming?.id))
-    onToast(
-      `Banho e Tosa de ${petName} recebido! ${fmt(total)}`,
-      'success'
-    )
+    setGroomingSessions(prev => prev.filter(s => s.id !== id))
+    onToast(`Banho e Tosa de ${petName} recebido! ${fmt(total)}`, 'success')
+  }
+
+  function handleGroomingWaived(petName: string) {
+    const id = activeGrooming?.id
+    setActiveGrooming(null)
+    setGroomingSessions(prev => prev.filter(s => s.id !== id))
+    onToast(`Serviço de ${petName} marcado como cortesia.`, 'success')
   }
 
   const totalPending = invoices.length + groomingSessions.length
@@ -299,6 +325,7 @@ export default function CashierTabReceivables({
           session={activeGrooming}
           onClose={() => setActiveGrooming(null)}
           onSuccess={handleGroomingSuccess}
+          onWaived={handleGroomingWaived}
         />
       )}
 

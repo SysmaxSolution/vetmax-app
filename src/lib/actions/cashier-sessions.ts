@@ -286,7 +286,7 @@ export async function listOutflows(filters?: {
   const ctx = await getClinicContext()
   if ('error' in ctx) return ctx
 
-  if (!['admin', 'owner', 'manager', 'accountant'].includes(ctx.role)) {
+  if (!['admin', 'owner', 'manager', 'accountant', 'receptionist'].includes(ctx.role)) {
     return { error: 'Acesso negado' }
   }
 

@@ -217,8 +217,7 @@ export async function listCashierEntries(filters?: {
   const ctx = await getClinicContext()
   if ('error' in ctx) return ctx
 
-  // Only admin, owner, accountant can view
-  if (!['admin', 'owner', 'accountant'].includes(ctx.role)) {
+  if (!['admin', 'owner', 'accountant', 'manager', 'receptionist'].includes(ctx.role)) {
     return { error: 'Acesso negado ao cashier' }
   }
 
@@ -250,7 +249,7 @@ export async function getCashierSummary(period: {
   const ctx = await getClinicContext()
   if ('error' in ctx) return ctx
 
-  if (!['admin', 'owner', 'accountant'].includes(ctx.role)) {
+  if (!['admin', 'owner', 'accountant', 'manager', 'receptionist'].includes(ctx.role)) {
     return { error: 'Acesso negado ao cashier' }
   }
 

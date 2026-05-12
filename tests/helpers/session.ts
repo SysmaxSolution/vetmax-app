@@ -1,11 +1,8 @@
-import { createClient } from '@supabase/supabase-js'
 import type { BrowserContext, Page } from '@playwright/test'
 import path from 'path'
 import fs from 'fs'
 
-const SUPABASE_URL      = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-const BASE_URL          = process.env.TEST_BASE_URL ?? 'http://localhost:4000'
+const BASE_URL = process.env.TEST_BASE_URL ?? 'http://localhost:4000'
 
 const AUTH_DIR = path.resolve(process.cwd(), 'tests/.auth')
 
@@ -17,10 +14,6 @@ const EMAIL_TO_ROLE: Record<string, string> = {
   'assistente@clinica-alfa.test': 'assistant',
   'contador@clinica-alfa.test':   'accountant',
   'admin@clinica-beta.test':      'adminB',
-}
-
-function getProjectRef(): string {
-  return new URL(SUPABASE_URL).hostname.split('.')[0]
 }
 
 // Verifica se o access_token do @supabase/ssr já expirou (com 90s de margem)
@@ -40,44 +33,28 @@ function isStorageStateExpired(cookies: Record<string, unknown>[]): boolean {
   }
 }
 
-// ─── Fallback: injeção direta de cookies via signInWithPassword ───────────────
-// Usa o formato base64- que o @supabase/ssr espera no servidor Next.js.
-// Acionado quando o storageState está ausente, vazio ou com token expirado.
-
+// ─── Fallback: login real via UI do Next.js ───────────────────────────────────
+// Abre uma página temporária no mesmo contexto, navega para /login,
+// preenche as credenciais e aguarda o redirect para /dashboard.
+// Os cookies de sessão gerados pelo @supabase/ssr ficam no contexto compartilhado.
 export async function injectFreshSession(
   context: BrowserContext,
   email: string,
   password: string,
 ): Promise<void> {
-  const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: { persistSession: false },
-  })
-  const { data, error } = await client.auth.signInWithPassword({ email, password })
-  if (error || !data.session) {
-    throw new Error(`[session] Auth failed for ${email}: ${error?.message ?? 'no session'}`)
+  const loginPage = await context.newPage()
+  try {
+    await loginPage.goto(`${BASE_URL}/login`, { waitUntil: 'networkidle', timeout: 60_000 })
+    await loginPage.locator('#email').waitFor({ state: 'visible', timeout: 15_000 })
+    await loginPage.fill('#email', email)
+    await loginPage.fill('#password', password)
+    await loginPage.getByRole('button', { name: /entrar/i }).click()
+    await loginPage.waitForURL(/\/dashboard/, { timeout: 45_000 })
+  } catch (err) {
+    throw new Error(`[session] UI login failed for ${email}: ${(err as Error).message}`)
+  } finally {
+    await loginPage.close()
   }
-  const { access_token, refresh_token, expires_at, expires_in, user } = data.session
-  const ref      = getProjectRef()
-  const cookieKey = `sb-${ref}-auth-token`
-
-  const sessionPayload = JSON.stringify({
-    access_token, token_type: 'bearer', expires_in, expires_at, refresh_token, user,
-  })
-  // @supabase/ssr usa base64URL (sem +/ do padrão): "base64-" + base64url(json)
-  const cookieValue = 'base64-' + Buffer.from(sessionPayload).toString('base64url')
-
-  const domain = new URL(BASE_URL).hostname
-  await context.clearCookies()
-  await context.addCookies([{
-    name:     cookieKey,
-    value:    cookieValue,
-    domain,
-    path:     '/',
-    httpOnly: false,
-    secure:   false,
-    sameSite: 'Lax' as const,
-    expires:  expires_at ?? Math.floor(Date.now() / 1000) + 3600,
-  }])
 }
 
 // ─── Rota primária: carrega storageState salvo pelo global-setup ──────────────

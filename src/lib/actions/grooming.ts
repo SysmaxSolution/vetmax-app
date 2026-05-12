@@ -109,10 +109,7 @@ export async function getGroomingBoard(): Promise<GroomingBoard | { error: strin
 
   const { supabase, clinicId } = ctx
 
-  // Show today's sessions + all non-delivered active ones
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-
+  // Sessões ativas (não entregues) + entregues com pagamento pendente
   const { data, error } = await supabase
     .from('grooming_sessions')
     .select(`
@@ -124,8 +121,9 @@ export async function getGroomingBoard(): Promise<GroomingBoard | { error: strin
       )
     `)
     .eq('clinic_id', clinicId)
-    .or(`status.neq.delivered,created_at.gte.${today.toISOString()}`)
+    .or('status.neq.delivered,payment_status.eq.pending')
     .neq('current_status', 'cancelled')
+    .neq('current_status', 'archived')
     .order('created_at', { ascending: true })
 
   if (error) return { error: 'Erro ao buscar sessões: ' + error.message }
@@ -182,6 +180,11 @@ export async function getGroomingBoard(): Promise<GroomingBoard | { error: strin
 
     if (isScheduledFuture) {
       board.scheduled.push(card)
+    } else if (s.status === 'delivered') {
+      // Apenas exibe entregues com pagamento pendente
+      if ((s.payment_status ?? 'pending') === 'pending') {
+        board.delivered.push(card)
+      }
     } else if (s.status in board) {
       board[s.status as keyof GroomingBoard].push(card)
     }
@@ -549,9 +552,10 @@ export async function getPendingGroomingSessions(): Promise<PendingGroomingPayme
       patients ( name, species, tutors ( name, phone ) )
     `)
     .eq('clinic_id', clinicId)
+    .eq('status', 'delivered')
     .eq('payment_status', 'pending')
     .gt('price_total', 0)
-    .neq('status', 'delivered')
+    .neq('current_status', 'archived')
     .order('created_at', { ascending: false })
 
   if (error) return { error: 'Erro ao buscar sessões: ' + error.message }
@@ -641,6 +645,29 @@ export async function processGroomingPaymentFromCashier(
 
   revalidatePath('/dashboard/cashier')
   revalidatePath('/dashboard/grooming')
+  return { success: true }
+}
+
+// ─── Arquivar Sessão Entregue (remover da fila) ───────────────────────────────
+
+export async function archiveGroomingSession(
+  sessionId: string,
+): Promise<{ success: true } | { error: string }> {
+  const ctx = await getClinicAndUser()
+  if ('error' in ctx) return ctx
+  const { supabase, clinicId } = ctx
+
+  const { error } = await supabase
+    .from('grooming_sessions')
+    .update({ current_status: 'archived' })
+    .eq('id', sessionId)
+    .eq('clinic_id', clinicId)
+    .eq('status', 'delivered')
+
+  if (error) return { error: 'Erro ao remover da fila: ' + error.message }
+
+  revalidatePath('/dashboard/grooming')
+  revalidatePath('/dashboard/cashier')
   return { success: true }
 }
 
