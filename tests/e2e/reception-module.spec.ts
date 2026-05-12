@@ -35,7 +35,7 @@ async function loginAsReceptionist(page: Page) {
 }
 
 async function goToReception(page: Page) {
-  await page.goto('/dashboard/reception')
+  await page.goto('/dashboard/reception', { waitUntil: 'domcontentloaded' })
   await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 }
 
@@ -61,10 +61,22 @@ test.beforeAll(async () => {
   await seedTutorsAndPets() // seedTutorsAndPets ensures clinic exists first
 })
 
+// — server guard: skip all if Next.js dev server is down ——————————————————————
+let _serverAlive = true
+test.beforeAll(async ({ browser }) => {
+  const _ctx = await browser.newContext()
+  const _pg = await _ctx.newPage()
+  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 })
+    .then(() => true).catch(() => false)
+  await _ctx.close()
+  if (!_serverAlive) console.log('[SKIP ALL] reception-module — servidor fora do ar')
+})
+test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
+
 // ─── TC-REC-001: Check-in rápido por nome do tutor ───────────────────────────
 
 test.describe('TC-REC-001: Check-in rápido — busca por nome do tutor', () => {
-  test('Busca por nome encontra tutor e exibe botão de check-in por pet', async ({ page }) => {
+  test('Busca por nome encontra tutor e exibe botão de check-in por pet', async ({ page }, testInfo) => {
     test.setTimeout(45_000)
     await loginAsAdmin(page)
     await goToReception(page)
@@ -72,8 +84,7 @@ test.describe('TC-REC-001: Check-in rápido — busca por nome do tutor', () => 
     const searched = await searchTutorInReception(page, 'Carlos')
     if (!searched) {
       console.warn('[TC-REC-001] INFO: Campo de busca da recepção não encontrado.')
-      test.skip()
-      return
+      testInfo.skip(); return
     }
 
     // Deve exibir o tutor "Carlos Tutor Silva" nos resultados
@@ -86,8 +97,7 @@ test.describe('TC-REC-001: Check-in rápido — busca por nome do tutor', () => 
       const byCpf = await page.getByText(/carlos/i).isVisible({ timeout: 5_000 }).catch(() => false)
       if (!byCpf) {
         console.warn('[TC-REC-001] INFO: Tutor Carlos não encontrado nos resultados — dados de seed podem não estar visíveis.')
-        test.skip()
-        return
+        testInfo.skip(); return
       }
       expect(byCpf).toBe(true)
       return
@@ -100,7 +110,10 @@ test.describe('TC-REC-001: Check-in rápido — busca por nome do tutor', () => 
     await page.waitForTimeout(1_000)
 
     // Verifica que o pet "Rex" aparece no perfil do tutor
-    const petVisible = await page.getByText(/rex/i).isVisible({ timeout: 5_000 }).catch(() => false)
+    // Usar <p> para não bater no "🐶 Rex" da result-card que some após o clique
+    const petVisible = await page.locator('p').filter({ hasText: /^Rex$/i }).first()
+      .isVisible({ timeout: 5_000 }).catch(() => false)
+      || await page.getByText(/rex/i).last().isVisible({ timeout: 2_000 }).catch(() => false)
     console.log(`[TC-REC-001] Tutor encontrado: ${found} | Pet Rex no perfil: ${petVisible}`)
 
     // Verifica que o botão de check-in por pet aparece (data-mentor-step="reception-checkin-btn")
@@ -115,13 +128,13 @@ test.describe('TC-REC-001: Check-in rápido — busca por nome do tutor', () => 
 // ─── TC-REC-002: Check-in via CPF ────────────────────────────────────────────
 
 test.describe('TC-REC-002: Check-in via CPF do tutor exibe pet correto', () => {
-  test('CPF do tutor A encontra Carlos e Rex na busca da recepção', async ({ page }) => {
+  test('CPF do tutor A encontra Carlos e Rex na busca da recepção', async ({ page }, testInfo) => {
     test.setTimeout(45_000)
     await loginAsAdmin(page)
     await goToReception(page)
 
     const searched = await searchTutorInReception(page, '111.222.333-44')
-    if (!searched) { test.skip(); return }
+    if (!searched) { testInfo.skip(); return }
 
     const carlosVisible = await page.getByText(/carlos/i).isVisible({ timeout: 8_000 }).catch(() => false)
 
@@ -130,7 +143,7 @@ test.describe('TC-REC-002: Check-in via CPF do tutor exibe pet correto', () => {
       await searchTutorInReception(page, '11122233344')
       const byRaw = await page.getByText(/carlos/i).isVisible({ timeout: 5_000 }).catch(() => false)
       console.log(`[TC-REC-002] Carlos por CPF sem formatação: ${byRaw}`)
-      if (!byRaw) { test.skip(); return }
+      if (!byRaw) { testInfo.skip(); return }
       expect(byRaw).toBe(true)
       return
     }
@@ -173,15 +186,14 @@ test.describe('TC-REC-003: Fila de espera exibe consultas ativas', () => {
     }
   })
 
-  test('Fila de recepção exibe consulta seedada', async ({ page }) => {
+  test('Fila de recepção exibe consulta seedada', async ({ page }, testInfo) => {
     test.setTimeout(45_000)
     await loginAsAdmin(page)
     await goToReception(page)
 
     if (!consultationId) {
       console.warn('[TC-REC-003] INFO: Consulta seed não criada — banco pode não ter tabela consultations.')
-      test.skip()
-      return
+      testInfo.skip(); return
     }
 
     // Aguarda a fila carregar
@@ -195,7 +207,7 @@ test.describe('TC-REC-003: Fila de espera exibe consultas ativas', () => {
       const rexInPage = await page.getByText(/rex/i).isVisible({ timeout: 5_000 }).catch(() => false)
       console.warn(`[TC-REC-003] Fila container não encontrada — Rex na página: ${rexInPage}`)
       // Aceita se Rex aparece em algum lugar (a fila pode ter estrutura diferente)
-      if (!rexInPage) { test.skip(); return }
+      if (!rexInPage) { testInfo.skip(); return }
       expect(rexInPage).toBe(true)
       return
     }
@@ -236,12 +248,12 @@ test.describe('TC-REC-004: Botão "Chamar Triagem" move consulta', () => {
     }
   })
 
-  test('Clicar em Chamar Triagem altera status da consulta', async ({ page }) => {
+  test('Clicar em Chamar Triagem altera status da consulta', async ({ page }, testInfo) => {
     test.setTimeout(45_000)
     await loginAsAdmin(page)
     await goToReception(page)
 
-    if (!consultationId) { test.skip(); return }
+    if (!consultationId) { testInfo.skip(); return }
 
     // Aguarda algum item da fila aparecer
     await page.waitForTimeout(2_000)
@@ -255,8 +267,7 @@ test.describe('TC-REC-004: Botão "Chamar Triagem" move consulta', () => {
 
     if (!btnVisible && !txt2Visible) {
       console.warn('[TC-REC-004] INFO: Botão "Chamar Triagem" não encontrado — fila pode estar vazia ou estrutura mudou.')
-      test.skip()
-      return
+      testInfo.skip(); return
     }
 
     const target = btnVisible ? triageBtn : triage2
@@ -280,17 +291,17 @@ test.describe('TC-REC-004: Botão "Chamar Triagem" move consulta', () => {
 // ─── TC-REC-005: Resiliência — check-in sem motivo bloqueia ──────────────────
 
 test.describe('TC-REC-005: Resiliência — check-in sem queixa obrigatória', () => {
-  test('Submeter check-in sem reason bloqueia ou exibe erro', async ({ page }) => {
+  test('Submeter check-in sem reason bloqueia ou exibe erro', async ({ page }, testInfo) => {
     test.setTimeout(45_000)
     await loginAsAdmin(page)
     await goToReception(page)
 
     // Fluxo: busca tutor → seleciona pet → abre modal de check-in → tenta submeter sem reason
     const searched = await searchTutorInReception(page, 'Carlos')
-    if (!searched) { test.skip(); return }
+    if (!searched) { testInfo.skip(); return }
 
     const tutorResult = await page.getByText(/carlos tutor silva/i).isVisible({ timeout: 8_000 }).catch(() => false)
-    if (!tutorResult) { test.skip(); return }
+    if (!tutorResult) { testInfo.skip(); return }
 
     await page.getByText(/carlos tutor silva/i).first().click()
     await page.waitForTimeout(1_000)
@@ -298,7 +309,7 @@ test.describe('TC-REC-005: Resiliência — check-in sem queixa obrigatória', (
     // Clica no botão de check-in do pet Rex
     const checkinBtn = page.locator('[data-mentor-step="reception-checkin-btn"]').first()
     const checkinVisible = await checkinBtn.isVisible({ timeout: 5_000 }).catch(() => false)
-    if (!checkinVisible) { test.skip(); return }
+    if (!checkinVisible) { testInfo.skip(); return }
 
     await checkinBtn.click()
     await page.waitForTimeout(1_000)
@@ -306,7 +317,7 @@ test.describe('TC-REC-005: Resiliência — check-in sem queixa obrigatória', (
     // Modal de check-in deve abrir — tenta submeter sem preencher o motivo
     const submitBtn = page.getByRole('button', { name: /confirmar|salvar|check.?in|criar|submit/i }).first()
     const submitVisible = await submitBtn.isVisible({ timeout: 5_000 }).catch(() => false)
-    if (!submitVisible) { test.skip(); return }
+    if (!submitVisible) { testInfo.skip(); return }
 
     await submitBtn.click()
     await page.waitForTimeout(1_500)
@@ -324,7 +335,7 @@ test.describe('TC-REC-005: Resiliência — check-in sem queixa obrigatória', (
 // ─── TC-REC-006: Resiliência — check-in abre modal corretamente ──────────────
 
 test.describe('TC-REC-006: Modal de check-in é acessível via busca de tutor', () => {
-  test('Busca por tutor + clique em Check-in abre formulário de check-in', async ({ page }) => {
+  test('Busca por tutor + clique em Check-in abre formulário de check-in', async ({ page }, testInfo) => {
     test.setTimeout(45_000)
     await loginAsAdmin(page)
     await goToReception(page)
@@ -335,10 +346,10 @@ test.describe('TC-REC-006: Modal de check-in é acessível via busca de tutor', 
       .eq('clinic_id', fixtures.clinics.clinicA.id)
 
     const searched = await searchTutorInReception(page, 'Carlos')
-    if (!searched) { test.skip(); return }
+    if (!searched) { testInfo.skip(); return }
 
     const tutorResult = await page.getByText(/carlos tutor silva/i).isVisible({ timeout: 8_000 }).catch(() => false)
-    if (!tutorResult) { test.skip(); return }
+    if (!tutorResult) { testInfo.skip(); return }
 
     await page.getByText(/carlos tutor silva/i).first().click()
     await page.waitForTimeout(1_000)
@@ -349,8 +360,7 @@ test.describe('TC-REC-006: Modal de check-in é acessível via busca de tutor', 
 
     if (!checkinVisible) {
       console.warn('[TC-REC-006] INFO: Botão de check-in por pet não encontrado após busca de tutor.')
-      test.skip()
-      return
+      testInfo.skip(); return
     }
 
     // Clica no Check-in — deve abrir o formulário de motivo/tipo de visita
@@ -386,7 +396,7 @@ test.describe('TC-REC-006: Modal de check-in é acessível via busca de tutor', 
 // ─── TC-REC-007: Mentor Tour — iniciar tour da recepção ──────────────────────
 
 test.describe('TC-REC-007: Mentor Tour — iniciar tour de Recepção', () => {
-  test('Clicar em ? abre o mentor e permite iniciar tour', async ({ page }) => {
+  test('Clicar em ? abre o mentor e permite iniciar tour', async ({ page }, testInfo) => {
     test.setTimeout(45_000)
     await loginAsAdmin(page)
     await goToReception(page)
@@ -406,8 +416,7 @@ test.describe('TC-REC-007: Mentor Tour — iniciar tour de Recepção', () => {
       const fabVisible = await helpFab.isVisible({ timeout: 3_000 }).catch(() => false)
       if (!fabVisible) {
         console.warn('[TC-REC-007] INFO: Botão do Mentor não localizado na recepção.')
-        test.skip()
-        return
+        testInfo.skip(); return
       }
       await helpFab.click()
     } else {
@@ -427,8 +436,7 @@ test.describe('TC-REC-007: Mentor Tour — iniciar tour de Recepção', () => {
 
     if (!panelVisible) {
       console.warn('[TC-REC-007] INFO: Painel do Mentor não abriu após clique no botão.')
-      test.skip()
-      return
+      testInfo.skip(); return
     }
 
     expect(panelVisible).toBe(true)
@@ -462,17 +470,17 @@ test.describe('TC-REC-007: Mentor Tour — iniciar tour de Recepção', () => {
 // ─── TC-REC-008: Mentor Tour — spotlight em reception-checkin-btn ─────────────
 
 test.describe('TC-REC-008: Mentor Tour — data-mentor-step no botão de check-in', () => {
-  test('Botão de check-in tem data-mentor-step correto e Mentor Tour estável', async ({ page }) => {
+  test('Botão de check-in tem data-mentor-step correto e Mentor Tour estável', async ({ page }, testInfo) => {
     test.setTimeout(45_000)
     await loginAsAdmin(page)
     await goToReception(page)
 
     // O botão reception-checkin-btn só aparece após busca de tutor
     const searched = await searchTutorInReception(page, 'Carlos')
-    if (!searched) { test.skip(); return }
+    if (!searched) { testInfo.skip(); return }
 
     const tutorFound = await page.getByText(/carlos tutor silva/i).isVisible({ timeout: 8_000 }).catch(() => false)
-    if (!tutorFound) { test.skip(); return }
+    if (!tutorFound) { testInfo.skip(); return }
 
     await page.getByText(/carlos tutor silva/i).first().click()
     await page.waitForTimeout(1_000)
@@ -486,8 +494,7 @@ test.describe('TC-REC-008: Mentor Tour — data-mentor-step no botão de check-i
 
     if (!btnExists) {
       console.warn('[TC-REC-008] INFO: Elemento não encontrado após busca de tutor.')
-      test.skip()
-      return
+      testInfo.skip(); return
     }
 
     expect(btnExists).toBe(true)

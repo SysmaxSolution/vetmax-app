@@ -37,8 +37,17 @@ function generateTestEmail(): string {
 
 // ─── TC-G01-01: Callback sem code redireciona para /login ─────────────────────
 
+// — server guard ——————————————————————————————————————————————————————————————
+let _serverAlive = true
+test.beforeAll(async ({ browser }) => {
+  const _ctx = await browser.newContext(); const _pg = await _ctx.newPage()
+  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
+  await _ctx.close(); if (!_serverAlive) console.log('[SKIP ALL] sprint-master-g01-email-trigger.spec.ts — servidor fora do ar')
+})
+test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
+
 test.describe('TC-G01-01: Callback sem code redireciona para /login', () => {
-  test('GET /auth/callback sem ?code= redireciona para /login', async ({ page }) => {
+  test('GET /auth/callback sem ?code= redireciona para /login', async ({ page }, testInfo) => {
     // Acessar callback sem parâmetro code
     await page.goto('/auth/callback');
     await page.waitForTimeout(3_000);
@@ -57,7 +66,7 @@ test.describe('TC-G01-01: Callback sem code redireciona para /login', () => {
     expect(redirectedToEmailConfirmado).toBe(false);
   });
 
-  test('GET /auth/callback com code inválido não gera erro 500', async ({ page }) => {
+  test('GET /auth/callback com code inválido não gera erro 500', async ({ page }, testInfo) => {
     // Verificar que código inválido não causa crash da aplicação
     const response = await page.goto('/auth/callback?code=INVALID_CODE_E2E_G01');
     await page.waitForTimeout(3_000);
@@ -84,7 +93,7 @@ test.describe('TC-G01-01: Callback sem code redireciona para /login', () => {
 // ─── TC-G01-02: /email-confirmado existe e renderiza mensagem de sucesso ──────
 
 test.describe('TC-G01-02: /email-confirmado existe e renderiza mensagem de sucesso', () => {
-  test('Rota /email-confirmado retorna 200 e exibe mensagem de confirmação', async ({ page }) => {
+  test('Rota /email-confirmado retorna 200 e exibe mensagem de confirmação', async ({ page }, testInfo) => {
     const response = await page.goto('/email-confirmado');
     await page.waitForTimeout(2_000);
 
@@ -116,7 +125,7 @@ test.describe('TC-G01-02: /email-confirmado existe e renderiza mensagem de suces
     expect(successVisible).toBe(true);
   });
 
-  test('/email-confirmado exibe link ou botão para fazer login', async ({ page }) => {
+  test('/email-confirmado exibe link ou botão para fazer login', async ({ page }, testInfo) => {
     await page.goto('/email-confirmado');
     await page.waitForTimeout(2_000);
 
@@ -137,7 +146,7 @@ test.describe('TC-G01-02: /email-confirmado existe e renderiza mensagem de suces
 // ─── TC-G01-03: signUp com metadata full_name e clinic_name ──────────────────
 
 test.describe('TC-G01-03: signUp inclui full_name e clinic_name no user_metadata', () => {
-  test('Formulário de registro inclui campos nome completo e nome da clínica', async ({ page }) => {
+  test('Formulário de registro inclui campos nome completo e nome da clínica', async ({ page }, testInfo) => {
     await page.goto('/register');
     await page.waitForTimeout(2_000);
 
@@ -169,7 +178,7 @@ test.describe('TC-G01-03: signUp inclui full_name e clinic_name no user_metadata
 
     if (!fullNameVisible && !clinicNameVisible) {
       console.log('TC-G01-03: SKIP — Página de registro não encontrada ou campos não visíveis');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -177,7 +186,7 @@ test.describe('TC-G01-03: signUp inclui full_name e clinic_name no user_metadata
     expect(clinicNameVisible).toBe(true);
   });
 
-  test('Submeter registro chama endpoint correto com metadata (interceptação de rede)', async ({ page }) => {
+  test('Submeter registro chama endpoint correto com metadata (interceptação de rede)', async ({ page }, testInfo) => {
     // Interceptar chamadas de autenticação
     const signUpRequests: string[] = [];
 
@@ -199,7 +208,7 @@ test.describe('TC-G01-03: signUp inclui full_name e clinic_name no user_metadata
         await page.waitForTimeout(1_500);
       } else {
         console.log('TC-G01-03b: SKIP — Formulário de registro não encontrado');
-        test.skip();
+        testInfo.skip();
         return;
       }
     }

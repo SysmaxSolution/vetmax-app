@@ -1,4 +1,4 @@
-import type { BrowserContext, Page } from '@playwright/test'
+import type { Page } from '@playwright/test'
 import path from 'path'
 import fs from 'fs'
 
@@ -6,7 +6,6 @@ const BASE_URL = process.env.TEST_BASE_URL ?? 'http://localhost:4000'
 
 const AUTH_DIR = path.resolve(process.cwd(), 'tests/.auth')
 
-// Mapeamento email → role para localizar o storageState salvo no global-setup
 const EMAIL_TO_ROLE: Record<string, string> = {
   'admin@clinica-alfa.test':      'admin',
   'vet@clinica-alfa.test':        'vet',
@@ -16,7 +15,6 @@ const EMAIL_TO_ROLE: Record<string, string> = {
   'admin@clinica-beta.test':      'adminB',
 }
 
-// Verifica se o access_token do @supabase/ssr já expirou (com 90s de margem)
 function isStorageStateExpired(cookies: Record<string, unknown>[]): boolean {
   const authCookie = cookies.find(
     (c) => typeof (c as any).name === 'string' && (c as any).name.includes('auth-token'),
@@ -33,34 +31,25 @@ function isStorageStateExpired(cookies: Record<string, unknown>[]): boolean {
   }
 }
 
-// ─── Fallback: login real via UI do Next.js ───────────────────────────────────
-// Abre uma página temporária no mesmo contexto, navega para /login,
-// preenche as credenciais e aguarda o redirect para /dashboard.
-// Os cookies de sessão gerados pelo @supabase/ssr ficam no contexto compartilhado.
+// Login via UI diretamente na página do teste (sem temp page — evita race condition de cookies)
 export async function injectFreshSession(
-  context: BrowserContext,
+  page: Page,
   email: string,
   password: string,
 ): Promise<void> {
-  const loginPage = await context.newPage()
-  try {
-    await loginPage.goto(`${BASE_URL}/login`, { waitUntil: 'networkidle', timeout: 60_000 })
-    await loginPage.locator('#email').waitFor({ state: 'visible', timeout: 15_000 })
-    await loginPage.fill('#email', email)
-    await loginPage.fill('#password', password)
-    await loginPage.getByRole('button', { name: /entrar/i }).click()
-    await loginPage.waitForURL(/\/dashboard/, { timeout: 45_000 })
-  } catch (err) {
-    throw new Error(`[session] UI login failed for ${email}: ${(err as Error).message}`)
-  } finally {
-    await loginPage.close()
+  await page.goto(`${BASE_URL}/login`, { waitUntil: 'domcontentloaded', timeout: 45_000 })
+  await page.locator('#email').waitFor({ state: 'visible', timeout: 15_000 })
+  await page.fill('#email', email)
+  await page.fill('#password', password)
+  await page.getByRole('button', { name: /entrar/i }).click()
+  // Aceita /dashboard OU /onboarding — falha rápida em vez de timeout de 45s
+  await page.waitForURL(/\/(dashboard|onboarding)/, { timeout: 60_000 })
+  if (page.url().includes('/onboarding')) {
+    throw new Error(
+      `[injectFreshSession] Login para ${email} redirecionou para /onboarding — profile.clinic_id está null no DB. Verifique seedUsers().`
+    )
   }
 }
-
-// ─── Rota primária: carrega storageState salvo pelo global-setup ──────────────
-// Usa os cookies REAIS que o @supabase/ssr define após um login bem-sucedido.
-// Retorna false se o storageState não existir, estiver vazio ou com token expirado
-// (nesse caso loginViaApi faz fallback para injectFreshSession).
 
 async function loadStorageState(page: Page, email: string): Promise<boolean> {
   const role = EMAIL_TO_ROLE[email]
@@ -77,15 +66,12 @@ async function loadStorageState(page: Page, email: string): Promise<boolean> {
     }
 
     if (!state.cookies || state.cookies.length === 0) return false
-
-    // Rejeita tokens expirados — evita que o middleware tente refresh com token inválido
     if (isStorageStateExpired(state.cookies)) return false
 
     await page.context().clearCookies()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await page.context().addCookies(state.cookies as any)
 
-    // Restaura localStorage do origin correto (caso @supabase/ssr use localStorage)
     const origin = state.origins?.find(o => o.origin.includes('localhost'))
     if (origin?.localStorage?.length) {
       await page.goto(`${BASE_URL}/`, { waitUntil: 'commit', timeout: 15_000 })
@@ -100,11 +86,10 @@ async function loadStorageState(page: Page, email: string): Promise<boolean> {
   }
 }
 
-// ─── API pública ─────────────────────────────────────────────────────────────
-
 /**
  * Autentica a página como o usuário indicado e navega para targetPath.
- * Prioridade: storageState salvo → injeção direta de cookies (fallback).
+ * Prioridade: storageState salvo → login via UI (fallback).
+ * Usa waitUntil:'domcontentloaded' para evitar hang do evento load em Next.js dev.
  */
 export async function loginViaApi(
   page: Page,
@@ -115,10 +100,23 @@ export async function loginViaApi(
   const loaded = await loadStorageState(page, email)
 
   if (!loaded) {
-    // Fallback: injeção direta (usado se global-setup falhou para este role)
-    await injectFreshSession(page.context(), email, password)
+    // Fallback: login direto na página principal
+    await injectFreshSession(page, email, password)
+    // Após login a página está em /dashboard — navegar ao targetPath se necessário
+    if (targetPath !== '/dashboard' && !page.url().includes(targetPath)) {
+      await page.goto(`${BASE_URL}${targetPath}`, { waitUntil: 'domcontentloaded', timeout: 45_000 })
+    }
+    return
   }
 
-  await page.goto(`${BASE_URL}${targetPath}`)
-  await page.waitForURL(/\/dashboard/, { timeout: 30_000 })
+  // Cookies carregados: navegar ao target (45s pois sob carga o dev server pode ser lento)
+  await page.goto(`${BASE_URL}${targetPath}`, { waitUntil: 'domcontentloaded', timeout: 45_000 })
+
+  // Se fomos redirecionados para login, os cookies estavam inválidos — fallback para UI login
+  if (!page.url().includes('/dashboard')) {
+    await injectFreshSession(page, email, password)
+    if (targetPath !== '/dashboard' && !page.url().includes(targetPath)) {
+      await page.goto(`${BASE_URL}${targetPath}`, { waitUntil: 'domcontentloaded', timeout: 45_000 })
+    }
+  }
 }

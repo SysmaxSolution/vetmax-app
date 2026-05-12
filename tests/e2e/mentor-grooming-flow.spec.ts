@@ -62,12 +62,22 @@ async function assertBalloonInViewport(page: Page) {
 
 async function advanceTourToEnd(page: Page) {
   const nextBtn = page.locator('.fixed.z-\\[10000\\] button', { hasText: /próximo/i })
-  while (await nextBtn.isVisible().catch(() => false)) {
-    await assertBalloonInViewport(page)
-    await nextBtn.click()
-    await page.waitForTimeout(150)
-  }
   const finishBtn = page.locator('.fixed.z-\\[10000\\] button', { hasText: /concluir/i })
+  let maxSteps = 12
+  while (maxSteps-- > 0) {
+    const finishVisible = await finishBtn.isVisible({ timeout: 500 }).catch(() => false)
+    if (finishVisible) break
+    const nextVisible = await nextBtn.isVisible({ timeout: 500 }).catch(() => false)
+    if (nextVisible) {
+      await assertBalloonInViewport(page)
+      await nextBtn.click()
+      await page.waitForTimeout(150)
+    } else {
+      // waitForNext step — forçar avanço via global
+      await page.evaluate(() => { (window as unknown as { __MENTOR_NEXT_STEP?: () => void }).__MENTOR_NEXT_STEP?.() })
+      await page.waitForTimeout(300)
+    }
+  }
   if (await finishBtn.isVisible().catch(() => false)) {
     await finishBtn.click()
   }
@@ -77,6 +87,7 @@ async function advanceTourToEnd(page: Page) {
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 test.describe('Mentor — Fluxo Banho e Tosa (módulos clínicos desativados)', () => {
+  test.setTimeout(180_000) // AI API + tour init pode levar >60s
 
   test('1. Quick tour "Banho e Tosa" aparece no Mentor e balão fica dentro da viewport', async ({ page }) => {
     await loginAs(page, 'receptionist')
@@ -115,8 +126,9 @@ test.describe('Mentor — Fluxo Banho e Tosa (módulos clínicos desativados)', 
     await expectTourBalloon(page, /kanban de banho e tosa/i)
     await assertBalloonInViewport(page)
 
-    // Avança para o passo de Registro por Voz
-    await page.locator('.fixed.z-\\[10000\\] button', { hasText: /próximo/i }).click()
+    // Step 0 (grooming-queue) tem waitForNext:true — usar __MENTOR_NEXT_STEP para avançar
+    await page.evaluate(() => { (window as unknown as { __MENTOR_NEXT_STEP?: () => void }).__MENTOR_NEXT_STEP?.() })
+    await page.waitForTimeout(300)
     await expectTourBalloon(page, /registro por voz/i)
     await assertBalloonInViewport(page)
     await advanceTourToEnd(page)

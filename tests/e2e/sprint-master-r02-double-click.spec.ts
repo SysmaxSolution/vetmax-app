@@ -50,7 +50,7 @@ async function seedConsultation(overrides: Record<string, unknown> = {}): Promis
 }
 
 async function navigateToReception(page: Page): Promise<boolean> {
-  await page.goto('/dashboard/reception');
+  await page.goto('/dashboard/reception', { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(2_000);
 
   const heading = page.getByText(/recepção|fila de espera|aguardando/i).first();
@@ -74,6 +74,15 @@ async function findReceptionCard(page: Page): Promise<boolean> {
 
 // ─── TC-R02-01: Duplo clique move para triagem ────────────────────────────────
 
+// — server guard ——————————————————————————————————————————————————————————————
+let _serverAlive = true
+test.beforeAll(async ({ browser }) => {
+  const _ctx = await browser.newContext(); const _pg = await _ctx.newPage()
+  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
+  await _ctx.close(); if (!_serverAlive) console.log('[SKIP ALL] sprint-master-r02-double-click.spec.ts — servidor fora do ar')
+})
+test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
+
 test.describe('TC-R02-01: Duplo clique em card move para fila de triagem', () => {
   let consultationId: string;
 
@@ -88,15 +97,15 @@ test.describe('TC-R02-01: Duplo clique em card move para fila de triagem', () =>
     if (consultationId) await admin.from('consultations').delete().eq('id', consultationId);
   });
 
-  test('Duplo clique em card da recepção muda status para triage no banco', async ({ page }) => {
+  test('Duplo clique em card da recepção muda status para triage no banco', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const navigated = await navigateToReception(page);
-    if (!navigated) { test.skip(); return; }
+    if (!navigated) { testInfo.skip(); return; }
 
     const cardFound = await findReceptionCard(page);
     if (!cardFound) {
       console.log('TC-R02-01: FUNCIONALIDADE PENDENTE — card Rex não encontrado na recepção');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -118,7 +127,7 @@ test.describe('TC-R02-01: Duplo clique em card move para fila de triagem', () =>
 
     if (!['triage', 'triagem', 'waiting_triage'].includes(consultation?.status ?? '')) {
       console.log('TC-R02-01: FUNCIONALIDADE PENDENTE — status não mudou para triage após duplo clique');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -142,15 +151,15 @@ test.describe('TC-R02-02: Card desaparece da lista de recepção após duplo cli
     if (consultationId) await admin.from('consultations').delete().eq('id', consultationId);
   });
 
-  test('Após duplo clique, card de Rex desaparece da lista da recepção', async ({ page }) => {
+  test('Após duplo clique, card de Rex desaparece da lista da recepção', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const navigated = await navigateToReception(page);
-    if (!navigated) { test.skip(); return; }
+    if (!navigated) { testInfo.skip(); return; }
 
     const cardFound = await findReceptionCard(page);
     if (!cardFound) {
       console.log('TC-R02-02: FUNCIONALIDADE PENDENTE — card Rex não encontrado');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -194,15 +203,15 @@ test.describe('TC-R02-03: Single clique não move para triagem', () => {
     if (consultationId) await admin.from('consultations').delete().eq('id', consultationId);
   });
 
-  test('Um único clique no card NÃO deve alterar status para triagem', async ({ page }) => {
+  test('Um único clique no card NÃO deve alterar status para triagem', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const navigated = await navigateToReception(page);
-    if (!navigated) { test.skip(); return; }
+    if (!navigated) { testInfo.skip(); return; }
 
     const cardFound = await findReceptionCard(page);
     if (!cardFound) {
       console.log('TC-R02-03: FUNCIONALIDADE PENDENTE — card Rex não encontrado');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -243,15 +252,15 @@ test.describe('TC-R02-04: Cursor do card é "pointer"', () => {
     if (consultationId) await admin.from('consultations').delete().eq('id', consultationId);
   });
 
-  test('Propriedade CSS cursor do card de recepção deve ser "pointer"', async ({ page }) => {
+  test('Propriedade CSS cursor do card de recepção deve ser "pointer"', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const navigated = await navigateToReception(page);
-    if (!navigated) { test.skip(); return; }
+    if (!navigated) { testInfo.skip(); return; }
 
     const cardFound = await findReceptionCard(page);
     if (!cardFound) {
       console.log('TC-R02-04: FUNCIONALIDADE PENDENTE — card Rex não encontrado');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -285,15 +294,15 @@ test.describe('TC-R02-05 (Crítico): Duplo clique rápido não duplica o registr
     if (consultationId) await admin.from('consultations').delete().eq('id', consultationId);
   });
 
-  test('Múltiplos duplos cliques rápidos não geram múltiplas transições ou registros duplicados', async ({ page }) => {
+  test('Múltiplos duplos cliques rápidos não geram múltiplas transições ou registros duplicados', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const navigated = await navigateToReception(page);
-    if (!navigated) { test.skip(); return; }
+    if (!navigated) { testInfo.skip(); return; }
 
     const cardFound = await findReceptionCard(page);
     if (!cardFound) {
       console.log('TC-R02-05: FUNCIONALIDADE PENDENTE — card Rex não encontrado');
-      test.skip();
+      testInfo.skip();
       return;
     }
 

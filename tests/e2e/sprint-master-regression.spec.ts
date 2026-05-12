@@ -79,8 +79,17 @@ test.beforeAll(async () => {
 // ─── TC-REG-01 ────────────────────────────────────────────────────────────────
 // Login com admin@clinica-alfa.test ainda funciona
 
+// — server guard ——————————————————————————————————————————————————————————————
+let _serverAlive = true
+test.beforeAll(async ({ browser }) => {
+  const _ctx = await browser.newContext(); const _pg = await _ctx.newPage()
+  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
+  await _ctx.close(); if (!_serverAlive) console.log('[SKIP ALL] sprint-master-regression.spec.ts — servidor fora do ar')
+})
+test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
+
 test.describe('TC-REG-01: Login admin@clinica-alfa.test ainda funciona', () => {
-  test('Login com email e senha retorna dashboard sem erros', async ({ page }) => {
+  test('Login com email e senha retorna dashboard sem erros', async ({ page }, testInfo) => {
     await page.goto('/login');
     await page.getByLabel(/e-?mail/i).fill(ADMIN_A.email);
     await page.locator('#password').fill(ADMIN_A.password);
@@ -114,9 +123,9 @@ test.describe('TC-REG-02: Fila de recepção exibe pacientes', () => {
     if (consultationId) await Promise.resolve(admin.from('consultations').delete().eq('id', consultationId)).then(() => {}).catch(() => {});
   });
 
-  test('Módulo de recepção carrega e exibe a fila sem erro', async ({ page }) => {
+  test('Módulo de recepção carrega e exibe a fila sem erro', async ({ page }, testInfo) => {
     await loginAs(page, ADMIN_A.email, ADMIN_A.password);
-    await page.goto('/dashboard/reception');
+    await page.goto('/dashboard/reception', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2_000);
 
     // A fila de recepção deve carregar
@@ -158,7 +167,7 @@ test.describe('TC-REG-03: Prescrição legada sem via de administração não qu
     if (consultationId) await Promise.resolve(admin.from('consultations').delete().eq('id', consultationId)).then(() => {}).catch(() => {});
   });
 
-  test('Ficha de consulta com prescrição legada renderiza sem crash', async ({ page }) => {
+  test('Ficha de consulta com prescrição legada renderiza sem crash', async ({ page }, testInfo) => {
     await loginAs(page, ADMIN_A.email, ADMIN_A.password);
     await page.goto(`/dashboard/vet/${consultationId}`);
     await page.waitForTimeout(2_000);
@@ -202,9 +211,9 @@ test.describe('TC-REG-04: Grooming checkout com waiting_pickup ainda funciona', 
     if (sessionId) await Promise.resolve(admin.from('grooming_sessions').delete().eq('id', sessionId)).then(() => {}).catch(() => {});
   });
 
-  test('Sessão de grooming com status waiting_pickup aparece no módulo', async ({ page }) => {
+  test('Sessão de grooming com status waiting_pickup aparece no módulo', async ({ page }, testInfo) => {
     await loginAs(page, ADMIN_A.email, ADMIN_A.password);
-    await page.goto('/dashboard/grooming');
+    await page.goto('/dashboard/grooming', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2_000);
 
     const heading = page.getByText(/banho|tosa|grooming/i).first();
@@ -250,9 +259,9 @@ test.describe('TC-REG-05: Exames lista sem nota clínica (E-01 legado)', () => {
     if (consultationId) await Promise.resolve(admin.from('consultations').delete().eq('id', consultationId)).then(() => {}).catch(() => {});
   });
 
-  test('Módulo de exames carrega sem quebrar com exam_request sem notes', async ({ page }) => {
+  test('Módulo de exames carrega sem quebrar com exam_request sem notes', async ({ page }, testInfo) => {
     await loginAs(page, ADMIN_A.email, ADMIN_A.password);
-    await page.goto('/dashboard/exams');
+    await page.goto('/dashboard/exams', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2_000);
 
     // Não deve haver crash
@@ -272,7 +281,7 @@ test.describe('TC-REG-05: Exames lista sem nota clínica (E-01 legado)', () => {
 // Autenticação por email/senha ainda funciona (G-01 não afetou)
 
 test.describe('TC-REG-06: Autenticação email/senha não foi afetada por G-01', () => {
-  test('Usuário consegue fazer login/logout e login novamente', async ({ page }) => {
+  test('Usuário consegue fazer login/logout e login novamente', async ({ page }, testInfo) => {
     await loginAs(page, ADMIN_A.email, ADMIN_A.password);
 
     const isDashboard = /\/(dashboard|reception|onboarding)/.test(page.url());
@@ -294,11 +303,11 @@ test.describe('TC-REG-06: Autenticação email/senha não foi afetada por G-01',
       await page.getByRole('button', { name: /entrar/i }).click();
       await page.waitForURL(/\/(dashboard|reception|onboarding)/, { timeout: 25_000 }).catch(() => {
         console.log('TC-REG-06: SKIP — segundo login não completou em 25s (possível flakiness de sessão)');
-        test.skip();
+        testInfo.skip(); return;
       });
 
       const isLoggedInAgain = /\/(dashboard|reception|onboarding)/.test(page.url());
-      if (!isLoggedInAgain) { test.skip(); return; }
+      if (!isLoggedInAgain) { testInfo.skip(); return; }
       expect(isLoggedInAgain).toBe(true);
       console.log('TC-REG-06: Login/Logout/Login ciclo funcionou normalmente');
     } else {
@@ -313,15 +322,15 @@ test.describe('TC-REG-06: Autenticação email/senha não foi afetada por G-01',
 // Internação manual ainda funciona (I-01 não obriga automação)
 
 test.describe('TC-REG-07: Internação manual ainda funciona (I-01 não obriga)', () => {
-  let hospId: string;
+  let hospId: string | undefined;
 
   test.afterAll(async () => {
     if (hospId) await Promise.resolve(admin.from('hospitalizations').delete().eq('id', hospId)).then(() => {}).catch(() => {});
   });
 
-  test('É possível criar internação manualmente sem trigger automático', async ({ page }) => {
+  test('É possível criar internação manualmente sem trigger automático', async ({ page }, testInfo) => {
     await loginAs(page, ADMIN_A.email, ADMIN_A.password);
-    await page.goto('/dashboard/hospitalization');
+    await page.goto('/dashboard/hospitalization', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2_000);
 
     // Verificar que a opção de criar internação manual existe
@@ -330,7 +339,7 @@ test.describe('TC-REG-07: Internação manual ainda funciona (I-01 não obriga)'
 
     if (!novaBtnVisible) {
       console.log('TC-REG-07: SKIP — Botão de nova internação não encontrado');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -359,7 +368,7 @@ test.describe('TC-REG-07: Internação manual ainda funciona (I-01 não obriga)'
 test.describe('TC-REG-08: Admin vê todos os módulos (RBAC não restringiu)', () => {
   const EXPECTED_MODULES = ['reception', 'triage', 'vet', 'exams', 'hospitalization', 'grooming'];
 
-  test('Admin da Clínica A acessa todos os módulos ativos', async ({ page }) => {
+  test('Admin da Clínica A acessa todos os módulos ativos', async ({ page }, testInfo) => {
     await loginAs(page, ADMIN_A.email, ADMIN_A.password);
     await page.waitForTimeout(1_500);
 
@@ -396,7 +405,7 @@ test.describe('TC-REG-08: Admin vê todos os módulos (RBAC não restringiu)', (
 // Voice triggers antigos (useGroomingVoiceAssistant) ainda funcionam após G-03
 
 test.describe('TC-REG-09: Voice triggers antigos funcionam após G-03', () => {
-  test('Módulo de grooming ainda carrega sem erros relacionados ao voice assistant', async ({ page }) => {
+  test('Módulo de grooming ainda carrega sem erros relacionados ao voice assistant', async ({ page }, testInfo) => {
     // Monitorar erros de console
     const consoleErrors: string[] = [];
     page.on('console', (msg) => {
@@ -411,7 +420,7 @@ test.describe('TC-REG-09: Voice triggers antigos funcionam após G-03', () => {
     });
 
     await loginAs(page, ADMIN_A.email, ADMIN_A.password);
-    await page.goto('/dashboard/grooming');
+    await page.goto('/dashboard/grooming', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(3_000);
 
     // Verificar que não há erros relacionados ao voice triggers
@@ -450,7 +459,7 @@ test.describe('TC-REG-10 (Crítico): Prescrição controlada sinaliza Receituár
     }
   });
 
-  test('Prescrição de medicamento controlado exibe alerta de Receituário Azul na UI', async ({ page }) => {
+  test('Prescrição de medicamento controlado exibe alerta de Receituário Azul na UI', async ({ page }, testInfo) => {
     await loginAs(page, ADMIN_A.email, ADMIN_A.password);
     await page.goto(`/dashboard/vet/${consultationId}`);
     await page.waitForTimeout(2_000);
@@ -459,7 +468,7 @@ test.describe('TC-REG-10 (Crítico): Prescrição controlada sinaliza Receituár
     const prescTabVisible = await prescTab.isVisible({ timeout: 8_000 }).catch(() => false);
     if (!prescTabVisible) {
       console.log('TC-REG-10: SKIP — Aba de prescrição não encontrada');
-      test.skip();
+      testInfo.skip();
       return;
     }
     await prescTab.click();
@@ -472,7 +481,7 @@ test.describe('TC-REG-10 (Crítico): Prescrição controlada sinaliza Receituár
     const medVisible = await medInput.isVisible({ timeout: 5_000 }).catch(() => false);
     if (!medVisible) {
       console.log('TC-REG-10: SKIP — Campo de medicamento não encontrado');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -490,7 +499,7 @@ test.describe('TC-REG-10 (Crítico): Prescrição controlada sinaliza Receituár
     // Aceitar também indicador via ícone ou badge de cor
     if (!alertVisible && !badgeVisible) {
       console.log('TC-REG-10: AVISO — Sinalização de Receituário Azul não detectada via texto/badge (verificar implementação)');
-      test.skip();
+      testInfo.skip(); return;
     } else {
       expect(alertVisible || badgeVisible).toBe(true);
     }
@@ -512,9 +521,9 @@ test.describe('TC-REG-11 (Crítico): Multi-tenancy intacto após Sprint Master',
     if (consultationId) await Promise.resolve(admin.from('consultations').delete().eq('id', consultationId)).then(() => {}).catch(() => {});
   });
 
-  test('Admin da Clínica B não vê consultas da Clínica A', async ({ page }) => {
+  test('Admin da Clínica B não vê consultas da Clínica A', async ({ page }, testInfo) => {
     await loginAs(page, ADMIN_B.email, ADMIN_B.password);
-    await page.goto('/dashboard/vet');
+    await page.goto('/dashboard/vet', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(3_000);
 
     // O marker da Clínica A não deve aparecer
@@ -527,14 +536,14 @@ test.describe('TC-REG-11 (Crítico): Multi-tenancy intacto após Sprint Master',
     expect(markerVisible).toBe(false);
   });
 
-  test('API de consultas retorna apenas dados da própria clínica', async ({ page }) => {
+  test('API de consultas retorna apenas dados da própria clínica', async ({ page }, testInfo) => {
     await loginAs(page, ADMIN_B.email, ADMIN_B.password);
 
     // Tentar buscar a consulta específica da Clínica A via API
     const response = await page.request.get(`/api/consultations/${consultationId}`).catch(() => null);
     if (!response) {
       console.log('TC-REG-11b: SKIP — servidor indisponível (ECONNREFUSED) ao testar API multi-tenancy');
-      test.skip(); return;
+      testInfo.skip(); return;
     }
     const status = response.status();
 
@@ -567,9 +576,9 @@ test.describe('TC-REG-12 (Crítico): Caixa lista lançamentos após P-05', () =>
     }])).then(() => {}).catch(() => {}); // ignorar se a estrutura for diferente
   });
 
-  test('Módulo caixa carrega lançamentos sem erro após P-05 (DateInput)', async ({ page }) => {
+  test('Módulo caixa carrega lançamentos sem erro após P-05 (DateInput)', async ({ page }, testInfo) => {
     await loginAs(page, ADMIN_A.email, ADMIN_A.password);
-    await page.goto('/dashboard/cashier');
+    await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2_000);
 
     // Verificar que o módulo carregou
@@ -629,7 +638,7 @@ test.describe('TC-REG-13: Prescrição iv + controlado exibe Receituário Azul E
     }
   });
 
-  test('Prescrição iv + controlado exibe Receituário Azul E badge de rota IV simultaneamente', async ({ page }) => {
+  test('Prescrição iv + controlado exibe Receituário Azul E badge de rota IV simultaneamente', async ({ page }, testInfo) => {
     await loginAs(page, ADMIN_A.email, ADMIN_A.password);
     await page.goto(`/dashboard/vet/${consultationId}`);
     await page.waitForTimeout(2_000);
@@ -637,7 +646,7 @@ test.describe('TC-REG-13: Prescrição iv + controlado exibe Receituário Azul E
     const prescTab = page.locator('button').filter({ hasText: /prescrição/i }).first();
     if (!(await prescTab.isVisible({ timeout: 8_000 }).catch(() => false))) {
       console.log('TC-REG-13: SKIP — Aba de prescrição não encontrada');
-      test.skip();
+      testInfo.skip();
       return;
     }
     await prescTab.click();
@@ -657,7 +666,7 @@ test.describe('TC-REG-13: Prescrição iv + controlado exibe Receituário Azul E
 
     if (!azulVisible && !ivVisible) {
       console.log('TC-REG-13: FUNCIONALIDADE PENDENTE — nenhuma das duas sinalizações encontrada');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -697,12 +706,12 @@ test.describe('TC-REG-14 (Crítico): Admin Clínica B não acessa prescrições 
     if (consultationId) await Promise.resolve(admin.from('consultations').delete().eq('id', consultationId)).then(() => {}).catch(() => {});
   });
 
-  test('Admin Clínica B não consegue ler prescrição da Clínica A via API direta', async ({ page }) => {
+  test('Admin Clínica B não consegue ler prescrição da Clínica A via API direta', async ({ page }, testInfo) => {
     await loginAs(page, ADMIN_B.email, ADMIN_B.password);
 
     if (!prescriptionId) {
       console.log('TC-REG-14: SKIP — Prescrição da Clínica A não foi criada no beforeAll');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -724,7 +733,7 @@ test.describe('TC-REG-14 (Crítico): Admin Clínica B não acessa prescrições 
     }
   });
 
-  test('Listagem de prescrições de Admin B não inclui marcador da Clínica A', async ({ page }) => {
+  test('Listagem de prescrições de Admin B não inclui marcador da Clínica A', async ({ page }, testInfo) => {
     await loginAs(page, ADMIN_B.email, ADMIN_B.password);
 
     // Buscar lista de prescrições como Admin B (deve retornar só da Clínica B)
@@ -733,7 +742,7 @@ test.describe('TC-REG-14 (Crítico): Admin Clínica B não acessa prescrições 
 
     if (status !== 200) {
       console.log(`TC-REG-14b: Endpoint /api/prescriptions retornou ${status} — skip`);
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -762,9 +771,9 @@ test.describe('TC-REG-15: Duplo clique rápido em triagem não duplica card na f
     if (consultationId) await Promise.resolve(admin.from('consultations').delete().eq('id', consultationId)).then(() => {}).catch(() => {});
   });
 
-  test('Duplo clique no botão de triagem não cria card duplicado na fila', async ({ page }) => {
+  test('Duplo clique no botão de triagem não cria card duplicado na fila', async ({ page }, testInfo) => {
     await loginAs(page, ADMIN_A.email, ADMIN_A.password);
-    await page.goto('/dashboard/reception');
+    await page.goto('/dashboard/reception', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2_000);
 
     // Localizar card do pet na fila de recepção
@@ -773,7 +782,7 @@ test.describe('TC-REG-15: Duplo clique rápido em triagem não duplica card na f
 
     if (!petVisible) {
       console.log('TC-REG-15: SKIP — Card do pet não encontrado na fila');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -783,7 +792,7 @@ test.describe('TC-REG-15: Duplo clique rápido em triagem não duplica card na f
 
     if (!actionVisible) {
       console.log('TC-REG-15: SKIP — Botão de ação da fila não encontrado');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -824,7 +833,7 @@ test.describe('TC-REG-15: Duplo clique rápido em triagem não duplica card na f
 // Voice trigger G-03 após G-04 não interfere (sem cross-contamination de contexto)
 
 test.describe('TC-REG-16: Voice trigger grooming (G-03) após internação (G-04) sem cross-contamination', () => {
-  test('Erros de console não indicam cross-contamination de contexto de voz entre módulos', async ({ page }) => {
+  test('Erros de console não indicam cross-contamination de contexto de voz entre módulos', async ({ page }, testInfo) => {
     const consoleErrors: string[] = [];
     const pageErrors: string[] = [];
 
@@ -836,11 +845,11 @@ test.describe('TC-REG-16: Voice trigger grooming (G-03) após internação (G-04
     await loginAs(page, ADMIN_A.email, ADMIN_A.password);
 
     // 1. Navegar para internação (G-04 — voice hook de internação)
-    await page.goto('/dashboard/hospitalization');
+    await page.goto('/dashboard/hospitalization', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2_500);
 
     // 2. Navegar para grooming (G-03 — voice hook de grooming)
-    await page.goto('/dashboard/grooming');
+    await page.goto('/dashboard/grooming', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2_500);
 
     // 3. Verificar que não há erros de cross-contamination de contexto

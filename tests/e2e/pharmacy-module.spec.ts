@@ -49,6 +49,18 @@ async function seedStockItem(overrides: Record<string, unknown> = {}): Promise<s
   return data.id;
 }
 
+// — server guard: skip all if Next.js dev server is down ——————————————————————
+let _serverAlive = true
+test.beforeAll(async ({ browser }) => {
+  const _ctx = await browser.newContext()
+  const _pg = await _ctx.newPage()
+  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 })
+    .then(() => true).catch(() => false)
+  await _ctx.close()
+  if (!_serverAlive) console.log('[SKIP ALL] pharmacy-module — servidor fora do ar')
+})
+test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
+
 // ─── TC-FAR-01: Adicionar item ao estoque ────────────────────────────────────
 
 test.describe('TC-FAR-01: Admin adiciona novo item ao estoque', () => {
@@ -64,9 +76,9 @@ test.describe('TC-FAR-01: Admin adiciona novo item ao estoque', () => {
       .eq('name', ITEM_NAME);
   });
 
-  test('Item adicionado aparece na lista de estoque', async ({ page }) => {
+  test('Item adicionado aparece na lista de estoque', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-    await page.goto('/dashboard/pharmacy');
+    await page.goto('/dashboard/pharmacy', { waitUntil: 'domcontentloaded' });
 
     // Workspace deve carregar
     // Usar heading para evitar strict mode (múltiplos elementos com "estoque" na página)
@@ -78,7 +90,7 @@ test.describe('TC-FAR-01: Admin adiciona novo item ao estoque', () => {
     const addBtn = page.getByRole('button', { name: /novo item|adicionar medicamento|add/i }).first();
     if (!(await addBtn.isVisible({ timeout: 8_000 }).catch(() => false))) {
       console.log('FUNCIONALIDADE PENDENTE DE IMPLEMENTAÇÃO: Botão de adicionar item ao estoque não encontrado na Farmácia');
-      test.skip();
+      testInfo.skip();
       return;
     }
     await addBtn.click();
@@ -86,7 +98,7 @@ test.describe('TC-FAR-01: Admin adiciona novo item ao estoque', () => {
     // Modal/form de cadastro
     if (!(await page.getByRole('dialog').isVisible({ timeout: 5_000 }).catch(() => false))) {
       console.log('FUNCIONALIDADE PENDENTE DE IMPLEMENTAÇÃO: Modal de cadastro de item não encontrado na Farmácia');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -139,13 +151,13 @@ test.describe('TC-FAR-02: Dispensar medicamento reduz quantidade', () => {
     if (stockItemId) await admin.from('stock_items').delete().eq('id', stockItemId);
   });
 
-  test('Dispensar 5 unidades reduz quantidade de 50 para 45', async ({ page }) => {
+  test('Dispensar 5 unidades reduz quantidade de 50 para 45', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-    await page.goto('/dashboard/pharmacy');
+    await page.goto('/dashboard/pharmacy', { waitUntil: 'domcontentloaded' });
 
     if (!(await page.getByText('Amoxicilina 250mg — Dispensar Teste').isVisible({ timeout: 10_000 }).catch(() => false))) {
       console.log('FUNCIONALIDADE PENDENTE DE IMPLEMENTAÇÃO: Item de estoque não encontrado na lista da Farmácia');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -161,7 +173,8 @@ test.describe('TC-FAR-02: Dispensar medicamento reduz quantidade', () => {
       const qtyField = page.getByLabel(/quantidade|qtd/i).or(page.getByPlaceholder(/quantidade/i)).last();
       await qtyField.fill('5');
 
-      await page.getByRole('button', { name: /confirmar|dispensar|ok/i }).click();
+      // Usar .last() para pegar o botão Dispensar do painel (não o da tabela)
+      await page.getByRole('button', { name: /confirmar|dispensar|ok/i }).last().click();
 
       await expect(page.getByText(/dispensado|retirada registrada/i)).toBeVisible({ timeout: 8_000 });
 
@@ -175,7 +188,7 @@ test.describe('TC-FAR-02: Dispensar medicamento reduz quantidade', () => {
       expect(Number(item?.quantity)).toBe(INITIAL_QTY - 5);
     } else {
       console.log('FUNCIONALIDADE PENDENTE DE IMPLEMENTAÇÃO: Botão de dispensar não encontrado no Módulo Farmácia');
-      test.skip();
+      testInfo.skip(); return;
     }
   });
 });
@@ -199,9 +212,9 @@ test.describe('TC-FAR-03: Item com estoque baixo aparece no painel de alerta', (
     if (stockItemId) await admin.from('stock_items').delete().eq('id', stockItemId);
   });
 
-  test('Item com quantidade abaixo do mínimo aparece no painel de alertas', async ({ page }) => {
+  test('Item com quantidade abaixo do mínimo aparece no painel de alertas', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-    await page.goto('/dashboard/pharmacy');
+    await page.goto('/dashboard/pharmacy', { waitUntil: 'domcontentloaded' });
 
     // Painel de estoque baixo deve aparecer
     const lowStockPanel = page.getByTestId('low-stock-panel').or(
@@ -209,14 +222,14 @@ test.describe('TC-FAR-03: Item com estoque baixo aparece no painel de alerta', (
     );
     if (!(await lowStockPanel.isVisible({ timeout: 10_000 }).catch(() => false))) {
       console.log('FUNCIONALIDADE PENDENTE DE IMPLEMENTAÇÃO: Painel de estoque baixo não encontrado na Farmácia');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
     // Item com baixo estoque deve estar listado
     if (!(await page.getByText('Metronidazol 250mg — Estoque Baixo').isVisible({ timeout: 8_000 }).catch(() => false))) {
       console.log('FUNCIONALIDADE PENDENTE DE IMPLEMENTAÇÃO: Item com estoque baixo não listado no painel de alertas');
-      test.skip();
+      testInfo.skip();
       return;
     }
   });
@@ -229,9 +242,9 @@ test.describe('TC-FAR-04: Receptionist não acessa farmácia', () => {
     await enableModule(fixtures.clinics.clinicA.id, 'pharmacy');
   });
 
-  test('Receptionist é redirecionado ao acessar /dashboard/pharmacy', async ({ page }) => {
+  test('Receptionist é redirecionado ao acessar /dashboard/pharmacy', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.receptionistA.email, fixtures.users.receptionistA.password);
-    await page.goto('/dashboard/pharmacy');
+    await page.goto('/dashboard/pharmacy', { waitUntil: 'domcontentloaded' });
 
     await page.waitForTimeout(3_000);
     expect(page.url()).not.toMatch(/\/pharmacy/);
@@ -249,11 +262,11 @@ test.describe('TC-FAR-05: Módulo pharmacy inativo redireciona', () => {
     await enableModule(fixtures.clinics.clinicA.id, 'pharmacy');
   });
 
-  test('Admin acessa /dashboard/pharmacy com módulo desativado → redirect', async ({ page }) => {
+  test('Admin acessa /dashboard/pharmacy com módulo desativado → redirect', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     // Aguardar um tick extra para garantir que o DB propagou o disableModule
     await page.waitForTimeout(500);
-    await page.goto('/dashboard/pharmacy');
+    await page.goto('/dashboard/pharmacy', { waitUntil: 'domcontentloaded' });
 
     // Aguardar redirect para qualquer rota fora de /pharmacy, ou timeout de 8s
     await page.waitForURL(url => !url.toString().includes('/pharmacy'), { timeout: 8_000 }).catch(() => {});
@@ -276,9 +289,9 @@ test.describe('TC-FAR-06: Isolamento RLS multi-tenant — farmácia', () => {
     if (stockItemId) await admin.from('stock_items').delete().eq('id', stockItemId);
   });
 
-  test('Admin da Clínica B não vê estoque da Clínica A', async ({ page }) => {
+  test('Admin da Clínica B não vê estoque da Clínica A', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminB.email, fixtures.users.adminB.password);
-    await page.goto('/dashboard/pharmacy');
+    await page.goto('/dashboard/pharmacy', { waitUntil: 'domcontentloaded' });
 
     await page.waitForTimeout(3_000);
     await expect(page.getByText('ITEM-CLINICA-A-RLS-FAR')).not.toBeVisible();

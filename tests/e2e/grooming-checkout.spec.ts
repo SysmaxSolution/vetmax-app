@@ -37,11 +37,11 @@ test.describe('Checkout Grooming → Central Cashier', () => {
     await adminSupabase.from('grooming_sessions').delete().eq('id', sessionId);
   });
 
-  test('TC-FIN-01: Checkout cria entrada no central_cashier com amount correto', async ({ page }) => {
+  test('TC-FIN-01: Checkout cria entrada no central_cashier com amount correto', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.receptionistA.email, fixtures.users.receptionistA.password);
 
     // Navegar para o board de grooming e localizar a sessão
-    await page.goto('/dashboard/grooming');
+    await page.goto('/dashboard/grooming', { waitUntil: 'domcontentloaded' });
 
     // Tentar localizar o card — pode usar testid ou locator genérico
     const sessionCardById = page.getByTestId(`session-card-${sessionId}`);
@@ -53,7 +53,7 @@ test.describe('Checkout Grooming → Central Cashier', () => {
       const sessionVisible = await sessionCardByText.isVisible({ timeout: 5_000 }).catch(() => false);
       if (!sessionVisible) {
         console.log('FUNCIONALIDADE PENDENTE: Card de sessão não encontrado no Kanban de Grooming (testid ou texto)');
-        test.skip();
+        testInfo.skip();
         return;
       }
     }
@@ -64,7 +64,7 @@ test.describe('Checkout Grooming → Central Cashier', () => {
     const checkoutBtn = sessionCard.getByRole('button', { name: /finalizar|pagar|checkout/i });
     if (!(await checkoutBtn.isVisible({ timeout: 3_000 }).catch(() => false))) {
       console.log('FUNCIONALIDADE PENDENTE DE IMPLEMENTAÇÃO: Botão de checkout não encontrado no card de grooming');
-      test.skip();
+      testInfo.skip();
       return;
     }
     await checkoutBtn.click();
@@ -105,7 +105,7 @@ test.describe('Checkout Grooming → Central Cashier', () => {
     expect(session!.payment_recorded_at).not.toBeNull();
   });
 
-  test('TC-FIN-02: Accountant vê lançamento no caixa; Assistant NÃO vê', async ({ page, context }) => {
+  test('TC-FIN-02: Accountant vê lançamento no caixa; Assistant NÃO vê', async ({ page, context }, testInfo) => {
     // Criar entrada de teste diretamente
     await adminSupabase.from('central_cashier').insert({
       clinic_id: fixtures.clinics.clinicA.id,
@@ -118,7 +118,7 @@ test.describe('Checkout Grooming → Central Cashier', () => {
 
     // --- Accountant DEVE ver ---
     await loginAs(page, fixtures.users.accountantA.email, fixtures.users.accountantA.password);
-    await page.goto('/dashboard/cashier');
+    await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded' });
 
     await expect(page.getByText(/145[,.]00|R\$.*145/i).first()).toBeVisible({ timeout: 10_000 });
     await expect(page.locator('td, [class*="card"], [class*="row"]').filter({ hasText: /grooming|banho/i }).first()).toBeVisible();

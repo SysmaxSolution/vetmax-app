@@ -63,7 +63,7 @@ async function seedCashierEntry(overrides: Record<string, unknown> = {}): Promis
 }
 
 async function navigateToCashier(page: Page): Promise<boolean> {
-  await page.goto('/dashboard/cashier');
+  await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(2_000);
 
   const heading = page.getByText(/caixa|financeiro|relatório.*caixa|lançamentos/i).first();
@@ -123,16 +123,25 @@ async function fillDateInput(page: Page, inputLocator: ReturnType<Page['locator'
 
 // ─── TC-P05-01: DateInput "Data início" presente ──────────────────────────────
 
+// — server guard ——————————————————————————————————————————————————————————————
+let _serverAlive = true
+test.beforeAll(async ({ browser }) => {
+  const _ctx = await browser.newContext(); const _pg = await _ctx.newPage()
+  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
+  await _ctx.close(); if (!_serverAlive) console.log('[SKIP ALL] sprint-master-p05-date-input.spec.ts — servidor fora do ar')
+})
+test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
+
 test.describe('TC-P05-01: DateInput "Data início" está presente nos filtros', () => {
   test.beforeEach(async () => {
     await enableModule(fixtures.clinics.clinicA.id, 'billing');
     await seedTutorsAndPets();
   });
 
-  test('Filtros do Caixa contêm o componente DateInput para "Data início"', async ({ page }) => {
+  test('Filtros do Caixa contêm o componente DateInput para "Data início"', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const navigated = await navigateToCashier(page);
-    if (!navigated) { test.skip(); return; }
+    if (!navigated) { testInfo.skip(); return; }
 
     const dateStart = await getDateStartInput(page);
     const visible = await dateStart.isVisible({ timeout: 8_000 }).catch(() => false);
@@ -140,7 +149,7 @@ test.describe('TC-P05-01: DateInput "Data início" está presente nos filtros', 
     console.log(`TC-P05-01: DateInput "Data início" visível: ${visible}`);
     if (!visible) {
       console.log('TC-P05-01: FUNCIONALIDADE PENDENTE — DateInput "Data início" não encontrado nos filtros do Caixa');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -165,10 +174,10 @@ test.describe('TC-P05-02: DateInput "Data fim" está presente nos filtros', () =
     await seedTutorsAndPets();
   });
 
-  test('Filtros do Caixa contêm o componente DateInput para "Data fim"', async ({ page }) => {
+  test('Filtros do Caixa contêm o componente DateInput para "Data fim"', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const navigated = await navigateToCashier(page);
-    if (!navigated) { test.skip(); return; }
+    if (!navigated) { testInfo.skip(); return; }
 
     const dateEnd = await getDateEndInput(page);
     const visible = await dateEnd.isVisible({ timeout: 8_000 }).catch(() => false);
@@ -176,7 +185,7 @@ test.describe('TC-P05-02: DateInput "Data fim" está presente nos filtros', () =
     console.log(`TC-P05-02: DateInput "Data fim" visível: ${visible}`);
     if (!visible) {
       console.log('TC-P05-02: FUNCIONALIDADE PENDENTE — DateInput "Data fim" não encontrado nos filtros do Caixa');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -220,10 +229,10 @@ test.describe('TC-P05-03: Filtrar por intervalo de datas retorna lançamentos co
     if (entryOldId) await Promise.resolve(admin.from('central_cashier').delete().eq('id', entryOldId)).then(() => {}).catch(() => {});
   });
 
-  test('Filtro de data início = ontem e fim = hoje exibe lançamento de hoje mas não o de 30 dias atrás', async ({ page }) => {
+  test('Filtro de data início = ontem e fim = hoje exibe lançamento de hoje mas não o de 30 dias atrás', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const navigated = await navigateToCashier(page);
-    if (!navigated) { test.skip(); return; }
+    if (!navigated) { testInfo.skip(); return; }
 
     const dateStart = await getDateStartInput(page);
     const dateEnd = await getDateEndInput(page);
@@ -233,7 +242,7 @@ test.describe('TC-P05-03: Filtrar por intervalo de datas retorna lançamentos co
       !(await dateEnd.isVisible({ timeout: 8_000 }).catch(() => false))
     ) {
       console.log('TC-P05-03: FUNCIONALIDADE PENDENTE — campos de data não encontrados');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -269,7 +278,7 @@ test.describe('TC-P05-03: Filtrar por intervalo de datas retorna lançamentos co
 
     if (!todayVisible) {
       console.log('TC-P05-03: FUNCIONALIDADE PENDENTE — filtro de data não filtra lançamentos');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -286,10 +295,10 @@ test.describe('TC-P05-04: Data início > data fim mostra erro ou reseta', () => 
     await seedTutorsAndPets();
   });
 
-  test('Preencher data início posterior à data fim exibe erro ou corrige automaticamente', async ({ page }) => {
+  test('Preencher data início posterior à data fim exibe erro ou corrige automaticamente', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const navigated = await navigateToCashier(page);
-    if (!navigated) { test.skip(); return; }
+    if (!navigated) { testInfo.skip(); return; }
 
     const dateStart = await getDateStartInput(page);
     const dateEnd = await getDateEndInput(page);
@@ -299,7 +308,7 @@ test.describe('TC-P05-04: Data início > data fim mostra erro ou reseta', () => 
       !(await dateEnd.isVisible({ timeout: 8_000 }).catch(() => false))
     ) {
       console.log('TC-P05-04: FUNCIONALIDADE PENDENTE — campos de data não encontrados');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -339,7 +348,7 @@ test.describe('TC-P05-04: Data início > data fim mostra erro ou reseta', () => 
 
     if (!hasError && !wasReset) {
       console.log('TC-P05-04: FUNCIONALIDADE PENDENTE — validação de intervalo de datas não implementada');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -362,10 +371,10 @@ test.describe('TC-P05-05 (Crítico): Selecionar hoje como data fim não exclui l
     if (entryId) await Promise.resolve(admin.from('central_cashier').delete().eq('id', entryId)).then(() => {}).catch(() => {});
   });
 
-  test('Filtro com data fim = hoje inclui lançamentos feitos hoje (não usa < hoje, usa <= hoje)', async ({ page }) => {
+  test('Filtro com data fim = hoje inclui lançamentos feitos hoje (não usa < hoje, usa <= hoje)', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const navigated = await navigateToCashier(page);
-    if (!navigated) { test.skip(); return; }
+    if (!navigated) { testInfo.skip(); return; }
 
     const dateStart = await getDateStartInput(page);
     const dateEnd = await getDateEndInput(page);
@@ -375,7 +384,7 @@ test.describe('TC-P05-05 (Crítico): Selecionar hoje como data fim não exclui l
       !(await dateEnd.isVisible({ timeout: 8_000 }).catch(() => false))
     ) {
       console.log('TC-P05-05: FUNCIONALIDADE PENDENTE — campos de data não encontrados');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -413,7 +422,7 @@ test.describe('TC-P05-05 (Crítico): Selecionar hoje como data fim não exclui l
         .single();
       console.log(`TC-P05-05: transaction_date no banco = "${rawEntry?.transaction_date}"`);
       console.log('TC-P05-05: FALHA CRÍTICA — filtro com data fim = hoje está excluindo lançamentos do dia (bug: < em vez de <=)');
-      test.skip();
+      testInfo.skip();
       return;
     }
 

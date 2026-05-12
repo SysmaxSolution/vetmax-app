@@ -63,7 +63,7 @@ async function seedHospitalization(opts: SeedHospitalizationOptions = {}): Promi
 }
 
 async function openHospitalizationCard(page: Page, hospId: string): Promise<boolean> {
-  await page.goto('/dashboard/hospitalization');
+  await page.goto('/dashboard/hospitalization', { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(2_000);
 
   const cardLocator = page.locator(`[data-testid="hosp-card-${hospId}"]`)
@@ -125,6 +125,15 @@ async function addEvolution(page: Page, evolutionStatus: string): Promise<boolea
 
 // ─── TC-I01-01: "melhorou" move card para "Pronto para Alta" ─────────────────
 
+// — server guard ——————————————————————————————————————————————————————————————
+let _serverAlive = true
+test.beforeAll(async ({ browser }) => {
+  const _ctx = await browser.newContext(); const _pg = await _ctx.newPage()
+  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
+  await _ctx.close(); if (!_serverAlive) console.log('[SKIP ALL] sprint-master-i01-hosp-auto-transition.spec.ts — servidor fora do ar')
+})
+test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
+
 test.describe('TC-I01-01: Evolução melhorou move card para Pronto para Alta', () => {
   let hospId: string;
 
@@ -141,27 +150,27 @@ test.describe('TC-I01-01: Evolução melhorou move card para Pronto para Alta', 
     }
   });
 
-  test('Registrar evolução melhorou move card para coluna Pronto para Alta', async ({ page }) => {
+  test('Registrar evolução melhorou move card para coluna Pronto para Alta', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
 
     const opened = await openHospitalizationCard(page, hospId);
     if (!opened) {
       console.log('TC-I01-01: SKIP — Card de internação não encontrado');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
     const modal = page.getByRole('dialog').first();
     if (!(await modal.isVisible({ timeout: 5_000 }).catch(() => false))) {
       console.log('TC-I01-01: SKIP — HospitalizationDetailModal não abriu');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
     const saved = await addEvolution(page, 'melhorou');
     if (!saved) {
       console.log('TC-I01-01: SKIP — Não foi possível registrar evolução');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -199,27 +208,27 @@ test.describe('TC-I01-02: Evolução estável mantém card na coluna Estável', 
     }
   });
 
-  test('Evolução estável mantém status stable no banco', async ({ page }) => {
+  test('Evolução estável mantém status stable no banco', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
 
     const opened = await openHospitalizationCard(page, hospId);
     if (!opened) {
       console.log('TC-I01-02: SKIP — Card de internação não encontrado');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
     const modal = page.getByRole('dialog').first();
     if (!(await modal.isVisible({ timeout: 5_000 }).catch(() => false))) {
       console.log('TC-I01-02: SKIP — HospitalizationDetailModal não abriu');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
     const saved = await addEvolution(page, 'estável');
     if (!saved) {
       console.log('TC-I01-02: SKIP — Não foi possível registrar evolução estável');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -248,27 +257,27 @@ test.describe('TC-I01-03: Evolução piorou mantém card na Observação', () =>
     }
   });
 
-  test('Evolução piorou não muda para ready_for_discharge', async ({ page }) => {
+  test('Evolução piorou não muda para ready_for_discharge', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
 
     const opened = await openHospitalizationCard(page, hospId);
     if (!opened) {
       console.log('TC-I01-03: SKIP — Card de internação não encontrado');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
     const modal = page.getByRole('dialog').first();
     if (!(await modal.isVisible({ timeout: 5_000 }).catch(() => false))) {
       console.log('TC-I01-03: SKIP — HospitalizationDetailModal não abriu');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
     const saved = await addEvolution(page, 'piorou');
     if (!saved) {
       console.log('TC-I01-03: SKIP — Não foi possível registrar evolução piorou');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -297,7 +306,7 @@ test.describe('TC-I01-04: Múltiplas evoluções — última determina status', 
     }
   });
 
-  test('Após piorou seguido de melhorou, status final é ready_for_discharge', async ({ page }) => {
+  test('Após piorou seguido de melhorou, status final é ready_for_discharge', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
 
     // Inserir evoluções diretamente no banco para simular múltiplas
@@ -347,7 +356,7 @@ test.describe('TC-I01-05: Transição automática registra updated_at', () => {
     }
   });
 
-  test('Transição para ready_for_discharge atualiza campo updated_at', async ({ page }) => {
+  test('Transição para ready_for_discharge atualiza campo updated_at', async ({ page }, testInfo) => {
     // Capturar updated_at antes da transição
     const { data: before } = await admin.from('hospitalizations').select('updated_at').eq('id', hospId).single();
     const updatedAtBefore = before?.updated_at ? new Date(before.updated_at).getTime() : 0;
@@ -357,14 +366,14 @@ test.describe('TC-I01-05: Transição automática registra updated_at', () => {
     const opened = await openHospitalizationCard(page, hospId);
     if (!opened) {
       console.log('TC-I01-05: SKIP — Card de internação não encontrado');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
     const modal = page.getByRole('dialog').first();
     if (!(await modal.isVisible({ timeout: 5_000 }).catch(() => false))) {
       console.log('TC-I01-05: SKIP — HospitalizationDetailModal não abriu');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -407,20 +416,20 @@ test.describe('TC-I01-06: Sem tutor.phone, transição ocorre mas botão WA não
     await admin.from('tutors').update({ phone: fixtures.tutors.tutorA1.phone }).eq('id', fixtures.tutors.tutorA1.id);
   });
 
-  test('Transição ocorre mas botão WA não aparece quando tutor não tem phone', async ({ page }) => {
+  test('Transição ocorre mas botão WA não aparece quando tutor não tem phone', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
 
     const opened = await openHospitalizationCard(page, hospId);
     if (!opened) {
       console.log('TC-I01-06: SKIP — Card de internação não encontrado');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
     const modal = page.getByRole('dialog').first();
     if (!(await modal.isVisible({ timeout: 5_000 }).catch(() => false))) {
       console.log('TC-I01-06: SKIP — HospitalizationDetailModal não abriu');
-      test.skip();
+      testInfo.skip();
       return;
     }
 

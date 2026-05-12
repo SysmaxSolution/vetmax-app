@@ -124,13 +124,13 @@ async function waitForMentorGlobals(page: Page) {
 
 async function startTour(page: Page, tourId: string) {
   await page.evaluate((id: string) => {
-    (window as Window & { __MENTOR_START_TOUR: (id: string) => void }).__MENTOR_START_TOUR(id)
+    (window as unknown as { __MENTOR_START_TOUR: (id: string) => void }).__MENTOR_START_TOUR(id)
   }, tourId)
 }
 
 async function advanceStep(page: Page) {
   await page.evaluate(() => {
-    (window as Window & { __MENTOR_NEXT_STEP: () => void }).__MENTOR_NEXT_STEP()
+    (window as unknown as { __MENTOR_NEXT_STEP: () => void }).__MENTOR_NEXT_STEP()
   })
 }
 
@@ -372,8 +372,8 @@ test.describe('MENTOR-008 — Tour: alta', () => {
 test.describe('MENTOR-009 — Tour: cadastro-pet', () => {
   test.beforeEach(async ({ page }) => {
     await loginAsAdmin(page)
-    await page.goto(`${BASE_URL}/dashboard/patients`)
-    await page.waitForLoadState('networkidle')
+    await page.goto(`${BASE_URL}/dashboard/patients`, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+    await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {})
     await waitForMentorGlobals(page)
   })
 

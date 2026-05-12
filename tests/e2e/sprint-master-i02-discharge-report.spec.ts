@@ -66,7 +66,7 @@ async function seedHospitalization(opts: SeedOptions = {}): Promise<string> {
 }
 
 async function openHospitalizationCard(page: Page, hospId: string): Promise<boolean> {
-  await page.goto('/dashboard/hospitalization');
+  await page.goto('/dashboard/hospitalization', { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(2_000);
 
   const cardLocator = page.locator(`[data-testid="hosp-card-${hospId}"]`)
@@ -89,6 +89,15 @@ function getDischargeButton(page: Page) {
 
 // ─── TC-I02-01: Botão aparece com ready_for_discharge + phone ────────────────
 
+// — server guard ——————————————————————————————————————————————————————————————
+let _serverAlive = true
+test.beforeAll(async ({ browser }) => {
+  const _ctx = await browser.newContext(); const _pg = await _ctx.newPage()
+  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
+  await _ctx.close(); if (!_serverAlive) console.log('[SKIP ALL] sprint-master-i02-discharge-report.spec.ts — servidor fora do ar')
+})
+test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
+
 test.describe('TC-I02-01: Botão aparece quando status ready_for_discharge e tutor tem phone', () => {
   let hospId: string;
 
@@ -106,20 +115,20 @@ test.describe('TC-I02-01: Botão aparece quando status ready_for_discharge e tut
     await admin.from('tutors').update({ phone: fixtures.tutors.tutorA1.phone }).eq('id', fixtures.tutors.tutorA1.id);
   });
 
-  test('Botão Enviar Relatório de Alta aparece no modal', async ({ page }) => {
+  test('Botão Enviar Relatório de Alta aparece no modal', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
 
     const opened = await openHospitalizationCard(page, hospId);
     if (!opened) {
       console.log('TC-I02-01: SKIP — Card de internação não encontrado');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
     const modal = page.getByRole('dialog').first();
     if (!(await modal.isVisible({ timeout: 5_000 }).catch(() => false))) {
       console.log('TC-I02-01: SKIP — HospitalizationDetailModal não abriu');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -153,20 +162,20 @@ test.describe('TC-I02-02: Botão NÃO aparece quando status não é ready_for_di
     await admin.from('tutors').update({ phone: fixtures.tutors.tutorA1.phone }).eq('id', fixtures.tutors.tutorA1.id);
   });
 
-  test('Botão Relatório de Alta não aparece com status observation (não pronto para alta)', async ({ page }) => {
+  test('Botão Relatório de Alta não aparece com status observation (não pronto para alta)', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
 
     const opened = await openHospitalizationCard(page, hospId);
     if (!opened) {
       console.log('TC-I02-02: SKIP — Card de internação não encontrado');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
     const modal = page.getByRole('dialog').first();
     if (!(await modal.isVisible({ timeout: 5_000 }).catch(() => false))) {
       console.log('TC-I02-02: SKIP — HospitalizationDetailModal não abriu');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -195,20 +204,20 @@ test.describe('TC-I02-03: Botão NÃO aparece quando tutor não tem phone', () =
     await admin.from('tutors').update({ phone: fixtures.tutors.tutorA1.phone }).eq('id', fixtures.tutors.tutorA1.id);
   });
 
-  test('Botão WA de alta não aparece quando tutor não tem phone', async ({ page }) => {
+  test('Botão WA de alta não aparece quando tutor não tem phone', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
 
     const opened = await openHospitalizationCard(page, hospId);
     if (!opened) {
       console.log('TC-I02-03: SKIP — Card de internação não encontrado');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
     const modal = page.getByRole('dialog').first();
     if (!(await modal.isVisible({ timeout: 5_000 }).catch(() => false))) {
       console.log('TC-I02-03: SKIP — HospitalizationDetailModal não abriu');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -244,20 +253,20 @@ test.describe('TC-I02-04: Clicar no botão abre popup de confirmação WA', () =
     // Ativar quando ambiente de staging tiver Evolution API disponível.
   });
 
-  test('Botão de alta presente — popup de confirmação aparece ao clicar', async ({ page }) => {
+  test('Botão de alta presente — popup de confirmação aparece ao clicar', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
 
     const opened = await openHospitalizationCard(page, hospId);
     if (!opened) {
       console.log('TC-I02-04: SKIP — Card de internação não encontrado');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
     const modal = page.getByRole('dialog').first();
     if (!(await modal.isVisible({ timeout: 5_000 }).catch(() => false))) {
       console.log('TC-I02-04: SKIP — HospitalizationDetailModal não abriu');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -265,7 +274,7 @@ test.describe('TC-I02-04: Clicar no botão abre popup de confirmação WA', () =
     const btnVisible = await dischargeBtn.isVisible({ timeout: 8_000 }).catch(() => false);
     if (!btnVisible) {
       console.log('TC-I02-04: SKIP — Botão de alta não encontrado');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -312,20 +321,20 @@ test.describe('TC-I02-05: Mensagem WA contém nome do pet e diagnóstico', () =>
     // Ativar em ambiente de staging com Evolution API disponível.
   });
 
-  test('Popup de alta exibe preview da mensagem com nome do pet e diagnóstico', async ({ page }) => {
+  test('Popup de alta exibe preview da mensagem com nome do pet e diagnóstico', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
 
     const opened = await openHospitalizationCard(page, hospId);
     if (!opened) {
       console.log('TC-I02-05: SKIP — Card de internação não encontrado');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
     const modal = page.getByRole('dialog').first();
     if (!(await modal.isVisible({ timeout: 5_000 }).catch(() => false))) {
       console.log('TC-I02-05: SKIP — HospitalizationDetailModal não abriu');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -333,7 +342,7 @@ test.describe('TC-I02-05: Mensagem WA contém nome do pet e diagnóstico', () =>
     const btnVisible = await dischargeBtn.isVisible({ timeout: 8_000 }).catch(() => false);
     if (!btnVisible) {
       console.log('TC-I02-05: SKIP — Botão de alta não encontrado');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -351,7 +360,7 @@ test.describe('TC-I02-05: Mensagem WA contém nome do pet e diagnóstico', () =>
 
     if (!petNameVisible && !diagnosisVisible) {
       console.log('TC-I02-05: FUNCIONALIDADE PENDENTE — Preview da mensagem WA não contém dados do pet/diagnóstico.');
-      test.skip();
+      testInfo.skip();
       return;
     }
 

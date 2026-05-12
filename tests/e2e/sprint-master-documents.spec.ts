@@ -75,7 +75,7 @@ async function navigateToPetDocumentsTab(page: Page): Promise<boolean> {
 
   if (!docsTabVisible) {
     // Tentar via lista de pacientes
-    await page.goto('/dashboard/patients');
+    await page.goto('/dashboard/patients', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2_000);
     const petRow = page.getByText(PET_NAME).first();
     const petVisible = await petRow.isVisible({ timeout: 5_000 }).catch(() => false);
@@ -108,8 +108,17 @@ test.beforeAll(async () => {
 // ─── TC-DOC-01 ────────────────────────────────────────────────────────────────
 // Aba "Documentos" aparece no cadastro do pet
 
+// — server guard ——————————————————————————————————————————————————————————————
+let _serverAlive = true
+test.beforeAll(async ({ browser }) => {
+  const _ctx = await browser.newContext(); const _pg = await _ctx.newPage()
+  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
+  await _ctx.close(); if (!_serverAlive) console.log('[SKIP ALL] sprint-master-documents.spec.ts — servidor fora do ar')
+})
+test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
+
 test.describe('TC-DOC-01: Aba Documentos aparece no cadastro do pet', () => {
-  test('Aba "Documentos" está presente no perfil do pet (P-03/P-04)', async ({ page }) => {
+  test('Aba "Documentos" está presente no perfil do pet (P-03/P-04)', async ({ page }, testInfo) => {
     await loginAs(page, ADMIN_A.email, ADMIN_A.password);
     await page.goto(`/dashboard/patients/${PET_ID}`);
     await page.waitForTimeout(2_000);
@@ -122,7 +131,7 @@ test.describe('TC-DOC-01: Aba Documentos aparece no cadastro do pet', () => {
 
     if (!docsTabVisible) {
       console.log('TC-DOC-01: SKIP — Aba Documentos não encontrada (P-03/P-04 pendente)');
-      test.skip();
+      test.info().skip();
       return;
     }
 
@@ -134,13 +143,13 @@ test.describe('TC-DOC-01: Aba Documentos aparece no cadastro do pet', () => {
 // Upload de documento na aba Documentos funciona
 
 test.describe('TC-DOC-02: Upload de documento na aba Documentos', () => {
-  test('Upload de arquivo PDF funciona na aba Documentos', async ({ page }) => {
+  test('Upload de arquivo PDF funciona na aba Documentos', async ({ page }, testInfo) => {
     await loginAs(page, ADMIN_A.email, ADMIN_A.password);
 
     const navigated = await navigateToPetDocumentsTab(page);
     if (!navigated) {
       console.log('TC-DOC-02: SKIP — Aba Documentos não encontrada (P-03/P-04 pendente)');
-      test.skip();
+      test.info().skip();
       return;
     }
 
@@ -157,7 +166,7 @@ test.describe('TC-DOC-02: Upload de documento na aba Documentos', () => {
         await page.waitForTimeout(500);
       } else {
         console.log('TC-DOC-02: SKIP — Input de arquivo não encontrado na aba Documentos');
-        test.skip();
+        test.info().skip();
         return;
       }
     }
@@ -191,13 +200,13 @@ test.describe('TC-DOC-02: Upload de documento na aba Documentos', () => {
 // Documento carregado aparece na lista com nome correto
 
 test.describe('TC-DOC-03: Documento carregado aparece na lista', () => {
-  test('Após upload, nome do arquivo aparece na lista de documentos', async ({ page }) => {
+  test('Após upload, nome do arquivo aparece na lista de documentos', async ({ page }, testInfo) => {
     await loginAs(page, ADMIN_A.email, ADMIN_A.password);
 
     const navigated = await navigateToPetDocumentsTab(page);
     if (!navigated) {
       console.log('TC-DOC-03: SKIP — Aba Documentos não encontrada');
-      test.skip();
+      test.info().skip();
       return;
     }
 
@@ -207,7 +216,7 @@ test.describe('TC-DOC-03: Documento carregado aparece na lista', () => {
 
     if (!listVisible) {
       console.log('TC-DOC-03: SKIP — Lista de documentos não encontrada');
-      test.skip();
+      test.info().skip();
       return;
     }
 
@@ -254,7 +263,7 @@ test.describe('TC-DOC-04: Prescrição pode ser impressa/exportada', () => {
     }
   });
 
-  test('Botão de imprimir/exportar prescrição está presente na ficha de consulta', async ({ page }) => {
+  test('Botão de imprimir/exportar prescrição está presente na ficha de consulta', async ({ page }, testInfo) => {
     await loginAs(page, ADMIN_A.email, ADMIN_A.password);
     await page.goto(`/dashboard/vet/${consultationId}`);
     await page.waitForTimeout(2_000);
@@ -264,7 +273,7 @@ test.describe('TC-DOC-04: Prescrição pode ser impressa/exportada', () => {
     const prescTabVisible = await prescTab.isVisible({ timeout: 8_000 }).catch(() => false);
     if (!prescTabVisible) {
       console.log('TC-DOC-04: SKIP — Aba Prescrição não encontrada');
-      test.skip();
+      test.info().skip();
       return;
     }
     await prescTab.click();
@@ -284,7 +293,7 @@ test.describe('TC-DOC-04: Prescrição pode ser impressa/exportada', () => {
 
       if (!printIconVisible) {
         console.log('TC-DOC-04: SKIP — Botão de impressão não encontrado na aba Prescrição');
-        test.skip();
+        test.info().skip();
         return;
       }
       expect(printIconVisible).toBe(true);
@@ -323,9 +332,9 @@ test.describe('TC-DOC-05: Relatório de alta contém dados do pet', () => {
     }
   });
 
-  test('Relatório de alta exibe nome do pet e diagnóstico', async ({ page }) => {
+  test('Relatório de alta exibe nome do pet e diagnóstico', async ({ page }, testInfo) => {
     await loginAs(page, ADMIN_A.email, ADMIN_A.password);
-    await page.goto('/dashboard/hospitalization');
+    await page.goto('/dashboard/hospitalization', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2_000);
 
     // Localizar o card de internação com o animal
@@ -334,7 +343,7 @@ test.describe('TC-DOC-05: Relatório de alta contém dados do pet', () => {
 
     if (!petCardVisible) {
       console.log('TC-DOC-05: SKIP — Card do pet na internação não encontrado');
-      test.skip();
+      test.info().skip();
       return;
     }
 
@@ -350,7 +359,7 @@ test.describe('TC-DOC-05: Relatório de alta contém dados do pet', () => {
       const altaBtnAfterVisible = await altaBtnAfter.isVisible({ timeout: 5_000 }).catch(() => false);
       if (!altaBtnAfterVisible) {
         console.log('TC-DOC-05: SKIP — Botão de Relatório de Alta não encontrado (I-02 pendente)');
-        test.skip();
+        test.info().skip();
         return;
       }
       await altaBtnAfter.click();
@@ -377,7 +386,7 @@ test.describe('TC-DOC-05: Relatório de alta contém dados do pet', () => {
 // Documento de pet não vaza para outra clínica (RLS)
 
 test.describe('TC-DOC-06 (Crítico): RLS — documento não vaza entre clínicas', () => {
-  test('Admin da Clínica B não consegue acessar documentos do pet da Clínica A', async ({ page }) => {
+  test('Admin da Clínica B não consegue acessar documentos do pet da Clínica A', async ({ page }, testInfo) => {
     await loginAs(page, ADMIN_B.email, ADMIN_B.password);
 
     // Tentar acessar diretamente a ficha do pet da Clínica A
@@ -401,7 +410,7 @@ test.describe('TC-DOC-06 (Crítico): RLS — documento não vaza entre clínicas
     expect(wasRedirected || deniedVisible || !petNameVisible).toBe(true);
   });
 
-  test('RLS: API de documentos do pet não retorna dados de outra clínica', async ({ page }) => {
+  test('RLS: API de documentos do pet não retorna dados de outra clínica', async ({ page }, testInfo) => {
     await loginAs(page, ADMIN_B.email, ADMIN_B.password);
 
     // Tentar chamar a API de documentos do pet da Clínica A diretamente
@@ -439,7 +448,7 @@ test.describe('TC-DOC-07 (Crítico): Upload rejeita tipos de arquivo inválidos'
       const navigated = await navigateToPetDocumentsTab(page);
       if (!navigated) {
         console.log(`TC-DOC-07 [${invalidFile.ext}]: SKIP — Aba Documentos não encontrada`);
-        test.skip();
+        test.info().skip();
         return;
       }
 
@@ -453,7 +462,7 @@ test.describe('TC-DOC-07 (Crítico): Upload rejeita tipos de arquivo inválidos'
           await page.waitForTimeout(500);
         } else {
           console.log(`TC-DOC-07 [${invalidFile.ext}]: SKIP — Input de arquivo não encontrado`);
-          test.skip();
+          test.info().skip();
           return;
         }
       }

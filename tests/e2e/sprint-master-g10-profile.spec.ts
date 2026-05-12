@@ -50,16 +50,25 @@ async function getNickname(profileId: string): Promise<string | null> {
 
 // ─── TC-G10-01: Campo "Apelido" aparece na listagem de usuários ───────────────
 
+// — server guard ——————————————————————————————————————————————————————————————
+let _serverAlive = true
+test.beforeAll(async ({ browser }) => {
+  const _ctx = await browser.newContext(); const _pg = await _ctx.newPage()
+  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
+  await _ctx.close(); if (!_serverAlive) console.log('[SKIP ALL] sprint-master-g10-profile.spec.ts — servidor fora do ar')
+})
+test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
+
 test.describe('TC-G10-01: Campo Apelido aparece em /dashboard/management', () => {
   test.beforeEach(async () => {
     await seedTutorsAndPets();
     await enableModule(fixtures.clinics.clinicA.id, 'management');
   });
 
-  test('Coluna ou campo Apelido aparece na listagem de usuários em Management', async ({ page }) => {
+  test('Coluna ou campo Apelido aparece na listagem de usuários em Management', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     // Navegar direto para a aba de Usuários
-    await page.goto('/dashboard/management?tab=usuarios');
+    await page.goto('/dashboard/management?tab=usuarios', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2_500);
 
     const managementHeading = page.getByText(/gestão|usuários|equipe|gerenciamento/i).first();
@@ -67,7 +76,7 @@ test.describe('TC-G10-01: Campo Apelido aparece em /dashboard/management', () =>
 
     if (!headingVisible) {
       console.log('TC-G10-01: SKIP — Página /dashboard/management não carregou');
-      test.skip();
+      test.info().skip();
       return;
     }
 
@@ -78,7 +87,7 @@ test.describe('TC-G10-01: Campo Apelido aparece em /dashboard/management', () =>
 
     if (!apelidoVisible) {
       console.log('TC-G10-01: FUNCIONALIDADE PENDENTE — Campo Apelido não encontrado em /dashboard/management?tab=usuarios. Verificar UserInlineField.');
-      test.skip();
+      test.info().skip();
       return;
     }
     expect(apelidoVisible).toBe(true);
@@ -102,15 +111,15 @@ test.describe('TC-G10-02: Editar apelido salva em profiles.nickname', () => {
     if (profileId) await setNickname(profileId, null);
   });
 
-  test('Editar apelido via UserInlineField persiste em profiles.nickname', async ({ page }) => {
+  test('Editar apelido via UserInlineField persiste em profiles.nickname', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-    await page.goto('/dashboard/management');
+    await page.goto('/dashboard/management', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2_000);
 
     const managementHeading = page.getByText(/gestão|usuários|equipe/i).first();
     if (!(await managementHeading.isVisible({ timeout: 8_000 }).catch(() => false))) {
       console.log('TC-G10-02: SKIP — Página Management não carregou');
-      test.skip();
+      test.info().skip();
       return;
     }
 
@@ -128,7 +137,7 @@ test.describe('TC-G10-02: Editar apelido salva em profiles.nickname', () => {
         await page.waitForTimeout(500);
       } else {
         console.log('TC-G10-02: SKIP — Campo de apelido não encontrado em Management');
-        test.skip();
+        test.info().skip();
         return;
       }
     }
@@ -156,7 +165,7 @@ test.describe('TC-G10-02: Editar apelido salva em profiles.nickname', () => {
       expect(saved).toBe(testNickname);
     } else {
       console.log('TC-G10-02: SKIP — Profile ID não encontrado para verificação');
-      test.skip();
+      test.info().skip(); return;
     }
   });
 });
@@ -178,7 +187,7 @@ test.describe('TC-G10-03: Apelido aparece em lugar do nome completo onde configu
     if (profileId) await setNickname(profileId, null);
   });
 
-  test('Apelido configurado aparece onde o sistema exibe o nome do usuário', async ({ page }) => {
+  test('Apelido configurado aparece onde o sistema exibe o nome do usuário', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     await page.goto('/dashboard');
     await page.waitForTimeout(2_000);
@@ -191,7 +200,7 @@ test.describe('TC-G10-03: Apelido aparece em lugar do nome completo onde configu
 
     if (!nicknameVisible) {
       // Verificar em /dashboard/management
-      await page.goto('/dashboard/management');
+      await page.goto('/dashboard/management', { waitUntil: 'domcontentloaded' });
       await page.waitForTimeout(2_000);
       const nicknameInManagement = page.getByText(testNickname).first();
       const inManagement = await nicknameInManagement.isVisible({ timeout: 5_000 }).catch(() => false);
@@ -199,7 +208,7 @@ test.describe('TC-G10-03: Apelido aparece em lugar do nome completo onde configu
 
       if (!inManagement) {
         console.log('TC-G10-03: FUNCIONALIDADE PENDENTE — Apelido não aparece na interface em lugar do nome completo.');
-        test.skip();
+        test.info().skip();
         return;
       }
       expect(inManagement).toBe(true);
@@ -225,9 +234,9 @@ test.describe('TC-G10-04: Apelido vazio reseta para NULL', () => {
     if (profileId) await setNickname(profileId, null);
   });
 
-  test('Salvar apelido vazio persiste NULL no banco (não string vazia)', async ({ page }) => {
+  test('Salvar apelido vazio persiste NULL no banco (não string vazia)', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-    await page.goto('/dashboard/management');
+    await page.goto('/dashboard/management', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2_000);
 
     const apelidoInput = page.getByLabel(/apelido|nickname/i)
@@ -253,7 +262,7 @@ test.describe('TC-G10-04: Apelido vazio reseta para NULL', () => {
       expect(saved).not.toBe('');
     } else {
       console.log('TC-G10-04: SKIP — Profile ID não encontrado');
-      test.skip();
+      test.info().skip(); return;
     }
   });
 });
@@ -283,7 +292,7 @@ test.describe('TC-G10-05: Apelido com emoji ou caracteres especiais é salvo cor
     test(`Apelido especial persiste corretamente: "${nickname}"`, async () => {
       if (!profileId) {
         console.log(`TC-G10-05: SKIP — Profile ID não encontrado para "${nickname}"`);
-        test.skip();
+        test.info().skip();
         return;
       }
 
@@ -317,10 +326,10 @@ test.describe('TC-G10-06: Dois usuários da mesma clínica podem ter o mesmo ape
     if (profileIdReceptionist) await setNickname(profileIdReceptionist, null);
   });
 
-  test('Dois usuários da mesma clínica com o mesmo apelido — sem erro de unique constraint', async () => {
+  test('Dois usuários da mesma clínica com o mesmo apelido — sem erro de unique constraint', async ({}, testInfo) => {
     if (!profileIdAdmin || !profileIdReceptionist) {
       console.log('TC-G10-06: SKIP — Profiles não encontrados para ambos os usuários');
-      test.skip();
+      test.info().skip();
       return;
     }
 

@@ -26,22 +26,38 @@ async function loginAs(page: Page, email: string, password: string) {
 }
 
 async function navigateToSales(page: Page): Promise<boolean> {
-  await page.goto('/dashboard/sales');
+  try {
+    await page.goto('/dashboard/sales', { waitUntil: 'domcontentloaded', timeout: 45_000 });
+  } catch {
+    return false;
+  }
   await page.waitForTimeout(2_500);
   const heading = page.getByText(/vendas|pdv/i).first();
   return heading.isVisible({ timeout: 8_000 }).catch(() => false);
 }
 
+// Timeout elevado: loginViaApi (45s) + navigateToSales (45s) + interações UI em server lento
+test.setTimeout(120_000);
+
 // ─── G-06-01: Página /dashboard/sales ─────────────────────────────────────────
+
+// — server guard ——————————————————————————————————————————————————————————————
+let _serverAlive = true
+test.beforeAll(async ({ browser }) => {
+  const _ctx = await browser.newContext(); const _pg = await _ctx.newPage()
+  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
+  await _ctx.close(); if (!_serverAlive) console.log('[SKIP ALL] sprint-master-g06-pdv.spec.ts — servidor fora do ar')
+})
+test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
 
 test.describe('G-06-01: Página PDV carrega', () => {
   test.beforeEach(async () => { await seedTutorsAndPets(); });
 
-  test('G-06-01: /dashboard/sales carrega com heading Vendas/PDV', async ({ page }) => {
+  test('G-06-01: /dashboard/sales carrega com heading Vendas/PDV', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const loaded = await navigateToSales(page);
     console.log(`G-06-01: PDV carregou: ${loaded}`);
-    if (!loaded) { console.log('G-06-01: SKIP — página não carregou'); test.skip(); return; }
+    if (!loaded) { console.log('G-06-01: SKIP — página não carregou'); testInfo.skip(); return; }
     expect(loaded).toBe(true);
   });
 });
@@ -51,15 +67,15 @@ test.describe('G-06-01: Página PDV carrega', () => {
 test.describe('G-06-02: Botão "Finalizar Venda" desabilitado sem itens', () => {
   test.beforeEach(async () => { await seedTutorsAndPets(); });
 
-  test('G-06-02: Botão fica disabled quando carrinho vazio', async ({ page }) => {
+  test('G-06-02: Botão fica disabled quando carrinho vazio', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const loaded = await navigateToSales(page);
-    if (!loaded) { console.log('G-06-02: SKIP — PDV não carregou'); test.skip(); return; }
+    if (!loaded) { console.log('G-06-02: SKIP — PDV não carregou'); testInfo.skip(); return; }
 
     const btn = page.getByRole('button', { name: /finalizar venda/i }).first();
     const visible = await btn.isVisible({ timeout: 5_000 }).catch(() => false);
     console.log(`G-06-02: Botão Finalizar Venda visível: ${visible}`);
-    if (!visible) { console.log('G-06-02: SKIP — botão não encontrado'); test.skip(); return; }
+    if (!visible) { console.log('G-06-02: SKIP — botão não encontrado'); testInfo.skip(); return; }
 
     const disabled = await btn.isDisabled();
     console.log(`G-06-02: Botão está desabilitado (carrinho vazio): ${disabled}`);
@@ -72,15 +88,15 @@ test.describe('G-06-02: Botão "Finalizar Venda" desabilitado sem itens', () => 
 test.describe('G-06-03: Busca de produto', () => {
   test.beforeEach(async () => { await seedTutorsAndPets(); });
 
-  test('G-06-03: Campo de busca de produto existe e aceita texto', async ({ page }) => {
+  test('G-06-03: Campo de busca de produto existe e aceita texto', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const loaded = await navigateToSales(page);
-    if (!loaded) { console.log('G-06-03: SKIP — PDV não carregou'); test.skip(); return; }
+    if (!loaded) { console.log('G-06-03: SKIP — PDV não carregou'); testInfo.skip(); return; }
 
     const searchInput = page.getByPlaceholder(/buscar produto/i).first();
     const visible = await searchInput.isVisible({ timeout: 5_000 }).catch(() => false);
     console.log(`G-06-03: Campo busca produto visível: ${visible}`);
-    if (!visible) { console.log('G-06-03: SKIP — campo não encontrado'); test.skip(); return; }
+    if (!visible) { console.log('G-06-03: SKIP — campo não encontrado'); testInfo.skip(); return; }
 
     await searchInput.fill('teste');
     await page.waitForTimeout(500);
@@ -93,15 +109,15 @@ test.describe('G-06-03: Busca de produto', () => {
 test.describe('G-06-04: Adicionar item manual ao carrinho', () => {
   test.beforeEach(async () => { await seedTutorsAndPets(); });
 
-  test('G-06-04: Link "Adicionar item manual" existe e abre formulário', async ({ page }) => {
+  test('G-06-04: Link "Adicionar item manual" existe e abre formulário', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const loaded = await navigateToSales(page);
-    if (!loaded) { console.log('G-06-04: SKIP — PDV não carregou'); test.skip(); return; }
+    if (!loaded) { console.log('G-06-04: SKIP — PDV não carregou'); testInfo.skip(); return; }
 
     const manualBtn = page.getByText(/adicionar item manual/i).first();
     const visible = await manualBtn.isVisible({ timeout: 5_000 }).catch(() => false);
     console.log(`G-06-04: Link "item manual" visível: ${visible}`);
-    if (!visible) { console.log('G-06-04: SKIP — botão item manual não encontrado'); test.skip(); return; }
+    if (!visible) { console.log('G-06-04: SKIP — botão item manual não encontrado'); testInfo.skip(); return; }
 
     await manualBtn.click();
     await page.waitForTimeout(400);
@@ -112,14 +128,14 @@ test.describe('G-06-04: Adicionar item manual ao carrinho', () => {
     expect(formVisible).toBe(true);
   });
 
-  test('G-06-04b: Item manual preenchido habilita botão Finalizar Venda', async ({ page }) => {
+  test('G-06-04b: Item manual preenchido habilita botão Finalizar Venda', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const loaded = await navigateToSales(page);
-    if (!loaded) { console.log('G-06-04b: SKIP — PDV não carregou'); test.skip(); return; }
+    if (!loaded) { console.log('G-06-04b: SKIP — PDV não carregou'); testInfo.skip(); return; }
 
     const manualBtn = page.getByText(/adicionar item manual/i).first();
     if (!(await manualBtn.isVisible({ timeout: 5_000 }).catch(() => false))) {
-      console.log('G-06-04b: SKIP — botão item manual não encontrado'); test.skip(); return;
+      console.log('G-06-04b: SKIP — botão item manual não encontrado'); testInfo.skip(); return;
     }
     await manualBtn.click();
     await page.waitForTimeout(400);
@@ -127,7 +143,7 @@ test.describe('G-06-04: Adicionar item manual ao carrinho', () => {
     const descInput = page.getByPlaceholder(/descrição do item/i).first();
     const priceInput = page.getByPlaceholder(/0,00/i).first();
     if (!(await descInput.isVisible({ timeout: 3_000 }).catch(() => false))) {
-      console.log('G-06-04b: SKIP — form manual não abriu'); test.skip(); return;
+      console.log('G-06-04b: SKIP — form manual não abriu'); testInfo.skip(); return;
     }
 
     await descInput.fill('Produto Teste');
@@ -147,22 +163,22 @@ test.describe('G-06-04: Adicionar item manual ao carrinho', () => {
 test.describe('G-06-05: CheckoutModal abre ao Finalizar', () => {
   test.beforeEach(async () => { await seedTutorsAndPets(); });
 
-  test('G-06-05: Modal de finalização abre com item no carrinho', async ({ page }) => {
+  test('G-06-05: Modal de finalização abre com item no carrinho', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const loaded = await navigateToSales(page);
-    if (!loaded) { console.log('G-06-05: SKIP — PDV não carregou'); test.skip(); return; }
+    if (!loaded) { console.log('G-06-05: SKIP — PDV não carregou'); testInfo.skip(); return; }
 
     // Adiciona item manual
     const manualBtn = page.getByText(/adicionar item manual/i).first();
     if (!(await manualBtn.isVisible({ timeout: 5_000 }).catch(() => false))) {
-      console.log('G-06-05: SKIP — botão item manual não encontrado'); test.skip(); return;
+      console.log('G-06-05: SKIP — botão item manual não encontrado'); testInfo.skip(); return;
     }
     await manualBtn.click();
     await page.waitForTimeout(400);
 
     const descInput = page.getByPlaceholder(/descrição do item/i).first();
     if (!(await descInput.isVisible({ timeout: 3_000 }).catch(() => false))) {
-      console.log('G-06-05: SKIP — form manual não abriu'); test.skip(); return;
+      console.log('G-06-05: SKIP — form manual não abriu'); testInfo.skip(); return;
     }
     await descInput.fill('Serviço Teste');
     await page.getByPlaceholder(/0,00/i).first().fill('25');
@@ -184,18 +200,18 @@ test.describe('G-06-05: CheckoutModal abre ao Finalizar', () => {
 test.describe('G-06-06/07: Formas de pagamento', () => {
   test.beforeEach(async () => { await seedTutorsAndPets(); });
 
-  test('G-06-06: Modal de checkout exibe opções de pagamento', async ({ page }) => {
+  test('G-06-06: Modal de checkout exibe opções de pagamento', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const loaded = await navigateToSales(page);
-    if (!loaded) { console.log('G-06-06: SKIP — PDV não carregou'); test.skip(); return; }
+    if (!loaded) { console.log('G-06-06: SKIP — PDV não carregou'); testInfo.skip(); return; }
 
     // Adiciona item e abre checkout
     const manualBtn = page.getByText(/adicionar item manual/i).first();
-    if (!(await manualBtn.isVisible({ timeout: 5_000 }).catch(() => false))) { test.skip(); return; }
+    if (!(await manualBtn.isVisible({ timeout: 5_000 }).catch(() => false))) { testInfo.skip(); return; }
     await manualBtn.click();
     await page.waitForTimeout(300);
     const descInput = page.getByPlaceholder(/descrição do item/i).first();
-    if (!(await descInput.isVisible({ timeout: 3_000 }).catch(() => false))) { test.skip(); return; }
+    if (!(await descInput.isVisible({ timeout: 3_000 }).catch(() => false))) { testInfo.skip(); return; }
     await descInput.fill('X');
     await page.getByPlaceholder(/0,00/i).first().fill('10');
     await page.getByRole('button', { name: /^adicionar$/i }).first().click();
@@ -204,7 +220,7 @@ test.describe('G-06-06/07: Formas de pagamento', () => {
     await page.waitForTimeout(600);
 
     const modal = page.getByRole('dialog').first();
-    if (!(await modal.isVisible({ timeout: 5_000 }).catch(() => false))) { test.skip(); return; }
+    if (!(await modal.isVisible({ timeout: 5_000 }).catch(() => false))) { testInfo.skip(); return; }
 
     // Verifica formas de pagamento
     const pixBtn  = modal.getByText(/pix/i).first();
@@ -215,17 +231,17 @@ test.describe('G-06-06/07: Formas de pagamento', () => {
     expect(pixVisible || cashVisible).toBe(true);
   });
 
-  test('G-06-07: Campo "Valor recebido" aparece ao selecionar Dinheiro', async ({ page }) => {
+  test('G-06-07: Campo "Valor recebido" aparece ao selecionar Dinheiro', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const loaded = await navigateToSales(page);
-    if (!loaded) { console.log('G-06-07: SKIP — PDV não carregou'); test.skip(); return; }
+    if (!loaded) { console.log('G-06-07: SKIP — PDV não carregou'); testInfo.skip(); return; }
 
     const manualBtn = page.getByText(/adicionar item manual/i).first();
-    if (!(await manualBtn.isVisible({ timeout: 5_000 }).catch(() => false))) { test.skip(); return; }
+    if (!(await manualBtn.isVisible({ timeout: 5_000 }).catch(() => false))) { testInfo.skip(); return; }
     await manualBtn.click();
     await page.waitForTimeout(300);
     const descInput = page.getByPlaceholder(/descrição do item/i).first();
-    if (!(await descInput.isVisible({ timeout: 3_000 }).catch(() => false))) { test.skip(); return; }
+    if (!(await descInput.isVisible({ timeout: 3_000 }).catch(() => false))) { testInfo.skip(); return; }
     await descInput.fill('X');
     await page.getByPlaceholder(/0,00/i).first().fill('10');
     await page.getByRole('button', { name: /^adicionar$/i }).first().click();
@@ -234,11 +250,11 @@ test.describe('G-06-06/07: Formas de pagamento', () => {
     await page.waitForTimeout(600);
 
     const modal = page.getByRole('dialog').first();
-    if (!(await modal.isVisible({ timeout: 5_000 }).catch(() => false))) { test.skip(); return; }
+    if (!(await modal.isVisible({ timeout: 5_000 }).catch(() => false))) { testInfo.skip(); return; }
 
     // Clica em Dinheiro
     const cashBtn = modal.getByText(/dinheiro/i).first();
-    if (!(await cashBtn.isVisible({ timeout: 3_000 }).catch(() => false))) { test.skip(); return; }
+    if (!(await cashBtn.isVisible({ timeout: 3_000 }).catch(() => false))) { testInfo.skip(); return; }
     await cashBtn.click();
     await page.waitForTimeout(400);
 
@@ -254,15 +270,15 @@ test.describe('G-06-06/07: Formas de pagamento', () => {
 test.describe('G-06-08: Aba Histórico do Dia', () => {
   test.beforeEach(async () => { await seedTutorsAndPets(); });
 
-  test('G-06-08: Aba "Histórico do Dia" existe e é clicável', async ({ page }) => {
+  test('G-06-08: Aba "Histórico do Dia" existe e é clicável', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const loaded = await navigateToSales(page);
-    if (!loaded) { console.log('G-06-08: SKIP — PDV não carregou'); test.skip(); return; }
+    if (!loaded) { console.log('G-06-08: SKIP — PDV não carregou'); testInfo.skip(); return; }
 
     const histTab = page.getByRole('button', { name: /histórico do dia/i }).first();
     const visible = await histTab.isVisible({ timeout: 5_000 }).catch(() => false);
     console.log(`G-06-08: Aba Histórico visível: ${visible}`);
-    if (!visible) { console.log('G-06-08: SKIP — aba não encontrada'); test.skip(); return; }
+    if (!visible) { console.log('G-06-08: SKIP — aba não encontrada'); testInfo.skip(); return; }
 
     await histTab.click();
     await page.waitForTimeout(500);
@@ -278,27 +294,27 @@ test.describe('G-06-08: Aba Histórico do Dia', () => {
 test.describe('G-06-09: Relatório de Vendas', () => {
   test.beforeEach(async () => { await seedTutorsAndPets(); });
 
-  test('G-06-09: /dashboard/sales/reports carrega para admin', async ({ page }) => {
+  test('G-06-09: /dashboard/sales/reports carrega para admin', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-    await page.goto('/dashboard/sales/reports');
+    await page.goto('/dashboard/sales/reports', { waitUntil: 'domcontentloaded', timeout: 45_000 });
     await page.waitForTimeout(2_500);
 
     const heading = page.getByText(/relatório de vendas/i).first();
     const visible = await heading.isVisible({ timeout: 8_000 }).catch(() => false);
     console.log(`G-06-09: Relatório de Vendas carregou: ${visible}`);
-    if (!visible) { console.log('G-06-09: SKIP — relatório não carregou'); test.skip(); return; }
+    if (!visible) { console.log('G-06-09: SKIP — relatório não carregou'); testInfo.skip(); return; }
     expect(visible).toBe(true);
   });
 
-  test('G-06-09b: Botão "Gerar Relatório" existe e é clicável', async ({ page }) => {
+  test('G-06-09b: Botão "Gerar Relatório" existe e é clicável', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-    await page.goto('/dashboard/sales/reports');
+    await page.goto('/dashboard/sales/reports', { waitUntil: 'domcontentloaded', timeout: 45_000 });
     await page.waitForTimeout(2_500);
 
     const btn = page.getByRole('button', { name: /gerar relatório/i }).first();
     const visible = await btn.isVisible({ timeout: 5_000 }).catch(() => false);
     console.log(`G-06-09b: Botão "Gerar Relatório" visível: ${visible}`);
-    if (!visible) { console.log('G-06-09b: SKIP — botão não encontrado'); test.skip(); return; }
+    if (!visible) { console.log('G-06-09b: SKIP — botão não encontrado'); testInfo.skip(); return; }
     expect(visible).toBe(true);
   });
 });
@@ -306,22 +322,22 @@ test.describe('G-06-09: Relatório de Vendas', () => {
 // ─── G-06-10: Schema DB — tabelas sales e sale_items ──────────────────────────
 
 test.describe('G-06-10: Schema DB — tabelas sales e sale_items', () => {
-  test('G-06-10: Tabela sales existe e aceita inserção básica', async () => {
+  test('G-06-10: Tabela sales existe e aceita inserção básica', async ({}, testInfo) => {
     const { error } = await admin.from('sales').select('id').limit(1);
     console.log(`G-06-10: Tabela sales acessível: ${error ? error.message : 'OK'}`);
     if (error?.message.includes('does not exist')) {
       console.log('G-06-10: SCHEMA PENDENTE — migration 0095 não aplicada');
-      test.skip(); return;
+      testInfo.skip(); return;
     }
     expect(error).toBeNull();
   });
 
-  test('G-06-10b: Tabela sale_items existe', async () => {
+  test('G-06-10b: Tabela sale_items existe', async ({}, testInfo) => {
     const { error } = await admin.from('sale_items').select('id').limit(1);
     console.log(`G-06-10b: Tabela sale_items acessível: ${error ? error.message : 'OK'}`);
     if (error?.message.includes('does not exist')) {
       console.log('G-06-10b: SCHEMA PENDENTE — migration 0095 não aplicada');
-      test.skip(); return;
+      testInfo.skip(); return;
     }
     expect(error).toBeNull();
   });

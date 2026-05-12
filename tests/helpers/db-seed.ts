@@ -31,8 +31,7 @@ export async function seedUsers(): Promise<Record<string, string>> {
   const ids: Record<string, string> = {}
   for (const [key, user] of Object.entries(fixtures.users)) {
     try {
-      // Recria sempre para garantir senha correta
-      await deleteTestUser(user.email)
+      // Find-or-update: preserva o mesmo UUID entre runs para evitar eventual consistency do Supabase auth
       const id = await createTestUser({
         email:     user.email,
         password:  user.password,

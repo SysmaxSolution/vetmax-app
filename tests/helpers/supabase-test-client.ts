@@ -41,7 +41,14 @@ export async function getAccessToken(email: string, password: string): Promise<s
   return session.session!.access_token;
 }
 
-/** Create a test user via admin and return their ID. */
+/**
+ * Find-or-create a test user and ensure their profile has the correct clinic_id.
+ *
+ * Strategy: NEVER delete + recreate. Instead, find the existing user (or create if absent)
+ * and upsert their profile. This preserves the same UUID across test runs, eliminating
+ * Supabase auth eventual-consistency issues where a deleted user can still be authenticated
+ * briefly while their profile is already gone.
+ */
 export async function createTestUser(params: {
   email: string;
   password: string;
@@ -52,38 +59,85 @@ export async function createTestUser(params: {
   const admin = createAdminClient();
   let userId: string;
 
-  const { data: authUser, error: createError } = await admin.auth.admin.createUser({
-    email: params.email,
-    password: params.password,
-    email_confirm: true,
-  });
-
-  if (createError) {
-    // User already exists — look them up
-    if (createError.message?.includes('already been registered') || createError.message?.includes('already registered')) {
-      const { data: listData } = await admin.auth.admin.listUsers();
-      const existing = listData?.users.find((u) => u.email === params.email);
-      if (!existing) throw createError;
-      userId = existing.id;
-      // Update password so test credentials always work
-      await admin.auth.admin.updateUserById(userId, { password: params.password });
-    } else {
-      throw createError;
+  // ── 1. Find existing user across all pages ────────────────────────────────
+  let existingId: string | undefined;
+  let page = 1;
+  while (!existingId) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 100 });
+    if (error) break;
+    const found = data.users.find((u) => u.email === params.email);
+    if (found) {
+      existingId = found.id;
+    } else if (data.users.length < 100) {
+      break; // last page — user does not exist
     }
-  } else {
-    userId = authUser.user.id;
+    page++;
   }
 
-  // Always upsert profile to ensure correct role/clinic_id
+  if (existingId) {
+    // ── 2a. User exists — update password (keep same UUID to avoid auth cache issues) ──
+    userId = existingId;
+    await admin.auth.admin.updateUserById(userId, {
+      password: params.password,
+      email_confirm: true,
+    });
+  } else {
+    // ── 2b. User does not exist — create fresh ───────────────────────────────
+    const { data: authUser, error: createError } = await admin.auth.admin.createUser({
+      email: params.email,
+      password: params.password,
+      email_confirm: true,
+    });
+
+    if (createError?.message?.includes('already been registered') || createError?.message?.includes('already exists')) {
+      // Pagination miss: user exists but wasn't found by listUsers (rate limit or eventual consistency).
+      // Exhaustively search larger perPage to find the user's ID.
+      const { data: allData } = await admin.auth.admin.listUsers({ perPage: 1000 })
+      const found = allData?.users.find(u => u.email === params.email)
+      if (!found) throw new Error(`createUser falhou e usuário não localizável: ${params.email}`)
+      userId = found.id
+      await admin.auth.admin.updateUserById(userId, { password: params.password, email_confirm: true })
+    } else if (createError) {
+      throw new Error(`createUser falhou para ${params.email}: ${createError.message}`)
+    } else {
+      userId = authUser!.user.id
+    }
+  }
+
+  // ── 3. Upsert profile with correct clinic_id ──────────────────────────────
   const { error: profileError } = await admin
     .from('profiles')
-    .upsert({
-      id: userId,
-      clinic_id: params.clinic_id,
-      full_name: params.full_name,
-      role: params.role,
-    }, { onConflict: 'id' });
-  if (profileError) throw profileError;
+    .upsert(
+      { id: userId, clinic_id: params.clinic_id, full_name: params.full_name, role: params.role },
+      { onConflict: 'id', ignoreDuplicates: false },
+    );
+  if (profileError) throw new Error(`Profile upsert falhou para ${params.email}: ${profileError.message}`);
+
+  // ── 4. Verify clinic_id was actually persisted ────────────────────────────
+  const { data: verifyProfile } = await admin
+    .from('profiles')
+    .select('clinic_id')
+    .eq('id', userId)
+    .single();
+
+  if (!verifyProfile?.clinic_id) {
+    // Fallback: explicit UPDATE in case upsert hit an edge case
+    console.warn(`[createTestUser] clinic_id null após upsert para ${params.email} — forçando UPDATE`);
+    const { error: retryError } = await admin
+      .from('profiles')
+      .update({ clinic_id: params.clinic_id, full_name: params.full_name, role: params.role })
+      .eq('id', userId);
+    if (retryError) throw new Error(`Retry UPDATE falhou para ${params.email}: ${retryError.message}`);
+
+    const { data: finalProfile } = await admin
+      .from('profiles')
+      .select('clinic_id')
+      .eq('id', userId)
+      .single();
+    if (!finalProfile?.clinic_id) {
+      throw new Error(`CRITICAL: clinic_id permanece null para ${params.email} após upsert + UPDATE`);
+    }
+  }
 
   return userId;
 }
@@ -92,7 +146,6 @@ export async function createTestUser(params: {
 export async function deleteTestUser(email: string): Promise<void> {
   const admin = createAdminClient()
   try {
-    // listUsers tem paginação padrão de 100 — itera até esgotar ou encontrar
     let pageNum = 1
     let found = false
     while (!found) {
@@ -107,12 +160,11 @@ export async function deleteTestUser(email: string): Promise<void> {
         await admin.auth.admin.deleteUser(user.id)
         found = true
       } else if (data.users.length < 100) {
-        break  // última página — usuário não existe no sistema
+        break
       }
       pageNum++
     }
   } catch (e) {
-    // Não propaga — deleteTestUser é best-effort antes do createTestUser
     console.warn(`[seed] Aviso ao deletar ${email}: ${(e as Error).message}`)
   }
 }

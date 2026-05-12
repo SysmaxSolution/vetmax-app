@@ -56,9 +56,9 @@ test.describe('TC-CAI-01: Admin vê lançamentos do mês corrente', () => {
     if (entryId) await admin.from('central_cashier').delete().eq('id', entryId);
   });
 
-  test('Página do Caixa Central exibe lançamentos e cards de resumo', async ({ page }) => {
+  test('Página do Caixa Central exibe lançamentos e cards de resumo', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-    await page.goto('/dashboard/cashier');
+    await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded' });
 
     // Cards de resumo KPI
     await expect(
@@ -83,14 +83,20 @@ test.describe('TC-CAI-02: Filtrar por módulo grooming', () => {
   let consultationEntryId: string;
 
   test.beforeEach(async () => {
+    // Limpar entradas órfãs de runs anteriores que falharam sem cleanup
+    await admin.from('central_cashier')
+      .delete()
+      .in('reason', ['Banho e Tosa - Filtro Teste', 'Consulta - Filtro Teste'])
+      .eq('clinic_id', fixtures.clinics.clinicA.id);
+
     groomingEntryId = await seedCashierEntry({
       source_module: 'grooming',
-      reason: 'Banho e Tosa — Filtro Teste',
+      reason: 'Banho e Tosa - Filtro Teste',
       amount: 120.00,
     });
     consultationEntryId = await seedCashierEntry({
       source_module: 'consultation',
-      reason: 'Consulta — Filtro Teste',
+      reason: 'Consulta - Filtro Teste',
       amount: 180.00,
     });
   });
@@ -99,11 +105,11 @@ test.describe('TC-CAI-02: Filtrar por módulo grooming', () => {
     await admin.from('central_cashier').delete().in('id', [groomingEntryId, consultationEntryId]);
   });
 
-  test('Filtrar por grooming exibe apenas lançamentos de grooming', async ({ page }) => {
+  test('Filtrar por grooming exibe apenas lançamentos de grooming', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-    await page.goto('/dashboard/cashier');
+    await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded' });
 
-    await expect(page.getByText('Banho e Tosa — Filtro Teste')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('Banho e Tosa - Filtro Teste')).toBeVisible({ timeout: 10_000 });
 
     // Aplicar filtro de módulo
     const moduleFilter = page.getByTestId('filter-module').or(
@@ -111,12 +117,22 @@ test.describe('TC-CAI-02: Filtrar por módulo grooming', () => {
     );
     await expect(moduleFilter).toBeVisible({ timeout: 8_000 });
     await moduleFilter.selectOption('grooming');
+    // Forçar evento nativo para garantir que o React processe a mudança
+    await page.evaluate(() => {
+      const sel = document.querySelector<HTMLSelectElement>('[data-testid="filter-module"]');
+      if (!sel) return;
+      const nativeSetter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
+      nativeSetter?.call(sel, 'grooming');
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    // Aguardar React re-renderizar e atualizar data-filtermod
+    await page.locator('[data-testid="cashier-entries-table"][data-filtermod="grooming"]').waitFor({ timeout: 5_000 });
 
     // Apenas lançamento de grooming deve aparecer
-    await expect(page.getByText('Banho e Tosa — Filtro Teste')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText('Banho e Tosa - Filtro Teste')).toBeVisible({ timeout: 5_000 });
 
     // Lançamento de consultation NÃO deve aparecer
-    await expect(page.getByText('Consulta — Filtro Teste')).not.toBeVisible();
+    await expect(page.getByText('Consulta - Filtro Teste')).not.toBeVisible({ timeout: 5_000 });
   });
 });
 
@@ -126,16 +142,16 @@ test.describe('TC-CAI-03: Filtro por data', () => {
   let recentEntryId: string;
 
   test.beforeEach(async () => {
-    recentEntryId = await seedCashierEntry({ reason: 'Lançamento Hoje — TC-CAI-03' });
+    recentEntryId = await seedCashierEntry({ reason: 'Lançamento Hoje - TC-CAI-03' });
   });
 
   test.afterEach(async () => {
     if (recentEntryId) await admin.from('central_cashier').delete().eq('id', recentEntryId);
   });
 
-  test('Filtrar por data de hoje exibe lançamento criado hoje', async ({ page }) => {
+  test('Filtrar por data de hoje exibe lançamento criado hoje', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-    await page.goto('/dashboard/cashier');
+    await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded' });
 
     const today = new Date().toISOString().split('T')[0];
 
@@ -167,7 +183,7 @@ test.describe('TC-CAI-03: Filtro por data', () => {
       await applyBtn.click();
     }
 
-    await expect(page.getByText('Lançamento Hoje — TC-CAI-03')).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByText('Lançamento Hoje - TC-CAI-03')).toBeVisible({ timeout: 8_000 });
   });
 });
 
@@ -187,9 +203,9 @@ test.describe('TC-CAI-04: Accountant verifica lançamento', () => {
     if (entryId) await admin.from('central_cashier').delete().eq('id', entryId);
   });
 
-  test('Accountant verifica lançamento e status muda para verified', async ({ page }) => {
+  test('Accountant verifica lançamento e status muda para verified', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.accountantA.email, fixtures.users.accountantA.password);
-    await page.goto('/dashboard/cashier');
+    await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded' });
 
     await expect(page.getByText('Lançamento Para Verificar TC-CAI-04')).toBeVisible({ timeout: 10_000 });
 
@@ -228,13 +244,13 @@ test.describe('TC-CAI-04: Accountant verifica lançamento', () => {
         } else {
           console.log('FUNCIONALIDADE PENDENTE DE IMPLEMENTAÇÃO: Botão verificar clicado mas status não mudou para verified');
         }
-        test.skip();
+        testInfo.skip();
         return;
       }
       expect(['verified', 'confirmed']).toContain(entry?.status);
     } else {
       console.log('FUNCIONALIDADE PENDENTE DE IMPLEMENTAÇÃO: Botão de verificação de lançamento (btn-verify-{id}) não encontrado no Caixa Central');
-      test.skip();
+      testInfo.skip(); return;
     }
   });
 });
@@ -242,7 +258,7 @@ test.describe('TC-CAI-04: Accountant verifica lançamento', () => {
 // ─── TC-CAI-05: Role guard — assistant não acessa caixa ──────────────────────
 
 test.describe('TC-CAI-05: Role guard — assistant não acessa /dashboard/cashier', () => {
-  test('Assistant é redirecionado ao acessar /dashboard/cashier', async ({ page }) => {
+  test('Assistant é redirecionado ao acessar /dashboard/cashier', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.assistantA.email, fixtures.users.assistantA.password);
 
     // Navegar com ignoreHTTPSErrors e capturar redirect loops
@@ -269,9 +285,9 @@ test.describe('TC-CAI-06: Isolamento RLS multi-tenant — caixa', () => {
     if (entryId) await admin.from('central_cashier').delete().eq('id', entryId);
   });
 
-  test('Admin da Clínica B não vê lançamentos da Clínica A no Caixa Central', async ({ page }) => {
+  test('Admin da Clínica B não vê lançamentos da Clínica A no Caixa Central', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminB.email, fixtures.users.adminB.password);
-    await page.goto('/dashboard/cashier');
+    await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded' });
 
     await page.waitForTimeout(3_000);
     await expect(page.getByText('LANCAMENTO-CLINICA-A-RLS-CAI')).not.toBeVisible();

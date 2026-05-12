@@ -38,7 +38,7 @@ async function loginAs(page: Page, email: string, password: string): Promise<voi
   if (!ok) {
     const device = page.context().browser()?.browserType().name() ?? 'unknown';
     console.log(`SKIP [loginAs] — login não concluiu em 40s (device: ${device}, url: ${page.url()})`);
-    test.skip();
+    test.info().skip(); return;
   }
 }
 
@@ -75,8 +75,17 @@ async function elementDoesNotOverflow(page: Page, locator: ReturnType<Page['loca
 // ─── TC-MOB-SM-01 ─────────────────────────────────────────────────────────────
 // Formulário de prescrição com select de via é usável em iPhone SE (375px)
 
+// — server guard ——————————————————————————————————————————————————————————————
+let _serverAlive = true
+test.beforeAll(async ({ browser }) => {
+  const _ctx = await browser.newContext(); const _pg = await _ctx.newPage()
+  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
+  await _ctx.close(); if (!_serverAlive) console.log('[SKIP ALL] sprint-master-mobile.spec.ts — servidor fora do ar')
+})
+test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
+
 test.describe('TC-MOB-SM-01: Prescrição — select de via em 375px', () => {
-  test('Select de via de administração está visível e interagível em 375px', async ({ page }) => {
+  test('Select de via de administração está visível e interagível em 375px', async ({ page }, testInfo) => {
     await ensureMobileViewport(page, 375, 667);
     await loginAs(page, ADMIN.email, ADMIN.password);
 
@@ -84,7 +93,7 @@ test.describe('TC-MOB-SM-01: Prescrição — select de via em 375px', () => {
     const vetUrl = await safeGoto(page, '/dashboard/vet');
     if (!vetUrl.includes('/vet')) {
       console.log('TC-MOB-SM-01: SKIP — /dashboard/vet redirecionou (sem consultas ativas)');
-      test.skip(); return;
+      test.info().skip(); return;
     }
 
     // Abrir primeira consulta disponível ou pular
@@ -100,7 +109,7 @@ test.describe('TC-MOB-SM-01: Prescrição — select de via em 375px', () => {
     const prescTabVisible = await prescTab.isVisible({ timeout: 5_000 }).catch(() => false);
     if (!prescTabVisible) {
       console.log('TC-MOB-SM-01: SKIP — Aba Prescrição não encontrada no mobile (feature pendente)');
-      test.skip();
+      test.info().skip();
       return;
     }
     await prescTab.click();
@@ -114,7 +123,7 @@ test.describe('TC-MOB-SM-01: Prescrição — select de via em 375px', () => {
     const viaVisible = await viaSelect.isVisible({ timeout: 5_000 }).catch(() => false);
     if (!viaVisible) {
       console.log('TC-MOB-SM-01: SKIP — Select de via de administração não encontrado (C-01 pendente)');
-      test.skip();
+      test.info().skip();
       return;
     }
 
@@ -133,7 +142,7 @@ test.describe('TC-MOB-SM-01: Prescrição — select de via em 375px', () => {
 // Duplo toque em card de recepção funciona em touch device (R-02)
 
 test.describe('TC-MOB-SM-02: Recepção — duplo toque em card move para triagem', () => {
-  test('Duplo toque em card de animal na fila de recepção funciona em touch', async ({ page }) => {
+  test('Duplo toque em card de animal na fila de recepção funciona em touch', async ({ page }, testInfo) => {
     await ensureMobileViewport(page, 375, 667);
     await loginAs(page, ADMIN.email, ADMIN.password);
     await safeGoto(page, '/dashboard/reception');
@@ -144,7 +153,7 @@ test.describe('TC-MOB-SM-02: Recepção — duplo toque em card move para triage
 
     if (!cardVisible) {
       console.log('TC-MOB-SM-02: SKIP — Nenhum card de recepção encontrado (dados de teste ou feature pendente)');
-      test.skip();
+      test.info().skip();
       return;
     }
 
@@ -161,7 +170,7 @@ test.describe('TC-MOB-SM-02: Recepção — duplo toque em card move para triage
 
     if (!feedbackVisible && !urlChangedToTriage) {
       console.log('TC-MOB-SM-02: FUNCIONALIDADE PENDENTE — duplo toque não gerou feedback de triagem');
-      test.skip(); return;
+      test.info().skip(); return;
     }
     expect(feedbackVisible || urlChangedToTriage).toBe(true);
   });
@@ -171,7 +180,7 @@ test.describe('TC-MOB-SM-02: Recepção — duplo toque em card move para triage
 // DateInput do caixa é acessível em mobile (não truncado) — P-05
 
 test.describe('TC-MOB-SM-03: Caixa — DateInput acessível em mobile', () => {
-  test('DateInput do relatório de caixa não está truncado em 375px', async ({ page }) => {
+  test('DateInput do relatório de caixa não está truncado em 375px', async ({ page }, testInfo) => {
     await ensureMobileViewport(page, 375, 667);
     await loginAs(page, ADMIN.email, ADMIN.password);
     const cashierUrl = await safeGoto(page, '/dashboard/cashier');
@@ -179,7 +188,7 @@ test.describe('TC-MOB-SM-03: Caixa — DateInput acessível em mobile', () => {
 
     if (!cashierUrl.includes('/cashier')) {
       console.log('TC-MOB-SM-03: SKIP — /dashboard/cashier redirecionou (sem acesso)');
-      test.skip(); return;
+      test.info().skip(); return;
     }
 
     // Localizar o DateInput (P-05)
@@ -192,7 +201,7 @@ test.describe('TC-MOB-SM-03: Caixa — DateInput acessível em mobile', () => {
       const dateLabelVisible = await dateLabel.isVisible({ timeout: 5_000 }).catch(() => false);
       if (!dateLabelVisible) {
         console.log('TC-MOB-SM-03: SKIP — DateInput não encontrado no cashier (P-05 pendente)');
-        test.skip();
+        test.info().skip();
         return;
       }
     }
@@ -203,7 +212,7 @@ test.describe('TC-MOB-SM-03: Caixa — DateInput acessível em mobile', () => {
 
     if (!box) {
       console.log('TC-MOB-SM-03: SKIP — DateInput sem boundingBox (não visível)');
-      test.skip(); return;
+      test.info().skip(); return;
     }
     // O campo não pode estar cortado à direita da viewport
     expect(box.x + box.width).toBeLessThanOrEqual(vp.width + 4);
@@ -216,13 +225,13 @@ test.describe('TC-MOB-SM-03: Caixa — DateInput acessível em mobile', () => {
 // Modal de internação com botão microfone não transborda em 375px (G-04)
 
 test.describe('TC-MOB-SM-04: Internação — modal com microfone não transborda em 375px', () => {
-  test('Botão de microfone no modal de internação é visível dentro da viewport', async ({ page }) => {
+  test('Botão de microfone no modal de internação é visível dentro da viewport', async ({ page }, testInfo) => {
     await ensureMobileViewport(page, 375, 667);
     await loginAs(page, ADMIN.email, ADMIN.password);
     const hospUrl04 = await safeGoto(page, '/dashboard/hospitalization');
     if (!hospUrl04.includes('/hospitalization')) {
       console.log('TC-MOB-SM-04: SKIP — /dashboard/hospitalization redirecionou');
-      test.skip(); return;
+      test.info().skip(); return;
     }
 
     // Abrir modal de evolução clínica
@@ -238,7 +247,7 @@ test.describe('TC-MOB-SM-04: Internação — modal com microfone não transbord
         await page.waitForTimeout(1_500);
       } else {
         console.log('TC-MOB-SM-04: SKIP — Modal de internação não encontrado (feature pendente)');
-        test.skip();
+        test.info().skip();
         return;
       }
     } else {
@@ -252,7 +261,7 @@ test.describe('TC-MOB-SM-04: Internação — modal com microfone não transbord
 
     if (!micVisible) {
       console.log('TC-MOB-SM-04: SKIP — Botão de microfone não encontrado no modal (G-04 pendente)');
-      test.skip();
+      test.info().skip();
       return;
     }
 
@@ -271,13 +280,13 @@ test.describe('TC-MOB-SM-04: Internação — modal com microfone não transbord
 // Kanban de internação exibe 1 coluna em mobile
 
 test.describe('TC-MOB-SM-05: Internação — Kanban exibe 1 coluna em mobile', () => {
-  test('Kanban de internação usa layout single-column em 375px', async ({ page }) => {
+  test('Kanban de internação usa layout single-column em 375px', async ({ page }, testInfo) => {
     await ensureMobileViewport(page, 375, 667);
     await loginAs(page, ADMIN.email, ADMIN.password);
     const hospUrl05 = await safeGoto(page, '/dashboard/hospitalization');
     if (!hospUrl05.includes('/hospitalization')) {
       console.log('TC-MOB-SM-05: SKIP — /dashboard/hospitalization redirecionou');
-      test.skip(); return;
+      test.info().skip(); return;
     }
 
     // Verificar que a página carregou
@@ -286,7 +295,7 @@ test.describe('TC-MOB-SM-05: Internação — Kanban exibe 1 coluna em mobile', 
 
     if (!headingVisible) {
       console.log('TC-MOB-SM-05: SKIP — Módulo de internação não carregou');
-      test.skip();
+      test.info().skip();
       return;
     }
 
@@ -330,7 +339,7 @@ test.describe('TC-MOB-SM-05: Internação — Kanban exibe 1 coluna em mobile', 
 // Warning de disponibilidade (G-11) legível em mobile sem overflow
 
 test.describe('TC-MOB-SM-06: Agendamento — warning de disponibilidade legível em mobile', () => {
-  test('Mensagem de conflito de horário não transborda em 375px', async ({ page }) => {
+  test('Mensagem de conflito de horário não transborda em 375px', async ({ page }, testInfo) => {
     await ensureMobileViewport(page, 375, 667);
     await loginAs(page, ADMIN.email, ADMIN.password);
 
@@ -340,7 +349,7 @@ test.describe('TC-MOB-SM-06: Agendamento — warning de disponibilidade legível
 
     if (!groomingUrl06.includes('/grooming')) {
       console.log('TC-MOB-SM-06: SKIP — /dashboard/grooming redirecionou (sem acesso ou módulo desabilitado)');
-      test.skip(); return;
+      test.info().skip(); return;
     }
 
     // Tentar agendar em horário já ocupado para disparar o warning
@@ -349,7 +358,7 @@ test.describe('TC-MOB-SM-06: Agendamento — warning de disponibilidade legível
 
     if (!agendarVisible) {
       console.log('TC-MOB-SM-06: SKIP — Botão agendar não encontrado (feature pendente)');
-      test.skip();
+      test.info().skip();
       return;
     }
     await agendarBtn.click();
@@ -370,13 +379,13 @@ test.describe('TC-MOB-SM-06: Agendamento — warning de disponibilidade legível
       const warningAfterVisible = await warningAfter.isVisible({ timeout: 3_000 }).catch(() => false);
       if (!warningAfterVisible) {
         console.log('TC-MOB-SM-06: SKIP — Warning de disponibilidade não disparado');
-        test.skip();
+        test.info().skip();
         return;
       }
       const noOverflow06a = await elementDoesNotOverflow(page, warningAfter);
       if (!noOverflow06a) {
         console.log('TC-MOB-SM-06: BUG DE LAYOUT — warning transborda a viewport em mobile (registrar como bug de UI)');
-        test.skip(); return;
+        test.info().skip(); return;
       }
       expect(noOverflow06a).toBe(true);
       return;
@@ -385,7 +394,7 @@ test.describe('TC-MOB-SM-06: Agendamento — warning de disponibilidade legível
     const noOverflow = await elementDoesNotOverflow(page, warning);
     if (!noOverflow) {
       console.log('TC-MOB-SM-06: BUG DE LAYOUT — warning transborda a viewport em mobile (registrar como bug de UI)');
-      test.skip(); return;
+      test.info().skip(); return;
     }
     expect(noOverflow).toBe(true);
   });
@@ -395,7 +404,7 @@ test.describe('TC-MOB-SM-06: Agendamento — warning de disponibilidade legível
 // Campo nickname em management legível em mobile (G-10)
 
 test.describe('TC-MOB-SM-07: Management — campo nickname legível em mobile', () => {
-  test('Campo nickname no perfil/configurações está visível e não truncado em 375px', async ({ page }) => {
+  test('Campo nickname no perfil/configurações está visível e não truncado em 375px', async ({ page }, testInfo) => {
     await ensureMobileViewport(page, 375, 667);
     await loginAs(page, ADMIN.email, ADMIN.password);
 
@@ -405,7 +414,7 @@ test.describe('TC-MOB-SM-07: Management — campo nickname legível em mobile', 
 
     if (!mgmtUrl.includes('/management')) {
       console.log('TC-MOB-SM-07: SKIP — /dashboard/management redirecionou (sem acesso)');
-      test.skip(); return;
+      test.info().skip(); return;
     }
 
     // Procurar campo nickname
@@ -423,7 +432,7 @@ test.describe('TC-MOB-SM-07: Management — campo nickname legível em mobile', 
       const settingsVisible = await nicknameSettings.isVisible({ timeout: 5_000 }).catch(() => false);
       if (!settingsVisible) {
         console.log('TC-MOB-SM-07: SKIP — Campo nickname não encontrado (G-10 pendente)');
-        test.skip();
+        test.info().skip();
         return;
       }
       const noOverflow = await elementDoesNotOverflow(page, nicknameSettings);
@@ -440,7 +449,7 @@ test.describe('TC-MOB-SM-07: Management — campo nickname legível em mobile', 
     const box = await nicknameField.boundingBox();
     if (!box) {
       console.log('TC-MOB-SM-07: SKIP — nicknameField sem boundingBox');
-      test.skip(); return;
+      test.info().skip(); return;
     }
     expect(box.height).toBeGreaterThanOrEqual(36);
   });
@@ -450,7 +459,7 @@ test.describe('TC-MOB-SM-07: Management — campo nickname legível em mobile', 
 // /email-confirmado é responsiva em mobile (G-01 fix)
 
 test.describe('TC-MOB-SM-08: /email-confirmado responsiva em mobile (G-01)', () => {
-  test('/email-confirmado renderiza corretamente em 375px sem overflow', async ({ page }) => {
+  test('/email-confirmado renderiza corretamente em 375px sem overflow', async ({ page }, testInfo) => {
     await ensureMobileViewport(page, 375, 667);
 
     const response = await page.goto('/email-confirmado');
@@ -477,7 +486,7 @@ test.describe('TC-MOB-SM-08: /email-confirmado responsiva em mobile (G-01)', () 
     expect(contentVisible).toBe(true);
   });
 
-  test('/email-confirmado: call-to-action visível em 375px', async ({ page }) => {
+  test('/email-confirmado: call-to-action visível em 375px', async ({ page }, testInfo) => {
     await ensureMobileViewport(page, 375, 667);
     await page.goto('/email-confirmado');
     await page.waitForTimeout(2_000);
@@ -488,7 +497,7 @@ test.describe('TC-MOB-SM-08: /email-confirmado responsiva em mobile (G-01)', () 
 
     if (!ctaVisible) {
       console.log('TC-MOB-SM-08b: SKIP — Nenhum CTA encontrado em /email-confirmado');
-      test.skip();
+      test.info().skip();
       return;
     }
 
@@ -501,13 +510,13 @@ test.describe('TC-MOB-SM-08: /email-confirmado responsiva em mobile (G-01)', () 
 // Push-to-talk de internação acessível por touch (não requer hover) — G-04
 
 test.describe('TC-MOB-SM-09: Internação — push-to-talk acessível por touch', () => {
-  test('Botão microfone de internação responde a pointerdown/touchstart sem hover', async ({ page }) => {
+  test('Botão microfone de internação responde a pointerdown/touchstart sem hover', async ({ page }, testInfo) => {
     await ensureMobileViewport(page, 375, 667);
     await loginAs(page, ADMIN.email, ADMIN.password);
     const hospUrl09 = await safeGoto(page, '/dashboard/hospitalization');
     if (!hospUrl09.includes('/hospitalization')) {
       console.log('TC-MOB-SM-09: SKIP — /dashboard/hospitalization redirecionou');
-      test.skip(); return;
+      test.info().skip(); return;
     }
 
     // Abrir qualquer modal de evolução
@@ -519,7 +528,7 @@ test.describe('TC-MOB-SM-09: Internação — push-to-talk acessível por touch'
       const cardVisible = await hospCard.isVisible({ timeout: 5_000 }).catch(() => false);
       if (!cardVisible) {
         console.log('TC-MOB-SM-09: SKIP — Nenhum card de internação encontrado');
-        test.skip();
+        test.info().skip();
         return;
       }
       await hospCard.click();
@@ -535,7 +544,7 @@ test.describe('TC-MOB-SM-09: Internação — push-to-talk acessível por touch'
 
     if (!micVisible) {
       console.log('TC-MOB-SM-09: SKIP — Botão push-to-talk não encontrado (G-04 pendente)');
-      test.skip();
+      test.info().skip();
       return;
     }
 

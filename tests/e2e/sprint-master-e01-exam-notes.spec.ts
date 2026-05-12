@@ -56,7 +56,7 @@ async function seedConsultation(overrides: Record<string, unknown> = {}): Promis
 }
 
 async function navigateToExams(page: Page): Promise<boolean> {
-  await page.goto('/dashboard/exams');
+  await page.goto('/dashboard/exams', { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(2_000);
 
   const heading = page.getByText(/exames|workspace de exames|laboratório/i).first();
@@ -104,19 +104,28 @@ async function getExamNotesTextarea(page: Page) {
 
 // ─── TC-E01-01: Campo "Nota Clínica" aparece no modal ────────────────────────
 
+// — server guard ——————————————————————————————————————————————————————————————
+let _serverAlive = true
+test.beforeAll(async ({ browser }) => {
+  const _ctx = await browser.newContext(); const _pg = await _ctx.newPage()
+  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
+  await _ctx.close(); if (!_serverAlive) console.log('[SKIP ALL] sprint-master-e01-exam-notes.spec.ts — servidor fora do ar')
+})
+test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
+
 test.describe('TC-E01-01: Campo "Nota Clínica" aparece no modal Solicitar Exame', () => {
   test.beforeEach(async () => {
     await enableModule(fixtures.clinics.clinicA.id, 'exams');
     await seedTutorsAndPets();
   });
 
-  test('Modal Solicitar Exame contém textarea de Nota Clínica', async ({ page }) => {
+  test('Modal Solicitar Exame contém textarea de Nota Clínica', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const navigated = await navigateToExams(page);
-    if (!navigated) { test.skip(); return; }
+    if (!navigated) { test.info().skip(); return; }
 
     const opened = await openExamRequestModal(page);
-    if (!opened) { test.skip(); return; }
+    if (!opened) { test.info().skip(); return; }
 
     const notesField = await getExamNotesTextarea(page);
     const fieldVisible = await notesField.isVisible({ timeout: 8_000 }).catch(() => false);
@@ -124,7 +133,7 @@ test.describe('TC-E01-01: Campo "Nota Clínica" aparece no modal Solicitar Exame
     console.log(`TC-E01-01: Campo Nota Clínica visível: ${fieldVisible}`);
     if (!fieldVisible) {
       console.log('TC-E01-01: FUNCIONALIDADE PENDENTE — campo Nota Clínica não encontrado no modal');
-      test.skip();
+      test.info().skip();
       return;
     }
 
@@ -143,15 +152,15 @@ test.describe('TC-E01-02: Valor padrão do campo Nota Clínica', () => {
   test(`Campo Nota Clínica vem preenchido com "${DEFAULT_EXAM_NOTE}"`, async ({ page }) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const navigated = await navigateToExams(page);
-    if (!navigated) { test.skip(); return; }
+    if (!navigated) { test.info().skip(); return; }
 
     const opened = await openExamRequestModal(page);
-    if (!opened) { test.skip(); return; }
+    if (!opened) { test.info().skip(); return; }
 
     const notesField = await getExamNotesTextarea(page);
     if (!(await notesField.isVisible({ timeout: 8_000 }).catch(() => false))) {
       console.log('TC-E01-02: FUNCIONALIDADE PENDENTE — campo Nota Clínica não encontrado');
-      test.skip();
+      test.info().skip();
       return;
     }
 
@@ -178,18 +187,18 @@ test.describe('TC-E01-03: Nota personalizada é salva ao solicitar exame', () =>
     if (consultationId) await admin.from('consultations').delete().eq('id', consultationId);
   });
 
-  test('Nota personalizada digitada pelo usuário é persistida no banco', async ({ page }) => {
+  test('Nota personalizada digitada pelo usuário é persistida no banco', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const navigated = await navigateToExams(page);
-    if (!navigated) { test.skip(); return; }
+    if (!navigated) { test.info().skip(); return; }
 
     const opened = await openExamRequestModal(page);
-    if (!opened) { test.skip(); return; }
+    if (!opened) { test.info().skip(); return; }
 
     const notesField = await getExamNotesTextarea(page);
     if (!(await notesField.isVisible({ timeout: 8_000 }).catch(() => false))) {
       console.log('TC-E01-03: FUNCIONALIDADE PENDENTE — campo Nota Clínica não encontrado');
-      test.skip();
+      test.info().skip();
       return;
     }
 
@@ -217,7 +226,7 @@ test.describe('TC-E01-03: Nota personalizada é salva ao solicitar exame', () =>
 
     if (!(await submitBtn.isVisible({ timeout: 5_000 }).catch(() => false))) {
       console.log('TC-E01-03: Botão de confirmar solicitação não encontrado');
-      test.skip();
+      test.info().skip();
       return;
     }
 
@@ -239,7 +248,7 @@ test.describe('TC-E01-03: Nota personalizada é salva ao solicitar exame', () =>
       expect(savedNote).toBe(customNote);
     } else {
       console.log('TC-E01-03: FUNCIONALIDADE PENDENTE — exame não encontrado no banco após solicitação');
-      test.skip();
+      test.info().skip(); return;
     }
   });
 });
@@ -268,10 +277,10 @@ test.describe('TC-E01-04: Nota aparece na ficha do exame após salvar', () => {
     if (createdExamId) await Promise.resolve(admin.from('exam_requests').delete().eq('id', createdExamId)).then(() => {}).catch(() => {});
   });
 
-  test('Nota clínica aparece na listagem/ficha do exame solicitado', async ({ page }) => {
+  test('Nota clínica aparece na listagem/ficha do exame solicitado', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const navigated = await navigateToExams(page);
-    if (!navigated) { test.skip(); return; }
+    if (!navigated) { test.info().skip(); return; }
 
     await page.waitForTimeout(1_500);
 
@@ -296,7 +305,7 @@ test.describe('TC-E01-04: Nota aparece na ficha do exame após salvar', () => {
     console.log(`TC-E01-04: Nota visível na ficha do exame: ${noteVisible}`);
     if (!noteVisible) {
       console.log('TC-E01-04: FUNCIONALIDADE PENDENTE — nota não exibida na ficha do exame');
-      test.skip();
+      test.info().skip();
       return;
     }
 
@@ -318,18 +327,18 @@ test.describe('TC-E01-05 (Crítico): Nota vazia não impede solicitação de exa
     if (createdExamId) await Promise.resolve(admin.from('exam_requests').delete().eq('id', createdExamId)).then(() => {}).catch(() => {});
   });
 
-  test('Limpar o campo Nota Clínica e solicitar exame deve funcionar sem erros de validação', async ({ page }) => {
+  test('Limpar o campo Nota Clínica e solicitar exame deve funcionar sem erros de validação', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const navigated = await navigateToExams(page);
-    if (!navigated) { test.skip(); return; }
+    if (!navigated) { test.info().skip(); return; }
 
     const opened = await openExamRequestModal(page);
-    if (!opened) { test.skip(); return; }
+    if (!opened) { test.info().skip(); return; }
 
     const notesField = await getExamNotesTextarea(page);
     if (!(await notesField.isVisible({ timeout: 8_000 }).catch(() => false))) {
       console.log('TC-E01-05: FUNCIONALIDADE PENDENTE — campo Nota Clínica não encontrado');
-      test.skip();
+      test.info().skip();
       return;
     }
 
@@ -356,7 +365,7 @@ test.describe('TC-E01-05 (Crítico): Nota vazia não impede solicitação de exa
 
     if (!(await submitBtn.isVisible({ timeout: 5_000 }).catch(() => false))) {
       console.log('TC-E01-05: Botão de confirmar não encontrado');
-      test.skip();
+      test.info().skip();
       return;
     }
 
@@ -388,18 +397,18 @@ test.describe('TC-E01-06 (Crítico): Nota com > 500 chars é truncada ou bloquea
     await seedTutorsAndPets();
   });
 
-  test('Digitar 501+ caracteres no campo Nota deve truncar ou exibir erro de limite', async ({ page }) => {
+  test('Digitar 501+ caracteres no campo Nota deve truncar ou exibir erro de limite', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const navigated = await navigateToExams(page);
-    if (!navigated) { test.skip(); return; }
+    if (!navigated) { test.info().skip(); return; }
 
     const opened = await openExamRequestModal(page);
-    if (!opened) { test.skip(); return; }
+    if (!opened) { test.info().skip(); return; }
 
     const notesField = await getExamNotesTextarea(page);
     if (!(await notesField.isVisible({ timeout: 8_000 }).catch(() => false))) {
       console.log('TC-E01-06: FUNCIONALIDADE PENDENTE — campo Nota Clínica não encontrado');
-      test.skip();
+      test.info().skip();
       return;
     }
 
@@ -426,7 +435,7 @@ test.describe('TC-E01-06 (Crítico): Nota com > 500 chars é truncada ou bloquea
 
     if (!isTruncated && !hasValidation) {
       console.log('TC-E01-06: FUNCIONALIDADE PENDENTE — limite de 500 chars não implementado');
-      test.skip();
+      test.info().skip();
       return;
     }
 

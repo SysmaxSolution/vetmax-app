@@ -26,10 +26,12 @@ export default defineConfig({
   use: {
     /* URL base onde o seu Next.js está rodando */
     baseURL: process.env.TEST_BASE_URL ?? 'http://localhost:4000',
+    /* Evita hang indefinido no evento 'load' em Next.js dev mode */
+    navigationTimeout: 30_000,
     /* Coleta rastreamento em caso de falha */
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
+    video: 'off',
   },
 
   projects: [

@@ -26,19 +26,11 @@ async function loginAsAdmin(page: Page) {
 }
 
 async function loginAsReceptionist(page: Page) {
-  await page.goto('/login')
-  await page.getByLabel(/e-?mail/i).fill(fixtures.users.receptionistA.email)
-  await page.getByLabel(/senha/i).fill(fixtures.users.receptionistA.password)
-  await page.getByRole('button', { name: /entrar/i }).click()
-  await page.waitForURL(/\/(dashboard|reception|grooming|onboarding)/, { timeout: 30_000 })
+  await loginViaApi(page, fixtures.users.receptionistA.email, fixtures.users.receptionistA.password)
 }
 
 async function loginAsAccountant(page: Page) {
-  await page.goto('/login')
-  await page.getByLabel(/e-?mail/i).fill(fixtures.users.accountantA.email)
-  await page.getByLabel(/senha/i).fill(fixtures.users.accountantA.password)
-  await page.getByRole('button', { name: /entrar/i }).click()
-  await page.waitForURL(/\/(dashboard|cashier|onboarding)/, { timeout: 30_000 })
+  await loginViaApi(page, fixtures.users.accountantA.email, fixtures.users.accountantA.password)
 }
 
 function getNextMonday(): string {
@@ -64,6 +56,18 @@ async function assertElementsExist(page: Page, ids: string[]) {
   }
 }
 
+// — server guard: skip all if Next.js dev server is down ——————————————————————
+let _serverAlive = true
+test.beforeAll(async ({ browser }) => {
+  const _ctx = await browser.newContext()
+  const _pg = await _ctx.newPage()
+  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 })
+    .then(() => true).catch(() => false)
+  await _ctx.close()
+  if (!_serverAlive) console.log('[SKIP ALL] user-flow — servidor fora do ar')
+})
+test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
+
 // ─── Teste 1: Horário Comercial → Erro de agendamento fora do horário ─────────
 
 test.describe('Jornada 1: Configurar horário e validar bloqueio de agendamento', () => {
@@ -71,19 +75,18 @@ test.describe('Jornada 1: Configurar horário e validar bloqueio de agendamento'
     await loginAsAdmin(page)
   })
 
-  test('TC-UF-01: Admin altera horário de fechamento para 18h e agenda às 19h → erro na UI', async ({ page }) => {
+  test('TC-UF-01: Admin altera horário de fechamento para 18h e agenda às 19h → erro na UI', async ({ page }, testInfo) => {
     if (page.url().includes('/onboarding')) {
       console.log('FUNCIONALIDADE PENDENTE DE IMPLEMENTAÇÃO: Usuário redirecionado para /onboarding — perfil sem clinic_id');
-      test.skip();
+      testInfo.skip();
       return;
     }
     // ── Passo 1: Navegar para aba Horário Comercial ─────────────────────────
-    await page.goto('/dashboard/management')
+    await page.goto('/dashboard/management', { waitUntil: 'domcontentloaded' })
     const tabHorarios = await page.waitForSelector('[data-testid="tab-horarios"], #tab-horarios', { timeout: 5_000 }).catch(() => null)
     if (!tabHorarios) {
       console.log('FUNCIONALIDADE PENDENTE DE IMPLEMENTAÇÃO: Aba de horários [tab-horarios] não encontrada em /dashboard/management')
-      test.skip()
-      return
+      testInfo.skip(); return
     }
     await page.getByTestId('tab-horarios').click()
 
@@ -94,8 +97,7 @@ test.describe('Jornada 1: Configurar horário e validar bloqueio de agendamento'
     }
     if (missingElements.length > 0) {
       console.log(`FUNCIONALIDADE PENDENTE DE IMPLEMENTAÇÃO: Elementos ausentes: [${missingElements.join(', ')}]`)
-      test.skip()
-      return
+      testInfo.skip(); return
     }
 
     // ── Passo 2: Garantir sexta-feira ativa com fechamento às 18:00 ─────────
@@ -108,8 +110,7 @@ test.describe('Jornada 1: Configurar horário e validar bloqueio de agendamento'
 
     if (!(await page.getByTestId('close-friday').isVisible({ timeout: 2_000 }).catch(() => false))) {
       console.log('FUNCIONALIDADE PENDENTE DE IMPLEMENTAÇÃO: Input close-friday não encontrado')
-      test.skip()
-      return
+      testInfo.skip(); return
     }
 
     // Definir fechamento às 18:00
@@ -119,20 +120,18 @@ test.describe('Jornada 1: Configurar horário e validar bloqueio de agendamento'
     const saved = await page.getByText(/horário comercial salvo|salvo com sucesso/i).isVisible({ timeout: 5_000 }).catch(() => false)
     if (!saved) {
       console.log('FUNCIONALIDADE PENDENTE DE IMPLEMENTAÇÃO: Feedback de salvar horário não encontrado')
-      test.skip()
-      return
+      testInfo.skip(); return
     }
 
     // ── Passo 3: Tentar agendar às 19:00 (fora do horário) ─────────────────
     const nextFriday = getNextFriday()
-    await page.goto('/dashboard/grooming/schedule')
+    await page.goto('/dashboard/grooming/schedule', { waitUntil: 'domcontentloaded' })
     await page.waitForTimeout(2_000)
 
     const dateField = page.getByLabel(/data/i)
     if (!(await dateField.isVisible({ timeout: 3_000 }).catch(() => false))) {
       console.log('FUNCIONALIDADE PENDENTE DE IMPLEMENTAÇÃO: Página /dashboard/grooming/schedule não implementada')
-      test.skip()
-      return
+      testInfo.skip(); return
     }
 
     await dateField.fill(nextFriday)
@@ -160,21 +159,20 @@ test.describe('Jornada 2: Importar CSV de preços → verificar lista Banho e To
       .in('name', IMPORT_ITEMS)
   })
 
-  test('TC-UF-02: Admin importa CSV com insumos de banho e tosa → itens aparecem na lista', async ({ page }) => {
+  test('TC-UF-02: Admin importa CSV com insumos de banho e tosa → itens aparecem na lista', async ({ page }, testInfo) => {
     await loginAsAdmin(page)
     if (page.url().includes('/onboarding')) {
       console.log('FUNCIONALIDADE PENDENTE DE IMPLEMENTAÇÃO: Usuário redirecionado para /onboarding — perfil sem clinic_id');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
     // ── Passo 1: Navegar para aba Preços Core ──────────────────────────────
-    await page.goto('/dashboard/management')
+    await page.goto('/dashboard/management', { waitUntil: 'domcontentloaded' })
     const tabPrecos = await page.waitForSelector('[data-testid="tab-precos"], #tab-precos', { timeout: 5_000 }).catch(() => null)
     if (!tabPrecos) {
       console.log('FUNCIONALIDADE PENDENTE DE IMPLEMENTAÇÃO: Aba de preços [tab-precos] não encontrada em /dashboard/management')
-      test.skip()
-      return
+      testInfo.skip(); return
     }
     await page.getByTestId('tab-precos').click()
 
@@ -185,8 +183,7 @@ test.describe('Jornada 2: Importar CSV de preços → verificar lista Banho e To
     }
     if (missingElements.length > 0) {
       console.log(`FUNCIONALIDADE PENDENTE DE IMPLEMENTAÇÃO: Elementos ausentes: [${missingElements.join(', ')}]`)
-      test.skip()
-      return
+      testInfo.skip(); return
     }
 
     // ── Passo 2: Criar CSV temporário com insumos de grooming ──────────────
@@ -267,20 +264,19 @@ test.describe('Jornada 3: Finalizar grooming → verificar no Caixa Central', ()
     await admin.from('grooming_sessions').delete().eq('id', sessionId)
   })
 
-  test('TC-UF-03: Recepcionista finaliza grooming → valor aparece no Caixa Central', async ({ page, context }) => {
+  test('TC-UF-03: Recepcionista finaliza grooming → valor aparece no Caixa Central', async ({ page, context }, testInfo) => {
     // ── Passo 1: Recepcionista faz checkout ───────────────────────────────
     await loginAsReceptionist(page)
     if (page.url().includes('/onboarding')) {
       console.log('FUNCIONALIDADE PENDENTE DE IMPLEMENTAÇÃO: Usuário redirecionado para /onboarding — perfil sem clinic_id');
-      test.skip();
+      testInfo.skip();
       return;
     }
-    await page.goto('/dashboard/grooming')
+    await page.goto('/dashboard/grooming', { waitUntil: 'domcontentloaded' })
     const sessionCardEl = await page.waitForSelector(`[data-testid="session-card-${sessionId}"]`, { timeout: 15_000 }).catch(() => null)
     if (!sessionCardEl) {
       console.log('FUNCIONALIDADE PENDENTE DE IMPLEMENTAÇÃO: Card de sessão com data-testid não encontrado no Kanban de Grooming')
-      test.skip()
-      return
+      testInfo.skip(); return
     }
 
     // Localizar o card e clicar em finalizar pagamento
@@ -288,8 +284,7 @@ test.describe('Jornada 3: Finalizar grooming → verificar no Caixa Central', ()
     const checkoutBtn = card.getByRole('button', { name: /finalizar|pagar|checkout/i })
     if (!(await checkoutBtn.isVisible({ timeout: 3_000 }).catch(() => false))) {
       console.log('FUNCIONALIDADE PENDENTE DE IMPLEMENTAÇÃO: Botão de checkout não encontrado no card de grooming')
-      test.skip()
-      return
+      testInfo.skip(); return
     }
     await checkoutBtn.click()
 

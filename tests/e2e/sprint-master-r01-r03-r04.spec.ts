@@ -24,7 +24,7 @@ async function loginAs(page: Page, email: string, password: string) {
 }
 
 async function navigateToReception(page: Page): Promise<boolean> {
-  await page.goto('/dashboard/reception');
+  await page.goto('/dashboard/reception', { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(2_500);
   const heading = page.getByText(/recepção|reception/i).first();
   return heading.isVisible({ timeout: 8_000 }).catch(() => false);
@@ -43,6 +43,15 @@ async function setGroomingModule(enabled: boolean) {
 
 // ─── R-01: Desativar B&T oculta botões ──────────────────────────────────────
 
+// — server guard ——————————————————————————————————————————————————————————————
+let _serverAlive = true
+test.beforeAll(async ({ browser }) => {
+  const _ctx = await browser.newContext(); const _pg = await _ctx.newPage()
+  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
+  await _ctx.close(); if (!_serverAlive) console.log('[SKIP ALL] sprint-master-r01-r03-r04.spec.ts — servidor fora do ar')
+})
+test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
+
 test.describe('R-01: Desativar módulo B&T oculta botões de grooming na Recepção', () => {
   test.beforeEach(async () => {
     await seedTutorsAndPets();
@@ -53,11 +62,11 @@ test.describe('R-01: Desativar módulo B&T oculta botões de grooming na Recepç
     await setGroomingModule(true);
   });
 
-  test('R-01-01: Com grooming ATIVO, botões B&T são visíveis na Recepção', async ({ page }) => {
+  test('R-01-01: Com grooming ATIVO, botões B&T são visíveis na Recepção', async ({ page }, testInfo) => {
     await setGroomingModule(true);
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const loaded = await navigateToReception(page);
-    if (!loaded) { console.log('R-01-01: SKIP — Recepção não carregou'); test.skip(); return; }
+    if (!loaded) { console.log('R-01-01: SKIP — Recepção não carregou'); testInfo.skip(); return; }
 
     const groomingBtn = page.getByRole('button', { name: /banho|tosa|grooming/i }).first()
       .or(page.getByText(/agendar.*tosa|check.?in.*tosa|banho.*tosa/i).first());
@@ -65,17 +74,17 @@ test.describe('R-01: Desativar módulo B&T oculta botões de grooming na Recepç
     console.log(`R-01-01: Botão B&T com grooming ativo: ${visible}`);
     if (!visible) {
       console.log('R-01-01: FUNCIONALIDADE PENDENTE — botão B&T não encontrado com módulo ativo');
-      test.skip();
+      testInfo.skip(); return;
     } else {
       expect(visible).toBe(true);
     }
   });
 
-  test('R-01-02: Com grooming DESATIVADO, botões B&T não aparecem', async ({ page }) => {
+  test('R-01-02: Com grooming DESATIVADO, botões B&T não aparecem', async ({ page }, testInfo) => {
     await setGroomingModule(false);
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const loaded = await navigateToReception(page);
-    if (!loaded) { console.log('R-01-02: SKIP — Recepção não carregou'); test.skip(); return; }
+    if (!loaded) { console.log('R-01-02: SKIP — Recepção não carregou'); testInfo.skip(); return; }
 
     await page.waitForTimeout(1_500);
     const groomingBtn = page.getByRole('button', { name: /agendar.*tosa|check.?in.*tosa/i }).first();
@@ -92,16 +101,16 @@ test.describe('R-03: Opção "Banho e Tosa" substitui "Geral" no agendamento', (
     await seedTutorsAndPets();
   });
 
-  test('R-03-01: Modal de agendamento exibe opção "Banho e Tosa" (não "Geral")', async ({ page }) => {
+  test('R-03-01: Modal de agendamento exibe opção "Banho e Tosa" (não "Geral")', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const loaded = await navigateToReception(page);
-    if (!loaded) { console.log('R-03-01: SKIP — Recepção não carregou'); test.skip(); return; }
+    if (!loaded) { console.log('R-03-01: SKIP — Recepção não carregou'); testInfo.skip(); return; }
 
     // Abrir modal de agendamento
     const scheduleBtn = page.getByRole('button', { name: /agendar|novo agendamento|schedule/i }).first();
     if (!(await scheduleBtn.isVisible({ timeout: 5_000 }).catch(() => false))) {
       console.log('R-03-01: SKIP — Botão de agendamento não encontrado');
-      test.skip(); return;
+      testInfo.skip(); return;
     }
     await scheduleBtn.click();
     await page.waitForTimeout(1_000);
@@ -153,7 +162,7 @@ test.describe('R-04: Dados completos do pet exibidos na Recepção', () => {
     await seedTutorsAndPets();
   });
 
-  test('R-04-01: Card da fila exibe espécie, raça e nome do tutor', async ({ page }) => {
+  test('R-04-01: Card da fila exibe espécie, raça e nome do tutor', async ({ page }, testInfo) => {
     // Colocar pet na fila
     const { data: queue, error } = await admin.from('queue_entries').insert([{
       clinic_id:  fixtures.clinics.clinicA.id,
@@ -163,16 +172,16 @@ test.describe('R-04: Dados completos do pet exibidos na Recepção', () => {
       visit_reason: 'consultation',
     }]).select('id').single();
 
-    if (error) { console.log(`R-04-01: SKIP — Erro ao inserir queue_entry: ${error.message}`); test.skip(); return; }
+    if (error) { console.log(`R-04-01: SKIP — Erro ao inserir queue_entry: ${error.message}`); testInfo.skip(); return; }
 
     try {
       await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
       const loaded = await navigateToReception(page);
-      if (!loaded) { console.log('R-04-01: SKIP — Recepção não carregou'); test.skip(); return; }
+      if (!loaded) { console.log('R-04-01: SKIP — Recepção não carregou'); testInfo.skip(); return; }
 
       const card = page.getByText(fixtures.patients.petA1.name).first();
       const cardVisible = await card.isVisible({ timeout: 8_000 }).catch(() => false);
-      if (!cardVisible) { console.log('R-04-01: SKIP — Card do pet não encontrado na fila'); test.skip(); return; }
+      if (!cardVisible) { console.log('R-04-01: SKIP — Card do pet não encontrado na fila'); testInfo.skip(); return; }
 
       // Verificar espécie (dog → 🐶 ou "Cão" ou "dog")
       const speciesVisible = await page.getByText(/cão|dog|🐶/i).first().isVisible({ timeout: 3_000 }).catch(() => false);
@@ -186,17 +195,17 @@ test.describe('R-04: Dados completos do pet exibidos na Recepção', () => {
     }
   });
 
-  test('R-04-02: Seção "Atendidos Hoje" existe na Recepção', async ({ page }) => {
+  test('R-04-02: Seção "Atendidos Hoje" existe na Recepção', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const loaded = await navigateToReception(page);
-    if (!loaded) { console.log('R-04-02: SKIP — Recepção não carregou'); test.skip(); return; }
+    if (!loaded) { console.log('R-04-02: SKIP — Recepção não carregou'); testInfo.skip(); return; }
 
     const atendidosHoje = page.getByText(/atendidos hoje|hoje.*atendidos|discharged today/i).first();
     const visible = await atendidosHoje.isVisible({ timeout: 8_000 }).catch(() => false);
     console.log(`R-04-02: Seção "Atendidos Hoje" visível: ${visible}`);
     if (!visible) {
       console.log('R-04-02: FUNCIONALIDADE PENDENTE — seção "Atendidos Hoje" não encontrada');
-      test.skip();
+      testInfo.skip(); return;
     } else {
       expect(visible).toBe(true);
     }

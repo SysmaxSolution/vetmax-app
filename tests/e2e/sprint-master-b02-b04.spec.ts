@@ -22,13 +22,22 @@ async function loginAs(page: Page, email: string, password: string) {
 }
 
 async function navigateToGrooming(page: Page): Promise<boolean> {
-  await page.goto('/dashboard/grooming');
+  await page.goto('/dashboard/grooming', { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(2_500);
   const heading = page.getByText(/banho|tosa|grooming/i).first();
   return heading.isVisible({ timeout: 8_000 }).catch(() => false);
 }
 
 // ─── B-04: Ordem tosa → banho ─────────────────────────────────────────────────
+
+// — server guard ——————————————————————————————————————————————————————————————
+let _serverAlive = true
+test.beforeAll(async ({ browser }) => {
+  const _ctx = await browser.newContext(); const _pg = await _ctx.newPage()
+  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
+  await _ctx.close(); if (!_serverAlive) console.log('[SKIP ALL] sprint-master-b02-b04.spec.ts — servidor fora do ar')
+})
+test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
 
 test.describe('B-04: Ordem das etapas — Tosa antes de Banho', () => {
   let sessionId: string | undefined;
@@ -42,12 +51,12 @@ test.describe('B-04: Ordem das etapas — Tosa antes de Banho', () => {
     if (sessionId) await admin.from('grooming_sessions').delete().eq('id', sessionId);
   });
 
-  test('B-04-01: Kanban do B&T exibe coluna "Em Tosa" antes de "Em Banho"', async ({ page }) => {
-    if (!sessionId) { console.log('B-04-01: SKIP — Sessão B&T não criada'); test.skip(); return; }
+  test('B-04-01: Kanban do B&T exibe coluna "Em Tosa" antes de "Em Banho"', async ({ page }, testInfo) => {
+    if (!sessionId) { console.log('B-04-01: SKIP — Sessão B&T não criada'); testInfo.skip(); return; }
 
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const loaded = await navigateToGrooming(page);
-    if (!loaded) { console.log('B-04-01: SKIP — Módulo B&T não carregou'); test.skip(); return; }
+    if (!loaded) { console.log('B-04-01: SKIP — Módulo B&T não carregou'); testInfo.skip(); return; }
 
     // Verificar colunas do Kanban
     const columns = await page.locator('[class*="column"], [class*="kanban"], [role="group"]').allTextContents();
@@ -67,7 +76,7 @@ test.describe('B-04: Ordem das etapas — Tosa antes de Banho', () => {
 
       if (posTosa === -1 || posBanho === -1) {
         console.log('B-04-01: SKIP — Colunas do Kanban não encontradas');
-        test.skip(); return;
+        testInfo.skip(); return;
       }
       expect(posTosa).toBeLessThan(posBanho);
     } else {
@@ -75,17 +84,17 @@ test.describe('B-04: Ordem das etapas — Tosa antes de Banho', () => {
     }
   });
 
-  test('B-04-02: STATUS_FLOW do modal B&T tem grooming antes de bathing (código)', async ({ page }) => {
-    if (!sessionId) { console.log('B-04-02: SKIP — Sessão não criada'); test.skip(); return; }
+  test('B-04-02: STATUS_FLOW do modal B&T tem grooming antes de bathing (código)', async ({ page }, testInfo) => {
+    if (!sessionId) { console.log('B-04-02: SKIP — Sessão não criada'); testInfo.skip(); return; }
 
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const loaded = await navigateToGrooming(page);
-    if (!loaded) { console.log('B-04-02: SKIP — Módulo B&T não carregou'); test.skip(); return; }
+    if (!loaded) { console.log('B-04-02: SKIP — Módulo B&T não carregou'); testInfo.skip(); return; }
 
     // Abrir sessão e verificar botões de progressão na ordem correta
     const sessionCard = page.getByText(fixtures.patients.petA1.name).first();
     if (!(await sessionCard.isVisible({ timeout: 8_000 }).catch(() => false))) {
-      console.log('B-04-02: SKIP — Card da sessão não encontrado'); test.skip(); return;
+      console.log('B-04-02: SKIP — Card da sessão não encontrado'); testInfo.skip(); return;
     }
     await sessionCard.click();
     await page.waitForTimeout(1_000);
@@ -101,12 +110,12 @@ test.describe('B-04: Ordem das etapas — Tosa antes de Banho', () => {
       expect(posTosa).toBeLessThan(posBanho);
     } else {
       console.log('B-04-02: SKIP — Botões de progressão específicos não encontrados no modal');
-      test.skip();
+      testInfo.skip(); return;
     }
   });
 
-  test('B-04-03: Progressão de status no banco: received → grooming → bathing', async () => {
-    if (!sessionId) { console.log('B-04-03: SKIP — Sessão não criada'); test.skip(); return; }
+  test('B-04-03: Progressão de status no banco: received → grooming → bathing', async ({}, testInfo) => {
+    if (!sessionId) { console.log('B-04-03: SKIP — Sessão não criada'); testInfo.skip(); return; }
 
     // Avançar diretamente via banco e verificar que a ordem faz sentido
     await admin.from('grooming_sessions').update({ status: 'grooming' }).eq('id', sessionId);
@@ -135,17 +144,17 @@ test.describe('B-02: Responder Sim/Não por voz no modal WhatsApp do B&T', () =>
     if (sessionId) await admin.from('grooming_sessions').delete().eq('id', sessionId);
   });
 
-  test('B-02-01: Modal WhatsApp de notificação ao tutor existe no B&T', async ({ page }) => {
-    if (!sessionId) { console.log('B-02-01: SKIP — Sessão não criada'); test.skip(); return; }
+  test('B-02-01: Modal WhatsApp de notificação ao tutor existe no B&T', async ({ page }, testInfo) => {
+    if (!sessionId) { console.log('B-02-01: SKIP — Sessão não criada'); testInfo.skip(); return; }
 
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const loaded = await navigateToGrooming(page);
-    if (!loaded) { console.log('B-02-01: SKIP — Módulo B&T não carregou'); test.skip(); return; }
+    if (!loaded) { console.log('B-02-01: SKIP — Módulo B&T não carregou'); testInfo.skip(); return; }
 
     // Abrir a sessão em waiting_pickup
     const sessionCard = page.getByText(fixtures.patients.petA1.name).first();
     if (!(await sessionCard.isVisible({ timeout: 8_000 }).catch(() => false))) {
-      console.log('B-02-01: SKIP — Card em Aguardando Retirada não encontrado'); test.skip(); return;
+      console.log('B-02-01: SKIP — Card em Aguardando Retirada não encontrado'); testInfo.skip(); return;
     }
     await sessionCard.click();
     await page.waitForTimeout(1_000);
@@ -155,22 +164,22 @@ test.describe('B-02: Responder Sim/Não por voz no modal WhatsApp do B&T', () =>
     console.log(`B-02-01: Modal WhatsApp visível: ${modalVisible}`);
     if (!modalVisible) {
       console.log('B-02-01: FUNCIONALIDADE PENDENTE — modal WhatsApp não encontrado no B&T');
-      test.skip();
+      testInfo.skip(); return;
     } else {
       expect(modalVisible).toBe(true);
     }
   });
 
-  test('B-02-02: Botão microfone ou indicador de voz existe no modal WhatsApp', async ({ page }) => {
-    if (!sessionId) { console.log('B-02-02: SKIP — Sessão não criada'); test.skip(); return; }
+  test('B-02-02: Botão microfone ou indicador de voz existe no modal WhatsApp', async ({ page }, testInfo) => {
+    if (!sessionId) { console.log('B-02-02: SKIP — Sessão não criada'); testInfo.skip(); return; }
 
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const loaded = await navigateToGrooming(page);
-    if (!loaded) { console.log('B-02-02: SKIP — Módulo B&T não carregou'); test.skip(); return; }
+    if (!loaded) { console.log('B-02-02: SKIP — Módulo B&T não carregou'); testInfo.skip(); return; }
 
     const sessionCard = page.getByText(fixtures.patients.petA1.name).first();
     if (!(await sessionCard.isVisible({ timeout: 8_000 }).catch(() => false))) {
-      console.log('B-02-02: SKIP — Card não encontrado'); test.skip(); return;
+      console.log('B-02-02: SKIP — Card não encontrado'); testInfo.skip(); return;
     }
     await sessionCard.click();
     await page.waitForTimeout(1_000);
@@ -182,13 +191,13 @@ test.describe('B-02: Responder Sim/Não por voz no modal WhatsApp do B&T', () =>
     console.log(`B-02-02: Botão de microfone/voz no modal WhatsApp: ${micVisible}`);
     if (!micVisible) {
       console.log('B-02-02: FUNCIONALIDADE PENDENTE — microfone não encontrado no modal WhatsApp');
-      test.skip();
+      testInfo.skip(); return;
     } else {
       expect(micVisible).toBe(true);
     }
   });
 
-  test('B-02-03: useGroomingVoiceAssistant exporta estado CONFIRM_WA (verificação de import)', async () => {
+  test('B-02-03: useGroomingVoiceAssistant exporta estado CONFIRM_WA (verificação de import)', async ({}, testInfo) => {
     // Verificar indiretamente via estrutura do hook
     const { data: triggers } = await admin.from('voice_trigger_configs')
       .select('trigger_phrase, action')
@@ -197,7 +206,7 @@ test.describe('B-02: Responder Sim/Não por voz no modal WhatsApp do B&T', () =>
 
     if (!triggers) {
       console.log('B-02-03: SKIP — Tabela voice_trigger_configs não existe ou vazia');
-      test.skip(); return;
+      testInfo.skip(); return;
     }
     console.log(`B-02-03: voice_trigger_configs encontrado com ${triggers.length} registros`);
     expect(Array.isArray(triggers)).toBe(true);

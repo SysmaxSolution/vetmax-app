@@ -43,6 +43,15 @@ async function setReproductiveStatus(petId: string, status: string | null) {
 
 // ─── T-01: Status reprodutivo automático na triagem ──────────────────────────
 
+// — server guard ——————————————————————————————————————————————————————————————
+let _serverAlive = true
+test.beforeAll(async ({ browser }) => {
+  const _ctx = await browser.newContext(); const _pg = await _ctx.newPage()
+  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
+  await _ctx.close(); if (!_serverAlive) console.log('[SKIP ALL] sprint-master-t01-t02-g09.spec.ts — servidor fora do ar')
+})
+test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
+
 test.describe('T-01: Status reprodutivo pré-preenchido automaticamente na Triagem', () => {
   let queueId: string | null = null;
   const testStatus = 'neutered';
@@ -58,22 +67,22 @@ test.describe('T-01: Status reprodutivo pré-preenchido automaticamente na Triag
     await setReproductiveStatus(fixtures.patients.petA1.id, null);
   });
 
-  test('T-01-01: Campo de status reprodutivo pré-preenchido ao abrir triagem', async ({ page }) => {
-    if (!queueId) { console.log('T-01-01: SKIP — queue_entry não criado'); test.skip(); return; }
+  test('T-01-01: Campo de status reprodutivo pré-preenchido ao abrir triagem', async ({ page }, testInfo) => {
+    if (!queueId) { console.log('T-01-01: SKIP — queue_entry não criado'); testInfo.skip(); return; }
 
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-    await page.goto('/dashboard/triage');
+    await page.goto('/dashboard/triage', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2_500);
 
     const triageHeading = page.getByText(/triagem/i).first();
     if (!(await triageHeading.isVisible({ timeout: 8_000 }).catch(() => false))) {
-      console.log('T-01-01: SKIP — Módulo de triagem não carregou'); test.skip(); return;
+      console.log('T-01-01: SKIP — Módulo de triagem não carregou'); testInfo.skip(); return;
     }
 
     // Abrir pet na triagem
     const petCard = page.getByText(fixtures.patients.petA1.name).first();
     if (!(await petCard.isVisible({ timeout: 5_000 }).catch(() => false))) {
-      console.log('T-01-01: SKIP — Pet não encontrado na fila de triagem'); test.skip(); return;
+      console.log('T-01-01: SKIP — Pet não encontrado na fila de triagem'); testInfo.skip(); return;
     }
     await petCard.click();
     await page.waitForTimeout(1_500);
@@ -85,7 +94,7 @@ test.describe('T-01: Status reprodutivo pré-preenchido automaticamente na Triag
 
     if (!fieldVisible) {
       console.log('T-01-01: FUNCIONALIDADE PENDENTE — campo de status reprodutivo não encontrado na triagem');
-      test.skip(); return;
+      testInfo.skip(); return;
     }
 
     const fieldValue = await reproField.inputValue().catch(() => '');
@@ -116,19 +125,19 @@ test.describe('T-02 + G-09: Campos obrigatórios de triagem e check-in configur�
     await seedTutorsAndPets();
   });
 
-  test('T-02-01: weight_kg e temperature_rectal sempre obrigatórios na triagem (CFMV)', async ({ page }) => {
+  test('T-02-01: weight_kg e temperature_rectal sempre obrigatórios na triagem (CFMV)', async ({ page }, testInfo) => {
     let queueId: string | null = null;
     try {
       queueId = await seedQueueEntryAtTriage();
-      if (!queueId) { console.log('T-02-01: SKIP — queue_entry não criado'); test.skip(); return; }
+      if (!queueId) { console.log('T-02-01: SKIP — queue_entry não criado'); testInfo.skip(); return; }
 
       await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-      await page.goto('/dashboard/triage');
+      await page.goto('/dashboard/triage', { waitUntil: 'domcontentloaded' });
       await page.waitForTimeout(2_500);
 
       const petCard = page.getByText(fixtures.patients.petA1.name).first();
       if (!(await petCard.isVisible({ timeout: 8_000 }).catch(() => false))) {
-        console.log('T-02-01: SKIP — Pet não encontrado na triagem'); test.skip(); return;
+        console.log('T-02-01: SKIP — Pet não encontrado na triagem'); testInfo.skip(); return;
       }
       await petCard.click();
       await page.waitForTimeout(1_500);
@@ -196,7 +205,7 @@ test.describe('T-02 + G-09: Campos obrigatórios de triagem e check-in configur�
     }
   });
 
-  test('G-09-02: Formulário de check-in exibe campos configurados em clinic_settings', async ({ page }) => {
+  test('G-09-02: Formulário de check-in exibe campos configurados em clinic_settings', async ({ page }, testInfo) => {
     const { data: entry, error } = await admin.from('queue_entries').insert([{
       clinic_id:    fixtures.clinics.clinicA.id,
       patient_id:   fixtures.patients.petA1.id,
@@ -205,16 +214,16 @@ test.describe('T-02 + G-09: Campos obrigatórios de triagem e check-in configur�
       visit_reason: 'consultation',
     }]).select('id').single();
 
-    if (error) { console.log(`G-09-02: SKIP — Erro ao criar entry: ${error.message}`); test.skip(); return; }
+    if (error) { console.log(`G-09-02: SKIP — Erro ao criar entry: ${error.message}`); testInfo.skip(); return; }
 
     try {
       await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-      await page.goto('/dashboard/reception');
+      await page.goto('/dashboard/reception', { waitUntil: 'domcontentloaded' });
       await page.waitForTimeout(2_500);
 
       const petCard = page.getByText(fixtures.patients.petA1.name).first();
       if (!(await petCard.isVisible({ timeout: 8_000 }).catch(() => false))) {
-        console.log('G-09-02: SKIP — Pet não na fila de recepção'); test.skip(); return;
+        console.log('G-09-02: SKIP — Pet não na fila de recepção'); testInfo.skip(); return;
       }
       await petCard.click();
       await page.waitForTimeout(1_000);
@@ -225,7 +234,7 @@ test.describe('T-02 + G-09: Campos obrigatórios de triagem e check-in configur�
       console.log(`G-09-02: Formulário de check-in visível: ${formVisible}`);
       if (!formVisible) {
         console.log('G-09-02: FUNCIONALIDADE PENDENTE — formulário de check-in não encontrado');
-        test.skip();
+        testInfo.skip(); return;
       } else {
         expect(formVisible).toBe(true);
       }

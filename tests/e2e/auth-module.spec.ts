@@ -26,6 +26,9 @@ import fixtures from '../fixtures/test-data.json'
 
 const admin = createAdminClient()
 
+// Timeout elevado: loginViaApi (45s goto + 60s waitForURL) + assertions
+test.setTimeout(180_000)
+
 // ─── Helper de login ──────────────────────────────────────────────────────────
 
 async function loginAs(page: Page, email: string, password: string) {
@@ -39,7 +42,7 @@ async function loginAsAdmin(page: Page) {
 // ─── TC-AUTH-001: E-mail inválido bloqueado ───────────────────────────────────
 
 test.describe('TC-AUTH-001: Formato de e-mail inválido bloqueado', () => {
-  test('Input com "usuario" sem @ bloqueia o botão de submit', async ({ page }) => {
+  test('Input com "usuario" sem @ bloqueia o botão de submit', async ({ page }, testInfo) => {
     await page.goto('/login')
 
     const emailInput = page.getByLabel(/e-?mail/i)
@@ -64,7 +67,7 @@ test.describe('TC-AUTH-001: Formato de e-mail inválido bloqueado', () => {
 // ─── TC-AUTH-002: Senha curta bloqueada ──────────────────────────────────────
 
 test.describe('TC-AUTH-002: Senha curta (< 8 chars) bloqueada', () => {
-  test('Senha com 5 caracteres não avança o login', async ({ page }) => {
+  test('Senha com 5 caracteres não avança o login', async ({ page }, testInfo) => {
     await page.goto('/login')
 
     await page.getByLabel(/e-?mail/i).fill('valido@teste.com')
@@ -80,7 +83,7 @@ test.describe('TC-AUTH-002: Senha curta (< 8 chars) bloqueada', () => {
 // ─── TC-AUTH-003: Credenciais erradas exibe erro ──────────────────────────────
 
 test.describe('TC-AUTH-003: Credenciais inválidas exibem erro', () => {
-  test('Login com senha errada mostra mensagem de erro', async ({ page }) => {
+  test('Login com senha errada mostra mensagem de erro', async ({ page }, testInfo) => {
     await page.goto('/login')
 
     await page.getByLabel(/e-?mail/i).fill(fixtures.users.adminA.email)
@@ -102,7 +105,7 @@ test.describe('TC-AUTH-003: Credenciais inválidas exibem erro', () => {
 // ─── TC-AUTH-004: Login bem-sucedido redireciona ──────────────────────────────
 
 test.describe('TC-AUTH-004: Login bem-sucedido redireciona para dashboard', () => {
-  test('Admin faz login e chega ao dashboard', async ({ page }) => {
+  test('Admin faz login e chega ao dashboard', async ({ page }, testInfo) => {
     await loginAsAdmin(page)
 
     // Aceita /onboarding como destino válido se perfil não está completo
@@ -114,12 +117,11 @@ test.describe('TC-AUTH-004: Login bem-sucedido redireciona para dashboard', () =
 // ─── TC-AUTH-005: Logout limpa sessão ────────────────────────────────────────
 
 test.describe('TC-AUTH-005: Logout limpa sessão', () => {
-  test('Após logout, acesso a /dashboard redireciona para /login', async ({ page }) => {
+  test('Após logout, acesso a /dashboard redireciona para /login', async ({ page }, testInfo) => {
     await loginAsAdmin(page)
 
     if (page.url().includes('/onboarding')) {
-      test.skip()
-      return
+      testInfo.skip(); return
     }
 
     // Procura botão de logout em padrões comuns da interface
@@ -136,7 +138,7 @@ test.describe('TC-AUTH-005: Logout limpa sessão', () => {
         try { sessionStorage.clear() } catch {}
       })
       await page.goto('/dashboard')
-      await page.waitForURL(/\/login/, { timeout: 10_000 })
+      await page.waitForURL(/\/login/, { timeout: 20_000 })
       expect(page.url()).toMatch(/\/login/)
       return
     }
@@ -154,22 +156,22 @@ test.describe('TC-AUTH-005: Logout limpa sessão', () => {
 // ─── TC-AUTH-006: Acesso sem autenticação → redirect /login ──────────────────
 
 test.describe('TC-AUTH-006: Rotas protegidas redirecionam para /login', () => {
-  test('GET /dashboard sem sessão → /login', async ({ page }) => {
+  test('GET /dashboard sem sessão → /login', async ({ page }, testInfo) => {
     // Sem fazer login, acessa direto
     await page.goto('/dashboard')
-    await page.waitForURL(/\/login/, { timeout: 10_000 })
+    await page.waitForURL(/\/login/, { timeout: 20_000 })
     expect(page.url()).toMatch(/\/login/)
   })
 
-  test('GET /dashboard/vet sem sessão → /login', async ({ page }) => {
-    await page.goto('/dashboard/vet')
-    await page.waitForURL(/\/login/, { timeout: 10_000 })
+  test('GET /dashboard/vet sem sessão → /login', async ({ page }, testInfo) => {
+    await page.goto('/dashboard/vet', { waitUntil: 'domcontentloaded' })
+    await page.waitForURL(/\/login/, { timeout: 20_000 })
     expect(page.url()).toMatch(/\/login/)
   })
 
-  test('GET /dashboard/management sem sessão → /login', async ({ page }) => {
-    await page.goto('/dashboard/management')
-    await page.waitForURL(/\/login/, { timeout: 10_000 })
+  test('GET /dashboard/management sem sessão → /login', async ({ page }, testInfo) => {
+    await page.goto('/dashboard/management', { waitUntil: 'domcontentloaded' })
+    await page.waitForURL(/\/login/, { timeout: 20_000 })
     expect(page.url()).toMatch(/\/login/)
   })
 })
@@ -177,17 +179,17 @@ test.describe('TC-AUTH-006: Rotas protegidas redirecionam para /login', () => {
 // ─── TC-AUTH-007: Receptionist não acessa rota do MV ─────────────────────────
 
 test.describe('TC-AUTH-007: Receptionist não acessa /dashboard/vet', () => {
-  test('Receptionist redirecionado ao tentar acessar vet', async ({ page }) => {
+  test.setTimeout(120_000)
+  test('Receptionist redirecionado ao tentar acessar vet', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.receptionistA.email, fixtures.users.receptionistA.password)
 
     // Pula se redirecionou para onboarding (perfil incompleto no ambiente de teste)
     if (page.url().includes('/onboarding')) {
       console.log('SKIP: receptionist em onboarding — perfil de teste sem clinic_id completo')
-      test.skip()
-      return
+      testInfo.skip(); return
     }
 
-    await page.goto('/dashboard/vet')
+    await page.goto('/dashboard/vet', { waitUntil: 'domcontentloaded' })
     await page.waitForTimeout(3_000)
 
     const url = page.url()
@@ -203,8 +205,7 @@ test.describe('TC-AUTH-007: Receptionist não acessa /dashboard/vet', () => {
       // Verifica que pelo menos a página carregou sem erro de servidor
       const serverError = await page.getByText(/500|internal server error/i).isVisible({ timeout: 2_000 }).catch(() => false)
       expect(serverError).toBe(false)
-      test.skip() // Marca como pendente de implementação de RBAC
-      return
+      testInfo.skip(); return
     }
 
     expect(redirectedAway || blockedByMessage).toBe(true)
@@ -214,16 +215,16 @@ test.describe('TC-AUTH-007: Receptionist não acessa /dashboard/vet', () => {
 // ─── TC-AUTH-008: Vet não acessa management ───────────────────────────────────
 
 test.describe('TC-AUTH-008: Vet não acessa /dashboard/management', () => {
-  test('Vet não vê configurações administrativas', async ({ page }) => {
+  test.setTimeout(120_000)
+  test('Vet não vê configurações administrativas', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.vetA.email, fixtures.users.vetA.password)
 
     if (page.url().includes('/onboarding')) {
       console.log('SKIP: vet em onboarding — perfil de teste sem clinic_id completo')
-      test.skip()
-      return
+      testInfo.skip(); return
     }
 
-    await page.goto('/dashboard/management')
+    await page.goto('/dashboard/management', { waitUntil: 'domcontentloaded' })
     await page.waitForTimeout(3_000)
 
     const url = page.url()
@@ -237,7 +238,7 @@ test.describe('TC-AUTH-008: Vet não acessa /dashboard/management', () => {
 // ─── TC-AUTH-009: Duplo clique não duplica request ────────────────────────────
 
 test.describe('TC-AUTH-009: Duplo clique não dispara duas requisições', () => {
-  test('Botão desabilitado ou request único no duplo clique', async ({ page }) => {
+  test('Botão desabilitado ou request único no duplo clique', async ({ page }, testInfo) => {
     test.setTimeout(40_000) // Login + navegação pode precisar de mais tempo que o global
     await page.goto('/login')
 
@@ -278,12 +279,12 @@ test.describe('TC-AUTH-009: Duplo clique não dispara duas requisições', () =>
 // ─── TC-AUTH-010: Sessão expirada redireciona ─────────────────────────────────
 
 test.describe('TC-AUTH-010: Sessão expirada redireciona para /login', () => {
-  test('Limpar cookies simula expiração de sessão', async ({ page }) => {
+  test.setTimeout(120_000)
+  test('Limpar cookies simula expiração de sessão', async ({ page }, testInfo) => {
     await loginAsAdmin(page)
 
     if (page.url().includes('/onboarding')) {
-      test.skip()
-      return
+      testInfo.skip(); return
     }
 
     // Simula expiração limpando todos os cookies e storage
@@ -295,7 +296,7 @@ test.describe('TC-AUTH-010: Sessão expirada redireciona para /login', () => {
 
     // Tenta acessar área protegida
     await page.goto('/dashboard')
-    await page.waitForURL(/\/login/, { timeout: 10_000 })
+    await page.waitForURL(/\/login/, { timeout: 20_000 })
     expect(page.url()).toMatch(/\/login/)
   })
 })
@@ -303,7 +304,7 @@ test.describe('TC-AUTH-010: Sessão expirada redireciona para /login', () => {
 // ─── TC-AUTH-011: Convite inválido exibe erro ─────────────────────────────────
 
 test.describe('TC-AUTH-011: Token de convite inválido exibe tela de erro', () => {
-  test('Token aleatório na URL de invite mostra mensagem de erro', async ({ page }) => {
+  test('Token aleatório na URL de invite mostra mensagem de erro', async ({ page }, testInfo) => {
     await page.goto('/invite/token-invalido-xyz-000')
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {})
 
@@ -326,7 +327,7 @@ test.describe('TC-AUTH-011: Token de convite inválido exibe tela de erro', () =
 // ─── TC-AUTH-012: /privacy-policy acessível sem auth ─────────────────────────
 
 test.describe('TC-AUTH-012: /privacy-policy acessível sem autenticação', () => {
-  test('Página de política de privacidade carrega sem login', async ({ page }) => {
+  test('Página de política de privacidade carrega sem login', async ({ page }, testInfo) => {
     await page.goto('/privacy-policy')
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {})
 
@@ -335,8 +336,7 @@ test.describe('TC-AUTH-012: /privacy-policy acessível sem autenticação', () =
     if (redirectedToLogin) {
       // Rota ainda não é pública — registra comportamento e pula
       console.warn('[TC-AUTH-012] INFO: /privacy-policy redireciona para /login — rota não é pública ainda. Pendente de implementação.')
-      test.skip()
-      return
+      testInfo.skip(); return
     }
 
     // Se a rota é pública, verifica que não há erro de servidor
@@ -352,14 +352,12 @@ test.describe('TC-AUTH-012: /privacy-policy acessível sem autenticação', () =
     if (!hasPrivacyContent && !hasAnyHeading) {
       // Página existe mas sem conteúdo de política — rota não implementada ainda
       console.warn('[TC-AUTH-012] INFO: /privacy-policy existe mas sem conteúdo de política. Pendente de implementação da página.')
-      test.skip()
-      return
+      testInfo.skip(); return
     }
 
     if (is404) {
       console.warn('[TC-AUTH-012] INFO: /privacy-policy retorna 404. Pendente de criação da rota.')
-      test.skip()
-      return
+      testInfo.skip(); return
     }
 
     expect(hasPrivacyContent || hasAnyHeading).toBe(true)
@@ -369,7 +367,7 @@ test.describe('TC-AUTH-012: /privacy-policy acessível sem autenticação', () =
 // ─── TC-AUTH-013: SQL Injection no e-mail não causa 500 ──────────────────────
 
 test.describe('TC-AUTH-013: Injeção SQL no campo de e-mail', () => {
-  test('Payload de SQL injection não retorna 500 nem crash', async ({ page }) => {
+  test('Payload de SQL injection não retorna 500 nem crash', async ({ page }, testInfo) => {
     await page.goto('/login')
 
     const sqlPayload = "' OR '1'='1'; DROP TABLE users; --"
@@ -434,7 +432,7 @@ test.describe('TC-AUTH-014: XSS no nome da clínica é escapado', () => {
     }
   })
 
-  test('Payload XSS no campo nome não executa script', async ({ page }) => {
+  test('Payload XSS no campo nome não executa script', async ({ page }, testInfo) => {
     // Login com usuário sem clinic_id → vai para /onboarding
     await page.goto('/login')
     await page.getByLabel(/e-?mail/i).fill(xssUserEmail)
@@ -444,8 +442,7 @@ test.describe('TC-AUTH-014: XSS no nome da clínica é escapado', () => {
 
     if (!page.url().includes('/onboarding')) {
       console.warn('[TC-AUTH-014] INFO: Usuário não foi direcionado para /onboarding — possivelmente perfil residual. Pulando.')
-      test.skip()
-      return
+      testInfo.skip(); return
     }
 
     const xssPayload = '<script>window.__xss_executed=true</script>'
@@ -457,8 +454,7 @@ test.describe('TC-AUTH-014: XSS no nome da clínica é escapado', () => {
     const found = await clinicNameInput.isVisible({ timeout: 8_000 }).catch(() => false)
     if (!found) {
       console.warn('[TC-AUTH-014] INFO: Campo de nome da clínica não encontrado no onboarding.')
-      test.skip()
-      return
+      testInfo.skip(); return
     }
 
     await clinicNameInput.fill(xssPayload)
@@ -487,16 +483,15 @@ test.describe('TC-AUTH-015: Isolamento básico entre clínicas', () => {
     await admin.from('patients').upsert([fixtures.patients.petA1])
   })
 
-  test('Admin da clínica B não vê pacientes da clínica A', async ({ page }) => {
+  test('Admin da clínica B não vê pacientes da clínica A', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminB.email, fixtures.users.adminB.password)
 
     if (page.url().includes('/onboarding')) {
       console.log('SKIP: Admin B em onboarding — perfil de teste sem clinic_id completo')
-      test.skip()
-      return
+      testInfo.skip(); return
     }
 
-    await page.goto('/dashboard/patients')
+    await page.goto('/dashboard/patients', { waitUntil: 'domcontentloaded' })
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {})
 
     // "Rex" é o pet da clínica A — não deve aparecer para clínica B

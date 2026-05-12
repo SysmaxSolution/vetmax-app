@@ -119,7 +119,12 @@ test.describe('Mentor — Resiliência e Variações', () => {
     // Deve começar do passo 1 novamente (sem estado residual)
     await expect(balloon.locator('text=/1/')).toBeVisible({ timeout: 3_000 })
 
-    await page.locator('.fixed.z-\\[10000\\] button', { hasText: /concluir|próximo/i }).first().click()
+    // Step 1 da recepção tem waitForNext:true — botão "Próximo" não existe
+    // Forçar avanço via __MENTOR_NEXT_STEP para que "Próximo/Concluir" apareça
+    await page.evaluate(() => { (window as unknown as { __MENTOR_NEXT_STEP?: () => void }).__MENTOR_NEXT_STEP?.() })
+    await page.waitForTimeout(400)
+
+    await page.locator('.fixed.z-\\[10000\\] button', { hasText: /concluir|próximo/i }).first().click({ force: true })
     console.log('[QA] Interrupção e retomada de tour — PASSOU')
   })
 
@@ -249,7 +254,12 @@ test.describe('Mentor — Resiliência e Variações', () => {
       console.log(`[QA] Balão sem target — centralizado em x:${box.x.toFixed(0)} y:${box.y.toFixed(0)} — PASSOU`)
     }
 
-    await page.locator('.fixed.z-\\[10000\\] button', { hasText: /concluir|próximo/i }).first().click()
+    // Step 1 da recepção tem waitForNext:true — botão "Próximo" não existe nesse step
+    // Forçar avanço via __MENTOR_NEXT_STEP para que "Próximo/Concluir" apareça
+    await page.evaluate(() => { (window as unknown as { __MENTOR_NEXT_STEP?: () => void }).__MENTOR_NEXT_STEP?.() })
+    await page.waitForTimeout(400)
+
+    await page.locator('.fixed.z-\\[10000\\] button', { hasText: /concluir|próximo/i }).first().click({ force: true })
   })
 
   test('10. Mentor responde corretamente após navegação SPA entre páginas', async ({ page }) => {

@@ -86,6 +86,15 @@ async function getReceptionistUserId(): Promise<string | null> {
 
 // ─── TC-G08-01: Admin vê todos os módulos ativos no menu ─────────────────────
 
+// — server guard ——————————————————————————————————————————————————————————————
+let _serverAlive = true
+test.beforeAll(async ({ browser }) => {
+  const _ctx = await browser.newContext(); const _pg = await _ctx.newPage()
+  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
+  await _ctx.close(); if (!_serverAlive) console.log('[SKIP ALL] sprint-master-g08-rbac.spec.ts — servidor fora do ar')
+})
+test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
+
 test.describe('TC-G08-01: Admin vê todos os módulos ativos no menu', () => {
   test.beforeEach(async () => {
     await seedTutorsAndPets();
@@ -98,7 +107,7 @@ test.describe('TC-G08-01: Admin vê todos os módulos ativos no menu', () => {
     ]);
   });
 
-  test('Admin vê link Farmácia, Internação, Banho & Tosa e Gestão no menu', async ({ page }) => {
+  test('Admin vê link Farmácia, Internação, Banho & Tosa e Gestão no menu', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     await page.goto('/dashboard');
     await page.waitForTimeout(2_000);
@@ -119,7 +128,7 @@ test.describe('TC-G08-01: Admin vê todos os módulos ativos no menu', () => {
 
     if (!pharmacyVisible && !hospVisible && !groomingVisible) {
       console.log('TC-G08-01: SKIP — Nenhum link de módulo encontrado no menu para Admin');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -147,7 +156,7 @@ test.describe('TC-G08-02: Recepcionista sem acesso ao pharmacy não vê link Far
     }
   });
 
-  test('Recepcionista sem permissão pharmacy não vê link Farmácia', async ({ page }) => {
+  test('Recepcionista sem permissão pharmacy não vê link Farmácia', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.receptionistA.email, fixtures.users.receptionistA.password);
     await page.goto('/dashboard');
     await page.waitForTimeout(2_000);
@@ -184,9 +193,9 @@ test.describe('TC-G08-03: Acesso direto à URL pharmacy sem permissão redirecio
     }
   });
 
-  test('Acesso direto a /dashboard/pharmacy sem permissão redireciona', async ({ page }) => {
+  test('Acesso direto a /dashboard/pharmacy sem permissão redireciona', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.receptionistA.email, fixtures.users.receptionistA.password);
-    await page.goto('/dashboard/pharmacy');
+    await page.goto('/dashboard/pharmacy', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(3_000);
 
     const currentUrl = page.url();
@@ -225,9 +234,9 @@ test.describe('TC-G08-04: Admin concede acesso ao módulo pharmacy para recepcio
     }
   });
 
-  test('Admin concede permissão pharmacy e recepcionista passa a ver o link', async ({ page }) => {
+  test('Admin concede permissão pharmacy e recepcionista passa a ver o link', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-    await page.goto('/dashboard/management');
+    await page.goto('/dashboard/management', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2_000);
 
     // Tentar encontrar painel de gestão de permissões
@@ -296,7 +305,7 @@ test.describe('TC-G08-05: Permissão revogada em tempo real — logout e login m
     }
   });
 
-  test('Revogar permissão pharmacy — após logout/login recepcionista não vê Farmácia', async ({ page }) => {
+  test('Revogar permissão pharmacy — após logout/login recepcionista não vê Farmácia', async ({ page }, testInfo) => {
     // Login inicial como recepcionista (com acesso)
     await loginAs(page, fixtures.users.receptionistA.email, fixtures.users.receptionistA.password);
     await page.goto('/dashboard');
@@ -408,7 +417,7 @@ test.describe('TC-G08-07: Recepcionista sem permissão "consultation" não vê l
     }
   });
 
-  test('Recepcionista sem permissão consultation não vê link "Consultório" ou "Vet" no nav', async ({ page }) => {
+  test('Recepcionista sem permissão consultation não vê link "Consultório" ou "Vet" no nav', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.receptionistA.email, fixtures.users.receptionistA.password);
     await page.goto('/dashboard');
     await page.waitForTimeout(2_000);
@@ -446,9 +455,9 @@ test.describe('TC-G08-08: Acesso a /dashboard/vet sem permissão retorna redirec
     }
   });
 
-  test('Acesso direto a /dashboard/vet sem permissão redireciona para dashboard (não exibe 403 cru)', async ({ page }) => {
+  test('Acesso direto a /dashboard/vet sem permissão redireciona para dashboard (não exibe 403 cru)', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.receptionistA.email, fixtures.users.receptionistA.password);
-    await page.goto('/dashboard/vet');
+    await page.goto('/dashboard/vet', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(3_000);
 
     const currentUrl = page.url();

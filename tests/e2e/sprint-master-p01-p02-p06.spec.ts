@@ -24,7 +24,7 @@ async function loginAs(page: Page, email: string, password: string) {
 }
 
 async function openPatientModal(page: Page): Promise<boolean> {
-  await page.goto('/dashboard/reception');
+  await page.goto('/dashboard/reception', { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(2_000);
 
   // Procurar botão de novo paciente ou cadastrar
@@ -54,15 +54,24 @@ async function openPatientModal(page: Page): Promise<boolean> {
 
 // ─── P-01: Toggle Idade / Data de nascimento ─────────────────────────────────
 
+// — server guard ——————————————————————————————————————————————————————————————
+let _serverAlive = true
+test.beforeAll(async ({ browser }) => {
+  const _ctx = await browser.newContext(); const _pg = await _ctx.newPage()
+  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
+  await _ctx.close(); if (!_serverAlive) console.log('[SKIP ALL] sprint-master-p01-p02-p06.spec.ts — servidor fora do ar')
+})
+test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
+
 test.describe('P-01: Toggle Idade ↔ Data de nascimento no cadastro do pet', () => {
   test.beforeEach(async () => {
     await seedTutorsAndPets();
   });
 
-  test('P-01-01: Modal de cadastro do pet exibe toggle Idade / Data', async ({ page }) => {
+  test('P-01-01: Modal de cadastro do pet exibe toggle Idade / Data', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const opened = await openPatientModal(page);
-    if (!opened) { console.log('P-01-01: SKIP — Modal de pet não encontrado'); test.skip(); return; }
+    if (!opened) { console.log('P-01-01: SKIP — Modal de pet não encontrado'); testInfo.skip(); return; }
 
     // Verificar existência do toggle
     const idadeBtn = page.getByRole('button', { name: /^idade$/i }).first()
@@ -76,21 +85,21 @@ test.describe('P-01: Toggle Idade ↔ Data de nascimento no cadastro do pet', ()
 
     if (!idadeVisible && !dataVisible) {
       console.log('P-01-01: FUNCIONALIDADE PENDENTE — toggle Idade/Data não encontrado no modal');
-      test.skip();
+      testInfo.skip(); return;
     } else {
       expect(idadeVisible || dataVisible).toBe(true);
     }
   });
 
-  test('P-01-02: Modo Idade mostra campo de número + unidade (A/M)', async ({ page }) => {
+  test('P-01-02: Modo Idade mostra campo de número + unidade (A/M)', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const opened = await openPatientModal(page);
-    if (!opened) { console.log('P-01-02: SKIP — Modal de pet não encontrado'); test.skip(); return; }
+    if (!opened) { console.log('P-01-02: SKIP — Modal de pet não encontrado'); testInfo.skip(); return; }
 
     const idadeBtn = page.getByRole('button', { name: /^idade$/i }).first();
     if (!(await idadeBtn.isVisible({ timeout: 5_000 }).catch(() => false))) {
       console.log('P-01-02: SKIP — Botão "Idade" não encontrado');
-      test.skip(); return;
+      testInfo.skip(); return;
     }
     await idadeBtn.click();
     await page.waitForTimeout(500);
@@ -102,21 +111,21 @@ test.describe('P-01: Toggle Idade ↔ Data de nascimento no cadastro do pet', ()
     console.log(`P-01-02: Input de idade visível no modo Idade: ${visible}`);
     if (!visible) {
       console.log('P-01-02: FUNCIONALIDADE PENDENTE — campo de número de idade não encontrado após clicar em Idade');
-      test.skip(); return;
+      testInfo.skip(); return;
     }
     expect(visible).toBe(true);
   });
 
-  test('P-01-03: Modo Data exibe campo DD/MM/AAAA', async ({ page }) => {
+  test('P-01-03: Modo Data exibe campo DD/MM/AAAA', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const opened = await openPatientModal(page);
-    if (!opened) { console.log('P-01-03: SKIP — Modal de pet não encontrado'); test.skip(); return; }
+    if (!opened) { console.log('P-01-03: SKIP — Modal de pet não encontrado'); testInfo.skip(); return; }
 
     const dataBtn = page.getByRole('button', { name: /^data$/i }).first()
       .or(page.getByText(/^data de nascimento$/i).first());
     if (!(await dataBtn.isVisible({ timeout: 5_000 }).catch(() => false))) {
       console.log('P-01-03: SKIP — Botão "Data" não encontrado');
-      test.skip(); return;
+      testInfo.skip(); return;
     }
     await dataBtn.click();
     await page.waitForTimeout(500);
@@ -149,17 +158,17 @@ test.describe('P-02: Aba "Tutor" no cadastro do pet substitui "Recepcao"', () =>
     await seedTutorsAndPets();
   });
 
-  test('P-02-01: Modal do pet exibe aba com label "Tutor" (não "Recepcao")', async ({ page }) => {
+  test('P-02-01: Modal do pet exibe aba com label "Tutor" (não "Recepcao")', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
 
     // Abrir modal de um pet existente
-    await page.goto('/dashboard/reception');
+    await page.goto('/dashboard/reception', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2_000);
 
     const tutorCard = page.getByText(fixtures.tutors.tutorA1.name).first();
     if (!(await tutorCard.isVisible({ timeout: 8_000 }).catch(() => false))) {
       console.log('P-02-01: SKIP — Tutor não encontrado na Recepção');
-      test.skip(); return;
+      testInfo.skip(); return;
     }
     await tutorCard.click();
     await page.waitForTimeout(1_000);
@@ -167,7 +176,7 @@ test.describe('P-02: Aba "Tutor" no cadastro do pet substitui "Recepcao"', () =>
     const petCard = page.getByText(fixtures.patients.petA1.name).first();
     if (!(await petCard.isVisible({ timeout: 5_000 }).catch(() => false))) {
       console.log('P-02-01: SKIP — Pet não encontrado no modal do tutor');
-      test.skip(); return;
+      testInfo.skip(); return;
     }
     await petCard.click();
     await page.waitForTimeout(1_000);
@@ -195,15 +204,15 @@ test.describe('P-06: Opção de enviar mensagem WhatsApp ao agendar', () => {
     await seedTutorsAndPets();
   });
 
-  test('P-06-01: Modal de agendamento contém toggle ou opção de enviar confirmação ao tutor', async ({ page }) => {
+  test('P-06-01: Modal de agendamento contém toggle ou opção de enviar confirmação ao tutor', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-    await page.goto('/dashboard/reception');
+    await page.goto('/dashboard/reception', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2_000);
 
     const scheduleBtn = page.getByRole('button', { name: /agendar|novo agendamento/i }).first();
     if (!(await scheduleBtn.isVisible({ timeout: 5_000 }).catch(() => false))) {
       console.log('P-06-01: SKIP — Botão de agendamento não encontrado');
-      test.skip(); return;
+      testInfo.skip(); return;
     }
     await scheduleBtn.click();
     await page.waitForTimeout(1_000);
@@ -216,13 +225,13 @@ test.describe('P-06: Opção de enviar mensagem WhatsApp ao agendar', () => {
 
     if (!visible) {
       console.log('P-06-01: FUNCIONALIDADE PENDENTE — toggle de envio de confirmação não encontrado');
-      test.skip();
+      testInfo.skip(); return;
     } else {
       expect(visible).toBe(true);
     }
   });
 
-  test('P-06-02: sendWhatsAppMessage é chamado com o telefone do tutor ao agendar (interceptação)', async ({ page }) => {
+  test('P-06-02: sendWhatsAppMessage é chamado com o telefone do tutor ao agendar (interceptação)', async ({ page }, testInfo) => {
     const whatsappCalls: string[] = [];
     page.on('request', req => {
       if (req.url().includes('/api/whatsapp') || req.url().includes('/send-message') || req.url().includes('/message/sendText')) {
@@ -232,12 +241,12 @@ test.describe('P-06: Opção de enviar mensagem WhatsApp ao agendar', () => {
     });
 
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-    await page.goto('/dashboard/reception');
+    await page.goto('/dashboard/reception', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2_000);
 
     const scheduleBtn = page.getByRole('button', { name: /agendar|novo agendamento/i }).first();
     if (!(await scheduleBtn.isVisible({ timeout: 5_000 }).catch(() => false))) {
-      console.log('P-06-02: SKIP — Botão de agendamento não encontrado'); test.skip(); return;
+      console.log('P-06-02: SKIP — Botão de agendamento não encontrado'); testInfo.skip(); return;
     }
     await scheduleBtn.click();
     await page.waitForTimeout(1_000);

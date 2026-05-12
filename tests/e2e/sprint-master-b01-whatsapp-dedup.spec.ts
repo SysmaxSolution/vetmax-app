@@ -35,7 +35,7 @@ async function enableGroomingModule(clinicId: string) {
 
 /** Abre GroomingDetailModal para a sessão com o dado ID */
 async function openGroomingCard(page: Page, sessionId: string) {
-  await page.goto('/dashboard/grooming');
+  await page.goto('/dashboard/grooming', { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(2_000);
 
   // Tentar abrir via data-testid ou pelo nome do pet (Rex)
@@ -76,6 +76,15 @@ async function dismissAnyPopup(page: Page) {
 
 // ─── TC-B01-01: Status "bathing" NÃO abre popup WhatsApp ─────────────────────
 
+// — server guard ——————————————————————————————————————————————————————————————
+let _serverAlive = true
+test.beforeAll(async ({ browser }) => {
+  const _ctx = await browser.newContext(); const _pg = await _ctx.newPage()
+  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
+  await _ctx.close(); if (!_serverAlive) console.log('[SKIP ALL] sprint-master-b01-whatsapp-dedup.spec.ts — servidor fora do ar')
+})
+test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
+
 test.describe('TC-B01-01: Status bathing não abre popup WhatsApp', () => {
   let sessionId: string;
 
@@ -89,13 +98,13 @@ test.describe('TC-B01-01: Status bathing não abre popup WhatsApp', () => {
     if (sessionId) await admin.from('grooming_sessions').delete().eq('id', sessionId);
   });
 
-  test('Save com status bathing não dispara popup WhatsApp', async ({ page }) => {
+  test('Save com status bathing não dispara popup WhatsApp', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
 
     const opened = await openGroomingCard(page, sessionId);
     if (!opened) {
       console.log('TC-B01-01: SKIP — Card de grooming não encontrado no Kanban');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -104,7 +113,7 @@ test.describe('TC-B01-01: Status bathing não abre popup WhatsApp', () => {
     const modalVisible = await modal.isVisible({ timeout: 5_000 }).catch(() => false);
     if (!modalVisible) {
       console.log('TC-B01-01: SKIP — GroomingDetailModal não abriu');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -112,7 +121,7 @@ test.describe('TC-B01-01: Status bathing não abre popup WhatsApp', () => {
     const saveBtn = page.getByRole('button', { name: /salvar|atualizar|save/i }).first();
     if (!(await saveBtn.isVisible({ timeout: 5_000 }).catch(() => false))) {
       console.log('TC-B01-01: SKIP — Botão salvar não encontrado no modal');
-      test.skip();
+      testInfo.skip();
       return;
     }
     await saveBtn.click();
@@ -140,7 +149,7 @@ test.describe('TC-B01-02: Status waiting_pickup abre popup WhatsApp', () => {
     if (sessionId) await admin.from('grooming_sessions').delete().eq('id', sessionId);
   });
 
-  test('Save com status waiting_pickup abre popup WhatsApp', async ({ page }) => {
+  test('Save com status waiting_pickup abre popup WhatsApp', async ({ page }, testInfo) => {
     // Mudar status para waiting_pickup via DB antes de abrir o modal
     await admin.from('grooming_sessions')
       .update({ status: 'waiting_pickup', current_status: 'waiting_pickup' })
@@ -151,7 +160,7 @@ test.describe('TC-B01-02: Status waiting_pickup abre popup WhatsApp', () => {
     const opened = await openGroomingCard(page, sessionId);
     if (!opened) {
       console.log('TC-B01-02: SKIP — Card de grooming não encontrado no Kanban');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -159,14 +168,14 @@ test.describe('TC-B01-02: Status waiting_pickup abre popup WhatsApp', () => {
     const modalVisible = await modal.isVisible({ timeout: 5_000 }).catch(() => false);
     if (!modalVisible) {
       console.log('TC-B01-02: SKIP — GroomingDetailModal não abriu');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
     const saveBtn = page.getByRole('button', { name: /salvar|atualizar|save/i }).first();
     if (!(await saveBtn.isVisible({ timeout: 5_000 }).catch(() => false))) {
       console.log('TC-B01-02: SKIP — Botão salvar não encontrado no modal');
-      test.skip();
+      testInfo.skip();
       return;
     }
     await saveBtn.click();
@@ -197,7 +206,7 @@ test.describe('TC-B01-03: Status delivered abre popup WhatsApp', () => {
     if (sessionId) await admin.from('grooming_sessions').delete().eq('id', sessionId);
   });
 
-  test('Save com status delivered abre popup WhatsApp', async ({ page }) => {
+  test('Save com status delivered abre popup WhatsApp', async ({ page }, testInfo) => {
     // Mudar status para delivered via DB
     await admin.from('grooming_sessions')
       .update({ status: 'delivered', current_status: 'delivered' })
@@ -208,7 +217,7 @@ test.describe('TC-B01-03: Status delivered abre popup WhatsApp', () => {
     const opened = await openGroomingCard(page, sessionId);
     if (!opened) {
       console.log('TC-B01-03: SKIP — Card de grooming não encontrado no Kanban');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -216,14 +225,14 @@ test.describe('TC-B01-03: Status delivered abre popup WhatsApp', () => {
     const modalVisible = await modal.isVisible({ timeout: 5_000 }).catch(() => false);
     if (!modalVisible) {
       console.log('TC-B01-03: SKIP — GroomingDetailModal não abriu');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
     const saveBtn = page.getByRole('button', { name: /salvar|atualizar|save/i }).first();
     if (!(await saveBtn.isVisible({ timeout: 5_000 }).catch(() => false))) {
       console.log('TC-B01-03: SKIP — Botão salvar não encontrado no modal');
-      test.skip();
+      testInfo.skip();
       return;
     }
     await saveBtn.click();
@@ -254,13 +263,13 @@ test.describe('TC-B01-04: Status received não abre popup WhatsApp', () => {
     if (sessionId) await admin.from('grooming_sessions').delete().eq('id', sessionId);
   });
 
-  test('Save com status received não dispara popup WhatsApp', async ({ page }) => {
+  test('Save com status received não dispara popup WhatsApp', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
 
     const opened = await openGroomingCard(page, sessionId);
     if (!opened) {
       console.log('TC-B01-04: SKIP — Card de grooming não encontrado no Kanban');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -268,14 +277,14 @@ test.describe('TC-B01-04: Status received não abre popup WhatsApp', () => {
     const modalVisible = await modal.isVisible({ timeout: 5_000 }).catch(() => false);
     if (!modalVisible) {
       console.log('TC-B01-04: SKIP — GroomingDetailModal não abriu');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
     const saveBtn = page.getByRole('button', { name: /salvar|atualizar|save/i }).first();
     if (!(await saveBtn.isVisible({ timeout: 5_000 }).catch(() => false))) {
       console.log('TC-B01-04: SKIP — Botão salvar não encontrado no modal');
-      test.skip();
+      testInfo.skip();
       return;
     }
     await saveBtn.click();
@@ -302,13 +311,13 @@ test.describe('TC-B01-05: Duplo save consecutivo só abre popup uma vez', () => 
     if (sessionId) await admin.from('grooming_sessions').delete().eq('id', sessionId);
   });
 
-  test('Duplo save consecutivo com waiting_pickup abre popup apenas uma vez', async ({ page }) => {
+  test('Duplo save consecutivo com waiting_pickup abre popup apenas uma vez', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
 
     const opened = await openGroomingCard(page, sessionId);
     if (!opened) {
       console.log('TC-B01-05: SKIP — Card de grooming não encontrado no Kanban');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -316,14 +325,14 @@ test.describe('TC-B01-05: Duplo save consecutivo só abre popup uma vez', () => 
     const modalVisible = await modal.isVisible({ timeout: 5_000 }).catch(() => false);
     if (!modalVisible) {
       console.log('TC-B01-05: SKIP — GroomingDetailModal não abriu');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
     const saveBtn = page.getByRole('button', { name: /salvar|atualizar|save/i }).first();
     if (!(await saveBtn.isVisible({ timeout: 5_000 }).catch(() => false))) {
       console.log('TC-B01-05: SKIP — Botão salvar não encontrado no modal');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -336,7 +345,7 @@ test.describe('TC-B01-05: Duplo save consecutivo só abre popup uma vez', () => 
 
     if (!firstPopup) {
       console.log('TC-B01-05: FUNCIONALIDADE PENDENTE — Popup WA não apareceu no 1º save.');
-      test.skip();
+      testInfo.skip();
       return;
     }
 

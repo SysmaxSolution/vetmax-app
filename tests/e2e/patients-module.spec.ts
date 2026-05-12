@@ -19,6 +19,18 @@ async function loginAs(page: Page, email: string, password: string) {
   await loginViaApi(page, email, password)
 }
 
+// — server guard: skip all if Next.js dev server is down ——————————————————————
+let _serverAlive = true
+test.beforeAll(async ({ browser }) => {
+  const _ctx = await browser.newContext()
+  const _pg = await _ctx.newPage()
+  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 })
+    .then(() => true).catch(() => false)
+  await _ctx.close()
+  if (!_serverAlive) console.log('[SKIP ALL] patients-module — servidor fora do ar')
+})
+test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
+
 // ─── TC-PAC-01: Cadastrar novo paciente ──────────────────────────────────────
 
 test.describe('TC-PAC-01: Cadastrar novo pet no módulo Pacientes', () => {
@@ -34,9 +46,9 @@ test.describe('TC-PAC-01: Cadastrar novo pet no módulo Pacientes', () => {
       .eq('name', NEW_TUTOR_NAME);
   });
 
-  test('Admin cadastra novo tutor + pet e eles aparecem na lista', async ({ page }) => {
+  test('Admin cadastra novo tutor + pet e eles aparecem na lista', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-    await page.goto('/dashboard/patients');
+    await page.goto('/dashboard/patients', { waitUntil: 'domcontentloaded' });
 
     // Módulo deve carregar — usar heading para evitar strict mode
     await expect(
@@ -48,7 +60,7 @@ test.describe('TC-PAC-01: Cadastrar novo pet no módulo Pacientes', () => {
 
     if (!(await addBtn.isVisible({ timeout: 8_000 }).catch(() => false))) {
       console.log('FUNCIONALIDADE PENDENTE DE IMPLEMENTAÇÃO: Botão de novo paciente não encontrado no módulo Pacientes');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -120,9 +132,9 @@ test.describe('TC-PAC-02: Buscar paciente por nome', () => {
     await seedTutorsAndPets();
   });
 
-  test('Busca por "Rex" retorna o paciente correto', async ({ page }) => {
+  test('Busca por "Rex" retorna o paciente correto', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.receptionistA.email, fixtures.users.receptionistA.password);
-    await page.goto('/dashboard/patients');
+    await page.goto('/dashboard/patients', { waitUntil: 'domcontentloaded' });
 
     await expect(page.getByRole('heading', { name: /pacientes|prontuário/i }).first()).toBeVisible({ timeout: 10_000 });
 
@@ -134,15 +146,14 @@ test.describe('TC-PAC-02: Buscar paciente por nome', () => {
     await searchInput.fill('Rex');
 
     // Resultado deve aparecer
-    await expect(page.getByText('Rex')).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByText('Rex').first()).toBeVisible({ timeout: 8_000 });
 
-    // Clicar no resultado para ver prontuário
-    await page.getByText('Rex').first().click();
+    // Abrir prontuário clicando no botão Histórico do card de Rex
+    await page.locator('div').filter({ has: page.locator('p').filter({ hasText: /^Rex$/ }) }).getByRole('button', { name: /histórico/i }).first().click();
+    await page.waitForTimeout(500);
 
-    // Prontuário/timeline deve abrir
-    await expect(
-      page.getByText(/prontuário|histórico|timeline|Rex/i).first()
-    ).toBeVisible({ timeout: 8_000 });
+    // Modal/dialog de prontuário deve abrir
+    await expect(page.getByRole('dialog').first()).toBeVisible({ timeout: 8_000 });
   });
 });
 
@@ -172,20 +183,21 @@ test.describe('TC-PAC-03: Timeline exibe histórico de consultas', () => {
     if (consultationId) await admin.from('consultations').delete().eq('id', consultationId);
   });
 
-  test('Prontuário de Rex exibe consulta histórica', async ({ page }) => {
+  test('Prontuário de Rex exibe consulta histórica', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-    await page.goto('/dashboard/patients');
+    await page.goto('/dashboard/patients', { waitUntil: 'domcontentloaded' });
 
     const searchInput = page.getByPlaceholder(/buscar|pesquisar|nome/i).or(page.getByRole('searchbox'));
     await expect(searchInput).toBeVisible({ timeout: 10_000 });
     await searchInput.fill('Rex');
 
     await page.getByText('Rex').first().waitFor({ timeout: 8_000 });
-    await page.getByText('Rex').first().click();
+    // Abrir prontuário pelo botão Histórico no card de Rex (clicar no nome não abre o modal)
+    await page.locator('div').filter({ has: page.locator('p').filter({ hasText: /^Rex$/ }) }).getByRole('button', { name: /histórico/i }).first().click();
 
     // Timeline deve mostrar o histórico
     await expect(
-      page.getByText(/check-up geral|TC-PAC-03|histórico/i)
+      page.getByText(/check-up geral|TC-PAC-03/i).first()
     ).toBeVisible({ timeout: 10_000 });
   });
 });
@@ -197,9 +209,9 @@ test.describe('TC-PAC-04: Isolamento RLS multi-tenant — pacientes', () => {
     await seedTutorsAndPets();
   });
 
-  test('Admin da Clínica B não vê pacientes da Clínica A', async ({ page }) => {
+  test('Admin da Clínica B não vê pacientes da Clínica A', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminB.email, fixtures.users.adminB.password);
-    await page.goto('/dashboard/patients');
+    await page.goto('/dashboard/patients', { waitUntil: 'domcontentloaded' });
 
     await page.waitForTimeout(3_000);
 

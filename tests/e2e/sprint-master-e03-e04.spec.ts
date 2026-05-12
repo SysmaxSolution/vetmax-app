@@ -44,13 +44,22 @@ async function seedExamQueueEntry(): Promise<{ queueId: string | null; consultat
 }
 
 async function navigateToExams(page: Page): Promise<boolean> {
-  await page.goto('/dashboard/exams');
+  await page.goto('/dashboard/exams', { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(2_500);
   const heading = page.getByText(/exames/i).first();
   return heading.isVisible({ timeout: 8_000 }).catch(() => false);
 }
 
 // ─── E-03: Dar Alta na aba Exames ────────────────────────────────────────────
+
+// — server guard ——————————————————————————————————————————————————————————————
+let _serverAlive = true
+test.beforeAll(async ({ browser }) => {
+  const _ctx = await browser.newContext(); const _pg = await _ctx.newPage()
+  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
+  await _ctx.close(); if (!_serverAlive) console.log('[SKIP ALL] sprint-master-e03-e04.spec.ts — servidor fora do ar')
+})
+test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
 
 test.describe('E-03: Botão "Dar Alta" na aba Exames', () => {
   let queueId: string | null = null;
@@ -68,16 +77,16 @@ test.describe('E-03: Botão "Dar Alta" na aba Exames', () => {
     if (consultationId) await admin.from('consultations').delete().eq('id', consultationId);
   });
 
-  test('E-03-01: Botão "Dar Alta" visível para pets na fila de exames', async ({ page }) => {
-    if (!queueId) { console.log('E-03-01: SKIP — Fila de exames não criada'); test.skip(); return; }
+  test('E-03-01: Botão "Dar Alta" visível para pets na fila de exames', async ({ page }, testInfo) => {
+    if (!queueId) { console.log('E-03-01: SKIP — Fila de exames não criada'); testInfo.skip(); return; }
 
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const loaded = await navigateToExams(page);
-    if (!loaded) { console.log('E-03-01: SKIP — Módulo de exames não carregou'); test.skip(); return; }
+    if (!loaded) { console.log('E-03-01: SKIP — Módulo de exames não carregou'); testInfo.skip(); return; }
 
     const petCard = page.getByText(fixtures.patients.petA1.name).first();
     if (!(await petCard.isVisible({ timeout: 8_000 }).catch(() => false))) {
-      console.log('E-03-01: SKIP — Pet não encontrado na fila de exames'); test.skip(); return;
+      console.log('E-03-01: SKIP — Pet não encontrado na fila de exames'); testInfo.skip(); return;
     }
 
     const dischargeBtn = page.getByRole('button', { name: /dar alta/i }).first();
@@ -86,21 +95,21 @@ test.describe('E-03: Botão "Dar Alta" na aba Exames', () => {
     expect(visible).toBe(true);
   });
 
-  test('E-03-02: Clicar em "Dar Alta" exibe confirmação ou muda status', async ({ page }) => {
-    if (!queueId) { console.log('E-03-02: SKIP — Fila de exames não criada'); test.skip(); return; }
+  test('E-03-02: Clicar em "Dar Alta" exibe confirmação ou muda status', async ({ page }, testInfo) => {
+    if (!queueId) { console.log('E-03-02: SKIP — Fila de exames não criada'); testInfo.skip(); return; }
 
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const loaded = await navigateToExams(page);
-    if (!loaded) { console.log('E-03-02: SKIP — Módulo de exames não carregou'); test.skip(); return; }
+    if (!loaded) { console.log('E-03-02: SKIP — Módulo de exames não carregou'); testInfo.skip(); return; }
 
     const petCard = page.getByText(fixtures.patients.petA1.name).first();
     if (!(await petCard.isVisible({ timeout: 8_000 }).catch(() => false))) {
-      console.log('E-03-02: SKIP — Pet não encontrado na fila de exames'); test.skip(); return;
+      console.log('E-03-02: SKIP — Pet não encontrado na fila de exames'); testInfo.skip(); return;
     }
 
     const dischargeBtn = page.getByRole('button', { name: /dar alta/i }).first();
     if (!(await dischargeBtn.isVisible({ timeout: 5_000 }).catch(() => false))) {
-      console.log('E-03-02: SKIP — Botão Dar Alta não encontrado'); test.skip(); return;
+      console.log('E-03-02: SKIP — Botão Dar Alta não encontrado'); testInfo.skip(); return;
     }
 
     await dischargeBtn.click();
@@ -119,8 +128,8 @@ test.describe('E-03: Botão "Dar Alta" na aba Exames', () => {
     expect(discharged).toBe(true);
   });
 
-  test('E-03-03: Alta via Exames sem is_reviewed_by_vet gera flag de auditoria (CFMV)', async () => {
-    if (!consultationId) { console.log('E-03-03: SKIP — Consulta não criada'); test.skip(); return; }
+  test('E-03-03: Alta via Exames sem is_reviewed_by_vet gera flag de auditoria (CFMV)', async ({}, testInfo) => {
+    if (!consultationId) { console.log('E-03-03: SKIP — Consulta não criada'); testInfo.skip(); return; }
 
     // Verificar que is_reviewed_by_vet é false por padrão
     const { data } = await admin.from('consultations')
@@ -157,16 +166,16 @@ test.describe('E-04: Botão "Internar" na aba Exames encaminha para Internação
       .eq('clinic_id', fixtures.clinics.clinicA.id);
   });
 
-  test('E-04-01: Botão "Internar" visível para pets na fila de exames', async ({ page }) => {
-    if (!queueId) { console.log('E-04-01: SKIP — Fila de exames não criada'); test.skip(); return; }
+  test('E-04-01: Botão "Internar" visível para pets na fila de exames', async ({ page }, testInfo) => {
+    if (!queueId) { console.log('E-04-01: SKIP — Fila de exames não criada'); testInfo.skip(); return; }
 
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const loaded = await navigateToExams(page);
-    if (!loaded) { console.log('E-04-01: SKIP — Módulo de exames não carregou'); test.skip(); return; }
+    if (!loaded) { console.log('E-04-01: SKIP — Módulo de exames não carregou'); testInfo.skip(); return; }
 
     const petCard = page.getByText(fixtures.patients.petA1.name).first();
     if (!(await petCard.isVisible({ timeout: 8_000 }).catch(() => false))) {
-      console.log('E-04-01: SKIP — Pet não encontrado na fila de exames'); test.skip(); return;
+      console.log('E-04-01: SKIP — Pet não encontrado na fila de exames'); testInfo.skip(); return;
     }
 
     const internBtn = page.getByRole('button', { name: /internar/i }).first();
@@ -175,21 +184,21 @@ test.describe('E-04: Botão "Internar" na aba Exames encaminha para Internação
     expect(visible).toBe(true);
   });
 
-  test('E-04-02: Clicar "Internar" cria registro em hospitalizations com admission_source', async ({ page }) => {
-    if (!queueId) { console.log('E-04-02: SKIP — Fila de exames não criada'); test.skip(); return; }
+  test('E-04-02: Clicar "Internar" cria registro em hospitalizations com admission_source', async ({ page }, testInfo) => {
+    if (!queueId) { console.log('E-04-02: SKIP — Fila de exames não criada'); testInfo.skip(); return; }
 
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const loaded = await navigateToExams(page);
-    if (!loaded) { console.log('E-04-02: SKIP — Módulo de exames não carregou'); test.skip(); return; }
+    if (!loaded) { console.log('E-04-02: SKIP — Módulo de exames não carregou'); testInfo.skip(); return; }
 
     const petCard = page.getByText(fixtures.patients.petA1.name).first();
     if (!(await petCard.isVisible({ timeout: 8_000 }).catch(() => false))) {
-      console.log('E-04-02: SKIP — Pet não encontrado na fila de exames'); test.skip(); return;
+      console.log('E-04-02: SKIP — Pet não encontrado na fila de exames'); testInfo.skip(); return;
     }
 
     const internBtn = page.getByRole('button', { name: /internar/i }).first();
     if (!(await internBtn.isVisible({ timeout: 5_000 }).catch(() => false))) {
-      console.log('E-04-02: SKIP — Botão Internar não encontrado'); test.skip(); return;
+      console.log('E-04-02: SKIP — Botão Internar não encontrado'); testInfo.skip(); return;
     }
 
     // Contar hospitalizações antes

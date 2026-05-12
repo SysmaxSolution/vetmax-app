@@ -27,8 +27,17 @@ async function loginAs(page: Page, email: string, password: string) {
 
 // ─── G-02: Branding SysVetMax ────────────────────────────────────────────────
 
+// — server guard ——————————————————————————————————————————————————————————————
+let _serverAlive = true
+test.beforeAll(async ({ browser }) => {
+  const _ctx = await browser.newContext(); const _pg = await _ctx.newPage()
+  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
+  await _ctx.close(); if (!_serverAlive) console.log('[SKIP ALL] sprint-master-g02-g05-g07-c02.spec.ts — servidor fora do ar')
+})
+test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
+
 test.describe('G-02: Branding SysVetMax — ícone e nome do site', () => {
-  test('G-02-01: Título da página contém "SysVetMax"', async ({ page }) => {
+  test('G-02-01: Título da página contém "SysVetMax"', async ({ page }, testInfo) => {
     await page.goto('/login');
     await page.waitForTimeout(1_000);
     const title = await page.title();
@@ -36,7 +45,7 @@ test.describe('G-02: Branding SysVetMax — ícone e nome do site', () => {
     expect(title).toMatch(/SysVetMax/i);
   });
 
-  test('G-02-02: Meta og:title contém "SysVetMax"', async ({ page }) => {
+  test('G-02-02: Meta og:title contém "SysVetMax"', async ({ page }, testInfo) => {
     await page.goto('/login', { waitUntil: 'commit' }).catch(() => {});
     await page.waitForTimeout(1_000);
     // timeout curto: meta tag pode não existir — não bloquear 30s esperando
@@ -46,18 +55,18 @@ test.describe('G-02: Branding SysVetMax — ícone e nome do site', () => {
     const hasBranding = (ogTitle ?? '').includes('SysVetMax') || siteTitle.includes('SysVetMax');
     if (!hasBranding) {
       console.log('G-02-02: FUNCIONALIDADE PENDENTE — og:title/title não contém SysVetMax');
-      test.skip(); return;
+      testInfo.skip(); return;
     }
     expect(hasBranding).toBe(true);
   });
 
-  test('G-02-03: Favicon existe (não é 404)', async ({ page }) => {
+  test('G-02-03: Favicon existe (não é 404)', async ({ page }, testInfo) => {
     const response = await page.goto('/favicon.ico').catch(() => null);
     const status = response?.status() ?? 0;
     console.log(`G-02-03: favicon.ico status: ${status}`);
     if (status === 404 || status === 0) {
       console.log('G-02-03: FUNCIONALIDADE PENDENTE — favicon.ico retorna 404 (adicionar /public/favicon.ico)');
-      test.skip(); return;
+      testInfo.skip(); return;
     }
     expect(status).not.toBe(404);
   });
@@ -70,7 +79,7 @@ test.describe('G-05: Soft delete de pet com motivo obrigatório e auditoria', ()
     await seedTutorsAndPets();
   });
 
-  test('G-05-01: Server Action softDeletePatient existe e aceita motivo', async () => {
+  test('G-05-01: Server Action softDeletePatient existe e aceita motivo', async ({}, testInfo) => {
     // Testar via banco — criar um queue_entry e tentar remover com motivo
     const { data: entry } = await admin.from('queue_entries').insert([{
       clinic_id:  fixtures.clinics.clinicA.id,
@@ -80,7 +89,7 @@ test.describe('G-05: Soft delete de pet com motivo obrigatório e auditoria', ()
       visit_reason: 'consultation',
     }]).select('id').single();
 
-    if (!entry?.id) { console.log('G-05-01: SKIP — queue_entry não criado'); test.skip(); return; }
+    if (!entry?.id) { console.log('G-05-01: SKIP — queue_entry não criado'); testInfo.skip(); return; }
 
     try {
       // Verificar que queue_entries aceita soft delete com campo removed_at
@@ -116,7 +125,7 @@ test.describe('G-05: Soft delete de pet com motivo obrigatório e auditoria', ()
     }
   });
 
-  test('G-05-03: Botão de excluir/remover pet visível apenas para admin/supervisor', async ({ page }) => {
+  test('G-05-03: Botão de excluir/remover pet visível apenas para admin/supervisor', async ({ page }, testInfo) => {
     // Criar entry na fila
     const { data: entry } = await admin.from('queue_entries').insert([{
       clinic_id:  fixtures.clinics.clinicA.id,
@@ -126,16 +135,16 @@ test.describe('G-05: Soft delete de pet com motivo obrigatório e auditoria', ()
       visit_reason: 'consultation',
     }]).select('id').single();
 
-    if (!entry?.id) { test.skip(); return; }
+    if (!entry?.id) { testInfo.skip(); return; }
 
     try {
       await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-      await page.goto('/dashboard/reception');
+      await page.goto('/dashboard/reception', { waitUntil: 'domcontentloaded' });
       await page.waitForTimeout(2_500);
 
       const petCard = page.getByText(fixtures.patients.petA1.name).first();
       if (!(await petCard.isVisible({ timeout: 8_000 }).catch(() => false))) {
-        console.log('G-05-03: SKIP — Card do pet não encontrado'); test.skip(); return;
+        console.log('G-05-03: SKIP — Card do pet não encontrado'); testInfo.skip(); return;
       }
       await petCard.click();
       await page.waitForTimeout(1_000);
@@ -146,7 +155,7 @@ test.describe('G-05: Soft delete de pet com motivo obrigatório e auditoria', ()
       console.log(`G-05-03: Botão remover visível para admin: ${visible}`);
       if (!visible) {
         console.log('G-05-03: FUNCIONALIDADE PENDENTE — botão de remoção não encontrado');
-        test.skip();
+        testInfo.skip(); return;
       } else {
         expect(visible).toBe(true);
       }
@@ -163,9 +172,9 @@ test.describe('G-07: Import CSV de preços na aba Tabela de Preços', () => {
     await seedTutorsAndPets();
   });
 
-  test('G-07-01: Aba "Tabela de Preços" acessível em /dashboard/management', async ({ page }) => {
+  test('G-07-01: Aba "Tabela de Preços" acessível em /dashboard/management', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-    await page.goto('/dashboard/management');
+    await page.goto('/dashboard/management', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2_000);
 
     const priceTab = page.getByRole('tab', { name: /tabela de preços|preços|pricing/i }).first()
@@ -176,15 +185,15 @@ test.describe('G-07: Import CSV de preços na aba Tabela de Preços', () => {
     console.log(`G-07-01: Aba "Tabela de Preços" visível: ${visible}`);
     if (!visible) {
       console.log('G-07-01: FUNCIONALIDADE PENDENTE — aba Tabela de Preços não encontrada');
-      test.skip();
+      testInfo.skip(); return;
     } else {
       expect(visible).toBe(true);
     }
   });
 
-  test('G-07-02: Botão de importação CSV dentro da aba Tabela de Preços', async ({ page }) => {
+  test('G-07-02: Botão de importação CSV dentro da aba Tabela de Preços', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-    await page.goto('/dashboard/management');
+    await page.goto('/dashboard/management', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2_000);
 
     // Navegar para aba de preços
@@ -193,7 +202,7 @@ test.describe('G-07: Import CSV de preços na aba Tabela de Preços', () => {
       .or(page.getByText(/tabela de preços/i).first());
 
     if (!(await priceTab.isVisible({ timeout: 5_000 }).catch(() => false))) {
-      console.log('G-07-02: SKIP — Aba Tabela de Preços não encontrada'); test.skip(); return;
+      console.log('G-07-02: SKIP — Aba Tabela de Preços não encontrada'); testInfo.skip(); return;
     }
     await priceTab.click();
     await page.waitForTimeout(1_000);
@@ -236,14 +245,14 @@ test.describe('C-02: Botão "Incluir Paciente" no Consultório', () => {
     if (vetQueueId) await admin.from('queue_entries').delete().eq('id', vetQueueId);
   });
 
-  test('C-02-01: Botão "Incluir Paciente" existe no módulo Consultório', async ({ page }) => {
+  test('C-02-01: Botão "Incluir Paciente" existe no módulo Consultório', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.vetA.email, fixtures.users.vetA.password);
-    await page.goto('/dashboard/vet');
+    await page.goto('/dashboard/vet', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2_500);
 
     const vetHeading = page.getByText(/consultório|vet|atendimento/i).first();
     if (!(await vetHeading.isVisible({ timeout: 8_000 }).catch(() => false))) {
-      console.log('C-02-01: SKIP — Módulo Consultório não carregou'); test.skip(); return;
+      console.log('C-02-01: SKIP — Módulo Consultório não carregou'); testInfo.skip(); return;
     }
 
     const addBtn = page.getByRole('button', { name: /incluir paciente|add.*patient|novo.*paciente/i }).first();
@@ -252,14 +261,14 @@ test.describe('C-02: Botão "Incluir Paciente" no Consultório', () => {
     expect(visible).toBe(true);
   });
 
-  test('C-02-02: Modal "Incluir Paciente no Consultório" abre ao clicar no botão', async ({ page }) => {
+  test('C-02-02: Modal "Incluir Paciente no Consultório" abre ao clicar no botão', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.vetA.email, fixtures.users.vetA.password);
-    await page.goto('/dashboard/vet');
+    await page.goto('/dashboard/vet', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2_500);
 
     const addBtn = page.getByRole('button', { name: /incluir paciente/i }).first();
     if (!(await addBtn.isVisible({ timeout: 8_000 }).catch(() => false))) {
-      console.log('C-02-02: SKIP — Botão não encontrado'); test.skip(); return;
+      console.log('C-02-02: SKIP — Botão não encontrado'); testInfo.skip(); return;
     }
     await addBtn.click();
     await page.waitForTimeout(1_000);
@@ -270,19 +279,19 @@ test.describe('C-02: Botão "Incluir Paciente" no Consultório', () => {
     console.log(`C-02-02: Modal "Incluir Paciente no Consultório" aberto: ${modalVisible}`);
     if (!modalVisible) {
       console.log('C-02-02: FUNCIONALIDADE PENDENTE — modal de incluir paciente não abriu');
-      test.skip(); return;
+      testInfo.skip(); return;
     }
     expect(modalVisible).toBe(true);
   });
 
-  test('C-02-03: Buscar pet no modal e confirmar inclusão cria entry no Consultório', async ({ page }) => {
+  test('C-02-03: Buscar pet no modal e confirmar inclusão cria entry no Consultório', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.vetA.email, fixtures.users.vetA.password);
-    await page.goto('/dashboard/vet');
+    await page.goto('/dashboard/vet', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2_500);
 
     const addBtn = page.getByRole('button', { name: /incluir paciente/i }).first();
     if (!(await addBtn.isVisible({ timeout: 8_000 }).catch(() => false))) {
-      console.log('C-02-03: SKIP — Botão não encontrado'); test.skip(); return;
+      console.log('C-02-03: SKIP — Botão não encontrado'); testInfo.skip(); return;
     }
     await addBtn.click({ timeout: 10_000 }).catch(() => {});
     await page.waitForTimeout(1_000);
@@ -290,7 +299,7 @@ test.describe('C-02: Botão "Incluir Paciente" no Consultório', () => {
     // Buscar o pet
     const searchInput = page.getByPlaceholder(/nome do pet|buscar|search/i).first();
     if (!(await searchInput.isVisible({ timeout: 5_000 }).catch(() => false))) {
-      console.log('C-02-03: SKIP — Modal não abriu após clique no botão'); test.skip(); return;
+      console.log('C-02-03: SKIP — Modal não abriu após clique no botão'); testInfo.skip(); return;
     }
     await searchInput.fill(fixtures.patients.petA1.name);
     await page.waitForTimeout(1_000);
@@ -306,7 +315,7 @@ test.describe('C-02: Botão "Incluir Paciente" no Consultório', () => {
     const dialog = page.getByRole('dialog').first();
     const confirmBtn = dialog.getByRole('button', { name: /incluir|confirmar|adicionar/i }).first();
     if (!(await confirmBtn.isVisible({ timeout: 5_000 }).catch(() => false))) {
-      console.log('C-02-03: SKIP — Botão de confirmar não encontrado no modal'); test.skip(); return;
+      console.log('C-02-03: SKIP — Botão de confirmar não encontrado no modal'); testInfo.skip(); return;
     }
 
     // Contar entries antes
@@ -319,7 +328,7 @@ test.describe('C-02: Botão "Incluir Paciente" no Consultório', () => {
     const clicked = await confirmBtn.click({ timeout: 10_000 }).then(() => true).catch(() => false);
     if (!clicked) {
       console.log('C-02-03: SKIP — clique no botão confirmar não concluiu (overlay ou loading state)');
-      test.skip(); return;
+      testInfo.skip(); return;
     }
     await page.waitForTimeout(2_000);
 

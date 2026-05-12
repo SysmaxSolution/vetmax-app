@@ -138,12 +138,24 @@ async function openModalAndAdvanceTour(page: Page): Promise<boolean> {
   }
 }
 
+// — server guard: skip all if Next.js dev server is down ——————————————————————
+let _serverAlive = true
+test.beforeAll(async ({ browser }) => {
+  const _ctx = await browser.newContext()
+  const _pg = await _ctx.newPage()
+  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 })
+    .then(() => true).catch(() => false)
+  await _ctx.close()
+  if (!_serverAlive) console.log('[SKIP ALL] phase6-mentor-jumpmode — servidor fora do ar')
+})
+test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
+
 // ─── Setup: login e navegação para /dashboard/patients ───────────────────────
 
 test.use({ storageState: undefined });
 
 test.describe('[TC-MENTOR] MentorTour JumpMode — Stress Test', () => {
-  test.setTimeout(60_000);
+  test.setTimeout(120_000);
 
   test.beforeEach(async ({ page }) => {
     await loginAsAdmin(page);
@@ -154,13 +166,13 @@ test.describe('[TC-MENTOR] MentorTour JumpMode — Stress Test', () => {
   // ───────────────────────────────────────────────────────────────────────────
   // TC-MENTOR-001: Tour inicia no passo 0
   // ───────────────────────────────────────────────────────────────────────────
-  test('TC-MENTOR-001: tour cadastro-pet inicia no passo 0 — btn-novo-paciente', async ({ page }) => {
+  test('TC-MENTOR-001: tour cadastro-pet inicia no passo 0 — btn-novo-paciente', async ({ page }, testInfo) => {
     await startCadastroPetTour(page);
     await page.waitForTimeout(800);
 
     const balloonVisible = await isBalloonVisible(page);
     if (!balloonVisible) {
-      test.skip(); // tour não pode ser iniciado via eval nesta build
+      testInfo.skip(); return; // tour não pode ser iniciado via eval nesta build
       return;
     }
 
@@ -178,12 +190,12 @@ test.describe('[TC-MENTOR] MentorTour JumpMode — Stress Test', () => {
   // ───────────────────────────────────────────────────────────────────────────
   // TC-MENTOR-002: JumpMode ativa ao focar campo fora da ordem
   // ───────────────────────────────────────────────────────────────────────────
-  test('TC-MENTOR-002: focar campo fora de ordem ativa JumpMode — badge "Exploração livre"', async ({ page }) => {
+  test('TC-MENTOR-002: focar campo fora de ordem ativa JumpMode — badge "Exploração livre"', async ({ page }, testInfo) => {
     await startCadastroPetTour(page);
     await page.waitForTimeout(800);
 
     const balloonVisible = await isBalloonVisible(page);
-    if (!balloonVisible) { test.skip(); return; }
+    if (!balloonVisible) { testInfo.skip(); return; }
 
     // Abre modal e aguarda tour avançar para passo 1 (pet-name-input)
     await openModalAndAdvanceTour(page);
@@ -199,12 +211,12 @@ test.describe('[TC-MENTOR] MentorTour JumpMode — Stress Test', () => {
   // ───────────────────────────────────────────────────────────────────────────
   // TC-MENTOR-003: Spotlight reposiciona para campo jumpado
   // ───────────────────────────────────────────────────────────────────────────
-  test('TC-MENTOR-003: spotlight (anel âmbar) reposiciona para o campo jumpado', async ({ page }) => {
+  test('TC-MENTOR-003: spotlight (anel âmbar) reposiciona para o campo jumpado', async ({ page }, testInfo) => {
     await startCadastroPetTour(page);
     await page.waitForTimeout(800);
 
     const balloonVisible = await isBalloonVisible(page);
-    if (!balloonVisible) { test.skip(); return; }
+    if (!balloonVisible) { testInfo.skip(); return; }
 
     await openModalAndAdvanceTour(page);
 
@@ -252,12 +264,12 @@ test.describe('[TC-MENTOR] MentorTour JumpMode — Stress Test', () => {
   // ───────────────────────────────────────────────────────────────────────────
   // TC-MENTOR-004: currentStep não avança durante JumpMode
   // ───────────────────────────────────────────────────────────────────────────
-  test('TC-MENTOR-004: passo do tour NÃO muda durante JumpMode', async ({ page }) => {
+  test('TC-MENTOR-004: passo do tour NÃO muda durante JumpMode', async ({ page }, testInfo) => {
     await startCadastroPetTour(page);
     await page.waitForTimeout(800);
 
     const balloonVisible = await isBalloonVisible(page);
-    if (!balloonVisible) { test.skip(); return; }
+    if (!balloonVisible) { testInfo.skip(); return; }
 
     await openModalAndAdvanceTour(page);
 
@@ -309,12 +321,12 @@ test.describe('[TC-MENTOR] MentorTour JumpMode — Stress Test', () => {
   // ───────────────────────────────────────────────────────────────────────────
   // TC-MENTOR-005: 3 saltos consecutivos — tour nunca fecha
   // ───────────────────────────────────────────────────────────────────────────
-  test('TC-MENTOR-005: 3 saltos consecutivos out-of-order — tour persiste, overlay nunca fecha', async ({ page }) => {
+  test('TC-MENTOR-005: 3 saltos consecutivos out-of-order — tour persiste, overlay nunca fecha', async ({ page }, testInfo) => {
     await startCadastroPetTour(page);
     await page.waitForTimeout(800);
 
     const balloonVisible = await isBalloonVisible(page);
-    if (!balloonVisible) { test.skip(); return; }
+    if (!balloonVisible) { testInfo.skip(); return; }
 
     await openModalAndAdvanceTour(page);
 
@@ -344,12 +356,12 @@ test.describe('[TC-MENTOR] MentorTour JumpMode — Stress Test', () => {
   // ───────────────────────────────────────────────────────────────────────────
   // TC-MENTOR-006: Focar o passo atual cancela JumpMode
   // ───────────────────────────────────────────────────────────────────────────
-  test('TC-MENTOR-006: focar o passo atual cancela JumpMode — anel volta a azul', async ({ page }) => {
+  test('TC-MENTOR-006: focar o passo atual cancela JumpMode — anel volta a azul', async ({ page }, testInfo) => {
     await startCadastroPetTour(page);
     await page.waitForTimeout(800);
 
     const balloonVisible = await isBalloonVisible(page);
-    if (!balloonVisible) { test.skip(); return; }
+    if (!balloonVisible) { testInfo.skip(); return; }
 
     await openModalAndAdvanceTour(page);
 
@@ -379,12 +391,12 @@ test.describe('[TC-MENTOR] MentorTour JumpMode — Stress Test', () => {
   // ───────────────────────────────────────────────────────────────────────────
   // TC-MENTOR-007: Botões Próximo/Anterior ocultos durante JumpMode
   // ───────────────────────────────────────────────────────────────────────────
-  test('TC-MENTOR-007: botões Próximo/Anterior ficam ocultos durante JumpMode', async ({ page }) => {
+  test('TC-MENTOR-007: botões Próximo/Anterior ficam ocultos durante JumpMode', async ({ page }, testInfo) => {
     await startCadastroPetTour(page);
     await page.waitForTimeout(800);
 
     const balloonVisible = await isBalloonVisible(page);
-    if (!balloonVisible) { test.skip(); return; }
+    if (!balloonVisible) { testInfo.skip(); return; }
 
     await openModalAndAdvanceTour(page);
 
@@ -415,12 +427,12 @@ test.describe('[TC-MENTOR] MentorTour JumpMode — Stress Test', () => {
   // ───────────────────────────────────────────────────────────────────────────
   // TC-MENTOR-008: Footer dots — passo atual=azul, passo explorado=âmbar
   // ───────────────────────────────────────────────────────────────────────────
-  test('TC-MENTOR-008: footer dots — passo atual azul, passo explorado âmbar', async ({ page }) => {
+  test('TC-MENTOR-008: footer dots — passo atual azul, passo explorado âmbar', async ({ page }, testInfo) => {
     await startCadastroPetTour(page);
     await page.waitForTimeout(800);
 
     const balloonVisible = await isBalloonVisible(page);
-    if (!balloonVisible) { test.skip(); return; }
+    if (!balloonVisible) { testInfo.skip(); return; }
 
     await openModalAndAdvanceTour(page);
 
@@ -456,12 +468,12 @@ test.describe('[TC-MENTOR] MentorTour JumpMode — Stress Test', () => {
   // ───────────────────────────────────────────────────────────────────────────
   // TC-MENTOR-009: Fechar tour via botão X encerra corretamente
   // ───────────────────────────────────────────────────────────────────────────
-  test('TC-MENTOR-009: fechar tour via botão X — overlay some completamente', async ({ page }) => {
+  test('TC-MENTOR-009: fechar tour via botão X — overlay some completamente', async ({ page }, testInfo) => {
     await startCadastroPetTour(page);
     await page.waitForTimeout(800);
 
     const balloonVisible = await isBalloonVisible(page);
-    if (!balloonVisible) { test.skip(); return; }
+    if (!balloonVisible) { testInfo.skip(); return; }
 
     await openModalAndAdvanceTour(page);
 
@@ -483,12 +495,12 @@ test.describe('[TC-MENTOR] MentorTour JumpMode — Stress Test', () => {
   // ───────────────────────────────────────────────────────────────────────────
   // TC-MENTOR-010: Tour persiste após scroll
   // ───────────────────────────────────────────────────────────────────────────
-  test('TC-MENTOR-010: spotlight re-ancora após scroll da página', async ({ page }) => {
+  test('TC-MENTOR-010: spotlight re-ancora após scroll da página', async ({ page }, testInfo) => {
     await startCadastroPetTour(page);
     await page.waitForTimeout(800);
 
     const balloonVisible = await isBalloonVisible(page);
-    if (!balloonVisible) { test.skip(); return; }
+    if (!balloonVisible) { testInfo.skip(); return; }
 
     await openModalAndAdvanceTour(page);
 

@@ -50,7 +50,7 @@ async function seedHospitalization(overrides: Record<string, unknown> = {}): Pro
 }
 
 async function navigateToHospitalization(page: Page): Promise<boolean> {
-  await page.goto('/dashboard/hospitalization');
+  await page.goto('/dashboard/hospitalization', { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(2_000);
 
   const heading = page.getByText(/internação|board de internação|hospitali/i).first();
@@ -96,6 +96,15 @@ async function openHospitalizationModal(page: Page): Promise<boolean> {
 
 // ─── TC-G04-01: Botão microfone presente no modal ────────────────────────────
 
+// — server guard ——————————————————————————————————————————————————————————————
+let _serverAlive = true
+test.beforeAll(async ({ browser }) => {
+  const _ctx = await browser.newContext(); const _pg = await _ctx.newPage()
+  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
+  await _ctx.close(); if (!_serverAlive) console.log('[SKIP ALL] sprint-master-g04-hospitalization-voice.spec.ts — servidor fora do ar')
+})
+test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
+
 test.describe('TC-G04-01: Botão microfone presente no modal de internação', () => {
   let hospitalizationId: string;
 
@@ -109,10 +118,10 @@ test.describe('TC-G04-01: Botão microfone presente no modal de internação', (
     if (hospitalizationId) await admin.from('hospitalizations').delete().eq('id', hospitalizationId);
   });
 
-  test('Modal de internação contém botão de microfone (push-to-talk)', async ({ page }) => {
+  test('Modal de internação contém botão de microfone (push-to-talk)', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const opened = await openHospitalizationModal(page);
-    if (!opened) { test.skip(); return; }
+    if (!opened) { testInfo.skip(); return; }
 
     const micBtn = page
       .locator('[data-testid="hospitalization-mic-btn"]')
@@ -124,7 +133,7 @@ test.describe('TC-G04-01: Botão microfone presente no modal de internação', (
 
     if (!micVisible) {
       console.log('TC-G04-01: FUNCIONALIDADE PENDENTE — botão de microfone não encontrado no modal de internação');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -147,10 +156,10 @@ test.describe('TC-G04-02: Clicar no botão microfone ativa estado de gravação'
     if (hospitalizationId) await admin.from('hospitalizations').delete().eq('id', hospitalizationId);
   });
 
-  test('Após clicar, botão muda para estado de gravação ativa (ícone MicOff ou aria-label alterado)', async ({ page }) => {
+  test('Após clicar, botão muda para estado de gravação ativa (ícone MicOff ou aria-label alterado)', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const opened = await openHospitalizationModal(page);
-    if (!opened) { test.skip(); return; }
+    if (!opened) { testInfo.skip(); return; }
 
     const micBtn = page
       .locator('[data-testid="hospitalization-mic-btn"]')
@@ -159,7 +168,7 @@ test.describe('TC-G04-02: Clicar no botão microfone ativa estado de gravação'
 
     if (!(await micBtn.isVisible({ timeout: 8_000 }).catch(() => false))) {
       console.log('TC-G04-02: FUNCIONALIDADE PENDENTE — botão de microfone não encontrado');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -181,7 +190,7 @@ test.describe('TC-G04-02: Clicar no botão microfone ativa estado de gravação'
 
     if (!stateChanged) {
       console.log('TC-G04-02: FUNCIONALIDADE PENDENTE — estado de gravação não detectado após clique');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -204,10 +213,10 @@ test.describe('TC-G04-03: Modal de internação abre ao clicar em card no Kanban
     if (hospitalizationId) await admin.from('hospitalizations').delete().eq('id', hospitalizationId);
   });
 
-  test('Clicar no card Rex no Kanban de internação abre o modal de detalhes', async ({ page }) => {
+  test('Clicar no card Rex no Kanban de internação abre o modal de detalhes', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const navigated = await navigateToHospitalization(page);
-    if (!navigated) { test.skip(); return; }
+    if (!navigated) { testInfo.skip(); return; }
 
     const card = page
       .locator('[data-testid="hospitalization-kanban-card"]')
@@ -216,7 +225,7 @@ test.describe('TC-G04-03: Modal de internação abre ao clicar em card no Kanban
 
     if (!(await card.isVisible({ timeout: 10_000 }).catch(() => false))) {
       console.log('TC-G04-03: FUNCIONALIDADE PENDENTE — card Rex não encontrado no Kanban de internação');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -232,7 +241,7 @@ test.describe('TC-G04-03: Modal de internação abre ao clicar em card no Kanban
 
     if (!modalVisible) {
       console.log('TC-G04-03: FUNCIONALIDADE PENDENTE — modal de detalhes não abre ao clicar no card do Kanban');
-      test.skip();
+      testInfo.skip();
       return;
     }
     expect(modalVisible).toBe(true);
@@ -258,12 +267,12 @@ test.describe('TC-G04-04 (Crítico): Estado de gravação não persiste ao fecha
     if (hospitalizationId) await admin.from('hospitalizations').delete().eq('id', hospitalizationId);
   });
 
-  test('Ao fechar e reabrir o modal, o estado de gravação começa desativado', async ({ page }) => {
+  test('Ao fechar e reabrir o modal, o estado de gravação começa desativado', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
 
     // Abrir modal pela primeira vez
     const opened = await openHospitalizationModal(page);
-    if (!opened) { test.skip(); return; }
+    if (!opened) { testInfo.skip(); return; }
 
     const micBtn = page
       .locator('[data-testid="hospitalization-mic-btn"]')
@@ -272,7 +281,7 @@ test.describe('TC-G04-04 (Crítico): Estado de gravação não persiste ao fecha
 
     if (!(await micBtn.isVisible({ timeout: 8_000 }).catch(() => false))) {
       console.log('TC-G04-04: FUNCIONALIDADE PENDENTE — botão de microfone não encontrado');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -311,7 +320,7 @@ test.describe('TC-G04-04 (Crítico): Estado de gravação não persiste ao fecha
 
     if (!(await card.isVisible({ timeout: 8_000 }).catch(() => false))) {
       console.log('TC-G04-04: Card não encontrado para reabrir modal');
-      test.skip();
+      testInfo.skip();
       return;
     }
 

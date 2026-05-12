@@ -72,6 +72,15 @@ async function openPrescriptionForm(page: Page, consultationId: string): Promise
 
 // ─── TC-C01-01: Select "Via de Administração" presente ────────────────────────
 
+// — server guard ——————————————————————————————————————————————————————————————
+let _serverAlive = true
+test.beforeAll(async ({ browser }) => {
+  const _ctx = await browser.newContext(); const _pg = await _ctx.newPage()
+  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
+  await _ctx.close(); if (!_serverAlive) console.log('[SKIP ALL] sprint-master-c01-prescriptions.spec.ts — servidor fora do ar')
+})
+test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
+
 test.describe('TC-C01-01: Select Via de Administração está presente', () => {
   let consultationId: string;
 
@@ -85,10 +94,10 @@ test.describe('TC-C01-01: Select Via de Administração está presente', () => {
     if (consultationId) await admin.from('consultations').delete().eq('id', consultationId);
   });
 
-  test('Select de via de administração está visível no formulário de prescrição', async ({ page }) => {
+  test('Select de via de administração está visível no formulário de prescrição', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const opened = await openPrescriptionForm(page, consultationId);
-    if (!opened) { test.skip(); return; }
+    if (!opened) { testInfo.skip(); return; }
 
     // data-testid preferencial; fallback por label/select[name]
     const routeSelect = page
@@ -99,7 +108,7 @@ test.describe('TC-C01-01: Select Via de Administração está presente', () => {
     const visible = await routeSelect.isVisible({ timeout: 8_000 }).catch(() => false);
     if (!visible) {
       console.log('TC-C01-01: FUNCIONALIDADE PENDENTE — select de via não encontrado');
-      test.skip();
+      testInfo.skip();
       return;
     }
     await expect(routeSelect).toBeVisible();
@@ -124,10 +133,10 @@ test.describe('TC-C01-02: Prescrição com via oral persiste no banco', () => {
     }
   });
 
-  test('Salvar prescrição com via oral cria registro com route_of_administration = oral', async ({ page }) => {
+  test('Salvar prescrição com via oral cria registro com route_of_administration = oral', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const opened = await openPrescriptionForm(page, consultationId);
-    if (!opened) { test.skip(); return; }
+    if (!opened) { testInfo.skip(); return; }
 
     const routeSelect = page
       .locator('[data-testid="prescription-route-select"]')
@@ -136,7 +145,7 @@ test.describe('TC-C01-02: Prescrição com via oral persiste no banco', () => {
 
     if (!(await routeSelect.isVisible({ timeout: 8_000 }).catch(() => false))) {
       console.log('TC-C01-02: FUNCIONALIDADE PENDENTE — select de via não encontrado');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -190,10 +199,10 @@ test.describe('TC-C01-03: Prescrição com via iv (intravenosa) persiste no banc
     }
   });
 
-  test('Salvar prescrição com via iv cria registro com route_of_administration = iv', async ({ page }) => {
+  test('Salvar prescrição com via iv cria registro com route_of_administration = iv', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const opened = await openPrescriptionForm(page, consultationId);
-    if (!opened) { test.skip(); return; }
+    if (!opened) { testInfo.skip(); return; }
 
     const routeSelect = page
       .locator('[data-testid="prescription-route-select"]')
@@ -202,7 +211,7 @@ test.describe('TC-C01-03: Prescrição com via iv (intravenosa) persiste no banc
 
     if (!(await routeSelect.isVisible({ timeout: 8_000 }).catch(() => false))) {
       console.log('TC-C01-03: FUNCIONALIDADE PENDENTE — select de via não encontrado');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -273,10 +282,10 @@ test.describe('TC-C01-04: Prescrições agrupadas por via na listagem', () => {
     }
   });
 
-  test('Listagem de prescrições exibe cabeçalhos de agrupamento por via', async ({ page }) => {
+  test('Listagem de prescrições exibe cabeçalhos de agrupamento por via', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const opened = await openPrescriptionForm(page, consultationId);
-    if (!opened) { test.skip(); return; }
+    if (!opened) { testInfo.skip(); return; }
 
     // Aguardar renderização da lista
     await page.waitForTimeout(1_000);
@@ -296,7 +305,7 @@ test.describe('TC-C01-04: Prescrições agrupadas por via na listagem', () => {
 
     if (!oralVisible && !ivVisible) {
       console.log('TC-C01-04: FUNCIONALIDADE PENDENTE — agrupamento por via não implementado');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -319,10 +328,10 @@ test.describe('TC-C01-05: Todas as 7 opções de via estão disponíveis no sele
     if (consultationId) await admin.from('consultations').delete().eq('id', consultationId);
   });
 
-  test('Select contém as 7 vias: oral, iv, im, subcutaneo, topico, inalacao, outro', async ({ page }) => {
+  test('Select contém as 7 vias: oral, iv, im, subcutaneo, topico, inalacao, outro', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const opened = await openPrescriptionForm(page, consultationId);
-    if (!opened) { test.skip(); return; }
+    if (!opened) { testInfo.skip(); return; }
 
     const routeSelect = page
       .locator('[data-testid="prescription-route-select"]')
@@ -331,7 +340,7 @@ test.describe('TC-C01-05: Todas as 7 opções de via estão disponíveis no sele
 
     if (!(await routeSelect.isVisible({ timeout: 8_000 }).catch(() => false))) {
       console.log('TC-C01-05: FUNCIONALIDADE PENDENTE — select de via não encontrado');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -371,10 +380,10 @@ test.describe('TC-C01-06: Via padrão é "oral" ao abrir formulário', () => {
     if (consultationId) await admin.from('consultations').delete().eq('id', consultationId);
   });
 
-  test('Ao abrir o formulário, o select de via já vem selecionado com "oral"', async ({ page }) => {
+  test('Ao abrir o formulário, o select de via já vem selecionado com "oral"', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const opened = await openPrescriptionForm(page, consultationId);
-    if (!opened) { test.skip(); return; }
+    if (!opened) { testInfo.skip(); return; }
 
     const routeSelect = page
       .locator('[data-testid="prescription-route-select"]')
@@ -383,7 +392,7 @@ test.describe('TC-C01-06: Via padrão é "oral" ao abrir formulário', () => {
 
     if (!(await routeSelect.isVisible({ timeout: 8_000 }).catch(() => false))) {
       console.log('TC-C01-06: FUNCIONALIDADE PENDENTE — select de via não encontrado');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -411,10 +420,10 @@ test.describe('TC-C01-07 (Crítico): Medicamento controlado com via iv sinaliza 
     }
   });
 
-  test('Marcar medicamento como controlado e via iv exibe badge "Receituário Azul"', async ({ page }) => {
+  test('Marcar medicamento como controlado e via iv exibe badge "Receituário Azul"', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const opened = await openPrescriptionForm(page, consultationId);
-    if (!opened) { test.skip(); return; }
+    if (!opened) { testInfo.skip(); return; }
 
     const routeSelect = page
       .locator('[data-testid="prescription-route-select"]')
@@ -423,7 +432,7 @@ test.describe('TC-C01-07 (Crítico): Medicamento controlado com via iv sinaliza 
 
     if (!(await routeSelect.isVisible({ timeout: 8_000 }).catch(() => false))) {
       console.log('TC-C01-07: FUNCIONALIDADE PENDENTE — select de via não encontrado');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -461,7 +470,7 @@ test.describe('TC-C01-07 (Crítico): Medicamento controlado com via iv sinaliza 
 
     if (!badgeVisible) {
       console.log('TC-C01-07: FUNCIONALIDADE PENDENTE — badge Receituário Azul não encontrado');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -495,10 +504,10 @@ test.describe('TC-C01-08: Via "subcutaneo" salva com acento "Subcutâneo" na exi
     }
   });
 
-  test('Via "subcutaneo" (sem acento no banco) é exibida como "Subcutâneo" (com acento) na UI', async ({ page }) => {
+  test('Via "subcutaneo" (sem acento no banco) é exibida como "Subcutâneo" (com acento) na UI', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const opened = await openPrescriptionForm(page, consultationId);
-    if (!opened) { test.skip(); return; }
+    if (!opened) { testInfo.skip(); return; }
 
     await page.waitForTimeout(1_500);
 
@@ -515,7 +524,7 @@ test.describe('TC-C01-08: Via "subcutaneo" salva com acento "Subcutâneo" na exi
 
     if (!subcutaneoVisible) {
       console.log('TC-C01-08: FUNCIONALIDADE PENDENTE — label de via não encontrado ou não está normalizando acentuação');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -554,10 +563,10 @@ test.describe('TC-C01-09: Prescrição legada sem route_of_administration mostra
     }
   });
 
-  test('Ao editar prescrição legada, o campo route_of_administration mostra "oral" como fallback', async ({ page }) => {
+  test('Ao editar prescrição legada, o campo route_of_administration mostra "oral" como fallback', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const opened = await openPrescriptionForm(page, consultationId);
-    if (!opened) { test.skip(); return; }
+    if (!opened) { testInfo.skip(); return; }
 
     await page.waitForTimeout(1_500);
 
@@ -577,7 +586,7 @@ test.describe('TC-C01-09: Prescrição legada sem route_of_administration mostra
 
     if (!(await routeSelect.isVisible({ timeout: 6_000 }).catch(() => false))) {
       console.log('TC-C01-09: FUNCIONALIDADE PENDENTE — select de via não encontrado ao editar prescrição legada');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -637,10 +646,10 @@ test.describe('TC-C01-10: Agrupamento de 3 prescrições (2 oral + 1 iv) — gru
     }
   });
 
-  test('Grupo "oral" tem 2 items e grupo "iv" tem 1 item na listagem agrupada', async ({ page }) => {
+  test('Grupo "oral" tem 2 items e grupo "iv" tem 1 item na listagem agrupada', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     const opened = await openPrescriptionForm(page, consultationId);
-    if (!opened) { test.skip(); return; }
+    if (!opened) { testInfo.skip(); return; }
 
     await page.waitForTimeout(1_500);
 
@@ -657,7 +666,7 @@ test.describe('TC-C01-10: Agrupamento de 3 prescrições (2 oral + 1 iv) — gru
 
       if (!oralVisible && !ivVisible) {
         console.log('TC-C01-10: FUNCIONALIDADE PENDENTE — agrupamento por via não implementado');
-        test.skip();
+        testInfo.skip();
         return;
       }
       console.log(`TC-C01-10: Seção oral: ${oralVisible}, Seção iv: ${ivVisible}`);

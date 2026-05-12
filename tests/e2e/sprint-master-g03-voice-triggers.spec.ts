@@ -80,8 +80,17 @@ async function evaluateVoiceTriggers(
 
 // ─── TC-G03-01: Wake word "vet max" (com espaço) ──────────────────────────────
 
+// — server guard ——————————————————————————————————————————————————————————————
+let _serverAlive = true
+test.beforeAll(async ({ browser }) => {
+  const _ctx = await browser.newContext(); const _pg = await _ctx.newPage()
+  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
+  await _ctx.close(); if (!_serverAlive) console.log('[SKIP ALL] sprint-master-g03-voice-triggers.spec.ts — servidor fora do ar')
+})
+test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
+
 test.describe('TC-G03-01: buildWakeRe combina "vet max" com espaço', () => {
-  test('Regex de wake word detecta "vet max" (com espaço)', async ({ page }) => {
+  test('Regex de wake word detecta "vet max" (com espaço)', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
 
     const results = await evaluateVoiceTriggers(page, [
@@ -96,7 +105,7 @@ test.describe('TC-G03-01: buildWakeRe combina "vet max" com espaço', () => {
 // ─── TC-G03-02: Wake word "vetmax" (sem espaço) ───────────────────────────────
 
 test.describe('TC-G03-02: buildWakeRe combina "vetmax" sem espaço', () => {
-  test('Regex de wake word detecta "vetmax" (sem espaço)', async ({ page }) => {
+  test('Regex de wake word detecta "vetmax" (sem espaço)', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
 
     const results = await evaluateVoiceTriggers(page, [
@@ -111,7 +120,7 @@ test.describe('TC-G03-02: buildWakeRe combina "vetmax" sem espaço', () => {
 // ─── TC-G03-03: Wake word "assistente" ────────────────────────────────────────
 
 test.describe('TC-G03-03: buildWakeRe combina "assistente"', () => {
-  test('Regex de wake word detecta a palavra "assistente"', async ({ page }) => {
+  test('Regex de wake word detecta a palavra "assistente"', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
 
     const results = await evaluateVoiceTriggers(page, [
@@ -126,7 +135,7 @@ test.describe('TC-G03-03: buildWakeRe combina "assistente"', () => {
 // ─── TC-G03-04: Wake word "gravar evolução" ───────────────────────────────────
 
 test.describe('TC-G03-04: buildWakeRe combina "gravar evolução"', () => {
-  test('Regex de wake word detecta "gravar evolução"', async ({ page }) => {
+  test('Regex de wake word detecta "gravar evolução"', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
 
     const results = await evaluateVoiceTriggers(page, [
@@ -144,7 +153,7 @@ test.describe('TC-G03-04: buildWakeRe combina "gravar evolução"', () => {
 // ─── TC-G03-05: Stop word "salvar evolução" ───────────────────────────────────
 
 test.describe('TC-G03-05: buildStopRe combina "salvar evolução"', () => {
-  test('Regex de stop word detecta "salvar evolução"', async ({ page }) => {
+  test('Regex de stop word detecta "salvar evolução"', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
 
     const results = await evaluateVoiceTriggers(page, [
@@ -160,7 +169,7 @@ test.describe('TC-G03-05: buildStopRe combina "salvar evolução"', () => {
 // ─── TC-G03-06: Stop word "finalizar" ─────────────────────────────────────────
 
 test.describe('TC-G03-06: buildStopRe combina "finalizar"', () => {
-  test('Regex de stop word detecta a palavra "finalizar"', async ({ page }) => {
+  test('Regex de stop word detecta a palavra "finalizar"', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
 
     const results = await evaluateVoiceTriggers(page, [
@@ -175,7 +184,7 @@ test.describe('TC-G03-06: buildStopRe combina "finalizar"', () => {
 // ─── TC-G03-07: Stop word "pode salvar" ───────────────────────────────────────
 
 test.describe('TC-G03-07: buildStopRe combina "pode salvar"', () => {
-  test('Regex de stop word detecta "pode salvar"', async ({ page }) => {
+  test('Regex de stop word detecta "pode salvar"', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
 
     const results = await evaluateVoiceTriggers(page, [
@@ -190,7 +199,7 @@ test.describe('TC-G03-07: buildStopRe combina "pode salvar"', () => {
 // ─── TC-G03-08 (Crítico): Palavras parciais não ativam wake word ───────────────
 
 test.describe('TC-G03-08 (Crítico): Palavras parciais não ativam o wake word', () => {
-  test('Termos similares mas não exatos NÃO devem acionar o wake word', async ({ page }) => {
+  test('Termos similares mas não exatos NÃO devem acionar o wake word', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
 
     const falsePhrases = [
@@ -228,7 +237,7 @@ test.describe('TC-G03-08 (Crítico): Palavras parciais não ativam o wake word',
     expect(salvamentoResult?.stop ?? false).toBe(false);
   });
 
-  test('SKIP (voz real): Reconhecimento de voz via microfone real não é testável em E2E', async ({ page: _ }) => {
+  test('SKIP (voz real): Reconhecimento de voz via microfone real não é testável em E2E', async ({ page: _ }, testInfo) => {
     test.skip(true, 'Reconhecimento de voz real (Web Speech API com microfone físico) não é testável em ambiente CI/CD headless. Coberto por testes unitários de regex.');
   });
 });

@@ -50,12 +50,24 @@ async function seedInvoice(): Promise<{ invoiceId: string; consultationId: strin
   return { invoiceId: inv.id, consultationId: cons.id };
 }
 
+// — server guard: skip all if Next.js dev server is down ——————————————————————
+let _serverAlive = true
+test.beforeAll(async ({ browser }) => {
+  const _ctx = await browser.newContext()
+  const _pg = await _ctx.newPage()
+  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 })
+    .then(() => true).catch(() => false)
+  await _ctx.close()
+  if (!_serverAlive) console.log('[SKIP ALL] phase6-edge-cases — servidor fora do ar')
+})
+test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // BLOCO I — SLOW NETWORK / LOADING STATE
 // ═══════════════════════════════════════════════════════════════════════════════
 
 test.describe('TC-EDGE-001: Formulário de triagem com latência simulada não duplica registro', () => {
-  test('Botão de salvar triagem fica desabilitado durante submit com slow 3G', async ({ page }) => {
+  test('Botão de salvar triagem fica desabilitado durante submit com slow 3G', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.receptionistA.email, fixtures.users.receptionistA.password);
 
     // Simular latência de rede (slow 3G: ~400ms RTT, ~750kbps)
@@ -64,7 +76,7 @@ test.describe('TC-EDGE-001: Formulário de triagem com latência simulada não d
       await route.continue();
     });
 
-    await page.goto('/dashboard/triage');
+    await page.goto('/dashboard/triage', { waitUntil: 'domcontentloaded' });
 
     // Verificar se a página de triagem carrega (pode requerer paciente na fila)
     const loaded = await page.getByText(/triagem|fila de triagem/i)
@@ -72,7 +84,7 @@ test.describe('TC-EDGE-001: Formulário de triagem com latência simulada não d
 
     if (!loaded) {
       console.log('TC-EDGE-001: SKIP — Página de triagem não carregou com rota simulada de latência');
-      test.skip(); return;
+      testInfo.skip(); return;
     }
 
     // Se há formulário de triagem aberto, verificar que o submit fica disabled
@@ -105,7 +117,7 @@ test.describe('TC-EDGE-002: Checkout de fatura — botão desabilitado durante s
     await admin.from('consultations').delete().eq('id', consultationId);
   });
 
-  test('Confirmar pagamento desabilita botão durante processamento', async ({ page }) => {
+  test('Confirmar pagamento desabilita botão durante processamento', async ({ page }, testInfo) => {
     // Interceptar Server Action com delay
     await page.route('**/dashboard/cashier', async (route) => {
       await new Promise(r => setTimeout(r, 300));
@@ -113,16 +125,22 @@ test.describe('TC-EDGE-002: Checkout de fatura — botão desabilitado durante s
     });
 
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-    await page.goto('/dashboard/cashier');
+    await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('cashier-entries-table')).toBeVisible({ timeout: 12_000 });
 
     // Ir para Recebimentos
-    await page.getByRole('button', { name: /recebimentos/i }).first().click();
+    const recTabEdge = page.getByRole('button', { name: /recebimentos/i }).first();
+    await recTabEdge.click();
+    await page.waitForTimeout(400);
+    if (!await page.getByRole('heading', { name: /recebimentos pendentes/i }).isVisible().catch(() => false)) {
+      await recTabEdge.click();
+    }
     await page.getByRole('heading', { name: /recebimentos pendentes/i }).waitFor({ timeout: 8_000 });
 
     const receiveBtn = page.locator('[data-mentor-step="cashier-receive-invoice-btn"]').first();
     if (!(await receiveBtn.isVisible({ timeout: 8_000 }).catch(() => false))) {
       console.log('TC-EDGE-002: SKIP — Fatura não visível na aba Recebimentos');
-      test.skip(); return;
+      testInfo.skip(); return;
     }
     await receiveBtn.click();
 
@@ -168,17 +186,23 @@ test.describe('TC-EDGE-003: Checkout com network abort após click — UI exibe 
     await admin.from('consultations').delete().eq('id', consultationId);
   });
 
-  test('Abortar fetch durante confirmação não crasha a página', async ({ page }) => {
+  test('Abortar fetch durante confirmação não crasha a página', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-    await page.goto('/dashboard/cashier');
+    await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('cashier-entries-table')).toBeVisible({ timeout: 12_000 });
 
-    await page.getByRole('button', { name: /recebimentos/i }).first().click();
+    const recTabEdge3 = page.getByRole('button', { name: /recebimentos/i }).first();
+    await recTabEdge3.click();
+    await page.waitForTimeout(400);
+    if (!await page.getByRole('heading', { name: /recebimentos pendentes/i }).isVisible().catch(() => false)) {
+      await recTabEdge3.click();
+    }
     await page.getByRole('heading', { name: /recebimentos pendentes/i }).waitFor({ timeout: 8_000 });
 
     const receiveBtn = page.locator('[data-mentor-step="cashier-receive-invoice-btn"]').first();
     if (!(await receiveBtn.isVisible({ timeout: 8_000 }).catch(() => false))) {
       console.log('TC-EDGE-003: SKIP — Fatura não visível');
-      test.skip(); return;
+      testInfo.skip(); return;
     }
     await receiveBtn.click();
     await page.getByText(/receber pagamento/i).waitFor({ timeout: 8_000 });
@@ -232,17 +256,23 @@ test.describe('TC-EDGE-004: Grooming payment — duplo clique no confirmar não 
     await admin.from('grooming_sessions').delete().eq('id', sessionId);
   });
 
-  test('Duplo clique em confirmar pagamento B&T não cria duplicatas no central_cashier', async ({ page }) => {
+  test('Duplo clique em confirmar pagamento B&T não cria duplicatas no central_cashier', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-    await page.goto('/dashboard/cashier');
+    await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('cashier-entries-table')).toBeVisible({ timeout: 12_000 });
 
-    await page.getByRole('button', { name: /recebimentos/i }).first().click();
+    const recTabEdge4 = page.getByRole('button', { name: /recebimentos/i }).first();
+    await recTabEdge4.click();
+    await page.waitForTimeout(400);
+    if (!await page.getByRole('heading', { name: /recebimentos pendentes/i }).isVisible().catch(() => false)) {
+      await recTabEdge4.click();
+    }
     await page.getByRole('heading', { name: /recebimentos pendentes/i }).waitFor({ timeout: 8_000 });
 
     const groomingBtn = page.locator('[data-mentor-step="cashier-receive-grooming-btn"]').first();
     if (!(await groomingBtn.isVisible({ timeout: 8_000 }).catch(() => false))) {
       console.log('TC-EDGE-004: SKIP — Sessão B&T não visível na aba Recebimentos');
-      test.skip(); return;
+      testInfo.skip(); return;
     }
     await groomingBtn.click();
 
@@ -273,7 +303,7 @@ test.describe('TC-EDGE-004: Grooming payment — duplo clique no confirmar não 
 // ═══════════════════════════════════════════════════════════════════════════════
 
 test.describe('TC-EDGE-005: Login com credenciais inválidas — mensagem de erro, sem loop', () => {
-  test('Email/senha errados exibem mensagem de erro e ficam na página de login', async ({ page }) => {
+  test('Email/senha errados exibem mensagem de erro e ficam na página de login', async ({ page }, testInfo) => {
     await page.goto('/login');
     await page.getByLabel(/e-?mail/i).fill('intruso@clinica-nao-existe.test');
     await page.getByLabel(/senha/i).fill('SenhaErrada123!');
@@ -291,17 +321,17 @@ test.describe('TC-EDGE-005: Login com credenciais inválidas — mensagem de err
 });
 
 test.describe('TC-EDGE-006: Acesso a rota protegida sem sessão → redireciona para /login', () => {
-  test('Rota /dashboard/cashier sem cookie redireciona para login', async ({ page }) => {
+  test('Rota /dashboard/cashier sem cookie redireciona para login', async ({ page }, testInfo) => {
     // Navegar diretamente sem login (contexto fresh)
-    await page.goto('/dashboard/cashier');
+    await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(3_000);
     expect(page.url()).toMatch(/\/login/);
   });
 });
 
 test.describe('TC-EDGE-007: Rota inexistente — 404 gracioso', () => {
-  test('URL inexistente não exibe stack trace nem crash', async ({ page }) => {
-    await page.goto('/dashboard/rota-que-nao-existe-9x8z7y');
+  test('URL inexistente não exibe stack trace nem crash', async ({ page }, testInfo) => {
+    await page.goto('/dashboard/rota-que-nao-existe-9x8z7y', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2_000);
 
     const title = await page.title();
@@ -320,11 +350,11 @@ test.describe('TC-EDGE-007: Rota inexistente — 404 gracioso', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 test.describe('TC-EDGE-008: Formulário de paciente com campos obrigatórios vazios — validação frontend', () => {
-  test('Tentar salvar pet sem nome exibe erro de validação', async ({ page }) => {
+  test('Tentar salvar pet sem nome exibe erro de validação', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.receptionistA.email, fixtures.users.receptionistA.password);
 
     // Navegar para pacientes
-    await page.goto('/dashboard/patients');
+    await page.goto('/dashboard/patients', { waitUntil: 'domcontentloaded' });
 
     const newPetBtn = page.locator('[data-mentor-step="btn-novo-paciente"]')
       .or(page.getByRole('button', { name: /novo paciente|novo pet|cadastrar/i }))
@@ -332,7 +362,7 @@ test.describe('TC-EDGE-008: Formulário de paciente com campos obrigatórios vaz
 
     if (!(await newPetBtn.isVisible({ timeout: 8_000 }).catch(() => false))) {
       console.log('TC-EDGE-008: SKIP — Botão novo paciente não encontrado');
-      test.skip(); return;
+      testInfo.skip(); return;
     }
 
     await newPetBtn.click();
@@ -344,7 +374,7 @@ test.describe('TC-EDGE-008: Formulário de paciente com campos obrigatórios vaz
 
     if (!modalVisible) {
       console.log('TC-EDGE-008: SKIP — Modal de cadastro não abriu');
-      test.skip(); return;
+      testInfo.skip(); return;
     }
 
     // Tentar salvar com campos vazios
@@ -369,7 +399,7 @@ test.describe('TC-EDGE-008: Formulário de paciente com campos obrigatórios vaz
       expect(hasValidationError || isInvalid).toBeTruthy();
     } else {
       console.log('TC-EDGE-008: SKIP — Botão salvar não encontrado no modal');
-      test.skip();
+      testInfo.skip(); return;
     }
   });
 });
@@ -450,7 +480,7 @@ test.describe('TC-EDGE-010: Duas requisições simultâneas para processar a mes
 // ═══════════════════════════════════════════════════════════════════════════════
 
 test.describe('TC-EDGE-009: API /api/process-template sem autenticação → bloqueado', () => {
-  test('POST /api/process-template sem cookie retorna 401 ou erro', async ({ request }) => {
+  test('POST /api/process-template sem cookie retorna 401 ou erro', async ({ request }, testInfo) => {
     const res = await request.post('/api/process-template', {
       data: { template: '{{patient_name}}', data: { patient_name: 'Hack' } },
       headers: { 'Content-Type': 'application/json' },

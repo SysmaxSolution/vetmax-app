@@ -36,7 +36,7 @@ async function loginAsAdmin(page: Page) {
 }
 
 async function goToTriage(page: Page) {
-  await page.goto('/dashboard/triage')
+  await page.goto('/dashboard/triage', { waitUntil: 'domcontentloaded', timeout: 45_000 })
   await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 }
 
@@ -109,6 +109,18 @@ test.beforeAll(async () => {
 // SESSÃO 1 — TC-TRG-01..05 (testes originais)
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// — server guard: skip all if Next.js dev server is down ——————————————————————
+let _serverAlive = true
+test.beforeAll(async ({ browser }) => {
+  const _ctx = await browser.newContext()
+  const _pg = await _ctx.newPage()
+  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 })
+    .then(() => true).catch(() => false)
+  await _ctx.close()
+  if (!_serverAlive) console.log('[SKIP ALL] triage-module — servidor fora do ar')
+})
+test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
+
 // ─── TC-TRG-01: Registrar animal na fila de triagem ──────────────────────────
 
 test.describe('TC-TRG-01: Registrar paciente na fila de triagem', () => {
@@ -120,32 +132,29 @@ test.describe('TC-TRG-01: Registrar paciente na fila de triagem', () => {
     await admin.from('triage_records').delete().eq('patient_id', fixtures.patients.petA1.id)
   })
 
-  test('Recepcionista adiciona animal à fila de triagem', async ({ page }) => {
+  test('Recepcionista adiciona animal à fila de triagem', async ({ page }, testInfo) => {
     test.setTimeout(45_000)
     await loginAs(page, fixtures.users.receptionistA.email, fixtures.users.receptionistA.password)
-    await page.goto('/dashboard/triage')
+    await page.goto('/dashboard/triage', { waitUntil: 'domcontentloaded' })
     await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 
     // Se a rota foi bloqueada (RBAC) ou redirecionada — skipa
     if (page.url().includes('/onboarding') || !page.url().includes('/triage')) {
       console.log('SKIP: Receptionist não tem acesso a /dashboard/triage ou redirecionado.')
-      test.skip()
-      return
+      testInfo.skip(); return
     }
 
     const triageText = await page.getByText(/triagem|fila de atendimento/i).first().isVisible({ timeout: 5_000 }).catch(() => false)
     if (!triageText) {
       console.log('SKIP: Texto de triagem não encontrado — página pode ter estrutura diferente.')
-      test.skip()
-      return
+      testInfo.skip(); return
     }
 
     const addBtn = page.getByRole('button', { name: /novo paciente|adicionar|registrar/i }).first()
 
     if (!(await addBtn.isVisible({ timeout: 8_000 }).catch(() => false))) {
       console.log('FUNCIONALIDADE PENDENTE DE IMPLEMENTAÇÃO: Botão de adicionar à triagem não encontrado')
-      test.skip()
-      return
+      testInfo.skip(); return
     }
 
     await addBtn.click()
@@ -210,17 +219,16 @@ test.describe('TC-TRG-02: Preencher ficha de triagem com sinais vitais', () => {
     if (triageId) await admin.from('triage_records').delete().eq('id', triageId)
   })
 
-  test('Auxiliar preenche peso, temperatura e histórico na ficha', async ({ page }) => {
+  test('Auxiliar preenche peso, temperatura e histórico na ficha', async ({ page }, testInfo) => {
     test.setTimeout(45_000)
     await loginAs(page, fixtures.users.receptionistA.email, fixtures.users.receptionistA.password)
-    await page.goto('/dashboard/triage')
+    await page.goto('/dashboard/triage', { waitUntil: 'domcontentloaded' })
 
     await page.getByText('Rex').first().waitFor({ timeout: 10_000 }).catch(() => {})
     const patientRow = page.getByText('Rex').first()
     if (!(await patientRow.isVisible({ timeout: 3_000 }).catch(() => false))) {
       console.log('FUNCIONALIDADE PENDENTE DE IMPLEMENTAÇÃO: Paciente Rex não aparece na fila de triagem')
-      test.skip()
-      return
+      testInfo.skip(); return
     }
     await expect(patientRow).toBeVisible()
 
@@ -247,8 +255,7 @@ test.describe('TC-TRG-02: Preencher ficha de triagem com sinais vitais', () => {
     const saveBtn = page.getByRole('button', { name: /salvar|atualizar/i })
     if (!(await saveBtn.isVisible({ timeout: 5_000 }).catch(() => false))) {
       console.log('FUNCIONALIDADE PENDENTE DE IMPLEMENTAÇÃO: Formulário de sinais vitais não encontrado na ficha de triagem')
-      test.skip()
-      return
+      testInfo.skip(); return
     }
 
     await saveBtn.click()
@@ -300,24 +307,22 @@ test.describe('TC-TRG-03: Concluir triagem move paciente para Consultório', () 
     }
   })
 
-  test('Concluir triagem cria consulta e move status', async ({ page }) => {
+  test('Concluir triagem cria consulta e move status', async ({ page }, testInfo) => {
     test.setTimeout(45_000)
     await loginAs(page, fixtures.users.receptionistA.email, fixtures.users.receptionistA.password)
-    await page.goto('/dashboard/triage')
+    await page.goto('/dashboard/triage', { waitUntil: 'domcontentloaded' })
 
     const rexVisible = await page.waitForSelector('text=Rex', { timeout: 10_000 }).catch(() => null)
     if (!rexVisible) {
       console.log('FUNCIONALIDADE PENDENTE DE IMPLEMENTAÇÃO: Paciente Rex não aparece na fila de triagem para concluir')
-      test.skip()
-      return
+      testInfo.skip(); return
     }
 
     const concludeBtn = page.getByRole('button', { name: /concluir triagem|encaminhar|enviar ao consultório/i })
 
     if (!(await concludeBtn.isVisible({ timeout: 8_000 }).catch(() => false))) {
       console.log('FUNCIONALIDADE PENDENTE DE IMPLEMENTAÇÃO: Botão de concluir triagem não encontrado')
-      test.skip()
-      return
+      testInfo.skip(); return
     }
 
     await concludeBtn.click()
@@ -352,10 +357,10 @@ test.describe('TC-TRG-04: Módulo triage inativo redireciona', () => {
     await enableModule(fixtures.clinics.clinicA.id, 'triage')
   })
 
-  test('Acesso a /dashboard/triage sem módulo ativo redireciona para /dashboard', async ({ page }) => {
+  test('Acesso a /dashboard/triage sem módulo ativo redireciona para /dashboard', async ({ page }, testInfo) => {
     test.setTimeout(45_000)
     await loginAs(page, fixtures.users.receptionistA.email, fixtures.users.receptionistA.password)
-    await page.goto('/dashboard/triage')
+    await page.goto('/dashboard/triage', { waitUntil: 'domcontentloaded' })
 
     await expect(page).not.toHaveURL(/\/triage/, { timeout: 8_000 })
     expect(page.url()).toMatch(/\/(dashboard|reception)/)
@@ -386,10 +391,10 @@ test.describe('TC-TRG-05: Isolamento RLS multi-tenant', () => {
     if (triageId) await admin.from('triage_records').delete().eq('id', triageId)
   })
 
-  test('Admin da Clínica B não vê registros de triagem da Clínica A', async ({ page }) => {
+  test('Admin da Clínica B não vê registros de triagem da Clínica A', async ({ page }, testInfo) => {
     test.setTimeout(45_000)
     await loginAs(page, fixtures.users.adminB.email, fixtures.users.adminB.password)
-    await page.goto('/dashboard/triage')
+    await page.goto('/dashboard/triage', { waitUntil: 'domcontentloaded' })
 
     await page.waitForTimeout(3_000)
 
@@ -421,16 +426,15 @@ test.describe('TC-TRI-001: Preencher peso, temperatura e queixa principal', () =
     }
   })
 
-  test('Campos de sinais vitais aceitam input válido', async ({ page }) => {
+  test('Campos de sinais vitais aceitam input válido', async ({ page }, testInfo) => {
     test.setTimeout(45_000)
     await loginAsAdmin(page)
-    if (!consultationId) { test.skip(); return }
+    if (!consultationId) { testInfo.skip(); return; }
 
     const formOpened = await openTriageForm(page)
     if (!formOpened) {
       console.warn('[TC-TRI-001] INFO: Formulário de triagem não abriu.')
-      test.skip()
-      return
+      testInfo.skip(); return
     }
 
     const weightInput = page.locator('#vital-weight')
@@ -466,13 +470,13 @@ test.describe('TC-TRI-002: Validação — peso zero bloqueia submissão', () =>
     }
   })
 
-  test('Tentar salvar com peso 0 exibe erro de validação', async ({ page }) => {
+  test('Tentar salvar com peso 0 exibe erro de validação', async ({ page }, testInfo) => {
     test.setTimeout(45_000)
     await loginAsAdmin(page)
-    if (!consultationId) { test.skip(); return }
+    if (!consultationId) { testInfo.skip(); return; }
 
     const formOpened = await openTriageForm(page)
-    if (!formOpened) { test.skip(); return }
+    if (!formOpened) { testInfo.skip(); return; }
 
     const weightInput = page.locator('#vital-weight')
     const tempInput = page.locator('#vital-temperature')
@@ -487,7 +491,7 @@ test.describe('TC-TRI-002: Validação — peso zero bloqueia submissão', () =>
 
     const saveBtn = page.locator('[data-mentor-step="triage-save-btn"]')
       .or(page.getByRole('button', { name: /salvar|finalizar|enviar/i })).first()
-    if (!(await saveBtn.isVisible({ timeout: 5_000 }).catch(() => false))) { test.skip(); return }
+    if (!(await saveBtn.isVisible({ timeout: 5_000 }).catch(() => false))) { testInfo.skip(); return; }
 
     const { count: before } = await admin
       .from('triage_records').select('id', { count: 'exact', head: true })
@@ -523,13 +527,13 @@ test.describe('TC-TRI-003: Validação — temperatura zero bloqueia submissão'
     }
   })
 
-  test('Tentar salvar com temperatura 0 exibe erro de validação', async ({ page }) => {
+  test('Tentar salvar com temperatura 0 exibe erro de validação', async ({ page }, testInfo) => {
     test.setTimeout(45_000)
     await loginAsAdmin(page)
-    if (!consultationId) { test.skip(); return }
+    if (!consultationId) { testInfo.skip(); return; }
 
     const formOpened = await openTriageForm(page)
-    if (!formOpened) { test.skip(); return }
+    if (!formOpened) { testInfo.skip(); return; }
 
     const weightInput = page.locator('#vital-weight')
     const tempInput = page.locator('#vital-temperature')
@@ -544,7 +548,7 @@ test.describe('TC-TRI-003: Validação — temperatura zero bloqueia submissão'
 
     const saveBtn = page.locator('[data-mentor-step="triage-save-btn"]')
       .or(page.getByRole('button', { name: /salvar|finalizar|enviar/i })).first()
-    if (!(await saveBtn.isVisible({ timeout: 5_000 }).catch(() => false))) { test.skip(); return }
+    if (!(await saveBtn.isVisible({ timeout: 5_000 }).catch(() => false))) { testInfo.skip(); return; }
 
     const { count: before } = await admin
       .from('triage_records').select('id', { count: 'exact', head: true })
@@ -580,16 +584,15 @@ test.describe('TC-TRI-004: Salvar triagem completa transiciona status', () => {
     }
   })
 
-  test('Triagem completa com dados válidos muda status para in_progress', async ({ page }) => {
+  test('Triagem completa com dados válidos muda status para in_progress', async ({ page }, testInfo) => {
     test.setTimeout(60_000)
     await loginAsAdmin(page)
-    if (!consultationId) { test.skip(); return }
+    if (!consultationId) { testInfo.skip(); return; }
 
     const formOpened = await openTriageForm(page)
     if (!formOpened) {
       console.warn('[TC-TRI-004] INFO: Formulário de triagem não abriu.')
-      test.skip()
-      return
+      testInfo.skip(); return
     }
 
     await page.locator('#vital-weight').fill('14.2')
@@ -609,8 +612,7 @@ test.describe('TC-TRI-004: Salvar triagem completa transiciona status', () => {
 
     if (!(await saveBtn.isVisible({ timeout: 5_000 }).catch(() => false))) {
       console.warn('[TC-TRI-004] INFO: Botão de salvar não encontrado.')
-      test.skip()
-      return
+      testInfo.skip(); return
     }
 
     await saveBtn.click()
@@ -644,10 +646,10 @@ test.describe('TC-TRI-005: Fila de triagem exibe pacientes aguardando', () => {
     }
   })
 
-  test('Paciente com status triage aparece na fila de triagem', async ({ page }) => {
+  test('Paciente com status triage aparece na fila de triagem', async ({ page }, testInfo) => {
     test.setTimeout(45_000)
     await loginAsAdmin(page)
-    if (!consultationId) { test.skip(); return }
+    if (!consultationId) { testInfo.skip(); return; }
 
     await goToTriage(page)
     await page.waitForTimeout(2_000)
@@ -658,7 +660,7 @@ test.describe('TC-TRI-005: Fila de triagem exibe pacientes aguardando', () => {
     if (!queueVisible) {
       const rexOnPage = await page.getByText(/rex/i).isVisible({ timeout: 5_000 }).catch(() => false)
       console.warn(`[TC-TRI-005] nurse-queue não encontrada — Rex na página: ${rexOnPage}`)
-      if (!rexOnPage) { test.skip(); return }
+      if (!rexOnPage) { testInfo.skip(); return; }
       expect(rexOnPage).toBe(true)
       return
     }
@@ -674,7 +676,7 @@ test.describe('TC-TRI-005: Fila de triagem exibe pacientes aguardando', () => {
 // ─── TC-TRI-006: Mentor Tour — botão ? na triagem ────────────────────────────
 
 test.describe('TC-TRI-006: Mentor Tour — abrir painel no módulo de triagem', () => {
-  test('Clicar em ? abre o painel do Mentor na página de triagem', async ({ page }) => {
+  test('Clicar em ? abre o painel do Mentor na página de triagem', async ({ page }, testInfo) => {
     test.setTimeout(45_000)
     await loginAsAdmin(page)
     await goToTriage(page)
@@ -687,8 +689,7 @@ test.describe('TC-TRI-006: Mentor Tour — abrir painel no módulo de triagem', 
     const mentorVisible = await mentorBtn.isVisible({ timeout: 8_000 }).catch(() => false)
     if (!mentorVisible) {
       console.warn('[TC-TRI-006] INFO: Botão do Mentor não encontrado.')
-      test.skip()
-      return
+      testInfo.skip(); return
     }
 
     await mentorBtn.click()
@@ -721,10 +722,10 @@ test.describe('TC-TRI-007: Mentor Tour — data-mentor-step estável com formul�
     }
   })
 
-  test('triage-save-btn e triage-voice-btn com data-mentor-step não travam o sistema', async ({ page }) => {
+  test('triage-save-btn e triage-voice-btn com data-mentor-step não travam o sistema', async ({ page }, testInfo) => {
     test.setTimeout(60_000)
     await loginAsAdmin(page)
-    if (!consultationId) { test.skip(); return }
+    if (!consultationId) { testInfo.skip(); return; }
 
     const formOpened = await openTriageForm(page)
 
@@ -736,8 +737,7 @@ test.describe('TC-TRI-007: Mentor Tour — data-mentor-step estável com formul�
 
     if (!formOpened && saveBtnCount + voiceBtnCount + addBtnCount === 0) {
       console.warn('[TC-TRI-007] INFO: Formulário não abriu e nenhum elemento mentor encontrado.')
-      test.skip()
-      return
+      testInfo.skip(); return
     }
 
     // Abre o Mentor com formulário ativo e verifica estabilidade

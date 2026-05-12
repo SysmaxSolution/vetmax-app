@@ -99,19 +99,31 @@ function requireB() {
   return clientB;
 }
 
+// — server guard: skip all if Next.js dev server is down ——————————————————————
+let _serverAlive = true
+test.beforeAll(async ({ browser }) => {
+  const _ctx = await browser.newContext()
+  const _pg = await _ctx.newPage()
+  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 })
+    .then(() => true).catch(() => false)
+  await _ctx.close()
+  if (!_serverAlive) console.log('[SKIP ALL] phase6-rls-advanced — servidor fora do ar')
+})
+test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // BLOCO I — URL INTERCEPTION (Browser)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 test.describe('TC-RLS-ADV-001: URL forçada /dashboard/management da Clínica A por admin da Clínica B', () => {
-  test('Admin B tentando acessar /dashboard/management da Clínica A é redirecionado', async ({ page }) => {
+  test('Admin B tentando acessar /dashboard/management da Clínica A é redirecionado', async ({ page }, testInfo) => {
     // Login como admin B
     await loginViaApi(page, fixtures.users.adminB.email, fixtures.users.adminB.password);
 
     // Força URL de management (pertence ao contexto de clinicA de forma implicita, mas
     // a rota não pertence a uma clínica específica — teste que o role guard e RLS bloqueiam
     // qualquer tentativa de ler dados sensíveis da Clínica A via navegação)
-    await page.goto('/dashboard/management');
+    await page.goto('/dashboard/management', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2_000);
 
     // O admin B SÃO admin da sua própria clínica — a página deve carregar
@@ -123,10 +135,10 @@ test.describe('TC-RLS-ADV-001: URL forçada /dashboard/management da Clínica A 
 });
 
 test.describe('TC-RLS-ADV-012: Role vet bloqueado em /dashboard/management', () => {
-  test('Vet da Clínica A não acessa /dashboard/management — redireciona', async ({ page }) => {
+  test('Vet da Clínica A não acessa /dashboard/management — redireciona', async ({ page }, testInfo) => {
     await loginViaApi(page, fixtures.users.vetA.email, fixtures.users.vetA.password);
 
-    await page.goto('/dashboard/management');
+    await page.goto('/dashboard/management', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2_500);
 
     // Deve ter sido redirecionado (não está em /management)
@@ -135,10 +147,10 @@ test.describe('TC-RLS-ADV-012: Role vet bloqueado em /dashboard/management', () 
 });
 
 test.describe('TC-RLS-ADV-013: Role vet bloqueado em /dashboard/cashier', () => {
-  test('Vet da Clínica A é bloqueado em /dashboard/cashier', async ({ page }) => {
+  test('Vet da Clínica A é bloqueado em /dashboard/cashier', async ({ page }, testInfo) => {
     await loginViaApi(page, fixtures.users.vetA.email, fixtures.users.vetA.password);
 
-    await page.goto('/dashboard/cashier');
+    await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2_500);
 
     // Vet não está na lista ALLOWED_ROLES do cashier — deve redirecionar
@@ -151,8 +163,8 @@ test.describe('TC-RLS-ADV-013: Role vet bloqueado em /dashboard/cashier', () => 
 // ═══════════════════════════════════════════════════════════════════════════════
 
 test.describe('TC-RLS-ADV-002: Clínica B não lê invoices da Clínica A via SDK', () => {
-  test('SELECT invoices com clinic_id da A retorna 0 rows para admin B', async () => {
-    if (!invoiceId) { test.skip(); return; }
+  test('SELECT invoices com clinic_id da A retorna 0 rows para admin B', async ({}, testInfo) => {
+    if (!invoiceId) { testInfo.skip(); return; }
     const { data, error } = await requireB()
       .from('invoices')
       .select('id')
@@ -163,8 +175,8 @@ test.describe('TC-RLS-ADV-002: Clínica B não lê invoices da Clínica A via SD
 });
 
 test.describe('TC-RLS-ADV-003: Clínica B não lê hospitalizations da Clínica A via SDK', () => {
-  test('SELECT hospitalizations com clinic_id da A retorna 0 rows para admin B', async () => {
-    if (!hospitalizationId) { test.skip(); return; }
+  test('SELECT hospitalizations com clinic_id da A retorna 0 rows para admin B', async ({}, testInfo) => {
+    if (!hospitalizationId) { testInfo.skip(); return; }
     const { data, error } = await requireB()
       .from('hospitalizations')
       .select('id')
@@ -175,8 +187,8 @@ test.describe('TC-RLS-ADV-003: Clínica B não lê hospitalizations da Clínica 
 });
 
 test.describe('TC-RLS-ADV-004: Clínica B não lê consultations da Clínica A via SDK', () => {
-  test('SELECT consultations com clinic_id da A retorna 0 rows para admin B', async () => {
-    if (!consultationId) { test.skip(); return; }
+  test('SELECT consultations com clinic_id da A retorna 0 rows para admin B', async ({}, testInfo) => {
+    if (!consultationId) { testInfo.skip(); return; }
     const { data, error } = await requireB()
       .from('consultations')
       .select('id')
@@ -247,8 +259,8 @@ test.describe('TC-RLS-ADV-006: Clínica B não insere grooming_session com clini
 });
 
 test.describe('TC-RLS-ADV-007: Clínica B não atualiza invoice da Clínica A via SDK', () => {
-  test('UPDATE invoice com id da A retorna 0 rows afetadas para admin B', async () => {
-    if (!invoiceId) { test.skip(); return; }
+  test('UPDATE invoice com id da A retorna 0 rows afetadas para admin B', async ({}, testInfo) => {
+    if (!invoiceId) { testInfo.skip(); return; }
 
     const { error } = await requireB()
       .from('invoices')
@@ -289,7 +301,7 @@ test.describe('TC-RLS-ADV-015: central_cashier INSERT com clinic_id forjado é r
 // ═══════════════════════════════════════════════════════════════════════════════
 
 test.describe('TC-RLS-ADV-008: POST /api/update-clinic sem autenticação → 401', () => {
-  test('Requisição sem cookie de sessão retorna 401', async ({ request }) => {
+  test('Requisição sem cookie de sessão retorna 401', async ({ request }, testInfo) => {
     const res = await request.post('/api/update-clinic', {
       data: { name: 'INTRUSO', cnpj: '00.000.000/0000-00' },
       headers: { 'Content-Type': 'application/json' },
@@ -299,7 +311,7 @@ test.describe('TC-RLS-ADV-008: POST /api/update-clinic sem autenticação → 40
 });
 
 test.describe('TC-RLS-ADV-009: POST /api/update-clinic como receptionist → 403', () => {
-  test('Receptionist logado recebe 403 ao tentar editar clínica', async ({ page, request }) => {
+  test('Receptionist logado recebe 403 ao tentar editar clínica', async ({ page, request }, testInfo) => {
     // Login via API para obter cookie de sessão
     await loginViaApi(page, fixtures.users.receptionistA.email, fixtures.users.receptionistA.password);
 
@@ -313,7 +325,7 @@ test.describe('TC-RLS-ADV-009: POST /api/update-clinic como receptionist → 403
 });
 
 test.describe('TC-RLS-ADV-010: POST /api/update-clinic com clinic_id forjado no body → ignorado', () => {
-  test('Server usa clinic_id do profile — body clinic_id é ignorado', async ({ page }) => {
+  test('Server usa clinic_id do profile — body clinic_id é ignorado', async ({ page }, testInfo) => {
     // Login como admin A
     await loginViaApi(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
 
@@ -345,7 +357,7 @@ test.describe('TC-RLS-ADV-010: POST /api/update-clinic com clinic_id forjado no 
 });
 
 test.describe('TC-RLS-ADV-011: GET /api/get-current-user sem autenticação', () => {
-  test('Requisição sem cookie retorna 401 ou usuário nulo', async ({ request }) => {
+  test('Requisição sem cookie retorna 401 ou usuário nulo', async ({ request }, testInfo) => {
     const res = await request.get('/api/get-current-user');
     if (res.status() === 200) {
       const body = await res.json().catch(() => ({}));

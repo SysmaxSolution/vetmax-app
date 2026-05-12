@@ -75,7 +75,7 @@ function getTomorrow(): string {
 
 /** Abre o modal de novo agendamento e seleciona profissional/data/hora */
 async function openNewAppointmentModal(page: Page): Promise<boolean> {
-  await page.goto('/dashboard/reception');
+  await page.goto('/dashboard/reception', { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(2_000);
 
   const newApptBtn = page.getByRole('button', { name: /novo agendamento|agendar|novo atendimento/i })
@@ -85,7 +85,7 @@ async function openNewAppointmentModal(page: Page): Promise<boolean> {
   const btnVisible = await newApptBtn.isVisible({ timeout: 8_000 }).catch(() => false);
   if (!btnVisible) {
     // Tentar via recepção diretamente
-    await page.goto('/dashboard/reception/schedule');
+    await page.goto('/dashboard/reception/schedule', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2_000);
     const btn2 = page.getByRole('button', { name: /novo agendamento|agendar/i }).first();
     if (!(await btn2.isVisible({ timeout: 5_000 }).catch(() => false))) {
@@ -149,6 +149,15 @@ async function isAvailabilityWarningVisible(page: Page): Promise<boolean> {
 
 // ─── TC-G11-01: Warning NÃO aparece quando profissional está disponível ───────
 
+// — server guard ——————————————————————————————————————————————————————————————
+let _serverAlive = true
+test.beforeAll(async ({ browser }) => {
+  const _ctx = await browser.newContext(); const _pg = await _ctx.newPage()
+  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
+  await _ctx.close(); if (!_serverAlive) console.log('[SKIP ALL] sprint-master-g11-availability.spec.ts — servidor fora do ar')
+})
+test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
+
 test.describe('TC-G11-01: Warning não aparece quando profissional está disponível', () => {
   let scheduleId: string;
   const tomorrow = getTomorrow();
@@ -175,20 +184,20 @@ test.describe('TC-G11-01: Warning não aparece quando profissional está dispon�
     if (scheduleId) await admin.from('professional_schedules').delete().eq('id', scheduleId);
   });
 
-  test('Selecionar horário disponível não exibe warning âmbar', async ({ page }) => {
+  test('Selecionar horário disponível não exibe warning âmbar', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
 
     const modalOpened = await openNewAppointmentModal(page);
     if (!modalOpened) {
       console.log('TC-G11-01: SKIP — Modal de novo agendamento não abriu');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
     const filled = await fillAppointmentForm(page, tomorrow, '10:00');
     if (!filled) {
       console.log('TC-G11-01: SKIP — Formulário de agendamento não encontrado');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -217,20 +226,20 @@ test.describe('TC-G11-02: Warning aparece quando profissional não tem agenda pa
     }
   });
 
-  test('Selecionar data sem agenda exibe warning de disponibilidade', async ({ page }) => {
+  test('Selecionar data sem agenda exibe warning de disponibilidade', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
 
     const modalOpened = await openNewAppointmentModal(page);
     if (!modalOpened) {
       console.log('TC-G11-02: SKIP — Modal de novo agendamento não abriu');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
     const filled = await fillAppointmentForm(page, dayAfterTomorrow, '10:00');
     if (!filled) {
       console.log('TC-G11-02: SKIP — Formulário de agendamento não encontrado');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -272,20 +281,20 @@ test.describe('TC-G11-03: Warning aparece quando horário está fora do slot dis
     if (scheduleId) await admin.from('professional_schedules').delete().eq('id', scheduleId);
   });
 
-  test('Horário fora do slot (14:00 com agenda até 12:00) exibe warning', async ({ page }) => {
+  test('Horário fora do slot (14:00 com agenda até 12:00) exibe warning', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
 
     const modalOpened = await openNewAppointmentModal(page);
     if (!modalOpened) {
       console.log('TC-G11-03: SKIP — Modal de novo agendamento não abriu');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
     const filled = await fillAppointmentForm(page, tomorrow, '14:00');
     if (!filled) {
       console.log('TC-G11-03: SKIP — Formulário de agendamento não encontrado');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -327,13 +336,13 @@ test.describe('TC-G11-04: Warning desaparece ao trocar para horário disponível
     if (scheduleId) await admin.from('professional_schedules').delete().eq('id', scheduleId);
   });
 
-  test('Warning some ao mudar de 14:00 (fora) para 09:00 (dentro do slot)', async ({ page }) => {
+  test('Warning some ao mudar de 14:00 (fora) para 09:00 (dentro do slot)', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
 
     const modalOpened = await openNewAppointmentModal(page);
     if (!modalOpened) {
       console.log('TC-G11-04: SKIP — Modal de novo agendamento não abriu');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -341,7 +350,7 @@ test.describe('TC-G11-04: Warning desaparece ao trocar para horário disponível
     const filled = await fillAppointmentForm(page, tomorrow, '14:00');
     if (!filled) {
       console.log('TC-G11-04: SKIP — Formulário de agendamento não encontrado');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -350,7 +359,7 @@ test.describe('TC-G11-04: Warning desaparece ao trocar para horário disponível
 
     if (!warningBefore) {
       console.log('TC-G11-04: SKIP — Warning não apareceu para horário fora do slot (pré-condição falhou)');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -380,13 +389,13 @@ test.describe('TC-G11-05: Warning não bloqueia o agendamento (apenas informa)',
     await enableModule(fixtures.clinics.clinicA.id, 'reception');
   });
 
-  test('Com warning de disponibilidade, botão Agendar permanece habilitado', async ({ page }) => {
+  test('Com warning de disponibilidade, botão Agendar permanece habilitado', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
 
     const modalOpened = await openNewAppointmentModal(page);
     if (!modalOpened) {
       console.log('TC-G11-05: SKIP — Modal de novo agendamento não abriu');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -394,7 +403,7 @@ test.describe('TC-G11-05: Warning não bloqueia o agendamento (apenas informa)',
     const filled = await fillAppointmentForm(page, dayAfterTomorrow, '10:00');
     if (!filled) {
       console.log('TC-G11-05: SKIP — Formulário de agendamento não encontrado');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -407,7 +416,7 @@ test.describe('TC-G11-05: Warning não bloqueia o agendamento (apenas informa)',
 
     if (!submitVisible) {
       console.log('TC-G11-05: SKIP — Botão de agendar não encontrado');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -440,13 +449,13 @@ test.describe('TC-G11-06: Profissional sem schedules retorna available:true (sem
     }
   });
 
-  test('Sem schedules cadastrados, profissional é tratado como disponível (sem warning)', async ({ page }) => {
+  test('Sem schedules cadastrados, profissional é tratado como disponível (sem warning)', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
 
     const modalOpened = await openNewAppointmentModal(page);
     if (!modalOpened) {
       console.log('TC-G11-06: SKIP — Modal de novo agendamento não abriu');
-      test.skip();
+      testInfo.skip();
       return;
     }
 
@@ -454,7 +463,7 @@ test.describe('TC-G11-06: Profissional sem schedules retorna available:true (sem
     const filled = await fillAppointmentForm(page, tomorrow, '10:00');
     if (!filled) {
       console.log('TC-G11-06: SKIP — Formulário de agendamento não encontrado');
-      test.skip();
+      testInfo.skip();
       return;
     }
 

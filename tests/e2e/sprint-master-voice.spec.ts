@@ -136,7 +136,7 @@ async function loginAs(page: Page, email: string, password: string): Promise<voi
 }
 
 async function openHospitalizationEvolutionModal(page: Page): Promise<boolean> {
-  await page.goto('/dashboard/hospitalization');
+  await page.goto('/dashboard/hospitalization', { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(2_000);
 
   const evolBtn = page.getByRole('button', { name: /nova evolução|registrar evolução|evolução/i }).first();
@@ -162,18 +162,27 @@ async function openHospitalizationEvolutionModal(page: Page): Promise<boolean> {
 // ─── TC-VOZ-01 ────────────────────────────────────────────────────────────────
 // Botão microfone no modal de internação tem aria-label acessível
 
+// — server guard ——————————————————————————————————————————————————————————————
+let _serverAlive = true
+test.beforeAll(async ({ browser }) => {
+  const _ctx = await browser.newContext(); const _pg = await _ctx.newPage()
+  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
+  await _ctx.close(); if (!_serverAlive) console.log('[SKIP ALL] sprint-master-voice.spec.ts — servidor fora do ar')
+})
+test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
+
 test.describe('TC-VOZ-01: Botão microfone tem aria-label acessível', () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(MOCK_SPEECH_SCRIPT);
   });
 
-  test('Aria-label do botão microfone descreve a ação de gravação', async ({ page }) => {
+  test('Aria-label do botão microfone descreve a ação de gravação', async ({ page }, testInfo) => {
     await loginAs(page, ADMIN.email, ADMIN.password);
 
     const opened = await openHospitalizationEvolutionModal(page);
     if (!opened) {
       console.log('TC-VOZ-01: SKIP — Modal de internação não encontrado (G-04 pendente)');
-      test.skip();
+      test.info().skip();
       return;
     }
 
@@ -184,7 +193,7 @@ test.describe('TC-VOZ-01: Botão microfone tem aria-label acessível', () => {
     const micVisible = await micBtn.isVisible({ timeout: 5_000 }).catch(() => false);
     if (!micVisible) {
       console.log('TC-VOZ-01: SKIP — Botão microfone não encontrado');
-      test.skip();
+      test.info().skip();
       return;
     }
 
@@ -213,13 +222,13 @@ test.describe('TC-VOZ-02: Wake word "vet max" ativa estado de gravação', () =>
     await page.addInitScript(MOCK_SPEECH_SCRIPT);
   });
 
-  test('Após transcrição de "vet max", UI indica estado de gravação ativo', async ({ page }) => {
+  test('Após transcrição de "vet max", UI indica estado de gravação ativo', async ({ page }, testInfo) => {
     await loginAs(page, ADMIN.email, ADMIN.password);
 
     const opened = await openHospitalizationEvolutionModal(page);
     if (!opened) {
       console.log('TC-VOZ-02: SKIP — Modal de internação não disponível');
-      test.skip();
+      test.info().skip();
       return;
     }
 
@@ -228,7 +237,7 @@ test.describe('TC-VOZ-02: Wake word "vet max" ativa estado de gravação', () =>
     const micVisible = await micBtn.isVisible({ timeout: 5_000 }).catch(() => false);
     if (!micVisible) {
       console.log('TC-VOZ-02: SKIP — Botão microfone não encontrado');
-      test.skip();
+      test.info().skip();
       return;
     }
 
@@ -272,13 +281,13 @@ test.describe('TC-VOZ-03: Stop word "salvar evolução" preenche o campo', () =>
     await page.addInitScript(MOCK_SPEECH_SCRIPT);
   });
 
-  test('Transcrição entre wake word e stop word aparece no campo de texto', async ({ page }) => {
+  test('Transcrição entre wake word e stop word aparece no campo de texto', async ({ page }, testInfo) => {
     await loginAs(page, ADMIN.email, ADMIN.password);
 
     const opened = await openHospitalizationEvolutionModal(page);
     if (!opened) {
       console.log('TC-VOZ-03: SKIP — Modal de internação não disponível');
-      test.skip();
+      test.info().skip();
       return;
     }
 
@@ -287,7 +296,7 @@ test.describe('TC-VOZ-03: Stop word "salvar evolução" preenche o campo', () =>
     const micVisible = await micBtn.isVisible({ timeout: 5_000 }).catch(() => false);
     if (!micVisible) {
       console.log('TC-VOZ-03: SKIP — Botão microfone não encontrado');
-      test.skip();
+      test.info().skip();
       return;
     }
 
@@ -309,7 +318,7 @@ test.describe('TC-VOZ-03: Stop word "salvar evolução" preenche o campo', () =>
 
     if (!fieldVisible) {
       console.log('TC-VOZ-03: Campo de evolução não encontrado para verificar preenchimento');
-      test.skip();
+      test.info().skip();
       return;
     }
 
@@ -330,13 +339,13 @@ test.describe('TC-VOZ-04: Sem Web Speech API — botão mostra tooltip de aviso'
     await page.addInitScript(MOCK_SPEECH_UNDEFINED_SCRIPT);
   });
 
-  test('Botão microfone indica indisponibilidade quando Speech API ausente', async ({ page }) => {
+  test('Botão microfone indica indisponibilidade quando Speech API ausente', async ({ page }, testInfo) => {
     await loginAs(page, ADMIN.email, ADMIN.password);
 
     const opened = await openHospitalizationEvolutionModal(page);
     if (!opened) {
       console.log('TC-VOZ-04: SKIP — Modal de internação não disponível');
-      test.skip();
+      test.info().skip();
       return;
     }
 
@@ -344,7 +353,7 @@ test.describe('TC-VOZ-04: Sem Web Speech API — botão mostra tooltip de aviso'
     const micVisible = await micBtn.isVisible({ timeout: 5_000 }).catch(() => false);
     if (!micVisible) {
       console.log('TC-VOZ-04: SKIP — Botão microfone não encontrado');
-      test.skip();
+      test.info().skip();
       return;
     }
 
@@ -381,13 +390,13 @@ test.describe('TC-VOZ-05: Texto gravado aparece no campo de texto correto', () =
     await page.addInitScript(MOCK_SPEECH_SCRIPT);
   });
 
-  test('Transcrição simulada preenche o campo de evolução clínica', async ({ page }) => {
+  test('Transcrição simulada preenche o campo de evolução clínica', async ({ page }, testInfo) => {
     await loginAs(page, ADMIN.email, ADMIN.password);
 
     const opened = await openHospitalizationEvolutionModal(page);
     if (!opened) {
       console.log('TC-VOZ-05: SKIP — Modal de internação não disponível');
-      test.skip();
+      test.info().skip();
       return;
     }
 
@@ -395,7 +404,7 @@ test.describe('TC-VOZ-05: Texto gravado aparece no campo de texto correto', () =
     const micVisible = await micBtn.isVisible({ timeout: 5_000 }).catch(() => false);
     if (!micVisible) {
       console.log('TC-VOZ-05: SKIP — Botão microfone não encontrado');
-      test.skip();
+      test.info().skip();
       return;
     }
 
@@ -446,7 +455,7 @@ test.describe('TC-VOZ-05: Texto gravado aparece no campo de texto correto', () =
 // Voice trigger centralizado (G-03) é importado pelo hook grooming
 
 test.describe('TC-VOZ-06 (Crítico): voice-triggers.ts importado pelo hook grooming', () => {
-  test('Source map confirma que hook de grooming usa buildWakeRe/buildStopRe de voice-triggers', async ({ page }) => {
+  test('Source map confirma que hook de grooming usa buildWakeRe/buildStopRe de voice-triggers', async ({ page }, testInfo) => {
     // Este teste verifica a estrutura do código sem precisar de servidor rodando
     // Usa page.goto para carregar um bundle e verificar via source maps / chunks
 
@@ -496,7 +505,7 @@ test.describe('TC-VOZ-06 (Crítico): voice-triggers.ts importado pelo hook groom
       console.log('TC-VOZ-06: voice-triggers não encontrado nos bundles — pode ser tree-shaken ou ainda não implementado (G-03)');
       // Não falhar — apenas registrar como aviso
       console.warn('TC-VOZ-06: AVISO — buildWakeRe/buildStopRe não detectados nos chunks JS carregados');
-      test.skip(); // Marcar como skip em vez de falha para feature em implementação
+      test.info().skip(); return; // Marcar como skip em vez de falha para feature em implementação
     } else {
       expect(voiceTriggersFound).toBe(true);
     }
@@ -511,13 +520,13 @@ test.describe('TC-VOZ-07 (Crítico): Wake word case-insensitive', () => {
     await page.addInitScript(MOCK_SPEECH_SCRIPT);
   });
 
-  test('"VET MAX" em maiúsculas ativa o mesmo comportamento que "vet max"', async ({ page }) => {
+  test('"VET MAX" em maiúsculas ativa o mesmo comportamento que "vet max"', async ({ page }, testInfo) => {
     await loginAs(page, ADMIN.email, ADMIN.password);
 
     const opened = await openHospitalizationEvolutionModal(page);
     if (!opened) {
       console.log('TC-VOZ-07: SKIP — Modal de internação não disponível');
-      test.skip();
+      test.info().skip();
       return;
     }
 
@@ -525,7 +534,7 @@ test.describe('TC-VOZ-07 (Crítico): Wake word case-insensitive', () => {
     const micVisible = await micBtn.isVisible({ timeout: 5_000 }).catch(() => false);
     if (!micVisible) {
       console.log('TC-VOZ-07: SKIP — Botão microfone não encontrado');
-      test.skip();
+      test.info().skip();
       return;
     }
 
@@ -575,13 +584,13 @@ test.describe('TC-VOZ-08: Stop word seguida imediatamente de wake word reinicia 
     await page.addInitScript(MOCK_SPEECH_SCRIPT);
   });
 
-  test('Stop word + wake word imediata não deixa sistema em estado inconsistente', async ({ page }) => {
+  test('Stop word + wake word imediata não deixa sistema em estado inconsistente', async ({ page }, testInfo) => {
     await loginAs(page, ADMIN.email, ADMIN.password);
 
     const opened = await openHospitalizationEvolutionModal(page);
     if (!opened) {
       console.log('TC-VOZ-08: SKIP — Modal de internação não disponível');
-      test.skip();
+      test.info().skip();
       return;
     }
 
@@ -589,7 +598,7 @@ test.describe('TC-VOZ-08: Stop word seguida imediatamente de wake word reinicia 
     const micVisible = await micBtn.isVisible({ timeout: 5_000 }).catch(() => false);
     if (!micVisible) {
       console.log('TC-VOZ-08: SKIP — Botão microfone não encontrado');
-      test.skip();
+      test.info().skip();
       return;
     }
 
@@ -660,7 +669,7 @@ test.describe('TC-VOZ-09: Gravação de 30s+ sem stop word — sistema auto-para
     const opened = await openHospitalizationEvolutionModal(page);
     if (!opened) {
       console.log('TC-VOZ-09: SKIP — Modal de internação não disponível');
-      test.skip();
+      test.info().skip();
       return;
     }
 
@@ -668,7 +677,7 @@ test.describe('TC-VOZ-09: Gravação de 30s+ sem stop word — sistema auto-para
     const micVisible = await micBtn.isVisible({ timeout: 5_000 }).catch(() => false);
     if (!micVisible) {
       console.log('TC-VOZ-09: SKIP — Botão microfone não encontrado');
-      test.skip();
+      test.info().skip();
       return;
     }
 
@@ -726,13 +735,13 @@ test.describe('TC-VOZ-10: Múltiplos campos de voz — ativar um desativa o outr
     await page.addInitScript(MOCK_SPEECH_SCRIPT);
   });
 
-  test('Ativar microfone em campo B desativa automaticamente campo A (sem gravação dupla)', async ({ page }) => {
+  test('Ativar microfone em campo B desativa automaticamente campo A (sem gravação dupla)', async ({ page }, testInfo) => {
     await loginAs(page, ADMIN.email, ADMIN.password);
 
     const opened = await openHospitalizationEvolutionModal(page);
     if (!opened) {
       console.log('TC-VOZ-10: SKIP — Modal de internação não disponível');
-      test.skip();
+      test.info().skip();
       return;
     }
 
@@ -744,7 +753,7 @@ test.describe('TC-VOZ-10: Múltiplos campos de voz — ativar um desativa o outr
 
     if (micCount < 2) {
       console.log('TC-VOZ-10: SKIP — Apenas 1 botão de microfone encontrado (teste requer múltiplos campos de voz na mesma tela)');
-      test.skip();
+      test.info().skip();
       return;
     }
 

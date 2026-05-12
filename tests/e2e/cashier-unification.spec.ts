@@ -24,9 +24,9 @@ async function loginAs(page: Page, email: string, password: string) {
 // ─── TC-UNI-01: Aba Caixa removida da Recepção ────────────────────────────────
 
 test.describe('TC-UNI-01: Aba Caixa removida da Recepção', () => {
-  test('Navegação da Recepção não exibe link para Caixa', async ({ page }) => {
+  test('Navegação da Recepção não exibe link para Caixa', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-    await page.goto('/dashboard/reception');
+    await page.goto('/dashboard/reception', { waitUntil: 'domcontentloaded' });
 
     // Sub-nav da recepção deve existir — usar link role para ser específico
     await expect(page.getByRole('link', { name: /atendimento/i })).toBeVisible({ timeout: 10_000 });
@@ -43,9 +43,9 @@ test.describe('TC-UNI-01: Aba Caixa removida da Recepção', () => {
 // ─── TC-UNI-02: Redirect de /reception/checkout ───────────────────────────────
 
 test.describe('TC-UNI-02: /reception/checkout redireciona para /cashier', () => {
-  test('Acessar /reception/checkout leva para /dashboard/cashier', async ({ page }) => {
+  test('Acessar /reception/checkout leva para /dashboard/cashier', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-    await page.goto('/dashboard/reception/checkout');
+    await page.goto('/dashboard/reception/checkout', { waitUntil: 'domcontentloaded' });
     await page.waitForURL(/\/dashboard\/cashier/, { timeout: 10_000 });
     expect(page.url()).toMatch(/\/dashboard\/cashier/);
   });
@@ -54,15 +54,20 @@ test.describe('TC-UNI-02: /reception/checkout redireciona para /cashier', () => 
 // ─── TC-UNI-03: Aba Recebimentos no Caixa ────────────────────────────────────
 
 test.describe('TC-UNI-03: Aba Recebimentos no módulo Caixa', () => {
-  test('Módulo Caixa exibe aba Recebimentos', async ({ page }) => {
+  test('Módulo Caixa exibe aba Recebimentos', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-    await page.goto('/dashboard/cashier');
+    await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded' });
+    // Aguardar hidratação React antes de clicar nas abas
+    await expect(page.getByTestId('cashier-entries-table')).toBeVisible({ timeout: 12_000 });
 
-    const tab = page.getByRole('button', { name: /^recebimentos$/i });
+    const tab = page.getByRole('button', { name: /recebimentos/i });
     await expect(tab).toBeVisible({ timeout: 10_000 });
     await tab.click();
+    await page.waitForTimeout(400);
+    if (!await page.getByRole('heading', { name: /recebimentos pendentes/i }).isVisible().catch(() => false)) {
+      await tab.click();
+    }
 
-    // Deve exibir conteúdo da aba — heading do componente
     await expect(
       page.getByRole('heading', { name: /recebimentos pendentes/i })
     ).toBeVisible({ timeout: 8_000 });
@@ -72,13 +77,18 @@ test.describe('TC-UNI-03: Aba Recebimentos no módulo Caixa', () => {
 // ─── TC-UNI-04: Aba Saídas no Caixa ──────────────────────────────────────────
 
 test.describe('TC-UNI-04: Aba Saídas no módulo Caixa', () => {
-  test('Módulo Caixa exibe aba Saídas', async ({ page }) => {
+  test('Módulo Caixa exibe aba Saídas', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-    await page.goto('/dashboard/cashier');
+    await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('cashier-entries-table')).toBeVisible({ timeout: 12_000 });
 
-    const tab = page.getByRole('button', { name: /^saídas$/i });
+    const tab = page.getByRole('button', { name: /saídas/i });
     await expect(tab).toBeVisible({ timeout: 10_000 });
     await tab.click();
+    await page.waitForTimeout(400);
+    if (!await page.getByRole('heading', { name: /saídas do caixa/i }).isVisible().catch(() => false)) {
+      await tab.click();
+    }
 
     await expect(
       page.getByRole('heading', { name: /saídas do caixa/i })
@@ -89,15 +99,19 @@ test.describe('TC-UNI-04: Aba Saídas no módulo Caixa', () => {
 // ─── TC-UNI-05: Aba Sessão no Caixa ──────────────────────────────────────────
 
 test.describe('TC-UNI-05: Aba Sessão no módulo Caixa', () => {
-  test('Módulo Caixa exibe aba Sessão com controle de abertura', async ({ page }) => {
+  test('Módulo Caixa exibe aba Sessão com controle de abertura', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-    await page.goto('/dashboard/cashier');
+    await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('cashier-entries-table')).toBeVisible({ timeout: 12_000 });
 
-    const tab = page.getByRole('button', { name: /^sessão$/i });
+    const tab = page.getByRole('button', { name: /sessão/i });
     await expect(tab).toBeVisible({ timeout: 10_000 });
     await tab.click();
+    await page.waitForTimeout(400);
+    if (!await page.getByRole('heading', { name: /gestão de sessão/i }).isVisible().catch(() => false)) {
+      await tab.click();
+    }
 
-    // Deve exibir controle de sessão — heading do componente
     await expect(
       page.getByRole('heading', { name: /gestão de sessão/i })
     ).toBeVisible({ timeout: 8_000 });
@@ -149,17 +163,30 @@ test.describe('TC-UNI-06: Fatura pendente aparece na aba Recebimentos', () => {
     if (consultationId) await admin.from('consultations').delete().eq('id', consultationId);
   });
 
-  test('Fatura seed aparece na aba Recebimentos do Caixa', async ({ page }) => {
-    if (!invoiceId) { test.skip(); return; }
+  test('Fatura seed aparece na aba Recebimentos do Caixa', async ({ page }, testInfo) => {
+    if (!invoiceId) { testInfo.skip(); return; }
 
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-    await page.goto('/dashboard/cashier');
+    await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded' });
+    // Aguardar hidratação React
+    await expect(page.getByTestId('cashier-entries-table')).toBeVisible({ timeout: 12_000 });
 
-    // Clicar na aba Recebimentos
-    await page.getByRole('button', { name: /recebimentos/i }).click();
-    await page.waitForTimeout(1_500);
+    // Retry no clique caso hidratação React ainda não completou
+    const recTab = page.getByRole('button', { name: /recebimentos/i });
+    await recTab.click();
+    await page.waitForTimeout(400);
+    if (!await page.getByRole('heading', { name: /recebimentos pendentes/i }).isVisible().catch(() => false)) {
+      await recTab.click();
+    }
+    await expect(page.getByRole('heading', { name: /recebimentos pendentes/i })).toBeVisible({ timeout: 8_000 });
 
-    // Deve exibir botão "Receber" — indica que há fatura pendente
+    // Forçar refresh para garantir que a fatura seedada aparece
+    const atualizarBtn = page.getByRole('button', { name: /atualizar/i });
+    if (await atualizarBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
+      await atualizarBtn.click();
+    }
+    await page.waitForTimeout(1_000);
+
     const receiveBtn = page.getByRole('button', { name: /receber/i }).first();
     await expect(receiveBtn).toBeVisible({ timeout: 10_000 });
   });
@@ -209,11 +236,11 @@ test.describe('TC-UNI-07: Kanban Faturamento exibe status de pagamento', () => {
     if (consultationId) await admin.from('consultations').delete().eq('id', consultationId);
   });
 
-  test('Coluna Faturamento do Kanban exibe badge de pagamento pendente', async ({ page }) => {
-    if (!consultationId) { test.skip(); return; }
+  test('Coluna Faturamento do Kanban exibe badge de pagamento pendente', async ({ page }, testInfo) => {
+    if (!consultationId) { testInfo.skip(); return; }
 
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-    await page.goto('/dashboard/management/kanban');
+    await page.goto('/dashboard/management/kanban', { waitUntil: 'domcontentloaded' });
 
     await page.waitForTimeout(2_000);
 
@@ -227,7 +254,7 @@ test.describe('TC-UNI-07: Kanban Faturamento exibe status de pagamento', () => {
     if (!hasBadge) {
       // Se não aparece, pode ser que a consulta seed não apareceu no kanban
       console.log('INFO TC-UNI-07: Badge de pagamento não visível — consulta seed pode não ter aparecido');
-      test.skip();
+      testInfo.skip(); return;
     } else {
       await expect(badge).toBeVisible();
     }
