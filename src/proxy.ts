@@ -99,7 +99,13 @@ export async function proxy(request: NextRequest) {
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
+  let user = null
+  try {
+    const { data } = await supabase.auth.getUser()
+    user = data.user
+  } catch (err) {
+    console.error('[proxy] erro ao renovar sessão:', err)
+  }
 
   if (!user) {
     const loginUrl = request.nextUrl.clone()
