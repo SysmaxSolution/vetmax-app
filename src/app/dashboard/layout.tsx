@@ -26,7 +26,7 @@ export default async function DashboardLayout({
 
   const { data: profile } = await admin
     .from('profiles')
-    .select('full_name, role, clinic_id, is_sysmax, clinics(name)')
+    .select('full_name, role, clinic_id, is_sysmax, is_in_surgery, clinics(name)')
     .eq('id', user.id)
     .single()
 
@@ -149,6 +149,7 @@ export default async function DashboardLayout({
         userClinics={isSysmax ? userClinics : (userClinics.length > 1 ? userClinics : undefined)}
         isSysmax={isSysmax}
         clinicStatus={clinicStatus}
+        isSurgeryMode={!!(profile as any).is_in_surgery}
       />
       <ClinicConfigProvider aiTranscriptionMode={(clinicData as any)?.ai_transcription_mode ?? 'ai_assisted'}>
         <ModulesProvider modules={activeModules}>

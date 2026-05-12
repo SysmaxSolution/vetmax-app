@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LogOut, Home, Stethoscope, TestTubes, Users, BarChart3, PawPrint, BedDouble, Package, Scissors, Banknote, FolderKanban, MessageCircle, ShoppingCart } from 'lucide-react'
+import { LogOut, Home, Stethoscope, TestTubes, Users, BarChart3, PawPrint, BedDouble, Package, Scissors, Banknote, FolderKanban, MessageCircle, ShoppingCart, Activity } from 'lucide-react'
 import type { UserRole } from '@/types'
 import { useState } from 'react'
 import { ClinicSwitcher } from '@/components/layout/ClinicSwitcher'
@@ -10,6 +10,7 @@ import { ImageLightbox } from '@/components/ui/ImageLightbox'
 import type { UserClinicInfo } from '@/lib/actions/clinic-switcher'
 import { updateClinicStatus } from '@/lib/actions/clinic-status'
 import type { ClinicStatus } from '@/lib/actions/clinic-status'
+import { setSurgeryMode } from '@/lib/actions/surgery-mode'
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
 
@@ -52,6 +53,7 @@ interface DashboardHeaderProps {
   userClinics?:          UserClinicInfo[]
   isSysmax?:             boolean
   clinicStatus?:         string
+  isSurgeryMode?:        boolean
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -68,8 +70,20 @@ export default function DashboardHeader({
   userClinics,
   isSysmax = false,
   clinicStatus,
+  isSurgeryMode = false,
 }: DashboardHeaderProps) {
   const pathname = usePathname()
+  const [surgeryActive, setSurgeryActive]   = useState(isSurgeryMode)
+  const [savingSurgery, setSavingSurgery]   = useState(false)
+
+  async function handleSurgeryToggle() {
+    const next = !surgeryActive
+    setSurgeryActive(next)
+    setSavingSurgery(true)
+    const res = await setSurgeryMode(next)
+    setSavingSurgery(false)
+    if ('error' in res) setSurgeryActive(!next)
+  }
 
   const tabs = ALL_TABS.filter(tab => {
     if (!tab.roles.includes(userRole)) return false
@@ -147,6 +161,23 @@ export default function DashboardHeader({
               ))}
             </select>
           )}
+
+          {userRole === 'vet' && (
+            <button
+              onClick={handleSurgeryToggle}
+              disabled={savingSurgery}
+              title={surgeryActive ? 'Sair do Modo Cirurgia' : 'Ativar Modo Cirurgia'}
+              className={
+                surgeryActive
+                  ? 'animate-pulse flex items-center gap-1.5 rounded-full bg-red-500 px-3 py-1 text-xs font-bold text-white shadow-md disabled:opacity-60'
+                  : 'flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 hover:border-red-300 hover:text-red-600 disabled:opacity-60'
+              }
+            >
+              <Activity className="h-3.5 w-3.5" />
+              {surgeryActive ? 'Em Cirurgia' : 'Modo Cirurgia'}
+            </button>
+          )}
+
           {isSysmax ? (
             <span className="text-sm font-semibold text-purple-700">SysMax</span>
           ) : (

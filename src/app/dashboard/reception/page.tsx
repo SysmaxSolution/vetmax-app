@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { getReceptionQueue, getReceptionHistory } from '@/lib/actions/consultations'
 import { getClinicSettingsConfig } from '@/lib/actions/clinic-settings'
 import { ReceptionWorkspace } from '@/components/reception/ReceptionWorkspace'
+import { UrgencyAlert } from '@/components/reception/UrgencyAlert'
 
 export default async function ReceptionPage() {
   const supabase = await createClient()
@@ -46,6 +47,7 @@ export default async function ReceptionPage() {
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-8">
+      <UrgencyAlert clinicId={profile.clinic_id} />
       <ReceptionWorkspace
         initialQueue={initialQueue}
         initialHistory={initialHistory}

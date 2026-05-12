@@ -1,7 +1,36 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { evolutionSendText } from '@/lib/evolution-api-client'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+// ─── Vet surgery status ───────────────────────────────────────────────────────
+
+interface VetSurgeryInfo {
+  isInSurgery: boolean
+  vetName:     string | null
+  vetPhone:    string | null
+  vetUserId:   string | null
+}
+
+async function getVetSurgeryInfo(clinicId: string): Promise<VetSurgeryInfo> {
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from('profiles')
+    .select('id, full_name, phone')
+    .eq('clinic_id', clinicId)
+    .eq('role', 'vet')
+    .eq('is_in_surgery', true)
+    .limit(1)
+    .maybeSingle()
+
+  return {
+    isInSurgery: !!data,
+    vetName:     data?.full_name ?? null,
+    vetPhone:    data?.phone     ?? null,
+    vetUserId:   data?.id        ?? null,
+  }
+}
 
 // ─── Tool definitions ─────────────────────────────────────────────────────────
 
@@ -51,7 +80,7 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'request_human_handoff',
-    description: 'Transfere a conversa para um atendente humano. Use quando: urgência médica, frustração do tutor, pergunta fora do escopo ou pedido explícito.',
+    description: 'Transfere a conversa para um atendente humano. Use quando: frustração do tutor, pergunta fora do escopo ou pedido explícito. Para urgências médicas com veterinário em cirurgia, use escalate_urgency_to_reception.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -61,6 +90,26 @@ const TOOLS: Anthropic.Tool[] = [
     },
   },
 ]
+
+const SURGERY_TOOL: Anthropic.Tool = {
+  name: 'escalate_urgency_to_reception',
+  description: 'Use SOMENTE quando (1) o veterinário está em Modo Cirurgia E (2) a mensagem indica urgência médica real: convulsão, dificuldade respiratória, trauma grave, envenenamento, desmaio, sangramento intenso, inconsciência. Cria alerta sonoro na recepção e envia push ao veterinário.',
+  input_schema: {
+    type: 'object' as const,
+    properties: {
+      urgency_level: {
+        type: 'string',
+        enum: ['high', 'critical'],
+        description: 'high = urgente. critical = risco de vida imediato.',
+      },
+      message_snippet: {
+        type: 'string',
+        description: 'Resumo em 1 frase do motivo para a recepção. Ex: "Pet com convulsões há 10 min".',
+      },
+    },
+    required: ['urgency_level', 'message_snippet'],
+  },
+}
 
 // ─── Tool executors ───────────────────────────────────────────────────────────
 
@@ -120,6 +169,66 @@ async function execGetAvailability(clinicId: string, date: string): Promise<stri
   if (!available.length) return `Sem horários disponíveis em ${date}.`
   const slots = available.map(h => `  • ${String(h).padStart(2, '0')}:00`).join('\n')
   return `Horários disponíveis em ${date}:\n${slots}`
+}
+
+async function execEscalateUrgency(params: {
+  clinicId:       string
+  conversationId: string
+  tutorPhone:     string
+  tutorName:      string | null
+  vetUserId:      string | null
+  vetPhone:       string | null
+  urgencyLevel:   string
+  messageSnippet: string
+}): Promise<string> {
+  const admin = createAdminClient()
+
+  const { data: log } = await admin
+    .from('urgency_escalation_logs')
+    .insert({
+      clinic_id:       params.clinicId,
+      conversation_id: params.conversationId,
+      tutor_phone:     params.tutorPhone,
+      tutor_name:      params.tutorName,
+      urgency_level:   params.urgencyLevel,
+      message_snippet: params.messageSnippet,
+      vet_user_id:     params.vetUserId,
+    })
+    .select('id')
+    .single()
+
+  let vetNotified = false
+  if (params.vetPhone) {
+    const apiUrl = process.env.EVOLUTION_API_URL
+    const apiKey = process.env.EVOLUTION_API_KEY
+    if (apiUrl && apiKey) {
+      const { data: wppSettings } = await admin
+        .from('clinic_whatsapp_settings')
+        .select('evolution_instance_name')
+        .eq('clinic_id', params.clinicId)
+        .maybeSingle()
+      if (wppSettings?.evolution_instance_name) {
+        const label  = params.tutorName ?? params.tutorPhone
+        const pushMsg = `🚨 URGÊNCIA WPP\nTutor: ${label}\n${params.messageSnippet}\n✅ Recepção alertada.`
+        try {
+          await evolutionSendText(
+            { apiUrl, instanceId: wppSettings.evolution_instance_name, apiKey },
+            params.vetPhone,
+            pushMsg,
+          )
+          vetNotified = true
+        } catch { /* best effort */ }
+      }
+    }
+  }
+
+  const { data: clinic } = await admin.from('clinics').select('phone').eq('id', params.clinicId).single()
+
+  return JSON.stringify({
+    reception_alerted: !!log,
+    vet_notified:      vetNotified,
+    clinic_phone:      clinic?.phone ?? null,
+  })
 }
 
 async function execBookAppointment(params: {
@@ -226,6 +335,9 @@ export async function runWhatsappAgent(params: {
 }): Promise<AgentResult> {
   const admin = createAdminClient()
 
+  // Verifica se algum veterinário está em Modo Cirurgia
+  const vetInfo = await getVetSurgeryInfo(params.clinicId)
+
   // Histórico recente da conversa (últimas 10 mensagens)
   const { data: history } = await admin
     .from('whatsapp_messages')
@@ -254,12 +366,19 @@ Seja cordial, conciso e profissional. Use linguagem informal-cordial (sem asteri
 Responda apenas sobre: serviços veterinários, preços, horários e agendamentos.
 Para emergências ou pedidos fora do escopo, transfira para um atendente humano.`
 
+  const surgeryContext = vetInfo.isInSurgery
+    ? `\n⚠️ MODO FOCO CLÍNICO ATIVO: O médico veterinário está em cirurgia neste momento.\n- Se a mensagem indicar urgência médica real (convulsão, dificuldade respiratória, trauma grave, envenenamento, desmaio, sangramento intenso): chame 'escalate_urgency_to_reception' e oriente o tutor a ir à recepção imediatamente.\n- Para casos não urgentes: responda normalmente e informe que o MV está em cirurgia, mas a recepção pode ajudar.`
+    : ''
+
   const systemPrompt = [
     params.personalityPrompt ?? defaultPersonality,
     tutorGreeting,
     'Hoje é ' + new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }) + '.',
+    surgeryContext,
     'Use as ferramentas disponíveis quando precisar de dados reais antes de responder.',
   ].filter(Boolean).join('\n')
+
+  const activeTools = vetInfo.isInSurgery ? [...TOOLS, SURGERY_TOOL] : TOOLS
 
   // Agentic loop — máximo 5 iterações
   let currentMessages = [...messages]
@@ -271,7 +390,7 @@ Para emergências ou pedidos fora do escopo, transfira para um atendente humano.
         model:      'claude-haiku-4-5-20251001',
         max_tokens: 512,
         system:     systemPrompt,
-        tools:      TOOLS,
+        tools:      activeTools,
         messages:   currentMessages,
       })
     } catch (err: unknown) {
@@ -315,6 +434,16 @@ Para emergências ou pedidos fora do escopo, transfira para um atendente humano.
         if (block.name === 'get_clinic_info')  result = await execGetClinicInfo(params.clinicId)
         if (block.name === 'get_price')         result = await execGetPrice(params.clinicId, input.service)
         if (block.name === 'get_availability')  result = await execGetAvailability(params.clinicId, input.date)
+        if (block.name === 'escalate_urgency_to_reception') result = await execEscalateUrgency({
+          clinicId:       params.clinicId,
+          conversationId: params.conversationId,
+          tutorPhone:     params.tutorPhone,
+          tutorName:      params.tutorName,
+          vetUserId:      vetInfo.vetUserId,
+          vetPhone:       vetInfo.vetPhone,
+          urgencyLevel:   input.urgency_level,
+          messageSnippet: input.message_snippet,
+        })
         if (block.name === 'book_appointment')  result = await execBookAppointment({
           clinicId:   params.clinicId,
           tutorPhone: params.tutorPhone,
