@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useTransition, useRef } from 'react'
-import { X, BedDouble, Loader2, AlertTriangle, Mic, Square } from 'lucide-react'
+import { X, BedDouble, Loader2, AlertTriangle, Mic, Square, Sparkles } from 'lucide-react'
 import { createHospitalization, type HospitalizationStatus } from '@/lib/actions/hospitalizations'
+import { extractAdmissionReason } from '@/lib/actions/ai_extraction'
 
 // ─── Opções de Ala ────────────────────────────────────────────────────────────
 
@@ -46,12 +47,15 @@ export default function AdmitPetModal({
   onClose,
   onSuccess,
 }: Props) {
-  const [status,      setStatus]      = useState<HospitalizationStatus>('observation')
-  const [reason,      setReason]      = useState('')
-  const [error,       setError]       = useState<string | null>(null)
-  const [isPending,   startTransition] = useTransition()
-  const [isRecording, setIsRecording] = useState(false)
-  const recognitionRef = useRef<any>(null)
+  const [status,          setStatus]          = useState<HospitalizationStatus>('observation')
+  const [reason,          setReason]          = useState('')
+  const [error,           setError]           = useState<string | null>(null)
+  const [isPending,       startTransition]    = useTransition()
+  const [isRecording,     setIsRecording]     = useState(false)
+  const [extracting,      setExtracting]      = useState(false)
+  const [fromTranscription, setFromTranscription] = useState(false)
+  const recognitionRef    = useRef<any>(null)
+  const voiceAccumRef     = useRef('')
 
   function toggleVoice() {
     if (isRecording) { recognitionRef.current?.stop(); return }
@@ -61,12 +65,28 @@ export default function AdmitPetModal({
     rec.lang = 'pt-BR'
     rec.continuous = true
     rec.interimResults = false
+    voiceAccumRef.current = ''
     rec.onstart  = () => setIsRecording(true)
-    rec.onend    = () => setIsRecording(false)
     rec.onerror  = () => setIsRecording(false)
     rec.onresult = (e: any) => {
-      const transcript = Array.from(e.results).map((r: any) => r[0].transcript).join(' ')
-      setReason(prev => prev ? `${prev} ${transcript}` : transcript)
+      const chunk = Array.from(e.results).map((r: any) => r[0].transcript).join(' ')
+      voiceAccumRef.current = voiceAccumRef.current
+        ? `${voiceAccumRef.current} ${chunk}`
+        : chunk
+      setReason(voiceAccumRef.current)
+    }
+    rec.onend = async () => {
+      setIsRecording(false)
+      const raw = voiceAccumRef.current.trim()
+      if (raw.length > 10) {
+        setExtracting(true)
+        const extracted = await extractAdmissionReason(raw)
+        setExtracting(false)
+        if (extracted) {
+          setReason(extracted)
+          setFromTranscription(true)
+        }
+      }
     }
     recognitionRef.current = rec
     rec.start()
@@ -79,10 +99,11 @@ export default function AdmitPetModal({
 
     startTransition(async () => {
       const result = await createHospitalization({
-        patient_id:      patientId,
-        consultation_id: consultationId,
+        patient_id:                         patientId,
+        consultation_id:                    consultationId,
         status,
         reason,
+        admission_reason_from_transcription: fromTranscription,
       })
       if ('error' in result) {
         setError(result.error)
@@ -156,14 +177,23 @@ export default function AdmitPetModal({
           {/* Motivo */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-sm font-semibold text-slate-700">
-                Motivo da Internação <span className="text-red-500">*</span>
-              </label>
+              <div className="flex items-center gap-2">
+                <label className="block text-sm font-semibold text-slate-700">
+                  Motivo da Internação <span className="text-red-500">*</span>
+                </label>
+                {fromTranscription && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700">
+                    <Sparkles className="h-2.5 w-2.5" />
+                    Extraído por IA
+                  </span>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={toggleVoice}
+                disabled={extracting}
                 title={isRecording ? 'Parar gravação' : 'Ditar motivo por voz'}
-                className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-50 ${
                   isRecording
                     ? 'bg-red-100 text-red-700 hover:bg-red-200 animate-pulse'
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -173,15 +203,27 @@ export default function AdmitPetModal({
                 {isRecording ? 'Parar' : 'Ditar'}
               </button>
             </div>
-            <textarea
-              value={reason}
-              onChange={e => setReason(e.target.value)}
-              rows={3}
-              placeholder="Ex: Gastroenterite hemorrágica severa, necessita fluidoterapia e monitoramento..."
-              className={`w-full rounded-xl border px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-rose-500/20 ${
-                isRecording ? 'border-red-300 focus:border-red-500 bg-red-50/30' : 'border-slate-300 focus:border-rose-500'
-              }`}
-            />
+            <div className="relative">
+              <textarea
+                value={reason}
+                onChange={e => { setReason(e.target.value); setFromTranscription(false) }}
+                rows={3}
+                placeholder="Ex: Gastroenterite hemorrágica severa, necessita fluidoterapia e monitoramento..."
+                className={`w-full rounded-xl border px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-rose-500/20 ${
+                  isRecording   ? 'border-red-300 focus:border-red-500 bg-red-50/30'      :
+                  fromTranscription ? 'border-violet-300 focus:border-violet-500 bg-violet-50/20' :
+                  'border-slate-300 focus:border-rose-500'
+                }`}
+              />
+              {extracting && (
+                <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-white/80">
+                  <div className="flex items-center gap-2 text-sm text-violet-700 font-medium">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Extraindo motivo com IA…
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Aviso UTI */}

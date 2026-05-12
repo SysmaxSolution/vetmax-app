@@ -123,6 +123,7 @@ export async function createHospitalization(data: {
   consultation_id?: string
   status:          HospitalizationStatus
   reason:          string
+  admission_reason_from_transcription?: boolean
 }): Promise<{ id: string } | { error: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -170,11 +171,13 @@ export async function createHospitalization(data: {
   const { data: result, error } = await admin
     .from('hospitalizations')
     .insert({
-      clinic_id:       clinicId,
-      patient_id:      data.patient_id,
-      consultation_id: data.consultation_id ?? null,
-      status:          data.status,
-      reason:          data.reason.trim(),
+      clinic_id:                          clinicId,
+      patient_id:                         data.patient_id,
+      consultation_id:                    data.consultation_id ?? null,
+      status:                             data.status,
+      reason:                             data.reason.trim(),
+      admission_reason:                   data.reason.trim(),
+      admission_reason_from_transcription: data.admission_reason_from_transcription ?? false,
     })
     .select('id')
     .single()

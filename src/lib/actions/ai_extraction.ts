@@ -77,6 +77,36 @@ Regras:
   }
 }
 
+// ─── Extração de Motivo de Internação via Voz (G-04) ─────────────────────────
+
+export async function extractAdmissionReason(transcript: string): Promise<string | null> {
+  if (!transcript || transcript.trim().length < 5) return null
+
+  try {
+    const message = await anthropic.messages.create({
+      model:      'claude-sonnet-4-6',
+      max_tokens: 256,
+      messages: [{
+        role:    'user',
+        content: `Você é um assistente veterinário clínico. A partir do relato oral a seguir, extraia e resuma em 1-3 frases objetivas o MOTIVO DA INTERNAÇÃO do animal, conforme diretrizes do CFMV. Use linguagem clínica formal. Não repita o nome do animal nem do tutor.
+
+Relato: "${transcript}"
+
+Responda SOMENTE com o texto do motivo, sem aspas, sem prefixo, sem explicação adicional.`,
+      }],
+    })
+
+    const content = message.content[0]
+    if (content.type !== 'text') return null
+
+    const text = content.text.trim()
+    return text.length > 0 ? text : null
+  } catch (e) {
+    console.error('[AI] extractAdmissionReason failed:', e)
+    return null
+  }
+}
+
 // ─── Resumo de Passagem de Turno com RAG ─────────────────────────────────────
 
 export async function generateClinicalSummary(
