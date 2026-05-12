@@ -29,61 +29,66 @@ const TOURS: Record<string, TourDef> = {
   recepcao: {
     path: '/dashboard/reception',
     steps: [
-      { target: 'reception-search-input', title: 'Busca de Tutor ou Pet' },
-      { target: 'reception-new-btn',      title: 'Novo Cadastro' },
+      { target: 'reception-search-input', title: 'Busca de Tutor ou Pet', waitForNext: true },
+      { target: 'reception-checkin-btn',  title: 'Confirmar Check-in' },
       { target: 'reception-queue',        title: 'Fila de Espera' },
+      { target: 'reception-new-btn',      title: 'Tutor Não Cadastrado?' },
     ],
   },
   'sala-espera': {
     path: '/dashboard/reception',
     steps: [
-      { target: 'reception-queue',   title: 'Sala de Espera' },
-      { target: 'reception-new-btn', title: 'Novo Check-in' },
+      { target: 'reception-queue',           title: 'Fila de Espera' },
+      { target: 'reception-call-triage-btn', title: 'Chamar para Triagem' },
+      { target: 'reception-new-btn',         title: 'Novo Check-in' },
     ],
   },
   triagem: {
     path: '/dashboard/triage',
     steps: [
-      { target: 'nurse-queue',      title: 'Fila de Triagem' },
-      { target: 'triage-add-btn',   title: 'Adicionar Manualmente' },
-      { target: 'triage-voice-btn', title: 'Triagem por Voz' },
+      { target: 'triage-add-btn',   title: 'Adicionar Pet Manualmente' },
+      { target: 'nurse-queue',      title: 'Fila de Triagem', waitForNext: true },
+      { target: 'triage-voice-btn', title: 'Registrar Sinais Vitais por Voz' },
       { target: 'triage-save-btn',  title: 'Concluir Triagem' },
     ],
   },
   consulta: {
     path: '/dashboard/vet',
     steps: [
-      { target: 'vet-queue',           title: 'Fila do Consultório' },
-      { target: 'vet-notes-textarea',  title: 'Anotações Clínicas (SOAP)' },
-      { target: 'vet-save-notes-btn',  title: 'Salvar Prontuário' },
+      { target: 'vet-queue',          title: 'Fila do Consultório', waitForNext: true },
+      { target: 'vet-notes-textarea', title: 'Anotações Clínicas (SOAP)' },
+      { target: 'vet-save-notes-btn', title: 'Salvar Prontuário' },
     ],
   },
   exames: {
     path: '/dashboard/exams',
     steps: [
-      { target: 'exams-queue',            title: 'Fila de Exames' },
-      { target: 'exams-request-btn',      title: 'Solicitar Exame' },
-      { target: 'exams-result-textarea',  title: 'Registrar Laudo' },
+      { target: 'exams-request-btn',     title: 'Solicitar Exame' },
+      { target: 'exams-queue',           title: 'Fila de Exames', waitForNext: true },
+      { target: 'exams-result-textarea', title: 'Registrar Laudo' },
     ],
   },
   internacao: {
     path: '/dashboard/hospitalization',
     steps: [
-      { target: 'hospitalization-list', title: 'Quadro de Internados' },
-      { target: 'hosp-discharge-btn',   title: 'Dar Alta Hospitalar' },
+      { target: 'hospitalization-list',    title: 'Quadro de Internados', waitForNext: true },
+      { target: 'hosp-save-evolution-btn', title: 'Registrar Evolução Clínica' },
+      { target: 'hosp-discharge-btn',      title: 'Dar Alta Hospitalar' },
     ],
   },
   grooming: {
     path: '/dashboard/grooming',
     steps: [
-      { target: 'grooming-queue',     title: 'Kanban de Banho e Tosa' },
-      { target: 'grooming-voice-btn', title: 'Registro por Voz' },
+      { target: 'grooming-queue',                 title: 'Kanban de Banho e Tosa', waitForNext: true },
+      { target: 'grooming-voice-btn',             title: 'Registro por Voz' },
+      { target: 'grooming-observations-textarea', title: 'Observações do Serviço' },
+      { target: 'grooming-save-record-btn',       title: 'Salvar Registro' },
     ],
   },
   alta: {
     path: '/dashboard/reception',
     steps: [
-      { target: 'reception-kanban-toggle', title: 'Ativar Visualização Kanban' },
+      { target: 'reception-kanban-toggle', title: 'Ativar Visualização Kanban', waitForNext: true },
       { target: 'kanban-board',            title: 'Quadro de Atendimentos' },
       { target: 'kanban-col-completed',    title: 'Coluna Alta' },
     ],
@@ -225,9 +230,9 @@ test.describe('MENTOR-003 — Tour: triagem', () => {
     const { steps } = TOURS.triagem
     await startTour(page, 'triagem')
 
-    // Passo 0: nurse-queue sempre existe na página de triagem
+    // Passo 0: triage-add-btn sempre existe na página de triagem
     const count0 = await assertStep(page, steps[0], steps[1].title)
-    expect(count0, 'nurse-queue deve estar na DOM').toBeGreaterThan(0)
+    expect(count0, 'triage-add-btn deve estar na DOM').toBeGreaterThan(0)
 
     // Passos 1, 2 e 3 dependem de um animal na fila — soft-check
     await advanceStep(page)
