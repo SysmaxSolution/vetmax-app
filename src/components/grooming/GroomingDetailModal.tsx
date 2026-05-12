@@ -135,6 +135,8 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
   const [whatsappPending,   setWhatsappPending]   = useState(false)
   const [voiceConfirmedWA,  setVoiceConfirmedWA]  = useState(false)
   const [waTrigger, setWaTrigger] = useState<WhatsAppTrigger>('grooming_ready_for_pickup')
+  const [waAppliedServices, setWaAppliedServices] = useState<string[]>([])
+  const [waObservations,    setWaObservations]    = useState('')
 
   // Status progressão mobile
   const [currentCardStatus, setCurrentCardStatus] = useState<GroomingStatus>(card.status)
@@ -447,11 +449,14 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
       }
     }
 
-    // WhatsApp: só abre no submit manual quando pet está pronto para retirada/entregue.
-    // Salvas intermediárias de evolução NÃO disparam WA (evita duplo disparo com voz).
-    if (card.tutor?.phone && (currentCardStatus === 'waiting_pickup' || currentCardStatus === 'delivered')) {
-      const trigger: WhatsAppTrigger = currentCardStatus === 'delivered' ? 'grooming_delivered' : 'grooming_ready_for_pickup'
+    // WhatsApp: dispara para toda evolução salva manualmente.
+    if (card.tutor?.phone) {
+      let trigger: WhatsAppTrigger = 'grooming_evolution_saved'
+      if (currentCardStatus === 'delivered')      trigger = 'grooming_delivered'
+      else if (currentCardStatus === 'waiting_pickup') trigger = 'grooming_ready_for_pickup'
       setWaTrigger(trigger)
+      setWaAppliedServices(appliedServices)
+      setWaObservations(observations.trim())
       setWhatsappPending(true)
     }
   }
@@ -1329,7 +1334,7 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
       {whatsappPending && card.tutor?.phone && (
         <WhatsAppNotificationModal
           isOpen={whatsappPending}
-          onClose={() => { setWhatsappPending(false); setVoiceConfirmedWA(false) }}
+          onClose={() => { setWhatsappPending(false); setVoiceConfirmedWA(false); setWaAppliedServices([]); setWaObservations('') }}
           trigger={waTrigger}
           autoSend={voiceConfirmedWA}
           context={{
@@ -1338,8 +1343,9 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
             tutorPhone:       card.tutor.phone,
             species:          card.patient.species,
             breed:            card.patient.breed ?? undefined,
-            groomingServices: selectedServices.length > 0 ? selectedServices : card.services_requested,
+            groomingServices: waAppliedServices.length > 0 ? waAppliedServices : card.services_requested,
             groomingBox:      card.box_number ?? undefined,
+            evolutionNotes:   waObservations || undefined,
           }}
           patientId={card.patient.id}
         />

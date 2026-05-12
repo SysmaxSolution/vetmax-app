@@ -417,7 +417,6 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
         return
       }
 
-      onSaved?.()
       setSaveToast('Evolução registrada com sucesso!')
       setTimeout(() => setSaveToast(null), 3000)
 
@@ -430,14 +429,8 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
         .order('created_at', { ascending: false })
       if (data) setRecords(data as HospitalizationRecord[])
 
-      // Trigger WhatsApp — FORA do startTransition para garantir re-render imediato
-      console.log('DEBUG: Tentando abrir WhatsApp de Evolução', {
-        tutorPhone: card.tutor?.phone,
-        cardStatus: card.status,
-        notesLength: notes.length,
-        medsCount: meds.length,
-      })
-
+      // Trigger WhatsApp — onSaved() deferido para o onClose do modal WA para não
+      // desmontar este componente antes do modal de WhatsApp aparecer.
       if (card.tutor?.phone) {
         const isDischarge = card.status === 'ready_for_discharge'
         const selDocs = selectedDocIds.size > 0
@@ -450,9 +443,9 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
           medNames:         meds.filter(m => m.name.trim()).map(m => m.name),
           attachedDocNames: selDocs,
         })
-        // resetForm() deferido para o onClose do modal WhatsApp
       } else {
         resetForm()
+        onSaved?.()
       }
     } finally {
       setIsSubmitting(false)
@@ -1085,7 +1078,7 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
     {whatsappPending && card.tutor?.phone && (
       <WhatsAppNotificationModal
         isOpen={!!whatsappPending}
-        onClose={() => { setWhatsappPending(null); resetForm() }}
+        onClose={() => { setWhatsappPending(null); resetForm(); onSaved?.() }}
         trigger={whatsappPending.trigger}
         context={{
           petName:         card.patient.name,

@@ -23,6 +23,7 @@ export type WhatsAppTrigger =
   | 'hospitalization_started'
   | 'grooming_ready_for_pickup'
   | 'grooming_delivered'
+  | 'grooming_evolution_saved'
   | 'appointment_scheduled'
   | 'sale_receipt'
 
@@ -495,6 +496,13 @@ Gere uma mensagem curta (máx. 2 parágrafos) informando ao tutor ${ctx.tutorNam
   sent_to_review: (ctx) =>
     `O pet ${ctx.petName} encerrou a internação e está retornando ao consultório do médico veterinário para revisão clínica pós-internação. Tutor: ${ctx.tutorName}.
 Gere uma mensagem calorosa e tranquilizadora para o tutor ${ctx.tutorName}: ${ctx.petName} saiu da internação e está indo para uma consulta de revisão com o veterinário, que avaliará a recuperação e orientará sobre os cuidados em casa. Tom positivo e levemente comemorativo. Máx. 2 parágrafos.`,
+
+  grooming_evolution_saved: (ctx) => {
+    const svcs = ctx.groomingServices?.length ? ctx.groomingServices.join(', ') : 'banho e tosa'
+    const obs  = ctx.evolutionNotes ? ` Observações: ${ctx.evolutionNotes}.` : ''
+    return `Pet ${ctx.petName} em atendimento de ${svcs}.${obs} Tutor: ${ctx.tutorName}.
+Gere uma mensagem simpática e tranquilizadora para o tutor ${ctx.tutorName} informando que ${ctx.petName} está sendo cuidado e tudo corre muito bem. Tom: amigável e acolhedor. Máx. 1 parágrafo curto.`
+  },
 
   grooming_ready_for_pickup: (ctx) => {
     const svcs = ctx.groomingServices?.length ? ctx.groomingServices.join(', ') : 'banho e tosa'
