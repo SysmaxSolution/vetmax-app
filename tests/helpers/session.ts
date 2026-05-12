@@ -19,43 +19,30 @@ const EMAIL_TO_ROLE: Record<string, string> = {
   'admin@clinica-beta.test':      'adminB',
 }
 
-// ─── Fallback: injeção direta de cookies Supabase ────────────────────────────
-// Usado quando o storageState salvo não está disponível ou está vazio.
-// Mantido como safety net — a rota primária é loadStorageState().
-
-const MAX_CHUNK_SIZE = 3180
-
 function getProjectRef(): string {
   return new URL(SUPABASE_URL).hostname.split('.')[0]
 }
 
-function buildCookieChunks(key: string, value: string): Array<{ name: string; value: string }> {
-  const encodedValue = encodeURIComponent(value)
-  if (encodedValue.length <= MAX_CHUNK_SIZE) {
-    return [{ name: key, value }]
+// Verifica se o access_token do @supabase/ssr já expirou (com 90s de margem)
+function isStorageStateExpired(cookies: Record<string, unknown>[]): boolean {
+  const authCookie = cookies.find(
+    (c) => typeof (c as any).name === 'string' && (c as any).name.includes('auth-token'),
+  ) as { value?: string } | undefined
+
+  if (!authCookie?.value) return true
+  try {
+    const raw = (authCookie.value as string).replace(/^base64-/, '')
+    const session = JSON.parse(Buffer.from(raw, 'base64').toString('utf-8')) as { expires_at?: number }
+    if (!session.expires_at) return true
+    return session.expires_at < Math.floor(Date.now() / 1000) + 90
+  } catch {
+    return true
   }
-  const chunks: string[] = []
-  let remaining = encodedValue
-  while (remaining.length > 0) {
-    let encodedHead = remaining.slice(0, MAX_CHUNK_SIZE)
-    const lastEscapePos = encodedHead.lastIndexOf('%')
-    if (lastEscapePos > MAX_CHUNK_SIZE - 3) {
-      encodedHead = encodedHead.slice(0, lastEscapePos)
-    }
-    let valueHead = ''
-    while (encodedHead.length > 0) {
-      try { valueHead = decodeURIComponent(encodedHead); break }
-      catch {
-        if (encodedHead.at(-3) === '%' && encodedHead.length > 3) {
-          encodedHead = encodedHead.slice(0, encodedHead.length - 3)
-        } else { break }
-      }
-    }
-    chunks.push(valueHead)
-    remaining = remaining.slice(encodedHead.length)
-  }
-  return chunks.map((v, i) => ({ name: `${key}.${i}`, value: v }))
 }
+
+// ─── Fallback: injeção direta de cookies via signInWithPassword ───────────────
+// Usa o formato base64- que o @supabase/ssr espera no servidor Next.js.
+// Acionado quando o storageState está ausente, vazio ou com token expirado.
 
 export async function injectFreshSession(
   context: BrowserContext,
@@ -69,28 +56,34 @@ export async function injectFreshSession(
   if (error || !data.session) {
     throw new Error(`[session] Auth failed for ${email}: ${error?.message ?? 'no session'}`)
   }
-  const { access_token, refresh_token, expires_at, user } = data.session
-  const ref        = getProjectRef()
-  const cookieKey  = `sb-${ref}-auth-token`
+  const { access_token, refresh_token, expires_at, expires_in, user } = data.session
+  const ref      = getProjectRef()
+  const cookieKey = `sb-${ref}-auth-token`
+
   const sessionPayload = JSON.stringify({
-    access_token, token_type: 'bearer',
-    expires_in: (expires_at ?? 0) - Math.floor(Date.now() / 1000),
-    expires_at, refresh_token, user,
+    access_token, token_type: 'bearer', expires_in, expires_at, refresh_token, user,
   })
+  // @supabase/ssr lê cookies no formato: "base64-" + base64(json)
+  const cookieValue = 'base64-' + Buffer.from(sessionPayload).toString('base64')
+
   const domain = new URL(BASE_URL).hostname
-  const chunks = buildCookieChunks(cookieKey, sessionPayload)
-  await context.addCookies(
-    chunks.map(({ name, value }) => ({
-      name, value, domain, path: '/',
-      httpOnly: false, secure: false, sameSite: 'Lax' as const,
-      expires: expires_at ?? Math.floor(Date.now() / 1000) + 3600,
-    })),
-  )
+  await context.clearCookies()
+  await context.addCookies([{
+    name:     cookieKey,
+    value:    cookieValue,
+    domain,
+    path:     '/',
+    httpOnly: false,
+    secure:   false,
+    sameSite: 'Lax' as const,
+    expires:  expires_at ?? Math.floor(Date.now() / 1000) + 3600,
+  }])
 }
 
 // ─── Rota primária: carrega storageState salvo pelo global-setup ──────────────
-// Usa os cookies REAIS que o @supabase/ssr define após um login bem-sucedido,
-// eliminando qualquer incompatibilidade de formato.
+// Usa os cookies REAIS que o @supabase/ssr define após um login bem-sucedido.
+// Retorna false se o storageState não existir, estiver vazio ou com token expirado
+// (nesse caso loginViaApi faz fallback para injectFreshSession).
 
 async function loadStorageState(page: Page, email: string): Promise<boolean> {
   const role = EMAIL_TO_ROLE[email]
@@ -107,6 +100,9 @@ async function loadStorageState(page: Page, email: string): Promise<boolean> {
     }
 
     if (!state.cookies || state.cookies.length === 0) return false
+
+    // Rejeita tokens expirados — evita que o middleware tente refresh com token inválido
+    if (isStorageStateExpired(state.cookies)) return false
 
     await page.context().clearCookies()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
