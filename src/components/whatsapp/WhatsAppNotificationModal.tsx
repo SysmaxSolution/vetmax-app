@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { X, MessageCircle, Send, Loader2, CheckCircle2, AlertCircle, Edit3, Paperclip, RefreshCw } from 'lucide-react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { X, MessageCircle, Send, Loader2, CheckCircle2, AlertCircle, Edit3, Paperclip, RefreshCw, Mic } from 'lucide-react'
 import {
   generateWhatsAppMessage,
   sendWhatsAppMessage,
@@ -156,35 +156,33 @@ export default function WhatsAppNotificationModal({
   const voiceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [listeningVoice, setListeningVoice] = useState(false)
 
-  useEffect(() => {
-    if (!isOpen || sent || isGenerating || autoSend) return
+  const startVoice = useCallback(() => {
     const SR = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition
     if (!SR) return
-
+    try { voiceRecogRef.current?.stop() } catch {}
+    if (voiceTimeoutRef.current) clearTimeout(voiceTimeoutRef.current)
     const rec = new SR()
     rec.lang = 'pt-BR'
     rec.continuous = false
     rec.interimResults = false
-
     rec.onstart  = () => setListeningVoice(true)
     rec.onend    = () => setListeningVoice(false)
     rec.onerror  = () => setListeningVoice(false)
-
     rec.onresult = (e: any) => {
       const transcript = e.results[0]?.[0]?.transcript?.toLowerCase().trim() ?? ''
-      const yes = /^(sim|pode|manda|envia|confirma|ok|pode mandar|pode enviar)/.test(transcript)
-      const no  = /^(não|nao|agora não|agora nao|não quero|cancel)/.test(transcript)
+      const yes = /^(sim|pode|manda|envia|confirma|ok|pode mandar|pode enviar|claro|vamos|manda sim)/.test(transcript)
+      const no  = /^(não|nao|agora não|agora nao|não quero|cancel|não precisa|deixa)/.test(transcript)
       if (yes) handleSendRef.current()
       else if (no) onClose()
     }
-
     voiceRecogRef.current = rec
     rec.start()
+    voiceTimeoutRef.current = setTimeout(() => { try { rec.stop() } catch {} }, 12000)
+  }, [onClose])
 
-    voiceTimeoutRef.current = setTimeout(() => {
-      try { rec.stop() } catch {}
-    }, 10000)
-
+  useEffect(() => {
+    if (!isOpen || sent || isGenerating || autoSend) return
+    startVoice()
     return () => {
       if (voiceTimeoutRef.current) clearTimeout(voiceTimeoutRef.current)
       try { voiceRecogRef.current?.stop() } catch {}
@@ -412,11 +410,21 @@ export default function WhatsAppNotificationModal({
         {/* Footer */}
         {!sent && !isGenerating && (
           <div className="px-5 pb-5 space-y-2">
-            {listeningVoice && (
-              <p className="text-center text-xs text-green-600 animate-pulse">
-                🎙️ Diga <strong>"Sim"</strong> para enviar ou <strong>"Não"</strong> para cancelar...
-              </p>
-            )}
+            <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={startVoice}
+                title={listeningVoice ? 'Ouvindo...' : 'Responder por voz'}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-medium transition-all ${
+                  listeningVoice
+                    ? 'border-green-400 bg-green-50 text-green-600 animate-pulse'
+                    : 'border-slate-200 bg-slate-50 text-slate-400 hover:text-slate-600 hover:border-slate-300'
+                }`}
+              >
+                <Mic className="w-3.5 h-3.5" />
+                {listeningVoice ? 'Diga "Sim" para enviar ou "Não" para cancelar' : 'Responder por voz'}
+              </button>
+            </div>
             <div className="flex gap-3">
               <button
                 onClick={onClose}
