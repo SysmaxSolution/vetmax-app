@@ -26,20 +26,28 @@ export async function seedClinics(): Promise<void> {
 }
 
 export async function seedUsers(): Promise<Record<string, string>> {
-  const ids: Record<string, string> = {};
+  // Garante que as clínicas existem antes de criar profiles (FK constraint)
+  await seedClinics()
+  const ids: Record<string, string> = {}
   for (const [key, user] of Object.entries(fixtures.users)) {
-    // Always delete before creating to avoid AuthApiError: already registered
-    await deleteTestUser(user.email);
-    const id = await createTestUser({
-      email: user.email,
-      password: user.password,
-      role: user.role,
-      clinic_id: user.clinic_id,
-      full_name: user.full_name,
-    });
-    ids[key] = id;
+    try {
+      // Recria sempre para garantir senha correta
+      await deleteTestUser(user.email)
+      const id = await createTestUser({
+        email:     user.email,
+        password:  user.password,
+        role:      user.role,
+        clinic_id: user.clinic_id,
+        full_name: user.full_name,
+      })
+      ids[key] = id
+      console.log(`[seed] ✓ user ${key} (${user.email})`)
+    } catch (e) {
+      console.error(`[seed] ✗ FALHOU user ${key} (${user.email}): ${(e as Error).message}`)
+      throw e  // propaga — seed falho deve ser erro visível, não silencioso
+    }
   }
-  return ids;
+  return ids
 }
 
 export async function seedTutorsAndPets(): Promise<void> {

@@ -88,13 +88,31 @@ export async function createTestUser(params: {
   return userId;
 }
 
-/** Delete test user including profile. */
+/** Delete test user including profile. Non-fatal: loga e continua se usuário não existir. */
 export async function deleteTestUser(email: string): Promise<void> {
-  const admin = createAdminClient();
-  const { data } = await admin.auth.admin.listUsers();
-  const user = data.users.find((u) => u.email === email);
-  if (user) {
-    await admin.from('profiles').delete().eq('id', user.id);
-    await admin.auth.admin.deleteUser(user.id);
+  const admin = createAdminClient()
+  try {
+    // listUsers tem paginação padrão de 100 — itera até esgotar ou encontrar
+    let pageNum = 1
+    let found = false
+    while (!found) {
+      const { data, error } = await admin.auth.admin.listUsers({ page: pageNum, perPage: 100 })
+      if (error) {
+        console.warn(`[seed] listUsers falhou ao buscar ${email}:`, error.message)
+        break
+      }
+      const user = data.users.find((u) => u.email === email)
+      if (user) {
+        await admin.from('profiles').delete().eq('id', user.id)
+        await admin.auth.admin.deleteUser(user.id)
+        found = true
+      } else if (data.users.length < 100) {
+        break  // última página — usuário não existe no sistema
+      }
+      pageNum++
+    }
+  } catch (e) {
+    // Não propaga — deleteTestUser é best-effort antes do createTestUser
+    console.warn(`[seed] Aviso ao deletar ${email}: ${(e as Error).message}`)
   }
 }

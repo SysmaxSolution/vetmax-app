@@ -43,10 +43,17 @@ import { loginViaApi } from '../helpers/session'
 
 import { test, expect, Page } from '@playwright/test';
 import { createAdminClient } from '../helpers/supabase-test-client';
-import { seedClinics } from '../helpers/db-seed';
+import { seedClinics, seedTutorsAndPets } from '../helpers/db-seed';
 import fixtures from '../fixtures/test-data.json';
 
 const admin = createAdminClient();
+
+// BUG-003: garante que clínica e pacientes existem antes de qualquer INSERT com FK
+// (cobre todos os BLOCOs caso o global-setup tenha falhado ou o teardown tenha limpado)
+test.beforeAll(async () => {
+  await seedClinics();
+  await seedTutorsAndPets();
+});
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

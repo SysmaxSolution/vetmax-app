@@ -8,3 +8,6 @@ dist/
 # Claude Code — nunca commitar permissões locais (podem conter tokens inline)
 .claude/settings.local.json
 .vercel
+
+# Tokens de sessão dos testes E2E — gerados pelo global-setup, nunca commitar
+tests/.auth/
