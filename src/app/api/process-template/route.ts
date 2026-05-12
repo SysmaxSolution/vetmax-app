@@ -224,6 +224,8 @@ Gere 4-6 campos realistas. APENAS JSON VÁLIDO.`
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error)
     console.error('Erro em /api/process-template:', { errorMsg, stack: error instanceof Error ? error.stack : 'N/A' })
+    const { logServerError } = await import('@/lib/error-logger')
+    await logServerError({ path: '/api/process-template', error, source: 'api', module: 'registry' })
     return NextResponse.json(
       { error: `Erro interno ao processar template: ${errorMsg}` },
       { status: 500 }

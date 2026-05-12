@@ -95,6 +95,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ answer, tourId })
   } catch (err) {
     console.error('[mentor-chat] error:', err)
+    const { logServerError } = await import('@/lib/error-logger')
+    await logServerError({ path: '/api/mentor-chat', error: err, source: 'api', module: 'mentor' })
     return NextResponse.json(
       { answer: 'Ocorreu um erro ao consultar o Mentor. Tente novamente ou use os tours guiados.' },
     )

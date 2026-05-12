@@ -77,6 +77,8 @@ Responda APENAS em JSON válido (sem markdown), no formato:
     return NextResponse.json(parsed)
   } catch (err) {
     console.error('[suggest-diagnosis]', err)
+    const { logServerError } = await import('@/lib/error-logger')
+    await logServerError({ path: '/api/suggest-diagnosis', error: err, source: 'api', module: 'vet' })
     return NextResponse.json({ error: 'Erro interno ao gerar diagnóstico.' }, { status: 500 })
   }
 }

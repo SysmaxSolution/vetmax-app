@@ -50,6 +50,8 @@ Regras:
     })
   } catch (err) {
     console.error('[prescription-calculator]', err)
+    const { logServerError } = await import('@/lib/error-logger')
+    await logServerError({ path: '/api/prescription-calculator', error: err, source: 'api', module: 'vet' })
     return NextResponse.json({ error: 'Erro ao calcular dose.' }, { status: 500 })
   }
 }

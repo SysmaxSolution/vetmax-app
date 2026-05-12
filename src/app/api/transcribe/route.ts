@@ -78,12 +78,10 @@ Do not add any explanations or metadata, just the processed clinical note.`,
     })
   } catch (error) {
     console.error('Erro ao processar transcrição:', error)
-
-    const errorMessage =
-      error instanceof Error ? error.message : 'Erro desconhecido'
-
+    const { logServerError } = await import('@/lib/error-logger')
+    await logServerError({ path: '/api/transcribe', error, source: 'api', module: 'triage' })
     return NextResponse.json(
-      { error: `Erro ao processar transcrição: ${errorMessage}` },
+      { error: `Erro ao processar transcrição: ${error instanceof Error ? error.message : 'Erro desconhecido'}` },
       { status: 500 }
     )
   }
