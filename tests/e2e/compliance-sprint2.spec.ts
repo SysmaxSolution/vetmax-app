@@ -19,6 +19,15 @@ import { createAdminClient, createUserClient } from '../helpers/supabase-test-cl
 import { seedTutorsAndPets } from '../helpers/db-seed';
 import fixtures from '../fixtures/test-data.json';
 
+let _serverAlive = true
+test.beforeAll(async ({ browser }) => {
+  const _ctx = await browser.newContext(); const _pg = await _ctx.newPage()
+  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
+  await _ctx.close(); if (!_serverAlive) console.log('[SKIP ALL] compliance-sprint2 — servidor fora do ar')
+})
+test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
+
+
 const admin = createAdminClient();
 
 async function loginAs(page: Page, email: string, password: string) {

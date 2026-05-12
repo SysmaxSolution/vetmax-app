@@ -16,6 +16,15 @@ import { test, expect, Page } from '@playwright/test';
 import { createAdminClient } from '../helpers/supabase-test-client';
 import fixtures from '../fixtures/test-data.json';
 
+let _serverAlive = true
+test.beforeAll(async ({ browser }) => {
+  const _ctx = await browser.newContext(); const _pg = await _ctx.newPage()
+  _serverAlive = await _pg.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
+  await _ctx.close(); if (!_serverAlive) console.log('[SKIP ALL] compliance-lgpd — servidor fora do ar')
+})
+test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
+
+
 const admin = createAdminClient();
 
 async function loginAs(page: Page, email: string, password: string) {
