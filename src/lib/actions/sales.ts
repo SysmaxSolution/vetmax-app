@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { sendWhatsAppMessage } from './whatsapp'
+import { isEAN } from '@/lib/utils/ean'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -74,10 +75,6 @@ export interface StockProduct {
 
 // ─── Buscar produtos do estoque para autocomplete ─────────────────────────────
 
-function isEAN(q: string): boolean {
-  return /^\d{8,14}$/.test(q.trim())
-}
-
 async function getClinicId(): Promise<string | null> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -138,8 +135,6 @@ export async function searchSalesProducts(query: string): Promise<StockProduct[]
     unit:       p.unit ?? 'un',
   }))
 }
-
-export { isEAN }
 
 // ─── Criar venda via RPC ──────────────────────────────────────────────────────
 

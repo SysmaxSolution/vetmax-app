@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Search, Plus, Package, Sparkles } from 'lucide-react'
-import { searchSalesProducts, isEAN, type StockProduct } from '@/lib/actions/sales'
+import { searchSalesProducts, type StockProduct } from '@/lib/actions/sales'
+import { isEAN } from '@/lib/utils/ean'
 import type { CartItem } from './SalesCart'
 import QuickAddProductModal from './QuickAddProductModal'
 

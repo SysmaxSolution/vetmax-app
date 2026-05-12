@@ -41,10 +41,10 @@ export async function onRequestError(
 
     await logServerError({
       path,
-      errorMessage: error.message,
-      stackTrace:   error.stack,
-      source:       'server',
-      module:       inferModule(path) ?? undefined,
+      error,
+      stackTrace: error.stack,
+      source:     'server',
+      module:     inferModule(path) ?? undefined,
     })
   } catch (loggingErr) {
     // Nunca deixar o logger derrubar a requisição

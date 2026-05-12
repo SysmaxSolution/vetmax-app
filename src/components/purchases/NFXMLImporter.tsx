@@ -2,8 +2,10 @@
 
 import { useState, useCallback, useTransition } from 'react'
 import { Upload, X, FileText, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
-import { parseNFeXML, importNFeXML, enrichProductFromNCM } from '@/lib/actions/purchases'
-import type { ParsedNFe, PurchaseOrder } from '@/lib/actions/purchases'
+import { importNFeXML, enrichProductFromNCM } from '@/lib/actions/purchases'
+import type { PurchaseOrder } from '@/lib/actions/purchases'
+import { parseNFeXML } from '@/lib/utils/nfe-parser'
+import type { ParsedNFe } from '@/lib/utils/nfe-parser'
 import { NFXMLPreview } from './NFXMLPreview'
 
 interface Props {

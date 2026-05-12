@@ -1,6 +1,6 @@
 'use client'
 
-import type { ParsedNFe } from '@/lib/actions/purchases'
+import type { ParsedNFe } from '@/lib/utils/nfe-parser'
 import { Building2, Package, FileText } from 'lucide-react'
 
 interface Props {

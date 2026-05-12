@@ -4,7 +4,7 @@ import { useState, useTransition, useEffect } from 'react'
 import { X, Sparkles, Loader2, AlertCircle, Plus, Search } from 'lucide-react'
 import { addStockItemV2 } from '@/lib/actions/stock'
 import { searchProductByEAN, enrichProductFromNCM } from '@/lib/actions/purchases'
-import { isEAN } from '@/lib/actions/sales'
+import { isEAN } from '@/lib/utils/ean'
 import type { CartItem } from './SalesCart'
 
 interface Props {
