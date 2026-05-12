@@ -90,7 +90,6 @@ export default function ModulesTab({ initialConfig, onToast }: Props) {
   }
 
   const pendingMod = MODULES.find(m => m.key === pendingToggle?.key)
-  const whatsappActive            = activeModules.includes('whatsapp')
   const whatsappIntelligentActive = activeModules.includes('whatsapp_intelligent')
 
   return (
@@ -236,8 +235,8 @@ export default function ModulesTab({ initialConfig, onToast }: Props) {
         </div>
       </div>
 
-      {/* Setup WhatsApp — visível quando qualquer módulo WhatsApp está ativo */}
-      {(whatsappActive || whatsappIntelligentActive) && (
+      {/* Setup WhatsApp — visível somente quando WhatsApp Inteligente está ativo */}
+      {whatsappIntelligentActive && (
         <WhatsappIntelligentSetup onToast={onToast} />
       )}
     </div>
