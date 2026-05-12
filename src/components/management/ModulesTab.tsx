@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react'
 import {
   ToggleLeft, ToggleRight, Loader2, Save, Shield, AlertTriangle, Eye, EyeOff,
-  Hotel, Syringe, FlaskConical, Scissors, ShoppingBag, Stethoscope, ClipboardList, MessageCircle, Sparkles, Bot, ShoppingCart,
+  Hotel, Syringe, FlaskConical, Scissors, ShoppingBag, Stethoscope, ClipboardList, MessageCircle, Sparkles, Bot, ShoppingCart, Truck,
 } from 'lucide-react'
 import { updateClinicConfig, type ClinicConfig } from '@/lib/actions/clinic-settings'
 import WhatsappIntelligentSetup from './Settings/WhatsappIntelligentSetup'
@@ -30,6 +30,7 @@ const MODULES: ModuleDef[] = [
   { key: 'whatsapp',        label: 'WhatsApp',              desc: 'Notificações e mensagens via WhatsApp',    icon: <MessageCircle  className="h-5 w-5" />, color: 'text-green-600 bg-green-50'  },
   { key: 'mentor',              label: 'Modo Mentor',               desc: 'Botão "?" flutuante com tour guiado em todas as telas',                    icon: <Sparkles      className="h-5 w-5" />, color: 'text-blue-600 bg-blue-50'      },
   { key: 'whatsapp_intelligent', label: 'WhatsApp Inteligente (Bot)', desc: 'Bot IA responde, agenda consultas e faz campanhas de reativação via WhatsApp', icon: <Bot           className="h-5 w-5" />, color: 'text-emerald-600 bg-emerald-50' },
+  { key: 'purchases',            label: 'Compras',                   desc: 'Importação de NF-e XML, fornecedores e atualização de estoque',             icon: <Truck         className="h-5 w-5" />, color: 'text-purple-600 bg-purple-50'  },
 ]
 
 // Master key is stored in env and compared client-side only for UX purposes.
