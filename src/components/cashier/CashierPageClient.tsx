@@ -109,7 +109,7 @@ export default function CashierPageClient({
               }`}
             >
               <Icon className="w-4 h-4 flex-shrink-0" />
-              <span className="hidden sm:inline">{tab.label}</span>
+              <span className="max-sm:hidden">{tab.label}</span>
               {tab.key === 'receivables' && (initialInvoices.length + initialGroomingSessions.length) > 0 && (
                 <span className="ml-1 rounded-full bg-teal-100 text-teal-700 text-xs font-bold px-1.5 py-0.5 leading-none">
                   {initialInvoices.length + initialGroomingSessions.length}

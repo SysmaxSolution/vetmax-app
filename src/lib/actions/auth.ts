@@ -209,69 +209,184 @@ export async function logout() {
   redirect('/login')
 }
 
-// Cadastro de nova clínica: armazena metadados no Auth e aguarda confirmação de e-mail
+// Cadastro: cria conta e aguarda confirmação de e-mail.
+// Suporta criação de nova clínica OU adesão a clínica existente.
 export async function signUpWithClinic(
   formData: FormData
 ): Promise<{ error: string } | { email: string }> {
-  const email      = (formData.get('email')       as string).trim()
-  const password   =  formData.get('password')    as string
-  const fullName   = (formData.get('full_name')   as string).trim()
-  const clinicName = (formData.get('clinic_name') as string).trim()
+  const email      = (formData.get('email')      as string ?? '').trim()
+  const password   = (formData.get('password')   as string ?? '')
+  const fullName   = (formData.get('full_name')  as string ?? '').trim()
+  const username   = (formData.get('username')   as string ?? '').trim().toLowerCase()
+  const phone      = (formData.get('phone')      as string ?? '').trim()
+  const clinicId   = (formData.get('clinic_id')  as string ?? '').trim()   // adesão a existente
+  const clinicName = (formData.get('clinic_name')as string ?? '').trim()   // nova clínica
+  const cnpj       = (formData.get('cnpj')       as string ?? '').replace(/\D/g, '')
 
-  if (!email || !password || !fullName || !clinicName) {
-    return { error: 'Preencha todos os campos.' }
+  if (!email || !password || !fullName) {
+    return { error: 'Preencha os campos obrigatórios.' }
+  }
+  if (!clinicId && !clinicName) {
+    return { error: 'Selecione uma clínica existente ou informe o nome da nova clínica.' }
   }
   if (password.length < 8) {
     return { error: 'A senha deve ter no mínimo 8 caracteres.' }
   }
+  if (username && !/^[a-z0-9_]{3,30}$/.test(username)) {
+    return { error: 'Nome de usuário inválido. Use de 3 a 30 letras, números ou _.' }
+  }
 
   const admin = createAdminClient()
 
-  // Verificar se e-mail já está cadastrado antes do signUp.
-  // O Supabase retorna sucesso silencioso para e-mails duplicados,
-  // deixando o usuário preso numa falsa espera de confirmação.
+  // Verifica e-mail duplicado (Supabase retorna sucesso silencioso)
   const { data: existingUsers } = await admin.auth.admin.listUsers({ perPage: 1000 })
   const emailJaExiste = existingUsers?.users?.some(
     u => u.email?.toLowerCase() === email.toLowerCase()
   )
   if (emailJaExiste) {
-    return {
-      error: 'Este e-mail já possui uma conta cadastrada. Acesse a página de login ou redefina sua senha.',
+    return { error: 'Este e-mail já possui uma conta. Acesse a página de login ou redefina sua senha.' }
+  }
+
+  // Verifica username duplicado se fornecido
+  if (username) {
+    const { data: existingUsername } = await admin
+      .from('profiles')
+      .select('id')
+      .eq('username', username)
+      .maybeSingle()
+    if (existingUsername) {
+      return { error: `O nome de usuário @${username} já está em uso. Escolha outro.` }
     }
   }
 
   const supabase = await createClient()
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://vetmax-one.vercel.app'
 
-  const { error } = await supabase.auth.signUp({
+  const { error: signUpError } = await supabase.auth.signUp({
     email,
     password,
     options: {
       emailRedirectTo: `${appUrl}/auth/callback`,
-      // Armazena dados no user_metadata para o trigger Postgres (G-01)
-      // acessar mesmo quando o callback falha em mobile (sem cookie PKCE)
-      data: { full_name: fullName, clinic_name: clinicName },
+      data: { full_name: fullName, clinic_name: clinicName || undefined, clinic_id: clinicId || undefined },
     },
   })
 
-  if (error) {
-    return { error: 'Erro ao criar conta: ' + error.message }
+  if (signUpError) {
+    return { error: 'Erro ao criar conta: ' + signUpError.message }
   }
 
-  // Salva dados do cadastro para recuperar no /auth/callback após confirmação.
-  // O Supabase sobrescreve user_metadata após email confirmation, então
-  // persistimos aqui via service role antes de o usuário clicar no link.
+  // Persiste dados para o callback recuperar após confirmação de e-mail
   await admin.from('pending_registrations').upsert({
     email,
     full_name:   fullName,
-    clinic_name: clinicName,
+    clinic_name: clinicName || null,
+    username:    username   || null,
+    phone:       phone      || null,
+    clinic_id:   clinicId   || null,
+    cnpj:        cnpj       || null,
   })
 
-  // Retorna o e-mail para o componente exibir a tela de "confirme seu e-mail"
   return { email }
 }
 
 /** @deprecated Use signUpWithClinic para novos cadastros de clínica */
 export async function signUpUser(formData: FormData) {
   return signUpWithClinic(formData)
+}
+
+// ── Busca clínicas ativas por nome (autocomplete no cadastro) ─────────────────
+export async function searchClinics(
+  query: string
+): Promise<{ id: string; name: string }[]> {
+  if (!query || query.trim().length < 2) return []
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from('clinics')
+    .select('id, name')
+    .eq('status', 'active')
+    .ilike('name', `%${query.trim()}%`)
+    .order('name')
+    .limit(10)
+  return data ?? []
+}
+
+// ── Completa a sessão após OAuth ou phone OTP (seta cookie, roteia) ───────────
+export async function completeAuthSession(): Promise<AuthState> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Sessão inválida. Faça login novamente.' }
+
+  const admin = createAdminClient()
+  const isSysmax = user.email?.toLowerCase() === SYSMAX_EMAIL
+
+  // Sincroniza avatar de OAuth se disponível e ainda não definido
+  const avatarUrl = user.user_metadata?.avatar_url as string | undefined
+  if (avatarUrl) {
+    await admin.from('profiles')
+      .update({ photo_url: avatarUrl })
+      .eq('id', user.id)
+      .is('photo_url', null)
+  }
+
+  if (isSysmax) {
+    const { data: allClinics } = await admin.from('clinics').select('id').order('name').limit(1)
+    if (!allClinics?.length) return { error: 'Nenhuma clínica cadastrada no sistema.' }
+    await admin.from('profiles').upsert({
+      id: user.id, clinic_id: allClinics[0].id,
+      full_name: 'SysMax Suporte', role: 'admin', is_sysmax: true,
+    }, { onConflict: 'id' })
+    const cookieStore = await cookies()
+    cookieStore.set(ROLE_COOKIE, 'admin', ROLE_COOKIE_OPTIONS)
+    redirect('/dashboard')
+  }
+
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('role, clinic_id, clinics(status)')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile?.clinic_id) redirect('/onboarding')
+
+  const clinicStatus = (profile.clinics as unknown as { status: string } | null)?.status
+  if (clinicStatus === 'pending') {
+    await supabase.auth.signOut()
+    return { error: 'Sua clínica ainda está aguardando liberação pela equipe SysMax. Entre em contato: suporte@sysmaxsolutions.com' }
+  }
+  if (clinicStatus === 'blocked') {
+    await supabase.auth.signOut()
+    return { error: 'O acesso desta clínica foi bloqueado. Entre em contato: suporte@sysmaxsolutions.com' }
+  }
+
+  const { data: userClinics } = await admin
+    .from('user_clinics')
+    .select('clinic_id, role, clinics(id, name, status)')
+    .eq('user_id', user.id)
+
+  const activeClinics = (userClinics ?? []).filter(uc => {
+    const status = (uc.clinics as unknown as { status: string } | null)?.status
+    return status === 'active'
+  })
+
+  if (activeClinics.length > 1) {
+    return {
+      selectClinic: true,
+      clinics: activeClinics.map(uc => ({
+        id:   (uc.clinics as unknown as { id: string }).id,
+        name: (uc.clinics as unknown as { name: string }).name,
+        role: uc.role,
+      })),
+    }
+  }
+
+  const cookieStore = await cookies()
+  cookieStore.set(ROLE_COOKIE, profile.role, ROLE_COOKIE_OPTIONS)
+
+  switch (profile.role) {
+    case 'receptionist': redirect('/dashboard/reception')
+    case 'vet':          redirect('/dashboard/vet')
+    case 'assistant':    redirect('/dashboard/triage')
+    case 'pharmacist':   redirect('/dashboard/pharmacy')
+    default:             redirect('/dashboard')
+  }
 }

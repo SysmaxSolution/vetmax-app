@@ -1,9 +1,19 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 import type { User } from '@supabase/supabase-js'
 
-// ─── Garante que clínica e perfil existam para o usuário confirmado ───────────
+const ROLE_COOKIE = 'vetmax-role'
+const ROLE_COOKIE_OPTIONS = {
+  httpOnly:  true,
+  sameSite:  'lax'  as const,
+  secure:    process.env.NODE_ENV === 'production',
+  path:      '/',
+  maxAge:    60 * 60 * 24 * 7,
+}
+
+// ─── Garante que clínica e perfil existam para o usuário confirmado (email) ───
 async function ensureClinicCreated(user: User): Promise<void> {
   const admin = createAdminClient()
 
@@ -13,23 +23,46 @@ async function ensureClinicCreated(user: User): Promise<void> {
     .eq('id', user.id)
     .single()
 
-  if (profile?.clinic_id) return  // trigger Postgres já criou — nada a fazer
+  if (profile?.clinic_id) return
 
-  // Fallback explícito: trigger não disparou ou migração ausente em staging
   const { data: pending } = await admin
     .from('pending_registrations')
-    .select('full_name, clinic_name')
+    .select('full_name, clinic_name, clinic_id, username, phone, cnpj')
     .ilike('email', user.email!)
     .single()
 
   const fullName   = pending?.full_name   ?? (user.user_metadata?.full_name   as string | undefined) ?? user.email?.split('@')[0] ?? 'Admin'
   const clinicName = pending?.clinic_name ?? (user.user_metadata?.clinic_name as string | undefined) ?? ''
+  const existingClinicId = pending?.clinic_id ?? (user.user_metadata?.clinic_id as string | undefined)
 
-  if (!clinicName) return  // convite ou fluxo externo — não cria clínica
+  // Usuário aderindo a clínica existente
+  if (existingClinicId) {
+    await admin.from('profiles').upsert({
+      id:        user.id,
+      clinic_id: existingClinicId,
+      full_name: fullName,
+      username:  pending?.username ?? null,
+      phone:     pending?.phone    ?? null,
+      role:      'receptionist', // papel padrão; admin da clínica pode elevar
+    })
+    await admin.from('user_clinics').upsert({
+      user_id:   user.id,
+      clinic_id: existingClinicId,
+      role:      'receptionist',
+    }, { onConflict: 'user_id,clinic_id' })
+    await admin.from('pending_registrations').delete().eq('email', user.email!)
+    return
+  }
+
+  if (!clinicName) return
+
+  // Cria nova clínica
+  const insertData: Record<string, unknown> = { name: clinicName, status: 'pending' }
+  if (pending?.cnpj) insertData.cnpj = pending.cnpj
 
   const { data: clinic, error: clinicErr } = await admin
     .from('clinics')
-    .insert({ name: clinicName, status: 'pending' })
+    .insert(insertData)
     .select('id')
     .single()
 
@@ -39,6 +72,8 @@ async function ensureClinicCreated(user: User): Promise<void> {
     id:        user.id,
     clinic_id: clinic.id,
     full_name: fullName,
+    username:  pending?.username ?? null,
+    phone:     pending?.phone    ?? null,
     role:      'admin',
   })
   await admin.from('user_clinics').upsert({
@@ -47,6 +82,56 @@ async function ensureClinicCreated(user: User): Promise<void> {
     role:      'admin',
   }, { onConflict: 'user_id,clinic_id' })
   await admin.from('pending_registrations').delete().eq('email', user.email!)
+}
+
+// ─── Roteia usuário OAuth para o dashboard correto ────────────────────────────
+async function routeOAuthUser(user: User, origin: string): Promise<NextResponse> {
+  const admin = createAdminClient()
+
+  // Sincroniza avatar OAuth → photo_url (apenas se não tiver foto própria)
+  const avatarUrl = user.user_metadata?.avatar_url as string | undefined
+  if (avatarUrl) {
+    await admin.from('profiles')
+      .update({ photo_url: avatarUrl })
+      .eq('id', user.id)
+      .is('photo_url', null)
+  }
+
+  // Garante nome completo populado a partir do provider
+  const providerName = user.user_metadata?.full_name as string | undefined
+    ?? user.user_metadata?.name as string | undefined
+  if (providerName) {
+    await admin.from('profiles')
+      .update({ full_name: providerName })
+      .eq('id', user.id)
+      .is('full_name', null)
+  }
+
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('role, clinic_id, clinics(status)')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile?.clinic_id) {
+    return NextResponse.redirect(`${origin}/onboarding`)
+  }
+
+  const clinicStatus = (profile.clinics as unknown as { status: string } | null)?.status
+  if (clinicStatus === 'pending' || clinicStatus === 'blocked') {
+    return NextResponse.redirect(`${origin}/login?error=clinic_not_active`)
+  }
+
+  const cookieStore = await cookies()
+  cookieStore.set(ROLE_COOKIE, profile.role, ROLE_COOKIE_OPTIONS)
+
+  const destinations: Record<string, string> = {
+    receptionist: '/dashboard/reception',
+    vet:          '/dashboard/vet',
+    assistant:    '/dashboard/triage',
+    pharmacist:   '/dashboard/pharmacy',
+  }
+  return NextResponse.redirect(`${origin}${destinations[profile.role] ?? '/dashboard'}`)
 }
 
 // ─── GET /auth/callback ───────────────────────────────────────────────────────
@@ -64,14 +149,12 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/reset-password`)
   }
 
-  // ── Path 2: Email OTP / token_hash (mobile-friendly, sem PKCE) ────────────
-  // Supabase envia token_hash quando o projeto usa "Email OTP" em vez de PKCE.
-  // Também ocorre quando o link de confirmação é aberto em browser diferente.
+  // ── Path 2: Email OTP / token_hash ────────────────────────────────────────
   if (token_hash && type) {
     const supabase = await createClient()
     const { data, error } = await supabase.auth.verifyOtp({
       token_hash,
-      type: type as any,
+      type: type as 'signup' | 'invite' | 'magiclink' | 'recovery' | 'email_change' | 'email',
     })
 
     if (!error && data.user) {
@@ -79,23 +162,28 @@ export async function GET(request: Request) {
       await ensureClinicCreated(data.user)
       return NextResponse.redirect(`${origin}/email-confirmado`)
     }
-    // token inválido ou expirado — cai no erro genérico
     return NextResponse.redirect(`${origin}/login?error=token_invalid`)
   }
 
-  // ── Path 3: PKCE Code Exchange (desktop / mesmo browser) ──────────────────
+  // ── Path 3: PKCE Code Exchange (OAuth Google ou email signup) ─────────────
   if (code) {
     const supabase = await createClient()
     const { data, error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error && data.user) {
+      const provider = data.user.app_metadata?.provider as string | undefined
+      const isOAuth = provider && provider !== 'email'
+
+      if (isOAuth) {
+        return routeOAuthUser(data.user, origin)
+      }
+
+      // Email signup confirmation
       await ensureClinicCreated(data.user)
       return NextResponse.redirect(`${origin}/email-confirmado`)
     }
 
-    // PKCE falhou — browser diferente (mobile in-app browser sem cookie de sessão).
-    // O trigger Postgres (migration 0093) já criou a clínica quando email_confirmed_at
-    // foi definido. Redireciona para /email-confirmado; usuário faz login normalmente.
+    // Fallback mobile (trigger Postgres já criou a clínica)
     return NextResponse.redirect(`${origin}/email-confirmado`)
   }
 
