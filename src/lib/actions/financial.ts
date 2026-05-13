@@ -1115,7 +1115,7 @@ function sum(rows: { amount?: unknown }[]): number {
 
 // ─── G-11: autoMatch engine (pure function, tolerância ±2 dias) ──────────────
 
-export function autoMatch(
+function autoMatch(
   imported: BankStatement[],
   entries:  FinancialEntry[]
 ): AutoMatchResult {
