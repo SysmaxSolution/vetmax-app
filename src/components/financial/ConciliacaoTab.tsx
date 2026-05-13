@@ -87,7 +87,7 @@ function ManualMatchPanel({
   }
 
   return (
-    <div className="grid grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       {/* Coluna: Lançamentos importados */}
       <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
@@ -175,7 +175,7 @@ function ManualMatchPanel({
 
       {/* Ação de conciliar */}
       {(selectedStmt || selectedEntry) && (
-        <div className="col-span-2 flex items-center justify-between rounded-2xl border border-teal-200 bg-teal-50 px-4 py-3">
+        <div className="col-span-1 sm:col-span-2 flex items-center justify-between rounded-2xl border border-teal-200 bg-teal-50 px-4 py-3">
           <div className="flex items-center gap-3">
             <Link2 className="h-4 w-4 text-teal-600" />
             <p className="text-sm font-medium text-teal-800">
@@ -196,7 +196,7 @@ function ManualMatchPanel({
       )}
 
       {saveMsg && (
-        <div className="col-span-2 rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-2 text-sm text-emerald-700">
+        <div className="col-span-1 sm:col-span-2 rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-2 text-sm text-emerald-700">
           {saveMsg}
         </div>
       )}
@@ -382,7 +382,7 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
       {/* Seleção de conta e upload */}
       <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-4">
         <div className="flex flex-wrap items-end gap-3">
-          <div className="flex-1 min-w-[200px]">
+          <div className="w-full sm:min-w-[200px] flex-1">
             <label className="block text-xs font-semibold text-slate-500 mb-1.5">Conta Bancária</label>
             <select
               value={selectedBank}
@@ -404,7 +404,7 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
               <FileText className="inline h-3 w-3 mr-1" />
               Importar Extrato
             </label>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
               <input
                 ref={fileRef}
                 type="file"
@@ -416,7 +416,7 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
               />
               <label
                 htmlFor="bank-statement-upload"
-                className={`flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold cursor-pointer transition-colors ${
+                className={`flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold cursor-pointer transition-colors w-full sm:w-auto justify-center ${
                   !selectedBank || isPending
                     ? 'opacity-50 cursor-default bg-slate-50 text-slate-400'
                     : 'bg-white text-slate-700 hover:bg-slate-50'

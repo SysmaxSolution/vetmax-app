@@ -104,7 +104,7 @@ function SummaryCards({ summary, type }: { summary: FinancialSummary; type: Entr
   ]
 
   return (
-    <div className="grid grid-cols-3 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
       {cards.map(card => (
         <div key={card.label} className={`rounded-2xl border p-4 ${card.color}`}>
           <div className="flex items-center gap-2 mb-2">
@@ -301,6 +301,7 @@ export default function FinancialWorkspace({
       <div className="mx-auto max-w-6xl px-4 pt-4 space-y-4">
 
         {/* ── Main Tabs ──────────────────────────────────────────────────── */}
+        <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
         <div className="flex rounded-xl border border-slate-200 bg-white p-1 gap-1 w-fit">
           {mainTabs.map(t => (
             <button
@@ -318,6 +319,7 @@ export default function FinancialWorkspace({
               {t.label}
             </button>
           ))}
+        </div>
         </div>
 
         {/* ── Títulos: Totalizadores ──────────────────────────────────────── */}
@@ -369,7 +371,7 @@ export default function FinancialWorkspace({
             </div>
 
             {showFilters && (
-              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-100">
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 mb-1.5">Vencimento — De</label>
                   <input type="date" value={dueFrom} onChange={e => setDueFrom(e.target.value)}

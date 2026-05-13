@@ -69,7 +69,7 @@ function ResumoCards({ result }: { result: ExtratoResult }) {
   ]
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
       {cards.map(card => (
         <div key={card.label} className={`rounded-2xl border p-4 ${card.color}`}>
           <div className="flex items-center gap-2 mb-2">
@@ -96,7 +96,7 @@ function LancamentoRow({
   return (
     <tr className="border-b border-slate-100 hover:bg-teal-50/40 transition-colors">
       <td className="py-3 px-4 text-sm text-slate-600 whitespace-nowrap">{fmtDate(stmt.date)}</td>
-      <td className="py-3 px-4 text-sm text-slate-700 max-w-[300px]">
+      <td className="py-3 px-4 text-sm text-slate-700 sm:max-w-[300px]">
         <p className="truncate">{stmt.description}</p>
         {stmt.external_id && (
           <p className="text-xs text-slate-400">{stmt.external_id}</p>
@@ -176,7 +176,7 @@ export default function ExtratoTab({ bankAccounts }: Props) {
       {/* Filtros */}
       <div className="rounded-2xl border border-slate-200 bg-white p-4">
         <div className="flex flex-wrap items-end gap-3">
-          <div className="flex-1 min-w-[180px]">
+          <div className="w-full sm:w-auto sm:min-w-[160px] flex-1">
             <label className="block text-xs font-semibold text-slate-500 mb-1.5">Conta Bancária</label>
             <select
               value={selectedBank}

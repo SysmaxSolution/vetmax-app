@@ -152,7 +152,7 @@ export default function TituloModal({ mode, entryType, entry, onClose, onSuccess
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className={labelClass}>Valor (R$)</label>
                   <div className="relative">
@@ -208,7 +208,7 @@ export default function TituloModal({ mode, entryType, entry, onClose, onSuccess
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className={labelClass}>{isReceivable ? 'Data de Recebimento' : 'Data de Pagamento'}</label>
                   <input
