@@ -164,6 +164,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ answer, tourId, highlights })
   } catch (err) {
     console.error('[mentor-chat] error:', err)
+
+    // Erro de créditos esgotados — não logar como bug; retornar mensagem amigável
+    const errMsg = err instanceof Error ? err.message : String(err)
+    const isCreditError = errMsg.toLowerCase().includes('credit') || errMsg.toLowerCase().includes('balance')
+    if (isCreditError) {
+      return NextResponse.json({
+        answer: 'O Mentor está temporariamente indisponível. Entre em contato com o suporte técnico.',
+      })
+    }
+
     const { logServerError } = await import('@/lib/error-logger')
     await logServerError({ path: '/api/mentor-chat', error: err, source: 'api', module: 'mentor' })
     return NextResponse.json(
