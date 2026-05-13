@@ -12,6 +12,7 @@ import { UnauthorizedBanner } from '@/components/ui/UnauthorizedBanner'
 import { Lock, AlertCircle } from 'lucide-react'
 import { getLowStockCount } from '@/lib/actions/stock'
 import type { UserClinicInfo } from '@/lib/actions/clinic-switcher'
+import OnboardingWizard from '@/components/onboarding/OnboardingWizard'
 
 export default async function DashboardLayout({
   children,
@@ -43,7 +44,7 @@ export default async function DashboardLayout({
     ? admin.from('clinics').select('id, name, status').order('name')
     : admin.from('user_clinics').select('clinic_id, role, clinics(id, name, status)').eq('user_id', user.id)
 
-  const [{ data: clinicData }, whatsAppRow, clinicsResult] = await Promise.all([
+  const [{ data: clinicData }, whatsAppRow, clinicsResult, petCountResult] = await Promise.all([
     admin
       .from('clinics')
       .select('logo_url, active_modules, status, ai_transcription_mode')
@@ -56,6 +57,10 @@ export default async function DashboardLayout({
       .eq('is_active', true)
       .maybeSingle(),
     clinicsQuery,
+    admin
+      .from('patients')
+      .select('id', { count: 'exact', head: true })
+      .eq('clinic_id', profile.clinic_id),
   ])
 
   let userClinics: UserClinicInfo[] = []
@@ -161,6 +166,14 @@ export default async function DashboardLayout({
           </ModulesProvider>
         </ClinicConfigProvider>
       </ThemeProvider>
+      {!isSysmax && (
+        <OnboardingWizard
+          initialHasLogo={!!(clinicData as any)?.logo_url}
+          initialHasPets={(petCountResult.count ?? 0) > 0}
+          clinicId={profile.clinic_id}
+          userRole={profile.role}
+        />
+      )}
       <MentorGlobalWrapper />
       <Suspense fallback={null}>
         <UnauthorizedBanner />
