@@ -39,7 +39,7 @@ const ALL_TABS: Tab[] = [
   { label: 'Gestão',      href: '/dashboard/management',       icon: BarChart3,     roles: ['admin'] },
   { label: 'WhatsApp',   href: '/dashboard/whatsapp',         icon: MessageCircle,  roles: ['receptionist','admin','vet','assistant'], moduleKey: 'whatsapp_intelligent' },
   { label: 'Compras',    href: '/dashboard/purchases',        icon: ClipboardList,  roles: ['admin'],                                  moduleKey: 'purchases' },
-  { label: 'Financeiro', href: '/dashboard/financial',        icon: DollarSign,     roles: ['admin'] },
+  { label: 'Financeiro', href: '/dashboard/financial',        icon: DollarSign,     roles: ['admin'],                                  moduleKey: 'financial' },
 ]
 
 // ─── Props ────────────────────────────────────────────────────────────────────

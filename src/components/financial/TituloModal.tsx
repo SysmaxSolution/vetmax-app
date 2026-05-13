@@ -59,14 +59,12 @@ export default function TituloModal({ mode, entryType, entry, onClose, onSuccess
   const [error, setError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
-  // Campos do formulário
   const [description, setDescription] = useState(entry?.description ?? '')
   const [amountStr,   setAmountStr]   = useState(entry ? fmtCurrency(String(Math.round(entry.amount * 100))) : '')
   const [dueDate,     setDueDate]     = useState(entry?.due_date ?? todayStr())
   const [category,    setCategory]    = useState(entry?.category ?? '')
   const [notes,       setNotes]       = useState(entry?.notes ?? '')
 
-  // Campos de baixa
   const [paymentDate,   setPaymentDate]   = useState(todayStr())
   const [paymentMethod, setPaymentMethod] = useState(entry?.payment_method ?? '')
 
@@ -84,7 +82,6 @@ export default function TituloModal({ mode, entryType, entry, onClose, onSuccess
     setAmountStr(fmtCurrency(raw))
   }
 
-  // ── Submit criar/editar ───────────────────────────────────────────────────
   function handleSave() {
     setError(null)
     const amount = parseCurrency(amountStr)
@@ -108,7 +105,6 @@ export default function TituloModal({ mode, entryType, entry, onClose, onSuccess
     })
   }
 
-  // ── Submit baixar ─────────────────────────────────────────────────────────
   function handleBaixar() {
     setError(null)
     if (!paymentDate)   { setError('Informe a data de recebimento.'); return }
@@ -121,7 +117,6 @@ export default function TituloModal({ mode, entryType, entry, onClose, onSuccess
     })
   }
 
-  // ── Submit excluir ────────────────────────────────────────────────────────
   function handleDelete() {
     startTransition(async () => {
       const res = await deleteEntry(entry!.id)
@@ -136,7 +131,6 @@ export default function TituloModal({ mode, entryType, entry, onClose, onSuccess
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="w-full max-w-md rounded-2xl bg-white shadow-xl">
-        {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <h2 className="text-base font-bold text-slate-800">{title}</h2>
           <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors">
@@ -146,7 +140,6 @@ export default function TituloModal({ mode, entryType, entry, onClose, onSuccess
 
         <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
 
-          {/* ── Modo: CRIAR / EDITAR ─────────────────────────────────────── */}
           {innerMode !== 'baixar' && (
             <>
               <div>
@@ -205,7 +198,6 @@ export default function TituloModal({ mode, entryType, entry, onClose, onSuccess
             </>
           )}
 
-          {/* ── Modo: BAIXAR ─────────────────────────────────────────────── */}
           {innerMode === 'baixar' && entry && (
             <>
               <div className="rounded-xl bg-teal-50 border border-teal-200 px-4 py-3">
@@ -241,7 +233,6 @@ export default function TituloModal({ mode, entryType, entry, onClose, onSuccess
             </>
           )}
 
-          {/* Erro */}
           {error && (
             <div className="flex items-start gap-2 rounded-xl bg-red-50 border border-red-200 px-3 py-2">
               <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0 mt-0.5" />
@@ -249,7 +240,6 @@ export default function TituloModal({ mode, entryType, entry, onClose, onSuccess
             </div>
           )}
 
-          {/* Confirmação de exclusão */}
           {confirmDelete && (
             <div className="rounded-xl bg-red-50 border border-red-200 p-4 space-y-3">
               <p className="text-sm font-semibold text-red-700">Confirmar exclusão do título?</p>
@@ -273,10 +263,8 @@ export default function TituloModal({ mode, entryType, entry, onClose, onSuccess
           )}
         </div>
 
-        {/* Footer */}
         {!confirmDelete && (
           <div className="flex items-center gap-2 border-t border-slate-100 px-5 py-4">
-            {/* Ações de edição: baixar + excluir */}
             {innerMode === 'edit' && entry?.status === 'pending' && (
               <button
                 onClick={() => { setInnerMode('baixar'); setError(null) }}
@@ -338,8 +326,6 @@ export default function TituloModal({ mode, entryType, entry, onClose, onSuccess
     </div>
   )
 }
-
-// ─── Display helpers ──────────────────────────────────────────────────────────
 
 function formatCurrency(v: number): string {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })

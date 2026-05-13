@@ -5,23 +5,36 @@ import { MODULE_THEME } from '@/lib/module-theme'
 import {
   listEntries, getFinancialSummary,
   type FinancialEntry, type EntryType, type FinancialSummary,
+  type BankAccount, type ChartOfAccount, type CreditCard, type Employee,
 } from '@/lib/actions/financial'
 import TituloModal from './TituloModal'
+import BankAccountsTab   from './cadastros/BankAccountsTab'
+import ChartOfAccountsTab from './cadastros/ChartOfAccountsTab'
+import CreditCardsTab    from './cadastros/CreditCardsTab'
+import EmployeesTab      from './cadastros/EmployeesTab'
 import {
   Plus, RefreshCcw, Search, Filter,
   TrendingUp, AlertTriangle, CheckCircle2,
-  ChevronDown, DollarSign,
+  ChevronDown, DollarSign, BookOpen,
 } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type FilterStatus = 'all' | 'pending' | 'paid' | 'cancelled'
+type MainTab = EntryType | 'cadastros'
+type CadastrosSubTab = 'bancos' | 'plano_contas' | 'cartoes' | 'funcionarios'
 
 interface Props {
-  initialReceivable:       FinancialEntry[]
-  initialPayable:          FinancialEntry[]
+  initialReceivable:        FinancialEntry[]
+  initialPayable:           FinancialEntry[]
   initialReceivableSummary: FinancialSummary | null
   initialPayableSummary:    FinancialSummary | null
+  // G-10 cadastros
+  initialBankAccounts:   BankAccount[]
+  initialChartAccounts:  ChartOfAccount[]
+  initialCreditCards:    CreditCard[]
+  initialEmployees:      Employee[]
+  isAdmin:               boolean
 }
 
 // ─── Display helpers ──────────────────────────────────────────────────────────
@@ -147,32 +160,38 @@ export default function FinancialWorkspace({
   initialPayable,
   initialReceivableSummary,
   initialPayableSummary,
+  initialBankAccounts,
+  initialChartAccounts,
+  initialCreditCards,
+  initialEmployees,
+  isAdmin,
 }: Props) {
   const theme = MODULE_THEME.financial
 
-  const [activeTab, setActiveTab] = useState<EntryType>('receivable')
+  const [activeTab,    setActiveTab]    = useState<MainTab>('receivable')
+  const [cadastrosTab, setCadastrosTab] = useState<CadastrosSubTab>('bancos')
+
   const [receivable, setReceivable] = useState<FinancialEntry[]>(initialReceivable)
   const [payable,    setPayable]    = useState<FinancialEntry[]>(initialPayable)
   const [recSummary, setRecSummary] = useState<FinancialSummary | null>(initialReceivableSummary)
   const [paySummary, setPaySummary] = useState<FinancialSummary | null>(initialPayableSummary)
 
-  // Filtros
   const [search,       setSearch]       = useState('')
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all')
   const [showFilters,  setShowFilters]  = useState(false)
   const [dueFrom,  setDueFrom]  = useState('')
   const [dueTo,    setDueTo]    = useState('')
 
-  // Modal
   const [modal, setModal] = useState<{ mode: 'create' | 'edit'; entry?: FinancialEntry } | null>(null)
 
   const [isPending, startTransition] = useTransition()
 
-  const entries       = activeTab === 'receivable' ? receivable    : payable
-  const summary       = activeTab === 'receivable' ? recSummary    : paySummary
+  const isTitulos = activeTab === 'receivable' || activeTab === 'payable'
+  const entries   = activeTab === 'receivable' ? receivable : payable
+  const summary   = activeTab === 'receivable' ? recSummary : paySummary
 
-  // ── Filtro client-side ────────────────────────────────────────────────────
   const filtered = useMemo(() => {
+    if (!isTitulos) return []
     let list = entries
     if (search.trim()) {
       const q = search.trim().toLowerCase()
@@ -194,9 +213,8 @@ export default function FinancialWorkspace({
     if (dueFrom) list = list.filter(e => e.due_date >= dueFrom)
     if (dueTo)   list = list.filter(e => e.due_date <= dueTo)
     return list
-  }, [entries, search, filterStatus, dueFrom, dueTo])
+  }, [entries, search, filterStatus, dueFrom, dueTo, isTitulos])
 
-  // ── Refresh ───────────────────────────────────────────────────────────────
   function refresh() {
     startTransition(async () => {
       const [recRes, payRes, recSum, paySum] = await Promise.all([
@@ -217,7 +235,20 @@ export default function FinancialWorkspace({
     refresh()
   }
 
-  const overdueCount = entries.filter(isOverdue).length
+  const overdueCount = isTitulos ? entries.filter(isOverdue).length : 0
+
+  const mainTabs = [
+    { id: 'receivable' as MainTab, label: 'Contas a Receber' },
+    { id: 'payable'    as MainTab, label: 'Contas a Pagar'   },
+    { id: 'cadastros'  as MainTab, label: 'Cadastros'        },
+  ]
+
+  const cadastrosSubTabs: { id: CadastrosSubTab; label: string }[] = [
+    { id: 'bancos',       label: 'Bancos' },
+    { id: 'plano_contas', label: 'Plano de Contas' },
+    { id: 'cartoes',      label: 'Cartões' },
+    { id: 'funcionarios', label: 'Funcionários' },
+  ]
 
   return (
     <div className={`min-h-screen ${theme.bg} pb-10`}>
@@ -239,179 +270,219 @@ export default function FinancialWorkspace({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={refresh}
-              disabled={isPending}
-              className="flex items-center gap-1.5 rounded-xl border border-teal-200 bg-white px-3 py-2 text-sm font-medium text-teal-700 hover:bg-teal-50 transition-colors disabled:opacity-50"
-            >
-              <RefreshCcw className={`h-4 w-4 ${isPending ? 'animate-spin' : ''}`} />
-            </button>
-            <button
-              onClick={() => setModal({ mode: 'create' })}
-              className="flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 transition-colors"
-            >
-              <Plus className="h-4 w-4" />
-              Novo Título
-            </button>
+            {isTitulos && (
+              <>
+                <button
+                  onClick={refresh}
+                  disabled={isPending}
+                  className="flex items-center gap-1.5 rounded-xl border border-teal-200 bg-white px-3 py-2 text-sm font-medium text-teal-700 hover:bg-teal-50 transition-colors disabled:opacity-50"
+                >
+                  <RefreshCcw className={`h-4 w-4 ${isPending ? 'animate-spin' : ''}`} />
+                </button>
+                <button
+                  onClick={() => setModal({ mode: 'create' })}
+                  className="flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 transition-colors"
+                >
+                  <Plus className="h-4 w-4" />
+                  Novo Título
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>
 
       <div className="mx-auto max-w-6xl px-4 pt-4 space-y-4">
 
-        {/* ── Tabs ───────────────────────────────────────────────────────── */}
+        {/* ── Main Tabs ──────────────────────────────────────────────────── */}
         <div className="flex rounded-xl border border-slate-200 bg-white p-1 gap-1 w-fit">
-          {[
-            { id: 'receivable' as EntryType, label: 'Contas a Receber' },
-            { id: 'payable'   as EntryType, label: 'Contas a Pagar'   },
-          ].map(t => (
+          {mainTabs.map(t => (
             <button
               key={t.id}
               onClick={() => setActiveTab(t.id)}
-              className={`rounded-lg px-5 py-2 text-sm font-semibold transition-all ${
+              className={`rounded-lg px-5 py-2 text-sm font-semibold transition-all flex items-center gap-1.5 ${
                 activeTab === t.id
                   ? `${theme.active} text-white shadow-sm`
                   : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
               }`}
             >
+              {t.id === 'cadastros' && <BookOpen className="h-3.5 w-3.5" />}
               {t.label}
             </button>
           ))}
         </div>
 
-        {/* ── Totalizadores ──────────────────────────────────────────────── */}
-        {summary && <SummaryCards summary={summary} type={activeTab} />}
+        {/* ── Títulos: Totalizadores ──────────────────────────────────────── */}
+        {isTitulos && summary && <SummaryCards summary={summary} type={activeTab as EntryType} />}
 
-        {/* ── Barra de filtros ───────────────────────────────────────────── */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
-          <div className="flex items-center gap-3">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <input
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Buscar por descrição, tutor ou pet..."
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 py-2 text-sm placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
-              />
+        {/* ── Títulos: Filtros ───────────────────────────────────────────── */}
+        {isTitulos && (
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="relative flex-1 max-w-sm">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <input
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Buscar por descrição, tutor ou pet..."
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 py-2 text-sm placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                />
+              </div>
+
+              <div className="flex gap-1.5">
+                {[
+                  { v: 'all'       as FilterStatus, label: 'Todos' },
+                  { v: 'pending'   as FilterStatus, label: 'Pendentes' },
+                  { v: 'paid'      as FilterStatus, label: 'Pagos' },
+                  { v: 'cancelled' as FilterStatus, label: 'Cancelados' },
+                ].map(opt => (
+                  <button
+                    key={opt.v}
+                    onClick={() => setFilterStatus(opt.v)}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
+                      filterStatus === opt.v
+                        ? `${theme.active} text-white`
+                        : 'border border-slate-200 text-slate-500 hover:bg-slate-50'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={() => setShowFilters(v => !v)}
+                className="flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-500 hover:bg-slate-50 transition-colors"
+              >
+                <Filter className="h-4 w-4" />
+                Filtros
+                <ChevronDown className={`h-3 w-3 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
+              </button>
             </div>
 
-            {/* Status rápido */}
-            <div className="flex gap-1.5">
-              {[
-                { v: 'all'       as FilterStatus, label: 'Todos' },
-                { v: 'pending'   as FilterStatus, label: 'Pendentes' },
-                { v: 'paid'      as FilterStatus, label: 'Pagos' },
-                { v: 'cancelled' as FilterStatus, label: 'Cancelados' },
-              ].map(opt => (
+            {showFilters && (
+              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1.5">Vencimento — De</label>
+                  <input type="date" value={dueFrom} onChange={e => setDueFrom(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1.5">Vencimento — Até</label>
+                  <input type="date" value={dueTo} onChange={e => setDueTo(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20" />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Títulos: Tabela ────────────────────────────────────────────── */}
+        {isTitulos && (
+          <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+            {filtered.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <DollarSign className="h-12 w-12 text-slate-200 mb-3" />
+                <p className="text-sm font-semibold text-slate-400">
+                  {search || filterStatus !== 'all' || dueFrom || dueTo
+                    ? 'Nenhum título encontrado com os filtros aplicados.'
+                    : activeTab === 'receivable'
+                      ? 'Nenhum título a receber. Clique em "Novo Título" para lançar.'
+                      : 'Nenhum título a pagar. Clique em "Novo Título" para lançar.'
+                  }
+                </p>
+                {!search && filterStatus === 'all' && (
+                  <button
+                    onClick={() => setModal({ mode: 'create' })}
+                    className="mt-4 flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 transition-colors"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Novo Título
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-slate-100 bg-slate-50">
+                      <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase">Descrição</th>
+                      <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase whitespace-nowrap">Vencimento</th>
+                      <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase whitespace-nowrap">
+                        {activeTab === 'receivable' ? 'Recebimento' : 'Pagamento'}
+                      </th>
+                      <th className="py-3 px-4 text-right text-xs font-bold text-slate-500 uppercase">Valor</th>
+                      <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase">Status</th>
+                      <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase">Modalidade</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map(entry => (
+                      <EntryRow
+                        key={entry.id}
+                        entry={entry}
+                        onClick={() => setModal({ mode: 'edit', entry })}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+
+                <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 bg-slate-50">
+                  <p className="text-xs text-slate-400">
+                    {filtered.length} {filtered.length === 1 ? 'título' : 'títulos'}
+                    {filtered.length !== entries.length ? ` (filtrado de ${entries.length})` : ''}
+                  </p>
+                  <p className="text-sm font-bold text-slate-700">
+                    Total: {fmt(filtered.reduce((s, e) => s + e.amount, 0))}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Cadastros ──────────────────────────────────────────────────── */}
+        {activeTab === 'cadastros' && (
+          <div className="space-y-4">
+            {/* Sub-abas Cadastros */}
+            <div className="flex gap-1 rounded-xl border border-slate-200 bg-white p-1 w-fit">
+              {cadastrosSubTabs.map(t => (
                 <button
-                  key={opt.v}
-                  onClick={() => setFilterStatus(opt.v)}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
-                    filterStatus === opt.v
-                      ? `${theme.active} text-white`
-                      : 'border border-slate-200 text-slate-500 hover:bg-slate-50'
+                  key={t.id}
+                  onClick={() => setCadastrosTab(t.id)}
+                  className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
+                    cadastrosTab === t.id
+                      ? 'bg-teal-600 text-white shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
                   }`}
                 >
-                  {opt.label}
+                  {t.label}
                 </button>
               ))}
             </div>
 
-            <button
-              onClick={() => setShowFilters(v => !v)}
-              className="flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-500 hover:bg-slate-50 transition-colors"
-            >
-              <Filter className="h-4 w-4" />
-              Filtros
-              <ChevronDown className={`h-3 w-3 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
-            </button>
+            {/* Conteúdo da sub-aba */}
+            {cadastrosTab === 'bancos' && (
+              <BankAccountsTab initialAccounts={initialBankAccounts} />
+            )}
+            {cadastrosTab === 'plano_contas' && (
+              <ChartOfAccountsTab initialAccounts={initialChartAccounts} />
+            )}
+            {cadastrosTab === 'cartoes' && (
+              <CreditCardsTab initialCards={initialCreditCards} />
+            )}
+            {cadastrosTab === 'funcionarios' && (
+              <EmployeesTab initialEmployees={initialEmployees} isAdmin={isAdmin} />
+            )}
           </div>
-
-          {/* Filtros avançados */}
-          {showFilters && (
-            <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100">
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Vencimento — De</label>
-                <input type="date" value={dueFrom} onChange={e => setDueFrom(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Vencimento — Até</label>
-                <input type="date" value={dueTo} onChange={e => setDueTo(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20" />
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* ── Tabela ─────────────────────────────────────────────────────── */}
-        <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
-          {filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <DollarSign className="h-12 w-12 text-slate-200 mb-3" />
-              <p className="text-sm font-semibold text-slate-400">
-                {search || filterStatus !== 'all' || dueFrom || dueTo
-                  ? 'Nenhum título encontrado com os filtros aplicados.'
-                  : activeTab === 'receivable'
-                    ? 'Nenhum título a receber. Clique em "Novo Título" para lançar.'
-                    : 'Nenhum título a pagar. Clique em "Novo Título" para lançar.'
-                }
-              </p>
-              {!search && filterStatus === 'all' && (
-                <button
-                  onClick={() => setModal({ mode: 'create' })}
-                  className="mt-4 flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 transition-colors"
-                >
-                  <Plus className="h-4 w-4" />
-                  Novo Título
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-slate-100 bg-slate-50">
-                    <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase">Descrição</th>
-                    <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase whitespace-nowrap">Vencimento</th>
-                    <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase whitespace-nowrap">
-                      {activeTab === 'receivable' ? 'Recebimento' : 'Pagamento'}
-                    </th>
-                    <th className="py-3 px-4 text-right text-xs font-bold text-slate-500 uppercase">Valor</th>
-                    <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase">Status</th>
-                    <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase">Modalidade</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map(entry => (
-                    <EntryRow
-                      key={entry.id}
-                      entry={entry}
-                      onClick={() => setModal({ mode: 'edit', entry })}
-                    />
-                  ))}
-                </tbody>
-              </table>
-
-              <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 bg-slate-50">
-                <p className="text-xs text-slate-400">
-                  {filtered.length} {filtered.length === 1 ? 'título' : 'títulos'}
-                  {filtered.length !== entries.length ? ` (filtrado de ${entries.length})` : ''}
-                </p>
-                <p className="text-sm font-bold text-slate-700">
-                  Total: {fmt(filtered.reduce((s, e) => s + e.amount, 0))}
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
+        )}
       </div>
 
       {/* ── Modal ──────────────────────────────────────────────────────────── */}
       {modal && (
         <TituloModal
           mode={modal.mode}
-          entryType={activeTab}
+          entryType={activeTab as EntryType}
           entry={modal.entry}
           onClose={() => setModal(null)}
           onSuccess={onModalSuccess}

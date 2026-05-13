@@ -3,7 +3,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Types base (G-09) ────────────────────────────────────────────────────────
 
 export type EntryType   = 'receivable' | 'payable'
 export type EntryStatus = 'pending' | 'paid' | 'cancelled'
@@ -25,15 +25,14 @@ export interface FinancialEntry {
   created_by:     string | null
   created_at:     string
   updated_at:     string
-  // joined
   tutor_name:     string | null
   patient_name:   string | null
 }
 
 export interface FinancialSummary {
-  toReceiveMonth: number   // pending + due_date dentro do mês
-  overdue:        number   // pending + due_date < hoje
-  paidMonth:      number   // paid + payment_date no mês corrente
+  toReceiveMonth:      number
+  overdue:             number
+  paidMonth:           number
   toReceiveMonthCount: number
   overdueCount:        number
   paidMonthCount:      number
@@ -50,26 +49,140 @@ export interface ListEntriesFilters {
 }
 
 export interface CreateEntryData {
-  type:           EntryType
-  description:    string
-  amount:         number
-  due_date:       string
+  type:            EntryType
+  description:     string
+  amount:          number
+  due_date:        string
   payment_method?: string
-  tutor_id?:      string
-  patient_id?:    string
-  category?:      string
-  notes?:         string
+  tutor_id?:       string
+  patient_id?:     string
+  category?:       string
+  notes?:          string
+}
+
+// ─── Types G-10 ───────────────────────────────────────────────────────────────
+
+export interface BankAccount {
+  id:         string
+  clinic_id:  string
+  name:       string
+  bank_name:  string | null
+  bank_code:  string | null
+  ispb:       string | null
+  agency:     string | null
+  account:    string | null
+  pix_key:    string | null
+  is_default: boolean
+  balance:    number
+  created_at: string
+}
+
+export interface CreateBankAccountData {
+  name:       string
+  bank_name?: string
+  bank_code?: string
+  ispb?:      string
+  agency?:    string
+  account?:   string
+  pix_key?:   string
+  is_default?: boolean
+}
+
+export interface ChartOfAccount {
+  id:        string
+  clinic_id: string
+  code:      string
+  name:      string
+  type:      'receita' | 'despesa' | 'ativo' | 'passivo'
+  parent_id: string | null
+  is_system: boolean
+  is_active: boolean
+  created_at: string
+}
+
+export interface CreateChartOfAccountData {
+  code:      string
+  name:      string
+  type:      'receita' | 'despesa' | 'ativo' | 'passivo'
+  parent_id?: string
+}
+
+export interface CreditCard {
+  id:               string
+  clinic_id:        string
+  name:             string
+  administrator:    string | null
+  brand:            'visa' | 'master' | 'elo' | 'amex' | 'hipercard' | 'other'
+  type:             'credit' | 'debit' | 'both'
+  installments_max: number
+  fee_percent:      number
+  days_to_receive:  number
+  is_active:        boolean
+  created_at:       string
+}
+
+export interface CreateCreditCardData {
+  name:             string
+  administrator?:   string
+  brand:            CreditCard['brand']
+  type:             CreditCard['type']
+  installments_max: number
+  fee_percent:      number
+  days_to_receive:  number
+}
+
+export interface Employee {
+  id:            string
+  clinic_id:     string
+  user_id:       string | null
+  name:          string
+  role:          string
+  email:         string | null
+  phone:         string | null
+  cpf:           string | null
+  address:       Record<string, string> | null
+  hire_date:     string | null
+  salary:        number | null
+  pix_key:       string | null
+  vacation_days: number
+  is_active:     boolean
+  created_at:    string
+  updated_at:    string
+}
+
+export interface CreateEmployeeData {
+  name:           string
+  role:           string
+  email?:         string
+  phone?:         string
+  cpf?:           string
+  address?:       Record<string, string>
+  hire_date?:     string
+  salary?:        number
+  pix_key?:       string
+  vacation_days?: number
+  user_id?:       string
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-async function getClinicId(): Promise<string | null> {
+async function getClinicIdAndRole(): Promise<{ clinicId: string; role: string } | null> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
   const admin = createAdminClient()
-  const { data } = await admin.from('profiles').select('clinic_id').eq('id', user.id).single()
-  return data?.clinic_id ?? null
+  const { data } = await admin
+    .from('profiles')
+    .select('clinic_id, role')
+    .eq('id', user.id)
+    .single()
+  if (!data?.clinic_id) return null
+  return { clinicId: data.clinic_id, role: data.role }
+}
+
+async function getClinicId(): Promise<string | null> {
+  const r = await getClinicIdAndRole()
+  return r?.clinicId ?? null
 }
 
 async function getAuthUser() {
@@ -109,11 +222,10 @@ export async function createEntry(
       created_by:     user.id,
       status:         'pending',
     })
-    .select(`*, tutors(name), patients(name)`)
+    .select('*, tutors(name), patients(name)')
     .single()
 
   if (error) return { error: 'Erro ao criar título: ' + error.message }
-
   return mapEntry(entry)
 }
 
@@ -128,7 +240,7 @@ export async function listEntries(
   const admin = createAdminClient()
   let query = admin
     .from('financial_entries')
-    .select(`*, tutors(name), patients(name)`)
+    .select('*, tutors(name), patients(name)')
     .eq('clinic_id', clinicId)
     .eq('type', filters.type)
     .order('due_date', { ascending: true })
@@ -147,7 +259,6 @@ export async function listEntries(
 
   const { data, error } = await query.limit(500)
   if (error) return { error: 'Erro ao buscar títulos: ' + error.message }
-
   return (data ?? []).map(mapEntry)
 }
 
@@ -291,6 +402,387 @@ export async function listPaymentMethods(): Promise<{ id: string; name: string; 
     .eq('is_active', true)
     .order('name')
   return data ?? []
+}
+
+// ─── BankAccounts (G-10) ──────────────────────────────────────────────────────
+
+export async function listBankAccounts(): Promise<BankAccount[] | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('bank_accounts')
+    .select('id, clinic_id, name, bank_name, bank_code, ispb, agency, account, pix_key, is_default, balance, created_at')
+    .eq('clinic_id', clinicId)
+    .order('is_default', { ascending: false })
+    .order('name')
+
+  if (error) return { error: 'Erro ao buscar contas: ' + error.message }
+  return (data ?? []) as BankAccount[]
+}
+
+export async function createBankAccount(
+  data: CreateBankAccountData
+): Promise<BankAccount | { error: string }> {
+  if (!data.name?.trim()) return { error: 'Nome obrigatório.' }
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+
+  const admin = createAdminClient()
+  const { data: row, error } = await admin
+    .from('bank_accounts')
+    .insert({
+      clinic_id:  clinicId,
+      name:       data.name.trim(),
+      bank_name:  data.bank_name  || null,
+      bank_code:  data.bank_code  || null,
+      ispb:       data.ispb       || null,
+      agency:     data.agency     || null,
+      account:    data.account    || null,
+      pix_key:    data.pix_key    || null,
+      is_default: data.is_default ?? false,
+    })
+    .select('id, clinic_id, name, bank_name, bank_code, ispb, agency, account, pix_key, is_default, balance, created_at')
+    .single()
+
+  if (error) return { error: 'Erro ao criar conta: ' + error.message }
+  return row as BankAccount
+}
+
+export async function updateBankAccount(
+  id: string,
+  data: Partial<CreateBankAccountData>
+): Promise<{ error?: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+
+  const updates: Record<string, unknown> = {}
+  if (data.name       !== undefined) updates.name       = data.name?.trim()
+  if (data.bank_name  !== undefined) updates.bank_name  = data.bank_name  || null
+  if (data.bank_code  !== undefined) updates.bank_code  = data.bank_code  || null
+  if (data.ispb       !== undefined) updates.ispb       = data.ispb       || null
+  if (data.agency     !== undefined) updates.agency     = data.agency     || null
+  if (data.account    !== undefined) updates.account    = data.account    || null
+  if (data.pix_key    !== undefined) updates.pix_key    = data.pix_key    || null
+  if (data.is_default !== undefined) updates.is_default = data.is_default
+
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('bank_accounts')
+    .update(updates)
+    .eq('id', id)
+    .eq('clinic_id', clinicId)
+
+  if (error) return { error: 'Erro ao atualizar conta: ' + error.message }
+  return {}
+}
+
+export async function deleteBankAccount(id: string): Promise<{ error?: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('bank_accounts')
+    .delete()
+    .eq('id', id)
+    .eq('clinic_id', clinicId)
+
+  if (error) return { error: 'Erro ao excluir conta: ' + error.message }
+  return {}
+}
+
+// ─── ChartOfAccounts (G-10) ───────────────────────────────────────────────────
+
+export async function listChartOfAccounts(): Promise<ChartOfAccount[] | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('chart_of_accounts')
+    .select('id, clinic_id, code, name, type, parent_id, is_system, is_active, created_at')
+    .eq('clinic_id', clinicId)
+    .eq('is_active', true)
+    .order('code')
+
+  if (error) return { error: 'Erro ao buscar plano de contas: ' + error.message }
+  return (data ?? []) as ChartOfAccount[]
+}
+
+export async function createChartOfAccount(
+  data: CreateChartOfAccountData
+): Promise<ChartOfAccount | { error: string }> {
+  if (!data.code?.trim()) return { error: 'Código obrigatório.' }
+  if (!data.name?.trim()) return { error: 'Nome obrigatório.' }
+
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+
+  const admin = createAdminClient()
+  const { data: row, error } = await admin
+    .from('chart_of_accounts')
+    .insert({
+      clinic_id: clinicId,
+      code:      data.code.trim(),
+      name:      data.name.trim(),
+      type:      data.type,
+      parent_id: data.parent_id || null,
+      is_system: false,
+    })
+    .select('id, clinic_id, code, name, type, parent_id, is_system, is_active, created_at')
+    .single()
+
+  if (error) return { error: 'Erro ao criar conta: ' + error.message }
+  return row as ChartOfAccount
+}
+
+export async function deleteChartOfAccount(id: string): Promise<{ error?: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+
+  const admin = createAdminClient()
+  // Verifica se é conta do sistema
+  const { data: acc } = await admin
+    .from('chart_of_accounts')
+    .select('is_system')
+    .eq('id', id)
+    .eq('clinic_id', clinicId)
+    .single()
+
+  if (acc?.is_system) return { error: 'Não é possível excluir contas do sistema.' }
+
+  const { error } = await admin
+    .from('chart_of_accounts')
+    .update({ is_active: false })
+    .eq('id', id)
+    .eq('clinic_id', clinicId)
+
+  if (error) return { error: 'Erro ao desativar conta: ' + error.message }
+  return {}
+}
+
+// ─── CreditCards (G-10) ───────────────────────────────────────────────────────
+
+export async function listCreditCards(): Promise<CreditCard[] | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('credit_cards')
+    .select('id, clinic_id, name, administrator, brand, type, installments_max, fee_percent, days_to_receive, is_active, created_at')
+    .eq('clinic_id', clinicId)
+    .order('name')
+
+  if (error) return { error: 'Erro ao buscar cartões: ' + error.message }
+  return (data ?? []) as CreditCard[]
+}
+
+export async function createCreditCard(
+  data: CreateCreditCardData
+): Promise<CreditCard | { error: string }> {
+  if (!data.name?.trim()) return { error: 'Nome obrigatório.' }
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+
+  const admin = createAdminClient()
+  const { data: row, error } = await admin
+    .from('credit_cards')
+    .insert({
+      clinic_id:        clinicId,
+      name:             data.name.trim(),
+      administrator:    data.administrator || null,
+      brand:            data.brand,
+      type:             data.type,
+      installments_max: data.installments_max,
+      fee_percent:      data.fee_percent,
+      days_to_receive:  data.days_to_receive,
+    })
+    .select('id, clinic_id, name, administrator, brand, type, installments_max, fee_percent, days_to_receive, is_active, created_at')
+    .single()
+
+  if (error) return { error: 'Erro ao criar cartão: ' + error.message }
+  return row as CreditCard
+}
+
+export async function updateCreditCard(
+  id: string,
+  data: Partial<CreateCreditCardData>
+): Promise<{ error?: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+
+  const updates: Record<string, unknown> = {}
+  if (data.name             !== undefined) updates.name             = data.name?.trim()
+  if (data.administrator    !== undefined) updates.administrator    = data.administrator || null
+  if (data.brand            !== undefined) updates.brand            = data.brand
+  if (data.type             !== undefined) updates.type             = data.type
+  if (data.installments_max !== undefined) updates.installments_max = data.installments_max
+  if (data.fee_percent      !== undefined) updates.fee_percent      = data.fee_percent
+  if (data.days_to_receive  !== undefined) updates.days_to_receive  = data.days_to_receive
+
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('credit_cards')
+    .update(updates)
+    .eq('id', id)
+    .eq('clinic_id', clinicId)
+
+  if (error) return { error: 'Erro ao atualizar cartão: ' + error.message }
+  return {}
+}
+
+export async function deleteCreditCard(id: string): Promise<{ error?: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('credit_cards')
+    .delete()
+    .eq('id', id)
+    .eq('clinic_id', clinicId)
+
+  if (error) return { error: 'Erro ao excluir cartão: ' + error.message }
+  return {}
+}
+
+// ─── Employees (G-10) ─────────────────────────────────────────────────────────
+
+export async function listEmployees(inclueSalary = false): Promise<Employee[] | { error: string }> {
+  const ctx = await getClinicIdAndRole()
+  if (!ctx) return { error: 'Não autenticado.' }
+
+  const admin = createAdminClient()
+  const cols = inclueSalary && ctx.role === 'admin'
+    ? 'id, clinic_id, user_id, name, role, email, phone, cpf, address, hire_date, salary, pix_key, vacation_days, is_active, created_at, updated_at'
+    : 'id, clinic_id, user_id, name, role, email, phone, cpf, address, hire_date, pix_key, vacation_days, is_active, created_at, updated_at'
+
+  const { data, error } = await admin
+    .from('employees')
+    .select(cols)
+    .eq('clinic_id', ctx.clinicId)
+    .order('name')
+
+  if (error) return { error: 'Erro ao buscar funcionários: ' + error.message }
+  return (data ?? []) as unknown as Employee[]
+}
+
+export async function createEmployee(
+  data: CreateEmployeeData
+): Promise<Employee | { error: string }> {
+  if (!data.name?.trim()) return { error: 'Nome obrigatório.' }
+  const ctx = await getClinicIdAndRole()
+  if (!ctx) return { error: 'Não autenticado.' }
+  if (ctx.role !== 'admin') return { error: 'Apenas administradores podem criar funcionários.' }
+
+  const admin = createAdminClient()
+  const { data: row, error } = await admin
+    .from('employees')
+    .insert({
+      clinic_id:     ctx.clinicId,
+      user_id:       data.user_id    || null,
+      name:          data.name.trim(),
+      role:          data.role       || 'other',
+      email:         data.email      || null,
+      phone:         data.phone      || null,
+      cpf:           data.cpf        || null,
+      address:       data.address    || null,
+      hire_date:     data.hire_date  || null,
+      salary:        data.salary     ?? null,
+      pix_key:       data.pix_key    || null,
+      vacation_days: data.vacation_days ?? 30,
+    })
+    .select('id, clinic_id, user_id, name, role, email, phone, cpf, address, hire_date, salary, pix_key, vacation_days, is_active, created_at, updated_at')
+    .single()
+
+  if (error) return { error: 'Erro ao criar funcionário: ' + error.message }
+  return row as Employee
+}
+
+export async function updateEmployee(
+  id: string,
+  data: Partial<CreateEmployeeData>
+): Promise<{ error?: string }> {
+  const ctx = await getClinicIdAndRole()
+  if (!ctx) return { error: 'Não autenticado.' }
+  if (ctx.role !== 'admin') return { error: 'Apenas administradores podem editar funcionários.' }
+
+  const updates: Record<string, unknown> = {}
+  if (data.name          !== undefined) updates.name          = data.name?.trim()
+  if (data.role          !== undefined) updates.role          = data.role
+  if (data.email         !== undefined) updates.email         = data.email         || null
+  if (data.phone         !== undefined) updates.phone         = data.phone         || null
+  if (data.cpf           !== undefined) updates.cpf           = data.cpf           || null
+  if (data.address       !== undefined) updates.address       = data.address       || null
+  if (data.hire_date     !== undefined) updates.hire_date     = data.hire_date     || null
+  if (data.salary        !== undefined) updates.salary        = data.salary        ?? null
+  if (data.pix_key       !== undefined) updates.pix_key       = data.pix_key       || null
+  if (data.vacation_days !== undefined) updates.vacation_days = data.vacation_days
+  if (data.user_id       !== undefined) updates.user_id       = data.user_id       || null
+
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('employees')
+    .update(updates)
+    .eq('id', id)
+    .eq('clinic_id', ctx.clinicId)
+
+  if (error) return { error: 'Erro ao atualizar funcionário: ' + error.message }
+  return {}
+}
+
+export async function deleteEmployee(id: string): Promise<{ error?: string }> {
+  const ctx = await getClinicIdAndRole()
+  if (!ctx) return { error: 'Não autenticado.' }
+  if (ctx.role !== 'admin') return { error: 'Apenas administradores podem excluir funcionários.' }
+
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('employees')
+    .update({ is_active: false })
+    .eq('id', id)
+    .eq('clinic_id', ctx.clinicId)
+
+  if (error) return { error: 'Erro ao desativar funcionário: ' + error.message }
+  return {}
+}
+
+export async function importEmployeesFromProfiles(): Promise<{ imported: number; error?: string }> {
+  const ctx = await getClinicIdAndRole()
+  if (!ctx) return { error: 'Não autenticado.', imported: 0 }
+  if (ctx.role !== 'admin') return { error: 'Permissão negada.', imported: 0 }
+
+  const admin = createAdminClient()
+  const { data: profiles } = await admin
+    .from('profiles')
+    .select('id, full_name, role, email, phone')
+    .eq('clinic_id', ctx.clinicId)
+    .eq('is_sysmax', false)
+    .eq('is_active', true)
+
+  if (!profiles?.length) return { imported: 0 }
+
+  let imported = 0
+  for (const p of profiles) {
+    const { error } = await admin
+      .from('employees')
+      .insert({
+        clinic_id: ctx.clinicId,
+        user_id:   p.id,
+        name:      p.full_name || 'Sem nome',
+        role:      p.role      || 'other',
+        email:     p.email     || null,
+        phone:     p.phone     || null,
+      })
+      .select('id')
+      .single()
+    if (!error) imported++
+  }
+
+  return { imported }
 }
 
 // ─── Private helpers ──────────────────────────────────────────────────────────
