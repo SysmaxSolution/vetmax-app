@@ -19,16 +19,20 @@ export type ProductPrice = {
 export type CentralCashierEntry = {
   id: string
   clinic_id: string
-  source_module: 'grooming' | 'pharmacy' | 'consultation' | 'exam' | 'manual' | 'adjustment'
+  source_module: 'grooming' | 'pharmacy' | 'consultation' | 'exam' | 'manual' | 'adjustment' | 'sales'
   source_id?: string
   amount: number
-  status: 'recorded' | 'verified' | 'archived'
+  status: 'pending' | 'recorded' | 'verified' | 'archived' | 'reversed'
   reason?: string
+  patient_name?: string
+  tutor_name?: string
+  payment_method?: string
   created_at: string
   recorded_by?: string
 }
 
 export type CashierSummary = {
+  total_pending:  number
   total_recorded: number
   total_verified: number
   entry_count: number
@@ -267,6 +271,7 @@ export async function getCashierSummary(period: {
 
   const entries = data || []
   const summary: CashierSummary = {
+    total_pending:  entries.filter((e) => e.status === 'pending').reduce((sum, e) => sum + Number(e.amount), 0),
     total_recorded: entries.filter((e) => e.status === 'recorded').reduce((sum, e) => sum + Number(e.amount), 0),
     total_verified: entries.filter((e) => e.status === 'verified').reduce((sum, e) => sum + Number(e.amount), 0),
     entry_count: entries.length,

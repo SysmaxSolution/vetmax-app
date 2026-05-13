@@ -178,6 +178,26 @@ export async function generateInvoice(
     .from('invoice_items')
     .insert(items.map(it => ({ ...it, invoice_id: invoice.id })))
 
+  // Cria entrada PENDENTE no Caixa Central (aparece antes do pagamento ser confirmado)
+  if (total_amount > 0) {
+    await admin
+      .from('central_cashier')
+      .insert({
+        clinic_id:     profile.clinic_id,
+        source_module: 'consultation',
+        source_id:     invoice.id,
+        amount:        total_amount,
+        status:        'pending',
+        reason:        `Consulta — ${patient.name}`,
+        patient_name:  patient.name,
+        tutor_name:    tutor?.name ?? null,
+        recorded_by:   user.id,
+      })
+      // Idempotente: ignora se já existe para este invoice
+      .select('id')
+      .maybeSingle()
+  }
+
   revalidatePath('/dashboard/reception/checkout')
   return { id: invoice.id }
 }

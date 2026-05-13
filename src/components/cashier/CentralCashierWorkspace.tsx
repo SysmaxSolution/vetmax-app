@@ -24,6 +24,7 @@ const MODULE_LABELS: Record<string, string> = {
 }
 
 const STATUS_CONFIG = {
+  pending:  { label: 'Pendente',    cls: 'bg-blue-100 text-blue-700',       icon: <Clock        className="h-3 w-3" /> },
   recorded: { label: 'Registrado',  cls: 'bg-amber-100 text-amber-700',     icon: <Clock        className="h-3 w-3" /> },
   verified: { label: 'Verificado',  cls: 'bg-emerald-100 text-emerald-700', icon: <BadgeCheck   className="h-3 w-3" /> },
   archived: { label: 'Arquivado',   cls: 'bg-slate-100 text-slate-500',     icon: <Archive      className="h-3 w-3" /> },
@@ -170,12 +171,22 @@ export default function CentralCashierWorkspace({ initialEntries, summary, userR
         <div
           id="cashier-summary-cards"
           data-testid="cashier-summary-cards"
-          className="grid grid-cols-1 sm:grid-cols-3 gap-4"
+          className="grid grid-cols-2 sm:grid-cols-4 gap-4"
         >
-          <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <div className="bg-white rounded-xl border border-blue-200 p-5">
             <div className="flex items-center gap-3 mb-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50">
-                <TrendingUp className="h-4 w-4 text-blue-600" />
+                <Clock className="h-4 w-4 text-blue-600" />
+              </div>
+              <p className="text-xs font-medium text-blue-600 uppercase tracking-wide">A Receber</p>
+            </div>
+            <p data-testid="kpi-total-pending" className="text-2xl font-bold text-blue-700">{fmt(summary.total_pending ?? 0)}</p>
+          </div>
+
+          <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50">
+                <TrendingUp className="h-4 w-4 text-amber-600" />
               </div>
               <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Registrado</p>
             </div>
@@ -229,6 +240,7 @@ export default function CentralCashierWorkspace({ initialEntries, summary, userR
           className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
         >
           <option value="all">Todos os status</option>
+          <option value="pending">Pendente</option>
           <option value="recorded">Registrado</option>
           <option value="verified">Verificado</option>
           <option value="archived">Arquivado</option>
