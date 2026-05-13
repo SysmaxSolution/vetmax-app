@@ -7,9 +7,10 @@ import type { Supplier } from '@/lib/actions/suppliers'
 import { NFXMLImporter } from './NFXMLImporter'
 import { PurchaseOrderCard } from './PurchaseOrderCard'
 import { SupplierFormModal } from './SupplierFormModal'
+import { ExportXmlModal } from './ExportXmlModal'
 import { listSuppliers } from '@/lib/actions/suppliers'
 import { listPurchaseOrders } from '@/lib/actions/purchases'
-import { Package, Upload, Users, RefreshCcw } from 'lucide-react'
+import { Package, Upload, Users, RefreshCcw, Archive } from 'lucide-react'
 
 type Tab = 'entradas' | 'fornecedores'
 
@@ -25,6 +26,7 @@ export default function PurchasesWorkspace({ initialOrders, initialSuppliers }: 
   const [suppliers, setSuppliers]   = useState<Supplier[]>(initialSuppliers)
   const [showImporter, setShowImporter] = useState(false)
   const [showSupplierForm, setShowSupplierForm] = useState(false)
+  const [showExportModal, setShowExportModal]   = useState(false)
   const [editingSupplier, setEditingSupplier]   = useState<Supplier | null>(null)
   const [isPending, startTransition]            = useTransition()
 
@@ -72,13 +74,23 @@ export default function PurchasesWorkspace({ initialOrders, initialSuppliers }: 
               Atualizar
             </button>
             {tab === 'entradas' && (
-              <button
-                onClick={() => setShowImporter(true)}
-                className={`flex items-center gap-1.5 rounded-lg ${theme.active} px-3 py-2 text-sm font-bold text-white shadow hover:opacity-90`}
-              >
-                <Upload className="h-4 w-4" />
-                Importar NF-e
-              </button>
+              <>
+                <button
+                  onClick={() => setShowExportModal(true)}
+                  className="flex items-center gap-1.5 rounded-lg border border-purple-300 bg-white px-3 py-2 text-sm font-medium text-purple-700 hover:bg-purple-50"
+                  title="Exportar XMLs NF-e para contabilidade"
+                >
+                  <Archive className="h-4 w-4" />
+                  Exportar XML Contabilidade
+                </button>
+                <button
+                  onClick={() => setShowImporter(true)}
+                  className={`flex items-center gap-1.5 rounded-lg ${theme.active} px-3 py-2 text-sm font-bold text-white shadow hover:opacity-90`}
+                >
+                  <Upload className="h-4 w-4" />
+                  Importar NF-e
+                </button>
+              </>
             )}
             {tab === 'fornecedores' && (
               <button
@@ -204,6 +216,12 @@ export default function PurchasesWorkspace({ initialOrders, initialSuppliers }: 
           supplier={editingSupplier}
           onClose={() => { setShowSupplierForm(false); setEditingSupplier(null) }}
           onSaved={onSupplierSaved}
+        />
+      )}
+
+      {showExportModal && (
+        <ExportXmlModal
+          onClose={() => setShowExportModal(false)}
         />
       )}
     </div>

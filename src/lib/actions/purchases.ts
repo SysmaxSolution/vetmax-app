@@ -451,6 +451,61 @@ export async function searchProductByEAN(
   }
 }
 
+// ─── Export NF-e XMLs as ZIP ──────────────────────────────────────────────────
+
+export async function exportNFeZip(params: {
+  month: number
+  year: number
+}): Promise<{ data: string; filename: string } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return { error: ctx.error as string }
+
+  const { month, year } = params
+
+  // Build date range for the selected month
+  const startDate = new Date(year, month - 1, 1).toISOString().split('T')[0]
+  const endDate   = new Date(year, month, 0).toISOString().split('T')[0]
+
+  const admin = createAdminClient()
+
+  const { data: orders, error } = await admin
+    .from('purchase_orders')
+    .select('id, nfe_number, nfe_series, issue_date, xml_content, supplier:suppliers(name, document)')
+    .eq('clinic_id', ctx.clinic_id)
+    .not('xml_content', 'is', null)
+    .gte('issue_date', startDate)
+    .lte('issue_date', endDate)
+    .order('issue_date', { ascending: true })
+
+  if (error) return { error: `Erro ao buscar NF-es: ${error.message}` }
+  if (!orders || orders.length === 0) {
+    return { error: `Nenhuma NF-e com XML encontrada para ${month.toString().padStart(2, '0')}/${year}.` }
+  }
+
+  // Dynamically import jszip (works in Node.js server action context)
+  const JSZip = (await import('jszip')).default
+  const zip = new JSZip()
+
+  for (const order of orders) {
+    const xmlContent = (order as any).xml_content as string | null
+    if (!xmlContent) continue
+
+    const nfeNum    = (order.nfe_number ?? order.id.substring(0, 8)).replace(/\W/g, '')
+    const supplier  = (order as any).supplier as { name?: string; document?: string } | null
+    const emitente  = supplier?.name
+      ? supplier.name.replace(/[^\w\s]/g, '').replace(/\s+/g, '_').substring(0, 30)
+      : 'Emitente'
+
+    const filename = `NF${nfeNum}_${emitente}.xml`
+    zip.file(filename, xmlContent)
+  }
+
+  const base64 = await zip.generateAsync({ type: 'base64', compression: 'DEFLATE' })
+  const filename = `NFes_${year}-${String(month).padStart(2, '0')}_clinica.zip`
+
+  return { data: base64, filename }
+}
+
 // ─── Cancel order ─────────────────────────────────────────────────────────────
 
 export async function cancelPurchaseOrder(
