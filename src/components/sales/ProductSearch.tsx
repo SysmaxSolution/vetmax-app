@@ -68,13 +68,14 @@ export default function ProductSearch({ onAdd, disabled = false, refocusTrigger 
 
     const [r, cat] = await Promise.all([
       searchSalesProducts(trimmed),
-      trimmed.length >= 3 && !isEAN(trimmed) ? searchGlobalCatalog(trimmed, 5) : Promise.resolve([]),
+      trimmed.length >= 3 && !isEAN(trimmed) ? searchGlobalCatalog(trimmed, undefined, 5) : Promise.resolve([]),
     ])
 
     setResults(r)
-    setCatalog(cat)
+    const catArr = Array.isArray(cat) ? cat : []
+    setCatalog(catArr)
 
-    if (r.length > 0 || cat.length > 0) {
+    if (r.length > 0 || catArr.length > 0) {
       setOpen(true)
       setNotFound(false)
     } else {

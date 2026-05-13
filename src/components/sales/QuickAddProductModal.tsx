@@ -74,11 +74,9 @@ export default function QuickAddProductModal({ query, onClose, onAdded }: Props)
 
     // Busca paralela: catálogo global + EAN/NCM externo
     const [catalogResults, eanResult] = await Promise.all([
-      searchGlobalCatalog(q, 8),
+      searchGlobalCatalog(q, undefined, 8),
       isEAN(q) ? searchProductByEAN(q) : Promise.resolve(null),
     ])
-
-    setCatalog(catalogResults)
 
     let found: Preview | null = null
     if (eanResult && !('error' in eanResult) && eanResult.description) {
@@ -105,7 +103,9 @@ export default function QuickAddProductModal({ query, onClose, onAdded }: Props)
     setPreview(found)
 
     // Se achou no catálogo global, mostra seleção primeiro
-    if (catalogResults.length > 0) {
+    const catalogArr = Array.isArray(catalogResults) ? catalogResults : []
+    setCatalog(catalogArr)
+    if (catalogArr.length > 0) {
       setStep('catalog')
     } else {
       // Sem catálogo: vai direto pro formulário
@@ -125,7 +125,7 @@ export default function QuickAddProductModal({ query, onClose, onAdded }: Props)
 
   function selectCatalogItem(item: CatalogSuggestion) {
     setName(item.name)
-    setUnit(item.unit)
+    setUnit(item.unit ?? 'un')
     setCategory(item.category in CAT_LABEL ? item.category : 'other')
     setNcm('')
     setStep('form')
