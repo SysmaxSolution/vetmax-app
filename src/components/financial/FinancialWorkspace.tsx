@@ -490,7 +490,20 @@ export default function FinancialWorkspace({
               <CreditCardsTab initialCards={initialCreditCards} />
             )}
             {cadastrosTab === 'funcionarios' && (
-              <EmployeesTab initialEmployees={initialEmployees} isAdmin={isAdmin} />
+              <EmployeesTab
+                employees={initialEmployees.map(e => ({
+                  id:         e.id,
+                  name:       e.name,
+                  role:       e.role,
+                  department: null,
+                  salary:     e.salary ?? null,
+                  phone:      e.phone ?? null,
+                  email:      e.email ?? null,
+                  is_active:  e.is_active,
+                }))}
+                canEditFinancial={isAdmin}
+                onToast={(_type, _msg) => {}}
+              />
             )}
           </div>
         )}
