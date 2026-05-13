@@ -7,10 +7,6 @@
     {
       "path": "/api/cron/classify-errors",
       "schedule": "0 2 * * *"
-    },
-    {
-      "path": "/api/cron/daily-schedule-alert",
-      "schedule": "0 * * * *"
     }
   ]
 }
