@@ -57,6 +57,7 @@ export default function QuickAddProductModal({ query, onClose, onAdded, activeMo
 
   const [name,     setName]     = useState(query)
   const [ncm,      setNcm]      = useState('')
+  const [barcode,  setBarcode]  = useState('')
   const [unit,     setUnit]     = useState('un')
   const [price,    setPrice]    = useState('')
   const [category, setCategory] = useState('petshop')
@@ -128,7 +129,9 @@ export default function QuickAddProductModal({ query, onClose, onAdded, activeMo
     setName(item.name)
     setUnit(item.unit ?? 'un')
     setCategory(item.category in CAT_LABEL ? item.category : 'other')
-    setNcm('')
+    setNcm(item.ncm ?? '')
+    setBarcode(item.barcode ?? '')
+    if (item.price_avg != null) setPrice(String(item.price_avg))
     setStep('form')
   }
 
@@ -156,7 +159,7 @@ export default function QuickAddProductModal({ query, onClose, onAdded, activeMo
         unit,
         min_quantity:    1,
         unit_price:      unitPrice,
-        barcode:         isEAN(query) ? query : null,
+        barcode:         barcode.trim() || (isEAN(query) ? query : null),
         ncm:             ncm.trim() || null,
         ncm_description: preview?.description || null,
       })
@@ -322,9 +325,15 @@ export default function QuickAddProductModal({ query, onClose, onAdded, activeMo
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">NCM (opcional)</label>
-                <input value={ncm} onChange={e => setNcm(e.target.value)} className={INPUT} placeholder="8 dígitos" maxLength={8} />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">NCM</label>
+                  <input value={ncm} onChange={e => setNcm(e.target.value)} className={INPUT} placeholder="8 dígitos" maxLength={8} />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Código de Barras</label>
+                  <input value={barcode} onChange={e => setBarcode(e.target.value)} className={INPUT} placeholder="EAN-13" />
+                </div>
               </div>
             </div>
 
