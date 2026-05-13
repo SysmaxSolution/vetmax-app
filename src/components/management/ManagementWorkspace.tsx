@@ -12,10 +12,8 @@ import { deleteTemplate } from '@/lib/actions/templates'
 import { createInvitation, createAndSendInvitation, revokeInvitation } from '@/lib/actions/invitations'
 import { uploadClinicLogo, removeClinicLogo } from '@/lib/actions/clinic-settings'
 import type { DocumentTemplate, TemplateType, UserRole, Invitation, InvitationRole } from '@/types'
-import type { CatalogItem } from '@/lib/actions/catalog'
 import type { ClinicConfig, ClinicSettingsConfig } from '@/lib/actions/clinic-settings'
 import ImportTemplateModal from './ImportTemplateModal'
-import CatalogTab from './CatalogTab'
 import { Toast } from '@/components/ui/toast'
 import ConveniosTab from './ConveniosTab'
 import RoomsTab from './RoomsTab'
@@ -40,7 +38,6 @@ interface ManagementWorkspaceProps {
   currentUserId:       string
   userEmail:           string
   userFullName:        string
-  initialCatalog:           CatalogItem[]
   initialClinicConfig:      ClinicConfig | null
   initialSettingsConfig?:   ClinicSettingsConfig | null
   initialRooms?:                Room[]
@@ -90,7 +87,7 @@ const INVITE_ROLE_OPTIONS: { value: InvitationRole; label: string }[] = [
   { value: 'pharmacist',   label: 'Técnico' },
 ]
 
-type ActiveTab = 'templates' | 'clinica' | 'usuarios' | 'catalogo' | 'configuracoes' | 'convenios' | 'salas' | 'aparencia' | 'monitoramento'
+type ActiveTab = 'templates' | 'clinica' | 'usuarios' | 'configuracoes' | 'convenios' | 'salas' | 'aparencia' | 'monitoramento'
 
 // ─── Inline Field Helper ─────────────────────────────────────────────────────
 
@@ -134,7 +131,7 @@ function UserInlineField({ label, value, placeholder, onSave }: {
 
 export default function ManagementWorkspace({
   initialTemplates, clinicData, users, initialInvitations, userLimit, currentUserId, userEmail, userFullName,
-  initialCatalog, initialClinicConfig, initialSettingsConfig = null, initialRooms = [],
+  initialClinicConfig, initialSettingsConfig = null, initialRooms = [],
   activeModules = [], isSysmax = false, initialWhatsAppSettings = null,
 }: ManagementWorkspaceProps) {
   const searchParams = useSearchParams()
@@ -493,14 +490,6 @@ export default function ManagementWorkspace({
             )}
           </div>
         </div>
-      )}
-
-      {/* ── Tab: Catálogo ── */}
-      {activeTab === 'catalogo' && (
-        <CatalogTab
-          initialItems={initialCatalog}
-          onToast={(type, message) => setToast({ type, message })}
-        />
       )}
 
       {/* ── Tab: Convênios ── */}

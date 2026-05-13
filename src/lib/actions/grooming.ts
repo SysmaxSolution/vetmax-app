@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -442,16 +443,16 @@ export async function getGroomingCatalog(): Promise<GroomingCatalogItem[] | { er
   if ('error' in ctx) return ctx
   const { supabase, clinicId } = ctx
 
-  const { data, error } = await supabase
-    .from('clinic_catalog')
-    .select('id, name, price')
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('stock_items')
+    .select('id, name, unit_price')
     .eq('clinic_id', clinicId)
-    .eq('item_type', 'grooming')
-    .eq('is_active', true)
+    .eq('is_service', true)
     .order('name', { ascending: true })
 
   if (error) return { error: 'Erro ao buscar catálogo: ' + error.message }
-  return (data ?? []) as GroomingCatalogItem[]
+  return (data ?? []).map((r: any) => ({ id: r.id, name: r.name, price: r.unit_price ?? 0 }))
 }
 
 // ─── Atualizar Pricing da Sessão ──────────────────────────────────────────────

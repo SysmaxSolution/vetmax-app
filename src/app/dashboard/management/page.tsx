@@ -3,7 +3,6 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import { getTemplates } from '@/lib/actions/templates'
 import { getClinicInvitations } from '@/lib/actions/invitations'
-import { getCatalog, seedDefaultCatalog } from '@/lib/actions/catalog'
 import { getClinicConfig, getClinicSettingsConfig } from '@/lib/actions/clinic-settings'
 import { getRooms } from '@/lib/actions/rooms'
 import { getWhatsAppSettings } from '@/lib/actions/whatsapp'
@@ -31,7 +30,7 @@ export default async function ManagementPage() {
 
   const clinicName = (profile.clinics as unknown as { name: string } | null)?.name ?? 'Minha Clínica'
 
-  const [templatesResult, clinicResult, usersResult, invitationsResult, catalogResult, configResult, roomsResult, settingsConfigResult, whatsAppSettingsResult] = await Promise.all([
+  const [templatesResult, clinicResult, usersResult, invitationsResult, configResult, roomsResult, settingsConfigResult, whatsAppSettingsResult] = await Promise.all([
     getTemplates(),
     admin
       .from('clinics')
@@ -45,7 +44,6 @@ export default async function ManagementPage() {
       .eq('is_sysmax', false)
       .order('full_name'),
     getClinicInvitations(),
-    getCatalog(),
     getClinicConfig(),
     getRooms(),
     getClinicSettingsConfig(),
@@ -58,18 +56,10 @@ export default async function ManagementPage() {
   const invitations = invitationsResult
   const userLimit: number = clinicData?.user_limit ?? 10
   const activeModules: string[] = (clinicData?.active_modules as string[] | null) ?? []
-  const initialCatalog = 'error' in catalogResult ? [] : catalogResult
   const initialClinicConfig = 'error' in configResult ? null : configResult
   const initialSettingsConfig = 'error' in settingsConfigResult ? null : settingsConfigResult
   const initialRooms = Array.isArray(roomsResult) ? roomsResult : []
   const initialWhatsAppSettings = whatsAppSettingsResult ?? null
-
-  // Seed defaults se o catálogo estiver vazio
-  if (initialCatalog.length === 0 && profile.clinic_id) {
-    await seedDefaultCatalog(profile.clinic_id)
-    const freshCatalog = await getCatalog()
-    initialCatalog.push(...('error' in freshCatalog ? [] : freshCatalog))
-  }
 
   return (
     <Suspense>

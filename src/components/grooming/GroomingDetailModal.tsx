@@ -25,7 +25,7 @@ import {
   type GroomingCatalogItem,
   type GroomingServicePrice,
 } from '@/lib/actions/grooming'
-import { saveCatalogItem } from '@/lib/actions/catalog'
+import { addStockItemV2 } from '@/lib/actions/stock'
 import { parseGroomingIntent } from '@/lib/actions/grooming-intent'
 import type { GroomingStatus } from '@/lib/actions/grooming'
 
@@ -1424,10 +1424,14 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
                   if (!registerProductName.trim()) return
                   setRegisterProductSaving(true)
                   const price = parseFloat(registerProductPrice.replace(',', '.')) || 0
-                  const res = await saveCatalogItem({
-                    item_type: 'grooming',
-                    name: registerProductName.trim(),
-                    price,
+                  const res = await addStockItemV2({
+                    name:       registerProductName.trim(),
+                    quantity:   0,
+                    unit:       'un',
+                    min_quantity: 0,
+                    is_service: true,
+                    category:   'service',
+                    unit_price: price,
                   })
                   setRegisterProductSaving(false)
                   if ('error' in res) {
