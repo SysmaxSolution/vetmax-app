@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Search, Plus, Package, Sparkles } from 'lucide-react'
+import { Search, Plus, Package, Sparkles, BookOpen } from 'lucide-react'
 import { searchSalesProducts, type StockProduct } from '@/lib/actions/sales'
+import { searchGlobalCatalog, type CatalogSuggestion } from '@/lib/actions/catalog'
 import { isEAN } from '@/lib/utils/ean'
 import type { CartItem } from './SalesCart'
 import QuickAddProductModal from './QuickAddProductModal'
@@ -24,15 +25,16 @@ const CATEGORY_LABELS: Record<string, string> = {
 }
 
 export default function ProductSearch({ onAdd, disabled = false, refocusTrigger }: ProductSearchProps) {
-  const [query,      setQuery]      = useState('')
-  const [results,    setResults]    = useState<StockProduct[]>([])
-  const [open,       setOpen]       = useState(false)
-  const [loading,    setLoading]    = useState(false)
-  const [notFound,   setNotFound]   = useState(false)
-  const [quickAdd,   setQuickAdd]   = useState(false)
-  const [manualDesc, setManualDesc] = useState('')
+  const [query,       setQuery]      = useState('')
+  const [results,     setResults]    = useState<StockProduct[]>([])
+  const [catalog,     setCatalog]    = useState<CatalogSuggestion[]>([])
+  const [open,        setOpen]       = useState(false)
+  const [loading,     setLoading]    = useState(false)
+  const [notFound,    setNotFound]   = useState(false)
+  const [quickAdd,    setQuickAdd]   = useState(false)
+  const [manualDesc,  setManualDesc] = useState('')
   const [manualPrice, setManualPrice] = useState('')
-  const [showManual, setShowManual] = useState(false)
+  const [showManual,  setShowManual] = useState(false)
   const inputRef  = useRef<HTMLInputElement>(null)
   const timerRef  = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -56,20 +58,27 @@ export default function ProductSearch({ onAdd, disabled = false, refocusTrigger 
     const trimmed = q.trim()
     if (trimmed.length < 2) {
       setResults([])
+      setCatalog([])
       setOpen(false)
       setNotFound(false)
       return
     }
     setLoading(true)
     setNotFound(false)
-    const r = await searchSalesProducts(trimmed)
+
+    const [r, cat] = await Promise.all([
+      searchSalesProducts(trimmed),
+      trimmed.length >= 3 && !isEAN(trimmed) ? searchGlobalCatalog(trimmed, 5) : Promise.resolve([]),
+    ])
+
     setResults(r)
-    if (r.length > 0) {
+    setCatalog(cat)
+
+    if (r.length > 0 || cat.length > 0) {
       setOpen(true)
       setNotFound(false)
     } else {
       setOpen(false)
-      // Só mostrar notFound se o usuário digitou algo substancial (3+ chars ou EAN)
       setNotFound(trimmed.length >= 3 || isEAN(trimmed))
     }
     setLoading(false)
@@ -151,21 +160,58 @@ export default function ProductSearch({ onAdd, disabled = false, refocusTrigger 
 
         {/* Dropdown de resultados */}
         {open && (
-          <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
-            {results.map(p => (
-              <button
-                key={p.id}
-                type="button"
-                onMouseDown={() => addProduct(p)}
-                className="w-full text-left px-4 py-2.5 hover:bg-blue-50 border-b border-slate-100 last:border-0 flex items-center justify-between gap-3 transition-colors"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-slate-900 truncate">{p.name}</p>
-                  <p className="text-xs text-slate-400">{CATEGORY_LABELS[p.category] ?? p.category} · Estoque: {p.quantity} {p.unit}</p>
+          <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-72 overflow-y-auto">
+            {/* Resultados do estoque */}
+            {results.length > 0 && (
+              <>
+                {results.map(p => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onMouseDown={() => addProduct(p)}
+                    className="w-full text-left px-4 py-2.5 hover:bg-blue-50 border-b border-slate-100 last:border-0 flex items-center justify-between gap-3 transition-colors"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-900 truncate">{p.name}</p>
+                      <p className="text-xs text-slate-400">{CATEGORY_LABELS[p.category] ?? p.category} · Estoque: {p.quantity} {p.unit}</p>
+                    </div>
+                    <span className="text-sm font-semibold text-blue-600 flex-shrink-0">R$ {p.unit_price.toFixed(2)}</span>
+                  </button>
+                ))}
+              </>
+            )}
+            {/* Sugestões do catálogo global */}
+            {catalog.length > 0 && (
+              <>
+                <div className="px-4 py-1.5 bg-slate-50 border-b border-slate-100">
+                  <p className="text-xs font-medium text-slate-400 flex items-center gap-1">
+                    <BookOpen className="h-3 w-3" />
+                    Catálogo veterinário — clique para cadastrar
+                  </p>
                 </div>
-                <span className="text-sm font-semibold text-blue-600 flex-shrink-0">R$ {p.unit_price.toFixed(2)}</span>
-              </button>
-            ))}
+                {catalog.map(c => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onMouseDown={() => { setQuickAdd(true); setOpen(false) }}
+                    className="w-full text-left px-4 py-2.5 hover:bg-emerald-50 border-b border-slate-100 last:border-0 flex items-center justify-between gap-3 transition-colors"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-800 truncate">{c.name}</p>
+                      <p className="text-xs text-slate-400">
+                        {CATEGORY_LABELS[c.category] ?? c.category}
+                        {c.common_brand ? ` · ${c.common_brand}` : ''}
+                        {' · '}{c.unit}
+                      </p>
+                    </div>
+                    <span className="text-xs font-medium text-emerald-600 flex-shrink-0 flex items-center gap-1">
+                      <Plus className="h-3 w-3" />
+                      Cadastrar
+                    </span>
+                  </button>
+                ))}
+              </>
+            )}
           </div>
         )}
       </div>

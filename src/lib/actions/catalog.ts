@@ -198,3 +198,34 @@ export async function seedDefaultCatalog(
 
   await admin.from('clinic_catalog').insert(defaults)
 }
+
+// ─── Busca no catálogo global de produtos veterinários ────────────────────────
+
+export interface CatalogSuggestion {
+  id:           string
+  name:         string
+  category:     string
+  subcategory:  string | null
+  unit:         string
+  description:  string | null
+  common_brand: string | null
+  species:      string[] | null
+}
+
+export async function searchGlobalCatalog(
+  query: string,
+  limit = 8
+): Promise<CatalogSuggestion[]> {
+  if (!query || query.trim().length < 2) return []
+
+  // Tabela pública — usa client anônimo via admin para evitar RLS de auth
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from('product_catalog_global')
+    .select('id, name, category, subcategory, unit, description, common_brand, species')
+    .ilike('name', `%${query.trim()}%`)
+    .order('name')
+    .limit(limit)
+
+  return (data ?? []) as CatalogSuggestion[]
+}
