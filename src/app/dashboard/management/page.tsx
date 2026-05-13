@@ -72,7 +72,6 @@ export default async function ManagementPage() {
         currentUserId={user.id}
         userEmail={user.email ?? ''}
         userFullName={profile.full_name}
-        initialCatalog={initialCatalog}
         initialClinicConfig={initialClinicConfig}
         initialSettingsConfig={initialSettingsConfig}
         initialRooms={initialRooms}
