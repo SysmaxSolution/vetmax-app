@@ -332,6 +332,47 @@ export async function triggerFixPlanGeneration(): Promise<
   }
 }
 
+/** Marca todos os erros não resolvidos como resolvidos (bulk resolve).
+ *  is_sysmax resolve de todas as clínicas; admin/manager só da própria clínica. */
+export async function resolveAllErrors(): Promise<
+  { resolved: number } | { error: string }
+> {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: 'Não autenticado.' }
+
+    const admin = createAdminClient()
+    const { data: profile } = await admin
+      .from('profiles')
+      .select('clinic_id, role, is_sysmax')
+      .eq('id', user.id)
+      .single()
+
+    if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
+
+    const isSysmax = profile.is_sysmax === true
+    if (!isSysmax && !['admin', 'manager'].includes(profile.role)) {
+      return { error: 'Sem permissão.' }
+    }
+
+    let query = admin
+      .from('error_logs')
+      .update({ resolved: true })
+      .eq('resolved', false)
+
+    if (!isSysmax) {
+      query = query.eq('clinic_id', profile.clinic_id)
+    }
+
+    const { error, count } = await query
+    if (error) return { error: 'Erro ao resolver: ' + error.message }
+    return { resolved: count ?? 0 }
+  } catch {
+    return { error: 'Erro inesperado.' }
+  }
+}
+
 /** Re-envia a notificação WhatsApp de aprovação para um plano específico. */
 export async function resendPlanNotification(
   planId: string,

@@ -3,9 +3,9 @@
 import { useState, useEffect, useCallback, useTransition } from 'react'
 import {
   Activity, RefreshCw, AlertTriangle, AlertCircle, Info,
-  ChevronRight, FileText, CheckCircle2, XCircle, Clock, Bug, Zap, MessageSquare,
+  ChevronRight, FileText, CheckCircle2, XCircle, Clock, Bug, Zap, MessageSquare, Trash2,
 } from 'lucide-react'
-import { getUnresolvedErrors, getFixPlans, approveFixPlan, rejectFixPlan, triggerFixPlanGeneration, resendPlanNotification } from '@/lib/actions/error-logs'
+import { getUnresolvedErrors, getFixPlans, approveFixPlan, rejectFixPlan, triggerFixPlanGeneration, resendPlanNotification, resolveError, resolveAllErrors } from '@/lib/actions/error-logs'
 import FixPlanSlideOver from './FixPlanSlideOver'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -77,6 +77,8 @@ export default function ErrorMonitoringDashboard() {
   const [toast,         setToast]         = useState<{ type: 'ok' | 'err'; msg: string } | null>(null)
   const [generating,    setGenerating]    = useState(false)
   const [resending,     setResending]     = useState<string | null>(null)
+  const [resolvingId,   setResolvingId]   = useState<string | null>(null)
+  const [resolvingAll,  setResolvingAll]  = useState(false)
   const [,             startTransition]   = useTransition()
 
   const showToast = (type: 'ok' | 'err', msg: string) => {
@@ -98,6 +100,30 @@ export default function ErrorMonitoringDashboard() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  async function handleResolve(errorId: string) {
+    setResolvingId(errorId)
+    const res = await resolveError(errorId)
+    if ('error' in res) {
+      showToast('err', res.error)
+    } else {
+      setErrors(prev => prev.filter(e => e.id !== errorId))
+      showToast('ok', 'Erro marcado como corrigido.')
+    }
+    setResolvingId(null)
+  }
+
+  async function handleResolveAll() {
+    setResolvingAll(true)
+    const res = await resolveAllErrors()
+    if ('error' in res) {
+      showToast('err', res.error)
+    } else {
+      setErrors([])
+      showToast('ok', `${res.resolved} erro${res.resolved !== 1 ? 's' : ''} marcado${res.resolved !== 1 ? 's' : ''} como corrigido${res.resolved !== 1 ? 's' : ''}.`)
+    }
+    setResolvingAll(false)
+  }
 
   async function handleGenerate() {
     setGenerating(true)
@@ -193,6 +219,21 @@ export default function ErrorMonitoringDashboard() {
               {p0Count} P0 ativo{p0Count > 1 ? 's' : ''}
             </span>
           )}
+          {errors.length > 0 && (
+            <button
+              onClick={handleResolveAll}
+              disabled={resolvingAll || loading}
+              title="Marcar todos os erros como corrigidos"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+            >
+              {resolvingAll
+                ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                : <CheckCircle2 className="w-3.5 h-3.5" />
+              }
+              <span className="hidden sm:inline">Resolver Todos</span>
+              <span className="sm:hidden">Resolver</span>
+            </button>
+          )}
           <button
             onClick={handleGenerate}
             disabled={generating || loading}
@@ -249,7 +290,7 @@ export default function ErrorMonitoringDashboard() {
           </div>
         ) : (
           <>
-            {subTab === 'logs'    && <ErrorLogsTab    errors={errors} />}
+            {subTab === 'logs'    && <ErrorLogsTab    errors={errors} resolvingId={resolvingId} onResolve={handleResolve} />}
             {subTab === 'pending' && (
               <PendingPlansTab
                 plans={pendingPlans}
@@ -294,7 +335,15 @@ export default function ErrorMonitoringDashboard() {
 
 // ─── Sub-tab: Logs de Erro ────────────────────────────────────────────────────
 
-function ErrorLogsTab({ errors }: { errors: ErrorLog[] }) {
+function ErrorLogsTab({
+  errors,
+  resolvingId,
+  onResolve,
+}: {
+  errors: ErrorLog[]
+  resolvingId: string | null
+  onResolve: (id: string) => void
+}) {
   if (errors.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-slate-400 gap-3">
@@ -310,8 +359,9 @@ function ErrorLogsTab({ errors }: { errors: ErrorLog[] }) {
       {/* ── Mobile: cards ─────────────────────────────────────────────────── */}
       <div className="sm:hidden space-y-2">
         {errors.map(err => {
-          const priority = (err.priority ?? 'P2') as 'P0' | 'P1' | 'P2'
-          const Icon     = P_ICON[priority] ?? Info
+          const priority  = (err.priority ?? 'P2') as 'P0' | 'P1' | 'P2'
+          const Icon      = P_ICON[priority] ?? Info
+          const isBusy    = resolvingId === err.id
           return (
             <div key={err.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
               <div className="flex items-start justify-between gap-2 mb-1">
@@ -329,15 +379,29 @@ function ErrorLogsTab({ errors }: { errors: ErrorLog[] }) {
                   </span>
                 </div>
               </div>
-              <p className="text-xs text-slate-800 font-medium line-clamp-2 mb-1">{err.error_message}</p>
-              <div className="flex items-center gap-2 flex-wrap">
-                {err.module && (
-                  <span className="text-[10px] font-medium text-slate-600 bg-slate-200 rounded px-1.5 py-0.5">{err.module}</span>
-                )}
-                {err.clinic_name && (
-                  <span className="text-[10px] text-slate-500 truncate max-w-[120px]">{err.clinic_name}</span>
-                )}
-                <span className="font-mono text-[10px] text-slate-400 truncate max-w-[160px]">{err.path}</span>
+              <p className="text-xs text-slate-800 font-medium line-clamp-2 mb-1.5">{err.error_message}</p>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {err.module && (
+                    <span className="text-[10px] font-medium text-slate-600 bg-slate-200 rounded px-1.5 py-0.5">{err.module}</span>
+                  )}
+                  {err.clinic_name && (
+                    <span className="text-[10px] text-slate-500 truncate max-w-[120px]">{err.clinic_name}</span>
+                  )}
+                  <span className="font-mono text-[10px] text-slate-400 truncate max-w-[130px]">{err.path}</span>
+                </div>
+                <button
+                  onClick={() => onResolve(err.id)}
+                  disabled={isBusy || resolvingId !== null}
+                  title="Marcar como corrigido"
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 text-emerald-700 text-[10px] font-semibold border border-emerald-200 hover:bg-emerald-100 disabled:opacity-50 transition-colors shrink-0"
+                >
+                  {isBusy
+                    ? <RefreshCw className="w-3 h-3 animate-spin" />
+                    : <CheckCircle2 className="w-3 h-3" />
+                  }
+                  Corrigido
+                </button>
               </div>
             </div>
           )
@@ -349,53 +413,69 @@ function ErrorLogsTab({ errors }: { errors: ErrorLog[] }) {
         <table className="w-full text-sm">
           <thead>
             <tr className="text-xs text-slate-500 uppercase tracking-wide border-b border-slate-100">
-              <th className="pb-2 pr-4 font-semibold text-left">Prioridade</th>
-              <th className="pb-2 pr-4 font-semibold text-left">Clínica</th>
-              <th className="pb-2 pr-4 font-semibold text-left">Módulo</th>
-              <th className="pb-2 pr-4 font-semibold text-left">Rota</th>
-              <th className="pb-2 pr-4 font-semibold text-left">Erro</th>
-              <th className="pb-2 pr-4 font-semibold text-left">Origem</th>
-              <th className="pb-2 text-right font-semibold">Ocorrências</th>
+              <th className="pb-2 pr-3 font-semibold text-left">Prioridade</th>
+              <th className="pb-2 pr-3 font-semibold text-left">Clínica</th>
+              <th className="pb-2 pr-3 font-semibold text-left">Módulo</th>
+              <th className="pb-2 pr-3 font-semibold text-left">Rota</th>
+              <th className="pb-2 pr-3 font-semibold text-left">Erro</th>
+              <th className="pb-2 pr-3 font-semibold text-left">Origem</th>
+              <th className="pb-2 pr-3 text-right font-semibold">Ocorrências</th>
+              <th className="pb-2 text-right font-semibold">Ação</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
             {errors.map(err => {
               const priority = (err.priority ?? 'P2') as 'P0' | 'P1' | 'P2'
               const Icon     = P_ICON[priority] ?? Info
+              const isBusy   = resolvingId === err.id
               return (
                 <tr key={err.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="py-2.5 pr-4">
+                  <td className="py-2.5 pr-3">
                     <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ${P_BADGE[priority] ?? P_BADGE.P2}`}>
                       <Icon className="w-3 h-3" />
                       {priority}
                     </span>
                   </td>
-                  <td className="py-2.5 pr-4 max-w-[140px]">
+                  <td className="py-2.5 pr-3 max-w-[120px]">
                     <span className="text-xs text-slate-700 truncate block" title={err.clinic_name ?? undefined}>
                       {err.clinic_name ?? <span className="text-slate-400 italic">global</span>}
                     </span>
                   </td>
-                  <td className="py-2.5 pr-4">
+                  <td className="py-2.5 pr-3">
                     <span className="text-xs font-medium text-slate-600 bg-slate-100 rounded px-1.5 py-0.5">
                       {err.module ?? '—'}
                     </span>
                   </td>
-                  <td className="py-2.5 pr-4 font-mono text-xs text-slate-500 max-w-[140px] truncate">
+                  <td className="py-2.5 pr-3 font-mono text-xs text-slate-500 max-w-[130px] truncate">
                     {err.path}
                   </td>
-                  <td className="py-2.5 pr-4 text-xs text-slate-700 max-w-[240px]">
+                  <td className="py-2.5 pr-3 text-xs text-slate-700 max-w-[220px]">
                     <p className="truncate">{err.error_message}</p>
                   </td>
-                  <td className="py-2.5 pr-4">
+                  <td className="py-2.5 pr-3">
                     <SourceBadge source={err.source} />
                   </td>
-                  <td className="py-2.5 text-right">
+                  <td className="py-2.5 pr-3 text-right">
                     <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-bold
                       ${err.occurrence_count >= 10 ? 'bg-red-100 text-red-700' :
                         err.occurrence_count >= 5  ? 'bg-orange-100 text-orange-600' :
                                                       'bg-slate-100 text-slate-600'}`}>
                       {err.occurrence_count}×
                     </span>
+                  </td>
+                  <td className="py-2.5 text-right">
+                    <button
+                      onClick={() => onResolve(err.id)}
+                      disabled={isBusy || resolvingId !== null}
+                      title="Marcar como corrigido"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-semibold border border-emerald-200 hover:bg-emerald-100 disabled:opacity-50 transition-colors"
+                    >
+                      {isBusy
+                        ? <RefreshCw className="w-3 h-3 animate-spin" />
+                        : <Trash2 className="w-3 h-3" />
+                      }
+                      Corrigido
+                    </button>
                   </td>
                 </tr>
               )
