@@ -110,6 +110,7 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
   })
   const [groomingBox,       setGroomingBox]       = useState('')
   const [groomingNotes,     setGroomingNotes]     = useState('')
+  const [groomingGroomerId, setGroomingGroomerId] = useState('')
   const [catalog,           setCatalog]           = useState<GroomingCatalogItem[]>([])
   const [catalogLoaded,     setCatalogLoaded]     = useState(false)
 
@@ -195,6 +196,7 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
         box_number:         groomingBox.trim() || undefined,
         notes:              groomingNotes.trim() || undefined,
         scheduled_at:       groomingDate || undefined,
+        groomer_id:         groomingGroomerId || undefined,
       })
 
       if ('error' in result) { setSubmitting(false); setError(result.error); return }
@@ -407,6 +409,25 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
                     })}
                   </div>
                 </div>
+
+                {/* Tosador */}
+                {professionals.length > 0 && (
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">
+                      Tosador / Banhista (opcional)
+                    </label>
+                    <select
+                      value={groomingGroomerId}
+                      onChange={e => setGroomingGroomerId(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                    >
+                      <option value="">Sem preferência</option>
+                      {professionals.map(p => (
+                        <option key={p.id} value={p.id}>{p.full_name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 {/* Data/hora do agendamento */}
                 <div>

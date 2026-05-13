@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { X, Scissors, Loader2, Save, Calendar, DollarSign, Tag } from 'lucide-react'
 import { createGroomingSession, getGroomingCatalog, updateGroomingPricing } from '@/lib/actions/grooming'
 import type { GroomingCatalogItem, GroomingServicePrice } from '@/lib/actions/grooming'
+import { getClinicProfessionals, type ClinicProfessional } from '@/lib/actions/professionals'
 import { DateTimePicker } from '@/components/ui/DatePicker'
 
 // ─── Serviços disponíveis (fallback sem catálogo) ─────────────────────────────
@@ -47,6 +48,8 @@ export default function GroomingCheckinModal({
   })
   const [isSaving, setIsSaving]       = useState(false)
   const [error, setError]             = useState<string | null>(null)
+  const [groomerId, setGroomerId]     = useState('')
+  const [professionals, setProfessionals] = useState<ClinicProfessional[]>([])
 
   // Catálogo de preços
   const [catalog, setCatalog]     = useState<GroomingCatalogItem[]>([])
@@ -56,6 +59,9 @@ export default function GroomingCheckinModal({
     getGroomingCatalog().then(res => {
       if (!('error' in res)) setCatalog(res)
       setCatalogLoaded(true)
+    })
+    getClinicProfessionals().then(res => {
+      if (!('error' in res)) setProfessionals(res)
     })
   }, [])
 
@@ -108,6 +114,7 @@ export default function GroomingCheckinModal({
       box_number:         boxNumber.trim() || undefined,
       notes:              notes.trim() || undefined,
       scheduled_at:       scheduledAt || undefined,
+      groomer_id:         groomerId || undefined,
     })
 
     if ('error' in result) {
@@ -184,6 +191,25 @@ export default function GroomingCheckinModal({
               })}
             </div>
           </div>
+
+          {/* Tosador */}
+          {professionals.length > 0 && (
+            <div>
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1 block">
+                Tosador / Banhista (opcional)
+              </label>
+              <select
+                value={groomerId}
+                onChange={e => setGroomerId(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+              >
+                <option value="">Sem preferência</option>
+                {professionals.map(p => (
+                  <option key={p.id} value={p.id}>{p.full_name}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Agendamento */}
           <div>

@@ -202,6 +202,7 @@ export async function createGroomingSession(data: {
   box_number?:        string
   notes?:             string
   scheduled_at?:      string
+  groomer_id?:        string
 }): Promise<{ id: string } | { error: string }> {
   const ctx = await getClinicAndUser()
   if ('error' in ctx) return ctx
@@ -219,6 +220,7 @@ export async function createGroomingSession(data: {
       box_number:         data.box_number ?? null,
       notes:              data.notes ?? null,
       scheduled_at:       data.scheduled_at ?? null,
+      groomer_id:         data.groomer_id ?? null,
       status:             'received',
       created_by:         user.id,
     })

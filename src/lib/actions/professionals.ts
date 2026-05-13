@@ -8,6 +8,7 @@ export interface ClinicProfessional {
   role: string
   specialties: string[] | null
   crmv: string | null
+  phone: string | null
 }
 
 export async function checkProfessionalAvailability(
@@ -48,8 +49,8 @@ export async function getClinicProfessionals(): Promise<ClinicProfessional[] | {
 
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, full_name, role, specialties, crmv')
-    .in('role', ['vet', 'assistant'])
+    .select('id, full_name, role, specialties, crmv, phone')
+    .in('role', ['vet', 'assistant', 'groomer'])
     .order('full_name')
 
   if (error) return { error: error.message }

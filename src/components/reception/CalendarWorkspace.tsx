@@ -16,6 +16,7 @@ import {
   getUnifiedMonthCounts,
   type UnifiedCalendarEvent,
 } from '@/lib/actions/calendar'
+import { sendDailyScheduleToVets, type DailyScheduleResult } from '@/lib/actions/daily-schedule-whatsapp'
 import NewAppointmentModal from './NewAppointmentModal'
 import ReceptionSubNav from './ReceptionSubNav'
 
@@ -261,6 +262,8 @@ export default function CalendarWorkspace({ clinicName }: Props) {
   const [kanbanMode, setKanbanMode] = useState(false)
   const [kanbanGroupBy, setKanbanGroupBy] = useState<'professional' | 'type'>('professional')
   const [toast,     setToast]     = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
+  const [sendingSchedule, setSendingSchedule] = useState(false)
+  const [scheduleResult, setScheduleResult]   = useState<DailyScheduleResult | null>(null)
   const [cancelGroomingTarget, setCancelGroomingTarget] = useState<UnifiedCalendarEvent | null>(null)
   const [vetCounts, setVetCounts] = useState<ProfessionalCount[]>([])
   const [isPending, startTransition] = useTransition()
@@ -268,6 +271,24 @@ export default function CalendarWorkspace({ clinicName }: Props) {
   function showToast(msg: string, type: 'success' | 'error' = 'success') {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 4000)
+  }
+
+  async function handleSendDailySchedule() {
+    setSendingSchedule(true)
+    setScheduleResult(null)
+    const res = await sendDailyScheduleToVets()
+    setSendingSchedule(false)
+    if ('error' in res) {
+      showToast(res.error, 'error')
+    } else {
+      setScheduleResult(res)
+      showToast(
+        res.sent === 0
+          ? 'Nenhum profissional com telefone cadastrado encontrado.'
+          : `Agenda enviada para ${res.sent} profissional${res.sent !== 1 ? 'is' : ''}!`,
+        res.sent > 0 ? 'success' : 'error',
+      )
+    }
   }
 
   async function refreshMonth() {
@@ -463,13 +484,26 @@ export default function CalendarWorkspace({ clinicName }: Props) {
             <h1 className="text-2xl font-semibold text-slate-900">Agenda</h1>
             <p className="mt-0.5 text-sm text-slate-500">{clinicName}</p>
           </div>
-          <button
-            onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 transition-colors"
-          >
-            <Plus className="h-4 w-4" />
-            Novo Agendamento
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleSendDailySchedule}
+              disabled={sendingSchedule}
+              title="Enviar agenda do dia para cada profissional via WhatsApp"
+              className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors"
+            >
+              {sendingSchedule
+                ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
+                : <MessageCircle className="h-4 w-4 text-green-600" />}
+              <span className="hidden sm:inline">Agenda do Dia</span>
+            </button>
+            <button
+              onClick={() => setShowModal(true)}
+              className="flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+              Novo Agendamento
+            </button>
+          </div>
         </div>
 
         {/* Atendimentos por profissional (hoje) */}
