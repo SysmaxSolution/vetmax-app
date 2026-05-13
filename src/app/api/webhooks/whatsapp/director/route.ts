@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
   if (!text) return NextResponse.json({ received: true })
 
   const admin = createAdminClient()
-  await handleDirectorCommand(text, admin)
+  await handleDirectorCommand(text, sender, admin)
 
   return NextResponse.json({ received: true })
 }

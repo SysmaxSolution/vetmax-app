@@ -123,10 +123,10 @@ export async function POST(
 
     if (!messageText?.trim()) return NextResponse.json({ received: true })
 
-    // Comandos do Diretor (SIM/NAO) têm prioridade sobre o fluxo de clientes
+    // Comandos do Diretor (SIM/NAO) — handleDirectorCommand valida P0_ALERT_PHONE internamente
     const alertPhone = (process.env.P0_ALERT_PHONE ?? '').replace(/\D/g, '')
     if (alertPhone && phone.replace(/\D/g, '').endsWith(alertPhone.slice(-10))) {
-      await handleDirectorCommand(messageText, admin)
+      await handleDirectorCommand(messageText, phone, admin)
       return NextResponse.json({ received: true })
     }
 

@@ -14,13 +14,29 @@ async function replyToDirector(text: string): Promise<void> {
 
 /**
  * Processa comandos SIM/NAO do Diretor para aprovar ou rejeitar fix_plans.
- * Retorna true se a mensagem era um comando válido (mesmo que o plano não seja encontrado).
- * Retorna false se a mensagem não corresponde ao padrão e deve ser tratada normalmente.
+ * Valida internamente que o remetente é P0_ALERT_PHONE — qualquer caller não autorizado
+ * recebe false imediatamente, independente do filtro externo do webhook.
+ *
+ * @param senderPhone  Número do remetente (será normalizado internamente).
+ * @returns true se a mensagem era um comando válido; false caso contrário.
  */
 export async function handleDirectorCommand(
   messageText: string,
+  senderPhone: string,
   admin: ReturnType<typeof createAdminClient>,
 ): Promise<boolean> {
+  // ── Validação de autorização ────────────────────────────────────────────────
+  const authorizedPhone = (process.env.P0_ALERT_PHONE ?? '').replace(/\D/g, '')
+  if (!authorizedPhone) {
+    console.warn('[Director Commands] P0_ALERT_PHONE não configurado — comando ignorado')
+    return false
+  }
+  const normalizedSender = senderPhone.replace(/[^\d]/g, '')
+  if (!normalizedSender || !normalizedSender.endsWith(authorizedPhone.slice(-10))) {
+    console.warn(`[Director Commands] Remetente não autorizado: "${senderPhone}" — comando SIM/NAO ignorado`)
+    return false
+  }
+
   const upper = messageText.trim().toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
 
   const approveMatch = /^(SIM|APROVAR)\s*([A-F0-9]{8})?/.exec(upper)
