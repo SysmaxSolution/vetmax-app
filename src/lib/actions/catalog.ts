@@ -221,7 +221,8 @@ export type GlobalCatalogSuggestion = CatalogSuggestion
 export async function searchGlobalCatalog(
   query: string,
   category?: string,
-  limit = 20
+  limit = 20,
+  modules?: string[]
 ): Promise<CatalogSuggestion[] | { error: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -237,6 +238,12 @@ export async function searchGlobalCatalog(
     .order('brand', { ascending: false, nullsFirst: false })
     .order('name')
     .limit(limit)
+
+  // Filtra categorias pelo módulo ativo
+  const grooming_allowed = !modules || modules.length === 0 || modules.includes('grooming')
+  if (!grooming_allowed) {
+    q = q.not('category', 'in', '("grooming_supply","aesthetics")')
+  }
 
   if (category) {
     q = q.eq('category', category)

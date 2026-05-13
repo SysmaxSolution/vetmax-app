@@ -28,11 +28,15 @@ export default async function SalesPage() {
 
   const clinicName = (profile.clinics as unknown as { name: string } | null)?.name ?? 'Clínica'
 
+  const { data: clinicRow } = await supabase.from('clinics').select('active_modules').eq('id', profile.clinic_id).single()
+  const activeModules = (clinicRow?.active_modules as string[] | null) ?? []
+
   return (
     <SalesWorkspace
       clinicId={profile.clinic_id}
       clinicName={clinicName}
       dailySales={dailySales}
+      activeModules={activeModules}
     />
   )
 }

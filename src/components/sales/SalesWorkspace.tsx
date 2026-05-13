@@ -11,12 +11,13 @@ import TutorSearch from './TutorSearch'
 import type { Sale, SaleTutor } from '@/lib/actions/sales'
 
 interface SalesWorkspaceProps {
-  clinicId:   string
-  clinicName: string
-  dailySales: Sale[]
+  clinicId:      string
+  clinicName:    string
+  dailySales:    Sale[]
+  activeModules?: string[]
 }
 
-export default function SalesWorkspace({ clinicId, clinicName, dailySales }: SalesWorkspaceProps) {
+export default function SalesWorkspace({ clinicId, clinicName, dailySales, activeModules = [] }: SalesWorkspaceProps) {
   const [tab,          setTab]          = useState<'pdv' | 'historico'>('pdv')
   const [cart,         setCart]         = useState<CartItem[]>([])
   const [addCount,     setAddCount]     = useState(0)   // dispara refocus no ProductSearch
@@ -99,6 +100,7 @@ export default function SalesWorkspace({ clinicId, clinicName, dailySales }: Sal
                 <ProductSearch
                   onAdd={item => { setCart(prev => [...prev, item]); setAddCount(c => c + 1) }}
                   refocusTrigger={addCount}
+                  activeModules={activeModules}
                 />
                 <div>
                   <label className="flex items-center gap-1.5 text-xs font-medium text-slate-500 mb-1.5">

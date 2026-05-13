@@ -9,9 +9,10 @@ import { isEAN } from '@/lib/utils/ean'
 import type { CartItem } from './SalesCart'
 
 interface Props {
-  query:   string
-  onClose: () => void
-  onAdded: (item: CartItem) => void
+  query:          string
+  onClose:        () => void
+  onAdded:        (item: CartItem) => void
+  activeModules?: string[]
 }
 
 interface Preview {
@@ -47,7 +48,7 @@ const CAT_LABEL: Record<string, string> = {
 
 const INPUT = 'w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none'
 
-export default function QuickAddProductModal({ query, onClose, onAdded }: Props) {
+export default function QuickAddProductModal({ query, onClose, onAdded, activeModules = [] }: Props) {
   const [step,     setStep]     = useState<'catalog' | 'form'>('catalog')
   const [catalog,  setCatalog]  = useState<CatalogSuggestion[]>([])
   const [preview,  setPreview]  = useState<Preview | null>(null)
@@ -74,7 +75,7 @@ export default function QuickAddProductModal({ query, onClose, onAdded }: Props)
 
     // Busca paralela: catálogo global + EAN/NCM externo
     const [catalogResults, eanResult] = await Promise.all([
-      searchGlobalCatalog(q, undefined, 8),
+      searchGlobalCatalog(q, undefined, 8, activeModules),
       isEAN(q) ? searchProductByEAN(q) : Promise.resolve(null),
     ])
 

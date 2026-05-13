@@ -20,14 +20,16 @@ export default async function PharmacyPage() {
 
   if (!profile || !['admin', 'vet'].includes(profile.role)) redirect('/dashboard')
 
+  let activeModules: string[] = []
   if (profile.clinic_id) {
     const { data: clinicRow } = await supabase.from('clinics').select('active_modules').eq('id', profile.clinic_id).single()
     const mods = clinicRow?.active_modules as string[] | null
     if (mods && !mods.includes('pharmacy')) redirect('/dashboard')
+    activeModules = mods ?? []
   }
 
   const stockResult = await getPharmacyStockV2()
   const stock = Array.isArray(stockResult) ? stockResult : []
 
-  return <PharmacyWorkspace stock={stock} userRole={profile.role as 'admin' | 'vet'} />
+  return <PharmacyWorkspace stock={stock} userRole={profile.role as 'admin' | 'vet'} activeModules={activeModules} />
 }

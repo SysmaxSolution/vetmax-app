@@ -9,9 +9,10 @@ import type { CartItem } from './SalesCart'
 import QuickAddProductModal from './QuickAddProductModal'
 
 interface ProductSearchProps {
-  onAdd:         (item: CartItem) => void
-  disabled?:     boolean
+  onAdd:           (item: CartItem) => void
+  disabled?:       boolean
   refocusTrigger?: number   // incrementar após cada addProduct para re-focar
+  activeModules?:  string[]
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -24,7 +25,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   exam:            'Exame',
 }
 
-export default function ProductSearch({ onAdd, disabled = false, refocusTrigger }: ProductSearchProps) {
+export default function ProductSearch({ onAdd, disabled = false, refocusTrigger, activeModules = [] }: ProductSearchProps) {
   const [query,       setQuery]      = useState('')
   const [results,     setResults]    = useState<StockProduct[]>([])
   const [catalog,     setCatalog]    = useState<CatalogSuggestion[]>([])
@@ -68,7 +69,7 @@ export default function ProductSearch({ onAdd, disabled = false, refocusTrigger 
 
     const [r, cat] = await Promise.all([
       searchSalesProducts(trimmed),
-      trimmed.length >= 3 && !isEAN(trimmed) ? searchGlobalCatalog(trimmed, undefined, 5) : Promise.resolve([]),
+      trimmed.length >= 3 && !isEAN(trimmed) ? searchGlobalCatalog(trimmed, undefined, 5, activeModules) : Promise.resolve([]),
     ])
 
     setResults(r)
@@ -83,7 +84,7 @@ export default function ProductSearch({ onAdd, disabled = false, refocusTrigger 
       setNotFound(trimmed.length >= 3 || isEAN(trimmed))
     }
     setLoading(false)
-  }, [])
+  }, [activeModules])
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const q = e.target.value
@@ -294,6 +295,7 @@ export default function ProductSearch({ onAdd, disabled = false, refocusTrigger 
           query={query}
           onClose={() => setQuickAdd(false)}
           onAdded={handleQuickAdded}
+          activeModules={activeModules}
         />
       )}
     </div>

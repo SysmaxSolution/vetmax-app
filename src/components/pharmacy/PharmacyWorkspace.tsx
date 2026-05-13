@@ -79,8 +79,9 @@ function formatDate(dateStr: string | null): string {
 // ─── Types / Form ─────────────────────────────────────────────────────────────
 
 interface Props {
-  stock:    StockItemV2[]
-  userRole: 'admin' | 'vet'
+  stock:         StockItemV2[]
+  userRole:      'admin' | 'vet'
+  activeModules?: string[]
 }
 
 interface ItemForm {
@@ -115,7 +116,7 @@ function formFromItem(item: StockItemV2): ItemForm {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function PharmacyWorkspace({ stock: initialStock, userRole }: Props) {
+export default function PharmacyWorkspace({ stock: initialStock, userRole, activeModules = [] }: Props) {
   const [stock, setStock]   = useState<StockItemV2[]>(initialStock)
   const [view, setView]     = useState<'products' | 'services'>('products')
   const [catTab, setCatTab] = useState<string>('all')
@@ -159,7 +160,7 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole }: Pro
     }
     setCatalogLoading(true)
     catalogDebounceRef.current = setTimeout(async () => {
-      const results = await searchGlobalCatalog(term, undefined, 6)
+      const results = await searchGlobalCatalog(term, undefined, 6, activeModules)
       if (!Array.isArray(results)) { setCatalogLoading(false); return }
       setCatalogSuggestions(results)
       setCatalogLoading(false)
