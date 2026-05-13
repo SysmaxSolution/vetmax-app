@@ -131,11 +131,11 @@ export async function getPetFrequencyReport(params: {
   const admin = createAdminClient()
 
   let query = admin
-    .from('consultation_records')
+    .from('consultations')
     .select(`
-      pet_id,
+      patient_id,
       created_at,
-      patients:pet_id (
+      patients:patient_id (
         id, name, species, breed,
         tutors:tutor_id ( name, phone )
       )
@@ -201,13 +201,13 @@ export async function getProfessionalProductivityReport(params: {
   const admin = createAdminClient()
 
   let q = admin
-    .from('consultation_records')
-    .select('attended_by, created_at, exam_requests, prescriptions, profiles:attended_by(full_name)')
+    .from('consultations')
+    .select('vet_id, created_at, profiles:vet_id(full_name)')
     .eq('clinic_id', ctx.clinic_id)
     .gte('created_at', params.from)
     .lte('created_at', params.to + 'T23:59:59')
 
-  if (params.user_id) q = q.eq('attended_by', params.user_id)
+  if (params.user_id) q = q.eq('vet_id', params.user_id)
 
   const { data, error } = await q
   if (error) return { error: error.message }
@@ -219,7 +219,35 @@ export async function getProfessionalProductivityReport(params: {
   if (rows.length > 0) {
     const firstProfile = Array.isArray(rows[0].profiles) ? rows[0].profiles[0] : rows[0].profiles as any
     user_name = firstProfile?.full_name ?? '—'
-    if (!user_id) user_id = rows[0].attended_by ?? ''
+    if (!user_id) user_id = (rows[0] as any).vet_id ?? ''
+  }
+
+  // Count exams and prescriptions via separate queries for the period
+  let examQ = admin.from('exam_requests')
+    .select('id, created_at')
+    .eq('clinic_id', ctx.clinic_id)
+    .gte('created_at', params.from)
+    .lte('created_at', params.to + 'T23:59:59')
+  if (params.user_id) examQ = examQ.eq('requested_by', params.user_id)
+
+  const [examRes, rxRes] = await Promise.all([
+    examQ,
+    admin.from('prescriptions')
+      .select('id, created_at')
+      .eq('clinic_id', ctx.clinic_id)
+      .gte('created_at', params.from)
+      .lte('created_at', params.to + 'T23:59:59'),
+  ])
+
+  const examsByDay = new Map<string, number>()
+  for (const e of examRes.data ?? []) {
+    const day = (e.created_at as string).slice(0, 10)
+    examsByDay.set(day, (examsByDay.get(day) ?? 0) + 1)
+  }
+  const rxsByDay = new Map<string, number>()
+  for (const p of rxRes.data ?? []) {
+    const day = (p.created_at as string).slice(0, 10)
+    rxsByDay.set(day, (rxsByDay.get(day) ?? 0) + 1)
   }
 
   const byDay = new Map<string, { consult_count: number; exam_count: number; prescription_count: number }>()
@@ -228,19 +256,16 @@ export async function getProfessionalProductivityReport(params: {
 
   for (const r of rows) {
     const day = (r.created_at as string).slice(0, 10)
-    const exams = Array.isArray(r.exam_requests) ? r.exam_requests.length : 0
-    const rxs   = Array.isArray(r.prescriptions)  ? r.prescriptions.length  : 0
 
-    const entry = byDay.get(day) ?? { consult_count: 0, exam_count: 0, prescription_count: 0 }
-    entry.consult_count       += 1
-    entry.exam_count          += exams
-    entry.prescription_count  += rxs
+    const entry = byDay.get(day) ?? { consult_count: 0, exam_count: examsByDay.get(day) ?? 0, prescription_count: rxsByDay.get(day) ?? 0 }
+    entry.consult_count += 1
     byDay.set(day, entry)
 
     totalConsult += 1
-    totalExam    += exams
-    totalRx      += rxs
   }
+
+  totalExam = Array.from(examsByDay.values()).reduce((s, v) => s + v, 0)
+  totalRx   = Array.from(rxsByDay.values()).reduce((s, v) => s + v, 0)
 
   const detail = Array.from(byDay.entries())
     .map(([day, v]) => ({ day, ...v }))
@@ -553,7 +578,7 @@ export async function getOperationalReport(params: {
 
   const [apptRes, hospRes, groomRes] = await Promise.all([
     admin
-      .from('consultation_records')
+      .from('consultations')
       .select('id, status, created_at')
       .eq('clinic_id', ctx.clinic_id)
       .gte('created_at', params.from)
