@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { X, MessageCircle, Send, Loader2, CheckCircle2, AlertCircle, Edit3, Paperclip, RefreshCw, Mic } from 'lucide-react'
+import { X, MessageCircle, Send, Loader2, CheckCircle2, AlertCircle, Edit3, Paperclip, RefreshCw, Mic, Smile, Upload, FileText, ImageIcon, XCircle } from 'lucide-react'
 import {
   generateWhatsAppMessage,
   sendWhatsAppMessage,
@@ -10,7 +10,73 @@ import {
   type WhatsAppContext,
   type AttachableItem,
 } from '@/lib/actions/whatsapp'
+import { uploadWhatsAppAttachment } from '@/lib/actions/whatsapp-upload'
 import { useWhatsAppGate } from '@/components/providers/WhatsAppGateProvider'
+
+// ─── Emoji Picker ─────────────────────────────────────────────────────────────
+
+const EMOJI_CATEGORIES = [
+  { label: 'Expressões', emojis: ['😊','😀','😂','🤩','😍','🥰','🙏','👍','👏','🎉','✅','💪','🤝','😎','🥳','😢','😅','🤗','💯','🔥'] },
+  { label: 'Pets',       emojis: ['🐶','🐱','🐰','🐹','🐦','🦎','🐠','🐾','🦴','🐕','🐈','🐇','🦜','🐿️','🐻','🦊','🐭','🐸','🦔','🐾'] },
+  { label: 'Saúde',      emojis: ['💊','💉','🩺','🩹','🏥','❤️‍🩹','🌡️','🔬','🧬','🩻','🦷','👁️','💓','🫀','🧠','🩸','😷','🧪','⚕️','🏨'] },
+  { label: 'Símbolos',   emojis: ['✨','⭐','🌟','💡','✔️','⚠️','🚨','📍','📋','📄','📱','💬','📞','📝','🔔','⏰','💰','🎯','📅','🔑'] },
+]
+
+function EmojiPicker({ onSelect, onClose }: { onSelect: (e: string) => void; onClose: () => void }) {
+  const [tab, setTab] = useState(0)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [onClose])
+
+  return (
+    <div
+      ref={ref}
+      className="absolute bottom-full mb-1 left-0 z-50 bg-white border border-slate-200 rounded-xl shadow-xl w-72 p-2"
+    >
+      <div className="flex gap-1 mb-2">
+        {EMOJI_CATEGORIES.map((cat, i) => (
+          <button key={i} onClick={() => setTab(i)}
+            className={`flex-1 text-[10px] py-1 rounded-lg font-medium transition-colors ${
+              tab === i ? 'bg-green-100 text-green-700' : 'text-slate-500 hover:bg-slate-100'
+            }`}
+          >
+            {cat.label}
+          </button>
+        ))}
+      </div>
+      <div className="grid grid-cols-10 gap-0.5">
+        {EMOJI_CATEGORIES[tab].emojis.map((emoji) => (
+          <button key={emoji} onClick={() => onSelect(emoji)}
+            className="text-lg w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 transition-colors"
+          >
+            {emoji}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── Ícone por tipo de arquivo ────────────────────────────────────────────────
+
+function FileTypeIcon({ mimeType }: { mimeType: string }) {
+  if (mimeType.startsWith('image/')) return <ImageIcon className="w-3.5 h-3.5 text-blue-500" />
+  return <FileText className="w-3.5 h-3.5 text-slate-500" />
+}
+
+const ACCEPTED_MIME = [
+  'image/jpeg','image/png','image/gif','image/webp',
+  'application/pdf',
+  'application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/plain','audio/mpeg','audio/ogg','audio/wav','video/mp4',
+].join(',')
 
 const ATTACHMENT_PHRASE = 'Estou enviando em anexo os documentos que conversamos. Qualquer dúvida é só chamar!'
 
@@ -88,17 +154,27 @@ export default function WhatsAppNotificationModal({
   const [sendError,         setSendError]         = useState<string | null>(null)
   const [failedAttachments, setFailedAttachments] = useState<string[]>([])
 
-  // Anexos
+  // Anexos existentes (patient_attachments)
   const [attachableItems,      setAttachableItems]      = useState<AttachableItem[]>([])
   const [selectedIds,          setSelectedIds]          = useState<Set<string>>(new Set())
   const [isLoadingAttachments, setIsLoadingAttachments] = useState(false)
   const phraseAddedRef = useRef(false)
+
+  // Upload de novos arquivos
+  const [localFiles,    setLocalFiles]    = useState<File[]>([])
+  const [isUploading,   setIsUploading]   = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Emoji picker
+  const [showEmoji,   setShowEmoji]   = useState(false)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   // Gerar mensagem ao abrir
   useEffect(() => {
     if (!isOpen) return
     setMessage(''); setSent(false); setGenError(null); setSendError(null); setFailedAttachments([])
     setAttachableItems([]); setSelectedIds(new Set()); phraseAddedRef.current = false
+    setLocalFiles([]); setShowEmoji(false)
     setIsGenerating(true)
 
     generateWhatsAppMessage(trigger, context)
@@ -134,9 +210,9 @@ export default function WhatsAppNotificationModal({
     fetchAttachments()
   }, [isOpen, consultationId, patientId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Adicionar/remover frase de anexo conforme seleção
+  // Adicionar/remover frase de anexo conforme seleção ou upload local
   useEffect(() => {
-    const hasSelected = selectedIds.size > 0
+    const hasSelected = selectedIds.size > 0 || localFiles.length > 0
     if (hasSelected && !phraseAddedRef.current) {
       setMessage(prev => prev ? `${prev}\n\n${ATTACHMENT_PHRASE}` : ATTACHMENT_PHRASE)
       phraseAddedRef.current = true
@@ -144,7 +220,7 @@ export default function WhatsAppNotificationModal({
       setMessage(prev => prev.replace(`\n\n${ATTACHMENT_PHRASE}`, '').replace(ATTACHMENT_PHRASE, ''))
       phraseAddedRef.current = false
     }
-  }, [selectedIds])
+  }, [selectedIds, localFiles])
 
   // Auto-envio por voz: dispara handleSend quando autoSend=true e mensagem já estiver pronta
   const handleSendRef = useRef<() => Promise<void>>(async () => {})
@@ -209,10 +285,27 @@ export default function WhatsAppNotificationModal({
     if (!message.trim() || !context.tutorPhone) return
     setIsSending(true); setSendError(null)
 
-    // Todos os itens são arquivos físicos com signed URL (patient_attachments)
-    const attachmentsToSend = attachableItems
-      .filter(a => selectedIds.has(a.id) && a.signedUrl)
-      .map(a => ({ name: a.name, signedUrl: a.signedUrl, mimeType: a.mimeType }))
+    // Anexos pré-existentes (patient_attachments)
+    const attachmentsToSend: { name: string; signedUrl: string; mimeType: string }[] =
+      attachableItems
+        .filter(a => selectedIds.has(a.id) && a.signedUrl)
+        .map(a => ({ name: a.name, signedUrl: a.signedUrl, mimeType: a.mimeType }))
+
+    // Upload dos arquivos locais novos
+    if (localFiles.length > 0) {
+      setIsUploading(true)
+      for (const file of localFiles) {
+        const fd = new FormData()
+        fd.append('file', file)
+        const res = await uploadWhatsAppAttachment(fd)
+        if ('error' in res) {
+          setSendError(`Falha ao enviar "${file.name}": ${res.error}`)
+          setIsSending(false); setIsUploading(false); return
+        }
+        attachmentsToSend.push({ name: res.name, signedUrl: res.url, mimeType: res.mimeType })
+      }
+      setIsUploading(false)
+    }
 
     const res = await sendWhatsAppMessage({
       phone:            context.tutorPhone,
@@ -235,6 +328,34 @@ export default function WhatsAppNotificationModal({
   }
   // Mantém o ref atualizado para o useEffect de autoSend poder invocar a versão mais recente
   handleSendRef.current = handleSend
+
+  function insertEmoji(emoji: string) {
+    const ta = textareaRef.current
+    if (!ta) { setMessage(prev => prev + emoji); return }
+    const start = ta.selectionStart ?? message.length
+    const end   = ta.selectionEnd   ?? message.length
+    const next  = message.slice(0, start) + emoji + message.slice(end)
+    setMessage(next)
+    setShowEmoji(false)
+    setTimeout(() => {
+      ta.focus()
+      ta.setSelectionRange(start + emoji.length, start + emoji.length)
+    }, 0)
+  }
+
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? [])
+    const oversized = files.filter(f => f.size > 16 * 1024 * 1024)
+    if (oversized.length) {
+      setSendError(`Arquivo(s) muito grandes (máx 16 MB): ${oversized.map(f => f.name).join(', ')}`)
+      return
+    }
+    setLocalFiles(prev => {
+      const names = new Set(prev.map(f => f.name))
+      return [...prev, ...files.filter(f => !names.has(f.name))]
+    })
+    e.target.value = ''
+  }
 
   const phoneDisplay = context.tutorPhone
     ? context.tutorPhone.replace(/(\d{2})(\d{2})(\d{5})(\d{4})/, '+$1 ($2) $3-$4')
@@ -316,14 +437,34 @@ export default function WhatsAppNotificationModal({
               <div className="flex items-center gap-1.5 mb-2">
                 <Edit3 className="w-3.5 h-3.5 text-slate-400" />
                 <span className="text-xs text-slate-500">Revise e edite antes de enviar</span>
+                <span className="ml-auto text-[10px] text-slate-400">{message.length} / 4096</span>
               </div>
-              <textarea
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                rows={6}
-                className="w-full text-sm text-slate-800 border border-slate-200 rounded-xl p-3 resize-none focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent bg-slate-50 leading-relaxed"
-                placeholder="Mensagem para o tutor..."
-              />
+
+              {/* Textarea + botão emoji */}
+              <div className="relative">
+                <textarea
+                  ref={textareaRef}
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value.slice(0, 4096))}
+                  rows={6}
+                  className="w-full text-sm text-slate-800 border border-slate-200 rounded-xl p-3 pr-10 resize-none focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent bg-slate-50 leading-relaxed"
+                  placeholder="Mensagem para o tutor..."
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowEmoji(p => !p)}
+                  className="absolute bottom-2.5 right-2.5 text-slate-400 hover:text-yellow-500 transition-colors"
+                  title="Inserir emoji"
+                >
+                  <Smile className="w-4 h-4" />
+                </button>
+                {showEmoji && (
+                  <EmojiPicker
+                    onSelect={insertEmoji}
+                    onClose={() => setShowEmoji(false)}
+                  />
+                )}
+              </div>
 
               {/* ─── Seção de Documentos e Anexos ───────────────────── */}
               <div className="mt-3 rounded-xl border border-slate-200 overflow-hidden">
@@ -396,6 +537,47 @@ export default function WhatsAppNotificationModal({
                       </li>
                     ))}
                   </ul>
+                )}
+              </div>
+
+              {/* ─── Upload de novos arquivos ─────────────────────── */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={ACCEPTED_MIME}
+                multiple
+                className="hidden"
+                onChange={handleFileSelect}
+              />
+              <div className="mt-2 flex flex-col gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex items-center gap-1.5 self-start px-3 py-1.5 rounded-lg border border-dashed border-slate-300 text-xs text-slate-500 hover:border-green-400 hover:text-green-600 hover:bg-green-50 transition-colors"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  Anexar arquivo
+                </button>
+                {localFiles.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {localFiles.map((file) => (
+                      <div
+                        key={file.name}
+                        className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-100 border border-slate-200 max-w-[180px]"
+                      >
+                        <FileTypeIcon mimeType={file.type} />
+                        <span className="text-xs text-slate-700 truncate flex-1">{file.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => setLocalFiles(prev => prev.filter(f => f !== file))}
+                          className="text-slate-400 hover:text-red-500 flex-shrink-0 transition-colors"
+                          title="Remover arquivo"
+                        >
+                          <XCircle className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
 

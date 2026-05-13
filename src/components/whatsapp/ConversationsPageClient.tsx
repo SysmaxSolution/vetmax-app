@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useTransition } from 'react'
-import { MessageCircle, Send, RefreshCw, Bot, User, X, ArrowLeft } from 'lucide-react'
+import { MessageCircle, Send, RefreshCw, Bot, User, X, ArrowLeft, RotateCcw } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import {
   getWhatsappConversations,
@@ -10,6 +10,7 @@ import {
   takeOverConversation,
   returnToBot,
   closeConversation,
+  reopenConversation,
   type WppConversation,
   type WppMessage,
 } from '@/lib/actions/whatsapp-conversations'
@@ -202,6 +203,19 @@ export default function ConversationsPageClient({
     })
   }
 
+  function handleReopen() {
+    if (!selectedId || isPending) return
+    startTransition(async () => {
+      const res = await reopenConversation(selectedId)
+      if ('error' in res) { showToast(res.error, 'error'); return }
+      showToast('Conversa reaberta.')
+      await Promise.all([refreshAll(), (async () => {
+        const msgs = await getConversationMessages(selectedId)
+        if (Array.isArray(msgs)) setMessages(msgs)
+      })()])
+    })
+  }
+
   const filtered = conversations.filter(c =>
     filter === 'all' ? c.status !== 'closed' : c.status === filter
   )
@@ -375,6 +389,17 @@ export default function ConversationsPageClient({
                       >
                         <X className="h-3.5 w-3.5" />
                         Fechar
+                      </button>
+                    )}
+
+                    {selectedConv.status === 'closed' && (
+                      <button
+                        onClick={handleReopen}
+                        disabled={isPending}
+                        className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        Reabrir
                       </button>
                     )}
                   </div>

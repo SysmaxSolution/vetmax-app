@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { runWhatsappAgent } from '@/lib/ai/whatsapp-agent'
 import { evolutionSendText, evolutionFetchContactByLid } from '@/lib/evolution-api-client'
+import { handleDirectorCommand } from '@/lib/director-commands'
 
 // POST /api/webhooks/whatsapp/[clinicId]
 // Recebe eventos da Evolution API v1.8.4.
@@ -121,6 +122,13 @@ export async function POST(
     console.info(`[WPP Webhook] phone=${phone} pushName=${pushName} messageText="${messageText?.substring(0, 50)}"`)
 
     if (!messageText?.trim()) return NextResponse.json({ received: true })
+
+    // Comandos do Diretor (SIM/NAO) têm prioridade sobre o fluxo de clientes
+    const alertPhone = (process.env.P0_ALERT_PHONE ?? '').replace(/\D/g, '')
+    if (alertPhone && phone.replace(/\D/g, '').endsWith(alertPhone.slice(-10))) {
+      await handleDirectorCommand(messageText, admin)
+      return NextResponse.json({ received: true })
+    }
 
     try {
       await processInboundMessage({ clinicId, phone, tutorName: pushName, messageText, admin })

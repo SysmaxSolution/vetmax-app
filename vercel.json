@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/cron/classify-errors",
-      "schedule": "0 2 * * *"
+      "schedule": "0 * * * *"
     }
   ]
 }

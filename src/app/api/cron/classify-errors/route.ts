@@ -60,11 +60,10 @@ export async function GET(request: NextRequest) {
 
   console.info(`[classify-cron] Classificados=${classified} falhas=${failed}`)
 
-  // Após classificar, aciona ciclo de planos para P0 novos e clusters maduros
-  let cycleResult = { created: 0, skipped: 0, failed: 0, clusters: 0 }
-  if (classified > 0) {
-    cycleResult = await runAutoFixCycle({ maxClusters: 3 })
-  }
+  // Sempre aciona ciclo de planos — independente de ter classificado novos erros.
+  // Erros já classificados mas sem plano (ex: abaixo do threshold na execução anterior)
+  // precisam ser reavaliados a cada ciclo.
+  const cycleResult = await runAutoFixCycle({ maxClusters: 3 })
 
   return NextResponse.json({
     ok:         true,

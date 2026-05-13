@@ -3,9 +3,9 @@
 import { useState, useEffect, useCallback, useTransition } from 'react'
 import {
   Activity, RefreshCw, AlertTriangle, AlertCircle, Info,
-  ChevronRight, FileText, CheckCircle2, XCircle, Clock, Bug,
+  ChevronRight, FileText, CheckCircle2, XCircle, Clock, Bug, Zap, MessageSquare,
 } from 'lucide-react'
-import { getUnresolvedErrors, getFixPlans, approveFixPlan, rejectFixPlan } from '@/lib/actions/error-logs'
+import { getUnresolvedErrors, getFixPlans, approveFixPlan, rejectFixPlan, triggerFixPlanGeneration } from '@/lib/actions/error-logs'
 import FixPlanSlideOver from './FixPlanSlideOver'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -75,6 +75,7 @@ export default function ErrorMonitoringDashboard() {
   const [selectedPlan,  setSelectedPlan]  = useState<FixPlan | null>(null)
   const [actionId,      setActionId]      = useState<string | null>(null)
   const [toast,         setToast]         = useState<{ type: 'ok' | 'err'; msg: string } | null>(null)
+  const [generating,    setGenerating]    = useState(false)
   const [,             startTransition]   = useTransition()
 
   const showToast = (type: 'ok' | 'err', msg: string) => {
@@ -96,6 +97,24 @@ export default function ErrorMonitoringDashboard() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  async function handleGenerate() {
+    setGenerating(true)
+    const res = await triggerFixPlanGeneration()
+    if ('error' in res) {
+      showToast('err', res.error)
+    } else if (res.created === 0 && res.skipped === 0) {
+      showToast('ok', 'Nenhum erro elegível encontrado no momento.')
+    } else {
+      const parts = []
+      if (res.created > 0) parts.push(`${res.created} novo${res.created > 1 ? 's' : ''} plano${res.created > 1 ? 's' : ''} gerado${res.created > 1 ? 's' : ''}`)
+      if (res.skipped > 0) parts.push(`${res.skipped} já existia${res.skipped > 1 ? 'm' : ''}`)
+      showToast('ok', `${parts.join(', ')}. Notificação enviada via WhatsApp.`)
+      setSubTab('pending')
+      await load()
+    }
+    setGenerating(false)
+  }
 
   async function handleApprove(planId: string) {
     setActionId(planId)
@@ -153,13 +172,24 @@ export default function ErrorMonitoringDashboard() {
             <p className="text-xs text-slate-500">Captura, classificação IA e planos de correção autônoma</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           {p0Count > 0 && (
             <span className="flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-sm font-bold text-red-700 border border-red-200 animate-pulse">
               <AlertTriangle className="w-3.5 h-3.5" />
               {p0Count} P0 ativo{p0Count > 1 ? 's' : ''}
             </span>
           )}
+          <button
+            onClick={handleGenerate}
+            disabled={generating || loading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+          >
+            {generating
+              ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              : <Zap className="w-3.5 h-3.5" />
+            }
+            Planejar agora
+          </button>
           <button
             onClick={() => load()}
             disabled={loading}
@@ -221,9 +251,14 @@ export default function ErrorMonitoringDashboard() {
 
       {/* ── Toast ───────────────────────────────────────────────────────────── */}
       {toast && (
-        <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg text-sm font-medium
+        <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg text-sm font-medium max-w-sm
           ${toast.type === 'ok' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}>
-          {toast.type === 'ok' ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+          {toast.type === 'ok'
+            ? toast.msg.includes('WhatsApp')
+              ? <MessageSquare className="w-4 h-4 shrink-0" />
+              : <CheckCircle2 className="w-4 h-4 shrink-0" />
+            : <XCircle className="w-4 h-4 shrink-0" />
+          }
           {toast.msg}
         </div>
       )}
@@ -331,7 +366,9 @@ function PendingPlansTab({
       <div className="flex flex-col items-center justify-center py-16 text-slate-400 gap-3">
         <FileText className="w-10 h-10 text-slate-200" />
         <p className="text-sm font-medium text-slate-500">Nenhum plano aguardando aprovação</p>
-        <p className="text-xs text-slate-400">Os planos são gerados automaticamente quando erros atingem o threshold de ocorrências.</p>
+        <p className="text-xs text-slate-400 text-center max-w-xs">
+          Use <span className="font-semibold text-indigo-600">Planejar agora</span> para forçar a geração, ou aguarde o ciclo automático (a cada hora).
+        </p>
       </div>
     )
   }
@@ -426,42 +463,15 @@ function PlanCard({
           )}
         </div>
 
-        {/* Actions */}
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            onClick={() => onView(plan)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-colors"
-          >
-            <FileText className="w-3.5 h-3.5" />
-            Ver Plano
-            <ChevronRight className="w-3 h-3" />
-          </button>
-
-          {showActions && onApprove && onReject && (
-            <>
-              <button
-                onClick={() => onReject(plan.id)}
-                disabled={isBusy}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-red-50 hover:text-red-700 hover:border-red-200 disabled:opacity-50 transition-colors"
-              >
-                <XCircle className="w-3.5 h-3.5" />
-                Rejeitar
-              </button>
-
-              <button
-                onClick={() => onApprove(plan.id)}
-                disabled={isBusy}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
-              >
-                {isBusy
-                  ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  : <CheckCircle2 className="w-3.5 h-3.5" />
-                }
-                Aprovar
-              </button>
-            </>
-          )}
-        </div>
+        {/* Ver Plano */}
+        <button
+          onClick={() => onView(plan)}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-colors shrink-0"
+        >
+          <FileText className="w-3.5 h-3.5" />
+          Ver Plano
+          <ChevronRight className="w-3 h-3" />
+        </button>
       </div>
 
       {/* Approved CTA */}
@@ -471,6 +481,31 @@ function PlanCard({
           <p className="text-xs text-emerald-700">
             <span className="font-semibold">Aprovado</span> — a Mozart Routine executará a correção automaticamente na Sprint G-07-E. Um PR será aberto para revisão antes do merge.
           </p>
+        </div>
+      )}
+
+      {/* Approve / Reject — abaixo do conteúdo */}
+      {showActions && onApprove && onReject && (
+        <div className="mt-3 pt-3 border-t border-slate-200 flex gap-2">
+          <button
+            onClick={() => onReject(plan.id)}
+            disabled={isBusy}
+            className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-red-50 hover:text-red-700 hover:border-red-200 disabled:opacity-50 transition-colors"
+          >
+            <XCircle className="w-4 h-4" />
+            Recusar
+          </button>
+          <button
+            onClick={() => onApprove(plan.id)}
+            disabled={isBusy}
+            className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+          >
+            {isBusy
+              ? <RefreshCw className="w-4 h-4 animate-spin" />
+              : <CheckCircle2 className="w-4 h-4" />
+            }
+            Aprovar
+          </button>
         </div>
       )}
     </div>

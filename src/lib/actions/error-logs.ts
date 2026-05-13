@@ -4,6 +4,7 @@ import { createHash } from 'crypto'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { ErrorSource, ErrorPriority } from '@/lib/error-logger'
+import { runAutoFixCycle } from '@/lib/fix-planner'
 
 export interface ErrorLogEntry {
   path: string
@@ -285,5 +286,30 @@ export async function rejectFixPlan(
     return { success: true }
   } catch {
     return { error: 'Erro inesperado.' }
+  }
+}
+
+/** Força a geração de planos de correção para todos os erros elegíveis agora.
+ *  Após criar cada plano, dispara automaticamente notificação via WhatsApp. */
+export async function triggerFixPlanGeneration(): Promise<
+  { created: number; skipped: number; failed: number } | { error: string }
+> {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: 'Não autenticado.' }
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    if (!['admin', 'manager'].includes(profile?.role ?? '')) return { error: 'Sem permissão.' }
+
+    const result = await runAutoFixCycle({ maxClusters: 10, minOccurrences: 1 })
+    return { created: result.created, skipped: result.skipped, failed: result.failed }
+  } catch {
+    return { error: 'Erro ao gerar planos.' }
   }
 }

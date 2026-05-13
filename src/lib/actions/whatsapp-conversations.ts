@@ -210,3 +210,22 @@ export async function closeConversation(
   if (error) return { error: error.message }
   return { success: true }
 }
+
+// ─── Reopen conversation ──────────────────────────────────────────────────────
+
+export async function reopenConversation(
+  conversationId: string,
+): Promise<{ success: true } | { error: string }> {
+  const auth = await getClinicId()
+  if ('error' in auth) return auth
+
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('whatsapp_conversations')
+    .update({ status: 'bot' })
+    .eq('id', conversationId)
+    .eq('clinic_id', auth.clinicId)
+
+  if (error) return { error: error.message }
+  return { success: true }
+}
