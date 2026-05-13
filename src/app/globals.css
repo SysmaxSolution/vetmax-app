@@ -5,6 +5,73 @@
   --vetmax-user-bg: transparent;
 }
 
+/* ─── G16-3: Mentor Highlight Animations ─────────────────────────────────── */
+
+@keyframes mentor-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4); }
+  50%       { box-shadow: 0 0 0 8px rgba(99, 102, 241, 0); }
+}
+
+.mentor-highlight-pulse {
+  animation: mentor-pulse 1.5s ease-in-out infinite;
+  outline: 2px solid #6366f1;
+  outline-offset: 2px;
+  border-radius: 6px;
+  position: relative;
+  z-index: 1;
+}
+
+.mentor-highlight-border {
+  outline: 2px solid #6366f1;
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+@keyframes mentor-arrow-bounce {
+  0%, 100% { transform: translateX(0); }
+  50%       { transform: translateX(-4px); }
+}
+
+.mentor-highlight-arrow::before {
+  content: '→';
+  position: absolute;
+  left: -1.8rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1rem;
+  color: #6366f1;
+  animation: mentor-arrow-bounce 0.8s ease-in-out infinite;
+}
+
+/* Tooltip do highlight */
+.mentor-highlight-tooltip {
+  position: absolute;
+  z-index: 10001;
+  background: #1e293b;
+  color: #f8fafc;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  padding: 5px 10px;
+  border-radius: 6px;
+  max-width: 220px;
+  text-align: center;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  white-space: nowrap;
+}
+
+.mentor-highlight-tooltip::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  transform: translateX(-50%);
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 5px solid #1e293b;
+}
+
 @media print {
   /* Libera o corpo para impressão */
   html, body {

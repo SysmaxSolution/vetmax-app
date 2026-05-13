@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { findPetConsultation, type MentorPetResult } from '@/lib/actions/mentor'
 import { useMentor, TOURS, INTENT_MAP } from './MentorContext'
 import { usePathname } from 'next/navigation'
+import { MentorHighlightOverlay, type MentorHighlight } from './MentorHighlightOverlay'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -24,7 +25,11 @@ interface Message {
     onClick: () => void
   }
   petResult?: MentorPetResult & { found: true }
+  highlights?: MentorHighlight[]
 }
+
+// ─── localStorage key ─────────────────────────────────────────────────────────
+const STORAGE_KEY = 'mentor_mode'
 
 // ─── NLP local ───────────────────────────────────────────────────────────────
 
@@ -84,14 +89,36 @@ interface SpeechRecognitionEvent extends Event {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function MentorChat() {
-  const [mounted, setMounted]      = useState(false)
-  const [open, setOpen]           = useState(false)
-  const [messages, setMessages]   = useState<Message[]>([GREET])
-  const [input, setInput]         = useState('')
-  const [listening, setListening] = useState(false)
-  const [isPending, startTransition] = useTransition()
+  const [mounted, setMounted]         = useState(false)
+  const [open, setOpen]               = useState(false)
+  const [messages, setMessages]       = useState<Message[]>([GREET])
+  const [input, setInput]             = useState('')
+  const [listening, setListening]     = useState(false)
+  const [isPending, startTransition]  = useTransition()
+  // G16-4: Dual-mode — 'text' | 'visual'. Persiste em localStorage.
+  const [mode, setMode]               = useState<'text' | 'visual'>('text')
+  // Highlights ativos no momento (para modo visual)
+  const [activeHighlights, setActiveHighlights] = useState<MentorHighlight[]>([])
 
   useEffect(() => { setMounted(true) }, [])
+
+  // Lê preferência de modo do localStorage após montar
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY)
+      if (saved === 'visual' || saved === 'text') setMode(saved)
+    } catch {
+      // localStorage indisponível — usa padrão
+    }
+  }, [])
+
+  const toggleMode = useCallback(() => {
+    setMode(prev => {
+      const next = prev === 'text' ? 'visual' : 'text'
+      try { localStorage.setItem(STORAGE_KEY, next) } catch { /* noop */ }
+      return next
+    })
+  }, [])
 
   const { startTour } = useMentor()
   const router        = useRouter()
@@ -192,20 +219,33 @@ export function MentorChat() {
         const res = await fetch('/api/mentor-chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ question: trimmed }),
+          // G16-2: envia pathname para injeção de contexto de rota no prompt
+          body: JSON.stringify({ question: trimmed, pathname }),
         })
-        const data = await res.json()
+        const data = await res.json() as {
+          answer?: string
+          tourId?: string | null
+          highlights?: MentorHighlight[]
+        }
         if (data.answer) {
           const tourId: string | null = data.tourId ?? null
+          const highlights = data.highlights ?? []
+
           setMessages(prev => {
             const withoutLoading = prev.filter(m => m.text !== 'Consultando a base de conhecimento...')
-            return [...withoutLoading, mentorMsg(data.answer, {
+            return [...withoutLoading, mentorMsg(data.answer!, {
               action: tourId && TOURS[tourId] ? {
                 label: 'Iniciar Tour Guiado',
                 onClick: () => launchTour(tourId),
               } : undefined,
+              highlights: highlights.length > 0 ? highlights : undefined,
             })]
           })
+
+          // G16-4: no modo visual, aplica highlights imediatamente
+          if (mode === 'visual' && highlights.length > 0) {
+            setActiveHighlights(highlights)
+          }
         }
       } catch {
         setMessages(prev => {
@@ -216,7 +256,8 @@ export function MentorChat() {
         })
       }
     })
-  }, [addMsg, launchTour, startTransition])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addMsg, launchTour, pathname, mode])
 
   // ── Pet result handler ────────────────────────────────────────────────────
 
@@ -314,6 +355,14 @@ export function MentorChat() {
 
   return createPortal(
     <>
+      {/* G16-3: Highlight Overlay — renderiza fora do chat panel para não conflitar com z-index */}
+      {activeHighlights.length > 0 && (
+        <MentorHighlightOverlay
+          highlights={activeHighlights}
+          onDismiss={() => setActiveHighlights([])}
+        />
+      )}
+
       {/* ── Floating Button ── */}
       <button
         onClick={() => setOpen(v => !v)}
@@ -357,10 +406,42 @@ export function MentorChat() {
                 {/* Online dot */}
                 <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-blue-600 bg-emerald-400" />
               </div>
-              <div>
+              <div className="flex-1 min-w-0">
                 <p className="text-sm font-bold text-white leading-none">Mentor SysVetMax</p>
                 <p className="mt-0.5 text-[11px] text-blue-200">Assistente de onboarding</p>
               </div>
+
+              {/* G16-4: Toggle Modo Texto / Modo Visual */}
+              <button
+                type="button"
+                onClick={toggleMode}
+                aria-label={mode === 'text' ? 'Ativar Modo Visual' : 'Ativar Modo Texto'}
+                title={mode === 'text' ? 'Modo Visual (destaca elementos na tela)' : 'Modo Texto (apenas respostas)'}
+                className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold transition-all duration-200 ${
+                  mode === 'visual'
+                    ? 'bg-white text-blue-700 shadow-sm'
+                    : 'bg-white/15 text-white hover:bg-white/25'
+                }`}
+              >
+                {mode === 'visual' ? (
+                  // Eye icon — modo visual ativo
+                  <>
+                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z"/>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/>
+                    </svg>
+                    Visual
+                  </>
+                ) : (
+                  // MessageSquare icon — modo texto
+                  <>
+                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.76c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 0 1 1.037-.443 48.282 48.282 0 0 0 5.68-.494c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z"/>
+                    </svg>
+                    Texto
+                  </>
+                )}
+              </button>
             </div>
           </div>
 
@@ -388,7 +469,7 @@ export function MentorChat() {
                   />
 
                   {/* Action buttons */}
-                  {msg.role === 'mentor' && (msg.action || msg.action2) && (
+                  {msg.role === 'mentor' && (msg.action || msg.action2 || msg.highlights) && (
                     <div className="flex flex-col gap-1.5 pl-0.5">
                       {msg.action && (
                         <button
@@ -410,6 +491,18 @@ export function MentorChat() {
                             <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z"/>
                           </svg>
                           {msg.action2.label}
+                        </button>
+                      )}
+                      {/* G16-4: Botão para aplicar highlights manualmente em Modo Texto */}
+                      {msg.highlights && msg.highlights.length > 0 && (
+                        <button
+                          onClick={() => setActiveHighlights(msg.highlights!)}
+                          className="flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-left text-xs font-semibold text-indigo-700 transition-colors hover:bg-indigo-100"
+                        >
+                          <svg className="h-3.5 w-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.042 21.672 13.684 16.6m0 0-2.51 2.225.569-9.47 5.227 7.917-3.286-.672Zm-7.518-.267A8.25 8.25 0 1 1 20.25 10.5M8.288 14.212A5.25 5.25 0 1 1 17.25 10.5"/>
+                          </svg>
+                          Mostrar na tela
                         </button>
                       )}
                     </div>
