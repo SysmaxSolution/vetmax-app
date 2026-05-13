@@ -25,22 +25,22 @@ interface Tab {
 }
 
 const ALL_TABS: Tab[] = [
-  { label: 'Recepção',    href: '/dashboard/reception',        icon: Home,        roles: ['receptionist','admin','vet','assistant'], moduleKey: 'reception' },
-  { label: 'Caixa',       href: '/dashboard/cashier',          icon: Banknote,    roles: ['admin','accountant' as UserRole],         id: 'nav-cashier' },
-  { label: 'Pacientes',   href: '/dashboard/patients',         icon: PawPrint,    roles: ['receptionist','admin','vet','assistant'] },
-  { label: 'Triagem',     href: '/dashboard/triage',           icon: Users,       roles: ['assistant','admin'],                      moduleKey: 'triage' },
-  { label: 'Consultório', href: '/dashboard/vet',              icon: Stethoscope, roles: ['vet','admin'],                            moduleKey: 'consultation' },
-  { label: 'Exames',      href: '/dashboard/exams',            icon: TestTubes,   roles: ['assistant','vet','admin'],                moduleKey: 'exams' },
-  { label: 'Internação',  href: '/dashboard/hospitalization',  icon: BedDouble,   roles: ['vet','admin','assistant'],                moduleKey: 'hospitalization' },
-  { label: 'Banho e Tosa',href: '/dashboard/grooming',         icon: Scissors,    roles: ['receptionist','admin','assistant'],       moduleKey: 'grooming' },
-  { label: 'Estoque',     href: '/dashboard/pharmacy',         icon: Package,     roles: ['admin'],                                  moduleKey: 'pharmacy' },
-  { label: 'Vendas',      href: '/dashboard/sales',            icon: ShoppingCart,roles: ['receptionist','admin','assistant'],            moduleKey: 'sales' },
-  { label: 'Cadastros',   href: '/dashboard/registry',         icon: FolderKanban,roles: ['admin','accountant' as UserRole,'receptionist'] },
-  { label: 'Gestão',      href: '/dashboard/management',       icon: BarChart3,     roles: ['admin'] },
-  { label: 'WhatsApp',   href: '/dashboard/whatsapp',         icon: MessageCircle,  roles: ['receptionist','admin','vet','assistant'], moduleKey: 'whatsapp_intelligent' },
-  { label: 'Compras',    href: '/dashboard/purchases',        icon: ClipboardList,  roles: ['admin'],                                  moduleKey: 'purchases' },
-  { label: 'Financeiro', href: '/dashboard/financial',        icon: DollarSign,     roles: ['admin'],                                  moduleKey: 'financial' },
-  { label: 'Relatórios', href: '/dashboard/reports',          icon: FileBarChart2,  roles: ['admin'] },
+  { label: 'Recepção',     href: '/dashboard/reception',       icon: Home,          roles: ['receptionist','admin','vet','assistant'], moduleKey: 'reception'       },
+  { label: 'Pacientes',    href: '/dashboard/patients',        icon: PawPrint,      roles: ['receptionist','admin','vet','assistant'], moduleKey: 'patients'        },
+  { label: 'Caixa',        href: '/dashboard/cashier',         icon: Banknote,      roles: ['admin','accountant' as UserRole],         moduleKey: 'cashier',        id: 'nav-cashier' },
+  { label: 'Triagem',      href: '/dashboard/triage',          icon: Users,         roles: ['assistant','admin'],                      moduleKey: 'triage'          },
+  { label: 'Consultório',  href: '/dashboard/vet',             icon: Stethoscope,   roles: ['vet','admin'],                            moduleKey: 'consultation'    },
+  { label: 'Exames',       href: '/dashboard/exams',           icon: TestTubes,     roles: ['assistant','vet','admin'],                moduleKey: 'exams'           },
+  { label: 'Internação',   href: '/dashboard/hospitalization', icon: BedDouble,     roles: ['vet','admin','assistant'],                moduleKey: 'hospitalization' },
+  { label: 'Banho e Tosa', href: '/dashboard/grooming',        icon: Scissors,      roles: ['receptionist','admin','assistant'],       moduleKey: 'grooming'        },
+  { label: 'Cadastros',    href: '/dashboard/registry',        icon: FolderKanban,  roles: ['admin','accountant' as UserRole,'receptionist'], moduleKey: 'registry' },
+  { label: 'Compras',      href: '/dashboard/purchases',       icon: ClipboardList, roles: ['admin'],                                  moduleKey: 'purchases'       },
+  { label: 'Estoque',      href: '/dashboard/pharmacy',        icon: Package,       roles: ['admin'],                                  moduleKey: 'pharmacy'        },
+  { label: 'Vendas',       href: '/dashboard/sales',           icon: ShoppingCart,  roles: ['receptionist','admin','assistant'],       moduleKey: 'sales'           },
+  { label: 'Financeiro',   href: '/dashboard/financial',       icon: DollarSign,    roles: ['admin'],                                  moduleKey: 'financial'       },
+  { label: 'Relatórios',   href: '/dashboard/reports',         icon: FileBarChart2, roles: ['admin'],                                  moduleKey: 'reports'         },
+  { label: 'Gestão',       href: '/dashboard/management',      icon: BarChart3,     roles: ['admin']                                                                },
+  { label: 'WhatsApp',     href: '/dashboard/whatsapp',        icon: MessageCircle, roles: ['receptionist','admin','vet','assistant'], moduleKey: 'whatsapp_intelligent' },
 ]
 
 // ─── Props ────────────────────────────────────────────────────────────────────

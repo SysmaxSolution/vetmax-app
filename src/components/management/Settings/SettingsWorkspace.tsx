@@ -9,7 +9,6 @@ import {
 import type { ClinicConfig, ClinicSettingsConfig, AiTranscriptionMode, FlowConfig } from '@/lib/actions/clinic-settings'
 import { updateClinicConfig } from '@/lib/actions/clinic-settings'
 import ModulesTab from '../ModulesTab'
-import BusinessHoursTab from '../BusinessHoursTab'
 import ClinicSettingsTab from '../ClinicSettingsTab'
 import CsvImporter from '../CsvImporter'
 import WhatsappSettings from './WhatsappSettings'
@@ -104,8 +103,10 @@ export default function SettingsWorkspace({
 
         {activeCategory === 'geral' && (
           <div className="space-y-6">
-            <SectionHeader icon={<Building2 className="h-5 w-5 text-slate-600" />} title="Configurações Gerais" description="Horário de funcionamento da clínica" />
-            <BusinessHoursTab initialConfig={initialClinicConfig} onToast={onToast} />
+            <SectionHeader icon={<Building2 className="h-5 w-5 text-slate-600" />} title="Configurações Gerais" description="Configurações operacionais da clínica" />
+            <p className="text-sm text-slate-500 bg-slate-50 rounded-xl px-5 py-4 border border-slate-200">
+              O horário de funcionamento está disponível em <strong>Gestão → Clínica</strong>.
+            </p>
           </div>
         )}
 

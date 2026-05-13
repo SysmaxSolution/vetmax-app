@@ -4,6 +4,7 @@ import { useState, useRef } from 'react'
 import {
   ToggleLeft, ToggleRight, Loader2, Save, Shield, AlertTriangle, Eye, EyeOff,
   Hotel, Syringe, FlaskConical, Scissors, ShoppingBag, Stethoscope, ClipboardList, MessageCircle, Sparkles, Bot, ShoppingCart, Truck,
+  PawPrint, Banknote, FolderKanban, DollarSign, FileBarChart2,
 } from 'lucide-react'
 import { updateClinicConfig, type ClinicConfig } from '@/lib/actions/clinic-settings'
 import WhatsappIntelligentSetup from './Settings/WhatsappIntelligentSetup'
@@ -19,18 +20,23 @@ interface ModuleDef {
 }
 
 const MODULES: ModuleDef[] = [
-  { key: 'reception',       label: 'Recepção',             desc: 'Check-in, fila e agenda',                   icon: <ClipboardList  className="h-5 w-5" />, color: 'text-blue-600 bg-blue-50'   },
-  { key: 'triage',          label: 'Triagem',               desc: 'Sinais vitais e avaliação inicial',         icon: <Stethoscope    className="h-5 w-5" />, color: 'text-purple-600 bg-purple-50' },
-  { key: 'consultation',    label: 'Consultório',           desc: 'Prontuário e conduta médica',               icon: <Syringe        className="h-5 w-5" />, color: 'text-green-600 bg-green-50'  },
-  { key: 'exams',           label: 'Exames',                desc: 'Laudos e resultados laboratoriais',         icon: <FlaskConical   className="h-5 w-5" />, color: 'text-teal-600 bg-teal-50'   },
-  { key: 'hospitalization', label: 'Internação',            desc: 'Gestão de internados e alta hospitalar',   icon: <Hotel          className="h-5 w-5" />, color: 'text-amber-600 bg-amber-50'  },
-  { key: 'pharmacy',        label: 'Estoque',               desc: 'Estoque de medicamentos e insumos',        icon: <ShoppingBag    className="h-5 w-5" />, color: 'text-orange-600 bg-orange-50' },
-  { key: 'grooming',        label: 'Banho e Tosa',          desc: 'Fila de grooming com registros por voz',   icon: <Scissors       className="h-5 w-5" />, color: 'text-pink-600 bg-pink-50'    },
-  { key: 'sales',           label: 'Vendas (PDV)',          desc: 'Ponto de venda, carrinho e recibos',       icon: <ShoppingCart   className="h-5 w-5" />, color: 'text-violet-600 bg-violet-50' },
-  { key: 'whatsapp',        label: 'WhatsApp',              desc: 'Notificações e mensagens via WhatsApp',    icon: <MessageCircle  className="h-5 w-5" />, color: 'text-green-600 bg-green-50'  },
-  { key: 'mentor',              label: 'Modo Mentor',               desc: 'Botão "?" flutuante com tour guiado em todas as telas',                    icon: <Sparkles      className="h-5 w-5" />, color: 'text-blue-600 bg-blue-50'      },
-  { key: 'whatsapp_intelligent', label: 'WhatsApp Inteligente (Bot)', desc: 'Bot IA responde, agenda consultas e faz campanhas de reativação via WhatsApp', icon: <Bot           className="h-5 w-5" />, color: 'text-emerald-600 bg-emerald-50' },
-  { key: 'purchases',            label: 'Compras',                   desc: 'Importação de NF-e XML, fornecedores e atualização de estoque',             icon: <Truck         className="h-5 w-5" />, color: 'text-purple-600 bg-purple-50'  },
+  { key: 'reception',            label: 'Recepção',                   desc: 'Check-in, fila e agenda',                                                   icon: <ClipboardList  className="h-5 w-5" />, color: 'text-blue-600 bg-blue-50'      },
+  { key: 'patients',             label: 'Pacientes',                  desc: 'Cadastro de tutores e pets',                                                icon: <PawPrint       className="h-5 w-5" />, color: 'text-cyan-600 bg-cyan-50'      },
+  { key: 'cashier',              label: 'Caixa',                      desc: 'Abertura, fechamento e lançamentos de caixa',                               icon: <Banknote       className="h-5 w-5" />, color: 'text-green-600 bg-green-50'    },
+  { key: 'triage',               label: 'Triagem',                    desc: 'Sinais vitais e avaliação inicial',                                         icon: <Stethoscope    className="h-5 w-5" />, color: 'text-amber-600 bg-amber-50'    },
+  { key: 'consultation',         label: 'Consultório',                desc: 'Prontuário e conduta médica',                                               icon: <Syringe        className="h-5 w-5" />, color: 'text-indigo-600 bg-indigo-50'  },
+  { key: 'exams',                label: 'Exames',                     desc: 'Laudos e resultados laboratoriais',                                         icon: <FlaskConical   className="h-5 w-5" />, color: 'text-violet-600 bg-violet-50'  },
+  { key: 'hospitalization',      label: 'Internação',                 desc: 'Gestão de internados e alta hospitalar',                                   icon: <Hotel          className="h-5 w-5" />, color: 'text-pink-600 bg-pink-50'      },
+  { key: 'grooming',             label: 'Banho e Tosa',               desc: 'Fila de grooming com registros por voz',                                   icon: <Scissors       className="h-5 w-5" />, color: 'text-rose-600 bg-rose-50'      },
+  { key: 'registry',             label: 'Cadastros',                  desc: 'Espécies, raças, convênios e tabela de preços',                            icon: <FolderKanban   className="h-5 w-5" />, color: 'text-slate-600 bg-slate-100'   },
+  { key: 'purchases',            label: 'Compras',                    desc: 'Importação de NF-e XML, fornecedores e atualização de estoque',             icon: <Truck          className="h-5 w-5" />, color: 'text-purple-600 bg-purple-50'  },
+  { key: 'pharmacy',             label: 'Estoque',                    desc: 'Estoque de medicamentos e insumos',                                         icon: <ShoppingBag    className="h-5 w-5" />, color: 'text-orange-600 bg-orange-50'  },
+  { key: 'sales',                label: 'Vendas (PDV)',               desc: 'Ponto de venda, carrinho e recibos',                                       icon: <ShoppingCart   className="h-5 w-5" />, color: 'text-emerald-600 bg-emerald-50' },
+  { key: 'financial',            label: 'Financeiro',                 desc: 'Contas a pagar e receber, extrato e conciliação bancária',                  icon: <DollarSign     className="h-5 w-5" />, color: 'text-teal-600 bg-teal-50'      },
+  { key: 'reports',              label: 'Relatórios',                 desc: 'DRE, Curva ABC, produtividade e relatórios operacionais',                   icon: <FileBarChart2  className="h-5 w-5" />, color: 'text-violet-600 bg-violet-50'  },
+  { key: 'whatsapp',             label: 'WhatsApp',                   desc: 'Notificações e mensagens via WhatsApp',                                     icon: <MessageCircle  className="h-5 w-5" />, color: 'text-green-600 bg-green-50'    },
+  { key: 'whatsapp_intelligent', label: 'WhatsApp Inteligente (Bot)', desc: 'Bot IA responde, agenda consultas e faz campanhas de reativação',          icon: <Bot            className="h-5 w-5" />, color: 'text-emerald-600 bg-emerald-50' },
+  { key: 'mentor',               label: 'Mentor IA',                  desc: 'Assistente flutuante com tours guiados e respostas visuais',                icon: <Sparkles       className="h-5 w-5" />, color: 'text-blue-600 bg-blue-50'      },
 ]
 
 // Master key is stored in env and compared client-side only for UX purposes.

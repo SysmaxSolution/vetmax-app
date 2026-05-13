@@ -23,6 +23,7 @@ import RoomsTab from './RoomsTab'
 import AppearanceTab from './AppearanceTab'
 import ErrorMonitoringDashboard from './ErrorMonitoringDashboard'
 import SettingsWorkspace from './Settings/SettingsWorkspace'
+import BusinessHoursTab from './BusinessHoursTab'
 import { updateUserPhone, getUserModuleAccess, setUserModuleAccess, updateUserNickname } from '@/lib/actions/user-management'
 import type { ClinicUserFull } from '@/lib/actions/user-management'
 import type { Room } from '@/lib/actions/rooms'
@@ -697,6 +698,9 @@ export default function ManagementWorkspace({
               )}
             </div>
           </div>
+
+          {/* Horário de Funcionamento */}
+          <BusinessHoursTab initialConfig={clinicData} onToast={(type, msg) => setToast({ type, message: msg })} />
         </div>
       )}
 
