@@ -785,6 +785,299 @@ export async function importEmployeesFromProfiles(): Promise<{ imported: number;
   return { imported }
 }
 
+// ─── G-11: Types ─────────────────────────────────────────────────────────────
+
+export interface BankStatement {
+  id:                  string
+  clinic_id:           string
+  bank_account_id:     string
+  external_id:         string | null
+  date:                string
+  amount:              number
+  description:         string
+  type:                'credit' | 'debit'
+  reconciled_entry_id: string | null
+  import_batch_id:     string
+  imported_at:         string
+}
+
+export interface ReconciliationBatch {
+  id:              string
+  clinic_id:       string
+  bank_account_id: string
+  source:          string
+  imported_at:     string
+  total_records:   number
+  matched_count:   number
+  status:          'pending' | 'completed'
+}
+
+export interface ExtratoFilters {
+  bank_account_id: string
+  start_date:      string
+  end_date:        string
+}
+
+export interface ExtratoResult {
+  statements:    BankStatement[]
+  saldo_inicial: number
+  total_entradas: number
+  total_saidas:   number
+  saldo_final:    number
+}
+
+export interface MatchedPair {
+  statement: BankStatement
+  entry:     FinancialEntry
+}
+
+export interface AutoMatchResult {
+  matched:              MatchedPair[]
+  unmatched_imported:   BankStatement[]
+  unmatched_entries:    FinancialEntry[]
+}
+
+export interface ImportStatementsData {
+  bank_account_id: string
+  source:          string
+  statements:      Array<{
+    external_id?:  string
+    date:          string
+    amount:        number
+    description:   string
+    type:          'credit' | 'debit'
+  }>
+}
+
+// ─── G-11: getExtrato ─────────────────────────────────────────────────────────
+
+export async function getExtrato(
+  filters: ExtratoFilters
+): Promise<ExtratoResult | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  if (!filters.bank_account_id) return { error: 'Conta bancária obrigatória.' }
+  if (!filters.start_date || !filters.end_date) return { error: 'Período obrigatório.' }
+
+  const admin = createAdminClient()
+
+  // Busca lançamentos no período
+  const { data, error } = await admin
+    .from('bank_statements')
+    .select('id, clinic_id, bank_account_id, external_id, date, amount, description, type, reconciled_entry_id, import_batch_id, imported_at')
+    .eq('clinic_id', clinicId)
+    .eq('bank_account_id', filters.bank_account_id)
+    .gte('date', filters.start_date)
+    .lte('date', filters.end_date)
+    .order('date', { ascending: true })
+    .order('imported_at', { ascending: true })
+
+  if (error) return { error: 'Erro ao buscar extrato: ' + error.message }
+
+  const statements = (data ?? []) as BankStatement[]
+  const total_entradas = statements.filter(s => s.type === 'credit').reduce((acc, s) => acc + s.amount, 0)
+  const total_saidas   = statements.filter(s => s.type === 'debit').reduce((acc, s) => acc + s.amount, 0)
+
+  // Busca saldo inicial: soma créditos - débitos anteriores ao período
+  const { data: prevData } = await admin
+    .from('bank_statements')
+    .select('amount, type')
+    .eq('clinic_id', clinicId)
+    .eq('bank_account_id', filters.bank_account_id)
+    .lt('date', filters.start_date)
+
+  const saldo_inicial = (prevData ?? []).reduce((acc, s) => {
+    return acc + (s.type === 'credit' ? Number(s.amount) : -Number(s.amount))
+  }, 0)
+
+  return {
+    statements,
+    saldo_inicial,
+    total_entradas,
+    total_saidas,
+    saldo_final: saldo_inicial + total_entradas - total_saidas,
+  }
+}
+
+// ─── G-11: importStatements ───────────────────────────────────────────────────
+
+export async function importStatements(
+  data: ImportStatementsData
+): Promise<ReconciliationBatch | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  if (!data.bank_account_id) return { error: 'Conta bancária obrigatória.' }
+  if (!data.statements?.length) return { error: 'Nenhum lançamento para importar.' }
+
+  const admin = createAdminClient()
+  const batchId = crypto.randomUUID()
+
+  // Cria o batch
+  const { data: batch, error: batchError } = await admin
+    .from('reconciliation_batches')
+    .insert({
+      clinic_id:       clinicId,
+      bank_account_id: data.bank_account_id,
+      source:          data.source,
+      total_records:   data.statements.length,
+      matched_count:   0,
+      status:          'pending',
+    })
+    .select('id, clinic_id, bank_account_id, source, imported_at, total_records, matched_count, status')
+    .single()
+
+  if (batchError) return { error: 'Erro ao criar lote: ' + batchError.message }
+
+  // Insere os lançamentos
+  const rows = data.statements.map(s => ({
+    clinic_id:       clinicId,
+    bank_account_id: data.bank_account_id,
+    external_id:     s.external_id || null,
+    date:            s.date,
+    amount:          Math.abs(s.amount),
+    description:     s.description || '',
+    type:            s.type,
+    import_batch_id: batch.id,
+  }))
+
+  const { error: insertError } = await admin
+    .from('bank_statements')
+    .insert(rows)
+
+  if (insertError) return { error: 'Erro ao inserir lançamentos: ' + insertError.message }
+
+  return batch as ReconciliationBatch
+}
+
+// ─── G-11: reconcileStatements (matching manual) ──────────────────────────────
+
+export async function reconcileStatements(
+  statementId: string,
+  entryId: string
+): Promise<{ error?: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('bank_statements')
+    .update({ reconciled_entry_id: entryId })
+    .eq('id', statementId)
+    .eq('clinic_id', clinicId)
+
+  if (error) return { error: 'Erro ao conciliar: ' + error.message }
+  return {}
+}
+
+// ─── G-11: listBatches ────────────────────────────────────────────────────────
+
+export async function listBatches(
+  bank_account_id?: string
+): Promise<ReconciliationBatch[] | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+
+  const admin = createAdminClient()
+  let query = admin
+    .from('reconciliation_batches')
+    .select('id, clinic_id, bank_account_id, source, imported_at, total_records, matched_count, status')
+    .eq('clinic_id', clinicId)
+    .order('imported_at', { ascending: false })
+
+  if (bank_account_id) query = query.eq('bank_account_id', bank_account_id)
+
+  const { data, error } = await query.limit(50)
+  if (error) return { error: 'Erro ao buscar lotes: ' + error.message }
+  return (data ?? []) as ReconciliationBatch[]
+}
+
+// ─── G-11: listBatchStatements ────────────────────────────────────────────────
+
+export async function listBatchStatements(
+  batch_id: string
+): Promise<BankStatement[] | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('bank_statements')
+    .select('id, clinic_id, bank_account_id, external_id, date, amount, description, type, reconciled_entry_id, import_batch_id, imported_at')
+    .eq('clinic_id', clinicId)
+    .eq('import_batch_id', batch_id)
+    .order('date', { ascending: true })
+
+  if (error) return { error: 'Erro ao buscar lançamentos: ' + error.message }
+  return (data ?? []) as BankStatement[]
+}
+
+// ─── G-11: getBBStatement (mock — plugar API real do BB Developer) ────────────
+
+export async function getBBStatement(params: {
+  account_id: string
+  start_date: string
+  end_date:   string
+}): Promise<BankStatement[] | { error: string }> {
+  // TODO: Substituir pelo client real da API BB Developer
+  // Endpoint real: https://api.sandbox.bb.com.br/extrato/v2/conta-corrente
+  // Autenticação: OAuth2 client_credentials com BB_CLIENT_ID e BB_CLIENT_SECRET
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+
+  // Dados mocados simulando retorno da API do Banco do Brasil
+  const mockStatements: BankStatement[] = [
+    {
+      id:                  crypto.randomUUID(),
+      clinic_id:           clinicId,
+      bank_account_id:     params.account_id,
+      external_id:         'BB-2026-001',
+      date:                params.start_date,
+      amount:              1500.00,
+      description:         'PIX RECEBIDO - TUTOR JOAO SILVA',
+      type:                'credit',
+      reconciled_entry_id: null,
+      import_batch_id:     'mock-batch',
+      imported_at:         new Date().toISOString(),
+    },
+    {
+      id:                  crypto.randomUUID(),
+      clinic_id:           clinicId,
+      bank_account_id:     params.account_id,
+      external_id:         'BB-2026-002',
+      date:                params.start_date,
+      amount:              350.00,
+      description:         'DEB AUTO - FORNECEDOR VETERINARIO',
+      type:                'debit',
+      reconciled_entry_id: null,
+      import_batch_id:     'mock-batch',
+      imported_at:         new Date().toISOString(),
+    },
+  ]
+
+  return mockStatements
+}
+
+// ─── G-11: autoMatch ─────────────────────────────────────────────────────────
+
+export async function autoMatchStatements(
+  batchId:        string,
+  entryType:      EntryType
+): Promise<AutoMatchResult | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+
+  const [statementsRes, entriesRes] = await Promise.all([
+    listBatchStatements(batchId),
+    listEntries({ type: entryType, status: 'pending' }),
+  ])
+
+  if ('error' in statementsRes) return statementsRes
+  if ('error' in entriesRes)    return entriesRes
+
+  const result = autoMatch(statementsRes, entriesRes)
+  return result
+}
+
 // ─── Private helpers ──────────────────────────────────────────────────────────
 
 function mapEntry(raw: Record<string, unknown>): FinancialEntry {
@@ -818,4 +1111,46 @@ function toDateStr(d: Date): string {
 
 function sum(rows: { amount?: unknown }[]): number {
   return rows.reduce((acc, r) => acc + Number(r.amount ?? 0), 0)
+}
+
+// ─── G-11: autoMatch engine (pure function, tolerância ±2 dias) ──────────────
+
+export function autoMatch(
+  imported: BankStatement[],
+  entries:  FinancialEntry[]
+): AutoMatchResult {
+  const matched:            MatchedPair[]  = []
+  const usedStatementIds  = new Set<string>()
+  const usedEntryIds      = new Set<string>()
+
+  for (const stmt of imported) {
+    if (usedStatementIds.has(stmt.id)) continue
+
+    const stmtDate = new Date(stmt.date)
+
+    for (const entry of entries) {
+      if (usedEntryIds.has(entry.id)) continue
+
+      // Tolerância de valor: diferença < 0.01
+      const amountMatch = Math.abs(entry.amount - stmt.amount) < 0.01
+
+      // Tolerância de data: ±2 dias usando due_date ou payment_date
+      const entryDateStr = entry.payment_date ?? entry.due_date
+      const entryDate    = new Date(entryDateStr)
+      const diffDays     = Math.abs((stmtDate.getTime() - entryDate.getTime()) / 86_400_000)
+      const dateMatch    = diffDays <= 2
+
+      if (amountMatch && dateMatch) {
+        matched.push({ statement: stmt, entry })
+        usedStatementIds.add(stmt.id)
+        usedEntryIds.add(entry.id)
+        break
+      }
+    }
+  }
+
+  const unmatched_imported = imported.filter(s => !usedStatementIds.has(s.id))
+  const unmatched_entries  = entries.filter(e  => !usedEntryIds.has(e.id))
+
+  return { matched, unmatched_imported, unmatched_entries }
 }

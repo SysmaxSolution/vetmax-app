@@ -8,20 +8,22 @@ import {
   type BankAccount, type ChartOfAccount, type CreditCard, type Employee,
 } from '@/lib/actions/financial'
 import TituloModal from './TituloModal'
-import BankAccountsTab   from './cadastros/BankAccountsTab'
+import BankAccountsTab    from './cadastros/BankAccountsTab'
 import ChartOfAccountsTab from './cadastros/ChartOfAccountsTab'
-import CreditCardsTab    from './cadastros/CreditCardsTab'
-import EmployeesTab      from './cadastros/EmployeesTab'
+import CreditCardsTab     from './cadastros/CreditCardsTab'
+import EmployeesTab       from './cadastros/EmployeesTab'
+import ExtratoTab         from './ExtratoTab'
+import ConciliacaoTab     from './ConciliacaoTab'
 import {
   Plus, RefreshCcw, Search, Filter,
   TrendingUp, AlertTriangle, CheckCircle2,
-  ChevronDown, DollarSign, BookOpen,
+  ChevronDown, DollarSign, BookOpen, Receipt, GitMerge,
 } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type FilterStatus = 'all' | 'pending' | 'paid' | 'cancelled'
-type MainTab = EntryType | 'cadastros'
+type MainTab = EntryType | 'extrato' | 'conciliacao' | 'cadastros'
 type CadastrosSubTab = 'bancos' | 'plano_contas' | 'cartoes' | 'funcionarios'
 
 interface Props {
@@ -186,9 +188,11 @@ export default function FinancialWorkspace({
 
   const [isPending, startTransition] = useTransition()
 
-  const isTitulos = activeTab === 'receivable' || activeTab === 'payable'
-  const entries   = activeTab === 'receivable' ? receivable : payable
-  const summary   = activeTab === 'receivable' ? recSummary : paySummary
+  const isTitulos      = activeTab === 'receivable' || activeTab === 'payable'
+  const isExtrato      = activeTab === 'extrato'
+  const isConciliacao  = activeTab === 'conciliacao'
+  const entries        = activeTab === 'receivable' ? receivable : payable
+  const summary        = activeTab === 'receivable' ? recSummary : paySummary
 
   const filtered = useMemo(() => {
     if (!isTitulos) return []
@@ -235,12 +239,14 @@ export default function FinancialWorkspace({
     refresh()
   }
 
-  const overdueCount = isTitulos ? entries.filter(isOverdue).length : 0
+  const overdueCount = isTitulos ? (activeTab === 'receivable' ? receivable : payable).filter(isOverdue).length : 0
 
   const mainTabs = [
-    { id: 'receivable' as MainTab, label: 'Contas a Receber' },
-    { id: 'payable'    as MainTab, label: 'Contas a Pagar'   },
-    { id: 'cadastros'  as MainTab, label: 'Cadastros'        },
+    { id: 'receivable'  as MainTab, label: 'Contas a Receber' },
+    { id: 'payable'     as MainTab, label: 'Contas a Pagar'   },
+    { id: 'extrato'     as MainTab, label: 'Extrato'           },
+    { id: 'conciliacao' as MainTab, label: 'Conciliação'       },
+    { id: 'cadastros'   as MainTab, label: 'Cadastros'         },
   ]
 
   const cadastrosSubTabs: { id: CadastrosSubTab; label: string }[] = [
@@ -306,7 +312,9 @@ export default function FinancialWorkspace({
                   : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
               }`}
             >
-              {t.id === 'cadastros' && <BookOpen className="h-3.5 w-3.5" />}
+              {t.id === 'cadastros'   && <BookOpen   className="h-3.5 w-3.5" />}
+              {t.id === 'extrato'     && <Receipt     className="h-3.5 w-3.5" />}
+              {t.id === 'conciliacao' && <GitMerge    className="h-3.5 w-3.5" />}
               {t.label}
             </button>
           ))}
@@ -439,6 +447,16 @@ export default function FinancialWorkspace({
               </div>
             )}
           </div>
+        )}
+
+        {/* ── Extrato Bancário ───────────────────────────────────────────── */}
+        {isExtrato && (
+          <ExtratoTab bankAccounts={initialBankAccounts} />
+        )}
+
+        {/* ── Conciliação ────────────────────────────────────────────────── */}
+        {isConciliacao && (
+          <ConciliacaoTab bankAccounts={initialBankAccounts} />
         )}
 
         {/* ── Cadastros ──────────────────────────────────────────────────── */}
