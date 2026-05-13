@@ -73,7 +73,12 @@ export default function TituloModal({
   const [innerMode, setInnerMode] = useState<ModalMode>(mode)
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
-  const [deleteStep, setDeleteStep] = useState<'none' | 'confirm_reversal' | 'confirm_delete'>('none')
+  // 'confirm_reversal_only'          → "Estornar Título" btn: só desfaz baixa, sem exclusão
+  // 'confirm_reversal_before_delete'  → "Excluir" btn (paid): estorna e depois pergunta se exclui
+  // 'confirm_delete'                  → confirmação final de exclusão
+  const [deleteStep, setDeleteStep] = useState<
+    'none' | 'confirm_reversal_only' | 'confirm_reversal_before_delete' | 'confirm_delete'
+  >('none')
 
   const isReceivable = entryType === 'receivable'
   const categories   = isReceivable ? CATEGORIES_RECEIVABLE : CATEGORIES_PAYABLE
@@ -184,14 +189,24 @@ export default function TituloModal({
   // ── Estorno / Exclusão ─────────────────────────────────────────────────────
   function handleDeleteClick() {
     setError(null)
-    if (entry?.status === 'paid') {
-      setDeleteStep('confirm_reversal')
-    } else {
-      setDeleteStep('confirm_delete')
-    }
+    // Se baixado, precisa estornar antes de excluir
+    setDeleteStep(entry?.status === 'paid' ? 'confirm_reversal_before_delete' : 'confirm_delete')
   }
 
-  function handleReversal() {
+  function handleEstornarClick() {
+    setError(null)
+    setDeleteStep('confirm_reversal_only')
+  }
+
+  function handleReversalOnly() {
+    startTransition(async () => {
+      const res = await reverseFinancialEntry(entry!.id)
+      if ('error' in res) { setError(res.error); return }
+      onSuccess()
+    })
+  }
+
+  function handleReversalBeforeDelete() {
     startTransition(async () => {
       const res = await reverseFinancialEntry(entry!.id)
       if ('error' in res) { setError(res.error); return }
@@ -464,24 +479,49 @@ export default function TituloModal({
             </div>
           )}
 
-          {/* Confirmar estorno */}
-          {deleteStep === 'confirm_reversal' && (
+          {/* Confirmar estorno simples (botão "Estornar Título") */}
+          {deleteStep === 'confirm_reversal_only' && (
+            <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 space-y-3">
+              <div className="flex items-start gap-2">
+                <RotateCcw className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-amber-800">Desfazer a baixa deste título?</p>
+                  <p className="text-xs text-amber-600 mt-0.5">
+                    O título voltará para <strong>Aberto/Pendente</strong>. O lançamento do extrato bancário será revertido.
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={handleReversalOnly} disabled={isPending}
+                  className="flex-1 rounded-xl bg-amber-600 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-60 transition-colors">
+                  {isPending ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : 'Sim, Estornar'}
+                </button>
+                <button onClick={() => setDeleteStep('none')} disabled={isPending}
+                  className="flex-1 rounded-xl border border-slate-200 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-60 transition-colors">
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Confirmar estorno antes de excluir (botão "Excluir" quando pago) */}
+          {deleteStep === 'confirm_reversal_before_delete' && (
             <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 space-y-3">
               <div className="flex items-start gap-2">
                 <RotateCcw className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="text-sm font-semibold text-amber-800">
-                    Este título está {isReceivable ? 'Recebido' : 'Pago'} (Baixado).
+                    Título está {isReceivable ? 'recebido' : 'pago'} — estornar antes de excluir?
                   </p>
                   <p className="text-xs text-amber-600 mt-0.5">
-                    Para excluir é necessário fazer o estorno primeiro. Deseja fazer o estorno?
+                    O estorno desfaz a baixa e reverte o extrato bancário. Em seguida você poderá confirmar a exclusão.
                   </p>
                 </div>
               </div>
               <div className="flex gap-2">
-                <button onClick={handleReversal} disabled={isPending}
+                <button onClick={handleReversalBeforeDelete} disabled={isPending}
                   className="flex-1 rounded-xl bg-amber-600 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-60 transition-colors">
-                  {isPending ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : 'Sim, Fazer Estorno'}
+                  {isPending ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : 'Sim, Estornar e Continuar'}
                 </button>
                 <button onClick={() => setDeleteStep('none')} disabled={isPending}
                   className="flex-1 rounded-xl border border-slate-200 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-60 transition-colors">
@@ -548,7 +588,7 @@ export default function TituloModal({
               )}
               {innerMode === 'edit' && entry?.status === 'paid' && (
                 <button
-                  onClick={handleDeleteClick}
+                  onClick={handleEstornarClick}
                   disabled={isPending}
                   className="flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100 disabled:opacity-60 transition-colors"
                 >
