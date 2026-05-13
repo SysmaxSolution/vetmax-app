@@ -53,12 +53,12 @@ export function ThemeProvider({
 
   return (
     <ThemeContext.Provider value={value}>
-      <div
+      <section
         className={`transition-colors duration-300 ${bgClass}`}
         style={preferences.custom_bg ? { backgroundColor: preferences.custom_bg } : undefined}
       >
         {children}
-      </div>
+      </section>
     </ThemeContext.Provider>
   )
 }

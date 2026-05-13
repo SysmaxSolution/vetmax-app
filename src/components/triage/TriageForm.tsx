@@ -311,8 +311,8 @@ export default function TriageForm({
         setToastMessage({
           type: 'success',
           message: isEditMode
-            ? 'Triagem atualizada com sucesso!'
-            : 'Triagem salva e enviada ao Médico Veterinário!',
+            ? 'Registro atualizado com sucesso!'
+            : 'Dados salvos com sucesso! Triagem enviada ao Médico Veterinário.',
         })
         if (!isEditMode && consultation.tutor?.phone) {
           setShowWhatsApp(true)

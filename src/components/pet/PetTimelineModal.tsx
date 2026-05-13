@@ -180,7 +180,7 @@ export default function PetTimelineModal({
         className="fixed inset-0 z-50 bg-black/50 flex items-start justify-center pt-4 pb-4 px-4 overflow-y-auto overflow-x-hidden"
         onClick={e => { if (e.target === e.currentTarget) onClose() }}
       >
-        <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
+        <div role="dialog" aria-modal="true" aria-label={`Prontuário de ${petName}`} className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
 
           {/* Header */}
           <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 flex-shrink-0">
