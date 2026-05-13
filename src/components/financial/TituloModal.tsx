@@ -513,17 +513,8 @@ export default function TituloModal({
         {/* Footer */}
         {deleteStep === 'none' && (
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-4 sm:px-5 py-4 flex-shrink-0">
-            {/* Ações secundárias */}
+            {/* Esquerda: Excluir | ← Voltar */}
             <div className="flex items-center gap-2">
-              {innerMode === 'edit' && entry?.status === 'pending' && (
-                <button
-                  onClick={() => { setInnerMode('baixar'); setError(null) }}
-                  className="flex items-center gap-1.5 rounded-xl bg-teal-600 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-700 transition-colors"
-                >
-                  <CheckCircle className="h-3.5 w-3.5" />
-                  {isReceivable ? 'Receber' : 'Pagar'}
-                </button>
-              )}
               {innerMode === 'edit' && (
                 <button
                   onClick={handleDeleteClick}
@@ -543,8 +534,29 @@ export default function TituloModal({
               )}
             </div>
 
-            {/* Ações primárias */}
+            {/* Direita: Baixar/Estornar · Cancelar · Salvar/Confirmar */}
             <div className="flex items-center gap-2">
+              {/* Botão Baixar (pendente) ou Estornar Título (baixado) */}
+              {innerMode === 'edit' && entry?.status === 'pending' && (
+                <button
+                  onClick={() => { setInnerMode('baixar'); setError(null) }}
+                  className="flex items-center gap-1.5 rounded-xl bg-teal-600 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-700 transition-colors"
+                >
+                  <CheckCircle className="h-3.5 w-3.5" />
+                  Baixar
+                </button>
+              )}
+              {innerMode === 'edit' && entry?.status === 'paid' && (
+                <button
+                  onClick={handleDeleteClick}
+                  disabled={isPending}
+                  className="flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100 disabled:opacity-60 transition-colors"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Estornar Título
+                </button>
+              )}
+
               <button
                 onClick={onClose}
                 className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
