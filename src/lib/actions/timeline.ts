@@ -26,6 +26,7 @@ export interface TimelineEvent {
   date: string
   consultation_id?: string
   visit_reason?: string
+  reason?: string
   vet_name?: string | null
   vet_crmv?: string | null
   performed_by?: string | null
@@ -143,7 +144,7 @@ export async function getPetTimeline(
     const { data: consultations, error: cError } = await supabase
       .from('consultations')
       .select(
-        'id, status, visit_reason, payment_status, weight, temperature, triage_notes, vet_notes, suggested_diagnosis, is_reviewed_by_vet, vet_id, created_at, updated_at'
+        'id, status, visit_reason, reason, payment_status, weight, temperature, triage_notes, vet_notes, suggested_diagnosis, is_reviewed_by_vet, vet_id, created_at, updated_at'
       )
       .eq('patient_id', petId)
       .eq('clinic_id', clinicId)
@@ -266,6 +267,7 @@ export async function getPetTimeline(
         date:            c.created_at,
         consultation_id: c.id,
         visit_reason:    c.visit_reason ?? undefined,
+        reason:          (c as any).reason ?? undefined,
         checkin: {
           visit_reason:   c.visit_reason ?? 'consultation',
           payment_status: c.payment_status ?? 'pending',

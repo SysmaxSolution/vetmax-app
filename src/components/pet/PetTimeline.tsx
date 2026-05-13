@@ -144,6 +144,9 @@ function CheckInCard({ event }: { event: TimelineEvent }) {
           <p className="mt-0.5 text-sm font-medium text-slate-800">
             {VISIT_REASON_LABELS[d.visit_reason] ?? d.visit_reason}
           </p>
+          {event.reason && (
+            <p className="mt-0.5 text-xs text-slate-600 italic">{event.reason}</p>
+          )}
         </div>
         <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
           d.payment_status === 'paid' ? 'bg-green-100 text-green-700' :
