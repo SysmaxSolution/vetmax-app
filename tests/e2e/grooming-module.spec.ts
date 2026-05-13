@@ -587,6 +587,11 @@ test.describe('TC-GRM-07: Agendamento via modal principal com motivo Banho e Tos
 
 test.describe('TC-GRM-08: Módulo grooming inativo', () => {
   test.beforeEach(async () => {
+    // seedUsers() repara profiles (clinic_id pode ficar null entre specs) e
+    // seedClinics() garante que active_modules inclui grooming antes de o desativar.
+    // seedTutorsAndPets() garante que Carlos Tutor Silva existe (não depende de TC-GRM-07 ter rodado).
+    await seedUsers()
+    await seedTutorsAndPets()
     await disableGroomingModule(fixtures.clinics.clinicA.id);
   });
 
@@ -835,26 +840,21 @@ test.describe('TC-GRM-013: Entrega do animal registra no Caixa Central', () => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     await page.goto('/dashboard/grooming', { waitUntil: 'domcontentloaded', timeout: 45_000 });
 
-    // Abrir modal do card em waiting_pickup
-    const card = page.getByText('Rex').first();
-    await expect(card).toBeVisible({ timeout: 12_000 });
-    await card.click({ force: true });
-    await page.waitForTimeout(300);
+    await expect(page.getByText('Rex').first()).toBeVisible({ timeout: 12_000 });
 
-    // Aguardar modal abrir
-    // Modal exibe "Rex — Banho e Tosa" (h2) ou "Registrar Serviço" (h3)
-    await expect(page.getByRole('heading', { name: /rex|banho e tosa|registrar serviço/i }).first()).toBeVisible({ timeout: 8_000 });
-
-    // Tentar mudar status para delivered (pode ser drag ou botão dependendo da implementação)
-    // Verificar se o status pode ser alterado pelo modal
-    const deliverBtn = page.getByRole('button', { name: /entregar|delivered|entregue|confirmar entrega/i }).first();
-    if (await deliverBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await deliverBtn.click();
-      await page.waitForTimeout(2_000);
+    // Clicar direto no botão "Entregar" do card (title="Confirmar Entrega ao Tutor")
+    // SEM abrir o GroomingDetailModal, para evitar que o overlay bloqueie o clique
+    const deliverCardBtn = page.getByTitle('Confirmar Entrega ao Tutor').first();
+    if (await deliverCardBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
+      await deliverCardBtn.click();
+      // Aparece modal de confirmação — clicar em "Confirmar Entrega"
+      const confirmBtn = page.getByRole('button', { name: /confirmar entrega/i }).first();
+      if (await confirmBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
+        await confirmBtn.click();
+        await page.waitForTimeout(2_000);
+      }
     } else {
-      // Fechar modal e verificar no banco diretamente
-      await page.keyboard.press('Escape');
-      // Atualizar status via banco
+      // Fallback: atualizar status diretamente no banco
       await adminSupabase.from('grooming_sessions').update({
         status: 'delivered',
         current_status: 'delivered',
