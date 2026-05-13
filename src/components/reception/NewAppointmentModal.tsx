@@ -8,7 +8,8 @@ import { createGroomingSession, getGroomingCatalog, updateGroomingPricing, type 
 import { sendWhatsAppMessage } from '@/lib/actions/whatsapp'
 import { useModules } from '@/components/providers/ModulesProvider'
 import { DateInput, TimePicker, DateTimePicker } from '@/components/ui/DatePicker'
-import { getClinicProfessionals, checkProfessionalAvailability, type ClinicProfessional } from '@/lib/actions/professionals'
+import { getClinicProfessionals, type ClinicProfessional } from '@/lib/actions/professionals'
+import { getProfessionalSlots } from '@/lib/actions/appointment-slots'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -82,9 +83,11 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
   const [submitting, setSubmitting]         = useState(false)
   const [error,      setError]              = useState<string | null>(null)
   const [sendConfirmation, setSendConfirmation] = useState(true)
-  const [professionalId, setProfessionalId]             = useState('')
-  const [professionals, setProfessionals]               = useState<ClinicProfessional[]>([])
-  const [availabilityWarning, setAvailabilityWarning]   = useState<string | null>(null)
+  const [professionalId, setProfessionalId] = useState('')
+  const [professionals, setProfessionals]   = useState<ClinicProfessional[]>([])
+  const [bookedTimes, setBookedTimes]       = useState<string[]>([])
+  const [intervalMinutes, setIntervalMinutes] = useState(60)
+  const [loadingSlots, setLoadingSlots]     = useState(false)
 
   // Load professionals on mount
   useEffect(() => {
@@ -93,14 +96,19 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
     })
   }, [])
 
-  // G-11: valida disponibilidade quando profissional + data + hora mudam
+  // Carrega slots ocupados quando profissional + data mudam
   useEffect(() => {
-    if (!professionalId || !date || !time) { setAvailabilityWarning(null); return }
-    checkProfessionalAvailability(professionalId, date, time).then(res => {
-      if ('error' in res) { setAvailabilityWarning(null); return }
-      setAvailabilityWarning(res.available ? null : (res.reason ?? 'Profissional pode não estar disponível neste horário.'))
+    if (!professionalId || !date) { setBookedTimes([]); return }
+    setLoadingSlots(true)
+    getProfessionalSlots(professionalId, date).then(res => {
+      setLoadingSlots(false)
+      if ('error' in res) return
+      setBookedTimes(res.bookedTimes)
+      setIntervalMinutes(res.intervalMinutes)
+      // Se o horário atual está ocupado, limpa
+      if (time && res.bookedTimes.includes(time)) setTime('')
     })
-  }, [professionalId, date, time])
+  }, [professionalId, date])
 
   // ── Grooming inline fields ──
   const [groomingServices,  setGroomingServices]  = useState<string[]>([])
@@ -244,6 +252,19 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
   const currentTutorName = defaultPet?.tutorName ?? selectedPet?.tutor.name
   const currentSpecies   = defaultPet?.species   ?? selectedPet?.species ?? ''
 
+  // Gera grade de horários de 07:00 a 19:00 no intervalo do profissional (ou 60 min)
+  function buildTimeSlots(): string[] {
+    const step  = intervalMinutes > 0 ? intervalMinutes : 60
+    const slots: string[] = []
+    for (let m = 7 * 60; m <= 19 * 60; m += step) {
+      const hh = String(Math.floor(m / 60)).padStart(2, '0')
+      const mm = String(m % 60).padStart(2, '0')
+      slots.push(`${hh}:${mm}`)
+    }
+    return slots
+  }
+  const timeSlots = buildTimeSlots()
+
   return (
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4 overflow-y-auto"
@@ -351,13 +372,13 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
               </select>
             </div>
 
-            {/* Professional selector (non-grooming only) */}
+            {/* Profissional — aparece antes da data, apenas para consultas */}
             {!isGrooming && professionals.length > 0 && (
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1.5">Profissional (opcional)</label>
                 <select
                   value={professionalId}
-                  onChange={e => setProfessionalId(e.target.value)}
+                  onChange={e => { setProfessionalId(e.target.value); setTime(''); setBookedTimes([]) }}
                   className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
                 >
                   <option value="">Sem preferência</option>
@@ -367,11 +388,6 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
                     </option>
                   ))}
                 </select>
-                {availabilityWarning && (
-                  <p className="mt-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
-                    ⚠️ {availabilityWarning}
-                  </p>
-                )}
               </div>
             )}
 
@@ -504,29 +520,60 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
               </>
             )}
 
-            {/* ══ CONSULTA — campos de data/hora e notas ══ */}
+            {/* ══ CONSULTA — data, horário e notas ══ */}
             {!isGrooming && (
               <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1.5">Data</label>
-                    <DateInput
-                      value={date}
-                      onChange={setDate}
-                      min={todayStr()}
-                      required
-                      placeholder="DD/MM/AAAA"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1.5">Horário</label>
-                    <TimePicker
-                      value={time}
-                      onChange={setTime}
-                    />
-                  </div>
+                {/* Data */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Data</label>
+                  <DateInput
+                    value={date}
+                    onChange={d => { setDate(d); setTime('') }}
+                    min={todayStr()}
+                    required
+                    placeholder="DD/MM/AAAA"
+                  />
                 </div>
 
+                {/* Horário — grid de slots se profissional selecionado, TimePicker livre caso contrário */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
+                    Horário
+                    {loadingSlots && <Loader2 className="h-3 w-3 animate-spin text-slate-400" />}
+                  </label>
+                  {professionalId && date ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {timeSlots.map(slot => {
+                        const occupied = bookedTimes.includes(slot)
+                        const selected = time === slot
+                        return (
+                          <button
+                            key={slot}
+                            type="button"
+                            disabled={occupied}
+                            onClick={() => setTime(slot)}
+                            className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                              selected
+                                ? 'bg-teal-600 border-teal-600 text-white shadow-sm'
+                                : occupied
+                                  ? 'bg-slate-100 border-slate-200 text-slate-300 line-through cursor-not-allowed'
+                                  : 'bg-white border-slate-200 text-slate-700 hover:border-teal-400 hover:text-teal-700'
+                            }`}
+                          >
+                            {slot}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <TimePicker value={time} onChange={setTime} />
+                  )}
+                  {professionalId && !date && (
+                    <p className="mt-1 text-[11px] text-slate-400">Selecione a data para ver os horários disponíveis</p>
+                  )}
+                </div>
+
+                {/* Notas */}
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1.5">Observações (opcional)</label>
                   <textarea
