@@ -39,7 +39,7 @@ export default async function ManagementPage() {
       .single(),
     admin
       .from('profiles')
-      .select('id, full_name, last_name, role, crmv, phone, specialties, nickname, photo_url, address, is_active, room, electronic_signature_url')
+      .select('id, full_name, last_name, role, crmv, phone, specialties, nickname, photo_url, address, is_active, room, electronic_signature_url, appointment_interval_minutes')
       .eq('clinic_id', profile.clinic_id)
       .eq('is_sysmax', false)
       .order('full_name'),

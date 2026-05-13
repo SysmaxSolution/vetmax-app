@@ -6,6 +6,7 @@ import {
   CheckCircle2, AlertCircle, Save, ToggleLeft, ToggleRight, Megaphone,
 } from 'lucide-react'
 import { getBotConfig, saveBotConfig, type BotConfig } from '@/lib/actions/whatsapp-bot'
+import { getDailyAlertTime, setDailyAlertTime } from '@/lib/actions/clinic-settings'
 import WhatsappCampaignSettings from './WhatsappCampaignSettings'
 
 interface Props {
@@ -201,7 +202,25 @@ function ConnectedSection({ instanceName, onReconnect, connecting, onToast }: {
   connecting:   boolean
   onToast:      (type: 'success' | 'error', message: string) => void
 }) {
-  const [activeTab, setActiveTab] = useState<'bot' | 'campaigns'>('bot')
+  const [activeTab, setActiveTab]       = useState<'bot' | 'campaigns'>('bot')
+  const [alertTime, setAlertTime]       = useState('')
+  const [savingAlert, setSavingAlert]   = useState(false)
+  const [alertLoaded, setAlertLoaded]   = useState(false)
+
+  useEffect(() => {
+    getDailyAlertTime().then(res => {
+      if (!('error' in res)) setAlertTime(res.alertTime ?? '')
+      setAlertLoaded(true)
+    })
+  }, [])
+
+  async function handleSaveAlertTime() {
+    setSavingAlert(true)
+    const res = await setDailyAlertTime(alertTime || null)
+    setSavingAlert(false)
+    onToast('error' in res ? 'error' : 'success',
+      'error' in res ? res.error : 'Horário de disparo salvo!')
+  }
 
   return (
     <div>
@@ -253,6 +272,46 @@ function ConnectedSection({ instanceName, onReconnect, connecting, onToast }: {
       {activeTab === 'bot'
         ? <BotPersonalityForm onToast={onToast} />
         : <WhatsappCampaignSettings onToast={onToast} />}
+
+      {/* Disparo Diário da Agenda */}
+      {alertLoaded && (
+        <div className="border-t border-slate-100 px-6 py-5">
+          <div className="flex items-start gap-3">
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-slate-800">Disparo Diário da Agenda</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Cada profissional recebe no WhatsApp a lista de atendimentos do dia neste horário.
+              </p>
+            </div>
+          </div>
+          <div className="mt-3 flex items-center gap-3">
+            <input
+              type="time"
+              value={alertTime}
+              onChange={e => setAlertTime(e.target.value)}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+            />
+            <button
+              type="button"
+              onClick={handleSaveAlertTime}
+              disabled={savingAlert}
+              className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50"
+            >
+              {savingAlert ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              {savingAlert ? 'Salvando...' : 'Salvar'}
+            </button>
+            {alertTime && (
+              <button
+                type="button"
+                onClick={() => { setAlertTime(''); setDailyAlertTime(null) }}
+                className="px-3 py-2 text-xs text-slate-500 hover:text-red-600 transition-colors"
+              >
+                Remover
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

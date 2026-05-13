@@ -7,35 +7,37 @@ import { revalidatePath } from 'next/cache'
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
 export interface ClinicUserFull {
-  id:                       string
-  full_name:                string
-  last_name:                string | null
-  role:                     string
-  crmv:                     string | null
-  phone:                    string | null
-  specialties:              string[] | null
-  nickname:                 string | null
-  photo_url:                string | null
-  address:                  string | null
-  is_active:                boolean | null
-  room:                     string | null
-  electronic_signature_url: string | null
+  id:                          string
+  full_name:                   string
+  last_name:                   string | null
+  role:                        string
+  crmv:                        string | null
+  phone:                       string | null
+  specialties:                 string[] | null
+  nickname:                    string | null
+  photo_url:                   string | null
+  address:                     string | null
+  is_active:                   boolean | null
+  room:                        string | null
+  electronic_signature_url:    string | null
+  appointment_interval_minutes: number | null
 }
 
 export interface AdminUpdateUserPayload {
-  userId:                   string
-  full_name?:               string
-  last_name?:               string | null
-  role?:                    string
-  crmv?:                    string | null
-  phone?:                   string | null
-  specialties?:             string[]
-  nickname?:                string | null
-  address?:                 string | null
-  is_active?:               boolean
-  room?:                    string | null
-  photo_url?:               string | null
-  electronic_signature_url?: string | null
+  userId:                       string
+  full_name?:                   string
+  last_name?:                   string | null
+  role?:                        string
+  crmv?:                        string | null
+  phone?:                       string | null
+  specialties?:                 string[]
+  nickname?:                    string | null
+  address?:                     string | null
+  is_active?:                   boolean
+  room?:                        string | null
+  photo_url?:                   string | null
+  electronic_signature_url?:    string | null
+  appointment_interval_minutes?: number | null
 }
 
 // ─── Admin: atualizar perfil completo de qualquer usuário ─────────────────────
@@ -67,8 +69,9 @@ export async function adminUpdateUser(
   if (fields.address    !== undefined) patch.address    = fields.address?.trim() || null
   if (fields.is_active  !== undefined) patch.is_active  = fields.is_active
   if (fields.room       !== undefined) patch.room       = fields.room?.trim() || null
-  if ('photo_url' in fields)               patch.photo_url               = fields.photo_url
-  if ('electronic_signature_url' in fields) patch.electronic_signature_url = fields.electronic_signature_url
+  if ('photo_url' in fields)                    patch.photo_url                    = fields.photo_url
+  if ('electronic_signature_url' in fields)    patch.electronic_signature_url    = fields.electronic_signature_url
+  if ('appointment_interval_minutes' in fields) patch.appointment_interval_minutes = fields.appointment_interval_minutes
 
   const admin = createAdminClient()
   const { error } = await admin

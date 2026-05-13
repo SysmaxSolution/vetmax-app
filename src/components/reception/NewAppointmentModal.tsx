@@ -9,7 +9,7 @@ import { sendWhatsAppMessage } from '@/lib/actions/whatsapp'
 import { useModules } from '@/components/providers/ModulesProvider'
 import { DateInput, TimePicker, DateTimePicker } from '@/components/ui/DatePicker'
 import { getClinicProfessionals, type ClinicProfessional } from '@/lib/actions/professionals'
-import { getProfessionalSlots } from '@/lib/actions/appointment-slots'
+import { getProfessionalSlots, checkProfessionalAvailability } from '@/lib/actions/appointment-slots'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -219,6 +219,16 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
 
     // ── Fluxo Consulta ──
     if (!date || !time) { setError('Selecione a data e horário.'); return }
+
+    // Validação server-side de conflito de horário
+    if (professionalId) {
+      const check = await checkProfessionalAvailability(professionalId, date, time)
+      if ('error' in check) { setError(check.error); return }
+      if (!check.available) {
+        setError('Horário indisponível para este profissional.')
+        return
+      }
+    }
 
     setSubmitting(true)
     setError(null)

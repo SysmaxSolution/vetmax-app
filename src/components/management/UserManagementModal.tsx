@@ -76,9 +76,10 @@ export default function UserManagementModal({
   const [nickname,   setNickname]   = useState(user?.nickname ?? '')
   const [specialties, setSpecialties] = useState<string[]>(user?.specialties ?? [])
   const [room,       setRoom]       = useState(user?.room ?? '')
-  const [isActive,   setIsActive]   = useState(user?.is_active ?? true)
-  const [photoUrl,   setPhotoUrl]   = useState<string | null>(user?.photo_url ?? null)
-  const [signatureUrl, setSignatureUrl] = useState<string | null>(user?.electronic_signature_url ?? null)
+  const [isActive,            setIsActive]            = useState(user?.is_active ?? true)
+  const [photoUrl,            setPhotoUrl]            = useState<string | null>(user?.photo_url ?? null)
+  const [signatureUrl,        setSignatureUrl]        = useState<string | null>(user?.electronic_signature_url ?? null)
+  const [appointmentInterval, setAppointmentInterval] = useState<string>(String(user?.appointment_interval_minutes ?? 60))
 
   // ── Senha ──────────────────────────────────────────────────────────────────
   const [newPassword,    setNewPassword]    = useState('')
@@ -114,12 +115,14 @@ export default function UserManagementModal({
     if (!fullName.trim()) { setError('Nome é obrigatório.'); return }
     if (!user) return  // criação via convite, não via este modal
     setSaving(true); setError(null)
+    const intervalNum = parseInt(appointmentInterval, 10)
     const res = await adminUpdateUser({
       userId: user.id,
       full_name: fullName, last_name: lastName,
       role, crmv: crmv || null, phone: phone || null,
       address: address || null, nickname: nickname || null,
       specialties, room: room || null, is_active: isActive,
+      appointment_interval_minutes: (!isNaN(intervalNum) && intervalNum > 0) ? intervalNum : 60,
     })
     setSaving(false)
     if ('error' in res) { setError(res.error); return }
@@ -336,6 +339,27 @@ export default function UserManagementModal({
                   </select>
                 </div>
               </div>
+
+              {/* Intervalo de Agendamento — apenas para vets e assistentes */}
+              {(role === 'vet' || role === 'assistant') && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">
+                    Intervalo de Agendamento (minutos)
+                  </label>
+                  <input
+                    type="number"
+                    min="15"
+                    max="240"
+                    step="15"
+                    value={appointmentInterval}
+                    onChange={e => setAppointmentInterval(e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                  />
+                  <p className="mt-1 text-[11px] text-slate-400">
+                    Duração padrão de cada consulta deste profissional na agenda
+                  </p>
+                </div>
+              )}
 
               {/* Especialidades */}
               <div>

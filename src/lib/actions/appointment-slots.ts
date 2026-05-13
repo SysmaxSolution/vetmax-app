@@ -63,3 +63,31 @@ export async function getProfessionalSlots(
     intervalMinutes,
   }
 }
+
+/** Verifica se um horário está disponível para um profissional em uma data.
+ *  Retorna `{ available: true }` ou `{ available: false, conflictAt: 'HH:MM' }`.
+ */
+export async function checkProfessionalAvailability(
+  professionalId: string,
+  date: string,   // yyyy-MM-dd
+  time: string,   // HH:MM
+): Promise<{ available: true } | { available: false; conflictAt: string } | { error: string }> {
+  const slots = await getProfessionalSlots(professionalId, date)
+  if ('error' in slots) return { error: slots.error }
+
+  const step     = slots.intervalMinutes > 0 ? slots.intervalMinutes : 60
+  const [hh, mm] = time.split(':').map(Number)
+  const startMin = hh * 60 + mm
+
+  // Verifica todos os slots que o novo agendamento ocuparia
+  for (let offset = 0; offset < step; offset += 30) {
+    const total  = startMin + offset
+    const slotHH = String(Math.floor(total / 60)).padStart(2, '0')
+    const slotMM = String(total % 60).padStart(2, '0')
+    const slot   = `${slotHH}:${slotMM}`
+    if (slots.bookedTimes.includes(slot)) {
+      return { available: false, conflictAt: slot }
+    }
+  }
+  return { available: true }
+}

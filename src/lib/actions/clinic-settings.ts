@@ -328,6 +328,52 @@ export async function updateRequiredFields(
   return { success: true }
 }
 
+// ─── Daily Schedule Alert Time ────────────────────────────────────────────────
+
+export async function getDailyAlertTime(): Promise<{ alertTime: string | null } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const { data: profile } = await supabase
+    .from('profiles').select('clinic_id').eq('id', user.id).single()
+  if (!profile?.clinic_id) return { error: 'Clínica não encontrada.' }
+
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from('clinic_settings')
+    .select('daily_schedule_alert_time')
+    .eq('clinic_id', profile.clinic_id)
+    .maybeSingle()
+
+  return { alertTime: data?.daily_schedule_alert_time ?? null }
+}
+
+export async function setDailyAlertTime(
+  alertTime: string | null, // 'HH:MM' ou null para desabilitar
+): Promise<{ success: true } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const { data: profile } = await supabase
+    .from('profiles').select('clinic_id, role').eq('id', user.id).single()
+  if (!profile?.clinic_id) return { error: 'Clínica não encontrada.' }
+  if (profile.role !== 'admin') return { error: 'Apenas administradores podem alterar configurações.' }
+
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('clinic_settings')
+    .upsert(
+      { clinic_id: profile.clinic_id, daily_schedule_alert_time: alertTime },
+      { onConflict: 'clinic_id' }
+    )
+
+  if (error) return { error: error.message }
+  revalidatePath('/dashboard/management')
+  return { success: true }
+}
+
 // ─── Remove Logo ──────────────────────────────────────────────────────────────
 
 export async function removeClinicLogo(): Promise<{ success: true } | { error: string }> {
