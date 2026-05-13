@@ -157,9 +157,14 @@ function EventCard({
   const canCancelGrooming = !isAppt && (event.status === 'received' || event.status === 'scheduled')
 
   return (
-    <div className={`rounded-xl border p-3 space-y-2.5 ${
-      isAppt ? 'border-blue-100 bg-blue-50/40' : 'border-emerald-100 bg-emerald-50/40'
-    }`}>
+    <div
+      className={`rounded-xl border p-3 space-y-2.5 ${
+        isAppt
+          ? 'border-blue-100 bg-blue-50/40 cursor-pointer hover:bg-blue-100/60 transition-colors'
+          : 'border-emerald-100 bg-emerald-50/40'
+      }`}
+      onClick={isAppt ? onEdit : undefined}
+    >
       <div className="flex items-start gap-2.5">
         {/* Time chip */}
         <div className={`flex-shrink-0 rounded-lg px-2.5 py-1.5 text-center min-w-[52px] ${
@@ -197,7 +202,7 @@ function EventCard({
           </p>
         </div>
       </div>
-      <div className="flex gap-2">
+      <div className="flex gap-2" onClick={e => e.stopPropagation()}>
         {/* Ações para consulta agendada */}
         {canActAppt && (
           <>

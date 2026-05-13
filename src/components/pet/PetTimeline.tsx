@@ -486,6 +486,7 @@ interface Props {
   events: TimelineEvent[]
   onPrint?: (data: PrintState) => void
   onEdit?: (consultationId: string) => void
+  onEditAppointment?: (appointmentId: string) => void
 }
 
 function isToday(iso: string) {
@@ -785,7 +786,7 @@ function EventDetailModal({ event, onClose }: { event: TimelineEvent; onClose: (
   )
 }
 
-export default function PetTimeline({ events, onPrint, onEdit }: Props) {
+export default function PetTimeline({ events, onPrint, onEdit, onEditAppointment }: Props) {
   const [filterType, setFilterType] = useState<TimelineEventType | 'all'>('all')
   const [filterDate, setFilterDate] = useState('')
   const [showFilters, setShowFilters] = useState(false)
@@ -898,12 +899,26 @@ export default function PetTimeline({ events, onPrint, onEdit }: Props) {
                         </button>
                       )}
                     </div>
-                    {/* Card — clicável para ver detalhes completos */}
+                    {/* Card — clicável para editar agendamentos ou ver detalhes */}
                     <div
                       role="button"
                       tabIndex={0}
-                      onClick={() => setExpandedEvent(event)}
-                      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setExpandedEvent(event) }}
+                      onClick={() => {
+                        if (onEditAppointment && event.type === 'appointment' && event.appointment) {
+                          onEditAppointment(event.appointment.id)
+                        } else {
+                          setExpandedEvent(event)
+                        }
+                      }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          if (onEditAppointment && event.type === 'appointment' && event.appointment) {
+                            onEditAppointment(event.appointment.id)
+                          } else {
+                            setExpandedEvent(event)
+                          }
+                        }
+                      }}
                       className="cursor-pointer rounded-xl hover:ring-2 hover:ring-teal-400/50 hover:ring-offset-1 focus:outline-none focus:ring-2 focus:ring-teal-400/50 transition-all"
                     >
                       {event.type === 'checkin'                   && <CheckInCard event={event} />}

@@ -8,6 +8,7 @@ import { getPatientVaccines, type PatientVaccine } from '@/lib/actions/vaccines'
 import PetTimeline from './PetTimeline'
 import VaccinationCard from '@/components/vet/VaccinationCard'
 import NewAppointmentModal from '@/components/reception/NewAppointmentModal'
+import EditAppointmentModal from '@/components/reception/EditAppointmentModal'
 import type { PrintState } from '@/components/vet/DocumentsSection'
 import type { ExtractedField } from '@/types'
 
@@ -47,6 +48,7 @@ export default function PetTimelineModal({
   const [error, setError] = useState<string | null>(null)
   const [printData, setPrintData] = useState<PrintState | null>(null)
   const [showSchedule, setShowSchedule] = useState(false)
+  const [editApptId, setEditApptId] = useState<string | null>(null)
   const [vaccines, setVaccines] = useState<PatientVaccine[]>([])
   const hasMounted = useRef(false)
 
@@ -235,7 +237,11 @@ export default function PetTimelineModal({
                 {error}
               </div>
             ) : (
-              <PetTimeline events={events} onPrint={handlePrint} />
+              <PetTimeline
+                events={events}
+                onPrint={handlePrint}
+                onEditAppointment={id => setEditApptId(id)}
+              />
             )}
           </div>
         </div>
@@ -253,6 +259,20 @@ export default function PetTimelineModal({
             tutorId:   tutorId,
             tutorName: tutorName,
           } : undefined}
+        />
+      )}
+
+      {/* Editar Agendamento (clique no card da timeline) */}
+      {editApptId && (
+        <EditAppointmentModal
+          appointmentId={editApptId}
+          onClose={() => setEditApptId(null)}
+          onSuccess={() => {
+            setEditApptId(null)
+            getPetTimeline(petId).then(res => {
+              if (!('error' in res)) setEvents(res)
+            })
+          }}
         />
       )}
     </>
