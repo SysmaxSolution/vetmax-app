@@ -653,3 +653,73 @@ test.setTimeout(180_000)
 | `vet-module` TC-VET-002 | 0ms ✘ crash | 12.3s ✅ | ✅ |
 | `vet-module` TC-VET-003 a TC-VET-008 | 0ms ✘ cascata | 10–23s ✅ | ✅ |
 | 50 specs `_serverAlive` guard | porta 3000 → skip always | porta 4000 → server alive correto | ✅ |
+
+---
+
+## 📊 Baseline E2E Completo — 2026-05-12
+
+**Branch:** main · Bypass mode · Claude Code  
+**Run:** PID 6064 · todos os projetos (chromium + 4 mobile + 2 tablet) · servidor quente  
+**Duração:** 2.4h
+
+### Placar Geral
+
+| Métrica | Valor |
+|---|---|
+| ✅ Passed | **599** |
+| ❌ Failed | **85** |
+| ⏭ Skipped | **393** |
+| **Total** | **1077** |
+| Duração | **2.4h** |
+
+### Comparativo de Evolução
+
+| Run | Passed | Failed | Skipped | Contexto |
+|---|---|---|---|---|
+| `bnpf6x1dk` (cold-start) | 27 | 119 | 451 | chromium, servidor frio |
+| `bdft30xwx` (servidor quente) | 49 | 0 | 3 | chromium, 52 testes (vet+mentor) |
+| **Baseline completo** | **599** | **85** | **393** | todos projetos, servidor quente |
+
+### Falhas Agrupadas por Spec File
+
+| Spec File | ❌ | Observação |
+|---|---|---|
+| `responsive-mobile.spec.ts` | **69** | CSS/layout: chromium×2, iphone-se×58, pixel5×4, ipad-mini×2, ipad-pro×3 |
+| `sprint-master-r02-double-click.spec.ts` | 2 | TC-R02-02, TC-R02-05 |
+| `patients-module.spec.ts` | 2 | TC-PAC-02, TC-PAC-03 |
+| `sprint-master-i02-discharge-report.spec.ts` | 1 | TC-I02-03 |
+| `sprint-master-g04-hospitalization-voice.spec.ts` | 1 | TC-G04-01 |
+| `triage-module.spec.ts` | 1 | TC-TRG-02 |
+| `compliance-sprint3.spec.ts` | 1 | TC-TUTOR-DASH-03 |
+| `cashier-unification.spec.ts` | 1 | TC-UNI-04 |
+| `mentor-resilience.spec.ts` | 1 | — |
+| `phase5-billing-management.spec.ts` | 1 | TC-BIL-005 |
+| `sprint-master-mobile.spec.ts` | 1 | TC-MOB-SM-07 (tablet-ipad-mini) |
+| `grooming-module.spec.ts` | 1 | TC-GRM-013 |
+| `sprint-master-r01-r03-r04.spec.ts` | 1 | R-01-02 |
+| `hospitalization-module.spec.ts` | 1 | TC-INT-02 |
+| `sprint-master-g08-rbac.spec.ts` | 1 | TC-G08-02 |
+
+### Análise — Separação por Categoria
+
+**69 de 85 falhas (81%)** são exclusivamente de CSS/layout responsivo (`responsive-mobile.spec.ts`) — sem impacto na lógica de negócio.
+
+**16 falhas funcionais (chromium):**
+
+| Prioridade | Specs | Falhas |
+|---|---|---|
+| P1 — Fluxo clínico | `patients-module`, `triage-module`, `hospitalization-module` | 4 |
+| P1 — Sprint Master | `r02-double-click`, `i02-discharge`, `g04-voice`, `g08-rbac`, `r01-r03-r04` | 6 |
+| P2 — Módulos | `cashier-unification`, `grooming-module`, `phase5-billing`, `compliance-sprint3` | 4 |
+| P2 — Resiliência | `mentor-resilience` | 1 |
+| P3 — Mobile SM | `sprint-master-mobile` (tablet) | 1 |
+
+### Próximos Passos
+
+| # | Ação | Prioridade | Impacto |
+|---|---|---|---|
+| 1 | Corrigir 69 falhas CSS/layout em `responsive-mobile.spec.ts` | P1 | 81% das falhas |
+| 2 | Investigar 4 falhas de fluxo clínico (patients, triage, hospitalization) | P1 | 4 testes |
+| 3 | Corrigir 6 falhas Sprint Master funcionais (r02, i02, g04, g08, r01) | P1 | 6 testes |
+| 4 | Corrigir 4 falhas de módulos (cashier, grooming, billing, compliance) | P2 | 4 testes |
+| 5 | Investigar `mentor-resilience` + `sprint-master-mobile` tablet | P3 | 2 testes |
