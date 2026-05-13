@@ -62,15 +62,18 @@ CREATE TRIGGER trg_purchase_orders_updated_at
 ALTER TABLE purchase_orders       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE purchase_order_items  ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "clinic_staff_view_purchase_orders" ON purchase_orders;
 CREATE POLICY "clinic_staff_view_purchase_orders"
   ON purchase_orders FOR SELECT
   USING (clinic_id = get_user_clinic_id());
 
+DROP POLICY IF EXISTS "managers_manage_purchase_orders" ON purchase_orders;
 CREATE POLICY "managers_manage_purchase_orders"
   ON purchase_orders FOR ALL
   USING  (clinic_id = get_user_clinic_id())
   WITH CHECK (clinic_id = get_user_clinic_id());
 
+DROP POLICY IF EXISTS "clinic_staff_view_purchase_order_items" ON purchase_order_items;
 CREATE POLICY "clinic_staff_view_purchase_order_items"
   ON purchase_order_items FOR SELECT
   USING (
@@ -79,6 +82,7 @@ CREATE POLICY "clinic_staff_view_purchase_order_items"
     )
   );
 
+DROP POLICY IF EXISTS "managers_manage_purchase_order_items" ON purchase_order_items;
 CREATE POLICY "managers_manage_purchase_order_items"
   ON purchase_order_items FOR ALL
   USING (
