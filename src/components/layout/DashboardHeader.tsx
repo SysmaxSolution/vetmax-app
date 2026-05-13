@@ -2,7 +2,11 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LogOut, Home, Stethoscope, TestTubes, Users, BarChart3, PawPrint, BedDouble, Package, Scissors, Banknote, FolderKanban, MessageCircle, ShoppingCart, Activity, ClipboardList, DollarSign } from 'lucide-react'
+<<<<<<< HEAD
+import { LogOut, Home, Stethoscope, TestTubes, Users, BarChart3, PawPrint, BedDouble, Package, Scissors, Banknote, FolderKanban, MessageCircle, ShoppingCart, Activity, ClipboardList, DollarSign, FileBarChart2 } from 'lucide-react'
+=======
+import { LogOut, Home, Stethoscope, TestTubes, Users, BarChart3, PawPrint, BedDouble, Package, Scissors, Banknote, FolderKanban, MessageCircle, ShoppingCart, Activity, ClipboardList, FileBarChart2 } from 'lucide-react'
+>>>>>>> worktree-agent-a9eafb207b5ec867b
 import type { UserRole } from '@/types'
 import { useState } from 'react'
 import { ClinicSwitcher } from '@/components/layout/ClinicSwitcher'
@@ -40,6 +44,7 @@ const ALL_TABS: Tab[] = [
   { label: 'WhatsApp',   href: '/dashboard/whatsapp',         icon: MessageCircle,  roles: ['receptionist','admin','vet','assistant'], moduleKey: 'whatsapp_intelligent' },
   { label: 'Compras',    href: '/dashboard/purchases',        icon: ClipboardList,  roles: ['admin'],                                  moduleKey: 'purchases' },
   { label: 'Financeiro', href: '/dashboard/financial',        icon: DollarSign,     roles: ['admin'],                                  moduleKey: 'financial' },
+  { label: 'Relatórios', href: '/dashboard/reports',          icon: FileBarChart2,  roles: ['admin'] },
 ]
 
 // ─── Props ────────────────────────────────────────────────────────────────────
