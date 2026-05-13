@@ -65,7 +65,7 @@ export interface FinancialReportSummary {
     payment_method: string | null
     status:         string
     due_date:       string | null
-    paid_at:        string | null
+    paid_at:        string | null   // mapped from payment_date
   }>
 }
 
@@ -314,7 +314,7 @@ export async function getFinancialReport(params: {
 
   let q = admin
     .from('financial_entries')
-    .select('id, type, amount, description, category, payment_method, status, due_date, paid_at, created_at')
+    .select('id, type, amount, description, category, payment_method, status, due_date, payment_date, created_at')
     .eq('clinic_id', ctx.clinic_id)
     .gte('created_at', params.from)
     .lte('created_at', params.to + 'T23:59:59')
@@ -366,7 +366,7 @@ export async function getFinancialReport(params: {
       payment_method: r.payment_method ?? null,
       status:         r.status,
       due_date:       r.due_date ?? null,
-      paid_at:        r.paid_at  ?? null,
+      paid_at:        (r as any).payment_date ?? null,
     })),
   }
 }
@@ -386,11 +386,11 @@ export async function getDREReport(params: {
   const admin = createAdminClient()
   const { data, error } = await admin
     .from('financial_entries')
-    .select('type, amount, category, status, paid_at')
+    .select('type, amount, category, status, payment_date')
     .eq('clinic_id', ctx.clinic_id)
     .eq('status', 'paid')
-    .gte('paid_at', params.from)
-    .lte('paid_at', params.to + 'T23:59:59')
+    .gte('payment_date', params.from)
+    .lte('payment_date', params.to + 'T23:59:59')
 
   if (error) return { error: error.message }
 
@@ -462,8 +462,8 @@ export async function getCurvaABCReport(params: {
     .eq('clinic_id', ctx.clinic_id)
     .eq('type', 'inflow')
     .eq('status', 'paid')
-    .gte('paid_at', params.from)
-    .lte('paid_at', params.to + 'T23:59:59')
+    .gte('payment_date', params.from)
+    .lte('payment_date', params.to + 'T23:59:59')
 
   if (params.type === 'services') {
     q = q.ilike('category', '%servi%')
