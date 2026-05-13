@@ -13,6 +13,7 @@ export const MODULE_THEME = {
   management:      { bg: 'bg-slate-200',   bgIntense: 'bg-slate-300',    active: 'bg-slate-700',   hover: 'hover:bg-slate-300 hover:text-slate-800' },
   whatsapp:        { bg: 'bg-green-50',    bgIntense: 'bg-green-100',    active: 'bg-green-500',   hover: 'hover:bg-green-100 hover:text-green-600' },
   purchases:       { bg: 'bg-purple-50',  bgIntense: 'bg-purple-100',   active: 'bg-purple-600',  hover: 'hover:bg-purple-100 hover:text-purple-700' },
+  reports:         { bg: 'bg-violet-50',  bgIntense: 'bg-violet-100',   active: 'bg-violet-600',  hover: 'hover:bg-violet-100 hover:text-violet-700' },
 } as const
 
 export type ModuleKey = keyof typeof MODULE_THEME
@@ -33,6 +34,7 @@ const PATH_TO_MODULE: Record<string, ModuleKey> = {
   '/dashboard/management':      'management',
   '/dashboard/whatsapp':        'whatsapp',
   '/dashboard/purchases':       'purchases',
+  '/dashboard/reports':         'reports',
 }
 
 export function getModuleFromPath(pathname: string): ModuleKey | null {

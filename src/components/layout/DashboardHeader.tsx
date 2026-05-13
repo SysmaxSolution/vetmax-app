@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LogOut, Home, Stethoscope, TestTubes, Users, BarChart3, PawPrint, BedDouble, Package, Scissors, Banknote, FolderKanban, MessageCircle, ShoppingCart, Activity, ClipboardList } from 'lucide-react'
+import { LogOut, Home, Stethoscope, TestTubes, Users, BarChart3, PawPrint, BedDouble, Package, Scissors, Banknote, FolderKanban, MessageCircle, ShoppingCart, Activity, ClipboardList, FileBarChart2 } from 'lucide-react'
 import type { UserRole } from '@/types'
 import { useState } from 'react'
 import { ClinicSwitcher } from '@/components/layout/ClinicSwitcher'
@@ -38,7 +38,8 @@ const ALL_TABS: Tab[] = [
   { label: 'Cadastros',   href: '/dashboard/registry',         icon: FolderKanban,roles: ['admin','accountant' as UserRole,'receptionist'] },
   { label: 'Gestão',      href: '/dashboard/management',       icon: BarChart3,     roles: ['admin'] },
   { label: 'WhatsApp',   href: '/dashboard/whatsapp',         icon: MessageCircle,  roles: ['receptionist','admin','vet','assistant'], moduleKey: 'whatsapp_intelligent' },
-  { label: 'Compras',    href: '/dashboard/purchases',        icon: ClipboardList,  roles: ['admin'],                                  moduleKey: 'purchases' },
+  { label: 'Compras',    href: '/dashboard/purchases',        icon: ClipboardList,   roles: ['admin'],                                  moduleKey: 'purchases' },
+  { label: 'Relatórios', href: '/dashboard/reports',          icon: FileBarChart2,   roles: ['admin'] },
 ]
 
 // ─── Props ────────────────────────────────────────────────────────────────────
