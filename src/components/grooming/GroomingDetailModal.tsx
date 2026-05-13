@@ -1438,7 +1438,7 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
                     setErrorToast('Erro ao cadastrar: ' + res.error)
                     setTimeout(() => setErrorToast(null), 4000)
                   } else {
-                    setCatalog(prev => [...prev, { id: res.id, name: res.name, price: res.price }])
+                    setCatalog(prev => [...prev, { id: res.id, name: res.name, price: res.unit_price ?? 0 }])
                     setSaveToast(`"${res.name}" cadastrado no catálogo!`)
                     setTimeout(() => setSaveToast(null), 3000)
                   }

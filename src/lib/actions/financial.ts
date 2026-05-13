@@ -10,27 +10,39 @@ export type EntryStatus = 'pending' | 'paid' | 'cancelled'
 export type EntrySource = 'manual' | 'cashier'
 
 export interface FinancialEntry {
-  id:                  string
-  clinic_id:           string
-  type:                EntryType
-  description:         string
-  amount:              number
-  due_date:            string
-  payment_date:        string | null
-  status:              EntryStatus
-  payment_method:      string | null
-  tutor_id:            string | null
-  patient_id:          string | null
-  category:            string | null
-  notes:               string | null
-  created_by:          string | null
-  created_at:          string
-  updated_at:          string
-  tutor_name:          string | null
-  patient_name:        string | null
-  source:              EntrySource
-  cashier_entry_id:    string | null
-  cashier_outflow_id:  string | null
+  id:                   string
+  clinic_id:            string
+  type:                 EntryType
+  description:          string
+  amount:               number
+  discount:             number
+  interest:             number
+  due_date:             string
+  payment_date:         string | null
+  status:               EntryStatus
+  payment_method:       string | null
+  tutor_id:             string | null
+  patient_id:           string | null
+  category:             string | null
+  notes:                string | null
+  created_by:           string | null
+  created_at:           string
+  updated_at:           string
+  // campos novos
+  document_number:      string | null
+  professional_id:      string | null
+  chart_of_accounts_id: string | null
+  settlement_bank_id:   string | null
+  // joins
+  tutor_name:           string | null
+  patient_name:         string | null
+  professional_name:    string | null
+  chart_account_label:  string | null
+  settlement_bank_name: string | null
+  // meta
+  source:               EntrySource
+  cashier_entry_id:     string | null
+  cashier_outflow_id:   string | null
 }
 
 export interface FinancialSummary {
@@ -53,15 +65,26 @@ export interface ListEntriesFilters {
 }
 
 export interface CreateEntryData {
-  type:            EntryType
-  description:     string
-  amount:          number
-  due_date:        string
-  payment_method?: string
-  tutor_id?:       string
-  patient_id?:     string
-  category?:       string
-  notes?:          string
+  type:                 EntryType
+  description:          string
+  amount:               number
+  due_date:             string
+  discount?:            number
+  payment_method?:      string
+  tutor_id?:            string
+  patient_id?:          string
+  category?:            string
+  notes?:               string
+  professional_id?:     string
+  chart_of_accounts_id?: string
+}
+
+export interface BaixarTituloData {
+  payment_date:        string
+  payment_method:      string
+  settlement_bank_id?: string
+  interest?:           number
+  discount?:           number
 }
 
 // ─── Types G-10 ───────────────────────────────────────────────────────────────
@@ -213,24 +236,28 @@ export async function createEntry(
   const { data: entry, error } = await admin
     .from('financial_entries')
     .insert({
-      clinic_id:      clinicId,
-      type:           data.type,
-      description:    data.description.trim(),
-      amount:         data.amount,
-      due_date:       data.due_date,
-      payment_method: data.payment_method || null,
-      tutor_id:       data.tutor_id       || null,
-      patient_id:     data.patient_id     || null,
-      category:       data.category       || null,
-      notes:          data.notes          || null,
-      created_by:     user.id,
-      status:         'pending',
+      clinic_id:            clinicId,
+      type:                 data.type,
+      description:          data.description.trim(),
+      amount:               data.amount,
+      discount:             data.discount ?? 0,
+      due_date:             data.due_date,
+      payment_method:       data.payment_method       || null,
+      tutor_id:             data.tutor_id             || null,
+      patient_id:           data.patient_id           || null,
+      category:             data.category             || null,
+      notes:                data.notes                || null,
+      professional_id:      data.professional_id      || null,
+      chart_of_accounts_id: data.chart_of_accounts_id || null,
+      created_by:           user.id,
+      status:               'pending',
+      // document_number e professional_id preenchidos pelo trigger trg_fe_defaults
     })
-    .select('*, tutors(name), patients(name)')
+    .select(ENTRY_SELECT)
     .single()
 
   if (error) return { error: 'Erro ao criar título: ' + error.message }
-  return mapEntry(entry)
+  return mapEntry(entry as unknown as Record<string, unknown>)
 }
 
 // ─── listEntries ──────────────────────────────────────────────────────────────
@@ -244,7 +271,7 @@ export async function listEntries(
   const admin = createAdminClient()
   let query = admin
     .from('financial_entries')
-    .select('*, tutors(name), patients(name)')
+    .select(ENTRY_SELECT)
     .eq('clinic_id', clinicId)
     .eq('type', filters.type)
     .order('due_date', { ascending: true })
@@ -263,7 +290,7 @@ export async function listEntries(
 
   const { data, error } = await query.limit(500)
   if (error) return { error: 'Erro ao buscar títulos: ' + error.message }
-  return (data ?? []).map(mapEntry)
+  return (data ?? []).map(row => mapEntry(row as unknown as Record<string, unknown>))
 }
 
 // ─── updateEntry ──────────────────────────────────────────────────────────────
@@ -276,14 +303,17 @@ export async function updateEntry(
   if (!clinicId) return { error: 'Não autenticado.' }
 
   const updates: Record<string, unknown> = {}
-  if (data.description !== undefined) updates.description = data.description.trim()
-  if (data.amount       !== undefined) updates.amount      = data.amount
-  if (data.due_date     !== undefined) updates.due_date    = data.due_date
-  if (data.payment_method !== undefined) updates.payment_method = data.payment_method || null
-  if (data.tutor_id     !== undefined) updates.tutor_id    = data.tutor_id    || null
-  if (data.patient_id   !== undefined) updates.patient_id  = data.patient_id  || null
-  if (data.category     !== undefined) updates.category    = data.category    || null
-  if (data.notes        !== undefined) updates.notes       = data.notes       || null
+  if (data.description          !== undefined) updates.description          = data.description.trim()
+  if (data.amount               !== undefined) updates.amount               = data.amount
+  if (data.discount             !== undefined) updates.discount             = data.discount ?? 0
+  if (data.due_date             !== undefined) updates.due_date             = data.due_date
+  if (data.payment_method       !== undefined) updates.payment_method       = data.payment_method       || null
+  if (data.tutor_id             !== undefined) updates.tutor_id             = data.tutor_id             || null
+  if (data.patient_id           !== undefined) updates.patient_id           = data.patient_id           || null
+  if (data.category             !== undefined) updates.category             = data.category             || null
+  if (data.notes                !== undefined) updates.notes                = data.notes                || null
+  if (data.professional_id      !== undefined) updates.professional_id      = data.professional_id      || null
+  if (data.chart_of_accounts_id !== undefined) updates.chart_of_accounts_id = data.chart_of_accounts_id || null
 
   const admin = createAdminClient()
   const { error } = await admin
@@ -358,7 +388,14 @@ export async function reverseFinancialEntry(
 
     const { error: updErr } = await admin
       .from('financial_entries')
-      .update({ status: newStatus, payment_date: null, updated_at: new Date().toISOString() })
+      .update({
+        status:             newStatus,
+        payment_date:       null,
+        payment_method:     null,
+        settlement_bank_id: null,
+        interest:           0,
+        updated_at:         new Date().toISOString(),
+      })
       .eq('id', id)
       .eq('clinic_id', clinicId)
 
@@ -388,7 +425,7 @@ export async function reverseFinancialEntry(
 
 export async function baixarTitulo(
   id: string,
-  data: { payment_date: string; payment_method: string; amount?: number }
+  data: BaixarTituloData
 ): Promise<{ error?: string }> {
   if (!data.payment_date)   return { error: 'Data de recebimento obrigatória.' }
   if (!data.payment_method) return { error: 'Modalidade de recebimento obrigatória.' }
@@ -397,11 +434,13 @@ export async function baixarTitulo(
   if (!clinicId) return { error: 'Não autenticado.' }
 
   const updates: Record<string, unknown> = {
-    status:         'paid',
-    payment_date:   data.payment_date,
-    payment_method: data.payment_method,
+    status:             'paid',
+    payment_date:       data.payment_date,
+    payment_method:     data.payment_method,
+    settlement_bank_id: data.settlement_bank_id || null,
+    interest:           data.interest ?? 0,
   }
-  if (data.amount && data.amount > 0) updates.amount = data.amount
+  if (data.discount !== undefined) updates.discount = data.discount
 
   const admin = createAdminClient()
   const { error } = await admin
@@ -860,6 +899,21 @@ export async function importEmployeesFromProfiles(): Promise<{ imported: number;
   return { imported }
 }
 
+// ─── listClinicProfiles ───────────────────────────────────────────────────────
+
+export async function listClinicProfiles(): Promise<{ id: string; full_name: string; role: string }[]> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return []
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from('profiles')
+    .select('id, full_name, role')
+    .eq('clinic_id', clinicId)
+    .eq('is_active', true)
+    .order('full_name')
+  return (data ?? []) as { id: string; full_name: string; role: string }[]
+}
+
 // ─── G-11: Types ─────────────────────────────────────────────────────────────
 
 export interface BankStatement {
@@ -1155,31 +1209,52 @@ export async function autoMatchStatements(
 
 // ─── Private helpers ──────────────────────────────────────────────────────────
 
+const ENTRY_SELECT = [
+  '*',
+  'tutors(name)',
+  'patients(name)',
+  'professional:profiles!professional_id(full_name)',
+  'chart_account:chart_of_accounts!chart_of_accounts_id(code, name)',
+  'settlement_bank:bank_accounts!settlement_bank_id(name)',
+].join(', ')
+
 function mapEntry(raw: Record<string, unknown>): FinancialEntry {
-  const tutors   = raw.tutors   as { name: string } | null
-  const patients = raw.patients as { name: string } | null
+  const tutors       = raw.tutors          as { name: string }             | null
+  const patients     = raw.patients        as { name: string }             | null
+  const professional = raw.professional    as { full_name: string }        | null
+  const chartAcc     = raw.chart_account   as { code: string; name: string } | null
+  const settleBank   = raw.settlement_bank as { name: string }             | null
   return {
-    id:                  raw.id                  as string,
-    clinic_id:           raw.clinic_id           as string,
-    type:                raw.type                as EntryType,
-    description:         raw.description         as string,
-    amount:              Number(raw.amount),
-    due_date:            raw.due_date            as string,
-    payment_date:        (raw.payment_date       as string | null) ?? null,
-    status:              raw.status              as EntryStatus,
-    payment_method:      (raw.payment_method     as string | null) ?? null,
-    tutor_id:            (raw.tutor_id           as string | null) ?? null,
-    patient_id:          (raw.patient_id         as string | null) ?? null,
-    category:            (raw.category           as string | null) ?? null,
-    notes:               (raw.notes              as string | null) ?? null,
-    created_by:          (raw.created_by         as string | null) ?? null,
-    created_at:          raw.created_at          as string,
-    updated_at:          raw.updated_at          as string,
-    tutor_name:          tutors?.name            ?? null,
-    patient_name:        patients?.name          ?? null,
-    source:              (raw.source             as EntrySource) ?? 'manual',
-    cashier_entry_id:    (raw.cashier_entry_id   as string | null) ?? null,
-    cashier_outflow_id:  (raw.cashier_outflow_id as string | null) ?? null,
+    id:                   raw.id                   as string,
+    clinic_id:            raw.clinic_id            as string,
+    type:                 raw.type                 as EntryType,
+    description:          raw.description          as string,
+    amount:               Number(raw.amount),
+    discount:             Number(raw.discount ?? 0),
+    interest:             Number(raw.interest ?? 0),
+    due_date:             raw.due_date             as string,
+    payment_date:         (raw.payment_date        as string | null) ?? null,
+    status:               raw.status               as EntryStatus,
+    payment_method:       (raw.payment_method      as string | null) ?? null,
+    tutor_id:             (raw.tutor_id            as string | null) ?? null,
+    patient_id:           (raw.patient_id          as string | null) ?? null,
+    category:             (raw.category            as string | null) ?? null,
+    notes:                (raw.notes               as string | null) ?? null,
+    created_by:           (raw.created_by          as string | null) ?? null,
+    created_at:           raw.created_at           as string,
+    updated_at:           raw.updated_at           as string,
+    document_number:      (raw.document_number     as string | null) ?? null,
+    professional_id:      (raw.professional_id     as string | null) ?? null,
+    chart_of_accounts_id: (raw.chart_of_accounts_id as string | null) ?? null,
+    settlement_bank_id:   (raw.settlement_bank_id  as string | null) ?? null,
+    tutor_name:           tutors?.name             ?? null,
+    patient_name:         patients?.name           ?? null,
+    professional_name:    professional?.full_name  ?? null,
+    chart_account_label:  chartAcc ? `${chartAcc.code} — ${chartAcc.name}` : null,
+    settlement_bank_name: settleBank?.name         ?? null,
+    source:               (raw.source              as EntrySource) ?? 'manual',
+    cashier_entry_id:     (raw.cashier_entry_id    as string | null) ?? null,
+    cashier_outflow_id:   (raw.cashier_outflow_id  as string | null) ?? null,
   }
 }
 

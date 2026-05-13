@@ -7,7 +7,7 @@ import {
   type FinancialEntry, type EntryType, type FinancialSummary,
   type BankAccount, type ChartOfAccount, type CreditCard, type Employee,
 } from '@/lib/actions/financial'
-import TituloModal from './TituloModal'
+import TituloModal, { type TituloModalProps } from './TituloModal'
 import BankAccountsTab    from './cadastros/BankAccountsTab'
 import ChartOfAccountsTab from './cadastros/ChartOfAccountsTab'
 import CreditCardsTab     from './cadastros/CreditCardsTab'
@@ -18,6 +18,7 @@ import {
   Plus, RefreshCcw, Search, Filter,
   TrendingUp, AlertTriangle, CheckCircle2,
   ChevronDown, DollarSign, BookOpen, Receipt, GitMerge,
+  ArrowDownCircle, RotateCcw,
 } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -37,6 +38,9 @@ interface Props {
   initialCreditCards:    CreditCard[]
   initialEmployees:      Employee[]
   isAdmin:               boolean
+  // Novos campos 0131
+  clinicProfiles:        { id: string; full_name: string; role: string }[]
+  currentUserId:         string
 }
 
 // ─── Display helpers ──────────────────────────────────────────────────────────
@@ -123,33 +127,88 @@ function SummaryCards({ summary, type }: { summary: FinancialSummary; type: Entr
 
 function EntryRow({
   entry,
+  isReceivable,
   onClick,
+  onBaixar,
+  onEstornar,
 }: {
-  entry: FinancialEntry
-  onClick: () => void
+  entry:        FinancialEntry
+  isReceivable: boolean
+  onClick:      () => void
+  onBaixar:     () => void
+  onEstornar:   () => void
 }) {
+  const netAmount = entry.amount - (entry.discount ?? 0)
+
   return (
     <tr
       onClick={onClick}
       className="cursor-pointer border-b border-slate-100 hover:bg-teal-50/50 transition-colors group"
     >
-      <td className="py-3 px-4 text-sm text-slate-700 max-w-[220px]">
+      {/* Nº */}
+      <td className="py-3 px-3 text-xs font-mono text-slate-400 whitespace-nowrap hidden sm:table-cell">
+        {entry.document_number ?? '—'}
+      </td>
+
+      {/* Descrição + Pet/Tutor + Categoria */}
+      <td className="py-3 px-4 text-sm text-slate-700 max-w-[200px]">
         <p className="font-medium truncate">{entry.description}</p>
         {(entry.tutor_name || entry.patient_name) && (
           <p className="text-xs text-slate-400 truncate">
-            {entry.tutor_name}{entry.tutor_name && entry.patient_name ? ' · ' : ''}{entry.patient_name}
+            {[entry.patient_name, entry.tutor_name].filter(Boolean).join(' · ')}
           </p>
         )}
         {entry.category && <p className="text-xs text-teal-600">{entry.category}</p>}
+        {entry.chart_account_label && (
+          <p className="text-xs text-slate-400 truncate">{entry.chart_account_label}</p>
+        )}
       </td>
-      <td className="py-3 px-4 text-sm text-slate-600 whitespace-nowrap hidden sm:table-cell">{fmtDate(entry.due_date)}</td>
-      <td className="py-3 px-4 text-sm text-slate-600 whitespace-nowrap hidden md:table-cell">{fmtDate(entry.payment_date)}</td>
-      <td className="py-3 px-4 text-sm font-semibold text-slate-800 text-right whitespace-nowrap">{fmt(entry.amount)}</td>
-      <td className="py-3 px-4">
+
+      {/* Cadastro */}
+      <td className="py-3 px-4 text-xs text-slate-400 whitespace-nowrap hidden lg:table-cell">
+        {fmtDate(entry.created_at.split('T')[0])}
+      </td>
+
+      {/* Vencimento */}
+      <td className="py-3 px-4 text-sm text-slate-600 whitespace-nowrap hidden sm:table-cell">
+        <span className={isOverdue(entry) ? 'text-red-600 font-semibold' : ''}>
+          {fmtDate(entry.due_date)}
+        </span>
+      </td>
+
+      {/* Valor + Desconto */}
+      <td className="py-3 px-4 text-right whitespace-nowrap">
+        <p className="text-sm font-semibold text-slate-800">{fmt(netAmount)}</p>
+        {entry.discount > 0 && (
+          <p className="text-xs text-slate-400">-{fmt(entry.discount)}</p>
+        )}
+      </td>
+
+      {/* Status */}
+      <td className="py-3 px-3">
         <StatusBadge entry={entry} />
       </td>
-      <td className="py-3 px-4 text-xs text-slate-400 max-w-[120px] truncate hidden lg:table-cell">
-        {entry.payment_method ?? '—'}
+
+      {/* Ação: Baixar / Estornar */}
+      <td className="py-3 px-3" onClick={e => e.stopPropagation()}>
+        {entry.status === 'pending' && (
+          <button
+            onClick={onBaixar}
+            className="flex items-center gap-1 rounded-lg bg-teal-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 transition-colors whitespace-nowrap"
+          >
+            <ArrowDownCircle className="h-3.5 w-3.5" />
+            Baixar
+          </button>
+        )}
+        {entry.status === 'paid' && (
+          <button
+            onClick={onEstornar}
+            className="flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100 transition-colors whitespace-nowrap"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            Estornar
+          </button>
+        )}
       </td>
     </tr>
   )
@@ -167,6 +226,8 @@ export default function FinancialWorkspace({
   initialCreditCards,
   initialEmployees,
   isAdmin,
+  clinicProfiles,
+  currentUserId,
 }: Props) {
   const theme = MODULE_THEME.financial
 
@@ -184,7 +245,7 @@ export default function FinancialWorkspace({
   const [dueFrom,  setDueFrom]  = useState('')
   const [dueTo,    setDueTo]    = useState('')
 
-  const [modal, setModal] = useState<{ mode: 'create' | 'edit'; entry?: FinancialEntry } | null>(null)
+  const [modal, setModal] = useState<{ mode: 'create' | 'edit' | 'baixar'; entry?: FinancialEntry } | null>(null)
 
   const [isPending, startTransition] = useTransition()
 
@@ -417,14 +478,13 @@ export default function FinancialWorkspace({
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-slate-100 bg-slate-50">
+                      <th className="py-3 px-3 text-left text-xs font-bold text-slate-500 uppercase whitespace-nowrap hidden sm:table-cell">Nº</th>
                       <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase">Descrição</th>
+                      <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase whitespace-nowrap hidden lg:table-cell">Cadastro</th>
                       <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase whitespace-nowrap hidden sm:table-cell">Vencimento</th>
-                      <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase whitespace-nowrap hidden md:table-cell">
-                        {activeTab === 'receivable' ? 'Recebimento' : 'Pagamento'}
-                      </th>
                       <th className="py-3 px-4 text-right text-xs font-bold text-slate-500 uppercase">Valor</th>
-                      <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase">Status</th>
-                      <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase hidden lg:table-cell">Modalidade</th>
+                      <th className="py-3 px-3 text-left text-xs font-bold text-slate-500 uppercase">Status</th>
+                      <th className="py-3 px-3 text-left text-xs font-bold text-slate-500 uppercase">Ação</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -432,7 +492,10 @@ export default function FinancialWorkspace({
                       <EntryRow
                         key={entry.id}
                         entry={entry}
+                        isReceivable={activeTab === 'receivable'}
                         onClick={() => setModal({ mode: 'edit', entry })}
+                        onBaixar={() => setModal({ mode: 'baixar', entry })}
+                        onEstornar={() => setModal({ mode: 'edit', entry })}
                       />
                     ))}
                   </tbody>
@@ -444,7 +507,7 @@ export default function FinancialWorkspace({
                     {filtered.length !== entries.length ? ` (filtrado de ${entries.length})` : ''}
                   </p>
                   <p className="text-sm font-bold text-slate-700">
-                    Total: {fmt(filtered.reduce((s, e) => s + e.amount, 0))}
+                    Total: {fmt(filtered.reduce((s, e) => s + e.amount - (e.discount ?? 0), 0))}
                   </p>
                 </div>
               </div>
@@ -522,6 +585,10 @@ export default function FinancialWorkspace({
           entry={modal.entry}
           onClose={() => setModal(null)}
           onSuccess={onModalSuccess}
+          bankAccounts={initialBankAccounts.map(b => ({ id: b.id, name: b.name }))}
+          chartAccounts={initialChartAccounts.map(c => ({ id: c.id, code: c.code, name: c.name }))}
+          clinicProfiles={clinicProfiles}
+          currentUserId={currentUserId}
         />
       )}
     </div>

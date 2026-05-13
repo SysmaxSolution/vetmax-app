@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import {
   listEntries, getFinancialSummary,
   listBankAccounts, listChartOfAccounts, listCreditCards, listEmployees,
+  listClinicProfiles,
 } from '@/lib/actions/financial'
 import FinancialWorkspace from '@/components/financial/FinancialWorkspace'
 
@@ -34,6 +35,7 @@ export default async function FinancialPage() {
     chartAccountsRes,
     creditCardsRes,
     employeesRes,
+    clinicProfilesRes,
   ] = await Promise.all([
     listEntries({ type: 'receivable', status: 'all' }),
     listEntries({ type: 'payable',   status: 'all' }),
@@ -43,6 +45,7 @@ export default async function FinancialPage() {
     listChartOfAccounts(),
     listCreditCards(),
     listEmployees(isAdmin),
+    listClinicProfiles(),
   ])
 
   return (
@@ -56,6 +59,8 @@ export default async function FinancialPage() {
       initialCreditCards={Array.isArray(creditCardsRes) ? creditCardsRes : []}
       initialEmployees={Array.isArray(employeesRes) ? employeesRes : []}
       isAdmin={isAdmin}
+      clinicProfiles={clinicProfilesRes}
+      currentUserId={user.id}
     />
   )
 }
