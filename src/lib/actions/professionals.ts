@@ -64,7 +64,7 @@ export async function getClinicProfessionals(): Promise<ClinicProfessional[] | {
     .select('id, full_name, role, specialties, crmv, phone')
     .eq('clinic_id', profile.clinic_id)
     .in('role', ['vet', 'assistant', 'groomer'])
-    .eq('is_active', true)
+    .neq('is_active', false)   // inclui NULL e true
     .order('full_name')
 
   if (error) return { error: error.message }
