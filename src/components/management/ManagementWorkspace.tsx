@@ -28,7 +28,6 @@ import type { ClinicUserFull } from '@/lib/actions/user-management'
 import type { Room } from '@/lib/actions/rooms'
 import type { ProductPrice } from '@/lib/actions/core-management'
 import UserManagementModal from './UserManagementModal'
-import SettingsWorkspace from './Settings/SettingsWorkspace'
 import type { WhatsAppSettingsDisplay } from '@/lib/actions/whatsapp'
 
 type ClinicUser = ClinicUserFull
@@ -523,7 +522,7 @@ export default function ManagementWorkspace({
         <SettingsWorkspace
           initialClinicConfig={initialClinicConfig}
           initialSettingsConfig={initialSettingsConfig}
-          initialWhatsAppSettings={initialWhatsAppSettings}
+          initialWhatsappSettings={initialWhatsAppSettings}
           initialChecklist={(clinicData?.reception_checklist as string[] | null) ?? []}
           activeModules={activeModules}
           onToast={(type, message) => setToast({ type, message })}
