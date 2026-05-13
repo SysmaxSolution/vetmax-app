@@ -31,6 +31,8 @@ import type { ClinicUserFull } from '@/lib/actions/user-management'
 import type { Room } from '@/lib/actions/rooms'
 import type { ProductPrice } from '@/lib/actions/core-management'
 import UserManagementModal from './UserManagementModal'
+import SettingsWorkspace from './Settings/SettingsWorkspace'
+import type { WhatsAppSettingsDisplay } from '@/lib/actions/whatsapp'
 
 type ClinicUser = ClinicUserFull
 
@@ -46,10 +48,11 @@ interface ManagementWorkspaceProps {
   initialCatalog:           CatalogItem[]
   initialClinicConfig:      ClinicConfig | null
   initialSettingsConfig?:   ClinicSettingsConfig | null
-  initialProductPrices?:    ProductPrice[]
-  initialRooms?:            Room[]
-  activeModules?:           string[]
-  isSysmax?:                boolean
+  initialProductPrices?:        ProductPrice[]
+  initialRooms?:                Room[]
+  activeModules?:               string[]
+  isSysmax?:                    boolean
+  initialWhatsAppSettings?:     WhatsAppSettingsDisplay | null
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -138,7 +141,7 @@ function UserInlineField({ label, value, placeholder, onSave }: {
 export default function ManagementWorkspace({
   initialTemplates, clinicData, users, initialInvitations, userLimit, currentUserId, userEmail, userFullName,
   initialCatalog, initialClinicConfig, initialSettingsConfig = null, initialProductPrices = [], initialRooms = [],
-  activeModules = [], isSysmax = false,
+  activeModules = [], isSysmax = false, initialWhatsAppSettings = null,
 }: ManagementWorkspaceProps) {
   const searchParams = useSearchParams()
   const activeTab = (searchParams.get('tab') as ActiveTab | null) ?? 'templates'
@@ -518,34 +521,14 @@ export default function ManagementWorkspace({
         <ConveniosTab onToast={(type, message) => setToast({ type, message })} />
       )}
 
-      {/* ── Tab: Configurações ── */}
+      {/* ── Tab: Configurações (G-15 — categorias reorganizadas) ── */}
       {activeTab === 'configuracoes' && (
-        <div className="space-y-6">
-          {/* Módulos (com master key) */}
-          <ModulesTab
-            initialConfig={initialClinicConfig}
-            onToast={(type, message) => setToast({ type, message })}
-          />
-
-          {/* Horário Comercial */}
-          <BusinessHoursTab
-            initialConfig={initialClinicConfig}
-            onToast={(type, message) => setToast({ type, message })}
-          />
-
-          {/* Logo, Checklist e Fluxo Contínuo */}
-          <ClinicSettingsTab
-            initialConfig={initialClinicConfig}
-            initialChecklist={(clinicData?.reception_checklist as string[] | null) ?? []}
-            initialSettingsConfig={initialSettingsConfig}
-            onToast={(type, message) => setToast({ type, message })}
-          />
-
-          {/* Importação CSV */}
-          <div className="pt-6 mt-6 border-t border-slate-200">
-            <CsvImporter />
-          </div>
-        </div>
+        <SettingsWorkspace
+          initialClinicConfig={initialClinicConfig}
+          initialSettingsConfig={initialSettingsConfig}
+          initialWhatsAppSettings={initialWhatsAppSettings}
+          onToast={(type, message) => setToast({ type, message })}
+        />
       )}
 
       {/* ── Tab: Clínica ── */}

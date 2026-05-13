@@ -7,6 +7,7 @@ import { getCatalog, seedDefaultCatalog } from '@/lib/actions/catalog'
 import { getClinicConfig, getClinicSettingsConfig } from '@/lib/actions/clinic-settings'
 import { listProductPrices } from '@/lib/actions/core-management'
 import { getRooms } from '@/lib/actions/rooms'
+import { getWhatsAppSettings } from '@/lib/actions/whatsapp'
 import ManagementWorkspace from '@/components/management/ManagementWorkspace'
 import { Suspense } from 'react'
 import type { DocumentTemplate } from '@/types'
@@ -31,7 +32,7 @@ export default async function ManagementPage() {
 
   const clinicName = (profile.clinics as unknown as { name: string } | null)?.name ?? 'Minha Clínica'
 
-  const [templatesResult, clinicResult, usersResult, invitationsResult, catalogResult, configResult, productPricesResult, roomsResult, settingsConfigResult] = await Promise.all([
+  const [templatesResult, clinicResult, usersResult, invitationsResult, catalogResult, configResult, productPricesResult, roomsResult, settingsConfigResult, whatsAppSettingsResult] = await Promise.all([
     getTemplates(),
     admin
       .from('clinics')
@@ -50,6 +51,7 @@ export default async function ManagementPage() {
     listProductPrices(),
     getRooms(),
     getClinicSettingsConfig(),
+    getWhatsAppSettings(),
   ])
 
   const templates: DocumentTemplate[] = 'error' in templatesResult ? [] : templatesResult
@@ -63,6 +65,7 @@ export default async function ManagementPage() {
   const initialSettingsConfig = 'error' in settingsConfigResult ? null : settingsConfigResult
   const initialProductPrices = 'error' in productPricesResult ? [] : productPricesResult
   const initialRooms = Array.isArray(roomsResult) ? roomsResult : []
+  const initialWhatsAppSettings = whatsAppSettingsResult ?? null
 
   // Seed defaults se o catálogo estiver vazio
   if (initialCatalog.length === 0 && profile.clinic_id) {
@@ -89,6 +92,7 @@ export default async function ManagementPage() {
         initialRooms={initialRooms}
         activeModules={activeModules}
         isSysmax={!!profile.is_sysmax}
+        initialWhatsAppSettings={initialWhatsAppSettings}
       />
     </Suspense>
   )
