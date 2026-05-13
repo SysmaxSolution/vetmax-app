@@ -34,19 +34,23 @@ export interface PetFrequencyRow {
 }
 
 export interface ProfessionalProductivityRow {
-  day:              string
-  consult_count:    number
-  exam_count:       number
-  prescription_count: number
+  user_id:            string
+  user_name:          string
+  role:               string
+  specialties:        string[] | null
+  crmv:               string | null
+  consult_total:      number
+  exam_total:         number
+  prescription_total: number
 }
 
 export interface ProfessionalProductivitySummary {
-  user_id:          string
-  user_name:        string
-  consult_total:    number
-  exam_total:       number
-  prescription_total: number
-  rows:             ProfessionalProductivityRow[]
+  rows: ProfessionalProductivityRow[]
+  totals: {
+    consult_total:      number
+    exam_total:         number
+    prescription_total: number
+  }
 }
 
 export interface FinancialReportSummary {
@@ -188,9 +192,8 @@ export async function getPetFrequencyReport(params: {
 // ─── G13-3: Professional Productivity ────────────────────────────────────────
 
 export async function getProfessionalProductivityReport(params: {
-  from:     string
-  to:       string
-  user_id?: string
+  from: string
+  to:   string
 }): Promise<ProfessionalProductivitySummary | { error: string }> {
   const ctx = await getCtx()
   if ('error' in ctx) return { error: ctx.error }
@@ -199,86 +202,79 @@ export async function getProfessionalProductivityReport(params: {
   }
 
   const admin = createAdminClient()
+  const toTs  = params.to + 'T23:59:59'
 
-  let q = admin
-    .from('consultations')
-    .select('vet_id, created_at, profiles:vet_id(full_name)')
-    .eq('clinic_id', ctx.clinic_id)
-    .gte('created_at', params.from)
-    .lte('created_at', params.to + 'T23:59:59')
-
-  if (params.user_id) q = q.eq('vet_id', params.user_id)
-
-  const { data, error } = await q
-  if (error) return { error: error.message }
-
-  const rows = data ?? []
-
-  let user_id = params.user_id ?? ''
-  let user_name = '—'
-  if (rows.length > 0) {
-    const firstProfile = Array.isArray(rows[0].profiles) ? rows[0].profiles[0] : rows[0].profiles as any
-    user_name = firstProfile?.full_name ?? '—'
-    if (!user_id) user_id = (rows[0] as any).vet_id ?? ''
-  }
-
-  // Count exams and prescriptions via separate queries for the period
-  let examQ = admin.from('exam_requests')
-    .select('id, created_at')
-    .eq('clinic_id', ctx.clinic_id)
-    .gte('created_at', params.from)
-    .lte('created_at', params.to + 'T23:59:59')
-  if (params.user_id) examQ = examQ.eq('requested_by', params.user_id)
-
-  const [examRes, rxRes] = await Promise.all([
-    examQ,
-    admin.from('prescriptions')
-      .select('id, created_at')
+  // Busca paralela: profissionais + atividades do período
+  const [profRes, consultRes, examRes, rxRes] = await Promise.all([
+    admin
+      .from('profiles')
+      .select('id, full_name, role, specialties, crmv')
+      .eq('clinic_id', ctx.clinic_id)
+      .in('role', ['vet', 'admin', 'technician', 'groomer', 'receptionist'])
+      .eq('is_active', true)
+      .order('full_name'),
+    admin
+      .from('consultations')
+      .select('vet_id')
       .eq('clinic_id', ctx.clinic_id)
       .gte('created_at', params.from)
-      .lte('created_at', params.to + 'T23:59:59'),
+      .lte('created_at', toTs),
+    admin
+      .from('exam_requests')
+      .select('requested_by')
+      .eq('clinic_id', ctx.clinic_id)
+      .gte('created_at', params.from)
+      .lte('created_at', toTs),
+    admin
+      .from('prescriptions')
+      .select('prescriber_id, consultation_id')
+      .eq('clinic_id', ctx.clinic_id)
+      .gte('created_at', params.from)
+      .lte('created_at', toTs)
+      .not('prescriber_id', 'is', null),
   ])
 
-  const examsByDay = new Map<string, number>()
+  if (profRes.error)    return { error: profRes.error.message }
+  if (consultRes.error) return { error: consultRes.error.message }
+
+  // Agrupa por profissional
+  const consultsByVet = new Map<string, number>()
+  for (const c of consultRes.data ?? []) {
+    if (c.vet_id) consultsByVet.set(c.vet_id, (consultsByVet.get(c.vet_id) ?? 0) + 1)
+  }
+
+  const examsByVet = new Map<string, number>()
   for (const e of examRes.data ?? []) {
-    const day = (e.created_at as string).slice(0, 10)
-    examsByDay.set(day, (examsByDay.get(day) ?? 0) + 1)
+    if (e.requested_by) examsByVet.set(e.requested_by, (examsByVet.get(e.requested_by) ?? 0) + 1)
   }
-  const rxsByDay = new Map<string, number>()
+
+  // Conta receituários por consulta única (evita contar múltiplos medicamentos como receitas separadas)
+  const rxByVet = new Map<string, Set<string>>()
   for (const p of rxRes.data ?? []) {
-    const day = (p.created_at as string).slice(0, 10)
-    rxsByDay.set(day, (rxsByDay.get(day) ?? 0) + 1)
+    if (!p.prescriber_id) continue
+    if (!rxByVet.has(p.prescriber_id)) rxByVet.set(p.prescriber_id, new Set())
+    const key = p.consultation_id ?? p.prescriber_id + Math.random()
+    rxByVet.get(p.prescriber_id)!.add(key)
   }
 
-  const byDay = new Map<string, { consult_count: number; exam_count: number; prescription_count: number }>()
+  const rows: ProfessionalProductivityRow[] = (profRes.data ?? []).map(prof => ({
+    user_id:            prof.id,
+    user_name:          prof.full_name ?? '—',
+    role:               prof.role,
+    specialties:        (prof.specialties as string[] | null) ?? null,
+    crmv:               prof.crmv ?? null,
+    consult_total:      consultsByVet.get(prof.id) ?? 0,
+    exam_total:         examsByVet.get(prof.id) ?? 0,
+    prescription_total: rxByVet.get(prof.id)?.size ?? 0,
+  }))
 
-  let totalConsult = 0, totalExam = 0, totalRx = 0
-
-  for (const r of rows) {
-    const day = (r.created_at as string).slice(0, 10)
-
-    const entry = byDay.get(day) ?? { consult_count: 0, exam_count: examsByDay.get(day) ?? 0, prescription_count: rxsByDay.get(day) ?? 0 }
-    entry.consult_count += 1
-    byDay.set(day, entry)
-
-    totalConsult += 1
+  const totals = {
+    consult_total:      rows.reduce((s, r) => s + r.consult_total, 0),
+    exam_total:         rows.reduce((s, r) => s + r.exam_total, 0),
+    prescription_total: rows.reduce((s, r) => s + r.prescription_total, 0),
   }
 
-  totalExam = Array.from(examsByDay.values()).reduce((s, v) => s + v, 0)
-  totalRx   = Array.from(rxsByDay.values()).reduce((s, v) => s + v, 0)
-
-  const detail = Array.from(byDay.entries())
-    .map(([day, v]) => ({ day, ...v }))
-    .sort((a, b) => a.day.localeCompare(b.day))
-
-  return {
-    user_id,
-    user_name,
-    consult_total:       totalConsult,
-    exam_total:          totalExam,
-    prescription_total:  totalRx,
-    rows:                detail,
-  }
+  return { rows, totals }
 }
 
 export async function listProfessionals(): Promise<Array<{ id: string; name: string }>> {
