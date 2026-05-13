@@ -4,7 +4,7 @@ import { useState, useActionState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import {
   BarChart3, Plus, Trash2, Building2, Users, Save, X,
-  FileText, CheckCircle2, Mail, Copy, Check, Link as LinkIcon, Shield, Settings,
+  FileText, CheckCircle2, Mail, Copy, Check, Link as LinkIcon, Shield,
   Upload, Image, Loader2, Send, Pencil,
 } from 'lucide-react'
 import { useRef } from 'react'
@@ -16,17 +16,14 @@ import type { CatalogItem } from '@/lib/actions/catalog'
 import type { ClinicConfig, ClinicSettingsConfig } from '@/lib/actions/clinic-settings'
 import ImportTemplateModal from './ImportTemplateModal'
 import CatalogTab from './CatalogTab'
-import ClinicSettingsTab from './ClinicSettingsTab'
 import { Toast } from '@/components/ui/toast'
-import CsvImporter from './CsvImporter'
 import ConveniosTab from './ConveniosTab'
-import BusinessHoursTab from './BusinessHoursTab'
 import PricingTab from './PricingTab'
-import ModulesTab from './ModulesTab'
 import RoomsTab from './RoomsTab'
 import AppearanceTab from './AppearanceTab'
 import ErrorMonitoringDashboard from './ErrorMonitoringDashboard'
-import { updateUserPhone, updateUserSpecialties, getUserModuleAccess, setUserModuleAccess, updateUserNickname } from '@/lib/actions/user-management'
+import SettingsWorkspace from './Settings/SettingsWorkspace'
+import { updateUserPhone, getUserModuleAccess, setUserModuleAccess, updateUserNickname } from '@/lib/actions/user-management'
 import type { ClinicUserFull } from '@/lib/actions/user-management'
 import type { Room } from '@/lib/actions/rooms'
 import type { ProductPrice } from '@/lib/actions/core-management'
@@ -520,32 +517,13 @@ export default function ManagementWorkspace({
 
       {/* ── Tab: Configurações ── */}
       {activeTab === 'configuracoes' && (
-        <div className="space-y-6">
-          {/* Módulos (com master key) */}
-          <ModulesTab
-            initialConfig={initialClinicConfig}
-            onToast={(type, message) => setToast({ type, message })}
-          />
-
-          {/* Horário Comercial */}
-          <BusinessHoursTab
-            initialConfig={initialClinicConfig}
-            onToast={(type, message) => setToast({ type, message })}
-          />
-
-          {/* Logo, Checklist e Fluxo Contínuo */}
-          <ClinicSettingsTab
-            initialConfig={initialClinicConfig}
-            initialChecklist={(clinicData?.reception_checklist as string[] | null) ?? []}
-            initialSettingsConfig={initialSettingsConfig}
-            onToast={(type, message) => setToast({ type, message })}
-          />
-
-          {/* Importação CSV */}
-          <div className="pt-6 mt-6 border-t border-slate-200">
-            <CsvImporter />
-          </div>
-        </div>
+        <SettingsWorkspace
+          initialClinicConfig={initialClinicConfig}
+          initialSettingsConfig={initialSettingsConfig}
+          initialChecklist={(clinicData?.reception_checklist as string[] | null) ?? []}
+          activeModules={activeModules}
+          onToast={(type, message) => setToast({ type, message })}
+        />
       )}
 
       {/* ── Tab: Clínica ── */}
