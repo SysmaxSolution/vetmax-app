@@ -1,10 +1,11 @@
 'use server'
 
-import { createHash } from 'crypto'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { ErrorSource, ErrorPriority } from '@/lib/error-logger'
+import { computeFingerprint } from '@/lib/error-logger'
 import { runAutoFixCycle } from '@/lib/fix-planner'
+import { sendP0FixPlanAlert } from '@/lib/p0-alert'
 
 export interface ErrorLogEntry {
   path: string
@@ -14,13 +15,6 @@ export interface ErrorLogEntry {
   severity?: 'error' | 'warning' | 'critical'
   /** Módulo funcional onde o erro ocorreu */
   module?: string
-}
-
-function computeFingerprint(path: string, message: string): string {
-  return createHash('sha256')
-    .update(`${path.slice(0, 200)}:${message.slice(0, 500)}`)
-    .digest('hex')
-    .slice(0, 20)
 }
 
 /** Captura erros do lado do cliente (React components autenticados). */
@@ -289,10 +283,10 @@ export async function rejectFixPlan(
   }
 }
 
-/** Força a geração de planos de correção para todos os erros elegíveis agora.
- *  Após criar cada plano, dispara automaticamente notificação via WhatsApp. */
+/** Força a geração de planos de correção para todos os erros elegíveis.
+ *  Quando não há erros novos, re-notifica via WhatsApp todos os planos pending_approval. */
 export async function triggerFixPlanGeneration(): Promise<
-  { created: number; skipped: number; failed: number } | { error: string }
+  { created: number; skipped: number; failed: number; notified: number } | { error: string }
 > {
   try {
     const supabase = await createClient()
@@ -308,8 +302,72 @@ export async function triggerFixPlanGeneration(): Promise<
     if (!['admin', 'manager'].includes(profile?.role ?? '')) return { error: 'Sem permissão.' }
 
     const result = await runAutoFixCycle({ maxClusters: 10, minOccurrences: 1 })
-    return { created: result.created, skipped: result.skipped, failed: result.failed }
+
+    // Planos novos já foram notificados dentro de generateFixPlanForCluster.
+    // Se nenhum plano foi criado, re-notifica os pending_approval existentes.
+    let notified = result.created
+    if (result.created === 0) {
+      const admin = createAdminClient()
+      const { data: pending } = await admin
+        .from('fix_plans')
+        .select('id, title, priority, error_summary')
+        .eq('status', 'pending_approval')
+        .order('created_at', { ascending: false })
+        .limit(20)
+
+      for (const plan of pending ?? []) {
+        await sendP0FixPlanAlert({
+          fixPlanId:    plan.id,
+          fixPlanTitle: plan.title,
+          errorSummary: plan.error_summary as string | null,
+          priority:     plan.priority as string,
+        })
+        notified++
+      }
+    }
+
+    return { created: result.created, skipped: result.skipped, failed: result.failed, notified }
   } catch {
     return { error: 'Erro ao gerar planos.' }
+  }
+}
+
+/** Re-envia a notificação WhatsApp de aprovação para um plano específico. */
+export async function resendPlanNotification(
+  planId: string,
+): Promise<{ success: true } | { error: string }> {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: 'Não autenticado.' }
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    if (!['admin', 'manager'].includes(profile?.role ?? '')) return { error: 'Sem permissão.' }
+
+    const admin = createAdminClient()
+    const { data: plan } = await admin
+      .from('fix_plans')
+      .select('id, title, priority, error_summary, status')
+      .eq('id', planId)
+      .maybeSingle()
+
+    if (!plan) return { error: 'Plano não encontrado.' }
+    if (plan.status !== 'pending_approval') return { error: 'Plano não está aguardando aprovação.' }
+
+    await sendP0FixPlanAlert({
+      fixPlanId:    plan.id,
+      fixPlanTitle: plan.title,
+      errorSummary: plan.error_summary as string | null,
+      priority:     plan.priority as string,
+    })
+
+    return { success: true }
+  } catch {
+    return { error: 'Erro ao re-enviar notificação.' }
   }
 }

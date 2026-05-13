@@ -5,7 +5,7 @@ import {
   Activity, RefreshCw, AlertTriangle, AlertCircle, Info,
   ChevronRight, FileText, CheckCircle2, XCircle, Clock, Bug, Zap, MessageSquare,
 } from 'lucide-react'
-import { getUnresolvedErrors, getFixPlans, approveFixPlan, rejectFixPlan, triggerFixPlanGeneration } from '@/lib/actions/error-logs'
+import { getUnresolvedErrors, getFixPlans, approveFixPlan, rejectFixPlan, triggerFixPlanGeneration, resendPlanNotification } from '@/lib/actions/error-logs'
 import FixPlanSlideOver from './FixPlanSlideOver'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -76,6 +76,7 @@ export default function ErrorMonitoringDashboard() {
   const [actionId,      setActionId]      = useState<string | null>(null)
   const [toast,         setToast]         = useState<{ type: 'ok' | 'err'; msg: string } | null>(null)
   const [generating,    setGenerating]    = useState(false)
+  const [resending,     setResending]     = useState<string | null>(null)
   const [,             startTransition]   = useTransition()
 
   const showToast = (type: 'ok' | 'err', msg: string) => {
@@ -103,17 +104,30 @@ export default function ErrorMonitoringDashboard() {
     const res = await triggerFixPlanGeneration()
     if ('error' in res) {
       showToast('err', res.error)
-    } else if (res.created === 0 && res.skipped === 0) {
-      showToast('ok', 'Nenhum erro elegível encontrado no momento.')
     } else {
-      const parts = []
-      if (res.created > 0) parts.push(`${res.created} novo${res.created > 1 ? 's' : ''} plano${res.created > 1 ? 's' : ''} gerado${res.created > 1 ? 's' : ''}`)
-      if (res.skipped > 0) parts.push(`${res.skipped} já existia${res.skipped > 1 ? 'm' : ''}`)
-      showToast('ok', `${parts.join(', ')}. Notificação enviada via WhatsApp.`)
-      setSubTab('pending')
-      await load()
+      const parts: string[] = []
+      if (res.created  > 0) parts.push(`${res.created} novo${res.created > 1 ? 's' : ''} plano${res.created > 1 ? 's' : ''} gerado${res.created > 1 ? 's' : ''}`)
+      if (res.skipped  > 0) parts.push(`${res.skipped} já existia${res.skipped > 1 ? 'm' : ''}`)
+      if (res.notified > 0) parts.push(`${res.notified} notificaç${res.notified > 1 ? 'ões' : 'ão'} enviada${res.notified > 1 ? 's' : ''} via WhatsApp`)
+      if (parts.length === 0) parts.push('Nenhum erro elegível no momento')
+      showToast('ok', parts.join(' · ') + '.')
+      if (res.created > 0 || res.notified > 0) {
+        setSubTab('pending')
+        await load()
+      }
     }
     setGenerating(false)
+  }
+
+  async function handleResend(planId: string) {
+    setResending(planId)
+    const res = await resendPlanNotification(planId)
+    if ('error' in res) {
+      showToast('err', res.error)
+    } else {
+      showToast('ok', 'Notificação WhatsApp re-enviada com sucesso.')
+    }
+    setResending(null)
   }
 
   async function handleApprove(planId: string) {
@@ -239,9 +253,11 @@ export default function ErrorMonitoringDashboard() {
               <PendingPlansTab
                 plans={pendingPlans}
                 actionId={actionId}
+                resending={resending}
                 onView={p => setSelectedPlan(p)}
                 onApprove={handleApprove}
                 onReject={handleReject}
+                onResend={handleResend}
               />
             )}
             {subTab === 'history' && <HistoryTab plans={historyPlans} onView={p => setSelectedPlan(p)} />}
@@ -353,13 +369,15 @@ function ErrorLogsTab({ errors }: { errors: ErrorLog[] }) {
 // ─── Sub-tab: Planos Pendentes ────────────────────────────────────────────────
 
 function PendingPlansTab({
-  plans, actionId, onView, onApprove, onReject,
+  plans, actionId, resending, onView, onApprove, onReject, onResend,
 }: {
   plans: FixPlan[]
-  actionId: string | null
+  actionId:  string | null
+  resending: string | null
   onView:    (p: FixPlan) => void
   onApprove: (id: string) => void
   onReject:  (id: string) => void
+  onResend:  (id: string) => void
 }) {
   if (plans.length === 0) {
     return (
@@ -380,9 +398,11 @@ function PendingPlansTab({
           key={plan.id}
           plan={plan}
           actionId={actionId}
+          resending={resending}
           onView={onView}
           onApprove={onApprove}
           onReject={onReject}
+          onResend={onResend}
           showActions
         />
       ))}
@@ -406,7 +426,7 @@ function HistoryTab({ plans, onView }: { plans: FixPlan[]; onView: (p: FixPlan) 
   return (
     <div className="space-y-3">
       {plans.map(plan => (
-        <PlanCard key={plan.id} plan={plan} actionId={null} onView={onView} showActions={false} />
+        <PlanCard key={plan.id} plan={plan} actionId={null} resending={null} onView={onView} showActions={false} />
       ))}
     </div>
   )
@@ -415,18 +435,21 @@ function HistoryTab({ plans, onView }: { plans: FixPlan[]; onView: (p: FixPlan) 
 // ─── Plan Card ────────────────────────────────────────────────────────────────
 
 function PlanCard({
-  plan, actionId, onView, onApprove, onReject, showActions,
+  plan, actionId, resending, onView, onApprove, onReject, onResend, showActions,
 }: {
   plan: FixPlan
-  actionId: string | null
+  actionId:   string | null
+  resending?: string | null
   onView:     (p: FixPlan) => void
   onApprove?: (id: string) => void
   onReject?:  (id: string) => void
+  onResend?:  (id: string) => void
   showActions: boolean
 }) {
   const priority = plan.priority as 'P0' | 'P1' | 'P2'
   const statusCfg = STATUS_CFG[plan.status] ?? { label: plan.status, cls: 'bg-slate-100 text-slate-600' }
   const isBusy   = actionId === plan.id
+  const isSending = resending === plan.id
 
   return (
     <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 hover:border-slate-300 transition-colors">
@@ -484,12 +507,25 @@ function PlanCard({
         </div>
       )}
 
-      {/* Approve / Reject — abaixo do conteúdo */}
+      {/* Approve / Reject / Re-enviar — abaixo do conteúdo */}
       {showActions && onApprove && onReject && (
         <div className="mt-3 pt-3 border-t border-slate-200 flex gap-2">
+          {onResend && (
+            <button
+              onClick={() => onResend(plan.id)}
+              disabled={isSending || isBusy}
+              title="Re-enviar notificação WhatsApp para aprovação"
+              className="flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-green-50 hover:text-green-700 hover:border-green-200 disabled:opacity-50 transition-colors"
+            >
+              {isSending
+                ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                : <MessageSquare className="w-3.5 h-3.5" />
+              }
+            </button>
+          )}
           <button
             onClick={() => onReject(plan.id)}
-            disabled={isBusy}
+            disabled={isBusy || isSending}
             className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-red-50 hover:text-red-700 hover:border-red-200 disabled:opacity-50 transition-colors"
           >
             <XCircle className="w-4 h-4" />
@@ -497,7 +533,7 @@ function PlanCard({
           </button>
           <button
             onClick={() => onApprove(plan.id)}
-            disabled={isBusy}
+            disabled={isBusy || isSending}
             className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
           >
             {isBusy
