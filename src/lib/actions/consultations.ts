@@ -176,6 +176,7 @@ export async function updateConsultation(
     .from('consultations')
     .update(consultationUpdates)
     .eq('id', consultationId)
+    .eq('clinic_id', profile.clinic_id)
 
   if (error) return { error: 'Erro ao atualizar: ' + error.message }
 

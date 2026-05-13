@@ -152,10 +152,19 @@ export async function getTutorWithPatients(tutorId: string): Promise<
 
   const admin = createAdminClient()
 
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('clinic_id')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile?.clinic_id) return { error: 'Clínica não encontrada.' }
+
   const { data: tutor, error: tErr } = await admin
     .from('tutors')
     .select('id, name, cpf, phone, email, address, emergency_contact')
     .eq('id', tutorId)
+    .eq('clinic_id', profile.clinic_id)
     .single()
 
   if (tErr || !tutor) return { error: 'Tutor não encontrado.' }
@@ -164,6 +173,7 @@ export async function getTutorWithPatients(tutorId: string): Promise<
     .from('patients')
     .select('id, name, species, breed, neutered, gender, photo_url')
     .eq('tutor_id', tutorId)
+    .eq('clinic_id', profile.clinic_id)
     .order('name')
 
   return { tutor, patients: patients ?? [] }
