@@ -215,6 +215,9 @@ export async function seedDefaultCatalog(
 
 // ─── Busca no catálogo global (autocomplete) ──────────────────────────────────
 
+// Alias para compatibilidade com componentes que importam GlobalCatalogSuggestion
+export type GlobalCatalogSuggestion = CatalogSuggestion
+
 export async function searchGlobalCatalog(
   query: string,
   category?: string,
