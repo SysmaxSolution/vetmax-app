@@ -17,6 +17,14 @@ async function loginAs(page: Page, email: string, password: string) {
   await loginViaApi(page, email, password)
 }
 
+let _serverAlive = true
+test.beforeAll(async ({ browser }) => {
+  const _ctx = await browser.newContext(); const _pg = await _ctx.newPage()
+  _serverAlive = await _pg.goto(process.env.TEST_BASE_URL ?? 'http://localhost:4000', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
+  await _ctx.close(); if (!_serverAlive) console.log('[SKIP ALL] grooming-checkout — servidor fora do ar')
+})
+test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
+
 test.describe('Checkout Grooming → Central Cashier', () => {
   let sessionId: string;
 

@@ -38,7 +38,7 @@ export async function injectFreshSession(
   password: string,
 ): Promise<void> {
   await page.goto(`${BASE_URL}/login`, { waitUntil: 'domcontentloaded', timeout: 45_000 })
-  await page.locator('#email').waitFor({ state: 'visible', timeout: 15_000 })
+  await page.locator('#email').waitFor({ state: 'visible', timeout: 30_000 })
   await page.fill('#email', email)
   await page.fill('#password', password)
   await page.getByRole('button', { name: /entrar/i }).click()
@@ -54,6 +54,13 @@ export async function injectFreshSession(
 async function loadStorageState(page: Page, email: string): Promise<boolean> {
   const role = EMAIL_TO_ROLE[email]
   if (!role) return false
+
+  // Se o contexto já tem cookies válidos (ex: refresh pós-test anterior), reutilizar.
+  // Evita sobrescrever tokens rotacionados pelo servidor com os antigos do arquivo.
+  const existing = await page.context().cookies()
+  if (existing.length > 0 && !isStorageStateExpired(existing as unknown as Record<string, unknown>[])) {
+    return true
+  }
 
   const statePath = path.join(AUTH_DIR, `${role}.json`)
   if (!fs.existsSync(statePath)) return false

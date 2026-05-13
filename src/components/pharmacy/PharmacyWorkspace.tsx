@@ -159,7 +159,7 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole }: Pro
     }
     setCatalogLoading(true)
     catalogDebounceRef.current = setTimeout(async () => {
-      const results = await searchGlobalCatalog(term, 6)
+      const results = await searchGlobalCatalog(term, undefined, 6)
       setCatalogSuggestions(results)
       setCatalogLoading(false)
     }, 400)

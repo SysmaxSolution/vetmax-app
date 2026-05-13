@@ -56,7 +56,7 @@ interface Props {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function PharmacyCatalogQuickAdd({ suggestion, onClose, onSaved }: Props) {
-  const [category,   setCategory]   = useState<StockCategory>(suggestion.category)
+  const [category,   setCategory]   = useState<StockCategory>(suggestion.category as StockCategory)
   const [unit,       setUnit]       = useState(suggestion.unit ?? 'un')
   const [price,      setPrice]      = useState(suggestion.price_avg != null ? String(suggestion.price_avg) : '')
   const [quantity,   setQuantity]   = useState('0')
@@ -133,7 +133,7 @@ export default function PharmacyCatalogQuickAdd({ suggestion, onClose, onSaved }
                 </span>
               )}
               <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
-                {CAT_LABELS[suggestion.category]}
+                {CAT_LABELS[suggestion.category as StockCategory]}
               </span>
             </div>
           </div>

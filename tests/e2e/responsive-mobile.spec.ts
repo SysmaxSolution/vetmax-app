@@ -1,4 +1,4 @@
-﻿/**
+/**
  * responsive-mobile.spec.ts
  *
  * Testes de responsividade para todos os módulos do VetMax.
@@ -32,29 +32,6 @@ async function loginAsAdmin(page: Page): Promise<void> {
 
 async function setMobileViewport(page: Page, width: number, height: number): Promise<void> {
   await page.setViewportSize({ width, height })
-}
-
-/** Retorna true se o elemento está visível E ocupa espaço em tela */
-async function isRenderedVisible(page: Page, selector: string): Promise<boolean> {
-  const el = page.locator(selector).first()
-  try {
-    const box = await el.boundingBox()
-    if (!box) return false
-    return box.width > 0 && box.height > 0
-  } catch {
-    return false
-  }
-}
-
-/** Verifica que um elemento CSS com display:none não ocupa espaço */
-async function isCSSHidden(page: Page, selector: string): Promise<boolean> {
-  const el = page.locator(selector).first()
-  try {
-    const box = await el.boundingBox()
-    return box === null
-  } catch {
-    return true
-  }
 }
 
 // ─── Dispositivos a testar ─────────────────────────────────────────────────────
@@ -209,8 +186,6 @@ test.describe('MOB-TRIAGEM: Triagem — Grade de Sinais Vitais', () => {
   })
 
   test('[TriageForm] grade de sinais vitais é 1 coluna em 375px', async ({ page }, testInfo) => {
-    // Navega para a página de triagem (o form só aparece ao clicar num item da fila)
-    // Vamos validar via CSS computed style que grid-cols-1 é aplicado
     await setMobileViewport(page, 375, 667)
     await page.goto('/dashboard/triage', { waitUntil: 'domcontentloaded' })
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {})
@@ -261,9 +236,6 @@ test.describe('MOB-WPP: WhatsApp — Toggle Mobile Lista/Chat', () => {
       )
       expect(hasOverflow).toBe(false)
 
-      // Painel de lista deve estar visível (div com classe flex, não hidden)
-      // O painel de chat deve estar oculto no início (mobileView === 'list')
-      // Verifica que não há overflow de layout
       const container = page.locator('div.grid').first()
       if (await container.count() > 0) {
         const containerBox = await container.boundingBox()
@@ -282,13 +254,6 @@ test.describe('MOB-WPP: WhatsApp — Toggle Mobile Lista/Chat', () => {
     const hasWhatsApp = await page.locator('h1').filter({ hasText: /WhatsApp/i }).count() > 0
     if (!hasWhatsApp) { test.info().skip(); return }
 
-    // O botão "← Voltar" (ArrowLeft) deve existir no DOM mas só aparece em mobile (flex lg:hidden)
-    const backBtn = page.locator('button').filter({
-      has: page.locator('svg'),
-    }).filter({ hasText: '' }).first()
-
-    // O botão voltar do chat só aparece quando há uma conversa selecionada
-    // Verifica que a estrutura do painel está correta
     const panelGrid = page.locator('.grid.grid-cols-1')
     await expect(panelGrid.first()).toBeVisible()
   })
@@ -307,7 +272,6 @@ test.describe('MOB-MENTOR: Mentor IA — Posição do Botão Flutuante', () => {
       await page.goto('/dashboard/reception', { waitUntil: 'domcontentloaded' })
       await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {})
 
-      // O botão do Mentor pode não estar ativo se o módulo não estiver habilitado
       const mentorBtn = page.locator('[aria-label*="Mentor"]').first()
       const hasMentor = await mentorBtn.count() > 0
       if (!hasMentor) { test.info().skip(); return }
@@ -315,14 +279,11 @@ test.describe('MOB-MENTOR: Mentor IA — Posição do Botão Flutuante', () => {
       const box = await mentorBtn.boundingBox()
       if (!box) { test.info().skip(); return }
 
-      // Botão deve estar dentro da viewport com margem de pelo menos 8px
       expect(box.x).toBeGreaterThanOrEqual(0)
       expect(box.y).toBeGreaterThanOrEqual(0)
       expect(box.x + box.width).toBeLessThanOrEqual(phone.w)
       expect(box.y + box.height).toBeLessThanOrEqual(phone.h)
 
-      // Em mobile (< 640px), bottom-4 right-4 = 16px de margem
-      // O botão deve estar a no máximo 32px da borda direita
       const rightMargin = phone.w - (box.x + box.width)
       expect(rightMargin).toBeLessThanOrEqual(32)
       expect(rightMargin).toBeGreaterThanOrEqual(8)
@@ -342,7 +303,6 @@ test.describe('MOB-MENTOR: Mentor IA — Posição do Botão Flutuante', () => {
       const box = await mentorBtn.boundingBox()
       if (!box) { test.info().skip(); return }
 
-      // Em tablet (≥ 640px), bottom-6 right-6 = 24px de margem
       const rightMargin = tablet.w - (box.x + box.width)
       expect(rightMargin).toBeLessThanOrEqual(40)
       expect(rightMargin).toBeGreaterThanOrEqual(16)
@@ -368,7 +328,6 @@ test.describe('MOB-RECEP: Recepção — Layout e Fila', () => {
       )
       expect(hasOverflow).toBe(false)
 
-      // Título da página visível
       await expect(page.getByRole('heading', { name: /Recepção|Fila|Espera/i }).first()).toBeVisible()
     })
   }
@@ -399,8 +358,6 @@ test.describe('MOB-AGENDA: Agenda — Layout Calendário', () => {
     await page.goto('/dashboard/reception/calendar', { waitUntil: 'domcontentloaded' })
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {})
 
-    // Em tablet, o grid lg:grid-cols-5 pode ou não estar ativo (depende de lg= 1024px)
-    // Verificar que o layout não quebra
     const hasOverflow = await page.evaluate(() =>
       document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
     )
@@ -562,7 +519,6 @@ test.describe('MOB-GESTAO: Gestão/Feed — Dados da Clínica', () => {
     await page.goto('/dashboard/management', { waitUntil: 'domcontentloaded' })
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {})
 
-    // Ao rolar para configurações de clínica, verificar layout responsivo
     // CSS grid-cols-1 sm:grid-cols-2 deve estar ativo em 375px
     const grids = await page.locator('.grid').all()
     for (const grid of grids) {

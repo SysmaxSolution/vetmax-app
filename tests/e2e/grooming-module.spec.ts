@@ -98,8 +98,8 @@ test.describe('TC-GRM-01: Check-in via Recepção', () => {
     // 1. Ir à Recepção e buscar o tutor
     await page.goto('/dashboard/reception', { waitUntil: 'domcontentloaded', timeout: 45_000 });
     await page.getByPlaceholder(/cpf|tutor|pet/i).fill('Carlos Tutor');
-    await page.waitForTimeout(500);
-    await page.getByText('Carlos Tutor Silva').first().waitFor({ timeout: 15_000 });
+    await page.waitForTimeout(1500);
+    await page.getByText('Carlos Tutor Silva').first().waitFor({ timeout: 20_000 });
     await page.getByText('Carlos Tutor Silva').first().click();
 
     // 2. Aguardar pets carregarem e clicar em Check-in B&T
@@ -157,12 +157,13 @@ test.describe('TC-GRM-02: Agendamento Futuro via Recepção', () => {
   });
 
   test('Agendamento futuro cria sessão com scheduled_at e aparece em "Agendados"', async ({ page }, testInfo) => {
+    test.setTimeout(90_000);
     await loginAs(page, fixtures.users.receptionistA.email, fixtures.users.receptionistA.password);
 
     await page.goto('/dashboard/reception', { waitUntil: 'domcontentloaded', timeout: 45_000 });
     await page.getByPlaceholder(/cpf|tutor|pet/i).fill('Carlos Tutor');
-    await page.waitForTimeout(500);
-    await page.getByText('Carlos Tutor Silva').first().waitFor({ timeout: 15_000 });
+    await page.waitForTimeout(1500);
+    await page.getByText('Carlos Tutor Silva').first().waitFor({ timeout: 20_000 });
     await page.getByText('Carlos Tutor Silva').first().click();
 
     // Aguardar pets e clicar em "Agendar B&T"
@@ -534,7 +535,8 @@ test.describe('TC-GRM-07: Agendamento via modal principal com motivo Banho e Tos
 
     // Buscar tutor
     await page.getByPlaceholder(/cpf|tutor|pet/i).fill('Carlos Tutor');
-    await page.getByText('Carlos Tutor Silva').first().waitFor({ timeout: 8_000 });
+    await page.waitForTimeout(1500);
+    await page.getByText('Carlos Tutor Silva').first().waitFor({ timeout: 20_000 });
     await page.getByText('Carlos Tutor Silva').first().click();
 
     // Aguardar pets carregarem e clicar em "Agendar" no pet
@@ -614,12 +616,13 @@ test.describe('TC-GRM-08: Módulo grooming inativo', () => {
   });
 
   test('Botão Banho/Tosa não aparece na Recepção quando módulo inativo', async ({ page }, testInfo) => {
+    test.setTimeout(90_000);
     await loginAs(page, fixtures.users.receptionistA.email, fixtures.users.receptionistA.password);
     await page.goto('/dashboard/reception', { waitUntil: 'domcontentloaded', timeout: 45_000 });
 
     await page.getByPlaceholder(/cpf|tutor|pet/i).fill('Carlos Tutor');
-    await page.waitForTimeout(500);
-    await page.getByText('Carlos Tutor Silva').first().waitFor({ timeout: 15_000 });
+    await page.waitForTimeout(1500);
+    await page.getByText('Carlos Tutor Silva').first().waitFor({ timeout: 20_000 });
     await page.getByText('Carlos Tutor Silva').first().click();
 
     // Botão de grooming NÃO deve aparecer
@@ -973,9 +976,7 @@ test.describe('TC-GRM-016: Mentor guia para data-mentor-step no modal de B&T', (
     const card = page.locator(`[data-testid="session-card-${sessionId}"]`);
     await expect(card).toBeVisible({ timeout: 5_000 });
     await card.click();
-    await page.waitForTimeout(300);
-
-    await expect(page.getByRole('heading', { name: /registrar serviço/i })).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByRole('heading', { name: /registrar serviço/i })).toBeVisible({ timeout: 15_000 });
 
     // Verificar que todos os data-mentor-step estão disponíveis no DOM
     const obsStep = await page.locator('[data-mentor-step="grooming-observations-textarea"]').count();

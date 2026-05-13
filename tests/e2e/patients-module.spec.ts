@@ -10,7 +10,7 @@
 
 import { test, expect, Page } from '@playwright/test';
 import { createAdminClient } from '../helpers/supabase-test-client';
-import { seedTutorsAndPets } from '../helpers/db-seed';
+import { seedTutorsAndPets, seedUsers } from '../helpers/db-seed';
 import fixtures from '../fixtures/test-data.json';
 
 const admin = createAdminClient();
@@ -28,6 +28,7 @@ test.beforeAll(async ({ browser }) => {
     .then(() => true).catch(() => false)
   await _ctx.close()
   if (!_serverAlive) console.log('[SKIP ALL] patients-module — servidor fora do ar')
+  if (_serverAlive) await seedUsers().catch(e => console.warn('[patients] seedUsers falhou:', e.message))
 })
 test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
 

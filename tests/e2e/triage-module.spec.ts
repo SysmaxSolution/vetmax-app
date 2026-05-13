@@ -20,7 +20,7 @@
 
 import { test, expect, Page } from '@playwright/test'
 import { createAdminClient } from '../helpers/supabase-test-client'
-import { seedTutorsAndPets } from '../helpers/db-seed'
+import { seedTutorsAndPets, seedUsers } from '../helpers/db-seed'
 import fixtures from '../fixtures/test-data.json'
 
 const admin = createAdminClient()
@@ -102,7 +102,8 @@ async function openTriageForm(page: Page): Promise<boolean> {
 // ─── Seed global ─────────────────────────────────────────────────────────────
 
 test.beforeAll(async () => {
-  await seedTutorsAndPets() // ensures clinic exists first
+  await seedUsers().catch(e => console.warn('[triage] seedUsers falhou:', e.message))
+  await seedTutorsAndPets()
 })
 
 // ═══════════════════════════════════════════════════════════════════════════════

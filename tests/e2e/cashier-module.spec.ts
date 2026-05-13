@@ -118,24 +118,21 @@ test.describe('TC-CAI-02: Filtrar por módulo grooming', () => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded' });
 
+    // Aguardar hidratação React antes de interagir com controles controlados
+    await page.getByTestId('cashier-hydrated').waitFor({ timeout: 15_000 }).catch(() => {});
+
     await expect(page.getByText('Banho e Tosa - Filtro Teste')).toBeVisible({ timeout: 10_000 });
 
-    // Aplicar filtro de módulo
-    const moduleFilter = page.getByTestId('filter-module').or(
-      page.getByLabel(/módulo|module/i)
-    );
+    // Aplicar filtro de módulo via testid direto (sem .or() para evitar ambiguidade)
+    const moduleFilter = page.getByTestId('filter-module');
     await expect(moduleFilter).toBeVisible({ timeout: 8_000 });
     await moduleFilter.selectOption('grooming');
-    // Forçar evento nativo para garantir que o React processe a mudança
-    await page.evaluate(() => {
-      const sel = document.querySelector<HTMLSelectElement>('[data-testid="filter-module"]');
-      if (!sel) return;
-      const nativeSetter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
-      nativeSetter?.call(sel, 'grooming');
-      sel.dispatchEvent(new Event('change', { bubbles: true }));
-    });
+
     // Aguardar React re-renderizar e atualizar data-filtermod
-    await page.locator('[data-testid="cashier-entries-table"][data-filtermod="grooming"]').waitFor({ timeout: 5_000 });
+    await page.waitForFunction(
+      () => document.querySelector('[data-testid="cashier-entries-table"]')?.getAttribute('data-filtermod') === 'grooming',
+      { timeout: 10_000 }
+    );
 
     // Apenas lançamento de grooming deve aparecer
     await expect(page.getByText('Banho e Tosa - Filtro Teste')).toBeVisible({ timeout: 5_000 });
