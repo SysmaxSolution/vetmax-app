@@ -60,28 +60,28 @@ export default function PetFrequencyReport() {
   return (
     <div className="space-y-4">
       {/* Filters */}
-      <div className="flex flex-wrap gap-3 items-end">
+      <div className="flex flex-col sm:flex-row flex-wrap gap-3 items-start sm:items-end">
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">De</label>
           <input type="date" value={from} onChange={e => setFrom(e.target.value)}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            className="w-full sm:w-auto rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Até</label>
           <input type="date" value={to} onChange={e => setTo(e.target.value)}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            className="w-full sm:w-auto rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Espécie</label>
           <select value={species} onChange={e => setSpecies(e.target.value)}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+            className="w-full sm:w-auto rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
             {SPECIES_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Raça</label>
           <input type="text" placeholder="Todas" value={breed} onChange={e => setBreed(e.target.value)}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm w-36 focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            className="w-full sm:w-36 rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
         </div>
         <button onClick={run} disabled={pending}
           className="rounded-lg bg-violet-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50 transition-colors">

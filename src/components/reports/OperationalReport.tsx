@@ -47,16 +47,16 @@ export default function OperationalReport() {
   return (
     <div className="space-y-5">
       {/* Filters */}
-      <div className="flex flex-wrap gap-3 items-end">
+      <div className="flex flex-col sm:flex-row flex-wrap gap-3 items-start sm:items-end">
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">De</label>
           <input type="date" value={from} onChange={e => setFrom(e.target.value)}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            className="w-full sm:w-auto rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Até</label>
           <input type="date" value={to} onChange={e => setTo(e.target.value)}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            className="w-full sm:w-auto rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
         </div>
         <button onClick={run} disabled={pending}
           className="rounded-lg bg-violet-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50 transition-colors">
@@ -96,13 +96,13 @@ export default function OperationalReport() {
           {/* Agendamentos tab */}
           {tab === 'agendamentos' && (
             <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <StatCard label="Total de consultas"  value={result.appointments.total} />
                 <StatCard label="Taxa de comparecimento" value={`${result.appointments.attendance_rate}%`} />
                 <StatCard label="Cancelamentos"        value={result.appointments.cancellations} />
               </div>
               {result.appointments.by_day.length > 0 && (
-                <div className="rounded-xl border border-slate-200 overflow-hidden">
+                <div className="rounded-xl border border-slate-200 overflow-x-auto">
                   <div className="px-4 py-3 bg-violet-50 border-b border-violet-100">
                     <p className="text-xs font-semibold text-violet-700 uppercase tracking-wide">Consultas por Dia</p>
                   </div>
@@ -130,7 +130,7 @@ export default function OperationalReport() {
 
           {/* Internação tab */}
           {tab === 'internacao' && (
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <StatCard label="Admissões"          value={result.hospitalization.admissions} />
               <StatCard label="Tempo médio (dias)" value={result.hospitalization.avg_days} />
               <StatCard label="Altas"              value={result.hospitalization.discharges} />
@@ -139,7 +139,7 @@ export default function OperationalReport() {
 
           {/* Grooming tab */}
           {tab === 'grooming' && (
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <StatCard label="Serviços realizados" value={result.grooming.services} />
               <StatCard label="Receita"             value={fmt(result.grooming.revenue)} />
               <StatCard label="Tutores recorrentes" value={result.grooming.recurring_tutors} />

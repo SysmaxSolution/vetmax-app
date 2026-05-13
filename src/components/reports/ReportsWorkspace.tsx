@@ -129,9 +129,9 @@ export default function ReportsWorkspace({ initialEnabled }: Props) {
   const safeActiveKey = activeCategory?.key ?? 'settings'
 
   return (
-    <div className="flex gap-0 min-h-[calc(100vh-120px)]">
-      {/* Sidebar */}
-      <aside className="w-56 flex-shrink-0 bg-white border-r border-slate-200 p-3 space-y-1">
+    <div className="flex flex-col lg:flex-row gap-0 min-h-[calc(100vh-120px)]">
+      {/* Sidebar — lateral em desktop, chips horizontais em mobile */}
+      <aside className="w-full lg:w-56 lg:flex-shrink-0 bg-white border-b lg:border-b-0 lg:border-r border-slate-200 p-3">
         <div className="flex items-center gap-2 px-2 py-3 mb-2">
           <div className="w-7 h-7 rounded-lg bg-violet-600 flex items-center justify-center flex-shrink-0">
             <BarChart3 className="w-4 h-4 text-white" />
@@ -142,18 +142,37 @@ export default function ReportsWorkspace({ initialEnabled }: Props) {
           </div>
         </div>
 
-        {visibleCategories.map(cat => (
-          <SidebarItem
-            key={cat.key}
-            cat={cat}
-            active={safeActiveKey === cat.key}
-            onClick={() => setActiveKey(cat.key)}
-          />
-        ))}
+        {/* Mobile: chips horizontais; Desktop: lista vertical */}
+        <div className="flex flex-wrap gap-2 lg:hidden">
+          {visibleCategories.map(cat => (
+            <button
+              key={cat.key}
+              onClick={() => setActiveKey(cat.key)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                safeActiveKey === cat.key
+                  ? 'bg-violet-600 text-white shadow-sm'
+                  : 'bg-slate-100 text-slate-600 hover:bg-violet-50 hover:text-violet-700'
+              }`}
+            >
+              <cat.icon className="w-3 h-3 flex-shrink-0" />
+              <span>{cat.label}</span>
+            </button>
+          ))}
+        </div>
+        <div className="hidden lg:flex lg:flex-col lg:space-y-1">
+          {visibleCategories.map(cat => (
+            <SidebarItem
+              key={cat.key}
+              cat={cat}
+              active={safeActiveKey === cat.key}
+              onClick={() => setActiveKey(cat.key)}
+            />
+          ))}
+        </div>
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 p-6 overflow-y-auto">
+      <main className="flex-1 p-4 lg:p-6 overflow-y-auto">
         {activeCategory && (
           <>
             <div className="mb-6">

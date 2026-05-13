@@ -80,26 +80,26 @@ export default function FinancialReport() {
   return (
     <div className="space-y-5">
       {/* Filters */}
-      <div className="flex flex-wrap gap-3 items-end">
+      <div className="flex flex-col sm:flex-row flex-wrap gap-3 items-start sm:items-end">
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">De</label>
           <input type="date" value={from} onChange={e => setFrom(e.target.value)}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            className="w-full sm:w-auto rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Até</label>
           <input type="date" value={to} onChange={e => setTo(e.target.value)}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            className="w-full sm:w-auto rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Categoria</label>
           <input type="text" placeholder="Todas" value={cat} onChange={e => setCat(e.target.value)}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm w-36 focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            className="w-full sm:w-36 rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Forma de Pagamento</label>
           <select value={method} onChange={e => setMethod(e.target.value)}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+            className="w-full sm:w-auto rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
             <option value="">Todas</option>
             <option value="cash">Dinheiro</option>
             <option value="card">Cartão</option>

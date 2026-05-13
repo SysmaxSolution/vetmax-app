@@ -32,27 +32,29 @@ export default function DREReport() {
   return (
     <div className="space-y-5">
       {/* Filters */}
-      <div className="flex flex-wrap gap-3 items-end print:hidden">
+      <div className="flex flex-col sm:flex-row flex-wrap gap-3 items-start sm:items-end print:hidden">
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">De</label>
           <input type="date" value={from} onChange={e => setFrom(e.target.value)}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            className="w-full sm:w-auto rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Até</label>
           <input type="date" value={to} onChange={e => setTo(e.target.value)}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            className="w-full sm:w-auto rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
         </div>
-        <button onClick={run} disabled={pending}
-          className="rounded-lg bg-violet-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50 transition-colors">
-          {pending ? 'Carregando…' : 'Gerar'}
-        </button>
-        {lines && (
-          <button onClick={handlePrint}
-            className="rounded-lg border border-violet-200 px-4 py-1.5 text-sm font-medium text-violet-700 hover:bg-violet-50 transition-colors">
-            Imprimir / Exportar PDF
+        <div className="flex flex-wrap gap-2">
+          <button onClick={run} disabled={pending}
+            className="rounded-lg bg-violet-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50 transition-colors">
+            {pending ? 'Carregando…' : 'Gerar'}
           </button>
-        )}
+          {lines && (
+            <button onClick={handlePrint}
+              className="rounded-lg border border-violet-200 px-4 py-1.5 text-sm font-medium text-violet-700 hover:bg-violet-50 transition-colors">
+              Imprimir / Exportar PDF
+            </button>
+          )}
+        </div>
       </div>
 
       {error && (
@@ -66,7 +68,7 @@ export default function DREReport() {
       )}
 
       {lines !== null && (
-        <div className="rounded-xl border border-slate-200 overflow-hidden">
+        <div className="rounded-xl border border-slate-200 overflow-x-auto">
           {/* Print header */}
           <div className="hidden print:block px-6 py-4 border-b border-slate-200">
             <h2 className="text-lg font-bold">Demonstração do Resultado do Exercício (DRE)</h2>

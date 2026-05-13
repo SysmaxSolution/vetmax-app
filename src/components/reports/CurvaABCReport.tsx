@@ -40,21 +40,21 @@ export default function CurvaABCReport() {
   return (
     <div className="space-y-5">
       {/* Filters */}
-      <div className="flex flex-wrap gap-3 items-end">
+      <div className="flex flex-col sm:flex-row flex-wrap gap-3 items-start sm:items-end">
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">De</label>
           <input type="date" value={from} onChange={e => setFrom(e.target.value)}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            className="w-full sm:w-auto rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Até</label>
           <input type="date" value={to} onChange={e => setTo(e.target.value)}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            className="w-full sm:w-auto rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Tipo</label>
           <select value={type} onChange={e => setType(e.target.value as 'services' | 'products' | 'all')}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+            className="w-full sm:w-auto rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
             <option value="all">Todos</option>
             <option value="services">Serviços</option>
             <option value="products">Produtos</option>
