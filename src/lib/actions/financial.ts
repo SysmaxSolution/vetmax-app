@@ -372,7 +372,7 @@ export async function reverseFinancialEntry(
 
     const { data: entry } = await admin
       .from('financial_entries')
-      .select('id, status, source, cashier_entry_id')
+      .select('id, status, source, cashier_entry_id, settlement_bank_id, payment_date, amount, discount, interest, document_number')
       .eq('id', id)
       .eq('clinic_id', clinicId)
       .single()
@@ -381,15 +381,17 @@ export async function reverseFinancialEntry(
     if (entry.status !== 'paid') return { error: 'Apenas títulos baixados podem ser estornados.' }
 
     const isCashierLinked = entry.source === 'cashier' && entry.cashier_entry_id
-
-    // Cashier-linked: vai para 'cancelled' (o lançamento origem será revertido no caixa)
-    // Manual: volta para 'pending' para permitir re-pagamento ou exclusão
-    const newStatus = isCashierLinked ? 'cancelled' : 'pending'
+    const prevBankId      = (entry as unknown as Record<string, unknown>).settlement_bank_id as string | null
+    const prevPayDate     = (entry as unknown as Record<string, unknown>).payment_date as string | null
+    const entryAmount     = Number((entry as unknown as Record<string, unknown>).amount ?? 0)
+    const entryDiscount   = Number((entry as unknown as Record<string, unknown>).discount ?? 0)
+    const entryInterest   = Number((entry as unknown as Record<string, unknown>).interest ?? 0)
+    const docNumber       = (entry as unknown as Record<string, unknown>).document_number as string | null
 
     const { error: updErr } = await admin
       .from('financial_entries')
       .update({
-        status:             newStatus,
+        status:             'pending',
         payment_date:       null,
         payment_method:     null,
         settlement_bank_id: null,
@@ -401,7 +403,23 @@ export async function reverseFinancialEntry(
 
     if (updErr) return { error: 'Erro ao estornar título: ' + updErr.message }
 
-    // Reverte o lançamento no Caixa (o trigger cuida do restante)
+    // Lança débito no extrato bancário (estorno do crédito original)
+    if (prevBankId && prevPayDate) {
+      const netAmount = entryAmount - entryDiscount + entryInterest
+      await admin
+        .from('bank_statements')
+        .insert({
+          clinic_id:          clinicId,
+          bank_account_id:    prevBankId,
+          date:               prevPayDate,
+          amount:             netAmount,
+          description:        `Estorno título ${docNumber ?? id}`,
+          type:               'debit',
+          reconciled_entry_id: id,
+        })
+    }
+
+    // Reverte o lançamento no Caixa quando origem é cashier
     if (isCashierLinked) {
       await admin
         .from('central_cashier')
@@ -433,16 +451,34 @@ export async function baixarTitulo(
   const clinicId = await getClinicId()
   if (!clinicId) return { error: 'Não autenticado.' }
 
+  const admin = createAdminClient()
+
+  // Lê o valor base do título para calcular o líquido do extrato
+  const { data: current } = await admin
+    .from('financial_entries')
+    .select('amount, discount, document_number')
+    .eq('id', id)
+    .eq('clinic_id', clinicId)
+    .eq('status', 'pending')
+    .single()
+
+  if (!current) return { error: 'Título não encontrado ou já baixado.' }
+
+  const baseAmount    = Number((current as unknown as Record<string, unknown>).amount ?? 0)
+  const baseDiscount  = data.discount !== undefined ? data.discount : Number((current as unknown as Record<string, unknown>).discount ?? 0)
+  const baseInterest  = data.interest ?? 0
+  const netAmount     = baseAmount - baseDiscount + baseInterest
+  const docNumber     = (current as unknown as Record<string, unknown>).document_number as string | null
+
   const updates: Record<string, unknown> = {
     status:             'paid',
     payment_date:       data.payment_date,
     payment_method:     data.payment_method,
     settlement_bank_id: data.settlement_bank_id || null,
-    interest:           data.interest ?? 0,
+    interest:           baseInterest,
+    discount:           baseDiscount,
   }
-  if (data.discount !== undefined) updates.discount = data.discount
 
-  const admin = createAdminClient()
   const { error } = await admin
     .from('financial_entries')
     .update(updates)
@@ -451,6 +487,22 @@ export async function baixarTitulo(
     .eq('status', 'pending')
 
   if (error) return { error: 'Erro ao baixar título: ' + error.message }
+
+  // Lança crédito no extrato bancário
+  if (data.settlement_bank_id) {
+    await admin
+      .from('bank_statements')
+      .insert({
+        clinic_id:           clinicId,
+        bank_account_id:     data.settlement_bank_id,
+        date:                data.payment_date,
+        amount:              netAmount,
+        description:         `Recebimento título ${docNumber ?? id}`,
+        type:                'credit',
+        reconciled_entry_id: id,
+      })
+  }
+
   return {}
 }
 
