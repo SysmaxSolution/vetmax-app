@@ -90,29 +90,31 @@ export interface BaixarTituloData {
 // ─── Types G-10 ───────────────────────────────────────────────────────────────
 
 export interface BankAccount {
-  id:         string
-  clinic_id:  string
-  name:       string
-  bank_name:  string | null
-  bank_code:  string | null
-  ispb:       string | null
-  agency:     string | null
-  account:    string | null
-  pix_key:    string | null
-  is_default: boolean
-  balance:    number
-  created_at: string
+  id:              string
+  clinic_id:       string
+  name:            string
+  bank_name:       string | null
+  bank_code:       string | null
+  ispb:            string | null
+  agency:          string | null
+  account:         string | null
+  pix_key:         string | null
+  is_default:      boolean
+  balance:         number
+  initial_balance: number
+  created_at:      string
 }
 
 export interface CreateBankAccountData {
-  name:       string
-  bank_name?: string
-  bank_code?: string
-  ispb?:      string
-  agency?:    string
-  account?:   string
-  pix_key?:   string
-  is_default?: boolean
+  name:            string
+  bank_name?:      string
+  bank_code?:      string
+  ispb?:           string
+  agency?:         string
+  account?:        string
+  pix_key?:        string
+  is_default?:     boolean
+  initial_balance?: number
 }
 
 export interface ChartOfAccount {
@@ -357,6 +359,13 @@ export async function deleteEntry(
   return {}
 }
 
+// REC-2026-000001 → #000001  |  null → s/nº
+function fmtDocRef(docNumber: string | null): string {
+  if (!docNumber) return 's/nº'
+  const seq = docNumber.split('-').pop()
+  return seq ? `#${seq}` : docNumber
+}
+
 // ─── reverseFinancialEntry ────────────────────────────────────────────────────
 
 export async function reverseFinancialEntry(
@@ -413,7 +422,7 @@ export async function reverseFinancialEntry(
           bank_account_id:    prevBankId,
           date:               prevPayDate,
           amount:             netAmount,
-          description:        `Estorno título ${docNumber ?? id}`,
+          description:        `Estorno ${fmtDocRef(docNumber)}`,
           type:               'debit',
           reconciled_entry_id: id,
         })
@@ -497,7 +506,7 @@ export async function baixarTitulo(
         bank_account_id:     data.settlement_bank_id,
         date:                data.payment_date,
         amount:              netAmount,
-        description:         `Recebimento título ${docNumber ?? id}`,
+        description:         `Recebimento ${fmtDocRef(docNumber)}`,
         type:                'credit',
         reconciled_entry_id: id,
       })
@@ -579,7 +588,7 @@ export async function listBankAccounts(): Promise<BankAccount[] | { error: strin
   const admin = createAdminClient()
   const { data, error } = await admin
     .from('bank_accounts')
-    .select('id, clinic_id, name, bank_name, bank_code, ispb, agency, account, pix_key, is_default, balance, created_at')
+    .select('id, clinic_id, name, bank_name, bank_code, ispb, agency, account, pix_key, is_default, balance, initial_balance, created_at')
     .eq('clinic_id', clinicId)
     .order('is_default', { ascending: false })
     .order('name')
@@ -599,17 +608,18 @@ export async function createBankAccount(
   const { data: row, error } = await admin
     .from('bank_accounts')
     .insert({
-      clinic_id:  clinicId,
-      name:       data.name.trim(),
-      bank_name:  data.bank_name  || null,
-      bank_code:  data.bank_code  || null,
-      ispb:       data.ispb       || null,
-      agency:     data.agency     || null,
-      account:    data.account    || null,
-      pix_key:    data.pix_key    || null,
-      is_default: data.is_default ?? false,
+      clinic_id:       clinicId,
+      name:            data.name.trim(),
+      bank_name:       data.bank_name       || null,
+      bank_code:       data.bank_code       || null,
+      ispb:            data.ispb            || null,
+      agency:          data.agency          || null,
+      account:         data.account         || null,
+      pix_key:         data.pix_key         || null,
+      is_default:      data.is_default      ?? false,
+      initial_balance: data.initial_balance ?? 0,
     })
-    .select('id, clinic_id, name, bank_name, bank_code, ispb, agency, account, pix_key, is_default, balance, created_at')
+    .select('id, clinic_id, name, bank_name, bank_code, ispb, agency, account, pix_key, is_default, balance, initial_balance, created_at')
     .single()
 
   if (error) return { error: 'Erro ao criar conta: ' + error.message }
@@ -624,14 +634,15 @@ export async function updateBankAccount(
   if (!clinicId) return { error: 'Não autenticado.' }
 
   const updates: Record<string, unknown> = {}
-  if (data.name       !== undefined) updates.name       = data.name?.trim()
-  if (data.bank_name  !== undefined) updates.bank_name  = data.bank_name  || null
-  if (data.bank_code  !== undefined) updates.bank_code  = data.bank_code  || null
-  if (data.ispb       !== undefined) updates.ispb       = data.ispb       || null
-  if (data.agency     !== undefined) updates.agency     = data.agency     || null
-  if (data.account    !== undefined) updates.account    = data.account    || null
-  if (data.pix_key    !== undefined) updates.pix_key    = data.pix_key    || null
-  if (data.is_default !== undefined) updates.is_default = data.is_default
+  if (data.name            !== undefined) updates.name            = data.name?.trim()
+  if (data.bank_name       !== undefined) updates.bank_name       = data.bank_name       || null
+  if (data.bank_code       !== undefined) updates.bank_code       = data.bank_code       || null
+  if (data.ispb            !== undefined) updates.ispb            = data.ispb            || null
+  if (data.agency          !== undefined) updates.agency          = data.agency          || null
+  if (data.account         !== undefined) updates.account         = data.account         || null
+  if (data.pix_key         !== undefined) updates.pix_key         = data.pix_key         || null
+  if (data.is_default      !== undefined) updates.is_default      = data.is_default
+  if (data.initial_balance !== undefined) updates.initial_balance = data.initial_balance ?? 0
 
   const admin = createAdminClient()
   const { error } = await admin
@@ -1059,15 +1070,24 @@ export async function getExtrato(
   const total_entradas = statements.filter(s => s.type === 'credit').reduce((acc, s) => acc + s.amount, 0)
   const total_saidas   = statements.filter(s => s.type === 'debit').reduce((acc, s) => acc + s.amount, 0)
 
-  // Busca saldo inicial: soma créditos - débitos anteriores ao período
-  const { data: prevData } = await admin
-    .from('bank_statements')
-    .select('amount, type')
-    .eq('clinic_id', clinicId)
-    .eq('bank_account_id', filters.bank_account_id)
-    .lt('date', filters.start_date)
+  // Busca initial_balance da conta e soma transações anteriores ao período
+  const [prevRes, bankRes] = await Promise.all([
+    admin
+      .from('bank_statements')
+      .select('amount, type')
+      .eq('clinic_id', clinicId)
+      .eq('bank_account_id', filters.bank_account_id)
+      .lt('date', filters.start_date),
+    admin
+      .from('bank_accounts')
+      .select('initial_balance')
+      .eq('id', filters.bank_account_id)
+      .eq('clinic_id', clinicId)
+      .single(),
+  ])
 
-  const saldo_inicial = (prevData ?? []).reduce((acc, s) => {
+  const baseBalance  = Number(bankRes.data?.initial_balance ?? 0)
+  const saldo_inicial = baseBalance + (prevRes.data ?? []).reduce((acc, s) => {
     return acc + (s.type === 'credit' ? Number(s.amount) : -Number(s.amount))
   }, 0)
 

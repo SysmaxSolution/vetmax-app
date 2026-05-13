@@ -40,7 +40,7 @@ interface Props {
 
 const emptyForm = (): CreateBankAccountData => ({
   name: '', bank_name: '', bank_code: '', ispb: '',
-  agency: '', account: '', pix_key: '', is_default: false,
+  agency: '', account: '', pix_key: '', is_default: false, initial_balance: 0,
 })
 
 const fieldClass = 'w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20'
@@ -66,6 +66,7 @@ function AccountModal({
           bank_code: account.bank_code ?? '', ispb: account.ispb ?? '',
           agency: account.agency ?? '', account: account.account ?? '',
           pix_key: account.pix_key ?? '', is_default: account.is_default,
+          initial_balance: account.initial_balance ?? 0,
         }
       : emptyForm()
   )
@@ -169,6 +170,23 @@ function AccountModal({
             <label className={labelClass}>Chave PIX</label>
             <input value={form.pix_key ?? ''} onChange={e => setForm(f => ({ ...f, pix_key: e.target.value }))}
               className={fieldClass} placeholder="CPF, CNPJ, e-mail, telefone ou chave aleatória" />
+          </div>
+
+          <div>
+            <label className={labelClass}>Saldo Inicial (R$)</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-400">R$</span>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.initial_balance ?? 0}
+                onChange={e => setForm(f => ({ ...f, initial_balance: Number(e.target.value) || 0 }))}
+                className={`${fieldClass} pl-9`}
+                placeholder="0,00"
+              />
+            </div>
+            <p className="mt-1 text-xs text-slate-400">Saldo pré-existente antes do início dos lançamentos neste sistema.</p>
           </div>
 
           <label className="flex items-center gap-2 cursor-pointer">
