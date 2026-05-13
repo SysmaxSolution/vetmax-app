@@ -54,6 +54,13 @@ export async function seedTutorsAndPets(): Promise<void> {
   await seedClinics();
   await admin.from('tutors').upsert([fixtures.tutors.tutorA1]);
   await admin.from('patients').upsert([fixtures.patients.petA1]);
+  // Remove orphaned consultations from petA1 left by previous specs to prevent
+  // cross-spec count pollution (e.g. TC-R02-05 expects exactly 1 consultation)
+  await admin
+    .from('consultations')
+    .delete()
+    .eq('patient_id', fixtures.patients.petA1.id)
+    .eq('clinic_id', fixtures.clinics.clinicA.id);
 }
 
 export async function seedProductPrices(): Promise<void> {

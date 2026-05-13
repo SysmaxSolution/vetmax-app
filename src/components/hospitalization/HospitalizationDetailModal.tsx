@@ -580,6 +580,8 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
                   {/* Failsafe manual + indicador handsfree */}
                   <button
                     type="button"
+                    data-testid="hospitalization-mic-btn"
+                    aria-label={isRecording ? 'Parar gravação de voz' : 'Iniciar gravação de voz (microfone)'}
                     onClick={() => voiceAssistant.manualToggle()}
                     disabled={isProcessingVoice}
                     title={isRecording ? 'Parar (ou diga "Finalizar")' : 'Gravar (ou diga "Assistente")'}
