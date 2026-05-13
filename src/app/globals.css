@@ -5,6 +5,11 @@
   --vetmax-user-bg: transparent;
 }
 
+/* Previne scroll horizontal em todos os módulos (MOB-* tests) */
+html, body {
+  overflow-x: hidden;
+}
+
 /* ─── G16-3: Mentor Highlight Animations ─────────────────────────────────── */
 
 @keyframes mentor-pulse {

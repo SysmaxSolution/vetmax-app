@@ -11,3 +11,7 @@ dist/
 
 # Tokens de sessão dos testes E2E — gerados pelo global-setup, nunca commitar
 tests/.auth/
+
+
+#Ignore vscode AI rules
+.github\instructions\codacy.instructions.md

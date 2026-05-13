@@ -97,7 +97,11 @@ test.describe('TC-GRM-01: Check-in via Recepção', () => {
 
     // 1. Ir à Recepção e buscar o tutor
     await page.goto('/dashboard/reception', { waitUntil: 'domcontentloaded', timeout: 45_000 });
-    await page.getByPlaceholder(/cpf|tutor|pet/i).fill('Carlos Tutor');
+    const searchInput1 = page.getByPlaceholder(/cpf|tutor|pet/i)
+    await searchInput1.waitFor({ state: 'visible', timeout: 30_000 })
+    await searchInput1.click()
+    await page.waitForTimeout(2_000)
+    await searchInput1.fill('Carlos Tutor');
     await page.waitForTimeout(1500);
     await page.getByText('Carlos Tutor Silva').first().waitFor({ timeout: 20_000 });
     await page.getByText('Carlos Tutor Silva').first().click();
@@ -161,7 +165,11 @@ test.describe('TC-GRM-02: Agendamento Futuro via Recepção', () => {
     await loginAs(page, fixtures.users.receptionistA.email, fixtures.users.receptionistA.password);
 
     await page.goto('/dashboard/reception', { waitUntil: 'domcontentloaded', timeout: 45_000 });
-    await page.getByPlaceholder(/cpf|tutor|pet/i).fill('Carlos Tutor');
+    const searchInput2 = page.getByPlaceholder(/cpf|tutor|pet/i)
+    await searchInput2.waitFor({ state: 'visible', timeout: 30_000 })
+    await searchInput2.click()
+    await page.waitForTimeout(2_000)
+    await searchInput2.fill('Carlos Tutor');
     await page.waitForTimeout(1500);
     await page.getByText('Carlos Tutor Silva').first().waitFor({ timeout: 20_000 });
     await page.getByText('Carlos Tutor Silva').first().click();
@@ -534,7 +542,11 @@ test.describe('TC-GRM-07: Agendamento via modal principal com motivo Banho e Tos
     await page.goto('/dashboard/reception', { waitUntil: 'domcontentloaded', timeout: 45_000 });
 
     // Buscar tutor
-    await page.getByPlaceholder(/cpf|tutor|pet/i).fill('Carlos Tutor');
+    const searchInput7 = page.getByPlaceholder(/cpf|tutor|pet/i)
+    await searchInput7.waitFor({ state: 'visible', timeout: 30_000 })
+    await searchInput7.click()
+    await page.waitForTimeout(2_000)
+    await searchInput7.fill('Carlos Tutor');
     await page.waitForTimeout(1500);
     await page.getByText('Carlos Tutor Silva').first().waitFor({ timeout: 20_000 });
     await page.getByText('Carlos Tutor Silva').first().click();
@@ -620,7 +632,11 @@ test.describe('TC-GRM-08: Módulo grooming inativo', () => {
     await loginAs(page, fixtures.users.receptionistA.email, fixtures.users.receptionistA.password);
     await page.goto('/dashboard/reception', { waitUntil: 'domcontentloaded', timeout: 45_000 });
 
-    await page.getByPlaceholder(/cpf|tutor|pet/i).fill('Carlos Tutor');
+    const searchInput8 = page.getByPlaceholder(/cpf|tutor|pet/i)
+    await searchInput8.waitFor({ state: 'visible', timeout: 30_000 })
+    await searchInput8.click()
+    await page.waitForTimeout(2_000)
+    await searchInput8.fill('Carlos Tutor');
     await page.waitForTimeout(1500);
     await page.getByText('Carlos Tutor Silva').first().waitFor({ timeout: 20_000 });
     await page.getByText('Carlos Tutor Silva').first().click();

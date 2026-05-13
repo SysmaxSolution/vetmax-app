@@ -169,6 +169,7 @@ test.describe('TC-G01-03: signUp inclui full_name e clinic_name no user_metadata
     const fullNameField = page.getByLabel(/nome completo|seu nome|full.?name/i)
       .or(page.locator('input[name*="full_name"], input[name*="name"], input[placeholder*="nome"]').first());
     const clinicNameField = page.getByLabel(/clínica|nome da clínica|clinic.?name/i)
+      .or(page.getByPlaceholder(/clínica|clinic/i).first())
       .or(page.locator('input[name*="clinic"]').first());
 
     const fullNameVisible = await fullNameField.isVisible({ timeout: 5_000 }).catch(() => false);

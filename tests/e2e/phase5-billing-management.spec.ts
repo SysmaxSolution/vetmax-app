@@ -665,30 +665,22 @@ test.describe('TC-MGT-003: Toggle com Master Key correta ativa módulo', () => {
 test.describe('TC-MGT-004: Aba horários de funcionamento edita dias úteis', () => {
   test('Aba de horários permite visualizar e editar dias de trabalho', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-    // BusinessHoursTab fica na aba 'configuracoes' da gestão
-    await page.goto('/dashboard/management?tab=configuracoes', { waitUntil: 'domcontentloaded' });
+    // BusinessHoursTab fica na aba 'clinica' da gestão
+    await page.goto('/dashboard/management?tab=clinica', { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(1_000);
 
-    // Tentar encontrar aba de horários (testid pendente de implementação — TC-UF-01)
-    const horariosTab = page.getByTestId('tab-horarios')
-      .or(page.getByRole('button', { name: /horários|funcionamento/i }))
-      .first();
+    // Verificar se BusinessHoursTab está visível (contém dias da semana)
+    const hasHours = await page.getByText(/segunda|monday/i)
+      .first().isVisible({ timeout: 8_000 }).catch(() => false);
 
-    if (!(await horariosTab.isVisible({ timeout: 5_000 }).catch(() => false))) {
-      // BusinessHoursTab pode estar direto na aba configuracoes sem subtab
-      const directHours = await page.getByText(/horário de funcionamento|segunda|monday/i)
-        .first().isVisible({ timeout: 5_000 }).catch(() => false);
-      if (!directHours) {
-        console.log('TC-MGT-004: SKIP — Aba de horários não encontrada em /dashboard/management?tab=configuracoes');
-        testInfo.skip(); return;
-      }
-      // BusinessHoursTab está diretamente visível — prosseguir sem clicar na tab
-    } else {
-      await horariosTab.click();
+    if (!hasHours) {
+      console.log('TC-MGT-004: SKIP — BusinessHoursTab não encontrada em /dashboard/management?tab=clinica');
+      testInfo.skip(); return;
     }
 
     // Deve mostrar campos de dias da semana
     await expect(
-      page.getByText(/segunda|monday|horário de funcionamento/i).first()
+      page.getByText(/segunda|monday/i).first()
     ).toBeVisible({ timeout: 8_000 });
 
     // Botão salvar
