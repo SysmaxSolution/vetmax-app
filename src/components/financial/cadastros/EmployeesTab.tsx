@@ -218,26 +218,29 @@ export default function EmployeesTab({ employees, canEditFinancial, onToast }: P
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Nome</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Cargo</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Departamento</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 hidden sm:table-cell">Cargo</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 hidden md:table-cell">Departamento</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">
                   Salário
                   {!canEditFinancial && <Lock className="inline h-3 w-3 ml-1 text-amber-500" />}
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 min-w-[120px]">Contato</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 hidden md:table-cell">Contato</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {list.map(emp => (
                 <tr key={emp.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-4 py-3 font-medium text-slate-800">{emp.name}</td>
-                  <td className="px-4 py-3 text-slate-600">{emp.role || '—'}</td>
-                  <td className="px-4 py-3 text-slate-600">{emp.department || '—'}</td>
+                  <td className="px-4 py-3 font-medium text-slate-800">
+                    <p>{emp.name}</p>
+                    <p className="text-xs text-slate-400 sm:hidden">{emp.role || ''}</p>
+                  </td>
+                  <td className="px-4 py-3 text-slate-600 hidden sm:table-cell">{emp.role || '—'}</td>
+                  <td className="px-4 py-3 text-slate-600 hidden md:table-cell">{emp.department || '—'}</td>
                   <td className="px-4 py-3">
                     <SalaryCell salary={emp.salary} canEdit={canEditFinancial} />
                   </td>
-                  <td className="px-4 py-3 text-slate-600 text-xs min-w-[120px]">
+                  <td className="px-4 py-3 text-slate-600 text-xs hidden md:table-cell">
                     {emp.phone || emp.email || '—'}
                   </td>
                   <td className="px-4 py-3">

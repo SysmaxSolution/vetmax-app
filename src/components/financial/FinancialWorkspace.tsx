@@ -142,13 +142,13 @@ function EntryRow({
         )}
         {entry.category && <p className="text-xs text-teal-600">{entry.category}</p>}
       </td>
-      <td className="py-3 px-4 text-sm text-slate-600 whitespace-nowrap">{fmtDate(entry.due_date)}</td>
-      <td className="py-3 px-4 text-sm text-slate-600 whitespace-nowrap">{fmtDate(entry.payment_date)}</td>
+      <td className="py-3 px-4 text-sm text-slate-600 whitespace-nowrap hidden sm:table-cell">{fmtDate(entry.due_date)}</td>
+      <td className="py-3 px-4 text-sm text-slate-600 whitespace-nowrap hidden md:table-cell">{fmtDate(entry.payment_date)}</td>
       <td className="py-3 px-4 text-sm font-semibold text-slate-800 text-right whitespace-nowrap">{fmt(entry.amount)}</td>
       <td className="py-3 px-4">
         <StatusBadge entry={entry} />
       </td>
-      <td className="py-3 px-4 text-xs text-slate-400 max-w-[120px] truncate">
+      <td className="py-3 px-4 text-xs text-slate-400 max-w-[120px] truncate hidden lg:table-cell">
         {entry.payment_method ?? '—'}
       </td>
     </tr>
@@ -287,10 +287,10 @@ export default function FinancialWorkspace({
                 </button>
                 <button
                   onClick={() => setModal({ mode: 'create' })}
-                  className="flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 transition-colors"
+                  className="flex items-center gap-2 rounded-xl bg-teal-600 px-3 sm:px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 transition-colors"
                 >
                   <Plus className="h-4 w-4" />
-                  Novo Título
+                  <span className="hidden sm:inline">Novo Título</span>
                 </button>
               </>
             )}
@@ -302,24 +302,24 @@ export default function FinancialWorkspace({
 
         {/* ── Main Tabs ──────────────────────────────────────────────────── */}
         <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
-        <div className="flex rounded-xl border border-slate-200 bg-white p-1 gap-1 w-fit">
-          {mainTabs.map(t => (
-            <button
-              key={t.id}
-              onClick={() => setActiveTab(t.id)}
-              className={`rounded-lg px-5 py-2 text-sm font-semibold transition-all flex items-center gap-1.5 ${
-                activeTab === t.id
-                  ? `${theme.active} text-white shadow-sm`
-                  : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              {t.id === 'cadastros'   && <BookOpen   className="h-3.5 w-3.5" />}
-              {t.id === 'extrato'     && <Receipt     className="h-3.5 w-3.5" />}
-              {t.id === 'conciliacao' && <GitMerge    className="h-3.5 w-3.5" />}
-              {t.label}
-            </button>
-          ))}
-        </div>
+          <div className="flex rounded-xl border border-slate-200 bg-white p-1 gap-1 w-max min-w-full sm:w-fit sm:min-w-0">
+            {mainTabs.map(t => (
+              <button
+                key={t.id}
+                onClick={() => setActiveTab(t.id)}
+                className={`rounded-lg px-3 sm:px-5 py-2 text-xs sm:text-sm font-semibold transition-all flex items-center gap-1 sm:gap-1.5 whitespace-nowrap flex-1 sm:flex-none justify-center ${
+                  activeTab === t.id
+                    ? `${theme.active} text-white shadow-sm`
+                    : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                {t.id === 'cadastros'   && <BookOpen   className="h-3.5 w-3.5" />}
+                {t.id === 'extrato'     && <Receipt     className="h-3.5 w-3.5" />}
+                {t.id === 'conciliacao' && <GitMerge    className="h-3.5 w-3.5" />}
+                {t.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* ── Títulos: Totalizadores ──────────────────────────────────────── */}
@@ -328,8 +328,9 @@ export default function FinancialWorkspace({
         {/* ── Títulos: Filtros ───────────────────────────────────────────── */}
         {isTitulos && (
           <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
-            <div className="flex items-center gap-3">
-              <div className="relative flex-1 max-w-sm">
+            {/* Linha 1: busca + botão filtros avançados */}
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <input
                   value={search}
@@ -338,36 +339,36 @@ export default function FinancialWorkspace({
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 py-2 text-sm placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
                 />
               </div>
-
-              <div className="flex gap-1.5">
-                {[
-                  { v: 'all'       as FilterStatus, label: 'Todos' },
-                  { v: 'pending'   as FilterStatus, label: 'Pendentes' },
-                  { v: 'paid'      as FilterStatus, label: 'Pagos' },
-                  { v: 'cancelled' as FilterStatus, label: 'Cancelados' },
-                ].map(opt => (
-                  <button
-                    key={opt.v}
-                    onClick={() => setFilterStatus(opt.v)}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
-                      filterStatus === opt.v
-                        ? `${theme.active} text-white`
-                        : 'border border-slate-200 text-slate-500 hover:bg-slate-50'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-
               <button
                 onClick={() => setShowFilters(v => !v)}
-                className="flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-500 hover:bg-slate-50 transition-colors"
+                className="flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-500 hover:bg-slate-50 transition-colors"
               >
                 <Filter className="h-4 w-4" />
-                Filtros
+                <span className="hidden sm:inline">Filtros</span>
                 <ChevronDown className={`h-3 w-3 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
               </button>
+            </div>
+
+            {/* Linha 2: chips de status */}
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                { v: 'all'       as FilterStatus, label: 'Todos' },
+                { v: 'pending'   as FilterStatus, label: 'Pendentes' },
+                { v: 'paid'      as FilterStatus, label: 'Pagos' },
+                { v: 'cancelled' as FilterStatus, label: 'Cancelados' },
+              ].map(opt => (
+                <button
+                  key={opt.v}
+                  onClick={() => setFilterStatus(opt.v)}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
+                    filterStatus === opt.v
+                      ? `${theme.active} text-white`
+                      : 'border border-slate-200 text-slate-500 hover:bg-slate-50'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
             </div>
 
             {showFilters && (
@@ -417,13 +418,13 @@ export default function FinancialWorkspace({
                   <thead>
                     <tr className="border-b border-slate-100 bg-slate-50">
                       <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase">Descrição</th>
-                      <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase whitespace-nowrap">Vencimento</th>
-                      <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase whitespace-nowrap">
+                      <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase whitespace-nowrap hidden sm:table-cell">Vencimento</th>
+                      <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase whitespace-nowrap hidden md:table-cell">
                         {activeTab === 'receivable' ? 'Recebimento' : 'Pagamento'}
                       </th>
                       <th className="py-3 px-4 text-right text-xs font-bold text-slate-500 uppercase">Valor</th>
                       <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase">Status</th>
-                      <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase">Modalidade</th>
+                      <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase hidden lg:table-cell">Modalidade</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -465,20 +466,22 @@ export default function FinancialWorkspace({
         {activeTab === 'cadastros' && (
           <div className="space-y-4">
             {/* Sub-abas Cadastros */}
-            <div className="flex gap-1 rounded-xl border border-slate-200 bg-white p-1 w-fit">
-              {cadastrosSubTabs.map(t => (
-                <button
-                  key={t.id}
-                  onClick={() => setCadastrosTab(t.id)}
-                  className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
-                    cadastrosTab === t.id
-                      ? 'bg-teal-600 text-white shadow-sm'
-                      : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
-                  }`}
-                >
-                  {t.label}
-                </button>
-              ))}
+            <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
+              <div className="flex gap-1 rounded-xl border border-slate-200 bg-white p-1 w-max min-w-full sm:w-fit sm:min-w-0">
+                {cadastrosSubTabs.map(t => (
+                  <button
+                    key={t.id}
+                    onClick={() => setCadastrosTab(t.id)}
+                    className={`rounded-lg px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold transition-all whitespace-nowrap flex-1 sm:flex-none ${
+                      cadastrosTab === t.id
+                        ? 'bg-teal-600 text-white shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Conteúdo da sub-aba */}

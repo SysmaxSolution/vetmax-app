@@ -316,62 +316,66 @@ export default function TituloModal({ mode, entryType, entry, onClose, onSuccess
         </div>
 
         {deleteStep === 'none' && (
-          <div className="flex items-center gap-2 border-t border-slate-100 px-5 py-4">
-            {innerMode === 'edit' && entry?.status === 'pending' && (
-              <button
-                onClick={() => { setInnerMode('baixar'); setError(null) }}
-                className="flex items-center gap-1.5 rounded-xl bg-teal-600 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-700 transition-colors"
-              >
-                <CheckCircle className="h-3.5 w-3.5" />
-                {isReceivable ? 'Receber' : 'Pagar'}
-              </button>
-            )}
-            {innerMode === 'edit' && (
-              <button
-                onClick={handleDeleteClick}
-                className="flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-100 transition-colors"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                Excluir
-              </button>
-            )}
-            {innerMode === 'baixar' && (
-              <button
-                onClick={() => { setInnerMode('edit'); setError(null) }}
-                className="text-sm text-slate-500 hover:text-slate-700 transition-colors px-1"
-              >
-                ← Voltar
-              </button>
-            )}
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-4 sm:px-5 py-4">
+            {/* Ações secundárias (esquerda) */}
+            <div className="flex items-center gap-2">
+              {innerMode === 'edit' && entry?.status === 'pending' && (
+                <button
+                  onClick={() => { setInnerMode('baixar'); setError(null) }}
+                  className="flex items-center gap-1.5 rounded-xl bg-teal-600 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-700 transition-colors"
+                >
+                  <CheckCircle className="h-3.5 w-3.5" />
+                  {isReceivable ? 'Receber' : 'Pagar'}
+                </button>
+              )}
+              {innerMode === 'edit' && (
+                <button
+                  onClick={handleDeleteClick}
+                  className="flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-100 transition-colors"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Excluir
+                </button>
+              )}
+              {innerMode === 'baixar' && (
+                <button
+                  onClick={() => { setInnerMode('edit'); setError(null) }}
+                  className="text-sm text-slate-500 hover:text-slate-700 transition-colors px-1"
+                >
+                  ← Voltar
+                </button>
+              )}
+            </div>
 
-            <div className="flex-1" />
-
-            <button
-              onClick={onClose}
-              className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
-            >
-              Cancelar
-            </button>
-
-            {innerMode === 'baixar' ? (
+            {/* Ações primárias (direita) */}
+            <div className="flex items-center gap-2">
               <button
-                onClick={handleBaixar}
-                disabled={isPending}
-                className="flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60 transition-colors"
+                onClick={onClose}
+                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
               >
-                {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
-                {isReceivable ? 'Confirmar Recebimento' : 'Confirmar Pagamento'}
+                Cancelar
               </button>
-            ) : (
-              <button
-                onClick={handleSave}
-                disabled={isPending}
-                className="flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60 transition-colors"
-              >
-                {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                {innerMode === 'create' ? 'Criar Título' : 'Salvar Alterações'}
-              </button>
-            )}
+
+              {innerMode === 'baixar' ? (
+                <button
+                  onClick={handleBaixar}
+                  disabled={isPending}
+                  className="flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60 transition-colors"
+                >
+                  {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                  {isReceivable ? 'Confirmar Recebimento' : 'Confirmar Pagamento'}
+                </button>
+              ) : (
+                <button
+                  onClick={handleSave}
+                  disabled={isPending}
+                  className="flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60 transition-colors"
+                >
+                  {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  {innerMode === 'create' ? 'Criar Título' : 'Salvar'}
+                </button>
+              )}
+            </div>
           </div>
         )}
       </div>
