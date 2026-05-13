@@ -7,26 +7,30 @@ import { createClient } from '@/lib/supabase/server'
 
 export type EntryType   = 'receivable' | 'payable'
 export type EntryStatus = 'pending' | 'paid' | 'cancelled'
+export type EntrySource = 'manual' | 'cashier'
 
 export interface FinancialEntry {
-  id:             string
-  clinic_id:      string
-  type:           EntryType
-  description:    string
-  amount:         number
-  due_date:       string
-  payment_date:   string | null
-  status:         EntryStatus
-  payment_method: string | null
-  tutor_id:       string | null
-  patient_id:     string | null
-  category:       string | null
-  notes:          string | null
-  created_by:     string | null
-  created_at:     string
-  updated_at:     string
-  tutor_name:     string | null
-  patient_name:   string | null
+  id:                  string
+  clinic_id:           string
+  type:                EntryType
+  description:         string
+  amount:              number
+  due_date:            string
+  payment_date:        string | null
+  status:              EntryStatus
+  payment_method:      string | null
+  tutor_id:            string | null
+  patient_id:          string | null
+  category:            string | null
+  notes:               string | null
+  created_by:          string | null
+  created_at:          string
+  updated_at:          string
+  tutor_name:          string | null
+  patient_name:        string | null
+  source:              EntrySource
+  cashier_entry_id:    string | null
+  cashier_outflow_id:  string | null
 }
 
 export interface FinancialSummary {
@@ -294,11 +298,25 @@ export async function updateEntry(
 
 // ─── deleteEntry ──────────────────────────────────────────────────────────────
 
-export async function deleteEntry(id: string): Promise<{ error?: string }> {
+export async function deleteEntry(
+  id: string
+): Promise<{ error?: string; requires_reversal?: true }> {
   const clinicId = await getClinicId()
   if (!clinicId) return { error: 'Não autenticado.' }
 
   const admin = createAdminClient()
+
+  const { data: entry } = await admin
+    .from('financial_entries')
+    .select('status')
+    .eq('id', id)
+    .eq('clinic_id', clinicId)
+    .single()
+
+  if (entry?.status === 'paid') {
+    return { error: 'Título baixado. Faça o estorno antes de excluir.', requires_reversal: true }
+  }
+
   const { error } = await admin
     .from('financial_entries')
     .delete()
@@ -307,6 +325,63 @@ export async function deleteEntry(id: string): Promise<{ error?: string }> {
 
   if (error) return { error: 'Erro ao excluir título: ' + error.message }
   return {}
+}
+
+// ─── reverseFinancialEntry ────────────────────────────────────────────────────
+
+export async function reverseFinancialEntry(
+  id: string
+): Promise<{ success: true } | { error: string }> {
+  try {
+    const user = await getAuthUser()
+    if (!user) return { error: 'Não autenticado.' }
+    const clinicId = await getClinicId()
+    if (!clinicId) return { error: 'Clínica não encontrada.' }
+
+    const admin = createAdminClient()
+
+    const { data: entry } = await admin
+      .from('financial_entries')
+      .select('id, status, source, cashier_entry_id')
+      .eq('id', id)
+      .eq('clinic_id', clinicId)
+      .single()
+
+    if (!entry) return { error: 'Título não encontrado.' }
+    if (entry.status !== 'paid') return { error: 'Apenas títulos baixados podem ser estornados.' }
+
+    const isCashierLinked = entry.source === 'cashier' && entry.cashier_entry_id
+
+    // Cashier-linked: vai para 'cancelled' (o lançamento origem será revertido no caixa)
+    // Manual: volta para 'pending' para permitir re-pagamento ou exclusão
+    const newStatus = isCashierLinked ? 'cancelled' : 'pending'
+
+    const { error: updErr } = await admin
+      .from('financial_entries')
+      .update({ status: newStatus, payment_date: null, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .eq('clinic_id', clinicId)
+
+    if (updErr) return { error: 'Erro ao estornar título: ' + updErr.message }
+
+    // Reverte o lançamento no Caixa (o trigger cuida do restante)
+    if (isCashierLinked) {
+      await admin
+        .from('central_cashier')
+        .update({
+          status:          'reversed',
+          reversed_at:     new Date().toISOString(),
+          reversed_by:     user.id,
+          reversal_reason: 'Estorno via módulo Financeiro',
+        })
+        .eq('id', entry.cashier_entry_id)
+        .neq('status', 'reversed')
+    }
+
+    return { success: true }
+  } catch {
+    return { error: 'Erro inesperado ao estornar.' }
+  }
 }
 
 // ─── baixarTitulo ─────────────────────────────────────────────────────────────
@@ -1084,24 +1159,27 @@ function mapEntry(raw: Record<string, unknown>): FinancialEntry {
   const tutors   = raw.tutors   as { name: string } | null
   const patients = raw.patients as { name: string } | null
   return {
-    id:             raw.id             as string,
-    clinic_id:      raw.clinic_id      as string,
-    type:           raw.type           as EntryType,
-    description:    raw.description    as string,
-    amount:         Number(raw.amount),
-    due_date:       raw.due_date       as string,
-    payment_date:   (raw.payment_date  as string | null) ?? null,
-    status:         raw.status         as EntryStatus,
-    payment_method: (raw.payment_method as string | null) ?? null,
-    tutor_id:       (raw.tutor_id      as string | null) ?? null,
-    patient_id:     (raw.patient_id    as string | null) ?? null,
-    category:       (raw.category      as string | null) ?? null,
-    notes:          (raw.notes         as string | null) ?? null,
-    created_by:     (raw.created_by    as string | null) ?? null,
-    created_at:     raw.created_at     as string,
-    updated_at:     raw.updated_at     as string,
-    tutor_name:     tutors?.name       ?? null,
-    patient_name:   patients?.name     ?? null,
+    id:                  raw.id                  as string,
+    clinic_id:           raw.clinic_id           as string,
+    type:                raw.type                as EntryType,
+    description:         raw.description         as string,
+    amount:              Number(raw.amount),
+    due_date:            raw.due_date            as string,
+    payment_date:        (raw.payment_date       as string | null) ?? null,
+    status:              raw.status              as EntryStatus,
+    payment_method:      (raw.payment_method     as string | null) ?? null,
+    tutor_id:            (raw.tutor_id           as string | null) ?? null,
+    patient_id:          (raw.patient_id         as string | null) ?? null,
+    category:            (raw.category           as string | null) ?? null,
+    notes:               (raw.notes              as string | null) ?? null,
+    created_by:          (raw.created_by         as string | null) ?? null,
+    created_at:          raw.created_at          as string,
+    updated_at:          raw.updated_at          as string,
+    tutor_name:          tutors?.name            ?? null,
+    patient_name:        patients?.name          ?? null,
+    source:              (raw.source             as EntrySource) ?? 'manual',
+    cashier_entry_id:    (raw.cashier_entry_id   as string | null) ?? null,
+    cashier_outflow_id:  (raw.cashier_outflow_id as string | null) ?? null,
   }
 }
 

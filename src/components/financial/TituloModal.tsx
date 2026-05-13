@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { X, Loader2, Trash2, CheckCircle, AlertCircle } from 'lucide-react'
+import { X, Loader2, Trash2, CheckCircle, AlertCircle, RotateCcw } from 'lucide-react'
 import {
-  createEntry, updateEntry, deleteEntry, baixarTitulo,
+  createEntry, updateEntry, deleteEntry, baixarTitulo, reverseFinancialEntry,
   type FinancialEntry, type EntryType,
 } from '@/lib/actions/financial'
 
@@ -57,7 +57,8 @@ export default function TituloModal({ mode, entryType, entry, onClose, onSuccess
   const [innerMode, setInnerMode] = useState<ModalMode>(mode)
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
-  const [confirmDelete, setConfirmDelete] = useState(false)
+  // 'none' | 'confirm_reversal' | 'confirm_delete'
+  const [deleteStep, setDeleteStep] = useState<'none' | 'confirm_reversal' | 'confirm_delete'>('none')
 
   const [description, setDescription] = useState(entry?.description ?? '')
   const [amountStr,   setAmountStr]   = useState(entry ? fmtCurrency(String(Math.round(entry.amount * 100))) : '')
@@ -114,6 +115,24 @@ export default function TituloModal({ mode, entryType, entry, onClose, onSuccess
       const res = await baixarTitulo(entry!.id, { payment_date: paymentDate, payment_method: paymentMethod })
       if (res?.error) { setError(res.error); return }
       onSuccess()
+    })
+  }
+
+  function handleDeleteClick() {
+    setError(null)
+    if (entry?.status === 'paid') {
+      setDeleteStep('confirm_reversal')
+    } else {
+      setDeleteStep('confirm_delete')
+    }
+  }
+
+  function handleReversal() {
+    startTransition(async () => {
+      const res = await reverseFinancialEntry(entry!.id)
+      if ('error' in res) { setError(res.error); return }
+      // Após estorno perguntar se deseja excluir
+      setDeleteStep('confirm_delete')
     })
   }
 
@@ -240,9 +259,41 @@ export default function TituloModal({ mode, entryType, entry, onClose, onSuccess
             </div>
           )}
 
-          {confirmDelete && (
+          {deleteStep === 'confirm_reversal' && (
+            <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 space-y-3">
+              <div className="flex items-start gap-2">
+                <RotateCcw className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-amber-800">
+                    Este título está {isReceivable ? 'Recebido' : 'Pago'} (Baixado).
+                  </p>
+                  <p className="text-xs text-amber-600 mt-0.5">
+                    Para excluir é necessário fazer o estorno primeiro. Deseja fazer o estorno?
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleReversal}
+                  disabled={isPending}
+                  className="flex-1 rounded-xl bg-amber-600 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-60 transition-colors"
+                >
+                  {isPending ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : 'Sim, Fazer Estorno'}
+                </button>
+                <button
+                  onClick={() => setDeleteStep('none')}
+                  disabled={isPending}
+                  className="flex-1 rounded-xl border border-slate-200 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-60 transition-colors"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+
+          {deleteStep === 'confirm_delete' && (
             <div className="rounded-xl bg-red-50 border border-red-200 p-4 space-y-3">
-              <p className="text-sm font-semibold text-red-700">Confirmar exclusão do título?</p>
+              <p className="text-sm font-semibold text-red-700">Deseja excluir o título?</p>
               <p className="text-xs text-red-500">Esta ação não pode ser desfeita.</p>
               <div className="flex gap-2">
                 <button
@@ -250,20 +301,21 @@ export default function TituloModal({ mode, entryType, entry, onClose, onSuccess
                   disabled={isPending}
                   className="flex-1 rounded-xl bg-red-600 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60 transition-colors"
                 >
-                  {isPending ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : 'Confirmar Exclusão'}
+                  {isPending ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : 'Sim, Excluir'}
                 </button>
                 <button
-                  onClick={() => setConfirmDelete(false)}
-                  className="flex-1 rounded-xl border border-slate-200 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+                  onClick={() => { setDeleteStep('none'); onSuccess() }}
+                  disabled={isPending}
+                  className="flex-1 rounded-xl border border-slate-200 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-60 transition-colors"
                 >
-                  Cancelar
+                  Não, Manter
                 </button>
               </div>
             </div>
           )}
         </div>
 
-        {!confirmDelete && (
+        {deleteStep === 'none' && (
           <div className="flex items-center gap-2 border-t border-slate-100 px-5 py-4">
             {innerMode === 'edit' && entry?.status === 'pending' && (
               <button
@@ -276,7 +328,7 @@ export default function TituloModal({ mode, entryType, entry, onClose, onSuccess
             )}
             {innerMode === 'edit' && (
               <button
-                onClick={() => setConfirmDelete(true)}
+                onClick={handleDeleteClick}
                 className="flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-100 transition-colors"
               >
                 <Trash2 className="h-3.5 w-3.5" />
