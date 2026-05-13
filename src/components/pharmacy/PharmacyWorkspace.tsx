@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useMemo } from 'react'
+import { useState, useTransition, useMemo, useEffect, useRef, useCallback } from 'react'
 import {
   Package, Plus, AlertTriangle, RefreshCw, Trash2, Pencil,
   ArrowDownToLine, Search, X, Loader2, Check, Calendar,
@@ -13,8 +13,11 @@ import {
   restockItemV2, adjustStockItemV2,
   dispenseStockItem, deleteStockItemV2,
 } from '@/lib/actions/stock'
+import type { GlobalCatalogSuggestion } from '@/lib/actions/catalog'
+import { searchGlobalCatalog } from '@/lib/actions/catalog'
 import StockCsvImporter from './StockCsvImporter'
 import { EnrichNcmModal } from './EnrichNcmModal'
+import PharmacyCatalogQuickAdd from './PharmacyCatalogQuickAdd'
 
 // ─── Categorias de Produtos ───────────────────────────────────────────────────
 
@@ -119,6 +122,12 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole }: Pro
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'critical' | 'ok'>('all')
 
+  // Catalog suggestions (empty-state search)
+  const [catalogSuggestions, setCatalogSuggestions] = useState<GlobalCatalogSuggestion[]>([])
+  const [catalogLoading, setCatalogLoading]         = useState(false)
+  const [quickAddSuggestion, setQuickAddSuggestion] = useState<GlobalCatalogSuggestion | null>(null)
+  const catalogDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   // Modals
   const [formModal, setFormModal]       = useState<{ mode: 'add' | 'edit'; item?: StockItemV2; serviceMode?: boolean } | null>(null)
   const [restockItem, setRestockItem]   = useState<StockItemV2 | null>(null)
@@ -137,7 +146,33 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole }: Pro
 
   function switchView(v: 'products' | 'services') {
     setView(v); setCatTab('all'); setSearch(''); setStatusFilter('all')
+    setCatalogSuggestions([])
   }
+
+  // Trigger catalog search when filtered list is empty and search >= 3 chars
+  const triggerCatalogSearch = useCallback((term: string, filteredLen: number) => {
+    if (catalogDebounceRef.current) clearTimeout(catalogDebounceRef.current)
+    if (filteredLen > 0 || term.length < 3 || view !== 'products') {
+      setCatalogSuggestions([])
+      setCatalogLoading(false)
+      return
+    }
+    setCatalogLoading(true)
+    catalogDebounceRef.current = setTimeout(async () => {
+      const results = await searchGlobalCatalog(term, 6)
+      setCatalogSuggestions(results)
+      setCatalogLoading(false)
+    }, 400)
+  }, [view])
+
+  // Clear suggestions when search is cleared
+  useEffect(() => {
+    if (!search || search.length < 3) {
+      setCatalogSuggestions([])
+      setCatalogLoading(false)
+      if (catalogDebounceRef.current) clearTimeout(catalogDebounceRef.current)
+    }
+  }, [search])
 
   // Split stock
   const products   = useMemo(() => stock.filter(i => !i.is_service), [stock])
@@ -174,6 +209,18 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole }: Pro
     })
   }, [activeList, catTab, search, statusFilter, view])
 
+  // Trigger catalog suggestions when filtered is empty and search has content
+  useEffect(() => {
+    if (view !== 'products') return
+    if (search.length >= 3 && filtered.length === 0) {
+      triggerCatalogSearch(search, filtered.length)
+    } else {
+      setCatalogSuggestions([])
+      setCatalogLoading(false)
+      if (catalogDebounceRef.current) clearTimeout(catalogDebounceRef.current)
+    }
+  }, [filtered.length, search, view, triggerCatalogSearch])
+
   // CRUD handlers
   function handleSaved(item: StockItemV2, isNew: boolean) {
     setStock(prev =>
@@ -182,6 +229,14 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole }: Pro
     )
     setFormModal(null)
     showToast(isNew ? 'Item cadastrado com sucesso!' : 'Item atualizado com sucesso!')
+  }
+
+  function handleCatalogQuickSaved(item: StockItemV2) {
+    setStock(prev => [...prev, item].sort((a, b) => a.name.localeCompare(b.name)))
+    setQuickAddSuggestion(null)
+    setCatalogSuggestions([])
+    setSearch('')
+    showToast('Item cadastrado no estoque!')
   }
 
   function handleDeleted(id: string) {
@@ -368,6 +423,11 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole }: Pro
           : <ProductsTable
               filtered={filtered}
               userRole={userRole}
+              searchTerm={search}
+              catalogLoading={catalogLoading}
+              catalogSuggestions={catalogSuggestions}
+              onCatalogQuickAdd={setQuickAddSuggestion}
+              onManualAdd={() => setFormModal({ mode: 'add' })}
               onEdit={item => setFormModal({ mode: 'edit', item })}
               onDelete={id => {
                 startTx(async () => {
@@ -441,27 +501,149 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole }: Pro
           onClose={() => setCsvImportOpen(false)}
         />
       )}
+
+      {/* Modal: Cadastro rápido a partir do catálogo global */}
+      {quickAddSuggestion && (
+        <PharmacyCatalogQuickAdd
+          suggestion={quickAddSuggestion}
+          onClose={() => setQuickAddSuggestion(null)}
+          onSaved={handleCatalogQuickSaved}
+        />
+      )}
     </div>
   )
 }
 
 // ─── Tabela de Produtos ───────────────────────────────────────────────────────
 
-function ProductsTable({ filtered, userRole, onEdit, onDelete, onRestock, onDispense, onAdjust, onEnrich }: {
-  filtered:  StockItemV2[]
-  userRole:  'admin' | 'vet'
-  onEdit:    (item: StockItemV2) => void
-  onDelete:  (id: string) => void
-  onRestock: (item: StockItemV2) => void
-  onDispense:(item: StockItemV2) => void
-  onAdjust:  (item: StockItemV2) => void
-  onEnrich?: (item: StockItemV2) => void
+function CatBadge({ cat }: { cat: typeof PRODUCT_CATS[number] | undefined }) {
+  if (!cat) return null
+  return (
+    <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${cat.badge}`}>
+      {cat.icon}{cat.label}
+    </span>
+  )
+}
+
+function ProductsTable({ filtered, userRole, searchTerm, catalogLoading, catalogSuggestions, onCatalogQuickAdd, onManualAdd, onEdit, onDelete, onRestock, onDispense, onAdjust, onEnrich }: {
+  filtered:             StockItemV2[]
+  userRole:             'admin' | 'vet'
+  searchTerm:           string
+  catalogLoading:       boolean
+  catalogSuggestions:   GlobalCatalogSuggestion[]
+  onCatalogQuickAdd:    (s: GlobalCatalogSuggestion) => void
+  onManualAdd:          () => void
+  onEdit:               (item: StockItemV2) => void
+  onDelete:             (id: string) => void
+  onRestock:            (item: StockItemV2) => void
+  onDispense:           (item: StockItemV2) => void
+  onAdjust:             (item: StockItemV2) => void
+  onEnrich?:            (item: StockItemV2) => void
 }) {
   if (filtered.length === 0) {
+    const isSearching = searchTerm.length >= 3
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col items-center justify-center py-16 text-slate-400">
-        <Package className="h-10 w-10 mb-3 opacity-30" />
-        <p className="text-sm font-medium">Nenhum produto encontrado</p>
+      <div className="space-y-3">
+        {/* Empty state panel */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+          {/* Header: search not found */}
+          <div className="flex flex-col items-center justify-center py-8 px-4 text-center border-b border-slate-100">
+            <Search className="h-8 w-8 mb-2 text-slate-300" />
+            {isSearching ? (
+              <>
+                <p className="text-sm font-semibold text-slate-700">
+                  "{searchTerm}" não encontrado no estoque
+                </p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {catalogLoading ? 'Buscando sugestões no Catálogo Veterinário…' : 'Veja sugestões abaixo ou cadastre manualmente'}
+                </p>
+              </>
+            ) : (
+              <p className="text-sm font-medium text-slate-400">Nenhum produto encontrado</p>
+            )}
+          </div>
+
+          {/* Catalog suggestions */}
+          {isSearching && (
+            <div className="p-4 space-y-2">
+              {catalogLoading ? (
+                <div className="flex items-center justify-center gap-2 py-6 text-slate-400">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <span className="text-sm">Buscando no Catálogo Veterinário…</span>
+                </div>
+              ) : catalogSuggestions.length > 0 ? (
+                <>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide pb-1">
+                    Sugestões do Catálogo Veterinário
+                  </p>
+                  {catalogSuggestions.map(s => {
+                    const cat = PRODUCT_CATS.find(c => c.key === s.category)
+                    return (
+                      <div
+                        key={s.id}
+                        className="flex items-center gap-3 px-3 py-3 rounded-xl border border-slate-100 bg-slate-50 hover:bg-teal-50 hover:border-teal-200 transition-colors"
+                      >
+                        {/* Category icon */}
+                        <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg ${cat?.badge ?? 'bg-slate-100 text-slate-500'}`}>
+                          {cat?.icon ?? <Package className="h-4 w-4" />}
+                        </div>
+
+                        {/* Info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p className="text-sm font-semibold text-slate-900 leading-tight">{s.name}</p>
+                            {s.ncm && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 uppercase tracking-wide">
+                                NCM {s.ncm}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-500 mt-0.5">{s.brand}</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <CatBadge cat={cat} />
+                            {s.price_avg != null && (
+                              <span className="text-xs font-semibold text-slate-600">
+                                R$ {s.price_avg.toFixed(2)}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Action button — only for admin */}
+                        {userRole === 'admin' && (
+                          <button
+                            onClick={() => onCatalogQuickAdd(s)}
+                            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-semibold hover:bg-teal-700 transition-colors"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                            Cadastrar
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })}
+                </>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-6 text-slate-400">
+                  <Package className="h-8 w-8 mb-2 opacity-30" />
+                  <p className="text-sm font-medium">Nenhuma sugestão encontrada</p>
+                  <p className="text-xs mt-0.5">Cadastre o produto manualmente</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Botão Cadastrar Manualmente */}
+        {userRole === 'admin' && (
+          <button
+            onClick={onManualAdd}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed border-slate-300 text-slate-500 text-sm font-medium hover:border-teal-400 hover:text-teal-600 hover:bg-teal-50 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            Cadastrar produto manualmente
+          </button>
+        )}
       </div>
     )
   }
