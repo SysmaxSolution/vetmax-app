@@ -1,10 +1,15 @@
-﻿'use client'
+'use client'
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LogOut, Home, Stethoscope, TestTubes, Users, BarChart3, PawPrint, BedDouble, Package, Scissors, Banknote, FolderKanban, MessageCircle, ShoppingCart, Activity, ClipboardList, DollarSign, FileBarChart2 } from 'lucide-react'
+import {
+  LogOut, Home, Stethoscope, TestTubes, Users, BarChart3, PawPrint,
+  BedDouble, Package, Scissors, Banknote, FolderKanban, MessageCircle,
+  ShoppingCart, Activity, ClipboardList, DollarSign, FileBarChart2,
+  Menu, X,
+} from 'lucide-react'
 import type { UserRole } from '@/types'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ClinicSwitcher } from '@/components/layout/ClinicSwitcher'
 import { ImageLightbox } from '@/components/ui/ImageLightbox'
 import type { UserClinicInfo } from '@/lib/actions/clinic-switcher'
@@ -77,8 +82,20 @@ export default function DashboardHeader({
   isSurgeryMode = false,
 }: DashboardHeaderProps) {
   const pathname = usePathname()
-  const [surgeryActive, setSurgeryActive]   = useState(isSurgeryMode)
-  const [savingSurgery, setSavingSurgery]   = useState(false)
+  const [surgeryActive, setSurgeryActive] = useState(isSurgeryMode)
+  const [savingSurgery, setSavingSurgery] = useState(false)
+  const [mobileOpen,    setMobileOpen]    = useState(false)
+  const [showNudge,     setShowNudge]     = useState(false)
+
+  // Onboarding nudge: pulsa o ícone de menu no primeiro acesso
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!sessionStorage.getItem('nav-hint-seen')) {
+      setShowNudge(true)
+      const t = setTimeout(() => setShowNudge(false), 5000)
+      return () => clearTimeout(t)
+    }
+  }, [])
 
   async function handleSurgeryToggle() {
     const next = !surgeryActive
@@ -87,6 +104,16 @@ export default function DashboardHeader({
     const res = await setSurgeryMode(next)
     setSavingSurgery(false)
     if ('error' in res) setSurgeryActive(!next)
+  }
+
+  function openMobileMenu() {
+    setMobileOpen(true)
+    setShowNudge(false)
+    sessionStorage.setItem('nav-hint-seen', '1')
+  }
+
+  function closeMobileMenu() {
+    setMobileOpen(false)
   }
 
   const tabs = ALL_TABS.filter(tab => {
@@ -100,12 +127,11 @@ export default function DashboardHeader({
   const isActive = (href: string) =>
     href === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(href)
 
-  const activeModuleKey = getModuleFromPath(pathname)
+  const activeModuleKey   = getModuleFromPath(pathname)
   const activeModuleTheme = activeModuleKey ? MODULE_THEME[activeModuleKey] : null
-
   const hasMultipleClinics = (isSysmax && userClinics && userClinics.length >= 1) || (userClinics && userClinics.length > 1)
   const [currentStatus, setCurrentStatus] = useState<string>(clinicStatus ?? 'active')
-  const [savingStatus, setSavingStatus] = useState(false)
+  const [savingStatus,  setSavingStatus]  = useState(false)
 
   const STATUS_OPTIONS: { value: ClinicStatus; label: string; color: string }[] = [
     { value: 'active',    label: 'Ativa',     color: 'bg-green-100 text-green-700' },
@@ -117,130 +143,228 @@ export default function DashboardHeader({
     setSavingStatus(true)
     const res = await updateClinicStatus(clinicId, newStatus)
     setSavingStatus(false)
-    if (!res.error) {
-      setCurrentStatus(newStatus)
-    }
+    if (!res.error) setCurrentStatus(newStatus)
   }
 
   return (
-    <div className="bg-white border-b border-slate-200 sticky top-0 z-50 print:hidden">
-      {/* Brand + Clínica + Usuário */}
-      <div className="mx-auto max-w-4xl px-3 sm:px-6 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          {hasMultipleClinics ? (
-            <ClinicSwitcher
-              currentClinicId={clinicId}
-              clinicName={clinicName}
-              clinics={userClinics}
-              logoUrl={logoUrl}
-            />
-          ) : (
-            <>
-              {logoUrl ? (
-                <ImageLightbox src={logoUrl} alt={clinicName} className="h-8 w-auto max-w-[120px] object-contain rounded" />
-              ) : (
-                <>
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
-                    <span className="text-sm font-bold text-white">V</span>
-                  </div>
-                  <div>
-                    <h1 className="text-sm font-semibold text-slate-900">SysVetMax</h1>
-                    <p className="text-xs text-slate-500">{clinicName}</p>
-                  </div>
-                </>
-              )}
-              {logoUrl && <p className="text-xs text-slate-500 ml-1">{clinicName}</p>}
-            </>
-          )}
-        </div>
-        <div className="flex items-center gap-3">
-          {isSysmax && (
-            <select
-              value={currentStatus}
-              onChange={e => handleStatusChange(e.target.value as ClinicStatus)}
-              disabled={savingStatus}
-              className={`text-xs font-semibold px-2.5 py-1 rounded-lg border-0 outline-none cursor-pointer disabled:opacity-50 ${
-                STATUS_OPTIONS.find(s => s.value === currentStatus)?.color ?? 'bg-slate-100 text-slate-600'
-              }`}
-            >
-              {STATUS_OPTIONS.map(s => (
-                <option key={s.value} value={s.value}>{s.label}</option>
-              ))}
-            </select>
-          )}
-
-          {userRole === 'vet' && (
+    <>
+      <div className="bg-white border-b border-slate-200 sticky top-0 z-50 print:hidden">
+        {/* Brand + Clínica + Usuário */}
+        <div className="mx-auto max-w-4xl px-3 sm:px-6 py-3 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            {/* Hambúrguer — visível apenas em mobile */}
             <button
-              onClick={handleSurgeryToggle}
-              disabled={savingSurgery}
-              title={surgeryActive ? 'Sair do Modo Cirurgia' : 'Ativar Modo Cirurgia'}
-              className={
-                surgeryActive
-                  ? 'animate-pulse flex items-center gap-1.5 rounded-full bg-red-500 px-3 py-1 text-xs font-bold text-white shadow-md disabled:opacity-60'
-                  : 'flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 hover:border-red-300 hover:text-red-600 disabled:opacity-60'
-              }
-            >
-              <Activity className="h-3.5 w-3.5" />
-              {surgeryActive ? 'Em Cirurgia' : 'Modo Cirurgia'}
-            </button>
-          )}
-
-          {isSysmax ? (
-            <span className="text-sm font-semibold text-purple-700">SysMax</span>
-          ) : (
-            <Link href="/dashboard/profile" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">
-              Olá, <span className="font-semibold">{userName}</span>
-            </Link>
-          )}
-        </div>
-      </div>
-
-      {/* Navegação */}
-      <div className="mx-auto max-w-4xl px-3 sm:px-6 flex flex-wrap items-center gap-1">
-        {tabs.map((tab) => {
-          const badgeCount =
-            tab.href === '/dashboard/pharmacy' ? lowStockCount :
-            tab.href === '/dashboard/whatsapp'  ? whatsappHandoffCount : 0
-          const showBadge = badgeCount > 0
-          return (
-            <Link
-              key={tab.href}
-              href={tab.href}
-              id={tab.id}
-              data-testid={tab.id}
-              className={`relative flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                isActive(tab.href)
-                  ? `${getTabTheme(tab.href).active} text-white shadow-sm`
-                  : `text-slate-600 ${getTabTheme(tab.href).hover}`
+              onClick={openMobileMenu}
+              aria-label="Abrir menu de navegação"
+              className={`sm:hidden flex items-center justify-center h-9 w-9 rounded-lg transition-all duration-200 text-slate-600 hover:bg-slate-100 ${
+                showNudge ? 'animate-pulse ring-2 ring-blue-400 ring-offset-1 text-blue-600' : ''
               }`}
             >
-              <tab.icon className="w-4 h-4" />
-              <span className="hidden sm:inline">{tab.label}</span>
-              {showBadge && (
-                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
-                  {badgeCount > 9 ? '9+' : badgeCount}
-                </span>
-              )}
-            </Link>
-          )
-        })}
+              <Menu className="h-5 w-5" />
+            </button>
 
-        <div className="flex-1" />
+            {hasMultipleClinics ? (
+              <ClinicSwitcher
+                currentClinicId={clinicId}
+                clinicName={clinicName}
+                clinics={userClinics}
+                logoUrl={logoUrl}
+              />
+            ) : (
+              <>
+                {logoUrl ? (
+                  <ImageLightbox src={logoUrl} alt={clinicName} className="h-8 w-auto max-w-[120px] object-contain rounded" />
+                ) : (
+                  <>
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
+                      <span className="text-sm font-bold text-white">V</span>
+                    </div>
+                    <div>
+                      <h1 className="text-sm font-semibold text-slate-900">SysVetMax</h1>
+                      <p className="text-xs text-slate-500">{clinicName}</p>
+                    </div>
+                  </>
+                )}
+                {logoUrl && <p className="text-xs text-slate-500 ml-1">{clinicName}</p>}
+              </>
+            )}
+          </div>
 
-        <button
-          onClick={async () => {
-            try { await fetch('/auth/logout', { method: 'POST' }) } catch {}
-            window.location.href = '/login'
-          }}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg text-slate-600 hover:text-slate-900 text-sm font-medium transition-all"
-          title="Sair"
-        >
-          <LogOut className="w-4 h-4" />
-          <span className="hidden sm:inline">Sair</span>
-        </button>
+          <div className="flex items-center gap-3">
+            {isSysmax && (
+              <select
+                value={currentStatus}
+                onChange={e => handleStatusChange(e.target.value as ClinicStatus)}
+                disabled={savingStatus}
+                className={`text-xs font-semibold px-2.5 py-1 rounded-lg border-0 outline-none cursor-pointer disabled:opacity-50 ${
+                  STATUS_OPTIONS.find(s => s.value === currentStatus)?.color ?? 'bg-slate-100 text-slate-600'
+                }`}
+              >
+                {STATUS_OPTIONS.map(s => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
+            )}
+
+            {userRole === 'vet' && (
+              <button
+                onClick={handleSurgeryToggle}
+                disabled={savingSurgery}
+                title={surgeryActive ? 'Sair do Modo Cirurgia' : 'Ativar Modo Cirurgia'}
+                className={
+                  surgeryActive
+                    ? 'animate-pulse flex items-center gap-1.5 rounded-full bg-red-500 px-3 py-1 text-xs font-bold text-white shadow-md disabled:opacity-60'
+                    : 'flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 hover:border-red-300 hover:text-red-600 disabled:opacity-60'
+                }
+              >
+                <Activity className="h-3.5 w-3.5" />
+                {surgeryActive ? 'Em Cirurgia' : 'Modo Cirurgia'}
+              </button>
+            )}
+
+            {isSysmax ? (
+              <span className="text-sm font-semibold text-purple-700">SysMax</span>
+            ) : (
+              <Link href="/dashboard/profile" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">
+                Olá, <span className="font-semibold">{userName}</span>
+              </Link>
+            )}
+          </div>
+        </div>
+
+        {/* Navegação — oculta em mobile (substituída pelo slide-over) */}
+        <div className="hidden sm:flex mx-auto max-w-4xl px-3 sm:px-6 flex-wrap items-center gap-1">
+          {tabs.map((tab) => {
+            const badgeCount =
+              tab.href === '/dashboard/pharmacy' ? lowStockCount :
+              tab.href === '/dashboard/whatsapp'  ? whatsappHandoffCount : 0
+            const showBadge = badgeCount > 0
+            return (
+              <Link
+                key={tab.href}
+                href={tab.href}
+                id={tab.id}
+                data-testid={tab.id}
+                className={`relative flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                  isActive(tab.href)
+                    ? `${getTabTheme(tab.href).active} text-white shadow-sm`
+                    : `text-slate-600 ${getTabTheme(tab.href).hover}`
+                }`}
+              >
+                <tab.icon className="w-4 h-4" />
+                <span>{tab.label}</span>
+                {showBadge && (
+                  <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+                    {badgeCount > 9 ? '9+' : badgeCount}
+                  </span>
+                )}
+              </Link>
+            )
+          })}
+
+          <div className="flex-1" />
+
+          <button
+            onClick={async () => {
+              try { await fetch('/auth/logout', { method: 'POST' }) } catch {}
+              window.location.href = '/login'
+            }}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-slate-600 hover:text-slate-900 text-sm font-medium transition-all"
+            title="Sair"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Sair</span>
+          </button>
+        </div>
+
+        {/* Indicador de módulo ativo */}
+        <div className={`h-[3px] w-full transition-colors duration-300 ${activeModuleTheme?.active ?? 'bg-slate-200'}`} />
       </div>
-      {/* Indicador de módulo ativo — 3px colorido na base do header */}
-      <div className={`h-[3px] w-full transition-colors duration-300 ${activeModuleTheme?.active ?? 'bg-slate-200'}`} />
-    </div>
+
+      {/* ── Mobile Slide-over ──────────────────────────────────────────── */}
+      {mobileOpen && (
+        <>
+          {/* Overlay */}
+          <div
+            className="fixed inset-0 z-[60] bg-black/40 sm:hidden"
+            onClick={closeMobileMenu}
+          />
+
+          {/* Painel lateral */}
+          <div className="fixed inset-y-0 left-0 z-[70] w-[280px] bg-white shadow-2xl flex flex-col sm:hidden">
+            {/* Header do painel */}
+            <div className="flex items-center justify-between px-4 py-4 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-600">
+                  <span className="text-xs font-bold text-white">V</span>
+                </div>
+                <span className="text-sm font-bold text-slate-800">Navegação</span>
+              </div>
+              <button
+                onClick={closeMobileMenu}
+                className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500 transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Lista de módulos */}
+            <nav className="flex-1 overflow-y-auto py-2 px-2 space-y-0.5">
+              {tabs.map((tab) => {
+                const theme      = getTabTheme(tab.href)
+                const active     = isActive(tab.href)
+                const badgeCount =
+                  tab.href === '/dashboard/pharmacy' ? lowStockCount :
+                  tab.href === '/dashboard/whatsapp'  ? whatsappHandoffCount : 0
+
+                return (
+                  <Link
+                    key={tab.href}
+                    href={tab.href}
+                    id={tab.id}
+                    onClick={closeMobileMenu}
+                    className={`flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-colors ${
+                      active
+                        ? `${theme.active} text-white shadow-sm`
+                        : 'text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    {/* Indicador de cor do módulo */}
+                    <div className={`flex h-8 w-8 items-center justify-center rounded-lg shrink-0 ${
+                      active ? 'bg-white/20' : theme.active + ' bg-opacity-10'
+                    }`}>
+                      <tab.icon className={`h-4 w-4 ${active ? 'text-white' : ''}`} />
+                    </div>
+                    <span className="flex-1">{tab.label}</span>
+                    {badgeCount > 0 && (
+                      <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                        {badgeCount > 9 ? '9+' : badgeCount}
+                      </span>
+                    )}
+                  </Link>
+                )
+              })}
+            </nav>
+
+            {/* Rodapé: nome do usuário + sair */}
+            <div className="border-t border-slate-100 px-4 py-4 space-y-2">
+              <p className="text-xs text-slate-400 truncate">
+                Olá, <span className="font-semibold text-slate-600">{userName}</span>
+              </p>
+              <button
+                onClick={async () => {
+                  try { await fetch('/auth/logout', { method: 'POST' }) } catch {}
+                  window.location.href = '/login'
+                }}
+                className="flex items-center gap-2 text-sm text-slate-500 hover:text-red-600 transition-colors"
+              >
+                <LogOut className="h-4 w-4" />
+                Sair
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </>
   )
 }
