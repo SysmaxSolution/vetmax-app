@@ -323,17 +323,19 @@ export default function DashboardHeader({
                     href={tab.href}
                     id={tab.id}
                     onClick={closeMobileMenu}
-                    className={`flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-colors ${
+                    className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors ${
                       active
-                        ? `${theme.active} text-white shadow-sm`
-                        : 'text-slate-700 hover:bg-slate-50'
+                        ? `${theme.active} text-white shadow-sm font-semibold`
+                        : 'text-slate-600 hover:bg-slate-50 font-medium'
                     }`}
                   >
-                    {/* Indicador de cor do módulo */}
-                    <div className={`flex h-8 w-8 items-center justify-center rounded-lg shrink-0 ${
-                      active ? 'bg-white/20' : theme.active + ' bg-opacity-10'
+                    {/* Ícone Soft UI */}
+                    <div className={`flex h-7 w-7 items-center justify-center rounded-lg shrink-0 ${
+                      active ? 'bg-white/20' : theme.bg
                     }`}>
-                      <tab.icon className={`h-4 w-4 ${active ? 'text-white' : ''}`} />
+                      <tab.icon className={`h-4 w-4 ${
+                        active ? 'text-white' : theme.active.replace('bg-', 'text-')
+                      }`} />
                     </div>
                     <span className="flex-1">{tab.label}</span>
                     {badgeCount > 0 && (

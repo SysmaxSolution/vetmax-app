@@ -7,7 +7,10 @@ import { revalidatePath } from 'next/cache'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type FlowConfig = {
-  vet_merged_modules: Array<'triage' | 'exams'>
+  vet_merged_modules:    Array<'triage' | 'exams'>
+  use_accounting_chart?: boolean
+  mentor_idle_enabled?:  boolean
+  mentor_idle_seconds?:  number
 }
 
 export type BusinessHourEntry = { open: string; close: string } | null

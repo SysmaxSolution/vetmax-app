@@ -88,9 +88,16 @@ interface SpeechRecognitionEvent extends Event {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function MentorChat() {
+interface MentorChatProps {
+  idleEnabled?: boolean
+  idleSeconds?: number
+}
+
+export function MentorChat({ idleEnabled = true, idleSeconds = 30 }: MentorChatProps) {
   const [mounted, setMounted]         = useState(false)
   const [open, setOpen]               = useState(false)
+  const [idleBubble, setIdleBubble]   = useState(false)
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [messages, setMessages]       = useState<Message[]>([GREET])
   const [input, setInput]             = useState('')
   const [listening, setListening]     = useState(false)
@@ -101,6 +108,26 @@ export function MentorChat() {
   const [activeHighlights, setActiveHighlights] = useState<MentorHighlight[]>([])
 
   useEffect(() => { setMounted(true) }, [])
+
+  // Idle timer — exibe balão de ajuda após inatividade
+  useEffect(() => {
+    if (!idleEnabled) return
+    const ms = idleSeconds * 1000
+
+    function resetTimer() {
+      setIdleBubble(false)
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
+      idleTimerRef.current = setTimeout(() => setIdleBubble(true), ms)
+    }
+
+    const events = ['scroll', 'click', 'touchstart', 'mousemove', 'keydown'] as const
+    events.forEach(e => window.addEventListener(e, resetTimer, { passive: true }))
+    resetTimer()
+    return () => {
+      events.forEach(e => window.removeEventListener(e, resetTimer))
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
+    }
+  }, [idleEnabled, idleSeconds])
 
   // Lê preferência de modo do localStorage após montar
   useEffect(() => {
@@ -363,9 +390,32 @@ export function MentorChat() {
         />
       )}
 
+      {/* ── Idle Bubble ── */}
+      {idleBubble && !open && (
+        <div className="fixed bottom-24 right-4 sm:right-6 z-[9999] w-64 origin-bottom-right animate-fade-in">
+          <div className="relative rounded-2xl bg-blue-600 px-4 py-3 text-xs text-white shadow-2xl">
+            <p className="leading-relaxed pr-5 font-medium">Precisa de ajuda? Estou aqui para orientar!</p>
+            <button
+              onClick={() => {
+                setIdleBubble(false)
+                if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
+              }}
+              aria-label="Fechar"
+              className="absolute right-2.5 top-2.5 rounded-full p-0.5 hover:bg-white/20 transition-colors"
+            >
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12"/>
+              </svg>
+            </button>
+            {/* Cauda apontando para o botão (abaixo) */}
+            <span className="absolute -bottom-[7px] right-7 h-3.5 w-3.5 rotate-45 rounded-sm bg-blue-600" />
+          </div>
+        </div>
+      )}
+
       {/* ── Floating Button ── */}
       <button
-        onClick={() => setOpen(v => !v)}
+        onClick={() => { setOpen(v => !v); setIdleBubble(false) }}
         className={`fixed bottom-6 right-6 z-[9999] flex h-14 w-14 items-center justify-center rounded-full shadow-2xl transition-all duration-200 ${
           open
             ? 'bg-slate-800 text-white scale-95'

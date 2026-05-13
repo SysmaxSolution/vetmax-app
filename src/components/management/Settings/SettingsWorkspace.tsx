@@ -4,7 +4,7 @@ import { useState } from 'react'
 import {
   Building2, Shield, Sparkles, MessageCircle, Calculator,
   BarChart3, Wrench, ToggleLeft, ToggleRight, Save, Loader2,
-  FileText, Cpu,
+  FileText, Cpu, HelpCircle,
 } from 'lucide-react'
 import type { ClinicConfig, ClinicSettingsConfig, AiTranscriptionMode, FlowConfig } from '@/lib/actions/clinic-settings'
 import { updateClinicConfig } from '@/lib/actions/clinic-settings'
@@ -107,6 +107,7 @@ export default function SettingsWorkspace({
             <p className="text-sm text-slate-500 bg-slate-50 rounded-xl px-5 py-4 border border-slate-200">
               O horário de funcionamento está disponível em <strong>Gestão → Clínica</strong>.
             </p>
+            <MentorIdleSettings initialConfig={initialClinicConfig} onToast={onToast} />
           </div>
         )}
 
@@ -515,6 +516,96 @@ function ReportsSettings() {
           <span className="font-semibold text-slate-600">Nota:</span> a persistência granular por relatório
           será implementada em G-13. Por ora, os toggles refletem a preferência visual.
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── MentorIdleSettings ───────────────────────────────────────────────────────
+
+function MentorIdleSettings({ initialConfig, onToast }: {
+  initialConfig: ClinicConfig | null
+  onToast: (type: 'success' | 'error', msg: string) => void
+}) {
+  const flow = initialConfig?.flow_config as any
+  const [enabled,  setEnabled]  = useState<boolean>(flow?.mentor_idle_enabled ?? true)
+  const [seconds,  setSeconds]  = useState<number>(flow?.mentor_idle_seconds  ?? 30)
+  const [saving,   setSaving]   = useState(false)
+
+  async function handleSave() {
+    setSaving(true)
+    const base = initialConfig?.flow_config ?? { vet_merged_modules: [] }
+    const res = await updateClinicConfig({
+      flow_config: { ...base, mentor_idle_enabled: enabled, mentor_idle_seconds: seconds } as FlowConfig,
+    })
+    setSaving(false)
+    if ('error' in res) { onToast('error', res.error); return }
+    onToast('success', 'Configurações do Mentor salvas!')
+  }
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+      <div className="border-b border-slate-100 px-6 py-4 flex items-center gap-3">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50">
+          <HelpCircle className="h-4 w-4 text-blue-600" />
+        </div>
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900">Mentor de IA — Sugestão por Inatividade</h3>
+          <p className="text-xs text-slate-500">Balão que aparece quando o usuário fica parado na tela</p>
+        </div>
+      </div>
+      <div className="px-6 py-5 space-y-5">
+        {/* Toggle */}
+        <div className="flex items-center justify-between rounded-xl border border-slate-100 px-4 py-3">
+          <div>
+            <p className="text-sm font-medium text-slate-800">Exibir sugestão de ajuda por inatividade</p>
+            <p className="text-xs text-slate-500">Mostra "Precisa de ajuda?" quando o usuário fica parado</p>
+          </div>
+          <button
+            onClick={() => setEnabled(v => !v)}
+            className={`transition-colors ${enabled ? 'text-blue-500' : 'text-slate-300'}`}
+          >
+            {enabled ? <ToggleRight className="h-7 w-7" /> : <ToggleLeft className="h-7 w-7" />}
+          </button>
+        </div>
+
+        {/* Tempo */}
+        {enabled && (
+          <div className="flex items-center gap-4">
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Tempo de inatividade para exibição
+              </label>
+              <p className="text-xs text-slate-500 mb-2">
+                Após quantos segundos parado o balão aparece (mín. 10 s, máx. 300 s)
+              </p>
+              <div className="flex items-center gap-3">
+                <input
+                  type="range"
+                  min={10}
+                  max={300}
+                  step={5}
+                  value={seconds}
+                  onChange={e => setSeconds(Number(e.target.value))}
+                  className="flex-1 accent-blue-600"
+                />
+                <span className="w-16 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-center text-sm font-mono font-semibold text-slate-700">
+                  {seconds}s
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50"
+        >
+          {saving
+            ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando...</>
+            : <><Save className="h-4 w-4" /> Salvar Configurações do Mentor</>}
+        </button>
       </div>
     </div>
   )
