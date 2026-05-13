@@ -61,21 +61,21 @@ export default function SettingsWorkspace({
   const [activeCategory, setActiveCategory] = useState<Category>('geral')
 
   return (
-    <div className="flex gap-6 min-h-[600px]">
+    <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 min-h-[600px]">
       {/* ── Sidebar ─────────────────────────────────────────────────────────── */}
-      <aside className="w-52 flex-shrink-0">
+      <aside className="w-full sm:w-52 sm:flex-shrink-0">
         <nav className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-100">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Categorias</p>
           </div>
-          <div className="py-1">
+          <div className="flex sm:flex-col overflow-x-auto pb-1 sm:pb-0 gap-1 py-1 sm:py-1 px-1 sm:px-0">
             {CATEGORIES.map(cat => {
               const isActive = activeCategory === cat.key
               return (
                 <button
                   key={cat.key}
                   onClick={() => setActiveCategory(cat.key)}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
+                  className={`whitespace-nowrap sm:whitespace-normal w-auto sm:w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors rounded-lg sm:rounded-none flex-shrink-0 sm:flex-shrink ${
                     isActive
                       ? 'bg-slate-900 text-white'
                       : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
@@ -88,7 +88,7 @@ export default function SettingsWorkspace({
                     <p className={`text-sm font-medium leading-tight ${isActive ? 'text-white' : 'text-slate-700'}`}>
                       {cat.label}
                     </p>
-                    <p className={`text-[10px] leading-tight truncate ${isActive ? 'text-slate-300' : 'text-slate-400'}`}>
+                    <p className={`text-[10px] leading-tight truncate hidden sm:block ${isActive ? 'text-slate-300' : 'text-slate-400'}`}>
                       {cat.description}
                     </p>
                   </div>

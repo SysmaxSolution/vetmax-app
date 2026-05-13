@@ -69,7 +69,7 @@ export function ExportXmlModal({ onClose }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
       <div className="relative w-full max-w-sm rounded-2xl bg-white shadow-2xl p-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-5">
@@ -87,7 +87,7 @@ export function ExportXmlModal({ onClose }: Props) {
         </div>
 
         {/* Filters */}
-        <div className="grid grid-cols-2 gap-3 mb-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Mês</label>
             <select
@@ -126,7 +126,7 @@ export function ExportXmlModal({ onClose }: Props) {
         )}
 
         {/* Actions */}
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2">
           <button
             onClick={onClose}
             disabled={isPending}

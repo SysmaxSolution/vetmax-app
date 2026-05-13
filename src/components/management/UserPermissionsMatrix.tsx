@@ -164,14 +164,18 @@ export default function UserPermissionsMatrix({
       )}
 
       {/* Matriz */}
-      <div className="overflow-x-auto rounded-xl border border-slate-200">
+      <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0 rounded-xl">
+        <div className="rounded-xl border border-slate-200">
         <table className="min-w-full text-sm">
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200">
-              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 w-40">Módulo</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 w-32 sm:w-40 min-w-[128px]">Módulo</th>
               {ACTIONS.map(a => (
-                <th key={a.key} className="px-3 py-3 text-center text-xs font-semibold text-slate-600 min-w-[90px]">
-                  {a.label}
+                <th key={a.key} className="px-3 py-3 text-center text-xs font-semibold text-slate-600 min-w-[80px]">
+                  {a.key === 'view'   && <><span className="hidden sm:inline">Visualizar</span><span className="sm:hidden">Ver</span></>}
+                  {a.key === 'create' && <span>Criar</span>}
+                  {a.key === 'edit'   && <span>Editar</span>}
+                  {a.key === 'delete' && <><span className="hidden sm:inline">Excluir</span><span className="sm:hidden">Del</span></>}
                 </th>
               ))}
             </tr>
@@ -179,7 +183,7 @@ export default function UserPermissionsMatrix({
           <tbody className="divide-y divide-slate-100">
             {MODULES.map(mod => (
               <tr key={mod.key} className="hover:bg-slate-50 transition-colors">
-                <td className="px-4 py-3 text-sm font-medium text-slate-800">{mod.label}</td>
+                <td className="px-4 py-3 text-sm font-medium text-slate-800 max-w-[100px] sm:max-w-none truncate">{mod.label}</td>
                 {ACTIONS.map(act => {
                   const checked  = getPermission(mod.key, act.key)
                   // Criar/Editar/Excluir ficam desabilitados se view não está marcado
@@ -224,6 +228,7 @@ export default function UserPermissionsMatrix({
             ))}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Footer: Salvar */}
