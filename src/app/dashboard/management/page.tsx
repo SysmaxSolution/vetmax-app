@@ -5,7 +5,6 @@ import { getTemplates } from '@/lib/actions/templates'
 import { getClinicInvitations } from '@/lib/actions/invitations'
 import { getCatalog, seedDefaultCatalog } from '@/lib/actions/catalog'
 import { getClinicConfig, getClinicSettingsConfig } from '@/lib/actions/clinic-settings'
-import { listProductPrices } from '@/lib/actions/core-management'
 import { getRooms } from '@/lib/actions/rooms'
 import { getWhatsAppSettings } from '@/lib/actions/whatsapp'
 import ManagementWorkspace from '@/components/management/ManagementWorkspace'
@@ -32,7 +31,7 @@ export default async function ManagementPage() {
 
   const clinicName = (profile.clinics as unknown as { name: string } | null)?.name ?? 'Minha Clínica'
 
-  const [templatesResult, clinicResult, usersResult, invitationsResult, catalogResult, configResult, productPricesResult, roomsResult, settingsConfigResult, whatsAppSettingsResult] = await Promise.all([
+  const [templatesResult, clinicResult, usersResult, invitationsResult, catalogResult, configResult, roomsResult, settingsConfigResult, whatsAppSettingsResult] = await Promise.all([
     getTemplates(),
     admin
       .from('clinics')
@@ -48,7 +47,6 @@ export default async function ManagementPage() {
     getClinicInvitations(),
     getCatalog(),
     getClinicConfig(),
-    listProductPrices(),
     getRooms(),
     getClinicSettingsConfig(),
     getWhatsAppSettings(),
@@ -63,7 +61,6 @@ export default async function ManagementPage() {
   const initialCatalog = 'error' in catalogResult ? [] : catalogResult
   const initialClinicConfig = 'error' in configResult ? null : configResult
   const initialSettingsConfig = 'error' in settingsConfigResult ? null : settingsConfigResult
-  const initialProductPrices = 'error' in productPricesResult ? [] : productPricesResult
   const initialRooms = Array.isArray(roomsResult) ? roomsResult : []
   const initialWhatsAppSettings = whatsAppSettingsResult ?? null
 
@@ -88,7 +85,6 @@ export default async function ManagementPage() {
         initialCatalog={initialCatalog}
         initialClinicConfig={initialClinicConfig}
         initialSettingsConfig={initialSettingsConfig}
-        initialProductPrices={initialProductPrices}
         initialRooms={initialRooms}
         activeModules={activeModules}
         isSysmax={!!profile.is_sysmax}

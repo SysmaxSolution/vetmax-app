@@ -44,18 +44,6 @@ export interface ClinicSettings {
   holiday_work: boolean
 }
 
-export interface ProductPrice {
-  id: string
-  clinic_id: string
-  name: string
-  category: Category
-  price: number
-  is_active: boolean
-  created_at: string
-  created_by?: string
-  updated_at?: string
-}
-
 export interface CentralCashierEntry {
   id: string
   clinic_id: string

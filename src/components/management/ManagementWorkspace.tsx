@@ -18,7 +18,6 @@ import ImportTemplateModal from './ImportTemplateModal'
 import CatalogTab from './CatalogTab'
 import { Toast } from '@/components/ui/toast'
 import ConveniosTab from './ConveniosTab'
-import PricingTab from './PricingTab'
 import RoomsTab from './RoomsTab'
 import AppearanceTab from './AppearanceTab'
 import ErrorMonitoringDashboard from './ErrorMonitoringDashboard'
@@ -27,7 +26,6 @@ import BusinessHoursTab from './BusinessHoursTab'
 import { updateUserPhone, getUserModuleAccess, setUserModuleAccess, updateUserNickname } from '@/lib/actions/user-management'
 import type { ClinicUserFull } from '@/lib/actions/user-management'
 import type { Room } from '@/lib/actions/rooms'
-import type { ProductPrice } from '@/lib/actions/core-management'
 import UserManagementModal from './UserManagementModal'
 import type { WhatsAppSettingsDisplay } from '@/lib/actions/whatsapp'
 
@@ -45,7 +43,6 @@ interface ManagementWorkspaceProps {
   initialCatalog:           CatalogItem[]
   initialClinicConfig:      ClinicConfig | null
   initialSettingsConfig?:   ClinicSettingsConfig | null
-  initialProductPrices?:        ProductPrice[]
   initialRooms?:                Room[]
   activeModules?:               string[]
   isSysmax?:                    boolean
@@ -137,7 +134,7 @@ function UserInlineField({ label, value, placeholder, onSave }: {
 
 export default function ManagementWorkspace({
   initialTemplates, clinicData, users, initialInvitations, userLimit, currentUserId, userEmail, userFullName,
-  initialCatalog, initialClinicConfig, initialSettingsConfig = null, initialProductPrices = [], initialRooms = [],
+  initialCatalog, initialClinicConfig, initialSettingsConfig = null, initialRooms = [],
   activeModules = [], isSysmax = false, initialWhatsAppSettings = null,
 }: ManagementWorkspaceProps) {
   const searchParams = useSearchParams()
@@ -500,17 +497,10 @@ export default function ManagementWorkspace({
 
       {/* ── Tab: Catálogo ── */}
       {activeTab === 'catalogo' && (
-        <div className="space-y-6">
-          <CatalogTab
-            initialItems={initialCatalog}
-            onToast={(type, message) => setToast({ type, message })}
-          />
-          {/* Tabela de Preços (CSV import) — migrado de Configurações G-07 */}
-          <PricingTab
-            initialItems={initialProductPrices}
-            onToast={(type, message) => setToast({ type, message })}
-          />
-        </div>
+        <CatalogTab
+          initialItems={initialCatalog}
+          onToast={(type, message) => setToast({ type, message })}
+        />
       )}
 
       {/* ── Tab: Convênios ── */}
