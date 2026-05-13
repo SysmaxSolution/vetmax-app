@@ -43,7 +43,7 @@
 
 import { test, expect, Page } from '@playwright/test';
 import { createAdminClient } from '../helpers/supabase-test-client';
-import { seedClinics, seedTutorsAndPets } from '../helpers/db-seed';
+import { seedClinics, seedTutorsAndPets, seedUsers } from '../helpers/db-seed';
 import fixtures from '../fixtures/test-data.json';
 
 let _serverAlive = true
@@ -51,6 +51,8 @@ test.beforeAll(async ({ browser }) => {
   const _ctx = await browser.newContext(); const _pg = await _ctx.newPage()
   _serverAlive = await _pg.goto(process.env.TEST_BASE_URL ?? 'http://localhost:4000', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
   await _ctx.close(); if (!_serverAlive) console.log('[SKIP ALL] cashier-complete — servidor fora do ar')
+  // Garante que profiles têm clinic_id correto (pode ser nulo por cascata de outros specs)
+  if (_serverAlive) await seedUsers().catch(e => console.warn('[cashier-complete] seedUsers falhou:', e.message))
 })
 test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
 
@@ -290,8 +292,7 @@ test.describe('BLOCO B — Fluxo de Consulta → Caixa', () => {
     await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded' });
 
     // Aguardar hidratação React antes de verificar KPIs
-    const table = page.getByTestId('cashier-entries-table');
-    await expect(table).toBeVisible({ timeout: 12_000 });
+    await expect(page.getByTestId('cashier-hydrated')).toBeAttached({ timeout: 20_000 });
 
     // CentralCashierWorkspace KPIs (sempre presentes, independentes do dashboard RPC)
     await expect(page.getByText(/total registrado/i)).toBeVisible({ timeout: 8_000 });
@@ -313,14 +314,9 @@ test.describe('BLOCO B — Fluxo de Consulta → Caixa', () => {
     await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded' });
 
     // Aguardar hidratação React antes de clicar nas abas
-    await expect(page.getByTestId('cashier-entries-table')).toBeVisible({ timeout: 12_000 });
+    await expect(page.getByTestId('cashier-hydrated')).toBeAttached({ timeout: 20_000 });
 
-    // Retry no clique caso tenha ocorrido antes de hidratação React
     await page.getByRole('button', { name: /recebimentos/i }).click()
-    await page.waitForTimeout(400)
-    if (!await page.getByRole('heading', { name: /recebimentos pendentes/i }).isVisible().catch(() => false)) {
-      await page.getByRole('button', { name: /recebimentos/i }).click()
-    }
     await expect(page.getByRole('heading', { name: /recebimentos pendentes/i })).toBeVisible({ timeout: 8_000 })
 
     // Forçar refresh para garantir que a fatura seedada aparece (pode não estar em initialInvoices)
@@ -517,14 +513,9 @@ test.describe('BLOCO D — Sessão de Caixa', () => {
     await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded' });
 
     // Aguardar hidratação React antes de clicar nas abas
-    await expect(page.getByTestId('cashier-entries-table')).toBeVisible({ timeout: 12_000 });
+    await expect(page.getByTestId('cashier-hydrated')).toBeAttached({ timeout: 20_000 });
 
-    // Ir para aba Sessão — retry caso o clique tenha ocorrido antes de hidratação React
     await page.getByRole('button', { name: /sessão/i }).click()
-    await page.waitForTimeout(400)
-    if (!await page.getByRole('heading', { name: /gestão de sessão/i }).isVisible().catch(() => false)) {
-      await page.getByRole('button', { name: /sessão/i }).click()
-    }
     await expect(page.getByRole('heading', { name: /gestão de sessão/i })).toBeVisible({ timeout: 10_000 });
 
     // Caixa deve estar fechado
@@ -630,14 +621,9 @@ test.describe('BLOCO E — Saídas (Outflows)', () => {
     await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded' });
 
     // Aguardar hidratação React antes de clicar nas abas
-    await expect(page.getByTestId('cashier-entries-table')).toBeVisible({ timeout: 12_000 });
+    await expect(page.getByTestId('cashier-hydrated')).toBeAttached({ timeout: 20_000 });
 
-    // Retry no clique caso tenha ocorrido antes de hidratação React
     await page.getByRole('button', { name: /saídas/i }).click()
-    await page.waitForTimeout(400)
-    if (!await page.getByText(/saídas do caixa/i).isVisible().catch(() => false)) {
-      await page.getByRole('button', { name: /saídas/i }).click()
-    }
     await expect(page.getByText(/saídas do caixa/i)).toBeVisible({ timeout: 8_000 });
 
     if (outflowId) {
@@ -651,14 +637,9 @@ test.describe('BLOCO E — Saídas (Outflows)', () => {
     await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded' });
 
     // Aguardar hidratação React antes de clicar nas abas
-    await expect(page.getByTestId('cashier-entries-table')).toBeVisible({ timeout: 12_000 });
+    await expect(page.getByTestId('cashier-hydrated')).toBeAttached({ timeout: 20_000 });
 
-    // Retry click na aba Saídas (mesmo padrão de TC-OUT-01 que passou)
     await page.getByRole('button', { name: /saídas/i }).click();
-    await page.waitForTimeout(400);
-    if (!await page.getByText(/saídas do caixa/i).isVisible({ timeout: 2_000 }).catch(() => false)) {
-      await page.getByRole('button', { name: /saídas/i }).click();
-    }
     await expect(page.getByText(/saídas do caixa/i)).toBeVisible({ timeout: 8_000 });
 
     const registerBtn = page.getByTestId('btn-registrar-saida');

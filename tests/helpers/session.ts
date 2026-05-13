@@ -42,8 +42,8 @@ export async function injectFreshSession(
   await page.fill('#email', email)
   await page.fill('#password', password)
   await page.getByRole('button', { name: /entrar/i }).click()
-  // Aceita /dashboard OU /onboarding — falha rápida em vez de timeout de 45s
-  await page.waitForURL(/\/(dashboard|onboarding)/, { timeout: 60_000 })
+  // waitUntil:'domcontentloaded' garante que o browser processou os Set-Cookie da resposta antes de retornar
+  await page.waitForURL(/\/(dashboard|onboarding)/, { timeout: 60_000, waitUntil: 'domcontentloaded' })
   if (page.url().includes('/onboarding')) {
     throw new Error(
       `[injectFreshSession] Login para ${email} redirecionou para /onboarding — profile.clinic_id está null no DB. Verifique seedUsers().`

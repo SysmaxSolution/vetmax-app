@@ -24,7 +24,7 @@
 
 import { test, expect, Page } from '@playwright/test';
 import { createAdminClient } from '../helpers/supabase-test-client';
-import { seedTutorsAndPets, seedGroomingSession } from '../helpers/db-seed';
+import { seedTutorsAndPets, seedGroomingSession, seedUsers } from '../helpers/db-seed';
 import fixtures from '../fixtures/test-data.json';
 
 const admin = createAdminClient();
@@ -33,6 +33,12 @@ const admin = createAdminClient();
 
 async function loginAs(page: Page, email: string, password: string) {
   await loginViaApi(page, email, password)
+}
+
+async function loginAndWaitHydrated(page: Page, email: string, password: string) {
+  await loginAs(page, email, password)
+  await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded', timeout: 60_000 })
+  await page.getByTestId('cashier-hydrated').waitFor({ state: 'attached', timeout: 20_000 })
 }
 
 function randomUUID(): string {
@@ -93,6 +99,8 @@ test.beforeAll(async ({ browser }) => {
     .then(() => true).catch(() => false)
   await _ctx.close()
   if (!_serverAlive) console.log('[SKIP ALL] phase5-billing-management — servidor fora do ar')
+  // Garante que profiles têm clinic_id correto (pode ser nulo por cascata de outros specs)
+  if (_serverAlive) await seedUsers().catch(e => console.warn('[phase5-billing] seedUsers falhou:', e.message))
 })
 test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
 
@@ -115,27 +123,23 @@ test.describe('TC-BIL-001: Aba Recebimentos exibe fatura pendente de consulta', 
   });
 
   test('Fatura pendente de consulta aparece na aba Recebimentos do Caixa', async ({ page }, testInfo) => {
-    await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-    await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded' });
-    // Aguardar hidratação React antes de clicar nas abas
-    await expect(page.getByTestId('cashier-entries-table')).toBeVisible({ timeout: 12_000 });
+    await loginAndWaitHydrated(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
 
-    // Navegar para aba Recebimentos (botão contém ícone SVG + texto + badge opcional)
     const receivablesTab = page.getByRole('button', { name: /recebimentos/i }).first();
-    await expect(receivablesTab).toBeVisible({ timeout: 10_000 });
     await receivablesTab.click();
-    await page.waitForTimeout(400);
-    if (!await page.getByRole('heading', { name: /recebimentos pendentes/i }).isVisible().catch(() => false)) {
-      await receivablesTab.click();
-    }
-
-    // Heading de recebimentos pendentes
     await expect(
       page.getByRole('heading', { name: /recebimentos pendentes/i })
     ).toBeVisible({ timeout: 8_000 });
 
+    // Forçar refresh para garantir que a fatura semeada aparece (SSR pode ter carregado antes do seed)
+    const atualizarBtn = page.getByRole('button', { name: /atualizar/i });
+    if (await atualizarBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
+      await atualizarBtn.click();
+      await page.waitForTimeout(1_000);
+    }
+
     // Rex deve aparecer como pendente (nome do paciente)
-    await expect(page.getByText('Rex').first()).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByText('Rex').first()).toBeVisible({ timeout: 10_000 });
 
     // Botão de receber — data-mentor-step
     const receiveBtn = page.locator('[data-mentor-step="cashier-receive-invoice-btn"]').first();
@@ -163,17 +167,10 @@ test.describe('TC-BIL-002: Pagamento de consulta via Pix → central_cashier', (
   });
 
   test('Clicar Receber → selecionar Pix → Confirmar → fatura paga + entrada no caixa', async ({ page }, testInfo) => {
-    await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-    await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByTestId('cashier-entries-table')).toBeVisible({ timeout: 12_000 });
+    await loginAndWaitHydrated(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
 
-    // Aba Recebimentos
     const recTab2 = page.getByRole('button', { name: /recebimentos/i }).first();
     await recTab2.click();
-    await page.waitForTimeout(400);
-    if (!await page.getByRole('heading', { name: /recebimentos pendentes/i }).isVisible().catch(() => false)) {
-      await recTab2.click();
-    }
     await expect(page.getByRole('heading', { name: /recebimentos pendentes/i })).toBeVisible({ timeout: 8_000 });
 
     // Clicar em Receber para a fatura de Rex
@@ -252,17 +249,10 @@ test.describe('TC-BIL-003: Pagamento de Banho e Tosa via Dinheiro', () => {
   });
 
   test('Aba Recebimentos → B&T de Rex → Dinheiro → Confirmar → registrado', async ({ page }, testInfo) => {
-    await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-    await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded', timeout: 60_000 });
-    await expect(page.getByTestId('cashier-entries-table')).toBeVisible({ timeout: 15_000 });
+    await loginAndWaitHydrated(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
 
     const recTab3 = page.getByRole('button', { name: /recebimentos/i }).first();
     await recTab3.click();
-    await page.waitForTimeout(1_500);
-    if (!await page.getByRole('heading', { name: /recebimentos pendentes/i }).isVisible().catch(() => false)) {
-      await recTab3.click();
-      await page.waitForTimeout(1_500);
-    }
     await expect(page.getByRole('heading', { name: /recebimentos pendentes/i })).toBeVisible({ timeout: 12_000 });
 
     // Botão Receber para Banho e Tosa
@@ -387,8 +377,7 @@ test.describe('TC-BIL-005: Filtro por módulo grooming na Visão Geral', () => {
   });
 
   test('Filtrar por grooming exibe apenas lançamentos de grooming', async ({ page }, testInfo) => {
-    await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-    await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded' });
+    await loginAndWaitHydrated(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
 
     await expect(page.getByText('TC-BIL-005 GROOMING')).toBeVisible({ timeout: 10_000 });
 
@@ -422,17 +411,10 @@ test.describe('TC-BIL-006: data-mentor-step presentes no Caixa Central', () => {
   });
 
   test('Aba Recebimentos expõe data-mentor-step para botões de pagamento', async ({ page }, testInfo) => {
-    await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-    await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded', timeout: 60_000 });
-    await expect(page.getByTestId('cashier-entries-table')).toBeVisible({ timeout: 15_000 });
+    await loginAndWaitHydrated(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
 
     const recTab4 = page.getByRole('button', { name: /recebimentos/i }).first();
     await recTab4.click();
-    await page.waitForTimeout(1_500);
-    if (!await page.getByRole('heading', { name: /recebimentos pendentes/i }).isVisible().catch(() => false)) {
-      await recTab4.click();
-      await page.waitForTimeout(1_500);
-    }
     await expect(page.getByRole('heading', { name: /recebimentos pendentes/i })).toBeVisible({ timeout: 12_000 });
 
     // Verificar data-mentor-step no botão de receber fatura

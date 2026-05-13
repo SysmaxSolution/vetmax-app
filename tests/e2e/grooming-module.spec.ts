@@ -15,7 +15,7 @@
 
 import { test, expect, Page } from '@playwright/test';
 import { createAdminClient } from '../helpers/supabase-test-client';
-import { seedGroomingSession, seedTutorsAndPets } from '../helpers/db-seed';
+import { seedGroomingSession, seedTutorsAndPets, seedUsers } from '../helpers/db-seed';
 import fixtures from '../fixtures/test-data.json';
 
 const adminSupabase = createAdminClient();
@@ -69,6 +69,8 @@ test.beforeAll(async ({ browser }) => {
   const _ctx = await browser.newContext(); const _pg = await _ctx.newPage()
   _serverAlive = await _pg.goto(process.env.TEST_BASE_URL ?? 'http://localhost:4000', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
   await _ctx.close(); if (!_serverAlive) console.log('[SKIP ALL] grooming-module — servidor fora do ar')
+  // Garante que profiles têm clinic_id correto (pode ser nulo por cascata de outros specs)
+  if (_serverAlive) await seedUsers().catch(e => console.warn('[grooming-module] seedUsers falhou:', e.message))
 })
 test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
 
@@ -175,9 +177,10 @@ test.describe('TC-GRM-02: Agendamento Futuro via Recepção', () => {
     // Modal deve abrir em modo "Agendamento"
     await expect(page.getByRole('heading', { name: /agendar banho e tosa/i })).toBeVisible({ timeout: 5_000 });
 
-    // Data deve estar pré-preenchida (amanhã)
-    const dateInput = page.locator('input[type="datetime-local"]');
-    await expect(dateInput).toHaveValue(/.+/); // campo preenchido
+    // DateTimePicker usa DatePicker (botão) + TimePicker (input text HH:MM)
+    // — não há input[type="datetime-local"]. Em modo schedule pré-preenche amanhã 09:00.
+    const timeInput = page.locator('input[placeholder="HH:MM"]');
+    await expect(timeInput).toHaveValue(/\d{2}:\d{2}/);
 
     // Selecionar serviço
     await page.getByRole('button', { name: 'Tosa Completa' }).click();
@@ -576,7 +579,7 @@ test.describe('TC-GRM-07: Agendamento via modal principal com motivo Banho e Tos
     await expect(page.getByRole('heading', { name: /agendar banho e tosa/i })).not.toBeVisible({ timeout: 8_000 });
     // Card deve aparecer no Kanban ou na lista de agendados
     await page.goto('/dashboard/grooming', { waitUntil: 'domcontentloaded', timeout: 45_000 });
-    await expect(page.getByText('Rex')).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByText('Rex').first()).toBeVisible({ timeout: 8_000 });
   });
 });
 

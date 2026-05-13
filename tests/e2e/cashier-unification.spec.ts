@@ -13,6 +13,7 @@
 
 import { test, expect, Page } from '@playwright/test';
 import { createAdminClient } from '../helpers/supabase-test-client';
+import { seedUsers } from '../helpers/db-seed';
 import fixtures from '../fixtures/test-data.json';
 
 let _serverAlive = true
@@ -20,6 +21,8 @@ test.beforeAll(async ({ browser }) => {
   const _ctx = await browser.newContext(); const _pg = await _ctx.newPage()
   _serverAlive = await _pg.goto(process.env.TEST_BASE_URL ?? 'http://localhost:4000', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
   await _ctx.close(); if (!_serverAlive) console.log('[SKIP ALL] cashier-unification — servidor fora do ar')
+  // Garante que profiles têm clinic_id correto (pode ser nulo por cascata de outros specs)
+  if (_serverAlive) await seedUsers().catch(e => console.warn('[cashier-unification] seedUsers falhou:', e.message))
 })
 test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
 
@@ -65,18 +68,12 @@ test.describe('TC-UNI-02: /reception/checkout redireciona para /cashier', () => 
 test.describe('TC-UNI-03: Aba Recebimentos no módulo Caixa', () => {
   test('Módulo Caixa exibe aba Recebimentos', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-    await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded' });
-    // Aguardar hidratação React antes de clicar nas abas
-    await expect(page.getByTestId('cashier-entries-table')).toBeVisible({ timeout: 12_000 });
+    await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded', timeout: 60_000 });
+    // cashier-hydrated só aparece após hidratação React (useEffect) — garante que onClick está registrado
+    await expect(page.getByTestId('cashier-hydrated')).toBeAttached({ timeout: 20_000 });
 
     const tab = page.getByRole('button', { name: /recebimentos/i });
-    await expect(tab).toBeVisible({ timeout: 10_000 });
     await tab.click();
-    await page.waitForTimeout(400);
-    if (!await page.getByRole('heading', { name: /recebimentos pendentes/i }).isVisible().catch(() => false)) {
-      await tab.click();
-    }
-
     await expect(
       page.getByRole('heading', { name: /recebimentos pendentes/i })
     ).toBeVisible({ timeout: 8_000 });
@@ -88,17 +85,11 @@ test.describe('TC-UNI-03: Aba Recebimentos no módulo Caixa', () => {
 test.describe('TC-UNI-04: Aba Saídas no módulo Caixa', () => {
   test('Módulo Caixa exibe aba Saídas', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-    await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByTestId('cashier-entries-table')).toBeVisible({ timeout: 12_000 });
+    await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded', timeout: 60_000 });
+    await expect(page.getByTestId('cashier-hydrated')).toBeAttached({ timeout: 20_000 });
 
     const tab = page.getByRole('button', { name: /saídas/i });
-    await expect(tab).toBeVisible({ timeout: 10_000 });
     await tab.click();
-    await page.waitForTimeout(400);
-    if (!await page.getByRole('heading', { name: /saídas do caixa/i }).isVisible().catch(() => false)) {
-      await tab.click();
-    }
-
     await expect(
       page.getByRole('heading', { name: /saídas do caixa/i })
     ).toBeVisible({ timeout: 8_000 });
@@ -110,17 +101,11 @@ test.describe('TC-UNI-04: Aba Saídas no módulo Caixa', () => {
 test.describe('TC-UNI-05: Aba Sessão no módulo Caixa', () => {
   test('Módulo Caixa exibe aba Sessão com controle de abertura', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-    await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByTestId('cashier-entries-table')).toBeVisible({ timeout: 12_000 });
+    await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded', timeout: 60_000 });
+    await expect(page.getByTestId('cashier-hydrated')).toBeAttached({ timeout: 20_000 });
 
     const tab = page.getByRole('button', { name: /sessão/i });
-    await expect(tab).toBeVisible({ timeout: 10_000 });
     await tab.click();
-    await page.waitForTimeout(400);
-    if (!await page.getByRole('heading', { name: /gestão de sessão/i }).isVisible().catch(() => false)) {
-      await tab.click();
-    }
-
     await expect(
       page.getByRole('heading', { name: /gestão de sessão/i })
     ).toBeVisible({ timeout: 8_000 });
@@ -176,17 +161,11 @@ test.describe('TC-UNI-06: Fatura pendente aparece na aba Recebimentos', () => {
     if (!invoiceId) { testInfo.skip(); return; }
 
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
-    await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded' });
-    // Aguardar hidratação React
-    await expect(page.getByTestId('cashier-entries-table')).toBeVisible({ timeout: 12_000 });
+    await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded', timeout: 60_000 });
+    await expect(page.getByTestId('cashier-hydrated')).toBeAttached({ timeout: 20_000 });
 
-    // Retry no clique caso hidratação React ainda não completou
     const recTab = page.getByRole('button', { name: /recebimentos/i });
     await recTab.click();
-    await page.waitForTimeout(400);
-    if (!await page.getByRole('heading', { name: /recebimentos pendentes/i }).isVisible().catch(() => false)) {
-      await recTab.click();
-    }
     await expect(page.getByRole('heading', { name: /recebimentos pendentes/i })).toBeVisible({ timeout: 8_000 });
 
     // Forçar refresh para garantir que a fatura seedada aparece

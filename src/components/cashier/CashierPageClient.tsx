@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { CheckCircle2, AlertCircle, LayoutDashboard, Receipt, ArrowDownCircle, Settings, FileBarChart } from 'lucide-react'
 import { listCashierEntries, getCashierSummary } from '@/lib/actions/core-management'
 import { getCashierDashboard, getCurrentSession, listOutflows } from '@/lib/actions/cashier-sessions'
@@ -45,12 +45,15 @@ export default function CashierPageClient({
   initialInvoices, initialOutflows, initialGroomingSessions,
   userRole, clinicId, clinicName, today, firstOfMonth,
 }: Props) {
-  const [activeTab, setActiveTab] = useState<Tab>('overview')
-  const [entries,   setEntries]   = useState<CentralCashierEntry[]>(initialEntries)
-  const [summary,   setSummary]   = useState<CashierSummary | null>(initialSummary)
-  const [dashboard, setDashboard] = useState<CashierDashboard | null>(initialDashboard)
-  const [session,   setSession]   = useState<CashierSession | null>(initialSession)
-  const [toast,     setToast]     = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
+  const [activeTab,  setActiveTab]  = useState<Tab>('overview')
+  const [entries,    setEntries]    = useState<CentralCashierEntry[]>(initialEntries)
+  const [summary,    setSummary]    = useState<CashierSummary | null>(initialSummary)
+  const [dashboard,  setDashboard]  = useState<CashierDashboard | null>(initialDashboard)
+  const [session,    setSession]    = useState<CashierSession | null>(initialSession)
+  const [toast,      setToast]      = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
+  const [hydrated,   setHydrated]   = useState(false)
+
+  useEffect(() => { setHydrated(true) }, [])
 
   function showToast(msg: string, type: 'success' | 'error' = 'success') {
     setToast({ type, msg })
@@ -92,6 +95,9 @@ export default function CashierPageClient({
         <h1 className="text-2xl font-bold text-slate-900">Caixa</h1>
         <p className="mt-0.5 text-sm text-slate-500">Central de recebimentos, saídas e gestão de sessão</p>
       </div>
+
+      {/* Sentinel: só aparece no DOM após hidratação React (useEffect) */}
+      {hydrated && <span data-testid="cashier-hydrated" className="sr-only" aria-hidden="true" />}
 
       {/* Tab navigation */}
       <div className="flex gap-1 border-b border-slate-200 overflow-x-auto pb-px -mb-px">

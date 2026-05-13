@@ -15,6 +15,7 @@
 
 import { test, expect, type Page } from '@playwright/test'
 import { loginViaApi } from '../helpers/session'
+import { seedUsers } from '../helpers/db-seed'
 
 // ─── Credenciais de teste ──────────────────────────────────────────────────────
 
@@ -79,6 +80,8 @@ test.beforeAll(async ({ browser }) => {
     .then(() => true).catch(() => false)
   await _ctx.close()
   if (!_serverAlive) console.log('[SKIP ALL] responsive-mobile — servidor fora do ar')
+  // Garante que profiles têm clinic_id correto (pode ser nulo por cascata de outros specs)
+  if (_serverAlive) await seedUsers().catch(e => console.warn('[responsive-mobile] seedUsers falhou:', e.message))
 })
 test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
 
