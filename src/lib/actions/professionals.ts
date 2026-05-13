@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 export interface ClinicProfessional {
   id: string
@@ -47,10 +48,23 @@ export async function getClinicProfessionals(): Promise<ClinicProfessional[] | {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Não autenticado.' }
 
-  const { data, error } = await supabase
+  // Busca o clinic_id do usuário logado
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('clinic_id')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
+
+  // Admin client ignora RLS — necessário para listar colegas da mesma clínica
+  const admin = createAdminClient()
+  const { data, error } = await admin
     .from('profiles')
     .select('id, full_name, role, specialties, crmv, phone')
+    .eq('clinic_id', profile.clinic_id)
     .in('role', ['vet', 'assistant', 'groomer'])
+    .eq('is_active', true)
     .order('full_name')
 
   if (error) return { error: error.message }
