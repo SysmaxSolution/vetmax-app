@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import {
   X, User, Shield, Loader2, Camera, FileSignature,
-  Eye, EyeOff, Check, AlertTriangle,
+  Eye, EyeOff, Check, AlertTriangle, Lock,
 } from 'lucide-react'
 import {
   adminUpdateUser, adminChangePassword, uploadUserSignature,
@@ -12,6 +12,7 @@ import {
 } from '@/lib/actions/user-management'
 import type { Room } from '@/lib/actions/rooms'
 import type { UserRole } from '@/types'
+import UserPermissionsMatrix from './UserPermissionsMatrix'
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -60,7 +61,7 @@ export default function UserManagementModal({
   user, rooms, activeModules, currentUserId, onClose, onSaved,
 }: Props) {
   const isNew = user === null
-  const [activeTab, setActiveTab] = useState<'usuario' | 'acessos'>('usuario')
+  const [activeTab, setActiveTab] = useState<'usuario' | 'acessos' | 'permissoes'>('usuario')
   const [saving, setSaving]       = useState(false)
   const [error, setError]         = useState<string | null>(null)
   const [success, setSuccess]     = useState<string | null>(null)
@@ -214,14 +215,15 @@ export default function UserManagementModal({
         {/* Tabs */}
         <div className="flex border-b border-slate-200 flex-shrink-0">
           {([
-            { key: 'usuario', label: 'Usuário',  Icon: User   },
-            { key: 'acessos', label: 'Acessos',  Icon: Shield },
+            { key: 'usuario',    label: 'Usuário',     Icon: User   },
+            { key: 'acessos',    label: 'Módulos',     Icon: Shield },
+            { key: 'permissoes', label: 'Permissões',  Icon: Lock   },
           ] as const).map(({ key, label, Icon }) => (
             <button
               key={key}
               onClick={() => setActiveTab(key)}
-              disabled={isNew && key === 'acessos'}
-              className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+              disabled={isNew && key !== 'usuario'}
+              className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === key
                   ? 'border-teal-600 text-teal-700'
                   : 'border-transparent text-slate-500 hover:text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed'
@@ -453,6 +455,19 @@ export default function UserManagementModal({
               )}
 
             </div>
+          )}
+
+          {/* ── Aba Permissões Granulares (G-14) ── */}
+          {activeTab === 'permissoes' && !isNew && user && (
+            <UserPermissionsMatrix
+              userId={user.id}
+              userFullName={user.full_name}
+              isAdmin={user.role === 'admin'}
+              onToast={(type, message) => {
+                if (type === 'error') setError(message)
+                else setSuccess(message)
+              }}
+            />
           )}
 
           {/* ── Aba Acessos ── */}

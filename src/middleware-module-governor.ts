@@ -116,3 +116,45 @@ export async function checkModuleAccess(moduleName: string): Promise<
 
   return { allowed: true }
 }
+
+/**
+ * G-14: Verificação granular de permissão (módulo × ação).
+ *
+ * - role='admin' → bypass total (sempre allowed)
+ * - Lê de user_permissions_granular sem cache de banco (usa sessão JWT já presente)
+ * - Para usar em Server Components/Actions, não no Edge middleware
+ *
+ * @param module  Ex: 'financial', 'cashier', 'reception'
+ * @param action  'view' | 'create' | 'edit' | 'delete'
+ */
+export async function checkGranularPermission(
+  module: string,
+  action: 'view' | 'create' | 'edit' | 'delete'
+): Promise<{ allowed: true } | { allowed: false; reason: string }> {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { allowed: false, reason: 'Não autenticado' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('clinic_id, role')
+    .eq('id', user.id)
+    .single()
+  if (!profile) return { allowed: false, reason: 'Perfil não encontrado' }
+
+  // Admin bypass total — sem consulta extra ao banco
+  if (profile.role === 'admin') return { allowed: true }
+
+  const { data } = await supabase
+    .from('user_permissions_granular')
+    .select('allowed')
+    .eq('clinic_id', profile.clinic_id)
+    .eq('user_id', user.id)
+    .eq('module', module)
+    .eq('action', action)
+    .single()
+
+  if (data?.allowed === true) return { allowed: true }
+  return { allowed: false, reason: `Sem permissão "${action}" no módulo "${module}"` }
+}
