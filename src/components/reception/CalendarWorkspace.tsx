@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, ChevronRight, CalendarDays, Plus, Scissors, X, MessageCircle } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CalendarDays, Plus, Scissors, X, MessageCircle, Pencil } from 'lucide-react'
 import {
   confirmArrival,
   cancelAppointment,
@@ -18,6 +18,7 @@ import {
 } from '@/lib/actions/calendar'
 import { sendDailyScheduleToVets, type DailyScheduleResult } from '@/lib/actions/daily-schedule-whatsapp'
 import NewAppointmentModal from './NewAppointmentModal'
+import EditAppointmentModal from './EditAppointmentModal'
 import ReceptionSubNav from './ReceptionSubNav'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -137,7 +138,7 @@ function AppointmentCard({
 type FilterType = 'all' | 'appointment' | 'grooming'
 
 function EventCard({
-  event, isPending, onConfirmArrival, onCancel, onCancelGrooming, onGroomingClick,
+  event, isPending, onConfirmArrival, onCancel, onCancelGrooming, onGroomingClick, onEdit,
 }: {
   event:              UnifiedCalendarEvent
   isPending:          boolean
@@ -145,6 +146,7 @@ function EventCard({
   onCancel:           () => void
   onCancelGrooming:   () => void
   onGroomingClick:    () => void
+  onEdit:             () => void
 }) {
   const time         = event.datetime.split('T')[1]?.substring(0, 5) ?? ''
   const emoji        = SPECIES_EMOJI[event.petSpecies] ?? '🐾'
@@ -207,6 +209,14 @@ function EventCard({
               Check-in
             </button>
             <button
+              onClick={onEdit}
+              disabled={isPending}
+              className="rounded-lg border border-blue-200 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-50 flex items-center gap-1"
+            >
+              <Pencil className="h-3 w-3" />
+              Editar
+            </button>
+            <button
               onClick={onCancel}
               disabled={isPending}
               className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500 hover:text-red-600 hover:border-red-200 transition-colors disabled:opacity-50"
@@ -265,6 +275,7 @@ export default function CalendarWorkspace({ clinicName }: Props) {
   const [sendingSchedule, setSendingSchedule] = useState(false)
   const [scheduleResult, setScheduleResult]   = useState<DailyScheduleResult | null>(null)
   const [cancelGroomingTarget, setCancelGroomingTarget] = useState<UnifiedCalendarEvent | null>(null)
+  const [editTargetId,         setEditTargetId]         = useState<string | null>(null)
   const [vetCounts, setVetCounts] = useState<ProfessionalCount[]>([])
   const [isPending, startTransition] = useTransition()
 
@@ -401,6 +412,17 @@ export default function CalendarWorkspace({ clinicName }: Props) {
           onSuccess={petName => {
             setShowModal(false)
             showToast(`Agendamento criado para ${petName}!`)
+            refreshDay(selDate)
+            refreshMonth()
+          }}
+        />
+      )}
+
+      {editTargetId && (
+        <EditAppointmentModal
+          appointmentId={editTargetId}
+          onClose={() => setEditTargetId(null)}
+          onSuccess={() => {
             refreshDay(selDate)
             refreshMonth()
           }}
@@ -750,6 +772,7 @@ export default function CalendarWorkspace({ clinicName }: Props) {
                       onCancel={() => handleCancel(event.sourceId)}
                       onCancelGrooming={() => setCancelGroomingTarget(event)}
                       onGroomingClick={() => router.push('/dashboard/grooming')}
+                      onEdit={() => event.type === 'appointment' && setEditTargetId(event.sourceId)}
                     />
                   ))}
                 </div>

@@ -68,6 +68,7 @@ export default async function VetConsultationPage({ params }: Props) {
         initialVaccines={initialVaccines}
         flowConfig={flowConfig}
         userRole={profile.role}
+        currentUserId={user.id}
       />
     </div>
   )

@@ -49,11 +49,12 @@ interface DefaultPet {
 }
 
 interface Props {
-  onClose:       () => void
-  onSuccess?:    (petName: string) => void
-  defaultPet?:   DefaultPet
-  defaultDate?:  string
-  defaultReason?: string
+  onClose:               () => void
+  onSuccess?:            (petName: string) => void
+  defaultPet?:           DefaultPet
+  defaultDate?:          string
+  defaultReason?:        string
+  defaultProfessionalId?: string
 }
 
 function mapMotivoToReason(motivo: string): string {
@@ -68,7 +69,7 @@ function mapMotivoToReason(motivo: string): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, defaultDate, defaultReason }: Props) {
+export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, defaultDate, defaultReason, defaultProfessionalId }: Props) {
   const activeModules = useModules()
   const [step, setStep]               = useState<'search' | 'form'>(defaultPet ? 'form' : 'search')
   const [selectedPet, setSelectedPet] = useState<PatientsListItem | null>(null)
@@ -80,18 +81,21 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
   const [time,       setTime]       = useState('09:00')
   const [reason,     setReason]     = useState(defaultReason ? mapMotivoToReason(defaultReason) : 'consultation')
   const [notes,      setNotes]      = useState('')
-  const [submitting, setSubmitting]         = useState(false)
-  const [error,      setError]              = useState<string | null>(null)
+  const [submitting, setSubmitting]             = useState(false)
+  const [error,      setError]                  = useState<string | null>(null)
   const [sendConfirmation, setSendConfirmation] = useState(true)
-  const [professionalId, setProfessionalId] = useState('')
-  const [professionals, setProfessionals]   = useState<ClinicProfessional[]>([])
-  const [bookedTimes, setBookedTimes]       = useState<string[]>([])
-  const [intervalMinutes, setIntervalMinutes] = useState(60)
-  const [loadingSlots, setLoadingSlots]     = useState(false)
+  const [professionalId, setProfessionalId]     = useState(defaultProfessionalId ?? '')
+  const [professionals, setProfessionals]       = useState<ClinicProfessional[]>([])
+  const [loadingProfessionals, setLoadingProfessionals] = useState(true)
+  const [bookedTimes, setBookedTimes]           = useState<string[]>([])
+  const [intervalMinutes, setIntervalMinutes]   = useState(60)
+  const [loadingSlots, setLoadingSlots]         = useState(false)
 
   // Load professionals on mount
   useEffect(() => {
+    setLoadingProfessionals(true)
     getClinicProfessionals().then(res => {
+      setLoadingProfessionals(false)
       if (!('error' in res)) setProfessionals(res)
     })
   }, [])
@@ -382,14 +386,18 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
               </select>
             </div>
 
-            {/* Profissional — aparece antes da data, apenas para consultas */}
-            {!isGrooming && professionals.length > 0 && (
+            {/* Profissional — sempre visível para consultas não-grooming */}
+            {!isGrooming && (
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Profissional (opcional)</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
+                  Profissional (opcional)
+                  {loadingProfessionals && <Loader2 className="h-3 w-3 animate-spin text-slate-400" />}
+                </label>
                 <select
                   value={professionalId}
                   onChange={e => { setProfessionalId(e.target.value); setTime(''); setBookedTimes([]) }}
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                  disabled={loadingProfessionals}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 disabled:opacity-60 bg-white"
                 >
                   <option value="">Sem preferência</option>
                   {professionals.map(p => (

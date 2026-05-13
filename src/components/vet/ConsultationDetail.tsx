@@ -129,6 +129,7 @@ interface Props {
   initialVaccines?:    PatientVaccine[]
   flowConfig?:         FlowConfig
   userRole?:           string
+  currentUserId?:      string
 }
 
 export default function ConsultationDetail({
@@ -142,6 +143,7 @@ export default function ConsultationDetail({
   initialVaccines = [],
   flowConfig = { vet_merged_modules: [] },
   userRole,
+  currentUserId,
 }: Props) {
   const router = useRouter()
   const aiMode = useAiTranscriptionMode()
@@ -742,6 +744,7 @@ export default function ConsultationDetail({
           }}
           defaultDate={apptModalData.date}
           defaultReason={apptModalData.reason}
+          defaultProfessionalId={currentUserId}
         />
       )}
 
