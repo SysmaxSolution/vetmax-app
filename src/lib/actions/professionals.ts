@@ -63,7 +63,8 @@ export async function getClinicProfessionals(): Promise<ClinicProfessional[] | {
     .from('profiles')
     .select('id, full_name, role, specialties, crmv, phone')
     .eq('clinic_id', profile.clinic_id)
-    .in('role', ['vet', 'assistant', 'groomer'])
+    .in('role', ['vet', 'assistant', 'groomer', 'admin'])
+    .eq('is_sysmax', false)
     .neq('is_active', false)   // inclui NULL e true
     .order('full_name')
 

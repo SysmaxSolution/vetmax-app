@@ -87,7 +87,8 @@ export default function EditAppointmentModal({ appointmentId, onClose, onSuccess
 
     getClinicProfessionals().then(res => {
       setLoadingProfs(false)
-      if (!('error' in res)) setProfessionals(res)
+      if ('error' in res) { console.error('Erro ao buscar profissionais:', res.error); return }
+      setProfessionals(res)
     })
   }, [appointmentId])
 

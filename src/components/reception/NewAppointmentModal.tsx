@@ -96,7 +96,8 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
     setLoadingProfessionals(true)
     getClinicProfessionals().then(res => {
       setLoadingProfessionals(false)
-      if (!('error' in res)) setProfessionals(res)
+      if ('error' in res) { console.error('Erro ao buscar profissionais:', res.error); return }
+      setProfessionals(res)
     })
   }, [])
 
