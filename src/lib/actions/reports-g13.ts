@@ -212,6 +212,7 @@ export async function getProfessionalProductivityReport(params: {
       .eq('clinic_id', ctx.clinic_id)
       .in('role', ['vet', 'admin', 'technician', 'groomer', 'receptionist'])
       .eq('is_active', true)
+      .not('is_sysmax', 'is', true)
       .order('full_name'),
     admin
       .from('consultations')
@@ -287,6 +288,7 @@ export async function listProfessionals(): Promise<Array<{ id: string; name: str
     .select('id, full_name')
     .eq('clinic_id', ctx.clinic_id)
     .in('role', ['vet', 'admin'])
+    .not('is_sysmax', 'is', true)
     .order('full_name')
 
   return (data ?? []).map(p => ({ id: p.id, name: p.full_name }))
