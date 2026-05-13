@@ -199,43 +199,53 @@ function parseTXT(text: string): ParseResult {
 }
 
 // ─── XLSX ─────────────────────────────────────────────────────────────────────
-// usa biblioteca xlsx (SheetJS)
+// usa exceljs (substituto seguro do SheetJS/xlsx — CVE GHSA-4r6h-8v6p-xvw6 e GHSA-5pgg-2g8v-p4x9)
+
+function resolveCellValue(v: unknown): unknown {
+  if (v === null || v === undefined) return null
+  if (typeof v === 'object' && 'result' in (v as object))
+    return resolveCellValue((v as Record<string, unknown>).result)
+  if (typeof v === 'object' && 'richText' in (v as object))
+    return (v as { richText: { text: string }[] }).richText.map(r => r.text).join('')
+  return v
+}
 
 async function parseXLSX(buffer: ArrayBuffer): Promise<ParseResult> {
-  const XLSX = await import('xlsx')
-  const wb   = XLSX.read(buffer, { type: 'array', cellDates: true })
-  const ws   = wb.Sheets[wb.SheetNames[0]]
-  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' })
+  const ExcelJS   = await import('exceljs')
+  const workbook  = new ExcelJS.default.Workbook()
+  // @ts-expect-error exceljs types predates Buffer<T> generic introduced in @types/node 22
+  await workbook.xlsx.load(Buffer.from(new Uint8Array(buffer)))
 
-  if (!rows.length) return { statements: [], errors: ['Planilha vazia.'] }
+  const worksheet = workbook.worksheets[0]
+  if (!worksheet || worksheet.rowCount < 2) return { statements: [], errors: ['Planilha vazia.'] }
 
   const statements: ParsedStatement[] = []
   const errors: string[] = []
 
-  const headers = Object.keys(rows[0]).map(h => h.toLowerCase())
-  const idxDate  = headers.findIndex(h => h.includes('data') || h === 'date')
-  const idxDesc  = headers.findIndex(h => h.includes('desc') || h.includes('memo') || h.includes('histor'))
-  const idxAmt   = headers.findIndex(h => h.includes('valor') || h === 'value' || h === 'amount')
+  const headerRow = worksheet.getRow(1)
+  const headers: string[] = []
+  headerRow.eachCell({ includeEmpty: true }, (cell, col) => {
+    headers[col - 1] = String(resolveCellValue(cell.value) ?? '').toLowerCase()
+  })
 
-  const origHeaders = Object.keys(rows[0])
+  const idxDate = headers.findIndex(h => h.includes('data') || h === 'date')
+  const idxDesc = headers.findIndex(h => h.includes('desc') || h.includes('memo') || h.includes('histor'))
+  const idxAmt  = headers.findIndex(h => h.includes('valor') || h === 'value' || h === 'amount')
 
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i]
+  worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+    if (rowNumber === 1) return
+
     try {
-      const rawDate = idxDate >= 0 ? row[origHeaders[idxDate]] : null
-      const rawAmt  = idxAmt  >= 0 ? row[origHeaders[idxAmt]]  : null
-      const desc    = idxDesc >= 0 ? String(row[origHeaders[idxDesc]] || 'Sem descrição') : 'Sem descrição'
+      const rawDate = resolveCellValue(idxDate >= 0 ? row.getCell(idxDate + 1).value : null)
+      const rawAmt  = resolveCellValue(idxAmt  >= 0 ? row.getCell(idxAmt  + 1).value : null)
+      const rawDesc = resolveCellValue(idxDesc >= 0 ? row.getCell(idxDesc + 1).value : null)
+      const desc    = rawDesc != null ? String(rawDesc) : 'Sem descrição'
 
-      if (!rawDate || rawAmt === null || rawAmt === '') continue
+      if (rawDate == null || rawAmt == null || rawAmt === '') return
 
-      // Data pode ser JS Date (xlsx com cellDates), string, ou number
       let date: string
       if (rawDate instanceof Date) {
         date = rawDate.toISOString().split('T')[0]
-      } else if (typeof rawDate === 'number') {
-        // Número serial do Excel
-        const d = XLSX.SSF.parse_date_code(rawDate)
-        date = `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}`
       } else {
         const s = String(rawDate).trim()
         if (/^\d{2}[/\-]\d{2}[/\-]\d{4}$/.test(s)) {
@@ -248,8 +258,8 @@ async function parseXLSX(buffer: ArrayBuffer): Promise<ParseResult> {
 
       const amount = parseFloat(String(rawAmt).replace(/\./g, '').replace(',', '.'))
       if (isNaN(amount)) {
-        errors.push(`Linha ${i + 2}: valor inválido`)
-        continue
+        errors.push(`Linha ${rowNumber}: valor inválido`)
+        return
       }
 
       statements.push({
@@ -259,9 +269,9 @@ async function parseXLSX(buffer: ArrayBuffer): Promise<ParseResult> {
         type:        amount >= 0 ? 'credit' : 'debit',
       })
     } catch {
-      errors.push(`Linha ${i + 2}: erro ao parsear`)
+      errors.push(`Linha ${rowNumber}: erro ao parsear`)
     }
-  }
+  })
 
   return { statements, errors }
 }
