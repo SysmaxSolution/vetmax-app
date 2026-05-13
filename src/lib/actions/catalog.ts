@@ -8,6 +8,20 @@ import { revalidatePath } from 'next/cache'
 
 export type CatalogItemType = 'consultation' | 'medication' | 'exam' | 'other' | 'grooming'
 
+export interface CatalogSuggestion {
+  id:           string
+  name:         string
+  category:     string
+  subcategory:  string | null
+  unit:         string | null
+  species:      string[] | null
+  common_brand: string | null
+  brand:        string | null
+  ncm:          string | null
+  price_avg:    number | null
+  barcode:      string | null
+}
+
 export interface CatalogItem {
   id:         string
   clinic_id:  string
@@ -197,4 +211,35 @@ export async function seedDefaultCatalog(
   ]
 
   await admin.from('clinic_catalog').insert(defaults)
+}
+
+// ─── Busca no catálogo global (autocomplete) ──────────────────────────────────
+
+export async function searchGlobalCatalog(
+  query: string,
+  category?: string,
+  limit = 20
+): Promise<CatalogSuggestion[] | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const term = query.trim()
+  if (!term || term.length < 2) return []
+
+  let q = supabase
+    .from('product_catalog_global')
+    .select('id, name, category, subcategory, unit, species, common_brand, brand, ncm, price_avg, barcode')
+    .or(`name.ilike.%${term}%,common_brand.ilike.%${term}%,brand.ilike.%${term}%,barcode.eq.${term}`)
+    .order('brand', { ascending: false, nullsFirst: false })
+    .order('name')
+    .limit(limit)
+
+  if (category) {
+    q = q.eq('category', category)
+  }
+
+  const { data, error } = await q
+  if (error) return { error: 'Erro ao buscar catálogo global: ' + error.message }
+  return (data ?? []) as CatalogSuggestion[]
 }
