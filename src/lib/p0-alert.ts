@@ -78,7 +78,10 @@ export async function sendP0FixPlanAlert(opts: {
   priority: string
 }): Promise<void> {
   const { alertPhone, apiUrl, apiKey, instance } = getEvolutionConfig()
-  if (!alertPhone || !apiUrl || !apiKey || !instance) return
+  if (!alertPhone || !apiUrl || !apiKey || !instance) {
+    console.warn('[Fix Plan Alert] Variáveis de Evolution API não configuradas — verifique EVOLUTION_API_URL, EVOLUTION_API_KEY, EVOLUTION_INSTANCE (ou P0_ALERT_INSTANCE) e P0_ALERT_PHONE no painel do Vercel')
+    return
+  }
 
   const shortId = opts.fixPlanId.slice(0, 8).toUpperCase()
   const message = [
