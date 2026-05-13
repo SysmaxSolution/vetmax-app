@@ -73,7 +73,7 @@ function AddAccountModal({
         </div>
 
         <div className="p-5 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className={labelClass}>Código *</label>
               <input value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))}
@@ -213,7 +213,7 @@ export default function ChartOfAccountsTab({ initialAccounts }: Props) {
     <div className="space-y-4">
       {/* Toolbar */}
       <div className="flex items-center gap-3 flex-wrap">
-        <div className="flex gap-1.5">
+        <div className="flex flex-wrap gap-1.5">
           {(['all', 'receita', 'despesa', 'ativo', 'passivo'] as const).map(t => (
             <button
               key={t}
@@ -244,7 +244,7 @@ export default function ChartOfAccountsTab({ initialAccounts }: Props) {
           <p className="text-sm text-slate-400 font-medium">Nenhuma conta encontrada.</p>
         </div>
       ) : (
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-1">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-1 overflow-x-auto">
           {tree.roots.map(root => {
             const children = tree.childrenOf(root.id)
             return (

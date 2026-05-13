@@ -126,7 +126,7 @@ function CardModal({
               className={fieldClass} placeholder="Ex: Cielo, Stone, PagSeguro..." />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className={labelClass}>Bandeira</label>
               <select value={form.brand} onChange={e => setForm(f => ({ ...f, brand: e.target.value as CreditCard['brand'] }))} className={fieldClass}>
@@ -141,7 +141,7 @@ function CardModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className={labelClass}>Taxa (%)</label>
               <input
@@ -263,52 +263,58 @@ export default function CreditCardsTab({ initialCards }: Props) {
         </div>
       ) : (
         <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-slate-100 bg-slate-50">
-                <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase">Nome</th>
-                <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase">Bandeira</th>
-                <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase">Tipo</th>
-                <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase">Taxa</th>
-                <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase">Prazo</th>
-                <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase">Parcelas</th>
-                <th className="py-3 px-4 text-center text-xs font-bold text-slate-500 uppercase">Ativo</th>
-                <th className="py-3 px-4" />
-              </tr>
-            </thead>
-            <tbody>
-              {cards.map(card => (
-                <tr key={card.id} className={`border-b border-slate-100 hover:bg-teal-50/40 transition-colors ${!card.is_active ? 'opacity-50' : ''}`}>
-                  <td className="py-3 px-4">
-                    <p className="text-sm font-semibold text-slate-800">{card.name}</p>
-                    {card.administrator && <p className="text-xs text-slate-400">{card.administrator}</p>}
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${BRAND_COLORS[card.brand]}`}>
-                      {brandLabel(card.brand)}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-sm text-slate-600">{typeLabel(card.type)}</td>
-                  <td className="py-3 px-4 text-sm text-slate-600">{card.fee_percent.toFixed(2)}%</td>
-                  <td className="py-3 px-4 text-sm text-slate-600">{card.days_to_receive}d</td>
-                  <td className="py-3 px-4 text-sm text-slate-600">até {card.installments_max}x</td>
-                  <td className="py-3 px-4 text-center">
-                    <button onClick={() => toggleActive(card)} disabled={isPending} className="text-slate-400 hover:text-teal-600 transition-colors">
-                      {card.is_active
-                        ? <ToggleRight className="h-5 w-5 text-teal-600" />
-                        : <ToggleLeft className="h-5 w-5" />}
-                    </button>
-                  </td>
-                  <td className="py-3 px-4">
-                    <button onClick={() => setModal({ mode: 'edit', card })}
-                      className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-teal-600 transition-colors">
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                  </td>
+          <div className="overflow-x-auto -mx-px">
+            <table className="min-w-full">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50">
+                  <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase">Nome</th>
+                  <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase">Bandeira</th>
+                  <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase">Tipo</th>
+                  <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase">Taxa</th>
+                  <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase hidden md:table-cell">Prazo</th>
+                  <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase hidden md:table-cell">Parcelas</th>
+                  <th className="py-3 px-4 text-center text-xs font-bold text-slate-500 uppercase">Ativo</th>
+                  <th className="py-3 px-4" />
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {cards.map(card => (
+                  <tr key={card.id} className={`border-b border-slate-100 hover:bg-teal-50/40 transition-colors ${!card.is_active ? 'opacity-50' : ''}`}>
+                    <td className="py-3 px-4">
+                      <p className="text-sm font-semibold text-slate-800">{card.name}</p>
+                      {card.administrator && <p className="text-xs text-slate-400">{card.administrator}</p>}
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${BRAND_COLORS[card.brand]}`}>
+                        {brandLabel(card.brand)}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-sm text-slate-600">{typeLabel(card.type)}</td>
+                    <td className="py-3 px-4 text-sm text-slate-600">{card.fee_percent.toFixed(2)}%</td>
+                    <td className="py-3 px-4 text-sm text-slate-600 hidden md:table-cell">{card.days_to_receive}d</td>
+                    <td className="py-3 px-4 text-sm text-slate-600 hidden md:table-cell">até {card.installments_max}x</td>
+                    <td className="py-3 px-4 text-center">
+                      <button
+                        onClick={() => toggleActive(card)}
+                        disabled={isPending}
+                        className="text-slate-400 hover:text-teal-600 transition-colors min-h-[44px] min-w-[44px] inline-flex items-center justify-center"
+                      >
+                        {card.is_active
+                          ? <ToggleRight className="h-5 w-5 text-teal-600" />
+                          : <ToggleLeft className="h-5 w-5" />}
+                      </button>
+                    </td>
+                    <td className="py-3 px-4">
+                      <button onClick={() => setModal({ mode: 'edit', card })}
+                        className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-teal-600 transition-colors">
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

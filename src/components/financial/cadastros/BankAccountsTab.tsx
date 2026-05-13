@@ -138,7 +138,7 @@ function AccountModal({
           </div>
 
           {form.bank_code === 'other' && (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className={labelClass}>Nome do Banco</label>
                 <input value={form.bank_name ?? ''} onChange={e => setForm(f => ({ ...f, bank_name: e.target.value }))}
@@ -152,7 +152,7 @@ function AccountModal({
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className={labelClass}>Agência</label>
               <input value={form.agency ?? ''} onChange={e => setForm(f => ({ ...f, agency: e.target.value }))}
@@ -250,7 +250,7 @@ export default function BankAccountsTab({ initialAccounts }: Props) {
     <div className="space-y-4">
       {/* Toolbar */}
       <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
+        <div className="relative flex-1 w-full sm:max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <input
             value={search}
@@ -283,53 +283,55 @@ export default function BankAccountsTab({ initialAccounts }: Props) {
         </div>
       ) : (
         <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-slate-100 bg-slate-50">
-                <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase">Conta</th>
-                <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase">Banco</th>
-                <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase">Agência / Conta</th>
-                <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase">Chave PIX</th>
-                <th className="py-3 px-4 text-right text-xs font-bold text-slate-500 uppercase">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(acc => (
-                <tr key={acc.id} className="border-b border-slate-100 hover:bg-teal-50/40 transition-colors">
-                  <td className="py-3 px-4">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-slate-800">{acc.name}</span>
-                      {acc.is_default && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-700">
-                          <Star className="h-3 w-3" /> Padrão
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="py-3 px-4 text-sm text-slate-600">
-                    {acc.bank_name ?? '—'}
-                    {acc.bank_code && <span className="ml-1 text-xs text-slate-400">({acc.bank_code})</span>}
-                  </td>
-                  <td className="py-3 px-4 text-sm text-slate-600">
-                    {acc.agency || acc.account
-                      ? `${acc.agency ?? '—'} / ${acc.account ?? '—'}`
-                      : '—'}
-                  </td>
-                  <td className="py-3 px-4 text-sm text-slate-600 max-w-[160px] truncate">
-                    {acc.pix_key ?? '—'}
-                  </td>
-                  <td className="py-3 px-4 text-right">
-                    <button
-                      onClick={() => setModal({ mode: 'edit', account: acc })}
-                      className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-teal-600 transition-colors"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                  </td>
+          <div className="overflow-x-auto -mx-px">
+            <table className="min-w-full">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50">
+                  <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase">Conta</th>
+                  <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase hidden sm:table-cell">Banco</th>
+                  <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase hidden sm:table-cell">Agência / Conta</th>
+                  <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase">Chave PIX</th>
+                  <th className="py-3 px-4 text-right text-xs font-bold text-slate-500 uppercase">Ações</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filtered.map(acc => (
+                  <tr key={acc.id} className="border-b border-slate-100 hover:bg-teal-50/40 transition-colors">
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-slate-800">{acc.name}</span>
+                        {acc.is_default && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-700">
+                            <Star className="h-3 w-3" /> Padrão
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 text-sm text-slate-600 hidden sm:table-cell">
+                      {acc.bank_name ?? '—'}
+                      {acc.bank_code && <span className="ml-1 text-xs text-slate-400">({acc.bank_code})</span>}
+                    </td>
+                    <td className="py-3 px-4 text-sm text-slate-600 hidden sm:table-cell">
+                      {acc.agency || acc.account
+                        ? `${acc.agency ?? '—'} / ${acc.account ?? '—'}`
+                        : '—'}
+                    </td>
+                    <td className="py-3 px-4 text-sm text-slate-600 truncate">
+                      {acc.pix_key ?? '—'}
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <button
+                        onClick={() => setModal({ mode: 'edit', account: acc })}
+                        className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-teal-600 transition-colors"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           <div className="border-t border-slate-100 bg-slate-50 px-4 py-2">
             <p className="text-xs text-slate-400">{accounts.length} conta{accounts.length !== 1 ? 's' : ''} cadastrada{accounts.length !== 1 ? 's' : ''}</p>
           </div>

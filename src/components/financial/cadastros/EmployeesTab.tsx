@@ -119,7 +119,7 @@ export default function EmployeesTab({ employees, canEditFinancial, onToast }: P
       {showForm && (
         <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
           <p className="text-xs font-semibold text-slate-700 mb-2">Novo Funcionário</p>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Nome *</label>
               <input
@@ -224,7 +224,7 @@ export default function EmployeesTab({ employees, canEditFinancial, onToast }: P
                   Salário
                   {!canEditFinancial && <Lock className="inline h-3 w-3 ml-1 text-amber-500" />}
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Contato</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 min-w-[120px]">Contato</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Status</th>
               </tr>
             </thead>
@@ -237,7 +237,7 @@ export default function EmployeesTab({ employees, canEditFinancial, onToast }: P
                   <td className="px-4 py-3">
                     <SalaryCell salary={emp.salary} canEdit={canEditFinancial} />
                   </td>
-                  <td className="px-4 py-3 text-slate-600 text-xs">
+                  <td className="px-4 py-3 text-slate-600 text-xs min-w-[120px]">
                     {emp.phone || emp.email || '—'}
                   </td>
                   <td className="px-4 py-3">
