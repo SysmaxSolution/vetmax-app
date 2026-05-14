@@ -48,6 +48,16 @@ export type PatientActivePackage = {
   sessions?:  PackageSession[]
   sessions_total?:     number
   sessions_remaining?: number
+  sessions_used?:      number
+  sessions_scheduled?: number
+}
+
+export type PackageSessionInfo = {
+  session_number:            number
+  total_sessions:            number
+  package_name:              string
+  patient_active_package_id: string
+  is_last:                   boolean
 }
 
 export type PackageSession = {
@@ -348,7 +358,7 @@ export async function schedulePackageSession(payload: {
   patient_active_package_id: string
   scheduled_for: string       // ISO datetime
   appointment_id?: string
-}): Promise<{ ok: true } | { error: string }> {
+}): Promise<{ ok: true; sessionsRemaining: number; isLast: boolean } | { error: string }> {
   const ctx = await getCtx()
   if (!ctx) return { error: 'Não autenticado.' }
 
@@ -383,14 +393,39 @@ export async function schedulePackageSession(payload: {
     .eq('status', 'pending')
 
   const sessionsRemaining = remaining ?? 0
-  if (sessionsRemaining === 0) {
-    console.log('[Smart Packages] Disparar WhatsApp: Renovação de Pacote', { patient_active_package_id: payload.patient_active_package_id })
+  const isLast = sessionsRemaining === 0
+
+  if (isLast) {
     await ctx.supabase.from('patient_active_packages').update({ status: 'completed' }).eq('id', payload.patient_active_package_id)
-  } else {
-    console.log('[Smart Packages] Disparar WhatsApp: Agendar próxima sessão', { sessions_remaining: sessionsRemaining })
+
+    // Dispara WhatsApp de renovação
+    try {
+      const { data: pap } = await ctx.supabase
+        .from('patient_active_packages')
+        .select('pet_id, package:catalog_packages(name)')
+        .eq('id', payload.patient_active_package_id)
+        .single()
+      if (pap) {
+        const { data: patient } = await ctx.supabase.from('patients').select('name, tutor_id').eq('id', pap.pet_id).single()
+        if (patient) {
+          const { data: tutor } = await ctx.supabase.from('tutors').select('id, name, phone').eq('id', patient.tutor_id).single()
+          const pkgName = (pap.package as any)?.name ?? 'pacote'
+          if (tutor?.phone) {
+            const { sendWhatsAppMessage } = await import('@/lib/actions/whatsapp')
+            await sendWhatsAppMessage({
+              phone: tutor.phone,
+              message: `Olá, ${tutor.name}! 🐾\nO pacote *${pkgName}* de *${patient.name}* foi concluído hoje. Gostaríamos de renovar e garantir a continuidade do atendimento! Entre em contato para reagendar. 😊`,
+              trigger: 'package_renewal',
+              tutorId: tutor.id,
+              tutorName: tutor.name,
+            })
+          }
+        }
+      }
+    } catch { /* best-effort */ }
   }
 
-  return { ok: true }
+  return { ok: true as const, sessionsRemaining, isLast }
 }
 
 // ─── Vincular appointment à próxima sessão pendente (sem consumir) ────────────
@@ -421,4 +456,83 @@ export async function linkSessionToAppointment(
 
   if (error) return { error: 'Erro ao vincular sessão: ' + error.message }
   return { ok: true }
+}
+
+// ─── Resumo de pacotes do pet (histórico) ─────────────────────────────────────
+
+export async function getPetPackageSummary(
+  petId: string
+): Promise<PatientActivePackage[] | { error: string }> {
+  const ctx = await getCtx()
+  if (!ctx) return { error: 'Não autenticado.' }
+
+  const { data, error } = await ctx.supabase
+    .from('patient_active_packages')
+    .select(`
+      id, clinic_id, pet_id, package_id, status, price_paid, started_at, created_at,
+      package:catalog_packages(id, name, description, price, interval_days, total_sessions),
+      sessions:patient_package_sessions(id, status, session_number, scheduled_for, used_at, appointment_id)
+    `)
+    .eq('pet_id', petId)
+    .eq('clinic_id', ctx.clinic_id)
+    .in('status', ['active', 'completed'])
+    .order('started_at', { ascending: false })
+    .limit(10)
+
+  if (error) return { error: 'Erro ao buscar resumo de pacotes: ' + error.message }
+
+  const result = (data ?? []) as unknown as (PatientActivePackage & { sessions: (PackageSession & { appointment_id: string | null })[] })[]
+  return result.map(pap => {
+    const sessions = pap.sessions ?? []
+    return {
+      ...pap,
+      sessions_total:     sessions.length,
+      sessions_used:      sessions.filter(s => s.status === 'used').length,
+      sessions_scheduled: sessions.filter(s => s.status === 'pending' && s.appointment_id).length,
+      sessions_remaining: sessions.filter(s => s.status === 'pending' && !s.appointment_id).length,
+    }
+  })
+}
+
+// ─── Mapa appointmentId → info de sessão de pacote (para timeline) ────────────
+
+export async function getPackageSessionsMap(
+  petId: string
+): Promise<Record<string, PackageSessionInfo> | { error: string }> {
+  const ctx = await getCtx()
+  if (!ctx) return { error: 'Não autenticado.' }
+
+  const { data: paps } = await ctx.supabase
+    .from('patient_active_packages')
+    .select('id, package:catalog_packages(name, total_sessions)')
+    .eq('pet_id', petId)
+    .eq('clinic_id', ctx.clinic_id)
+
+  if (!paps?.length) return {}
+
+  const papIds = paps.map(p => p.id)
+
+  const { data: sessions } = await ctx.supabase
+    .from('patient_package_sessions')
+    .select('appointment_id, session_number, patient_active_package_id')
+    .in('patient_active_package_id', papIds)
+    .not('appointment_id', 'is', null)
+
+  if (!sessions?.length) return {}
+
+  const map: Record<string, PackageSessionInfo> = {}
+  for (const s of sessions) {
+    if (!s.appointment_id) continue
+    const pap      = paps.find(p => p.id === s.patient_active_package_id) as any
+    const pkg      = pap?.package
+    const total    = pkg?.total_sessions ?? 1
+    map[s.appointment_id] = {
+      session_number:            s.session_number,
+      total_sessions:            total,
+      package_name:              pkg?.name ?? '—',
+      patient_active_package_id: s.patient_active_package_id,
+      is_last:                   s.session_number === total,
+    }
+  }
+  return map
 }

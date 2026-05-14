@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Calendar, Clock } from 'lucide-react'
+import { X, Calendar, Clock, Gift } from 'lucide-react'
 import { getPetTimeline, type TimelineEvent } from '@/lib/actions/timeline'
 import { getPatientVaccines, type PatientVaccine } from '@/lib/actions/vaccines'
+import { getPetPackageSummary, getPackageSessionsMap, type PatientActivePackage, type PackageSessionInfo } from '@/lib/actions/packages'
 import PetTimeline from './PetTimeline'
 import VaccinationCard from '@/components/vet/VaccinationCard'
 import NewAppointmentModal from '@/components/reception/NewAppointmentModal'
@@ -50,6 +51,8 @@ export default function PetTimelineModal({
   const [showSchedule, setShowSchedule] = useState(false)
   const [editApptId, setEditApptId] = useState<string | null>(null)
   const [vaccines, setVaccines] = useState<PatientVaccine[]>([])
+  const [packages, setPackages] = useState<PatientActivePackage[]>([])
+  const [packageMap, setPackageMap] = useState<Record<string, PackageSessionInfo>>({})
   const hasMounted = useRef(false)
 
   const sp = SPECIES_LABELS[petSpecies] ?? { label: petSpecies, emoji: '🐾' }
@@ -61,15 +64,17 @@ export default function PetTimelineModal({
     Promise.all([
       getPetTimeline(petId),
       getPatientVaccines(petId),
-    ]).then(([timelineResult, vaccinesResult]) => {
+      getPetPackageSummary(petId),
+      getPackageSessionsMap(petId),
+    ]).then(([timelineResult, vaccinesResult, pkgSummary, pkgMap]) => {
       if ('error' in timelineResult) {
         setError(timelineResult.error)
       } else {
         setEvents(timelineResult)
       }
-      if (!('error' in vaccinesResult)) {
-        setVaccines(vaccinesResult)
-      }
+      if (!('error' in vaccinesResult)) setVaccines(vaccinesResult)
+      if (!('error' in pkgSummary))     setPackages(pkgSummary)
+      if (!('error' in pkgMap))         setPackageMap(pkgMap)
       setLoading(false)
     })
   }, [petId])
@@ -85,6 +90,63 @@ export default function PetTimelineModal({
   const handlePrint = (data: PrintState) => {
     setPrintData(data)
     setTimeout(() => window.print(), 400)
+  }
+
+  // ─── PackagesSummaryCard inline ──────────────────────────────────────────────
+
+  function PackagesSummaryCard() {
+    if (packages.length === 0) return null
+    return (
+      <div className="rounded-xl border border-teal-200 bg-teal-50/60 overflow-hidden">
+        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-teal-200 bg-teal-100/50">
+          <Gift className="h-4 w-4 text-teal-600" />
+          <span className="text-xs font-bold text-teal-800 uppercase tracking-wide">Pacotes / Planos</span>
+        </div>
+        <div className="divide-y divide-teal-100">
+          {packages.map(pkg => {
+            const total     = pkg.sessions_total     ?? 0
+            const used      = pkg.sessions_used      ?? 0
+            const scheduled = pkg.sessions_scheduled ?? 0
+            const remaining = total - used - scheduled
+            const pct       = total > 0 ? Math.round((used / total) * 100) : 0
+            const isActive  = pkg.status === 'active'
+            return (
+              <div key={pkg.id} className="px-4 py-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-slate-800">{pkg.package?.name ?? 'Pacote'}</p>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    isActive ? 'bg-teal-100 text-teal-700' : 'bg-slate-100 text-slate-500'
+                  }`}>
+                    {isActive ? 'Ativo' : 'Concluído'}
+                  </span>
+                </div>
+                {/* barra de progresso */}
+                <div className="w-full h-1.5 bg-teal-200 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-teal-500 rounded-full transition-all"
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+                {/* grid de contadores */}
+                <div className="grid grid-cols-4 gap-1 text-center">
+                  {([
+                    ['Total',      total,     'text-slate-600'],
+                    ['Realizados', used,      'text-teal-700'],
+                    ['Agendados',  scheduled, 'text-amber-600'],
+                    ['Restantes',  remaining, remaining === 0 ? 'text-red-600' : 'text-slate-700'],
+                  ] as [string, number, string][]).map(([lbl, val, cls]) => (
+                    <div key={lbl} className="bg-white rounded-lg py-1.5 border border-teal-100">
+                      <p className={`text-base font-bold ${cls}`}>{val}</p>
+                      <p className="text-[9px] text-slate-400 font-medium">{lbl}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    )
   }
 
   // Portal de impressão (mesma estratégia do ConsultationDetail)
@@ -217,6 +279,9 @@ export default function PetTimelineModal({
 
           {/* Body */}
           <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+            {/* Pacotes / Planos */}
+            <PackagesSummaryCard />
+
             {/* Carteira de Vacinação (leitura) */}
             <VaccinationCard
               patientId={petId}
@@ -239,6 +304,7 @@ export default function PetTimelineModal({
             ) : (
               <PetTimeline
                 events={events}
+                packageMap={packageMap}
                 onPrint={handlePrint}
                 onEditAppointment={id => setEditApptId(id)}
               />

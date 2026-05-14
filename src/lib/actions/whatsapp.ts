@@ -26,6 +26,7 @@ export type WhatsAppTrigger =
   | 'grooming_evolution_saved'
   | 'appointment_scheduled'
   | 'sale_receipt'
+  | 'package_renewal'
 
 // ─── Attachable Items ─────────────────────────────────────────────────────────
 
@@ -574,6 +575,10 @@ Tom: acolhedor, positivo, levemente comemorativo. Máx. 3 parágrafos.`
   sale_receipt: (ctx) =>
     `O tutor ${ctx.tutorName} realizou uma compra na clínica agora. Valor: R$ ${ctx.saleTotal ?? '0,00'}.
     Gere uma mensagem curta de agradecimento pela compra, mencionando o nome da clínica. Tom: cordial e objetivo. Máx. 2 linhas.`,
+
+  package_renewal: (ctx) =>
+    `O pacote/plano de ${ctx.petName} (tutor: ${ctx.tutorName}) foi totalmente utilizado.
+    Gere uma mensagem simpática convidando a renovar o pacote, destacando os benefícios de continuar o tratamento. Tom: amigável e motivador. Máx. 3 linhas.`,
 }
 
 export async function generateWhatsAppMessage(

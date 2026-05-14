@@ -489,6 +489,29 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
                     </button>
                   )
                 })}
+
+                {/* Aviso "1ª visita de N" quando pacote selecionado */}
+                {selectedCatalogPkgId && (() => {
+                  const pkg = catalogPackages.find(p => p.id === selectedCatalogPkgId)
+                  if (!pkg) return null
+                  return (
+                    <div className={`flex items-start gap-2 rounded-xl px-3 py-2.5 border ${
+                      pkg.total_sessions === 1
+                        ? 'bg-amber-50 border-amber-200'
+                        : 'bg-teal-50 border-teal-200'
+                    }`}>
+                      <span className="text-base leading-none mt-0.5">🎁</span>
+                      <div>
+                        <p className="text-xs font-semibold text-slate-800">
+                          Ao confirmar, esta será a <span className="text-teal-700">1ª visita de {pkg.total_sessions}</span> do pacote <span className="italic">{pkg.name}</span>
+                        </p>
+                        {pkg.total_sessions === 1 && (
+                          <p className="text-[10px] text-amber-700 mt-0.5">Pacote de sessão única — será concluído neste atendimento.</p>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })()}
               </div>
             )}
 

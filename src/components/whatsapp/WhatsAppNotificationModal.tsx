@@ -113,6 +113,7 @@ const TRIGGER_TITLES: Record<WhatsAppTrigger, string> = {
   grooming_evolution_saved:        'Atualização do Banho e Tosa para o Tutor',
   appointment_scheduled:           'Confirmação de Agendamento',
   sale_receipt:                    'Enviar Recibo de Venda ao Tutor',
+  package_renewal:                 'Renovação de Pacote / Plano',
 }
 
 const TRIGGER_SUBTITLES: Record<WhatsAppTrigger, string> = {
@@ -132,6 +133,7 @@ const TRIGGER_SUBTITLES: Record<WhatsAppTrigger, string> = {
   grooming_evolution_saved:        'Informar que o pet está sendo atendido e tudo corre bem',
   appointment_scheduled:           'Confirmar data, horário e orientar sobre pontualidade',
   sale_receipt:                    'Comprovante de venda com itens e forma de pagamento',
+  package_renewal:                 'Convidar tutor a renovar o pacote/plano do pet',
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────

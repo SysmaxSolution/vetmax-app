@@ -6,6 +6,7 @@ import { DatePicker } from '@/components/ui/DatePicker'
 import type { TimelineEvent, TimelineEventType } from '@/lib/actions/timeline'
 import type { PrintState } from '@/components/vet/DocumentsSection'
 import type { ExtractedField } from '@/types'
+import type { PackageSessionInfo } from '@/lib/actions/packages'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -286,7 +287,7 @@ function DocumentCard({
   )
 }
 
-function AppointmentCard({ event }: { event: TimelineEvent }) {
+function AppointmentCard({ event, packageInfo }: { event: TimelineEvent; packageInfo?: PackageSessionInfo }) {
   const a          = event.appointment!
   const statusCfg  = APPOINTMENT_STATUS_LABELS[a.status] ?? { label: a.status, color: 'bg-slate-100 text-slate-600' }
   const datePart   = a.datetime.split('T')[0]
@@ -299,12 +300,24 @@ function AppointmentCard({ event }: { event: TimelineEvent }) {
     <div className="rounded-xl border border-indigo-200 bg-gradient-to-br from-indigo-50 to-blue-50 px-4 py-3">
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             <p className="text-xs font-bold uppercase tracking-wide text-indigo-600">Próximo Agendamento</p>
             <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${statusCfg.color}`}>
               {statusCfg.label}
             </span>
+            {packageInfo && (
+              <span className={`rounded-full px-2 py-0.5 text-xs font-bold border ${
+                packageInfo.is_last
+                  ? 'bg-amber-100 text-amber-700 border-amber-300'
+                  : 'bg-teal-100 text-teal-700 border-teal-300'
+              }`}>
+                🎁 Visita {packageInfo.session_number}/{packageInfo.total_sessions}
+              </span>
+            )}
           </div>
+          {packageInfo && (
+            <p className="text-[10px] text-teal-600 font-medium mb-1 truncate">{packageInfo.package_name}</p>
+          )}
           <p className="text-sm font-semibold text-indigo-900 capitalize">{dateLabel}</p>
           {timePart && (
             <p className="text-xs text-indigo-600 mt-0.5">Horário: {timePart}</p>
@@ -484,6 +497,7 @@ function VitalItem({ label, value }: { label: string; value: string }) {
 
 interface Props {
   events: TimelineEvent[]
+  packageMap?: Record<string, PackageSessionInfo>
   onPrint?: (data: PrintState) => void
   onEdit?: (consultationId: string) => void
   onEditAppointment?: (appointmentId: string) => void
@@ -786,7 +800,7 @@ function EventDetailModal({ event, onClose }: { event: TimelineEvent; onClose: (
   )
 }
 
-export default function PetTimeline({ events, onPrint, onEdit, onEditAppointment }: Props) {
+export default function PetTimeline({ events, packageMap = {}, onPrint, onEdit, onEditAppointment }: Props) {
   const [filterType, setFilterType] = useState<TimelineEventType | 'all'>('all')
   const [filterDate, setFilterDate] = useState('')
   const [showFilters, setShowFilters] = useState(false)
@@ -928,7 +942,7 @@ export default function PetTimeline({ events, onPrint, onEdit, onEditAppointment
                       {event.type === 'document'                  && <DocumentCard event={event} onPrint={onPrint} />}
                       {event.type === 'attachment'                && <AttachmentCard event={event} />}
                       {event.type === 'completed'                 && <CompletedCard event={event} />}
-                      {event.type === 'appointment'               && <AppointmentCard event={event} />}
+                      {event.type === 'appointment'               && <AppointmentCard event={event} packageInfo={packageMap[event.appointment?.id ?? '']} />}
                       {event.type === 'hospitalization_evolution' && <HospitalizationEvolutionCard event={event} />}
                       {event.type === 'grooming_evolution'        && <GroomingEvolutionCard event={event} />}
                       {event.type === 'whatsapp_notification'     && <WhatsAppNotificationCard event={event} />}

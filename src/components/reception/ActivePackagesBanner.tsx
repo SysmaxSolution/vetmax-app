@@ -148,7 +148,10 @@ function UseSessionModal({ pap, petName, onClose, onSuccess }: {
     onSuccess()
   }
 
-  const remaining = pap.sessions_remaining ?? 0
+  const total         = pap.sessions_total     ?? 0
+  const remaining     = pap.sessions_remaining ?? 0
+  const sessionNumber = total - remaining + 1
+  const isLast        = remaining === 1
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
@@ -164,12 +167,30 @@ function UseSessionModal({ pap, petName, onClose, onSuccess }: {
         </div>
 
         <div className="px-5 py-4 space-y-4">
-          <div className="bg-teal-50 rounded-xl p-3">
+          <div className="bg-teal-50 rounded-xl p-3 space-y-2">
             <p className="text-sm font-semibold text-teal-800">{pap.package?.name ?? '—'}</p>
-            <p className="text-xs text-teal-600 mt-0.5">
+            <div className="flex items-center gap-2">
+              <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full border ${
+                isLast
+                  ? 'bg-amber-100 text-amber-800 border-amber-300'
+                  : 'bg-teal-100 text-teal-700 border-teal-300'
+              }`}>
+                🎁 Esta é a sessão {sessionNumber} de {total}
+              </span>
+            </div>
+            <p className="text-xs text-teal-600">
               {petName} · {remaining - 1 < 0 ? 0 : remaining - 1} sessões restantes após este uso
             </p>
           </div>
+
+          {isLast && (
+            <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
+              <span className="text-amber-500 text-base leading-none mt-0.5">⚠️</span>
+              <p className="text-xs text-amber-800 leading-relaxed">
+                <span className="font-bold">Última sessão do pacote!</span> Após confirmar, o tutor receberá uma mensagem via WhatsApp para renovar o pacote.
+              </p>
+            </div>
+          )}
 
           <div>
             <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 mb-1.5">
