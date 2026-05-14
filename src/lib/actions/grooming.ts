@@ -448,9 +448,10 @@ export async function getGroomingCatalog(): Promise<GroomingCatalogItem[] | { er
   const admin = createAdminClient()
   const { data, error } = await admin
     .from('stock_items')
-    .select('id, name, unit_price')
+    .select('id, name, unit_price, category')
     .eq('clinic_id', clinicId)
     .eq('is_service', true)
+    .not('category', 'in', '("vet_service","exam","surgery")')
     .order('name', { ascending: true })
 
   if (error) return { error: 'Erro ao buscar catálogo: ' + error.message }

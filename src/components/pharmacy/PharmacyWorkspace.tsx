@@ -39,9 +39,13 @@ const PRODUCT_CATS: {
 const SERVICE_CATS: {
   key: StockCategory | 'all'; label: string; icon: React.ReactNode; color: string; badge: string
 }[] = [
-  { key: 'all',     label: 'Todos',    icon: <Stethoscope  className="h-4 w-4" />, color: 'text-slate-600',  badge: 'bg-slate-100 text-slate-600'   },
-  { key: 'service', label: 'Serviços', icon: <Stethoscope  className="h-4 w-4" />, color: 'text-teal-600',   badge: 'bg-teal-100 text-teal-700'    },
-  { key: 'exam',    label: 'Exames',   icon: <FlaskConical className="h-4 w-4" />, color: 'text-indigo-600', badge: 'bg-indigo-100 text-indigo-700' },
+  { key: 'all',               label: 'Todos',        icon: <Package      className="h-4 w-4" />, color: 'text-slate-600',   badge: 'bg-slate-100 text-slate-600'   },
+  { key: 'vet_service',       label: 'Veterinário',  icon: <Stethoscope  className="h-4 w-4" />, color: 'text-teal-600',    badge: 'bg-teal-100 text-teal-700'    },
+  { key: 'grooming_service',  label: 'Banho e Tosa', icon: <Scissors     className="h-4 w-4" />, color: 'text-pink-600',    badge: 'bg-pink-100 text-pink-700'    },
+  { key: 'aesthetics_service',label: 'Estética',     icon: <Sparkles     className="h-4 w-4" />, color: 'text-violet-600',  badge: 'bg-violet-100 text-violet-700' },
+  { key: 'exam',              label: 'Exame/Lab',    icon: <FlaskConical className="h-4 w-4" />, color: 'text-indigo-600',  badge: 'bg-indigo-100 text-indigo-700' },
+  { key: 'surgery',           label: 'Cirurgia',     icon: <Scissors     className="h-4 w-4" />, color: 'text-red-600',     badge: 'bg-red-100 text-red-700'      },
+  { key: 'service',           label: 'Geral',        icon: <Stethoscope  className="h-4 w-4" />, color: 'text-slate-600',   badge: 'bg-slate-100 text-slate-600'  },
 ]
 
 // Campos condicionais por categoria de produto
@@ -54,7 +58,7 @@ const CAT_FIELDS: Record<string, { batch: boolean; expiry: boolean; barcode: boo
   aesthetics:            { batch: false, expiry: true,  barcode: true,  sku: true  },
 }
 
-const SERVICE_CAT_KEYS = new Set(['service', 'exam'])
+const SERVICE_CAT_KEYS = new Set(['service', 'exam', 'vet_service', 'grooming_service', 'aesthetics_service', 'surgery'])
 
 const UNITS = ['un', 'comprimido', 'cápsula', 'frasco', 'ampola', 'ml', 'mg', 'g', 'kg', 'l', 'caixa', 'sachê', 'kit', 'par', 'rolo', 'bisnaga', 'spray', 'tubo']
 
@@ -1015,7 +1019,7 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
             <label className="block text-xs font-semibold text-slate-600 mb-2">
               {isService ? 'Tipo' : 'Categoria'} <span className="text-red-500">*</span>
             </label>
-            <div className={`grid gap-2 ${isService ? 'grid-cols-2' : 'grid-cols-3'}`}>
+            <div className={`grid gap-2 ${isService ? 'grid-cols-3' : 'grid-cols-3'}`}>
               {(isService ? SERVICE_CATS.filter(c => c.key !== 'all') : PRODUCT_CATS.filter(c => c.key !== 'all')).map(cat => (
                 <button key={cat.key} type="button"
                   onClick={() => {

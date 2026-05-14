@@ -10,7 +10,7 @@ import { useModules } from '@/components/providers/ModulesProvider'
 import { DateInput, TimePicker, DateTimePicker } from '@/components/ui/DatePicker'
 import { getClinicProfessionals, type ClinicProfessional } from '@/lib/actions/professionals'
 import { getProfessionalSlots, checkProfessionalAvailability } from '@/lib/actions/appointment-slots'
-import { getPetActivePackages, linkSessionToAppointment, type PatientActivePackage } from '@/lib/actions/packages'
+import { listCatalogPackages, sellPackageToPet, linkSessionToAppointment, type CatalogPackage } from '@/lib/actions/packages'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -91,10 +91,10 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
   const [bookedTimes, setBookedTimes]           = useState<string[]>([])
   const [intervalMinutes, setIntervalMinutes]   = useState(60)
   const [loadingSlots, setLoadingSlots]         = useState(false)
-  const [activePackages,  setActivePackages]    = useState<PatientActivePackage[]>([])
-  const [loadingPackages, setLoadingPackages]   = useState(false)
-  const [selectedPapId,   setSelectedPapId]     = useState<string>('')
-  const [appointmentType, setAppointmentType]   = useState<'regular' | 'package'>('regular')
+  const [scheduleMode,         setScheduleMode]         = useState<'regular' | 'package'>('regular')
+  const [catalogPackages,      setCatalogPackages]       = useState<CatalogPackage[]>([])
+  const [loadingCatalog,       setLoadingCatalog]        = useState(false)
+  const [selectedCatalogPkgId, setSelectedCatalogPkgId] = useState<string>('')
 
   // Load professionals on mount
   useEffect(() => {
@@ -120,21 +120,15 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
     })
   }, [professionalId, date])
 
-  // Carrega pacotes ativos do pet selecionado
+  // Carrega catálogo de pacotes ao entrar no modo "Vender Pacote"
   useEffect(() => {
-    const petId = defaultPet?.id ?? selectedPet?.id
-    if (!petId || step === 'search') {
-      setActivePackages([])
-      setSelectedPapId('')
-      setAppointmentType('regular')
-      return
-    }
-    setLoadingPackages(true)
-    getPetActivePackages(petId).then(res => {
-      setLoadingPackages(false)
-      setActivePackages(!('error' in res) ? res : [])
+    if (scheduleMode !== 'package' || catalogPackages.length > 0) return
+    setLoadingCatalog(true)
+    listCatalogPackages().then(res => {
+      setLoadingCatalog(false)
+      setCatalogPackages(!('error' in res) ? (res as CatalogPackage[]).filter(p => p.active) : [])
     })
-  }, [defaultPet?.id, selectedPet?.id, step])
+  }, [scheduleMode])
 
   // ── Grooming inline fields ──
   const [groomingServices,  setGroomingServices]  = useState<string[]>([])
@@ -179,6 +173,8 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
   function handleSelectPet(p: PatientsListItem) {
     setSelectedPet(p)
     setResults([])
+    setScheduleMode('regular')
+    setSelectedCatalogPkgId('')
     setStep('form')
   }
 
@@ -243,6 +239,41 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
       return
     }
 
+    // ── Fluxo Vender Pacote ──
+    if (scheduleMode === 'package') {
+      if (!selectedCatalogPkgId) { setError('Selecione um pacote.'); return }
+      if (!date || !time)        { setError('Selecione a data e horário do primeiro atendimento.'); return }
+      setSubmitting(true)
+      setError(null)
+
+      const sellResult = await sellPackageToPet({ pet_id: petId, package_id: selectedCatalogPkgId })
+      if ('error' in sellResult) { setSubmitting(false); setError(sellResult.error); return }
+
+      const apptResult = await createAppointment({
+        pet_id:               petId,
+        tutor_id:             tutorId,
+        appointment_datetime: `${date}T${time}:00`,
+        reason,
+        notes:                notes.trim() || undefined,
+        professional_id:      professionalId || undefined,
+      })
+      if ('error' in apptResult) { setSubmitting(false); setError(apptResult.error); return }
+
+      await linkSessionToAppointment(sellResult.id, apptResult.id)
+
+      setSubmitting(false)
+      const tutorPhone = selectedPet?.tutor.phone ?? ''
+      if (sendConfirmation && tutorPhone) {
+        const [yyyy, mm, dd] = date.split('-')
+        const pkg = catalogPackages.find(p => p.id === selectedCatalogPkgId)
+        const msg = `Olá, ${tutorName}! 🐾\nPacote *${pkg?.name ?? ''}* contratado para *${petName}*. Primeiro atendimento em *${dd}/${mm}/${yyyy}* às *${time}*. Até breve!`
+        sendWhatsAppMessage({ phone: tutorPhone, message: msg, trigger: 'appointment_scheduled', tutorId, tutorName })
+          .catch(() => {})
+      }
+      onSuccess?.(petName); onClose()
+      return
+    }
+
     // ── Fluxo Consulta ──
     if (!date || !time) { setError('Selecione a data e horário.'); return }
 
@@ -279,10 +310,6 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
       const msg = `Olá, ${tutorName}! 🐾\nAgendamento confirmado: *${petName}* (${reasonLabel}) em *${dateLabel}* às *${time}*.\nEm caso de dúvidas, entre em contato conosco. Até breve!`
       sendWhatsAppMessage({ phone: tutorPhone, message: msg, trigger: 'appointment_scheduled', tutorId, tutorName })
         .catch(() => {/* best-effort */})
-    }
-
-    if (selectedPapId && 'id' in result) {
-      await linkSessionToAppointment(selectedPapId, (result as { id: string }).id)
     }
 
     onSuccess?.(petName); onClose()
@@ -396,61 +423,74 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
               </button>
             )}
 
-            {/* Seletor de Pacote — visível apenas quando há pacotes ativos e não é grooming */}
-            {!isGrooming && activePackages.length > 0 && (
-              <div className="rounded-xl border border-teal-200 bg-teal-50 p-3 space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5">
-                    <Gift className="h-4 w-4 text-teal-600 shrink-0" />
-                    <span className="text-xs font-semibold text-teal-700">Vincular a um Pacote</span>
-                    {loadingPackages && <Loader2 className="h-3 w-3 animate-spin text-teal-500" />}
-                  </div>
-                  <div className="flex rounded-lg overflow-hidden border border-teal-300 text-[11px] font-semibold">
-                    <button
-                      type="button"
-                      onClick={() => { setAppointmentType('regular'); setSelectedPapId('') }}
-                      className={`px-2.5 py-1 transition-colors ${appointmentType === 'regular' ? 'bg-teal-600 text-white' : 'text-teal-700 hover:bg-teal-100'}`}
-                    >
-                      Regular
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAppointmentType('package')}
-                      className={`px-2.5 py-1 border-l border-teal-300 transition-colors ${appointmentType === 'package' ? 'bg-teal-600 text-white' : 'text-teal-700 hover:bg-teal-100'}`}
-                    >
-                      De Pacote
-                    </button>
-                  </div>
-                </div>
+            {/* Toggle: Agendamento Regular / Vender Pacote (oculto no modo Grooming) */}
+            {!isGrooming && (
+              <div className="flex rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+                <button
+                  type="button"
+                  onClick={() => { setScheduleMode('regular'); setSelectedCatalogPkgId('') }}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold transition-colors ${
+                    scheduleMode === 'regular' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <CalendarDays className="h-3.5 w-3.5" />
+                  Agendamento
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setScheduleMode('package')}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold border-l border-slate-200 transition-colors ${
+                    scheduleMode === 'package' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <Gift className="h-3.5 w-3.5" />
+                  Vender Pacote
+                </button>
+              </div>
+            )}
 
-                {appointmentType === 'package' && (
-                  <div className="space-y-1.5">
-                    {activePackages.map(pkg => {
-                      const remaining  = pkg.sessions_remaining ?? 0
-                      const isSelected = selectedPapId === pkg.id
-                      return (
-                        <button
-                          key={pkg.id}
-                          type="button"
-                          onClick={() => setSelectedPapId(isSelected ? '' : pkg.id)}
-                          className={`w-full flex items-center justify-between rounded-lg border px-3 py-2 text-left transition-all ${
-                            isSelected
-                              ? 'border-teal-500 bg-teal-100 shadow-sm'
-                              : 'border-teal-200 bg-white hover:border-teal-400'
-                          }`}
-                        >
-                          <div>
-                            <p className="text-xs font-semibold text-slate-800">{pkg.package?.name ?? '—'}</p>
-                            <p className="text-[10px] text-teal-600">
-                              {remaining} sessão{remaining !== 1 ? 'ões' : ''} restante{remaining !== 1 ? 's' : ''}
-                            </p>
-                          </div>
-                          {isSelected && <Check className="h-4 w-4 text-teal-600 shrink-0" />}
-                        </button>
-                      )
-                    })}
+            {/* Catálogo de pacotes — modo Vender Pacote */}
+            {!isGrooming && scheduleMode === 'package' && (
+              <div className="space-y-2">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">
+                  Selecione o pacote <span className="text-red-400">*</span>
+                </p>
+                {loadingCatalog ? (
+                  <div className="flex items-center justify-center gap-2 py-4 text-slate-400 text-xs">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Carregando...
                   </div>
-                )}
+                ) : catalogPackages.length === 0 ? (
+                  <p className="text-xs text-slate-400 text-center py-3 rounded-xl border border-dashed border-slate-200">
+                    Nenhum pacote ativo cadastrado.<br />
+                    <span className="text-teal-600">Crie em Estoque → Pacotes e Planos</span>
+                  </p>
+                ) : catalogPackages.map(pkg => {
+                  const isSelected = selectedCatalogPkgId === pkg.id
+                  return (
+                    <button
+                      key={pkg.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedCatalogPkgId(isSelected ? '' : pkg.id)
+                        if (pkg.default_professional_id && !isSelected) setProfessionalId(pkg.default_professional_id)
+                      }}
+                      className={`w-full flex items-center justify-between rounded-xl border px-3 py-2.5 text-left transition-all ${
+                        isSelected
+                          ? 'border-teal-500 bg-teal-50 shadow-sm'
+                          : 'border-slate-200 bg-white hover:border-teal-300'
+                      }`}
+                    >
+                      <div>
+                        <p className="text-xs font-semibold text-slate-800">{pkg.name}</p>
+                        <p className="text-[10px] text-slate-500">
+                          {pkg.total_sessions} sessão{pkg.total_sessions !== 1 ? 'ões' : ''} · R$ {pkg.price.toFixed(2)}
+                          {pkg.interval_days > 0 && ` · a cada ${pkg.interval_days}d`}
+                        </p>
+                      </div>
+                      {isSelected && <Check className="h-4 w-4 text-teal-600 shrink-0" />}
+                    </button>
+                  )
+                })}
               </div>
             )}
 
@@ -730,7 +770,9 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
                   ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando...</>
                   : isGrooming
                     ? <><Scissors className="h-4 w-4" /> Agendar Banho e Tosa</>
-                    : <><Save className="h-4 w-4" /> Confirmar Agendamento</>}
+                    : scheduleMode === 'package'
+                      ? <><Gift className="h-4 w-4" /> Vender Pacote e Agendar</>
+                      : <><Save className="h-4 w-4" /> Confirmar Agendamento</>}
               </button>
             </div>
           </form>

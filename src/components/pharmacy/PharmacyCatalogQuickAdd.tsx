@@ -24,8 +24,12 @@ const CAT_LABELS: Record<StockCategory, string> = {
   grooming_supply:       'Banho e Tosa',
   aesthetics:            'Estética',
   other:                 'Outro',
-  service:               'Serviço',
-  exam:                  'Exame',
+  service:               'Serviço Geral',
+  exam:                  'Exame/Lab',
+  vet_service:           'Veterinário',
+  grooming_service:      'Banho e Tosa',
+  aesthetics_service:    'Estética',
+  surgery:               'Cirurgia',
 }
 
 const PRODUCT_CAT_KEYS: StockCategory[] = [
