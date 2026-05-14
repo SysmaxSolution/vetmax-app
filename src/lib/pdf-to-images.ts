@@ -21,29 +21,59 @@ export interface PdfTextItem {
 }
 
 export interface PdfPagesResult {
-  images: string[]                      // base64 data URLs (uma por pagina)
-  dimensions: PageDimensionsRecord[]    // dimensoes em PDF points (uma por pagina)
-  textItems: PdfTextItem[]              // texto nativo extraido com coordenadas exatas
+  /** Data URLs PNG por pagina — preview no editor. */
+  images: string[]
+  /** Canvases brutos. Operacao Zero-Touch: passamos por eraseRegions antes
+   *  de virarem PNG de fundo limpo. Pode estar [] se `keepCanvases=false`. */
+  canvases: HTMLCanvasElement[]
+  dimensions: PageDimensionsRecord[]
+  textItems: PdfTextItem[]
 }
 
+export interface PdfToImagesOptions {
+  /**
+   * Escala de renderizacao. scale=4.17 corresponde a ~300 DPI (4.17 × 72).
+   * Default 4.17 para qualidade de impressao Enterprise.
+   */
+  scale?: number
+  /**
+   * Mantem as referencias aos HTMLCanvasElement para que o caller possa
+   * pintar retangulos brancos (canvas-eraser) antes de virar PNG final.
+   * Default false (memoria solta apos render).
+   */
+  keepCanvases?: boolean
+  /**
+   * Formato da preview data URL. Operacao Zero-Touch usa PNG para nao
+   * perder dados nas bordas de erase. Default 'png'.
+   */
+  previewFormat?: 'png' | 'jpeg'
+}
+
+const DEFAULT_SCALE_300DPI = 300 / 72   // 4.166...
+
 /**
- * Converte um PDF em (a) imagens base64 para preview/editor, (b) dimensoes
- * exatas em PDF points e (c) texto nativo com coordenadas exatas (pdfjs).
- *
- * Os textItems sao usados no refinamento pos-Vision: a IA detecta QUAIS sao
- * os campos, mas as coordenadas EXATAS das labels vem do textContent do PDF.
+ * Renderiza cada pagina do PDF em canvas alta resolucao e extrai o
+ * textContent nativo (com coordenadas exatas).
  */
 export async function pdfToImages(
   file: File,
-  scale = 2 // 2x para qualidade
+  opts: PdfToImagesOptions | number = {},
 ): Promise<PdfPagesResult> {
-  const pdfjsLib = await import('pdfjs-dist')
+  // Backwards compat: pdfToImages(file, scale) ainda funciona
+  const optsObj: PdfToImagesOptions = typeof opts === 'number'
+    ? { scale: opts }
+    : opts
+  const scale = optsObj.scale ?? DEFAULT_SCALE_300DPI
+  const keepCanvases = optsObj.keepCanvases ?? false
+  const previewFormat = optsObj.previewFormat ?? 'png'
 
+  const pdfjsLib = await import('pdfjs-dist')
   pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
 
   const arrayBuffer = await file.arrayBuffer()
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
   const images: string[] = []
+  const canvases: HTMLCanvasElement[] = []
   const dimensions: PageDimensionsRecord[] = []
   const textItems: PdfTextItem[] = []
 
@@ -56,18 +86,21 @@ export async function pdfToImages(
     const pageH = baseViewport.height
     dimensions.push({ width_pt: pageW, height_pt: pageH })
 
-    // 2. Render em alta resolucao para preview
+    // 2. Render em alta resolucao
     const viewport = page.getViewport({ scale })
     const canvas = document.createElement('canvas')
-    canvas.width = viewport.width
-    canvas.height = viewport.height
+    canvas.width = Math.ceil(viewport.width)
+    canvas.height = Math.ceil(viewport.height)
     const ctx = canvas.getContext('2d')!
     ctx.fillStyle = '#ffffff'
     ctx.fillRect(0, 0, canvas.width, canvas.height)
     await page.render({ canvasContext: ctx, viewport, canvas } as any).promise
 
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
+    const mime = previewFormat === 'jpeg' ? 'image/jpeg' : 'image/png'
+    const quality = previewFormat === 'jpeg' ? 0.92 : undefined
+    const dataUrl = canvas.toDataURL(mime, quality)
     images.push(dataUrl)
+    if (keepCanvases) canvases.push(canvas)
 
     // 3. Text content nativo do PDF — coordenadas exatas
     try {
@@ -81,10 +114,7 @@ export async function pdfToImages(
         const y_pt = tr[5]                    // baseline (bottom-left do glyph)
         const w_pt = raw.width ?? 0
         const h_pt = raw.height ?? Math.abs(tr[3])
-        // Converte para top-left (Y invertido para o sistema do editor)
-        // y_pt eh a baseline; o topo do texto fica em y_pt + h_pt
         const top_pt = pageH - (y_pt + h_pt)
-        // Baseline em % from top: pageH - y_pt e a distancia da baseline ao topo
         const baseline_pct = ((pageH - y_pt) / pageH) * 100
         textItems.push({
           str: raw.str,
@@ -101,5 +131,5 @@ export async function pdfToImages(
     }
   }
 
-  return { images, dimensions, textItems }
+  return { images, canvases, dimensions, textItems }
 }

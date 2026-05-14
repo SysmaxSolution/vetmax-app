@@ -274,6 +274,8 @@ export interface DocumentTemplate {
   page_dimensions?: PageDimensionsRecord[] | null
   layout_overlays?: LayoutOverlay[] | null
   page_images_storage_paths?: string[] | null
+  // Operacao Zero-Touch (migration 0139)
+  cleaned_page_paths?: string[] | null  // PNGs limpos por pagina (bucket document-templates)
   created_at: string
   updated_at?: string
 }
@@ -306,4 +308,6 @@ export interface SaveTemplatePayload {
   page_count?: number | null
   page_dimensions?: PageDimensionsRecord[] | null
   layout_overlays?: LayoutOverlay[] | null
+  // Operacao Zero-Touch (migration 0139)
+  cleaned_page_paths?: string[] | null
 }

@@ -28,7 +28,7 @@ export async function getTemplates(): Promise<DocumentTemplate[] | { error: stri
   // 3. Buscar templates (RLS ativo = filtra por clinic_id automaticamente)
   const { data, error } = await supabase
     .from('document_templates')
-    .select('id, clinic_id, name, type, file_url, extracted_fields, template_html, page_images, original_pdf_path, original_pdf_size_bytes, page_count, page_dimensions, layout_overlays, page_images_storage_paths, created_at, updated_at')
+    .select('id, clinic_id, name, type, file_url, extracted_fields, template_html, page_images, original_pdf_path, original_pdf_size_bytes, page_count, page_dimensions, layout_overlays, page_images_storage_paths, cleaned_page_paths, created_at, updated_at')
     .eq('clinic_id', profile.clinic_id)
     .order('created_at', { ascending: false })
 
@@ -98,6 +98,7 @@ export async function saveTemplate(
       page_count: payload.page_count ?? null,
       page_dimensions: payload.page_dimensions || null,
       layout_overlays: payload.layout_overlays || null,
+      cleaned_page_paths: payload.cleaned_page_paths || null,
     })
     .select('id')
     .single()
@@ -186,6 +187,7 @@ export async function updateTemplate(
       page_count: payload.page_count ?? undefined,
       page_dimensions: payload.page_dimensions ?? undefined,
       layout_overlays: payload.layout_overlays ?? undefined,
+      cleaned_page_paths: payload.cleaned_page_paths ?? undefined,
     })
     .eq('id', id)
     .eq('clinic_id', profile.clinic_id)

@@ -19,7 +19,7 @@ import type {
   DocumentTemplate, ExtractedField, FieldType, TemplateType,
   LayoutOverlay, PageDimensionsRecord,
 } from '@/types'
-import { uploadTemplatePdf } from '@/lib/actions/template-storage'
+import { uploadTemplatePdf, uploadCleanedPages } from '@/lib/actions/template-storage'
 import { previewFilledPdfBase64 } from '@/lib/actions/document-generation'
 import { buildMockFieldValues } from '@/lib/pdf/mock-field-values'
 import { FileCheck2 } from 'lucide-react'
@@ -45,6 +45,8 @@ interface FormState {
   pageCount: number | null
   pageDimensions: PageDimensionsRecord[] | null
   layoutOverlays: LayoutOverlay[] | null
+  // Operacao Zero-Touch (migration 0139) — PNGs limpos por pagina
+  cleanedPagePaths: string[] | null
 }
 
 const FIELD_TYPES: FieldType[] = ['text', 'number', 'date', 'select', 'boolean', 'textarea']
@@ -406,6 +408,7 @@ export default function ImportTemplateModal({
     pageCount: editTemplate?.page_count ?? null,
     pageDimensions: editTemplate?.page_dimensions ?? null,
     layoutOverlays: editTemplate?.layout_overlays ?? null,
+    cleanedPagePaths: editTemplate?.cleaned_page_paths ?? null,
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -525,64 +528,74 @@ export default function ImportTemplateModal({
     // Pixel Perfect: capturado durante conversao do PDF (escopo do handler)
     let pdfDimensions: PageDimensionsRecord[] | null = null
     let pdfPageCount: number | null = null
-    let pdfTextItems: import('@/lib/pdf-to-images').PdfTextItem[] = []
     let pdfImages: string[] | null = null
-    // Pipeline OCR Sniper substitui Vision para coords. Dados consolidados:
+    // Pipeline Zero-Touch substitui Vision E o sniper antigo. Dados consolidados:
     let pipelineFields: ExtractedField[] = []
     let pipelineOverlays: LayoutOverlay[] = []
+    let cleanedPagesBlobs: Blob[] = []     // PNGs limpos prontos para upload
     let templateHtmlFallback: string | null = null
     try {
 
       if (selectedFile) {
         const isPdf = selectedFile.type === 'application/pdf' || selectedFile.name.endsWith('.pdf')
 
-        // ── CAMINHO 1: PDF — OCR Sniper + Matcher (sem Claude Vision) ──────
+        // ── CAMINHO 1: PDF — Operacao Zero-Touch (Flatten & Clean) ────────
         if (isPdf) {
+          let canvases: HTMLCanvasElement[] = []
+          let textItems: import('@/lib/pdf-to-images').PdfTextItem[] = []
           try {
-            console.log('[ImportTemplate] Convertendo PDF para imagens + textContent...')
-            const { images, dimensions, textItems } = await pdfToImages(selectedFile, 2)
-            console.log(`[ImportTemplate] ${images.length} pagina(s) convertidas, ${textItems.length} text items nativos`)
-            pdfDimensions = dimensions
-            pdfPageCount = images.length
-            pdfTextItems = textItems
-            pdfImages = images
+            console.log('[ImportTemplate] Rasterizando PDF @300dpi + textContent...')
+            const r = await pdfToImages(selectedFile, { scale: 300 / 72, keepCanvases: true, previewFormat: 'png' })
+            console.log(`[ImportTemplate] ${r.images.length} pagina(s) rasterizadas, ${r.textItems.length} text items nativos`)
+            pdfDimensions = r.dimensions
+            pdfPageCount = r.images.length
+            pdfImages = r.images
+            canvases = r.canvases
+            textItems = r.textItems
           } catch (pdfErr) {
             const msg = pdfErr instanceof Error ? pdfErr.message : String(pdfErr)
-            console.error('[ImportTemplate] Falha ao converter PDF:', msg)
+            console.error('[ImportTemplate] Falha ao rasterizar PDF:', msg)
             setError(
-              'Falha ao converter o PDF. Detalhe: ' + msg +
+              'Falha ao rasterizar o PDF. Detalhe: ' + msg +
               '. Tente recarregar a pagina (Ctrl+Shift+R) — se persistir, verifique se /pdf.worker.min.mjs esta acessivel.'
             )
             setLoading(false)
             return
           }
 
-          if (pdfTextItems.length === 0) {
-            setError('PDF sem camada de texto extraivel (provavelmente escaneado). Use um PDF gerado digitalmente para Pixel Perfect.')
+          if (textItems.length === 0) {
+            setError('PDF sem camada de texto extraivel (provavelmente escaneado). Use um PDF gerado digitalmente.')
             setLoading(false)
             return
           }
 
-          // Roda pipeline OCR Sniper + Semantic Matcher
+          // Roda pipeline Flatten & Clean: rasterizacao + erase de pixels +
+          // mapeamento deterministico (sem IA).
           try {
-            const { runSniperPipeline } = await import('@/lib/pdf/sniper-pipeline')
-            const result = await runSniperPipeline({
-              textItems: pdfTextItems,
+            const { runFlattenClean } = await import('@/lib/pdf/flatten-clean-pipeline')
+            const result = await runFlattenClean({
+              textItems,
               dimensions: pdfDimensions!,
+              canvases,
               doc_type: form.type,
-              doc_name: form.name,
             })
             pipelineFields = result.extracted_fields
             pipelineOverlays = result.layout_overlays
+            cleanedPagesBlobs = result.cleaned_pages
             console.log(
-              `[ImportTemplate] OCR Sniper: ${result.stats.candidates} candidates, ` +
-              `${result.stats.matched_fields} campos mapeados, ${result.stats.globals} globais, ` +
+              `[ImportTemplate] Zero-Touch:`,
+              `${result.stats.candidates} candidates,`,
+              `${result.stats.signatures} signatures,`,
+              `${result.stats.globals} globais,`,
+              `${result.stats.canonicos} canonicos /`,
+              `${result.stats.customs} customs,`,
+              `${result.stats.pixels_apagados} pixels apagados,`,
               `${result.stats.total_overlays} overlays`,
             )
           } catch (pipeErr) {
             const msg = pipeErr instanceof Error ? pipeErr.message : String(pipeErr)
-            console.error('[ImportTemplate] Pipeline OCR falhou:', msg)
-            setError('Falha no pipeline OCR: ' + msg)
+            console.error('[ImportTemplate] Pipeline Flatten falhou:', msg)
+            setError('Falha no pipeline Flatten & Clean: ' + msg)
             setLoading(false)
             return
           }
@@ -634,8 +647,11 @@ export default function ImportTemplateModal({
 
       const pageImages = pdfImages
 
-      // Pixel Perfect: upload do PDF original para Storage (apos extracao da IA)
+      // Operacao Zero-Touch: upload do PDF original (referencia) E das PNGs limpas.
+      // O PDF original e mantido apenas para reprocessamento futuro; a geracao
+      // USARA SEMPRE os PNGs limpos do bucket.
       let originalPdfPath: string | null = null
+      let cleanedPagePaths: string[] | null = null
       const isPdf = selectedFile && (selectedFile.type === 'application/pdf' || selectedFile.name.endsWith('.pdf'))
       if (selectedFile && isPdf) {
         try {
@@ -651,6 +667,36 @@ export default function ImportTemplateModal({
         } catch (upErr) {
           console.warn('[ImportTemplate] Erro upload PDF original:', upErr)
         }
+
+        // Upload dos PNGs limpos (canvas-eraser ja apagou os valores antigos)
+        if (cleanedPagesBlobs.length > 0) {
+          try {
+            const pagesFd = new FormData()
+            // Reaproveita o folder_id do PDF original (mesmo UUID)
+            const folderId = originalPdfPath?.match(/^[^/]+\/([0-9a-f-]+)\//i)?.[1]
+            if (folderId) pagesFd.append('folder_id', folderId)
+            for (let i = 0; i < cleanedPagesBlobs.length; i++) {
+              const fileFromBlob = new File([cleanedPagesBlobs[i]], `page-${i}.png`, { type: 'image/png' })
+              pagesFd.append(`page-${i}`, fileFromBlob)
+            }
+            const r2 = await uploadCleanedPages(pagesFd)
+            if ('paths' in r2) {
+              cleanedPagePaths = r2.paths
+              console.log(`[ImportTemplate] ${r2.paths.length} PNGs limpos em Storage`)
+            } else {
+              console.warn('[ImportTemplate] Upload PNGs limpos falhou:', r2.error)
+              setError('Falha no upload das paginas limpas: ' + r2.error)
+              setLoading(false)
+              return
+            }
+          } catch (upErr) {
+            const msg = upErr instanceof Error ? upErr.message : String(upErr)
+            console.warn('[ImportTemplate] Erro upload PNGs:', msg)
+            setError('Erro upload PNGs: ' + msg)
+            setLoading(false)
+            return
+          }
+        }
       }
 
       setForm(prev => ({
@@ -662,8 +708,9 @@ export default function ImportTemplateModal({
         originalPdfSizeBytes: selectedFile?.size ?? null,
         pageCount: pdfPageCount,
         pageDimensions: pdfDimensions,
-        // Overlays prontos do pipeline OCR Sniper (com whiteout_bbox + is_global)
+        // Overlays prontos do pipeline Zero-Touch (whiteout=false — pixel ja limpo)
         layoutOverlays: pipelineOverlays.length > 0 ? pipelineOverlays : null,
+        cleanedPagePaths,
       }))
 
       // Hidrata o editor:
@@ -1049,6 +1096,8 @@ export default function ImportTemplateModal({
         page_count: form.pageCount,
         page_dimensions: form.pageDimensions,
         layout_overlays: overlaysToSave.length > 0 ? overlaysToSave : form.layoutOverlays,
+        // Operacao Zero-Touch (migration 0139) — PNGs limpos por pagina
+        cleaned_page_paths: form.cleanedPagePaths,
       }
 
       const result = isEditMode
@@ -1079,6 +1128,7 @@ export default function ImportTemplateModal({
         page_count: form.pageCount,
         page_dimensions: form.pageDimensions,
         layout_overlays: finalLayoutOverlays,
+        cleaned_page_paths: form.cleanedPagePaths,
         created_at: editTemplate?.created_at ?? new Date().toISOString(),
       })
     } catch (err) {

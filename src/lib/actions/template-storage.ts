@@ -166,6 +166,122 @@ export async function uploadGeneratedPatientPdf(
   return { path }
 }
 
+/**
+ * Operacao Zero-Touch — Upload de PNGs limpos por pagina.
+ *
+ * Acionado pelo ImportTemplateModal apos o pipeline runFlattenClean. Cada
+ * PNG do array vira um arquivo no bucket privado document-templates, dentro
+ * da pasta UUID do template:
+ *
+ *   {clinic_id}/{folder_id}/page-0.png
+ *   {clinic_id}/{folder_id}/page-1.png
+ *   ...
+ *
+ * O `folder_id` corresponde ao mesmo UUID usado em uploadTemplatePdf (path
+ * tipo `{clinic_id}/{folder_id}/original.pdf`). Quando esse mesmo folder_id
+ * eh passado, as paginas limpas ficam coabitando com o PDF original.
+ *
+ * Retorna a lista de paths na MESMA ORDEM das pages do PDF original — esse
+ * array eh persistido em document_templates.cleaned_page_paths.
+ *
+ * RLS: bucket eh privado; service role grava. Validamos `folder_id` formato
+ * UUID e que o usuario eh admin da clinica.
+ */
+export async function uploadCleanedPages(
+  formData: FormData,
+): Promise<{ paths: string[]; folder_id: string } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Nao autenticado' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('clinic_id, role')
+    .eq('id', user.id)
+    .single()
+  if (!profile?.clinic_id) return { error: 'Perfil sem clinica' }
+  if (profile.role !== 'admin') return { error: 'Apenas admin pode subir templates' }
+
+  // folder_id explicito (se reaproveitando o do uploadTemplatePdf) ou novo
+  const reqFolder = (formData.get('folder_id') as string | null) ?? null
+  const folderId = reqFolder && /^[0-9a-f-]{36}$/i.test(reqFolder) ? reqFolder : randomUUID()
+
+  // Coleta pages: campos `page-0`, `page-1`, ...
+  const pages: { idx: number; file: File }[] = []
+  for (const [key, value] of formData.entries()) {
+    const m = key.match(/^page-(\d+)$/)
+    if (!m || !(value instanceof File)) continue
+    const idx = parseInt(m[1], 10)
+    if (Number.isNaN(idx) || idx < 0 || idx > 200) continue
+    if (value.size > MAX_TEMPLATE_PDF_BYTES) {
+      return { error: `Pagina ${idx} excede ${MAX_TEMPLATE_PDF_BYTES / 1024 / 1024}MB` }
+    }
+    if (!value.type.startsWith('image/')) {
+      return { error: `Pagina ${idx} nao eh imagem (${value.type})` }
+    }
+    pages.push({ idx, file: value })
+  }
+  if (pages.length === 0) return { error: 'Nenhuma pagina recebida' }
+
+  pages.sort((a, b) => a.idx - b.idx)
+
+  const admin = createAdminClient()
+  const paths: string[] = []
+  for (const { idx, file } of pages) {
+    const path = `${profile.clinic_id}/${folderId}/page-${idx}.png`
+    const bytes = await file.arrayBuffer()
+    const { error: upErr } = await admin.storage
+      .from(TEMPLATE_BUCKET)
+      .upload(path, bytes, {
+        contentType: 'image/png',
+        cacheControl: '3600',
+        upsert: true,
+      })
+    if (upErr) return { error: `Erro upload pagina ${idx}: ${upErr.message}` }
+    paths.push(path)
+  }
+
+  await logAudit({
+    action: 'UPLOAD_TEMPLATE_CLEANED_PAGES',
+    entity_type: 'document_templates_storage',
+    entity_id: folderId,
+    details: { folder_id: folderId, pages: pages.length, total_bytes: pages.reduce((a, p) => a + p.file.size, 0) },
+  })
+
+  return { paths, folder_id: folderId }
+}
+
+/**
+ * Remove TODAS as paginas limpas de um folder_id (cleanup ao deletar template).
+ */
+export async function deleteCleanedPages(
+  paths: string[],
+): Promise<{ success: boolean } | { error: string }> {
+  if (paths.length === 0) return { success: true }
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Nao autenticado' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('clinic_id, role')
+    .eq('id', user.id)
+    .single()
+  if (!profile?.clinic_id || profile.role !== 'admin') {
+    return { error: 'Apenas admin pode deletar' }
+  }
+  for (const p of paths) {
+    if (!p.startsWith(`${profile.clinic_id}/`)) {
+      return { error: `Acesso negado: ${p}` }
+    }
+  }
+
+  const admin = createAdminClient()
+  const { error } = await admin.storage.from(TEMPLATE_BUCKET).remove(paths)
+  if (error) return { error: 'Erro ao remover paginas: ' + error.message }
+  return { success: true }
+}
+
 export async function getPatientDocSignedUrl(
   path: string,
   expiresInSeconds = 3600,

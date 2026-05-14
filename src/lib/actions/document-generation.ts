@@ -103,6 +103,75 @@ async function buildSystemFieldsContext(
 }
 
 /**
+ * Operacao Zero-Touch — Carrega o PDF base para a geracao.
+ *
+ * Duas vias:
+ *   1. Template tem `cleaned_page_paths` (Flatten & Clean): cria PDF novo do
+ *      zero (`PDFDocument.create`) e desenha cada PNG limpo como fundo, na
+ *      dimensao exata da pagina original. drawText subsequente carimba os
+ *      textos novos em cima desse fundo imutavel.
+ *
+ *   2. Fallback legacy (templates pre-Zero-Touch): faz `PDFDocument.load`
+ *      do PDF original e desenha texto sobre ele. Mantido apenas para
+ *      compatibilidade — todos os templates novos devem usar (1).
+ */
+async function loadFlattenedPdf(
+  template: {
+    cleaned_page_paths?: string[] | null
+    original_pdf_path?: string | null
+    page_dimensions?: PageDimensionsRecord[] | null
+  },
+  supabaseAdmin: ReturnType<typeof createAdminClient>,
+): Promise<{ pdfDoc: PDFDocument; mode: 'zero-touch' | 'legacy' } | { error: string }> {
+  const cleanedPaths = (template.cleaned_page_paths ?? null) as string[] | null
+  const pageDims = (template.page_dimensions ?? null) as PageDimensionsRecord[] | null
+
+  // ── ZERO-TOUCH path ────────────────────────────────────────────────────
+  if (cleanedPaths && cleanedPaths.length > 0 && pageDims && pageDims.length > 0) {
+    if (cleanedPaths.length !== pageDims.length) {
+      return { error: `cleaned_page_paths (${cleanedPaths.length}) e page_dimensions (${pageDims.length}) desincronizados` }
+    }
+    const pdfDoc = await PDFDocument.create()
+    for (let i = 0; i < cleanedPaths.length; i++) {
+      const path = cleanedPaths[i]
+      const { data: pngBlob, error: dlErr } = await supabaseAdmin.storage
+        .from(TEMPLATE_BUCKET)
+        .download(path)
+      if (dlErr || !pngBlob) {
+        return { error: `Falha ao baixar pagina limpa ${i}: ${dlErr?.message || 'blob vazio'}` }
+      }
+      const pngBytes = await pngBlob.arrayBuffer()
+      const png = await pdfDoc.embedPng(pngBytes)
+      const dim = pageDims[i]
+      const page = pdfDoc.addPage([dim.width_pt, dim.height_pt])
+      // Carimba o fundo cobrindo 100% da pagina (PNG ja contem o template
+      // sem os valores antigos — pixel-perfect imutavel).
+      page.drawImage(png, {
+        x: 0, y: 0, width: dim.width_pt, height: dim.height_pt,
+      })
+    }
+    return { pdfDoc, mode: 'zero-touch' }
+  }
+
+  // ── LEGACY path (templates antigos) ────────────────────────────────────
+  if (!template.original_pdf_path) {
+    return { error: 'Template sem cleaned_page_paths nem original_pdf_path — reimporte o documento' }
+  }
+  const { data: pdfBlob, error: dlErr } = await supabaseAdmin.storage
+    .from(TEMPLATE_BUCKET)
+    .download(template.original_pdf_path)
+  if (dlErr || !pdfBlob) {
+    return { error: 'Erro ao baixar PDF original: ' + (dlErr?.message || '') }
+  }
+  try {
+    const pdfDoc = await PDFDocument.load(await pdfBlob.arrayBuffer())
+    return { pdfDoc, mode: 'legacy' }
+  } catch (e) {
+    return { error: 'PDF original invalido: ' + (e instanceof Error ? e.message : '') }
+  }
+}
+
+/**
  * Hidrata overlays a partir do snapshot canonico OU monta um fallback usando
  * extracted_fields (templates antigos que ainda nao tem layout_overlays).
  */
@@ -148,10 +217,10 @@ export async function generateFilledDocument(
     .single()
   if (!profile?.clinic_id) return { error: 'Perfil sem clinica' }
 
-  // 1. Fetch template (RLS isola por clinic_id)
+  // 1. Fetch template (RLS isola por clinic_id) — inclui cleaned_page_paths (Zero-Touch)
   const { data: template, error: tplErr } = await supabase
     .from('document_templates')
-    .select('id, name, type, original_pdf_path, page_dimensions, layout_overlays, extracted_fields, page_count')
+    .select('id, name, type, original_pdf_path, cleaned_page_paths, page_dimensions, layout_overlays, extracted_fields, page_count')
     .eq('id', input.template_id)
     .eq('clinic_id', profile.clinic_id)
     .single()
@@ -159,27 +228,13 @@ export async function generateFilledDocument(
   if (tplErr || !template) {
     return { error: 'Template nao encontrado ou sem permissao' }
   }
-  if (!template.original_pdf_path) {
-    return { error: 'Template sem PDF original — reimporte o documento para habilitar Pixel Perfect' }
-  }
 
-  // 2. Download do PDF original via admin (bypass RLS — ja validamos clinic acima)
+  // 2. Operacao Zero-Touch: tenta usar cleaned_page_paths primeiro; fallback
+  //    para PDF original em templates antigos
   const admin = createAdminClient()
-  const { data: pdfBlob, error: dlErr } = await admin.storage
-    .from(TEMPLATE_BUCKET)
-    .download(template.original_pdf_path)
-  if (dlErr || !pdfBlob) {
-    return { error: 'Erro ao baixar PDF original: ' + (dlErr?.message || '') }
-  }
-  const pdfBytes = await pdfBlob.arrayBuffer()
-
-  // 3. Carregar com pdf-lib
-  let pdfDoc: PDFDocument
-  try {
-    pdfDoc = await PDFDocument.load(pdfBytes)
-  } catch (e) {
-    return { error: 'PDF original invalido ou corrompido: ' + (e instanceof Error ? e.message : '') }
-  }
+  const loaded = await loadFlattenedPdf(template as any, admin)
+  if ('error' in loaded) return { error: loaded.error }
+  const pdfDoc = loaded.pdfDoc
 
   // 4. Embed fonts standard (Helvetica = default decisao Diretoria §12)
   const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica)
@@ -335,17 +390,16 @@ export async function previewFilledPdfBytes(
 
   const { data: template } = await supabase
     .from('document_templates')
-    .select('id, original_pdf_path, page_dimensions, layout_overlays, extracted_fields')
+    .select('id, original_pdf_path, cleaned_page_paths, page_dimensions, layout_overlays, extracted_fields')
     .eq('id', templateId)
     .eq('clinic_id', profile.clinic_id)
     .single()
-  if (!template?.original_pdf_path) return { error: 'Template sem PDF original' }
+  if (!template) return { error: 'Template nao encontrado' }
 
   const admin = createAdminClient()
-  const { data: pdfBlob } = await admin.storage.from(TEMPLATE_BUCKET).download(template.original_pdf_path)
-  if (!pdfBlob) return { error: 'Falha download PDF' }
-
-  const pdfDoc = await PDFDocument.load(await pdfBlob.arrayBuffer())
+  const loaded = await loadFlattenedPdf(template as any, admin)
+  if ('error' in loaded) return { error: loaded.error }
+  const pdfDoc = loaded.pdfDoc
   const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica)
   const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
 
