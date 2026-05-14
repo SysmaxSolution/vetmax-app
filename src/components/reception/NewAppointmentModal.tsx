@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { X, Search, CalendarDays, Scissors, Tag, DollarSign, Loader2, Save, Calendar, MessageCircle } from 'lucide-react'
+import { X, Search, CalendarDays, Scissors, Tag, DollarSign, Loader2, Save, Calendar, MessageCircle, Gift, Check } from 'lucide-react'
 import { getPatientsList, type PatientsListItem } from '@/lib/actions/timeline'
 import { createAppointment } from '@/lib/actions/appointments'
 import { createGroomingSession, getGroomingCatalog, updateGroomingPricing, type GroomingCatalogItem, type GroomingServicePrice } from '@/lib/actions/grooming'
@@ -10,7 +10,7 @@ import { useModules } from '@/components/providers/ModulesProvider'
 import { DateInput, TimePicker, DateTimePicker } from '@/components/ui/DatePicker'
 import { getClinicProfessionals, type ClinicProfessional } from '@/lib/actions/professionals'
 import { getProfessionalSlots, checkProfessionalAvailability } from '@/lib/actions/appointment-slots'
-import ActivePackagesBanner from './ActivePackagesBanner'
+import { getPetActivePackages, linkSessionToAppointment, type PatientActivePackage } from '@/lib/actions/packages'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -91,6 +91,10 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
   const [bookedTimes, setBookedTimes]           = useState<string[]>([])
   const [intervalMinutes, setIntervalMinutes]   = useState(60)
   const [loadingSlots, setLoadingSlots]         = useState(false)
+  const [activePackages,  setActivePackages]    = useState<PatientActivePackage[]>([])
+  const [loadingPackages, setLoadingPackages]   = useState(false)
+  const [selectedPapId,   setSelectedPapId]     = useState<string>('')
+  const [appointmentType, setAppointmentType]   = useState<'regular' | 'package'>('regular')
 
   // Load professionals on mount
   useEffect(() => {
@@ -115,6 +119,22 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
       if (time && res.bookedTimes.includes(time)) setTime('')
     })
   }, [professionalId, date])
+
+  // Carrega pacotes ativos do pet selecionado
+  useEffect(() => {
+    const petId = defaultPet?.id ?? selectedPet?.id
+    if (!petId || step === 'search') {
+      setActivePackages([])
+      setSelectedPapId('')
+      setAppointmentType('regular')
+      return
+    }
+    setLoadingPackages(true)
+    getPetActivePackages(petId).then(res => {
+      setLoadingPackages(false)
+      setActivePackages(!('error' in res) ? res : [])
+    })
+  }, [defaultPet?.id, selectedPet?.id, step])
 
   // ── Grooming inline fields ──
   const [groomingServices,  setGroomingServices]  = useState<string[]>([])
@@ -261,6 +281,10 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
         .catch(() => {/* best-effort */})
     }
 
+    if (selectedPapId && 'id' in result) {
+      await linkSessionToAppointment(selectedPapId, (result as { id: string }).id)
+    }
+
     onSuccess?.(petName); onClose()
   }
 
@@ -372,12 +396,62 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
               </button>
             )}
 
-            {/* Banner de Pacotes Ativos */}
-            {(defaultPet?.id ?? selectedPet?.id) && (
-              <ActivePackagesBanner
-                petId={(defaultPet?.id ?? selectedPet?.id)!}
-                petName={(defaultPet?.name ?? selectedPet?.name) ?? ''}
-              />
+            {/* Seletor de Pacote — visível apenas quando há pacotes ativos e não é grooming */}
+            {!isGrooming && activePackages.length > 0 && (
+              <div className="rounded-xl border border-teal-200 bg-teal-50 p-3 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <Gift className="h-4 w-4 text-teal-600 shrink-0" />
+                    <span className="text-xs font-semibold text-teal-700">Vincular a um Pacote</span>
+                    {loadingPackages && <Loader2 className="h-3 w-3 animate-spin text-teal-500" />}
+                  </div>
+                  <div className="flex rounded-lg overflow-hidden border border-teal-300 text-[11px] font-semibold">
+                    <button
+                      type="button"
+                      onClick={() => { setAppointmentType('regular'); setSelectedPapId('') }}
+                      className={`px-2.5 py-1 transition-colors ${appointmentType === 'regular' ? 'bg-teal-600 text-white' : 'text-teal-700 hover:bg-teal-100'}`}
+                    >
+                      Regular
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAppointmentType('package')}
+                      className={`px-2.5 py-1 border-l border-teal-300 transition-colors ${appointmentType === 'package' ? 'bg-teal-600 text-white' : 'text-teal-700 hover:bg-teal-100'}`}
+                    >
+                      De Pacote
+                    </button>
+                  </div>
+                </div>
+
+                {appointmentType === 'package' && (
+                  <div className="space-y-1.5">
+                    {activePackages.map(pkg => {
+                      const remaining  = pkg.sessions_remaining ?? 0
+                      const isSelected = selectedPapId === pkg.id
+                      return (
+                        <button
+                          key={pkg.id}
+                          type="button"
+                          onClick={() => setSelectedPapId(isSelected ? '' : pkg.id)}
+                          className={`w-full flex items-center justify-between rounded-lg border px-3 py-2 text-left transition-all ${
+                            isSelected
+                              ? 'border-teal-500 bg-teal-100 shadow-sm'
+                              : 'border-teal-200 bg-white hover:border-teal-400'
+                          }`}
+                        >
+                          <div>
+                            <p className="text-xs font-semibold text-slate-800">{pkg.package?.name ?? '—'}</p>
+                            <p className="text-[10px] text-teal-600">
+                              {remaining} sessão{remaining !== 1 ? 'ões' : ''} restante{remaining !== 1 ? 's' : ''}
+                            </p>
+                          </div>
+                          {isSelected && <Check className="h-4 w-4 text-teal-600 shrink-0" />}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
             )}
 
             {/* Motivo */}
