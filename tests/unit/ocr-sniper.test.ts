@@ -77,8 +77,9 @@ describe('OCR Sniper', () => {
       const c = cs[0]
       expect(c.label_text).toBe('Paciente:')
       expect(c.label_normalized).toBe('paciente')
-      // LEI 2: value_bbox.x_pct = label.right + WHITEOUT_SAFETY_PCT (0.3)
-      expect(c.value_bbox.x_pct).toBeCloseTo(10 + 8 + 0.3, 1)
+      // INTERVENCAO CIRURGICA: value_bbox.x_pct = colonEndX + COLON_SAFETY_PCT (0.85)
+      // colonEndX = item.x + (colonIdx+1)/len * item.w = 10 + 9/9 * 8 = 18
+      expect(c.value_bbox.x_pct).toBeCloseTo(18 + 0.85, 1)
       // value.y = label.y
       expect(c.value_bbox.y_pct).toBeCloseTo(20, 1)
       // value.h = label.h
@@ -207,9 +208,10 @@ describe('OCR Sniper', () => {
       expect(cs.length).toBe(1)
       const c = cs[0]
       expect(c.label_normalized).toBe('aorta')
-      // LEI 2: value_bbox.x = label.right + WHITEOUT_SAFETY_PCT (0.3)
-      expect(c.value_bbox.x_pct).toBeCloseTo(17 + 0.3, 1)
-      // value_bbox direita = suffix.x - WHITEOUT_SAFETY_PCT = 45 - 0.3 = 44.7
+      // INTERVENCAO CIRURGICA: value_bbox.x = colonEndX + COLON_SAFETY (0.85)
+      // colonEndX = 10 + 6/6 * 7 = 17
+      expect(c.value_bbox.x_pct).toBeCloseTo(17 + 0.85, 1)
+      // value_bbox direita = suffix.x - WHITEOUT_SAFETY_PCT = 45 - 0.3
       expect(c.value_bbox.x_pct + c.value_bbox.w_pct).toBeCloseTo(45 - 0.3, 1)
       // Align CENTER quando há sufixo
       expect(c.align).toBe('center')
@@ -251,8 +253,8 @@ describe('OCR Sniper', () => {
       expect(c.existing_value_text).toBeUndefined()
       // existing_value_bbox setada para cobrir o espaço entre label e cm
       expect(c.existing_value_bbox).toBeDefined()
-      // LEI 2: x_pct = labelRight (17) + WHITEOUT_SAFETY_PCT (0.3)
-      expect(c.existing_value_bbox!.x_pct).toBeCloseTo(17.3, 1)
+      // INTERVENCAO CIRURGICA: x_pct = colonEndX (17) + COLON_SAFETY_PCT (0.85)
+      expect(c.existing_value_bbox!.x_pct).toBeCloseTo(17.85, 1)
       expect(c.align).toBe('center')
     })
 

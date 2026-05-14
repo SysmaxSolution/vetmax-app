@@ -19,69 +19,41 @@
 import type { FieldType } from '@/types'
 
 /**
- * Sinonimos por campo canonico. Todos os sinonimos sao normalizados via
- * `normalizeForMatch` (lowercase, sem acentos, sem pontuacao, ":" removido).
+ * INTERVENCAO CIRURGICA — Whitelist de "Mao Unica".
+ *
+ * APENAS 8 campos canonicos. QUALQUER outro rotulo extraido do PDF DEVE
+ * virar custom_* com valor vazio. Sem excecoes.
+ *
+ * Decisao do Diretor: "E melhor o medico ver o campo em branco do que ver
+ * a idade do cachorro no lugar da velocidade da aorta."
+ *
+ * SYSTEM_FIELDS (professional_* e clinic_name) NAO vivem aqui — sao resolvidos
+ * exclusivamente via detectProfessionalSignatures (regex), e o valor vem do
+ * usuario logado em interpolate-vars.
  */
 export const CANONICAL_WHITELIST: Record<string, readonly string[]> = {
-  // Cadastro do animal
   paciente_nome: ['paciente', 'pet', 'animal', 'nome do animal', 'nome do pet', 'nome'],
-  especie: ['especie', 'species'],
-  raca: ['raca', 'race', 'breed'],
-  idade: ['idade', 'age'],
-  sexo: ['sexo', 'gender', 'genero'],
-  peso: ['peso', 'weight'],
-  pelagem: ['pelagem', 'cor', 'cor do pelo', 'pelo'],
-
-  // Cadastro do tutor
-  tutor_nome: ['tutor', 'proprietario', 'dono', 'responsavel'],
-  tutor_cpf: ['cpf'],
-  tutor_telefone: ['telefone', 'celular', 'fone'],
-  tutor_email: ['email', 'e-mail'],
-  tutor_endereco: ['endereco', 'rua'],
-  tutor_cep: ['cep'],
-
-  // Documento
-  data: ['data', 'data do exame', 'dia', 'date'],
-  hora: ['hora', 'horario', 'time'],
-
-  // Sinais vitais GENERICOS — NAO confundir com parametros cardiologicos
-  // (Aorta, Mitral, etc. NUNCA mapeiam aqui)
-  temperatura: ['temperatura', 'temp', 't'],
-  frequencia_cardiaca: ['fc', 'frequencia cardiaca', 'freq cardiaca'],
-  frequencia_respiratoria: ['fr', 'frequencia respiratoria', 'freq respiratoria'],
-  pressao_arterial: ['pa', 'pressao arterial'],
-
-  // Textos clinicos longos
-  anamnese: ['anamnese', 'queixa', 'historico'],
-  observacoes: ['observacoes', 'obs', 'consideracoes'],
-  diagnostico: ['diagnostico', 'conclusao'],
-  tratamento: ['tratamento', 'prescricao', 'medicacao'],
-
-  // Profissional (campos de sistema — preenchidos automaticamente pelo
-  // usuario logado, sem input manual no formulario de geracao)
-  professional_name: ['veterinario', 'medico', 'mv', 'medico veterinario'],
-  professional_crmv: ['crmv'],
-  professional_role: ['cargo', 'especialidade', 'cargo do profissional'],
-  clinic_name: ['clinica', 'hospital', 'estabelecimento'],
+  tutor_nome:    ['tutor', 'proprietario', 'dono', 'responsavel'],
+  especie:       ['especie', 'species'],
+  raca:          ['raca', 'race', 'breed'],
+  idade:         ['idade', 'age'],
+  sexo:          ['sexo', 'gender', 'genero'],
+  peso:          ['peso', 'weight'],
+  data:          ['data', 'date', 'data do exame', 'dia'],
 }
 
-/** Tipos canonicos. Default e 'text' para o que nao estiver aqui. */
+/** Tipos canonicos. Default e 'text'. */
 export const CANONICAL_TYPES: Record<string, FieldType> = {
   peso: 'number',
-  idade: 'text',                // pode ser "5 anos" — string
-  temperatura: 'number',
-  frequencia_cardiaca: 'number',
-  frequencia_respiratoria: 'number',
   data: 'date',
-  hora: 'text',
   sexo: 'select',
-  anamnese: 'textarea',
-  observacoes: 'textarea',
-  diagnostico: 'textarea',
-  tratamento: 'textarea',
 }
 
-/** Campos de sistema — preenchidos via contexto do usuario logado. */
+/**
+ * Campos de sistema — resolvidos por detectProfessionalSignatures (regex),
+ * NUNCA por matchCanonicalLocal. Preenchidos automaticamente pelo
+ * usuario logado em interpolate-vars.
+ */
 export const SYSTEM_FIELDS = new Set([
   'professional_name',
   'professional_crmv',

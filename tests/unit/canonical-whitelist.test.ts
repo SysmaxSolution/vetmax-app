@@ -27,7 +27,7 @@ describe('normalizeForMatch', () => {
   })
 })
 
-describe('matchCanonicalLocal — canonicos basicos batem', () => {
+describe('matchCanonicalLocal — APENAS 8 canonicos da Intervencao Cirurgica', () => {
   it('paciente_nome: paciente, pet, animal, nome do animal', () => {
     expect(matchCanonicalLocal('Paciente:')?.field_name).toBe('paciente_nome')
     expect(matchCanonicalLocal('PET:')?.field_name).toBe('paciente_nome')
@@ -41,12 +41,13 @@ describe('matchCanonicalLocal — canonicos basicos batem', () => {
     expect(matchCanonicalLocal('Responsavel:')?.field_name).toBe('tutor_nome')
   })
 
-  it('campos basicos: idade, peso, raca, sexo, especie', () => {
+  it('campos basicos: idade, peso, raca, sexo, especie, data', () => {
     expect(matchCanonicalLocal('Idade:')?.field_name).toBe('idade')
     expect(matchCanonicalLocal('Peso:')?.field_name).toBe('peso')
     expect(matchCanonicalLocal('Raça:')?.field_name).toBe('raca')
     expect(matchCanonicalLocal('Sexo:')?.field_name).toBe('sexo')
     expect(matchCanonicalLocal('Espécie:')?.field_name).toBe('especie')
+    expect(matchCanonicalLocal('Data:')?.field_name).toBe('data')
   })
 
   it('tipos canonicos: peso=number, data=date, sexo=select', () => {
@@ -55,19 +56,42 @@ describe('matchCanonicalLocal — canonicos basicos batem', () => {
     expect(matchCanonicalLocal('Sexo:')?.type).toBe('select')
   })
 
-  it('campos de sistema marcados', () => {
-    expect(matchCanonicalLocal('Veterinario:')?.is_system).toBe(true)
-    expect(matchCanonicalLocal('CRMV:')?.is_system).toBe(true)
-    expect(matchCanonicalLocal('Clinica:')?.is_system).toBe(true)
-    expect(matchCanonicalLocal('Paciente:')?.is_system).toBe(false)
-  })
-
   it('REQUIRED_DEFAULTS contem campos essenciais', () => {
     expect(matchCanonicalLocal('Paciente:')?.required).toBe(true)
     expect(matchCanonicalLocal('Tutor:')?.required).toBe(true)
     expect(matchCanonicalLocal('Data:')?.required).toBe(true)
-    // Nao-essenciais
     expect(matchCanonicalLocal('Idade:')?.required).toBe(false)
+  })
+
+  it('NENHUM campo eh is_system (signatures usam outro caminho)', () => {
+    expect(matchCanonicalLocal('Paciente:')?.is_system).toBe(false)
+    expect(matchCanonicalLocal('Tutor:')?.is_system).toBe(false)
+  })
+
+  // ── INTERVENCAO CIRURGICA — rotulos removidos da whitelist ──────────────
+  it('REMOVIDOS: Veterinario, CRMV, Clinica nao batem mais (signatures cuidam)', () => {
+    expect(matchCanonicalLocal('Veterinario:')).toBeNull()
+    expect(matchCanonicalLocal('CRMV:')).toBeNull()
+    expect(matchCanonicalLocal('Clinica:')).toBeNull()
+    expect(matchCanonicalLocal('Hospital:')).toBeNull()
+  })
+
+  it('REMOVIDOS: sinais vitais e textos clinicos viram custom_', () => {
+    expect(matchCanonicalLocal('Temperatura:')).toBeNull()
+    expect(matchCanonicalLocal('FC:')).toBeNull()
+    expect(matchCanonicalLocal('Frequencia Cardiaca:')).toBeNull()
+    expect(matchCanonicalLocal('Pressao Arterial:')).toBeNull()
+    expect(matchCanonicalLocal('Anamnese:')).toBeNull()
+    expect(matchCanonicalLocal('Observacoes:')).toBeNull()
+    expect(matchCanonicalLocal('Diagnostico:')).toBeNull()
+    expect(matchCanonicalLocal('Tratamento:')).toBeNull()
+  })
+
+  it('REMOVIDOS: campos de tutor extra (CPF/telefone/email) viram custom_', () => {
+    expect(matchCanonicalLocal('CPF:')).toBeNull()
+    expect(matchCanonicalLocal('Telefone:')).toBeNull()
+    expect(matchCanonicalLocal('Email:')).toBeNull()
+    expect(matchCanonicalLocal('Endereco:')).toBeNull()
   })
 })
 
@@ -94,7 +118,13 @@ describe('isLegitCanonicalAssignment — defesa em profundidade', () => {
   it('pareamento legitimo retorna true', () => {
     expect(isLegitCanonicalAssignment('Paciente:', 'paciente_nome')).toBe(true)
     expect(isLegitCanonicalAssignment('Tutor:', 'tutor_nome')).toBe(true)
-    expect(isLegitCanonicalAssignment('CRMV:', 'professional_crmv')).toBe(true)
+    expect(isLegitCanonicalAssignment('Idade:', 'idade')).toBe(true)
+    expect(isLegitCanonicalAssignment('Peso:', 'peso')).toBe(true)
+  })
+
+  it('professional_* nao sao mais canonicos (signatures cuidam)', () => {
+    expect(isLegitCanonicalAssignment('CRMV:', 'professional_crmv')).toBe(false)
+    expect(isLegitCanonicalAssignment('Veterinario:', 'professional_name')).toBe(false)
   })
 
   it('alucinacao (Mitral -> raca) retorna FALSE', () => {

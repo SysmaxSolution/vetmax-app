@@ -75,10 +75,44 @@ const DEFAULT_LINE_TOLERANCE_PCT = 0.6
  * Margem de segurança ENTRE o rótulo e o início do retângulo branco. Garante
  * matematicamente que o whiteout NUNCA toque a tipografia do label.
  *
- * 0.3% de uma página A4 (≈595pt de largura) = ≈1.8pt ≈ 2px (a 100% zoom). É
- * folgado o suficiente para evitar erros de subpixel sem comer espaço útil.
+ * 0.3% de uma página A4 (≈595pt de largura) ≈ 1.8pt ≈ 2px (a 100% zoom).
  */
 const WHITEOUT_SAFETY_PCT = 0.3
+
+/**
+ * INTERVENCAO CIRURGICA — Regra do ":".
+ *
+ * Para QUALQUER label terminado em ":", o whiteout DEVE comecar
+ * estritamente APOS o caractere ":". Margem >= COLON_SAFETY_PCT (~5px em A4
+ * a 100%, ~6px em alta resolucao). Esta margem se sobrepoe a WHITEOUT_SAFETY_PCT
+ * — usamos a MAIOR das duas (sempre COLON_SAFETY_PCT quando ha ":").
+ *
+ * Em 595pt: 0.85% ≈ 5pt ≈ 5px @ 100%.
+ */
+const COLON_SAFETY_PCT = 0.85
+
+/**
+ * Localiza a posicao X (% da pagina) do CARACTERE imediatamente apos o
+ * ultimo ":" presente nos label_items. Retorna null se nenhum item contem ":".
+ *
+ * Calculo: x_pct = item.x + ((colonIdx+1) / strLen) * item.w
+ *
+ * A aproximacao usa proporcionalidade simples sobre o numero de caracteres —
+ * imprecisa para fontes proporcionais (variacao ~3-5%), mas a margem
+ * COLON_SAFETY_PCT cobre essa variacao com folga.
+ */
+function colonEndX(labelItems: PdfTextItem[]): number | null {
+  for (let i = labelItems.length - 1; i >= 0; i--) {
+    const it = labelItems[i]
+    const colonIdx = it.str.lastIndexOf(':')
+    if (colonIdx === -1) continue
+    const len = it.str.length
+    if (len === 0) return it.x_pct + it.w_pct
+    const ratio = (colonIdx + 1) / len
+    return it.x_pct + it.w_pct * ratio
+  }
+  return null
+}
 
 /**
  * Vocabulário de labels comuns em documentos veterinários — usado como
@@ -420,25 +454,29 @@ export function snipeLabels(
       const labelNorm = normalizeLabel(labelText)
       if (!labelNorm) continue
 
-      // ── LEI 2 — A MATEMÁTICA DO WHITE-OUT SEGURO ─────────────────────────
+      // ── INTERVENCAO CIRURGICA — A MATEMATICA DO WHITE-OUT SEGURO ─────────
       //
-      // Regra inquebrável:
-      //   labelLeft   ← labelBbox.x_pct
-      //   labelRight  ← labelBbox.x_pct + labelBbox.w_pct
-      //   whiteoutLeft  = labelRight + WHITEOUT_SAFETY_PCT   ← ESTRITAMENTE > labelRight
-      //   whiteoutRight =
-      //     suffix?    → suffixBbox.x_pct - WHITEOUT_SAFETY_PCT
-      //     nextLabel? → nextLabel.x_pct  - WHITEOUT_SAFETY_PCT
-      //     else       → 100              - WHITEOUT_SAFETY_PCT
+      // PRIORIDADE 1 (regra do ":"): Se o label termina com ":", o whiteout
+      //   comeca em colonEndX + COLON_SAFETY_PCT (5px @100% em A4). Esta
+      //   regra anula qualquer outra — nunca, sob nenhuma circunstancia, o
+      //   apagamento cruza o ":".
       //
-      // O retângulo branco NUNCA toca o LabelBox nem o SuffixBox. O rótulo
-      // ("Aorta:") e a unidade ("cm") são protegidos por construção.
+      // PRIORIDADE 2 (label sem ":", batido por vocabulario): comeca em
+      //   labelRight + WHITEOUT_SAFETY_PCT (2px).
+      //
+      // Limite a direita:
+      //   suffix?    → suffixBbox.x_pct - SAFETY
+      //   nextLabel? → nextLabel.x_pct  - SAFETY
+      //   else       → 100              - SAFETY
       //
       // O `value_bbox` (alvo do drawText) coincide com o whiteout — o texto
-      // novo é escrito EXATAMENTE no espaço que acabamos de apagar.
+      // novo eh escrito EXATAMENTE no espaco apagado.
 
+      const colonX = colonEndX(seg.label_items)
       const labelRight = labelBbox.x_pct + labelBbox.w_pct
-      const whiteoutLeft = labelRight + WHITEOUT_SAFETY_PCT
+      const whiteoutLeft = colonX !== null
+        ? colonX + COLON_SAFETY_PCT       // PRIORIDADE 1
+        : labelRight + WHITEOUT_SAFETY_PCT  // PRIORIDADE 2
       const hasSuffix = typeof seg.suffix_x_pct === 'number'
 
       let whiteoutRight: number

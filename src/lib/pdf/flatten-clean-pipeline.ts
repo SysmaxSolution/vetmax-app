@@ -199,20 +199,31 @@ export async function runFlattenClean(
   // 6) Junta erase regions por pagina (whiteout em pixel ANTES do PNG)
   const erasePerPage: EraseRect[][] = Array.from({ length: pageCount }, () => [])
 
-  // 6a) sniper candidates (existing_value_bbox = LEI 2 seguro)
+  // Helper de debug — formata bbox % com 2 casas
+  const fmtBox = (b: EraseRect) =>
+    `x:${b.x_pct.toFixed(2)}% y:${b.y_pct.toFixed(2)}% w:${b.w_pct.toFixed(2)}% h:${b.h_pct.toFixed(2)}%`
+
+  // 6a) sniper candidates (existing_value_bbox respeita regra do ":")
   for (const c of sniperCandidatesFiltered) {
-    if (c.existing_value_bbox) erasePerPage[c.page].push(c.existing_value_bbox)
+    if (!c.existing_value_bbox) continue
+    console.log(`[Debug] Apagando valor apos rotulo "${c.label_text}" na pagina ${c.page} coordenada ${fmtBox(c.existing_value_bbox)}`)
+    erasePerPage[c.page].push(c.existing_value_bbox)
   }
-  // 6b) signatures candidates (existing_value_bbox = bbox dos items casados)
+
+  // 6b) signatures candidates (whiteout = LINHA INTEIRA)
   for (const c of signatures.candidates) {
-    if (c.existing_value_bbox) erasePerPage[c.page].push(c.existing_value_bbox)
+    if (!c.existing_value_bbox) continue
+    console.log(`[Debug] Apagando ASSINATURA "${c.existing_value_text}" na pagina ${c.page} coordenada ${fmtBox(c.existing_value_bbox)}`)
+    erasePerPage[c.page].push(c.existing_value_bbox)
   }
 
   // 7) Aplica erase nos canvases — pixels DESAPARECEM da imagem de fundo.
   let pixelsApagados = 0
   for (let p = 0; p < pageCount; p++) {
     if (!canvases[p]) continue
-    pixelsApagados += eraseRegions(canvases[p], erasePerPage[p])
+    const painted = eraseRegions(canvases[p], erasePerPage[p])
+    console.log(`[Debug] Pagina ${p}: ${painted}/${erasePerPage[p].length} regioes apagadas no canvas`)
+    pixelsApagados += painted
   }
 
   // 8) Converte cada canvas LIMPO em PNG Blob (paralelo)

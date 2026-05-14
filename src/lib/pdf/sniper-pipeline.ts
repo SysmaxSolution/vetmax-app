@@ -163,45 +163,21 @@ export interface SignatureDetectionResult {
 }
 
 /**
- * Resolve QUAIS items da linha contêm o trecho casado pelo regex.
+ * INTERVENCAO CIRURGICA — Reset de Assinatura.
  *
- * Concatena os strs com espaço (igual ao matching) e mapeia cada caractere
- * de volta ao item de origem. O range [matchStart, matchEnd) na string
- * concatenada vira o conjunto de items que sobrepõem o match.
- *
- * Por LEI 2, o whiteout precisa cobrir SOMENTE esses items — nunca a linha
- * inteira. Isso protege qualquer texto adjacente que não seja parte da
- * assinatura (ex: "Responsável Técnico — Dr. Foo" só apaga "Dr. Foo").
- */
-function itemsForMatch(items: PdfTextItem[], re: RegExp): PdfTextItem[] | null {
-  // Reconstrói a string com offsets de cada item
-  const offsets: { start: number; end: number; item: PdfTextItem }[] = []
-  let acc = ''
-  for (const it of items) {
-    if (acc.length > 0) acc += ' '
-    const start = acc.length
-    acc += it.str
-    offsets.push({ start, end: acc.length, item: it })
-  }
-  const m = re.exec(acc)
-  if (!m) return null
-  const mStart = m.index
-  const mEnd = m.index + m[0].length
-  const hits = offsets
-    .filter(o => o.end > mStart && o.start < mEnd)
-    .map(o => o.item)
-  return hits.length > 0 ? hits : null
-}
-
-/**
- * Varre o textContent buscando padrões de assinatura profissional.
+ * Varre o textContent buscando padroes de assinatura profissional.
  * Para cada match, gera:
- *   - 1 FieldMatch (pré-resolvido, não vai pro Claude)
- *   - N LabelCandidates (1 por instância no PDF — geralmente 1 por página)
+ *   - 1 FieldMatch (pre-resolvido)
+ *   - 1 LabelCandidate POR PAGINA (uma instancia por pagina onde a regex bate)
  *
- * LEI 2 aplicada: whiteout cobre EXATAMENTE o span dos items que casaram com
- * o regex (e não a linha inteira). Texto adjacente fica intacto. O drawText
- * é depositado nesse mesmo span.
+ * Regra do usuario (Frankstein-killer):
+ *   O whiteout cobre a LINHA INTEIRA onde o nome antigo aparece — nao apenas
+ *   o span do match do regex. Isso garante que "Responsavel Tecnico — Dr.
+ *   Velho" inteiro vire branco antes do drawText do "Dr. Novo" centralizado
+ *   na faixa.
+ *
+ * align = 'center' — o nome do usuario logado eh centralizado na faixa
+ * apagada.
  */
 export function detectProfessionalSignatures(
   textItems: PdfTextItem[],
@@ -214,32 +190,29 @@ export function detectProfessionalSignatures(
   for (const line of lines) {
     const lineText = line.items.map(i => i.str).join(' ').trim()
     if (!lineText) continue
-    // Linhas com ':' são labels → deixa o sniper normal tratar.
-    // O regex de assinatura é só para TEXTO FLUTUANTE sem rótulo.
+    // Linhas com ':' sao labels → deixa o sniper tratar.
+    // O regex de assinatura eh para TEXTO FLUTUANTE sem rotulo.
     if (lineText.includes(':')) continue
 
     for (const pattern of SIGNATURE_PATTERNS) {
-      const hitItems = itemsForMatch(line.items, pattern.re)
-      if (!hitItems) continue
+      if (!pattern.re.test(lineText)) continue
 
-      // LEI 2: bbox = apenas o trecho casado, não a linha
-      const hitBbox = bboxFromItems(hitItems)
-      const baseline_y_pct = hitItems[0].baseline_y_pct
-      const hitText = hitItems.map(i => i.str).join(' ').trim()
+      // INTERVENCAO CIRURGICA: bbox = linha INTEIRA (apaga "Frankstein")
+      const lineBbox = bboxFromItems(line.items)
+      const baseline_y_pct = line.items[0].baseline_y_pct
 
       candidates.push({
         page: line.page,
-        label_text: pattern.field_name,    // identificador estável para detectGlobalFields
+        label_text: pattern.field_name,
         label_normalized: pattern.field_name,
-        // label_bbox sintético "antes" do hit (largura 0): permite que a
-        // matemática do whiteout de aplyOverlayToPage NÃO seja usada aqui —
-        // já fornecemos whiteout_bbox = existing_value_bbox.
-        label_bbox: { x_pct: hitBbox.x_pct, y_pct: hitBbox.y_pct, w_pct: 0, h_pct: hitBbox.h_pct },
-        value_bbox: hitBbox,               // drawText escreve sobre o hit
-        align: 'left',                     // assinaturas: alinhamento à esquerda
-        existing_value_text: hitText,
-        existing_value_bbox: hitBbox,      // whiteout cirúrgico SOMENTE no hit
-        font_size_pt: hitBbox.h_pct,
+        // label_bbox sintetico (largura 0) — o motor ja sabe que o whiteout
+        // a usar eh o existing_value_bbox.
+        label_bbox: { x_pct: lineBbox.x_pct, y_pct: lineBbox.y_pct, w_pct: 0, h_pct: lineBbox.h_pct },
+        value_bbox: lineBbox,              // drawText sobre a linha
+        align: 'center',                   // nome novo centralizado
+        existing_value_text: lineText,
+        existing_value_bbox: lineBbox,     // whiteout LINHA INTEIRA
+        font_size_pt: lineBbox.h_pct,
         baseline_y_pct,
       })
       matchedLines.add(lineText)
