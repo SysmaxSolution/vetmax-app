@@ -4,7 +4,7 @@ import { useState, useRef, useCallback, useMemo, useLayoutEffect, useEffect } fr
 import { Rnd } from 'react-rnd'
 import {
   Move, Image as ImageIcon, PenTool, Type, Trash2,
-  RotateCcw, Plus, ChevronLeft, ChevronRight, MousePointer2, X,
+  RotateCcw, Plus, ChevronLeft, ChevronRight, MousePointer2, X, CopyPlus,
 } from 'lucide-react'
 import type { ExtractedField, FieldType, PageDimensionsRecord } from '@/types'
 import NewFieldDialog from './NewFieldDialog'
@@ -182,12 +182,20 @@ function PropertiesPanel({
   element,
   onChange,
   onDelete,
+  onRepeatOnAllPages,
+  pageCount,
 }: {
   element: LayoutElement
   onChange: (updates: Partial<LayoutElement>) => void
   onDelete: () => void
+  onRepeatOnAllPages?: () => void
+  pageCount?: number
 }) {
   const unit = isPct(element) ? '%' : 'px'
+  const canRepeatAcrossPages =
+    onRepeatOnAllPages !== undefined &&
+    pageCount !== undefined && pageCount > 1 &&
+    isPct(element)
 
   return (
     <div className="space-y-3">
@@ -197,6 +205,18 @@ function PropertiesPanel({
           <Trash2 className="w-3.5 h-3.5" />
         </button>
       </div>
+
+      {canRepeatAcrossPages && (
+        <button
+          type="button"
+          onClick={onRepeatOnAllPages}
+          title="Cria copias deste elemento nas demais paginas, mantendo as coordenadas. Usado para logo/cabecalho/assinatura."
+          className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors"
+        >
+          <CopyPlus className="w-3.5 h-3.5" />
+          Repetir em todas as paginas
+        </button>
+      )}
 
       <div>
         <label className="text-[10px] font-medium text-slate-500">Label</label>
@@ -711,6 +731,31 @@ export default function TemplateLayoutEditor({
             element={selected}
             onChange={(updates) => updateElement(selected.id, updates)}
             onDelete={() => deleteElement(selected.id)}
+            pageCount={pageCount}
+            onRepeatOnAllPages={
+              pixelPerfectMode && pageCount > 1 && isPct(selected)
+                ? () => {
+                    // Cria uma copia em cada outra pagina, mantendo coords/font/etc.
+                    const sourcePage = selected.page ?? 0
+                    const clones: LayoutElement[] = []
+                    for (let p = 0; p < pageCount; p++) {
+                      if (p === sourcePage) continue
+                      // Pula se ja existe overlay com mesmo field_name nessa pagina
+                      // (evita duplicacao se o user clicar varias vezes)
+                      const exists = elements.some(
+                        e => e.type === selected.type &&
+                             (e.page ?? 0) === p &&
+                             (e.field_name ?? null) === (selected.field_name ?? null) &&
+                             Math.abs(e.x - selected.x) < 0.5 &&
+                             Math.abs(e.y - selected.y) < 0.5,
+                      )
+                      if (exists) continue
+                      clones.push({ ...selected, id: uid(), page: p })
+                    }
+                    if (clones.length > 0) updateElements([...elements, ...clones])
+                  }
+                : undefined
+            }
           />
         ) : (
           <div className="text-center py-8">
@@ -756,15 +801,11 @@ export default function TemplateLayoutEditor({
         <NewFieldDialog
           rect={pendingDrawnField.rect}
           page={pendingDrawnField.page}
-          existingFieldNames={[
-            ...fields.map(f => f.field_name),
-            ...elements.filter(e => e.type === 'field' && e.field_name).map(e => e.field_name!),
-          ]}
+          existingFields={fields}
           onCancel={() => setPendingDrawnField(null)}
           onConfirm={(newField) => {
-            // 1. Avisa o componente pai (adiciona em form.extractedFields)
+            // CAMPO NOVO: avisa o pai (push em extractedFields) + cria overlay
             onAddField(newField)
-            // 2. Adiciona overlay correspondente no editor
             const newOverlay: LayoutElement = {
               id: uid(),
               type: 'field',
@@ -783,7 +824,32 @@ export default function TemplateLayoutEditor({
             updateElements([...elements, newOverlay])
             setSelectedId(newOverlay.id)
             setPendingDrawnField(null)
-            setDrawMode(false)  // sai do modo desenho apos criar (pode ativar de novo se quiser)
+            setDrawMode(false)
+          }}
+          onConfirmRepeat={(existingFieldName) => {
+            // CAMPO REPETIDO: nao duplica em extractedFields; so cria overlay.
+            // O motor pdf-lib ao gerar desenha o mesmo valor em todas as posicoes.
+            const existing = fields.find(f => f.field_name === existingFieldName)
+            const rect = pendingDrawnField.rect
+            const newOverlay: LayoutElement = {
+              id: uid(),
+              type: 'field',
+              field_name: existingFieldName,
+              label: existing?.label ?? existingFieldName,
+              page: pendingDrawnField.page,
+              unit: 'pct',
+              x: rect.x_pct,
+              y: rect.y_pct,
+              width: rect.w_pct,
+              height: rect.h_pct,
+              fontSize: 11,
+              fontWeight: 'normal',
+              textAlign: 'left',
+            }
+            updateElements([...elements, newOverlay])
+            setSelectedId(newOverlay.id)
+            setPendingDrawnField(null)
+            setDrawMode(false)
           }}
         />
       )}
