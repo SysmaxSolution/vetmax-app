@@ -278,6 +278,10 @@ interface LineSegmentation {
   // o value_bbox deve ficar ENTRE label.right e suffix.left
   suffix_items?: PdfTextItem[]
   suffix_x_pct?: number           // X do sufixo (limite direito do valor)
+  // INTERVENCAO CIRURGICA: boundary direita — texto FIXO do template que
+  // delimita o valor pela direita SEM ser apagado (referencias clinicas
+  // entre parenteses, "Referência: X – Y", etc).
+  right_boundary_x_pct?: number
 }
 
 // TZ-3: Padrões de unidades de medida comuns em laudos veterinários.
@@ -287,6 +291,46 @@ const SUFFIX_UNIT_REGEX = /^(?:cm|mm|m\/s|m\/seg|mmHg|bpm|mpm|spm|%|kg|°C|ºC|H
 
 function isSuffixUnit(text: string): boolean {
   return SUFFIX_UNIT_REGEX.test(text.trim())
+}
+
+/**
+ * INTERVENCAO CIRURGICA: items que sao informacoes FIXAS do template e
+ * delimitam o valor a direita sem serem apagados.
+ *
+ * Exemplos:
+ *   "(normal até 1,7)"          — referencia em parenteses
+ *   "Referência: 60% – 80%"     — bloco de referencia inteiro
+ *   "Ref:"                      — abreviacao
+ */
+function isBoundaryItem(text: string): boolean {
+  const t = text.trim()
+  if (t.startsWith('(')) return true
+  if (/^Refer[êe]ncia/i.test(t)) return true
+  if (/^Ref\.?:?$/i.test(t)) return true
+  if (/^Normal\b/i.test(t) && /\b(at[ée]|de)\b/i.test(t)) return true
+  return false
+}
+
+/**
+ * Rotulos FIXOS do template que NAO viram campos do usuario. Mesmo
+ * terminando em ":", representam dados imutaveis (referencia clinica, faixa
+ * normal, observacao do template).
+ *
+ * Tratado como PREFIX: "Normal até:" -> "normal ate" bate com prefix "normal".
+ */
+const TEMPLATE_FIXED_LABEL_PREFIXES = [
+  'referencia',
+  'ref',
+  'normal',
+  'valor normal',
+  'faixa normal',
+  'range',
+]
+
+function isTemplateFixedLabel(labelNormalized: string): boolean {
+  return TEMPLATE_FIXED_LABEL_PREFIXES.some(p =>
+    labelNormalized === p || labelNormalized.startsWith(p + ' '),
+  )
 }
 
 /**
@@ -352,6 +396,18 @@ function segmentLine(line: LineGroup): LineSegmentation[] {
       ? items[nextLabelStartIdx].x_pct
       : null
 
+    // INTERVENCAO CIRURGICA: detecta item BOUNDARY entre value items —
+    // textos como "(normal até 1,7)" sao referencias clinicas FIXAS que
+    // delimitam o valor a direita SEM serem apagados pelo whiteout.
+    const boundaryIdx = valueItems.findIndex(it => isBoundaryItem(it.str))
+    let rightBoundaryX: number | undefined
+    if (boundaryIdx >= 0) {
+      rightBoundaryX = valueItems[boundaryIdx].x_pct
+      // Tudo a partir do boundary deixa de ser "value antigo do campo" —
+      // permanece intocavel no template.
+      valueItems = valueItems.slice(0, boundaryIdx)
+    }
+
     // TZ-3: tenta extrair sufixo de unidade (último item do value, se bater regex)
     // Examina os últimos 1-2 items (pode ter "cm" sozinho ou "/ s" fragmentado)
     let suffixItems: PdfTextItem[] | undefined
@@ -379,6 +435,7 @@ function segmentLine(line: LineGroup): LineSegmentation[] {
       next_label_x_pct: nextLabelX,
       suffix_items: suffixItems,
       suffix_x_pct: suffixX,
+      right_boundary_x_pct: rightBoundaryX,
     })
     labelStartIdx = nextLabelStartIdx
   }
@@ -472,16 +529,28 @@ export function snipeLabels(
       // O `value_bbox` (alvo do drawText) coincide com o whiteout — o texto
       // novo eh escrito EXATAMENTE no espaco apagado.
 
+      // INTERVENCAO CIRURGICA: rotulos fixos do template ("Referência:",
+      // "Normal:", etc) NAO viram campos — sao informacoes imutaveis.
+      if (isTemplateFixedLabel(labelNorm)) continue
+
       const colonX = colonEndX(seg.label_items)
       const labelRight = labelBbox.x_pct + labelBbox.w_pct
       const whiteoutLeft = colonX !== null
         ? colonX + COLON_SAFETY_PCT       // PRIORIDADE 1
         : labelRight + WHITEOUT_SAFETY_PCT  // PRIORIDADE 2
       const hasSuffix = typeof seg.suffix_x_pct === 'number'
+      const hasBoundary = typeof seg.right_boundary_x_pct === 'number'
 
+      // Ordem de prioridade do limite DIREITO do whiteout:
+      //   1. sufixo de unidade ("cm", "mmHg") — texto a manter intocavel
+      //   2. boundary item "(normal até..." — texto a manter intocavel
+      //   3. proximo label da mesma linha
+      //   4. fim da pagina
       let whiteoutRight: number
       if (hasSuffix) {
         whiteoutRight = (seg.suffix_x_pct as number) - WHITEOUT_SAFETY_PCT
+      } else if (hasBoundary) {
+        whiteoutRight = (seg.right_boundary_x_pct as number) - WHITEOUT_SAFETY_PCT
       } else if (seg.next_label_x_pct !== null) {
         whiteoutRight = seg.next_label_x_pct - WHITEOUT_SAFETY_PCT
       } else {
@@ -498,9 +567,9 @@ export function snipeLabels(
         const allowedMax = whiteoutRight
         whiteoutWidth = Math.max(0, Math.min(valueMinW, allowedMax - whiteoutLeft))
       }
-      // Sem sufixo, respeita também o limite valueMaxW para não comer toda
-      // a página em campos sem next_label.
-      if (!hasSuffix && seg.next_label_x_pct === null) {
+      // Sem sufixo nem boundary, respeita também o limite valueMaxW para
+      // nao comer toda a pagina em campos sem next_label.
+      if (!hasSuffix && !hasBoundary && seg.next_label_x_pct === null) {
         whiteoutWidth = Math.min(whiteoutWidth, valueMaxW)
       }
 

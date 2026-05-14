@@ -136,6 +136,42 @@ describe('OCR Sniper', () => {
       expect(c.existing_value_bbox!.w_pct).toBeLessThanOrEqual(50)
     })
 
+    // ── IC-8: BOUNDARY DETECTION ──────────────────────────────────────────
+    it('IC-8: "(normal até 1,7)" boundary — whiteout nao apaga referencia clinica', () => {
+      // Linha "Diâmetro normalizado VE:" + "(normal até 1,7)" — o paren
+      // eh boundary direita, nao value
+      const items = [
+        item('Diametro normalizado VE:', 0, 16.6, 60, 20.6, 1.5),
+        item('(normal até 1,7)',          0, 53.3, 60, 16.1, 1.5),
+      ]
+      const cs = snipeLabels(items)
+      expect(cs.length).toBe(1)
+      const c = cs[0]
+      const whiteoutRight = c.existing_value_bbox!.x_pct + c.existing_value_bbox!.w_pct
+      // Whiteout NAO pode invadir "(normal até..." que comeca em x=53.3
+      expect(whiteoutRight).toBeLessThan(53.3)
+      // E deve respeitar a margem de seguranca
+      expect(53.3 - whiteoutRight).toBeGreaterThanOrEqual(0.2)
+    })
+
+    it('IC-8: rotulo "Referência:" NAO vira campo (label fixo do template)', () => {
+      const items = [
+        item('Referência:', 0, 60, 50, 12, 1.5),
+        item('60% – 80%',   0, 73, 50, 18, 1.5),
+      ]
+      const cs = snipeLabels(items)
+      expect(cs.length).toBe(0)  // skip — eh referencia clinica, nao campo
+    })
+
+    it('IC-8: rotulo "Normal até:" NAO vira campo', () => {
+      const items = [
+        item('Normal até:', 0, 60, 50, 12, 1.5),
+        item('1,6',         0, 73, 50, 6, 1.5),
+      ]
+      const cs = snipeLabels(items)
+      expect(cs.length).toBe(0)
+    })
+
     it('LEI 2: dois labels na mesma linha — whiteout do 1o nao cruza o 2o', () => {
       const items = [
         item('Paciente:', 0, 10, 20, 8, 1.5),
