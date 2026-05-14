@@ -28,7 +28,7 @@ export async function getTemplates(): Promise<DocumentTemplate[] | { error: stri
   // 3. Buscar templates (RLS ativo = filtra por clinic_id automaticamente)
   const { data, error } = await supabase
     .from('document_templates')
-    .select('id, clinic_id, name, type, file_url, extracted_fields, template_html, page_images, created_at, updated_at')
+    .select('id, clinic_id, name, type, file_url, extracted_fields, template_html, page_images, original_pdf_path, original_pdf_size_bytes, page_count, page_dimensions, layout_overlays, page_images_storage_paths, created_at, updated_at')
     .eq('clinic_id', profile.clinic_id)
     .order('created_at', { ascending: false })
 
@@ -93,6 +93,11 @@ export async function saveTemplate(
       extracted_fields: payload.extracted_fields,
       template_html: payload.template_html || null,
       page_images: payload.page_images || null,
+      original_pdf_path: payload.original_pdf_path || null,
+      original_pdf_size_bytes: payload.original_pdf_size_bytes ?? null,
+      page_count: payload.page_count ?? null,
+      page_dimensions: payload.page_dimensions || null,
+      layout_overlays: payload.layout_overlays || null,
     })
     .select('id')
     .single()
@@ -176,6 +181,11 @@ export async function updateTemplate(
       extracted_fields: payload.extracted_fields,
       template_html: payload.template_html || null,
       page_images: payload.page_images || null,
+      original_pdf_path: payload.original_pdf_path ?? undefined,
+      original_pdf_size_bytes: payload.original_pdf_size_bytes ?? undefined,
+      page_count: payload.page_count ?? undefined,
+      page_dimensions: payload.page_dimensions ?? undefined,
+      layout_overlays: payload.layout_overlays ?? undefined,
     })
     .eq('id', id)
     .eq('clinic_id', profile.clinic_id)

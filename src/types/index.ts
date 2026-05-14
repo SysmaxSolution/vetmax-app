@@ -208,6 +208,34 @@ export interface ExtractedField {
   page?: number           // Indice da pagina (0-based)
 }
 
+// ── Pixel Perfect — Layout Overlay (snapshot do editor) ──────────────────────
+// Fonte unica da verdade para preview/editor/geracao pdf-lib.
+
+export type OverlayElementType = 'field' | 'text' | 'logo' | 'signature' | 'image'
+
+export interface LayoutOverlay {
+  id: string
+  type: OverlayElementType
+  field_name?: string                   // quando type='field'
+  label: string
+  content?: string                      // quando type='text'
+  page: number                          // 0-based, qual pagina do PDF original
+  x_pct: number                         // % da largura da pagina
+  y_pct: number                         // % da altura da pagina (top-left)
+  w_pct: number
+  h_pct: number
+  font_size: number                     // points
+  font_weight: 'normal' | 'bold'
+  font_family: 'Helvetica' | 'Times' | 'Courier'
+  text_align: 'left' | 'center' | 'right'
+  color?: string                        // hex, default '#000000'
+}
+
+export interface PageDimensionsRecord {
+  width_pt: number
+  height_pt: number
+}
+
 export interface DocumentTemplate {
   id: string
   clinic_id: string
@@ -216,7 +244,14 @@ export interface DocumentTemplate {
   file_url?: string | null
   extracted_fields: ExtractedField[]
   template_html?: string | null
-  page_images?: string[] | null  // Base64 data URLs das paginas do documento original
+  page_images?: string[] | null         // Base64 data URLs das paginas do documento original
+  // Pixel Perfect (migration 0138)
+  original_pdf_path?: string | null     // path no bucket document-templates
+  original_pdf_size_bytes?: number | null
+  page_count?: number | null
+  page_dimensions?: PageDimensionsRecord[] | null
+  layout_overlays?: LayoutOverlay[] | null
+  page_images_storage_paths?: string[] | null
   created_at: string
   updated_at?: string
 }
@@ -243,4 +278,10 @@ export interface SaveTemplatePayload {
   extracted_fields: ExtractedField[]
   template_html?: string | null
   page_images?: string[] | null
+  // Pixel Perfect (migration 0138)
+  original_pdf_path?: string | null
+  original_pdf_size_bytes?: number | null
+  page_count?: number | null
+  page_dimensions?: PageDimensionsRecord[] | null
+  layout_overlays?: LayoutOverlay[] | null
 }

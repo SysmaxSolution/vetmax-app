@@ -1,0 +1,456 @@
+'use server'
+
+/**
+ * Operacao Pixel Perfect — F5: Engine de geracao de documentos com pdf-lib.
+ *
+ * Substitui jspdf (client-side) por pdf-lib (server-side), preservando o PDF
+ * original byte-a-byte e adicionando apenas overlay de texto nas coordenadas
+ * configuradas no editor.
+ *
+ * Fluxo:
+ *   1. Auth + RLS check via clinic_id
+ *   2. Fetch template + download PDF original do Storage
+ *   3. PDFDocument.load → preserva fontes, marca d'agua, vetores
+ *   4. Para cada overlay 'field', drawText nas coordenadas exatas
+ *   5. Upload do PDF preenchido para patient-documents
+ *   6. Insert em patient_documents com generated_pdf_path
+ */
+
+import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { revalidatePath } from 'next/cache'
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
+import { randomUUID } from 'crypto'
+import {
+  overlayToDrawTextPoint, overlayToPdfBox, ascenderRatio,
+  PDF_PAGE, type PageDimensions,
+} from '@/lib/pdf/coordinate-system'
+import type { LayoutOverlay, ExtractedField, PageDimensionsRecord } from '@/types'
+import { logAudit } from './audit'
+
+const TEMPLATE_BUCKET = 'document-templates'
+const PATIENT_DOC_BUCKET = 'patient-documents'
+
+// ── Input/Output types ─────────────────────────────────────────────────────
+
+export interface GenerateDocumentInput {
+  template_id: string
+  patient_id: string
+  consultation_id?: string | null
+  document_name: string
+  field_values: Record<string, string | number | boolean | null>
+}
+
+export interface GenerateDocumentResult {
+  document_id: string
+  storage_path: string
+  signed_url: string
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+function formatValueForPdf(raw: unknown, fieldType?: ExtractedField['type']): string {
+  if (raw === null || raw === undefined || raw === '') return ''
+  if (typeof raw === 'boolean') return raw ? 'Sim' : 'Nao'
+  if (fieldType === 'date' && typeof raw === 'string') {
+    // ISO yyyy-MM-dd → dd/MM/yyyy
+    const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/)
+    if (m) return `${m[3]}/${m[2]}/${m[1]}`
+  }
+  return String(raw)
+}
+
+/**
+ * Hidrata overlays a partir do snapshot canonico OU monta um fallback usando
+ * extracted_fields (templates antigos que ainda nao tem layout_overlays).
+ */
+function buildOverlaysWithFallback(
+  layoutOverlays: LayoutOverlay[] | null,
+  extractedFields: ExtractedField[],
+): LayoutOverlay[] {
+  if (layoutOverlays && layoutOverlays.length > 0) return layoutOverlays
+
+  // Fallback: cria overlays apenas para fields com coordenadas % conhecidas
+  return extractedFields
+    .filter(f => f.x_percent != null)
+    .map(f => ({
+      id: f.field_name,
+      type: 'field' as const,
+      field_name: f.field_name,
+      label: f.label,
+      page: f.page ?? 0,
+      x_pct: f.x_percent ?? 30,
+      y_pct: f.y_percent ?? 10,
+      w_pct: f.width_percent ?? 25,
+      h_pct: f.height_percent ?? 3,
+      font_size: 11,
+      font_weight: 'normal' as const,
+      font_family: 'Helvetica' as const,
+      text_align: 'left' as const,
+    }))
+}
+
+/**
+ * Quebra texto em multiplas linhas para caber na largura do overlay.
+ * Heuristica: tenta inteiro; se nao couber, quebra por palavras.
+ */
+function wrapTextToWidth(
+  text: string,
+  font: { widthOfTextAtSize: (s: string, size: number) => number },
+  size: number,
+  maxWidth: number,
+): string[] {
+  if (!text) return []
+  if (font.widthOfTextAtSize(text, size) <= maxWidth) return [text]
+
+  const words = text.split(/\s+/)
+  const lines: string[] = []
+  let current = ''
+  for (const w of words) {
+    const candidate = current ? `${current} ${w}` : w
+    if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
+      current = candidate
+    } else {
+      if (current) lines.push(current)
+      // Palavra unica maior que maxWidth: forca quebra brutal
+      if (font.widthOfTextAtSize(w, size) > maxWidth) {
+        let chunk = ''
+        for (const ch of w) {
+          if (font.widthOfTextAtSize(chunk + ch, size) > maxWidth) {
+            lines.push(chunk); chunk = ch
+          } else {
+            chunk += ch
+          }
+        }
+        current = chunk
+      } else {
+        current = w
+      }
+    }
+  }
+  if (current) lines.push(current)
+  return lines
+}
+
+// ── Main: generateFilledDocument ────────────────────────────────────────────
+
+export async function generateFilledDocument(
+  input: GenerateDocumentInput,
+): Promise<GenerateDocumentResult | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Nao autenticado' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('clinic_id')
+    .eq('id', user.id)
+    .single()
+  if (!profile?.clinic_id) return { error: 'Perfil sem clinica' }
+
+  // 1. Fetch template (RLS isola por clinic_id)
+  const { data: template, error: tplErr } = await supabase
+    .from('document_templates')
+    .select('id, name, type, original_pdf_path, page_dimensions, layout_overlays, extracted_fields, page_count')
+    .eq('id', input.template_id)
+    .eq('clinic_id', profile.clinic_id)
+    .single()
+
+  if (tplErr || !template) {
+    return { error: 'Template nao encontrado ou sem permissao' }
+  }
+  if (!template.original_pdf_path) {
+    return { error: 'Template sem PDF original — reimporte o documento para habilitar Pixel Perfect' }
+  }
+
+  // 2. Download do PDF original via admin (bypass RLS — ja validamos clinic acima)
+  const admin = createAdminClient()
+  const { data: pdfBlob, error: dlErr } = await admin.storage
+    .from(TEMPLATE_BUCKET)
+    .download(template.original_pdf_path)
+  if (dlErr || !pdfBlob) {
+    return { error: 'Erro ao baixar PDF original: ' + (dlErr?.message || '') }
+  }
+  const pdfBytes = await pdfBlob.arrayBuffer()
+
+  // 3. Carregar com pdf-lib
+  let pdfDoc: PDFDocument
+  try {
+    pdfDoc = await PDFDocument.load(pdfBytes)
+  } catch (e) {
+    return { error: 'PDF original invalido ou corrompido: ' + (e instanceof Error ? e.message : '') }
+  }
+
+  // 4. Embed fonts standard (Helvetica = default decisao Diretoria §12)
+  const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica)
+  const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
+
+  // 5. Resolve overlays (canonicos ou fallback de extracted_fields)
+  const overlays = buildOverlaysWithFallback(
+    (template.layout_overlays as LayoutOverlay[] | null),
+    (template.extracted_fields as ExtractedField[]) ?? [],
+  )
+
+  const pageDims = (template.page_dimensions as PageDimensionsRecord[] | null) ?? null
+
+  // Map de fields por field_name para resolver tipo (para format de date/boolean)
+  const fieldTypeMap = new Map<string, ExtractedField['type']>()
+  for (const f of (template.extracted_fields as ExtractedField[]) ?? []) {
+    fieldTypeMap.set(f.field_name, f.type)
+  }
+
+  // 6. Aplica overlays pagina por pagina
+  const pagesInPdf = pdfDoc.getPages()
+  for (const overlay of overlays) {
+    const pageIdx = overlay.page ?? 0
+    if (pageIdx >= pagesInPdf.length) continue
+    const page = pagesInPdf[pageIdx]
+
+    // Dimensoes reais (usa o PDF como fonte da verdade — pageDims do template
+    // pode estar desincronizado se o usuario subiu PDF diferente)
+    const pageSize = page.getSize()
+    const pageDim: PageDimensions = { width_pt: pageSize.width, height_pt: pageSize.height }
+    // Se houver page_dimensions persistido e a diferenca for grande, log alerta
+    const storedDim = pageDims?.[pageIdx]
+    if (storedDim && Math.abs(storedDim.width_pt - pageDim.width_pt) > 5) {
+      console.warn(`[generateFilledDocument] page ${pageIdx} dim mismatch — armazenado=${storedDim.width_pt}x${storedDim.height_pt}, real=${pageDim.width_pt}x${pageDim.height_pt}`)
+    }
+
+    const font = overlay.font_weight === 'bold' ? helveticaBold : helvetica
+    const fontSize_pt = overlay.font_size
+
+    // Resolve conteudo
+    let text = ''
+    if (overlay.type === 'field') {
+      const raw = input.field_values[overlay.field_name ?? '']
+      text = formatValueForPdf(raw, fieldTypeMap.get(overlay.field_name ?? ''))
+      if (!text) continue // campo vazio — nao desenha nada
+    } else if (overlay.type === 'text') {
+      text = overlay.content ?? overlay.label ?? ''
+      if (!text) continue
+    } else {
+      // logo / signature / image — F5 nao desenha imagens ainda (backlog)
+      continue
+    }
+
+    // Quebra de linha se nao couber
+    const maxWidth_pt = (overlay.w_pct / 100) * pageDim.width_pt
+    const lines = wrapTextToWidth(
+      text,
+      { widthOfTextAtSize: (s, sz) => font.widthOfTextAtSize(s, sz) },
+      fontSize_pt,
+      maxWidth_pt,
+    )
+
+    const lineHeight_pt = fontSize_pt * 1.2  // line-height padrao
+
+    // Desenha cada linha
+    for (let li = 0; li < lines.length; li++) {
+      const line = lines[li]
+      const textWidth_pt = font.widthOfTextAtSize(line, fontSize_pt)
+
+      // Coordenadas baseline para drawText
+      const align = overlay.text_align ?? 'left'
+      const baseY_overlay = { ...overlay, y_pct: overlay.y_pct + (li * lineHeight_pt / pageDim.height_pt) * 100 }
+      const baseY_rect = {
+        x_pct: baseY_overlay.x_pct,
+        y_pct: baseY_overlay.y_pct,
+        w_pct: overlay.w_pct,
+        h_pct: overlay.h_pct,
+      }
+      const point = overlayToDrawTextPoint(
+        baseY_rect,
+        pageDim,
+        { size_pt: fontSize_pt, family: 'Helvetica' },
+        align,
+        textWidth_pt,
+      )
+
+      try {
+        page.drawText(line, {
+          x: point.x,
+          y: point.y,
+          size: fontSize_pt,
+          font,
+          color: rgb(0, 0, 0),
+        })
+      } catch (drawErr) {
+        console.warn('[generateFilledDocument] drawText falhou:', overlay.field_name, drawErr)
+      }
+    }
+  }
+
+  // 7. Serializa PDF preenchido
+  const filledPdfBytes = await pdfDoc.save({ useObjectStreams: false })
+
+  // 8. Insert em patient_documents (gera id para usar no path)
+  const documentId = randomUUID()
+  const storagePath = `${profile.clinic_id}/${input.patient_id}/${documentId}.pdf`
+
+  const { error: upErr } = await admin.storage
+    .from(PATIENT_DOC_BUCKET)
+    .upload(storagePath, filledPdfBytes, {
+      contentType: 'application/pdf',
+      cacheControl: '3600',
+      upsert: false,
+    })
+  if (upErr) {
+    return { error: 'Erro ao salvar PDF gerado: ' + upErr.message }
+  }
+
+  const { error: insErr } = await admin
+    .from('patient_documents')
+    .insert({
+      id: documentId,
+      clinic_id: profile.clinic_id,
+      patient_id: input.patient_id,
+      consultation_id: input.consultation_id ?? null,
+      template_id: template.id,
+      template_name: template.name,
+      template_type: template.type,
+      template_extracted_fields: template.extracted_fields,
+      document_name: input.document_name || template.name,
+      content_data: input.field_values,
+      generated_pdf_path: storagePath,
+      overlay_values: input.field_values,
+      generated_at: new Date().toISOString(),
+    })
+
+  if (insErr) {
+    // rollback parcial: remove o PDF do storage
+    await admin.storage.from(PATIENT_DOC_BUCKET).remove([storagePath])
+    return { error: 'Erro ao registrar documento: ' + insErr.message }
+  }
+
+  // 9. Signed URL para visualizacao imediata
+  const { data: signedData, error: signErr } = await admin.storage
+    .from(PATIENT_DOC_BUCKET)
+    .createSignedUrl(storagePath, 3600)
+  if (signErr || !signedData) {
+    return { error: 'PDF gerado mas falha ao criar URL: ' + (signErr?.message || '') }
+  }
+
+  await logAudit({
+    action: 'GENERATE_PIXEL_PERFECT_DOC',
+    entity_type: 'patient_documents',
+    entity_id: documentId,
+    details: {
+      template_id: template.id,
+      template_name: template.name,
+      patient_id: input.patient_id,
+      bytes: filledPdfBytes.length,
+      overlay_count: overlays.length,
+    },
+  })
+
+  revalidatePath('/dashboard/vet')
+
+  return {
+    document_id: documentId,
+    storage_path: storagePath,
+    signed_url: signedData.signedUrl,
+  }
+}
+
+// ── Test/debug helper: gera PDF sem inserir no banco (apenas retorna bytes) ─
+
+export async function previewFilledPdfBytes(
+  templateId: string,
+  fieldValues: Record<string, any>,
+): Promise<{ bytes: Uint8Array } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Nao autenticado' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('clinic_id')
+    .eq('id', user.id)
+    .single()
+  if (!profile?.clinic_id) return { error: 'Perfil sem clinica' }
+
+  const { data: template } = await supabase
+    .from('document_templates')
+    .select('id, original_pdf_path, page_dimensions, layout_overlays, extracted_fields')
+    .eq('id', templateId)
+    .eq('clinic_id', profile.clinic_id)
+    .single()
+  if (!template?.original_pdf_path) return { error: 'Template sem PDF original' }
+
+  const admin = createAdminClient()
+  const { data: pdfBlob } = await admin.storage.from(TEMPLATE_BUCKET).download(template.original_pdf_path)
+  if (!pdfBlob) return { error: 'Falha download PDF' }
+
+  const pdfDoc = await PDFDocument.load(await pdfBlob.arrayBuffer())
+  const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica)
+  const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
+
+  const overlays = buildOverlaysWithFallback(
+    template.layout_overlays as LayoutOverlay[] | null,
+    (template.extracted_fields as ExtractedField[]) ?? [],
+  )
+
+  const fieldTypeMap = new Map<string, ExtractedField['type']>()
+  for (const f of (template.extracted_fields as ExtractedField[]) ?? []) {
+    fieldTypeMap.set(f.field_name, f.type)
+  }
+
+  const pages = pdfDoc.getPages()
+  for (const overlay of overlays) {
+    const pageIdx = overlay.page ?? 0
+    if (pageIdx >= pages.length) continue
+    const page = pages[pageIdx]
+    const { width, height } = page.getSize()
+    const pageDim: PageDimensions = { width_pt: width, height_pt: height }
+    const font = overlay.font_weight === 'bold' ? helveticaBold : helvetica
+
+    let text = ''
+    if (overlay.type === 'field') {
+      const raw = fieldValues[overlay.field_name ?? '']
+      text = formatValueForPdf(raw, fieldTypeMap.get(overlay.field_name ?? ''))
+      if (!text) continue
+    } else if (overlay.type === 'text') {
+      text = overlay.content ?? overlay.label ?? ''
+      if (!text) continue
+    } else continue
+
+    const maxWidth_pt = (overlay.w_pct / 100) * pageDim.width_pt
+    const lines = wrapTextToWidth(text, font, overlay.font_size, maxWidth_pt)
+    const lineHeight_pt = overlay.font_size * 1.2
+
+    for (let li = 0; li < lines.length; li++) {
+      const line = lines[li]
+      const textWidth_pt = font.widthOfTextAtSize(line, overlay.font_size)
+      const rect = {
+        x_pct: overlay.x_pct,
+        y_pct: overlay.y_pct + (li * lineHeight_pt / pageDim.height_pt) * 100,
+        w_pct: overlay.w_pct,
+        h_pct: overlay.h_pct,
+      }
+      const point = overlayToDrawTextPoint(rect, pageDim,
+        { size_pt: overlay.font_size, family: 'Helvetica' },
+        overlay.text_align ?? 'left', textWidth_pt)
+      try {
+        page.drawText(line, { x: point.x, y: point.y, size: overlay.font_size, font, color: rgb(0, 0, 0) })
+      } catch {}
+    }
+  }
+
+  const bytes = await pdfDoc.save({ useObjectStreams: false })
+  return { bytes }
+}
+
+/**
+ * Wrapper friendly-to-client: roda previewFilledPdfBytes e devolve o PDF
+ * codificado em base64 (string facil de serializar via Server Actions).
+ * O caller faz atob/Uint8Array/Blob/createObjectURL para abrir em nova aba.
+ */
+export async function previewFilledPdfBase64(
+  templateId: string,
+  fieldValues: Record<string, any>,
+): Promise<{ base64: string; byte_length: number } | { error: string }> {
+  const r = await previewFilledPdfBytes(templateId, fieldValues)
+  if ('error' in r) return r
+  const base64 = Buffer.from(r.bytes).toString('base64')
+  return { base64, byte_length: r.bytes.length }
+}
