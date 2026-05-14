@@ -252,6 +252,47 @@ export async function uploadCleanedPages(
 }
 
 /**
+ * Operacao Zero-Touch — devolve signed URLs em lote para um array de
+ * `cleaned_page_paths`. Usado pelo editor ao reabrir um template salvo: as
+ * paginas vivem no Storage e nao em base64 no banco.
+ *
+ * Valida que TODOS os paths comecam com o clinic_id do usuario logado.
+ */
+export async function getCleanedPagesSignedUrls(
+  paths: string[],
+  expiresInSeconds = 3600,
+): Promise<{ urls: string[] } | { error: string }> {
+  if (paths.length === 0) return { urls: [] }
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Nao autenticado' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('clinic_id')
+    .eq('id', user.id)
+    .single()
+  if (!profile?.clinic_id) return { error: 'Perfil sem clinica' }
+
+  for (const p of paths) {
+    if (!p.startsWith(`${profile.clinic_id}/`)) {
+      return { error: `Acesso negado: ${p}` }
+    }
+  }
+
+  const admin = createAdminClient()
+  const urls: string[] = []
+  for (const p of paths) {
+    const { data, error } = await admin.storage
+      .from(TEMPLATE_BUCKET)
+      .createSignedUrl(p, expiresInSeconds)
+    if (error || !data) return { error: `Erro signed URL ${p}: ${error?.message || ''}` }
+    urls.push(data.signedUrl)
+  }
+  return { urls }
+}
+
+/**
  * Remove TODAS as paginas limpas de um folder_id (cleanup ao deletar template).
  */
 export async function deleteCleanedPages(

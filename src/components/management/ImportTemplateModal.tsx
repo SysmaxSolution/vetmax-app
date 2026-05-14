@@ -19,7 +19,7 @@ import type {
   DocumentTemplate, ExtractedField, FieldType, TemplateType,
   LayoutOverlay, PageDimensionsRecord,
 } from '@/types'
-import { uploadTemplatePdf, uploadCleanedPages } from '@/lib/actions/template-storage'
+import { uploadTemplatePdf, uploadCleanedPages, getCleanedPagesSignedUrls } from '@/lib/actions/template-storage'
 import { previewFilledPdfBase64 } from '@/lib/actions/document-generation'
 import { buildMockFieldValues } from '@/lib/pdf/mock-field-values'
 import { FileCheck2 } from 'lucide-react'
@@ -474,6 +474,30 @@ export default function ImportTemplateModal({
   })
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // ── Operacao Zero-Touch — hidrata preview ao reabrir template ─────────
+  // Templates novos NAO persistem page_images base64 (estouraria o limite
+  // do Server Action). Em modo edit, recupera signed URLs do Storage.
+  useEffect(() => {
+    if (!editTemplate?.cleaned_page_paths || editTemplate.cleaned_page_paths.length === 0) return
+    if (form.pageImages && form.pageImages.length > 0) return  // ja temos preview da sessao atual
+    let cancelled = false
+    ;(async () => {
+      try {
+        const r = await getCleanedPagesSignedUrls(editTemplate.cleaned_page_paths!)
+        if (cancelled) return
+        if ('urls' in r) {
+          setForm(prev => ({ ...prev, pageImages: r.urls }))
+        } else {
+          console.warn('[ImportTemplate] Falha signed URLs:', r.error)
+        }
+      } catch (e) {
+        console.warn('[ImportTemplate] Erro signed URLs:', e)
+      }
+    })()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editTemplate?.id])
 
   // ── File handlers ─────────────────────────────────────────────────────
 
@@ -1083,13 +1107,22 @@ export default function ImportTemplateModal({
     // Pixel Perfect: serializa overlays % do editor para salvar canonicamente.
     const overlaysToSave = layoutElementsToOverlays(layoutElements)
 
+    // Operacao Zero-Touch: NAO persiste page_images base64 quando temos
+    // cleaned_page_paths. Cada imagem 300 DPI eh ~6MB em base64; multiplas
+    // paginas estourariam o limite "Maximum array nesting exceeded" do
+    // Next.js 16 Server Actions. As paginas vivem no Storage e sao
+    // recuperadas via signed URL para preview.
+    const persistedPageImages = form.cleanedPagePaths && form.cleanedPagePaths.length > 0
+      ? null
+      : form.pageImages
+
     try {
       const payload = {
         name: form.name,
         type: form.type,
         extracted_fields: form.extractedFields,
         template_html: finalHtml,
-        page_images: form.pageImages,
+        page_images: persistedPageImages,
         // Pixel Perfect (migration 0138)
         original_pdf_path: form.originalPdfPath,
         original_pdf_size_bytes: form.originalPdfSizeBytes,
@@ -1122,7 +1155,7 @@ export default function ImportTemplateModal({
         file_url: null,
         extracted_fields: form.extractedFields,
         template_html: finalHtml,
-        page_images: form.pageImages,
+        page_images: persistedPageImages,
         original_pdf_path: form.originalPdfPath,
         original_pdf_size_bytes: form.originalPdfSizeBytes,
         page_count: form.pageCount,
