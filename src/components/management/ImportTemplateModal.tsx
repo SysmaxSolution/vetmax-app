@@ -524,6 +524,7 @@ export default function ImportTemplateModal({
     // Pixel Perfect: capturado durante conversao do PDF (escopo do handler)
     let pdfDimensions: PageDimensionsRecord[] | null = null
     let pdfPageCount: number | null = null
+    let pdfTextItems: import('@/lib/pdf-to-images').PdfTextItem[] = []
     try {
       let response
 
@@ -538,10 +539,11 @@ export default function ImportTemplateModal({
         if (isPdf) {
           try {
             console.log('[ImportTemplate] Convertendo PDF para imagens...')
-            const { images, dimensions } = await pdfToImages(selectedFile, 2)
-            console.log(`[ImportTemplate] ${images.length} pagina(s) convertidas`)
+            const { images, dimensions, textItems } = await pdfToImages(selectedFile, 2)
+            console.log(`[ImportTemplate] ${images.length} pagina(s) convertidas, ${textItems.length} text items nativos`)
             pdfDimensions = dimensions
             pdfPageCount = images.length
+            pdfTextItems = textItems
             for (const img of images) {
               formData.append('page_images', img)
             }
@@ -593,6 +595,25 @@ export default function ImportTemplateModal({
 
       const pageImages = data.page_images || null
 
+      // Pixel Perfect — Refinamento de coordenadas:
+      // A Vision API retorna coordenadas APROXIMADAS (erro tipico 3-5%).
+      // Usamos o textContent NATIVO do PDF (pdfjs) para refinar as coords
+      // com precisao sub-pixel quando a label e encontrada no PDF.
+      let refinedFields: ExtractedField[] = data.fields
+      if (pdfTextItems.length > 0 && data.fields.length > 0) {
+        try {
+          const { refineFieldsWithPdfText } = await import('@/lib/pdf/refine-field-coords')
+          const result = refineFieldsWithPdfText(data.fields, pdfTextItems)
+          refinedFields = result.refined
+          console.log(
+            `[ImportTemplate] Refinamento: ${result.stats.refined_count}/${result.stats.total} ` +
+            `campos com coords exatas do PDF nativo (fallback Vision: ${result.stats.fallback_count})`,
+          )
+        } catch (refErr) {
+          console.warn('[ImportTemplate] Refinamento falhou, usando Vision puro:', refErr)
+        }
+      }
+
       // Pixel Perfect: upload do PDF original para Storage (apos extracao da IA)
       let originalPdfPath: string | null = null
       const isPdf = selectedFile && (selectedFile.type === 'application/pdf' || selectedFile.name.endsWith('.pdf'))
@@ -614,7 +635,7 @@ export default function ImportTemplateModal({
 
       setForm(prev => ({
         ...prev,
-        extractedFields: data.fields,
+        extractedFields: refinedFields,
         templateHtml: data.template_html || null,
         pageImages,
         originalPdfPath,
@@ -624,10 +645,11 @@ export default function ImportTemplateModal({
       }))
 
       // Modo Pixel Perfect: hidrata o editor com as coordenadas extraidas pela
-      // Vision API. Cada campo vira um overlay posicionado onde a IA identificou.
+      // Vision API + refinadas pelo textContent nativo do PDF. Cada campo vira
+      // um overlay posicionado onde a IA + pdfjs identificaram.
       // Modo legado (sem pageImages): editor faz buildDefaultElements (vertical).
       if (pageImages && pageImages.length > 0) {
-        const ppElements: LayoutElement[] = data.fields.map((f: ExtractedField) => ({
+        const ppElements: LayoutElement[] = refinedFields.map((f: ExtractedField) => ({
           id: `el_${Math.random().toString(36).slice(2)}`,
           type: 'field' as const,
           field_name: f.field_name,
