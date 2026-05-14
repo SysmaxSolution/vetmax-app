@@ -135,7 +135,14 @@ async function buildSystemFieldsContext(
   const crmv = formatCrmv(crmvRaw)
   const specialty = profile.specialty ?? ''
   const roleRaw = profile.role ?? ''
-  const roleDisplay = ROLE_TO_DISPLAY[roleRaw] ?? roleRaw
+  // INTERVENCAO CIRURGICA: quem tem CRMV cadastrado eh OBRIGATORIAMENTE
+  // medico veterinario, independente do role RBAC do sistema. Um admin que
+  // tambem assina laudos cadastra seu CRMV e vira "Medico Veterinario" no
+  // cabecalho — nao "Administrador".
+  const hasCrmv = !!crmvRaw.trim()
+  const roleDisplay = hasCrmv
+    ? 'Médico Veterinário'
+    : (ROLE_TO_DISPLAY[roleRaw] ?? roleRaw)
 
   // professional_role combina cargo + especialidade na MESMA string —
   // o template tipico tem "Médico Veterinário – Cardiologo" numa unica linha,
@@ -225,6 +232,22 @@ async function loadFlattenedPdf(
   } catch (e) {
     return { error: 'PDF original invalido: ' + (e instanceof Error ? e.message : '') }
   }
+}
+
+/**
+ * Aplica regras de seguranca por overlay no momento da geracao.
+ *
+ * INTERVENCAO CIRURGICA: signatures (professional_*) sao capadas em 11pt no
+ * runtime. Templates ja salvos com font_size > 11 (calculado de h_pct do
+ * pdfjs, tipicamente ~13pt) acabavam fazendo wrap em duas linhas no rodape
+ * — sao corrigidos retroativamente aqui.
+ */
+function applyOverlayRuntimeGuards(o: LayoutOverlay): LayoutOverlay {
+  const isSig = o.field_name?.startsWith('professional_')
+  if (isSig && (o.font_size ?? 0) > 11) {
+    return { ...o, font_size: 11 }
+  }
+  return o
 }
 
 /**
@@ -352,7 +375,7 @@ export async function generateFilledDocument(
       continue
     }
 
-    applyOverlayToPage(page, overlay, text, { helvetica, helveticaBold, ctx: systemCtx }, pageDim)
+    applyOverlayToPage(page, applyOverlayRuntimeGuards(overlay), text, { helvetica, helveticaBold, ctx: systemCtx }, pageDim)
   }
 
   // 7. Serializa PDF preenchido
@@ -496,7 +519,7 @@ export async function previewFilledPdfBytes(
       if (!text) continue
     } else continue
 
-    applyOverlayToPage(page, overlay, text, { helvetica, helveticaBold, ctx: systemCtx }, pageDim)
+    applyOverlayToPage(page, applyOverlayRuntimeGuards(overlay), text, { helvetica, helveticaBold, ctx: systemCtx }, pageDim)
   }
 
   const bytes = await pdfDoc.save({ useObjectStreams: false })

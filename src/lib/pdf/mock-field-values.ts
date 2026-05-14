@@ -64,8 +64,11 @@ const CANONICAL_MOCKS: Matcher[] = [
 export function mockValueForField(field: ExtractedField): string | number | boolean {
   const name = field.field_name.toLowerCase()
 
-  // INTERVENCAO CIRURGICA: custom_* sempre vazio
-  if (field.is_custom === true || name.startsWith('custom_')) return ''
+  // INTERVENCAO CIRURGICA: custom_* recebe um placeholder VISUAL ("—") apenas
+  // no fluxo de TESTE — em producao o vet preenche o campo vazio, e se nao
+  // preencher o overlay sai branco. O "—" aqui permite que o cliente valide
+  // a posicao/tamanho de cada campo no PDF de teste.
+  if (field.is_custom === true || name.startsWith('custom_')) return '—'
 
   // System fields vivem do ctx do usuario logado — nao mockar aqui
   if (name.startsWith('professional_') || name === 'clinic_name') return ''
