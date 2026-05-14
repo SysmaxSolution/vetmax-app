@@ -526,94 +526,113 @@ export default function ImportTemplateModal({
     let pdfDimensions: PageDimensionsRecord[] | null = null
     let pdfPageCount: number | null = null
     let pdfTextItems: import('@/lib/pdf-to-images').PdfTextItem[] = []
+    let pdfImages: string[] | null = null
+    // Pipeline OCR Sniper substitui Vision para coords. Dados consolidados:
+    let pipelineFields: ExtractedField[] = []
+    let pipelineOverlays: LayoutOverlay[] = []
+    let templateHtmlFallback: string | null = null
     try {
-      let response
 
       if (selectedFile) {
-        const formData = new FormData()
-        formData.append('file', selectedFile)
-        formData.append('name', form.name)
-        formData.append('type', form.type)
-
-        // For PDF files, convert to images in the browser first (pdfjs-dist)
         const isPdf = selectedFile.type === 'application/pdf' || selectedFile.name.endsWith('.pdf')
+
+        // ── CAMINHO 1: PDF — OCR Sniper + Matcher (sem Claude Vision) ──────
         if (isPdf) {
           try {
-            console.log('[ImportTemplate] Convertendo PDF para imagens...')
+            console.log('[ImportTemplate] Convertendo PDF para imagens + textContent...')
             const { images, dimensions, textItems } = await pdfToImages(selectedFile, 2)
             console.log(`[ImportTemplate] ${images.length} pagina(s) convertidas, ${textItems.length} text items nativos`)
             pdfDimensions = dimensions
             pdfPageCount = images.length
             pdfTextItems = textItems
-            for (const img of images) {
-              formData.append('page_images', img)
-            }
+            pdfImages = images
           } catch (pdfErr) {
             const msg = pdfErr instanceof Error ? pdfErr.message : String(pdfErr)
-            console.error('[ImportTemplate] Falha ao converter PDF para imagens:', msg)
-            // Aborta: sem page_images o modo Pixel Perfect nao funciona.
-            // O usuario precisa saber para nao acreditar que o modo PP esta ativo.
+            console.error('[ImportTemplate] Falha ao converter PDF:', msg)
             setError(
-              'Falha ao converter o PDF em imagens no navegador. O modo Pixel Perfect requer essa etapa. ' +
-              'Detalhe tecnico: ' + msg +
+              'Falha ao converter o PDF. Detalhe: ' + msg +
               '. Tente recarregar a pagina (Ctrl+Shift+R) — se persistir, verifique se /pdf.worker.min.mjs esta acessivel.'
             )
             setLoading(false)
             return
           }
-        }
 
-        // For image files, add as page_images too
-        const isImage = selectedFile.type.startsWith('image/')
-        if (isImage) {
-          const reader = new FileReader()
-          const dataUrl = await new Promise<string>((resolve) => {
-            reader.onload = () => resolve(reader.result as string)
-            reader.readAsDataURL(selectedFile!)
+          if (pdfTextItems.length === 0) {
+            setError('PDF sem camada de texto extraivel (provavelmente escaneado). Use um PDF gerado digitalmente para Pixel Perfect.')
+            setLoading(false)
+            return
+          }
+
+          // Roda pipeline OCR Sniper + Semantic Matcher
+          try {
+            const { runSniperPipeline } = await import('@/lib/pdf/sniper-pipeline')
+            const result = await runSniperPipeline({
+              textItems: pdfTextItems,
+              dimensions: pdfDimensions!,
+              doc_type: form.type,
+              doc_name: form.name,
+            })
+            pipelineFields = result.extracted_fields
+            pipelineOverlays = result.layout_overlays
+            console.log(
+              `[ImportTemplate] OCR Sniper: ${result.stats.candidates} candidates, ` +
+              `${result.stats.matched_fields} campos mapeados, ${result.stats.globals} globais, ` +
+              `${result.stats.total_overlays} overlays`,
+            )
+          } catch (pipeErr) {
+            const msg = pipeErr instanceof Error ? pipeErr.message : String(pipeErr)
+            console.error('[ImportTemplate] Pipeline OCR falhou:', msg)
+            setError('Falha no pipeline OCR: ' + msg)
+            setLoading(false)
+            return
+          }
+        } else {
+          // ── CAMINHO 2: DOCX / Imagem — mantem Claude Vision (fallback) ─
+          const formData = new FormData()
+          formData.append('file', selectedFile)
+          formData.append('name', form.name)
+          formData.append('type', form.type)
+
+          const isImage = selectedFile.type.startsWith('image/')
+          if (isImage) {
+            const reader = new FileReader()
+            const dataUrl = await new Promise<string>((resolve) => {
+              reader.onload = () => resolve(reader.result as string)
+              reader.readAsDataURL(selectedFile!)
+            })
+            formData.append('page_images', dataUrl)
+          }
+
+          const response = await fetch('/api/process-template-with-file', {
+            method: 'POST',
+            body: formData,
           })
-          formData.append('page_images', dataUrl)
+          if (!response.ok) {
+            const data = await response.json()
+            throw new Error(data.error || `Erro HTTP ${response.status}`)
+          }
+          const data = await response.json()
+          if (!data.fields) throw new Error('Nenhum campo retornado')
+          pipelineFields = data.fields
+          pdfImages = data.page_images || null
+          templateHtmlFallback = data.template_html || null
         }
-
-        response = await fetch('/api/process-template-with-file', {
-          method: 'POST',
-          body: formData,
-        })
       } else {
-        response = await fetch('/api/process-template', {
+        // Sem arquivo — cria template em branco
+        const response = await fetch('/api/process-template', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: form.name, type: form.type }),
         })
-      }
-
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.error || `Erro HTTP ${response.status}`)
-      }
-
-      const data = await response.json()
-      if (!data.fields) throw new Error('Nenhum campo retornado')
-
-      const pageImages = data.page_images || null
-
-      // Pixel Perfect — Refinamento de coordenadas:
-      // A Vision API retorna coordenadas APROXIMADAS (erro tipico 3-5%).
-      // Usamos o textContent NATIVO do PDF (pdfjs) para refinar as coords
-      // com precisao sub-pixel quando a label e encontrada no PDF.
-      let refinedFields: ExtractedField[] = data.fields
-      if (pdfTextItems.length > 0 && data.fields.length > 0) {
-        try {
-          const { refineFieldsWithPdfText } = await import('@/lib/pdf/refine-field-coords')
-          const result = refineFieldsWithPdfText(data.fields, pdfTextItems)
-          refinedFields = result.refined
-          console.log(
-            `[ImportTemplate] Refinamento: ${result.stats.refined_count}/${result.stats.total} ` +
-            `campos com coords exatas do PDF nativo (fallback Vision: ${result.stats.fallback_count})`,
-          )
-        } catch (refErr) {
-          console.warn('[ImportTemplate] Refinamento falhou, usando Vision puro:', refErr)
+        if (!response.ok) {
+          const d = await response.json()
+          throw new Error(d.error || `Erro HTTP ${response.status}`)
         }
+        const data = await response.json()
+        pipelineFields = data.fields ?? []
       }
+
+      const pageImages = pdfImages
 
       // Pixel Perfect: upload do PDF original para Storage (apos extracao da IA)
       let originalPdfPath: string | null = null
@@ -636,21 +655,43 @@ export default function ImportTemplateModal({
 
       setForm(prev => ({
         ...prev,
-        extractedFields: refinedFields,
-        templateHtml: data.template_html || null,
+        extractedFields: pipelineFields,
+        templateHtml: templateHtmlFallback,
         pageImages,
         originalPdfPath,
         originalPdfSizeBytes: selectedFile?.size ?? null,
         pageCount: pdfPageCount,
         pageDimensions: pdfDimensions,
+        // Overlays prontos do pipeline OCR Sniper (com whiteout_bbox + is_global)
+        layoutOverlays: pipelineOverlays.length > 0 ? pipelineOverlays : null,
       }))
 
-      // Modo Pixel Perfect: hidrata o editor com as coordenadas extraidas pela
-      // Vision API + refinadas pelo textContent nativo do PDF. Cada campo vira
-      // um overlay posicionado onde a IA + pdfjs identificaram.
-      // Modo legado (sem pageImages): editor faz buildDefaultElements (vertical).
-      if (pageImages && pageImages.length > 0) {
-        const ppElements: LayoutElement[] = refinedFields.map((f: ExtractedField) => ({
+      // Hidrata o editor:
+      // Caminho 1 (PDF via OCR Sniper): usa os overlays prontos do pipeline,
+      // que ja vem com coordenadas exatas + whiteout_bbox por overlay.
+      if (pipelineOverlays.length > 0) {
+        const elements: LayoutElement[] = pipelineOverlays.map(o => ({
+          id: o.id,
+          type: o.type as LayoutElement['type'],
+          field_name: o.field_name,
+          label: o.label,
+          content: o.content,
+          page: o.page,
+          unit: 'pct' as const,
+          x: o.x_pct,
+          y: o.y_pct,
+          width: o.w_pct,
+          height: o.h_pct,
+          fontSize: o.font_size,
+          fontWeight: o.font_weight,
+          textAlign: o.text_align,
+          whiteoutBbox: o.whiteout_bbox,
+          isGlobal: o.is_global,
+        }))
+        setLayoutElements(elements)
+      } else if (pageImages && pageImages.length > 0 && pipelineFields.length > 0) {
+        // Caminho 2 (fallback DOCX/imagem): cria overlays a partir das coords da Vision
+        const ppElements: LayoutElement[] = pipelineFields.map((f: ExtractedField) => ({
           id: uid(),
           type: 'field' as const,
           field_name: f.field_name,

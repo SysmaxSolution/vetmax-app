@@ -79,12 +79,18 @@ export function applyOverlayToPage(
   const fontSize_pt = overlay.font_size
 
   // ── Whiteout: apaga conteudo embaixo do overlay (default ON) ──────────
+  // PRIORIDADE: se whiteout_bbox estiver definida (vinda do OCR Sniper com
+  // a posicao EXATA do texto antigo), usa ela — mais cirurgico que o bbox
+  // do overlay (que pode ter sido redimensionado pelo usuario).
   const shouldWhiteout = overlay.whiteout !== false
   if (shouldWhiteout) {
-    const box = overlayToPdfBox(
-      { x_pct: overlay.x_pct, y_pct: overlay.y_pct, w_pct: overlay.w_pct, h_pct: overlay.h_pct },
-      pageDim,
-    )
+    const whiteoutRect = overlay.whiteout_bbox ?? {
+      x_pct: overlay.x_pct,
+      y_pct: overlay.y_pct,
+      w_pct: overlay.w_pct,
+      h_pct: overlay.h_pct,
+    }
+    const box = overlayToPdfBox(whiteoutRect, pageDim)
     const MARGIN_PT = 1
     try {
       page.drawRectangle({

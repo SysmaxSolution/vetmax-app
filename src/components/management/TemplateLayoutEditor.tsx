@@ -28,6 +28,10 @@ export type LayoutElement = {
   // Pixel Perfect (opcionais — quando presentes, indicam modo % por pagina)
   page?: number                   // 0-based — qual pagina do PDF original
   unit?: 'px' | 'pct'             // 'pct' = todos x/y/w/h em %; ausente/default = 'px' (legado)
+  // OCR Sniper: bbox EXATA do texto antigo (para whiteout cirurgico)
+  whiteoutBbox?: { x_pct: number; y_pct: number; w_pct: number; h_pct: number }
+  // OCR Sniper: marca campos de cabecalho/rodape que se repetem em todas as paginas
+  isGlobal?: boolean
 }
 
 interface TemplateLayoutEditorProps {
@@ -1040,6 +1044,9 @@ export function layoutElementsToOverlays(elements: LayoutElement[]) {
       font_weight: el.fontWeight,
       font_family: 'Helvetica' as const,
       text_align: el.textAlign,
+      // OCR Sniper: preserva whiteout_bbox e is_global
+      whiteout_bbox: el.whiteoutBbox,
+      is_global: el.isGlobal,
     }))
 }
 
@@ -1063,5 +1070,8 @@ export function overlaysToLayoutElements(overlays: any[] | null | undefined): La
     textAlign: o.text_align ?? 'left',
     page: o.page ?? 0,
     unit: 'pct',
+    // OCR Sniper: preserva ao hidratar template salvo
+    whiteoutBbox: o.whiteout_bbox,
+    isGlobal: o.is_global,
   }))
 }

@@ -234,6 +234,14 @@ export interface LayoutOverlay {
   // Default: true em modo Pixel Perfect. Setar false quando o overlay
   // deve ficar transparente sobre o substrato (raro).
   whiteout?: boolean
+  // OCR Sniper: bbox EXATA do texto antigo a ser apagado (em % da pagina).
+  // Quando definida, o motor pdf-lib usa essa bbox para o whiteout em vez
+  // da bbox do overlay. Util quando o texto antigo (ex: "Dr. Joao Silva")
+  // tem dimensoes diferentes do espaco reservado para o overlay.
+  whiteout_bbox?: { x_pct: number; y_pct: number; w_pct: number; h_pct: number }
+  // OCR Sniper: marca campos que se repetem em todas as paginas (header/footer).
+  // Util para CRMV, nome do MV — preenchidos UMA vez, desenhados em N posicoes.
+  is_global?: boolean
 }
 
 export interface PageDimensionsRecord {
