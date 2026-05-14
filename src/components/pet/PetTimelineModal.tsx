@@ -1,11 +1,12 @@
 ﻿'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { X, Calendar, Clock, Gift } from 'lucide-react'
 import { getPetTimeline, type TimelineEvent } from '@/lib/actions/timeline'
 import { getPatientVaccines, type PatientVaccine } from '@/lib/actions/vaccines'
 import { getPetPackageSummary, getPackageSessionsMap, type PatientActivePackage, type PackageSessionInfo } from '@/lib/actions/packages'
+import { createClient } from '@/lib/supabase/client'
 import PetTimeline from './PetTimeline'
 import VaccinationCard from '@/components/vet/VaccinationCard'
 import NewAppointmentModal from '@/components/reception/NewAppointmentModal'
@@ -53,31 +54,38 @@ export default function PetTimelineModal({
   const [vaccines, setVaccines] = useState<PatientVaccine[]>([])
   const [packages, setPackages] = useState<PatientActivePackage[]>([])
   const [packageMap, setPackageMap] = useState<Record<string, PackageSessionInfo>>({})
-  const hasMounted = useRef(false)
 
   const sp = SPECIES_LABELS[petSpecies] ?? { label: petSpecies, emoji: '🐾' }
 
-  // Carrega timeline + carteira de vacinação
-  useEffect(() => {
-    if (hasMounted.current) return
-    hasMounted.current = true
-    Promise.all([
+  const loadData = useCallback(async (showLoader = false) => {
+    if (showLoader) setLoading(true)
+    const [timelineResult, vaccinesResult, pkgSummary, pkgMap] = await Promise.all([
       getPetTimeline(petId),
       getPatientVaccines(petId),
       getPetPackageSummary(petId),
       getPackageSessionsMap(petId),
-    ]).then(([timelineResult, vaccinesResult, pkgSummary, pkgMap]) => {
-      if ('error' in timelineResult) {
-        setError(timelineResult.error)
-      } else {
-        setEvents(timelineResult)
-      }
-      if (!('error' in vaccinesResult)) setVaccines(vaccinesResult)
-      if (!('error' in pkgSummary))     setPackages(pkgSummary)
-      if (!('error' in pkgMap))         setPackageMap(pkgMap)
-      setLoading(false)
-    })
+    ])
+    if ('error' in timelineResult) setError(timelineResult.error)
+    else setEvents(timelineResult)
+    if (!('error' in vaccinesResult)) setVaccines(vaccinesResult)
+    if (!('error' in pkgSummary))     setPackages(pkgSummary)
+    if (!('error' in pkgMap))         setPackageMap(pkgMap)
+    setLoading(false)
   }, [petId])
+
+  // Carga inicial
+  useEffect(() => { loadData(true) }, [loadData])
+
+  // Real-time: recarrega ao detectar INSERT/UPDATE em appointments ou pacotes do pet
+  useEffect(() => {
+    const supabase = createClient()
+    const channel = supabase
+      .channel(`pet-feed-${petId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments',             filter: `pet_id=eq.${petId}` }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'patient_active_packages', filter: `pet_id=eq.${petId}` }, () => loadData())
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [petId, loadData])
 
   // Limpa print após impressão
   useEffect(() => {
@@ -333,7 +341,7 @@ export default function PetTimelineModal({
       {showSchedule && (
         <NewAppointmentModal
           onClose={() => setShowSchedule(false)}
-          onSuccess={() => setShowSchedule(false)}
+          onSuccess={() => { setShowSchedule(false); loadData() }}
           defaultPet={tutorId ? {
             id:        petId,
             name:      petName,
@@ -349,12 +357,7 @@ export default function PetTimelineModal({
         <EditAppointmentModal
           appointmentId={editApptId}
           onClose={() => setEditApptId(null)}
-          onSuccess={() => {
-            setEditApptId(null)
-            getPetTimeline(petId).then(res => {
-              if (!('error' in res)) setEvents(res)
-            })
-          }}
+          onSuccess={() => { setEditApptId(null); loadData() }}
         />
       )}
     </>
