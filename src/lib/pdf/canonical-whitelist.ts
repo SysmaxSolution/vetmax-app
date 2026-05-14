@@ -53,11 +53,21 @@ export const CANONICAL_TYPES: Record<string, FieldType> = {
  * Campos de sistema — resolvidos por detectProfessionalSignatures (regex),
  * NUNCA por matchCanonicalLocal. Preenchidos automaticamente pelo
  * usuario logado em interpolate-vars.
+ *
+ * Cobre as 4 linhas tipicas do cabecalho/rodape de laudos:
+ *   - professional_name        "Dr. Fulano"
+ *   - professional_role        "Medico Veterinario – Cardiologista" (role+specialty)
+ *   - professional_specialty   "Cardiologista" (exposto em separado)
+ *   - professional_crmv        "CRMV-SP 74.696"
+ *   - professional_signature   "Assinado eletronicamente por X – CRMV-Y"
+ *   - clinic_name              "VetMax Clinica"
  */
 export const SYSTEM_FIELDS = new Set([
   'professional_name',
-  'professional_crmv',
   'professional_role',
+  'professional_specialty',
+  'professional_crmv',
+  'professional_signature',
   'clinic_name',
 ])
 

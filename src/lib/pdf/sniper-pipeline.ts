@@ -129,6 +129,16 @@ interface SignaturePattern {
  */
 const SIGNATURE_PATTERNS: SignaturePattern[] = [
   {
+    // FOOTER COMPOUND: "Assinado eletronicamente por X – CRMV/Y" — tem
+    // PRIORIDADE sobre os demais. Quando bate, a linha INTEIRA do rodape
+    // eh substituida pela string "Assinado por {nome} – {crmv}" interpolada.
+    re: /\bassinad[oa]\s+eletronicamente\b/i,
+    field_name: 'professional_signature',
+    label: 'Assinatura eletronica',
+    type: 'text',
+    description: 'Linha de assinatura eletronica no rodape',
+  },
+  {
     // "CRMV-SP 74.696", "CRMV/SP 74.696", "CRMV: 74.696"
     re: /\bCRMV[\s:/\-]*[A-Z]{0,3}[\s:/\-]*[\d.\-/]+/i,
     field_name: 'professional_crmv',
@@ -137,21 +147,24 @@ const SIGNATURE_PATTERNS: SignaturePattern[] = [
     description: 'Registro profissional no CRMV',
   },
   {
-    // "Dr. Claudiney", "Dra. Maria", "Doutor João" (precisa de pelo menos
-    // 1 caractere após o título — evita match com só "Dr.")
+    // "Dr. Claudiney", "Dra. Maria", "Doutor João" (precisa pelo menos 1
+    // caractere apos titulo — evita match com so "Dr.")
     re: /\b(?:Dr\.?|Dra\.?|Doutor[a]?\.?)\s+[A-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇ][a-zA-Záàâãéèêíïóôõöúç]+/,
     field_name: 'professional_name',
     label: 'Veterinário',
     type: 'text',
-    description: 'Nome do médico veterinário responsável',
+    description: 'Nome do medico veterinario responsavel',
   },
   {
-    // "Médico Veterinário", "Médica Veterinária", com ou sem cargo após (–, hífen)
+    // "Médico Veterinário", "Médica Veterinária", com ou sem cargo apos (–, hifen).
+    // Quando linha tambem tem especialidade ("Medico Vet – Cardiologo"), o ctx
+    // ja vem preenchido com "Med. Vet. – Cardiologo" e a linha inteira eh
+    // substituida por essa string.
     re: /m[ée]dic[oa]\s+veterin[áa]ri[oa]/i,
     field_name: 'professional_role',
     label: 'Cargo do profissional',
     type: 'text',
-    description: 'Cargo/especialidade do veterinário',
+    description: 'Cargo + especialidade do veterinario',
   },
 ]
 

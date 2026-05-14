@@ -61,17 +61,30 @@ function formatValueForPdf(raw: unknown, fieldType?: ExtractedField['type']): st
 }
 
 /**
+ * Mapeia profiles.role (enum RBAC) → string descritiva no laudo.
+ * "vet" e "veterinarian" sao tratados; demais voltam display do RBAC.
+ */
+const ROLE_TO_DISPLAY: Record<string, string> = {
+  admin: 'Administrador',
+  vet: 'Médico Veterinário',
+  veterinarian: 'Médico Veterinário',
+  assistant: 'Auxiliar Veterinário',
+  receptionist: 'Recepcionista',
+  pharmacist: 'Farmacêutico',
+  groomer: 'Tosador',
+}
+
+/**
  * LEI 3 — monta o contexto de interpolacao a partir do usuario logado.
  *
- * O contexto e injetado em `applyOverlayToPage` (via `fonts.ctx`) e tambem
- * mergeado em `field_values` para overlays type='field' cujo field_name esta
- * em SYSTEM_FIELDS.
- *
- * Fonte:
- *   profiles.full_name → professional_name
- *   profiles.crmv      → professional_crmv
- *   profiles.role      → professional_role (Veterinario / Auxiliar / ...)
- *   clinics.name       → clinic_name
+ * Cobre as 4 linhas tipicas do cabecalho de laudos (e mais):
+ *   profiles.full_name           → professional_name
+ *   profiles.role (mapeada)      → cargo display (compoe role full)
+ *   profiles.specialty           → professional_specialty (exposto separadamente)
+ *   role+specialty combinados    → professional_role ("Médico Veterinário – Cardiologista")
+ *   profiles.crmv                → professional_crmv
+ *   composto                     → professional_signature ("Assinado por X – CRMV-Y")
+ *   clinics.name                 → clinic_name
  */
 async function buildSystemFieldsContext(
   supabaseAdmin: ReturnType<typeof createAdminClient>,
@@ -79,7 +92,7 @@ async function buildSystemFieldsContext(
 ): Promise<InterpolationContext> {
   const { data: profile } = await supabaseAdmin
     .from('profiles')
-    .select('full_name, crmv, role, clinic_id')
+    .select('full_name, crmv, role, specialty, clinic_id')
     .eq('id', userId)
     .single()
   if (!profile) return {}
@@ -94,10 +107,29 @@ async function buildSystemFieldsContext(
     clinicName = clinic?.name ?? null
   }
 
+  const name = profile.full_name ?? ''
+  const crmv = profile.crmv ?? ''
+  const specialty = profile.specialty ?? ''
+  const roleRaw = profile.role ?? ''
+  const roleDisplay = ROLE_TO_DISPLAY[roleRaw] ?? roleRaw
+
+  // professional_role combina cargo + especialidade na MESMA string —
+  // o template tipico tem "Médico Veterinário – Cardiologo" numa unica linha,
+  // entao o overlay com field_name=professional_role recebe a string completa.
+  const roleFull = roleDisplay
+    + (specialty ? ` – ${specialty}` : '')
+
+  // professional_signature: linha de rodape composta. Vazia se nao tem nome.
+  const signature = name
+    ? `Assinado eletronicamente por ${name}${crmv ? ` – ${crmv}` : ''}`
+    : ''
+
   return {
-    professional_name: profile.full_name ?? '',
-    professional_crmv: profile.crmv ?? '',
-    professional_role: profile.role ?? '',
+    professional_name: name,
+    professional_role: roleFull,
+    professional_specialty: specialty,
+    professional_crmv: crmv,
+    professional_signature: signature,
     clinic_name: clinicName ?? '',
   }
 }
