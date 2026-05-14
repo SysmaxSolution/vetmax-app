@@ -53,15 +53,22 @@ export default function ElementQuickEditPopover({
     const elTop = elementPx.y
     const elBottom = elementPx.y + elementPx.height
     const fitsAbove = elTop - GAP - POPOVER_H_ESTIMATE >= 0
-    const top = fitsAbove
+    const top = Math.round(fitsAbove
       ? elTop - GAP - POPOVER_H_ESTIMATE
-      : elBottom + GAP
+      : elBottom + GAP)
 
     const desiredLeft = elementPx.x
     const maxLeft = Math.max(0, canvasSize.width - POPOVER_W - 4)
-    const left = Math.max(4, Math.min(desiredLeft, maxLeft))
+    const left = Math.round(Math.max(4, Math.min(desiredLeft, maxLeft)))
 
-    setPosition({ left, top })
+    // Threshold: nao atualiza se o delta e sub-pixel (evita cascata de
+    // re-renders quando o canvas tem dimensoes fracionarias)
+    setPosition(prev => {
+      if (prev && Math.abs(prev.left - left) < 1 && Math.abs(prev.top - top) < 1) {
+        return prev
+      }
+      return { left, top }
+    })
   }, [elementPx.x, elementPx.y, elementPx.width, elementPx.height, canvasSize.width])
 
   // Fecha com Esc

@@ -370,7 +370,13 @@ export default function TemplateLayoutEditor({
     const updateSize = () => {
       if (!canvasRef.current) return
       const r = canvasRef.current.getBoundingClientRect()
-      setCanvasSize({ width: r.width, height: r.height })
+      // Round para evitar sub-pixel changes do ResizeObserver disparando
+      // re-renders em cascata (que faziam o popover piscar)
+      const w = Math.round(r.width)
+      const h = Math.round(r.height)
+      setCanvasSize(prev =>
+        prev.width === w && prev.height === h ? prev : { width: w, height: h },
+      )
     }
     updateSize()
     const ro = new ResizeObserver(updateSize)
@@ -669,12 +675,25 @@ export default function TemplateLayoutEditor({
                     // o click bubblaria pro canvas e fecharia o popover (efeito "piscar").
                     onClick={(e: any) => { e.stopPropagation(); setSelectedId(el.id) }}
                     onDragStop={(_e, d) => {
+                      // Threshold: ignora "drags" de 0px (clique puro). Sem isso, o
+                      // react-rnd dispara onDragStop apos cliques sem movimento, o que
+                      // gera updateElement com pequena diferenca de sub-pixel → loop de
+                      // re-render → pisca visivel (especialmente em campos IA com coords
+                      // de muitas casas decimais vindas do refinamento pdfjs).
+                      if (Math.abs(d.x - px.x) < 0.5 && Math.abs(d.y - px.y) < 0.5) return
                       const upd = pxToOverlay(el, { x: d.x, y: d.y, width: px.width, height: px.height })
                       updateElement(el.id, upd)
                     }}
                     onResizeStop={(_e, _dir, ref, _delta, position) => {
                       const newW = parseFloat(ref.style.width)
                       const newH = parseFloat(ref.style.height)
+                      // Mesmo threshold para resize "fantasma"
+                      if (
+                        Math.abs(position.x - px.x) < 0.5 &&
+                        Math.abs(position.y - px.y) < 0.5 &&
+                        Math.abs(newW - px.width) < 0.5 &&
+                        Math.abs(newH - px.height) < 0.5
+                      ) return
                       const upd = pxToOverlay(el, { x: position.x, y: position.y, width: newW, height: newH })
                       updateElement(el.id, upd)
                     }}
