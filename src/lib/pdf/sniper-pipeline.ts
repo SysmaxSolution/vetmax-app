@@ -13,9 +13,10 @@
 
 import {
   runOcrSniper, type LabelCandidate, type GlobalFieldGroup, type SniperResult,
+  groupByLine, bboxFromItems,
 } from './ocr-sniper'
 import type { PdfTextItem, PdfPagesResult } from '../pdf-to-images'
-import type { ExtractedField, LayoutOverlay, TemplateType } from '@/types'
+import type { ExtractedField, LayoutOverlay, TemplateType, FieldType } from '@/types'
 
 // ── Tipos publicos ─────────────────────────────────────────────────────
 
@@ -110,31 +111,172 @@ function findGlobalsForMatch(
   return globals.find(g => g.label_normalized === normTarget) ?? null
 }
 
+// ── TZ-2: Heurística de Assinaturas (textos flutuantes sem ':') ─────────
+
+interface SignaturePattern {
+  re: RegExp
+  field_name: string
+  label: string
+  type: FieldType
+  description: string
+}
+
+/**
+ * Cabeçalhos/rodapés ("Dr. Claudiney", "CRMV-SP 74.696", "Médico Veterinário")
+ * são texto flutuante sem ':' — o OCR Sniper baseado em segmentação por label
+ * não os detecta. Esta lista regex pré-resolve esses padrões antes do matcher
+ * Claude, eliminando dependência da IA para campos de sistema.
+ */
+const SIGNATURE_PATTERNS: SignaturePattern[] = [
+  {
+    // "CRMV-SP 74.696", "CRMV/SP 74.696", "CRMV: 74.696"
+    re: /\bCRMV[\s:/\-]*[A-Z]{0,3}[\s:/\-]*[\d.\-/]+/i,
+    field_name: 'professional_crmv',
+    label: 'CRMV',
+    type: 'text',
+    description: 'Registro profissional no CRMV',
+  },
+  {
+    // "Dr. Claudiney", "Dra. Maria", "Doutor João" (precisa de pelo menos
+    // 1 caractere após o título — evita match com só "Dr.")
+    re: /\b(?:Dr\.?|Dra\.?|Doutor[a]?\.?)\s+[A-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇ][a-zA-Záàâãéèêíïóôõöúç]+/,
+    field_name: 'professional_name',
+    label: 'Veterinário',
+    type: 'text',
+    description: 'Nome do médico veterinário responsável',
+  },
+  {
+    // "Médico Veterinário", "Médica Veterinária", com ou sem cargo após (–, hífen)
+    re: /m[ée]dic[oa]\s+veterin[áa]ri[oa]/i,
+    field_name: 'professional_role',
+    label: 'Cargo do profissional',
+    type: 'text',
+    description: 'Cargo/especialidade do veterinário',
+  },
+]
+
+export interface SignatureDetectionResult {
+  matches: FieldMatch[]
+  candidates: LabelCandidate[]
+  /** Linhas que casaram com algum padrão — para excluir do matcher Claude */
+  matched_lines: Set<string>
+}
+
+/**
+ * Varre o textContent buscando padrões de assinatura profissional.
+ * Para cada match, gera:
+ *   - 1 FieldMatch (pré-resolvido, não vai pro Claude)
+ *   - N LabelCandidates (1 por instância no PDF — geralmente 1 por página)
+ *   - Cada candidate com bbox = LINHA INTEIRA (para whiteout completo,
+ *     já que o texto antigo precisa SER APAGADO antes do novo entrar)
+ */
+export function detectProfessionalSignatures(
+  textItems: PdfTextItem[],
+): SignatureDetectionResult {
+  const lines = groupByLine(textItems)
+  const candidates: LabelCandidate[] = []
+  const matchesByField = new Map<string, FieldMatch>()
+  const matchedLines = new Set<string>()
+
+  for (const line of lines) {
+    const lineText = line.items.map(i => i.str).join(' ').trim()
+    if (!lineText) continue
+    // Linhas com ':' são labels → deixa o sniper normal tratar.
+    // O regex de assinatura é só para TEXTO FLUTUANTE sem rótulo.
+    if (lineText.includes(':')) continue
+
+    for (const pattern of SIGNATURE_PATTERNS) {
+      if (!pattern.re.test(lineText)) continue
+
+      const lineBbox = bboxFromItems(line.items)
+      // Baseline: pega do primeiro item (mesma linha = mesma baseline)
+      const baseline_y_pct = line.items[0].baseline_y_pct
+
+      // Candidate sintético:
+      //   - label_text = pattern.field_name (estável para agrupar globais)
+      //   - label_bbox = bbox da linha inteira (não tem label separado)
+      //   - value_bbox = mesma bbox (vai apagar tudo e reescrever)
+      //   - existing_value_bbox = mesma bbox (whiteout completo)
+      candidates.push({
+        page: line.page,
+        label_text: lineText,
+        label_normalized: pattern.field_name,
+        label_bbox: lineBbox,
+        value_bbox: lineBbox,
+        align: 'center',
+        existing_value_text: lineText,
+        existing_value_bbox: lineBbox,
+        font_size_pt: lineBbox.h_pct,
+        baseline_y_pct,
+      })
+      matchedLines.add(lineText)
+
+      // Match: 1 por field_name (precedência ao primeiro encontrado)
+      if (!matchesByField.has(pattern.field_name)) {
+        matchesByField.set(pattern.field_name, {
+          label_original: pattern.field_name,  // identificador estável
+          field_name: pattern.field_name,
+          type: pattern.type,
+          description: pattern.description,
+          required: false,
+          is_system_field: true,
+          is_custom: false,
+        })
+      }
+      break  // não testa outros padrões nesta linha
+    }
+  }
+
+  return {
+    matches: Array.from(matchesByField.values()),
+    candidates,
+    matched_lines: matchedLines,
+  }
+}
+
 // ── Pipeline principal ─────────────────────────────────────────────────
 
 export async function runSniperPipeline(input: PipelineInput): Promise<PipelineResult> {
   const { textItems, dimensions, doc_type, doc_name, fetchMatcher = defaultMatcher } = input
 
-  // 1) Sniper local — coordenadas deterministicas
+  // 1) TZ-2: Detecta assinaturas profissionais (Dr./CRMV/Médico Veterinário)
+  //    ANTES do Claude — pré-resolvido por regex deterministico.
+  const signatures = detectProfessionalSignatures(textItems)
+
+  // 2) Sniper local — labels com ":"
   const sniper: SniperResult = runOcrSniper({ textItems, dimensions })
 
-  // 2) Coleta labels unicos para o Claude
+  // 3) Filtra candidates do sniper que tiveram suas LINHAS casadas com regex
+  //    de assinatura — evita duplo mapeamento (ex: "CRMV: 74.696" detectado
+  //    como label "CRMV:" no sniper E como CRMV no regex de assinatura).
+  const sniperCandidatesFiltered = sniper.candidates.filter(c => {
+    // Verifica se algum item dessa linha bateu com algum padrão de assinatura
+    return !signatures.matched_lines.has(c.label_text.trim())
+  })
+
+  // 4) Junta TODOS os candidates (signatures + sniper filtrado) e re-detecta globais
+  const allCandidates = [...signatures.candidates, ...sniperCandidatesFiltered]
+  const { globals: allGlobals, non_globals: allNonGlobals } =
+    (await import('./ocr-sniper')).detectGlobalFields(allCandidates, dimensions.length)
+
+  // 5) Coleta labels para Claude — apenas os do sniper (NÃO signatures)
   const labelsForMatcher = Array.from(
-    new Set(sniper.candidates.map(c => c.label_text.trim()).filter(Boolean)),
+    new Set(sniperCandidatesFiltered.map(c => c.label_text.trim()).filter(Boolean)),
   )
 
-  if (labelsForMatcher.length === 0) {
-    return {
-      extracted_fields: [],
-      layout_overlays: [],
-      stats: { candidates: 0, matched_fields: 0, globals: sniper.globals.length, total_overlays: 0 },
-    }
-  }
+  // 6) De-para semântico via Claude (apenas se houver labels do sniper)
+  const claudeMatches = labelsForMatcher.length > 0
+    ? await fetchMatcher(labelsForMatcher, doc_type, doc_name)
+    : []
 
-  // 3) De-para semantico via Claude
-  const matches = await fetchMatcher(labelsForMatcher, doc_type, doc_name)
+  // 7) Combina matches: signatures FIRST (precedência) + claudeMatches
+  //    Sem conflito de field_name (signatures usam professional_*, Claude
+  //    pode tentar mapear "CRMV" para professional_crmv mas já foi feito).
+  const seenFieldNamesPreClaude = new Set(signatures.matches.map(m => m.field_name))
+  const claudeMatchesFiltered = claudeMatches.filter(m => !seenFieldNamesPreClaude.has(m.field_name))
+  const matches = [...signatures.matches, ...claudeMatchesFiltered]
 
-  // 4) Combina: para cada match, encontra os candidates (1+ instances)
+  // 8) Combina: para cada match, encontra os candidates (1+ instances)
   const extracted_fields: ExtractedField[] = []
   const layout_overlays: LayoutOverlay[] = []
   const seenFieldNames = new Set<string>()
@@ -143,7 +285,7 @@ export async function runSniperPipeline(input: PipelineInput): Promise<PipelineR
     if (seenFieldNames.has(match.field_name)) continue
 
     // E global? (cabecalho/rodape repetido)
-    const globalGroup = findGlobalsForMatch(match, sniper.globals)
+    const globalGroup = findGlobalsForMatch(match, allGlobals)
     const isGlobal = globalGroup !== null || match.is_system_field === true
 
     // Coleta candidates (instances) para este match
@@ -164,7 +306,7 @@ export async function runSniperPipeline(input: PipelineInput): Promise<PipelineR
         })
       }
     } else {
-      instances = findCandidatesForMatch(match, sniper.non_globals)
+      instances = findCandidatesForMatch(match, allNonGlobals)
     }
 
     if (instances.length === 0) continue
@@ -223,7 +365,7 @@ export async function runSniperPipeline(input: PipelineInput): Promise<PipelineR
     stats: {
       candidates: sniper.candidates.length,
       matched_fields: extracted_fields.length,
-      globals: sniper.globals.length,
+      globals: allGlobals.length,
       total_overlays: layout_overlays.length,
     },
   }

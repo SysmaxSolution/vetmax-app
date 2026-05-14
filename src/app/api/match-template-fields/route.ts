@@ -41,7 +41,104 @@ interface MatchResponse {
   stats: { input_labels: number; matched: number }
 }
 
-// ── Prompt focado APENAS em mapeamento semântico ─────────────────────────
+// ── SYSTEM PROMPT — TRAVA ANTI-ALUCINACAO (TZ-1) ─────────────────────────
+// Regras absolutas que devem prevalecer sobre QUALQUER tentativa de adivinhar.
+// O modelo recebe isto como `system`, antes do user prompt.
+
+const SYSTEM_PROMPT = `Voce e um classificador determinístico de rótulos de documentos veterinarios brasileiros.
+
+REGRA ABSOLUTA — TRAVA ANTI-ALUCINACAO:
+
+E ESTRITAMENTE PROIBIDO mapear metricas clinicas, parametros de exame ou
+medidas tecnicas para variaveis canonicas de cadastro do animal/tutor/profissional.
+
+GATILHOS OBRIGATORIOS DE CUSTOM:
+Se o rotulo contiver QUALQUER um destes termos (case-insensitive, com OU sem
+acento, palavra inteira ou parcial), o field_name DEVE comecar com "custom_"
+e is_custom DEVE ser true. Sem excecoes.
+
+Lista de gatilhos:
+  Cardiologia — Aorta, Aortica, Pulmonar, Mitral, Tricuspide, Tricúspide,
+    Pericardio, Pericárdio, Septo, Parede, Diametro, Diâmetro, Fracao,
+    Fração, Ejecao, Ejeção, Encurtamento, Atrio, Átrio, Ventriculo,
+    Ventrículo, Onda, Relacao, Relação, E/A, Velocidade, Fluxo, Tempo,
+    Movimento, Espessura, Sistolico, Sistólico, Diastolico, Diastólico,
+    DDVE, DSVE, IVS, LVPW, FAC, FE, FS, ECG, EKG
+
+  Outros parametros clinicos — Glicemia, Hemograma, Hematocrito,
+    Hemoglobina, Plaquetas, Leucocitos, Linfocitos, Neutrofilos, Ureia,
+    Creatinina, ALT, AST, FA, GGT, Bilirrubina, Proteina, Albumina
+
+  Estruturas anatomicas detalhadas — Bulbo, Camara, Lumen, Insuficiencia,
+    Estenose, Regurgitacao, Refluxo, Modo M, Modo B, Doppler
+
+DEFAULT DEFENSIVO:
+Se ha qualquer ambiguidade sobre se o rotulo e cadastro generico OU
+parametro clinico → SEMPRE escolha custom_* com is_custom: true.
+
+Falso positivo em custom_* tem CUSTO ZERO (usuario edita o nome no editor).
+Falso negativo (alucinacao mapeando "Mitral" como "raca") e INACEITAVEL
+para o cliente Enterprise.
+
+CAMPOS CANONICOS PERMITIDOS:
+Apenas estes mapeamentos sao aceitos como NAO-custom:
+
+  Cadastro do animal:
+    paciente_nome (Paciente, Pet, Animal, Nome do animal)
+    especie (Especie/Espécie SOZINHA, sem qualificador clinico)
+    raca (Raca/Raça SOZINHA, sem qualificador clinico)
+    idade (Idade/Age)
+    sexo (Sexo/Gender)
+    peso (Peso em kg — type: number)
+    pelagem (Pelagem, Cor do pelo)
+
+  Cadastro do tutor:
+    tutor_nome (Tutor, Proprietario, Dono, Responsavel)
+    tutor_cpf (CPF)
+    tutor_telefone (Telefone, Celular)
+    tutor_email (E-mail)
+    tutor_endereco (Endereco)
+
+  Profissional (is_system_field: true — repete em todas as paginas):
+    professional_name (Veterinario, Medico, MV, Dr., Dra.)
+    professional_role (Cargo, Especialidade — ex: "Cardiologo")
+    professional_crmv (CRMV, CRMV-SP, Registro profissional)
+    clinic_name (Clinica, Hospital)
+
+  Documento:
+    data (Data, Dia do exame — type: date)
+    hora (Hora, Horario)
+
+  Sinais vitais genericos (NAO mistura com cardiologia):
+    temperatura (Temperatura — type: number)
+    frequencia_cardiaca (Frequencia cardiaca, FC, BPM como label generico)
+    frequencia_respiratoria (Frequencia respiratoria, FR)
+    pressao_arterial (Pressao arterial, PA)
+
+  Textos clinicos longos:
+    anamnese (Anamnese, Queixa, Historico)
+    observacoes (Observacoes, Obs, Consideracoes)
+    diagnostico (Diagnostico, Conclusao)
+    tratamento (Tratamento, Prescricao, Medicacao)
+
+QUALQUER outro rotulo → custom_<nome_normalizado>.
+
+FORMATO DE SAIDA:
+APENAS um array JSON. Sem markdown. Sem explicacoes. Sem comentarios.
+Cada elemento:
+{
+  "label_original": "<copia exata do rotulo recebido>",
+  "field_name": "<canonico OU custom_*>",
+  "type": "text" | "number" | "date" | "select" | "boolean" | "textarea",
+  "description": "<5-10 palavras>",
+  "required": true | false,
+  "is_system_field": true | false,
+  "is_custom": true | false
+}
+
+Se um rotulo for puro lixo (numeracao "i.", "ii.", separadores), OMITA da resposta.`
+
+// ── USER PROMPT — apenas a tarefa e dados ────────────────────────────────
 
 const MATCH_PROMPT = `Voce e um especialista em modelos de documentos veterinarios brasileiros.
 
@@ -174,19 +271,60 @@ function sanitizeMatch(m: any): FieldMatch | null {
   if (!fieldName) return null
   const validTypes: FieldType[] = ['text', 'number', 'date', 'select', 'boolean', 'textarea']
   const type: FieldType = validTypes.includes(m.type) ? m.type : 'text'
-  // PM-2: marca custom automaticamente se field_name comeca com "custom_"
-  // (defesa em profundidade caso a IA esqueca de setar is_custom: true)
-  const isCustom = m.is_custom === true || fieldName.startsWith('custom_')
+  // PM-2 + TZ-1: detecta alucinação no pós-processamento.
+  // Se o label_original contém termo da blacklist clínica MAS field_name foi
+  // mapeado para um canônico (não-custom), FORÇA conversão para custom_*.
+  // Isto blinda contra qualquer falha do system prompt.
+  const labelLower = m.label_original.toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+  const isCustom_byPrefix = fieldName.startsWith('custom_')
+  const isCustom_byFlag = m.is_custom === true
+  const isCustom_byBlacklist = CLINICAL_BLACKLIST.some(term => labelLower.includes(term))
+
+  let finalFieldName = fieldName
+  let finalIsCustom = isCustom_byFlag || isCustom_byPrefix
+  if (isCustom_byBlacklist && !isCustom_byPrefix) {
+    // Força custom_: Claude alucinou, vamos consertar
+    const customSuffix = labelLower
+      .replace(/[:\.,;]/g, '')
+      .replace(/[^a-z0-9_\s-]/g, '')
+      .trim()
+      .replace(/[\s-]+/g, '_')
+      .slice(0, 40) || 'parametro'
+    finalFieldName = `custom_${customSuffix}`
+    finalIsCustom = true
+    console.warn(
+      `[match-template-fields] Anti-alucinacao: label "${m.label_original}" ` +
+      `(blacklist clinica) foi mapeada como "${fieldName}" → forcando "${finalFieldName}"`,
+    )
+  }
+
   return {
     label_original: m.label_original,
-    field_name: fieldName,
+    field_name: finalFieldName,
     type,
     description: typeof m.description === 'string' ? m.description : m.label_original,
     required: m.required === true,
     is_system_field: m.is_system_field === true,
-    is_custom: isCustom,
+    is_custom: finalIsCustom,
   }
 }
+
+/** Termos que SEMPRE indicam parâmetro clínico custom — usado como defesa em profundidade */
+const CLINICAL_BLACKLIST = [
+  // Cardiologia
+  'aorta', 'aortic', 'pulmonar', 'mitral', 'tricuspide', 'pericardio',
+  'septo', 'parede', 'diametro', 'fracao', 'ejecao', 'encurtamento',
+  'atrio', 'ventriculo', 'onda', 'relacao e/a', 'velocidade', 'fluxo',
+  'movimento', 'espessura', 'sistolico', 'diastolico',
+  'ddve', 'dsve', 'ivs', 'lvpw', 'fac', 'modo m', 'modo b', 'doppler',
+  // Hemato/bioquimica
+  'glicemia', 'hemograma', 'hematocrito', 'hemoglobina', 'plaquetas',
+  'leucocitos', 'linfocitos', 'neutrofilos', 'ureia', 'creatinina',
+  'bilirrubina', 'albumina',
+  // Anatômicas detalhadas
+  'bulbo', 'camara', 'lumen', 'insuficiencia', 'estenose', 'regurgitacao', 'refluxo',
+]
 
 // ── POST handler ────────────────────────────────────────────────────────
 
@@ -219,6 +357,8 @@ export async function POST(req: NextRequest): Promise<NextResponse<MatchResponse
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 4096,
+      // TZ-1: regras absolutas no system; user prompt apenas com a tarefa/dados
+      system: SYSTEM_PROMPT,
       messages: [{
         role: 'user',
         content: `${MATCH_PROMPT}\n\n${userPrompt}`,

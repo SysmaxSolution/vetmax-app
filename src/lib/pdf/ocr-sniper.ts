@@ -103,7 +103,7 @@ export function normalizeLabel(s: string): string {
     .trim()
 }
 
-function bboxFromItems(items: PdfTextItem[]): Bbox {
+export function bboxFromItems(items: PdfTextItem[]): Bbox {
   if (items.length === 0) return { x_pct: 0, y_pct: 0, w_pct: 0, h_pct: 0 }
   const xMin = Math.min(...items.map(i => i.x_pct))
   const yMin = Math.min(...items.map(i => i.y_pct))
@@ -229,6 +229,19 @@ interface LineSegmentation {
   label_items: PdfTextItem[]      // itens que compõem o label
   value_items: PdfTextItem[]      // itens que compõem o valor existente
   next_label_x_pct: number | null // X do próximo label na mesma linha (limite do valor)
+  // TZ-3: sufixo de unidade (cm, m/s, mmHg, bpm, %, kg) — quando presente,
+  // o value_bbox deve ficar ENTRE label.right e suffix.left
+  suffix_items?: PdfTextItem[]
+  suffix_x_pct?: number           // X do sufixo (limite direito do valor)
+}
+
+// TZ-3: Padrões de unidades de medida comuns em laudos veterinários.
+// Quando um item da linha (após o label) bate com este regex, é tratado
+// como SUFIXO — o value_bbox para drawText fica ENTRE o label e este sufixo.
+const SUFFIX_UNIT_REGEX = /^(?:cm|mm|m\/s|m\/seg|mmHg|bpm|mpm|spm|%|kg|°C|ºC|Hz|ms|s|ml|mg|µg|ug|g|dl|UI|UI\/L)$/i
+
+function isSuffixUnit(text: string): boolean {
+  return SUFFIX_UNIT_REGEX.test(text.trim())
 }
 
 /**
@@ -289,15 +302,38 @@ function segmentLine(line: LineGroup): LineSegmentation[] {
       ? labelEnds[li + 1] - countConsecutiveContiguous(items, labelEnds[li + 1])
       : items.length
 
-    const valueItems = items.slice(valueStartIdx, nextLabelStartIdx)
+    let valueItems = items.slice(valueStartIdx, nextLabelStartIdx)
     const nextLabelX = li + 1 < labelEnds.length
       ? items[nextLabelStartIdx].x_pct
       : null
+
+    // TZ-3: tenta extrair sufixo de unidade (último item do value, se bater regex)
+    // Examina os últimos 1-2 items (pode ter "cm" sozinho ou "/ s" fragmentado)
+    let suffixItems: PdfTextItem[] | undefined
+    let suffixX: number | undefined
+    if (valueItems.length > 0) {
+      const last = valueItems[valueItems.length - 1]
+      if (isSuffixUnit(last.str)) {
+        suffixItems = [last]
+        suffixX = last.x_pct
+        valueItems = valueItems.slice(0, -1)
+      } else if (valueItems.length >= 2) {
+        // Tenta combinação dos últimos 2 (ex: "m" + "/s" fragmentados)
+        const combined = valueItems.slice(-2).map(i => i.str).join('')
+        if (isSuffixUnit(combined)) {
+          suffixItems = valueItems.slice(-2)
+          suffixX = suffixItems[0].x_pct
+          valueItems = valueItems.slice(0, -2)
+        }
+      }
+    }
 
     segments.push({
       label_items: labelItems,
       value_items: valueItems,
       next_label_x_pct: nextLabelX,
+      suffix_items: suffixItems,
+      suffix_x_pct: suffixX,
     })
     labelStartIdx = nextLabelStartIdx
   }
@@ -375,12 +411,26 @@ export function snipeLabels(
 
       // Largura do VALOR: do fim do label até o próximo label OU 100% da página
       // OU valueMaxW (limite superior). Min: valueMinW.
+      //
+      // TZ-3: SE há sufixo de unidade (cm, mmHg, etc), o limite direito do
+      // value_bbox é o INÍCIO do sufixo — não o próximo label. Isso garante
+      // que o número fique posicionado ENTRE o rótulo e a unidade.
       const valueStartX = labelBbox.x_pct + labelBbox.w_pct + margin
-      const valueEndX_max = seg.next_label_x_pct !== null
-        ? seg.next_label_x_pct - margin
-        : 100
+      let valueEndX_max: number
+      let hasSuffix = false
+      if (typeof seg.suffix_x_pct === 'number') {
+        valueEndX_max = seg.suffix_x_pct - margin
+        hasSuffix = true
+      } else if (seg.next_label_x_pct !== null) {
+        valueEndX_max = seg.next_label_x_pct - margin
+      } else {
+        valueEndX_max = 100
+      }
       const valueWidthRaw = valueEndX_max - valueStartX
-      const valueWidth = Math.max(valueMinW, Math.min(valueWidthRaw, valueMaxW))
+      // Quando há sufixo, NÃO aplica valueMaxW (queremos o espaço exato entre label e unidade)
+      const valueWidth = hasSuffix
+        ? Math.max(valueMinW, valueWidthRaw)
+        : Math.max(valueMinW, Math.min(valueWidthRaw, valueMaxW))
 
       // BBOX do valor dinâmico (onde drawText vai escrever)
       const valueBbox: Bbox = {
@@ -394,16 +444,31 @@ export function snipeLabels(
       const existingValueItems = seg.value_items
       let existingValueBbox: Bbox | undefined
       let existingValueText: string | undefined
-      let align: 'left' | 'center' | 'right' = 'left'
+      // TZ-3: quando há sufixo, força align=center (número fica centralizado
+      // entre label e unidade — padrão visual em laudos cardiológicos)
+      let align: 'left' | 'center' | 'right' = hasSuffix ? 'center' : 'left'
 
       if (existingValueItems.length > 0) {
         existingValueBbox = bboxFromItems(existingValueItems)
         existingValueText = existingValueItems.map(i => i.str).join(' ').trim()
-        align = detectAlignment(
-          existingValueItems,
-          valueStartX,
-          valueStartX + valueWidth,
-        )
+        // Sem sufixo: detecta alinhamento herdado normalmente
+        if (!hasSuffix) {
+          align = detectAlignment(
+            existingValueItems,
+            valueStartX,
+            valueStartX + valueWidth,
+          )
+        }
+      } else if (hasSuffix) {
+        // Sem texto antigo MAS com sufixo: cria existing_value_bbox vazia
+        // cobrindo todo o espaço entre label e unidade (para apagar
+        // sublinhados/traços brancos do template). Isso garante limpeza.
+        existingValueBbox = {
+          x_pct: valueStartX,
+          y_pct: labelBbox.y_pct,
+          w_pct: valueWidth,
+          h_pct: labelBbox.h_pct,
+        }
       }
 
       // Tamanho de fonte estimado: altura do label em pt

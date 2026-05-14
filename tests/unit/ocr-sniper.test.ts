@@ -131,6 +131,82 @@ describe('OCR Sniper', () => {
       expect(cs.length).toBe(0)
     })
 
+    // ── TZ-3: sufixos de unidade (cm, m/s, mmHg, bpm, %, kg) ────────────────
+    it('TZ-3: sufixo "cm" no fim da linha — value_bbox entre label e unidade, align=center', () => {
+      // "Aorta:" "0,76" "cm" — value vai entre label.right e suffix.left
+      const items = [
+        item('Aorta:', 0, 10, 30, 7, 1.5),
+        item('0,76',   0, 25, 30, 5, 1.5),
+        item('cm',     0, 45, 30, 4, 1.5),
+      ]
+      const cs = snipeLabels(items)
+      expect(cs.length).toBe(1)
+      const c = cs[0]
+      expect(c.label_normalized).toBe('aorta')
+      // value_bbox.x = label.right + margem (0.5)
+      expect(c.value_bbox.x_pct).toBeCloseTo(17 + 0.5, 1)
+      // value_bbox direita = suffix.x - margem = 45 - 0.5 = 44.5
+      // value_bbox.w = 44.5 - 17.5 = 27
+      expect(c.value_bbox.x_pct + c.value_bbox.w_pct).toBeCloseTo(45 - 0.5, 1)
+      // Align CENTER quando há sufixo
+      expect(c.align).toBe('center')
+      // existing_value continua sendo "0,76" (sem o sufixo)
+      expect(c.existing_value_text).toBe('0,76')
+    })
+
+    it('TZ-3: sufixo "bpm" detectado', () => {
+      const items = [
+        item('FC:',   0, 10, 30, 5, 1.5),
+        item('120',   0, 20, 30, 4, 1.5),
+        item('bpm',   0, 30, 30, 5, 1.5),
+      ]
+      const cs = snipeLabels(items)
+      expect(cs.length).toBe(1)
+      expect(cs[0].align).toBe('center')
+      expect(cs[0].value_bbox.x_pct + cs[0].value_bbox.w_pct).toBeLessThan(30)
+    })
+
+    it('TZ-3: sem sufixo — align padrão "left" e usa valueMaxW', () => {
+      const items = [
+        item('Observacoes:', 0, 10, 30, 15, 1.5),
+        item('teste',        0, 28, 30, 6, 1.5),
+      ]
+      const cs = snipeLabels(items)
+      expect(cs.length).toBe(1)
+      expect(cs[0].align).toBe('left')
+    })
+
+    it('TZ-3: sufixo sem texto antigo (linha pontilhada) — cria existing_value_bbox vazia', () => {
+      // "Aorta:" "cm" — campo VAZIO (sem valor preenchido)
+      const items = [
+        item('Aorta:', 0, 10, 30, 7, 1.5),
+        item('cm',     0, 45, 30, 4, 1.5),
+      ]
+      const cs = snipeLabels(items)
+      expect(cs.length).toBe(1)
+      const c = cs[0]
+      expect(c.existing_value_text).toBeUndefined()
+      // Mas existing_value_bbox deve estar setada para cobrir o espaço entre label e cm
+      expect(c.existing_value_bbox).toBeDefined()
+      expect(c.existing_value_bbox!.x_pct).toBeCloseTo(17.5, 1)
+      expect(c.align).toBe('center')
+    })
+
+    it('TZ-3: regex de sufixo aceita unidades comuns', () => {
+      // Roda múltiplas combinações para garantir cobertura
+      const units = ['cm', 'mm', 'mmHg', '%', 'kg', 'ms', 'ml', 'mg']
+      for (const u of units) {
+        const items = [
+          item('Campo:', 0, 10, 30, 8, 1.5),
+          item('1.5',    0, 20, 30, 4, 1.5),
+          item(u,        0, 30, 30, 6, 1.5),
+        ]
+        const cs = snipeLabels(items)
+        expect(cs.length).toBe(1)
+        expect(cs[0].align).toBe('center')
+      }
+    })
+
     it('label multi-palavra: agrupa palavras contíguas', () => {
       // "Frequência cardíaca:" fragmentado em dois items próximos
       const items = [
