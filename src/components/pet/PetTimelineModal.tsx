@@ -128,16 +128,16 @@ export default function PetTimelineModal({
                   />
                 </div>
                 {/* grid de contadores */}
-                <div className="grid grid-cols-4 gap-1 text-center">
+                <div className="grid grid-cols-2 xs:grid-cols-4 gap-1.5 text-center">
                   {([
                     ['Total',      total,     'text-slate-600'],
                     ['Realizados', used,      'text-teal-700'],
                     ['Agendados',  scheduled, 'text-amber-600'],
                     ['Restantes',  remaining, remaining === 0 ? 'text-red-600' : 'text-slate-700'],
                   ] as [string, number, string][]).map(([lbl, val, cls]) => (
-                    <div key={lbl} className="bg-white rounded-lg py-1.5 border border-teal-100">
-                      <p className={`text-base font-bold ${cls}`}>{val}</p>
-                      <p className="text-[9px] text-slate-400 font-medium">{lbl}</p>
+                    <div key={lbl} className="bg-white rounded-xl py-2 border border-teal-100 shadow-sm">
+                      <p className={`text-lg font-bold ${cls}`}>{val}</p>
+                      <p className="text-[10px] text-slate-400 font-medium">{lbl}</p>
                     </div>
                   ))}
                 </div>

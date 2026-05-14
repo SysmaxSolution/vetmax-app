@@ -478,14 +478,14 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
                           : 'border-slate-200 bg-white hover:border-teal-300'
                       }`}
                     >
-                      <div>
-                        <p className="text-xs font-semibold text-slate-800">{pkg.name}</p>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-slate-800 truncate">{pkg.name}</p>
                         <p className="text-[10px] text-slate-500">
                           🎁 {pkg.total_sessions} visita{pkg.total_sessions !== 1 ? 's' : ''} · R$ {pkg.price.toFixed(2)}
                           {pkg.interval_days > 0 && ` · a cada ${pkg.interval_days}d`}
                         </p>
                       </div>
-                      {isSelected && <Check className="h-4 w-4 text-teal-600 shrink-0" />}
+                      {isSelected && <Check className="h-4 w-4 text-teal-600 shrink-0 ml-2" />}
                     </button>
                   )
                 })}

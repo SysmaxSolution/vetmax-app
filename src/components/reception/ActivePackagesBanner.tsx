@@ -76,23 +76,23 @@ export default function ActivePackagesBanner({ petId, petName }: Props) {
         {expanded && (
           <div className="border-t border-teal-200 divide-y divide-teal-100">
             {packages.map(pap => (
-              <div key={pap.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+              <div key={pap.id} className="flex items-center gap-3 px-4 py-2.5">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-slate-800 truncate">
+                  <p className="text-sm font-semibold text-slate-800 leading-tight truncate">
                     {pap.package?.name ?? '—'}
                   </p>
-                  <p className="text-xs text-slate-500">
-                    {pap.sessions_remaining} de {pap.sessions_total} sessão{(pap.sessions_total ?? 0) !== 1 ? 'ões' : ''} restante{(pap.sessions_remaining ?? 0) !== 1 ? 's' : ''}
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {pap.sessions_remaining} de {pap.sessions_total} visita{(pap.sessions_total ?? 0) !== 1 ? 's' : ''} restante{(pap.sessions_remaining ?? 0) !== 1 ? 's' : ''}
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setSessionModal(pap)}
                   disabled={(pap.sessions_remaining ?? 0) === 0}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-bold hover:bg-teal-700 transition-colors disabled:opacity-40"
+                  className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-teal-600 text-white text-xs font-bold hover:bg-teal-700 transition-colors disabled:opacity-40"
                 >
                   <Check className="h-3.5 w-3.5" />
-                  Usar sessão
+                  <span>Usar sessão</span>
                 </button>
               </div>
             ))}

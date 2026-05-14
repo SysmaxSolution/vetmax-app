@@ -181,27 +181,31 @@ function PackageCard({ pkg, canEdit, onEdit, onToggle, onDelete }: {
   const totalItems = (pkg.items ?? []).reduce((sum, i) => sum + i.quantity, 0)
 
   return (
-    <div className={`bg-white rounded-xl border p-4 space-y-3 transition-opacity ${!pkg.active ? 'opacity-60' : ''}`}>
-      <div className="flex items-start justify-between gap-2">
+    <div className={`bg-white rounded-xl border p-4 space-y-3 transition-opacity min-w-0 ${!pkg.active ? 'opacity-60' : ''}`}>
+
+      {/* Linha 1: nome + status */}
+      <div className="flex items-start gap-2">
+        <Gift className="h-4 w-4 text-teal-600 shrink-0 mt-0.5" />
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <Gift className="h-4 w-4 text-teal-600 shrink-0" />
-            <span className="font-semibold text-slate-900 truncate">{pkg.name}</span>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="font-semibold text-slate-900 leading-tight">{pkg.name}</span>
             {!pkg.active && (
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">INATIVO</span>
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 shrink-0">INATIVO</span>
             )}
           </div>
           {pkg.description && (
-            <p className="mt-1 text-xs text-slate-500 line-clamp-2">{pkg.description}</p>
+            <p className="mt-0.5 text-xs text-slate-500 line-clamp-2">{pkg.description}</p>
           )}
         </div>
-        <div className="text-right shrink-0 space-y-1">
-          <p className="font-bold text-teal-700 text-base">{fmtPrice(pkg.price)}</p>
-          <span className="inline-flex items-center gap-1 rounded-full bg-teal-100 border border-teal-300 px-2 py-0.5 text-xs font-bold text-teal-800">
-            🎁 {pkg.total_sessions ?? '?'} visita{(pkg.total_sessions ?? 0) !== 1 ? 's' : ''}
-          </span>
-          <p className="text-[10px] text-slate-400">a cada {pkg.interval_days}d</p>
-        </div>
+      </div>
+
+      {/* Linha 2: preço + visitas + intervalo */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="font-bold text-teal-700 text-base">{fmtPrice(pkg.price)}</span>
+        <span className="inline-flex items-center gap-1 rounded-full bg-teal-100 border border-teal-300 px-2 py-0.5 text-xs font-bold text-teal-800 shrink-0">
+          🎁 {pkg.total_sessions ?? '?'} visita{(pkg.total_sessions ?? 0) !== 1 ? 's' : ''}
+        </span>
+        <span className="text-[10px] text-slate-400">a cada {pkg.interval_days}d</span>
       </div>
 
       {/* Itens */}
@@ -220,28 +224,30 @@ function PackageCard({ pkg, canEdit, onEdit, onToggle, onDelete }: {
       )}
 
       {/* Footer */}
-      <div className="flex items-center justify-between pt-1 border-t border-slate-100">
-        <span className="text-xs text-slate-400">{pkg.total_sessions ?? totalItems} visita{(pkg.total_sessions ?? totalItems) !== 1 ? 's' : ''} · {(pkg.items ?? []).length} tipo{(pkg.items ?? []).length !== 1 ? 's' : ''} de serviço</span>
+      <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100">
+        <span className="text-xs text-slate-400 min-w-0 truncate">
+          {pkg.total_sessions ?? totalItems} visita{(pkg.total_sessions ?? totalItems) !== 1 ? 's' : ''} · {(pkg.items ?? []).length} tipo{(pkg.items ?? []).length !== 1 ? 's' : ''} de serviço
+        </span>
         {canEdit && (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 shrink-0">
             <button
               onClick={onToggle}
               title={pkg.active ? 'Desativar' : 'Ativar'}
-              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+              className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
             >
               {pkg.active ? <ToggleRight className="h-4 w-4 text-teal-500" /> : <ToggleLeft className="h-4 w-4" />}
             </button>
             <button
               onClick={onEdit}
               title="Editar"
-              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-colors"
+              className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-colors"
             >
               <Pencil className="h-4 w-4" />
             </button>
             <button
               onClick={onDelete}
               title="Excluir"
-              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-red-500 transition-colors"
+              className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-red-500 transition-colors"
             >
               <Trash2 className="h-4 w-4" />
             </button>

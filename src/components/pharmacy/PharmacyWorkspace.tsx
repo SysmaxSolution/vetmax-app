@@ -276,19 +276,43 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole, activ
       <div className="max-w-7xl mx-auto px-4 py-6 space-y-5">
 
         {/* Header */}
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div>
-            <h1 className="text-xl font-bold text-slate-900">Estoque</h1>
-            <p className="text-sm text-slate-500">
-              {products.length} produto{products.length !== 1 ? 's' : ''} · {services.length} serviço{services.length !== 1 ? 's' : ''}
-            </p>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <h1 className="text-xl font-bold text-slate-900">Estoque</h1>
+              <p className="text-sm text-slate-500">
+                {products.length} produto{products.length !== 1 ? 's' : ''} · {services.length} serviço{services.length !== 1 ? 's' : ''}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Importar CSV — apenas estoque */}
+              {userRole === 'admin' && view !== 'packages' && (
+                <button
+                  onClick={() => setCsvImportOpen(true)}
+                  className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-600 text-xs font-semibold hover:border-slate-300 hover:bg-slate-50 transition-colors"
+                >
+                  <Upload className="h-3.5 w-3.5" /> Importar CSV
+                </button>
+              )}
+              {/* Novo item — apenas estoque */}
+              {userRole === 'admin' && view !== 'packages' && (
+                <button
+                  onClick={() => setFormModal({ mode: 'add', serviceMode: isServiceView })}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 transition-colors"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span className="hidden xs:inline">{isServiceView ? 'Novo Serviço' : 'Novo Item'}</span>
+                </button>
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Toggle Produtos / Serviços / Pacotes */}
-            <div className="flex rounded-xl overflow-hidden border border-slate-200 bg-white">
+
+          {/* Toggle Produtos / Serviços / Pacotes — linha separada, scroll em mobile */}
+          <div className="w-full overflow-x-auto pb-0.5 -mb-0.5">
+            <div className="flex rounded-xl overflow-hidden border border-slate-200 bg-white w-full sm:w-auto">
               <button
                 onClick={() => switchView('products')}
-                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold transition-colors ${
+                className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-semibold transition-colors ${
                   view === 'products' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-50'
                 }`}
               >
@@ -296,7 +320,7 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole, activ
               </button>
               <button
                 onClick={() => switchView('services')}
-                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold transition-colors border-l border-slate-200 ${
+                className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-semibold transition-colors border-l border-slate-200 ${
                   view === 'services' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-50'
                 }`}
               >
@@ -304,32 +328,13 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole, activ
               </button>
               <button
                 onClick={() => switchView('packages')}
-                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold transition-colors border-l border-slate-200 ${
+                className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-semibold transition-colors border-l border-slate-200 ${
                   view === 'packages' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-50'
                 }`}
               >
                 <Gift className="h-3.5 w-3.5" /> Pacotes e Planos
               </button>
             </div>
-            {/* Importar CSV — apenas estoque */}
-            {userRole === 'admin' && view !== 'packages' && (
-              <button
-                onClick={() => setCsvImportOpen(true)}
-                className="flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-600 text-xs font-semibold hover:border-slate-300 hover:bg-slate-50 transition-colors"
-              >
-                <Upload className="h-3.5 w-3.5" /> Importar CSV
-              </button>
-            )}
-            {/* Novo item — apenas estoque */}
-            {userRole === 'admin' && view !== 'packages' && (
-              <button
-                onClick={() => setFormModal({ mode: 'add', serviceMode: isServiceView })}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 transition-colors"
-              >
-                <Plus className="h-4 w-4" />
-                {isServiceView ? 'Novo Serviço' : 'Novo Item'}
-              </button>
-            )}
           </div>
         </div>
 
