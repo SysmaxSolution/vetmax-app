@@ -57,15 +57,16 @@ describe('coordinate-system', () => {
   })
 
   describe('overlayToDrawTextPoint', () => {
-    it('campo no canto superior esquerdo: y invertido com ascender', () => {
+    it('campo no canto superior esquerdo: baseline derivada do bbox (y_pct + h_pct)', () => {
       const rect = { x_pct: 0, y_pct: 0, w_pct: 100, h_pct: 5 }
       const font = { size_pt: 12, family: 'Helvetica' as const }
       const p = overlayToDrawTextPoint(rect, A4, font)
       // x: começo da página
       expect(p.x).toBeCloseTo(0, 3)
-      // baseline: 0 + 12 * 0.718 = 8.616 do topo
-      // y de baixo: 841.89 - 8.616 = 833.274
-      expect(p.y).toBeCloseTo(841.89 - 12 * 0.718, 2)
+      // INTERVENCAO CIRURGICA: baseline = (y + h) em coords top-down
+      // baseline_from_top = (0 + 5)/100 * 841.89 = 42.09
+      // y_from_bottom = 841.89 - 42.09 = 799.80
+      expect(p.y).toBeCloseTo(841.89 - (0 + 5) / 100 * 841.89, 2)
     })
 
     it('campo no meio: x e y absolutos corretos', () => {
@@ -73,9 +74,10 @@ describe('coordinate-system', () => {
       const font = { size_pt: 10, family: 'Helvetica' as const }
       const p = overlayToDrawTextPoint(rect, A4, font)
       expect(p.x).toBeCloseTo(297.64, 2)  // 50% de 595.28
-      // y de cima: 50% de 841.89 = 420.945, + ascender 7.18
-      // y de baixo: 841.89 - 428.125 = 413.765
-      expect(p.y).toBeCloseTo(841.89 - 420.945 - 10 * 0.718, 2)
+      // INTERVENCAO CIRURGICA: baseline = (y + h)/100 * pageH
+      // baseline_from_top = (50 + 5)/100 * 841.89 = 463.04
+      // y_from_bottom = 841.89 - 463.04 = 378.85
+      expect(p.y).toBeCloseTo(841.89 - (50 + 5) / 100 * 841.89, 2)
     })
 
     it('align center: x deslocado pela largura do texto', () => {
@@ -103,7 +105,8 @@ describe('coordinate-system', () => {
       const font = { size_pt: 12, family: 'Helvetica' as const }
       const p = overlayToDrawTextPoint(rect, land, font)
       expect(p.x).toBeCloseTo(land.width_pt * 0.5, 2)
-      expect(p.y).toBeCloseTo(land.height_pt - land.height_pt * 0.5 - 12 * 0.718, 2)
+      // INTERVENCAO CIRURGICA: baseline = (y + h)/100 * pageH (sem ascender)
+      expect(p.y).toBeCloseTo(land.height_pt - (50 + 5) / 100 * land.height_pt, 2)
     })
   })
 

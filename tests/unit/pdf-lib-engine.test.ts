@@ -60,8 +60,9 @@ describe('pdf-lib engine (integracao com coordinate-system)', () => {
       pageDim,
       { size_pt: 12, family: 'Helvetica' },
     )
-    // baseline em pdf-lib = page_height - ascender
-    expect(topPoint.y).toBeCloseTo(pageDim.height_pt - 12 * 0.718, 1)
+    // INTERVENCAO CIRURGICA: baseline = (y_pct + h_pct)/100 * pageH (top-down)
+    // y_from_bottom = pageH - 5%*pageH
+    expect(topPoint.y).toBeCloseTo(pageDim.height_pt - 0.05 * pageDim.height_pt, 1)
 
     // Overlay no fim (y=95%) deve ter baseline perto do bottom
     const bottomPoint = overlayToDrawTextPoint(
@@ -70,7 +71,8 @@ describe('pdf-lib engine (integracao com coordinate-system)', () => {
       { size_pt: 12, family: 'Helvetica' },
     )
     expect(bottomPoint.y).toBeLessThan(topPoint.y)
-    expect(bottomPoint.y).toBeCloseTo(pageDim.height_pt - 0.95 * pageDim.height_pt - 12 * 0.718, 1)
+    // y_from_bottom = pageH - (95+5)%*pageH = pageH - pageH = 0
+    expect(bottomPoint.y).toBeCloseTo(pageDim.height_pt - 1.0 * pageDim.height_pt, 1)
 
     // Desenha ambos no PDF
     page.drawText('TOP', { x: topPoint.x, y: topPoint.y, size: 12, font })

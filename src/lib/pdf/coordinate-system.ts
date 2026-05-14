@@ -114,24 +114,34 @@ export function pixelRectToPctRect(
  * Converte coordenadas % de um overlay para os argumentos `x`/`y` esperados
  * pelo `page.drawText` do pdf-lib (baseline-left, origem bottom-left).
  *
- * Considera o tamanho da fonte para posicionar a BASELINE no local visualmente
- * equivalente ao topo do overlay (top-left).
+ * INTERVENCAO CIRURGICA: a baseline eh DERIVADA do bbox do overlay
+ * usando `y_pct + h_pct` (em coords top-down) — esse valor coincide com
+ * a baseline original do texto reportado pelo pdfjs:
+ *
+ *   bbox_top = pageH - (baseline + h)      ← top-left storage
+ *   baseline = pageH - (top_pct + h_pct) * pageH / 100
+ *
+ * Esse calculo eh CORRETO independente do fontSize usado no drawText,
+ * porque depende apenas do bbox original. O calculo antigo `top +
+ * fontSize * ascender_ratio` falhava quando fontSize gerado != fontSize
+ * original (ex: signatures capadas em 11pt mas h_pct original era 1.539%
+ * = 12.96pt).
+ *
+ * O parametro `font` permanece para compatibilidade com codigo legacy mas
+ * nao influencia mais a baseline.
  */
 export function overlayToDrawTextPoint(
   rect: OverlayRect,
   page: PageDimensions,
-  font: FontMetrics,
+  _font: FontMetrics,
   align: 'left' | 'center' | 'right' = 'left',
   textWidth_pt = 0,
 ): { x: number; y: number } {
   const overlay_left_pt   = (rect.x_pct / 100) * page.width_pt
-  const overlay_top_pt    = (rect.y_pct / 100) * page.height_pt
   const overlay_width_pt  = (rect.w_pct / 100) * page.width_pt
 
-  // Baseline = topo do overlay + ascender (de cima para baixo)
-  const baseline_from_top_pt = overlay_top_pt + (font.size_pt * ascenderRatio(font))
-
-  // pdf-lib usa Y crescendo para cima → inverter
+  // Baseline derivada do bbox: posicao do fundo tipografico em coords pdf
+  const baseline_from_top_pt = (rect.y_pct + rect.h_pct) / 100 * page.height_pt
   const y_from_bottom_pt = page.height_pt - baseline_from_top_pt
 
   let x_pt = overlay_left_pt
