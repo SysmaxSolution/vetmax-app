@@ -7,9 +7,21 @@ import {
   CheckSquare, Square, Pencil, Tag, Sparkles, PlusCircle, ScanEye, LayoutGrid, List,
 } from 'lucide-react'
 import { saveTemplate, updateTemplate } from '@/lib/actions/templates'
-import TemplateLayoutEditor, { layoutToHtml, htmlToLayout, type LayoutElement } from './TemplateLayoutEditor'
+import TemplateLayoutEditor, {
+  layoutToHtml, htmlToLayout,
+  layoutElementsToOverlays, overlaysToLayoutElements,
+  type LayoutElement,
+} from './TemplateLayoutEditor'
+import TemplatePreviewPane from './TemplatePreviewPane'
 import { pdfToImages } from '@/lib/pdf-to-images'
-import type { DocumentTemplate, ExtractedField, FieldType, TemplateType } from '@/types'
+import type {
+  DocumentTemplate, ExtractedField, FieldType, TemplateType,
+  LayoutOverlay, PageDimensionsRecord,
+} from '@/types'
+import { uploadTemplatePdf } from '@/lib/actions/template-storage'
+import { previewFilledPdfBase64 } from '@/lib/actions/document-generation'
+import { buildMockFieldValues } from '@/lib/pdf/mock-field-values'
+import { FileCheck2 } from 'lucide-react'
 
 interface ImportTemplateModalProps {
   onClose: () => void
@@ -26,6 +38,12 @@ interface FormState {
   extractedFields: ExtractedField[]
   templateHtml: string | null
   pageImages: string[] | null  // base64 data URLs das paginas do documento original
+  // Pixel Perfect (migration 0138) — preenchidos no upload do PDF
+  originalPdfPath: string | null
+  originalPdfSizeBytes: number | null
+  pageCount: number | null
+  pageDimensions: PageDimensionsRecord[] | null
+  layoutOverlays: LayoutOverlay[] | null
 }
 
 const FIELD_TYPES: FieldType[] = ['text', 'number', 'date', 'select', 'boolean', 'textarea']
@@ -382,6 +400,11 @@ export default function ImportTemplateModal({
     extractedFields: editTemplate?.extracted_fields ?? [],
     templateHtml: editTemplate?.template_html ?? null,
     pageImages: editTemplate?.page_images ?? null,
+    originalPdfPath: editTemplate?.original_pdf_path ?? null,
+    originalPdfSizeBytes: editTemplate?.original_pdf_size_bytes ?? null,
+    pageCount: editTemplate?.page_count ?? null,
+    pageDimensions: editTemplate?.page_dimensions ?? null,
+    layoutOverlays: editTemplate?.layout_overlays ?? null,
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -407,10 +430,33 @@ export default function ImportTemplateModal({
     count: number
   } | null>(null)
 
-  // Layout editor state — initialize from editTemplate if available
+  // Layout editor state — prioriza layout_overlays (Pixel Perfect),
+  // depois template_html (legado), por ultimo coordenadas % das fields (IA).
   const [layoutElements, setLayoutElements] = useState<LayoutElement[]>(() => {
+    if (editTemplate?.layout_overlays && editTemplate.layout_overlays.length > 0) {
+      return overlaysToLayoutElements(editTemplate.layout_overlays)
+    }
     if (editTemplate?.template_html) {
       return htmlToLayout(editTemplate.template_html, editTemplate.extracted_fields)
+    }
+    // Modo Pixel Perfect novo (sem editTemplate ainda salvo): cria overlays
+    // a partir das coordenadas % retornadas pela Vision API.
+    if (editTemplate?.page_images && editTemplate.page_images.length > 0) {
+      return editTemplate.extracted_fields.map(f => ({
+        id: `el_${Math.random().toString(36).slice(2)}`,
+        type: 'field' as const,
+        field_name: f.field_name,
+        label: f.label,
+        page: f.page ?? 0,
+        unit: 'pct' as const,
+        x: f.x_percent ?? 30,
+        y: f.y_percent ?? 10,
+        width: f.width_percent ?? 25,
+        height: f.height_percent ?? 3,
+        fontSize: 11,
+        fontWeight: 'normal' as const,
+        textAlign: 'left' as const,
+      }))
     }
     return []
   })
@@ -447,6 +493,9 @@ export default function ImportTemplateModal({
     if (!form.name.trim()) { setError('Preencha o nome do documento'); return }
 
     setLoading(true)
+    // Pixel Perfect: capturado durante conversao do PDF (escopo do handler)
+    let pdfDimensions: PageDimensionsRecord[] | null = null
+    let pdfPageCount: number | null = null
     try {
       let response
 
@@ -461,8 +510,10 @@ export default function ImportTemplateModal({
         if (isPdf) {
           try {
             console.log('[ImportTemplate] Convertendo PDF para imagens...')
-            const images = await pdfToImages(selectedFile, 2)
+            const { images, dimensions } = await pdfToImages(selectedFile, 2)
             console.log(`[ImportTemplate] ${images.length} pagina(s) convertidas`)
+            pdfDimensions = dimensions
+            pdfPageCount = images.length
             for (const img of images) {
               formData.append('page_images', img)
             }
@@ -504,15 +555,59 @@ export default function ImportTemplateModal({
 
       const pageImages = data.page_images || null
 
+      // Pixel Perfect: upload do PDF original para Storage (apos extracao da IA)
+      let originalPdfPath: string | null = null
+      const isPdf = selectedFile && (selectedFile.type === 'application/pdf' || selectedFile.name.endsWith('.pdf'))
+      if (selectedFile && isPdf) {
+        try {
+          const uploadFd = new FormData()
+          uploadFd.append('file', selectedFile)
+          const r = await uploadTemplatePdf(uploadFd)
+          if ('path' in r) {
+            originalPdfPath = r.path
+            console.log('[ImportTemplate] PDF original em Storage:', r.path)
+          } else {
+            console.warn('[ImportTemplate] Upload do PDF falhou:', r.error)
+          }
+        } catch (upErr) {
+          console.warn('[ImportTemplate] Erro upload PDF original:', upErr)
+        }
+      }
+
       setForm(prev => ({
         ...prev,
         extractedFields: data.fields,
         templateHtml: data.template_html || null,
         pageImages,
+        originalPdfPath,
+        originalPdfSizeBytes: selectedFile?.size ?? null,
+        pageCount: pdfPageCount,
+        pageDimensions: pdfDimensions,
       }))
 
-      // Always go to editor — preview tab will show original document
-      setLayoutElements([])
+      // Modo Pixel Perfect: hidrata o editor com as coordenadas extraidas pela
+      // Vision API. Cada campo vira um overlay posicionado onde a IA identificou.
+      // Modo legado (sem pageImages): editor faz buildDefaultElements (vertical).
+      if (pageImages && pageImages.length > 0) {
+        const ppElements: LayoutElement[] = data.fields.map((f: ExtractedField) => ({
+          id: `el_${Math.random().toString(36).slice(2)}`,
+          type: 'field' as const,
+          field_name: f.field_name,
+          label: f.label,
+          page: f.page ?? 0,
+          unit: 'pct' as const,
+          x: f.x_percent ?? 30,
+          y: f.y_percent ?? 10,
+          width: f.width_percent ?? 25,
+          height: f.height_percent ?? 3,
+          fontSize: 11,
+          fontWeight: 'normal' as const,
+          textAlign: 'left' as const,
+        }))
+        setLayoutElements(ppElements)
+      } else {
+        setLayoutElements([])
+      }
       setStep('editor')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro desconhecido')
@@ -764,6 +859,57 @@ export default function ImportTemplateModal({
     setDuplicateConfirm(null)
   }
 
+  // ── Gerar PDF de Teste (Botao Magico) ─────────────────────────────────
+
+  const [isGeneratingTestPdf, setIsGeneratingTestPdf] = useState(false)
+
+  const handleGenerateTestPdf = async () => {
+    setError(null)
+    if (!editTemplate?.id) {
+      setError('Salve o template antes de gerar o PDF de teste.')
+      return
+    }
+    if (!form.originalPdfPath && !editTemplate.original_pdf_path) {
+      setError('Template sem PDF original. Reimporte um arquivo PDF para gerar o teste pixel-perfect.')
+      return
+    }
+    if (form.extractedFields.length === 0) {
+      setError('Mapeie ao menos um campo antes de gerar o teste.')
+      return
+    }
+
+    setIsGeneratingTestPdf(true)
+    try {
+      const mockValues = buildMockFieldValues(form.extractedFields)
+      console.log('[TestPDF] Mock values:', mockValues)
+
+      const result = await previewFilledPdfBase64(editTemplate.id, mockValues)
+      if ('error' in result) {
+        setError(result.error)
+        return
+      }
+
+      // base64 → Uint8Array → Blob → Object URL → window.open
+      const binary = atob(result.base64)
+      const bytes = new Uint8Array(binary.length)
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+      const blob = new Blob([bytes], { type: 'application/pdf' })
+      const url = URL.createObjectURL(blob)
+
+      const opened = window.open(url, '_blank', 'noopener,noreferrer')
+      if (!opened) {
+        setError('Bloqueio de pop-up impediu abrir o PDF. Permita pop-ups neste site e tente novamente.')
+      }
+
+      // Libera o Object URL apos 60s — tempo suficiente para o browser carregar
+      setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao gerar PDF de teste')
+    } finally {
+      setIsGeneratingTestPdf(false)
+    }
+  }
+
   // ── Save template ─────────────────────────────────────────────────────
 
   const handleSaveTemplate = async () => {
@@ -784,6 +930,9 @@ export default function ImportTemplateModal({
     }
 
     setLoading(true)
+    // Pixel Perfect: serializa overlays % do editor para salvar canonicamente.
+    const overlaysToSave = layoutElementsToOverlays(layoutElements)
+
     try {
       const payload = {
         name: form.name,
@@ -791,6 +940,12 @@ export default function ImportTemplateModal({
         extracted_fields: form.extractedFields,
         template_html: finalHtml,
         page_images: form.pageImages,
+        // Pixel Perfect (migration 0138)
+        original_pdf_path: form.originalPdfPath,
+        original_pdf_size_bytes: form.originalPdfSizeBytes,
+        page_count: form.pageCount,
+        page_dimensions: form.pageDimensions,
+        layout_overlays: overlaysToSave.length > 0 ? overlaysToSave : form.layoutOverlays,
       }
 
       const result = isEditMode
@@ -808,6 +963,11 @@ export default function ImportTemplateModal({
         extracted_fields: form.extractedFields,
         template_html: finalHtml,
         page_images: form.pageImages,
+        original_pdf_path: form.originalPdfPath,
+        original_pdf_size_bytes: form.originalPdfSizeBytes,
+        page_count: form.pageCount,
+        page_dimensions: form.pageDimensions,
+        layout_overlays: form.layoutOverlays,
         created_at: editTemplate?.created_at ?? new Date().toISOString(),
       })
     } catch (err) {
@@ -1157,54 +1317,17 @@ export default function ImportTemplateModal({
               {/* ── Tab Content ── */}
               <div className="flex-1 overflow-auto px-4 py-4" style={{ minHeight: '500px' }}>
 
-                {/* Tab 1: Pre-visualizar — original document images or HTML */}
+                {/* Tab 1: Pre-visualizar — Pixel Perfect (PDF background + overlays) */}
                 {viewMode === 'preview' && form.pageImages && form.pageImages.length > 0 && (
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
-                      <ScanEye className="w-4 h-4 text-blue-600" />
-                      <p className="text-xs text-blue-700 font-medium">
-                        Documento original — {form.pageImages.length} pagina(s). Os campos serao sobrepostos sobre esta imagem.
-                      </p>
-                    </div>
-                    {form.pageImages.map((img, idx) => (
-                      <div key={idx} className="relative bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
-                        {watermark && (
-                          <div className="absolute inset-0 pointer-events-none overflow-hidden z-10" style={{ opacity: watermarkOpacity / 100 }}>
-                            <div className="absolute top-1/2 left-1/2 text-slate-400 font-bold whitespace-nowrap select-none"
-                              style={{ fontSize: '3rem', transform: 'translate(-50%, -50%) rotate(-35deg)', letterSpacing: '0.15em' }}>
-                              {watermark}
-                            </div>
-                          </div>
-                        )}
-                        {form.pageImages!.length > 1 && (
-                          <div className="absolute top-2 left-2 z-10 bg-black/60 text-white text-[10px] font-medium px-2 py-0.5 rounded">
-                            Pagina {idx + 1}
-                          </div>
-                        )}
-                        <img src={img} alt={`Pagina ${idx + 1}`} className="w-full h-auto" />
-                        {/* Overlay field indicators */}
-                        {form.extractedFields
-                          .filter(f => (f.page ?? 0) === idx && f.x_percent != null)
-                          .map(f => (
-                            <div
-                              key={f.field_name}
-                              className="absolute border-2 border-blue-400 bg-blue-100/40 rounded cursor-pointer group"
-                              style={{
-                                left: `${f.x_percent}%`,
-                                top: `${f.y_percent}%`,
-                                width: `${f.width_percent}%`,
-                                height: `${f.height_percent}%`,
-                              }}
-                              title={`${f.label} (${f.field_name})`}
-                            >
-                              <span className="absolute -top-5 left-0 text-[9px] font-semibold text-blue-700 bg-blue-100 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                                {f.label}
-                              </span>
-                            </div>
-                          ))}
-                      </div>
-                    ))}
-                  </div>
+                  <TemplatePreviewPane
+                    pageImages={form.pageImages}
+                    pageDimensions={form.pageDimensions}
+                    layoutElements={layoutElements}
+                    extractedFields={form.extractedFields}
+                    watermark={watermark}
+                    watermarkOpacity={watermarkOpacity}
+                    clinicLogoUrl={clinicLogoUrl}
+                  />
                 )}
                 {viewMode === 'preview' && (!form.pageImages || form.pageImages.length === 0) && form.templateHtml && (
                   <HtmlPreview
@@ -1238,6 +1361,8 @@ export default function ImportTemplateModal({
                     watermark={watermark}
                     watermarkOpacity={watermarkOpacity}
                     clinicLogoUrl={clinicLogoUrl}
+                    pageImages={form.pageImages}
+                    pageDimensions={form.pageDimensions}
                   />
                 )}
                 {viewMode === 'layout' && editingHtml && (
@@ -1361,6 +1486,29 @@ export default function ImportTemplateModal({
               >
                 <ChevronLeft className="w-4 h-4" />Campos
               </button>
+
+              {/* Botao Magico: gera PDF preenchido com mock e abre em nova aba */}
+              <button
+                type="button"
+                onClick={handleGenerateTestPdf}
+                disabled={
+                  isGeneratingTestPdf
+                  || loading
+                  || !editTemplate?.id
+                  || form.extractedFields.length === 0
+                }
+                title={
+                  !editTemplate?.id
+                    ? 'Salve o template primeiro para habilitar o teste'
+                    : 'Gerar um PDF preenchido com valores ficticios para validar o layout pixel-perfect'
+                }
+                className="px-4 py-2 rounded-lg border border-blue-300 text-blue-700 bg-blue-50 text-sm font-medium hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
+              >
+                {isGeneratingTestPdf
+                  ? <><Loader className="w-4 h-4 animate-spin" />Gerando PDF...</>
+                  : <><FileCheck2 className="w-4 h-4" />Gerar PDF de Teste</>}
+              </button>
+
               <button
                 onClick={handleSaveTemplate}
                 disabled={loading || form.extractedFields.length === 0}
