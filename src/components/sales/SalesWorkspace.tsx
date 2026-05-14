@@ -1,14 +1,16 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { ShoppingCart, RotateCcw, Tag, AlertCircle, UserCircle } from 'lucide-react'
+import { ShoppingCart, RotateCcw, Tag, AlertCircle, UserCircle, Gift, Package } from 'lucide-react'
 import ProductSearch from './ProductSearch'
+import PackagePDVSearch from './PackagePDVSearch'
 import SalesCart, { cartSubtotal, type CartItem } from './SalesCart'
 import CheckoutModal from './CheckoutModal'
 import ReceiptModal from './ReceiptModal'
 import SalesHistoryTable from './SalesHistoryTable'
 import TutorSearch from './TutorSearch'
 import type { Sale, SaleTutor } from '@/lib/actions/sales'
+import type { PatientsListItem } from '@/lib/actions/timeline'
 
 interface SalesWorkspaceProps {
   clinicId:      string
@@ -19,15 +21,19 @@ interface SalesWorkspaceProps {
 
 export default function SalesWorkspace({ clinicId, clinicName, dailySales, activeModules = [] }: SalesWorkspaceProps) {
   const [tab,          setTab]          = useState<'pdv' | 'historico'>('pdv')
+  const [pdvMode,      setPdvMode]      = useState<'item' | 'package'>('item')
   const [cart,         setCart]         = useState<CartItem[]>([])
   const [addCount,     setAddCount]     = useState(0)   // dispara refocus no ProductSearch
   const [discount,     setDiscount]     = useState(0)
   const [discountInput, setDiscountInput] = useState('')
   const [tutor,        setTutor]        = useState<SaleTutor | null>(null)
+  const [selectedPet,  setSelectedPet]  = useState<PatientsListItem | null>(null)
   const [showCheckout, setShowCheckout] = useState(false)
   const [receipt,      setReceipt]      = useState<Sale | null>(null)
   const [sales,        setSales]        = useState<Sale[]>(dailySales)
   const [, startTransition]             = useTransition()
+
+  const hasPackages = cart.some(i => !!i.package_id)
 
   const subtotal    = cartSubtotal(cart)
   const total       = Math.max(subtotal - discount, 0)
@@ -52,6 +58,8 @@ export default function SalesWorkspace({ clinicId, clinicName, dailySales, activ
     setDiscount(0)
     setDiscountInput('')
     setTutor(null)
+    setSelectedPet(null)
+    setPdvMode('item')
   }
 
   return (
@@ -96,19 +104,50 @@ export default function SalesWorkspace({ clinicId, clinicName, dailySales, activ
             {/* Coluna principal */}
             <div className="lg:col-span-3 space-y-4">
               <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-4">
-                <h2 className="text-sm font-semibold text-slate-700">Adicionar produto</h2>
-                <ProductSearch
-                  onAdd={item => { setCart(prev => [...prev, item]); setAddCount(c => c + 1) }}
-                  refocusTrigger={addCount}
-                  activeModules={activeModules}
-                />
-                <div>
-                  <label className="flex items-center gap-1.5 text-xs font-medium text-slate-500 mb-1.5">
-                    <UserCircle className="h-3.5 w-3.5" />
-                    Tutor (opcional)
-                  </label>
-                  <TutorSearch selected={tutor} onSelect={setTutor} />
+                {/* Toggle Item / Pacote */}
+                <div className="flex rounded-xl overflow-hidden border border-slate-200 bg-slate-50 w-fit">
+                  <button
+                    type="button"
+                    onClick={() => setPdvMode('item')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold transition-colors ${
+                      pdvMode === 'item' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <Package className="h-3.5 w-3.5" /> Produto / Serviço
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPdvMode('package')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold transition-colors border-l border-slate-200 ${
+                      pdvMode === 'package' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <Gift className="h-3.5 w-3.5" /> Pacotes
+                  </button>
                 </div>
+
+                {pdvMode === 'package' ? (
+                  <PackagePDVSearch
+                    selectedPet={selectedPet}
+                    onSelectPet={setSelectedPet}
+                    onAdd={item => setCart(prev => [...prev, item])}
+                  />
+                ) : (
+                  <>
+                    <ProductSearch
+                      onAdd={item => { setCart(prev => [...prev, item]); setAddCount(c => c + 1) }}
+                      refocusTrigger={addCount}
+                      activeModules={activeModules}
+                    />
+                    <div>
+                      <label className="flex items-center gap-1.5 text-xs font-medium text-slate-500 mb-1.5">
+                        <UserCircle className="h-3.5 w-3.5" />
+                        Tutor (opcional)
+                      </label>
+                      <TutorSearch selected={tutor} onSelect={setTutor} />
+                    </div>
+                  </>
+                )}
               </div>
 
               <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-3">
@@ -176,10 +215,17 @@ export default function SalesWorkspace({ clinicId, clinicName, dailySales, activ
                   </div>
                 )}
 
+                {hasPackages && !selectedPet && (
+                  <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                    <Gift className="h-3.5 w-3.5 shrink-0" />
+                    Selecione o animal para vender o pacote
+                  </div>
+                )}
+
                 <button
                   type="button"
                   onClick={() => setShowCheckout(true)}
-                  disabled={!hasItems}
+                  disabled={!hasItems || (hasPackages && !selectedPet)}
                   className="w-full bg-green-600 text-white rounded-xl py-3 text-sm font-bold hover:bg-green-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Finalizar Venda →
@@ -201,6 +247,7 @@ export default function SalesWorkspace({ clinicId, clinicName, dailySales, activ
           items={cart}
           discount={discount}
           tutor={tutor}
+          petId={selectedPet?.id ?? null}
           onSuccess={handleSaleSuccess}
           onClose={() => setShowCheckout(false)}
         />

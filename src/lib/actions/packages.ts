@@ -12,6 +12,8 @@ export type CatalogPackage = {
   description:  string | null
   price:        number
   interval_days: number
+  total_sessions: number
+  default_professional_id: string | null
   active:       boolean
   created_at:   string
   updated_at:   string
@@ -83,7 +85,8 @@ export async function listCatalogPackages(): Promise<CatalogPackage[] | { error:
   const { data, error } = await ctx.supabase
     .from('catalog_packages')
     .select(`
-      id, clinic_id, name, description, price, interval_days, active, created_at, updated_at,
+      id, clinic_id, name, description, price, interval_days, total_sessions,
+      default_professional_id, active, created_at, updated_at,
       items:package_items(
         id, package_id, item_type, item_id, quantity,
         stock_item:stock_items(id, name, unit, unit_price, is_service)
@@ -102,6 +105,8 @@ export type UpsertPackagePayload = {
   description?: string
   price:        number
   interval_days: number
+  total_sessions: number
+  default_professional_id?: string | null
   active?:      boolean
   items: { item_type: 'product' | 'service'; item_id: string; quantity: number }[]
 }
@@ -115,12 +120,14 @@ export async function upsertCatalogPackage(
   const isEdit = !!payload.id
 
   const pkgData = {
-    clinic_id:    ctx.clinic_id,
-    name:         payload.name.trim(),
-    description:  payload.description?.trim() ?? null,
-    price:        payload.price,
-    interval_days: payload.interval_days,
-    active:       payload.active ?? true,
+    clinic_id:               ctx.clinic_id,
+    name:                    payload.name.trim(),
+    description:             payload.description?.trim() ?? null,
+    price:                   payload.price,
+    interval_days:           payload.interval_days,
+    total_sessions:          payload.total_sessions,
+    default_professional_id: payload.default_professional_id ?? null,
+    active:                  payload.active ?? true,
   }
 
   let pkgId: string
@@ -212,13 +219,14 @@ export async function sellPackageToPet(payload: {
   const ctx = await getCtx()
   if (!ctx) return { error: 'Não autenticado.' }
 
-  // Busca total de sessões do pacote (soma das quantities)
-  const { data: items } = await ctx.supabase
-    .from('package_items')
-    .select('quantity')
-    .eq('package_id', payload.package_id)
+  // Usa total_sessions do catálogo (campo canônico)
+  const { data: pkgInfo } = await ctx.supabase
+    .from('catalog_packages')
+    .select('total_sessions')
+    .eq('id', payload.package_id)
+    .single()
 
-  const totalSessions = (items ?? []).reduce((sum, i) => sum + i.quantity, 0)
+  const totalSessions = pkgInfo?.total_sessions ?? 1
 
   const { data, error } = await ctx.supabase
     .from('patient_active_packages')
@@ -332,4 +340,55 @@ export async function usePackageSession(
   }
 
   return { ok: true, sessionsRemaining: sessionsRemaining as number }
+}
+
+// ─── Agendar uma sessão (scheduled) ──────────────────────────────────────────
+
+export async function schedulePackageSession(payload: {
+  patient_active_package_id: string
+  scheduled_for: string       // ISO datetime
+  appointment_id?: string
+}): Promise<{ ok: true } | { error: string }> {
+  const ctx = await getCtx()
+  if (!ctx) return { error: 'Não autenticado.' }
+
+  // Pega a próxima sessão pending
+  const { data: session } = await ctx.supabase
+    .from('patient_package_sessions')
+    .select('id')
+    .eq('patient_active_package_id', payload.patient_active_package_id)
+    .eq('status', 'pending')
+    .order('session_number', { ascending: true })
+    .limit(1)
+    .single()
+
+  if (!session) return { error: 'Nenhuma sessão pendente encontrada.' }
+
+  const { error } = await ctx.supabase
+    .from('patient_package_sessions')
+    .update({
+      status:        'used',
+      used_at:       payload.scheduled_for,
+      appointment_id: payload.appointment_id ?? null,
+    })
+    .eq('id', session.id)
+
+  if (error) return { error: 'Erro ao agendar sessão: ' + error.message }
+
+  // Verifica se foi a última
+  const { count: remaining } = await ctx.supabase
+    .from('patient_package_sessions')
+    .select('id', { count: 'exact', head: true })
+    .eq('patient_active_package_id', payload.patient_active_package_id)
+    .eq('status', 'pending')
+
+  const sessionsRemaining = remaining ?? 0
+  if (sessionsRemaining === 0) {
+    console.log('[Smart Packages] Disparar WhatsApp: Renovação de Pacote', { patient_active_package_id: payload.patient_active_package_id })
+    await ctx.supabase.from('patient_active_packages').update({ status: 'completed' }).eq('id', payload.patient_active_package_id)
+  } else {
+    console.log('[Smart Packages] Disparar WhatsApp: Agendar próxima sessão', { sessions_remaining: sessionsRemaining })
+  }
+
+  return { ok: true }
 }

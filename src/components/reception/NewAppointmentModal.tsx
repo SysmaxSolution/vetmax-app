@@ -10,6 +10,7 @@ import { useModules } from '@/components/providers/ModulesProvider'
 import { DateInput, TimePicker, DateTimePicker } from '@/components/ui/DatePicker'
 import { getClinicProfessionals, type ClinicProfessional } from '@/lib/actions/professionals'
 import { getProfessionalSlots, checkProfessionalAvailability } from '@/lib/actions/appointment-slots'
+import ActivePackagesBanner from './ActivePackagesBanner'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -369,6 +370,14 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
               >
                 ← Trocar animal
               </button>
+            )}
+
+            {/* Banner de Pacotes Ativos */}
+            {(defaultPet?.id ?? selectedPet?.id) && (
+              <ActivePackagesBanner
+                petId={(defaultPet?.id ?? selectedPet?.id)!}
+                petName={(defaultPet?.name ?? selectedPet?.name) ?? ''}
+              />
             )}
 
             {/* Motivo */}

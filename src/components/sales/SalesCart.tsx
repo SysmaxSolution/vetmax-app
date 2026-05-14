@@ -5,6 +5,7 @@ import { Trash2, Plus, Minus } from 'lucide-react'
 export interface CartItem {
   key:           string
   stock_item_id: string | null
+  package_id?:   string | null
   description:   string
   unit_price:    number
   quantity:      number

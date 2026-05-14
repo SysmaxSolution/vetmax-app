@@ -4,6 +4,7 @@ import { useState, useTransition, useRef, useEffect } from 'react'
 import { checkInPatientWithContacts, updateConsultation } from '@/lib/actions/consultations'
 import type { VisitReason, PaymentStatus } from '@/types'
 import { DateInput } from '@/components/ui/DatePicker'
+import ActivePackagesBanner from './ActivePackagesBanner'
 
 const VISIT_REASON_OPTIONS: { value: VisitReason; label: string; emoji: string; color: string }[] = [
   { value: 'consultation', label: 'Consulta', emoji: '👨‍⚕️', color: 'bg-slate-100 text-slate-700' },
@@ -198,6 +199,11 @@ export function CheckInModal({
         {/* Body — SCROLL INTERNO */}
         <div className="flex-1 overflow-y-auto">
           <form ref={formRef} onSubmit={handleSubmit} className="px-4 sm:px-6 pt-5 pb-6 space-y-5">
+
+            {/* ── Banner de Pacotes Ativos ── */}
+            {patientId && (
+              <ActivePackagesBanner petId={patientId} petName={patientName} />
+            )}
 
             {/* ── Motivo da Visita ── */}
             <div>

@@ -3,8 +3,8 @@
 import { useState, useEffect, useTransition, useRef } from 'react'
 import {
   Plus, Gift, Pencil, Trash2, ToggleLeft, ToggleRight,
-  Search, X, Loader2, Check, ChevronDown, Package, Stethoscope,
-  CalendarDays, Tag, AlignLeft,
+  Search, X, Loader2, Check, Package, Stethoscope,
+  CalendarDays, Tag, AlignLeft, Hash, User,
 } from 'lucide-react'
 import type { CatalogPackage, UpsertPackagePayload } from '@/lib/actions/packages'
 import {
@@ -13,6 +13,7 @@ import {
 } from '@/lib/actions/packages'
 import type { StockItemV2 } from '@/lib/actions/stock'
 import { getPharmacyStockV2 } from '@/lib/actions/stock'
+import { getClinicProfessionals, type ClinicProfessional } from '@/lib/actions/professionals'
 
 // ─── Sub-tipos ────────────────────────────────────────────────────────────────
 
@@ -27,10 +28,12 @@ type DraftItem = {
 }
 
 const EMPTY_FORM = {
-  name:          '',
-  description:   '',
-  price:         '',
-  interval_days: '7',
+  name:                    '',
+  description:             '',
+  price:                   '',
+  interval_days:           '7',
+  total_sessions:          '4',
+  default_professional_id: '',
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -194,7 +197,7 @@ function PackageCard({ pkg, canEdit, onEdit, onToggle, onDelete }: {
         </div>
         <div className="text-right shrink-0">
           <p className="font-bold text-teal-700 text-base">{fmtPrice(pkg.price)}</p>
-          <p className="text-[10px] text-slate-400">{pkg.interval_days}d intervalo</p>
+          <p className="text-[10px] text-slate-400">{pkg.total_sessions ?? '?'} sessões · {pkg.interval_days}d</p>
         </div>
       </div>
 
@@ -215,7 +218,7 @@ function PackageCard({ pkg, canEdit, onEdit, onToggle, onDelete }: {
 
       {/* Footer */}
       <div className="flex items-center justify-between pt-1 border-t border-slate-100">
-        <span className="text-xs text-slate-400">{totalItems} sessão{totalItems !== 1 ? 'ões' : ''}</span>
+        <span className="text-xs text-slate-400">{pkg.total_sessions ?? totalItems} sessão{(pkg.total_sessions ?? totalItems) !== 1 ? 'ões' : ''} · {(pkg.items ?? []).length} tipo{(pkg.items ?? []).length !== 1 ? 's' : ''}</span>
         {canEdit && (
           <div className="flex items-center gap-1">
             <button
@@ -256,10 +259,12 @@ function PackageFormModal({ mode, pkg, stock, onClose, onSaved }: {
   onSaved: (pkg: CatalogPackage) => void
 }) {
   const [form, setForm]       = useState({ ...EMPTY_FORM, ...pkg ? {
-    name:          pkg.name,
-    description:   pkg.description ?? '',
-    price:         String(pkg.price),
-    interval_days: String(pkg.interval_days),
+    name:                    pkg.name,
+    description:             pkg.description ?? '',
+    price:                   String(pkg.price),
+    interval_days:           String(pkg.interval_days),
+    total_sessions:          String(pkg.total_sessions ?? 4),
+    default_professional_id: pkg.default_professional_id ?? '',
   } : {} })
   const [items, setItems]     = useState<DraftItem[]>(() => {
     if (!pkg?.items) return []
@@ -273,11 +278,18 @@ function PackageFormModal({ mode, pkg, stock, onClose, onSaved }: {
       quantity:   i.quantity,
     }))
   })
+  const [professionals, setProfessionals] = useState<ClinicProfessional[]>([])
   const [itemSearch, setItemSearch] = useState('')
   const [showDropdown, setShowDropdown] = useState(false)
   const [saving, setSaving]       = useState(false)
   const [error, setError]         = useState('')
   const dropdownRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    getClinicProfessionals().then(res => {
+      if (!('error' in res)) setProfessionals(res)
+    })
+  }, [])
 
   const filteredStock = stock
     .filter(s => s.name.toLowerCase().includes(itemSearch.toLowerCase()))
@@ -320,19 +332,23 @@ function PackageFormModal({ mode, pkg, stock, onClose, onSaved }: {
     if (!form.name.trim())  { setError('Nome é obrigatório.'); return }
     if (items.length === 0) { setError('Adicione pelo menos um item.'); return }
 
-    const price = parseFloat(form.price.replace(',', '.'))
-    const interval_days = parseInt(form.interval_days)
-    if (isNaN(price) || price < 0)      { setError('Preço inválido.'); return }
+    const price          = parseFloat(form.price.replace(',', '.'))
+    const interval_days  = parseInt(form.interval_days)
+    const total_sessions = parseInt(form.total_sessions)
+    if (isNaN(price) || price < 0)             { setError('Preço inválido.'); return }
     if (isNaN(interval_days) || interval_days < 1) { setError('Intervalo inválido.'); return }
+    if (isNaN(total_sessions) || total_sessions < 1) { setError('Total de sessões deve ser ≥ 1.'); return }
 
     setSaving(true)
     const payload: UpsertPackagePayload = {
       ...(pkg ? { id: pkg.id } : {}),
-      name:          form.name.trim(),
-      description:   form.description.trim() || undefined,
+      name:                    form.name.trim(),
+      description:             form.description.trim() || undefined,
       price,
       interval_days,
-      items:         items.map(i => ({ item_type: i.item_type, item_id: i.item_id, quantity: i.quantity })),
+      total_sessions,
+      default_professional_id: form.default_professional_id || null,
+      items:                   items.map(i => ({ item_type: i.item_type, item_id: i.item_id, quantity: i.quantity })),
     }
 
     const res = await upsertCatalogPackage(payload)
@@ -340,17 +356,18 @@ function PackageFormModal({ mode, pkg, stock, onClose, onSaved }: {
 
     if ('error' in res) { setError(res.error); return }
 
-    // Reconstituiu o objeto para passar ao callback
     const saved: CatalogPackage = {
-      id:           res.id,
-      clinic_id:    pkg?.clinic_id ?? '',
-      name:         payload.name,
-      description:  payload.description ?? null,
+      id:                      res.id,
+      clinic_id:               pkg?.clinic_id ?? '',
+      name:                    payload.name,
+      description:             payload.description ?? null,
       price,
       interval_days,
-      active:       pkg?.active ?? true,
-      created_at:   pkg?.created_at ?? new Date().toISOString(),
-      updated_at:   new Date().toISOString(),
+      total_sessions,
+      default_professional_id: payload.default_professional_id ?? null,
+      active:                  pkg?.active ?? true,
+      created_at:              pkg?.created_at ?? new Date().toISOString(),
+      updated_at:              new Date().toISOString(),
       items:        items.map(i => ({
         id:         i.key,
         package_id: res.id,
@@ -444,7 +461,7 @@ function PackageFormModal({ mode, pkg, stock, onClose, onSaved }: {
             </div>
             <div>
               <label className="flex items-center gap-1 text-xs font-semibold text-slate-600 mb-1">
-                <CalendarDays className="h-3.5 w-3.5" /> Intervalo Sugerido (dias)
+                <CalendarDays className="h-3.5 w-3.5" /> Intervalo (dias)
               </label>
               <input
                 type="number"
@@ -453,6 +470,39 @@ function PackageFormModal({ mode, pkg, stock, onClose, onSaved }: {
                 onChange={e => setForm(f => ({ ...f, interval_days: e.target.value }))}
                 className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
               />
+            </div>
+          </div>
+
+          {/* Total de Sessões + Profissional Padrão */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="flex items-center gap-1 text-xs font-semibold text-slate-600 mb-1">
+                <Hash className="h-3.5 w-3.5" /> Total de Sessões *
+              </label>
+              <input
+                type="number"
+                min={1}
+                value={form.total_sessions}
+                onChange={e => setForm(f => ({ ...f, total_sessions: e.target.value }))}
+                className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+              />
+              <p className="mt-0.5 text-[10px] text-slate-400">Nº de visitas à clínica</p>
+            </div>
+            <div>
+              <label className="flex items-center gap-1 text-xs font-semibold text-slate-600 mb-1">
+                <User className="h-3.5 w-3.5" /> Profissional Padrão
+              </label>
+              <select
+                value={form.default_professional_id}
+                onChange={e => setForm(f => ({ ...f, default_professional_id: e.target.value }))}
+                className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
+              >
+                <option value="">Sem preferência</option>
+                {professionals.map(p => (
+                  <option key={p.id} value={p.id}>{p.full_name}</option>
+                ))}
+              </select>
+              <p className="mt-0.5 text-[10px] text-slate-400">Sugestão no agendamento</p>
             </div>
           </div>
 

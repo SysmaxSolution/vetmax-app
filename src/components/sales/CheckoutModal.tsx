@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { X, CreditCard, Banknote, QrCode, Handshake, CheckCircle2 } from 'lucide-react'
 import { createSale, type CreateSaleParams, type SaleTutor } from '@/lib/actions/sales'
+import { sellPackageToPet } from '@/lib/actions/packages'
 import { cartSubtotal, PAYMENT_LABELS, type CartItem } from './SalesCart'
 import type { Sale } from '@/lib/actions/sales'
 
@@ -11,6 +12,7 @@ interface CheckoutModalProps {
   items:       CartItem[]
   discount:    number
   tutor?:      SaleTutor | null
+  petId?:      string | null
   onSuccess:   (sale: Sale) => void
   onClose:     () => void
 }
@@ -26,7 +28,7 @@ const PAYMENT_OPTIONS: { method: PaymentMethod; label: string; icon: React.Compo
 ]
 
 export default function CheckoutModal({
-  clinicId, items, discount, tutor, onSuccess, onClose,
+  clinicId, items, discount, tutor, petId, onSuccess, onClose,
 }: CheckoutModalProps) {
   const [method,   setMethod]  = useState<PaymentMethod>('cash')
   const [received, setReceived] = useState('')
@@ -63,6 +65,18 @@ export default function CheckoutModal({
       if ('error' in result) {
         setError(result.error)
         return
+      }
+
+      // Para cada pacote no carrinho, cria o contrato
+      if (petId) {
+        const packageItems = items.filter(i => !!i.package_id)
+        for (const item of packageItems) {
+          await sellPackageToPet({
+            pet_id:     petId,
+            package_id: item.package_id!,
+            price_paid: item.unit_price * item.quantity - item.discount,
+          })
+        }
       }
 
       // Constrói objeto Sale mínimo para o recibo
