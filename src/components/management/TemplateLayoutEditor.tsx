@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useRef, useCallback, useMemo, useLayoutEffect } from 'react'
+import { useState, useRef, useCallback, useMemo, useLayoutEffect, useEffect } from 'react'
 import { Rnd } from 'react-rnd'
 import {
   Move, Image as ImageIcon, PenTool, Type, Trash2,
-  RotateCcw, Plus, ChevronLeft, ChevronRight,
+  RotateCcw, Plus, ChevronLeft, ChevronRight, MousePointer2, X,
 } from 'lucide-react'
-import type { ExtractedField, PageDimensionsRecord } from '@/types'
+import type { ExtractedField, FieldType, PageDimensionsRecord } from '@/types'
+import NewFieldDialog from './NewFieldDialog'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -39,6 +40,9 @@ interface TemplateLayoutEditorProps {
   // como fundo e trabalha em coordenadas % por pagina.
   pageImages?: string[] | null
   pageDimensions?: PageDimensionsRecord[] | null
+  // Modo desenho: callback acionado quando o usuario desenha um novo campo
+  // sobre o PDF. Recebe o ExtractedField completo, ja com coords e tipo.
+  onAddField?: (field: ExtractedField) => void
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -295,6 +299,7 @@ export default function TemplateLayoutEditor({
   clinicLogoUrl,
   pageImages,
   pageDimensions,
+  onAddField,
 }: TemplateLayoutEditorProps) {
   const pixelPerfectMode = !!(pageImages && pageImages.length > 0)
   const pageCount = pixelPerfectMode ? pageImages!.length : 1
@@ -304,6 +309,31 @@ export default function TemplateLayoutEditor({
   )
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(0)
+
+  // ── Modo Desenhar Campo (Pixel Perfect mode) ──────────────────────────
+  const [drawMode, setDrawMode] = useState(false)
+  const [drawingRect, setDrawingRect] = useState<
+    { x_pct: number; y_pct: number; w_pct: number; h_pct: number } | null
+  >(null)
+  const drawStartRef = useRef<{ x_pct: number; y_pct: number } | null>(null)
+  const [pendingDrawnField, setPendingDrawnField] = useState<
+    { rect: { x_pct: number; y_pct: number; w_pct: number; h_pct: number }; page: number } | null
+  >(null)
+
+  // Esc cancela o modo desenho
+  useEffect(() => {
+    if (!drawMode && !pendingDrawnField) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setDrawMode(false)
+        setDrawingRect(null)
+        drawStartRef.current = null
+        setPendingDrawnField(null)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [drawMode, pendingDrawnField])
 
   // Tamanho renderizado do canvas (para converter % ↔ px nas operacoes de Rnd)
   const canvasRef = useRef<HTMLDivElement>(null)
@@ -471,6 +501,23 @@ export default function TemplateLayoutEditor({
             className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors">
             <Plus className="w-3.5 h-3.5" />Campo
           </button>
+          {/* Modo Desenhar Campo — disponivel em Pixel Perfect mode */}
+          {pixelPerfectMode && onAddField && (
+            <button
+              onClick={() => { setDrawMode(m => !m); setSelectedId(null) }}
+              title={drawMode ? 'Sair do modo desenho (Esc)' : 'Clique e arraste sobre o PDF para criar um campo'}
+              className={
+                'flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium border rounded-lg transition-colors ' +
+                (drawMode
+                  ? 'text-white bg-blue-600 border-blue-700 hover:bg-blue-700'
+                  : 'text-purple-700 bg-purple-50 border-purple-200 hover:bg-purple-100')
+              }
+            >
+              {drawMode
+                ? <><X className="w-3.5 h-3.5" />Cancelar Desenho</>
+                : <><MousePointer2 className="w-3.5 h-3.5" />Desenhar Campo</>}
+            </button>
+          )}
           <div className="flex-1" />
           {pixelPerfectMode && pageCount > 1 && (
             <div className="flex items-center gap-1 px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs">
@@ -503,9 +550,48 @@ export default function TemplateLayoutEditor({
           <div className="flex justify-center py-4 px-2">
             <div
               ref={canvasRef}
-              className="relative bg-white shadow-lg"
+              className={'relative bg-white shadow-lg' + (drawMode ? ' cursor-crosshair' : '')}
               style={canvasStyle}
-              onClick={() => setSelectedId(null)}
+              onClick={() => { if (!drawMode) setSelectedId(null) }}
+              onMouseDown={(e) => {
+                if (!drawMode || !canvasRef.current) return
+                // Inicia desenho — calcula coords % a partir do clique
+                const rect = canvasRef.current.getBoundingClientRect()
+                const x_pct = ((e.clientX - rect.left) / rect.width) * 100
+                const y_pct = ((e.clientY - rect.top)  / rect.height) * 100
+                drawStartRef.current = { x_pct, y_pct }
+                setDrawingRect({ x_pct, y_pct, w_pct: 0, h_pct: 0 })
+                setSelectedId(null)
+                e.preventDefault()
+              }}
+              onMouseMove={(e) => {
+                if (!drawMode || !drawStartRef.current || !canvasRef.current) return
+                const rect = canvasRef.current.getBoundingClientRect()
+                const curX = ((e.clientX - rect.left) / rect.width) * 100
+                const curY = ((e.clientY - rect.top)  / rect.height) * 100
+                const s = drawStartRef.current
+                // Suporta arraste em qualquer direcao — pega min/max
+                const x = Math.max(0, Math.min(s.x_pct, curX))
+                const y = Math.max(0, Math.min(s.y_pct, curY))
+                const w = Math.min(100 - x, Math.abs(curX - s.x_pct))
+                const h = Math.min(100 - y, Math.abs(curY - s.y_pct))
+                setDrawingRect({ x_pct: x, y_pct: y, w_pct: w, h_pct: h })
+              }}
+              onMouseUp={() => {
+                if (!drawMode || !drawingRect || !drawStartRef.current) return
+                drawStartRef.current = null
+                // Desenho muito pequeno (clique acidental) — cancela
+                if (drawingRect.w_pct < 1 || drawingRect.h_pct < 0.8) {
+                  setDrawingRect(null)
+                  return
+                }
+                setPendingDrawnField({ rect: drawingRect, page: currentPage })
+                setDrawingRect(null)
+              }}
+              onMouseLeave={() => {
+                // Se sair do canvas com o mouse pressionado, cancela
+                if (drawingRect) { setDrawingRect(null); drawStartRef.current = null }
+              }}
             >
               {/* PDF page background (Pixel Perfect mode) */}
               {pixelPerfectMode && pageImages![currentPage] && (
@@ -534,8 +620,8 @@ export default function TemplateLayoutEditor({
                   style={{ border: '1px dashed #e2e8f0', margin: '10mm' }} />
               )}
 
-              {/* Elements via Rnd */}
-              {visibleElements.map(el => {
+              {/* Elements via Rnd — desabilitados no modo desenho para nao intercepter cliques */}
+              {!drawMode && visibleElements.map(el => {
                 const px = overlayToPx(el)
                 const isSel = selectedId === el.id
                 return (
@@ -567,6 +653,52 @@ export default function TemplateLayoutEditor({
                   </Rnd>
                 )
               })}
+
+              {/* No modo desenho: render somente como overlay visual (sem interacao) */}
+              {drawMode && visibleElements.map(el => {
+                const px = overlayToPx(el)
+                return (
+                  <div
+                    key={el.id}
+                    className="absolute pointer-events-none"
+                    style={{
+                      left: px.x, top: px.y, width: px.width, height: px.height,
+                      border: '1.5px dashed rgba(59,130,246,0.25)',
+                      borderRadius: '3px',
+                      zIndex: 15,
+                    }}
+                  >
+                    <ElementContent element={el} clinicLogoUrl={clinicLogoUrl} />
+                  </div>
+                )
+              })}
+
+              {/* Preview do retangulo sendo desenhado */}
+              {drawingRect && (
+                <div
+                  className="absolute pointer-events-none"
+                  style={{
+                    left:   `${drawingRect.x_pct}%`,
+                    top:    `${drawingRect.y_pct}%`,
+                    width:  `${drawingRect.w_pct}%`,
+                    height: `${drawingRect.h_pct}%`,
+                    border: '2px dashed #2563eb',
+                    background: 'rgba(37, 99, 235, 0.12)',
+                    borderRadius: '3px',
+                    zIndex: 40,
+                  }}
+                />
+              )}
+
+              {/* Hint visual quando o modo desenho esta ativo */}
+              {drawMode && !drawingRect && (
+                <div
+                  className="absolute top-2 left-1/2 -translate-x-1/2 bg-purple-600 text-white text-xs font-medium px-3 py-1.5 rounded-lg shadow-lg pointer-events-none z-50 flex items-center gap-2"
+                >
+                  <MousePointer2 className="w-3.5 h-3.5" />
+                  Clique e arraste sobre o PDF para criar um campo &middot; Esc cancela
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -618,6 +750,43 @@ export default function TemplateLayoutEditor({
           </div>
         </div>
       </div>
+
+      {/* Dialog de criacao de campo desenhado */}
+      {pendingDrawnField && onAddField && (
+        <NewFieldDialog
+          rect={pendingDrawnField.rect}
+          page={pendingDrawnField.page}
+          existingFieldNames={[
+            ...fields.map(f => f.field_name),
+            ...elements.filter(e => e.type === 'field' && e.field_name).map(e => e.field_name!),
+          ]}
+          onCancel={() => setPendingDrawnField(null)}
+          onConfirm={(newField) => {
+            // 1. Avisa o componente pai (adiciona em form.extractedFields)
+            onAddField(newField)
+            // 2. Adiciona overlay correspondente no editor
+            const newOverlay: LayoutElement = {
+              id: uid(),
+              type: 'field',
+              field_name: newField.field_name,
+              label: newField.label,
+              page: newField.page ?? 0,
+              unit: 'pct',
+              x: newField.x_percent ?? 30,
+              y: newField.y_percent ?? 10,
+              width: newField.width_percent ?? 25,
+              height: newField.height_percent ?? 3,
+              fontSize: 11,
+              fontWeight: 'normal',
+              textAlign: 'left',
+            }
+            updateElements([...elements, newOverlay])
+            setSelectedId(newOverlay.id)
+            setPendingDrawnField(null)
+            setDrawMode(false)  // sai do modo desenho apos criar (pode ativar de novo se quiser)
+          }}
+        />
+      )}
     </div>
   )
 }

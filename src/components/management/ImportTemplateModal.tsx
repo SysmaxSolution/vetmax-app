@@ -1423,6 +1423,14 @@ export default function ImportTemplateModal({
                     clinicLogoUrl={clinicLogoUrl}
                     pageImages={form.pageImages}
                     pageDimensions={form.pageDimensions}
+                    onAddField={(newField) => {
+                      // Persiste o novo campo desenhado em form.extractedFields
+                      // (o editor ja adicionou o overlay correspondente em layoutElements).
+                      setForm(prev => ({
+                        ...prev,
+                        extractedFields: [...prev.extractedFields, newField],
+                      }))
+                    }}
                   />
                 )}
                 {viewMode === 'layout' && editingHtml && (
