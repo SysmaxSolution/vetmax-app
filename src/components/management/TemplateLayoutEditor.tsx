@@ -573,7 +573,13 @@ export default function TemplateLayoutEditor({
               ref={canvasRef}
               className={'relative bg-white shadow-lg' + (drawMode ? ' cursor-crosshair' : '')}
               style={canvasStyle}
-              onClick={() => { if (!drawMode) setSelectedId(null) }}
+              onClick={(e) => {
+                // So desseleciona se o click foi DIRETAMENTE na div do canvas
+                // (area vazia/fundo), nao em um Rnd/popover filho.
+                // Defesa em profundidade contra "popover pisca" quando algum
+                // filho esquece de stopPropagation.
+                if (!drawMode && e.target === e.currentTarget) setSelectedId(null)
+              }}
               onMouseDown={(e) => {
                 if (!drawMode || !canvasRef.current) return
                 // Inicia desenho — calcula coords % a partir do clique
@@ -652,6 +658,10 @@ export default function TemplateLayoutEditor({
                     size={{ width: px.width, height: px.height }}
                     bounds="parent"
                     onMouseDown={(e: any) => { e.stopPropagation(); setSelectedId(el.id) }}
+                    // CRITICO: stopPropagation no click TAMBEM (eventos React distintos).
+                    // Sem isso, o click bubbla pro canvas e dispara setSelectedId(null),
+                    // fechando o popover imediatamente apos abrir (efeito "piscar").
+                    onClick={(e: any) => e.stopPropagation()}
                     onDragStop={(_e, d) => {
                       const upd = pxToOverlay(el, { x: d.x, y: d.y, width: px.width, height: px.height })
                       updateElement(el.id, upd)
