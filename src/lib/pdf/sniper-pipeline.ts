@@ -176,6 +176,36 @@ export interface SignatureDetectionResult {
 }
 
 /**
+ * Reconstroi a string visual de uma linha respeitando fragmentacao do pdfjs.
+ *
+ * pdfjs frequentemente quebra "Médico" em [{str:"Médic"}, {str:"o"}] devido a
+ * kerning especial. O `.join(' ')` ingenuamente cria "Médic o" — regex de
+ * assinatura nao casa.
+ *
+ * Heuristica: pdfjs reporta gap ≈ 0pt entre fragmentos da MESMA palavra e
+ * gap > 0.3% (~1.78pt em A4) entre palavras DIFERENTES. Quando o gap eh
+ * tight E ambos extremos sao letras (continuacao alfabetica), junta sem
+ * espaco; caso contrario, junta com espaco.
+ */
+const TIGHT_GAP_PCT = 0.3
+const LETTER_RE = /[a-zA-ZáàâãéèêíïóôõöúçÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇ]/
+
+function joinLineText(items: PdfTextItem[]): string {
+  if (items.length === 0) return ''
+  let out = items[0].str
+  for (let i = 1; i < items.length; i++) {
+    const prev = items[i - 1]
+    const cur = items[i]
+    const gap = cur.x_pct - (prev.x_pct + prev.w_pct)
+    const prevEndsLetter = LETTER_RE.test(prev.str.slice(-1))
+    const curStartsLetter = LETTER_RE.test(cur.str.slice(0, 1))
+    const isContinuation = gap < TIGHT_GAP_PCT && prevEndsLetter && curStartsLetter
+    out += isContinuation ? cur.str : ' ' + cur.str
+  }
+  return out
+}
+
+/**
  * INTERVENCAO CIRURGICA — Reset de Assinatura.
  *
  * Varre o textContent buscando padroes de assinatura profissional.
@@ -201,7 +231,9 @@ export function detectProfessionalSignatures(
   const matchedLines = new Set<string>()
 
   for (const line of lines) {
-    const lineText = line.items.map(i => i.str).join(' ').trim()
+    // Reconstroi string visual respeitando fragmentacao do pdfjs
+    // ("Médic" + "o" + "Veterinári" + "o" → "Médico Veterinário")
+    const lineText = joinLineText(line.items).trim()
     if (!lineText) continue
     // Linhas com ':' sao labels → deixa o sniper tratar.
     // O regex de assinatura eh para TEXTO FLUTUANTE sem rotulo.
