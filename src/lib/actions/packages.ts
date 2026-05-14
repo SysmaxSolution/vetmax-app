@@ -1,0 +1,335 @@
+'use server'
+
+import { createClient } from '@/lib/supabase/server'
+import { revalidatePath } from 'next/cache'
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export type CatalogPackage = {
+  id:           string
+  clinic_id:    string
+  name:         string
+  description:  string | null
+  price:        number
+  interval_days: number
+  active:       boolean
+  created_at:   string
+  updated_at:   string
+  items?:       PackageItem[]
+}
+
+export type PackageItem = {
+  id:         string
+  package_id: string
+  item_type:  'product' | 'service'
+  item_id:    string
+  quantity:   number
+  stock_item?: {
+    id:       string
+    name:     string
+    unit:     string
+    unit_price: number
+    is_service: boolean
+  }
+}
+
+export type PatientActivePackage = {
+  id:         string
+  clinic_id:  string
+  pet_id:     string
+  package_id: string
+  status:     'active' | 'completed' | 'cancelled'
+  price_paid: number | null
+  started_at: string
+  created_at: string
+  package?:   CatalogPackage
+  sessions?:  PackageSession[]
+  sessions_total?:     number
+  sessions_remaining?: number
+}
+
+export type PackageSession = {
+  id:                        string
+  patient_active_package_id: string
+  appointment_id:            string | null
+  status:                    'pending' | 'used' | 'cancelled'
+  session_number:            number
+  scheduled_for:             string | null
+  used_at:                   string | null
+  created_at:                string
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+async function getCtx() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('clinic_id, role')
+    .eq('id', user.id)
+    .single()
+  if (!profile?.clinic_id) return null
+  return { supabase, clinic_id: profile.clinic_id, role: profile.role }
+}
+
+// ─── Catalog CRUD ─────────────────────────────────────────────────────────────
+
+export async function listCatalogPackages(): Promise<CatalogPackage[] | { error: string }> {
+  const ctx = await getCtx()
+  if (!ctx) return { error: 'Não autenticado.' }
+
+  const { data, error } = await ctx.supabase
+    .from('catalog_packages')
+    .select(`
+      id, clinic_id, name, description, price, interval_days, active, created_at, updated_at,
+      items:package_items(
+        id, package_id, item_type, item_id, quantity,
+        stock_item:stock_items(id, name, unit, unit_price, is_service)
+      )
+    `)
+    .eq('clinic_id', ctx.clinic_id)
+    .order('name', { ascending: true })
+
+  if (error) return { error: 'Erro ao listar pacotes: ' + error.message }
+  return (data ?? []) as unknown as CatalogPackage[]
+}
+
+export type UpsertPackagePayload = {
+  id?:          string
+  name:         string
+  description?: string
+  price:        number
+  interval_days: number
+  active?:      boolean
+  items: { item_type: 'product' | 'service'; item_id: string; quantity: number }[]
+}
+
+export async function upsertCatalogPackage(
+  payload: UpsertPackagePayload
+): Promise<{ id: string } | { error: string }> {
+  const ctx = await getCtx()
+  if (!ctx) return { error: 'Não autenticado.' }
+
+  const isEdit = !!payload.id
+
+  const pkgData = {
+    clinic_id:    ctx.clinic_id,
+    name:         payload.name.trim(),
+    description:  payload.description?.trim() ?? null,
+    price:        payload.price,
+    interval_days: payload.interval_days,
+    active:       payload.active ?? true,
+  }
+
+  let pkgId: string
+
+  if (isEdit) {
+    const { error } = await ctx.supabase
+      .from('catalog_packages')
+      .update(pkgData)
+      .eq('id', payload.id!)
+      .eq('clinic_id', ctx.clinic_id)
+    if (error) return { error: 'Erro ao atualizar pacote: ' + error.message }
+    pkgId = payload.id!
+    // Redelete items e recria
+    await ctx.supabase.from('package_items').delete().eq('package_id', pkgId)
+  } else {
+    const { data, error } = await ctx.supabase
+      .from('catalog_packages')
+      .insert(pkgData)
+      .select('id')
+      .single()
+    if (error) return { error: 'Erro ao criar pacote: ' + error.message }
+    pkgId = data.id
+  }
+
+  if (payload.items.length > 0) {
+    const { error: itemsError } = await ctx.supabase
+      .from('package_items')
+      .insert(
+        payload.items.map(item => ({
+          package_id: pkgId,
+          item_type:  item.item_type,
+          item_id:    item.item_id,
+          quantity:   item.quantity,
+        }))
+      )
+    if (itemsError) return { error: 'Erro ao salvar itens: ' + itemsError.message }
+  }
+
+  revalidatePath('/dashboard/pharmacy')
+  return { id: pkgId }
+}
+
+export async function togglePackageActive(id: string): Promise<{ ok: true } | { error: string }> {
+  const ctx = await getCtx()
+  if (!ctx) return { error: 'Não autenticado.' }
+
+  const { data: pkg } = await ctx.supabase
+    .from('catalog_packages')
+    .select('active')
+    .eq('id', id)
+    .eq('clinic_id', ctx.clinic_id)
+    .single()
+
+  if (!pkg) return { error: 'Pacote não encontrado.' }
+
+  const { error } = await ctx.supabase
+    .from('catalog_packages')
+    .update({ active: !pkg.active })
+    .eq('id', id)
+    .eq('clinic_id', ctx.clinic_id)
+
+  if (error) return { error: 'Erro ao alterar status: ' + error.message }
+  revalidatePath('/dashboard/pharmacy')
+  return { ok: true }
+}
+
+export async function deleteCatalogPackage(id: string): Promise<{ ok: true } | { error: string }> {
+  const ctx = await getCtx()
+  if (!ctx) return { error: 'Não autenticado.' }
+
+  const { error } = await ctx.supabase
+    .from('catalog_packages')
+    .delete()
+    .eq('id', id)
+    .eq('clinic_id', ctx.clinic_id)
+
+  if (error) return { error: 'Erro ao excluir pacote: ' + error.message }
+  revalidatePath('/dashboard/pharmacy')
+  return { ok: true }
+}
+
+// ─── Contrato (venda do pacote para um pet) ───────────────────────────────────
+
+export async function sellPackageToPet(payload: {
+  pet_id:     string
+  package_id: string
+  price_paid?: number
+}): Promise<{ id: string } | { error: string }> {
+  const ctx = await getCtx()
+  if (!ctx) return { error: 'Não autenticado.' }
+
+  // Busca total de sessões do pacote (soma das quantities)
+  const { data: items } = await ctx.supabase
+    .from('package_items')
+    .select('quantity')
+    .eq('package_id', payload.package_id)
+
+  const totalSessions = (items ?? []).reduce((sum, i) => sum + i.quantity, 0)
+
+  const { data, error } = await ctx.supabase
+    .from('patient_active_packages')
+    .insert({
+      clinic_id:  ctx.clinic_id,
+      pet_id:     payload.pet_id,
+      package_id: payload.package_id,
+      price_paid: payload.price_paid ?? null,
+      status:     'active',
+    })
+    .select('id')
+    .single()
+
+  if (error) return { error: 'Erro ao criar contrato: ' + error.message }
+
+  // Gera sessões individuais (pending)
+  if (totalSessions > 0) {
+    const sessions = Array.from({ length: totalSessions }, (_, i) => ({
+      patient_active_package_id: data.id,
+      session_number:            i + 1,
+      status:                    'pending' as const,
+    }))
+    await ctx.supabase.from('patient_package_sessions').insert(sessions)
+  }
+
+  revalidatePath('/dashboard/reception')
+  return { id: data.id }
+}
+
+// ─── Sessões restantes de um pet ─────────────────────────────────────────────
+
+export async function getPetActivePackages(
+  petId: string
+): Promise<PatientActivePackage[] | { error: string }> {
+  const ctx = await getCtx()
+  if (!ctx) return { error: 'Não autenticado.' }
+
+  const { data, error } = await ctx.supabase
+    .from('patient_active_packages')
+    .select(`
+      id, clinic_id, pet_id, package_id, status, price_paid, started_at, created_at,
+      package:catalog_packages(id, name, description, price, interval_days),
+      sessions:patient_package_sessions(id, status, session_number, scheduled_for, used_at)
+    `)
+    .eq('pet_id', petId)
+    .eq('clinic_id', ctx.clinic_id)
+    .eq('status', 'active')
+
+  if (error) return { error: 'Erro ao buscar pacotes do pet: ' + error.message }
+
+  const result = (data ?? []) as unknown as PatientActivePackage[]
+  return result.map(pap => {
+    const sessions = pap.sessions ?? []
+    return {
+      ...pap,
+      sessions_total:     sessions.length,
+      sessions_remaining: sessions.filter(s => s.status === 'pending').length,
+    }
+  })
+}
+
+// ─── Marcar sessão como usada (com webhook log para WhatsApp) ─────────────────
+
+export async function usePackageSession(
+  sessionId: string,
+  appointmentId?: string
+): Promise<{ ok: true; sessionsRemaining: number } | { error: string }> {
+  const ctx = await getCtx()
+  if (!ctx) return { error: 'Não autenticado.' }
+
+  const { data: session, error: fetchErr } = await ctx.supabase
+    .from('patient_package_sessions')
+    .select('id, patient_active_package_id, status, session_number')
+    .eq('id', sessionId)
+    .single()
+
+  if (fetchErr || !session) return { error: 'Sessão não encontrada.' }
+  if (session.status !== 'pending') return { error: 'Sessão já utilizada ou cancelada.' }
+
+  const { error } = await ctx.supabase
+    .from('patient_package_sessions')
+    .update({ status: 'used', used_at: new Date().toISOString(), appointment_id: appointmentId ?? null })
+    .eq('id', sessionId)
+
+  if (error) return { error: 'Erro ao registrar sessão: ' + error.message }
+
+  // Conta restantes
+  const { count: remaining } = await ctx.supabase
+    .from('patient_package_sessions')
+    .select('id', { count: 'exact', head: true })
+    .eq('patient_active_package_id', session.patient_active_package_id)
+    .eq('status', 'pending')
+
+  const sessionsRemaining = remaining ?? 0
+
+  // Fase 4: Log de gatilho WhatsApp
+  if (sessionsRemaining === 0) {
+    console.log('[Smart Packages] Disparar WhatsApp: Renovação de Pacote', {
+      patient_active_package_id: session.patient_active_package_id,
+    })
+    // Marca contrato como completed
+    await ctx.supabase
+      .from('patient_active_packages')
+      .update({ status: 'completed' })
+      .eq('id', session.patient_active_package_id)
+  } else {
+    console.log('[Smart Packages] Disparar WhatsApp: Agendar próxima sessão', {
+      patient_active_package_id: session.patient_active_package_id,
+      sessions_remaining: sessionsRemaining,
+    })
+  }
+
+  return { ok: true, sessionsRemaining: sessionsRemaining as number }
+}

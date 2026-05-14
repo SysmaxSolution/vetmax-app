@@ -5,7 +5,7 @@ import {
   Package, Plus, AlertTriangle, RefreshCw, Trash2, Pencil,
   ArrowDownToLine, Search, X, Loader2, Check, Calendar,
   Shield, ShoppingBag, Scissors, Sparkles, FlaskConical, Pill,
-  Upload, Stethoscope,
+  Upload, Stethoscope, Gift,
 } from 'lucide-react'
 import type { StockItemV2, StockCategory } from '@/lib/actions/stock'
 import {
@@ -18,6 +18,7 @@ import { searchGlobalCatalog } from '@/lib/actions/catalog'
 import StockCsvImporter from './StockCsvImporter'
 import { EnrichNcmModal } from './EnrichNcmModal'
 import PharmacyCatalogQuickAdd from './PharmacyCatalogQuickAdd'
+import PackagesTab from './PackagesTab'
 
 // ─── Categorias de Produtos ───────────────────────────────────────────────────
 
@@ -118,7 +119,7 @@ function formFromItem(item: StockItemV2): ItemForm {
 
 export default function PharmacyWorkspace({ stock: initialStock, userRole, activeModules = [] }: Props) {
   const [stock, setStock]   = useState<StockItemV2[]>(initialStock)
-  const [view, setView]     = useState<'products' | 'services'>('products')
+  const [view, setView]     = useState<'products' | 'services' | 'packages'>('products')
   const [catTab, setCatTab] = useState<string>('all')
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'critical' | 'ok'>('all')
@@ -145,7 +146,7 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole, activ
     setTimeout(() => setToast(null), 3500)
   }
 
-  function switchView(v: 'products' | 'services') {
+  function switchView(v: 'products' | 'services' | 'packages') {
     setView(v); setCatTab('all'); setSearch(''); setStatusFilter('all')
     setCatalogSuggestions([])
   }
@@ -279,7 +280,7 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole, activ
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Toggle Produtos / Serviços */}
+            {/* Toggle Produtos / Serviços / Pacotes */}
             <div className="flex rounded-xl overflow-hidden border border-slate-200 bg-white">
               <button
                 onClick={() => switchView('products')}
@@ -297,9 +298,17 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole, activ
               >
                 <Stethoscope className="h-3.5 w-3.5" /> Serviços
               </button>
+              <button
+                onClick={() => switchView('packages')}
+                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold transition-colors border-l border-slate-200 ${
+                  view === 'packages' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <Gift className="h-3.5 w-3.5" /> Pacotes e Planos
+              </button>
             </div>
-            {/* Importar CSV */}
-            {userRole === 'admin' && (
+            {/* Importar CSV — apenas estoque */}
+            {userRole === 'admin' && view !== 'packages' && (
               <button
                 onClick={() => setCsvImportOpen(true)}
                 className="flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-600 text-xs font-semibold hover:border-slate-300 hover:bg-slate-50 transition-colors"
@@ -307,8 +316,8 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole, activ
                 <Upload className="h-3.5 w-3.5" /> Importar CSV
               </button>
             )}
-            {/* Novo item */}
-            {userRole === 'admin' && (
+            {/* Novo item — apenas estoque */}
+            {userRole === 'admin' && view !== 'packages' && (
               <button
                 onClick={() => setFormModal({ mode: 'add', serviceMode: isServiceView })}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 transition-colors"
@@ -355,8 +364,8 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole, activ
           </div>
         )}
 
-        {/* Tabs de categoria */}
-        <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-hide">
+        {/* Tabs de categoria — oculto em Pacotes */}
+        {view !== 'packages' && <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-hide">
           {activeCats.map(cat => (
             <button
               key={cat.key}
@@ -376,10 +385,10 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole, activ
               )}
             </button>
           ))}
-        </div>
+        </div>}
 
-        {/* Search + filtros */}
-        <div className="flex gap-2">
+        {/* Search + filtros — oculto em Pacotes */}
+        {view !== 'packages' && <div className="flex gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <input
@@ -406,10 +415,12 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole, activ
               Normais
             </button>
           )}
-        </div>
+        </div>}
 
-        {/* Tabelas */}
-        {isServiceView
+        {/* Conteúdo principal */}
+        {view === 'packages'
+          ? <PackagesTab userRole={userRole} />
+          : isServiceView
           ? <ServicesTable
               filtered={filtered}
               userRole={userRole}
@@ -445,6 +456,7 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole, activ
             />
         }
       </div>
+
 
       {/* Modal: Cadastro / Edição */}
       {formModal && (
