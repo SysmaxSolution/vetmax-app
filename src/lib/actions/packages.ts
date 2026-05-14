@@ -392,3 +392,33 @@ export async function schedulePackageSession(payload: {
 
   return { ok: true }
 }
+
+// ─── Vincular appointment à próxima sessão pendente (sem consumir) ────────────
+
+export async function linkSessionToAppointment(
+  patientActivePackageId: string,
+  appointmentId: string,
+): Promise<{ ok: true } | { error: string }> {
+  const ctx = await getCtx()
+  if (!ctx) return { error: 'Não autenticado.' }
+
+  const { data: session } = await ctx.supabase
+    .from('patient_package_sessions')
+    .select('id')
+    .eq('patient_active_package_id', patientActivePackageId)
+    .eq('status', 'pending')
+    .is('appointment_id', null)
+    .order('session_number', { ascending: true })
+    .limit(1)
+    .single()
+
+  if (!session) return { error: 'Nenhuma sessão disponível para vincular.' }
+
+  const { error } = await ctx.supabase
+    .from('patient_package_sessions')
+    .update({ appointment_id: appointmentId })
+    .eq('id', session.id)
+
+  if (error) return { error: 'Erro ao vincular sessão: ' + error.message }
+  return { ok: true }
+}

@@ -57,12 +57,12 @@ async function getUserClinic(): Promise<{ clinicId: string; userId: string } | {
 
 export async function createAppointment(
   payload: CreateAppointmentPayload
-): Promise<{ success: true } | { error: string }> {
+): Promise<{ success: true; id: string } | { error: string }> {
   const auth = await getUserClinic()
   if ('error' in auth) return auth
 
   const supabase = await createClient()
-  const { error } = await supabase.from('appointments').insert({
+  const { data, error } = await supabase.from('appointments').insert({
     clinic_id:            auth.clinicId,
     pet_id:               payload.pet_id,
     tutor_id:             payload.tutor_id,
@@ -72,12 +72,12 @@ export async function createAppointment(
     professional_id:      payload.professional_id ?? null,
     status:               'scheduled',
     created_by:           auth.userId,
-  })
+  }).select('id').single()
 
   if (error) return { error: 'Erro ao criar agendamento: ' + error.message }
   revalidatePath('/dashboard/reception')
   revalidatePath('/dashboard/reception/calendar')
-  return { success: true }
+  return { success: true, id: data.id }
 }
 
 // ─── List for a specific date ─────────────────────────────────────────────────
