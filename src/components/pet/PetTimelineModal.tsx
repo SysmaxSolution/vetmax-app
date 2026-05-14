@@ -96,6 +96,22 @@ export default function PetTimelineModal({
 
   function PackagesSummaryCard() {
     if (packages.length === 0) return null
+
+    // Consolida contratos do mesmo pacote (package_id) somando contadores
+    const consolidated = packages.reduce<Record<string, PatientActivePackage>>((acc, pkg) => {
+      const key = pkg.package_id
+      if (!acc[key]) {
+        acc[key] = { ...pkg, sessions_total: 0, sessions_used: 0, sessions_scheduled: 0 }
+      }
+      const e = acc[key]
+      e.sessions_total     = (e.sessions_total     ?? 0) + (pkg.sessions_total     ?? 0)
+      e.sessions_used      = (e.sessions_used      ?? 0) + (pkg.sessions_used      ?? 0)
+      e.sessions_scheduled = (e.sessions_scheduled ?? 0) + (pkg.sessions_scheduled ?? 0)
+      if (pkg.status === 'active') e.status = 'active'
+      return acc
+    }, {})
+    const list = Object.values(consolidated)
+
     return (
       <div className="rounded-xl border border-teal-200 bg-teal-50/60 overflow-hidden">
         <div className="flex items-center gap-2 px-4 py-2.5 border-b border-teal-200 bg-teal-100/50">
@@ -103,7 +119,7 @@ export default function PetTimelineModal({
           <span className="text-xs font-bold text-teal-800 uppercase tracking-wide">Pacotes / Planos</span>
         </div>
         <div className="divide-y divide-teal-100">
-          {packages.map(pkg => {
+          {list.map(pkg => {
             const total     = pkg.sessions_total     ?? 0
             const used      = pkg.sessions_used      ?? 0
             const scheduled = pkg.sessions_scheduled ?? 0
@@ -111,7 +127,7 @@ export default function PetTimelineModal({
             const pct       = total > 0 ? Math.round((used / total) * 100) : 0
             const isActive  = pkg.status === 'active'
             return (
-              <div key={pkg.id} className="px-4 py-3 space-y-2">
+              <div key={pkg.package_id} className="px-4 py-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-semibold text-slate-800">{pkg.package?.name ?? 'Pacote'}</p>
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
