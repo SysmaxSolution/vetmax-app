@@ -619,7 +619,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                   )}
                   {birthDateMode === 'age' && birthDate && (
                     <p className="text-[10px] text-slate-400 mt-0.5 ml-1">
-                      Nascimento estimado: {new Date(birthDate).toLocaleDateString('pt-BR')}
+                      Nascimento estimado: {birthDate.split('-').reverse().join('/')}
                     </p>
                   )}
                 </div>

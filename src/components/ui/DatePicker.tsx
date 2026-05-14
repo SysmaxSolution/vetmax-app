@@ -190,7 +190,7 @@ function parseBrToIso(br: string): string {
   if (parts.length !== 3) return ''
   const [dd, mm, yyyy] = parts
   if (!dd || !mm || !yyyy || yyyy.length < 4) return ''
-  const d = new Date(`${yyyy}-${mm}-${dd}`)
+  const d = parse(`${dd}/${mm}/${yyyy}`, 'dd/MM/yyyy', new Date())
   if (!isValid(d)) return ''
   return format(d, 'yyyy-MM-dd')
 }
