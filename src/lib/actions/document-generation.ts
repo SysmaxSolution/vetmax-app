@@ -61,6 +61,27 @@ function formatValueForPdf(raw: unknown, fieldType?: ExtractedField['type']): st
 }
 
 /**
+ * Formata o CRMV armazenado cru ("SP74696") para o formato de exibicao
+ * usado no laudo ("CRMV-SP 74.696").
+ *
+ * O banco armazena no padrao da constraint chk_crmv_format: 2 letras + 4-10
+ * digitos, sem separadores. Aqui inserimos prefixo, hifen e separador de
+ * milhar para legibilidade.
+ *
+ * Retorna o input inalterado se nao casar com o formato esperado.
+ */
+function formatCrmv(raw: string): string {
+  if (!raw) return ''
+  const m = raw.toUpperCase().match(/^([A-Z]{2})([0-9]{4,10})$/)
+  if (!m) return raw
+  const uf = m[1]
+  const num = m[2]
+  // 74696 -> 74.696 ; 1234567 -> 1.234.567
+  const formatted = num.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+  return `CRMV-${uf} ${formatted}`
+}
+
+/**
  * Mapeia profiles.role (enum RBAC) → string descritiva no laudo.
  * "vet" e "veterinarian" sao tratados; demais voltam display do RBAC.
  */
@@ -108,7 +129,10 @@ async function buildSystemFieldsContext(
   }
 
   const name = profile.full_name ?? ''
-  const crmv = profile.crmv ?? ''
+  // CRMV no banco eh armazenado cru (constraint chk_crmv_format: ^[A-Z]{2}[0-9]{4,10}$).
+  // Formata para exibicao: "SP74696" -> "CRMV-SP 74.696"
+  const crmvRaw = profile.crmv ?? ''
+  const crmv = formatCrmv(crmvRaw)
   const specialty = profile.specialty ?? ''
   const roleRaw = profile.role ?? ''
   const roleDisplay = ROLE_TO_DISPLAY[roleRaw] ?? roleRaw
