@@ -508,8 +508,8 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
               </select>
             </div>
 
-            {/* Profissional — sempre visível para consultas não-grooming */}
-            {!isGrooming && (
+            {/* Profissional — visível para consultas e para venda de pacote */}
+            {(!isGrooming || scheduleMode === 'package') && (
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
                   Profissional (opcional)
@@ -531,8 +531,8 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
               </div>
             )}
 
-            {/* ══ BANHO E TOSA — campos inline ══ */}
-            {isGrooming && (
+            {/* ══ BANHO E TOSA — campos inline (oculto ao vender pacote) ══ */}
+            {isGrooming && scheduleMode !== 'package' && (
               <>
                 {/* Serviços */}
                 <div>
@@ -660,8 +660,8 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
               </>
             )}
 
-            {/* ══ CONSULTA — data, horário e notas ══ */}
-            {!isGrooming && (
+            {/* ══ CONSULTA / PACOTE — data, horário e notas ══ */}
+            {(!isGrooming || scheduleMode === 'package') && (
               <>
                 {/* Data */}
                 <div>
