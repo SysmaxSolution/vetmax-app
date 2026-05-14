@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import type { ExtractedField, FieldType, PageDimensionsRecord } from '@/types'
 import NewFieldDialog from './NewFieldDialog'
+import ElementQuickEditPopover from './ElementQuickEditPopover'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -718,6 +719,40 @@ export default function TemplateLayoutEditor({
                   <MousePointer2 className="w-3.5 h-3.5" />
                   Clique e arraste sobre o PDF para criar um campo &middot; Esc cancela
                 </div>
+              )}
+
+              {/* Popover de edicao rapida — ao lado do elemento selecionado */}
+              {!drawMode && selected && (pixelPerfectMode ? (selected.page ?? 0) === currentPage : true) && (
+                <ElementQuickEditPopover
+                  element={selected}
+                  elementPx={overlayToPx(selected)}
+                  canvasSize={canvasSize}
+                  onChange={(updates) => updateElement(selected.id, updates)}
+                  onDelete={() => deleteElement(selected.id)}
+                  onClose={() => setSelectedId(null)}
+                  pageCount={pageCount}
+                  onRepeatOnAllPages={
+                    pixelPerfectMode && pageCount > 1 && isPct(selected)
+                      ? () => {
+                          const sourcePage = selected.page ?? 0
+                          const clones: LayoutElement[] = []
+                          for (let p = 0; p < pageCount; p++) {
+                            if (p === sourcePage) continue
+                            const exists = elements.some(
+                              e => e.type === selected.type &&
+                                   (e.page ?? 0) === p &&
+                                   (e.field_name ?? null) === (selected.field_name ?? null) &&
+                                   Math.abs(e.x - selected.x) < 0.5 &&
+                                   Math.abs(e.y - selected.y) < 0.5,
+                            )
+                            if (exists) continue
+                            clones.push({ ...selected, id: uid(), page: p })
+                          }
+                          if (clones.length > 0) updateElements([...elements, ...clones])
+                        }
+                      : undefined
+                  }
+                />
               )}
             </div>
           </div>

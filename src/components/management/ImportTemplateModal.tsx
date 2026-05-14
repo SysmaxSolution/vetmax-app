@@ -1014,6 +1014,14 @@ export default function ImportTemplateModal({
 
       if ('error' in result) { setError(result.error); return }
 
+      // BUG FIX: usar o MESMO valor enviado ao banco (overlaysToSave),
+      // nao o form.layoutOverlays (que nunca e atualizado apos o useState inicial).
+      // Sem isso, o cache local do ManagementWorkspace fica desincronizado e
+      // ao reabrir o modal o editor mostra o layout antigo.
+      const finalLayoutOverlays = overlaysToSave.length > 0
+        ? overlaysToSave
+        : form.layoutOverlays
+
       onSuccess({
         id: result.id,
         clinic_id: editTemplate?.clinic_id ?? '',
@@ -1027,7 +1035,7 @@ export default function ImportTemplateModal({
         original_pdf_size_bytes: form.originalPdfSizeBytes,
         page_count: form.pageCount,
         page_dimensions: form.pageDimensions,
-        layout_overlays: form.layoutOverlays,
+        layout_overlays: finalLayoutOverlays,
         created_at: editTemplate?.created_at ?? new Date().toISOString(),
       })
     } catch (err) {

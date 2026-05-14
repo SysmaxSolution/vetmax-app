@@ -94,10 +94,10 @@ describe('render-overlay', () => {
       expect(textSpy).toHaveBeenCalledTimes(1)
 
       // Retangulo: cobre o bbox do overlay (~10% x 20% de A4)
-      const rectArgs = rectSpy.mock.calls[0][0]
+      const rectArgs = rectSpy.mock.calls[0][0]!
       expect(rectArgs.x).toBeCloseTo(A4.width_pt * 0.10 - 1, 0)   // -1 margem
-      expect(rectArgs.width).toBeCloseTo(A4.width_pt * 0.30 + 2, 0)
-      expect(rectArgs.height).toBeCloseTo(A4.height_pt * 0.05 + 2, 0)
+      expect(rectArgs.width!).toBeCloseTo(A4.width_pt * 0.30 + 2, 0)
+      expect(rectArgs.height!).toBeCloseTo(A4.height_pt * 0.05 + 2, 0)
       // Cor branca
       expect(rectArgs.color).toEqual(expect.objectContaining({
         red: 1, green: 1, blue: 1,
@@ -207,11 +207,11 @@ describe('render-overlay', () => {
         pageDim,
       )
 
-      const args = rectSpy.mock.calls[0][0]
-      expect(args.x).toBeGreaterThanOrEqual(0)
-      expect(args.y).toBeGreaterThanOrEqual(0)
-      expect(args.x + args.width).toBeLessThanOrEqual(pageDim.width_pt + 0.01)
-      expect(args.y + args.height).toBeLessThanOrEqual(pageDim.height_pt + 0.01)
+      const args = rectSpy.mock.calls[0][0]!
+      expect(args.x!).toBeGreaterThanOrEqual(0)
+      expect(args.y!).toBeGreaterThanOrEqual(0)
+      expect(args.x! + args.width!).toBeLessThanOrEqual(pageDim.width_pt + 0.01)
+      expect(args.y! + args.height!).toBeLessThanOrEqual(pageDim.height_pt + 0.01)
     })
   })
 })
