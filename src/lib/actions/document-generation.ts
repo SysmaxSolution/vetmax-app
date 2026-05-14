@@ -19,12 +19,10 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
+import { PDFDocument, StandardFonts } from 'pdf-lib'
 import { randomUUID } from 'crypto'
-import {
-  overlayToDrawTextPoint, overlayToPdfBox, ascenderRatio,
-  PDF_PAGE, type PageDimensions,
-} from '@/lib/pdf/coordinate-system'
+import { type PageDimensions } from '@/lib/pdf/coordinate-system'
+import { applyOverlayToPage } from '@/lib/pdf/render-overlay'
 import type { LayoutOverlay, ExtractedField, PageDimensionsRecord } from '@/types'
 import { logAudit } from './audit'
 
@@ -88,48 +86,6 @@ function buildOverlaysWithFallback(
       font_family: 'Helvetica' as const,
       text_align: 'left' as const,
     }))
-}
-
-/**
- * Quebra texto em multiplas linhas para caber na largura do overlay.
- * Heuristica: tenta inteiro; se nao couber, quebra por palavras.
- */
-function wrapTextToWidth(
-  text: string,
-  font: { widthOfTextAtSize: (s: string, size: number) => number },
-  size: number,
-  maxWidth: number,
-): string[] {
-  if (!text) return []
-  if (font.widthOfTextAtSize(text, size) <= maxWidth) return [text]
-
-  const words = text.split(/\s+/)
-  const lines: string[] = []
-  let current = ''
-  for (const w of words) {
-    const candidate = current ? `${current} ${w}` : w
-    if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
-      current = candidate
-    } else {
-      if (current) lines.push(current)
-      // Palavra unica maior que maxWidth: forca quebra brutal
-      if (font.widthOfTextAtSize(w, size) > maxWidth) {
-        let chunk = ''
-        for (const ch of w) {
-          if (font.widthOfTextAtSize(chunk + ch, size) > maxWidth) {
-            lines.push(chunk); chunk = ch
-          } else {
-            chunk += ch
-          }
-        }
-        current = chunk
-      } else {
-        current = w
-      }
-    }
-  }
-  if (current) lines.push(current)
-  return lines
 }
 
 // ── Main: generateFilledDocument ────────────────────────────────────────────
@@ -210,74 +166,25 @@ export async function generateFilledDocument(
     // pode estar desincronizado se o usuario subiu PDF diferente)
     const pageSize = page.getSize()
     const pageDim: PageDimensions = { width_pt: pageSize.width, height_pt: pageSize.height }
-    // Se houver page_dimensions persistido e a diferenca for grande, log alerta
     const storedDim = pageDims?.[pageIdx]
     if (storedDim && Math.abs(storedDim.width_pt - pageDim.width_pt) > 5) {
       console.warn(`[generateFilledDocument] page ${pageIdx} dim mismatch — armazenado=${storedDim.width_pt}x${storedDim.height_pt}, real=${pageDim.width_pt}x${pageDim.height_pt}`)
     }
-
-    const font = overlay.font_weight === 'bold' ? helveticaBold : helvetica
-    const fontSize_pt = overlay.font_size
 
     // Resolve conteudo
     let text = ''
     if (overlay.type === 'field') {
       const raw = input.field_values[overlay.field_name ?? '']
       text = formatValueForPdf(raw, fieldTypeMap.get(overlay.field_name ?? ''))
-      if (!text) continue // campo vazio — nao desenha nada
+      if (!text) continue
     } else if (overlay.type === 'text') {
       text = overlay.content ?? overlay.label ?? ''
       if (!text) continue
     } else {
-      // logo / signature / image — F5 nao desenha imagens ainda (backlog)
       continue
     }
 
-    // Quebra de linha se nao couber
-    const maxWidth_pt = (overlay.w_pct / 100) * pageDim.width_pt
-    const lines = wrapTextToWidth(
-      text,
-      { widthOfTextAtSize: (s, sz) => font.widthOfTextAtSize(s, sz) },
-      fontSize_pt,
-      maxWidth_pt,
-    )
-
-    const lineHeight_pt = fontSize_pt * 1.2  // line-height padrao
-
-    // Desenha cada linha
-    for (let li = 0; li < lines.length; li++) {
-      const line = lines[li]
-      const textWidth_pt = font.widthOfTextAtSize(line, fontSize_pt)
-
-      // Coordenadas baseline para drawText
-      const align = overlay.text_align ?? 'left'
-      const baseY_overlay = { ...overlay, y_pct: overlay.y_pct + (li * lineHeight_pt / pageDim.height_pt) * 100 }
-      const baseY_rect = {
-        x_pct: baseY_overlay.x_pct,
-        y_pct: baseY_overlay.y_pct,
-        w_pct: overlay.w_pct,
-        h_pct: overlay.h_pct,
-      }
-      const point = overlayToDrawTextPoint(
-        baseY_rect,
-        pageDim,
-        { size_pt: fontSize_pt, family: 'Helvetica' },
-        align,
-        textWidth_pt,
-      )
-
-      try {
-        page.drawText(line, {
-          x: point.x,
-          y: point.y,
-          size: fontSize_pt,
-          font,
-          color: rgb(0, 0, 0),
-        })
-      } catch (drawErr) {
-        console.warn('[generateFilledDocument] drawText falhou:', overlay.field_name, drawErr)
-      }
-    }
+    applyOverlayToPage(page, overlay, text, { helvetica, helveticaBold }, pageDim)
   }
 
   // 7. Serializa PDF preenchido
@@ -402,7 +309,6 @@ export async function previewFilledPdfBytes(
     const page = pages[pageIdx]
     const { width, height } = page.getSize()
     const pageDim: PageDimensions = { width_pt: width, height_pt: height }
-    const font = overlay.font_weight === 'bold' ? helveticaBold : helvetica
 
     let text = ''
     if (overlay.type === 'field') {
@@ -414,26 +320,7 @@ export async function previewFilledPdfBytes(
       if (!text) continue
     } else continue
 
-    const maxWidth_pt = (overlay.w_pct / 100) * pageDim.width_pt
-    const lines = wrapTextToWidth(text, font, overlay.font_size, maxWidth_pt)
-    const lineHeight_pt = overlay.font_size * 1.2
-
-    for (let li = 0; li < lines.length; li++) {
-      const line = lines[li]
-      const textWidth_pt = font.widthOfTextAtSize(line, overlay.font_size)
-      const rect = {
-        x_pct: overlay.x_pct,
-        y_pct: overlay.y_pct + (li * lineHeight_pt / pageDim.height_pt) * 100,
-        w_pct: overlay.w_pct,
-        h_pct: overlay.h_pct,
-      }
-      const point = overlayToDrawTextPoint(rect, pageDim,
-        { size_pt: overlay.font_size, family: 'Helvetica' },
-        overlay.text_align ?? 'left', textWidth_pt)
-      try {
-        page.drawText(line, { x: point.x, y: point.y, size: overlay.font_size, font, color: rgb(0, 0, 0) })
-      } catch {}
-    }
+    applyOverlayToPage(page, overlay, text, { helvetica, helveticaBold }, pageDim)
   }
 
   const bytes = await pdfDoc.save({ useObjectStreams: false })

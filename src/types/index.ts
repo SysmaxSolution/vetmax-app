@@ -229,6 +229,11 @@ export interface LayoutOverlay {
   font_family: 'Helvetica' | 'Times' | 'Courier'
   text_align: 'left' | 'center' | 'right'
   color?: string                        // hex, default '#000000'
+  // Padrao DocuSign: pinta retangulo branco antes do drawText para apagar
+  // conteudo pre-preenchido do template (dados de exemplo, linhas pontilhadas).
+  // Default: true em modo Pixel Perfect. Setar false quando o overlay
+  // deve ficar transparente sobre o substrato (raro).
+  whiteout?: boolean
 }
 
 export interface PageDimensionsRecord {
