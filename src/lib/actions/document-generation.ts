@@ -23,6 +23,8 @@ import { PDFDocument, StandardFonts } from 'pdf-lib'
 import { randomUUID } from 'crypto'
 import { type PageDimensions } from '@/lib/pdf/coordinate-system'
 import { applyOverlayToPage } from '@/lib/pdf/render-overlay'
+import { SYSTEM_FIELDS } from '@/lib/pdf/canonical-whitelist'
+import type { InterpolationContext } from '@/lib/pdf/interpolate-vars'
 import type { LayoutOverlay, ExtractedField, PageDimensionsRecord } from '@/types'
 import { logAudit } from './audit'
 
@@ -56,6 +58,48 @@ function formatValueForPdf(raw: unknown, fieldType?: ExtractedField['type']): st
     if (m) return `${m[3]}/${m[2]}/${m[1]}`
   }
   return String(raw)
+}
+
+/**
+ * LEI 3 — monta o contexto de interpolacao a partir do usuario logado.
+ *
+ * O contexto e injetado em `applyOverlayToPage` (via `fonts.ctx`) e tambem
+ * mergeado em `field_values` para overlays type='field' cujo field_name esta
+ * em SYSTEM_FIELDS.
+ *
+ * Fonte:
+ *   profiles.full_name → professional_name
+ *   profiles.crmv      → professional_crmv
+ *   profiles.role      → professional_role (Veterinario / Auxiliar / ...)
+ *   clinics.name       → clinic_name
+ */
+async function buildSystemFieldsContext(
+  supabaseAdmin: ReturnType<typeof createAdminClient>,
+  userId: string,
+): Promise<InterpolationContext> {
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('full_name, crmv, role, clinic_id')
+    .eq('id', userId)
+    .single()
+  if (!profile) return {}
+
+  let clinicName: string | null = null
+  if (profile.clinic_id) {
+    const { data: clinic } = await supabaseAdmin
+      .from('clinics')
+      .select('name')
+      .eq('id', profile.clinic_id)
+      .single()
+    clinicName = clinic?.name ?? null
+  }
+
+  return {
+    professional_name: profile.full_name ?? '',
+    professional_crmv: profile.crmv ?? '',
+    professional_role: profile.role ?? '',
+    clinic_name: clinicName ?? '',
+  }
 }
 
 /**
@@ -141,6 +185,19 @@ export async function generateFilledDocument(
   const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica)
   const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
 
+  // 4b. LEI 3 — Contexto de interpolacao a partir do usuario logado.
+  //     Resolve [professional_name], [professional_crmv], [clinic_name], etc.
+  const systemCtx = await buildSystemFieldsContext(admin, user.id)
+
+  // 4c. Merge: campos de sistema entram em field_values automaticamente
+  //     (do contrario o overlay type='field' seria pulado por text vazio).
+  const mergedFieldValues: Record<string, unknown> = { ...input.field_values }
+  for (const key of SYSTEM_FIELDS) {
+    if (mergedFieldValues[key] == null || mergedFieldValues[key] === '') {
+      mergedFieldValues[key] = systemCtx[key] ?? ''
+    }
+  }
+
   // 5. Resolve overlays (canonicos ou fallback de extracted_fields)
   const overlays = buildOverlaysWithFallback(
     (template.layout_overlays as LayoutOverlay[] | null),
@@ -174,7 +231,7 @@ export async function generateFilledDocument(
     // Resolve conteudo
     let text = ''
     if (overlay.type === 'field') {
-      const raw = input.field_values[overlay.field_name ?? '']
+      const raw = mergedFieldValues[overlay.field_name ?? '']
       text = formatValueForPdf(raw, fieldTypeMap.get(overlay.field_name ?? ''))
       if (!text) continue
     } else if (overlay.type === 'text') {
@@ -184,7 +241,7 @@ export async function generateFilledDocument(
       continue
     }
 
-    applyOverlayToPage(page, overlay, text, { helvetica, helveticaBold }, pageDim)
+    applyOverlayToPage(page, overlay, text, { helvetica, helveticaBold, ctx: systemCtx }, pageDim)
   }
 
   // 7. Serializa PDF preenchido
@@ -292,6 +349,15 @@ export async function previewFilledPdfBytes(
   const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica)
   const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
 
+  // LEI 3 — ctx do usuario logado
+  const systemCtx = await buildSystemFieldsContext(admin, user.id)
+  const mergedFieldValues: Record<string, unknown> = { ...fieldValues }
+  for (const key of SYSTEM_FIELDS) {
+    if (mergedFieldValues[key] == null || mergedFieldValues[key] === '') {
+      mergedFieldValues[key] = systemCtx[key] ?? ''
+    }
+  }
+
   const overlays = buildOverlaysWithFallback(
     template.layout_overlays as LayoutOverlay[] | null,
     (template.extracted_fields as ExtractedField[]) ?? [],
@@ -312,7 +378,7 @@ export async function previewFilledPdfBytes(
 
     let text = ''
     if (overlay.type === 'field') {
-      const raw = fieldValues[overlay.field_name ?? '']
+      const raw = mergedFieldValues[overlay.field_name ?? '']
       text = formatValueForPdf(raw, fieldTypeMap.get(overlay.field_name ?? ''))
       if (!text) continue
     } else if (overlay.type === 'text') {
@@ -320,7 +386,7 @@ export async function previewFilledPdfBytes(
       if (!text) continue
     } else continue
 
-    applyOverlayToPage(page, overlay, text, { helvetica, helveticaBold }, pageDim)
+    applyOverlayToPage(page, overlay, text, { helvetica, helveticaBold, ctx: systemCtx }, pageDim)
   }
 
   const bytes = await pdfDoc.save({ useObjectStreams: false })

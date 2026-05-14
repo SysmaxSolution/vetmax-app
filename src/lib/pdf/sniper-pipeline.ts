@@ -163,12 +163,45 @@ export interface SignatureDetectionResult {
 }
 
 /**
+ * Resolve QUAIS items da linha contêm o trecho casado pelo regex.
+ *
+ * Concatena os strs com espaço (igual ao matching) e mapeia cada caractere
+ * de volta ao item de origem. O range [matchStart, matchEnd) na string
+ * concatenada vira o conjunto de items que sobrepõem o match.
+ *
+ * Por LEI 2, o whiteout precisa cobrir SOMENTE esses items — nunca a linha
+ * inteira. Isso protege qualquer texto adjacente que não seja parte da
+ * assinatura (ex: "Responsável Técnico — Dr. Foo" só apaga "Dr. Foo").
+ */
+function itemsForMatch(items: PdfTextItem[], re: RegExp): PdfTextItem[] | null {
+  // Reconstrói a string com offsets de cada item
+  const offsets: { start: number; end: number; item: PdfTextItem }[] = []
+  let acc = ''
+  for (const it of items) {
+    if (acc.length > 0) acc += ' '
+    const start = acc.length
+    acc += it.str
+    offsets.push({ start, end: acc.length, item: it })
+  }
+  const m = re.exec(acc)
+  if (!m) return null
+  const mStart = m.index
+  const mEnd = m.index + m[0].length
+  const hits = offsets
+    .filter(o => o.end > mStart && o.start < mEnd)
+    .map(o => o.item)
+  return hits.length > 0 ? hits : null
+}
+
+/**
  * Varre o textContent buscando padrões de assinatura profissional.
  * Para cada match, gera:
  *   - 1 FieldMatch (pré-resolvido, não vai pro Claude)
  *   - N LabelCandidates (1 por instância no PDF — geralmente 1 por página)
- *   - Cada candidate com bbox = LINHA INTEIRA (para whiteout completo,
- *     já que o texto antigo precisa SER APAGADO antes do novo entrar)
+ *
+ * LEI 2 aplicada: whiteout cobre EXATAMENTE o span dos items que casaram com
+ * o regex (e não a linha inteira). Texto adjacente fica intacto. O drawText
+ * é depositado nesse mesmo span.
  */
 export function detectProfessionalSignatures(
   textItems: PdfTextItem[],
@@ -186,27 +219,27 @@ export function detectProfessionalSignatures(
     if (lineText.includes(':')) continue
 
     for (const pattern of SIGNATURE_PATTERNS) {
-      if (!pattern.re.test(lineText)) continue
+      const hitItems = itemsForMatch(line.items, pattern.re)
+      if (!hitItems) continue
 
-      const lineBbox = bboxFromItems(line.items)
-      // Baseline: pega do primeiro item (mesma linha = mesma baseline)
-      const baseline_y_pct = line.items[0].baseline_y_pct
+      // LEI 2: bbox = apenas o trecho casado, não a linha
+      const hitBbox = bboxFromItems(hitItems)
+      const baseline_y_pct = hitItems[0].baseline_y_pct
+      const hitText = hitItems.map(i => i.str).join(' ').trim()
 
-      // Candidate sintético:
-      //   - label_text = pattern.field_name (estável para agrupar globais)
-      //   - label_bbox = bbox da linha inteira (não tem label separado)
-      //   - value_bbox = mesma bbox (vai apagar tudo e reescrever)
-      //   - existing_value_bbox = mesma bbox (whiteout completo)
       candidates.push({
         page: line.page,
-        label_text: lineText,
+        label_text: pattern.field_name,    // identificador estável para detectGlobalFields
         label_normalized: pattern.field_name,
-        label_bbox: lineBbox,
-        value_bbox: lineBbox,
-        align: 'center',
-        existing_value_text: lineText,
-        existing_value_bbox: lineBbox,
-        font_size_pt: lineBbox.h_pct,
+        // label_bbox sintético "antes" do hit (largura 0): permite que a
+        // matemática do whiteout de aplyOverlayToPage NÃO seja usada aqui —
+        // já fornecemos whiteout_bbox = existing_value_bbox.
+        label_bbox: { x_pct: hitBbox.x_pct, y_pct: hitBbox.y_pct, w_pct: 0, h_pct: hitBbox.h_pct },
+        value_bbox: hitBbox,               // drawText escreve sobre o hit
+        align: 'left',                     // assinaturas: alinhamento à esquerda
+        existing_value_text: hitText,
+        existing_value_bbox: hitBbox,      // whiteout cirúrgico SOMENTE no hit
+        font_size_pt: hitBbox.h_pct,
         baseline_y_pct,
       })
       matchedLines.add(lineText)

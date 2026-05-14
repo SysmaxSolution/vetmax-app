@@ -189,6 +189,117 @@ describe('render-overlay', () => {
       expect(callArgs?.font).toBe(helveticaBold)
     })
 
+    // ── LEI 3 — Interpolacao de variaveis ─────────────────────────────────
+    it('LEI 3: [professional_name] e substituido por ctx antes de drawText', async () => {
+      const pdf = await PDFDocument.load(basePdfBytes)
+      const helvetica = await pdf.embedFont(StandardFonts.Helvetica)
+      const helveticaBold = await pdf.embedFont(StandardFonts.HelveticaBold)
+      const page = pdf.getPage(0)
+      const pageDim = { width_pt: page.getWidth(), height_pt: page.getHeight() }
+
+      const textSpy = jest.spyOn(page, 'drawText')
+
+      applyOverlayToPage(
+        page,
+        makeOverlay({ type: 'text' }),
+        '[professional_name]',
+        {
+          helvetica, helveticaBold,
+          ctx: { professional_name: 'Dr. Foo' },
+        },
+        pageDim,
+      )
+
+      expect(textSpy).toHaveBeenCalledTimes(1)
+      // INVARIANTE: o texto desenhado NAO contem '[professional_name]'
+      const writtenText = textSpy.mock.calls[0][0] as string
+      expect(writtenText).toBe('Dr. Foo')
+      expect(writtenText).not.toContain('[')
+      expect(writtenText).not.toContain(']')
+    })
+
+    it('LEI 3: {{professional_crmv}} idem', async () => {
+      const pdf = await PDFDocument.load(basePdfBytes)
+      const helvetica = await pdf.embedFont(StandardFonts.Helvetica)
+      const helveticaBold = await pdf.embedFont(StandardFonts.HelveticaBold)
+      const page = pdf.getPage(0)
+      const pageDim = { width_pt: page.getWidth(), height_pt: page.getHeight() }
+
+      const textSpy = jest.spyOn(page, 'drawText')
+
+      applyOverlayToPage(
+        page,
+        makeOverlay({ type: 'text' }),
+        '{{professional_crmv}}',
+        {
+          helvetica, helveticaBold,
+          ctx: { professional_crmv: 'CRMV-SP 74.696' },
+        },
+        pageDim,
+      )
+
+      expect(textSpy).toHaveBeenCalledTimes(1)
+      const writtenText = textSpy.mock.calls[0][0] as string
+      expect(writtenText).toBe('CRMV-SP 74.696')
+      expect(writtenText).not.toContain('{')
+      expect(writtenText).not.toContain('}')
+    })
+
+    it('LEI 3: token desconhecido vira "" — NAO emite drawText (texto vazio)', async () => {
+      const pdf = await PDFDocument.load(basePdfBytes)
+      const helvetica = await pdf.embedFont(StandardFonts.Helvetica)
+      const helveticaBold = await pdf.embedFont(StandardFonts.HelveticaBold)
+      const page = pdf.getPage(0)
+      const pageDim = { width_pt: page.getWidth(), height_pt: page.getHeight() }
+
+      const rectSpy = jest.spyOn(page, 'drawRectangle')
+      const textSpy = jest.spyOn(page, 'drawText')
+
+      applyOverlayToPage(
+        page,
+        makeOverlay({ type: 'text' }),
+        '[unknown_field]',
+        { helvetica, helveticaBold, ctx: {} },
+        pageDim,
+      )
+
+      // O whiteout ainda eh emitido (limpa conteudo antigo do PDF original)
+      expect(rectSpy).toHaveBeenCalledTimes(1)
+      // Mas NENHUM drawText com o literal
+      expect(textSpy).not.toHaveBeenCalled()
+    })
+
+    it('LEI 3: mistura de texto puro + placeholders', async () => {
+      const pdf = await PDFDocument.load(basePdfBytes)
+      const helvetica = await pdf.embedFont(StandardFonts.Helvetica)
+      const helveticaBold = await pdf.embedFont(StandardFonts.HelveticaBold)
+      const page = pdf.getPage(0)
+      const pageDim = { width_pt: page.getWidth(), height_pt: page.getHeight() }
+
+      const textSpy = jest.spyOn(page, 'drawText')
+
+      applyOverlayToPage(
+        page,
+        makeOverlay({ type: 'text', w_pct: 60 }),
+        '[professional_name] - [professional_crmv]',
+        {
+          helvetica, helveticaBold,
+          ctx: { professional_name: 'Dr. Foo', professional_crmv: 'CRMV-SP 1' },
+        },
+        pageDim,
+      )
+
+      // Pode haver wrap em > 1 linha; verificar que NENHUMA contém literal
+      for (const call of textSpy.mock.calls) {
+        const s = call[0] as string
+        expect(s).not.toContain('[')
+        expect(s).not.toContain(']')
+      }
+      // E que ao menos uma linha contém o nome resolvido
+      const allText = textSpy.mock.calls.map(c => c[0]).join(' ')
+      expect(allText).toContain('Dr. Foo')
+    })
+
     it('whiteout respeita bounds da pagina (clamp para nao sair)', async () => {
       const pdf = await PDFDocument.load(basePdfBytes)
       const helvetica = await pdf.embedFont(StandardFonts.Helvetica)

@@ -77,8 +77,8 @@ describe('OCR Sniper', () => {
       const c = cs[0]
       expect(c.label_text).toBe('Paciente:')
       expect(c.label_normalized).toBe('paciente')
-      // value_bbox.x_pct = label.x + label.w + margem (0.5)
-      expect(c.value_bbox.x_pct).toBeCloseTo(10 + 8 + 0.5, 1)
+      // LEI 2: value_bbox.x_pct = label.right + WHITEOUT_SAFETY_PCT (0.3)
+      expect(c.value_bbox.x_pct).toBeCloseTo(10 + 8 + 0.3, 1)
       // value.y = label.y
       expect(c.value_bbox.y_pct).toBeCloseTo(20, 1)
       // value.h = label.h
@@ -86,6 +86,70 @@ describe('OCR Sniper', () => {
       expect(c.existing_value_text).toBe('Snow')
       // PM-3: baseline_y_pct deve estar presente
       expect(c.baseline_y_pct).toBeGreaterThan(0)
+    })
+
+    // ── LEI 2: WHITEOUT NUNCA CRUZA O LABEL ────────────────────────────────
+    it('LEI 2: "Aorta: 0,76 cm" — whiteout NAO encosta no rotulo "Aorta:"', () => {
+      // label "Aorta:" ocupa x=10..17, value "0,76" em 25, sufixo "cm" em 45
+      const items = [
+        item('Aorta:', 0, 10, 30, 7, 1.5),
+        item('0,76',   0, 25, 30, 5, 1.5),
+        item('cm',     0, 45, 30, 4, 1.5),
+      ]
+      const cs = snipeLabels(items)
+      expect(cs.length).toBe(1)
+      const c = cs[0]
+
+      const labelRight = c.label_bbox.x_pct + c.label_bbox.w_pct  // = 17
+      const whiteoutLeft = c.existing_value_bbox!.x_pct
+      const whiteoutRight = whiteoutLeft + c.existing_value_bbox!.w_pct
+      const suffixLeft = 45
+
+      // INVARIANTE 1: whiteoutLeft > labelRight (com margem >= 0.2%)
+      expect(whiteoutLeft).toBeGreaterThan(labelRight)
+      expect(whiteoutLeft - labelRight).toBeGreaterThanOrEqual(0.2)
+
+      // INVARIANTE 2: whiteoutRight < suffixLeft (com margem >= 0.2%)
+      expect(whiteoutRight).toBeLessThan(suffixLeft)
+      expect(suffixLeft - whiteoutRight).toBeGreaterThanOrEqual(0.2)
+
+      // INVARIANTE 3: value_bbox = whiteout_bbox (texto novo onde se apagou)
+      expect(c.value_bbox.x_pct).toBeCloseTo(c.existing_value_bbox!.x_pct, 5)
+      expect(c.value_bbox.w_pct).toBeCloseTo(c.existing_value_bbox!.w_pct, 5)
+
+      // Align CENTER (sufixo presente)
+      expect(c.align).toBe('center')
+    })
+
+    it('LEI 2: sem sufixo, sem next_label — whiteout vai ate ~100 com margem', () => {
+      const items = [
+        item('Observacoes:', 0, 10, 20, 15, 1.5),
+      ]
+      const cs = snipeLabels(items)
+      expect(cs.length).toBe(1)
+      const c = cs[0]
+      const labelRight = c.label_bbox.x_pct + c.label_bbox.w_pct  // 25
+      const whiteoutLeft = c.existing_value_bbox!.x_pct
+      expect(whiteoutLeft - labelRight).toBeGreaterThanOrEqual(0.2)
+      // sem sufixo + sem next_label aplica valueMaxW (50%)
+      expect(c.existing_value_bbox!.w_pct).toBeLessThanOrEqual(50)
+    })
+
+    it('LEI 2: dois labels na mesma linha — whiteout do 1o nao cruza o 2o', () => {
+      const items = [
+        item('Paciente:', 0, 10, 20, 8, 1.5),
+        item('Snow',      0, 19, 20, 6, 1.5),
+        item('Especie:',  0, 50, 20, 8, 1.5),
+        item('Canino',    0, 59, 20, 7, 1.5),
+      ]
+      const cs = snipeLabels(items)
+      expect(cs.length).toBe(2)
+      const first = cs[0]
+      const secondLabelLeft = 50
+      const firstWhiteoutRight = first.existing_value_bbox!.x_pct + first.existing_value_bbox!.w_pct
+      // INVARIANTE: whiteout do primeiro termina ANTES do segundo label
+      expect(firstWhiteoutRight).toBeLessThan(secondLabelLeft)
+      expect(secondLabelLeft - firstWhiteoutRight).toBeGreaterThanOrEqual(0.2)
     })
 
     // ── PM-1: item unificado "Paciente: Snow" deve ser separado matematicamente ─
@@ -143,11 +207,10 @@ describe('OCR Sniper', () => {
       expect(cs.length).toBe(1)
       const c = cs[0]
       expect(c.label_normalized).toBe('aorta')
-      // value_bbox.x = label.right + margem (0.5)
-      expect(c.value_bbox.x_pct).toBeCloseTo(17 + 0.5, 1)
-      // value_bbox direita = suffix.x - margem = 45 - 0.5 = 44.5
-      // value_bbox.w = 44.5 - 17.5 = 27
-      expect(c.value_bbox.x_pct + c.value_bbox.w_pct).toBeCloseTo(45 - 0.5, 1)
+      // LEI 2: value_bbox.x = label.right + WHITEOUT_SAFETY_PCT (0.3)
+      expect(c.value_bbox.x_pct).toBeCloseTo(17 + 0.3, 1)
+      // value_bbox direita = suffix.x - WHITEOUT_SAFETY_PCT = 45 - 0.3 = 44.7
+      expect(c.value_bbox.x_pct + c.value_bbox.w_pct).toBeCloseTo(45 - 0.3, 1)
       // Align CENTER quando há sufixo
       expect(c.align).toBe('center')
       // existing_value continua sendo "0,76" (sem o sufixo)
@@ -186,9 +249,10 @@ describe('OCR Sniper', () => {
       expect(cs.length).toBe(1)
       const c = cs[0]
       expect(c.existing_value_text).toBeUndefined()
-      // Mas existing_value_bbox deve estar setada para cobrir o espaço entre label e cm
+      // existing_value_bbox setada para cobrir o espaço entre label e cm
       expect(c.existing_value_bbox).toBeDefined()
-      expect(c.existing_value_bbox!.x_pct).toBeCloseTo(17.5, 1)
+      // LEI 2: x_pct = labelRight (17) + WHITEOUT_SAFETY_PCT (0.3)
+      expect(c.existing_value_bbox!.x_pct).toBeCloseTo(17.3, 1)
       expect(c.align).toBe('center')
     })
 

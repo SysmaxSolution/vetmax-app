@@ -15,6 +15,7 @@ import {
   overlayToDrawTextPoint, overlayToPdfBox,
   type PageDimensions,
 } from './coordinate-system'
+import { interpolateText, type InterpolationContext } from './interpolate-vars'
 import type { LayoutOverlay } from '@/types'
 
 // ── Word-wrap ───────────────────────────────────────────────────────────────
@@ -61,12 +62,22 @@ export function wrapTextToWidth(
 export interface ApplyOverlayOptions {
   helvetica: PDFFont
   helveticaBold: PDFFont
+  /**
+   * LEI 3 — Contexto de interpolacao. Antes de drawText, tokens como
+   * `[professional_name]` ou `{{professional_name}}` no texto sao substituidos
+   * por `ctx[professional_name]`. Tokens nao encontrados viram string vazia
+   * (NUNCA vazam literais para o PDF final).
+   */
+  ctx?: InterpolationContext
 }
 
 /**
  * Desenha um retangulo branco no bbox do overlay (whiteout) e em seguida
  * escreve o texto. Whiteout pode ser desativado por overlay setando
  * `overlay.whiteout = false`.
+ *
+ * O `text` recebido SEMPRE passa pela LEI 3 (interpolateText) antes de qualquer
+ * outra operacao. Tokens [foo]/{{foo}} sao resolvidos via fonts.ctx.
  */
 export function applyOverlayToPage(
   page: PDFPage,
@@ -75,6 +86,9 @@ export function applyOverlayToPage(
   fonts: ApplyOverlayOptions,
   pageDim: PageDimensions,
 ): void {
+  // LEI 3 — substitui qualquer placeholder ANTES de qualquer operacao
+  const resolvedText = interpolateText(text ?? '', fonts.ctx ?? {})
+
   const font = overlay.font_weight === 'bold' ? fonts.helveticaBold : fonts.helvetica
   const fontSize_pt = overlay.font_size
 
@@ -107,9 +121,14 @@ export function applyOverlayToPage(
   }
 
   // ── drawText com word-wrap ────────────────────────────────────────────
+  // Se a interpolacao resultou em string vazia, NAO emite drawText (e nao
+  // queremos um whiteout-only mesmo? Sim — o whiteout ja apagou o conteudo
+  // antigo; deixar o campo limpo eh o comportamento desejado).
+  if (!resolvedText) return
+
   const maxWidth_pt = (overlay.w_pct / 100) * pageDim.width_pt
   const lines = wrapTextToWidth(
-    text,
+    resolvedText,
     { widthOfTextAtSize: (s, sz) => font.widthOfTextAtSize(s, sz) },
     fontSize_pt,
     maxWidth_pt,

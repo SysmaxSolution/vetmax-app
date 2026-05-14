@@ -21,9 +21,30 @@ describe('detectProfessionalSignatures (TZ-2)', () => {
     expect(r.matches[0].is_system_field).toBe(true)
     expect(r.matches[0].is_custom).toBe(false)
     expect(r.candidates.length).toBe(1)
-    expect(r.candidates[0].align).toBe('center')
-    // existing_value_bbox = bbox INTEIRO da linha (whiteout completo)
+    // LEI 2: align 'left' (assinatura) — nao 'center'
+    expect(r.candidates[0].align).toBe('left')
+    // LEI 2: existing_value_bbox = bbox SOMENTE dos items casados
     expect(r.candidates[0].existing_value_bbox).toBeDefined()
+  })
+
+  // ── LEI 2: whiteout cirurgico — texto adjacente fora do match fica intacto ─
+  it('LEI 2: linha "Responsavel Tecnico Dr. Foo Bar" — whiteout cobre apenas "Dr. Foo Bar"', () => {
+    // Items na mesma linha. O regex de Dr. casa a partir de "Dr." em diante.
+    const items = [
+      item('Responsavel', 0, 5,  10, 12, 1.5),
+      item('Tecnico',     0, 18, 10, 8,  1.5),
+      item('Dr.',         0, 28, 10, 4,  1.5),
+      item('Foo',         0, 33, 10, 5,  1.5),
+      item('Bar',         0, 39, 10, 5,  1.5),
+    ]
+    const r = detectProfessionalSignatures(items)
+    expect(r.matches.length).toBe(1)
+    expect(r.candidates.length).toBe(1)
+    const c = r.candidates[0]
+    // Whiteout SO cobre "Dr. Foo Bar" — comeca em x >= 28
+    expect(c.existing_value_bbox!.x_pct).toBeGreaterThanOrEqual(28 - 0.01)
+    // E NAO inicia na linha ("Responsavel" comeca em x=5)
+    expect(c.existing_value_bbox!.x_pct).toBeGreaterThan(5 + 12)  // > fim de "Responsavel"
   })
 
   it('detecta "CRMV-SP 74.696" como professional_crmv', () => {

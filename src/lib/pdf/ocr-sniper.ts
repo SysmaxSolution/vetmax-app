@@ -70,6 +70,17 @@ const DEFAULT_VALUE_MAX_W_PCT = 50
 const DEFAULT_LINE_TOLERANCE_PCT = 0.6
 
 /**
+ * LEI 2 — Whiteout Seguro.
+ *
+ * Margem de segurança ENTRE o rótulo e o início do retângulo branco. Garante
+ * matematicamente que o whiteout NUNCA toque a tipografia do label.
+ *
+ * 0.3% de uma página A4 (≈595pt de largura) = ≈1.8pt ≈ 2px (a 100% zoom). É
+ * folgado o suficiente para evitar erros de subpixel sem comer espaço útil.
+ */
+const WHITEOUT_SAFETY_PCT = 0.3
+
+/**
  * Vocabulário de labels comuns em documentos veterinários — usado como
  * "boost" de confiança quando o texto não termina com ':' mas bate com a lista.
  */
@@ -409,66 +420,87 @@ export function snipeLabels(
       const labelNorm = normalizeLabel(labelText)
       if (!labelNorm) continue
 
-      // Largura do VALOR: do fim do label até o próximo label OU 100% da página
-      // OU valueMaxW (limite superior). Min: valueMinW.
+      // ── LEI 2 — A MATEMÁTICA DO WHITE-OUT SEGURO ─────────────────────────
       //
-      // TZ-3: SE há sufixo de unidade (cm, mmHg, etc), o limite direito do
-      // value_bbox é o INÍCIO do sufixo — não o próximo label. Isso garante
-      // que o número fique posicionado ENTRE o rótulo e a unidade.
-      const valueStartX = labelBbox.x_pct + labelBbox.w_pct + margin
-      let valueEndX_max: number
-      let hasSuffix = false
-      if (typeof seg.suffix_x_pct === 'number') {
-        valueEndX_max = seg.suffix_x_pct - margin
-        hasSuffix = true
-      } else if (seg.next_label_x_pct !== null) {
-        valueEndX_max = seg.next_label_x_pct - margin
-      } else {
-        valueEndX_max = 100
-      }
-      const valueWidthRaw = valueEndX_max - valueStartX
-      // Quando há sufixo, NÃO aplica valueMaxW (queremos o espaço exato entre label e unidade)
-      const valueWidth = hasSuffix
-        ? Math.max(valueMinW, valueWidthRaw)
-        : Math.max(valueMinW, Math.min(valueWidthRaw, valueMaxW))
+      // Regra inquebrável:
+      //   labelLeft   ← labelBbox.x_pct
+      //   labelRight  ← labelBbox.x_pct + labelBbox.w_pct
+      //   whiteoutLeft  = labelRight + WHITEOUT_SAFETY_PCT   ← ESTRITAMENTE > labelRight
+      //   whiteoutRight =
+      //     suffix?    → suffixBbox.x_pct - WHITEOUT_SAFETY_PCT
+      //     nextLabel? → nextLabel.x_pct  - WHITEOUT_SAFETY_PCT
+      //     else       → 100              - WHITEOUT_SAFETY_PCT
+      //
+      // O retângulo branco NUNCA toca o LabelBox nem o SuffixBox. O rótulo
+      // ("Aorta:") e a unidade ("cm") são protegidos por construção.
+      //
+      // O `value_bbox` (alvo do drawText) coincide com o whiteout — o texto
+      // novo é escrito EXATAMENTE no espaço que acabamos de apagar.
 
-      // BBOX do valor dinâmico (onde drawText vai escrever)
+      const labelRight = labelBbox.x_pct + labelBbox.w_pct
+      const whiteoutLeft = labelRight + WHITEOUT_SAFETY_PCT
+      const hasSuffix = typeof seg.suffix_x_pct === 'number'
+
+      let whiteoutRight: number
+      if (hasSuffix) {
+        whiteoutRight = (seg.suffix_x_pct as number) - WHITEOUT_SAFETY_PCT
+      } else if (seg.next_label_x_pct !== null) {
+        whiteoutRight = seg.next_label_x_pct - WHITEOUT_SAFETY_PCT
+      } else {
+        whiteoutRight = 100 - WHITEOUT_SAFETY_PCT
+      }
+
+      // Defesa: largura mínima de 1% e nunca negativa. Quando whiteoutRight
+      // <= whiteoutLeft (impossível porque margem positiva, mas guarda),
+      // marca whiteoutRight = whiteoutLeft + valueMinW (sem ultrapassar).
+      let whiteoutWidth = whiteoutRight - whiteoutLeft
+      if (whiteoutWidth < valueMinW) {
+        // Linha apertada: aceita o mínimo, mas SEM ultrapassar o lado direito
+        // permitido (suffix ou nextLabel). Mantém prioridade da LEI 2.
+        const allowedMax = whiteoutRight
+        whiteoutWidth = Math.max(0, Math.min(valueMinW, allowedMax - whiteoutLeft))
+      }
+      // Sem sufixo, respeita também o limite valueMaxW para não comer toda
+      // a página em campos sem next_label.
+      if (!hasSuffix && seg.next_label_x_pct === null) {
+        whiteoutWidth = Math.min(whiteoutWidth, valueMaxW)
+      }
+
+      // value_bbox = whiteout_bbox: drawText escreve onde se apagou.
       const valueBbox: Bbox = {
-        x_pct: valueStartX,
+        x_pct: whiteoutLeft,
         y_pct: labelBbox.y_pct,
-        w_pct: Math.min(valueWidth, 100 - valueStartX),
+        w_pct: Math.min(whiteoutWidth, 100 - whiteoutLeft),
         h_pct: labelBbox.h_pct,
       }
 
-      // Texto antigo (já preenchido) no campo
+      // Texto antigo (já preenchido) — apenas para registro/debug
       const existingValueItems = seg.value_items
-      let existingValueBbox: Bbox | undefined
-      let existingValueText: string | undefined
-      // TZ-3: quando há sufixo, força align=center (número fica centralizado
-      // entre label e unidade — padrão visual em laudos cardiológicos)
-      let align: 'left' | 'center' | 'right' = hasSuffix ? 'center' : 'left'
+      const existingValueText = existingValueItems.length > 0
+        ? existingValueItems.map(i => i.str).join(' ').trim()
+        : undefined
 
-      if (existingValueItems.length > 0) {
-        existingValueBbox = bboxFromItems(existingValueItems)
-        existingValueText = existingValueItems.map(i => i.str).join(' ').trim()
-        // Sem sufixo: detecta alinhamento herdado normalmente
-        if (!hasSuffix) {
-          align = detectAlignment(
-            existingValueItems,
-            valueStartX,
-            valueStartX + valueWidth,
-          )
-        }
-      } else if (hasSuffix) {
-        // Sem texto antigo MAS com sufixo: cria existing_value_bbox vazia
-        // cobrindo todo o espaço entre label e unidade (para apagar
-        // sublinhados/traços brancos do template). Isso garante limpeza.
-        existingValueBbox = {
-          x_pct: valueStartX,
-          y_pct: labelBbox.y_pct,
-          w_pct: valueWidth,
-          h_pct: labelBbox.h_pct,
-        }
+      // existing_value_bbox = whiteout SEGURO. Por LEI 2, este SEMPRE existe
+      // (mesmo em campos vazios — limpa sublinhados/dashes do template original)
+      // e SEMPRE respeita a fronteira do label/suffix.
+      const existingValueBbox: Bbox = {
+        x_pct: whiteoutLeft,
+        y_pct: labelBbox.y_pct,
+        w_pct: Math.min(whiteoutWidth, 100 - whiteoutLeft),
+        h_pct: labelBbox.h_pct,
+      }
+
+      // Alinhamento:
+      //  • com sufixo → center (número centralizado entre label e unidade)
+      //  • sem sufixo + texto antigo → herda do texto antigo
+      //  • sem sufixo + sem texto → left
+      let align: 'left' | 'center' | 'right' = hasSuffix ? 'center' : 'left'
+      if (!hasSuffix && existingValueItems.length > 0) {
+        align = detectAlignment(
+          existingValueItems,
+          whiteoutLeft,
+          whiteoutLeft + whiteoutWidth,
+        )
       }
 
       // Tamanho de fonte estimado: altura do label em pt
