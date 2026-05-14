@@ -687,6 +687,7 @@ export default function ImportTemplateModal({
           textAlign: o.text_align,
           whiteoutBbox: o.whiteout_bbox,
           isGlobal: o.is_global,
+          baselineYPct: o.baseline_y_pct,
         }))
         setLayoutElements(elements)
       } else if (pageImages && pageImages.length > 0 && pipelineFields.length > 0) {

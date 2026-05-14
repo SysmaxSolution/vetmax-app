@@ -195,7 +195,7 @@ export type TemplateType = 'laudo' | 'receita' | 'encaminhamento' | 'termo' | 'e
 export type FieldType = 'text' | 'number' | 'date' | 'select' | 'boolean' | 'textarea'
 
 export interface ExtractedField {
-  field_name: string      // snake_case, ex: "diagnostico_presuntivo"
+  field_name: string      // snake_case, ex: "diagnostico_presuntivo" ou "custom_mitral"
   label: string           // PT-BR, ex: "Diagnóstico Presuntivo"
   type: FieldType
   description: string     // Contexto para IA, ex: "Resumo da suspeita clínica"
@@ -206,6 +206,10 @@ export interface ExtractedField {
   width_percent?: number
   height_percent?: number
   page?: number           // Indice da pagina (0-based)
+  // PM-2: marca campos clinicos especificos sem mapeamento canonico (ex: Mitral, Septo).
+  // Usado pela UI para renderizar com badge "customizado" e pelo cadastro do paciente
+  // para nao tentar autofill via dados do sistema.
+  is_custom?: boolean
 }
 
 // ── Pixel Perfect — Layout Overlay (snapshot do editor) ──────────────────────
@@ -242,6 +246,11 @@ export interface LayoutOverlay {
   // OCR Sniper: marca campos que se repetem em todas as paginas (header/footer).
   // Util para CRMV, nome do MV — preenchidos UMA vez, desenhados em N posicoes.
   is_global?: boolean
+  // PM-3: baseline Y EXATA do texto original (% do topo da pagina). Quando
+  // presente, o motor pdf-lib usa essa baseline para alinhar drawText
+  // perfeitamente onde o texto antigo estava — evita drift vertical entre
+  // fontes (ascender de Helvetica vs fonte original do PDF).
+  baseline_y_pct?: number
 }
 
 export interface PageDimensionsRecord {

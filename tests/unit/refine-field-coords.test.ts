@@ -4,7 +4,10 @@ import type { ExtractedField } from '../../src/types'
 
 const makeItem = (
   str: string, page: number, x: number, y: number, w: number, h = 2,
-): PdfTextItem => ({ str, page, x_pct: x, y_pct: y, w_pct: w, h_pct: h })
+): PdfTextItem => ({
+  str, page, x_pct: x, y_pct: y, w_pct: w, h_pct: h,
+  baseline_y_pct: y + h,
+})
 
 const makeField = (
   field_name: string, label: string, vision_x = 30, vision_y = 50,

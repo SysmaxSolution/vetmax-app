@@ -39,6 +39,9 @@ export interface LabelCandidate {
   existing_value_bbox?: Bbox
   /** Tamanho da fonte estimado em pt (a partir da altura do label) */
   font_size_pt: number
+  /** PM-3: baseline Y em % do topo da página (do texto original). Usada
+   * para alinhar drawText exatamente onde o texto antigo estava. */
+  baseline_y_pct: number
 }
 
 export interface Bbox {
@@ -107,6 +110,67 @@ function bboxFromItems(items: PdfTextItem[]): Bbox {
   const xMaxEnd = Math.max(...items.map(i => i.x_pct + i.w_pct))
   const yMaxEnd = Math.max(...items.map(i => i.y_pct + i.h_pct))
   return { x_pct: xMin, y_pct: yMin, w_pct: xMaxEnd - xMin, h_pct: yMaxEnd - yMin }
+}
+
+/**
+ * Operacao Precisao Milimetrica — PM-1.
+ *
+ * pdfjs frequentemente retorna "Paciente: Snow" como UM unico item.
+ * Sem split, o sniper trataria a string toda como label E o whiteout
+ * apagaria o rotulo. Esta funcao quebra matematicamente o item em duas
+ * partes: o rotulo (ate o ':' inclusive) e o valor (apos o ':').
+ *
+ * A largura de cada parte e calculada proporcionalmente ao numero de
+ * caracteres (aproximacao razoavel — chars de fonte monospace seriam
+ * exatos; em fontes proporcionais e ~5% de erro absoluto, suficiente
+ * para o whiteout cobrir a regiao correta).
+ */
+function splitItemAtColon(item: PdfTextItem): PdfTextItem[] {
+  const colonIdx = item.str.indexOf(':')
+  // Quebra apenas se ':' esta no meio (nao no fim) E ha conteudo nao-espaco apos
+  if (colonIdx === -1 || colonIdx === item.str.length - 1) return [item]
+  const afterColon = item.str.slice(colonIdx + 1)
+  if (!afterColon.trim()) return [item]
+
+  const labelStr = item.str.slice(0, colonIdx + 1)        // "Paciente:"
+  const trimmedValueStart = afterColon.length - afterColon.trimStart().length
+  const valueStr = afterColon.trimStart()                  // "Snow"
+  const totalLen = item.str.length
+
+  // Proporcao de cada parte (em chars)
+  const labelLenRatio = labelStr.length / totalLen
+  const skippedRatio  = trimmedValueStart / totalLen
+  const valueLenRatio = valueStr.length / totalLen
+
+  const labelW_pct = item.w_pct * labelLenRatio
+  const skippedW_pct = item.w_pct * skippedRatio
+  const valueW_pct = item.w_pct * valueLenRatio
+
+  const labelPart: PdfTextItem = {
+    ...item,
+    str: labelStr,
+    w_pct: labelW_pct,
+  }
+  const valuePart: PdfTextItem = {
+    ...item,
+    str: valueStr,
+    x_pct: item.x_pct + labelW_pct + skippedW_pct,
+    w_pct: valueW_pct,
+  }
+  return [labelPart, valuePart]
+}
+
+/**
+ * Aplica splitItemAtColon em todos os items de uma linha, expandindo items
+ * compostos em dois pseudo-items antes do segmentLine identificar labels.
+ */
+function preprocessLineItems(items: PdfTextItem[]): PdfTextItem[] {
+  const out: PdfTextItem[] = []
+  for (const it of items) {
+    const parts = splitItemAtColon(it)
+    out.push(...parts)
+  }
+  return out
 }
 
 // ── Etapa 1: agrupar items por linha ────────────────────────────────────────
@@ -185,7 +249,8 @@ function isLabelVocab(text: string): boolean {
  * Retorna array de {label, value, nextLabelX}.
  */
 function segmentLine(line: LineGroup): LineSegmentation[] {
-  const items = line.items
+  // PM-1: pre-processa items para quebrar "Label: Valor" coladados em um unico item
+  const items = preprocessLineItems(line.items)
   if (items.length === 0) return []
 
   // Encontra os ÍNDICES dos items que TERMINAM com ':' (alta confiança)
@@ -345,6 +410,14 @@ export function snipeLabels(
       // (page total height_pt corresponde a 100% h_pct; conversão real é feita no consumidor)
       const fontSize_pt_estimate = labelBbox.h_pct
 
+      // PM-3: baseline Y herdada do label original (ou valor antigo, se mais
+      // confiavel — o valor antigo TEM o baseline alinhado com o que queremos
+      // escrever). Prioridade: existing_value > label.
+      const baselineSource = existingValueItems.length > 0
+        ? existingValueItems[0]
+        : seg.label_items[0]
+      const baseline_y_pct = baselineSource.baseline_y_pct
+
       candidates.push({
         page: line.page,
         label_text: labelText,
@@ -355,6 +428,7 @@ export function snipeLabels(
         existing_value_text: existingValueText,
         existing_value_bbox: existingValueBbox,
         font_size_pt: fontSize_pt_estimate,
+        baseline_y_pct,
       })
     }
   }
@@ -377,6 +451,8 @@ export interface GlobalFieldGroup {
   y_pct_avg: number
   /** Bboxes do texto antigo a apagar (se houver) */
   existing_value_bboxes: (Bbox | undefined)[]
+  /** Baselines exatas em cada página (PM-3) */
+  baseline_y_pcts: number[]
   /** Alinhamento consenso */
   align: 'left' | 'center' | 'right'
   /** Font size médio em pt */
@@ -422,6 +498,7 @@ export function detectGlobalFields(
       value_bboxes: group.map(c => c.value_bbox),
       y_pct_avg: ys.reduce((a, b) => a + b, 0) / ys.length,
       existing_value_bboxes: group.map(c => c.existing_value_bbox),
+      baseline_y_pcts: group.map(c => c.baseline_y_pct),
       align: group[0].align,
       font_size_pt: group[0].font_size_pt,
     })

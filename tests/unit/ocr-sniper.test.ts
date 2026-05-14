@@ -8,7 +8,11 @@ import type { PdfTextItem } from '../../src/lib/pdf-to-images'
 
 const item = (
   str: string, page: number, x: number, y: number, w: number, h = 1.5,
-): PdfTextItem => ({ str, page, x_pct: x, y_pct: y, w_pct: w, h_pct: h })
+  baseline_y_pct?: number,
+): PdfTextItem => ({
+  str, page, x_pct: x, y_pct: y, w_pct: w, h_pct: h,
+  baseline_y_pct: baseline_y_pct ?? (y + h),
+})
 
 describe('OCR Sniper', () => {
   describe('normalizeLabel', () => {
@@ -80,6 +84,51 @@ describe('OCR Sniper', () => {
       // value.h = label.h
       expect(c.value_bbox.h_pct).toBeCloseTo(1.5, 1)
       expect(c.existing_value_text).toBe('Snow')
+      // PM-3: baseline_y_pct deve estar presente
+      expect(c.baseline_y_pct).toBeGreaterThan(0)
+    })
+
+    // ── PM-1: item unificado "Paciente: Snow" deve ser separado matematicamente ─
+    it('PM-1: item unificado "Paciente: Snow" e quebrado em label + valor', () => {
+      // pdfjs frequentemente retorna a string toda como UM item.
+      // String tem 14 chars: "Paciente: Snow"
+      //   "Paciente:" = 9 chars (64.3%)
+      //   " " = 1 char (7.1%)
+      //   "Snow" = 4 chars (28.6%)
+      // Item ocupa x=10, w=28 (14 chars × 2/char) — proporcional aos chars
+      const items = [
+        item('Paciente: Snow', 0, 10, 20, 28, 1.5),
+      ]
+      const cs = snipeLabels(items)
+      expect(cs.length).toBe(1)
+      const c = cs[0]
+      // Label_text e SO "Paciente:", nao a string inteira
+      expect(c.label_text).toBe('Paciente:')
+      expect(c.label_normalized).toBe('paciente')
+      // Label_bbox cobre APENAS "Paciente:" (9/14 = 64.3% de 28 = 18)
+      expect(c.label_bbox.w_pct).toBeCloseTo(28 * (9 / 14), 1)
+      // existing_value_bbox NAO sobrepoe o label — comeca apos ele + espaco
+      expect(c.existing_value_bbox).toBeDefined()
+      expect(c.existing_value_bbox!.x_pct).toBeGreaterThan(c.label_bbox.x_pct + c.label_bbox.w_pct)
+      expect(c.existing_value_text).toBe('Snow')
+    })
+
+    it('PM-1: nao quebra "Paciente:" puro (":" no fim, sem valor unido)', () => {
+      const items = [
+        item('Paciente:', 0, 10, 20, 8, 1.5),
+        item('Snow',      0, 20, 20, 6, 1.5),
+      ]
+      const cs = snipeLabels(items)
+      expect(cs.length).toBe(1)
+      expect(cs[0].label_text).toBe('Paciente:')
+    })
+
+    it('PM-1: nao quebra item sem ":"', () => {
+      const items = [
+        item('LAUDO ECOCARDIOGRAFICO', 0, 30, 5, 40, 2),
+      ]
+      const cs = snipeLabels(items)
+      expect(cs.length).toBe(0)
     })
 
     it('label multi-palavra: agrupa palavras contíguas', () => {
@@ -179,22 +228,22 @@ describe('OCR Sniper', () => {
         { page: 0, label_text: 'CRMV:', label_normalized: 'crmv',
           label_bbox: { x_pct: 60, y_pct: 5, w_pct: 8, h_pct: 1.5 },
           value_bbox: { x_pct: 69, y_pct: 5, w_pct: 20, h_pct: 1.5 },
-          align: 'left' as const, font_size_pt: 1.5 },
+          align: 'left' as const, font_size_pt: 1.5, baseline_y_pct: 7 },
         // Página 1 (Y igual)
         { page: 1, label_text: 'CRMV:', label_normalized: 'crmv',
           label_bbox: { x_pct: 60, y_pct: 5.1, w_pct: 8, h_pct: 1.5 },
           value_bbox: { x_pct: 69, y_pct: 5.1, w_pct: 20, h_pct: 1.5 },
-          align: 'left' as const, font_size_pt: 1.5 },
+          align: 'left' as const, font_size_pt: 1.5, baseline_y_pct: 7 },
         // Página 2 (Y igual)
         { page: 2, label_text: 'CRMV:', label_normalized: 'crmv',
           label_bbox: { x_pct: 60, y_pct: 5, w_pct: 8, h_pct: 1.5 },
           value_bbox: { x_pct: 69, y_pct: 5, w_pct: 20, h_pct: 1.5 },
-          align: 'left' as const, font_size_pt: 1.5 },
+          align: 'left' as const, font_size_pt: 1.5, baseline_y_pct: 7 },
         // Página 0 também tem "Paciente" (não-global, só em 1 pagina)
         { page: 0, label_text: 'Paciente:', label_normalized: 'paciente',
           label_bbox: { x_pct: 10, y_pct: 30, w_pct: 8, h_pct: 1.5 },
           value_bbox: { x_pct: 19, y_pct: 30, w_pct: 25, h_pct: 1.5 },
-          align: 'left' as const, font_size_pt: 1.5 },
+          align: 'left' as const, font_size_pt: 1.5, baseline_y_pct: 7 },
       ]
       const { globals, non_globals } = detectGlobalFields(candidates, 3)
       expect(globals.length).toBe(1)
@@ -209,7 +258,7 @@ describe('OCR Sniper', () => {
         { page: 0, label_text: 'X:', label_normalized: 'x',
           label_bbox: { x_pct: 10, y_pct: 5, w_pct: 5, h_pct: 1 },
           value_bbox: { x_pct: 16, y_pct: 5, w_pct: 20, h_pct: 1 },
-          align: 'left' as const, font_size_pt: 1 },
+          align: 'left' as const, font_size_pt: 1, baseline_y_pct: 6 },
       ]
       const { globals, non_globals } = detectGlobalFields(candidates, 3)
       expect(globals.length).toBe(0)
@@ -221,11 +270,11 @@ describe('OCR Sniper', () => {
         { page: 0, label_text: 'Data:', label_normalized: 'data',
           label_bbox: { x_pct: 10, y_pct: 5, w_pct: 5, h_pct: 1 },
           value_bbox: { x_pct: 16, y_pct: 5, w_pct: 15, h_pct: 1 },
-          align: 'left' as const, font_size_pt: 1 },
+          align: 'left' as const, font_size_pt: 1, baseline_y_pct: 6 },
         { page: 1, label_text: 'Data:', label_normalized: 'data',
           label_bbox: { x_pct: 10, y_pct: 90, w_pct: 5, h_pct: 1 },  // Y muito distante
           value_bbox: { x_pct: 16, y_pct: 90, w_pct: 15, h_pct: 1 },
-          align: 'left' as const, font_size_pt: 1 },
+          align: 'left' as const, font_size_pt: 1, baseline_y_pct: 6 },
       ]
       const { globals } = detectGlobalFields(candidates, 2)
       expect(globals.length).toBe(0)

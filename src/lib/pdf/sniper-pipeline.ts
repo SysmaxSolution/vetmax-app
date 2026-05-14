@@ -27,6 +27,7 @@ export interface FieldMatch {
   description: string
   required: boolean
   is_system_field?: boolean
+  is_custom?: boolean   // PM-2: parametro clinico especifico sem mapeamento canonico
 }
 
 export interface PipelineInput {
@@ -159,6 +160,7 @@ export async function runSniperPipeline(input: PipelineInput): Promise<PipelineR
           align: globalGroup.align,
           existing_value_bbox: globalGroup.existing_value_bboxes[i],
           font_size_pt: globalGroup.font_size_pt,
+          baseline_y_pct: globalGroup.baseline_y_pcts[i],
         })
       }
     } else {
@@ -181,6 +183,8 @@ export async function runSniperPipeline(input: PipelineInput): Promise<PipelineR
       width_percent: first.value_bbox.w_pct,
       height_percent: first.value_bbox.h_pct,
       page: first.page,
+      // PM-2: propaga marca de campo customizado
+      is_custom: match.is_custom === true,
     })
     seenFieldNames.add(match.field_name)
 
@@ -198,8 +202,6 @@ export async function runSniperPipeline(input: PipelineInput): Promise<PipelineR
         h_pct: inst.value_bbox.h_pct,
         // Tamanho de fonte real em pt: altura do label em pt = font_size_pt
         // Conversao: h_pct e em % da altura da pagina. h_pct * height_pt / 100 = h em pt.
-        // Como o sniper estima font_size_pt como label.h_pct, e isso ja vem em
-        // % da pagina, multiplicamos por height_pt da pagina dele.
         font_size: Math.max(8, Math.min(24, inst.font_size_pt * (dimensions[inst.page]?.height_pt ?? 842) / 100)),
         font_weight: 'normal',
         font_family: 'Helvetica',
@@ -208,6 +210,9 @@ export async function runSniperPipeline(input: PipelineInput): Promise<PipelineR
         whiteout: true,
         whiteout_bbox: inst.existing_value_bbox,
         is_global: isGlobal,
+        // PM-3: baseline Y exata do texto original (para drawText pegar exatamente
+        // a mesma linha base que o texto antigo, sem drift entre fontes)
+        baseline_y_pct: inst.baseline_y_pct,
       })
     }
   }

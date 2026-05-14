@@ -127,11 +127,25 @@ export function applyOverlayToPage(
       w_pct: overlay.w_pct,
       h_pct: overlay.h_pct,
     }
-    const point = overlayToDrawTextPoint(
+    let point = overlayToDrawTextPoint(
       rect, pageDim,
       { size_pt: fontSize_pt, family: 'Helvetica' },
       align, textWidth_pt,
     )
+    // PM-3: se o overlay carrega a baseline EXATA do texto original (vinda do
+    // OCR Sniper), usa essa baseline em vez da calculada via ascenderRatio.
+    // Sem isso, a baseline da fonte Helvetica nova diverge da fonte original
+    // do PDF e o texto fica acima/abaixo da linha pontilhada.
+    if (typeof overlay.baseline_y_pct === 'number' && li === 0) {
+      const baselineFromTop_pt = (overlay.baseline_y_pct / 100) * pageDim.height_pt
+      const baselineY_bottomOrigin = pageDim.height_pt - baselineFromTop_pt
+      point = { x: point.x, y: baselineY_bottomOrigin }
+    } else if (typeof overlay.baseline_y_pct === 'number' && li > 0) {
+      // Linhas subsequentes: desloca a baseline original em lineHeight para baixo
+      const baselineFromTop_pt = (overlay.baseline_y_pct / 100) * pageDim.height_pt + li * lineHeight_pt
+      const baselineY_bottomOrigin = pageDim.height_pt - baselineFromTop_pt
+      point = { x: point.x, y: baselineY_bottomOrigin }
+    }
     try {
       page.drawText(line, {
         x: point.x, y: point.y, size: fontSize_pt, font, color: rgb(0, 0, 0),

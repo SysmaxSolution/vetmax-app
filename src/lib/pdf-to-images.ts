@@ -14,6 +14,10 @@ export interface PdfTextItem {
   y_pct: number                // top em %
   w_pct: number                // largura em %
   h_pct: number                // altura em %
+  // BASELINE Y do texto original em % do TOPO da pagina (top-left origin).
+  // Usado pelo motor pdf-lib para alinhar drawText exatamente na baseline
+  // do texto original — evita drift vertical entre fontes diferentes.
+  baseline_y_pct: number
 }
 
 export interface PdfPagesResult {
@@ -80,6 +84,8 @@ export async function pdfToImages(
         // Converte para top-left (Y invertido para o sistema do editor)
         // y_pt eh a baseline; o topo do texto fica em y_pt + h_pt
         const top_pt = pageH - (y_pt + h_pt)
+        // Baseline em % from top: pageH - y_pt e a distancia da baseline ao topo
+        const baseline_pct = ((pageH - y_pt) / pageH) * 100
         textItems.push({
           str: raw.str,
           page: i - 1,
@@ -87,6 +93,7 @@ export async function pdfToImages(
           y_pct: (top_pt / pageH) * 100,
           w_pct: (w_pt / pageW) * 100,
           h_pct: (h_pt / pageH) * 100,
+          baseline_y_pct: baseline_pct,
         })
       }
     } catch (e) {

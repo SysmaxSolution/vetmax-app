@@ -32,6 +32,8 @@ export type LayoutElement = {
   whiteoutBbox?: { x_pct: number; y_pct: number; w_pct: number; h_pct: number }
   // OCR Sniper: marca campos de cabecalho/rodape que se repetem em todas as paginas
   isGlobal?: boolean
+  // PM-3: baseline Y exata do texto original — pdf-lib usa para alinhar drawText
+  baselineYPct?: number
 }
 
 interface TemplateLayoutEditorProps {
@@ -1044,9 +1046,10 @@ export function layoutElementsToOverlays(elements: LayoutElement[]) {
       font_weight: el.fontWeight,
       font_family: 'Helvetica' as const,
       text_align: el.textAlign,
-      // OCR Sniper: preserva whiteout_bbox e is_global
+      // OCR Sniper: preserva whiteout_bbox, is_global, baseline_y_pct
       whiteout_bbox: el.whiteoutBbox,
       is_global: el.isGlobal,
+      baseline_y_pct: el.baselineYPct,
     }))
 }
 
@@ -1073,5 +1076,6 @@ export function overlaysToLayoutElements(overlays: any[] | null | undefined): La
     // OCR Sniper: preserva ao hidratar template salvo
     whiteoutBbox: o.whiteout_bbox,
     isGlobal: o.is_global,
+    baselineYPct: o.baseline_y_pct,
   }))
 }

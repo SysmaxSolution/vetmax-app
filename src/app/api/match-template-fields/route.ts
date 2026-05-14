@@ -27,11 +27,13 @@ interface MatchRequest {
 
 export interface FieldMatch {
   label_original: string       // exatamente como veio na requisição (para juntar com bbox)
-  field_name: string           // snake_case (ex: tutor_nome)
+  field_name: string           // snake_case (ex: tutor_nome ou custom_fracao_ejecao)
   type: FieldType              // text/number/date/select/boolean/textarea
   description: string          // descrição curta (~10 palavras)
   required: boolean
   is_system_field?: boolean    // se é campo "global" tipo CRMV, nome MV (cabeçalho/rodapé)
+  is_custom?: boolean          // PM-2: campo CUSTOMIZADO (parâmetro clínico específico,
+                               // não tem mapeamento canônico no sistema)
 }
 
 interface MatchResponse {
@@ -43,40 +45,105 @@ interface MatchResponse {
 
 const MATCH_PROMPT = `Voce e um especialista em modelos de documentos veterinarios brasileiros.
 
-TAREFA: Receba uma lista de ROTULOS extraidos de um documento (laudo/receita/etc) e
-devolva o mapeamento semantico para variaveis do sistema VetMax.
+TAREFA: Receba uma lista de ROTULOS extraidos de um documento e devolva o
+mapeamento semantico em DUAS CATEGORIAS — campos CANONICOS do sistema OU
+campos CUSTOMIZADOS (parametros clinicos especificos).
 
-REGRAS:
+═══════════════════════════════════════════════════════════════════════════
+CATEGORIA 1 — CAMPOS CANONICOS (is_custom: false)
+═══════════════════════════════════════════════════════════════════════════
+
+APENAS estes rotulos mapeiam para variaveis canonicas do sistema:
+
+  Cadastro do animal:
+    - Paciente / Pet / Animal / Nome do animal → "paciente_nome"
+    - Especie                                 → "especie"
+    - Raca                                    → "raca"
+    - Idade                                   → "idade"
+    - Sexo                                    → "sexo" (select)
+    - Peso (kg)                               → "peso" (number)
+    - Pelagem / Cor                           → "pelagem"
+
+  Cadastro do tutor:
+    - Tutor / Proprietario / Dono / Responsavel → "tutor_nome"
+    - CPF                                       → "tutor_cpf"
+    - Telefone / Celular                        → "tutor_telefone"
+    - Email                                     → "tutor_email"
+    - Endereco                                  → "tutor_endereco"
+
+  Profissional (is_system_field: true — repete em todas as paginas):
+    - Veterinario / Medico / MV → "veterinario_nome"
+    - CRMV / Registro           → "crmv"
+    - Cargo / Especialidade     → "veterinario_cargo"
+    - Clinica / Hospital        → "clinica_nome"
+
+  Documento:
+    - Data / Dia do exame → "data" (date)
+    - Hora                → "hora"
+
+  Sinais vitais e descricao clinica geral:
+    - Frequencia cardiaca / FC      → "frequencia_cardiaca" (number)
+    - Frequencia respiratoria / FR  → "frequencia_respiratoria" (number)
+    - Temperatura                   → "temperatura" (number)
+    - Pressao arterial / PA         → "pressao_arterial"
+    - Anamnese / Queixa / Historico → "anamnese" (textarea)
+    - Observacoes / Obs             → "observacoes" (textarea)
+    - Diagnostico / Conclusao       → "diagnostico" (textarea)
+    - Tratamento / Prescricao       → "tratamento" (textarea)
+
+═══════════════════════════════════════════════════════════════════════════
+CATEGORIA 2 — CAMPOS CUSTOMIZADOS (is_custom: true)  ←  REGRA CRITICA
+═══════════════════════════════════════════════════════════════════════════
+
+Se o rotulo for um PARAMETRO CLINICO HIPERESPECIFICO (medida de exame,
+estrutura anatomica detalhada, parametro de eletrocardiograma/ecocardiograma,
+qualquer coisa que nao tenha equivalente DIRETO na lista canonica acima):
+
+  → field_name: "custom_<nome_normalizado>" (snake_case, sem acentos)
+  → type: number quando claramente numerico, text caso contrario
+  → is_custom: true
+
+EXEMPLOS DE CAMPOS QUE DEVEM SER CUSTOMIZADOS (NAO mapear para canonicos):
+
+  - "Mitral:"                      → custom_mitral
+  - "Aortica:" / "Aorta:"          → custom_aorta
+  - "Tricuspide:"                  → custom_tricuspide
+  - "Pulmonar:"                    → custom_pulmonar
+  - "Septo Diastole:"              → custom_septo_diastole
+  - "Parede Diastole:"             → custom_parede_diastole
+  - "Diametro Sistolico:"          → custom_diametro_sistolico (number)
+  - "Diametro Diastolico:"         → custom_diametro_diastolico (number)
+  - "Diametro normalizado VE:"     → custom_diametro_normalizado_ve (number)
+  - "Fracao de Ejecao" / "FE"      → custom_fracao_ejecao (number)
+  - "Fracao de Encurtamento" / FS  → custom_fracao_encurtamento (number)
+  - "Atrio Esquerdo" / AE          → custom_atrio_esquerdo (number)
+  - "Ventriculo Esquerdo" / VE     → custom_ventriculo_esquerdo
+  - "Onda E" / "Onda A"            → custom_onda_e, custom_onda_a
+  - "Pericardio:"                  → custom_pericardio
+  - "Ritmo:"                       → custom_ritmo
+  - "Condicao do paciente"         → custom_condicao_paciente
+
+═══════════════════════════════════════════════════════════════════════════
+REGRAS GERAIS
+═══════════════════════════════════════════════════════════════════════════
+
 1. Para cada rotulo, devolva um objeto com:
-   - label_original: copia EXATA do rotulo recebido (preserve case e ":" se houver)
-   - field_name: snake_case, em PT-BR (ex: "paciente_nome", "tutor_nome", "crmv")
+   - label_original: copia EXATA do rotulo recebido
+   - field_name: snake_case (canonico OU custom_*)
    - type: text | number | date | select | boolean | textarea
    - description: 5-10 palavras descrevendo o campo
-   - required: true se for clinicamente essencial (paciente, tutor, data)
-   - is_system_field: true APENAS para campos de cabecalho/rodape que se repetem
-     em todas as paginas (CRMV, nome do veterinario, cargo, clinica)
+   - required: true APENAS se for clinicamente essencial (paciente, tutor, data)
+   - is_system_field: true APENAS para campos do header/footer profissional
+   - is_custom: true para parametros clinicos especificos (Categoria 2)
 
-2. Convenções de nomenclatura:
-   - Paciente/Pet/Animal → "paciente_nome"
-   - Tutor/Proprietario/Dono → "tutor_nome"
-   - Veterinario/Medico/MV → "veterinario_nome"
-   - CRMV/Registro → "crmv"
-   - Data/Dia → "data" (type: date)
-   - Peso (kg) → "peso" (type: number)
-   - Idade → "idade"
-   - Frequencia cardiaca/FC → "frequencia_cardiaca" (type: number)
-   - Frequencia respiratoria/FR → "frequencia_respiratoria" (type: number)
-   - Temperatura → "temperatura" (type: number)
-   - Observacoes/Obs/Conclusao → "observacoes" (type: textarea)
-   - Diagnostico → "diagnostico" (type: textarea)
+2. NUNCA force um rotulo clinico-especifico em um canonico.
+   ERRADO: "Mitral:" → "raca" (alucinacao!)
+   CERTO:  "Mitral:" → "custom_mitral" (is_custom: true)
 
-3. Se um rotulo nao tiver mapeamento claro (ex: "i.", "ii.", numeracao, palavras
-   isoladas sem sentido de campo), ignore — NAO inclua na resposta.
-
-4. NAO INVENTE campos. Mapeie apenas os rotulos recebidos.
+3. Se o rotulo for puro lixo (numeracao "i.", "ii.", separadores), IGNORE.
 
 FORMATO: APENAS um array JSON. Sem markdown. Sem explicacoes.
-[{"label_original":"X","field_name":"x","type":"text","description":"desc","required":false,"is_system_field":false}]`
+[{"label_original":"X","field_name":"x","type":"text","description":"desc","required":false,"is_system_field":false,"is_custom":false}]`
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
@@ -107,6 +174,9 @@ function sanitizeMatch(m: any): FieldMatch | null {
   if (!fieldName) return null
   const validTypes: FieldType[] = ['text', 'number', 'date', 'select', 'boolean', 'textarea']
   const type: FieldType = validTypes.includes(m.type) ? m.type : 'text'
+  // PM-2: marca custom automaticamente se field_name comeca com "custom_"
+  // (defesa em profundidade caso a IA esqueca de setar is_custom: true)
+  const isCustom = m.is_custom === true || fieldName.startsWith('custom_')
   return {
     label_original: m.label_original,
     field_name: fieldName,
@@ -114,6 +184,7 @@ function sanitizeMatch(m: any): FieldMatch | null {
     description: typeof m.description === 'string' ? m.description : m.label_original,
     required: m.required === true,
     is_system_field: m.is_system_field === true,
+    is_custom: isCustom,
   }
 }
 
