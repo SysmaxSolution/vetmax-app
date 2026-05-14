@@ -195,9 +195,12 @@ function PackageCard({ pkg, canEdit, onEdit, onToggle, onDelete }: {
             <p className="mt-1 text-xs text-slate-500 line-clamp-2">{pkg.description}</p>
           )}
         </div>
-        <div className="text-right shrink-0">
+        <div className="text-right shrink-0 space-y-1">
           <p className="font-bold text-teal-700 text-base">{fmtPrice(pkg.price)}</p>
-          <p className="text-[10px] text-slate-400">{pkg.total_sessions ?? '?'} sessões · {pkg.interval_days}d</p>
+          <span className="inline-flex items-center gap-1 rounded-full bg-teal-100 border border-teal-300 px-2 py-0.5 text-xs font-bold text-teal-800">
+            🎁 {pkg.total_sessions ?? '?'} visita{(pkg.total_sessions ?? 0) !== 1 ? 's' : ''}
+          </span>
+          <p className="text-[10px] text-slate-400">a cada {pkg.interval_days}d</p>
         </div>
       </div>
 
@@ -218,7 +221,7 @@ function PackageCard({ pkg, canEdit, onEdit, onToggle, onDelete }: {
 
       {/* Footer */}
       <div className="flex items-center justify-between pt-1 border-t border-slate-100">
-        <span className="text-xs text-slate-400">{pkg.total_sessions ?? totalItems} sessão{(pkg.total_sessions ?? totalItems) !== 1 ? 'ões' : ''} · {(pkg.items ?? []).length} tipo{(pkg.items ?? []).length !== 1 ? 's' : ''}</span>
+        <span className="text-xs text-slate-400">{pkg.total_sessions ?? totalItems} visita{(pkg.total_sessions ?? totalItems) !== 1 ? 's' : ''} · {(pkg.items ?? []).length} tipo{(pkg.items ?? []).length !== 1 ? 's' : ''} de serviço</span>
         {canEdit && (
           <div className="flex items-center gap-1">
             <button
@@ -278,6 +281,7 @@ function PackageFormModal({ mode, pkg, stock, onClose, onSaved }: {
       quantity:   i.quantity,
     }))
   })
+  const [totalOverridden, setTotalOverridden] = useState(!!pkg)
   const [professionals, setProfessionals] = useState<ClinicProfessional[]>([])
   const [itemSearch, setItemSearch] = useState('')
   const [showDropdown, setShowDropdown] = useState(false)
@@ -295,12 +299,21 @@ function PackageFormModal({ mode, pkg, stock, onClose, onSaved }: {
     .filter(s => s.name.toLowerCase().includes(itemSearch.toLowerCase()))
     .slice(0, 8)
 
+  const autoTotal = items.reduce((s, i) => s + i.quantity, 0)
+
+  function syncAutoTotal(nextItems: DraftItem[]) {
+    if (totalOverridden) return
+    const t = nextItems.reduce((s, i) => s + i.quantity, 0)
+    if (t > 0) setForm(f => ({ ...f, total_sessions: String(t) }))
+  }
+
   function addItem(s: StockItemV2) {
     const exists = items.find(i => i.item_id === s.id)
+    let next: DraftItem[]
     if (exists) {
-      setItems(prev => prev.map(i => i.item_id === s.id ? { ...i, quantity: i.quantity + 1 } : i))
+      next = items.map(i => i.item_id === s.id ? { ...i, quantity: i.quantity + 1 } : i)
     } else {
-      setItems(prev => [...prev, {
+      next = [...items, {
         key:        s.id,
         item_type:  s.is_service ? 'service' : 'product',
         item_id:    s.id,
@@ -308,19 +321,25 @@ function PackageFormModal({ mode, pkg, stock, onClose, onSaved }: {
         unit:       s.unit,
         unit_price: s.unit_price,
         quantity:   1,
-      }])
+      }]
     }
+    setItems(next)
+    syncAutoTotal(next)
     setItemSearch('')
     setShowDropdown(false)
   }
 
   function removeItem(key: string) {
-    setItems(prev => prev.filter(i => i.key !== key))
+    const next = items.filter(i => i.key !== key)
+    setItems(next)
+    syncAutoTotal(next)
   }
 
   function updateQty(key: string, qty: number) {
     if (qty < 1) return
-    setItems(prev => prev.map(i => i.key === key ? { ...i, quantity: qty } : i))
+    const next = items.map(i => i.key === key ? { ...i, quantity: qty } : i)
+    setItems(next)
+    syncAutoTotal(next)
   }
 
   const suggestedPrice = items.reduce((sum, i) => sum + i.unit_price * i.quantity, 0)
@@ -337,7 +356,7 @@ function PackageFormModal({ mode, pkg, stock, onClose, onSaved }: {
     const total_sessions = parseInt(form.total_sessions)
     if (isNaN(price) || price < 0)             { setError('Preço inválido.'); return }
     if (isNaN(interval_days) || interval_days < 1) { setError('Intervalo inválido.'); return }
-    if (isNaN(total_sessions) || total_sessions < 1) { setError('Total de sessões deve ser ≥ 1.'); return }
+    if (isNaN(total_sessions) || total_sessions < 1) { setError('Total de visitas deve ser ≥ 1.'); return }
 
     setSaving(true)
     const payload: UpsertPackagePayload = {
@@ -473,37 +492,60 @@ function PackageFormModal({ mode, pkg, stock, onClose, onSaved }: {
             </div>
           </div>
 
-          {/* Total de Sessões + Profissional Padrão */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="flex items-center gap-1 text-xs font-semibold text-slate-600 mb-1">
-                <Hash className="h-3.5 w-3.5" /> Total de Sessões *
-              </label>
+          {/* Total de Visitas */}
+          <div className="rounded-xl border-2 border-teal-200 bg-teal-50 px-4 py-3 space-y-2">
+            <label className="flex items-center gap-1.5 text-xs font-bold text-teal-800">
+              <Hash className="h-3.5 w-3.5" /> Total de Visitas *
+            </label>
+            <div className="flex items-center gap-3">
               <input
                 type="number"
                 min={1}
                 value={form.total_sessions}
-                onChange={e => setForm(f => ({ ...f, total_sessions: e.target.value }))}
-                className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                onChange={e => {
+                  setTotalOverridden(true)
+                  setForm(f => ({ ...f, total_sessions: e.target.value }))
+                }}
+                className="w-28 border-2 border-teal-400 rounded-xl px-3 py-2 text-base font-bold text-teal-900 text-center focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
               />
-              <p className="mt-0.5 text-[10px] text-slate-400">Nº de visitas à clínica</p>
+              <div className="flex-1">
+                <p className="text-xs text-teal-700 font-medium">
+                  Quantas vezes o pet será atendido com este pacote
+                </p>
+                {autoTotal > 0 && totalOverridden && parseInt(form.total_sessions) !== autoTotal && (
+                  <button
+                    type="button"
+                    onClick={() => { setTotalOverridden(false); setForm(f => ({ ...f, total_sessions: String(autoTotal) })) }}
+                    className="mt-0.5 text-[10px] text-teal-600 hover:underline"
+                  >
+                    ↺ Usar sugerido: {autoTotal} (soma dos itens)
+                  </button>
+                )}
+                {!totalOverridden && autoTotal > 0 && (
+                  <p className="text-[10px] text-teal-500 mt-0.5">
+                    Calculado automaticamente pela soma dos itens
+                  </p>
+                )}
+              </div>
             </div>
-            <div>
-              <label className="flex items-center gap-1 text-xs font-semibold text-slate-600 mb-1">
-                <User className="h-3.5 w-3.5" /> Profissional Padrão
-              </label>
-              <select
-                value={form.default_professional_id}
-                onChange={e => setForm(f => ({ ...f, default_professional_id: e.target.value }))}
-                className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
-              >
-                <option value="">Sem preferência</option>
-                {professionals.map(p => (
-                  <option key={p.id} value={p.id}>{p.full_name}</option>
-                ))}
-              </select>
-              <p className="mt-0.5 text-[10px] text-slate-400">Sugestão no agendamento</p>
-            </div>
+          </div>
+
+          {/* Profissional Padrão */}
+          <div>
+            <label className="flex items-center gap-1 text-xs font-semibold text-slate-600 mb-1">
+              <User className="h-3.5 w-3.5" /> Profissional Padrão
+            </label>
+            <select
+              value={form.default_professional_id}
+              onChange={e => setForm(f => ({ ...f, default_professional_id: e.target.value }))}
+              className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
+            >
+              <option value="">Sem preferência</option>
+              {professionals.map(p => (
+                <option key={p.id} value={p.id}>{p.full_name}</option>
+              ))}
+            </select>
+            <p className="mt-0.5 text-[10px] text-slate-400">Sugestão no agendamento</p>
           </div>
 
           {/* Seletor de Itens */}

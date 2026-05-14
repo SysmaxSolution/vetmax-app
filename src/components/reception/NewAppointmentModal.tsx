@@ -481,7 +481,7 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
                       <div>
                         <p className="text-xs font-semibold text-slate-800">{pkg.name}</p>
                         <p className="text-[10px] text-slate-500">
-                          {pkg.total_sessions} sessão{pkg.total_sessions !== 1 ? 'ões' : ''} · R$ {pkg.price.toFixed(2)}
+                          🎁 {pkg.total_sessions} visita{pkg.total_sessions !== 1 ? 's' : ''} · R$ {pkg.price.toFixed(2)}
                           {pkg.interval_days > 0 && ` · a cada ${pkg.interval_days}d`}
                         </p>
                       </div>
