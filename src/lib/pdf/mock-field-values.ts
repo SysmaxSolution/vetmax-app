@@ -1,8 +1,20 @@
 /**
- * Mock de valores ficticios para testar geracao pixel-perfect de PDFs.
+ * Mock de valores ficticios para testar geracao pixel-perfect.
  *
- * Faz matching por padroes comuns no field_name (snake_case). Casos sem match
- * recebem um placeholder generico baseado no tipo (text/number/date/...).
+ * INTERVENCAO CIRURGICA — regras inflexiveis:
+ *
+ *   1. Campos `custom_*` (qualquer um) → VAZIO. Decisao do Diretor:
+ *      "E melhor o medico ver o campo em branco do que ver a idade do
+ *      cachorro na velocidade da aorta."
+ *
+ *   2. APENAS os 8 canonicos da whitelist recebem mock-value: paciente_nome,
+ *      tutor_nome, especie, raca, idade, sexo, peso, data.
+ *
+ *   3. Default sem match → VAZIO (nunca `[${label}]` — esse padrao vazava
+ *      como literal no PDF final por NAO casar no interpolateText regex).
+ *
+ *   4. Fields system (professional_*, clinic_name) tambem ficam vazios aqui
+ *      — o motor preenche via interpolateText/ctx do usuario logado.
  *
  * Usado apenas pelo botao "Gerar PDF de Teste" no editor de templates.
  */
@@ -10,7 +22,7 @@
 import type { ExtractedField } from '@/types'
 
 type Matcher = {
-  test: (fieldName: string, label: string) => boolean
+  test: (fieldName: string) => boolean
   value: string | number | boolean
 }
 
@@ -28,136 +40,45 @@ const TODAY_ISO = (() => {
   return `${d.getFullYear()}-${mm}-${dd}`
 })()
 
-const includesAny = (s: string, terms: string[]) =>
-  terms.some(t => s.includes(t))
-
-const MATCHERS: Matcher[] = [
-  // Pet / paciente
-  { test: (n, l) => includesAny(n, ['paciente', 'pet', 'animal', 'nome_pet', 'nome_animal'])
-                || includesAny(l.toLowerCase(), ['paciente', 'animal']),
-    value: 'Snow' },
-
-  // Especie
-  { test: n => includesAny(n, ['especie', 'species']), value: 'Canino' },
-
-  // Raca
-  { test: n => includesAny(n, ['raca', 'breed']), value: 'Border Collie' },
-
-  // Idade
-  { test: n => includesAny(n, ['idade', 'age']), value: '5 anos' },
-
-  // Sexo
-  { test: n => includesAny(n, ['sexo', 'gender']), value: 'Macho' },
-
-  // Peso
-  { test: n => includesAny(n, ['peso', 'weight', 'kg']), value: '12.5 kg' },
-
-  // Pelagem / cor
-  { test: n => includesAny(n, ['pelagem', 'cor_pelo', 'coat']), value: 'Preto e branco' },
-
-  // Tutor / proprietario
-  { test: (n, l) => includesAny(n, ['tutor', 'proprietario', 'dono', 'owner', 'responsavel_tutor'])
-                || includesAny(l.toLowerCase(), ['tutor', 'proprietario', 'dono']),
-    value: 'Joao da Silva' },
-
-  // CPF
-  { test: n => includesAny(n, ['cpf']), value: '123.456.789-00' },
-
-  // Telefone
-  { test: n => includesAny(n, ['telefone', 'celular', 'fone', 'phone']), value: '(11) 98765-4321' },
-
-  // Email
-  { test: n => includesAny(n, ['email', 'e_mail']), value: 'joao.silva@example.com' },
-
-  // Endereco
-  { test: n => includesAny(n, ['endereco', 'address', 'logradouro']), value: 'Rua das Flores, 123 - Sao Paulo/SP' },
-
-  // CEP
-  { test: n => includesAny(n, ['cep']), value: '01234-567' },
-
-  // Veterinario / MV / responsavel
-  { test: (n, l) => includesAny(n, ['veterinario', 'medico_vet', 'mv', 'responsavel_tecnico', 'vet_responsavel'])
-                || includesAny(l.toLowerCase(), ['veterinario', 'medico']),
-    value: 'Dr. Marcelo Costa' },
-
-  // CRMV
-  { test: n => includesAny(n, ['crmv', 'registro_crmv']), value: 'CRMV-SP 74.696' },
-
-  // Clinica
-  { test: n => includesAny(n, ['clinica', 'hospital', 'nome_clinica']), value: 'VetMax Clinica Veterinaria' },
-
-  // CNPJ
-  { test: n => includesAny(n, ['cnpj']), value: '12.345.678/0001-90' },
-
-  // Data
-  { test: n => includesAny(n, ['data', 'date', 'dia_exame']), value: TODAY_BR },
-
-  // Hora
-  { test: n => includesAny(n, ['hora', 'time', 'horario']), value: '14:30' },
-
-  // ECG / exame especifico — laudo cardiologico
-  { test: n => includesAny(n, ['frequencia_cardiaca', 'fc_bpm', 'bpm']), value: '120 bpm' },
-  { test: n => includesAny(n, ['ritmo', 'rhythm']), value: 'Sinusal' },
-  { test: n => includesAny(n, ['mitral']), value: 'Valva mitral com leve regurgitacao' },
-  { test: n => includesAny(n, ['aortica', 'aorta']), value: 'Sem alteracoes' },
-  { test: n => includesAny(n, ['tricuspide']), value: 'Sem alteracoes' },
-  { test: n => includesAny(n, ['pulmonar']), value: 'Sem alteracoes' },
-  { test: n => includesAny(n, ['septo']), value: 'Espessura preservada' },
-  { test: n => includesAny(n, ['atrio_esquerdo', 'ae']), value: 'Diametro dentro da normalidade' },
-  { test: n => includesAny(n, ['ventriculo_esquerdo', 've']), value: 'Funcao sistolica preservada' },
-  { test: n => includesAny(n, ['fracao_ejecao', 'ef', 'ejection']), value: '65%' },
-  { test: n => includesAny(n, ['fracao_encurtamento', 'fs']), value: '40%' },
-
-  // Temperatura
-  { test: n => includesAny(n, ['temperatura', 'temp']), value: '38.5 C' },
-
-  // FR
-  { test: n => includesAny(n, ['frequencia_respiratoria', 'fr', 'respiratoria']), value: '24 mpm' },
-
-  // Pressao
-  { test: n => includesAny(n, ['pressao', 'pa', 'pressao_arterial']), value: '120/80 mmHg' },
-
-  // Condicao paciente
-  { test: n => includesAny(n, ['condicao', 'condicao_paciente', 'estado_clinico']),
-    value: 'Calmo, hidratado, em decubito lateral direito' },
-
-  // Diagnostico
-  { test: n => includesAny(n, ['diagnostico', 'diagnosis', 'conclusao']),
-    value: 'Cardiomiopatia hipertrofica leve compensada' },
-
-  // Observacoes / consideracoes
-  { test: n => includesAny(n, ['observacoes', 'obs', 'consideracoes', 'recomendacoes', 'notas']),
-    value: 'Recomendado controle ecocardiografico em 3 meses. Manter dieta atual.' },
-
-  // Anamnese / queixa
-  { test: n => includesAny(n, ['anamnese', 'queixa', 'historico']),
-    value: 'Tutor relata episodios de tosse seca apos exercicio.' },
-
-  // Medicacao / tratamento
-  { test: n => includesAny(n, ['medicacao', 'tratamento', 'prescricao']),
-    value: 'Pimobendan 5mg - 1/2 comprimido VO BID por 30 dias.' },
+/**
+ * APENAS os 8 canonicos da Intervencao Cirurgica. Match exato por field_name.
+ */
+const CANONICAL_MOCKS: Matcher[] = [
+  { test: n => n === 'paciente_nome', value: 'Snow' },
+  { test: n => n === 'tutor_nome',    value: 'Joao da Silva' },
+  { test: n => n === 'especie',       value: 'Canino' },
+  { test: n => n === 'raca',          value: 'Border Collie' },
+  { test: n => n === 'idade',         value: '5 anos' },
+  { test: n => n === 'sexo',          value: 'Macho' },
+  { test: n => n === 'peso',          value: 12.5 },
+  { test: n => n === 'data',          value: TODAY_BR },
 ]
 
 /**
- * Retorna um valor mock para o campo, ou um placeholder generico se nao
- * houver matcher especifico.
+ * Retorna um valor mock para o campo, ou string vazia.
+ * - Campos custom_* SEMPRE vazios (regra do Diretor).
+ * - Apenas canonicos exatos recebem mock-value de teste.
+ * - System fields (professional_*, clinic_name) NAO preenchemos aqui
+ *   — o motor de geracao popula via ctx do usuario logado.
  */
 export function mockValueForField(field: ExtractedField): string | number | boolean {
   const name = field.field_name.toLowerCase()
-  const label = field.label
 
-  for (const m of MATCHERS) {
-    if (m.test(name, label)) return m.value
+  // INTERVENCAO CIRURGICA: custom_* sempre vazio
+  if (field.is_custom === true || name.startsWith('custom_')) return ''
+
+  // System fields vivem do ctx do usuario logado — nao mockar aqui
+  if (name.startsWith('professional_') || name === 'clinic_name') return ''
+
+  for (const m of CANONICAL_MOCKS) {
+    if (m.test(name)) return m.value
   }
 
-  // Fallback por tipo
+  // Default sem match: VAZIO (nao [label] — esse formato vazava literal no PDF)
   switch (field.type) {
     case 'date':     return TODAY_ISO
-    case 'number':   return 42
-    case 'boolean':  return true
-    case 'textarea': return `Exemplo de preenchimento para ${field.label}.`
-    case 'select':   return 'Opcao 1'
-    default:         return `[${field.label}]`
+    case 'boolean':  return false
+    default:         return ''
   }
 }
 
