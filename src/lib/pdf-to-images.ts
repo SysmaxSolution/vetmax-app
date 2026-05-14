@@ -21,7 +21,8 @@ export async function pdfToImages(
 ): Promise<PdfPagesResult> {
   const pdfjsLib = await import('pdfjs-dist')
 
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`
+  // Worker servido localmente em public/pdf.worker.min.mjs (CDN externa bate no CSP).
+  pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
 
   const arrayBuffer = await file.arrayBuffer()
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise

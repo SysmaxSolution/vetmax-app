@@ -473,7 +473,35 @@ export default function ImportTemplateModal({
 
   // ── File handlers ─────────────────────────────────────────────────────
 
-  const handleFileSelect = (file: File) => {
+  /**
+   * Validacao preventiva: se o arquivo tem extensao .pdf, confirma o header %PDF.
+   * Evita gastar tokens da Vision API com arquivos corrompidos/renomeados.
+   */
+  const validateFileBeforeUse = async (file: File): Promise<string | null> => {
+    const isPdfExt = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+    if (!isPdfExt) return null
+
+    // Le os primeiros 8 bytes e checa o magic number "%PDF-1."
+    try {
+      const head = await file.slice(0, 8).arrayBuffer()
+      const sig = new TextDecoder().decode(new Uint8Array(head, 0, 4))
+      if (sig !== '%PDF') {
+        return 'O arquivo tem extensao .pdf mas nao e um PDF valido (header %PDF ausente). Verifique se ele nao foi renomeado de outro formato (TXT, DOCX, imagem) ou se o download nao foi corrompido.'
+      }
+    } catch {
+      return 'Nao foi possivel ler o conteudo do arquivo selecionado.'
+    }
+    return null
+  }
+
+  const handleFileSelect = async (file: File) => {
+    const validationError = await validateFileBeforeUse(file)
+    if (validationError) {
+      setSelectedFile(null)
+      setFilePreview(null)
+      setError(validationError)
+      return
+    }
     setSelectedFile(file)
     setFilePreview({ name: file.name, size: file.size })
     setError(null)
@@ -483,7 +511,7 @@ export default function ImportTemplateModal({
     e.preventDefault()
     setDragging(false)
     const file = e.dataTransfer.files[0]
-    if (file) handleFileSelect(file)
+    if (file) void handleFileSelect(file)
   }
 
   // ── Process template ──────────────────────────────────────────────────
@@ -518,7 +546,17 @@ export default function ImportTemplateModal({
               formData.append('page_images', img)
             }
           } catch (pdfErr) {
-            console.warn('[ImportTemplate] Falha ao converter PDF para imagens, enviando sem:', pdfErr)
+            const msg = pdfErr instanceof Error ? pdfErr.message : String(pdfErr)
+            console.error('[ImportTemplate] Falha ao converter PDF para imagens:', msg)
+            // Aborta: sem page_images o modo Pixel Perfect nao funciona.
+            // O usuario precisa saber para nao acreditar que o modo PP esta ativo.
+            setError(
+              'Falha ao converter o PDF em imagens no navegador. O modo Pixel Perfect requer essa etapa. ' +
+              'Detalhe tecnico: ' + msg +
+              '. Tente recarregar a pagina (Ctrl+Shift+R) — se persistir, verifique se /pdf.worker.min.mjs esta acessivel.'
+            )
+            setLoading(false)
+            return
           }
         }
 

@@ -4,6 +4,14 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
 const supabaseHost = supabaseUrl ? new URL(supabaseUrl).hostname : ''
 
 const nextConfig: NextConfig = {
+  // Operação Pixel Perfect — PDFs de laudos podem chegar a 50MB.
+  // Server Actions default = 1MB; subimos o teto para acomodar uploads reais.
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '50mb',
+    },
+  },
+
   async headers() {
     return [
       {
