@@ -1043,14 +1043,20 @@ export default function ImportTemplateModal({
       setError('Salve o template antes de gerar o PDF de teste.')
       return
     }
-    if (!form.originalPdfPath && !editTemplate.original_pdf_path) {
-      setError('Template sem PDF original. Reimporte um arquivo PDF para gerar o teste pixel-perfect.')
+    if (!form.originalPdfPath && !editTemplate.original_pdf_path
+        && !form.cleanedPagePaths && !editTemplate.cleaned_page_paths) {
+      setError('Template sem fundo (PDF ou paginas limpas). Reimporte um arquivo PDF.')
       return
     }
     if (form.extractedFields.length === 0) {
       setError('Mapeie ao menos um campo antes de gerar o teste.')
       return
     }
+
+    // CRITICO: abre uma janela VAZIA ANTES do await para preservar o
+    // user-gesture. Sem isso, os browsers bloqueiam window.open() pos-await
+    // como popup programatico.
+    const popupWin = window.open('about:blank', '_blank', 'noopener,noreferrer')
 
     setIsGeneratingTestPdf(true)
     try {
@@ -1059,25 +1065,37 @@ export default function ImportTemplateModal({
 
       const result = await previewFilledPdfBase64(editTemplate.id, mockValues)
       if ('error' in result) {
+        if (popupWin && !popupWin.closed) popupWin.close()
         setError(result.error)
         return
       }
 
-      // base64 → Uint8Array → Blob → Object URL → window.open
+      // base64 → Uint8Array → Blob → Object URL
       const binary = atob(result.base64)
       const bytes = new Uint8Array(binary.length)
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
       const blob = new Blob([bytes], { type: 'application/pdf' })
       const url = URL.createObjectURL(blob)
+      console.log(`[TestPDF] gerado: ${(result.byte_length / 1024).toFixed(1)} KB`)
 
-      const opened = window.open(url, '_blank', 'noopener,noreferrer')
-      if (!opened) {
-        setError('Bloqueio de pop-up impediu abrir o PDF. Permita pop-ups neste site e tente novamente.')
+      if (popupWin && !popupWin.closed) {
+        // Caminho feliz: usa a janela ja aberta com user-gesture
+        popupWin.location.href = url
+      } else {
+        // Fallback: popup bloqueado — dispara download via <a>
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${editTemplate.name || 'teste'}-preview.pdf`
+        document.body.appendChild(a)
+        a.click()
+        a.remove()
+        setError('Pop-up bloqueado pelo navegador — o PDF foi baixado em vez disso. Para abrir em nova aba, permita pop-ups neste site.')
       }
 
       // Libera o Object URL apos 60s — tempo suficiente para o browser carregar
       setTimeout(() => URL.revokeObjectURL(url), 60_000)
     } catch (err) {
+      if (popupWin && !popupWin.closed) popupWin.close()
       setError(err instanceof Error ? err.message : 'Erro ao gerar PDF de teste')
     } finally {
       setIsGeneratingTestPdf(false)
