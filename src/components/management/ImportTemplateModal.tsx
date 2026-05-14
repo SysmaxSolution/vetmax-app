@@ -10,6 +10,7 @@ import { saveTemplate, updateTemplate } from '@/lib/actions/templates'
 import TemplateLayoutEditor, {
   layoutToHtml, htmlToLayout,
   layoutElementsToOverlays, overlaysToLayoutElements,
+  uid,
   type LayoutElement,
 } from './TemplateLayoutEditor'
 import TemplatePreviewPane from './TemplatePreviewPane'
@@ -443,7 +444,7 @@ export default function ImportTemplateModal({
     // a partir das coordenadas % retornadas pela Vision API.
     if (editTemplate?.page_images && editTemplate.page_images.length > 0) {
       return editTemplate.extracted_fields.map(f => ({
-        id: `el_${Math.random().toString(36).slice(2)}`,
+        id: uid(),
         type: 'field' as const,
         field_name: f.field_name,
         label: f.label,
@@ -650,7 +651,7 @@ export default function ImportTemplateModal({
       // Modo legado (sem pageImages): editor faz buildDefaultElements (vertical).
       if (pageImages && pageImages.length > 0) {
         const ppElements: LayoutElement[] = refinedFields.map((f: ExtractedField) => ({
-          id: `el_${Math.random().toString(36).slice(2)}`,
+          id: uid(),
           type: 'field' as const,
           field_name: f.field_name,
           label: f.label,

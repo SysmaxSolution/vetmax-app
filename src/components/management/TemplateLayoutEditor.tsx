@@ -49,7 +49,12 @@ interface TemplateLayoutEditorProps {
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 let idCounter = 0
-const uid = () => `el_${Date.now()}_${++idCounter}`
+/**
+ * Gera um ID deterministico unico para LayoutElements. Combina timestamp +
+ * counter — nunca colide, mesmo em chamadas back-to-back. Exportado para que
+ * o ImportTemplateModal use o mesmo padrao ao criar campos a partir da IA.
+ */
+export const uid = () => `el_${Date.now()}_${++idCounter}`
 
 const isPct = (el: LayoutElement) => el.unit === 'pct'
 
@@ -658,10 +663,11 @@ export default function TemplateLayoutEditor({
                     size={{ width: px.width, height: px.height }}
                     bounds="parent"
                     onMouseDown={(e: any) => { e.stopPropagation(); setSelectedId(el.id) }}
-                    // CRITICO: stopPropagation no click TAMBEM (eventos React distintos).
-                    // Sem isso, o click bubbla pro canvas e dispara setSelectedId(null),
-                    // fechando o popover imediatamente apos abrir (efeito "piscar").
-                    onClick={(e: any) => e.stopPropagation()}
+                    // Redundancia robusta: alguns paths do react-rnd (drag/tap-vs-click)
+                    // podem nao chegar ao nosso onMouseDown a tempo. O onClick garante
+                    // que selectedId seja setado em qualquer caso. Sem stopPropagation
+                    // o click bubblaria pro canvas e fecharia o popover (efeito "piscar").
+                    onClick={(e: any) => { e.stopPropagation(); setSelectedId(el.id) }}
                     onDragStop={(_e, d) => {
                       const upd = pxToOverlay(el, { x: d.x, y: d.y, width: px.width, height: px.height })
                       updateElement(el.id, upd)
