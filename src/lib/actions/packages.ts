@@ -494,6 +494,45 @@ export async function getPetPackageSummary(
   })
 }
 
+// ─── Info de pacote por lista de appointmentIds (para agenda/calendário) ──────
+
+export async function getPackageInfoForAppointments(
+  appointmentIds: string[]
+): Promise<Record<string, PackageSessionInfo> | { error: string }> {
+  if (appointmentIds.length === 0) return {}
+  const ctx = await getCtx()
+  if (!ctx) return { error: 'Não autenticado.' }
+
+  const { data: sessions } = await ctx.supabase
+    .from('patient_package_sessions')
+    .select(`
+      appointment_id,
+      session_number,
+      patient_active_package_id,
+      pap:patient_active_packages(
+        package:catalog_packages(name, total_sessions)
+      )
+    `)
+    .in('appointment_id', appointmentIds)
+
+  if (!sessions?.length) return {}
+
+  const map: Record<string, PackageSessionInfo> = {}
+  for (const s of sessions) {
+    if (!s.appointment_id) continue
+    const pkg   = (s.pap as any)?.package
+    const total = pkg?.total_sessions ?? 1
+    map[s.appointment_id] = {
+      session_number:            s.session_number,
+      total_sessions:            total,
+      package_name:              pkg?.name ?? '—',
+      patient_active_package_id: s.patient_active_package_id,
+      is_last:                   s.session_number === total,
+    }
+  }
+  return map
+}
+
 // ─── Mapa appointmentId → info de sessão de pacote (para timeline) ────────────
 
 export async function getPackageSessionsMap(

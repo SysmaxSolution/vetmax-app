@@ -17,6 +17,7 @@ import {
   type UnifiedCalendarEvent,
 } from '@/lib/actions/calendar'
 import { sendDailyScheduleToVets, type DailyScheduleResult } from '@/lib/actions/daily-schedule-whatsapp'
+import { getPackageInfoForAppointments, type PackageSessionInfo } from '@/lib/actions/packages'
 import NewAppointmentModal from './NewAppointmentModal'
 import EditAppointmentModal from './EditAppointmentModal'
 import ReceptionSubNav from './ReceptionSubNav'
@@ -138,10 +139,11 @@ function AppointmentCard({
 type FilterType = 'all' | 'appointment' | 'grooming'
 
 function EventCard({
-  event, isPending, onConfirmArrival, onCancel, onCancelGrooming, onGroomingClick, onEdit,
+  event, isPending, packageInfo, onConfirmArrival, onCancel, onCancelGrooming, onGroomingClick, onEdit,
 }: {
   event:              UnifiedCalendarEvent
   isPending:          boolean
+  packageInfo?:       PackageSessionInfo
   onConfirmArrival:   () => void
   onCancel:           () => void
   onCancelGrooming:   () => void
@@ -189,12 +191,24 @@ function EventCard({
             <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${statusCfg.color}`}>
               {statusCfg.label}
             </span>
+            {packageInfo && (
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold border flex items-center gap-0.5 ${
+                packageInfo.is_last
+                  ? 'bg-amber-100 text-amber-700 border-amber-300'
+                  : 'bg-teal-100 text-teal-700 border-teal-200'
+              }`}>
+                🎁 {packageInfo.session_number}/{packageInfo.total_sessions}
+              </span>
+            )}
             {event.source === 'whatsapp' && (
               <span className="rounded-full px-2 py-0.5 text-[10px] font-bold bg-green-100 text-green-700 flex items-center gap-0.5">
                 <MessageCircle className="h-2.5 w-2.5" />WhatsApp
               </span>
             )}
           </div>
+          {packageInfo && (
+            <p className="text-[10px] text-teal-600 font-medium truncate">{packageInfo.package_name}</p>
+          )}
           <p className="text-xs text-slate-500 mt-0.5">
             {event.tutorName}
             {isAppt && event.reason ? ` · ${VISIT_REASON_LABELS[event.reason] ?? event.reason}` : ''}
@@ -270,6 +284,7 @@ export default function CalendarWorkspace({ clinicName }: Props) {
   const [selDate,   setSelDate]   = useState(todayStr)
   const [counts,    setCounts]    = useState<Record<string, number>>({})
   const [events,    setEvents]    = useState<UnifiedCalendarEvent[]>([])
+  const [packageMap, setPackageMap] = useState<Record<string, PackageSessionInfo>>({})
   const [filter,    setFilter]    = useState<FilterType>('all')
   const [loadMonth, setLoadMonth] = useState(false)
   const [loadDay,   setLoadDay]   = useState(false)
@@ -314,8 +329,19 @@ export default function CalendarWorkspace({ clinicName }: Props) {
 
   async function refreshDay(date: string) {
     const res = await getUnifiedCalendarEvents(date)
-    if (!('error' in res)) setEvents(res)
-    else setEvents([])
+    if (!('error' in res)) {
+      setEvents(res)
+      const apptIds = res.filter(e => e.type === 'appointment').map(e => e.id)
+      if (apptIds.length > 0) {
+        const pkgRes = await getPackageInfoForAppointments(apptIds)
+        setPackageMap(!('error' in pkgRes) ? pkgRes : {})
+      } else {
+        setPackageMap({})
+      }
+    } else {
+      setEvents([])
+      setPackageMap({})
+    }
   }
 
   useEffect(() => {
@@ -331,10 +357,21 @@ export default function CalendarWorkspace({ clinicName }: Props) {
 
   useEffect(() => {
     setLoadDay(true)
-    getUnifiedCalendarEvents(selDate).then(res => {
+    getUnifiedCalendarEvents(selDate).then(async res => {
       setLoadDay(false)
-      if (!('error' in res)) setEvents(res)
-      else setEvents([])
+      if (!('error' in res)) {
+        setEvents(res)
+        const apptIds = res.filter(e => e.type === 'appointment').map(e => e.id)
+        if (apptIds.length > 0) {
+          const pkgRes = await getPackageInfoForAppointments(apptIds)
+          setPackageMap(!('error' in pkgRes) ? pkgRes : {})
+        } else {
+          setPackageMap({})
+        }
+      } else {
+        setEvents([])
+        setPackageMap({})
+      }
     })
   }, [selDate])
 
@@ -685,7 +722,7 @@ export default function CalendarWorkspace({ clinicName }: Props) {
                       : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                   }`}
                 >
-                  {f === 'all' ? 'Todos' : f === 'appointment' ? '🩺 Consultas' : '✂️ Tosa'}
+                  {f === 'all' ? 'Todos' : f === 'appointment' ? '🩺 Consultas' : '✂️ Banho/Tosa'}
                 </button>
               ))}
             </div>
@@ -773,6 +810,7 @@ export default function CalendarWorkspace({ clinicName }: Props) {
                       key={event.id}
                       event={event}
                       isPending={isPending}
+                      packageInfo={event.type === 'appointment' ? packageMap[event.id] : undefined}
                       onConfirmArrival={() => handleConfirmArrival(event.sourceId)}
                       onCancel={() => handleCancel(event.sourceId)}
                       onCancelGrooming={() => setCancelGroomingTarget(event)}

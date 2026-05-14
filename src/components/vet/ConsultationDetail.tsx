@@ -72,7 +72,7 @@ const CRT_LABELS: Record<string, string> = {
 
 const VISIT_REASON_LABELS: Record<string, string> = {
   consultation: 'Consulta', follow_up: 'Retorno', emergency: 'Emergência',
-  vaccination: 'Vacinação', exam: 'Exame', surgery: 'Cirurgia',
+  vaccination: 'Vacinação', exam: 'Exame', surgery: 'Cirurgia', grooming: 'Banho e Tosa',
 }
 
 const STATUS_LABELS: Record<string, string> = {

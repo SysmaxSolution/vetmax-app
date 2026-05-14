@@ -43,6 +43,7 @@ const VISIT_REASON_LABELS: Record<string, string> = {
   vaccination:  'Vacinação',
   exam:         'Exame',
   surgery:      'Cirurgia',
+  grooming:     'Banho e Tosa',
 }
 
 // ─── Action ───────────────────────────────────────────────────────────────────
