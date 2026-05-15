@@ -32,8 +32,10 @@ export interface PdfPagesResult {
 
 export interface PdfToImagesOptions {
   /**
-   * Escala de renderizacao. scale=4.17 corresponde a ~300 DPI (4.17 × 72).
-   * Default 4.17 para qualidade de impressao Enterprise.
+   * Escala de renderizacao. scale=2.78 corresponde a ~200 DPI (2.78 × 72).
+   * Default 2.78 (200 DPI) — qualidade alta para impressao mantendo a
+   * memoria sob controle. 300 DPI causava OOM em laudos de 3+ paginas
+   * (A4 a 300dpi = ~2480x3508px = ~26MB de RGBA por pagina).
    */
   scale?: number
   /**
@@ -49,7 +51,10 @@ export interface PdfToImagesOptions {
   previewFormat?: 'png' | 'jpeg'
 }
 
-const DEFAULT_SCALE_300DPI = 300 / 72   // 4.166...
+// IC-14: 200 DPI (era 300) para evitar OOM em PDFs de multiplas paginas.
+// 200 DPI ainda eh "qualidade de impressao" — visualmente identico ao olho
+// humano. Reduz a memoria pela metade.
+const DEFAULT_SCALE_200DPI = 200 / 72   // 2.777...
 
 /**
  * Renderiza cada pagina do PDF em canvas alta resolucao e extrai o
@@ -63,7 +68,7 @@ export async function pdfToImages(
   const optsObj: PdfToImagesOptions = typeof opts === 'number'
     ? { scale: opts }
     : opts
-  const scale = optsObj.scale ?? DEFAULT_SCALE_300DPI
+  const scale = optsObj.scale ?? DEFAULT_SCALE_200DPI
   const keepCanvases = optsObj.keepCanvases ?? false
   const previewFormat = optsObj.previewFormat ?? 'png'
 

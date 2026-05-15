@@ -50,6 +50,8 @@ export interface FlattenCleanInput {
 export interface FlattenCleanResult {
   /** PNG limpo por pagina (mesmo indice que `canvases`/`dimensions`). */
   cleaned_pages: Blob[]
+  /** Data URLs PNG dos canvases JA LIMPOS — usar como pageImages no editor. */
+  cleaned_data_urls: string[]
   extracted_fields: ExtractedField[]
   layout_overlays: LayoutOverlay[]
   stats: {
@@ -226,10 +228,16 @@ export async function runFlattenClean(
     pixelsApagados += painted
   }
 
-  // 8) Converte cada canvas LIMPO em PNG Blob (paralelo)
+  // 8) Para cada canvas LIMPO: gera tanto PNG Blob (Storage) quanto data URL
+  //    (editor preview) ANTES de liberar memoria. Setar width=0/height=0
+  //    libera o backing store do canvas (~16MB de RGBA @200dpi por A4).
   const cleaned_pages: Blob[] = []
+  const cleaned_data_urls: string[] = []
   for (const c of canvases) {
+    cleaned_data_urls.push(c.toDataURL('image/png'))
     cleaned_pages.push(await canvasToPngBlob(c))
+    c.width = 0
+    c.height = 0
   }
 
   // 9) Gera extracted_fields + layout_overlays
@@ -292,17 +300,17 @@ export async function runFlattenClean(
     const isGlobal = instances.length > 1 || match.is_system_field
     const isSig = match.is_system_field === true
 
-    // IC-13: REDUCAO VISUAL DA ALTURA DO BBOX
+    // IC-13/14: REDUCAO VISUAL DA ALTURA DO BBOX
     //
     // O pdfjs reporta `height` igual ao fontSize (12pt em Helvetica 12pt),
-    // que inclui ascender + descender da fonte. Visualmente, o BBOX que
-    // contem essa altura inteira INVADE as linhas horizontais da tabela
-    // (cell-row tipicamente cabe so ~80% disso).
+    // que inclui ascender + descender da fonte. O BBOX visual desse altura
+    // inteira INVADE as linhas horizontais da tabela (cell tipicamente
+    // comporta ~60% disso visualmente).
     //
-    // Reduzimos h_pct e ajustamos y_pct para preservar a BASELINE em
-    // (y + h)/100 * pageH. O drawText continua exatamente no mesmo lugar;
-    // o bbox visual ocupa apenas a area do x-height/cap-height.
-    const BBOX_VISUAL_H_FACTOR = 0.78
+    // Factor 0.6 → bbox compacto, sai bem abaixo do glyph-top ascender.
+    // BASELINE preservada (y_pct + h_pct = baseline_topdown), entao
+    // drawText continua exatamente no mesmo lugar.
+    const BBOX_VISUAL_H_FACTOR = 0.6
 
     for (const inst of instances) {
       const dim = dimensions[inst.page] ?? dimensions[0]
@@ -342,6 +350,7 @@ export async function runFlattenClean(
 
   return {
     cleaned_pages,
+    cleaned_data_urls,
     extracted_fields,
     layout_overlays,
     stats: {

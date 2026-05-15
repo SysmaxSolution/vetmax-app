@@ -569,7 +569,9 @@ export default function ImportTemplateModal({
           let textItems: import('@/lib/pdf-to-images').PdfTextItem[] = []
           try {
             console.log('[ImportTemplate] Rasterizando PDF @300dpi + textContent...')
-            const r = await pdfToImages(selectedFile, { scale: 300 / 72, keepCanvases: true, previewFormat: 'png' })
+            // IC-14: 200 DPI (era 300) para evitar OOM em PDFs grandes.
+            // Qualidade ainda visualmente identica em monitor; reduz memoria ~55%.
+            const r = await pdfToImages(selectedFile, { scale: 200 / 72, keepCanvases: true, previewFormat: 'png' })
             console.log(`[ImportTemplate] ${r.images.length} pagina(s) rasterizadas, ${r.textItems.length} text items nativos`)
             pdfDimensions = r.dimensions
             pdfPageCount = r.images.length
@@ -606,10 +608,10 @@ export default function ImportTemplateModal({
             pipelineFields = result.extracted_fields
             pipelineOverlays = result.layout_overlays
             cleanedPagesBlobs = result.cleaned_pages
-            // IC-11: substitui pdfImages (data URLs pre-erase) pelos data URLs
-            // dos canvases JA APAGADOS — editor preview mostra o template
-            // limpo, identico ao PNG salvo no Storage.
-            pdfImages = canvases.map(c => c.toDataURL('image/png'))
+            // IC-11/14: usa data URLs JA gerados pelo pipeline (antes do
+            // canvas ser liberado para evitar OOM). Editor preview mostra
+            // o template limpo identico ao PNG salvo no Storage.
+            pdfImages = result.cleaned_data_urls
             console.log(
               `[ImportTemplate] Zero-Touch:`,
               `${result.stats.candidates} candidates,`,
