@@ -163,6 +163,42 @@ describe('OCR Sniper', () => {
       expect(cs.length).toBe(0)  // skip — eh referencia clinica, nao campo
     })
 
+    // ── IC-19: PONTOS DE PREENCHIMENTO (hemogramas/laudos lab) ─────────────
+    it('IC-19: label "ERITRÓCITOS(/mm³).............." detectado (5+ pontos)', () => {
+      const items = [
+        item('ERITRÓCITOS(/mm³)..............', 0, 6, 30, 30, 1.5),
+        item('7,1',                              0, 41, 30, 4, 1.5),
+        item('milhões/mm³',                     0, 49, 30, 12, 1.5),
+        item('5,5 - 10 milhões/mm³',            0, 65, 30, 25, 1.5),
+      ]
+      const cs = snipeLabels(items)
+      expect(cs.length).toBe(1)
+      expect(cs[0].label_text).toContain('ERITRÓCITOS')
+      expect(cs[0].existing_value_text).toBe('7,1')
+    })
+
+    it('IC-19: whiteout NAO invade referencias (boundary no 2o item)', () => {
+      const items = [
+        item('HEMOGLOBINA(g/dl)..............', 0, 6, 30, 30, 1.5),
+        item('10,5',                             0, 41, 30, 4, 1.5),
+        item('g/dl',                             0, 49, 30, 5, 1.5),  // unidade
+        item('8,0 - 15,0 g/dl',                  0, 60, 30, 18, 1.5), // referencia
+      ]
+      const cs = snipeLabels(items)
+      expect(cs.length).toBe(1)
+      // whiteoutRight respeita o 2o item (unidade "g/dl") como boundary
+      const whiteoutRight = cs[0].existing_value_bbox!.x_pct + cs[0].existing_value_bbox!.w_pct
+      expect(whiteoutRight).toBeLessThan(49)  // antes da unidade
+    })
+
+    it('IC-19: NAO confunde "etc..." com label (somente 5+ pontos)', () => {
+      const items = [
+        item('observacao etc...', 0, 10, 30, 16, 1.5),
+      ]
+      const cs = snipeLabels(items)
+      expect(cs.length).toBe(0)   // 3 pontos nao basta
+    })
+
     // ── IC-12: GUTTER DE COLUNA (margem visual entre value e nextLabel) ───
     it('IC-12: gutter >= 2.5% entre value e nextLabel (respeita divisoria tabela)', () => {
       // Tabela 2-col: Paciente: + Espécie:

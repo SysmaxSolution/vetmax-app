@@ -370,11 +370,22 @@ function isTemplateFixedLabel(labelNormalized: string): boolean {
 
 /**
  * Detecta se um item ou sequência forma um label.
- * Critério primário: texto termina com ':'
- * Critério secundário: bate com vocabulário conhecido (boost).
+ *
+ * Criterios:
+ *   1. Texto termina com ':' — caso classico
+ *   2. IC-19: texto termina com 5+ pontos de preenchimento — padrao comum
+ *      em hemogramas e relatorios laboratoriais para alinhar valores em
+ *      colunas ("ERITRÓCITOS(milhões/mm³)..............")
+ *
+ * 5+ pontos eh o threshold seguro: descarta reticencias (3 pontos), itens
+ * decimais ("3.14") e abreviacoes ("etc..."), mas captura corretamente o
+ * padrao de preenchimento de tabelas.
  */
 function isLabelEnding(text: string): boolean {
-  return /[:][\s]*$/.test(text.trim())
+  const t = text.trim()
+  if (/[:][\s]*$/.test(t)) return true
+  if (/\.{5,}\s*$/.test(t)) return true
+  return false
 }
 
 function isLabelVocab(text: string): boolean {
@@ -443,6 +454,20 @@ function segmentLine(line: LineGroup): LineSegmentation[] {
       // Tudo a partir do boundary deixa de ser "value antigo do campo" —
       // permanece intocavel no template.
       valueItems = valueItems.slice(0, boundaryIdx)
+    }
+
+    // IC-19: para labels com pontos de preenchimento (hemogramas), o VALOR
+    // eh apenas o PRIMEIRO item apos o label. Items subsequentes na mesma
+    // linha sao UNIDADE + REFERENCIA (intocaveis). Ex linha 1 hemograma:
+    //   "ERITRÓCITOS(milhões/mm³)......" + "7,1" + "milhões/mm³" + "5,5 - 10 milhões/mm³"
+    //   label:                          ^value^  ^suffix/ref^   ^reference (boundary)^
+    // Sem essa logica, o whiteout cobria 50% da pagina e apagava as
+    // referencias intactas.
+    const labelEndsWithDots = /\.{5,}\s*$/.test(items[labelEndIdx].str)
+    if (labelEndsWithDots && valueItems.length >= 2 && rightBoundaryX === undefined) {
+      // Promove o segundo item a boundary (limita o whiteout)
+      rightBoundaryX = valueItems[1].x_pct
+      valueItems = valueItems.slice(0, 1)
     }
 
     // IC-9: detecta sufixo de unidade em ANY posicao do value (nao so o ultimo).
