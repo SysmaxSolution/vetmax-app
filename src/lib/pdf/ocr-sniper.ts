@@ -282,6 +282,10 @@ interface LineSegmentation {
   // delimita o valor pela direita SEM ser apagado (referencias clinicas
   // entre parenteses, "Referência: X – Y", etc).
   right_boundary_x_pct?: number
+  // IC-10: simetria de coluna — quando ha 2+ labels na mesma linha, o
+  // ultimo label "herda" a largura media dos values dos labels anteriores.
+  // Evita que a coluna direita estique ate a borda da pagina.
+  symmetry_next_x_pct?: number
 }
 
 // TZ-3: Padrões de unidades de medida comuns em laudos veterinários.
@@ -468,6 +472,35 @@ function segmentLine(line: LineGroup): LineSegmentation[] {
     })
     labelStartIdx = nextLabelStartIdx
   }
+
+  // IC-10: SIMETRIA DE COLUNA
+  // Em linhas com 2+ labels, o ULTIMO segmento (coluna direita) NAO tem
+  // next_label_x_pct. Sem isso o value pode esticar ate a borda da pagina
+  // (50% via valueMaxW), enquanto a coluna esquerda foi limitada pelo
+  // proximo label. Resultado visual: bbox direita muito maior que a esquerda.
+  //
+  // Heuristica: usa a largura MEDIA dos values dos labels anteriores
+  // (label_right ate next_label) como sintetic next_label para o ultimo.
+  if (segments.length >= 2) {
+    const widths: number[] = []
+    for (let i = 0; i < segments.length - 1; i++) {
+      const s = segments[i]
+      if (s.next_label_x_pct === null) continue
+      const lb = bboxFromItems(s.label_items)
+      const w = s.next_label_x_pct - (lb.x_pct + lb.w_pct)
+      if (w > 0) widths.push(w)
+    }
+    if (widths.length > 0) {
+      const avg = widths.reduce((a, b) => a + b, 0) / widths.length
+      const last = segments[segments.length - 1]
+      // Soh aplica se last NAO tem suffix nem boundary (ja delimitam)
+      if (!last.suffix_x_pct && last.right_boundary_x_pct === undefined) {
+        const lb = bboxFromItems(last.label_items)
+        last.symmetry_next_x_pct = (lb.x_pct + lb.w_pct) + avg
+      }
+    }
+  }
+
   return segments
 }
 
@@ -569,12 +602,14 @@ export function snipeLabels(
         : labelRight + WHITEOUT_SAFETY_PCT  // PRIORIDADE 2
       const hasSuffix = typeof seg.suffix_x_pct === 'number'
       const hasBoundary = typeof seg.right_boundary_x_pct === 'number'
+      const hasSymmetry = typeof seg.symmetry_next_x_pct === 'number'
 
       // Ordem de prioridade do limite DIREITO do whiteout:
       //   1. sufixo de unidade ("cm", "mmHg") — texto a manter intocavel
       //   2. boundary item "(normal até..." — texto a manter intocavel
       //   3. proximo label da mesma linha
-      //   4. fim da pagina
+      //   4. IC-10: simetria com coluna esquerda (mesma linha 2+ labels)
+      //   5. fim da pagina
       let whiteoutRight: number
       if (hasSuffix) {
         whiteoutRight = (seg.suffix_x_pct as number) - WHITEOUT_SAFETY_PCT
@@ -582,6 +617,8 @@ export function snipeLabels(
         whiteoutRight = (seg.right_boundary_x_pct as number) - WHITEOUT_SAFETY_PCT
       } else if (seg.next_label_x_pct !== null) {
         whiteoutRight = seg.next_label_x_pct - WHITEOUT_SAFETY_PCT
+      } else if (hasSymmetry) {
+        whiteoutRight = Math.min(seg.symmetry_next_x_pct as number, 100) - WHITEOUT_SAFETY_PCT
       } else {
         whiteoutRight = 100 - WHITEOUT_SAFETY_PCT
       }
@@ -596,9 +633,9 @@ export function snipeLabels(
         const allowedMax = whiteoutRight
         whiteoutWidth = Math.max(0, Math.min(valueMinW, allowedMax - whiteoutLeft))
       }
-      // Sem sufixo nem boundary, respeita também o limite valueMaxW para
+      // Sem sufixo, boundary ou simetria, respeita o limite valueMaxW para
       // nao comer toda a pagina em campos sem next_label.
-      if (!hasSuffix && !hasBoundary && seg.next_label_x_pct === null) {
+      if (!hasSuffix && !hasBoundary && !hasSymmetry && seg.next_label_x_pct === null) {
         whiteoutWidth = Math.min(whiteoutWidth, valueMaxW)
       }
 

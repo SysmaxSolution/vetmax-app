@@ -163,6 +163,24 @@ describe('OCR Sniper', () => {
       expect(cs.length).toBe(0)  // skip — eh referencia clinica, nao campo
     })
 
+    // ── IC-10: SIMETRIA DE COLUNA ──────────────────────────────────────────
+    it('IC-10: linha com 2 labels — ultimo label herda width medio do primeiro', () => {
+      // Linha tipo "Paciente: ... Espécie:" — em template de 2 colunas, o
+      // value de Espécie nao deve esticar ate a borda da pagina.
+      const items = [
+        item('Paciente:', 0, 5,  20, 9, 1.5),    // x=5, w=9, end=14
+        item('Espécie:',  0, 51, 20, 8, 1.5),    // x=51, w=8, end=59
+      ]
+      const cs = snipeLabels(items)
+      expect(cs.length).toBe(2)
+      // Paciente value width = 51 - 14 = 37%
+      const pacWidth = cs[0].existing_value_bbox!.w_pct
+      const espWidth = cs[1].existing_value_bbox!.w_pct
+      // Espécie deve ter width SIMILAR (simetria) — nao toda a borda direita
+      expect(espWidth).toBeLessThan(pacWidth + 5)
+      expect(espWidth).toBeGreaterThan(pacWidth - 5)
+    })
+
     it('IC-9 (A): sufixo no PRIMEIRO item — campo vazio "RDAP index:" + "%" + ">30%"', () => {
       const items = [
         item('RDAP index:', 0, 16.6, 60, 10.0, 1.5),

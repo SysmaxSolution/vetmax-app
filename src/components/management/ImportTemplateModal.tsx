@@ -606,6 +606,10 @@ export default function ImportTemplateModal({
             pipelineFields = result.extracted_fields
             pipelineOverlays = result.layout_overlays
             cleanedPagesBlobs = result.cleaned_pages
+            // IC-11: substitui pdfImages (data URLs pre-erase) pelos data URLs
+            // dos canvases JA APAGADOS — editor preview mostra o template
+            // limpo, identico ao PNG salvo no Storage.
+            pdfImages = canvases.map(c => c.toDataURL('image/png'))
             console.log(
               `[ImportTemplate] Zero-Touch:`,
               `${result.stats.candidates} candidates,`,
