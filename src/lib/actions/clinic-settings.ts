@@ -242,6 +242,10 @@ export async function updateClinicVoiceTriggers(
 
   if (error) return { error: error.message }
   revalidatePath('/dashboard/grooming')
+  revalidatePath('/dashboard/vet', 'layout')
+  revalidatePath('/dashboard/hospitalization', 'layout')
+  revalidatePath('/dashboard/triage', 'layout')
+  revalidatePath('/dashboard/exams', 'layout')
   return { success: true }
 }
 

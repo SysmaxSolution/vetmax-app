@@ -1480,9 +1480,7 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
             {/* Gatilhos de ativação */}
             <div>
               <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Frases para Iniciar Gravação</p>
-              <p className="text-[10px] text-slate-400 mb-2">
-                Padrão: "Assistente", "Vet Max", "Gravar evolução", "Iniciar gravação"
-              </p>
+              <p className="text-[10px] text-slate-400 mb-2">Se a lista estiver vazia, o sistema usa os padrões integrados. Itens removidos são desativados permanentemente.</p>
               <div className="flex gap-2 mb-2">
                 <input
                   type="text"
@@ -1525,9 +1523,7 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
             {/* Gatilhos de parada */}
             <div>
               <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Frases para Salvar e Finalizar</p>
-              <p className="text-[10px] text-slate-400 mb-2">
-                Padrão: "Finalizar", "Pode salvar", "Salvar evolução"
-              </p>
+              <p className="text-[10px] text-slate-400 mb-2">Se a lista estiver vazia, o sistema usa os padrões integrados. Itens removidos são desativados permanentemente.</p>
               <div className="flex gap-2 mb-2">
                 <input
                   type="text"

@@ -38,11 +38,17 @@ const DEFAULT_STOP_WORDS = [
 ]
 
 export function buildWakeRe(custom: string[] = []): RegExp {
-  return new RegExp('\\b(' + [...DEFAULT_WAKE_WORDS, ...custom.map(esc)].join('|') + ')\\b', 'i')
+  // Usa exclusivamente os triggers da clínica quando configurados.
+  // Defaults só como fallback quando a clínica não tem triggers no banco.
+  const terms = custom.length > 0 ? custom.map(esc) : DEFAULT_WAKE_WORDS
+  return new RegExp('\\b(' + terms.join('|') + ')\\b', 'i')
 }
 
 export function buildStopRe(custom: string[] = []): RegExp {
-  return new RegExp('(' + [...DEFAULT_STOP_WORDS, ...custom.map(esc)].join('|') + ')', 'i')
+  // Usa exclusivamente os triggers da clínica quando configurados.
+  // Defaults só como fallback quando a clínica não tem triggers no banco.
+  const terms = custom.length > 0 ? custom.map(esc) : DEFAULT_STOP_WORDS
+  return new RegExp('(' + terms.join('|') + ')', 'i')
 }
 
 /**

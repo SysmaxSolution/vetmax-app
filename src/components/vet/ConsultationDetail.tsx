@@ -326,7 +326,13 @@ export default function ConsultationDetail({
     setIsExtractingVoice(false)
 
     if ('error' in result) {
-      setToast({ type: 'error', message: result.error })
+      // Fallback: preserva a transcrição bruta para não perder o conteúdo gravado
+      const fallbackNotes = vetNotesRef.current
+        ? `${vetNotesRef.current}\n\n${transcript}`
+        : transcript
+      setVetNotes(fallbackNotes)
+      autoSave(fallbackNotes)
+      setToast({ type: 'error', message: `${result.error} — transcrição salva como texto bruto.` })
       return
     }
 
@@ -2139,7 +2145,7 @@ export default function ConsultationDetail({
 
             <div>
               <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Frases para Iniciar Gravação</p>
-              <p className="text-[10px] text-slate-400 mb-2">Padrão: "Assistente", "Vet Max", "Gravar evolução", "Iniciar gravação"</p>
+              <p className="text-[10px] text-slate-400 mb-2">Se a lista estiver vazia, o sistema usa os padrões integrados. Itens removidos são desativados permanentemente.</p>
               <div className="flex gap-2 mb-2">
                 <input type="text" value={newStartInput} onChange={e => setNewStartInput(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter' && newStartInput.trim()) { e.preventDefault(); setStartTriggers(prev => [...new Set([...prev, newStartInput.trim().toLowerCase()])]); setNewStartInput('') } }}
@@ -2159,7 +2165,7 @@ export default function ConsultationDetail({
 
             <div>
               <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Frases para Salvar e Finalizar</p>
-              <p className="text-[10px] text-slate-400 mb-2">Padrão: "Finalizar", "Pode salvar", "Salvar evolução"</p>
+              <p className="text-[10px] text-slate-400 mb-2">Se a lista estiver vazia, o sistema usa os padrões integrados. Itens removidos são desativados permanentemente.</p>
               <div className="flex gap-2 mb-2">
                 <input type="text" value={newStopInput} onChange={e => setNewStopInput(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter' && newStopInput.trim()) { e.preventDefault(); setStopTriggers(prev => [...new Set([...prev, newStopInput.trim().toLowerCase()])]); setNewStopInput('') } }}
