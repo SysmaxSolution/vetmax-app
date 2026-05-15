@@ -77,7 +77,55 @@ interface FieldMatch {
 
 // ── Helpers de matching deterministico ─────────────────────────────────
 
+/**
+ * IC-18: Regex de SYSTEM FIELDS reconhecidos quando o label tem `:` mas o
+ * texto eh ALTAMENTE ESPECIFICO de um campo de sistema (medico veterinario,
+ * clinica veterinaria). Aceita abreviacoes comuns: "Méd. Vet.:", "Med. Vet.:",
+ * "Clínica Vet.:", "Hospital Vet.:".
+ *
+ * Sao reconhecidos APENAS termos especificos do dominio veterinario — nao
+ * abre brecha para alucinacao de campos clinicos (continua valendo a
+ * regra "8 canonicos puros" no canonical-whitelist).
+ */
+const SYSTEM_FIELD_REGEX: { re: RegExp; field_name: string; description: string }[] = [
+  {
+    re: /^m[ée]d(?:ic[oa])?[\.\s]+vet(?:erin[áa]ri[oa])?\.?/i,
+    field_name: 'professional_role',
+    description: 'Cargo do profissional (Médico Veterinário)',
+  },
+  {
+    re: /^cl[íi]nica[\.\s]+vet(?:erin[áa]ria?)?\.?/i,
+    field_name: 'clinic_name',
+    description: 'Nome da clinica veterinaria',
+  },
+  {
+    re: /^hospital[\.\s]+vet(?:erin[áa]ri[oa])?\.?/i,
+    field_name: 'clinic_name',
+    description: 'Nome do hospital veterinario',
+  },
+]
+
+function tryMatchSystemFieldRegex(labelText: string): FieldMatch | null {
+  // Normaliza removendo pontuacao final
+  const clean = labelText.replace(/[:\.\s]+$/, '').trim()
+  for (const r of SYSTEM_FIELD_REGEX) {
+    if (r.re.test(clean)) {
+      return {
+        label_original: labelText,
+        field_name: r.field_name,
+        type: 'text',
+        description: r.description,
+        required: false,
+        is_system_field: true,
+        is_custom: false,
+      }
+    }
+  }
+  return null
+}
+
 function resolveMatchDeterministic(labelText: string): FieldMatch {
+  // 1. Whitelist canonica (paciente, raca, idade, ...)
   const local = matchCanonicalLocal(labelText)
   if (local) {
     return {
@@ -90,7 +138,10 @@ function resolveMatchDeterministic(labelText: string): FieldMatch {
       is_custom: false,
     }
   }
-  // Anything not in whitelist -> custom_*
+  // 2. IC-18: SYSTEM FIELDS por regex (Médico Vet., Clínica Vet., etc)
+  const sys = tryMatchSystemFieldRegex(labelText)
+  if (sys) return sys
+  // 3. Anything else -> custom_*
   return {
     label_original: labelText,
     field_name: buildCustomFieldName(labelText),
