@@ -19,7 +19,8 @@ import type {
   DocumentTemplate, ExtractedField, FieldType, TemplateType,
   LayoutOverlay, PageDimensionsRecord,
 } from '@/types'
-import { uploadTemplatePdf, uploadCleanedPages, getCleanedPagesSignedUrls } from '@/lib/actions/template-storage'
+import { uploadTemplatePdf, uploadCleanedPages, getCleanedPagesSignedUrls, getTemplateUploadUrls } from '@/lib/actions/template-storage'
+import { createClient as createBrowserSupabase } from '@/lib/supabase/client'
 import { previewFilledPdfBase64 } from '@/lib/actions/document-generation'
 import { buildMockFieldValues } from '@/lib/pdf/mock-field-values'
 import { FileCheck2 } from 'lucide-react'
@@ -677,55 +678,87 @@ export default function ImportTemplateModal({
 
       const pageImages = pdfImages
 
-      // Operacao Zero-Touch: upload do PDF original (referencia) E das PNGs limpas.
-      // O PDF original e mantido apenas para reprocessamento futuro; a geracao
-      // USARA SEMPRE os PNGs limpos do bucket.
+      // Operacao Zero-Touch + IC-17 — UPLOAD DIRETO via signed URLs.
+      // O fluxo antigo passava arquivos via FormData no payload do Server Action,
+      // o que serializava no Next.js intermediario e chegava a demorar 6+ MINUTOS
+      // para PDFs de poucas paginas. Agora geramos signed upload tokens (1s) e
+      // o browser uploada DIRETO para o bucket Supabase.
       let originalPdfPath: string | null = null
       let cleanedPagePaths: string[] | null = null
       const isPdf = selectedFile && (selectedFile.type === 'application/pdf' || selectedFile.name.endsWith('.pdf'))
-      if (selectedFile && isPdf) {
-        try {
-          const uploadFd = new FormData()
-          uploadFd.append('file', selectedFile)
-          const r = await uploadTemplatePdf(uploadFd)
-          if ('path' in r) {
-            originalPdfPath = r.path
-            console.log('[ImportTemplate] PDF original em Storage:', r.path)
-          } else {
-            console.warn('[ImportTemplate] Upload do PDF falhou:', r.error)
-          }
-        } catch (upErr) {
-          console.warn('[ImportTemplate] Erro upload PDF original:', upErr)
-        }
 
-        // Upload dos PNGs limpos (canvas-eraser ja apagou os valores antigos)
-        if (cleanedPagesBlobs.length > 0) {
-          try {
-            const pagesFd = new FormData()
-            // Reaproveita o folder_id do PDF original (mesmo UUID)
-            const folderId = originalPdfPath?.match(/^[^/]+\/([0-9a-f-]+)\//i)?.[1]
-            if (folderId) pagesFd.append('folder_id', folderId)
-            for (let i = 0; i < cleanedPagesBlobs.length; i++) {
-              const fileFromBlob = new File([cleanedPagesBlobs[i]], `page-${i}.png`, { type: 'image/png' })
-              pagesFd.append(`page-${i}`, fileFromBlob)
-            }
-            const r2 = await uploadCleanedPages(pagesFd)
-            if ('paths' in r2) {
-              cleanedPagePaths = r2.paths
-              console.log(`[ImportTemplate] ${r2.paths.length} PNGs limpos em Storage`)
-            } else {
-              console.warn('[ImportTemplate] Upload PNGs limpos falhou:', r2.error)
-              setError('Falha no upload das paginas limpas: ' + r2.error)
-              setLoading(false)
-              return
-            }
-          } catch (upErr) {
-            const msg = upErr instanceof Error ? upErr.message : String(upErr)
-            console.warn('[ImportTemplate] Erro upload PNGs:', msg)
-            setError('Erro upload PNGs: ' + msg)
+      if (selectedFile && isPdf) {
+        const t0 = performance.now()
+        try {
+          // 1. Pede os tokens de upload em UMA so chamada ao server
+          const tokens = await getTemplateUploadUrls({
+            upload_pdf: true,
+            upload_pages_count: cleanedPagesBlobs.length,
+          })
+          if ('error' in tokens) {
+            setError('Falha gerando tokens de upload: ' + tokens.error)
             setLoading(false)
             return
           }
+          console.log(`[ImportTemplate] tokens criados em ${(performance.now() - t0).toFixed(0)}ms`)
+
+          // 2. Upload PARALELO direto ao Storage via supabase-js
+          const supa = createBrowserSupabase()
+          const uploads: Promise<{ ok: boolean; path?: string; idx?: number; err?: string }>[] = []
+
+          if (tokens.pdf) {
+            uploads.push(
+              supa.storage.from('document-templates')
+                .uploadToSignedUrl(tokens.pdf.path, tokens.pdf.token, selectedFile)
+                .then(r => r.error
+                  ? { ok: false, err: 'PDF: ' + r.error.message }
+                  : { ok: true, path: tokens.pdf!.path }
+                )
+            )
+          }
+          if (tokens.pages) {
+            for (const p of tokens.pages) {
+              const blob = cleanedPagesBlobs[p.idx]
+              if (!blob) continue
+              uploads.push(
+                supa.storage.from('document-templates')
+                  .uploadToSignedUrl(p.path, p.token, blob, { contentType: 'image/png' })
+                  .then(r => r.error
+                    ? { ok: false, err: `pagina ${p.idx}: ${r.error.message}` }
+                    : { ok: true, path: p.path, idx: p.idx }
+                  )
+              )
+            }
+          }
+
+          const t1 = performance.now()
+          const results = await Promise.all(uploads)
+          console.log(`[ImportTemplate] ${results.length} uploads diretos em ${(performance.now() - t1).toFixed(0)}ms`)
+
+          // 3. Valida e separa paths
+          const errs = results.filter(r => !r.ok).map(r => r.err)
+          if (errs.length > 0) {
+            setError('Falha no upload: ' + errs.join('; '))
+            setLoading(false)
+            return
+          }
+          if (tokens.pdf) {
+            originalPdfPath = tokens.pdf.path
+          }
+          if (tokens.pages && tokens.pages.length > 0) {
+            // Reconstroi os paths na ORDEM por idx
+            cleanedPagePaths = tokens.pages
+              .slice()
+              .sort((a, b) => a.idx - b.idx)
+              .map(p => p.path)
+            console.log(`[ImportTemplate] ${cleanedPagePaths.length} PNGs limpos em Storage`)
+          }
+        } catch (upErr) {
+          const msg = upErr instanceof Error ? upErr.message : String(upErr)
+          console.warn('[ImportTemplate] Erro upload direto:', msg)
+          setError('Erro upload direto: ' + msg)
+          setLoading(false)
+          return
         }
       }
 

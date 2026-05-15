@@ -167,6 +167,89 @@ export async function uploadGeneratedPatientPdf(
 }
 
 /**
+ * IC-17: Gera signed upload URLs para upload DIRETO browser → Supabase.
+ *
+ * O fluxo antigo (uploadTemplatePdf + uploadCleanedPages) passava o arquivo
+ * inteiro como FormData no payload do Server Action. Para um laudo de 3
+ * paginas (PDF ~2MB + 3 PNGs limpos ~600KB cada), o Server Action chegava
+ * a demorar 6+ MINUTOS por causa da serializacao + roundtrip do Next.js
+ * antes do upload chegar ao Supabase.
+ *
+ * Esta action APENAS gera os tokens de upload (operacao rapida, <1s) e o
+ * cliente faz `supabase.storage.uploadToSignedUrl(path, token, blob)`
+ * DIRETO no bucket — sem passar pelo Next.js intermediario.
+ *
+ * RLS: a action valida auth + role admin antes de gerar os tokens.
+ */
+export async function getTemplateUploadUrls(input: {
+  folder_id?: string
+  upload_pdf?: boolean
+  upload_pages_count?: number
+}): Promise<{
+  folder_id: string
+  pdf?: { path: string; token: string }
+  pages?: { path: string; token: string; idx: number }[]
+} | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Nao autenticado' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('clinic_id, role')
+    .eq('id', user.id)
+    .single()
+  if (!profile?.clinic_id) return { error: 'Perfil sem clinica' }
+  if (profile.role !== 'admin') return { error: 'Apenas admin pode subir templates' }
+
+  const folderId = input.folder_id && /^[0-9a-f-]{36}$/i.test(input.folder_id)
+    ? input.folder_id
+    : randomUUID()
+
+  const admin = createAdminClient()
+  const result: {
+    folder_id: string
+    pdf?: { path: string; token: string }
+    pages?: { path: string; token: string; idx: number }[]
+  } = { folder_id: folderId }
+
+  if (input.upload_pdf) {
+    const path = `${profile.clinic_id}/${folderId}/original.pdf`
+    const { data, error } = await admin.storage
+      .from(TEMPLATE_BUCKET)
+      .createSignedUploadUrl(path, { upsert: false })
+    if (error || !data) return { error: 'Erro criando token PDF: ' + (error?.message || '') }
+    result.pdf = { path, token: data.token }
+  }
+
+  if (input.upload_pages_count && input.upload_pages_count > 0) {
+    if (input.upload_pages_count > 50) return { error: 'Excesso de paginas (max 50)' }
+    result.pages = []
+    for (let i = 0; i < input.upload_pages_count; i++) {
+      const path = `${profile.clinic_id}/${folderId}/page-${i}.png`
+      const { data, error } = await admin.storage
+        .from(TEMPLATE_BUCKET)
+        .createSignedUploadUrl(path, { upsert: true })
+      if (error || !data) return { error: `Erro criando token pagina ${i}: ${error?.message || ''}` }
+      result.pages.push({ path, token: data.token, idx: i })
+    }
+  }
+
+  await logAudit({
+    action: 'TEMPLATE_UPLOAD_URLS_ISSUED',
+    entity_type: 'document_templates_storage',
+    entity_id: folderId,
+    details: {
+      folder_id: folderId,
+      pdf: !!input.upload_pdf,
+      pages: input.upload_pages_count ?? 0,
+    },
+  })
+
+  return result
+}
+
+/**
  * Operacao Zero-Touch — Upload de PNGs limpos por pagina.
  *
  * Acionado pelo ImportTemplateModal apos o pipeline runFlattenClean. Cada
