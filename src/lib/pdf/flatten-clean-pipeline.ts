@@ -205,18 +205,36 @@ export async function runFlattenClean(
   const fmtBox = (b: EraseRect) =>
     `x:${b.x_pct.toFixed(2)}% y:${b.y_pct.toFixed(2)}% w:${b.w_pct.toFixed(2)}% h:${b.h_pct.toFixed(2)}%`
 
+  // IC-16: SHRINK TOP — pdfjs reporta h_pt = fontSize (que inclui o "ascender
+  // void" acima do glyph real). Linhas horizontais da tabela vivem nesse
+  // espaco vazio. Encolhemos o TOP do erase em ~28% (ascender_void da
+  // Helvetica) para preservar essas linhas. O glyph real (cap_top ate
+  // descender_bottom) continua totalmente coberto.
+  const ERASER_TOP_SHRINK = 0.28
+
+  function shrinkBboxTop(bbox: EraseRect): EraseRect {
+    return {
+      x_pct: bbox.x_pct,
+      y_pct: bbox.y_pct + bbox.h_pct * ERASER_TOP_SHRINK,
+      w_pct: bbox.w_pct,
+      h_pct: bbox.h_pct * (1 - ERASER_TOP_SHRINK),
+    }
+  }
+
   // 6a) sniper candidates (existing_value_bbox respeita regra do ":")
   for (const c of sniperCandidatesFiltered) {
     if (!c.existing_value_bbox) continue
-    console.log(`[Debug] Apagando valor apos rotulo "${c.label_text}" na pagina ${c.page} coordenada ${fmtBox(c.existing_value_bbox)}`)
-    erasePerPage[c.page].push(c.existing_value_bbox)
+    const shrunk = shrinkBboxTop(c.existing_value_bbox)
+    console.log(`[Debug] Apagando valor apos rotulo "${c.label_text}" na pagina ${c.page} coordenada ${fmtBox(shrunk)}`)
+    erasePerPage[c.page].push(shrunk)
   }
 
-  // 6b) signatures candidates (whiteout = LINHA INTEIRA)
+  // 6b) signatures candidates (whiteout = LINHA INTEIRA, idem shrink)
   for (const c of signatures.candidates) {
     if (!c.existing_value_bbox) continue
-    console.log(`[Debug] Apagando ASSINATURA "${c.existing_value_text}" na pagina ${c.page} coordenada ${fmtBox(c.existing_value_bbox)}`)
-    erasePerPage[c.page].push(c.existing_value_bbox)
+    const shrunk = shrinkBboxTop(c.existing_value_bbox)
+    console.log(`[Debug] Apagando ASSINATURA "${c.existing_value_text}" na pagina ${c.page} coordenada ${fmtBox(shrunk)}`)
+    erasePerPage[c.page].push(shrunk)
   }
 
   // 7) Aplica erase nos canvases — pixels DESAPARECEM da imagem de fundo.
