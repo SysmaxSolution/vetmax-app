@@ -163,6 +163,80 @@ describe('OCR Sniper', () => {
       expect(cs.length).toBe(0)  // skip — eh referencia clinica, nao campo
     })
 
+    it('IC-9 (A): sufixo no PRIMEIRO item — campo vazio "RDAP index:" + "%" + ">30%"', () => {
+      const items = [
+        item('RDAP index:', 0, 16.6, 60, 10.0, 1.5),
+        item('%',           0, 31.9, 60, 1.2, 1.5),
+        item('>',           0, 63.3, 60, 0.8, 1.5),
+        item('30%',         0, 64.1, 60, 3.0, 1.5),
+      ]
+      const cs = snipeLabels(items)
+      expect(cs.length).toBe(1)
+      const c = cs[0]
+      // boundary ">" detectado em x=63.3 ANTES da deteccao de sufixo
+      // sufixo "%" no PRIMEIRO item apos label (depois de remover boundary)
+      // → value_bbox fica ENTRE label.right e %.x
+      const whiteoutRight = c.existing_value_bbox!.x_pct + c.existing_value_bbox!.w_pct
+      expect(whiteoutRight).toBeLessThan(31.9)   // antes do %
+      expect(c.align).toBe('center')              // sufixo OU boundary → center
+    })
+
+    it('IC-9 (B): "mmHg/s" reconhecido como sufixo', () => {
+      const items = [
+        item('dP/dt:',    0, 10, 50, 5, 1.5),
+        item('mmHg/s',    0, 32, 50, 6, 1.5),
+      ]
+      const cs = snipeLabels(items)
+      expect(cs.length).toBe(1)
+      expect(cs[0].align).toBe('center')
+      // bbox entre label e sufixo
+      const right = cs[0].existing_value_bbox!.x_pct + cs[0].existing_value_bbox!.w_pct
+      expect(right).toBeLessThan(32)
+    })
+
+    it('IC-9 (C): boundary + align=center (sem sufixo)', () => {
+      const items = [
+        item('Diametro normalizado VE:', 0, 16.6, 60, 20.6, 1.5),
+        item('(normal até 1,7)',          0, 53.3, 60, 16.1, 1.5),
+      ]
+      const cs = snipeLabels(items)
+      expect(cs.length).toBe(1)
+      // boundary "(normal até..." → align=center (nao left)
+      expect(cs[0].align).toBe('center')
+    })
+
+    it('IC-9 (D): "> 30%" como boundary', () => {
+      const items = [
+        item('Campo:', 0, 10, 50, 5, 1.5),
+        item('>',      0, 50, 50, 1, 1.5),
+        item('30%',    0, 52, 50, 3, 1.5),
+      ]
+      const cs = snipeLabels(items)
+      expect(cs.length).toBe(1)
+      // boundary ">" delimita o whiteout
+      const right = cs[0].existing_value_bbox!.x_pct + cs[0].existing_value_bbox!.w_pct
+      expect(right).toBeLessThan(50)
+    })
+
+    it('IC-9 (E): titulo all-caps "OBSERVAÇÕES" NAO vira campo', () => {
+      const items = [
+        item('OBSERVAÇÕES', 0, 4.5, 50, 13.9, 1.5),
+      ]
+      const cs = snipeLabels(items)
+      expect(cs.length).toBe(0)   // titulo de secao, nao label
+    })
+
+    it('IC-9 (E): "CRMV" curto (sigla) AINDA vira campo via vocab', () => {
+      // 4 chars all-caps eh sigla, nao titulo — deve continuar detectando
+      const items = [
+        item('CRMV',      0, 10, 5, 5, 1.5),
+        item('SP 74.696', 0, 17, 5, 12, 1.5),
+      ]
+      const cs = snipeLabels(items)
+      expect(cs.length).toBe(1)
+      expect(cs[0].label_normalized).toContain('crmv')
+    })
+
     it('IC-8: rotulo "Normal até:" NAO vira campo', () => {
       const items = [
         item('Normal até:', 0, 60, 50, 12, 1.5),

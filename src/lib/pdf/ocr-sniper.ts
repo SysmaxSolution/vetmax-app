@@ -287,7 +287,7 @@ interface LineSegmentation {
 // TZ-3: Padrões de unidades de medida comuns em laudos veterinários.
 // Quando um item da linha (após o label) bate com este regex, é tratado
 // como SUFIXO — o value_bbox para drawText fica ENTRE o label e este sufixo.
-const SUFFIX_UNIT_REGEX = /^(?:cm|mm|m\/s|m\/seg|mmHg|bpm|mpm|spm|%|kg|°C|ºC|Hz|ms|s|ml|mg|µg|ug|g|dl|UI|UI\/L)$/i
+const SUFFIX_UNIT_REGEX = /^(?:cm|mm|m\/s|m\/seg|mmHg(?:\/s)?|bpm|mpm|spm|%|kg|°C|ºC|Hz|ms|s|ml|mg|µg|ug|g|dl|UI|UI\/L)$/i
 
 function isSuffixUnit(text: string): boolean {
   return SUFFIX_UNIT_REGEX.test(text.trim())
@@ -305,10 +305,26 @@ function isSuffixUnit(text: string): boolean {
 function isBoundaryItem(text: string): boolean {
   const t = text.trim()
   if (t.startsWith('(')) return true
+  // IC-9: comparadores iniciam referencias clinicas tipo ">30%", "<2.5"
+  if (/^[><≥≤]/.test(t)) return true
   if (/^Refer[êe]ncia/i.test(t)) return true
   if (/^Ref\.?:?$/i.test(t)) return true
   if (/^Normal\b/i.test(t) && /\b(at[ée]|de)\b/i.test(t)) return true
   return false
+}
+
+/**
+ * IC-9: titulos de secao ("OBSERVAÇÕES", "CONCLUSÃO", "PARÂMETROS ANALISADOS")
+ * sao texto todo em maiusculas e NAO devem virar campos via vocabulary match.
+ *
+ * Siglas curtas (CRMV, CPF, RG, FC, FR) sao consideradas labels validos —
+ * threshold de 6 chars exclui essas.
+ */
+function isAllCapsTitle(text: string): boolean {
+  const t = text.trim().replace(/[:\.,;]/g, '')
+  if (t.length < 6) return false   // CRMV (4), CPF (3), etc passam
+  if (!/[A-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÇ]/.test(t)) return false
+  return t === t.toUpperCase()
 }
 
 /**
@@ -368,6 +384,8 @@ function segmentLine(line: LineGroup): LineSegmentation[] {
     for (let len = 3; len >= 1; len--) {
       if (items.length < len) continue
       const candidate = items.slice(0, len).map(i => i.str).join(' ')
+      // IC-9: titulos all-caps ("OBSERVAÇÕES", "CONCLUSÃO") sao secao, nao label
+      if (isAllCapsTitle(candidate)) continue
       if (isLabelVocab(candidate)) {
         // Considera os primeiros `len` items como label
         labelEnds.push(len - 1)
@@ -408,13 +426,24 @@ function segmentLine(line: LineGroup): LineSegmentation[] {
       valueItems = valueItems.slice(0, boundaryIdx)
     }
 
-    // TZ-3: tenta extrair sufixo de unidade (último item do value, se bater regex)
-    // Examina os últimos 1-2 items (pode ter "cm" sozinho ou "/ s" fragmentado)
+    // IC-9: detecta sufixo de unidade em ANY posicao do value (nao so o ultimo).
+    // Casos:
+    //   - campo vazio com unidade depois: "RDAP index:" + "%" + ">30%"
+    //     (boundary ">30%" ja foi removido acima; sobra ["%"] — sufixo no primeiro)
+    //   - campo com valor + unidade: "Aorta:" + "0,76" + "cm" (sufixo no ultimo)
+    //   - sufixo fragmentado: "m" + "/s" (combina ultimos 2)
     let suffixItems: PdfTextItem[] | undefined
     let suffixX: number | undefined
     if (valueItems.length > 0) {
+      const first = valueItems[0]
       const last = valueItems[valueItems.length - 1]
-      if (isSuffixUnit(last.str)) {
+      if (isSuffixUnit(first.str)) {
+        // PRIMEIRO item eh sufixo — campo vazio com unidade
+        suffixItems = [first]
+        suffixX = first.x_pct
+        valueItems = valueItems.slice(1)
+      } else if (isSuffixUnit(last.str)) {
+        // ULTIMO item eh sufixo — campo preenchido com unidade no fim
         suffixItems = [last]
         suffixX = last.x_pct
         valueItems = valueItems.slice(0, -1)
@@ -598,11 +627,11 @@ export function snipeLabels(
       }
 
       // Alinhamento:
-      //  • com sufixo → center (número centralizado entre label e unidade)
-      //  • sem sufixo + texto antigo → herda do texto antigo
-      //  • sem sufixo + sem texto → left
-      let align: 'left' | 'center' | 'right' = hasSuffix ? 'center' : 'left'
-      if (!hasSuffix && existingValueItems.length > 0) {
+      //  • com sufixo OU boundary → center (valor centralizado no espaco delimitado)
+      //  • sem ambos + texto antigo → herda do texto antigo
+      //  • sem ambos + sem texto → left
+      let align: 'left' | 'center' | 'right' = (hasSuffix || hasBoundary) ? 'center' : 'left'
+      if (!hasSuffix && !hasBoundary && existingValueItems.length > 0) {
         align = detectAlignment(
           existingValueItems,
           whiteoutLeft,
