@@ -92,6 +92,21 @@ const WHITEOUT_SAFETY_PCT = 0.3
 const COLON_SAFETY_PCT = 0.85
 
 /**
+ * IC-12 — Gutter de coluna.
+ *
+ * Quando o limite direito vem de OUTRO LABEL na mesma linha (next_label ou
+ * symmetry), aplicamos uma margem MAIOR que WHITEOUT_SAFETY_PCT (0.3%) — o
+ * usuario ve uma DIVISORIA VISUAL entre as colunas da tabela (linhas
+ * verticais), normalmente posicionada entre 5-15pt antes do proximo label.
+ *
+ * 2.5% em A4 (595pt) = ~15pt — respeita a divisoria sem comer o value util.
+ *
+ * Para limites "intocaveis" (sufixo, boundary), continuamos usando o SAFETY
+ * pequeno: queremos chegar o MAIS PROXIMO possivel sem tocar.
+ */
+const COLUMN_GUTTER_PCT = 2.5
+
+/**
  * Localiza a posicao X (% da pagina) do CARACTERE imediatamente apos o
  * ultimo ":" presente nos label_items. Retorna null se nenhum item contem ":".
  *
@@ -605,22 +620,24 @@ export function snipeLabels(
       const hasSymmetry = typeof seg.symmetry_next_x_pct === 'number'
 
       // Ordem de prioridade do limite DIREITO do whiteout:
-      //   1. sufixo de unidade ("cm", "mmHg") — texto a manter intocavel
-      //   2. boundary item "(normal até..." — texto a manter intocavel
-      //   3. proximo label da mesma linha
-      //   4. IC-10: simetria com coluna esquerda (mesma linha 2+ labels)
-      //   5. fim da pagina
+      //   1. sufixo de unidade ("cm", "mmHg") — texto a manter intocavel (SAFETY pequeno)
+      //   2. boundary item "(normal até..." — texto a manter intocavel (SAFETY pequeno)
+      //   3. proximo label da mesma linha (GUTTER maior — respeita divisoria)
+      //   4. IC-10: simetria com coluna esquerda (GUTTER maior)
+      //   5. fim da pagina (GUTTER de margem)
       let whiteoutRight: number
       if (hasSuffix) {
         whiteoutRight = (seg.suffix_x_pct as number) - WHITEOUT_SAFETY_PCT
       } else if (hasBoundary) {
         whiteoutRight = (seg.right_boundary_x_pct as number) - WHITEOUT_SAFETY_PCT
       } else if (seg.next_label_x_pct !== null) {
-        whiteoutRight = seg.next_label_x_pct - WHITEOUT_SAFETY_PCT
+        // IC-12: gutter maior para respeitar divisoria visual entre colunas
+        whiteoutRight = seg.next_label_x_pct - COLUMN_GUTTER_PCT
       } else if (hasSymmetry) {
-        whiteoutRight = Math.min(seg.symmetry_next_x_pct as number, 100) - WHITEOUT_SAFETY_PCT
+        whiteoutRight = Math.min(seg.symmetry_next_x_pct as number, 100) - COLUMN_GUTTER_PCT
       } else {
-        whiteoutRight = 100 - WHITEOUT_SAFETY_PCT
+        // Sem nada delimitando — margem da borda direita da pagina
+        whiteoutRight = 100 - COLUMN_GUTTER_PCT
       }
 
       // Defesa: largura mínima de 1% e nunca negativa. Quando whiteoutRight

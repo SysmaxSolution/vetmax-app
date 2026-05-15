@@ -163,6 +163,21 @@ describe('OCR Sniper', () => {
       expect(cs.length).toBe(0)  // skip — eh referencia clinica, nao campo
     })
 
+    // ── IC-12: GUTTER DE COLUNA (margem visual entre value e nextLabel) ───
+    it('IC-12: gutter >= 2.5% entre value e nextLabel (respeita divisoria tabela)', () => {
+      // Tabela 2-col: Paciente: + Espécie:
+      const items = [
+        item('Paciente:', 0, 4.5, 20, 9, 1.5),    // x=4.5, w=9, end=13.5
+        item('Espécie:',  0, 50.9, 20, 8, 1.5),   // x=50.9
+      ]
+      const cs = snipeLabels(items)
+      expect(cs.length).toBe(2)
+      const pacRight = cs[0].existing_value_bbox!.x_pct + cs[0].existing_value_bbox!.w_pct
+      // pacRight NAO pode chegar perto demais de Espécie (x=50.9)
+      // Gutter >= 2.5% — fica em ate 48.4%
+      expect(50.9 - pacRight).toBeGreaterThanOrEqual(2.0)
+    })
+
     // ── IC-10: SIMETRIA DE COLUNA ──────────────────────────────────────────
     it('IC-10: linha com 2 labels — ultimo label herda width medio do primeiro', () => {
       // Linha tipo "Paciente: ... Espécie:" — em template de 2 colunas, o
