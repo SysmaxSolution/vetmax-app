@@ -291,17 +291,33 @@ export async function runFlattenClean(
 
     const isGlobal = instances.length > 1 || match.is_system_field
     const isSig = match.is_system_field === true
+
+    // IC-13: REDUCAO VISUAL DA ALTURA DO BBOX
+    //
+    // O pdfjs reporta `height` igual ao fontSize (12pt em Helvetica 12pt),
+    // que inclui ascender + descender da fonte. Visualmente, o BBOX que
+    // contem essa altura inteira INVADE as linhas horizontais da tabela
+    // (cell-row tipicamente cabe so ~80% disso).
+    //
+    // Reduzimos h_pct e ajustamos y_pct para preservar a BASELINE em
+    // (y + h)/100 * pageH. O drawText continua exatamente no mesmo lugar;
+    // o bbox visual ocupa apenas a area do x-height/cap-height.
+    const BBOX_VISUAL_H_FACTOR = 0.78
+
     for (const inst of instances) {
       const dim = dimensions[inst.page] ?? dimensions[0]
       const fontSize_pt_raw = inst.font_size_pt * (dim?.height_pt ?? 842) / 100
-      // INTERVENCAO CIRURGICA: signatures usam font_size cap em 11pt para
-      // evitar wrap. O pdfjs reporta height>=12.96 para a Helvetica
-      // original do template, mas Helvetica padrao do pdf-lib eh ~5% mais
-      // larga — "CRMV-SP 74.696" em 13pt estoura a w_pct disponivel da
-      // linha e quebra em 2 linhas. 11pt cabe com folga.
       const fontSize_pt = isSig
         ? Math.min(11, fontSize_pt_raw)
         : Math.max(8, Math.min(24, fontSize_pt_raw))
+
+      // IC-13: comprime h_pct visual preservando a baseline (y + h constante)
+      const orig_y = inst.value_bbox.y_pct
+      const orig_h = inst.value_bbox.h_pct
+      const baseline_topdown = orig_y + orig_h
+      const visual_h = orig_h * BBOX_VISUAL_H_FACTOR
+      const visual_y = baseline_topdown - visual_h
+
       layout_overlays.push({
         id: overlayId(),
         type: 'field',
@@ -309,9 +325,9 @@ export async function runFlattenClean(
         label: match.label_original,
         page: inst.page,
         x_pct: inst.value_bbox.x_pct,
-        y_pct: inst.value_bbox.y_pct,
+        y_pct: visual_y,
         w_pct: inst.value_bbox.w_pct,
-        h_pct: inst.value_bbox.h_pct,
+        h_pct: visual_h,
         font_size: Math.max(8, fontSize_pt),
         font_weight: 'normal',
         font_family: 'Helvetica',
