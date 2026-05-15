@@ -24,8 +24,13 @@ export interface EraseRect {
  * Pinta retangulos brancos sobre `regions` no canvas. Sem efeito se o
  * contexto 2D nao estiver disponivel.
  *
- * Por seguranca, clampa cada retangulo para dentro dos bounds do canvas e
- * adiciona 1px de "bleed" para garantir cobertura contra antialiasing.
+ * IC-15: BLEED ASSIMETRICO
+ *   - Horizontal (X): bleed de 1px em cada lado — apaga antialiasing das
+ *     bordas laterais do texto antigo. Divisorias VERTICAIS da tabela ficam
+ *     longe (gutter de 2-3pt), entao 1px nao as toca.
+ *   - Vertical (Y): SEM bleed — a linha horizontal da tabela costuma ficar
+ *     a 1-2px do glyph-top do texto seguinte. Bleed vertical apagaria a
+ *     linha. Sem bleed, o erase respeita exatamente o pixel reportado.
  */
 export function eraseRegions(
   canvas: HTMLCanvasElement,
@@ -43,11 +48,12 @@ export function eraseRegions(
     const yPx = (r.y_pct / 100) * canvas.height
     const wPx = (r.w_pct / 100) * canvas.width
     const hPx = (r.h_pct / 100) * canvas.height
-    // Bleed de 1px ao redor para anti-aliasing
+    // Bleed horizontal de 1px (antialiasing lateral); SEM bleed vertical
+    // (linhas horizontais da tabela ficam muito proximas do glyph-top).
     const x = Math.max(0, Math.floor(xPx) - 1)
-    const y = Math.max(0, Math.floor(yPx) - 1)
+    const y = Math.max(0, Math.floor(yPx))
     const w = Math.min(canvas.width - x, Math.ceil(wPx) + 2)
-    const h = Math.min(canvas.height - y, Math.ceil(hPx) + 2)
+    const h = Math.min(canvas.height - y, Math.ceil(hPx))
     if (w > 0 && h > 0) {
       ctx.fillRect(x, y, w, h)
       painted++
@@ -89,10 +95,11 @@ export function rectPctToPixelsClamped(
   const yPx = (rect.y_pct / 100) * canvasHeight
   const wPx = (rect.w_pct / 100) * canvasWidth
   const hPx = (rect.h_pct / 100) * canvasHeight
+  // Bleed horizontal apenas; vertical = 0
   const x = Math.max(0, Math.floor(xPx) - 1)
-  const y = Math.max(0, Math.floor(yPx) - 1)
+  const y = Math.max(0, Math.floor(yPx))
   const w = Math.min(canvasWidth - x, Math.ceil(wPx) + 2)
-  const h = Math.min(canvasHeight - y, Math.ceil(hPx) + 2)
+  const h = Math.min(canvasHeight - y, Math.ceil(hPx))
   if (w <= 0 || h <= 0) return null
   return { x, y, w, h }
 }

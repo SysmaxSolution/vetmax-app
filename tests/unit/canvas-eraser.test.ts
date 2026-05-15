@@ -9,20 +9,21 @@
 import { rectPctToPixelsClamped } from '../../src/lib/pdf/canvas-eraser'
 
 describe('rectPctToPixelsClamped', () => {
-  it('converte % em pixels com bleed de 1px', () => {
+  it('converte % em pixels — bleed assimetrico (H sim, V nao)', () => {
     const r = rectPctToPixelsClamped(
       { x_pct: 10, y_pct: 20, w_pct: 30, h_pct: 5 },
       1000, 800,
     )
     expect(r).not.toBeNull()
+    // IC-15: bleed horizontal -1, bleed vertical = 0
     // x_px = 100, bleed -1
     expect(r!.x).toBe(99)
-    // y_px = 160, bleed -1
-    expect(r!.y).toBe(159)
+    // y_px = 160, SEM bleed vertical
+    expect(r!.y).toBe(160)
     // w_px = 300, bleed +2
     expect(r!.w).toBe(302)
-    // h_px = 40, bleed +2
-    expect(r!.h).toBe(42)
+    // h_px = 40, SEM bleed vertical
+    expect(r!.h).toBe(40)
   })
 
   it('clampa contra a borda esquerda (x_pct = 0)', () => {
