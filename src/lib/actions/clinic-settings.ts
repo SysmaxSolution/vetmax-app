@@ -11,6 +11,8 @@ export type FlowConfig = {
   use_accounting_chart?: boolean
   mentor_idle_enabled?:  boolean
   mentor_idle_seconds?:  number
+  verify_cpf_cnpj?:      boolean
+  verify_cep?:           boolean
 }
 
 export type BusinessHourEntry = { open: string; close: string } | null
@@ -376,6 +378,35 @@ export async function setDailyAlertTime(
   if (error) return { error: error.message }
   revalidatePath('/dashboard/management')
   return { success: true }
+}
+
+// ─── Remove Logo ──────────────────────────────────────────────────────────────
+
+// ─── Registration Settings (verify_cpf_cnpj / verify_cep) ───────────────────
+
+export interface RegistrationSettings {
+  verify_cpf_cnpj: boolean
+  verify_cep:      boolean
+}
+
+export async function getRegistrationSettings(): Promise<RegistrationSettings> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { verify_cpf_cnpj: false, verify_cep: false }
+
+  const { data: profile } = await supabase
+    .from('profiles').select('clinic_id').eq('id', user.id).single()
+  if (!profile?.clinic_id) return { verify_cpf_cnpj: false, verify_cep: false }
+
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from('clinics').select('flow_config').eq('id', profile.clinic_id).single()
+
+  const flow = (data?.flow_config ?? {}) as FlowConfig
+  return {
+    verify_cpf_cnpj: flow.verify_cpf_cnpj ?? false,
+    verify_cep:      flow.verify_cep      ?? false,
+  }
 }
 
 // ─── Remove Logo ──────────────────────────────────────────────────────────────

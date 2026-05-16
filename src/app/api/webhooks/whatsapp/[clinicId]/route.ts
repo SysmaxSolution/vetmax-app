@@ -248,6 +248,8 @@ async function processInboundMessage(params: {
     tutorName:         tutorName ?? conversation.tutor_name,
     tutorPhone:        phone,
     personalityPrompt: botConfig.personality_prompt ?? null,
+    canBook:           botConfig.can_book,
+    canInformPrices:   botConfig.can_inform_prices,
   })
 
   console.info(`[WPP Bot] resposta="${result.reply.substring(0, 80)}" handoff=${result.handoff}`)

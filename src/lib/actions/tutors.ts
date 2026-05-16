@@ -115,7 +115,7 @@ export async function searchTutorsAndPatients(
 
 // ─── Busca Tutor por CPF (para pré-preenchimento no cadastro) ────────────────
 export async function getTutorByCpf(cpf: string): Promise<
-  { id: string; name: string | null; cpf: string | null; phone: string | null; email: string | null; address: string | null; emergency_contact: string | null } | null | { error: string }
+  { id: string; name: string | null; cpf: string | null; phone: string | null; email: string | null; address: string | null; emergency_contact: string | null; cep: string | null; street: string | null; neighborhood: string | null; city: string | null; state: string | null; address_number: string | null; address_complement: string | null } | null | { error: string }
 > {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -134,7 +134,7 @@ export async function getTutorByCpf(cpf: string): Promise<
   if (cpfDigits.length !== 11) return null
   const { data } = await admin
     .from('tutors')
-    .select('id, name, cpf, phone, email, address, emergency_contact')
+    .select('id, name, cpf, phone, email, address, emergency_contact, cep, street, neighborhood, city, state, address_number, address_complement')
     .eq('clinic_id', profile.clinic_id)
     .eq('cpf', cpfDigits)
     .maybeSingle()
@@ -162,7 +162,7 @@ export async function getTutorWithPatients(tutorId: string): Promise<
 
   const { data: tutor, error: tErr } = await admin
     .from('tutors')
-    .select('id, name, cpf, phone, email, address, emergency_contact')
+    .select('id, name, cpf, phone, email, address, emergency_contact, cep, street, neighborhood, city, state, address_number, address_complement')
     .eq('id', tutorId)
     .eq('clinic_id', profile.clinic_id)
     .single()
@@ -207,12 +207,19 @@ export async function registerTutorAndPet(
   const cpfDigits = (tutorData.cpf ?? '').replace(/\D/g, '')
 
   const tutorRow = {
-    clinic_id: clinicId,
-    name:      tutorData.name?.trim() || null,
-    cpf:       cpfDigits.length === 11 ? cpfDigits : null,
-    email:     tutorData.email?.trim() || null,
-    phone:     tutorData.phone?.trim() || null,
-    address:   tutorData.address?.trim() || null,
+    clinic_id:           clinicId,
+    name:                tutorData.name?.trim() || null,
+    cpf:                 cpfDigits.length === 11 ? cpfDigits : null,
+    email:               tutorData.email?.trim() || null,
+    phone:               tutorData.phone?.trim() || null,
+    address:             tutorData.address?.trim() || null,
+    cep:                 tutorData.cep?.replace(/\D/g, '') || null,
+    street:              tutorData.street?.trim() || null,
+    neighborhood:        tutorData.neighborhood?.trim() || null,
+    city:                tutorData.city?.trim() || null,
+    state:               tutorData.state?.trim() || null,
+    address_number:      tutorData.address_number?.trim() || null,
+    address_complement:  tutorData.address_complement?.trim() || null,
   }
 
   let tutor: { id: string } | null = null

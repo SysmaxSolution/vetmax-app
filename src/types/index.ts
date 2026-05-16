@@ -3,6 +3,47 @@
 
 export type UserRole = 'admin' | 'vet' | 'assistant' | 'receptionist' | 'pharmacist' | 'pending'
 
+// ── PLG — Planos, Feature Flags e Cotas ─────────────────────────────────────
+
+export type BusinessType = 'vet_clinic' | 'pet_aesthetics'
+export type PlanName = 'free' | 'pro' | 'enterprise'
+export type SubscriptionStatus = 'active' | 'trialing' | 'past_due' | 'cancelled'
+
+export interface TenantSubscription {
+  id: string
+  clinic_id: string
+  plan_name: PlanName
+  status: SubscriptionStatus
+  custom_price: number | null
+  trial_ends_at: string | null
+  current_period_end: string | null
+  cancelled_at: string | null
+  started_at: string
+  created_at: string
+  updated_at: string
+}
+
+export interface TenantFeatureFlags {
+  clinic_id: string
+  has_advanced_finance: boolean
+  has_smart_packages: boolean
+  has_tef_integration: boolean
+  has_document_templates: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface TenantQuota {
+  id: string
+  clinic_id: string
+  resource_name: string
+  limit_amount: number
+  used_amount: number
+  reset_date: string | null
+  created_at: string
+  updated_at: string
+}
+
 export type PatientSpecies = 'dog' | 'cat' | 'bird' | 'rabbit' | 'rodent' | 'reptile' | 'fish' | 'exotic'
 
 export type PatientGender = 'male' | 'female' | 'unknown'
@@ -52,6 +93,7 @@ export interface VitalSigns {
 export interface Clinic {
   id: string
   name: string
+  business_type: BusinessType
   reception_checklist: string[] | null
   created_at: string
 }
@@ -147,6 +189,13 @@ export interface CreateTutorPayload {
   email?: string
   phone?: string
   address?: string
+  cep?: string
+  street?: string
+  neighborhood?: string
+  city?: string
+  state?: string
+  address_number?: string
+  address_complement?: string
 }
 
 export interface CreatePatientPayload {
@@ -276,6 +325,10 @@ export interface DocumentTemplate {
   page_images_storage_paths?: string[] | null
   // Operacao Zero-Touch (migration 0139)
   cleaned_page_paths?: string[] | null  // PNGs limpos por pagina (bucket document-templates)
+  // Motor docx-native (migration 0157) — docxtemplater + pizzip
+  engine?: 'pdf' | 'docx-native'
+  original_docx_path?: string | null
+  docx_tags?: Array<{ literal: string; canonical: string; occurrences: number }> | null
   created_at: string
   updated_at?: string
 }

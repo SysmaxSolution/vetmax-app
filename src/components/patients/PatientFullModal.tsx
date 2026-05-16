@@ -8,6 +8,7 @@ import { DateInput } from '@/components/ui/DatePicker'
 import { updateFullProfile, uploadPetPhoto, softDeletePatient } from '@/lib/actions/pets'
 import { uploadAttachment, getAttachments, deleteAttachment, type Attachment } from '@/lib/actions/attachments'
 import { registerTutorAndPet, addPatientToTutor, getTutorByCpf, recordConsent } from '@/lib/actions/tutors'
+import { getRegistrationSettings } from '@/lib/actions/clinic-settings'
 import ConsentModal from '@/components/reception/ConsentModal'
 import SMSConsentToggle from '@/components/reception/SMSConsentToggle'
 import { getPatientVaccines, type PatientVaccine } from '@/lib/actions/vaccines'
@@ -47,6 +48,46 @@ function formatPhone(v: string) {
   if (d.length <= 2) return d
   if (d.length <= 7) return `(${d.slice(0, 2)}) ${d.slice(2)}`
   return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`
+}
+
+function formatCnpj(v: string) {
+  const d = v.replace(/\D/g, '').slice(0, 14)
+  if (d.length <= 2) return d
+  if (d.length <= 5) return `${d.slice(0,2)}.${d.slice(2)}`
+  if (d.length <= 8) return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5)}`
+  if (d.length <= 12) return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8)}`
+  return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8,12)}-${d.slice(12)}`
+}
+
+function formatCpfCnpj(v: string) {
+  const d = v.replace(/\D/g, '')
+  return d.length <= 11 ? formatCpf(d) : formatCnpj(d)
+}
+
+function formatCep(v: string) {
+  const d = v.replace(/\D/g, '').slice(0, 8)
+  if (d.length <= 5) return d
+  return `${d.slice(0, 5)}-${d.slice(5)}`
+}
+
+function validateCpf(digits: string): boolean {
+  if (digits.length !== 11 || /^(\d)\1{10}$/.test(digits)) return false
+  const calc = (s: string, w: number[]) => {
+    const sum = s.split('').reduce((a, d, i) => a + parseInt(d) * w[i], 0)
+    const r = sum % 11; return r < 2 ? 0 : 11 - r
+  }
+  return calc(digits.slice(0,9), [10,9,8,7,6,5,4,3,2]) === parseInt(digits[9])
+      && calc(digits.slice(0,10), [11,10,9,8,7,6,5,4,3,2]) === parseInt(digits[10])
+}
+
+function validateCnpj(digits: string): boolean {
+  if (digits.length !== 14 || /^(\d)\1{13}$/.test(digits)) return false
+  const calc = (s: string, w: number[]) => {
+    const sum = s.split('').reduce((a, d, i) => a + parseInt(d) * w[i], 0)
+    const r = sum % 11; return r < 2 ? 0 : 11 - r
+  }
+  return calc(digits.slice(0,12), [5,4,3,2,9,8,7,6,5,4,3,2]) === parseInt(digits[12])
+      && calc(digits.slice(0,13), [6,5,4,3,2,9,8,7,6,5,4,3,2]) === parseInt(digits[13])
 }
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -178,12 +219,34 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
   const [microchipId,         setMicrochipId]         = useState(patient?.microchip_id ?? '')
 
   // ── Tutor fields ──
-  const [tutorName,         setTutorName]         = useState(patient?.tutor?.name       ?? propTutorName ?? '')
-  const [tutorPhone,        setTutorPhone]        = useState(patient?.tutor?.phone      ?? '')
-  const [tutorCpf,          setTutorCpf]          = useState(patient?.tutor?.cpf        ?? '')
-  const [tutorEmail,        setTutorEmail]        = useState(patient?.tutor?.email      ?? '')
-  const [tutorAddress,      setTutorAddress]      = useState(patient?.tutor?.address    ?? '')
-  const [emergencyContact,  setEmergencyContact]  = useState(patient?.tutor?.emergency_contact ?? '')
+  const [tutorName,           setTutorName]           = useState(patient?.tutor?.name       ?? propTutorName ?? '')
+  const [tutorPhone,          setTutorPhone]          = useState(patient?.tutor?.phone      ?? '')
+  const [tutorCpf,            setTutorCpf]            = useState(patient?.tutor?.cpf        ?? '')
+  const [tutorEmail,          setTutorEmail]          = useState(patient?.tutor?.email      ?? '')
+  const [tutorAddress,        setTutorAddress]        = useState(patient?.tutor?.address    ?? '')
+  const [emergencyContact,    setEmergencyContact]    = useState(patient?.tutor?.emergency_contact ?? '')
+  // Endereço estruturado
+  const tutorAny = patient?.tutor as any
+  const [tutorCep,            setTutorCep]            = useState<string>(tutorAny?.cep            ?? '')
+  const [tutorStreet,         setTutorStreet]         = useState<string>(tutorAny?.street         ?? '')
+  const [tutorNeighborhood,   setTutorNeighborhood]   = useState<string>(tutorAny?.neighborhood   ?? '')
+  const [tutorCity,           setTutorCity]           = useState<string>(tutorAny?.city           ?? '')
+  const [tutorState,          setTutorState]          = useState<string>(tutorAny?.state          ?? '')
+  const [tutorAddressNumber,  setTutorAddressNumber]  = useState<string>(tutorAny?.address_number ?? '')
+  const [tutorComplement,     setTutorComplement]     = useState<string>(tutorAny?.address_complement ?? '')
+
+  // ── Config de cadastro (verify_cpf_cnpj / verify_cep) ──
+  const [regSettings, setRegSettings] = useState({ verify_cpf_cnpj: false, verify_cep: false })
+  useEffect(() => {
+    getRegistrationSettings().then(setRegSettings)
+  }, [])
+
+  // ── Status de validação CPF/CNPJ ──
+  const [cpfCnpjStatus, setCpfCnpjStatus] = useState<'idle'|'invalid'|'valid'|'found_cnpj'|'searching_cnpj'>('idle')
+  const cpfCnpjTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // ── Status de busca CEP ──
+  const [cepStatus, setCepStatus] = useState<'idle'|'searching'|'found'|'not_found'>('idle')
 
   // ── Consentimento LGPD ──
   const [showConsent, setShowConsent]   = useState(false)
@@ -235,6 +298,13 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
         setTutorPhone(result.phone ? formatPhone(result.phone) : '')
         setTutorEmail(result.email ?? '')
         setTutorAddress(result.address ?? '')
+        setTutorCep(result.cep ? formatCep(result.cep) : '')
+        setTutorStreet(result.street ?? '')
+        setTutorNeighborhood(result.neighborhood ?? '')
+        setTutorCity(result.city ?? '')
+        setTutorState(result.state ?? '')
+        setTutorAddressNumber(result.address_number ?? '')
+        setTutorComplement(result.address_complement ?? '')
         setCpfLookupStatus('found')
       } else {
         setFoundTutorId(null)
@@ -243,6 +313,62 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
     }, 400)
     return () => { if (cpfLookupTimer.current) clearTimeout(cpfLookupTimer.current) }
   }, [tutorCpf, isEdit, isPetOnly])
+
+  // ─── Validação CPF/CNPJ (quando verify_cpf_cnpj ativo) ───────────────────────
+  useEffect(() => {
+    if (!regSettings.verify_cpf_cnpj) { setCpfCnpjStatus('idle'); return }
+    const digits = tutorCpf.replace(/\D/g, '')
+    if (digits.length < 11) { setCpfCnpjStatus('idle'); return }
+    if (cpfCnpjTimer.current) clearTimeout(cpfCnpjTimer.current)
+
+    if (digits.length === 11) {
+      setCpfCnpjStatus(validateCpf(digits) ? 'valid' : 'invalid')
+      return
+    }
+    if (digits.length === 14) {
+      if (!validateCnpj(digits)) { setCpfCnpjStatus('invalid'); return }
+      setCpfCnpjStatus('searching_cnpj')
+      cpfCnpjTimer.current = setTimeout(async () => {
+        try {
+          const res = await fetch(`https://publica.cnpj.ws/cnpj/${digits}`)
+          if (res.ok) {
+            const data = await res.json()
+            const razao = data.razao_social ?? data.nome_fantasia ?? ''
+            if (razao && !tutorName.trim()) setTutorName(razao)
+            setCpfCnpjStatus('found_cnpj')
+          } else {
+            setCpfCnpjStatus('valid')
+          }
+        } catch { setCpfCnpjStatus('valid') }
+      }, 600)
+    }
+    return () => { if (cpfCnpjTimer.current) clearTimeout(cpfCnpjTimer.current) }
+  }, [tutorCpf, regSettings.verify_cpf_cnpj]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ─── Busca CEP via ViaCEP (quando verify_cep ativo) ──────────────────────────
+  useEffect(() => {
+    if (!regSettings.verify_cep) { setCepStatus('idle'); return }
+    const digits = tutorCep.replace(/\D/g, '')
+    if (digits.length !== 8) { setCepStatus('idle'); return }
+    setCepStatus('searching')
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`)
+        if (res.ok) {
+          const data = await res.json()
+          if (data.erro) { setCepStatus('not_found'); return }
+          setTutorStreet(data.logradouro ?? '')
+          setTutorNeighborhood(data.bairro ?? '')
+          setTutorCity(data.localidade ?? '')
+          setTutorState(data.uf ?? '')
+          setCepStatus('found')
+        } else {
+          setCepStatus('not_found')
+        }
+      } catch { setCepStatus('not_found') }
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [tutorCep, regSettings.verify_cep])
 
   // ─── Vacinas lazy load ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -305,7 +431,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
         reproductive_status: reproductiveStatus, behavior_tags: tags,
         allergies: allergies || null, chronic_diseases: chronicDiseases || null, microchip_id: microchipId || null,
       },
-      { name: tutorName, phone: tutorPhone, cpf: tutorCpf, email: tutorEmail, address: tutorAddress, emergency_contact: emergencyContact }
+      { name: tutorName, phone: tutorPhone, cpf: tutorCpf, email: tutorEmail, address: tutorAddress, emergency_contact: emergencyContact, cep: tutorCep.replace(/\D/g,'') || null, street: tutorStreet || null, neighborhood: tutorNeighborhood || null, city: tutorCity || null, state: tutorState || null, address_number: tutorAddressNumber || null, address_complement: tutorComplement || null }
     )
     if (res && 'success' in res) {
       onSuccess({ tutorId: patient.tutor.id, patientId: patient.id, patientName: petName, tutorName })
@@ -354,7 +480,15 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
         result = 'error' in res ? res : { tutorId: existingTutorId, patientId: res.id }
       } else {
         result = await registerTutorAndPet(
-          { name: tutorName, cpf: tutorCpf, phone: tutorPhone, email: tutorEmail || undefined, address: tutorAddress || undefined },
+          {
+            name: tutorName, cpf: tutorCpf, phone: tutorPhone,
+            email: tutorEmail || undefined, address: tutorAddress || undefined,
+            cep: tutorCep.replace(/\D/g,'') || undefined,
+            street: tutorStreet || undefined, neighborhood: tutorNeighborhood || undefined,
+            city: tutorCity || undefined, state: tutorState || undefined,
+            address_number: tutorAddressNumber || undefined,
+            address_complement: tutorComplement || undefined,
+          },
           petPayload
         )
       }
@@ -690,7 +824,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
             </div>
           )}
 
-          {/* ══ ABA: RECEPÇÃO ══ */}
+          {/* ══ ABA: TUTOR ══ */}
           {tab === 'tutor' && (
             <div className="space-y-6">
 
@@ -704,31 +838,41 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                 </div>
               )}
 
-              {/* CPF com lookup — só no modo criação de novo tutor */}
+              {/* CPF/CNPJ com lookup — só no modo criação de novo tutor */}
               {!isEdit && !isPetOnly && (
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5 ml-1 tracking-wider">CPF</label>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5 ml-1 tracking-wider">CPF / CNPJ</label>
                   <div className="relative">
                     <input
                       value={tutorCpf}
-                      onChange={e => setTutorCpf(formatCpf(e.target.value))}
-                      placeholder="000.000.000-00"
+                      onChange={e => setTutorCpf(formatCpfCnpj(e.target.value))}
+                      placeholder="000.000.000-00 ou CNPJ"
                       inputMode="numeric"
+                      maxLength={18}
                       className={`w-full bg-slate-100/50 border rounded-xl px-4 py-3 pr-10 text-sm font-medium outline-none transition-all ${
-                        cpfLookupStatus === 'found'
+                        cpfLookupStatus === 'found' || cpfCnpjStatus === 'valid' || cpfCnpjStatus === 'found_cnpj'
                           ? 'border-green-400 bg-green-50 focus:border-green-500'
+                          : cpfCnpjStatus === 'invalid'
+                          ? 'border-red-400 bg-red-50 focus:border-red-500'
                           : 'border-slate-200 focus:border-teal-500'
                       }`}
                     />
-                    {cpfLookupStatus === 'searching' && (
+                    {(cpfLookupStatus === 'searching' || cpfCnpjStatus === 'searching_cnpj') && (
                       <div className="absolute right-3 top-1/2 -translate-y-1/2">
                         <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
                       </div>
                     )}
-                    {cpfLookupStatus === 'found' && (
+                    {(cpfLookupStatus === 'found' || cpfCnpjStatus === 'valid' || cpfCnpjStatus === 'found_cnpj') && cpfLookupStatus !== 'searching' && cpfCnpjStatus !== 'searching_cnpj' && (
                       <div className="absolute right-3 top-1/2 -translate-y-1/2 text-green-500">
                         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                        </svg>
+                      </div>
+                    )}
+                    {cpfCnpjStatus === 'invalid' && cpfLookupStatus !== 'searching' && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2 text-red-400">
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
                         </svg>
                       </div>
                     )}
@@ -738,8 +882,21 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                       Tutor encontrado — dados preenchidos automaticamente.
                     </p>
                   )}
-                  {cpfLookupStatus === 'not_found' && (
+                  {cpfLookupStatus === 'not_found' && cpfCnpjStatus !== 'invalid' && (
                     <p className="mt-1 text-xs text-slate-500">CPF não cadastrado — preencha os dados abaixo.</p>
+                  )}
+                  {regSettings.verify_cpf_cnpj && cpfCnpjStatus === 'invalid' && (
+                    <p className="mt-1.5 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-600 font-medium">
+                      CPF/CNPJ inválido — verifique os dígitos informados.
+                    </p>
+                  )}
+                  {regSettings.verify_cpf_cnpj && cpfCnpjStatus === 'found_cnpj' && (
+                    <p className="mt-1.5 rounded-lg bg-green-50 border border-green-200 px-3 py-2 text-xs text-green-700 font-medium">
+                      CNPJ verificado — razão social preenchida automaticamente.
+                    </p>
+                  )}
+                  {regSettings.verify_cpf_cnpj && cpfCnpjStatus === 'searching_cnpj' && (
+                    <p className="mt-1 text-xs text-slate-500">Consultando CNPJ...</p>
                   )}
                 </div>
               )}
@@ -747,16 +904,132 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
               <FieldInput label="Nome do Responsável" value={tutorName} onChange={setTutorName} icon={<User className="h-4 w-4 text-slate-400" />} placeholder="Ex: Maria Silva" />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <FieldInput label="Celular" value={tutorPhone} onChange={(v: string) => setTutorPhone(formatPhone(v))} placeholder="(00) 00000-0000" />
-                {/* Em edição, CPF fica aqui junto ao telefone */}
+                {/* Em edição, CPF/CNPJ fica aqui junto ao telefone */}
                 {isEdit && (
-                  <FieldInput label="CPF" value={tutorCpf} onChange={setTutorCpf} placeholder="000.000.000-00" />
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5 ml-1 tracking-wider">CPF / CNPJ</label>
+                    <div className="relative">
+                      <input
+                        value={tutorCpf}
+                        onChange={e => setTutorCpf(formatCpfCnpj(e.target.value))}
+                        placeholder="000.000.000-00 ou CNPJ"
+                        inputMode="numeric"
+                        maxLength={18}
+                        className={`w-full bg-slate-100/50 border rounded-xl px-4 py-3 pr-10 text-sm font-medium outline-none transition-all ${
+                          cpfCnpjStatus === 'valid' || cpfCnpjStatus === 'found_cnpj'
+                            ? 'border-green-400 bg-green-50 focus:border-green-500'
+                            : cpfCnpjStatus === 'invalid'
+                            ? 'border-red-400 bg-red-50 focus:border-red-500'
+                            : 'border-slate-200 focus:border-teal-500'
+                        }`}
+                      />
+                      {cpfCnpjStatus === 'searching_cnpj' && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+                        </div>
+                      )}
+                      {(cpfCnpjStatus === 'valid' || cpfCnpjStatus === 'found_cnpj') && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-green-500">
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                          </svg>
+                        </div>
+                      )}
+                      {cpfCnpjStatus === 'invalid' && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-red-400">
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                          </svg>
+                        </div>
+                      )}
+                    </div>
+                    {regSettings.verify_cpf_cnpj && cpfCnpjStatus === 'invalid' && (
+                      <p className="mt-1 text-xs text-red-500">CPF/CNPJ inválido.</p>
+                    )}
+                  </div>
                 )}
               </div>
               <FieldInput label="E-mail" value={tutorEmail} onChange={setTutorEmail} placeholder="tutor@email.com" type="email" />
+
+              {/* ── Endereço ── */}
               <div className="pt-4 border-t border-slate-100 space-y-4">
-                <FieldInput label="Endereço Completo" value={tutorAddress} onChange={setTutorAddress} icon={<MapPin className="h-4 w-4 text-slate-400" />} placeholder="Rua, Número, Cidade" />
-                <FieldInput label="Contacto de Emergência" value={emergencyContact} onChange={setEmergencyContact} icon={<PhoneCall className="h-4 w-4 text-slate-400" />} placeholder="(00) 00000-0000" />
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                  <MapPin className="h-3 w-3" /> Endereço
+                </p>
+
+                {/* CEP */}
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5 ml-1 tracking-wider">
+                    CEP{regSettings.verify_cep && <span className="ml-1 font-normal text-teal-600 normal-case">(preenchimento automático)</span>}
+                  </label>
+                  <div className="relative">
+                    <input
+                      value={tutorCep}
+                      onChange={e => setTutorCep(formatCep(e.target.value))}
+                      placeholder="00000-000"
+                      inputMode="numeric"
+                      maxLength={9}
+                      className={`w-full bg-slate-100/50 border rounded-xl px-4 py-3 pr-10 text-sm font-medium outline-none transition-all ${
+                        cepStatus === 'found'
+                          ? 'border-green-400 bg-green-50 focus:border-green-500'
+                          : cepStatus === 'not_found'
+                          ? 'border-red-300 bg-red-50 focus:border-red-400'
+                          : 'border-slate-200 focus:border-teal-500'
+                      }`}
+                    />
+                    {cepStatus === 'searching' && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+                      </div>
+                    )}
+                    {cepStatus === 'found' && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2 text-green-500">
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+                  {cepStatus === 'found' && (
+                    <p className="mt-1 text-xs text-green-600">Endereço preenchido automaticamente.</p>
+                  )}
+                  {cepStatus === 'not_found' && (
+                    <p className="mt-1 text-xs text-red-500">CEP não encontrado — preencha o endereço manualmente.</p>
+                  )}
+                </div>
+
+                {/* Rua / Logradouro */}
+                <FieldInput
+                  label="Rua / Logradouro"
+                  value={tutorStreet}
+                  onChange={setTutorStreet}
+                  placeholder="Ex: Av. Paulista"
+                />
+
+                {/* Bairro + Cidade */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <FieldInput label="Bairro" value={tutorNeighborhood} onChange={setTutorNeighborhood} placeholder="Ex: Centro" />
+                  <FieldInput label="Cidade" value={tutorCity} onChange={setTutorCity} placeholder="Ex: São Paulo" />
+                </div>
+
+                {/* Estado + Número + Complemento */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5 ml-1 tracking-wider">UF</label>
+                    <input
+                      value={tutorState}
+                      onChange={e => setTutorState(e.target.value.toUpperCase().slice(0, 2))}
+                      placeholder="SP"
+                      maxLength={2}
+                      className="w-full bg-slate-100/50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:border-teal-500 outline-none transition-all text-center tracking-widest"
+                    />
+                  </div>
+                  <FieldInput label="Número" value={tutorAddressNumber} onChange={setTutorAddressNumber} placeholder="123" />
+                  <FieldInput label="Complemento" value={tutorComplement} onChange={setTutorComplement} placeholder="Apto 4" />
+                </div>
               </div>
+
+              <FieldInput label="Contato de Emergência" value={emergencyContact} onChange={setEmergencyContact} icon={<PhoneCall className="h-4 w-4 text-slate-400" />} placeholder="(00) 00000-0000" />
 
               {/* LGPD: toggle de consentimento WhatsApp — só em modo edição com tutorId conhecido */}
               {isEdit && patient?.tutor?.id && (

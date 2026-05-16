@@ -113,7 +113,7 @@ const SURGERY_TOOL: Anthropic.Tool = {
 
 // ─── Tool executors ───────────────────────────────────────────────────────────
 
-async function execGetClinicInfo(clinicId: string): Promise<string> {
+async function execGetClinicInfo(clinicId: string, includePrices: boolean): Promise<string> {
   const admin = createAdminClient()
   const [clinicRes, catalogRes] = await Promise.all([
     admin.from('clinics').select('name, address, phone').eq('id', clinicId).single(),
@@ -122,7 +122,9 @@ async function execGetClinicInfo(clinicId: string): Promise<string> {
   const c = clinicRes.data
   if (!c) return 'Informações da clínica não disponíveis.'
   const services = (catalogRes.data ?? [])
-    .map(s => `  • ${s.name}: R$ ${Number(s.price).toFixed(2).replace('.', ',')}`)
+    .map(s => includePrices
+      ? `  • ${s.name}: R$ ${Number(s.price).toFixed(2).replace('.', ',')}`
+      : `  • ${s.name}`)
     .join('\n')
   return [
     `Clínica: ${c.name}`,
@@ -332,6 +334,8 @@ export async function runWhatsappAgent(params: {
   tutorName:         string | null
   tutorPhone:        string
   personalityPrompt?: string | null
+  canBook?:          boolean
+  canInformPrices?:  boolean
 }): Promise<AgentResult> {
   const admin = createAdminClient()
 
@@ -356,6 +360,10 @@ export async function runWhatsappAgent(params: {
   // Adiciona a mensagem atual
   messages.push({ role: 'user', content: params.userMessage })
 
+  // Capacidades configuradas pela clínica (default: tudo habilitado)
+  const canBook         = params.canBook         ?? true
+  const canInformPrices = params.canInformPrices ?? true
+
   // Prompt de sistema
   const { data: clinic } = await admin.from('clinics').select('name').eq('id', params.clinicId).single()
   const clinicName = clinic?.name ?? 'a clínica'
@@ -370,15 +378,31 @@ Para emergências ou pedidos fora do escopo, transfira para um atendente humano.
     ? `\n⚠️ MODO FOCO CLÍNICO ATIVO: O médico veterinário está em cirurgia neste momento.\n- Se a mensagem indicar urgência médica real (convulsão, dificuldade respiratória, trauma grave, envenenamento, desmaio, sangramento intenso): chame 'escalate_urgency_to_reception' e oriente o tutor a ir à recepção imediatamente.\n- Para casos não urgentes: responda normalmente e informe que o MV está em cirurgia, mas a recepção pode ajudar.`
     : ''
 
+  const priceRestriction = !canInformPrices
+    ? 'RESTRIÇÃO: Não informe valores, preços ou tabelas de preços ao tutor, mesmo que perguntado. Quando solicitado preço de qualquer serviço, responda que as informações de valores devem ser consultadas diretamente com a clínica pelo telefone.'
+    : ''
+
+  const bookingRestriction = !canBook
+    ? 'RESTRIÇÃO: Você NÃO pode confirmar agendamentos diretamente. Quando o tutor quiser agendar, use get_availability para informar os dias e horários disponíveis e, em seguida, use request_human_handoff (reason: "agendamento_pendente_confirmacao") para transferir ao atendente que fará a confirmação.'
+    : ''
+
   const systemPrompt = [
     params.personalityPrompt ?? defaultPersonality,
     tutorGreeting,
     'Hoje é ' + new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }) + '.',
     surgeryContext,
+    priceRestriction,
+    bookingRestriction,
     'Use as ferramentas disponíveis quando precisar de dados reais antes de responder.',
   ].filter(Boolean).join('\n')
 
-  const activeTools = vetInfo.isInSurgery ? [...TOOLS, SURGERY_TOOL] : TOOLS
+  // Filtra tools de acordo com as capacidades habilitadas
+  const baseTools = TOOLS.filter(t => {
+    if (t.name === 'get_price'        && !canInformPrices) return false
+    if (t.name === 'book_appointment' && !canBook)         return false
+    return true
+  })
+  const activeTools = vetInfo.isInSurgery ? [...baseTools, SURGERY_TOOL] : baseTools
 
   // Agentic loop — máximo 5 iterações
   let currentMessages = [...messages]
@@ -431,7 +455,7 @@ Para emergências ou pedidos fora do escopo, transfira para um atendente humano.
         const input = block.input as Record<string, string>
         let result = ''
 
-        if (block.name === 'get_clinic_info')  result = await execGetClinicInfo(params.clinicId)
+        if (block.name === 'get_clinic_info')  result = await execGetClinicInfo(params.clinicId, canInformPrices)
         if (block.name === 'get_price')         result = await execGetPrice(params.clinicId, input.service)
         if (block.name === 'get_availability')  result = await execGetAvailability(params.clinicId, input.date)
         if (block.name === 'escalate_urgency_to_reception') result = await execEscalateUrgency({

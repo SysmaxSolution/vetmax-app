@@ -331,6 +331,13 @@ export interface UpdateTutorData {
   email?: string
   address?: string | null
   emergency_contact?: string | null
+  cep?: string | null
+  street?: string | null
+  neighborhood?: string | null
+  city?: string | null
+  state?: string | null
+  address_number?: string | null
+  address_complement?: string | null
 }
 
 // ─── Soft Delete de Pet com Motivo (G-05) ────────────────────────────────────

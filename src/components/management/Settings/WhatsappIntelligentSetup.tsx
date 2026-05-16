@@ -384,7 +384,7 @@ function BotPersonalityForm({ onToast }: { onToast: (type: 'success' | 'error', 
           className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent resize-none font-mono text-xs"
         />
         <p className="text-xs text-slate-400 mt-1">
-          Deixe em branco para usar o prompt padrão. O bot sempre terá acesso a ferramentas de preços, horários e agendamentos.
+          Deixe em branco para usar o prompt padrão. As capacidades habilitadas abaixo controlam o que o bot pode fazer.
         </p>
       </div>
 
@@ -399,7 +399,7 @@ function BotPersonalityForm({ onToast }: { onToast: (type: 'success' | 'error', 
         />
         <ToggleRow
           label="Agendar consultas"
-          desc="Bot pode sugerir horários disponíveis (agendamento real na Sprint 3)"
+          desc="Bot confirma agendamentos diretamente. Desativado: informa horários disponíveis e passa para um humano confirmar"
           value={config.can_book}
           onChange={v => setConfig(c => ({ ...c, can_book: v }))}
         />

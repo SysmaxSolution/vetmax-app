@@ -107,6 +107,7 @@ export default function SettingsWorkspace({
             <p className="text-sm text-slate-500 bg-slate-50 rounded-xl px-5 py-4 border border-slate-200">
               O horário de funcionamento está disponível em <strong>Gestão → Clínica</strong>.
             </p>
+            <RegistrationSettings initialConfig={initialClinicConfig} onToast={onToast} />
             <MentorIdleSettings initialConfig={initialClinicConfig} onToast={onToast} />
           </div>
         )}
@@ -516,6 +517,72 @@ function ReportsSettings() {
           <span className="font-semibold text-slate-600">Nota:</span> a persistência granular por relatório
           será implementada em G-13. Por ora, os toggles refletem a preferência visual.
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── RegistrationSettings ─────────────────────────────────────────────────────
+
+function RegistrationSettings({ initialConfig, onToast }: {
+  initialConfig: ClinicConfig | null
+  onToast: (type: 'success' | 'error', msg: string) => void
+}) {
+  const flow = initialConfig?.flow_config as any
+  const [verifyCpf, setVerifyCpf] = useState<boolean>(flow?.verify_cpf_cnpj ?? false)
+  const [verifyCep, setVerifyCep] = useState<boolean>(flow?.verify_cep       ?? false)
+  const [saving, setSaving]       = useState(false)
+
+  async function handleSave() {
+    setSaving(true)
+    const base = initialConfig?.flow_config ?? { vet_merged_modules: [] }
+    const res = await updateClinicConfig({
+      flow_config: { ...base, verify_cpf_cnpj: verifyCpf, verify_cep: verifyCep } as FlowConfig,
+    })
+    setSaving(false)
+    if ('error' in res) { onToast('error', res.error); return }
+    onToast('success', 'Configurações de cadastro salvas!')
+  }
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+      <div className="border-b border-slate-100 px-6 py-4 flex items-center gap-3">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-50">
+          <Shield className="h-4 w-4 text-teal-600" />
+        </div>
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900">Validações no Cadastro de Pacientes</h3>
+          <p className="text-xs text-slate-500">Controles automáticos no módulo Pacientes ao cadastrar tutores</p>
+        </div>
+      </div>
+      <div className="px-6 py-5 space-y-3">
+        <div className="flex items-center justify-between rounded-xl border border-slate-100 px-4 py-3">
+          <div>
+            <p className="text-sm font-medium text-slate-800">Verificar CPF / CNPJ do tutor</p>
+            <p className="text-xs text-slate-500 mt-0.5">Valida o dígito verificador e consulta dados públicos de CNPJ via Receita Federal</p>
+          </div>
+          <button onClick={() => setVerifyCpf(v => !v)} className={`transition-colors ${verifyCpf ? 'text-teal-600' : 'text-slate-300'}`}>
+            {verifyCpf ? <ToggleRight className="h-7 w-7" /> : <ToggleLeft className="h-7 w-7" />}
+          </button>
+        </div>
+        <div className="flex items-center justify-between rounded-xl border border-slate-100 px-4 py-3">
+          <div>
+            <p className="text-sm font-medium text-slate-800">Verificar CEP</p>
+            <p className="text-xs text-slate-500 mt-0.5">Preenche endereço automaticamente via ViaCEP ao digitar o CEP do tutor</p>
+          </div>
+          <button onClick={() => setVerifyCep(v => !v)} className={`transition-colors ${verifyCep ? 'text-teal-600' : 'text-slate-300'}`}>
+            {verifyCep ? <ToggleRight className="h-7 w-7" /> : <ToggleLeft className="h-7 w-7" />}
+          </button>
+        </div>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex items-center gap-2 px-5 py-2.5 bg-teal-600 text-white text-sm font-semibold rounded-xl hover:bg-teal-700 transition-colors disabled:opacity-50"
+        >
+          {saving
+            ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando...</>
+            : <><Save className="h-4 w-4" /> Salvar Configurações de Cadastro</>}
+        </button>
       </div>
     </div>
   )
