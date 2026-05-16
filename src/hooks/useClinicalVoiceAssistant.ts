@@ -148,34 +148,36 @@ export function useClinicalVoiceAssistant({ onAutoSave, startTriggers, stopTrigg
 
       // RECORDING: acumula transcrição, detecta stop command
       if (curState === 'RECORDING') {
-        let interim   = ''
-        let newFinals = ''
+        let interim      = ''
+        // finalBuffer cresce à medida que cada final é processado; cada novo final
+        // é deduplicado contra o buffer JÁ ACUMULADO — cobre finais cumulativos do
+        // Chrome mobile ("a gente" → "a gente tá" → "a gente tá esperando" → ...).
+        let finalBuffer  = finalTranscriptRef.current
+        let hadNewFinals = false
 
         for (let i = event.resultIndex; i < event.results.length; i++) {
           if (i < recordingStartRef.current) continue
           if (event.results[i].isFinal) {
-            const text = event.results[i][0].transcript.trim().toLowerCase()
-            // Dupla guarda: índice (intra-sessão) + conteúdo (cross-restart)
-            if (!processedFinalIndicesRef.current.has(i) && !processedFinalTextsRef.current.has(text)) {
+            const rawText = event.results[i][0].transcript
+            const textKey = rawText.trim().toLowerCase()
+            if (!processedFinalIndicesRef.current.has(i) && !processedFinalTextsRef.current.has(textKey)) {
               processedFinalIndicesRef.current.add(i)
-              processedFinalTextsRef.current.add(text)
-              newFinals += event.results[i][0].transcript + ' '
+              processedFinalTextsRef.current.add(textKey)
+              const delta = removeLeadingOverlap(finalBuffer, rawText)
+              if (delta) {
+                finalBuffer  = (finalBuffer + ' ' + delta).trim()
+                hadNewFinals = true
+              }
             }
           } else {
             interim = event.results[i][0].transcript
           }
         }
 
-        if (newFinals) {
-          finalTranscriptRef.current = (finalTranscriptRef.current + ' ' + newFinals).trim()
-        }
+        if (hadNewFinals) finalTranscriptRef.current = finalBuffer
 
-        // Remove sobreposição entre interim acumulado e o finalTranscript já confirmado.
-        // Cobre: interim começa com finalTranscript completo (caso 1) ou com um
-        // sufixo dele (caso 2 — causa do loop "a avaliação a avaliação" no Chrome mobile).
-        const displayInterim = removeLeadingOverlap(finalTranscriptRef.current, interim)
-
-        const fullText = (finalTranscriptRef.current + (displayInterim ? ' ' + displayInterim : '')).trim()
+        const displayInterim = removeLeadingOverlap(finalBuffer, interim)
+        const fullText = (finalBuffer + (displayInterim ? ' ' + displayInterim : '')).trim()
 
         if (saveCmdReRef.current.test(fullText) || fuzzyMatchCustom(fullText, stopTriggers ?? [])) {
           triggerSave(fullText)
@@ -183,7 +185,7 @@ export function useClinicalVoiceAssistant({ onAutoSave, startTriggers, stopTrigg
         }
 
         setTranscript(fullText)
-        if (newFinals) {
+        if (hadNewFinals) {
           clearSilenceTimer()
           silenceTimerRef.current = setTimeout(() => {
             if (stateRef.current === 'RECORDING') triggerSave(finalTranscriptRef.current)

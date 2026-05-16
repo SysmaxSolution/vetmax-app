@@ -179,30 +179,33 @@ export function useGroomingVoiceAssistant({ onAutoSave, onSendWA, startTriggers,
 
       // ── RECORDING: acumula transcrição, detecta save command ────────────────
       if (curState === 'RECORDING') {
-        let interim   = ''
-        let newFinals = ''
+        let interim      = ''
+        let finalBuffer  = finalTranscriptRef.current
+        let hadNewFinals = false
 
         for (let i = event.resultIndex; i < event.results.length; i++) {
           if (i < recordingStartRef.current) continue  // ignora pré-RECORDING
           if (event.results[i].isFinal) {
-            const text = event.results[i][0].transcript.trim().toLowerCase()
-            if (!processedFinalIndicesRef.current.has(i) && !processedFinalTextsRef.current.has(text)) {
+            const rawText = event.results[i][0].transcript
+            const textKey = rawText.trim().toLowerCase()
+            if (!processedFinalIndicesRef.current.has(i) && !processedFinalTextsRef.current.has(textKey)) {
               processedFinalIndicesRef.current.add(i)
-              processedFinalTextsRef.current.add(text)
-              newFinals += event.results[i][0].transcript + ' '
+              processedFinalTextsRef.current.add(textKey)
+              const delta = removeLeadingOverlap(finalBuffer, rawText)
+              if (delta) {
+                finalBuffer  = (finalBuffer + ' ' + delta).trim()
+                hadNewFinals = true
+              }
             }
           } else {
             interim = event.results[i][0].transcript
           }
         }
 
-        if (newFinals) {
-          finalTranscriptRef.current = (finalTranscriptRef.current + ' ' + newFinals).trim()
-        }
+        if (hadNewFinals) finalTranscriptRef.current = finalBuffer
 
-        const displayInterim = removeLeadingOverlap(finalTranscriptRef.current, interim)
-
-        const fullText = (finalTranscriptRef.current + (displayInterim ? ' ' + displayInterim : '')).trim()
+        const displayInterim = removeLeadingOverlap(finalBuffer, interim)
+        const fullText = (finalBuffer + (displayInterim ? ' ' + displayInterim : '')).trim()
 
         // Verifica save command no texto completo (final + interim)
         if (saveCmdReRef.current.test(fullText) || fuzzyMatchCustom(fullText, stopTriggers ?? [])) {
@@ -212,7 +215,7 @@ export function useGroomingVoiceAssistant({ onAutoSave, onSendWA, startTriggers,
 
         // Atualiza display e reinicia timer de silêncio (só quando há texto novo finalizado)
         setTranscript(fullText)
-        if (newFinals) {
+        if (hadNewFinals) {
           clearSilenceTimer()
           silenceTimerRef.current = setTimeout(() => {
             if (stateRef.current === 'RECORDING') triggerSave(finalTranscriptRef.current)
