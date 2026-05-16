@@ -510,14 +510,20 @@ export default function ImportTemplateModal({
     const isPdfExt = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
     const isDocxExt = file.name.toLowerCase().endsWith('.docx')
 
-    // IC-22: DOCX precisa ser convertido para PDF antes (no Word):
-    // "Arquivo → Salvar como → PDF". O motor entao reconhece os placeholders
-    // (Custom_nome_profissional, Code_crmv, Medicamento1, etc) automaticamente.
+    // IC-23: DOCX agora suportado nativamente (conversao server→HTML +
+    // client→PDF). Apenas valida estrutura PKZip (DOCX eh ZIP).
     if (isDocxExt) {
-      return 'Templates em formato DOCX precisam ser exportados como PDF antes do upload. '
-        + 'No Word: "Arquivo → Salvar como → PDF". O sistema reconhece automaticamente '
-        + 'placeholders no estilo da Dra. Lais ("Custom_nome_profissional", "Code_crmv", '
-        + '"Medicamento1", "Cidade_da_clinica", etc).'
+      try {
+        const head = await file.slice(0, 4).arrayBuffer()
+        const sig = new Uint8Array(head)
+        // PKZip magic: 50 4B 03 04
+        if (sig[0] !== 0x50 || sig[1] !== 0x4B || sig[2] !== 0x03 || sig[3] !== 0x04) {
+          return 'O arquivo tem extensao .docx mas nao parece ser um documento Word valido.'
+        }
+      } catch {
+        return 'Nao foi possivel ler o arquivo DOCX.'
+      }
+      return null
     }
 
     if (!isPdfExt) return null
@@ -573,8 +579,41 @@ export default function ImportTemplateModal({
     let templateHtmlFallback: string | null = null
     try {
 
-      if (selectedFile) {
-        const isPdf = selectedFile.type === 'application/pdf' || selectedFile.name.endsWith('.pdf')
+      // IC-23: se for DOCX, converte para PDF (server-side mammoth→HTML,
+      // client-side jsPDF.html). A variavel `workingFile` segue como PDF
+      // do passo da rasterizacao em diante.
+      let workingFile: File | null = selectedFile
+      if (workingFile && workingFile.name.toLowerCase().endsWith('.docx')) {
+        try {
+          console.log('[ImportTemplate] DOCX detectado — convertendo via mammoth + jsPDF...')
+          const docxFd = new FormData()
+          docxFd.append('file', workingFile)
+          const { convertDocxToHtml } = await import('@/lib/actions/docx-convert')
+          const docxRes = await convertDocxToHtml(docxFd)
+          if ('error' in docxRes) {
+            setError('Falha conversao DOCX: ' + docxRes.error)
+            setLoading(false)
+            return
+          }
+          console.log(`[ImportTemplate] DOCX → HTML: ${docxRes.html.length} bytes, ${docxRes.placeholders_detected.length} placeholders detectados`)
+          console.log('[ImportTemplate] placeholders:', docxRes.placeholders_detected)
+
+          const { convertHtmlToPdfFile } = await import('@/lib/pdf/docx-to-pdf')
+          workingFile = await convertHtmlToPdfFile(docxRes.html, workingFile.name)
+          console.log(`[ImportTemplate] HTML → PDF: ${workingFile.size} bytes`)
+          // Atualiza state para o preview
+          setSelectedFile(workingFile)
+        } catch (docxErr) {
+          const msg = docxErr instanceof Error ? docxErr.message : String(docxErr)
+          console.error('[ImportTemplate] Erro DOCX→PDF:', msg)
+          setError('Falha ao converter DOCX para PDF: ' + msg)
+          setLoading(false)
+          return
+        }
+      }
+
+      if (workingFile) {
+        const isPdf = workingFile.type === 'application/pdf' || workingFile.name.endsWith('.pdf')
 
         // ── CAMINHO 1: PDF — Operacao Zero-Touch (Flatten & Clean) ────────
         if (isPdf) {
@@ -584,7 +623,7 @@ export default function ImportTemplateModal({
             console.log('[ImportTemplate] Rasterizando PDF @300dpi + textContent...')
             // IC-14: 200 DPI (era 300) para evitar OOM em PDFs grandes.
             // Qualidade ainda visualmente identica em monitor; reduz memoria ~55%.
-            const r = await pdfToImages(selectedFile, { scale: 200 / 72, keepCanvases: true, previewFormat: 'png' })
+            const r = await pdfToImages(workingFile, { scale: 200 / 72, keepCanvases: true, previewFormat: 'png' })
             console.log(`[ImportTemplate] ${r.images.length} pagina(s) rasterizadas, ${r.textItems.length} text items nativos`)
             pdfDimensions = r.dimensions
             pdfPageCount = r.images.length
@@ -643,18 +682,19 @@ export default function ImportTemplateModal({
             return
           }
         } else {
-          // ── CAMINHO 2: DOCX / Imagem — mantem Claude Vision (fallback) ─
+          // ── CAMINHO 2: Imagem — mantem Claude Vision (fallback)
+          // (DOCX agora eh convertido para PDF acima via IC-23)
           const formData = new FormData()
-          formData.append('file', selectedFile)
+          formData.append('file', workingFile)
           formData.append('name', form.name)
           formData.append('type', form.type)
 
-          const isImage = selectedFile.type.startsWith('image/')
+          const isImage = workingFile.type.startsWith('image/')
           if (isImage) {
             const reader = new FileReader()
             const dataUrl = await new Promise<string>((resolve) => {
               reader.onload = () => resolve(reader.result as string)
-              reader.readAsDataURL(selectedFile!)
+              reader.readAsDataURL(workingFile!)
             })
             formData.append('page_images', dataUrl)
           }
@@ -697,9 +737,9 @@ export default function ImportTemplateModal({
       // o browser uploada DIRETO para o bucket Supabase.
       let originalPdfPath: string | null = null
       let cleanedPagePaths: string[] | null = null
-      const isPdf = selectedFile && (selectedFile.type === 'application/pdf' || selectedFile.name.endsWith('.pdf'))
+      const isPdf = workingFile && (workingFile.type === 'application/pdf' || workingFile.name.endsWith('.pdf'))
 
-      if (selectedFile && isPdf) {
+      if (workingFile && isPdf) {
         const t0 = performance.now()
         try {
           // 1. Pede os tokens de upload em UMA so chamada ao server
@@ -721,7 +761,7 @@ export default function ImportTemplateModal({
           if (tokens.pdf) {
             uploads.push(
               supa.storage.from('document-templates')
-                .uploadToSignedUrl(tokens.pdf.path, tokens.pdf.token, selectedFile)
+                .uploadToSignedUrl(tokens.pdf.path, tokens.pdf.token, workingFile)
                 .then(r => r.error
                   ? { ok: false, err: 'PDF: ' + r.error.message }
                   : { ok: true, path: tokens.pdf!.path }
@@ -780,7 +820,7 @@ export default function ImportTemplateModal({
         templateHtml: templateHtmlFallback,
         pageImages,
         originalPdfPath,
-        originalPdfSizeBytes: selectedFile?.size ?? null,
+        originalPdfSizeBytes: workingFile?.size ?? null,
         pageCount: pdfPageCount,
         pageDimensions: pdfDimensions,
         // Overlays prontos do pipeline Zero-Touch (whiteout=false — pixel ja limpo)
