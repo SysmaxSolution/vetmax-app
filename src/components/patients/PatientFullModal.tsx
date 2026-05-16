@@ -17,6 +17,7 @@ import { getPetInsurance, upsertPetInsurance, removePetInsurance, type PetInsura
 import VaccinationCard from '@/components/vet/VaccinationCard'
 import { BehaviorTagsSelector } from '@/components/ui/BehaviorTagsBadges'
 import { BreedCombobox } from '@/components/ui/BreedCombobox'
+import { lookupCep } from '@/lib/cep'
 import type { PatientsListItem } from '@/lib/actions/timeline'
 import type { PatientSpecies } from '@/types'
 import { REPRODUCTIVE_STATUS_OPTIONS } from '@/types'
@@ -247,7 +248,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
   const cpfCnpjTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // ── Status de busca CEP ──
-  const [cepStatus, setCepStatus] = useState<'idle'|'searching'|'found'|'not_found'>('idle')
+  const [cepStatus, setCepStatus] = useState<'idle'|'searching'|'found'|'not_found'|'error'>('idle')
 
   // ── Consentimento LGPD ──
   const [showConsent, setShowConsent]   = useState(false)
@@ -346,29 +347,27 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
     return () => { if (cpfCnpjTimer.current) clearTimeout(cpfCnpjTimer.current) }
   }, [tutorCpf, regSettings.verify_cpf_cnpj]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ─── Busca CEP via ViaCEP (quando verify_cep ativo) ──────────────────────────
+  // ─── Busca CEP com fallback ViaCEP → BrasilAPI ───────────────────────────────
   useEffect(() => {
     if (!regSettings.verify_cep) { setCepStatus('idle'); return }
     const digits = tutorCep.replace(/\D/g, '')
     if (digits.length !== 8) { setCepStatus('idle'); return }
     setCepStatus('searching')
+    let cancelled = false
     const timer = setTimeout(async () => {
-      try {
-        const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`)
-        if (res.ok) {
-          const data = await res.json()
-          if (data.erro) { setCepStatus('not_found'); return }
-          setTutorStreet(data.logradouro ?? '')
-          setTutorNeighborhood(data.bairro ?? '')
-          setTutorCity(data.localidade ?? '')
-          setTutorState(data.uf ?? '')
-          setCepStatus('found')
-        } else {
-          setCepStatus('not_found')
-        }
-      } catch { setCepStatus('not_found') }
+      const result = await lookupCep(digits)
+      if (cancelled) return
+      if (result.ok) {
+        setTutorStreet(result.street)
+        setTutorNeighborhood(result.neighborhood)
+        setTutorCity(result.city)
+        setTutorState(result.state)
+        setCepStatus('found')
+      } else {
+        setCepStatus(result.reason === 'network' ? 'error' : 'not_found')
+      }
     }, 500)
-    return () => clearTimeout(timer)
+    return () => { cancelled = true; clearTimeout(timer) }
   }, [tutorCep, regSettings.verify_cep])
 
   // ─── Vacinas lazy load ────────────────────────────────────────────────────────
@@ -981,6 +980,8 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                           ? 'border-green-400 bg-green-50 focus:border-green-500'
                           : cepStatus === 'not_found'
                           ? 'border-red-300 bg-red-50 focus:border-red-400'
+                          : cepStatus === 'error'
+                          ? 'border-amber-300 bg-amber-50 focus:border-amber-400'
                           : 'border-slate-200 focus:border-teal-500'
                       }`}
                     />
@@ -1002,6 +1003,11 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                   )}
                   {cepStatus === 'not_found' && (
                     <p className="mt-1 text-xs text-red-500">CEP não encontrado — preencha o endereço manualmente.</p>
+                  )}
+                  {cepStatus === 'error' && (
+                    <p className="mt-1 text-xs text-amber-600">
+                      Não foi possível consultar o CEP agora. Você pode preencher manualmente ou tentar de novo em alguns segundos.
+                    </p>
                   )}
                 </div>
 
