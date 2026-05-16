@@ -210,6 +210,107 @@ export async function deleteUserCommission(id: string): Promise<{ success: true 
   return { success: true }
 }
 
+// ─── Busca de itens para comissão por item específico ────────────────────────
+
+export interface CommissionableItem {
+  id:       string
+  name:     string
+  price:    number
+  category: string
+}
+
+export async function searchItemsForCommission(
+  query: string,
+  type:  'product' | 'service' | 'package',
+): Promise<CommissionableItem[] | { error: string }> {
+  const ctx = await getClinicCtx()
+  if (!ctx) return { error: 'Não autenticado.' }
+
+  const admin = createAdminClient()
+  const q = query.trim()
+
+  if (type === 'package') {
+    const { data, error } = await admin
+      .from('catalog_packages')
+      .select('id, name, price')
+      .eq('clinic_id', ctx.clinic_id)
+      .eq('active', true)
+      .ilike('name', `%${q}%`)
+      .order('name')
+      .limit(15)
+    if (error) return { error: error.message }
+    return (data ?? []).map((p: any) => ({
+      id: p.id, name: p.name, price: Number(p.price ?? 0), category: 'package',
+    }))
+  }
+
+  // product or service — differentiated by is_service flag
+  const isService = type === 'service'
+  const { data, error } = await admin
+    .from('stock_items')
+    .select('id, name, unit_price, category, is_service')
+    .eq('clinic_id', ctx.clinic_id)
+    .eq('is_service', isService)
+    .ilike('name', `%${q}%`)
+    .order('name')
+    .limit(15)
+
+  if (error) return { error: error.message }
+  return (data ?? []).map((p: any) => ({
+    id: p.id, name: p.name, price: Number(p.unit_price ?? 0), category: p.category ?? type,
+  }))
+}
+
+// ─── Comissão por valor total (grooming, billing) ─────────────────────────────
+
+/**
+ * Processa comissão sobre um valor total já confirmado (checkout de tosa ou consulta).
+ * Aplica regras do profissional onde item_type está em `item_types`.
+ * Fire-and-forget — nunca bloqueia o fluxo principal.
+ */
+export async function processAmountCommission(params: {
+  clinic_id:         string
+  professional_id:   string
+  professional_name: string
+  amount:            number
+  description:       string
+  date:              string
+  item_types:        Array<'all' | 'service' | 'package'>
+}): Promise<void> {
+  if (params.amount <= 0) return
+  const admin = createAdminClient()
+
+  const { data: rules } = await admin
+    .from('user_commissions')
+    .select('id, item_type, percentage')
+    .eq('clinic_id', params.clinic_id)
+    .eq('user_id', params.professional_id)
+    .in('item_type', params.item_types)
+
+  if (!rules || rules.length === 0) return
+
+  const entries = rules.map((rule: any) => {
+    const amount = +(params.amount * (Number(rule.percentage) / 100)).toFixed(2)
+    return {
+      clinic_id:       params.clinic_id,
+      type:            'payable',
+      category:        'commission',
+      source:          'commission',
+      description:     params.description,
+      amount,
+      due_date:        params.date,
+      professional_id: params.professional_id,
+      status:          'pending',
+      discount:        0,
+      interest:        0,
+    }
+  }).filter((e: any) => e.amount > 0)
+
+  if (entries.length > 0) {
+    await admin.from('financial_entries').insert(entries)
+  }
+}
+
 // ─── Relatório de comissões ───────────────────────────────────────────────────
 
 export async function getCommissionsReport(filters?: {

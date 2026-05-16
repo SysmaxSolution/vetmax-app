@@ -306,13 +306,14 @@ export async function processPayment(
 
   const adminClient = createAdminClient()
 
-  // Buscar fatura com dados do paciente/tutor para desnormalizar no caixa
+  // Buscar fatura com dados do paciente/tutor e vet da consulta para comissão
   const { data: invoice, error: fetchErr } = await supabase
     .from('invoices')
     .select(`
-      id, subtotal, status,
+      id, subtotal, status, consultation_id,
       patients ( name ),
-      tutors ( name )
+      tutors ( name ),
+      consultations ( vet_id, profiles!vet_id ( full_name ) )
     `)
     .eq('id', invoiceId)
     .eq('clinic_id', profile.clinic_id)
@@ -385,6 +386,24 @@ export async function processPayment(
     p_recorded_by:    user.id,
     p_session_id:     openSession?.id ?? null,
   })
+
+  // Comissão automática do veterinário (fire-and-forget)
+  const invAny = invoice as any
+  const vetId   = invAny.consultations?.vet_id ?? null
+  const vetName = invAny.consultations?.profiles?.full_name ?? null
+  if (vetId && total_amount > 0) {
+    import('./commissions').then(({ processAmountCommission }) => {
+      processAmountCommission({
+        clinic_id:         profile.clinic_id,
+        professional_id:   vetId,
+        professional_name: vetName ?? 'Veterinário',
+        amount:            total_amount,
+        description:       `Comissão Consulta — ${invAny.patients?.name ?? 'Paciente'}, Data: ${new Date().toISOString().split('T')[0]} - Profissional: ${vetName ?? 'Veterinário'}`,
+        date:              new Date().toISOString().split('T')[0],
+        item_types:        ['all', 'service'],
+      }).catch(() => {})
+    })
+  }
 
   revalidatePath('/dashboard/cashier')
   revalidatePath('/dashboard/reception/checkout')

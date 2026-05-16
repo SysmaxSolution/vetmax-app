@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useTransition } from 'react'
 import {
   X, User, Shield, Loader2, Camera, FileSignature,
   Eye, EyeOff, Check, AlertTriangle, Lock,
-  Percent, Plus, Trash2,
+  Percent, Plus, Trash2, Search, Package, Wrench, ShoppingBag,
 } from 'lucide-react'
 import {
   adminUpdateUser, adminChangePassword, uploadUserSignature,
@@ -13,7 +13,8 @@ import {
 } from '@/lib/actions/user-management'
 import {
   listUserCommissions, upsertUserCommission, deleteUserCommission,
-  type UserCommission,
+  searchItemsForCommission,
+  type UserCommission, type CommissionableItem,
 } from '@/lib/actions/commissions'
 import type { Room } from '@/lib/actions/rooms'
 import type { UserRole } from '@/types'
@@ -119,6 +120,17 @@ export default function UserManagementModal({
   const [commDesc,       setCommDesc]       = useState('')
   const [savingComm,     setSavingComm]     = useState(false)
   const [deletingComm,   setDeletingComm]   = useState<string | null>(null)
+
+  // Modal de busca de item específico
+  const [showItemModal,   setShowItemModal]   = useState(false)
+  const [itemModalType,   setItemModalType]   = useState<'product' | 'service' | 'package'>('product')
+  const [itemQuery,       setItemQuery]       = useState('')
+  const [itemResults,     setItemResults]     = useState<CommissionableItem[]>([])
+  const [searchingItems,  setSearchingItems]  = useState(false)
+  const [selectedItem,    setSelectedItem]    = useState<CommissionableItem | null>(null)
+  const [itemPct,         setItemPct]         = useState('')
+  const [savingItemComm,  setSavingItemComm]  = useState(false)
+
   const [, startTransition] = useTransition()
 
   useEffect(() => {
@@ -243,6 +255,43 @@ export default function UserManagementModal({
     setDeletingComm(null)
     if ('error' in res) { setError(res.error); return }
     setCommissions(prev => prev.filter(c => c.id !== id))
+  }
+
+  async function handleSearchItems() {
+    if (!itemQuery.trim()) return
+    setSearchingItems(true)
+    const res = await searchItemsForCommission(itemQuery, itemModalType)
+    setSearchingItems(false)
+    if (!('error' in res)) setItemResults(res)
+  }
+
+  async function handleSaveItemCommission() {
+    if (!user || !selectedItem) return
+    const pct = parseFloat(itemPct)
+    if (isNaN(pct) || pct <= 0 || pct > 100) {
+      setError('Percentual deve ser entre 0,01% e 100%.'); return
+    }
+    setSavingItemComm(true); setError(null)
+    const res = await upsertUserCommission({
+      user_id:     user.id,
+      item_type:   itemModalType,
+      item_id:     selectedItem.id,
+      percentage:  pct,
+      description: `${selectedItem.name} — ${pct.toFixed(2)}%`,
+    })
+    setSavingItemComm(false)
+    if ('error' in res) { setError(res.error); return }
+    // Fechar modal e atualizar lista
+    setShowItemModal(false)
+    setSelectedItem(null); setItemQuery(''); setItemResults([]); setItemPct('')
+    const updated = await listUserCommissions(user.id)
+    if (!('error' in updated)) setCommissions(updated)
+  }
+
+  function openItemModal(type: 'product' | 'service' | 'package') {
+    setItemModalType(type)
+    setItemQuery(''); setItemResults([]); setSelectedItem(null); setItemPct('')
+    setShowItemModal(true)
   }
 
   function toggleSpecialty(s: string) {
@@ -704,11 +753,181 @@ export default function UserManagementModal({
                 </div>
               )}
 
+              {/* Atalhos para comissão por item específico */}
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-slate-600">Comissão por Item Específico</p>
+                <p className="text-xs text-slate-400">
+                  Comissione produto a produto, serviço a serviço ou pacote a pacote — além das regras gerais acima.
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    { type: 'product' as const, label: 'Produto',  Icon: ShoppingBag, color: 'text-blue-700 bg-blue-50 border-blue-200 hover:bg-blue-100' },
+                    { type: 'service' as const, label: 'Serviço',  Icon: Wrench,      color: 'text-purple-700 bg-purple-50 border-purple-200 hover:bg-purple-100' },
+                    { type: 'package' as const, label: 'Pacote',   Icon: Package,     color: 'text-teal-700 bg-teal-50 border-teal-200 hover:bg-teal-100' },
+                  ]).map(({ type, label, Icon, color }) => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => openItemModal(type)}
+                      className={`flex flex-col items-center gap-1.5 rounded-xl border-2 border-dashed py-3 text-xs font-semibold transition-colors ${color}`}
+                    >
+                      <Icon className="h-5 w-5" />
+                      + {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Info */}
               <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 text-xs text-blue-700">
-                <strong>Como funciona:</strong> Após cada venda no PDV, o sistema calcula e registra automaticamente
-                um lançamento em <em>Contas a Pagar</em> com categoria <em>Comissão</em> para este profissional.
+                <strong>Como funciona:</strong> As comissões são lançadas automaticamente em <em>Contas a Pagar</em>
+                após vendas no PDV, pagamento de consultas (checkout) e tosas (caixa).
                 Visualize em <strong>Relatórios → Comissões</strong>.
+              </div>
+            </div>
+          )}
+
+          {/* ── Modal de busca de item específico ── */}
+          {showItemModal && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+              <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden">
+                {/* Header */}
+                <div className={`px-5 py-4 flex items-center justify-between ${
+                  itemModalType === 'product' ? 'bg-blue-600' :
+                  itemModalType === 'service' ? 'bg-purple-600' : 'bg-teal-600'
+                }`}>
+                  <div className="flex items-center gap-2 text-white">
+                    {itemModalType === 'product' && <ShoppingBag className="h-5 w-5" />}
+                    {itemModalType === 'service' && <Wrench className="h-5 w-5" />}
+                    {itemModalType === 'package' && <Package className="h-5 w-5" />}
+                    <span className="font-semibold text-sm">
+                      Comissão por {itemModalType === 'product' ? 'Produto' : itemModalType === 'service' ? 'Serviço' : 'Pacote'}
+                    </span>
+                  </div>
+                  <button onClick={() => setShowItemModal(false)} className="text-white/70 hover:text-white p-1 rounded-lg">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="p-5 space-y-4">
+                  {/* Busca */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">
+                      Buscar {itemModalType === 'product' ? 'produto' : itemModalType === 'service' ? 'serviço' : 'pacote'}
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        value={itemQuery}
+                        onChange={e => setItemQuery(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && handleSearchItems()}
+                        placeholder={`Digite o nome do ${itemModalType === 'package' ? 'pacote' : itemModalType}...`}
+                        className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        onClick={handleSearchItems}
+                        disabled={searchingItems || !itemQuery.trim()}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-700 text-white text-sm font-medium hover:bg-slate-800 transition-colors disabled:opacity-50"
+                      >
+                        {searchingItems ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Resultados */}
+                  {itemResults.length > 0 && !selectedItem && (
+                    <div className="border border-slate-200 rounded-xl overflow-hidden max-h-48 overflow-y-auto divide-y divide-slate-100">
+                      {itemResults.map(item => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setSelectedItem(item)}
+                          className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-slate-50 transition-colors"
+                        >
+                          <div>
+                            <p className="text-sm font-medium text-slate-800">{item.name}</p>
+                            <p className="text-xs text-slate-400">{item.category}</p>
+                          </div>
+                          <span className="text-xs font-semibold text-slate-600 ml-4 flex-shrink-0">
+                            {item.price > 0
+                              ? item.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                              : '—'}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {itemResults.length === 0 && itemQuery && !searchingItems && (
+                    <p className="text-xs text-slate-400 text-center py-2">
+                      Nenhum resultado. Tente outro termo.
+                    </p>
+                  )}
+
+                  {/* Item selecionado */}
+                  {selectedItem && (
+                    <div className="rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-800">{selectedItem.name}</p>
+                        <p className="text-xs text-slate-400">{selectedItem.category}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => { setSelectedItem(null); setItemResults([]) }}
+                        className="text-slate-400 hover:text-slate-600 p-1"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Percentual */}
+                  {selectedItem && (
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">
+                        Comissão sobre este item (%)
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min="0.01" max="100" step="0.01"
+                          value={itemPct}
+                          onChange={e => setItemPct(e.target.value)}
+                          placeholder="Ex: 10"
+                          autoFocus
+                          className="w-full rounded-lg border border-slate-300 px-3 py-2 pr-8 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                        />
+                        <span className="absolute right-3 top-2.5 text-slate-400 text-sm">%</span>
+                      </div>
+                      {selectedItem.price > 0 && itemPct && !isNaN(parseFloat(itemPct)) && (
+                        <p className="mt-1 text-[11px] text-slate-500">
+                          = {(selectedItem.price * (parseFloat(itemPct) / 100)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} por unidade vendida
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Botões */}
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={handleSaveItemCommission}
+                      disabled={!selectedItem || !itemPct || savingItemComm}
+                      className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 transition-colors disabled:opacity-50"
+                    >
+                      {savingItemComm ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                      Salvar Comissão
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowItemModal(false)}
+                      className="px-4 py-2.5 rounded-xl border border-slate-300 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}

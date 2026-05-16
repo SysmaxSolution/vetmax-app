@@ -592,7 +592,7 @@ export async function processGroomingPaymentFromCashier(
   // Fetch session to validate
   const { data: session, error: fetchErr } = await supabase
     .from('grooming_sessions')
-    .select('id, price_total, payment_status, status, patients ( name, tutors ( name ) )')
+    .select('id, price_total, payment_status, status, groomer_id, patients ( name, tutors ( name ) )')
     .eq('id', sessionId)
     .eq('clinic_id', clinicId)
     .single()
@@ -645,6 +645,23 @@ export async function processGroomingPaymentFromCashier(
     .eq('clinic_id', clinicId)
 
   if (updateErr) return { error: 'Caixa registrado mas status não atualizado: ' + updateErr.message }
+
+  // Comissão automática do banhista (fire-and-forget)
+  const gs = session as any
+  if (gs.groomer_id && amount > 0) {
+    const { data: groomerProfile } = await supabase
+      .from('profiles').select('full_name').eq('id', gs.groomer_id).single()
+    const { processAmountCommission } = await import('./commissions')
+    processAmountCommission({
+      clinic_id:         clinicId,
+      professional_id:   gs.groomer_id,
+      professional_name: groomerProfile?.full_name ?? 'Banhista',
+      amount,
+      description: `Comissão Tosa — ${patientName ?? 'Paciente'}, Data: ${new Date().toISOString().split('T')[0]} - Profissional: ${groomerProfile?.full_name ?? 'Banhista'}`,
+      date:         new Date().toISOString().split('T')[0],
+      item_types:   ['all', 'service'],
+    }).catch(() => {})
+  }
 
   revalidatePath('/dashboard/cashier')
   revalidatePath('/dashboard/grooming')
