@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { useRealtimeSync } from '@/hooks/useRealtimeSync'
 import { searchTutorsAndPatients, getTutorWithPatients, addPatientToTutor } from '@/lib/actions/tutors'
 import { checkInPatient, moveToTriage, moveDirectToVet, getReceptionHistory } from '@/lib/actions/consultations'
@@ -352,7 +353,8 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
     paymentStatus?: string
     scheduledDate?: string | null
   } | null>(null)
-  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error'; action?: { label: string; href: string } } | null>(null)
+  const router = useRouter()
   const [whatsappCtx, setWhatsappCtx] = useState<{ petName: string; tutorName: string; tutorPhone: string; consultationId: string } | null>(null)
   const [groomingModal, setGroomingModal] = useState<{
     patientId: string; patientName: string; tutorId: string; tutorName: string
@@ -368,9 +370,13 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const activeModules = useModules()
 
-  function showToast(msg: string, type: 'success' | 'error' = 'success') {
-    setToast({ msg, type })
-    setTimeout(() => setToast(null), 3500)
+  function showToast(
+    msg: string,
+    type: 'success' | 'error' = 'success',
+    action?: { label: string; href: string },
+  ) {
+    setToast({ msg, type, action })
+    setTimeout(() => setToast(null), action ? 6000 : 3500)
   }
 
   // Atalho Alt+N → Novo Cadastro
@@ -479,13 +485,19 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
         const err = await moveDirectToVet(consultationId)
         if (err) { showToast(err.error, 'error'); return }
         setQueue(q => q.filter(c => c.id !== consultationId))
-        showToast('Pet encaminhado direto ao Consultório.')
+        showToast('Pet encaminhado direto ao Consultório.', 'success', {
+          label: 'Abrir Consultório',
+          href:  `/dashboard/vet/${consultationId}`,
+        })
         return
       }
       const err = await moveToTriage(consultationId)
       if (err) { showToast(err.error, 'error'); return }
       setQueue(q => q.filter(c => c.id !== consultationId))
-      showToast('Pet encaminhado para Triagem.')
+      showToast('Pet encaminhado para Triagem.', 'success', {
+        label: 'Abrir Triagem',
+        href:  `/dashboard/triage/${consultationId}`,
+      })
       if (item?.tutor?.phone) {
         setWhatsappCtx({
           petName:        item.patient.name,
@@ -551,7 +563,15 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
             ? <svg className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
             : <svg className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126Z" /></svg>
           }
-          {toast.msg}
+          <span>{toast.msg}</span>
+          {toast.action && (
+            <button
+              onClick={() => { router.push(toast.action!.href); setToast(null) }}
+              className="ml-1 underline underline-offset-2 font-semibold hover:opacity-80"
+            >
+              {toast.action.label} →
+            </button>
+          )}
         </div>
       )}
 

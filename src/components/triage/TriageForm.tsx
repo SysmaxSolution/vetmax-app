@@ -317,7 +317,10 @@ export default function TriageForm({
         if (!isEditMode && consultation.tutor?.phone) {
           setShowWhatsApp(true)
         } else {
-          setTimeout(() => router.push('/dashboard/triage'), 1500)
+          // Após triagem concluída, leva ao Consultório com pet+tutor pré-carregados.
+          // Em modo de edição, volta para a fila de triagem.
+          const next = isEditMode ? '/dashboard/triage' : `/dashboard/vet/${consultation.id}`
+          setTimeout(() => router.push(next), 1500)
         }
       }
     } catch {
@@ -399,7 +402,10 @@ export default function TriageForm({
       {/* WhatsApp — Triagem Concluída */}
       <WhatsAppNotificationModal
         isOpen={showWhatsApp}
-        onClose={() => { setShowWhatsApp(false); router.push('/dashboard/triage') }}
+        onClose={() => {
+          setShowWhatsApp(false)
+          router.push(isEditMode ? '/dashboard/triage' : `/dashboard/vet/${consultation.id}`)
+        }}
         trigger="triage_completed"
         context={{
           petName:     consultation.patient.name,

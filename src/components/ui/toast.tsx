@@ -8,9 +8,11 @@ interface ToastProps {
   message: string
   onClose: () => void
   duration?: number
+  /** Ação opcional renderizada como link clicável dentro do toast. */
+  action?: { label: string; onClick: () => void }
 }
 
-export function Toast({ type, message, onClose, duration = 4000 }: ToastProps) {
+export function Toast({ type, message, onClose, duration = 4000, action }: ToastProps) {
   const onCloseRef = useRef(onClose)
   onCloseRef.current = onClose
 
@@ -35,7 +37,19 @@ export function Toast({ type, message, onClose, duration = 4000 }: ToastProps) {
         ) : (
           <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
         )}
-        <p className="text-sm font-medium flex-1">{message}</p>
+        <div className="flex-1">
+          <p className="text-sm font-medium">{message}</p>
+          {action && (
+            <button
+              onClick={() => { action.onClick(); onClose() }}
+              className={`mt-1 text-sm font-semibold underline underline-offset-2 ${
+                type === 'success' ? 'text-green-900 hover:text-green-700' : 'text-red-900 hover:text-red-700'
+              }`}
+            >
+              {action.label} →
+            </button>
+          )}
+        </div>
         <button
           onClick={onClose}
           className="text-gray-400 hover:text-gray-600 ml-2 flex-shrink-0"
