@@ -18,6 +18,7 @@ import VaccinationCard from '@/components/vet/VaccinationCard'
 import { BehaviorTagsSelector } from '@/components/ui/BehaviorTagsBadges'
 import { BreedCombobox } from '@/components/ui/BreedCombobox'
 import { lookupCepAction } from '@/lib/actions/cep'
+import { lookupCnpjAction } from '@/lib/actions/cnpj'
 import type { PatientsListItem } from '@/lib/actions/timeline'
 import type { PatientSpecies } from '@/types'
 
@@ -356,17 +357,16 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
       if (!validateCnpj(digits)) { setCpfCnpjStatus('invalid'); return }
       setCpfCnpjStatus('searching_cnpj')
       cpfCnpjTimer.current = setTimeout(async () => {
-        try {
-          const res = await fetch(`https://publica.cnpj.ws/cnpj/${digits}`)
-          if (res.ok) {
-            const data = await res.json()
-            const razao = data.razao_social ?? data.nome_fantasia ?? ''
-            if (razao && !tutorName.trim()) setTutorName(razao)
-            setCpfCnpjStatus('found_cnpj')
-          } else {
-            setCpfCnpjStatus('valid')
-          }
-        } catch { setCpfCnpjStatus('valid') }
+        const result = await lookupCnpjAction(digits)
+        if (result.ok) {
+          const razao = result.razao_social || result.nome_fantasia
+          if (razao && !tutorName.trim()) setTutorName(razao)
+          setCpfCnpjStatus('found_cnpj')
+        } else {
+          // Mantém como "válido" — o dígito verificador já passou; só não conseguimos
+          // enriquecer com razão social. O usuário pode digitar o nome manualmente.
+          setCpfCnpjStatus('valid')
+        }
       }, 600)
     }
     return () => { if (cpfCnpjTimer.current) clearTimeout(cpfCnpjTimer.current) }
