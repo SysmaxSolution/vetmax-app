@@ -178,7 +178,7 @@ export async function createSale(
     clinic_id:   params.clinic_id,
     seller_id:   user.id,
     seller_name: sellerProfile?.full_name ?? 'Vendedor',
-    items:       params.items,
+    items:       params.items.map(i => ({ ...i, stock_item_id: i.stock_item_id ?? null })),
     sale_date:   new Date().toISOString().split('T')[0],
   }).catch(() => {})
 
