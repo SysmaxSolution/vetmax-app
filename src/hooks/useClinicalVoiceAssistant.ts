@@ -26,16 +26,19 @@ export function useClinicalVoiceAssistant({ onAutoSave, startTriggers, stopTrigg
   const [state,      setState]      = useState<ClinicalVoiceState>('IDLE')
   const [transcript, setTranscript] = useState('')
 
-  const recognitionRef     = useRef<any>(null)
-  const silenceTimerRef    = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const finalTranscriptRef = useRef('')
-  const recordingStartRef  = useRef(0)
-  const lastResultLenRef   = useRef(0)
-  const isActivatedRef     = useRef(false)
-  const stateRef           = useRef<ClinicalVoiceState>('IDLE')
-  const wakeWordReRef      = useRef<RegExp>(buildWakeRe([]))
-  const saveCmdReRef       = useRef<RegExp>(buildStopRe([]))
-  const onAutoSaveRef      = useRef(onAutoSave)
+  const recognitionRef           = useRef<any>(null)
+  const silenceTimerRef          = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const finalTranscriptRef       = useRef('')
+  const recordingStartRef        = useRef(0)
+  const lastResultLenRef         = useRef(0)
+  const isActivatedRef           = useRef(false)
+  const stateRef                 = useRef<ClinicalVoiceState>('IDLE')
+  const wakeWordReRef            = useRef<RegExp>(buildWakeRe([]))
+  const saveCmdReRef             = useRef<RegExp>(buildStopRe([]))
+  const onAutoSaveRef            = useRef(onAutoSave)
+  // Rastreia índices de resultados finais já processados para evitar dupla contagem
+  // (comportamento de algumas engines ASR mobile/server-side).
+  const processedFinalIndicesRef = useRef<Set<number>>(new Set())
 
   useEffect(() => { stateRef.current      = state      }, [state])
   useEffect(() => { onAutoSaveRef.current = onAutoSave }, [onAutoSave])
@@ -65,6 +68,7 @@ export function useClinicalVoiceAssistant({ onAutoSave, startTriggers, stopTrigg
     clearSilenceTimer()
     const clean = rawText.replace(saveCmdReRef.current, '').replace(/\s{2,}/g, ' ').trim()
     finalTranscriptRef.current = ''
+    processedFinalIndicesRef.current.clear()
     setState('IDLE')
     setTranscript('')
     playBeep(660)
@@ -81,6 +85,7 @@ export function useClinicalVoiceAssistant({ onAutoSave, startTriggers, stopTrigg
     r.interimResults = true
     r.maxAlternatives = 1
     recognitionRef.current = r
+    processedFinalIndicesRef.current.clear()
 
     r.onerror = (e: any) => {
       if (e.error === 'aborted') return
@@ -127,7 +132,12 @@ export function useClinicalVoiceAssistant({ onAutoSave, startTriggers, stopTrigg
         for (let i = event.resultIndex; i < event.results.length; i++) {
           if (i < recordingStartRef.current) continue
           if (event.results[i].isFinal) {
-            newFinals += event.results[i][0].transcript + ' '
+            // Evita reprocessar o mesmo índice (engines mobile podem disparar onresult
+            // múltiplas vezes com o mesmo resultado já finalizado)
+            if (!processedFinalIndicesRef.current.has(i)) {
+              processedFinalIndicesRef.current.add(i)
+              newFinals += event.results[i][0].transcript + ' '
+            }
           } else {
             interim = event.results[i][0].transcript
           }
@@ -137,7 +147,20 @@ export function useClinicalVoiceAssistant({ onAutoSave, startTriggers, stopTrigg
           finalTranscriptRef.current = (finalTranscriptRef.current + ' ' + newFinals).trim()
         }
 
-        const fullText = (finalTranscriptRef.current + (interim ? ' ' + interim : '')).trim()
+        // Fix cross-browser: engines ASR server-side (mobile Chrome, Android WebView)
+        // retornam o texto ACUMULADO completo em cada interim result. Ao combinar com
+        // finals já processados, isso gera o loop de repetição visível na UI.
+        // Detecta e remove o prefixo duplicado antes de montar fullText.
+        let displayInterim = interim
+        if (finalTranscriptRef.current && displayInterim) {
+          const f = finalTranscriptRef.current.trim()
+          const d = displayInterim.trim()
+          if (d.toLowerCase().startsWith(f.toLowerCase())) {
+            displayInterim = d.slice(f.length).trimStart()
+          }
+        }
+
+        const fullText = (finalTranscriptRef.current + (displayInterim ? ' ' + displayInterim : '')).trim()
 
         if (saveCmdReRef.current.test(fullText) || fuzzyMatchCustom(fullText, stopTriggers ?? [])) {
           triggerSave(fullText)

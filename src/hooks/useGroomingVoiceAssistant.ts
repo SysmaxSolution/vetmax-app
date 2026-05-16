@@ -33,17 +33,19 @@ export function useGroomingVoiceAssistant({ onAutoSave, onSendWA, startTriggers,
   const [transcript, setTranscript] = useState('')
 
   // ─── Refs (evitam closures stale nos handlers do SR) ─────────────────────────
-  const recognitionRef      = useRef<any>(null)
-  const silenceTimerRef     = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const finalTranscriptRef  = useRef('')       // texto finalizado acumulado durante RECORDING
-  const recordingStartRef   = useRef(0)        // índice em event.results onde RECORDING começou
-  const lastResultLenRef    = useRef(0)        // último event.results.length visto (para manualToggle)
-  const isActivatedRef      = useRef(false)    // true após activate(), false após deactivate()
-  const stateRef            = useRef<VoiceAssistantState>('IDLE')
-  const wakeWordReRef       = useRef<RegExp>(buildWakeRe([]))
-  const saveCmdReRef        = useRef<RegExp>(buildStopRe([]))
-  const onAutoSaveRef       = useRef(onAutoSave)
-  const onSendWARef         = useRef(onSendWA)
+  const recognitionRef           = useRef<any>(null)
+  const silenceTimerRef          = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const finalTranscriptRef       = useRef('')       // texto finalizado acumulado durante RECORDING
+  const recordingStartRef        = useRef(0)        // índice em event.results onde RECORDING começou
+  const lastResultLenRef         = useRef(0)        // último event.results.length visto (para manualToggle)
+  const isActivatedRef           = useRef(false)    // true após activate(), false após deactivate()
+  const stateRef                 = useRef<VoiceAssistantState>('IDLE')
+  const wakeWordReRef            = useRef<RegExp>(buildWakeRe([]))
+  const saveCmdReRef             = useRef<RegExp>(buildStopRe([]))
+  const onAutoSaveRef            = useRef(onAutoSave)
+  const onSendWARef              = useRef(onSendWA)
+  // Rastreia índices de resultados finais já processados para evitar dupla contagem
+  const processedFinalIndicesRef = useRef<Set<number>>(new Set())
 
   useEffect(() => { stateRef.current     = state      }, [state])
   useEffect(() => { onAutoSaveRef.current = onAutoSave }, [onAutoSave])
@@ -96,6 +98,7 @@ export function useGroomingVoiceAssistant({ onAutoSave, onSendWA, startTriggers,
     // Remove o próprio gatilho de parada do texto antes de salvar
     const clean = rawText.replace(saveCmdReRef.current, '').replace(/\s{2,}/g, ' ').trim()
     finalTranscriptRef.current = ''
+    processedFinalIndicesRef.current.clear()
     setState('CONFIRM_WA')
     setTranscript('')
     playBeep(660)
@@ -114,6 +117,7 @@ export function useGroomingVoiceAssistant({ onAutoSave, onSendWA, startTriggers,
     r.interimResults = true   // ← SEMPRE true: uma instância serve todos os modos
     r.maxAlternatives = 1
     recognitionRef.current = r
+    processedFinalIndicesRef.current.clear()
 
     // Se parar inesperadamente (erro / timeout do browser), reinicia
     r.onerror = (e: any) => {
@@ -161,7 +165,10 @@ export function useGroomingVoiceAssistant({ onAutoSave, onSendWA, startTriggers,
         for (let i = event.resultIndex; i < event.results.length; i++) {
           if (i < recordingStartRef.current) continue  // ignora pré-RECORDING
           if (event.results[i].isFinal) {
-            newFinals += event.results[i][0].transcript + ' '
+            if (!processedFinalIndicesRef.current.has(i)) {
+              processedFinalIndicesRef.current.add(i)
+              newFinals += event.results[i][0].transcript + ' '
+            }
           } else {
             interim = event.results[i][0].transcript
           }
@@ -171,7 +178,19 @@ export function useGroomingVoiceAssistant({ onAutoSave, onSendWA, startTriggers,
           finalTranscriptRef.current = (finalTranscriptRef.current + ' ' + newFinals).trim()
         }
 
-        const fullText = (finalTranscriptRef.current + (interim ? ' ' + interim : '')).trim()
+        // Fix cross-browser: engines ASR server-side (mobile Chrome, Android WebView)
+        // retornam o texto ACUMULADO completo em cada interim result, causando o loop
+        // de repetição. Remove o prefixo já finalizado antes de montar fullText.
+        let displayInterim = interim
+        if (finalTranscriptRef.current && displayInterim) {
+          const f = finalTranscriptRef.current.trim()
+          const d = displayInterim.trim()
+          if (d.toLowerCase().startsWith(f.toLowerCase())) {
+            displayInterim = d.slice(f.length).trimStart()
+          }
+        }
+
+        const fullText = (finalTranscriptRef.current + (displayInterim ? ' ' + displayInterim : '')).trim()
 
         // Verifica save command no texto completo (final + interim)
         if (saveCmdReRef.current.test(fullText) || fuzzyMatchCustom(fullText, stopTriggers ?? [])) {
