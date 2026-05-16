@@ -129,6 +129,15 @@ interface SignaturePattern {
  */
 const SIGNATURE_PATTERNS: SignaturePattern[] = [
   {
+    // IC-21: DATA/LOCAL DE EMISSAO no rodape: "Ribeirão Preto – SP, 11 de JULHO de 2025"
+    // Substituida por "{cidade da clinica} - {uf}, {dia} de {mês PT} de {ano}." (data atual)
+    re: /[A-ZÁÀÂÃÉÈÊÍÏÓÔÕÚÇ][\w\sá-úçÇ]{2,40}\s*[–\-]\s*[A-Z]{2},?\s*\d{1,2}\s+de\s+\w+\s+de\s+\d{4}/,
+    field_name: 'signature_date_location',
+    label: 'Data e local de emissao',
+    type: 'text',
+    description: 'Cidade - UF, dia de mes de ano (rodape)',
+  },
+  {
     // FOOTER COMPOUND: "Assinado eletronicamente por X – CRMV/Y" — tem
     // PRIORIDADE sobre os demais. Quando bate, a linha INTEIRA do rodape
     // eh substituida pela string "Assinado por {nome} – {crmv}" interpolada.

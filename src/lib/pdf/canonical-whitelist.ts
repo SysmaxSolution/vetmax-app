@@ -69,6 +69,9 @@ export const SYSTEM_FIELDS = new Set([
   'professional_crmv',
   'professional_signature',
   'clinic_name',
+  // IC-21: data/local de emissao no rodape de receitas/laudos
+  // "Ribeirão Preto – SP, 16 de MAIO de 2026."
+  'signature_date_location',
 ])
 
 /** Campos required default (clinicamente essenciais). */

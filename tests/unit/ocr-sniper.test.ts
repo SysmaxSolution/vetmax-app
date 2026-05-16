@@ -1,6 +1,6 @@
 import {
   groupByLine, snipeLabels, detectGlobalFields, runOcrSniper,
-  normalizeLabel,
+  normalizeLabel, detectNumberedMedications, isNumberedItem,
 } from '../../src/lib/pdf/ocr-sniper'
 import type { PdfTextItem } from '../../src/lib/pdf-to-images'
 
@@ -162,6 +162,10 @@ describe('OCR Sniper', () => {
       const cs = snipeLabels(items)
       expect(cs.length).toBe(0)  // skip — eh referencia clinica, nao campo
     })
+
+    // ── IC-20: MEDICAMENTOS NUMERADOS (receituarios) ───────────────────────
+    // Esses sao detectados por detectNumberedMedications, NAO por snipeLabels.
+    // Aqui no test importamos a funcao auxiliar e validamos diretamente.
 
     // ── IC-19: PONTOS DE PREENCHIMENTO (hemogramas/laudos lab) ─────────────
     it('IC-19: label "ERITRÓCITOS(/mm³).............." detectado (5+ pontos)', () => {
@@ -521,6 +525,64 @@ describe('OCR Sniper', () => {
       ]
       const cs = snipeLabels(items)
       expect(cs[0].value_bbox.w_pct).toBeLessThanOrEqual(50)
+    })
+  })
+
+  describe('IC-20: detectNumberedMedications', () => {
+    it('isNumberedItem reconhece "1.", "2.", ..., "99."', () => {
+      expect(isNumberedItem('1.')).toEqual({ n: 1 })
+      expect(isNumberedItem('  2.  ')).toEqual({ n: 2 })
+      expect(isNumberedItem('99.')).toEqual({ n: 99 })
+      expect(isNumberedItem('100.')).toBeNull()    // muito grande
+      expect(isNumberedItem('1')).toBeNull()       // sem ponto
+      expect(isNumberedItem('1.5')).toBeNull()     // decimal
+      expect(isNumberedItem('abc')).toBeNull()
+    })
+
+    it('detecta linha de receita: "1." + medicamento', () => {
+      const items = [
+        item('1.',                          0, 5,  30, 2, 1.5),
+        item('Kollagenase 0,6U/g..Pomada', 0, 8, 30, 50, 1.5),
+      ]
+      const cs = detectNumberedMedications(items)
+      expect(cs.length).toBe(1)
+      expect(cs[0].label_normalized).toBe('custom_medicamento_1')
+      expect(cs[0].existing_value_text).toContain('Kollagenase')
+    })
+
+    it('multiplos medicamentos: 1., 2., 3. viram custom_medicamento_N separados', () => {
+      const items = [
+        item('1.',         0, 5, 30, 2, 1.5),
+        item('Pomada',     0, 8, 30, 8, 1.5),
+        item('2.',         0, 5, 28, 2, 1.5),
+        item('Comprimido', 0, 8, 28, 10, 1.5),
+        item('3.',         0, 5, 26, 2, 1.5),
+        item('Xarope',     0, 8, 26, 8, 1.5),
+      ]
+      const cs = detectNumberedMedications(items)
+      expect(cs.length).toBe(3)
+      expect(cs.map(c => c.label_normalized).sort()).toEqual([
+        'custom_medicamento_1',
+        'custom_medicamento_2',
+        'custom_medicamento_3',
+      ])
+    })
+
+    it('linha sem numero no inicio: nao detecta', () => {
+      const items = [
+        item('Texto livre',  0, 5, 30, 12, 1.5),
+        item('continuacao', 0, 18, 30, 10, 1.5),
+      ]
+      const cs = detectNumberedMedications(items)
+      expect(cs.length).toBe(0)
+    })
+
+    it('numero sozinho na linha (sem texto seguinte): nao detecta', () => {
+      const items = [
+        item('1.', 0, 5, 30, 2, 1.5),
+      ]
+      const cs = detectNumberedMedications(items)
+      expect(cs.length).toBe(0)   // exige >= 2 items
     })
   })
 

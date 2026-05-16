@@ -23,7 +23,8 @@
  */
 
 import {
-  runOcrSniper, type LabelCandidate, type GlobalFieldGroup, type Bbox,
+  runOcrSniper, detectNumberedMedications,
+  type LabelCandidate, type GlobalFieldGroup, type Bbox,
 } from './ocr-sniper'
 import {
   detectProfessionalSignatures, type SignatureDetectionResult,
@@ -197,15 +198,19 @@ export async function runFlattenClean(
   const sniper = runOcrSniper({ textItems, dimensions })
   const signatures: SignatureDetectionResult = detectProfessionalSignatures(textItems)
 
+  // 1b) IC-20: detecta linhas numeradas de medicamentos em receituarios
+  const medications = detectNumberedMedications(textItems)
+
   // 2) Filtra candidatos do sniper que coincidem com linhas de assinatura
   const sniperCandidatesFiltered = sniper.candidates.filter(
     c => !signatures.matched_lines.has(c.label_text.trim()),
   )
 
-  // 3) Recalcula globais sobre signatures + sniper filtrado
+  // 3) Recalcula globais sobre signatures + sniper filtrado + medicamentos
   const allCandidates: LabelCandidate[] = [
     ...signatures.candidates,
     ...sniperCandidatesFiltered,
+    ...medications,
   ]
   const { globals: allGlobals, non_globals: allNonGlobals } =
     (await import('./ocr-sniper')).detectGlobalFields(allCandidates, pageCount)
@@ -215,6 +220,10 @@ export async function runFlattenClean(
   const uniqueLabels = Array.from(
     new Set(sniperCandidatesFiltered.map(c => c.label_text.trim()).filter(Boolean)),
   )
+  // IC-20: medicamentos numerados — cada candidate vira UM match custom_*
+  // (deduplicacao por label_normalized garante 1 match por numero, mesmo
+  // que aparecam em multiplas paginas — vira global)
+  const medicationFieldNames = Array.from(new Set(medications.map(m => m.label_normalized)))
   const matches: FieldMatch[] = [
     // Signatures: cada uma ja sabe seu field_name canonico (professional_name, etc)
     ...signatures.matches.map(m => ({
@@ -228,6 +237,16 @@ export async function runFlattenClean(
     })),
     // Sniper labels: cada label resolve via canonical-whitelist
     ...uniqueLabels.map(resolveMatchDeterministic),
+    // IC-20: medicamentos numerados
+    ...medicationFieldNames.map(fn => ({
+      label_original: fn.replace('custom_medicamento_', 'Medicamento '),
+      field_name: fn,
+      type: 'textarea' as FieldType,
+      description: `Medicamento receitado #${fn.replace('custom_medicamento_', '')}`,
+      required: false,
+      is_system_field: false,
+      is_custom: true,
+    })),
   ]
 
   // 5) Dedup matches por field_name. Para custom_ colidente, sufixa _2, _3...

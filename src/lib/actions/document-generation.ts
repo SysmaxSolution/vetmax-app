@@ -133,6 +133,8 @@ async function buildSystemFieldsContext(
   // Formata para exibicao: "SP74696" -> "CRMV-SP 74.696"
   const crmvRaw = profile.crmv ?? ''
   const crmv = formatCrmv(crmvRaw)
+  // IC-21: extrai UF do CRMV para usar como UF default em data/local
+  const crmvUf = crmvRaw.match(/^([A-Z]{2})/)?.[1] ?? ''
   const specialty = profile.specialty ?? ''
   const roleRaw = profile.role ?? ''
   // INTERVENCAO CIRURGICA: quem tem CRMV cadastrado eh OBRIGATORIAMENTE
@@ -155,6 +157,26 @@ async function buildSystemFieldsContext(
     ? `Assinado eletronicamente por ${name}${crmv ? ` – ${crmv}` : ''}`
     : ''
 
+  // IC-21: signature_date_location no formato "Cidade – UF, DD de MES de AAAA."
+  // Cidade default: clinic_name (sem prefixo "Clinica/Hospital").
+  // UF default: extraida do CRMV se houver.
+  // Data: dia atual em PT-BR.
+  const MESES_PT = [
+    'JANEIRO', 'FEVEREIRO', 'MARÇO', 'ABRIL', 'MAIO', 'JUNHO',
+    'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO',
+  ]
+  const today = new Date()
+  const dia = today.getDate()
+  const mesPt = MESES_PT[today.getMonth()]
+  const ano = today.getFullYear()
+  const cityForSig = (clinicName ?? '')
+    .replace(/^(?:cl[íi]nica|hospital|consultorio)\s+/i, '')
+    .replace(/\s+veterin[áa]ri[oa]\s*/i, '')
+    .trim()
+  const dateLocation = (cityForSig || crmvUf)
+    ? `${cityForSig}${cityForSig && crmvUf ? ' – ' : ''}${crmvUf}, ${dia} de ${mesPt} de ${ano}.`
+    : `${dia} de ${mesPt} de ${ano}.`
+
   return {
     professional_name: name,
     professional_role: roleFull,
@@ -162,6 +184,7 @@ async function buildSystemFieldsContext(
     professional_crmv: crmv,
     professional_signature: signature,
     clinic_name: clinicName ?? '',
+    signature_date_location: dateLocation,
   }
 }
 

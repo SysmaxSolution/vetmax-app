@@ -388,6 +388,77 @@ function isLabelEnding(text: string): boolean {
   return false
 }
 
+/**
+ * IC-20: Detecta items numerados em receitas: "1.", "2.", "3." etc.
+ *
+ * Em receituarios o padrao tipico eh:
+ *   "1." + "Kollagenase com Cloranfenicol 0,6U/g + 0,01g/g..........Pomada"
+ *   "2." + "Cetoconazol 200mg .....................Comprimido"
+ *
+ * O numero esta em UM item isolado na coluna esquerda. O texto do
+ * medicamento esta no item SEGUINTE da mesma linha. Vamos transformar
+ * cada par (numero + texto) em um campo `custom_medicamento_N`.
+ */
+const NUMBERED_ITEM_REGEX = /^(\d+)\.\s*$/
+
+export function isNumberedItem(text: string): { n: number } | null {
+  const m = NUMBERED_ITEM_REGEX.exec(text.trim())
+  if (!m) return null
+  const n = parseInt(m[1], 10)
+  if (n < 1 || n > 99) return null
+  return { n }
+}
+
+/**
+ * IC-20: Detecta linhas de medicamentos numerados.
+ *
+ * Estrategia:
+ *   Para cada linha agrupada, verifica se o PRIMEIRO item bate em `\d+\.`.
+ *   Se sim, gera candidate `custom_medicamento_N` onde:
+ *     - label_bbox = bbox do item numero ("1.")
+ *     - value_bbox = bbox do RESTO da linha (medicamento + dose + ....)
+ *     - existing_value_bbox = mesmo (whiteout cobre tudo apos o numero)
+ *   align = 'left' (medicamento eh texto longo, alinhar a esquerda)
+ *
+ * Retorna candidates prontos para serem mesclados ao resultado do snipeLabels.
+ */
+export function detectNumberedMedications(textItems: PdfTextItem[]): LabelCandidate[] {
+  const lines = groupByLine(textItems)
+  const candidates: LabelCandidate[] = []
+
+  for (const line of lines) {
+    if (line.items.length < 2) continue
+    const first = line.items[0]
+    const numInfo = isNumberedItem(first.str)
+    if (!numInfo) continue
+
+    // O texto do medicamento eh tudo APOS o numero
+    const medItems = line.items.slice(1)
+    const labelBbox = {
+      x_pct: first.x_pct,
+      y_pct: first.y_pct,
+      w_pct: first.w_pct,
+      h_pct: first.h_pct,
+    }
+    const valueBbox = bboxFromItems(medItems)
+
+    const fieldName = `custom_medicamento_${numInfo.n}`
+    candidates.push({
+      page: line.page,
+      label_text: `${numInfo.n}.`,
+      label_normalized: fieldName,  // estavel para detectGlobalFields
+      label_bbox: labelBbox,
+      value_bbox: valueBbox,
+      align: 'left',
+      existing_value_text: medItems.map(i => i.str).join(' ').trim(),
+      existing_value_bbox: valueBbox,
+      font_size_pt: labelBbox.h_pct,
+      baseline_y_pct: first.baseline_y_pct,
+    })
+  }
+  return candidates
+}
+
 function isLabelVocab(text: string): boolean {
   return VET_LABEL_VOCABULARY.has(normalizeLabel(text))
 }
