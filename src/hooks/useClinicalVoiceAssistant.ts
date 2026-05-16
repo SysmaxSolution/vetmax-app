@@ -65,24 +65,40 @@ export function useClinicalVoiceAssistant({ onAutoSave, startTriggers, stopTrigg
     if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null }
   }
 
-  // Remove do início de `incoming` qualquer texto já presente no final de `base`.
-  // Cobre dois casos: (1) interim começa com o finalTranscript completo (fix anterior);
-  // (2) interim começa com um sufixo do finalTranscript (overlap parcial — causa do loop no Chrome mobile).
+  // Remove do início de `incoming` qualquer texto já presente no final de `base`,
+  // usando matching por TOKENS (letras+dígitos), imune a pontuação e espaços extras.
+  // Cobre overlaps longos (frases inteiras de ASR cumulativo do Chrome mobile)
+  // e variações como "37 ,5" vs "37,5" — ambos tokenizam para ["37","5"].
   function removeLeadingOverlap(base: string, incoming: string): string {
     if (!base || !incoming) return incoming
-    const b    = base.trim().toLowerCase()
-    const c    = incoming.trim().toLowerCase()
-    const cOrig = incoming.trim()
-    if (b.endsWith(c)) return ''               // base já contém o incoming por completo
-    if (c.startsWith(b)) return cOrig.slice(b.length).trimStart()  // caso completo (fix anterior)
-    const words = b.split(/\s+/)
-    for (let len = Math.min(words.length, 12); len >= 2; len--) {
-      const suffix = words.slice(words.length - len).join(' ')
-      if (suffix.length >= 8 && c.startsWith(suffix)) {
-        return cOrig.slice(suffix.length).trimStart()
-      }
+    const incomingTrim = incoming.trim()
+    if (!base.trim() || !incomingTrim) return incomingTrim
+
+    const tokRe   = /\p{L}+|\d+/gu
+    const bTokens = (base.toLowerCase().match(tokRe) ?? [])
+    const cMatches: { tok: string; end: number }[] = []
+    for (const m of incomingTrim.matchAll(tokRe)) {
+      cMatches.push({ tok: m[0].toLowerCase(), end: (m.index ?? 0) + m[0].length })
     }
-    return incoming
+    if (bTokens.length === 0 || cMatches.length === 0) return incomingTrim
+
+    // Maior sufixo de bTokens que é prefixo de cTokens (sem limite arbitrário).
+    let overlap = 0
+    const max = Math.min(bTokens.length, cMatches.length)
+    for (let len = max; len >= 1; len--) {
+      let ok = true
+      for (let i = 0; i < len; i++) {
+        if (bTokens[bTokens.length - len + i] !== cMatches[i].tok) { ok = false; break }
+      }
+      if (ok) { overlap = len; break }
+    }
+
+    if (overlap === 0) return incomingTrim
+    if (overlap === cMatches.length) return ''
+    // Limiar mínimo (5 chars de texto sobreposto) para evitar falso-positivo em "a"/"e"/"o".
+    const chars = cMatches.slice(0, overlap).reduce((s, t) => s + t.tok.length, 0)
+    if (chars < 5) return incomingTrim
+    return incomingTrim.slice(cMatches[overlap - 1].end).trimStart()
   }
 
   function triggerSave(rawText: string) {

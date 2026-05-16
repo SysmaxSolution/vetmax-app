@@ -95,19 +95,32 @@ export function useGroomingVoiceAssistant({ onAutoSave, onSendWA, startTriggers,
 
   function removeLeadingOverlap(base: string, incoming: string): string {
     if (!base || !incoming) return incoming
-    const b    = base.trim().toLowerCase()
-    const c    = incoming.trim().toLowerCase()
-    const cOrig = incoming.trim()
-    if (b.endsWith(c)) return ''
-    if (c.startsWith(b)) return cOrig.slice(b.length).trimStart()
-    const words = b.split(/\s+/)
-    for (let len = Math.min(words.length, 12); len >= 2; len--) {
-      const suffix = words.slice(words.length - len).join(' ')
-      if (suffix.length >= 8 && c.startsWith(suffix)) {
-        return cOrig.slice(suffix.length).trimStart()
-      }
+    const incomingTrim = incoming.trim()
+    if (!base.trim() || !incomingTrim) return incomingTrim
+
+    const tokRe   = /\p{L}+|\d+/gu
+    const bTokens = (base.toLowerCase().match(tokRe) ?? [])
+    const cMatches: { tok: string; end: number }[] = []
+    for (const m of incomingTrim.matchAll(tokRe)) {
+      cMatches.push({ tok: m[0].toLowerCase(), end: (m.index ?? 0) + m[0].length })
     }
-    return incoming
+    if (bTokens.length === 0 || cMatches.length === 0) return incomingTrim
+
+    let overlap = 0
+    const max = Math.min(bTokens.length, cMatches.length)
+    for (let len = max; len >= 1; len--) {
+      let ok = true
+      for (let i = 0; i < len; i++) {
+        if (bTokens[bTokens.length - len + i] !== cMatches[i].tok) { ok = false; break }
+      }
+      if (ok) { overlap = len; break }
+    }
+
+    if (overlap === 0) return incomingTrim
+    if (overlap === cMatches.length) return ''
+    const chars = cMatches.slice(0, overlap).reduce((s, t) => s + t.tok.length, 0)
+    if (chars < 5) return incomingTrim
+    return incomingTrim.slice(cMatches[overlap - 1].end).trimStart()
   }
 
   // ─── Salvar evolução ──────────────────────────────────────────────────────────
