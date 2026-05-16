@@ -29,6 +29,10 @@ export type HospitalizationCard = {
     name:          string
     species:       string
     breed:         string | null
+    birth_date:    string | null
+    gender:        string | null
+    neutered:      boolean
+    coat_color:    string | null
     photo_url:     string | null
     behavior_tags: string[]
   }
@@ -70,7 +74,7 @@ export async function getHospitalizationsBoard(): Promise<HospitalizationBoard |
     .from('hospitalizations')
     .select(`
       id, clinic_id, patient_id, consultation_id, status, reason, notes, created_at, discharged_at,
-      patients ( id, name, species, breed, photo_url, behavior_tags, tutors ( name, phone ) )
+      patients ( id, name, species, breed, birth_date, gender, neutered, coat_color, photo_url, behavior_tags, tutors ( name, phone ) )
     `)
     .eq('clinic_id', clinicId)
     .neq('status', 'discharged')
@@ -103,6 +107,10 @@ export async function getHospitalizationsBoard(): Promise<HospitalizationBoard |
         name:          p?.name ?? '—',
         species:       p?.species ?? '',
         breed:         p?.breed ?? null,
+        birth_date:    p?.birth_date ?? null,
+        gender:        p?.gender ?? null,
+        neutered:      p?.neutered ?? false,
+        coat_color:    p?.coat_color ?? null,
         photo_url:     p?.photo_url ?? null,
         behavior_tags: Array.isArray(p?.behavior_tags) ? p.behavior_tags : [],
       },

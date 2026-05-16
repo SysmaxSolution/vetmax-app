@@ -47,6 +47,10 @@ export type GroomingCard = {
     name:          string
     species:       string
     breed:         string | null
+    birth_date:    string | null
+    gender:        string | null
+    neutered:      boolean
+    coat_color:    string | null
     photo_url:     string | null
     behavior_tags: string[]
   }
@@ -117,7 +121,7 @@ export async function getGroomingBoard(): Promise<GroomingBoard | { error: strin
       id, clinic_id, patient_id, tutor_id, status, services_requested,
       box_number, notes, scheduled_at, started_at, completed_at, created_at,
       price_total, service_prices, discount_percent, payment_status,
-      patients ( id, name, species, breed, photo_url, behavior_tags,
+      patients ( id, name, species, breed, birth_date, gender, neutered, coat_color, photo_url, behavior_tags,
         tutors ( name, phone )
       )
     `)
@@ -163,6 +167,10 @@ export async function getGroomingBoard(): Promise<GroomingBoard | { error: strin
         name:          p?.name ?? '—',
         species:       p?.species ?? '',
         breed:         p?.breed ?? null,
+        birth_date:    p?.birth_date ?? null,
+        gender:        p?.gender ?? null,
+        neutered:      p?.neutered ?? false,
+        coat_color:    p?.coat_color ?? null,
         photo_url:     p?.photo_url ?? null,
         behavior_tags: Array.isArray(p?.behavior_tags) ? p.behavior_tags : [],
       },

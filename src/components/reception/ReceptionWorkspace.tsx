@@ -33,6 +33,8 @@ const SPECIES_LABELS: Record<string, { label: string; emoji: string; color: stri
   fish:    { label: 'Peixe',     emoji: '🐟', color: 'bg-blue-100 text-blue-700' },
 }
 
+const GENDER_LABELS: Record<string, string> = { male: 'Macho', female: 'Fêmea', unknown: 'N/I' }
+
 const VISIT_REASON_OPTIONS = [
   { value: 'consultation' as VisitReason, label: 'Consulta', emoji: '👨‍⚕️' },
   { value: 'follow_up' as VisitReason, label: 'Retorno', emoji: '📋' },
@@ -126,8 +128,6 @@ function TutorProfile({
   if ('error' in data) return (
     <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">{data.error}</div>
   )
-
-  const GENDER_LABELS: Record<string, string> = { male: 'Macho', female: 'Fêmea', unknown: 'N/I' }
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
@@ -274,6 +274,11 @@ function QueueCard({ item, onMoveToTriage, triageActive }: { item: ReceptionQueu
           <SpeciesBadge species={item.patient.species} />
           {age && <span className="text-xs text-slate-500 bg-slate-100 rounded-full px-2 py-0.5">{age}</span>}
           {item.patient.breed && <span className="text-xs text-slate-400">{item.patient.breed}</span>}
+          {item.patient.gender && item.patient.gender !== 'unknown' && (
+            <span className="text-xs text-slate-400">{GENDER_LABELS[item.patient.gender] ?? item.patient.gender}</span>
+          )}
+          {item.patient.neutered && <span className="text-xs text-slate-400">· Castrado(a)</span>}
+          {item.patient.coat_color && <span className="text-xs text-slate-400">· {item.patient.coat_color}</span>}
           <BehaviorTagsBadges tags={item.patient.behavior_tags} size="xs" />
         </div>
         <p className="text-sm text-slate-500 mt-0.5">

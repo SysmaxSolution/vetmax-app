@@ -91,7 +91,9 @@ export type TriageConsultationDetail = {
     allergies: string | null
     chronic_diseases: string | null
     gender: string | null
-    color: string | null
+    neutered: boolean
+    birth_date: string | null
+    coat_color: string | null
     reproductive_status: string | null
     medical_history: string | null
     photo_url: string | null
@@ -146,7 +148,7 @@ export async function getTriageConsultation(
   // Step 2: busca patient
   const { data: rawPatient, error: patientError } = await admin
     .from('patients')
-    .select('id, name, species, breed, allergies, chronic_diseases, gender, color, reproductive_status, medical_history, photo_url, behavior_tags, tutor_id')
+    .select('id, name, species, breed, allergies, chronic_diseases, gender, neutered, birth_date, coat_color, reproductive_status, medical_history, photo_url, behavior_tags, tutor_id')
     .eq('id', rawConsult.patient_id)
     .single()
 
@@ -210,7 +212,9 @@ export async function getTriageConsultation(
       allergies: rawPatient.allergies ?? null,
       chronic_diseases: rawPatient.chronic_diseases ?? null,
       gender: rawPatient.gender ?? null,
-      color: rawPatient.color ?? null,
+      neutered: rawPatient.neutered ?? false,
+      birth_date: rawPatient.birth_date ?? null,
+      coat_color: rawPatient.coat_color ?? null,
       reproductive_status: rawPatient.reproductive_status ?? null,
       medical_history: rawPatient.medical_history ?? null,
       photo_url: rawPatient.photo_url ?? null,
@@ -635,7 +639,7 @@ export async function getTriageRecordById(
       .from('triage_records')
       .select(`
         id, status, chief_complaint, weight_kg, temperature_celsius, anamnesis, created_at,
-        patients ( id, name, species, breed, allergies, chronic_diseases, gender, color,
+        patients ( id, name, species, breed, allergies, chronic_diseases, gender, neutered, birth_date, coat_color,
                    reproductive_status, medical_history, photo_url, behavior_tags,
           tutors ( id, name, phone )
         )
@@ -672,7 +676,9 @@ export async function getTriageRecordById(
         allergies: r.patients?.allergies ?? null,
         chronic_diseases: r.patients?.chronic_diseases ?? null,
         gender: r.patients?.gender ?? null,
-        color: r.patients?.color ?? null,
+        neutered: r.patients?.neutered ?? false,
+        birth_date: r.patients?.birth_date ?? null,
+        coat_color: r.patients?.coat_color ?? null,
         reproductive_status: r.patients?.reproductive_status ?? null,
         medical_history: r.patients?.medical_history ?? null,
         photo_url: r.patients?.photo_url ?? null,

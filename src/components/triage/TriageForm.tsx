@@ -495,15 +495,30 @@ export default function TriageForm({
                     <BehaviorTagsBadges tags={consultation.patient.behavior_tags} size="sm" />
                   </div>
                 )}
-                {consultation.patient.color && (
+                {consultation.patient.coat_color && (
                   <p className="text-sm text-slate-600 mt-0.5">
-                    <span className="font-medium">Pelagem:</span> {consultation.patient.color}
+                    <span className="font-medium">Pelagem:</span> {consultation.patient.coat_color}
                   </p>
                 )}
                 {consultation.patient.gender && (
                   <p className="text-sm text-slate-600 mt-0.5">
                     <span className="font-medium">Sexo:</span>{' '}
                     {consultation.patient.gender === 'male' ? 'Macho' : consultation.patient.gender === 'female' ? 'Fêmea' : 'Desconhecido'}
+                  </p>
+                )}
+                <p className="text-sm text-slate-600 mt-0.5">
+                  <span className="font-medium">Castrado:</span>{' '}
+                  {consultation.patient.neutered ? 'Sim' : 'Não'}
+                </p>
+                {consultation.patient.birth_date && (
+                  <p className="text-sm text-slate-600 mt-0.5">
+                    <span className="font-medium">Idade:</span>{' '}
+                    {(() => {
+                      const months = Math.floor((Date.now() - new Date(consultation.patient.birth_date).getTime()) / (1000*60*60*24*30.5))
+                      if (months < 1) return '< 1 mês'
+                      if (months < 12) return `${months} ${months === 1 ? 'mês' : 'meses'}`
+                      const y = Math.floor(months / 12); return `${y} ${y === 1 ? 'ano' : 'anos'}`
+                    })()}
                   </p>
                 )}
                 <div className="mt-3">

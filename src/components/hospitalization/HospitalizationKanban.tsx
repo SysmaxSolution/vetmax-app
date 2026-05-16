@@ -610,6 +610,22 @@ function KanbanCard({ card, onDragStart, onDragEnd, onDischarge, onOpen }: CardP
           <p className="text-[10px] text-slate-500 font-medium truncate uppercase">
             {card.patient.breed || 'SRD'}
           </p>
+          <div className="flex flex-wrap gap-x-2 mt-0.5">
+            {card.patient.gender && card.patient.gender !== 'unknown' && (
+              <span className="text-[10px] text-slate-400">{card.patient.gender === 'male' ? 'Macho' : 'Fêmea'}</span>
+            )}
+            {card.patient.neutered && (
+              <span className="text-[10px] text-slate-400">Castrado(a)</span>
+            )}
+            {card.patient.coat_color && (
+              <span className="text-[10px] text-slate-400">{card.patient.coat_color}</span>
+            )}
+            {card.patient.birth_date && (() => {
+              const m = Math.floor((Date.now() - new Date(card.patient.birth_date).getTime()) / (1000*60*60*24*30.5))
+              const label = m < 1 ? '< 1 mês' : m < 12 ? `${m}m` : `${Math.floor(m/12)}a`
+              return <span className="text-[10px] text-slate-400">{label}</span>
+            })()}
+          </div>
         </div>
       </div>
 
