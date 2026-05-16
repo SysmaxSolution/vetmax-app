@@ -380,8 +380,21 @@ export async function processPayment(
   })
 
   if (rpcErr) {
-    // Falha na RPC não deve bloquear o fluxo; logar para diagnóstico
+    // Rollback: a invoice não pode ficar 'paid' se o caixa não registrou o
+    // recebimento — isso gera o bug "invoice fantasma" (paid sem caixa ativo),
+    // invisível na aba Recebimentos e impossível de re-baixar.
     console.error('[billing] rpc_record_invoice_payment error:', rpcErr.message)
+    await supabase
+      .from('invoices')
+      .update({
+        status:         'pending',
+        paid_at:        null,
+        payment_method: null,
+        updated_at:     new Date().toISOString(),
+      })
+      .eq('id', invoiceId)
+      .eq('clinic_id', profile.clinic_id)
+    return { error: 'Erro ao registrar no caixa: ' + rpcErr.message + '. Pagamento revertido, tente novamente.' }
   }
 
   // Comissão automática do veterinário (fire-and-forget)
