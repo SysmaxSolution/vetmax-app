@@ -72,6 +72,13 @@ export const SYSTEM_FIELDS = new Set([
   // IC-21: data/local de emissao no rodape de receitas/laudos
   // "Ribeirão Preto – SP, 16 de MAIO de 2026."
   'signature_date_location',
+  // IC-22: componentes individuais (DOCX/Word style)
+  'clinic_city',
+  'clinic_uf',
+  'today_dia',
+  'today_mes',
+  'today_ano',
+  'medicamento_via_uso',  // "USO TOPICO", "USO ORAL", "USO PARENTERAL"
 ])
 
 /** Campos required default (clinicamente essenciais). */

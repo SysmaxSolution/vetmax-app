@@ -508,6 +508,18 @@ export default function ImportTemplateModal({
    */
   const validateFileBeforeUse = async (file: File): Promise<string | null> => {
     const isPdfExt = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+    const isDocxExt = file.name.toLowerCase().endsWith('.docx')
+
+    // IC-22: DOCX precisa ser convertido para PDF antes (no Word):
+    // "Arquivo → Salvar como → PDF". O motor entao reconhece os placeholders
+    // (Custom_nome_profissional, Code_crmv, Medicamento1, etc) automaticamente.
+    if (isDocxExt) {
+      return 'Templates em formato DOCX precisam ser exportados como PDF antes do upload. '
+        + 'No Word: "Arquivo → Salvar como → PDF". O sistema reconhece automaticamente '
+        + 'placeholders no estilo da Dra. Lais ("Custom_nome_profissional", "Code_crmv", '
+        + '"Medicamento1", "Cidade_da_clinica", etc).'
+    }
+
     if (!isPdfExt) return null
 
     // Le os primeiros 8 bytes e checa o magic number "%PDF-1."

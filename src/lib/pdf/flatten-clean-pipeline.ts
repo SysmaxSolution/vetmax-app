@@ -23,7 +23,7 @@
  */
 
 import {
-  runOcrSniper, detectNumberedMedications,
+  runOcrSniper, detectNumberedMedications, detectDocxPlaceholders,
   type LabelCandidate, type GlobalFieldGroup, type Bbox,
 } from './ocr-sniper'
 import {
@@ -201,16 +201,24 @@ export async function runFlattenClean(
   // 1b) IC-20: detecta linhas numeradas de medicamentos em receituarios
   const medications = detectNumberedMedications(textItems)
 
+  // 1c) IC-22: detecta placeholders nominais de DOCX (mail merge style)
+  //     Ex: "Custom_nome_profissional", "Medicamento1_posologia"
+  const docxPlaceholders = detectDocxPlaceholders(textItems)
+
   // 2) Filtra candidatos do sniper que coincidem com linhas de assinatura
+  //    OU com linhas de DOCX placeholders (ja resolvidos)
+  const docxPlaceholderLines = new Set(docxPlaceholders.map(c => c.existing_value_text || ''))
   const sniperCandidatesFiltered = sniper.candidates.filter(
-    c => !signatures.matched_lines.has(c.label_text.trim()),
+    c => !signatures.matched_lines.has(c.label_text.trim())
+      && !docxPlaceholderLines.has(c.existing_value_text || ''),
   )
 
-  // 3) Recalcula globais sobre signatures + sniper filtrado + medicamentos
+  // 3) Recalcula globais sobre signatures + sniper filtrado + medicamentos + docx
   const allCandidates: LabelCandidate[] = [
     ...signatures.candidates,
     ...sniperCandidatesFiltered,
     ...medications,
+    ...docxPlaceholders,
   ]
   const { globals: allGlobals, non_globals: allNonGlobals } =
     (await import('./ocr-sniper')).detectGlobalFields(allCandidates, pageCount)
@@ -247,6 +255,34 @@ export async function runFlattenClean(
       is_system_field: false,
       is_custom: true,
     })),
+    // IC-22: DOCX placeholders nominais — cada um mapeado para field_name
+    // canonico OU system_field. Customs viram is_custom=true.
+    ...docxPlaceholders.map(c => {
+      const fn = c.label_normalized
+      const isSys = (
+        fn === 'professional_name' || fn === 'professional_role' ||
+        fn === 'professional_crmv' || fn === 'professional_specialty' ||
+        fn === 'professional_signature' || fn === 'clinic_name' ||
+        fn === 'clinic_city' || fn === 'clinic_uf' ||
+        fn === 'today_dia' || fn === 'today_mes' || fn === 'today_ano' ||
+        fn === 'signature_date_location' ||
+        fn === 'medicamento_via_uso'
+      )
+      const isCanonic = (
+        fn === 'paciente_nome' || fn === 'tutor_nome' || fn === 'especie' ||
+        fn === 'raca' || fn === 'idade' || fn === 'sexo' || fn === 'peso' ||
+        fn === 'data' || fn === 'sexo_macho' || fn === 'sexo_femea'
+      )
+      return {
+        label_original: c.label_text,
+        field_name: fn,
+        type: 'text' as FieldType,
+        description: 'Placeholder DOCX',
+        required: false,
+        is_system_field: isSys,
+        is_custom: !isSys && !isCanonic,
+      }
+    }),
   ]
 
   // 5) Dedup matches por field_name. Para custom_ colidente, sufixa _2, _3...

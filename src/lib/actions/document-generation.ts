@@ -185,6 +185,14 @@ async function buildSystemFieldsContext(
     professional_signature: signature,
     clinic_name: clinicName ?? '',
     signature_date_location: dateLocation,
+    // IC-22: componentes individuais para templates DOCX da cliente
+    clinic_city: cityForSig,
+    clinic_uf: crmvUf,
+    today_dia: String(dia),
+    today_mes: mesPt,
+    today_ano: String(ano),
+    // Default vazio — vet preenche
+    medicamento_via_uso: '',
   }
 }
 

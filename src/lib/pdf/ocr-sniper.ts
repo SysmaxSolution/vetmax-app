@@ -410,6 +410,140 @@ export function isNumberedItem(text: string): { n: number } | null {
 }
 
 /**
+ * IC-22: Mapeamento de placeholders nominais do Word/DOCX → fields do sistema.
+ *
+ * Templates DOCX brasileiros (mail merge style) tipicamente trazem
+ * placeholders explicitos como "Custom_nome_profissional", "Code_crmv",
+ * "Medicamento1", etc. Quando o DOCX eh salvo como PDF no Word, esses
+ * nomes viram texto literal e podem ser detectados aqui.
+ *
+ * Cada match cria um candidate diretamente com o field_name correspondente.
+ * Padroes da Dra. Lais (Modelo Receituario.docx) ja mapeados:
+ */
+type DocxPlaceholderMatcher = {
+  test: (normalized: string) => { field_name: string; description: string } | null
+}
+
+const DOCX_PLACEHOLDER_MATCHERS: DocxPlaceholderMatcher[] = [
+  // Profissional / clinica
+  { test: n => /^custom[\s_]*nome[\s_]*profissional$/i.test(n)
+      ? { field_name: 'professional_name', description: 'Nome do medico veterinario' } : null },
+  { test: n => /^code[\s_]*crmv$/i.test(n)
+      ? { field_name: 'professional_crmv', description: 'Numero do CRMV' } : null },
+  { test: n => /^custom[\s_]*cargo[\s_]*funcao$/i.test(n)
+      ? { field_name: 'professional_role', description: 'Cargo/funcao do profissional' } : null },
+  { test: n => /^cidade[\s_]*da[\s_]*clinica$/i.test(n)
+      ? { field_name: 'clinic_city', description: 'Cidade da clinica' } : null },
+  { test: n => /^sigla[\s_]*estado[\s_]*clinica$/i.test(n)
+      ? { field_name: 'clinic_uf', description: 'UF da clinica' } : null },
+
+  // Data (componentes)
+  { test: n => /^dia[\s_]*atendimento$/i.test(n)
+      ? { field_name: 'today_dia', description: 'Dia do atendimento' } : null },
+  { test: n => /^mes[\s_]*atendimento$/i.test(n)
+      ? { field_name: 'today_mes', description: 'Mes do atendimento' } : null },
+  { test: n => /^ano[\s_]*atendimento$/i.test(n)
+      ? { field_name: 'today_ano', description: 'Ano do atendimento' } : null },
+
+  // Cadastro animal/tutor
+  { test: n => /^custom[\s_]*tutor$/i.test(n)
+      ? { field_name: 'tutor_nome', description: 'Nome do tutor' } : null },
+  { test: n => /^(custom[\s_]*)?(patient|paciente)([\s_]*nome)?$/i.test(n)
+      ? { field_name: 'paciente_nome', description: 'Nome do paciente' } : null },
+  { test: n => /^custom[\s_]*idade$/i.test(n)
+      ? { field_name: 'idade', description: 'Idade' } : null },
+  { test: n => /^custom[\s_]*peso$/i.test(n)
+      ? { field_name: 'peso', description: 'Peso' } : null },
+  { test: n => /^especie$/i.test(n)
+      ? { field_name: 'especie', description: 'Especie' } : null },
+  { test: n => /^raca$/i.test(n)
+      ? { field_name: 'raca', description: 'Raca' } : null },
+  { test: n => /^patient[\s_]*is[\s_]*male$/i.test(n)
+      ? { field_name: 'sexo_macho', description: 'Sexo: macho (checkbox)' } : null },
+  { test: n => /^patient[\s_]*is[\s_]*fa?male$/i.test(n)  // famale ou female
+      ? { field_name: 'sexo_femea', description: 'Sexo: femea (checkbox)' } : null },
+
+  // Receituario (compartilha logica com IC-20)
+  { test: n => /^medicaments?[\s_]*via[\s_]*uso$/i.test(n)
+      ? { field_name: 'medicamento_via_uso', description: 'Via de uso (USO TOPICO, ORAL, etc)' } : null },
+  { test: n => {
+      const m = /^medicamento[\s_]*(\d+)$/i.exec(n)
+      return m ? { field_name: `custom_medicamento_${m[1]}`, description: `Medicamento #${m[1]}` } : null
+    }
+  },
+  { test: n => {
+      const m = /^medicamento[\s_]*(\d+)[\s_]*posologia$/i.exec(n)
+      return m ? { field_name: `custom_medicamento_${m[1]}_posologia`, description: `Posologia do medicamento #${m[1]}` } : null
+    }
+  },
+  { test: n => {
+      const m = /^custom[\s_]*indica[çc][õo]es[\s_]*medicamento[\s_]*(\d+)$/i.exec(n)
+      return m ? { field_name: `custom_indicacoes_medicamento_${m[1]}`, description: `Indicacoes medicamento #${m[1]}` } : null
+    }
+  },
+]
+
+/**
+ * IC-22: Identifica DOCX placeholders por linha (apos joinLineText).
+ *
+ * Quando uma linha INTEIRA bate com um placeholder nominal (ex: a linha tem
+ * "Custom_nome_profissional"), criamos um candidate diretamente com o
+ * field_name correspondente do dicionario.
+ *
+ * Suporta fragmentacao: "Medicamento" + "5" + "_posologia" eh agrupado
+ * antes via joinLineText e batido como "Medicamento 5 _posologia" →
+ * normaliza para "medicamento5_posologia" → mapeado para
+ * `custom_medicamento_5_posologia`.
+ */
+function normalizeDocxLine(text: string): string {
+  return text
+    .replace(/_\s+/g, '_')
+    .replace(/\s+_/g, '_')
+    .replace(/([a-zA-Záéíóúç])\s+(\d)/gi, '$1$2')
+    .replace(/(\d)\s+([a-zA-Záéíóúç])/gi, '$1$2')
+    .trim()
+}
+
+export function detectDocxPlaceholders(textItems: PdfTextItem[]): LabelCandidate[] {
+  const lines = groupByLine(textItems)
+  const candidates: LabelCandidate[] = []
+  const seen = new Set<string>()   // field_name ja criado (dedup por placeholder)
+
+  for (const line of lines) {
+    if (line.items.length === 0) continue
+    // Concatena items para detectar placeholder mesmo se fragmentado
+    const raw = line.items.map(i => i.str).join(' ')
+    const normalized = normalizeDocxLine(raw)
+
+    // Match contra dicionario
+    for (const matcher of DOCX_PLACEHOLDER_MATCHERS) {
+      const m = matcher.test(normalized)
+      if (!m) continue
+      if (seen.has(m.field_name)) continue
+      seen.add(m.field_name)
+
+      const lineBbox = bboxFromItems(line.items)
+      candidates.push({
+        page: line.page,
+        label_text: m.field_name,
+        label_normalized: m.field_name,
+        // Bbox label "no inicio" (largura 0): permite ao motor de erase
+        // usar existing_value_bbox = linha inteira (substitui o placeholder)
+        label_bbox: { x_pct: lineBbox.x_pct, y_pct: lineBbox.y_pct, w_pct: 0, h_pct: lineBbox.h_pct },
+        value_bbox: lineBbox,
+        align: 'left',
+        existing_value_text: raw,
+        existing_value_bbox: lineBbox,
+        font_size_pt: lineBbox.h_pct,
+        baseline_y_pct: line.items[0].baseline_y_pct,
+      })
+      break  // 1 placeholder por linha
+    }
+  }
+  return candidates
+}
+
+/**
  * IC-20: Detecta linhas de medicamentos numerados.
  *
  * Estrategia:

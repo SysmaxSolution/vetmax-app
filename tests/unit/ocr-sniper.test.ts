@@ -1,6 +1,7 @@
 import {
   groupByLine, snipeLabels, detectGlobalFields, runOcrSniper,
   normalizeLabel, detectNumberedMedications, isNumberedItem,
+  detectDocxPlaceholders,
 } from '../../src/lib/pdf/ocr-sniper'
 import type { PdfTextItem } from '../../src/lib/pdf-to-images'
 
@@ -583,6 +584,90 @@ describe('OCR Sniper', () => {
       ]
       const cs = detectNumberedMedications(items)
       expect(cs.length).toBe(0)   // exige >= 2 items
+    })
+  })
+
+  describe('IC-22: detectDocxPlaceholders (templates Word)', () => {
+    it('Custom_nome_profissional → professional_name', () => {
+      const items = [item('Custom_nome_profissional', 0, 10, 10, 50, 1.5)]
+      const cs = detectDocxPlaceholders(items)
+      expect(cs.length).toBe(1)
+      expect(cs[0].label_normalized).toBe('professional_name')
+    })
+
+    it('Code_crmv → professional_crmv', () => {
+      const items = [item('Code_crmv', 0, 10, 12, 20, 1.5)]
+      const cs = detectDocxPlaceholders(items)
+      expect(cs.length).toBe(1)
+      expect(cs[0].label_normalized).toBe('professional_crmv')
+    })
+
+    it('Medicamento1 → custom_medicamento_1', () => {
+      const items = [item('Medicamento1', 0, 10, 50, 22, 1.5)]
+      const cs = detectDocxPlaceholders(items)
+      expect(cs.length).toBe(1)
+      expect(cs[0].label_normalized).toBe('custom_medicamento_1')
+    })
+
+    it('fragmentado: "Medicamento" + "5" + "_posologia" → custom_medicamento_5_posologia', () => {
+      // Fragmentos comuns de Mail Merge Field do Word
+      const items = [
+        item('Medicamento', 0, 10, 50, 22, 1.5),
+        item('5',           0, 33, 50, 2,  1.5),
+        item('_posologia',  0, 35, 50, 22, 1.5),
+      ]
+      const cs = detectDocxPlaceholders(items)
+      expect(cs.length).toBe(1)
+      expect(cs[0].label_normalized).toBe('custom_medicamento_5_posologia')
+    })
+
+    it('Custom_indicações_medicamento3 → custom_indicacoes_medicamento_3', () => {
+      const items = [item('Custom_indicações_medicamento3', 0, 10, 50, 60, 1.5)]
+      const cs = detectDocxPlaceholders(items)
+      expect(cs.length).toBe(1)
+      expect(cs[0].label_normalized).toBe('custom_indicacoes_medicamento_3')
+    })
+
+    it('Cidade_da_clinica + sigla_estado_clinica', () => {
+      const items = [
+        item('Cidade_da_clinica',       0, 10, 80, 40, 1.5),
+        item('sigla_estado_clinica',    0, 10, 78, 40, 1.5),
+      ]
+      const cs = detectDocxPlaceholders(items)
+      expect(cs.length).toBe(2)
+      const fn = cs.map(c => c.label_normalized).sort()
+      expect(fn).toContain('clinic_city')
+      expect(fn).toContain('clinic_uf')
+    })
+
+    it('Dia_atendimento + mes_atendimento + ano_atendimento', () => {
+      const items = [
+        item('Dia_atendimento', 0, 10, 85, 30, 1.5),
+        item('mes_atendimento', 0, 10, 83, 30, 1.5),
+        item('ano_atendimento', 0, 10, 81, 30, 1.5),
+      ]
+      const cs = detectDocxPlaceholders(items)
+      expect(cs.length).toBe(3)
+      const fn = cs.map(c => c.label_normalized).sort()
+      expect(fn).toEqual(['today_ano', 'today_dia', 'today_mes'])
+    })
+
+    it('Patient_is_male e Patient_is_famale (checkboxes M/F)', () => {
+      const items = [
+        item('Patient_is_male',   0, 10, 30, 20, 1.5),
+        item('Patient_is_famale', 0, 10, 28, 24, 1.5),  // typo do Word: famale
+      ]
+      const cs = detectDocxPlaceholders(items)
+      expect(cs.length).toBe(2)
+      const fn = cs.map(c => c.label_normalized).sort()
+      expect(fn).toContain('sexo_macho')
+      expect(fn).toContain('sexo_femea')
+    })
+
+    it('texto livre sem placeholder: nao detecta', () => {
+      const items = [item('Esse eh um texto qualquer.', 0, 10, 50, 60, 1.5)]
+      const cs = detectDocxPlaceholders(items)
+      expect(cs.length).toBe(0)
     })
   })
 
