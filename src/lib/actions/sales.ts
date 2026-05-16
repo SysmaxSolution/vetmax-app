@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { sendWhatsAppMessage } from './whatsapp'
 import { isEAN } from '@/lib/utils/ean'
+import { processCommissions } from './commissions'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -162,7 +163,26 @@ export async function createSale(
   revalidatePath('/dashboard/sales')
   revalidatePath('/dashboard/cashier')
 
-  return { id: (data as any).id, total: Number((data as any).total) }
+  const saleId = (data as any).id as string
+  const total  = Number((data as any).total)
+
+  // Processar comissões de forma não-bloqueante
+  const { data: sellerProfile } = await supabase
+    .from('profiles')
+    .select('full_name')
+    .eq('id', user.id)
+    .single()
+
+  processCommissions({
+    sale_id:     saleId,
+    clinic_id:   params.clinic_id,
+    seller_id:   user.id,
+    seller_name: sellerProfile?.full_name ?? 'Vendedor',
+    items:       params.items,
+    sale_date:   new Date().toISOString().split('T')[0],
+  }).catch(() => {})
+
+  return { id: saleId, total }
 }
 
 // ─── Cancelar venda ───────────────────────────────────────────────────────────

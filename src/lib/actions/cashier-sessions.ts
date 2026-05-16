@@ -232,6 +232,28 @@ export async function getCurrentSession(): Promise<CashierSession | null | { err
   return data ?? null
 }
 
+// ─── Orphan Sales Hook ────────────────────────────────────────────────────────
+
+/**
+ * Vincula lançamentos do central_cashier sem session_id (vendas órfãs do dia)
+ * à sessão recém-aberta. Chamado automaticamente após openCashierSession.
+ */
+export async function linkOrphanSalesToSession(sessionId: string): Promise<void> {
+  const ctx = await getClinicContext()
+  if ('error' in ctx) return
+
+  const today = new Date().toISOString().split('T')[0]
+  const supabase = await createClient()
+
+  await supabase
+    .from('central_cashier')
+    .update({ session_id: sessionId })
+    .eq('clinic_id', ctx.clinic_id)
+    .is('session_id', null)
+    .gte('created_at', `${today}T00:00:00.000Z`)
+    .lte('created_at', `${today}T23:59:59.999Z`)
+}
+
 // ─── Outflows (Saídas) ────────────────────────────────────────────────────────
 
 /**

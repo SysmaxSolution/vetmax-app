@@ -7,8 +7,10 @@ import PackagePDVSearch from './PackagePDVSearch'
 import SalesCart, { cartSubtotal, type CartItem } from './SalesCart'
 import CheckoutModal from './CheckoutModal'
 import ReceiptModal from './ReceiptModal'
+import CashierGateModal from './CashierGateModal'
 import SalesHistoryTable from './SalesHistoryTable'
 import TutorSearch from './TutorSearch'
+import { getCurrentSession } from '@/lib/actions/cashier-sessions'
 import type { Sale, SaleTutor } from '@/lib/actions/sales'
 import type { PatientsListItem } from '@/lib/actions/timeline'
 
@@ -28,10 +30,11 @@ export default function SalesWorkspace({ clinicId, clinicName, dailySales, activ
   const [discountInput, setDiscountInput] = useState('')
   const [tutor,        setTutor]        = useState<SaleTutor | null>(null)
   const [selectedPet,  setSelectedPet]  = useState<PatientsListItem | null>(null)
-  const [showCheckout, setShowCheckout] = useState(false)
-  const [receipt,      setReceipt]      = useState<Sale | null>(null)
-  const [sales,        setSales]        = useState<Sale[]>(dailySales)
-  const [, startTransition]             = useTransition()
+  const [showCheckout,    setShowCheckout]    = useState(false)
+  const [showCashierGate, setShowCashierGate] = useState(false)
+  const [receipt,         setReceipt]         = useState<Sale | null>(null)
+  const [sales,           setSales]           = useState<Sale[]>(dailySales)
+  const [isPending,       startTransition]    = useTransition()
 
   const hasPackages = cart.some(i => !!i.package_id)
 
@@ -51,6 +54,17 @@ export default function SalesWorkspace({ clinicId, clinicName, dailySales, activ
   function applyDiscount() {
     const val = parseFloat(discountInput.replace(',', '.'))
     setDiscount(isNaN(val) || val < 0 ? 0 : Math.min(val, subtotal))
+  }
+
+  function handleCheckoutIntent() {
+    startTransition(async () => {
+      const session = await getCurrentSession()
+      if (!session || 'error' in session) {
+        setShowCashierGate(true)
+      } else {
+        setShowCheckout(true)
+      }
+    })
   }
 
   function resetPDV() {
@@ -224,11 +238,11 @@ export default function SalesWorkspace({ clinicId, clinicName, dailySales, activ
 
                 <button
                   type="button"
-                  onClick={() => setShowCheckout(true)}
-                  disabled={!hasItems || (hasPackages && !selectedPet)}
+                  onClick={handleCheckoutIntent}
+                  disabled={!hasItems || (hasPackages && !selectedPet) || isPending}
                   className="w-full bg-green-600 text-white rounded-xl py-3 text-sm font-bold hover:bg-green-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  Finalizar Venda →
+                  {isPending ? 'Verificando caixa...' : 'Finalizar Venda →'}
                 </button>
               </div>
             </div>
@@ -240,6 +254,13 @@ export default function SalesWorkspace({ clinicId, clinicName, dailySales, activ
           <SalesHistoryTable sales={sales} clinicId={clinicId} onSalesUpdate={setSales} />
         )}
       </main>
+
+      {showCashierGate && (
+        <CashierGateModal
+          onSessionOpened={() => { setShowCashierGate(false); setShowCheckout(true) }}
+          onClose={() => setShowCashierGate(false)}
+        />
+      )}
 
       {showCheckout && (
         <CheckoutModal
