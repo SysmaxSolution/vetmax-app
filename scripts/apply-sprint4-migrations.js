@@ -17,7 +17,7 @@ if (!urlMatch) { console.error('Formato de DATABASE_URL inválido'); process.exi
 const [, user, passwordEncoded, host, port, database] = urlMatch
 const password = decodeURIComponent(passwordEncoded)
 
-const MIGRATIONS = ['0149_user_commissions.sql']
+const MIGRATIONS = ['0150_patients_whatsapp_trigger.sql']
 
 async function run() {
   const client = new Client({

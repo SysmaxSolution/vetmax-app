@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useTransition } from 'react'
 import Link from 'next/link'
-import { X, Save, Loader2, User, Dog, MapPin, PhoneCall, Syringe, Camera, Shield, Trash2, Plus, AlertTriangle, Cpu, Paperclip, FileText, Upload, ExternalLink } from 'lucide-react'
+import { X, Save, Loader2, User, Dog, MapPin, PhoneCall, Syringe, Camera, Shield, Trash2, Plus, AlertTriangle, Cpu, Paperclip, FileText, Upload, ExternalLink, Share2 } from 'lucide-react'
 import { ImageLightbox } from '@/components/ui/ImageLightbox'
 import { DateInput } from '@/components/ui/DatePicker'
 import { updateFullProfile, uploadPetPhoto, softDeletePatient } from '@/lib/actions/pets'
@@ -784,11 +784,33 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                   <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Carregando...</p>
                 </div>
               ) : (
-                <VaccinationCard
-                  patientId={(isEdit ? patient.id : createdPatientId)!}
-                  initialVaccines={vaccines || []}
-                  isFinalized={false}
-                />
+                <>
+                  <VaccinationCard
+                    patientId={(isEdit ? patient.id : createdPatientId)!}
+                    initialVaccines={vaccines || []}
+                    isFinalized={false}
+                  />
+                  {/* Botão Compartilhar Histórico via WhatsApp */}
+                  {isEdit && patient?.id && (
+                    <div className="mt-4 pt-4 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const url = `${window.location.origin}/public/vaccines/${patient.id}`
+                          const msg = `Olá! Aqui está o histórico de vacinação do ${patient.name} atualizado: ${url}`
+                          window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank', 'noopener,noreferrer')
+                        }}
+                        className="flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-green-700 transition-colors"
+                      >
+                        <Share2 className="h-4 w-4" />
+                        Compartilhar via WhatsApp
+                      </button>
+                      <p className="text-xs text-slate-400 mt-1.5">
+                        Gera um link público da carteira de vacinação para o tutor
+                      </p>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}

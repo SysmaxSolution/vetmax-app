@@ -142,6 +142,87 @@ export async function getUnifiedCalendarEvents(
 }
 
 /**
+ * Returns all events for a date range: appointments + grooming sessions.
+ * Used by react-big-calendar for week/month navigation.
+ */
+export async function getUnifiedEventsForRange(
+  start: string, // 'YYYY-MM-DD'
+  end:   string, // 'YYYY-MM-DD'
+): Promise<UnifiedCalendarEvent[] | { error: string }> {
+  const auth = await getUserClinic()
+  if ('error' in auth) return auth
+
+  const supabase = await createClient()
+  const rangeStart = `${start}T00:00:00`
+  const rangeEnd   = `${end}T23:59:59`
+
+  const [apptRes, groomRes] = await Promise.all([
+    supabase
+      .from('appointments')
+      .select(`id, appointment_datetime, reason, status, source,
+               patients:pet_id ( id, name, species ),
+               tutors:tutor_id ( id, name )`)
+      .eq('clinic_id', auth.clinicId)
+      .gte('appointment_datetime', rangeStart)
+      .lte('appointment_datetime', rangeEnd)
+      .neq('status', 'cancelled')
+      .order('appointment_datetime'),
+
+    supabase
+      .from('grooming_sessions')
+      .select(`id, scheduled_at, status, services_requested,
+               patients:patient_id ( id, name, species ),
+               tutors:tutor_id ( id, name )`)
+      .eq('clinic_id', auth.clinicId)
+      .not('scheduled_at', 'is', null)
+      .gte('scheduled_at', rangeStart)
+      .lte('scheduled_at', rangeEnd)
+      .neq('status', 'delivered')
+      .neq('current_status', 'cancelled')
+      .order('scheduled_at'),
+  ])
+
+  if (apptRes.error) return { error: `Erro ao buscar consultas: ${apptRes.error.message}` }
+  if (groomRes.error) return { error: `Erro ao buscar tosas: ${groomRes.error.message}` }
+
+  const events: UnifiedCalendarEvent[] = []
+
+  for (const a of (apptRes.data ?? [])) {
+    const pet   = Array.isArray(a.patients) ? a.patients[0] : a.patients
+    const tutor = Array.isArray(a.tutors)   ? a.tutors[0]   : a.tutors
+    events.push({
+      id: a.id, type: 'appointment', sourceId: a.id,
+      title:      pet?.name ?? 'Sem nome',
+      datetime:   a.appointment_datetime,
+      status:     a.status,
+      petName:    pet?.name ?? '',
+      tutorName:  tutor?.name ?? '',
+      petSpecies: pet?.species ?? '',
+      reason:     a.reason,
+      source:     (a as any).source ?? 'manual',
+    })
+  }
+
+  for (const g of (groomRes.data ?? [])) {
+    const pet   = Array.isArray(g.patients) ? g.patients[0] : g.patients
+    const tutor = Array.isArray(g.tutors)   ? g.tutors[0]   : g.tutors
+    events.push({
+      id: g.id, type: 'grooming', sourceId: g.id,
+      title:      pet?.name ?? 'Sem nome',
+      datetime:   g.scheduled_at!,
+      status:     g.status,
+      petName:    pet?.name ?? '',
+      tutorName:  tutor?.name ?? '',
+      petSpecies: pet?.species ?? '',
+      services:   g.services_requested ?? [],
+    })
+  }
+
+  events.sort((a, b) => a.datetime.localeCompare(b.datetime))
+  return events
+}
+
+/**
  * Returns event counts per day for a month (appointments + grooming sessions).
  * Used to render event dots on the monthly calendar grid.
  */

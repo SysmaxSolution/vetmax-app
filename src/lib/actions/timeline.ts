@@ -576,3 +576,57 @@ export async function getPatientsList(
     return { error: 'Erro ao listar pacientes.' }
   }
 }
+
+export async function getPatientById(
+  patientId: string
+): Promise<PatientsListItem | { error: string }> {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: 'Não autenticado.' }
+
+    const admin = createAdminClient()
+    const { data: profile } = await admin
+      .from('profiles').select('clinic_id').eq('id', user.id).single()
+    if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
+
+    const { data: p, error: pErr } = await admin
+      .from('patients')
+      .select('id, name, species, breed, gender, neutered, birth_date, birth_date_estimated, coat_color, reproductive_status, medical_history, photo_url, behavior_tags, allergies, chronic_diseases, microchip_id, tutor_id')
+      .eq('id', patientId)
+      .eq('clinic_id', profile.clinic_id)
+      .is('deleted_at', null)
+      .single()
+
+    if (pErr || !p) return { error: 'Paciente não encontrado.' }
+
+    const { data: tutor } = await admin
+      .from('tutors')
+      .select('id, name, cpf, phone, email, address, emergency_contact')
+      .eq('id', p.tutor_id)
+      .single()
+
+    return {
+      id:                   p.id,
+      name:                 p.name,
+      species:              p.species,
+      breed:                p.breed,
+      gender:               p.gender,
+      neutered:             p.neutered,
+      birth_date:           p.birth_date,
+      birth_date_estimated: p.birth_date_estimated ?? false,
+      coat_color:           p.coat_color ?? null,
+      reproductive_status:  p.reproductive_status ?? null,
+      medical_history:      p.medical_history ?? null,
+      photo_url:            p.photo_url ?? null,
+      behavior_tags:        Array.isArray(p.behavior_tags) ? p.behavior_tags : [],
+      allergies:            p.allergies ?? null,
+      chronic_diseases:     p.chronic_diseases ?? null,
+      microchip_id:         p.microchip_id ?? null,
+      tutor:                tutor ?? { id: p.tutor_id, name: '—', cpf: '', phone: '' },
+      last_visit:           null,
+    }
+  } catch {
+    return { error: 'Erro ao buscar paciente.' }
+  }
+}
