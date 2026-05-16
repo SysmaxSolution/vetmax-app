@@ -204,10 +204,12 @@ export interface CreatePatientPayload {
   species: PatientSpecies
   breed?: string
   gender?: PatientGender
-  neutered?: boolean
+  neutered?: boolean | null
   birth_date?: string
   microchip?: string
   color?: string
+  coat_color?: string
+  reproductive_status?: string
   allergies?: string
   past_surgeries?: string
   chronic_diseases?: string
@@ -363,4 +365,8 @@ export interface SaveTemplatePayload {
   layout_overlays?: LayoutOverlay[] | null
   // Operacao Zero-Touch (migration 0139)
   cleaned_page_paths?: string[] | null
+  // Motor docx-native (migration 0157)
+  engine?: 'pdf' | 'docx-native'
+  original_docx_path?: string | null
+  docx_tags?: Array<{ literal: string; canonical: string; occurrences: number }> | null
 }

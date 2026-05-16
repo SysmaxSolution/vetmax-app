@@ -150,6 +150,8 @@ export interface UpdatePetData {
   breed?:                 string | null
   birth_date?:            string | null
   birth_date_estimated?:  boolean
+  gender?:                string | null
+  neutered?:              boolean | null
   coat_color?:            string | null
   reproductive_status?:   string | null
   medical_history?:       string | null

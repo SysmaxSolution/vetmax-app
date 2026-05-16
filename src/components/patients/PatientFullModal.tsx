@@ -20,7 +20,30 @@ import { BreedCombobox } from '@/components/ui/BreedCombobox'
 import { lookupCep } from '@/lib/cep'
 import type { PatientsListItem } from '@/lib/actions/timeline'
 import type { PatientSpecies } from '@/types'
-import { REPRODUCTIVE_STATUS_OPTIONS } from '@/types'
+
+// ─── Castrado: 3-state helper ────────────────────────────────────────────────
+type NeuteredState = 'yes' | 'no' | 'unknown'
+
+function neuteredFromPatient(neutered: boolean | null | undefined, reproductive: string | null | undefined): NeuteredState {
+  if (neutered === true) return 'yes'
+  if (neutered === false && reproductive && !/Desconhecido/i.test(reproductive)) return 'no'
+  return 'unknown'
+}
+
+function neuteredToBoolean(state: NeuteredState): boolean | null {
+  if (state === 'yes') return true
+  if (state === 'no')  return false
+  return null
+}
+
+function deriveReproductiveStatus(gender: string, neutered: NeuteredState): string {
+  if (neutered === 'unknown' || !gender) return 'Desconhecido'
+  if (gender === 'male'   && neutered === 'yes') return 'Macho Castrado'
+  if (gender === 'male'   && neutered === 'no')  return 'Macho Inteiro'
+  if (gender === 'female' && neutered === 'yes') return 'Fêmea Castrada'
+  if (gender === 'female' && neutered === 'no')  return 'Fêmea Inteira'
+  return 'Desconhecido'
+}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -214,7 +237,9 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
   const [birthDateMode,       setBirthDateMode]       = useState<'date' | 'age'>(patient?.birth_date_estimated ? 'age' : 'date')
   const [ageValue,            setAgeValue]            = useState('')
   const [ageUnit,             setAgeUnit]             = useState<'A' | 'M'>('A')
-  const [reproductiveStatus,  setReproductiveStatus]  = useState(patient?.reproductive_status ?? 'Desconhecido')
+  const [gender,              setGender]              = useState<'male'|'female'|''>((patient?.gender as 'male'|'female'|null) ?? '')
+  const [neuteredState,       setNeuteredState]       = useState<NeuteredState>(neuteredFromPatient(patient?.neutered, patient?.reproductive_status))
+  const [coatColor,           setCoatColor]           = useState(patient?.coat_color ?? '')
   const [tags,                setTags]                = useState<string[]>(patient?.behavior_tags ?? [])
   const [allergies,           setAllergies]           = useState(patient?.allergies ?? '')
   const [chronicDiseases,     setChronicDiseases]     = useState(patient?.chronic_diseases ?? '')
@@ -428,7 +453,11 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
       {
         name: petName, species, breed, birth_date: birthDate || null,
         birth_date_estimated: birthDateMode === 'age',
-        reproductive_status: reproductiveStatus, behavior_tags: tags,
+        gender: gender || null,
+        neutered: neuteredToBoolean(neuteredState),
+        coat_color: coatColor.trim() || null,
+        reproductive_status: deriveReproductiveStatus(gender, neuteredState),
+        behavior_tags: tags,
         allergies: allergies || null, chronic_diseases: chronicDiseases || null, microchip_id: microchipId || null,
       },
       { name: tutorName, phone: tutorPhone, cpf: tutorCpf, email: tutorEmail, address: tutorAddress, emergency_contact: emergencyContact, cep: tutorCep.replace(/\D/g,'') || null, street: tutorStreet || null, neighborhood: tutorNeighborhood || null, city: tutorCity || null, state: tutorState || null, address_number: tutorAddressNumber || null, address_complement: tutorComplement || null }
@@ -470,6 +499,14 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
         name:    petName,
         species: species as PatientSpecies,
         breed:   breed || undefined,
+        birth_date:          birthDate || undefined,
+        gender:              (gender || undefined) as 'male'|'female'|undefined,
+        neutered:            neuteredToBoolean(neuteredState),
+        coat_color:          coatColor.trim() || undefined,
+        reproductive_status: deriveReproductiveStatus(gender, neuteredState),
+        behavior_tags:       tags,
+        allergies:           allergies || undefined,
+        chronic_diseases:    chronicDiseases || undefined,
       }
 
       let result: { tutorId: string; patientId: string } | { error: string }
@@ -763,7 +800,31 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                     </p>
                   )}
                 </div>
-                <FieldSelect label="Estado Reprodutivo" value={reproductiveStatus} options={REPRODUCTIVE_STATUS_OPTIONS} onChange={setReproductiveStatus} data-mentor-step="pet-reproductive-select" />
+                <FieldInput label="Cor / Pelagem" value={coatColor} onChange={setCoatColor} placeholder="Ex: Caramelo, Tigrado, Tricolor" data-mentor-step="pet-coat-color-input" />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <FieldSelect
+                  label="Sexo"
+                  value={gender}
+                  options={[
+                    { value: '',       label: '— Não informado —' },
+                    { value: 'male',   label: 'Macho' },
+                    { value: 'female', label: 'Fêmea' },
+                  ]}
+                  onChange={(v: string) => setGender(v as 'male'|'female'|'')}
+                  data-mentor-step="pet-gender-select"
+                />
+                <FieldSelect
+                  label="Castrado"
+                  value={neuteredState}
+                  options={[
+                    { value: 'yes',     label: 'Sim' },
+                    { value: 'no',      label: 'Não' },
+                    { value: 'unknown', label: 'Desconhecido' },
+                  ]}
+                  onChange={(v: string) => setNeuteredState(v as NeuteredState)}
+                  data-mentor-step="pet-neutered-select"
+                />
               </div>
               <div data-mentor-step="pet-behavior-tags">
                 <label className="block text-[10px] font-bold text-slate-400 uppercase mb-3 tracking-widest">Tags de Comportamento</label>
