@@ -1,29 +1,31 @@
 'use client'
 
 /**
- * IC-23: Conversao client-side de HTML (vindo de DOCX/mammoth) em PDF.
+ * IC-23/24: Conversao client-side de HTML (vindo de DOCX/mammoth) em PDF.
+ *
+ * Versao 2 — usa html2canvas DIRETO + pdf-lib para controle total da
+ * paginacao. Versao 1 usava jsPDF.html() que paginava errado (gerava
+ * 13 paginas para 1 pagina A4 do Word).
  *
  * Fluxo:
- *   1. Cria iframe oculto com o HTML estilizado A4
- *   2. Aguarda fontes carregarem
- *   3. Usa jsPDF.html() (que usa html2canvas internamente) para gerar PDF
- *   4. Retorna File de PDF pronto para entrar no pipeline normal
- *
- * Vantagens vs conversao server-side:
- *   - Sem libreoffice/puppeteer (~200MB de bloat no Vercel)
- *   - Reusa jsPDF (ja instalado) + html2canvas (recem instalado)
- *   - Identidade visual preservada (mammoth mantem estilos basicos)
- *   - Imagens embutidas (logo da clinica) entram como data URLs
+ *   1. Cria iframe oculto A4 com o HTML (sem min-height forcado)
+ *   2. Aguarda fontes/imagens carregarem
+ *   3. html2canvas captura o body INTEIRO (qualquer altura)
+ *   4. Calcula quantas paginas A4 sao necessarias (altura/297mm)
+ *   5. Para cada pagina, recorta uma "fatia" da imagem e desenha em PDF A4
  */
 
-// Estilo CSS basico para imitar Word (A4 portrait + margens razoaveis)
+const A4_WIDTH_MM = 210
+const A4_HEIGHT_MM = 297
+const A4_WIDTH_PT = 595.28
+const A4_HEIGHT_PT = 841.89
+
+// CSS aplicado dentro do iframe — A4 portrait com margens tipicas Word
 const A4_STYLES = `
-  @page { size: A4; margin: 0; }
+  html, body { margin: 0; padding: 0; }
   body {
-    margin: 0;
-    padding: 25mm 20mm;
-    width: 210mm;
-    min-height: 297mm;
+    width: ${A4_WIDTH_MM}mm;
+    padding: 20mm 20mm;
     background: white;
     color: #000;
     font-family: 'Calibri', 'Arial', sans-serif;
@@ -41,24 +43,19 @@ const A4_STYLES = `
   img { max-width: 100%; height: auto; }
   strong { font-weight: bold; }
   em { font-style: italic; }
-  /* Remover sombras/fundos azuis de "campos" do Word (se mammoth deixou inline-styles) */
+  /* Remove fundos azuis de Content Controls do Word */
   span[style*="background-color"] { background-color: transparent !important; }
 `
 
 /**
- * Renderiza HTML em um iframe oculto com tamanho A4 e converte para PDF
- * usando jsPDF.html() (que usa html2canvas internamente).
- *
- * Retorna um File com nome `<base>-converted.pdf`.
+ * Renderiza HTML em iframe oculto e converte para PDF preservando o numero
+ * correto de paginas A4 baseado na altura real do conteudo.
  */
 export async function convertHtmlToPdfFile(
   html: string,
   baseName = 'documento',
 ): Promise<File> {
-  // Sanitiza HTML basico (remove scripts inline)
   const cleanHtml = html.replace(/<script[\s\S]*?<\/script>/gi, '')
-
-  // Monta o documento completo no iframe
   const fullDoc = `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -68,77 +65,112 @@ export async function convertHtmlToPdfFile(
 <body>${cleanHtml}</body>
 </html>`
 
-  // Cria iframe oculto FORA do viewport para nao perturbar UI
   const iframe = document.createElement('iframe')
   iframe.style.position = 'fixed'
   iframe.style.left = '-9999px'
   iframe.style.top = '0'
-  iframe.style.width = '210mm'
-  iframe.style.height = '297mm'
+  iframe.style.width = `${A4_WIDTH_MM}mm`
+  // SEM min-height — deixa o conteudo definir a altura real
+  iframe.style.height = 'auto'
   iframe.style.border = '0'
   iframe.style.background = 'white'
-  // sandbox: permite mesmo origem para que jsPDF possa ler o body
   iframe.setAttribute('aria-hidden', 'true')
   document.body.appendChild(iframe)
 
   try {
-    // Renderiza HTML no iframe
     const doc = iframe.contentDocument
     if (!doc) throw new Error('iframe sem contentDocument')
     doc.open()
     doc.write(fullDoc)
     doc.close()
 
-    // Aguarda fontes/imagens carregarem (1.5s de buffer geralmente basta)
-    await new Promise(r => setTimeout(r, 1500))
-
-    // Espera imagens completarem
+    // Aguarda render + imagens
+    await new Promise(r => setTimeout(r, 500))
     const imgs = Array.from(doc.images)
     await Promise.all(imgs.map(img => {
       if (img.complete) return Promise.resolve()
       return new Promise<void>(res => {
-        img.onload = () => res()
-        img.onerror = () => res()
+        const done = () => res()
+        img.onload = done
+        img.onerror = done
       })
     }))
+    // Buffer extra para garantir layout final
+    await new Promise(r => setTimeout(r, 300))
 
-    // Importa jsPDF (peso so quando precisa)
-    const { jsPDF } = await import('jspdf')
-    await import('html2canvas')  // peer dep do jsPDF.html()
+    // Dimensiona iframe para conter o body completo (necessario para html2canvas)
+    const body = doc.body
+    const contentHeight = Math.max(body.scrollHeight, body.offsetHeight, body.clientHeight)
+    const contentWidth = Math.max(body.scrollWidth, body.offsetWidth, body.clientWidth)
+    iframe.style.height = `${contentHeight}px`
 
-    // Cria PDF A4
-    const pdf = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: 'a4',
-      compress: true,
+    console.log(`[docx-to-pdf] iframe content: ${contentWidth}x${contentHeight}px`)
+
+    // Captura tudo em PNG (alta resolucao para qualidade)
+    const html2canvas = (await import('html2canvas')).default
+    const canvas = await html2canvas(body, {
+      scale: 2,
+      backgroundColor: '#ffffff',
+      logging: false,
+      useCORS: true,
+      windowWidth: contentWidth,
+      windowHeight: contentHeight,
+      width: contentWidth,
+      height: contentHeight,
     })
 
-    // jsPDF.html eh assincrono — usa promise
-    await new Promise<void>((resolve, reject) => {
-      pdf.html(doc.body, {
-        callback: () => resolve(),
-        x: 0,
-        y: 0,
-        // jsPDF html() converte mm <-> px usando 96dpi (default). Para
-        // bater com nosso A4 (210mm), html2canvas escala automaticamente.
-        autoPaging: 'text',
-        html2canvas: {
-          scale: 2,                  // 2x para qualidade — vira ~192 DPI
-          backgroundColor: '#ffffff',
-          logging: false,
-          useCORS: true,
-        },
-        width: 210,
-        windowWidth: 794,            // 210mm em px @96dpi
-      }).then(() => resolve()).catch(reject)
-    })
+    // Calcula numero de paginas A4 necessarias
+    // A4 ratio: 297/210 = 1.4143
+    // contentWidthPx representa 210mm. Pixels por mm = contentWidth / 210
+    const pxPerMm = canvas.width / A4_WIDTH_MM
+    const a4PageHeightPx = Math.round(A4_HEIGHT_MM * pxPerMm)
+    const totalPages = Math.max(1, Math.ceil(canvas.height / a4PageHeightPx))
+    console.log(`[docx-to-pdf] canvas: ${canvas.width}x${canvas.height}px, pxPerMm: ${pxPerMm.toFixed(2)}, paginas A4: ${totalPages}`)
 
-    const blob = pdf.output('blob') as Blob
+    // pdf-lib monta o PDF final
+    const { PDFDocument } = await import('pdf-lib')
+    const pdf = await PDFDocument.create()
+
+    for (let p = 0; p < totalPages; p++) {
+      // Recorta uma "fatia" do canvas correspondente a 1 pagina A4
+      const sliceTop = p * a4PageHeightPx
+      const sliceHeight = Math.min(a4PageHeightPx, canvas.height - sliceTop)
+      const sliceCanvas = document.createElement('canvas')
+      sliceCanvas.width = canvas.width
+      sliceCanvas.height = a4PageHeightPx
+      const sliceCtx = sliceCanvas.getContext('2d')!
+      sliceCtx.fillStyle = '#ffffff'
+      sliceCtx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height)
+      sliceCtx.drawImage(
+        canvas,
+        0, sliceTop, canvas.width, sliceHeight,
+        0, 0, canvas.width, sliceHeight,
+      )
+      const pngBlob: Blob = await new Promise(res =>
+        sliceCanvas.toBlob(b => res(b!), 'image/png')
+      )
+      const pngBytes = new Uint8Array(await pngBlob.arrayBuffer())
+      const png = await pdf.embedPng(pngBytes)
+      const page = pdf.addPage([A4_WIDTH_PT, A4_HEIGHT_PT])
+      page.drawImage(png, {
+        x: 0, y: 0,
+        width: A4_WIDTH_PT, height: A4_HEIGHT_PT,
+      })
+
+      // Libera o canvas slice
+      sliceCanvas.width = 0
+      sliceCanvas.height = 0
+    }
+
+    // Libera o canvas grande
+    canvas.width = 0
+    canvas.height = 0
+
+    const pdfBytes = await pdf.save({ useObjectStreams: false })
     const safeName = baseName.replace(/\.docx$/i, '').replace(/[^\w\s-]/g, '_')
-    return new File([blob], `${safeName}-converted.pdf`, { type: 'application/pdf' })
+    // Uint8Array → BlobPart (ArrayBuffer)
+    return new File([pdfBytes.buffer as ArrayBuffer], `${safeName}-converted.pdf`, { type: 'application/pdf' })
   } finally {
-    // Sempre limpa o iframe (mesmo em caso de erro)
     if (iframe.parentNode) iframe.parentNode.removeChild(iframe)
   }
 }
