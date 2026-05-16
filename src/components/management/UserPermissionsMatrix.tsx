@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Loader2, Save, Check, AlertTriangle, Lock, Shield } from 'lucide-react'
+import { Loader2, Save, Check, Lock, Shield } from 'lucide-react'
 import { listUserPermissions, upsertUserPermissions } from '@/lib/actions/permissions'
 import type { UserPermission } from '@/lib/actions/permissions'
 
@@ -154,11 +154,11 @@ export default function UserPermissionsMatrix({
           </p>
         </div>
       ) : (
-        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-          <AlertTriangle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
-          <p className="text-xs text-amber-700">
-            Marque <strong>Visualizar</strong> para liberar acesso mínimo ao módulo.
-            As demais ações só funcionam se Visualizar estiver ativo.
+        <div className="flex items-start gap-2 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+          <Lock className="h-4 w-4 text-slate-500 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-slate-600">
+            Clique em qualquer ação para liberar ou revogar. Marcar Criar/Editar/Excluir
+            ativa <strong>Visualizar</strong> automaticamente.
           </p>
         </div>
       )}
@@ -185,10 +185,10 @@ export default function UserPermissionsMatrix({
               <tr key={mod.key} className="hover:bg-slate-50 transition-colors">
                 <td className="px-4 py-3 text-sm font-medium text-slate-800 max-w-[100px] sm:max-w-none truncate">{mod.label}</td>
                 {ACTIONS.map(act => {
-                  const checked  = getPermission(mod.key, act.key)
-                  // Criar/Editar/Excluir ficam desabilitados se view não está marcado
-                  const viewOn   = getPermission(mod.key, 'view')
-                  const disabled = isAdmin || (act.key !== 'view' && !viewOn)
+                  const checked = getPermission(mod.key, act.key)
+                  const viewOn  = getPermission(mod.key, 'view')
+                  // Não-view sem view ativo fica visualmente mais suave, mas ainda clicável
+                  const dimmed  = !isAdmin && act.key !== 'view' && !viewOn && !checked
 
                   return (
                     <td key={act.key} className="px-3 py-3 text-center">
@@ -201,22 +201,15 @@ export default function UserPermissionsMatrix({
                       ) : (
                         <button
                           type="button"
-                          onClick={() => !disabled && togglePermission(mod.key, act.key)}
-                          disabled={disabled}
-                          className={`mx-auto flex h-5 w-5 items-center justify-center rounded border-2 transition-all ${
+                          onClick={() => togglePermission(mod.key, act.key)}
+                          className={`mx-auto flex h-5 w-5 items-center justify-center rounded border-2 transition-all cursor-pointer ${
                             checked
-                              ? 'border-teal-500 bg-teal-500'
-                              : 'border-slate-300 bg-white'
-                          } ${
-                            disabled && !checked
-                              ? 'opacity-30 cursor-not-allowed'
-                              : 'cursor-pointer hover:border-teal-400'
+                              ? 'border-teal-500 bg-teal-500 hover:border-teal-600 hover:bg-teal-600'
+                              : dimmed
+                                ? 'border-slate-200 bg-white hover:border-teal-300'
+                                : 'border-slate-300 bg-white hover:border-teal-400'
                           }`}
-                          title={
-                            disabled && act.key !== 'view'
-                              ? 'Ative "Visualizar" primeiro'
-                              : checked ? 'Revogar' : 'Conceder'
-                          }
+                          title={checked ? 'Revogar permissão' : 'Conceder permissão'}
                         >
                           {checked && <Check className="h-3 w-3 text-white" />}
                         </button>

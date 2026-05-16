@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useTransition } from 'react'
+import Link from 'next/link'
 import {
   X, User, Shield, Loader2, Camera, FileSignature,
   Eye, EyeOff, Check, AlertTriangle, Lock,
@@ -780,9 +781,16 @@ export default function UserManagementModal({
 
               {/* Info */}
               <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 text-xs text-blue-700">
-                <strong>Como funciona:</strong> As comissões são lançadas automaticamente em <em>Contas a Pagar</em>
-                após vendas no PDV, pagamento de consultas (checkout) e tosas (caixa).
-                Visualize em <strong>Relatórios → Comissões</strong>.
+                <strong>Como funciona:</strong> As comissões são lançadas automaticamente em{' '}
+                <em>Contas a Pagar</em> após vendas no PDV, pagamento de consultas (checkout) e tosas (caixa).{' '}
+                Visualize em{' '}
+                <Link
+                  href="/dashboard/reports"
+                  className="font-semibold underline underline-offset-2 hover:text-blue-900 transition-colors"
+                  onClick={onClose}
+                >
+                  Relatórios → Comissões
+                </Link>.
               </div>
             </div>
           )}

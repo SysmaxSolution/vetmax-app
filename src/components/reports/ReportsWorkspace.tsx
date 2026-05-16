@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { BarChart3, Users, DollarSign, TrendingUp, PieChart, MessageCircle, ClipboardList, PawPrint, Settings } from 'lucide-react'
+import { BarChart3, Users, DollarSign, TrendingUp, PieChart, MessageCircle, ClipboardList, PawPrint, Percent } from 'lucide-react'
 import PetFrequencyReport from './PetFrequencyReport'
 import ProfessionalProductivityReport from './ProfessionalProductivityReport'
 import FinancialReport from './FinancialReport'
@@ -9,13 +9,13 @@ import DREReport from './DREReport'
 import CurvaABCReport from './CurvaABCReport'
 import WhatsAppReport from './WhatsAppReport'
 import OperationalReport from './OperationalReport'
-import ReportsSettings from './ReportsSettings'
+import CommissionsReport from './CommissionsReport'
 import type { ReportsEnabled } from '@/lib/actions/reports-g13'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface ReportCategory {
-  key:        keyof ReportsEnabled | 'settings'
+  key:        keyof ReportsEnabled | 'commissions'
   label:      string
   icon:       React.ComponentType<{ className: string }>
   description: string
@@ -109,16 +109,17 @@ export default function ReportsWorkspace({ initialEnabled }: Props) {
       component:   <OperationalReport />,
     },
     {
-      key:         'settings',
-      label:       'Configurações',
-      icon:        Settings,
-      description: 'Ativar ou desativar tipos de relatório visíveis neste módulo.',
+      key:         'commissions',
+      label:       'Comissões',
+      icon:        Percent,
+      description: 'Comissões pagas e pendentes por profissional, com filtros por status e período.',
+      component:   <CommissionsReport />,
     },
   ]
 
-  // Filter visible categories (always show Settings)
+  // Filter visible categories (commissions always shown)
   const visibleCategories = ALL_CATEGORIES.filter(cat => {
-    if (cat.key === 'settings') return true
+    if (cat.key === 'commissions') return true
     return enabled[cat.key as keyof ReportsEnabled]
   })
 
@@ -188,14 +189,7 @@ export default function ReportsWorkspace({ initialEnabled }: Props) {
             </div>
 
             <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
-              {activeCategory.key === 'settings' ? (
-                <ReportsSettings
-                  enabled={enabled}
-                  onSave={setEnabled}
-                />
-              ) : (
-                activeCategory.component
-              )}
+              {activeCategory.component}
             </div>
           </>
         )}
