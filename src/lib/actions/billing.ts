@@ -363,20 +363,13 @@ export async function processPayment(
 
   if (error) return { error: 'Erro ao processar pagamento: ' + error.message }
 
-  // Buscar sessão de caixa aberta (se houver) para vincular a entrada
-  const { data: openSession } = await supabase
-    .from('cashier_sessions')
-    .select('id')
-    .eq('clinic_id', profile.clinic_id)
-    .eq('status', 'open')
-    .maybeSingle()
-
-  // Registrar entrada no caixa central via RPC (idempotente)
+  // Registrar recebimento no caixa central via RPC
+  // Nota: p_session_id foi removido na migration 0128 — não passar
   const inv = invoice as any
   const patientName = inv.patients?.name ?? null
   const tutorName   = inv.tutors?.name   ?? null
 
-  await supabase.rpc('rpc_record_invoice_payment', {
+  const { error: rpcErr } = await supabase.rpc('rpc_record_invoice_payment', {
     p_clinic_id:      profile.clinic_id,
     p_invoice_id:     invoiceId,
     p_amount:         total_amount,
@@ -384,8 +377,12 @@ export async function processPayment(
     p_patient_name:   patientName,
     p_tutor_name:     tutorName,
     p_recorded_by:    user.id,
-    p_session_id:     openSession?.id ?? null,
   })
+
+  if (rpcErr) {
+    // Falha na RPC não deve bloquear o fluxo; logar para diagnóstico
+    console.error('[billing] rpc_record_invoice_payment error:', rpcErr.message)
+  }
 
   // Comissão automática do veterinário (fire-and-forget)
   const invAny = invoice as any
