@@ -12,6 +12,7 @@ export interface ClinicUserFull {
   last_name:                   string | null
   role:                        string
   crmv:                        string | null
+  mapa_code:                   string | null
   phone:                       string | null
   specialties:                 string[] | null
   nickname:                    string | null
@@ -29,6 +30,7 @@ export interface AdminUpdateUserPayload {
   last_name?:                   string | null
   role?:                        string
   crmv?:                        string | null
+  mapa_code?:                   string | null
   phone?:                       string | null
   specialties?:                 string[]
   nickname?:                    string | null
@@ -63,6 +65,7 @@ export async function adminUpdateUser(
   if (fields.last_name  !== undefined) patch.last_name  = fields.last_name?.trim() || null
   if (fields.role       !== undefined) patch.role       = fields.role
   if (fields.crmv       !== undefined) patch.crmv       = fields.crmv?.trim().toUpperCase() || null
+  if (fields.mapa_code  !== undefined) patch.mapa_code  = fields.mapa_code?.trim().toUpperCase() || null
   if (fields.phone      !== undefined) patch.phone      = fields.phone?.trim() || null
   if (fields.specialties !== undefined) patch.specialties = fields.specialties
   if (fields.nickname   !== undefined) patch.nickname   = fields.nickname?.trim() || null

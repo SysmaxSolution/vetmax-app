@@ -1,15 +1,20 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useTransition } from 'react'
 import {
   X, User, Shield, Loader2, Camera, FileSignature,
   Eye, EyeOff, Check, AlertTriangle, Lock,
+  Percent, Plus, Trash2,
 } from 'lucide-react'
 import {
   adminUpdateUser, adminChangePassword, uploadUserSignature,
   getUserModuleAccess, setUserModuleAccess,
   type ClinicUserFull,
 } from '@/lib/actions/user-management'
+import {
+  listUserCommissions, upsertUserCommission, deleteUserCommission,
+  type UserCommission,
+} from '@/lib/actions/commissions'
 import type { Room } from '@/lib/actions/rooms'
 import type { UserRole } from '@/types'
 import UserPermissionsMatrix from './UserPermissionsMatrix'
@@ -44,6 +49,13 @@ const SPECIALTY_OPTIONS = [
   'Odontologia', 'Nutrição', 'Acupuntura', 'Radiologia',
 ]
 
+const ITEM_TYPE_LABELS: Record<UserCommission['item_type'], string> = {
+  all:     'Toda a venda',
+  product: 'Produtos',
+  service: 'Serviços',
+  package: 'Pacotes',
+}
+
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface Props {
@@ -61,7 +73,7 @@ export default function UserManagementModal({
   user, rooms, activeModules, currentUserId, onClose, onSaved,
 }: Props) {
   const isNew = user === null
-  const [activeTab, setActiveTab] = useState<'usuario' | 'acessos' | 'permissoes'>('usuario')
+  const [activeTab, setActiveTab] = useState<'usuario' | 'acessos' | 'permissoes' | 'comissoes'>('usuario')
   const [saving, setSaving]       = useState(false)
   const [error, setError]         = useState<string | null>(null)
   const [success, setSuccess]     = useState<string | null>(null)
@@ -71,6 +83,7 @@ export default function UserManagementModal({
   const [lastName,   setLastName]   = useState(user?.last_name ?? '')
   const [role,       setRole]       = useState<UserRole>((user?.role as UserRole) ?? 'receptionist')
   const [crmv,       setCrmv]       = useState(user?.crmv ?? '')
+  const [mapaCode,   setMapaCode]   = useState(user?.mapa_code ?? '')
   const [phone,      setPhone]      = useState(user?.phone ?? '')
   const [address,    setAddress]    = useState(user?.address ?? '')
   const [nickname,   setNickname]   = useState(user?.nickname ?? '')
@@ -82,9 +95,9 @@ export default function UserManagementModal({
   const [appointmentInterval, setAppointmentInterval] = useState<string>(String(user?.appointment_interval_minutes ?? 60))
 
   // ── Senha ──────────────────────────────────────────────────────────────────
-  const [newPassword,    setNewPassword]    = useState('')
-  const [showPassword,   setShowPassword]   = useState(false)
-  const [changingPass,   setChangingPass]   = useState(false)
+  const [newPassword,  setNewPassword]  = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [changingPass, setChangingPass] = useState(false)
 
   // ── Uploads ────────────────────────────────────────────────────────────────
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
@@ -93,9 +106,20 @@ export default function UserManagementModal({
   const sigRef   = useRef<HTMLInputElement>(null)
 
   // ── Módulos (aba Acessos) ──────────────────────────────────────────────────
-  const [moduleMap,       setModuleMap]       = useState<Record<string, boolean>>({})
-  const [loadingModules,  setLoadingModules]  = useState(false)
-  const [savingModule,    setSavingModule]    = useState<string | null>(null)
+  const [moduleMap,      setModuleMap]      = useState<Record<string, boolean>>({})
+  const [loadingModules, setLoadingModules] = useState(false)
+  const [savingModule,   setSavingModule]   = useState<string | null>(null)
+
+  // ── Comissões ──────────────────────────────────────────────────────────────
+  const [commissions,    setCommissions]    = useState<UserCommission[]>([])
+  const [loadingComm,    setLoadingComm]    = useState(false)
+  const [showCommForm,   setShowCommForm]   = useState(false)
+  const [commType,       setCommType]       = useState<UserCommission['item_type']>('all')
+  const [commPct,        setCommPct]        = useState('')
+  const [commDesc,       setCommDesc]       = useState('')
+  const [savingComm,     setSavingComm]     = useState(false)
+  const [deletingComm,   setDeletingComm]   = useState<string | null>(null)
+  const [, startTransition] = useTransition()
 
   useEffect(() => {
     if (activeTab !== 'acessos' || isNew || !user) return
@@ -109,19 +133,29 @@ export default function UserManagementModal({
     })
   }, [activeTab, isNew, user?.id])
 
+  useEffect(() => {
+    if (activeTab !== 'comissoes' || isNew || !user) return
+    setLoadingComm(true)
+    listUserCommissions(user.id).then(res => {
+      setLoadingComm(false)
+      if (!('error' in res)) setCommissions(res)
+    })
+  }, [activeTab, isNew, user?.id])
+
   // ── Handlers ──────────────────────────────────────────────────────────────
 
   async function handleSaveUser() {
     if (!fullName.trim()) { setError('Nome é obrigatório.'); return }
-    if (!user) return  // criação via convite, não via este modal
+    if (!user) return
     setSaving(true); setError(null)
     const intervalNum = parseInt(appointmentInterval, 10)
     const res = await adminUpdateUser({
       userId: user.id,
       full_name: fullName, last_name: lastName,
-      role, crmv: crmv || null, phone: phone || null,
-      address: address || null, nickname: nickname || null,
-      specialties, room: room || null, is_active: isActive,
+      role, crmv: crmv || null, mapa_code: mapaCode || null,
+      phone: phone || null, address: address || null,
+      nickname: nickname || null, specialties, room: room || null,
+      is_active: isActive,
       appointment_interval_minutes: (!isNaN(intervalNum) && intervalNum > 0) ? intervalNum : 60,
     })
     setSaving(false)
@@ -146,10 +180,8 @@ export default function UserManagementModal({
     if (!user) return
     setUploadingPhoto(true)
     const fd = new FormData(); fd.append('logo', file)
-    // Reutiliza o bucket user-avatars via API existente
     const res = await fetch('/api/upload-user-avatar', {
-      method: 'POST',
-      body: fd,
+      method: 'POST', body: fd,
       headers: { 'x-user-id': user.id },
     })
     setUploadingPhoto(false)
@@ -184,9 +216,45 @@ export default function UserManagementModal({
     }
   }
 
+  async function handleSaveCommission() {
+    if (!user) return
+    const pct = parseFloat(commPct)
+    if (isNaN(pct) || pct <= 0 || pct > 100) {
+      setError('Percentual deve ser entre 0,01% e 100%.'); return
+    }
+    setSavingComm(true); setError(null)
+    const res = await upsertUserCommission({
+      user_id:     user.id,
+      item_type:   commType,
+      item_id:     null,
+      percentage:  pct,
+      description: commDesc.trim() || undefined,
+    })
+    setSavingComm(false)
+    if ('error' in res) { setError(res.error); return }
+    setCommPct(''); setCommDesc(''); setCommType('all'); setShowCommForm(false)
+    const updated = await listUserCommissions(user.id)
+    if (!('error' in updated)) setCommissions(updated)
+  }
+
+  async function handleDeleteCommission(id: string) {
+    setDeletingComm(id)
+    const res = await deleteUserCommission(id)
+    setDeletingComm(null)
+    if ('error' in res) { setError(res.error); return }
+    setCommissions(prev => prev.filter(c => c.id !== id))
+  }
+
   function toggleSpecialty(s: string) {
     setSpecialties(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s])
   }
+
+  const TABS = [
+    { key: 'usuario',    label: 'Usuário',    Icon: User    },
+    { key: 'acessos',    label: 'Módulos',    Icon: Shield  },
+    { key: 'permissoes', label: 'Permissões', Icon: Lock    },
+    { key: 'comissoes',  label: 'Comissões',  Icon: Percent },
+  ] as const
 
   return (
     <div
@@ -216,17 +284,13 @@ export default function UserManagementModal({
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-slate-200 flex-shrink-0">
-          {([
-            { key: 'usuario',    label: 'Usuário',     Icon: User   },
-            { key: 'acessos',    label: 'Módulos',     Icon: Shield },
-            { key: 'permissoes', label: 'Permissões',  Icon: Lock   },
-          ] as const).map(({ key, label, Icon }) => (
+        <div className="flex border-b border-slate-200 flex-shrink-0 overflow-x-auto">
+          {TABS.map(({ key, label, Icon }) => (
             <button
               key={key}
               onClick={() => setActiveTab(key)}
               disabled={isNew && key !== 'usuario'}
-              className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-colors ${
+              className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
                 activeTab === key
                   ? 'border-teal-600 text-teal-700'
                   : 'border-transparent text-slate-500 hover:text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed'
@@ -290,7 +354,7 @@ export default function UserManagementModal({
                 </div>
               </div>
 
-              {/* Cargo + Status */}
+              {/* Cargo + Apelido */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1">Cargo</label>
@@ -315,7 +379,7 @@ export default function UserManagementModal({
                 </div>
               </div>
 
-              {/* CRMV + Especialidades */}
+              {/* CRMV + MAPA (apenas vets) */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1">CRMV</label>
@@ -325,6 +389,24 @@ export default function UserManagementModal({
                     className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
                   />
                 </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">
+                    Credencial MAPA
+                    <span className="ml-1 text-[10px] font-normal text-slate-400">(receituário controlado)</span>
+                  </label>
+                  <input
+                    value={mapaCode} onChange={e => setMapaCode(e.target.value.toUpperCase())}
+                    placeholder="Ex: RQA-SP-00001"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                  />
+                  <p className="mt-0.5 text-[10px] text-slate-400">
+                    Número de habilitação junto ao Ministério da Agricultura (MAPA) para prescrição de produtos controlados
+                  </p>
+                </div>
+              </div>
+
+              {/* Box / Sala */}
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1">Box / Sala</label>
                   <select
@@ -338,28 +420,20 @@ export default function UserManagementModal({
                     ))}
                   </select>
                 </div>
+                {(role === 'vet' || role === 'assistant') && (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">
+                      Intervalo de Agendamento (min)
+                    </label>
+                    <input
+                      type="number" min="15" max="240" step="15"
+                      value={appointmentInterval}
+                      onChange={e => setAppointmentInterval(e.target.value)}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                    />
+                  </div>
+                )}
               </div>
-
-              {/* Intervalo de Agendamento — apenas para vets e assistentes */}
-              {(role === 'vet' || role === 'assistant') && (
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">
-                    Intervalo de Agendamento (minutos)
-                  </label>
-                  <input
-                    type="number"
-                    min="15"
-                    max="240"
-                    step="15"
-                    value={appointmentInterval}
-                    onChange={e => setAppointmentInterval(e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
-                  />
-                  <p className="mt-1 text-[11px] text-slate-400">
-                    Duração padrão de cada consulta deste profissional na agenda
-                  </p>
-                </div>
-              )}
 
               {/* Especialidades */}
               <div>
@@ -381,7 +455,7 @@ export default function UserManagementModal({
                 </div>
               </div>
 
-              {/* Telefone + Endereço */}
+              {/* Telefone + Ativo */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1">Telefone</label>
@@ -481,7 +555,165 @@ export default function UserManagementModal({
             </div>
           )}
 
-          {/* ── Aba Permissões Granulares (G-14) ── */}
+          {/* ── Aba Comissões ── */}
+          {activeTab === 'comissoes' && !isNew && user && (
+            <div className="space-y-5">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-800">Regras de Comissão</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Defina o percentual de comissão que <strong>{user.full_name}</strong> recebe por tipo de venda.
+                  Os lançamentos são gerados automaticamente em Contas a Pagar após cada venda no PDV.
+                </p>
+              </div>
+
+              {/* Botão adicionar */}
+              {!showCommForm && (
+                <button
+                  type="button"
+                  onClick={() => setShowCommForm(true)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-dashed border-teal-300 text-teal-700 text-sm font-medium hover:bg-teal-50 transition-colors w-full justify-center"
+                >
+                  <Plus className="h-4 w-4" />
+                  Adicionar Regra de Comissão
+                </button>
+              )}
+
+              {/* Formulário inline */}
+              {showCommForm && (
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+                  <p className="text-xs font-semibold text-slate-700">Nova Regra</p>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* Tipo */}
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Aplica sobre</label>
+                      <select
+                        value={commType}
+                        onChange={e => setCommType(e.target.value as UserCommission['item_type'])}
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                      >
+                        <option value="all">Toda a venda</option>
+                        <option value="product">Produtos</option>
+                        <option value="service">Serviços</option>
+                        <option value="package">Pacotes</option>
+                      </select>
+                    </div>
+
+                    {/* Percentual */}
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Comissão (%)</label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min="0.01" max="100" step="0.01"
+                          value={commPct}
+                          onChange={e => setCommPct(e.target.value)}
+                          placeholder="Ex: 5"
+                          className="w-full rounded-lg border border-slate-300 px-3 py-2 pr-8 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                        />
+                        <span className="absolute right-3 top-2.5 text-slate-400 text-sm">%</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Descrição */}
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Observação (opcional)</label>
+                    <input
+                      value={commDesc}
+                      onChange={e => setCommDesc(e.target.value)}
+                      placeholder={
+                        commType === 'all' ? 'Ex: Comissão padrão sobre vendas'
+                        : commType === 'product' ? 'Ex: Comissão sobre medicamentos'
+                        : commType === 'service' ? 'Ex: Comissão sobre consultas'
+                        : 'Ex: Comissão sobre pacotes de banho'
+                      }
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                    />
+                  </div>
+
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={handleSaveCommission}
+                      disabled={savingComm || !commPct}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-teal-600 text-white text-sm font-semibold rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-50"
+                    >
+                      {savingComm ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                      Salvar Regra
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setShowCommForm(false); setCommPct(''); setCommDesc(''); setCommType('all') }}
+                      className="px-4 py-2 border border-slate-300 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50 transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Lista de regras */}
+              {loadingComm ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-teal-600" />
+                </div>
+              ) : commissions.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 text-center">
+                  <Percent className="h-10 w-10 text-slate-200 mb-3" />
+                  <p className="text-sm font-medium text-slate-500">Nenhuma regra cadastrada</p>
+                  <p className="text-xs text-slate-400 mt-1">Adicione uma regra para gerar comissões automaticamente</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {commissions.map(c => (
+                    <div
+                      key={c.id}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-teal-100">
+                          <Percent className="h-4 w-4 text-teal-600" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-semibold text-slate-800">
+                              {c.percentage.toFixed(2).replace('.', ',')}%
+                            </span>
+                            <span className="text-xs bg-blue-100 text-blue-700 rounded-full px-2 py-0.5 font-medium">
+                              {ITEM_TYPE_LABELS[c.item_type]}
+                            </span>
+                          </div>
+                          {c.description && (
+                            <p className="text-xs text-slate-400 truncate mt-0.5">{c.description}</p>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCommission(c.id)}
+                        disabled={deletingComm === c.id}
+                        className="flex-shrink-0 p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {deletingComm === c.id
+                          ? <Loader2 className="h-4 w-4 animate-spin" />
+                          : <Trash2 className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Info */}
+              <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 text-xs text-blue-700">
+                <strong>Como funciona:</strong> Após cada venda no PDV, o sistema calcula e registra automaticamente
+                um lançamento em <em>Contas a Pagar</em> com categoria <em>Comissão</em> para este profissional.
+                Visualize em <strong>Relatórios → Comissões</strong>.
+              </div>
+            </div>
+          )}
+
+          {/* ── Aba Permissões Granulares ── */}
           {activeTab === 'permissoes' && !isNew && user && (
             <UserPermissionsMatrix
               userId={user.id}
@@ -514,7 +746,7 @@ export default function UserManagementModal({
               ) : (
                 <div className="grid grid-cols-2 gap-2">
                   {MODULE_OPTIONS.map(({ key, label }) => {
-                    const enabled = moduleMap[key] !== false
+                    const enabled  = moduleMap[key] !== false
                     const isSaving = savingModule === key
                     const disabled = user?.id === currentUserId
                     return (
