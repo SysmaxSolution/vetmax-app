@@ -5,7 +5,7 @@ import {
   Package, Plus, AlertTriangle, RefreshCw, Trash2, Pencil,
   ArrowDownToLine, Search, X, Loader2, Check, Calendar,
   Shield, ShoppingBag, Scissors, Sparkles, FlaskConical, Pill,
-  Upload, Stethoscope, Gift,
+  Upload, Stethoscope, Gift, Activity,
 } from 'lucide-react'
 import type { StockItemV2, StockCategory } from '@/lib/actions/stock'
 import {
@@ -45,7 +45,7 @@ const SERVICE_CATS: {
   { key: 'aesthetics_service',label: 'Estética',     icon: <Sparkles     className="h-4 w-4" />, color: 'text-violet-600',  badge: 'bg-violet-100 text-violet-700' },
   { key: 'exam',              label: 'Exame/Lab',    icon: <FlaskConical className="h-4 w-4" />, color: 'text-indigo-600',  badge: 'bg-indigo-100 text-indigo-700' },
   { key: 'surgery',           label: 'Cirurgia',     icon: <Scissors     className="h-4 w-4" />, color: 'text-red-600',     badge: 'bg-red-100 text-red-700'      },
-  { key: 'service',           label: 'Geral',        icon: <Stethoscope  className="h-4 w-4" />, color: 'text-slate-600',   badge: 'bg-slate-100 text-slate-600'  },
+  { key: 'service',           label: 'Procedimentos', icon: <Activity     className="h-4 w-4" />, color: 'text-slate-600',   badge: 'bg-slate-100 text-slate-600'  },
 ]
 
 // Campos condicionais por categoria de produto
