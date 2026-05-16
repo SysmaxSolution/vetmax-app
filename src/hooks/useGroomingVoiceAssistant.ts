@@ -44,8 +44,8 @@ export function useGroomingVoiceAssistant({ onAutoSave, onSendWA, startTriggers,
   const saveCmdReRef             = useRef<RegExp>(buildStopRe([]))
   const onAutoSaveRef            = useRef(onAutoSave)
   const onSendWARef              = useRef(onSendWA)
-  // Rastreia índices de resultados finais já processados para evitar dupla contagem
   const processedFinalIndicesRef = useRef<Set<number>>(new Set())
+  const processedFinalTextsRef   = useRef<Set<string>>(new Set())
 
   useEffect(() => { stateRef.current     = state      }, [state])
   useEffect(() => { onAutoSaveRef.current = onAutoSave }, [onAutoSave])
@@ -91,6 +91,25 @@ export function useGroomingVoiceAssistant({ onAutoSave, onSendWA, startTriggers,
     if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null }
   }
 
+  // ─── Overlap dedup ───────────────────────────────────────────────────────────
+
+  function removeLeadingOverlap(base: string, incoming: string): string {
+    if (!base || !incoming) return incoming
+    const b    = base.trim().toLowerCase()
+    const c    = incoming.trim().toLowerCase()
+    const cOrig = incoming.trim()
+    if (b.endsWith(c)) return ''
+    if (c.startsWith(b)) return cOrig.slice(b.length).trimStart()
+    const words = b.split(/\s+/)
+    for (let len = Math.min(words.length, 12); len >= 2; len--) {
+      const suffix = words.slice(words.length - len).join(' ')
+      if (suffix.length >= 8 && c.startsWith(suffix)) {
+        return cOrig.slice(suffix.length).trimStart()
+      }
+    }
+    return incoming
+  }
+
   // ─── Salvar evolução ──────────────────────────────────────────────────────────
 
   function triggerSave(rawText: string) {
@@ -99,6 +118,7 @@ export function useGroomingVoiceAssistant({ onAutoSave, onSendWA, startTriggers,
     const clean = rawText.replace(saveCmdReRef.current, '').replace(/\s{2,}/g, ' ').trim()
     finalTranscriptRef.current = ''
     processedFinalIndicesRef.current.clear()
+    processedFinalTextsRef.current.clear()
     setState('CONFIRM_WA')
     setTranscript('')
     playBeep(660)
@@ -165,8 +185,10 @@ export function useGroomingVoiceAssistant({ onAutoSave, onSendWA, startTriggers,
         for (let i = event.resultIndex; i < event.results.length; i++) {
           if (i < recordingStartRef.current) continue  // ignora pré-RECORDING
           if (event.results[i].isFinal) {
-            if (!processedFinalIndicesRef.current.has(i)) {
+            const text = event.results[i][0].transcript.trim().toLowerCase()
+            if (!processedFinalIndicesRef.current.has(i) && !processedFinalTextsRef.current.has(text)) {
               processedFinalIndicesRef.current.add(i)
+              processedFinalTextsRef.current.add(text)
               newFinals += event.results[i][0].transcript + ' '
             }
           } else {
@@ -178,17 +200,7 @@ export function useGroomingVoiceAssistant({ onAutoSave, onSendWA, startTriggers,
           finalTranscriptRef.current = (finalTranscriptRef.current + ' ' + newFinals).trim()
         }
 
-        // Fix cross-browser: engines ASR server-side (mobile Chrome, Android WebView)
-        // retornam o texto ACUMULADO completo em cada interim result, causando o loop
-        // de repetição. Remove o prefixo já finalizado antes de montar fullText.
-        let displayInterim = interim
-        if (finalTranscriptRef.current && displayInterim) {
-          const f = finalTranscriptRef.current.trim()
-          const d = displayInterim.trim()
-          if (d.toLowerCase().startsWith(f.toLowerCase())) {
-            displayInterim = d.slice(f.length).trimStart()
-          }
-        }
+        const displayInterim = removeLeadingOverlap(finalTranscriptRef.current, interim)
 
         const fullText = (finalTranscriptRef.current + (displayInterim ? ' ' + displayInterim : '')).trim()
 

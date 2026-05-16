@@ -36,9 +36,10 @@ export function useClinicalVoiceAssistant({ onAutoSave, startTriggers, stopTrigg
   const wakeWordReRef            = useRef<RegExp>(buildWakeRe([]))
   const saveCmdReRef             = useRef<RegExp>(buildStopRe([]))
   const onAutoSaveRef            = useRef(onAutoSave)
-  // Rastreia índices de resultados finais já processados para evitar dupla contagem
-  // (comportamento de algumas engines ASR mobile/server-side).
   const processedFinalIndicesRef = useRef<Set<number>>(new Set())
+  // Dedup por conteúdo: persiste entre restarts da engine (Chrome mobile reinicia ~60s)
+  // para evitar que o mesmo texto seja acumulado duas vezes após um onend/restart.
+  const processedFinalTextsRef   = useRef<Set<string>>(new Set())
 
   useEffect(() => { stateRef.current      = state      }, [state])
   useEffect(() => { onAutoSaveRef.current = onAutoSave }, [onAutoSave])
@@ -64,11 +65,32 @@ export function useClinicalVoiceAssistant({ onAutoSave, startTriggers, stopTrigg
     if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null }
   }
 
+  // Remove do início de `incoming` qualquer texto já presente no final de `base`.
+  // Cobre dois casos: (1) interim começa com o finalTranscript completo (fix anterior);
+  // (2) interim começa com um sufixo do finalTranscript (overlap parcial — causa do loop no Chrome mobile).
+  function removeLeadingOverlap(base: string, incoming: string): string {
+    if (!base || !incoming) return incoming
+    const b    = base.trim().toLowerCase()
+    const c    = incoming.trim().toLowerCase()
+    const cOrig = incoming.trim()
+    if (b.endsWith(c)) return ''               // base já contém o incoming por completo
+    if (c.startsWith(b)) return cOrig.slice(b.length).trimStart()  // caso completo (fix anterior)
+    const words = b.split(/\s+/)
+    for (let len = Math.min(words.length, 12); len >= 2; len--) {
+      const suffix = words.slice(words.length - len).join(' ')
+      if (suffix.length >= 8 && c.startsWith(suffix)) {
+        return cOrig.slice(suffix.length).trimStart()
+      }
+    }
+    return incoming
+  }
+
   function triggerSave(rawText: string) {
     clearSilenceTimer()
     const clean = rawText.replace(saveCmdReRef.current, '').replace(/\s{2,}/g, ' ').trim()
     finalTranscriptRef.current = ''
     processedFinalIndicesRef.current.clear()
+    processedFinalTextsRef.current.clear()
     setState('IDLE')
     setTranscript('')
     playBeep(660)
@@ -132,10 +154,11 @@ export function useClinicalVoiceAssistant({ onAutoSave, startTriggers, stopTrigg
         for (let i = event.resultIndex; i < event.results.length; i++) {
           if (i < recordingStartRef.current) continue
           if (event.results[i].isFinal) {
-            // Evita reprocessar o mesmo índice (engines mobile podem disparar onresult
-            // múltiplas vezes com o mesmo resultado já finalizado)
-            if (!processedFinalIndicesRef.current.has(i)) {
+            const text = event.results[i][0].transcript.trim().toLowerCase()
+            // Dupla guarda: índice (intra-sessão) + conteúdo (cross-restart)
+            if (!processedFinalIndicesRef.current.has(i) && !processedFinalTextsRef.current.has(text)) {
               processedFinalIndicesRef.current.add(i)
+              processedFinalTextsRef.current.add(text)
               newFinals += event.results[i][0].transcript + ' '
             }
           } else {
@@ -147,18 +170,10 @@ export function useClinicalVoiceAssistant({ onAutoSave, startTriggers, stopTrigg
           finalTranscriptRef.current = (finalTranscriptRef.current + ' ' + newFinals).trim()
         }
 
-        // Fix cross-browser: engines ASR server-side (mobile Chrome, Android WebView)
-        // retornam o texto ACUMULADO completo em cada interim result. Ao combinar com
-        // finals já processados, isso gera o loop de repetição visível na UI.
-        // Detecta e remove o prefixo duplicado antes de montar fullText.
-        let displayInterim = interim
-        if (finalTranscriptRef.current && displayInterim) {
-          const f = finalTranscriptRef.current.trim()
-          const d = displayInterim.trim()
-          if (d.toLowerCase().startsWith(f.toLowerCase())) {
-            displayInterim = d.slice(f.length).trimStart()
-          }
-        }
+        // Remove sobreposição entre interim acumulado e o finalTranscript já confirmado.
+        // Cobre: interim começa com finalTranscript completo (caso 1) ou com um
+        // sufixo dele (caso 2 — causa do loop "a avaliação a avaliação" no Chrome mobile).
+        const displayInterim = removeLeadingOverlap(finalTranscriptRef.current, interim)
 
         const fullText = (finalTranscriptRef.current + (displayInterim ? ' ' + displayInterim : '')).trim()
 
