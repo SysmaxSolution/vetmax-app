@@ -16,6 +16,7 @@ import { getInsuranceProviders, type InsuranceProvider } from '@/lib/actions/ins
 import { getPetInsurance, upsertPetInsurance, removePetInsurance, type PetInsurance } from '@/lib/actions/pet-insurance'
 import VaccinationCard from '@/components/vet/VaccinationCard'
 import { BehaviorTagsSelector } from '@/components/ui/BehaviorTagsBadges'
+import { BreedCombobox } from '@/components/ui/BreedCombobox'
 import type { PatientsListItem } from '@/lib/actions/timeline'
 import type { PatientSpecies } from '@/types'
 import { REPRODUCTIVE_STATUS_OPTIONS } from '@/types'
@@ -703,7 +704,13 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                 <FieldSelect label="Espécie" value={species} options={SPECIES_OPTIONS} onChange={setSpecies} data-mentor-step="pet-species-select" />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-                <FieldInput label="Raça" value={breed} onChange={setBreed} placeholder="Ex: Labrador" data-mentor-step="pet-breed-input" />
+                <BreedCombobox
+                  value={breed}
+                  onChange={setBreed}
+                  species={species as PatientSpecies}
+                  placeholder="Ex: Labrador"
+                  inputProps={{ 'data-mentor-step': 'pet-breed-input' } as React.InputHTMLAttributes<HTMLInputElement>}
+                />
                 <div>
                   <div className="flex items-center justify-between mb-1.5 ml-1">
                     <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Nascimento</label>
