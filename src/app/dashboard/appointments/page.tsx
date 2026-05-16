@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { getUnifiedEventsForRange } from '@/lib/actions/calendar'
+import { getUnifiedEventsForRange, getClinicProfessionals } from '@/lib/actions/calendar'
 import AppointmentsCalendar from '@/components/appointments/AppointmentsCalendar'
 import { format, startOfMonth, endOfMonth } from 'date-fns'
 import { CalendarDays } from 'lucide-react'
@@ -16,8 +16,13 @@ export default async function AppointmentsPage() {
   const start = format(startOfMonth(today), 'yyyy-MM-dd')
   const end   = format(endOfMonth(today),   'yyyy-MM-dd')
 
-  const result = await getUnifiedEventsForRange(start, end)
-  const initialEvents = Array.isArray(result) ? result : []
+  const [eventsResult, profResult] = await Promise.all([
+    getUnifiedEventsForRange(start, end),
+    getClinicProfessionals(),
+  ])
+
+  const initialEvents      = Array.isArray(eventsResult) ? eventsResult : []
+  const initialProfessionals = Array.isArray(profResult)  ? profResult  : []
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -38,6 +43,7 @@ export default async function AppointmentsPage() {
         <AppointmentsCalendar
           initialEvents={initialEvents}
           initialDate={today}
+          professionals={initialProfessionals}
         />
       </main>
     </div>

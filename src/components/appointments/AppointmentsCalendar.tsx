@@ -1,12 +1,19 @@
 'use client'
 
-import { useState, useCallback } from 'react'
-import { Calendar, dateFnsLocalizer, type View, type SlotInfo } from 'react-big-calendar'
-import { format, parse, startOfWeek, getDay, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns'
+import { useState, useCallback, useMemo } from 'react'
+import { Calendar, dateFnsLocalizer, type View } from 'react-big-calendar'
+import {
+  format, parse, startOfWeek, getDay,
+  startOfMonth, endOfMonth, startOfDay, endOfDay, addDays,
+} from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
-import { getUnifiedEventsForRange, type UnifiedCalendarEvent } from '@/lib/actions/calendar'
-import { ChevronLeft, ChevronRight, Calendar as CalIcon, Loader2 } from 'lucide-react'
+import { getUnifiedEventsForRange, type UnifiedCalendarEvent, type CalendarProfessional } from '@/lib/actions/calendar'
+import PatientLink from '@/components/PatientLink'
+import {
+  ChevronLeft, ChevronRight, Loader2, X,
+  Clock, User, Scissors, Stethoscope, Syringe, AlertCircle,
+} from 'lucide-react'
 
 // ─── Localizer pt-BR ──────────────────────────────────────────────────────────
 
@@ -18,7 +25,7 @@ const localizer = dateFnsLocalizer({
   locales: { 'pt-BR': ptBR },
 })
 
-// ─── Mapeamento de cores ──────────────────────────────────────────────────────
+// ─── Constantes de estilo ─────────────────────────────────────────────────────
 
 const REASON_COLORS: Record<string, string> = {
   consultation: '#2563eb',
@@ -30,65 +37,270 @@ const REASON_COLORS: Record<string, string> = {
   grooming:     '#0d9488',
 }
 
-function eventColor(evt: UnifiedCalendarEvent): string {
-  if (evt.type === 'grooming') return REASON_COLORS.grooming
-  return REASON_COLORS[evt.reason ?? ''] ?? '#2563eb'
+const REASON_LABELS: Record<string, string> = {
+  consultation: 'Consulta',
+  follow_up:    'Retorno',
+  vaccination:  'Vacinação',
+  surgery:      'Cirurgia',
+  exam:         'Exame',
+  emergency:    'Emergência',
+  grooming:     'Banho & Tosa',
 }
 
-// ─── Props ────────────────────────────────────────────────────────────────────
+const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
+  scheduled:       { label: 'Agendado',          cls: 'bg-blue-100 text-blue-700' },
+  confirmed:       { label: 'Confirmado',         cls: 'bg-teal-100 text-teal-700' },
+  arrived:         { label: 'Em Atendimento',     cls: 'bg-amber-100 text-amber-700' },
+  completed:       { label: 'Concluído',          cls: 'bg-green-100 text-green-700' },
+  cancelled:       { label: 'Cancelado',          cls: 'bg-red-100 text-red-700' },
+  received:        { label: 'Recebido',           cls: 'bg-slate-100 text-slate-600' },
+  bathing:         { label: 'Banho',              cls: 'bg-blue-100 text-blue-700' },
+  grooming_status: { label: 'Tosa',               cls: 'bg-indigo-100 text-indigo-700' },
+  waiting_pickup:  { label: 'Aguard. Retirada',   cls: 'bg-amber-100 text-amber-700' },
+  delivered:       { label: 'Entregue',           cls: 'bg-green-100 text-green-700' },
+}
+
+const ROLE_ICONS: Record<string, React.ReactNode> = {
+  vet:     <Stethoscope className="h-3 w-3" />,
+  groomer: <Scissors className="h-3 w-3" />,
+}
+
+const COLOR_LEGEND = [
+  { label: 'Consulta',     color: '#2563eb' },
+  { label: 'Vacinação',    color: '#16a34a' },
+  { label: 'Cirurgia',     color: '#dc2626' },
+  { label: 'Exame',        color: '#7c3aed' },
+  { label: 'Emergência',   color: '#ea580c' },
+  { label: 'Banho & Tosa', color: '#0d9488' },
+]
+
+const UNASSIGNED_ID = '__unassigned__'
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function eventColor(e: UnifiedCalendarEvent): string {
+  if (e.type === 'grooming') return REASON_COLORS.grooming
+  return REASON_COLORS[e.reason ?? ''] ?? '#2563eb'
+}
+
+function serviceLabel(e: UnifiedCalendarEvent): string {
+  if (e.type === 'grooming' && e.services && e.services.length > 0) return e.services.join(', ')
+  if (e.type === 'grooming') return 'Banho & Tosa'
+  return REASON_LABELS[e.reason ?? ''] ?? e.reason ?? 'Consulta'
+}
+
+// ─── RBC Event shape ──────────────────────────────────────────────────────────
 
 interface RBCEvent {
-  id:       string
-  title:    string
-  start:    Date
-  end:      Date
-  resource: UnifiedCalendarEvent
+  id:         string
+  title:      string
+  start:      Date
+  end:        Date
+  resourceId: string
+  resource:   UnifiedCalendarEvent
 }
 
 function toRBCEvents(raw: UnifiedCalendarEvent[]): RBCEvent[] {
   return raw.map(e => {
-    const start = new Date(e.datetime.replace(' ', 'T'))
-    // appointment = 30 min, grooming = 2 h
+    const start      = new Date(e.datetime.replace(' ', 'T'))
     const durationMs = e.type === 'grooming' ? 2 * 60 * 60 * 1000 : 30 * 60 * 1000
     return {
-      id:       e.id,
-      title:    `${e.petName} — ${e.type === 'grooming' ? 'B&T' : e.reason ?? 'Consulta'}`,
+      id:         e.id,
+      title:      `${e.petName} — ${serviceLabel(e)}`,
       start,
-      end:      new Date(start.getTime() + durationMs),
-      resource: e,
+      end:        new Date(start.getTime() + durationMs),
+      resourceId: e.professionalId ?? UNASSIGNED_ID,
+      resource:   e,
     }
   })
 }
 
-const MESSAGES = {
-  allDay:     'Dia todo',
-  previous:   '‹ Anterior',
-  next:       'Próximo ›',
-  today:      'Hoje',
-  month:      'Mês',
-  week:       'Semana',
-  day:        'Dia',
-  agenda:     'Agenda',
-  date:       'Data',
-  time:       'Hora',
-  event:      'Evento',
-  showMore:   (n: number) => `+${n} mais`,
-  noEventsInRange: 'Sem eventos neste período',
+// ─── Toolbar customizada ──────────────────────────────────────────────────────
+
+interface ToolbarProps {
+  date:        Date
+  view:        View
+  onNavigate:  (action: 'PREV' | 'NEXT' | 'TODAY') => void
+  onView:      (view: View) => void
+  loading:     boolean
 }
 
-// ─── Props do componente ──────────────────────────────────────────────────────
+function CustomToolbar({ date, view, onNavigate, onView, loading }: ToolbarProps) {
+  const label = useMemo(() => {
+    if (view === 'month') return format(date, 'MMMM yyyy', { locale: ptBR })
+    if (view === 'week') {
+      const ws = startOfWeek(date, { locale: ptBR })
+      const we = addDays(ws, 6)
+      return `${format(ws, 'dd MMM', { locale: ptBR })} – ${format(we, "dd MMM yyyy", { locale: ptBR })}`
+    }
+    return format(date, "EEEE, dd 'de' MMMM yyyy", { locale: ptBR })
+  }, [date, view])
+
+  const VIEWS: { key: View; label: string }[] = [
+    { key: 'day',   label: 'Dia' },
+    { key: 'week',  label: 'Semana' },
+    { key: 'month', label: 'Mês' },
+  ]
+
+  return (
+    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-4 py-3 border-b border-slate-100">
+      {/* Navegação de data */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => onNavigate('PREV')}
+          className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <button
+          onClick={() => onNavigate('TODAY')}
+          className="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-xs font-semibold text-slate-700 transition-colors"
+        >
+          Hoje
+        </button>
+        <button
+          onClick={() => onNavigate('NEXT')}
+          className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+        <h2 className="text-sm font-semibold text-slate-800 ml-1 capitalize">{label}</h2>
+        {loading && <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />}
+      </div>
+
+      {/* Seletor de vista */}
+      <div className="flex rounded-xl overflow-hidden border border-slate-200 bg-slate-50 text-xs font-semibold">
+        {VIEWS.map((v, i) => (
+          <button
+            key={v.key}
+            onClick={() => onView(v.key)}
+            className={`px-4 py-2 transition-all ${i > 0 ? 'border-l border-slate-200' : ''} ${
+              view === v.key
+                ? 'bg-blue-600 text-white'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            {v.label}
+            {v.key === 'day' && view === 'day' && (
+              <span className="ml-1.5 text-[10px] bg-white/20 rounded-full px-1">por profissional</span>
+            )}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── Card de detalhes rico ────────────────────────────────────────────────────
+
+function EventDetailCard({ event, onClose }: { event: UnifiedCalendarEvent; onClose: () => void }) {
+  const color   = eventColor(event)
+  const status  = STATUS_LABELS[event.status] ?? { label: event.status, cls: 'bg-slate-100 text-slate-600' }
+  const service = serviceLabel(event)
+  const time    = format(new Date(event.datetime.replace(' ', 'T')), 'HH:mm')
+  const dateStr = format(new Date(event.datetime.replace(' ', 'T')), "dd 'de' MMMM yyyy", { locale: ptBR })
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden animate-in slide-in-from-bottom-2 duration-200">
+      {/* Faixa colorida topo */}
+      <div className="h-1.5" style={{ backgroundColor: color }} />
+
+      <div className="p-5 space-y-4">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              {event.type === 'grooming'
+                ? <Scissors className="h-4 w-4 text-teal-600" />
+                : <Stethoscope className="h-4 w-4 text-blue-600" />
+              }
+              <span className="font-bold text-slate-900 text-base">{event.petName}</span>
+            </div>
+            {event.petId && (
+              <PatientLink id={event.petId} name={event.petName} size="sm" className="ml-6" />
+            )}
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors flex-shrink-0"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Grid de informações */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-0.5">
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Tutor</p>
+            <p className="text-sm font-medium text-slate-800">{event.tutorName || '—'}</p>
+          </div>
+
+          <div className="space-y-0.5">
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Serviço</p>
+            <p className="text-sm font-medium text-slate-800">{service}</p>
+          </div>
+
+          <div className="space-y-0.5">
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+              <Clock className="h-3 w-3" /> Horário
+            </p>
+            <p className="text-sm font-medium text-slate-800">{time}</p>
+            <p className="text-xs text-slate-400">{dateStr}</p>
+          </div>
+
+          <div className="space-y-0.5">
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+              <User className="h-3 w-3" /> Profissional
+            </p>
+            <p className="text-sm font-medium text-slate-800">
+              {event.professionalName || 'Não atribuído'}
+            </p>
+          </div>
+        </div>
+
+        {/* Status + badge */}
+        <div className="flex items-center justify-between pt-1 border-t border-slate-100">
+          <span className={`inline-flex items-center text-xs font-bold px-2.5 py-1 rounded-full ${status.cls}`}>
+            {status.label}
+          </span>
+          <span className="text-xs text-slate-400">
+            {event.source === 'whatsapp' && '📱 via WhatsApp · '}
+            {event.type === 'grooming' ? 'Banho & Tosa' : 'Consulta'}
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Props ────────────────────────────────────────────────────────────────────
+
+interface Resource {
+  id:    string
+  title: string
+  role?: string
+}
 
 interface Props {
   initialEvents: UnifiedCalendarEvent[]
   initialDate:   Date
+  professionals: CalendarProfessional[]
 }
 
-export default function AppointmentsCalendar({ initialEvents, initialDate }: Props) {
-  const [events,    setEvents]    = useState<RBCEvent[]>(toRBCEvents(initialEvents))
-  const [view,      setView]      = useState<View>('month')
-  const [date,      setDate]      = useState(initialDate)
-  const [loading,   setLoading]   = useState(false)
-  const [selected,  setSelected]  = useState<UnifiedCalendarEvent | null>(null)
+// ─── Componente principal ─────────────────────────────────────────────────────
+
+export default function AppointmentsCalendar({ initialEvents, initialDate, professionals }: Props) {
+  const [events,  setEvents]  = useState<RBCEvent[]>(() => toRBCEvents(initialEvents))
+  const [view,    setView]    = useState<View>('month')
+  const [date,    setDate]    = useState(initialDate)
+  const [loading, setLoading] = useState(false)
+  const [selected, setSelected] = useState<UnifiedCalendarEvent | null>(null)
+
+  // Lista de recursos (profissionais + coluna geral)
+  const resources = useMemo<Resource[]>(() => [
+    { id: UNASSIGNED_ID, title: 'Geral' },
+    ...professionals.map(p => ({ id: p.id, title: p.name, role: p.role })),
+  ], [professionals])
 
   const fetchRange = useCallback(async (newDate: Date, newView: View) => {
     setLoading(true)
@@ -98,12 +310,11 @@ export default function AppointmentsCalendar({ initialEvents, initialDate }: Pro
       end   = endOfMonth(newDate)
     } else if (newView === 'week') {
       start = startOfWeek(newDate, { locale: ptBR })
-      end   = new Date(start.getTime() + 6 * 24 * 60 * 60 * 1000)
+      end   = addDays(start, 6)
     } else {
-      start = newDate
-      end   = newDate
+      start = startOfDay(newDate)
+      end   = endOfDay(newDate)
     }
-
     const result = await getUnifiedEventsForRange(
       format(start, 'yyyy-MM-dd'),
       format(end,   'yyyy-MM-dd'),
@@ -122,50 +333,34 @@ export default function AppointmentsCalendar({ initialEvents, initialDate }: Pro
     fetchRange(date, newView)
   }
 
-  function handleSelectEvent(evt: RBCEvent) {
-    setSelected(evt.resource)
-  }
-
-  function handleSelectSlot(_slot: SlotInfo) {
-    setSelected(null)
-  }
-
-  const eventPropGetter = (evt: RBCEvent) => ({
-    style: {
-      backgroundColor: eventColor(evt.resource),
-      borderRadius:    '6px',
-      border:          'none',
-      color:           '#fff',
-      fontSize:        '12px',
-      fontWeight:      600,
-      padding:         '2px 6px',
-    },
-  })
+  // Resource props apenas na vista Dia
+  const resourceProps = view === 'day' ? {
+    resources,
+    resourceIdAccessor: 'id'    as const,
+    resourceTitleAccessor: 'title' as const,
+  } : {}
 
   return (
     <div className="space-y-4">
-      {/* Legenda de cores */}
-      <div className="flex flex-wrap gap-3 text-xs">
-        {[
-          { label: 'Consulta',     color: '#2563eb' },
-          { label: 'Vacinação',    color: '#16a34a' },
-          { label: 'Cirurgia',     color: '#dc2626' },
-          { label: 'Exame',        color: '#7c3aed' },
-          { label: 'Emergência',   color: '#ea580c' },
-          { label: 'Banho & Tosa', color: '#0d9488' },
-        ].map(l => (
+      {/* Legenda */}
+      <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 px-1">
+        {COLOR_LEGEND.map(l => (
           <span key={l.label} className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded-full inline-block flex-shrink-0" style={{ backgroundColor: l.color }} />
+            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: l.color }} />
             {l.label}
           </span>
         ))}
-        {loading && <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400 ml-2" />}
+        {view === 'day' && professionals.length > 0 && (
+          <span className="ml-auto text-xs text-blue-600 font-semibold">
+            {resources.length} colunas · Visão por Profissional
+          </span>
+        )}
       </div>
 
       {/* Calendário */}
       <div
         className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"
-        style={{ height: 680 }}
+        style={{ height: 700 }}
       >
         <Calendar
           localizer={localizer}
@@ -174,47 +369,56 @@ export default function AppointmentsCalendar({ initialEvents, initialDate }: Pro
           date={date}
           onView={handleView}
           onNavigate={handleNavigate}
-          onSelectEvent={handleSelectEvent}
-          onSelectSlot={handleSelectSlot}
-          selectable
-          eventPropGetter={eventPropGetter}
-          messages={MESSAGES}
+          onSelectEvent={(evt: RBCEvent) => setSelected(evt.resource)}
+          eventPropGetter={(evt: RBCEvent) => ({
+            style: {
+              backgroundColor: eventColor(evt.resource),
+              borderRadius:    '6px',
+              border:          'none',
+              color:           '#fff',
+              fontSize:        '11px',
+              fontWeight:      600,
+              padding:         '2px 6px',
+              cursor:          'pointer',
+            },
+          })}
+          messages={{
+            allDay:           'Dia todo',
+            previous:         '',
+            next:             '',
+            today:            '',
+            month:            'Mês',
+            week:             'Semana',
+            day:              'Dia',
+            agenda:           'Agenda',
+            date:             'Data',
+            time:             'Hora',
+            event:            'Evento',
+            showMore:         (n: number) => `+${n} mais`,
+            noEventsInRange:  'Sem eventos neste período',
+          }}
           culture="pt-BR"
           style={{ height: '100%', fontFamily: 'inherit' }}
           popup
           showAllEvents
+          components={{
+            toolbar: (props: any) => (
+              <CustomToolbar
+                date={props.date}
+                view={props.view}
+                onNavigate={props.onNavigate}
+                onView={props.onView}
+                loading={loading}
+              />
+            ),
+          }}
+          {...resourceProps}
         />
       </div>
 
-      {/* Painel lateral de detalhe do evento */}
+      {/* Card de detalhe do evento selecionado */}
       {selected && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3 animate-in slide-in-from-bottom-2 duration-200">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="font-semibold text-slate-900 text-base">{selected.petName}</p>
-              <p className="text-sm text-slate-500 mt-0.5">Tutor: {selected.tutorName}</p>
-            </div>
-            <span
-              className="text-xs font-bold px-2.5 py-1 rounded-full text-white"
-              style={{ backgroundColor: eventColor(selected) }}
-            >
-              {selected.type === 'grooming' ? 'Banho & Tosa' : selected.reason ?? 'Consulta'}
-            </span>
-          </div>
-          <div className="text-sm text-slate-600 space-y-1">
-            <p><span className="font-medium">Horário:</span> {format(new Date(selected.datetime.replace(' ', 'T')), "dd/MM/yyyy 'às' HH:mm")}</p>
-            <p><span className="font-medium">Status:</span> {selected.status}</p>
-            {selected.services && selected.services.length > 0 && (
-              <p><span className="font-medium">Serviços:</span> {selected.services.join(', ')}</p>
-            )}
-          </div>
-          <button
-            onClick={() => setSelected(null)}
-            className="text-xs text-slate-400 hover:text-slate-600 mt-2"
-          >
-            Fechar
-          </button>
-        </div>
+        <EventDetailCard event={selected} onClose={() => setSelected(null)} />
       )}
     </div>
   )
