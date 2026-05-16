@@ -1,445 +1,488 @@
 'use client'
 
-import { useState, useEffect, useTransition } from 'react'
+import { useState, useCallback, useMemo, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, ChevronRight, CalendarDays, Plus, Scissors, X, MessageCircle, Pencil } from 'lucide-react'
+import { Calendar, dateFnsLocalizer, type View } from 'react-big-calendar'
 import {
-  confirmArrival,
-  cancelAppointment,
-  getTodayCountsByProfessional,
-  type AppointmentItem,
-  type ProfessionalCount,
+  format, parse, startOfWeek, getDay,
+  startOfMonth, endOfMonth, startOfDay, endOfDay, addDays,
+} from 'date-fns'
+import { ptBR } from 'date-fns/locale'
+import 'react-big-calendar/lib/css/react-big-calendar.css'
+import {
+  ChevronLeft, ChevronRight, Plus, Scissors, X, MessageCircle,
+  Clock, User, Stethoscope, Loader2, CheckCircle2, AlertCircle,
+} from 'lucide-react'
+import {
+  confirmArrival, cancelAppointment,
+  getTodayCountsByProfessional, type ProfessionalCount,
 } from '@/lib/actions/appointments'
 import { cancelGroomingSession } from '@/lib/actions/grooming'
 import {
-  getUnifiedCalendarEvents,
-  getUnifiedMonthCounts,
-  type UnifiedCalendarEvent,
+  getUnifiedEventsForRange, getClinicProfessionals,
+  type UnifiedCalendarEvent, type CalendarProfessional,
 } from '@/lib/actions/calendar'
-import { sendDailyScheduleToVets, type DailyScheduleResult } from '@/lib/actions/daily-schedule-whatsapp'
-import { getPackageInfoForAppointments, type PackageSessionInfo } from '@/lib/actions/packages'
+import { sendDailyScheduleToVets } from '@/lib/actions/daily-schedule-whatsapp'
+import PatientLink from '@/components/PatientLink'
 import NewAppointmentModal from './NewAppointmentModal'
 import EditAppointmentModal from './EditAppointmentModal'
 import ReceptionSubNav from './ReceptionSubNav'
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// ─── Localizer pt-BR ──────────────────────────────────────────────────────────
 
-const PT_MONTHS = [
-  'Janeiro','Fevereiro','Março','Abril','Maio','Junho',
-  'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro',
-]
-const PT_WEEKDAYS      = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb']
-const PT_WEEKDAYS_LONG = ['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado']
+const localizer = dateFnsLocalizer({
+  format,
+  parse,
+  startOfWeek: () => startOfWeek(new Date(), { locale: ptBR }),
+  getDay,
+  locales: { 'pt-BR': ptBR },
+})
 
-const VISIT_REASON_LABELS: Record<string, string> = {
+// ─── Constantes ───────────────────────────────────────────────────────────────
+
+const UNASSIGNED_ID = '__unassigned__'
+
+const EVENT_COLORS: Record<string, string> = {
+  consultation: '#2563eb',
+  follow_up:    '#6366f1',
+  vaccination:  '#16a34a',
+  surgery:      '#dc2626',
+  exam:         '#7c3aed',
+  emergency:    '#ea580c',
+  grooming:     '#0d9488',
+}
+
+const REASON_LABELS: Record<string, string> = {
   consultation: 'Consulta',
   follow_up:    'Retorno',
-  emergency:    'Emergência',
   vaccination:  'Vacinação',
-  exam:         'Exame',
   surgery:      'Cirurgia',
-  grooming:     'Banho e Tosa',
+  exam:         'Exame',
+  emergency:    'Emergência',
+  grooming:     'Banho & Tosa',
 }
 
-const SPECIES_EMOJI: Record<string, string> = {
-  dog: '🐶', cat: '🐱', bird: '🐦', exotic: '🦜',
-  rabbit: '🐰', rodent: '🐹', reptile: '🦎', fish: '🐟',
+const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
+  scheduled:      { label: 'Agendado',        cls: 'bg-blue-100 text-blue-700' },
+  confirmed:      { label: 'Confirmado',       cls: 'bg-teal-100 text-teal-700' },
+  arrived:        { label: 'Em Atendimento',   cls: 'bg-amber-100 text-amber-700' },
+  completed:      { label: 'Concluído',        cls: 'bg-green-100 text-green-700' },
+  cancelled:      { label: 'Cancelado',        cls: 'bg-red-100 text-red-700' },
+  received:       { label: 'Recebido',         cls: 'bg-slate-100 text-slate-600' },
+  bathing:        { label: 'Banho',            cls: 'bg-blue-100 text-blue-700' },
+  waiting_pickup: { label: 'Aguard. Retirada', cls: 'bg-amber-100 text-amber-700' },
+  delivered:      { label: 'Entregue',         cls: 'bg-green-100 text-green-700' },
 }
 
-const STATUS_CFG: Record<string, { label: string; color: string }> = {
-  scheduled: { label: 'Agendado',  color: 'bg-blue-100 text-blue-700' },
-  confirmed: { label: 'Confirmado', color: 'bg-green-100 text-green-700' },
-  arrived:   { label: 'Chegou',    color: 'bg-teal-100 text-teal-700' },
-  cancelled: { label: 'Cancelado', color: 'bg-red-100 text-red-600' },
-}
+const COLOR_LEGEND = [
+  { label: 'Consulta',     color: '#2563eb' },
+  { label: 'Vacinação',    color: '#16a34a' },
+  { label: 'Cirurgia',     color: '#dc2626' },
+  { label: 'Exame',        color: '#7c3aed' },
+  { label: 'Emergência',   color: '#ea580c' },
+  { label: 'Banho & Tosa', color: '#0d9488' },
+]
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function padDate(year: number, month: number, day: number): string {
-  return `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`
+function eventColor(e: UnifiedCalendarEvent): string {
+  if (e.type === 'grooming') return EVENT_COLORS.grooming
+  return EVENT_COLORS[e.reason ?? ''] ?? '#2563eb'
 }
 
-function buildGrid(year: number, month: number): (number | null)[] {
-  const firstDay    = new Date(year, month - 1, 1).getDay()
-  const daysInMonth = new Date(year, month, 0).getDate()
-  const grid: (number | null)[] = Array(firstDay).fill(null)
-  for (let d = 1; d <= daysInMonth; d++) grid.push(d)
-  while (grid.length % 7 !== 0) grid.push(null)
-  return grid
+function serviceLabel(e: UnifiedCalendarEvent): string {
+  if (e.type === 'grooming' && e.services?.length) return e.services.join(', ')
+  if (e.type === 'grooming') return 'Banho & Tosa'
+  return REASON_LABELS[e.reason ?? ''] ?? e.reason ?? 'Consulta'
 }
 
-function apptTime(datetime: string): string {
-  return datetime.split('T')[1]?.substring(0, 5) ?? ''
+// ─── RBC Event ────────────────────────────────────────────────────────────────
+
+interface RBCEvent {
+  id:         string
+  title:      string
+  start:      Date
+  end:        Date
+  resourceId: string
+  resource:   UnifiedCalendarEvent
 }
 
-// ─── Appointment Card ─────────────────────────────────────────────────────────
+function toRBCEvents(raw: UnifiedCalendarEvent[]): RBCEvent[] {
+  return raw.map(e => {
+    const start = new Date(e.datetime.replace(' ', 'T'))
+    const durationMs = e.type === 'grooming' ? 2 * 3600000 : 1800000
+    return {
+      id:         e.id,
+      title:      `${e.petName} — ${serviceLabel(e)}`,
+      start,
+      end:        new Date(start.getTime() + durationMs),
+      resourceId: e.professionalId ?? UNASSIGNED_ID,
+      resource:   e,
+    }
+  })
+}
 
-function AppointmentCard({
-  appt, isPending, onConfirmArrival, onCancel,
-}: {
-  appt:             AppointmentItem
-  isPending:        boolean
-  onConfirmArrival: () => void
-  onCancel:         () => void
-}) {
-  const time      = apptTime(appt.appointment_datetime)
-  const emoji     = SPECIES_EMOJI[appt.patient.species] ?? '🐾'
-  const statusCfg = STATUS_CFG[appt.status] ?? { label: appt.status, color: 'bg-slate-100 text-slate-600' }
-  const canAct    = appt.status === 'scheduled' || appt.status === 'confirmed'
+// ─── Toolbar customizada ──────────────────────────────────────────────────────
+
+interface ToolbarProps {
+  date:           Date
+  view:           View
+  onNavigate:     (action: 'PREV' | 'NEXT' | 'TODAY') => void
+  onView:         (view: View) => void
+  loading:        boolean
+  onNewAppt:      () => void
+  onSendSchedule: () => void
+  sendingSchedule:boolean
+}
+
+function CustomToolbar({
+  date, view, onNavigate, onView, loading,
+  onNewAppt, onSendSchedule, sendingSchedule,
+}: ToolbarProps) {
+  const label = useMemo(() => {
+    if (view === 'month') return format(date, 'MMMM yyyy', { locale: ptBR })
+    if (view === 'week') {
+      const ws = startOfWeek(date, { locale: ptBR })
+      const we = addDays(ws, 6)
+      return `${format(ws, 'dd MMM', { locale: ptBR })} – ${format(we, "dd MMM yyyy", { locale: ptBR })}`
+    }
+    return format(date, "EEEE, dd 'de' MMMM yyyy", { locale: ptBR })
+  }, [date, view])
+
+  const VIEWS: { key: View; label: string }[] = [
+    { key: 'day',   label: 'Dia' },
+    { key: 'week',  label: 'Semana' },
+    { key: 'month', label: 'Mês' },
+  ]
 
   return (
-    <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 space-y-2.5">
-      <div className="flex items-start gap-2.5">
-        {/* Time chip */}
-        <div className="flex-shrink-0 rounded-lg bg-teal-100 px-2.5 py-1.5 text-center min-w-[52px]">
-          <p className="text-xs font-bold text-teal-700 tabular-nums">{time || '—'}</p>
-        </div>
-        {/* Info */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-sm font-semibold text-slate-900">
-              {emoji} {appt.patient.name}
-            </span>
-            <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${statusCfg.color}`}>
-              {statusCfg.label}
-            </span>
-          </div>
-          <p className="text-xs text-slate-500 mt-0.5">
-            {appt.tutor.name} · {VISIT_REASON_LABELS[appt.reason] ?? appt.reason}
-          </p>
-          {appt.notes && (
-            <p className="text-xs text-slate-400 italic mt-0.5 line-clamp-1">{appt.notes}</p>
-          )}
-        </div>
+    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-4 py-3 border-b border-slate-100">
+      {/* Navegação */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <button
+          onClick={() => onNavigate('PREV')}
+          className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <button
+          onClick={() => onNavigate('TODAY')}
+          className="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-xs font-semibold text-slate-700 transition-colors"
+        >
+          Hoje
+        </button>
+        <button
+          onClick={() => onNavigate('NEXT')}
+          className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+        <h2 className="text-sm font-semibold text-slate-800 ml-1 capitalize">{label}</h2>
+        {loading && <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />}
       </div>
-      {canAct && (
-        <div className="flex gap-2">
-          <button
-            onClick={onConfirmArrival}
-            disabled={isPending}
-            className="flex-1 rounded-lg bg-teal-600 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 transition-colors disabled:opacity-50"
-          >
-            Confirmar Chegada (Check-in)
-          </button>
-          <button
-            onClick={onCancel}
-            disabled={isPending}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500 hover:text-red-600 hover:border-red-200 transition-colors disabled:opacity-50"
-          >
-            Cancelar
-          </button>
+
+      {/* Direita: views + ações */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {/* Seletor de vista */}
+        <div className="flex rounded-xl overflow-hidden border border-slate-200 bg-slate-50 text-xs font-semibold">
+          {VIEWS.map((v, i) => (
+            <button
+              key={v.key}
+              onClick={() => onView(v.key)}
+              className={`px-4 py-2 transition-all ${i > 0 ? 'border-l border-slate-200' : ''} ${
+                view === v.key
+                  ? 'bg-blue-600 text-white'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              {v.label}
+              {v.key === 'day' && view === 'day' && (
+                <span className="ml-1.5 text-[10px] bg-white/20 rounded-full px-1">profissionais</span>
+              )}
+            </button>
+          ))}
         </div>
-      )}
+
+        {/* Botão: Agenda do Dia → WhatsApp */}
+        <button
+          onClick={onSendSchedule}
+          disabled={sendingSchedule}
+          title="Enviar agenda do dia para profissionais via WhatsApp"
+          className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors"
+        >
+          {sendingSchedule
+            ? <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />
+            : <MessageCircle className="h-3.5 w-3.5 text-green-600" />}
+          <span className="hidden sm:inline">Agenda do Dia</span>
+        </button>
+
+        {/* Novo Agendamento */}
+        <button
+          onClick={onNewAppt}
+          className="flex items-center gap-1.5 rounded-xl bg-teal-600 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-700 transition-colors"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Novo Agendamento
+        </button>
+      </div>
     </div>
   )
 }
 
-// ─── Event Card ───────────────────────────────────────────────────────────────
+// ─── Card de detalhe do evento ────────────────────────────────────────────────
 
-type FilterType = 'all' | 'appointment' | 'grooming'
+interface DetailCardProps {
+  event:       UnifiedCalendarEvent
+  onClose:     () => void
+  onCheckIn:   (id: string) => void
+  onCancel:    (id: string, type: 'appointment' | 'grooming') => void
+  onEdit:      (id: string) => void
+  isPending:   boolean
+}
 
-function EventCard({
-  event, isPending, packageInfo, onConfirmArrival, onCancel, onCancelGrooming, onGroomingClick, onEdit,
-}: {
-  event:              UnifiedCalendarEvent
-  isPending:          boolean
-  packageInfo?:       PackageSessionInfo
-  onConfirmArrival:   () => void
-  onCancel:           () => void
-  onCancelGrooming:   () => void
-  onGroomingClick:    () => void
-  onEdit:             () => void
-}) {
-  const time         = event.datetime.split('T')[1]?.substring(0, 5) ?? ''
-  const emoji        = SPECIES_EMOJI[event.petSpecies] ?? '🐾'
+function EventDetailCard({ event, onClose, onCheckIn, onCancel, onEdit, isPending }: DetailCardProps) {
+  const color   = eventColor(event)
+  const status  = STATUS_LABELS[event.status] ?? { label: event.status, cls: 'bg-slate-100 text-slate-600' }
+  const service = serviceLabel(event)
+  const time    = format(new Date(event.datetime.replace(' ', 'T')), 'HH:mm')
+  const dateStr = format(new Date(event.datetime.replace(' ', 'T')), "dd 'de' MMMM yyyy", { locale: ptBR })
+
   const isAppt       = event.type === 'appointment'
-  const statusCfg    = STATUS_CFG[event.status] ?? { label: event.status, color: 'bg-slate-100 text-slate-600' }
-  const canActAppt   = isAppt && (event.status === 'scheduled' || event.status === 'confirmed')
-  // Grooming pode ser cancelado enquanto ainda não iniciou (status=received, que no board aparece como scheduled ou received)
-  const canCancelGrooming = !isAppt && (event.status === 'received' || event.status === 'scheduled')
+  const canCheckIn   = isAppt && (event.status === 'scheduled' || event.status === 'confirmed')
+  const canCancelAppt = isAppt && (event.status === 'scheduled' || event.status === 'confirmed')
+  const canCancelGroom = !isAppt && (event.status === 'received' || event.status === 'scheduled')
 
   return (
-    <div
-      className={`rounded-xl border p-3 space-y-2.5 ${
-        isAppt
-          ? 'border-blue-100 bg-blue-50/40 cursor-pointer hover:bg-blue-100/60 transition-colors'
-          : 'border-emerald-100 bg-emerald-50/40'
-      }`}
-      onClick={isAppt ? onEdit : undefined}
-    >
-      <div className="flex items-start gap-2.5">
-        {/* Time chip */}
-        <div className={`flex-shrink-0 rounded-lg px-2.5 py-1.5 text-center min-w-[52px] ${
-          isAppt ? 'bg-blue-100' : 'bg-emerald-100'
-        }`}>
-          <p className={`text-xs font-bold tabular-nums ${isAppt ? 'text-blue-700' : 'text-emerald-700'}`}>
-            {time || '—'}
-          </p>
-        </div>
-        {/* Info */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-sm font-semibold text-slate-900">
-              {emoji} {event.petName}
-            </span>
-            {/* Type badge */}
-            <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold flex items-center gap-0.5 ${
-              isAppt ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'
-            }`}>
-              {isAppt ? '🩺 Consulta' : <><Scissors className="h-2.5 w-2.5" /> Tosa</>}
-            </span>
-            <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${statusCfg.color}`}>
-              {statusCfg.label}
-            </span>
-            {packageInfo && (
-              <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold border flex items-center gap-0.5 ${
-                packageInfo.is_last
-                  ? 'bg-amber-100 text-amber-700 border-amber-300'
-                  : 'bg-teal-100 text-teal-700 border-teal-200'
-              }`}>
-                🎁 {packageInfo.session_number}/{packageInfo.total_sessions}
-              </span>
-            )}
-            {event.source === 'whatsapp' && (
-              <span className="rounded-full px-2 py-0.5 text-[10px] font-bold bg-green-100 text-green-700 flex items-center gap-0.5">
-                <MessageCircle className="h-2.5 w-2.5" />WhatsApp
-              </span>
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden animate-in slide-in-from-bottom-2 duration-200">
+      <div className="h-1.5" style={{ backgroundColor: color }} />
+
+      <div className="p-5 space-y-4">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              {isAppt
+                ? <Stethoscope className="h-4 w-4 text-blue-600" />
+                : <Scissors className="h-4 w-4 text-teal-600" />}
+              <span className="font-bold text-slate-900 text-base">{event.petName}</span>
+            </div>
+            {event.petId && (
+              <PatientLink id={event.petId} name={event.petName} size="sm" className="ml-6" />
             )}
           </div>
-          {packageInfo && (
-            <p className="text-[10px] text-teal-600 font-medium truncate">{packageInfo.package_name}</p>
-          )}
-          <p className="text-xs text-slate-500 mt-0.5">
-            {event.tutorName}
-            {isAppt && event.reason ? ` · ${VISIT_REASON_LABELS[event.reason] ?? event.reason}` : ''}
-            {!isAppt && event.services?.length ? ` · ${event.services.join(', ')}` : ''}
-          </p>
+          <button
+            onClick={onClose}
+            className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors flex-shrink-0"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
-      </div>
-      <div className="flex gap-2" onClick={e => e.stopPropagation()}>
-        {/* Ações para consulta agendada */}
-        {canActAppt && (
-          <>
-            <button
-              onClick={onConfirmArrival}
-              disabled={isPending}
-              className="flex-1 rounded-lg bg-blue-600 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
-            >
-              Check-in
-            </button>
-            <button
-              onClick={onEdit}
-              disabled={isPending}
-              className="rounded-lg border border-blue-200 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-50 flex items-center gap-1"
-            >
-              <Pencil className="h-3 w-3" />
-              Editar
-            </button>
-            <button
-              onClick={onCancel}
-              disabled={isPending}
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500 hover:text-red-600 hover:border-red-200 transition-colors disabled:opacity-50"
-            >
-              Cancelar
-            </button>
-          </>
-        )}
-        {/* Ações para grooming */}
-        {!isAppt && (
-          <button
-            onClick={onGroomingClick}
-            className="flex-1 rounded-lg bg-emerald-600 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 transition-colors"
-          >
-            Ver no Kanban →
-          </button>
-        )}
-        {canCancelGrooming && (
-          <button
-            onClick={onCancelGrooming}
-            disabled={isPending}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500 hover:text-red-600 hover:border-red-200 transition-colors disabled:opacity-50"
-          >
-            Cancelar
-          </button>
+
+        {/* Info grid */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-0.5">
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Tutor</p>
+            <p className="text-sm font-medium text-slate-800">{event.tutorName || '—'}</p>
+          </div>
+          <div className="space-y-0.5">
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Serviço</p>
+            <p className="text-sm font-medium text-slate-800">{service}</p>
+          </div>
+          <div className="space-y-0.5">
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+              <Clock className="h-3 w-3" /> Horário
+            </p>
+            <p className="text-sm font-medium text-slate-800">{time}</p>
+            <p className="text-xs text-slate-400">{dateStr}</p>
+          </div>
+          <div className="space-y-0.5">
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+              <User className="h-3 w-3" /> Profissional
+            </p>
+            <p className="text-sm font-medium text-slate-800">{event.professionalName || 'Não atribuído'}</p>
+          </div>
+        </div>
+
+        {/* Status */}
+        <div className="flex items-center justify-between pt-1 border-t border-slate-100">
+          <span className={`inline-flex items-center text-xs font-bold px-2.5 py-1 rounded-full ${status.cls}`}>
+            {status.label}
+          </span>
+          <span className="text-xs text-slate-400">
+            {event.source === 'whatsapp' && '📱 via WhatsApp · '}
+            {isAppt ? 'Consulta' : 'Banho & Tosa'}
+          </span>
+        </div>
+
+        {/* Ações */}
+        {(canCheckIn || canCancelAppt || canCancelGroom || isAppt) && (
+          <div className="flex gap-2 pt-1">
+            {canCheckIn && (
+              <button
+                onClick={() => onCheckIn(event.sourceId)}
+                disabled={isPending}
+                className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-teal-600 py-2 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-50 transition-colors"
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Check-in
+              </button>
+            )}
+            {isAppt && (
+              <button
+                onClick={() => onEdit(event.sourceId)}
+                disabled={isPending}
+                className="flex items-center justify-center gap-1 rounded-xl border border-slate-200 px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-colors"
+              >
+                Editar
+              </button>
+            )}
+            {!isAppt && (
+              <button
+                onClick={() => window.location.href = '/dashboard/grooming'}
+                className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-2 text-xs font-semibold text-white hover:bg-emerald-700 transition-colors"
+              >
+                Ver no Kanban →
+              </button>
+            )}
+            {(canCancelAppt || canCancelGroom) && (
+              <button
+                onClick={() => onCancel(event.sourceId, event.type)}
+                disabled={isPending}
+                className="flex items-center justify-center gap-1 rounded-xl border border-red-200 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors"
+              >
+                <AlertCircle className="h-3.5 w-3.5" />
+                Cancelar
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>
   )
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ─── Props ────────────────────────────────────────────────────────────────────
 
 interface Props {
   clinicName: string
   userName?:  string
 }
 
-export default function CalendarWorkspace({ clinicName }: Props) {
-  const router   = useRouter()
-  const today    = new Date()
-  const todayStr = padDate(today.getFullYear(), today.getMonth() + 1, today.getDate())
+// ─── Componente principal ─────────────────────────────────────────────────────
 
-  const [viewYear,  setViewYear]  = useState(today.getFullYear())
-  const [viewMonth, setViewMonth] = useState(today.getMonth() + 1)
-  const [selDate,   setSelDate]   = useState(todayStr)
-  const [counts,    setCounts]    = useState<Record<string, number>>({})
-  const [events,    setEvents]    = useState<UnifiedCalendarEvent[]>([])
-  const [packageMap, setPackageMap] = useState<Record<string, PackageSessionInfo>>({})
-  const [filter,    setFilter]    = useState<FilterType>('all')
-  const [loadMonth, setLoadMonth] = useState(false)
-  const [loadDay,   setLoadDay]   = useState(false)
-  const [showModal, setShowModal] = useState(false)
-  const [kanbanMode, setKanbanMode] = useState(false)
-  const [kanbanGroupBy, setKanbanGroupBy] = useState<'professional' | 'type'>('professional')
-  const [toast,     setToast]     = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
+export default function CalendarWorkspace({ clinicName }: Props) {
+  const router = useRouter()
+  const today  = new Date()
+
+  const [events,        setEvents]        = useState<RBCEvent[]>([])
+  const [professionals, setProfessionals] = useState<CalendarProfessional[]>([])
+  const [vetCounts,     setVetCounts]     = useState<ProfessionalCount[]>([])
+  const [view,          setView]          = useState<View>('month')
+  const [date,          setDate]          = useState(today)
+  const [loading,       setLoading]       = useState(false)
+  const [selected,      setSelected]      = useState<UnifiedCalendarEvent | null>(null)
+  const [showNewAppt,   setShowNewAppt]   = useState(false)
+  const [editApptId,    setEditApptId]    = useState<string | null>(null)
   const [sendingSchedule, setSendingSchedule] = useState(false)
-  const [scheduleResult, setScheduleResult]   = useState<DailyScheduleResult | null>(null)
-  const [cancelGroomingTarget, setCancelGroomingTarget] = useState<UnifiedCalendarEvent | null>(null)
-  const [editTargetId,         setEditTargetId]         = useState<string | null>(null)
-  const [vetCounts, setVetCounts] = useState<ProfessionalCount[]>([])
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
   const [isPending, startTransition] = useTransition()
 
-  function showToast(msg: string, type: 'success' | 'error' = 'success') {
+  function showToastMsg(msg: string, type: 'success' | 'error' = 'success') {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 4000)
   }
 
-  async function handleSendDailySchedule() {
+  // Recursos (profissionais + Geral) — só Day view usa
+  const resources = useMemo(() => [
+    { id: UNASSIGNED_ID, title: 'Geral' },
+    ...professionals.map(p => ({ id: p.id, title: p.name, role: p.role })),
+  ], [professionals])
+
+  const fetchRange = useCallback(async (d: Date, v: View) => {
+    setLoading(true)
+    let start: Date, end: Date
+    if (v === 'month') { start = startOfMonth(d); end = endOfMonth(d) }
+    else if (v === 'week') { start = startOfWeek(d, { locale: ptBR }); end = addDays(start, 6) }
+    else { start = startOfDay(d); end = endOfDay(d) }
+
+    const result = await getUnifiedEventsForRange(
+      format(start, 'yyyy-MM-dd'),
+      format(end,   'yyyy-MM-dd'),
+    )
+    if (!('error' in result)) setEvents(toRBCEvents(result))
+    setLoading(false)
+  }, [])
+
+  // Carga inicial
+  useEffect(() => {
+    fetchRange(today, 'month')
+    getClinicProfessionals().then(r => { if (Array.isArray(r)) setProfessionals(r) })
+    getTodayCountsByProfessional().then(r => { if (!('error' in r)) setVetCounts(r) })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleNavigate(newDate: Date) {
+    setDate(newDate)
+    fetchRange(newDate, view)
+  }
+
+  function handleView(newView: View) {
+    setView(newView)
+    fetchRange(date, newView)
+  }
+
+  function handleCheckIn(apptId: string) {
+    startTransition(async () => {
+      const res = await confirmArrival(apptId)
+      if ('error' in res) {
+        showToastMsg(res.error, 'error')
+      } else {
+        showToastMsg('Check-in realizado! Pet está na fila de espera.')
+        setSelected(null)
+        fetchRange(date, view)
+      }
+    })
+  }
+
+  function handleCancel(id: string, type: 'appointment' | 'grooming') {
+    startTransition(async () => {
+      const res = type === 'appointment'
+        ? await cancelAppointment(id)
+        : await cancelGroomingSession(id)
+      if ('error' in res) {
+        showToastMsg(res.error, 'error')
+      } else {
+        showToastMsg(type === 'appointment' ? 'Agendamento cancelado.' : 'Banho e Tosa cancelado.')
+        setSelected(null)
+        fetchRange(date, view)
+      }
+    })
+  }
+
+  async function handleSendSchedule() {
     setSendingSchedule(true)
-    setScheduleResult(null)
     const res = await sendDailyScheduleToVets()
     setSendingSchedule(false)
     if ('error' in res) {
-      showToast(res.error, 'error')
+      showToastMsg(res.error, 'error')
     } else {
-      setScheduleResult(res)
-      showToast(
+      showToastMsg(
         res.sent === 0
-          ? 'Nenhum profissional com telefone cadastrado encontrado.'
+          ? 'Nenhum profissional com telefone cadastrado.'
           : `Agenda enviada para ${res.sent} profissional${res.sent !== 1 ? 'is' : ''}!`,
         res.sent > 0 ? 'success' : 'error',
       )
     }
   }
 
-  async function refreshMonth() {
-    const res = await getUnifiedMonthCounts(viewYear, viewMonth)
-    if (!('error' in res)) setCounts(res)
-  }
-
-  async function refreshDay(date: string) {
-    const res = await getUnifiedCalendarEvents(date)
-    if (!('error' in res)) {
-      setEvents(res)
-      const apptIds = res.filter(e => e.type === 'appointment').map(e => e.id)
-      if (apptIds.length > 0) {
-        const pkgRes = await getPackageInfoForAppointments(apptIds)
-        setPackageMap(!('error' in pkgRes) ? pkgRes : {})
-      } else {
-        setPackageMap({})
-      }
-    } else {
-      setEvents([])
-      setPackageMap({})
-    }
-  }
-
-  useEffect(() => {
-    setLoadMonth(true)
-    getUnifiedMonthCounts(viewYear, viewMonth).then(res => {
-      setLoadMonth(false)
-      if (!('error' in res)) setCounts(res)
-    })
-    getTodayCountsByProfessional().then(res => {
-      if (!('error' in res)) setVetCounts(res)
-    })
-  }, [viewYear, viewMonth])
-
-  useEffect(() => {
-    setLoadDay(true)
-    getUnifiedCalendarEvents(selDate).then(async res => {
-      setLoadDay(false)
-      if (!('error' in res)) {
-        setEvents(res)
-        const apptIds = res.filter(e => e.type === 'appointment').map(e => e.id)
-        if (apptIds.length > 0) {
-          const pkgRes = await getPackageInfoForAppointments(apptIds)
-          setPackageMap(!('error' in pkgRes) ? pkgRes : {})
-        } else {
-          setPackageMap({})
-        }
-      } else {
-        setEvents([])
-        setPackageMap({})
-      }
-    })
-  }, [selDate])
-
-  const displayed = filter === 'all' ? events : events.filter(e => e.type === filter)
-
-  function prevMonth() {
-    if (viewMonth === 1) { setViewYear(y => y - 1); setViewMonth(12) }
-    else setViewMonth(m => m - 1)
-  }
-  function nextMonth() {
-    if (viewMonth === 12) { setViewYear(y => y + 1); setViewMonth(1) }
-    else setViewMonth(m => m + 1)
-  }
-
-  function handleConfirmArrival(apptId: string) {
-    startTransition(async () => {
-      const res = await confirmArrival(apptId)
-      if ('error' in res) {
-        showToast(res.error, 'error')
-      } else {
-        showToast(`Check-in realizado! Pet está na fila de espera.`)
-        await Promise.all([refreshDay(selDate), refreshMonth()])
-      }
-    })
-  }
-
-  function handleCancel(apptId: string) {
-    startTransition(async () => {
-      const res = await cancelAppointment(apptId)
-      if ('error' in res) {
-        showToast(res.error, 'error')
-      } else {
-        showToast('Agendamento cancelado.')
-        await Promise.all([refreshDay(selDate), refreshMonth()])
-      }
-    })
-  }
-
-  function handleCancelGrooming(sessionId: string) {
-    startTransition(async () => {
-      const res = await cancelGroomingSession(sessionId)
-      if ('error' in res) {
-        showToast(res.error, 'error')
-      } else {
-        showToast('Banho e Tosa cancelado.')
-        await Promise.all([refreshDay(selDate), refreshMonth()])
-      }
-    })
-  }
-
-  function confirmCancelGroomingModal() {
-    if (!cancelGroomingTarget) return
-    const event = cancelGroomingTarget
-    setCancelGroomingTarget(null)
-    handleCancelGrooming(event.sourceId)
-  }
-
-  const grid       = buildGrid(viewYear, viewMonth)
-  const selDateObj = new Date(selDate + 'T12:00:00')
-  const selWeekday = PT_WEEKDAYS_LONG[selDateObj.getDay()]
-  const selFormatted = selDateObj.toLocaleDateString('pt-BR', {
-    day: '2-digit', month: 'long', year: 'numeric',
-  })
-  const apptCount     = displayed.filter(e => e.type === 'appointment').length
-  const groomingCount = displayed.filter(e => e.type === 'grooming').length
+  const resourceProps = view === 'day' ? {
+    resources,
+    resourceIdAccessor: 'id'    as const,
+    resourceTitleAccessor: 'title' as const,
+  } : {}
 
   return (
     <>
+      {/* Toast */}
       {toast && (
         <div className={`fixed top-4 right-4 z-50 flex items-center gap-3 rounded-xl px-5 py-3 text-sm font-medium shadow-lg ${
           toast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
@@ -448,129 +491,38 @@ export default function CalendarWorkspace({ clinicName }: Props) {
         </div>
       )}
 
-      {showModal && (
+      {showNewAppt && (
         <NewAppointmentModal
-          onClose={() => setShowModal(false)}
+          onClose={() => setShowNewAppt(false)}
           onSuccess={petName => {
-            setShowModal(false)
-            showToast(`Agendamento criado para ${petName}!`)
-            refreshDay(selDate)
-            refreshMonth()
+            setShowNewAppt(false)
+            showToastMsg(`Agendamento criado para ${petName}!`)
+            fetchRange(date, view)
           }}
         />
       )}
 
-      {editTargetId && (
+      {editApptId && (
         <EditAppointmentModal
-          appointmentId={editTargetId}
-          onClose={() => setEditTargetId(null)}
+          appointmentId={editApptId}
+          onClose={() => setEditApptId(null)}
           onSuccess={() => {
-            refreshDay(selDate)
-            refreshMonth()
+            setEditApptId(null)
+            fetchRange(date, view)
           }}
         />
-      )}
-
-      {/* Modal de Confirmação de Cancelamento — Banho e Tosa */}
-      {cancelGroomingTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6 space-y-4">
-            <div className="flex items-start justify-between">
-              <div>
-                <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                  <X className="h-5 w-5 text-red-500" />
-                  Cancelar Agendamento
-                </h2>
-                <p className="text-sm text-slate-500 mt-0.5">Esta ação não pode ser desfeita.</p>
-              </div>
-              <button
-                onClick={() => setCancelGroomingTarget(null)}
-                className="text-slate-400 hover:text-slate-600 p-1"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="flex items-center gap-3 p-3 bg-red-50 rounded-xl border border-red-100">
-              <div className="h-10 w-10 rounded-xl bg-red-100 flex items-center justify-center text-red-500 flex-shrink-0">
-                <Scissors className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="font-semibold text-slate-900 text-sm">
-                  {cancelGroomingTarget.petName}
-                </p>
-                <p className="text-xs text-slate-500">
-                  Tutor: {cancelGroomingTarget.tutorName}
-                </p>
-                <p className="text-xs text-red-500 font-medium mt-0.5">
-                  {new Date(cancelGroomingTarget.datetime).toLocaleString('pt-BR', {
-                    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
-                  })}
-                  {cancelGroomingTarget.services?.length
-                    ? ` · ${cancelGroomingTarget.services.join(', ')}`
-                    : ''}
-                </p>
-              </div>
-            </div>
-
-            <p className="text-sm text-slate-600">
-              Tem certeza que deseja cancelar o agendamento de{' '}
-              <span className="font-semibold">Banho e Tosa</span> de{' '}
-              <span className="font-semibold text-slate-900">{cancelGroomingTarget.petName}</span>?
-            </p>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => setCancelGroomingTarget(null)}
-                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
-              >
-                Manter Agendamento
-              </button>
-              <button
-                onClick={confirmCancelGroomingModal}
-                disabled={isPending}
-                className="flex-1 py-2.5 rounded-xl bg-red-600 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
-              >
-                <X className="h-4 w-4" />
-                Cancelar Agendamento
-              </button>
-            </div>
-          </div>
-        </div>
       )}
 
       <ReceptionSubNav />
 
-      <div className="space-y-6">
-        {/* Page header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold text-slate-900">Agenda</h1>
-            <p className="mt-0.5 text-sm text-slate-500">{clinicName}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleSendDailySchedule}
-              disabled={sendingSchedule}
-              title="Enviar agenda do dia para cada profissional via WhatsApp"
-              className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors"
-            >
-              {sendingSchedule
-                ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
-                : <MessageCircle className="h-4 w-4 text-green-600" />}
-              <span className="hidden sm:inline">Agenda do Dia</span>
-            </button>
-            <button
-              onClick={() => setShowModal(true)}
-              className="flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 transition-colors"
-            >
-              <Plus className="h-4 w-4" />
-              Novo Agendamento
-            </button>
-          </div>
+      <div className="space-y-4">
+        {/* Header */}
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900">Agenda</h1>
+          <p className="mt-0.5 text-sm text-slate-500">{clinicName}</p>
         </div>
 
-        {/* Atendimentos por profissional (hoje) */}
+        {/* Atendimentos hoje por profissional */}
         {vetCounts.length > 0 && (
           <div className="flex items-center gap-3 flex-wrap bg-white rounded-xl border border-slate-200 px-4 py-2.5">
             <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">Atendimentos hoje</span>
@@ -586,243 +538,94 @@ export default function CalendarWorkspace({ clinicName }: Props) {
           </div>
         )}
 
-        {/* Calendar + Day panel */}
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-
-          {/* ── Monthly Calendar ── */}
-          <div className="lg:col-span-3 rounded-2xl border border-slate-200 bg-white p-6">
-            {/* Month nav */}
-            <div className="flex items-center justify-between mb-6">
-              <button
-                onClick={prevMonth}
-                className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-slate-100 transition-colors"
-              >
-                <ChevronLeft className="h-4 w-4 text-slate-600" />
-              </button>
-              <h2 className="text-base font-semibold text-slate-900">
-                {PT_MONTHS[viewMonth - 1]} {viewYear}
-              </h2>
-              <button
-                onClick={nextMonth}
-                className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-slate-100 transition-colors"
-              >
-                <ChevronRight className="h-4 w-4 text-slate-600" />
-              </button>
-            </div>
-
-            {/* Weekday headers */}
-            <div className="grid grid-cols-7 mb-1">
-              {PT_WEEKDAYS.map(d => (
-                <div key={d} className="text-center text-xs font-semibold text-slate-400 py-1">{d}</div>
-              ))}
-            </div>
-
-            {/* Day grid */}
-            <div className="grid grid-cols-7 gap-1">
-              {grid.map((day, i) => {
-                if (!day) return <div key={i} />
-                const dateStr  = padDate(viewYear, viewMonth, day)
-                const count    = counts[dateStr] ?? 0
-                const isToday  = dateStr === todayStr
-                const isSel    = dateStr === selDate
-                const isPast   = dateStr < todayStr
-
-                return (
-                  <button
-                    key={i}
-                    onClick={() => setSelDate(dateStr)}
-                    onDoubleClick={() => { setSelDate(dateStr); setKanbanMode(true) }}
-                    className={`relative flex flex-col items-center justify-center rounded-xl py-2 px-1 min-h-[52px] transition-all ${
-                      isSel
-                        ? 'bg-slate-900 text-white shadow-sm'
-                        : isToday
-                        ? 'ring-2 ring-teal-500 text-teal-700 font-bold hover:bg-teal-50'
-                        : isPast
-                        ? 'text-slate-300 hover:bg-slate-50 cursor-pointer'
-                        : 'text-slate-700 hover:bg-slate-100'
-                    }`}
-                  >
-                    <span className="text-sm font-medium leading-none">{day}</span>
-                    {count > 0 && (
-                      <span className={`mt-1 text-[10px] font-bold leading-none rounded-full px-1.5 py-0.5 ${
-                        isSel ? 'bg-white/20 text-white' : 'bg-teal-100 text-teal-600'
-                      }`}>
-                        {count}
-                      </span>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-
-            {loadMonth && (
-              <p className="mt-3 text-center text-xs text-slate-400">Carregando...</p>
-            )}
-
-            {/* Legend */}
-            <div className="mt-4 flex items-center gap-4 text-xs text-slate-400">
-              <span className="flex items-center gap-1.5">
-                <span className="inline-block h-2.5 w-2.5 rounded-full bg-blue-400" />
-                Consulta
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-400" />
-                Banho e Tosa
-              </span>
-              <span className="ml-auto">
-                <span className="bg-teal-100 text-teal-600 rounded-full px-1.5 text-[10px] font-bold">{Object.values(counts).reduce((a, b) => a + b, 0)}</span>
-                {' '}no mês
-              </span>
-            </div>
-          </div>
-
-          {/* ── Day Events Panel ── */}
-          <div className="lg:col-span-2 rounded-2xl border border-slate-200 bg-white p-5 flex flex-col gap-3">
-            {/* Day header */}
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{selWeekday}</p>
-                <h3 className="text-sm font-bold text-slate-900">{selFormatted}</h3>
-                {events.length > 0 && (
-                  <button
-                    onClick={() => setKanbanMode(v => !v)}
-                    className={`mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full transition-colors ${
-                      kanbanMode ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                    }`}
-                  >
-                    {kanbanMode ? '← Lista' : '▦ Kanban'}
-                  </button>
-                )}
-              </div>
-              {events.length > 0 && (
-                <div className="text-right">
-                  <p className="text-xl font-bold text-slate-900 tabular-nums">{events.length}</p>
-                  <p className="text-xs text-slate-400">evento{events.length !== 1 ? 's' : ''}</p>
-                  <div className="flex gap-1.5 justify-end mt-0.5">
-                    {apptCount > 0 && <span className="text-[10px] bg-blue-100 text-blue-700 rounded-full px-1.5 py-0.5 font-bold">{apptCount} consulta{apptCount !== 1 ? 's' : ''}</span>}
-                    {groomingCount > 0 && <span className="text-[10px] bg-emerald-100 text-emerald-700 rounded-full px-1.5 py-0.5 font-bold">{groomingCount} tosa{groomingCount !== 1 ? 's' : ''}</span>}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Filter pills */}
-            <div className="flex gap-1.5">
-              {(['all', 'appointment', 'grooming'] as FilterType[]).map(f => (
-                <button
-                  key={f}
-                  onClick={() => setFilter(f)}
-                  className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
-                    filter === f
-                      ? f === 'all'
-                        ? 'bg-slate-900 text-white'
-                        : f === 'appointment'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-emerald-600 text-white'
-                      : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                  }`}
-                >
-                  {f === 'all' ? 'Todos' : f === 'appointment' ? '🩺 Consultas' : '✂️ Banho/Tosa'}
-                </button>
-              ))}
-            </div>
-
-            {/* Events list / Kanban */}
-            <div className="flex-1">
-              {kanbanMode && displayed.length > 0 ? (
-                /* ── KANBAN MODE ── */
-                <div className="space-y-3">
-                  <div className="flex gap-1.5">
-                    <button
-                      onClick={() => setKanbanGroupBy('professional')}
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${kanbanGroupBy === 'professional' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}
-                    >
-                      Por Especialidade
-                    </button>
-                    <button
-                      onClick={() => setKanbanGroupBy('type')}
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${kanbanGroupBy === 'type' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}
-                    >
-                      Por Tipo
-                    </button>
-                  </div>
-                  {(() => {
-                    const groups: Record<string, UnifiedCalendarEvent[]> = {}
-                    for (const ev of displayed) {
-                      const key = kanbanGroupBy === 'type'
-                        ? (ev.type === 'appointment' ? (VISIT_REASON_LABELS[ev.reason ?? ''] ?? 'Consulta') : 'Banho e Tosa')
-                        : (ev.reason ? (VISIT_REASON_LABELS[ev.reason] ?? ev.reason) : 'Banho e Tosa')
-                      if (!groups[key]) groups[key] = []
-                      groups[key].push(ev)
-                    }
-                    return Object.entries(groups).map(([label, items]) => (
-                      <div key={label} className="rounded-xl border border-indigo-100 bg-indigo-50/30 p-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-bold text-indigo-700">{label}</span>
-                          <span className="text-[10px] font-bold bg-indigo-100 text-indigo-600 rounded-full px-1.5 py-0.5">{items.length}</span>
-                        </div>
-                        <div className="space-y-1.5">
-                          {items.map(ev => (
-                            <div
-                              key={ev.id}
-                              className="rounded-lg bg-white border border-slate-100 px-3 py-2 cursor-pointer hover:border-indigo-200 transition-colors"
-                              onClick={() => {
-                                if (ev.type === 'appointment') handleConfirmArrival(ev.sourceId)
-                                else router.push('/dashboard/grooming')
-                              }}
-                            >
-                              <p className="text-xs font-semibold text-slate-900">
-                                {SPECIES_EMOJI[ev.petSpecies] ?? '🐾'} {ev.petName}
-                              </p>
-                              <p className="text-[10px] text-slate-500">{ev.tutorName} · {ev.datetime.split('T')[1]?.substring(0, 5) ?? ''}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))
-                  })()}
-                </div>
-              ) : loadDay ? (
-                <div className="flex items-center justify-center py-12">
-                  <svg className="h-6 w-6 animate-spin text-slate-300" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-                  </svg>
-                </div>
-              ) : displayed.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-10 text-center">
-                  <CalendarDays className="h-10 w-10 text-slate-200 mb-3" />
-                  <p className="text-sm font-medium text-slate-400">
-                    {filter === 'all' ? 'Sem eventos' : filter === 'appointment' ? 'Sem consultas' : 'Sem tosas'}
-                  </p>
-                  <p className="text-xs text-slate-300 mt-0.5">nenhum para este dia</p>
-                  <button
-                    onClick={() => setShowModal(true)}
-                    className="mt-4 text-xs text-teal-600 hover:text-teal-700 font-semibold transition-colors"
-                  >
-                    + Agendar consulta
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-2.5">
-                  {displayed.map(event => (
-                    <EventCard
-                      key={event.id}
-                      event={event}
-                      isPending={isPending}
-                      packageInfo={event.type === 'appointment' ? packageMap[event.id] : undefined}
-                      onConfirmArrival={() => handleConfirmArrival(event.sourceId)}
-                      onCancel={() => handleCancel(event.sourceId)}
-                      onCancelGrooming={() => setCancelGroomingTarget(event)}
-                      onGroomingClick={() => router.push('/dashboard/grooming')}
-                      onEdit={() => event.type === 'appointment' && setEditTargetId(event.sourceId)}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+        {/* Legenda */}
+        <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 px-1">
+          {COLOR_LEGEND.map(l => (
+            <span key={l.label} className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: l.color }} />
+              {l.label}
+            </span>
+          ))}
+          {view === 'day' && professionals.length > 0 && (
+            <span className="ml-auto text-xs text-blue-600 font-semibold">
+              {resources.length} colunas · Visão por Profissional
+            </span>
+          )}
         </div>
+
+        {/* Calendário */}
+        <div
+          className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"
+          style={{ height: 680 }}
+        >
+          <Calendar
+            localizer={localizer}
+            events={events}
+            view={view}
+            date={date}
+            onView={handleView}
+            onNavigate={handleNavigate}
+            onSelectEvent={(evt: RBCEvent) => setSelected(evt.resource)}
+            eventPropGetter={(evt: RBCEvent) => ({
+              style: {
+                backgroundColor: eventColor(evt.resource),
+                borderRadius:    '6px',
+                border:          'none',
+                color:           '#fff',
+                fontSize:        '11px',
+                fontWeight:      600,
+                padding:         '2px 6px',
+                cursor:          'pointer',
+              },
+            })}
+            messages={{
+              allDay:          'Dia todo',
+              previous:        '',
+              next:            '',
+              today:           '',
+              month:           'Mês',
+              week:            'Semana',
+              day:             'Dia',
+              agenda:          'Agenda',
+              date:            'Data',
+              time:            'Hora',
+              event:           'Evento',
+              showMore:        (n: number) => `+${n} mais`,
+              noEventsInRange: 'Sem eventos neste período',
+            }}
+            culture="pt-BR"
+            style={{ height: '100%', fontFamily: 'inherit' }}
+            popup
+            showAllEvents
+            components={{
+              toolbar: (props: any) => (
+                <CustomToolbar
+                  date={props.date}
+                  view={props.view}
+                  onNavigate={props.onNavigate}
+                  onView={props.onView}
+                  loading={loading}
+                  onNewAppt={() => setShowNewAppt(true)}
+                  onSendSchedule={handleSendSchedule}
+                  sendingSchedule={sendingSchedule}
+                />
+              ),
+            }}
+            {...resourceProps}
+          />
+        </div>
+
+        {/* Card de detalhe */}
+        {selected && (
+          <EventDetailCard
+            event={selected}
+            onClose={() => setSelected(null)}
+            onCheckIn={handleCheckIn}
+            onCancel={handleCancel}
+            onEdit={id => { setSelected(null); setEditApptId(id) }}
+            isPending={isPending}
+          />
+        )}
       </div>
     </>
   )
