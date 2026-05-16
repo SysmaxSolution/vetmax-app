@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { logServerError } from '@/lib/error-logger'
 
 /**
  * POST /api/update-clinic
@@ -49,6 +50,14 @@ export async function POST(request: NextRequest) {
       .eq('id', profile.clinic_id)
 
     if (error) {
+      await logServerError({
+        path:     '/api/update-clinic',
+        error:    error.message,
+        source:   'api',
+        module:   'management',
+        clinicId: profile.clinic_id,
+        userId:   user.id,
+      })
       return NextResponse.json(
         { error: `Erro ao atualizar clínica: ${error.message}` },
         { status: 500 }
@@ -59,8 +68,13 @@ export async function POST(request: NextRequest) {
       success: true,
       message: 'Dados da clínica atualizados com sucesso',
     })
-  } catch (error) {
-    console.error('Erro ao atualizar clínica:', error)
+  } catch (err) {
+    await logServerError({
+      path:   '/api/update-clinic',
+      error:  err,
+      source: 'api',
+      module: 'management',
+    })
     return NextResponse.json(
       { error: 'Erro ao atualizar dados da clínica' },
       { status: 500 }

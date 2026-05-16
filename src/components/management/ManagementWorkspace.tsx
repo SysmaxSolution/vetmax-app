@@ -13,6 +13,7 @@ import { createInvitation, createAndSendInvitation, revokeInvitation } from '@/l
 import { uploadClinicLogo, removeClinicLogo } from '@/lib/actions/clinic-settings'
 import type { DocumentTemplate, TemplateType, UserRole, Invitation, InvitationRole } from '@/types'
 import type { ClinicConfig, ClinicSettingsConfig } from '@/lib/actions/clinic-settings'
+import { apiFetch } from '@/lib/api-fetch'
 import ImportTemplateModal from './ImportTemplateModal'
 import { Toast } from '@/components/ui/toast'
 import ConveniosTab from './ConveniosTab'
@@ -300,9 +301,10 @@ export default function ManagementWorkspace({
   const handleSaveClinic = async () => {
     setIsSavingClinic(true)
     try {
-      const res = await fetch('/api/update-clinic', {
+      const res = await apiFetch('/api/update-clinic', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        module: 'management',
         body: JSON.stringify({
           name:                clinicName,
           cnpj:                clinicCnpj,
