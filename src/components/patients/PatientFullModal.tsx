@@ -17,7 +17,7 @@ import { getPetInsurance, upsertPetInsurance, removePetInsurance, type PetInsura
 import VaccinationCard from '@/components/vet/VaccinationCard'
 import { BehaviorTagsSelector } from '@/components/ui/BehaviorTagsBadges'
 import { BreedCombobox } from '@/components/ui/BreedCombobox'
-import { lookupCep } from '@/lib/cep'
+import { lookupCepAction } from '@/lib/actions/cep'
 import type { PatientsListItem } from '@/lib/actions/timeline'
 import type { PatientSpecies } from '@/types'
 
@@ -380,7 +380,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
     setCepStatus('searching')
     let cancelled = false
     const timer = setTimeout(async () => {
-      const result = await lookupCep(digits)
+      const result = await lookupCepAction(digits)
       if (cancelled) return
       if (result.ok) {
         setTutorStreet(result.street)
