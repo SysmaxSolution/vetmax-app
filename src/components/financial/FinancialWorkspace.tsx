@@ -14,12 +14,14 @@ import CreditCardsTab     from './cadastros/CreditCardsTab'
 import EmployeesTab       from './cadastros/EmployeesTab'
 import ExtratoTab         from './ExtratoTab'
 import ConciliacaoTab     from './ConciliacaoTab'
+import Link from 'next/link'
 import {
   Plus, RefreshCcw, Search, Filter,
   TrendingUp, AlertTriangle, CheckCircle2,
   ChevronDown, DollarSign, BookOpen, Receipt, GitMerge,
-  ArrowDownCircle, RotateCcw,
+  ArrowDownCircle, RotateCcw, PawPrint,
 } from 'lucide-react'
+import { useModule } from '@/components/providers/ModulesProvider'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -310,6 +312,18 @@ export default function FinancialWorkspace({
     { id: 'cadastros'   as MainTab, label: 'Cadastros'         },
   ]
 
+  const petloveEnabled = useModule('petlove_reconciliation')
+  const externalTabs: { href: string; label: string; icon: typeof PawPrint; tone: string }[] = petloveEnabled
+    ? [
+        {
+          href:  '/dashboard/financial/insurance-reconciliation',
+          label: 'Conciliação Petlove',
+          icon:  PawPrint,
+          tone:  'text-purple-700 hover:bg-purple-50 border-purple-200',
+        },
+      ]
+    : []
+
   const cadastrosSubTabs: { id: CadastrosSubTab; label: string }[] = [
     { id: 'bancos',       label: 'Bancos' },
     { id: 'plano_contas', label: 'Plano de Contas' },
@@ -379,6 +393,16 @@ export default function FinancialWorkspace({
                 {t.id === 'conciliacao' && <GitMerge    className="h-3.5 w-3.5" />}
                 {t.label}
               </button>
+            ))}
+            {externalTabs.map(t => (
+              <Link
+                key={t.href}
+                href={t.href}
+                className={`rounded-lg px-3 sm:px-5 py-2 text-xs sm:text-sm font-semibold transition-all flex items-center gap-1 sm:gap-1.5 whitespace-nowrap flex-1 sm:flex-none justify-center border bg-white ${t.tone}`}
+              >
+                <t.icon className="h-3.5 w-3.5" />
+                {t.label}
+              </Link>
             ))}
           </div>
         </div>

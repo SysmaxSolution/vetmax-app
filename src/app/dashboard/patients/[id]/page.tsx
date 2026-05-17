@@ -2,6 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import { getPatientById } from '@/lib/actions/timeline'
 import { getPatientVaccines } from '@/lib/actions/vaccines'
+import { getPetlovePriceHistoryForPet } from '@/lib/actions/petlove-import'
+import PetlovePriceHistory from '@/components/pet/PetlovePriceHistory'
 import Link from 'next/link'
 import {
   ArrowLeft, PawPrint, User, Syringe, Calendar,
@@ -22,15 +24,17 @@ export default async function PatientProfilePage({ params }: { params: { id: str
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const [patientResult, vaccinesResult] = await Promise.all([
+  const [patientResult, vaccinesResult, petloveResult] = await Promise.all([
     getPatientById(params.id),
     getPatientVaccines(params.id),
+    getPetlovePriceHistoryForPet(params.id),
   ])
 
   if ('error' in patientResult) notFound()
 
   const patient  = patientResult
   const vaccines = Array.isArray(vaccinesResult) ? vaccinesResult : []
+  const petlovePrices = Array.isArray(petloveResult) ? petloveResult : []
   const today    = new Date().toISOString().split('T')[0]
 
   const overdue  = vaccines.filter(v => v.next_due_date && v.next_due_date < today)
@@ -141,6 +145,9 @@ export default async function PatientProfilePage({ params }: { params: { id: str
             </div>
           )}
         </div>
+
+        {/* Tabela de Preços Históricos Petlove */}
+        <PetlovePriceHistory items={petlovePrices} />
 
         {/* Histórico de Vacinas */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
