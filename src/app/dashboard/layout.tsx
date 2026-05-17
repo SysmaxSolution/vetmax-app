@@ -13,6 +13,8 @@ import { Lock, AlertCircle } from 'lucide-react'
 import { getLowStockCount } from '@/lib/actions/stock'
 import type { UserClinicInfo } from '@/lib/actions/clinic-switcher'
 import OnboardingWizard from '@/components/onboarding/OnboardingWizard'
+import { FREE_ROUTES } from '@/config/access-matrix'
+import type { PlanName, BusinessType } from '@/types'
 
 export default async function DashboardLayout({
   children,
@@ -44,10 +46,10 @@ export default async function DashboardLayout({
     ? admin.from('clinics').select('id, name, status').order('name')
     : admin.from('user_clinics').select('clinic_id, role, clinics(id, name, status)').eq('user_id', user.id)
 
-  const [{ data: clinicData }, whatsAppRow, clinicsResult, petCountResult] = await Promise.all([
+  const [{ data: clinicData }, whatsAppRow, clinicsResult, petCountResult, subResult] = await Promise.all([
     admin
       .from('clinics')
-      .select('logo_url, active_modules, status, ai_transcription_mode')
+      .select('logo_url, active_modules, status, ai_transcription_mode, business_type, ui_preferences')
       .eq('id', profile.clinic_id)
       .single(),
     supabase
@@ -61,6 +63,11 @@ export default async function DashboardLayout({
       .from('patients')
       .select('id', { count: 'exact', head: true })
       .eq('clinic_id', profile.clinic_id),
+    admin
+      .from('tenant_subscriptions')
+      .select('plan_name')
+      .eq('clinic_id', profile.clinic_id)
+      .single(),
   ])
 
   let userClinics: UserClinicInfo[] = []
@@ -84,8 +91,11 @@ export default async function DashboardLayout({
 
   const whatsAppEnabled = !!whatsAppRow.data
 
-  const clinicStatus = (clinicData as any)?.status ?? 'active'
-  const clinicConfig = clinicData
+  const clinicStatus   = (clinicData as any)?.status ?? 'active'
+  const clinicConfig   = clinicData
+  const planName       = ((subResult as any)?.data?.plan_name ?? 'free') as PlanName
+  const businessType   = ((clinicData as any)?.business_type ?? 'vet_clinic') as BusinessType
+  const allowedRoutes  = FREE_ROUTES[businessType] ?? FREE_ROUTES.vet_clinic
 
   // Bloqueio de clínica em análise (SysMax nunca é bloqueado)
   if (clinicStatus === 'pending' && !isSysmax) {
@@ -156,8 +166,10 @@ export default async function DashboardLayout({
         isSysmax={isSysmax}
         clinicStatus={clinicStatus}
         isSurgeryMode={!!(profile as any).is_in_surgery}
+        planName={planName}
+        allowedRoutes={allowedRoutes}
       />
-      <ThemeProvider initialPreferences={(profile as any).ui_preferences ?? null}>
+      <ThemeProvider initialPreferences={(clinicData as any)?.ui_preferences ?? null}>
         <ClinicConfigProvider aiTranscriptionMode={(clinicData as any)?.ai_transcription_mode ?? 'ai_assisted'}>
           <ModulesProvider modules={activeModules}>
             <WhatsAppGateProvider enabled={whatsAppEnabled}>

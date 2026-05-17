@@ -38,13 +38,32 @@ export function ThemeProvider({
     initialPreferences ?? { intensity: 'normal', custom_bg: null }
   )
 
+  const hasImage = !!preferences.background_image_url
+
   const bgClass = useMemo(() => {
-    if (preferences.custom_bg) return ''         // custom color via inline style
-    if (!theme)                 return 'bg-slate-50'
-    if (preferences.intensity === 'off')     return 'bg-slate-50'
-    if (preferences.intensity === 'intense') return theme.bgIntense
+    if (hasImage)                              return ''
+    if (preferences.custom_bg)                 return ''
+    if (!theme)                                return 'bg-slate-50'
+    if (preferences.intensity === 'off')       return 'bg-slate-50'
+    if (preferences.intensity === 'intense')   return theme.bgIntense
     return theme.bg
-  }, [preferences, theme])
+  }, [preferences, theme, hasImage])
+
+  const sectionStyle: React.CSSProperties | undefined = useMemo(() => {
+    if (hasImage) {
+      return {
+        backgroundImage:    `url("${preferences.background_image_url}")`,
+        backgroundSize:     'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat:   'no-repeat',
+        backgroundAttachment: 'fixed',
+      }
+    }
+    if (preferences.custom_bg) {
+      return { backgroundColor: preferences.custom_bg }
+    }
+    return undefined
+  }, [preferences, hasImage])
 
   const value = useMemo(
     () => ({ moduleKey, theme, preferences, setPreferences }),
@@ -55,7 +74,7 @@ export function ThemeProvider({
     <ThemeContext.Provider value={value}>
       <section
         className={`transition-colors duration-300 ${bgClass}`}
-        style={preferences.custom_bg ? { backgroundColor: preferences.custom_bg } : undefined}
+        style={sectionStyle}
       >
         {children}
       </section>
