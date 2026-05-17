@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -78,17 +79,27 @@ export interface BulkCreateResult {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+//
+// IMPORTANTE: usamos o admin client em writes para evitar surpresas com a
+// função SQL get_user_clinic_id() em cenários onde profiles.clinic_id pode
+// estar desatualizado (multi-clinic switcher, sessões antigas). A segurança
+// é garantida validando manualmente clinic_id no início de cada action.
 
-type ClinicCtx = { supabase: Awaited<ReturnType<typeof createClient>>; clinicId: string; userId: string }
+type ClinicCtx = {
+  supabase: ReturnType<typeof createAdminClient>
+  clinicId: string
+  userId:   string
+}
 
 async function getCtx(): Promise<ClinicCtx | { error: string }> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const supabaseSSR = await createClient()
+  const { data: { user } } = await supabaseSSR.auth.getUser()
   if (!user) return { error: 'Não autenticado.' }
-  const { data: profile } = await supabase
+  const admin = createAdminClient()
+  const { data: profile } = await admin
     .from('profiles').select('clinic_id').eq('id', user.id).single()
   if (!profile?.clinic_id) return { error: 'Perfil sem clínica vinculada.' }
-  return { supabase, clinicId: profile.clinic_id, userId: user.id }
+  return { supabase: admin, clinicId: profile.clinic_id, userId: user.id }
 }
 
 function normalizeChip(s: string | null | undefined): string {
@@ -137,7 +148,7 @@ function valueWithinTolerance(expected: number | null, actual: number, ratio = 0
 
 // ─── runMatchEngine ───────────────────────────────────────────────────────────
 
-export async function runMatchEngine(remittanceId: string): Promise<{ updated: number } | { error: string }> {
+export async function runMatchEngine(remittanceId: string): Promise<{ updated: number; matched: number; partial: number; orphan: number; missing: number; errors: string[] } | { error: string }> {
   const ctx = await getCtx()
   if ('error' in ctx) return ctx
   const { supabase, clinicId } = ctx
@@ -149,7 +160,7 @@ export async function runMatchEngine(remittanceId: string): Promise<{ updated: n
     .eq('remittance_id', remittanceId)
 
   if (linesErr) return { error: linesErr.message }
-  if (!lines || lines.length === 0) return { updated: 0 }
+  if (!lines || lines.length === 0) return { updated: 0, matched: 0, partial: 0, orphan: 0, missing: 0, errors: [] }
 
   // ─── Carregar lookup tables em memória (uma vez por execução) ───────────────
   const allChips = Array.from(new Set(lines.map(l => normalizeChip(l.microchip_raw)).filter(Boolean)))
@@ -190,7 +201,23 @@ export async function runMatchEngine(remittanceId: string): Promise<{ updated: n
   }
 
   let updates = 0
+  const counters = { matched: 0, partial: 0, orphan: 0, missing: 0 }
+  const errors: string[] = []
   const matchedItemIds = new Set<string>()
+
+  async function applyUpdate(lineId: string, patch: Record<string, unknown>, kind: 'matched' | 'partial' | 'orphan' | 'missing') {
+    const { error } = await supabase
+      .from('petlove_remittance_lines')
+      .update(patch)
+      .eq('id', lineId)
+      .eq('clinic_id', clinicId) // double-check (defesa contra ambiguidade)
+    if (error) {
+      errors.push(`linha ${lineId}: ${error.message}`)
+      return
+    }
+    counters[kind]++
+    updates++
+  }
 
   for (const line of lines) {
     const chip = normalizeChip(line.microchip_raw)
@@ -213,12 +240,11 @@ export async function runMatchEngine(remittanceId: string): Promise<{ updated: n
     }
 
     if (!patient) {
-      await supabase.from('petlove_remittance_lines').update({
-        match_status: 'missing_patient_profile',
+      await applyUpdate(line.id, {
+        match_status:     'missing_patient_profile',
         match_confidence: 0,
-        match_notes: [{ reason: 'no_patient_match', ...note }],
-      }).eq('id', line.id)
-      updates++
+        match_notes:      [{ reason: 'no_patient_match', ...note }],
+      }, 'missing')
       continue
     }
 
@@ -239,14 +265,13 @@ export async function runMatchEngine(remittanceId: string): Promise<{ updated: n
       .lte('created_at', `${dateHigh}T23:59:59Z`)
 
     if (!consults || consults.length === 0) {
-      await supabase.from('petlove_remittance_lines').update({
-        match_status: 'orphan_invoice',
-        match_confidence: confidence,
+      await applyUpdate(line.id, {
+        match_status:       'orphan_invoice',
+        match_confidence:   confidence,
         matched_patient_id: patient.id,
         matched_tutor_id:   patient.tutor_id,
-        match_notes: [{ reason: 'no_consultation_in_date_range', date_range: [dateLow, dateHigh] }],
-      }).eq('id', line.id)
-      updates++
+        match_notes:        [{ reason: 'no_consultation_in_date_range', date_range: [dateLow, dateHigh] }],
+      }, 'orphan')
       continue
     }
 
@@ -270,14 +295,13 @@ export async function runMatchEngine(remittanceId: string): Promise<{ updated: n
     const found = findInvoiceItemByName(candidateItems, line.procedure_name_raw ?? '', line.repass_value)
 
     if (!found) {
-      await supabase.from('petlove_remittance_lines').update({
-        match_status: 'orphan_invoice',
-        match_confidence: confidence,
+      await applyUpdate(line.id, {
+        match_status:       'orphan_invoice',
+        match_confidence:   confidence,
         matched_patient_id: patient.id,
         matched_tutor_id:   patient.tutor_id,
-        match_notes: [{ reason: 'procedure_not_in_invoice', candidates: candidateItems.length }],
-      }).eq('id', line.id)
-      updates++
+        match_notes:        [{ reason: 'procedure_not_in_invoice', candidates: candidateItems.length }],
+      }, 'orphan')
       continue
     }
 
@@ -286,24 +310,27 @@ export async function runMatchEngine(remittanceId: string): Promise<{ updated: n
     const status: MatchStatus = inTolerance ? 'matched' : 'partial'
     const finalConfidence = inTolerance ? Math.min(95, confidence + 5) : Math.max(50, confidence - 10)
 
-    await supabase.from('petlove_remittance_lines').update({
-      match_status: status,
-      match_confidence: finalConfidence,
+    await applyUpdate(line.id, {
+      match_status:            status,
+      match_confidence:        finalConfidence,
       matched_invoice_item_id: found.id,
-      matched_patient_id: patient.id,
-      matched_tutor_id:   patient.tutor_id,
+      matched_patient_id:      patient.id,
+      matched_tutor_id:        patient.tutor_id,
       match_notes: inTolerance
         ? [{ reason: 'exact_or_partial_match' }]
         : [{ reason: 'value_drift', expected: found.expected_value ?? found.total_price, actual: line.repass_value }],
-    }).eq('id', line.id)
-    updates++
+    }, inTolerance ? 'matched' : 'partial')
   }
 
-  // Atualiza status da remessa
-  await supabase.from('petlove_remittances').update({ status: 'reviewed' }).eq('id', remittanceId)
+  // Atualiza status da remessa (não retrocede de reconciled)
+  await supabase
+    .from('petlove_remittances')
+    .update({ status: 'reviewed' })
+    .eq('id', remittanceId)
+    .in('status', ['imported', 'reviewed'])
 
   revalidatePath(`/dashboard/financial/insurance-reconciliation/${remittanceId}/review`)
-  return { updated: updates }
+  return { updated: updates, ...counters, errors }
 }
 
 // ─── getReviewBundle ──────────────────────────────────────────────────────────

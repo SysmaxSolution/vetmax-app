@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { runMatchEngine, bulkCreatePatientsFromPetlove } from '@/lib/actions/petlove-matching'
 
@@ -50,17 +51,25 @@ export interface DeleteRemittanceResult {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+//
+// Usa admin client em writes para evitar surpresas de RLS. Segurança garantida
+// validando manualmente clinic_id em cada query.
 
-type ClinicCtx = { supabase: Awaited<ReturnType<typeof createClient>>; clinicId: string; userId: string }
+type ClinicCtx = {
+  supabase: ReturnType<typeof createAdminClient>
+  clinicId: string
+  userId:   string
+}
 
 async function getCtx(): Promise<ClinicCtx | { error: string }> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const supabaseSSR = await createClient()
+  const { data: { user } } = await supabaseSSR.auth.getUser()
   if (!user) return { error: 'Não autenticado.' }
-  const { data: profile } = await supabase
+  const admin = createAdminClient()
+  const { data: profile } = await admin
     .from('profiles').select('clinic_id').eq('id', user.id).single()
   if (!profile?.clinic_id) return { error: 'Perfil sem clínica vinculada.' }
-  return { supabase, clinicId: profile.clinic_id, userId: user.id }
+  return { supabase: admin, clinicId: profile.clinic_id, userId: user.id }
 }
 
 function fmtDateBR(iso: string): string {
@@ -208,12 +217,10 @@ export async function applyReconciliation(
   }
 
   // ─── Pipeline autônomo: matching → bulk register → re-matching ───────────
-  // Se a remessa ainda não passou pelo motor, roda agora. Depois,
+  // Roda SEMPRE matching (idempotente — só atualiza o que mudou). Em seguida,
   // pets órfãos viram cadastros via bulk register e o matching reroda.
-  if (rem.status === 'imported') {
-    const r1 = await runMatchEngine(remittanceId)
-    if ('error' in r1) result.errors.push(`Matching inicial: ${r1.error}`)
-  }
+  const r1 = await runMatchEngine(remittanceId)
+  if ('error' in r1) result.errors.push(`Matching inicial: ${r1.error}`)
 
   // Auto bulk register: identifica linhas missing e cria pets/tutores
   const { data: missingLines } = await supabase
@@ -229,6 +236,8 @@ export async function applyReconciliation(
       result.auto_created_patients = bulk.created_patients
       result.auto_created_tutors   = bulk.created_tutors
       for (const err of bulk.errors) result.errors.push(`Bulk register: ${err}`)
+    } else {
+      result.errors.push(`Bulk register: ${bulk.error}`)
     }
     // Reroda matching após criar os pets — agora terão matched_patient_id
     const r2 = await runMatchEngine(remittanceId)

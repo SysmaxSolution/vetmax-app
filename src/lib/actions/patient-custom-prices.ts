@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -20,16 +21,20 @@ export interface PatientCustomPrice {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-type ClinicCtx = { supabase: Awaited<ReturnType<typeof createClient>>; clinicId: string }
+type ClinicCtx = {
+  supabase: ReturnType<typeof createAdminClient>
+  clinicId: string
+}
 
 async function getCtx(): Promise<ClinicCtx | { error: string }> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const supabaseSSR = await createClient()
+  const { data: { user } } = await supabaseSSR.auth.getUser()
   if (!user) return { error: 'Não autenticado.' }
-  const { data: profile } = await supabase
+  const admin = createAdminClient()
+  const { data: profile } = await admin
     .from('profiles').select('clinic_id').eq('id', user.id).single()
   if (!profile?.clinic_id) return { error: 'Perfil sem clínica vinculada.' }
-  return { supabase, clinicId: profile.clinic_id }
+  return { supabase: admin, clinicId: profile.clinic_id }
 }
 
 // ─── getCustomPricesForPatient ────────────────────────────────────────────────

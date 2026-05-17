@@ -14,8 +14,11 @@ const client = new Client({
 ;(async () => {
   await client.connect()
 
-  console.log('=== petlove_remittances (last 5) ===')
-  const r = await client.query(`SELECT id, clinic_id, remittance_number, status, imported_at FROM petlove_remittances ORDER BY imported_at DESC LIMIT 5`)
+  console.log('=== petlove_remittances (last 5) — joined with clinic name ===')
+  const r = await client.query(`
+    SELECT pr.id, pr.clinic_id, c.name as clinic_name, pr.remittance_number, pr.status, pr.imported_at
+    FROM petlove_remittances pr LEFT JOIN clinics c ON c.id=pr.clinic_id
+    ORDER BY imported_at DESC LIMIT 5`)
   console.table(r.rows)
 
   if (r.rows.length > 0) {
