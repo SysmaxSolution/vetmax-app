@@ -50,7 +50,9 @@ export async function createInvitation(
     .eq('clinic_id', profile.clinic_id)
 
   if (clinic && currentUsers !== null && currentUsers >= clinic.user_limit) {
-    return { error: `Limite de ${clinic.user_limit} usuários atingido. Contate a SisMax para expandir sua licença.` }
+    return {
+      error: `Limite de ${clinic.user_limit} usuários atingido no seu plano atual. Fale com a Sysmax Solutions pelo WhatsApp (16) 99702-3340 ou e-mail contato@sysmaxsolutions.com para fazer upgrade.`,
+    }
   }
 
   // Invalida convites anteriores para o mesmo e-mail nesta clínica

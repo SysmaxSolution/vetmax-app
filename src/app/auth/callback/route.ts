@@ -27,7 +27,7 @@ async function ensureClinicCreated(user: User): Promise<void> {
 
   const { data: pending } = await admin
     .from('pending_registrations')
-    .select('full_name, clinic_name, clinic_id, username, phone, cnpj')
+    .select('full_name, clinic_name, clinic_id, username, phone, cnpj, business_type')
     .ilike('email', user.email!)
     .single()
 
@@ -56,8 +56,11 @@ async function ensureClinicCreated(user: User): Promise<void> {
 
   if (!clinicName) return
 
-  // Cria nova clínica
-  const insertData: Record<string, unknown> = { name: clinicName, status: 'pending' }
+  // Cria nova clínica — nasce ativa (PLG: sem aprovação manual)
+  const insertData: Record<string, unknown> = {
+    name:          clinicName,
+    business_type: pending?.business_type ?? 'vet_clinic',
+  }
   if (pending?.cnpj) insertData.cnpj = pending.cnpj
 
   const { data: clinic, error: clinicErr } = await admin
@@ -118,8 +121,8 @@ async function routeOAuthUser(user: User, origin: string): Promise<NextResponse>
   }
 
   const clinicStatus = (profile.clinics as unknown as { status: string } | null)?.status
-  if (clinicStatus === 'pending' || clinicStatus === 'blocked') {
-    return NextResponse.redirect(`${origin}/login?error=clinic_not_active`)
+  if (clinicStatus === 'suspended') {
+    return NextResponse.redirect(`${origin}/login?error=clinic_suspended`)
   }
 
   const cookieStore = await cookies()

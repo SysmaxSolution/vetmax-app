@@ -30,7 +30,7 @@ export default async function ManagementPage() {
 
   const clinicName = (profile.clinics as unknown as { name: string } | null)?.name ?? 'Minha Clínica'
 
-  const [templatesResult, clinicResult, usersResult, invitationsResult, configResult, roomsResult, settingsConfigResult, whatsAppSettingsResult] = await Promise.all([
+  const [templatesResult, clinicResult, usersResult, invitationsResult, configResult, roomsResult, settingsConfigResult, whatsAppSettingsResult, subResult] = await Promise.all([
     getTemplates(),
     admin
       .from('clinics')
@@ -48,6 +48,11 @@ export default async function ManagementPage() {
     getRooms(),
     getClinicSettingsConfig(),
     getWhatsAppSettings(),
+    admin
+      .from('tenant_subscriptions')
+      .select('plan_name')
+      .eq('clinic_id', profile.clinic_id)
+      .single(),
   ])
 
   const templates: DocumentTemplate[] = 'error' in templatesResult ? [] : templatesResult
@@ -60,6 +65,7 @@ export default async function ManagementPage() {
   const initialSettingsConfig = 'error' in settingsConfigResult ? null : settingsConfigResult
   const initialRooms = Array.isArray(roomsResult) ? roomsResult : []
   const initialWhatsAppSettings = whatsAppSettingsResult ?? null
+  const planName: string = (subResult as any)?.data?.plan_name ?? 'free'
 
   return (
     <Suspense>
@@ -78,6 +84,7 @@ export default async function ManagementPage() {
         activeModules={activeModules}
         isSysmax={!!profile.is_sysmax}
         initialWhatsAppSettings={initialWhatsAppSettings}
+        planName={planName}
       />
     </Suspense>
   )

@@ -7,15 +7,26 @@ export default async function ManagementLayout({ children }: { children: React.R
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  let isSysmax = false
+  let isSysmax  = false
+  let planName  = 'enterprise'
+
   if (user) {
     const admin = createAdminClient()
     const { data: profile } = await admin
       .from('profiles')
-      .select('is_sysmax')
+      .select('is_sysmax, clinic_id')
       .eq('id', user.id)
       .single()
     isSysmax = !!profile?.is_sysmax
+
+    if (profile?.clinic_id && !isSysmax) {
+      const { data: sub } = await admin
+        .from('tenant_subscriptions')
+        .select('plan_name')
+        .eq('clinic_id', profile.clinic_id)
+        .single()
+      planName = sub?.plan_name ?? 'free'
+    }
   }
 
   return (
@@ -25,7 +36,7 @@ export default async function ManagementLayout({ children }: { children: React.R
         <p className="mt-0.5 text-sm text-slate-500">Templates, configurações e usuários</p>
       </div>
       <Suspense>
-        <ManagementNav showMonitoramento={isSysmax} />
+        <ManagementNav showMonitoramento={isSysmax} planName={planName} />
       </Suspense>
       {children}
     </div>

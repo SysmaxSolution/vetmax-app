@@ -105,12 +105,13 @@ export async function completeOnboarding(
     const { data: { user }, error: userError } = await supabase.auth.getUser()
     if (userError || !user) return { error: 'Sessão inválida. Faça login novamente.' }
 
-    const clinicName = (formData.get('clinic_name') as string).trim()
+    const clinicName   = (formData.get('clinic_name')   as string).trim()
+    const businessType = (formData.get('business_type') as string ?? 'vet_clinic').trim()
     if (!clinicName) return { error: 'Preencha o nome da clínica.' }
 
     const { data: clinic, error: clinicError } = await admin
       .from('clinics')
-      .insert({ name: clinicName })
+      .insert({ name: clinicName, business_type: businessType })
       .select('id')
       .single()
 

@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useTransition, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { findPetConsultation, type MentorPetResult } from '@/lib/actions/mentor'
+import { checkMentorDailyQuota } from '@/lib/actions/mentor-quota'
 import { useMentor, TOURS, INTENT_MAP } from './MentorContext'
 import { usePathname } from 'next/navigation'
 import { MentorHighlightOverlay, type MentorHighlight } from './MentorHighlightOverlay'
@@ -91,9 +92,10 @@ interface SpeechRecognitionEvent extends Event {
 interface MentorChatProps {
   idleEnabled?: boolean
   idleSeconds?: number
+  isFreePlan?:  boolean
 }
 
-export function MentorChat({ idleEnabled = true, idleSeconds = 30 }: MentorChatProps) {
+export function MentorChat({ idleEnabled = true, idleSeconds = 30, isFreePlan = true }: MentorChatProps) {
   const [mounted, setMounted]         = useState(false)
   const [open, setOpen]               = useState(false)
   const [idleBubble, setIdleBubble]   = useState(false)
@@ -199,6 +201,33 @@ export function MentorChat({ idleEnabled = true, idleSeconds = 30 }: MentorChatP
 
     setInput('')
     addMsg(userMsg(trimmed))
+
+    // PLG: plano Free — verifica cota diária antes de processar
+    if (isFreePlan) {
+      startTransition(async () => {
+        const allowed = await checkMentorDailyQuota()
+        if (!allowed) {
+          addMsg(mentorMsg(
+            'Minha cota gratuita diária acabou! 😔 Faça o upgrade para eu ser seu assistente ilimitado!',
+            {
+              action: {
+                label: 'Conhecer Planos PRO',
+                onClick: () => router.push('/planos'),
+              },
+            }
+          ))
+          return
+        }
+        _runProcessInput(trimmed)
+      })
+      return
+    }
+
+    _runProcessInput(trimmed)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFreePlan, addMsg, router])
+
+  const _runProcessInput = useCallback((trimmed: string) => {
 
     // 1. Checar se é busca por animal (contém nome + contexto de localização)
     const petSearchPatterns = [
@@ -461,19 +490,30 @@ export function MentorChat({ idleEnabled = true, idleSeconds = 30 }: MentorChatP
                 <p className="mt-0.5 text-[11px] text-blue-200">Assistente de onboarding</p>
               </div>
 
-              {/* G16-4: Toggle Modo Texto / Modo Visual */}
+              {/* G16-4: Toggle Modo Texto / Modo Visual — desabilitado no plano Free (PLG) */}
               <button
                 type="button"
-                onClick={toggleMode}
-                aria-label={mode === 'text' ? 'Ativar Modo Visual' : 'Ativar Modo Texto'}
-                title={mode === 'text' ? 'Modo Visual (destaca elementos na tela)' : 'Modo Texto (apenas respostas)'}
+                onClick={isFreePlan ? undefined : toggleMode}
+                disabled={isFreePlan}
+                aria-label={isFreePlan ? 'Modo Visual disponível no Plano PRO' : mode === 'text' ? 'Ativar Modo Visual' : 'Ativar Modo Texto'}
+                title={isFreePlan ? '🔒 Modo Visual disponível no Plano PRO' : mode === 'text' ? 'Modo Visual (destaca elementos na tela)' : 'Modo Texto (apenas respostas)'}
                 className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold transition-all duration-200 ${
-                  mode === 'visual'
-                    ? 'bg-white text-blue-700 shadow-sm'
-                    : 'bg-white/15 text-white hover:bg-white/25'
+                  isFreePlan
+                    ? 'bg-white/10 text-white/40 cursor-not-allowed'
+                    : mode === 'visual'
+                      ? 'bg-white text-blue-700 shadow-sm'
+                      : 'bg-white/15 text-white hover:bg-white/25'
                 }`}
               >
-                {mode === 'visual' ? (
+                {isFreePlan ? (
+                  // Lock icon — visual mode bloqueado no Free
+                  <>
+                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z"/>
+                    </svg>
+                    Visual
+                  </>
+                ) : mode === 'visual' ? (
                   // Eye icon — modo visual ativo
                   <>
                     <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">

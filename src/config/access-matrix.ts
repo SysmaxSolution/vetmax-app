@@ -6,15 +6,19 @@ import type { PlanName, BusinessType } from '@/types'
 export const FREE_ROUTES: Record<BusinessType, string[]> = {
   vet_clinic: [
     '/dashboard',
-    '/dashboard/patients',    // Pacientes (cadastro e histórico)
-    '/dashboard/reception',   // Agenda manual (appointments)
-    '/dashboard/cashier',     // PDV básico
+    '/dashboard/patients',    // Pacientes
+    '/dashboard/reception',   // Recepção
+    '/dashboard/cashier',     // Caixa
+    '/dashboard/vet',         // Consultório
+    '/dashboard/management',  // Gestão (com tabs restritas — ver MANAGEMENT_TAB_BLOCKED_ON_FREE)
   ],
   pet_aesthetics: [
     '/dashboard',
     '/dashboard/patients',    // Pacientes
+    '/dashboard/reception',   // Recepção
+    '/dashboard/cashier',     // Caixa
     '/dashboard/grooming',    // Banho e Tosa
-    '/dashboard/cashier',     // PDV básico
+    '/dashboard/management',  // Gestão (com tabs restritas)
   ],
 }
 
@@ -23,6 +27,19 @@ export const ALWAYS_ALLOWED: string[] = [
   '/dashboard/profile',
   '/dashboard/settings',
 ]
+
+// ── Tabs da Gestão bloqueadas no plano Free ───────────────────────────────────
+// Aplica-se a /dashboard/management?tab=<tab>
+export const MANAGEMENT_TAB_BLOCKED_ON_FREE: string[] = [
+  'templates',       // Modelos de Documentos
+  'configuracoes',   // Configurações da Clínica
+]
+
+export function isManagementTabAllowed(tab: string | null, plan: PlanName): boolean {
+  if (plan !== 'free') return true
+  const normalized = tab ?? 'templates' // default tab é "templates"
+  return !MANAGEMENT_TAB_BLOCKED_ON_FREE.includes(normalized)
+}
 
 export function isRouteAllowed(
   pathname: string,
@@ -105,6 +122,17 @@ export const PAYWALL_COPY: Record<string, PaywallCopy> = {
     title:       'Cadastros Avançados',
     description: 'Cadastros de tutores, animais, fornecedores, funcionários e tabelas de preços personalizadas.',
     feature:     'Cadastros PRO',
+  },
+  // ── Sub-tabs bloqueadas da Gestão ────────────────────────────────────────────
+  '/dashboard/management?tab=templates': {
+    title:       'Modelos de Documentos',
+    description: 'Crie e edite modelos de laudos, receitas, termos e encaminhamentos com campos dinâmicos e assinatura digital.',
+    feature:     'Modelos de Documentos',
+  },
+  '/dashboard/management?tab=configuracoes': {
+    title:       'Configurações da Clínica',
+    description: 'Configure horário de funcionamento, fluxo de atendimento, integrações, IA, transcrição por voz e mais.',
+    feature:     'Configurações Avançadas',
   },
 }
 

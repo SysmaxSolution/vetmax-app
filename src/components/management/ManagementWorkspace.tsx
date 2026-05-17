@@ -27,6 +27,7 @@ import type { ClinicUserFull } from '@/lib/actions/user-management'
 import type { Room } from '@/lib/actions/rooms'
 import UserManagementModal from './UserManagementModal'
 import type { WhatsAppSettingsDisplay } from '@/lib/actions/whatsapp'
+import PremiumPaywall from '@/components/paywall/PremiumPaywall'
 
 type ClinicUser = ClinicUserFull
 
@@ -45,6 +46,7 @@ interface ManagementWorkspaceProps {
   activeModules?:               string[]
   isSysmax?:                    boolean
   initialWhatsAppSettings?:     WhatsAppSettingsDisplay | null
+  planName?:                    string
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -134,7 +136,11 @@ export default function ManagementWorkspace({
   initialTemplates, clinicData, users, initialInvitations, userLimit, currentUserId, userEmail, userFullName,
   initialClinicConfig, initialSettingsConfig = null, initialRooms = [],
   activeModules = [], isSysmax = false, initialWhatsAppSettings = null,
+  planName = 'enterprise',
 }: ManagementWorkspaceProps) {
+  // PLG: tabs bloqueadas no Free
+  const isFreePlan      = planName === 'free' && !isSysmax
+  const blockedTabsFree = new Set(['templates', 'configuracoes'])
   const searchParams = useSearchParams()
   const activeTab = (searchParams.get('tab') as ActiveTab | null) ?? 'templates'
   const [templates, setTemplates] = useState<DocumentTemplate[]>(initialTemplates)
@@ -406,6 +412,17 @@ export default function ManagementWorkspace({
   }
 
   // ─── Render ──────────────────────────────────────────────────────────────
+
+  // PLG: se Free e tab bloqueada, renderiza paywall inline no lugar do conteúdo
+  if (isFreePlan && blockedTabsFree.has(activeTab)) {
+    const route = `/dashboard/management?tab=${activeTab}`
+    return (
+      <>
+        {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
+        <PremiumPaywall route={route} />
+      </>
+    )
+  }
 
   return (
     <>

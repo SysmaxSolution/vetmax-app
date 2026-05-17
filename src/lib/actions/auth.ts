@@ -81,17 +81,10 @@ export async function login(
   // Verificar status da clínica antes de permitir acesso
   const clinicStatus = (profile.clinics as unknown as { status: string } | null)?.status
 
-  if (clinicStatus === 'pending') {
+  if (clinicStatus === 'suspended') {
     await supabase.auth.signOut()
     return {
-      error: 'Sua clínica ainda está aguardando liberação de acesso pela equipe SysMax. Entre em contato: suporte@sysmaxsolutions.com',
-    }
-  }
-
-  if (clinicStatus === 'blocked') {
-    await supabase.auth.signOut()
-    return {
-      error: 'O acesso desta clínica foi bloqueado. Entre em contato: suporte@sysmaxsolutions.com',
+      error: 'O acesso desta clínica foi suspenso. Entre em contato: suporte@sysmaxsolutions.com',
     }
   }
 
@@ -214,14 +207,15 @@ export async function logout() {
 export async function signUpWithClinic(
   formData: FormData
 ): Promise<{ error: string } | { email: string }> {
-  const email      = (formData.get('email')      as string ?? '').trim()
-  const password   = (formData.get('password')   as string ?? '')
-  const fullName   = (formData.get('full_name')  as string ?? '').trim()
-  const username   = (formData.get('username')   as string ?? '').trim().toLowerCase()
-  const phone      = (formData.get('phone')      as string ?? '').trim()
-  const clinicId   = (formData.get('clinic_id')  as string ?? '').trim()   // adesão a existente
-  const clinicName = (formData.get('clinic_name')as string ?? '').trim()   // nova clínica
-  const cnpj       = (formData.get('cnpj')       as string ?? '').replace(/\D/g, '')
+  const email        = (formData.get('email')         as string ?? '').trim()
+  const password     = (formData.get('password')      as string ?? '')
+  const fullName     = (formData.get('full_name')     as string ?? '').trim()
+  const username     = (formData.get('username')      as string ?? '').trim().toLowerCase()
+  const phone        = (formData.get('phone')         as string ?? '').trim()
+  const clinicId     = (formData.get('clinic_id')     as string ?? '').trim()   // adesão a existente
+  const clinicName   = (formData.get('clinic_name')   as string ?? '').trim()   // nova clínica
+  const cnpj         = (formData.get('cnpj')          as string ?? '').replace(/\D/g, '')
+  const businessType = (formData.get('business_type') as string ?? 'vet_clinic').trim()
 
   if (!email || !password || !fullName) {
     return { error: 'Preencha os campos obrigatórios.' }
@@ -278,12 +272,13 @@ export async function signUpWithClinic(
   // Persiste dados para o callback recuperar após confirmação de e-mail
   await admin.from('pending_registrations').upsert({
     email,
-    full_name:   fullName,
-    clinic_name: clinicName || null,
-    username:    username   || null,
-    phone:       phone      || null,
-    clinic_id:   clinicId   || null,
-    cnpj:        cnpj       || null,
+    full_name:     fullName,
+    clinic_name:   clinicName     || null,
+    username:      username       || null,
+    phone:         phone          || null,
+    clinic_id:     clinicId       || null,
+    cnpj:          cnpj           || null,
+    business_type: businessType   || 'vet_clinic',
   })
 
   return { email }
@@ -349,13 +344,9 @@ export async function completeAuthSession(): Promise<AuthState> {
   if (!profile?.clinic_id) redirect('/onboarding')
 
   const clinicStatus = (profile.clinics as unknown as { status: string } | null)?.status
-  if (clinicStatus === 'pending') {
+  if (clinicStatus === 'suspended') {
     await supabase.auth.signOut()
-    return { error: 'Sua clínica ainda está aguardando liberação pela equipe SysMax. Entre em contato: suporte@sysmaxsolutions.com' }
-  }
-  if (clinicStatus === 'blocked') {
-    await supabase.auth.signOut()
-    return { error: 'O acesso desta clínica foi bloqueado. Entre em contato: suporte@sysmaxsolutions.com' }
+    return { error: 'O acesso desta clínica foi suspenso. Entre em contato: suporte@sysmaxsolutions.com' }
   }
 
   const { data: userClinics } = await admin
