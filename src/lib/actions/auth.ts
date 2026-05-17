@@ -254,7 +254,8 @@ export async function signUpWithClinic(
   }
 
   const supabase = await createClient()
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://vetmax-one.vercel.app'
+  const { getAppUrl } = await import('@/lib/app-url')
+  const appUrl = getAppUrl()
 
   const { error: signUpError } = await supabase.auth.signUp({
     email,

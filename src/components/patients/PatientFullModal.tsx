@@ -19,6 +19,7 @@ import { BehaviorTagsSelector } from '@/components/ui/BehaviorTagsBadges'
 import { BreedCombobox } from '@/components/ui/BreedCombobox'
 import { lookupCepAction } from '@/lib/actions/cep'
 import { lookupCnpjAction } from '@/lib/actions/cnpj'
+import { getClientAppUrl } from '@/lib/app-url'
 import type { PatientsListItem } from '@/lib/actions/timeline'
 import type { PatientSpecies } from '@/types'
 
@@ -1143,7 +1144,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                       <button
                         type="button"
                         onClick={() => {
-                          const url = `${window.location.origin}/public/vaccines/${patient.id}`
+                          const url = `${getClientAppUrl()}/public/vaccines/${patient.id}`
                           const msg = `Olá! Aqui está o histórico de vacinação do ${patient.name} atualizado: ${url}`
                           window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank', 'noopener,noreferrer')
                         }}

@@ -26,15 +26,11 @@ export async function POST() {
 
   // Nome da instância = prefixo do clinic_id sem hífens (8 chars)
   const instanceName = 'vet' + profile.clinic_id.replace(/-/g, '').substring(0, 8)
-  // VERCEL_PROJECT_PRODUCTION_URL é provido automaticamente pela Vercel (sem protocolo, ex: SysVetMax-one.vercel.app)
-  // Tem prioridade sobre NEXT_PUBLIC_APP_URL (que pode conter IP de dev local)
-  const productionUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
-    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-    : null
-  const configuredUrl = process.env.NEXT_PUBLIC_APP_URL?.startsWith('http')
-    ? process.env.NEXT_PUBLIC_APP_URL
-    : null
-  const appUrl = (productionUrl ?? configuredUrl ?? '').replace(/\/$/, '')
+  // Webhook usa o domínio canônico (sysvetmax.sysmaxsolutions.com em produção).
+  // NEXT_PUBLIC_APP_URL tem prioridade — VERCEL_PROJECT_PRODUCTION_URL fica como fallback
+  // caso a env explícita não esteja configurada.
+  const { getAppUrl } = await import('@/lib/app-url')
+  const appUrl = getAppUrl()
   const webhookUrl = appUrl ? `${appUrl}/api/webhooks/whatsapp/${profile.clinic_id}` : undefined
 
   const admin = createAdminClient()

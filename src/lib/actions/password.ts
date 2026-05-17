@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { getAppUrl } from '@/lib/app-url'
 
 export async function sendPasswordResetEmail(
   email: string
@@ -10,8 +11,7 @@ export async function sendPasswordResetEmail(
   }
 
   const supabase = await createClient()
-
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+  const appUrl = getAppUrl()
 
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
     redirectTo: `${appUrl}/auth/callback?type=recovery`,

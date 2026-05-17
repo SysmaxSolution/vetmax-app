@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getAppUrl } from '@/lib/app-url'
 import type { InvitationRole, Invitation } from '@/types'
 
 import { sendInviteEmail } from '@/lib/actions/send-invite-email'
@@ -79,10 +80,9 @@ export async function createInvitation(
     return { error: 'Erro ao gerar convite. Tente novamente.' }
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://vetmax-one.vercel.app'
   return {
     token: invitation.token,
-    url:   `${baseUrl}/invite/${invitation.token}`,
+    url:   `${getAppUrl()}/invite/${invitation.token}`,
   }
 }
 
