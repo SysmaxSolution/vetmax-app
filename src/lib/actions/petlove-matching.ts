@@ -573,9 +573,11 @@ export async function bulkCreatePatientsFromPetlove(
           name:         finalPetName,
           species,
           breed:        line.breed_raw ?? null,
+          gender:       'unknown',
+          neutered:     false,
           microchip_id: chip || null,
           microchip:    chip || null,
-          notes:        '⚠ Cadastro rápido via importação Petlove. Complete os dados (gênero, data de nascimento, peso, alergias) na próxima visita.',
+          notes:        '⚠ Cadastro rápido via importação Petlove. A planilha não traz sexo, data de nascimento, peso, alergias — complete na próxima visita.',
           created_from: 'petlove_import',
         })
         .select('id')

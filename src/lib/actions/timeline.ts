@@ -493,6 +493,7 @@ export type PatientsListItem = {
   allergies: string | null
   chronic_diseases: string | null
   microchip_id: string | null
+  created_from: string | null
   tutor: {
     id:                string
     name:              string | null
@@ -501,6 +502,7 @@ export type PatientsListItem = {
     email?:            string | null
     address?:          string | null
     emergency_contact?: string | null
+    created_from?:     string | null
   }
   last_visit: string | null
 }
@@ -569,6 +571,7 @@ export async function getPatientsList(
       chronic_diseases:    p.chronic_diseases ?? null,
       microchip_id:        p.microchip_id ?? null,
       tutor:               tutorMap[p.tutor_id] ?? { id: p.tutor_id, name: '—', cpf: '', phone: '' },
+      created_from:        null,
       last_visit:          null, // preenchido futuramente com join em consultations
     }))
   } catch (err) {
@@ -592,7 +595,7 @@ export async function getPatientById(
 
     const { data: p, error: pErr } = await admin
       .from('patients')
-      .select('id, name, species, breed, gender, neutered, birth_date, birth_date_estimated, coat_color, reproductive_status, medical_history, photo_url, behavior_tags, allergies, chronic_diseases, microchip_id, tutor_id')
+      .select('id, name, species, breed, gender, neutered, birth_date, birth_date_estimated, coat_color, reproductive_status, medical_history, photo_url, behavior_tags, allergies, chronic_diseases, microchip_id, created_from, tutor_id')
       .eq('id', patientId)
       .eq('clinic_id', profile.clinic_id)
       .is('deleted_at', null)
@@ -602,7 +605,7 @@ export async function getPatientById(
 
     const { data: tutor } = await admin
       .from('tutors')
-      .select('id, name, cpf, phone, email, address, emergency_contact')
+      .select('id, name, cpf, phone, email, address, emergency_contact, created_from')
       .eq('id', p.tutor_id)
       .single()
 
@@ -623,6 +626,7 @@ export async function getPatientById(
       allergies:            p.allergies ?? null,
       chronic_diseases:     p.chronic_diseases ?? null,
       microchip_id:         p.microchip_id ?? null,
+      created_from:         (p as { created_from?: string | null }).created_from ?? null,
       tutor:                tutor ?? { id: p.tutor_id, name: '—', cpf: '', phone: '' },
       last_visit:           null,
     }

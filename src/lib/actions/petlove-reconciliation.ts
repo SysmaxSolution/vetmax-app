@@ -254,6 +254,10 @@ export async function applyReconciliation(
   if (!lines || lines.length === 0) return { error: 'Remessa sem linhas para conciliar.' }
 
   // ─── Lookup: procedure_name_raw → stock_item_id (via mappings + auto-create) ─
+  //
+  // Auto-cria mapping + stock_item (valor 0) para procedimentos sem vínculo.
+  // Garante que TODA linha conciliada terá um stock_item para popular
+  // patient_custom_prices — a única fonte de verdade dos preços do convênio.
   const procNames = Array.from(new Set(lines.map(l => (l.procedure_name_raw ?? '').trim()).filter(Boolean)))
   const mappingByName = new Map<string, string>()
   if (procNames.length > 0) {
@@ -266,6 +270,58 @@ export async function applyReconciliation(
     for (const m of maps ?? []) {
       if (m.internal_stock_item_id) mappingByName.set(m.external_procedure_name, m.internal_stock_item_id)
     }
+  }
+
+  // Auto-create para nomes sem mapping
+  const unmappedNames = procNames.filter(n => !mappingByName.has(n))
+  for (const name of unmappedNames) {
+    // 1. Achar stock_item existente com mesmo nome (case-insensitive)
+    let stockItemId: string | null = null
+    const { data: existing } = await supabase
+      .from('stock_items')
+      .select('id')
+      .eq('clinic_id', clinicId)
+      .ilike('name', name)
+      .limit(1)
+      .maybeSingle()
+    if (existing?.id) {
+      stockItemId = existing.id
+    } else {
+      // 2. Criar stock_item com valor zerado (preço fica em patient_custom_prices)
+      const { data: created, error: createErr } = await supabase
+        .from('stock_items')
+        .insert({
+          clinic_id:  clinicId,
+          name,
+          category:   'service',
+          is_service: true,
+          quantity:   0,
+          unit:       'un',
+          min_quantity: 0,
+          unit_price: 0,
+        })
+        .select('id')
+        .single()
+      if (createErr || !created) {
+        result.errors.push(`Auto-create stock_item "${name}": ${createErr?.message ?? 'falha'}`)
+        continue
+      }
+      stockItemId = created.id
+    }
+
+    // 3. Upsert mapping
+    await supabase
+      .from('petlove_procedure_mappings')
+      .upsert({
+        clinic_id:               clinicId,
+        provider_id:             rem.provider_id,
+        external_procedure_name: name,
+        internal_stock_item_id:  stockItemId,
+        is_auto_learned:         true,
+        updated_at:              new Date().toISOString(),
+      }, { onConflict: 'clinic_id,provider_id,external_procedure_name' })
+
+    if (stockItemId) mappingByName.set(name, stockItemId)
   }
 
   // ─── Loop por linha — cada uma vira um título individual ──────────────────

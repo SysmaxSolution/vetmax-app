@@ -7,7 +7,8 @@ import PetlovePriceHistory from '@/components/pet/PetlovePriceHistory'
 import Link from 'next/link'
 import {
   ArrowLeft, PawPrint, User, Syringe, Calendar,
-  Phone, MapPin, Heart, AlertTriangle, CheckCircle2
+  Phone, MapPin, Heart, AlertTriangle, CheckCircle2,
+  Info,
 } from 'lucide-react'
 
 const SPECIES_LABELS: Record<string, string> = {
@@ -53,6 +54,28 @@ export default async function PatientProfilePage({ params }: { params: { id: str
           <ArrowLeft className="h-4 w-4" />
           Lista de Pacientes
         </Link>
+
+        {/* Banner Cadastro Rápido (criado via importação Petlove) */}
+        {patient.created_from === 'petlove_import' && (
+          <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 flex items-start gap-3">
+            <Info className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="font-semibold text-amber-900">Cadastro rápido via Petlove</p>
+              <p className="text-sm text-amber-800 mt-0.5">
+                Este pet foi cadastrado em massa a partir da planilha. <strong>A planilha Petlove não traz alguns campos:</strong>
+              </p>
+              <ul className="text-xs text-amber-700 mt-1.5 ml-4 list-disc space-y-0.5">
+                {!patient.gender || patient.gender === 'unknown' ? <li>Sexo (macho/fêmea)</li> : null}
+                {!patient.birth_date ? <li>Data de nascimento</li> : null}
+                <li>Peso, alergias, doenças crônicas e foto</li>
+                {patient.tutor?.phone === '(não informado)' ? <li>Telefone e CPF do tutor (placeholder gerado)</li> : null}
+              </ul>
+              <p className="text-xs text-amber-700 mt-1.5">
+                Complete na próxima visita do tutor à clínica.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Header do Paciente */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex items-start gap-5">
