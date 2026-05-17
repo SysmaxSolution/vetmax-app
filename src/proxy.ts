@@ -69,17 +69,25 @@ function isRoleAllowed(role: string, pathname: string): boolean {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  if (isPublicPath(pathname)) return NextResponse.next()
+  // Encaminha x-pathname/x-url para Server Components — necessário para
+  // src/app/dashboard/template.tsx aplicar enforcement de plano (default-deny).
+  const requestHeaders = new Headers(request.headers)
+  requestHeaders.set('x-pathname', pathname)
+  requestHeaders.set('x-url',      request.url)
+
+  if (isPublicPath(pathname)) {
+    return NextResponse.next({ request: { headers: requestHeaders } })
+  }
 
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api/') ||
     pathname.includes('.')
   ) {
-    return NextResponse.next()
+    return NextResponse.next({ request: { headers: requestHeaders } })
   }
 
-  let response = NextResponse.next({ request })
+  let response = NextResponse.next({ request: { headers: requestHeaders } })
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -90,7 +98,7 @@ export async function proxy(request: NextRequest) {
         setAll: (cookiesToSet) => {
           // Atualiza cookies no request para que Server Components recebam o token renovado
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-          response = NextResponse.next({ request })
+          response = NextResponse.next({ request: { headers: requestHeaders } })
           cookiesToSet.forEach(({ name, value, options }) =>
             response.cookies.set(name, value, options)
           )
