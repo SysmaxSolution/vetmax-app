@@ -41,6 +41,12 @@ export interface StageRemittanceResult {
   lines_count:   number
 }
 
+export interface StageRemittanceError {
+  error:                   string
+  code?:                   'DUPLICATE_REMITTANCE' | 'UNKNOWN'
+  existing_remittance_id?: string
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 type ClinicCtx = { supabase: Awaited<ReturnType<typeof createClient>>; clinicId: string; userId: string }
@@ -258,7 +264,7 @@ async function findOrCreatePetloveProvider(
 
 // ─── stageRemittance ──────────────────────────────────────────────────────────
 
-export async function stageRemittance(parsed: PetloveRemittanceAST): Promise<StageRemittanceResult | { error: string }> {
+export async function stageRemittance(parsed: PetloveRemittanceAST): Promise<StageRemittanceResult | StageRemittanceError> {
   const ctx = await getCtx()
   if ('error' in ctx) return ctx
   const { supabase, clinicId, userId } = ctx
@@ -275,7 +281,11 @@ export async function stageRemittance(parsed: PetloveRemittanceAST): Promise<Sta
     .eq('remittance_number', parsed.remittance_number)
     .maybeSingle()
   if (dupe) {
-    return { error: `Remessa #${parsed.remittance_number} já foi importada em ${new Date(dupe.imported_at).toLocaleString('pt-BR')} (status: ${dupe.status}).` }
+    return {
+      error: 'Planilha já importada anteriormente.',
+      code: 'DUPLICATE_REMITTANCE',
+      existing_remittance_id: dupe.id,
+    }
   }
 
   const { data: remittance, error: remErr } = await supabase
@@ -338,7 +348,7 @@ export async function stageRemittance(parsed: PetloveRemittanceAST): Promise<Sta
 
 export async function uploadAndStagePetloveRemittance(
   formData: FormData,
-): Promise<StageRemittanceResult | { error: string }> {
+): Promise<StageRemittanceResult | StageRemittanceError> {
   const file = formData.get('file')
   if (!(file instanceof File)) return { error: 'Nenhum arquivo enviado.' }
   if (!/\.xlsx$/i.test(file.name)) return { error: 'Apenas arquivos .xlsx são aceitos.' }

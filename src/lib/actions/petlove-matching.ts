@@ -155,17 +155,22 @@ export async function runMatchEngine(remittanceId: string): Promise<{ updated: n
   const allChips = Array.from(new Set(lines.map(l => normalizeChip(l.microchip_raw)).filter(Boolean)))
   const allNames = Array.from(new Set(lines.map(l => normalizeName(l.pet_name_raw)).filter(Boolean)))
 
-  // Pets por microchip
+  // Pets por microchip — usa .in() em batches para evitar query URL muito longa
   const petsByChip = new Map<string, { id: string; name: string; tutor_id: string | null }>()
   if (allChips.length > 0) {
-    const { data: petsM } = await supabase
-      .from('patients')
-      .select('id, name, tutor_id, microchip_id, microchip')
-      .eq('clinic_id', clinicId)
-      .or(allChips.map(c => `microchip_id.eq.${c},microchip.eq.${c},microchip_id.eq.#${c},microchip.eq.#${c}`).join(','))
-    for (const p of petsM ?? []) {
-      const chip = normalizeChip(p.microchip_id ?? p.microchip)
-      if (chip) petsByChip.set(chip, { id: p.id, name: p.name, tutor_id: p.tutor_id })
+    const chipsWithHash = allChips.flatMap(c => [c, `#${c}`])
+    const BATCH = 200
+    for (let i = 0; i < chipsWithHash.length; i += BATCH) {
+      const batch = chipsWithHash.slice(i, i + BATCH)
+      const { data: petsM } = await supabase
+        .from('patients')
+        .select('id, name, tutor_id, microchip_id, microchip')
+        .eq('clinic_id', clinicId)
+        .or(`microchip_id.in.(${batch.map(c => `"${c}"`).join(',')}),microchip.in.(${batch.map(c => `"${c}"`).join(',')})`)
+      for (const p of petsM ?? []) {
+        const chip = normalizeChip(p.microchip_id ?? p.microchip)
+        if (chip) petsByChip.set(chip, { id: p.id, name: p.name, tutor_id: p.tutor_id })
+      }
     }
   }
 

@@ -3,7 +3,7 @@
 import { useEffect } from 'react'
 import Link from 'next/link'
 import confetti from 'canvas-confetti'
-import { CheckCircle2, ArrowRight, Sparkles, Receipt, Gift, AlertCircle, Tags, TrendingUp, Users } from 'lucide-react'
+import { CheckCircle2, ArrowRight, Sparkles, Receipt, Gift, AlertCircle, Tags, TrendingUp, Users, UserPlus } from 'lucide-react'
 import type { ApplyReconciliationResult } from '@/lib/actions/petlove-reconciliation'
 
 export interface SuccessDialogSummary {
@@ -125,7 +125,16 @@ export default function SuccessDialog({
               )}
               {applied.retroactive_entries_created > 0 && (
                 <Line icon={<Users className="h-3.5 w-3.5 text-blue-600" />}>
-                  <strong>{applied.retroactive_entries_created}</strong> lançamento{applied.retroactive_entries_created !== 1 ? 's' : ''} retroativo{applied.retroactive_entries_created !== 1 ? 's' : ''} (recepção esqueceu de lançar)
+                  <strong>{applied.retroactive_entries_created}</strong> lançamento{applied.retroactive_entries_created !== 1 ? 's' : ''} retroativo{applied.retroactive_entries_created !== 1 ? 's' : ''} (sem invoice prévio no sistema)
+                </Line>
+              )}
+              {(applied.auto_created_patients > 0 || applied.auto_created_tutors > 0) && (
+                <Line icon={<UserPlus className="h-3.5 w-3.5 text-purple-600" />}>
+                  <strong>{applied.auto_created_patients}</strong> pet{applied.auto_created_patients !== 1 ? 's' : ''}
+                  {applied.auto_created_tutors > 0 && (
+                    <> + <strong>{applied.auto_created_tutors}</strong> tutor{applied.auto_created_tutors !== 1 ? 'es' : ''}</>
+                  )}
+                  {' '}cadastrado{applied.auto_created_patients !== 1 ? 's' : ''} automaticamente
                 </Line>
               )}
               {applied.standalone_entries_created > 0 && (

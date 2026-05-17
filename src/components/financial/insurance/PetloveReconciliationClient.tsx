@@ -1,15 +1,17 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useTransition } from 'react'
 import Link from 'next/link'
-import { Upload, FileSpreadsheet, Loader2, CheckCircle2, AlertCircle, Clock, ArrowRight } from 'lucide-react'
+import { Upload, FileSpreadsheet, Loader2, CheckCircle2, AlertCircle, Clock, ArrowRight, Trash2 } from 'lucide-react'
 import { uploadAndStagePetloveRemittance, type ImportedRemittanceSummary } from '@/lib/actions/petlove-import'
+import { deleteRemittance } from '@/lib/actions/petlove-reconciliation'
 
 type Status =
   | { kind: 'idle' }
   | { kind: 'uploading'; filename: string }
-  | { kind: 'success';   remittanceId: string; linesCount: number }
-  | { kind: 'error';     message: string }
+  | { kind: 'success';    remittanceId: string; linesCount: number }
+  | { kind: 'duplicate';  message: string; existingRemittanceId?: string }
+  | { kind: 'error';      message: string }
 
 const STATUS_STYLES: Record<string, string> = {
   imported:    'bg-amber-50 text-amber-700 border-amber-200',
@@ -33,7 +35,27 @@ export default function PetloveReconciliationClient({
   const [status, setStatus]           = useState<Status>({ kind: 'idle' })
   const [remittances, setRemittances] = useState(initialRemittances)
   const [isDragging, setIsDragging]   = useState(false)
+  const [deletingId, setDeletingId]   = useState<string | null>(null)
+  const [, startDelete]               = useTransition()
   const inputRef                      = useRef<HTMLInputElement>(null)
+
+  function handleDelete(id: string, remittanceNumber: string, isReconciled: boolean) {
+    const msg = isReconciled
+      ? `Excluir remessa #${remittanceNumber}?\n\nOs ${remittances.find(r => r.id === id)?.lines_count ?? '?'} lançamentos financeiros criados serão apagados e os invoice_items voltam a "aguardando repasse".\n\nA ação não pode ser desfeita.`
+      : `Excluir remessa #${remittanceNumber} e todas suas linhas?\n\nA ação não pode ser desfeita.`
+    if (!window.confirm(msg)) return
+    setDeletingId(id)
+    startDelete(async () => {
+      const res = await deleteRemittance(id)
+      setDeletingId(null)
+      if ('error' in res) {
+        alert('Erro: ' + res.error)
+        return
+      }
+      setRemittances(prev => prev.filter(r => r.id !== id))
+      setStatus({ kind: 'idle' })
+    })
+  }
 
   const handleFile = useCallback(async (file: File) => {
     if (!/\.xlsx$/i.test(file.name)) {
@@ -47,7 +69,15 @@ export default function PetloveReconciliationClient({
 
     const result = await uploadAndStagePetloveRemittance(formData)
     if ('error' in result) {
-      setStatus({ kind: 'error', message: result.error })
+      if ('code' in result && result.code === 'DUPLICATE_REMITTANCE') {
+        setStatus({
+          kind: 'duplicate',
+          message: result.error,
+          existingRemittanceId: result.existing_remittance_id,
+        })
+      } else {
+        setStatus({ kind: 'error', message: result.error })
+      }
       return
     }
 
@@ -145,6 +175,35 @@ export default function PetloveReconciliationClient({
         </div>
       )}
 
+      {status.kind === 'duplicate' && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
+          <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="font-semibold text-amber-900">Planilha já importada anteriormente</p>
+            <p className="text-sm text-amber-700 mt-0.5">
+              Esta remessa já está no sistema. Para reprocessar, abra a remessa existente e use
+              <strong> Excluir Remessa</strong> antes de subir novamente.
+            </p>
+            <div className="flex items-center gap-3 mt-2">
+              {status.existingRemittanceId && (
+                <Link
+                  href={`/dashboard/financial/insurance-reconciliation/${status.existingRemittanceId}/review`}
+                  className="text-xs text-amber-800 font-semibold underline hover:text-amber-900 inline-flex items-center gap-1"
+                >
+                  Abrir remessa existente <ArrowRight className="h-3 w-3" />
+                </Link>
+              )}
+              <button
+                onClick={() => setStatus({ kind: 'idle' })}
+                className="text-xs text-amber-700 underline hover:text-amber-900"
+              >
+                Escolher outro arquivo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {status.kind === 'error' && (
         <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 flex items-start gap-3">
           <AlertCircle className="h-5 w-5 text-rose-600 flex-shrink-0 mt-0.5" />
@@ -204,6 +263,16 @@ export default function PetloveReconciliationClient({
                     Revisar
                     <ArrowRight className="h-3.5 w-3.5" />
                   </Link>
+                  <button
+                    onClick={() => handleDelete(r.id, r.remittance_number, r.status === 'reconciled')}
+                    disabled={deletingId === r.id}
+                    title="Excluir remessa"
+                    className="inline-flex items-center justify-center h-7 w-7 rounded-md text-rose-500 hover:bg-rose-50 hover:text-rose-700 disabled:opacity-50 transition-colors"
+                  >
+                    {deletingId === r.id
+                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      : <Trash2 className="h-3.5 w-3.5" />}
+                  </button>
                 </div>
               </div>
             ))}

@@ -31,9 +31,11 @@ export interface SaveMappingsInput {
 }
 
 export interface SaveMappingsResult {
-  saved:               number
-  created_stock_items: number
-  errors:              string[]
+  saved:                number
+  created_stock_items:  number
+  /** patient_custom_prices upserted automaticamente após o mapping. */
+  custom_prices_set:    number
+  errors:               string[]
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -199,7 +201,7 @@ export async function upsertProcedureMappings(
     }
   }
 
-  const result: SaveMappingsResult = { saved: 0, created_stock_items: 0, errors: [] }
+  const result: SaveMappingsResult = { saved: 0, created_stock_items: 0, custom_prices_set: 0, errors: [] }
 
   for (const it of input) {
     const name = it.external_procedure_name.trim()
@@ -223,6 +225,8 @@ export async function upsertProcedureMappings(
       if (existing?.id) {
         stockItemId = existing.id
       } else {
+        // Serviços auto-criados da Petlove entram com valor ZERADO no estoque.
+        // O preço real fica em patient_custom_prices (por pet × procedimento).
         const { data: created, error: createErr } = await supabase
           .from('stock_items')
           .insert({
@@ -233,7 +237,7 @@ export async function upsertProcedureMappings(
             quantity:   0,
             unit:       'un',
             min_quantity: 0,
-            unit_price: lastValue ?? 0,
+            unit_price: 0,
           })
           .select('id')
           .single()
@@ -261,8 +265,68 @@ export async function upsertProcedureMappings(
         is_auto_learned:         it.internal_stock_item_id ? false : true,
         updated_at:              new Date().toISOString(),
       }, { onConflict: 'clinic_id,provider_id,external_procedure_name' })
-    if (upErr) result.errors.push(`"${name}": ${upErr.message}`)
-    else result.saved++
+    if (upErr) {
+      result.errors.push(`"${name}": ${upErr.message}`)
+      continue
+    }
+    result.saved++
+
+    // ─── Propaga: vincula este stock_item aos pets desta remessa que ─────
+    //              já estão cadastrados (têm matched_patient_id).
+    if (remittanceId && stockItemId) {
+      const { data: matchedLines } = await supabase
+        .from('petlove_remittance_lines')
+        .select('matched_patient_id, repass_value')
+        .eq('clinic_id', clinicId)
+        .eq('remittance_id', remittanceId)
+        .eq('procedure_name_raw', name)
+        .not('matched_patient_id', 'is', null)
+
+      const byPatient = new Map<string, number>()
+      for (const ml of matchedLines ?? []) {
+        if (ml.matched_patient_id) {
+          byPatient.set(ml.matched_patient_id, Number(ml.repass_value) || 0)
+        }
+      }
+
+      for (const [patientId, repass] of byPatient.entries()) {
+        const { data: existingCp } = await supabase
+          .from('patient_custom_prices')
+          .select('id, observation_count')
+          .eq('clinic_id', clinicId)
+          .eq('patient_id', patientId)
+          .eq('stock_item_id', stockItemId)
+          .maybeSingle()
+        if (existingCp) {
+          await supabase
+            .from('patient_custom_prices')
+            .update({
+              custom_price:       repass,
+              source:             'petlove_remittance',
+              provider_id:        providerId,
+              last_remittance_id: remittanceId,
+              last_seen_at:       new Date().toISOString(),
+              observation_count:  (existingCp.observation_count ?? 0) + 1,
+              updated_at:         new Date().toISOString(),
+            })
+            .eq('id', existingCp.id)
+        } else {
+          await supabase
+            .from('patient_custom_prices')
+            .insert({
+              clinic_id:          clinicId,
+              patient_id:         patientId,
+              stock_item_id:      stockItemId,
+              custom_price:       repass,
+              source:             'petlove_remittance',
+              provider_id:        providerId,
+              last_remittance_id: remittanceId,
+              observation_count:  1,
+            })
+        }
+        result.custom_prices_set++
+      }
+    }
   }
 
   if (remittanceId) {
