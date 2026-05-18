@@ -35,6 +35,7 @@ describe('TC-SM-01: Transições válidas na máquina de estados', () => {
   });
 
   afterEach(async () => {
+    await admin.from('central_cashier').delete().eq('source_id', sessionId);
     await admin.from('grooming_status_transitions').delete().eq('grooming_session_id', sessionId);
     await admin.from('grooming_sessions').delete().eq('id', sessionId);
   });
@@ -90,6 +91,7 @@ describe('TC-SM-02: Transição inválida é rejeitada', () => {
   });
 
   afterEach(async () => {
+    await admin.from('central_cashier').delete().eq('source_id', sessionId);
     await admin.from('grooming_status_transitions').delete().eq('grooming_session_id', sessionId);
     await admin.from('grooming_sessions').delete().eq('id', sessionId);
   });
@@ -140,6 +142,7 @@ describe('TC-SM-03: Role incorreto para transição → bloqueado', () => {
   });
 
   afterEach(async () => {
+    await admin.from('central_cashier').delete().eq('source_id', sessionId);
     await admin.from('grooming_status_transitions').delete().eq('grooming_session_id', sessionId);
     await admin.from('grooming_sessions').delete().eq('id', sessionId);
   });
