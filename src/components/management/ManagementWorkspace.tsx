@@ -15,8 +15,8 @@ import type { DocumentTemplate, TemplateType, UserRole, Invitation, InvitationRo
 import type { ClinicConfig, ClinicSettingsConfig } from '@/lib/actions/clinic-settings'
 import { apiFetch } from '@/lib/api-fetch'
 import ImportTemplateModal from './ImportTemplateModal'
-import CanvaTemplateEditor from '@/components/canva/CanvaTemplateEditor'
-import { CANVA_DEFAULT_MARGINS, type CanvaBlockStyle } from '@/lib/canva/types'
+import CanvasEditor from '@/components/canva/editor/CanvasEditor'
+import { hydrateCanvasState, type CanvasState } from '@/lib/canva/canvas-state'
 import { Toast } from '@/components/ui/toast'
 import ConveniosTab from './ConveniosTab'
 import RoomsTab from './RoomsTab'
@@ -1049,24 +1049,15 @@ export default function ManagementWorkspace({
         />
       )}
 
-      {/* Editor Canva Nativo — papel timbrado + sliders de margem + preview reativo */}
+      {/* Editor Canvas Visual — drag&drop, A4/A5, dynamic tags, repeater */}
       {canvaEditing && (
-        <CanvaTemplateEditor
+        <CanvasEditor
           templateId={canvaEditing.id}
           templateName={canvaEditing.name}
-          initial={{
-            background_image_url: canvaEditing.background_image_url ?? null,
-            margins: {
-              top:    canvaEditing.margin_top    ?? CANVA_DEFAULT_MARGINS.top,
-              bottom: canvaEditing.margin_bottom ?? CANVA_DEFAULT_MARGINS.bottom,
-              left:   canvaEditing.margin_left   ?? CANVA_DEFAULT_MARGINS.left,
-              right:  canvaEditing.margin_right  ?? CANVA_DEFAULT_MARGINS.right,
-            },
-            block_style: (canvaEditing.block_style as CanvaBlockStyle) ?? 'solid',
-          }}
+          initialState={hydrateCanvasState(canvaEditing.canvas_state)}
           onClose={() => setCanvaEditing(null)}
           onSaved={() => {
-            setToast({ type: 'success', message: 'Configuração Canva Nativo salva.' })
+            setToast({ type: 'success', message: 'Modelo salvo.' })
           }}
         />
       )}

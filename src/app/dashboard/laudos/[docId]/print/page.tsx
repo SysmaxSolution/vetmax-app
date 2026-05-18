@@ -52,20 +52,32 @@ export default async function PrintLaudoPage({ params, searchParams }: Props) {
     }
   }
 
+  const patient = {
+    patient_name: patientName,
+    species,
+    breed,
+    sex,
+    date: new Date().toLocaleDateString('pt-BR'),
+    vet_name: vetName,
+    crmv,
+  }
+
+  // Contexto para resolver Dynamic Tags do Canvas Visual (quando o template
+  // tem canvas_state — o motor visual lê tutor/pet/consulta/vet via path).
+  const resolveContext = {
+    patient: { name: patientName, species, breed, sex },
+    consultation: { date: new Date().toLocaleDateString('pt-BR') },
+    vet: { full_name: vetName, crmv },
+  }
+
   return (
     <LaudoPrintable
       documentTitle={loaded.document_name}
       config={loaded.config}
       content={loaded.content}
-      patient={{
-        patient_name: patientName,
-        species,
-        breed,
-        sex,
-        date: new Date().toLocaleDateString('pt-BR'),
-        vet_name: vetName,
-        crmv,
-      }}
+      canvasState={loaded.canvas_state}
+      resolveContext={resolveContext}
+      patient={patient}
       autoPrint={auto === '1'}
     />
   )

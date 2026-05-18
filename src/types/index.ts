@@ -338,6 +338,8 @@ export interface DocumentTemplate {
   margin_left?: number   | null
   margin_right?: number  | null
   block_style?: 'solid' | 'transparent' | null
+  // Editor Canvas Visual (migration 0170) — layout drag&drop
+  canvas_state?: unknown | null   // schema completo em src/lib/canva/canvas-state.ts
   created_at: string
   updated_at?: string
 }

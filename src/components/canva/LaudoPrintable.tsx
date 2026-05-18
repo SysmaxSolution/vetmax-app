@@ -12,7 +12,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Download, Printer } from 'lucide-react'
 import type { CanvaContentJson, CanvaTemplateConfig } from '@/lib/canva/types'
+import type { CanvasState } from '@/lib/canva/canvas-state'
 import CanvaA4Preview from './CanvaA4Preview'
+import CanvasStage from './editor/CanvasStage'
+import type { ResolveContext } from '@/lib/canva/dynamic-tags'
 
 interface PatientHeader {
   patient_name?: string
@@ -34,10 +37,14 @@ interface Props {
   patient: PatientHeader
   /** Quando true, dispara print automaticamente após montar. */
   autoPrint?: boolean
+  /** Quando presente, renderiza pelo motor Canvas Visual (drag&drop). */
+  canvasState?: CanvasState | null
+  /** Contexto para resolver dynamic tags (tutor, pet, consulta, etc.). */
+  resolveContext?: ResolveContext
 }
 
 export default function LaudoPrintable({
-  documentTitle, config, content, patient, autoPrint,
+  documentTitle, config, content, patient, autoPrint, canvasState, resolveContext,
 }: Props) {
   const printAreaRef = useRef<HTMLDivElement>(null)
   const [busy, setBusy] = useState(false)
@@ -117,16 +124,24 @@ export default function LaudoPrintable({
         ref={printAreaRef}
         className="canva-print-area mx-auto max-w-[820px]"
       >
-        <CanvaA4Preview
-          backgroundUrl={config.background_image_url}
-          margins={config.margins}
-          blockStyle={config.block_style}
-          patient={patient}
-          content={content}
-          documentTitle={documentTitle}
-          mode="print"
-          pages={1}
-        />
+        {canvasState ? (
+          <CanvasStage
+            state={canvasState}
+            mode="print"
+            resolveContext={resolveContext}
+          />
+        ) : (
+          <CanvaA4Preview
+            backgroundUrl={config.background_image_url}
+            margins={config.margins}
+            blockStyle={config.block_style}
+            patient={patient}
+            content={content}
+            documentTitle={documentTitle}
+            mode="print"
+            pages={1}
+          />
+        )}
       </div>
     </div>
   )
