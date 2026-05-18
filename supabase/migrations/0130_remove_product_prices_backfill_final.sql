@@ -9,8 +9,7 @@ INSERT INTO public.stock_items (
   unit_price,
   is_service,
   quantity,
-  unit,
-  is_active
+  unit
 )
 SELECT
   pp.clinic_id,
@@ -29,8 +28,7 @@ SELECT
     ELSE false
   END,
   0,
-  'un',
-  true
+  'un'
 FROM public.product_prices pp
 WHERE pp.is_active = true
   AND NOT EXISTS (
