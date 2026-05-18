@@ -49,6 +49,7 @@ interface Props {
 type DocAction =
   | { type: 'set_page'; page: PageConfig }
   | { type: 'add'; element: CanvasElement; autoPosition?: boolean }
+  | { type: 'add_many'; elements: CanvasElement[] }
   | { type: 'patch'; id: string; patch: Partial<CanvasElement> }
   | { type: 'delete'; id: string }
   | { type: 'move_z'; id: string; dir: 'front' | 'back' | 'forward' | 'backward' }
@@ -81,16 +82,21 @@ function docReducer(state: CanvasState, action: DocAction): CanvasState {
         const others = state.elements.filter(e => e.kind !== 'brush_stroke')
         if (others.length > 0) {
           const lastY = Math.max(...others.map(e => e.box.y + e.box.h))
-          // Próximo elemento entra logo abaixo do "rodapé" do último,
-          // mas não passa de 85% pra não ficar fora da página
           const nextY = Math.min(85, Math.max(2, lastY + 1))
           el.box = { ...el.box, y: nextY }
         }
       }
-      // zIndex sempre acima dos existentes para o novo ficar visível
       const maxZ = state.elements.reduce((acc, e) => Math.max(acc, e.zIndex ?? 1), 0)
       el.zIndex = maxZ + 1
       return { ...state, elements: [...state.elements, el] }
+    }
+
+    case 'add_many': {
+      // Macros: respeitam coordenadas explícitas, mas garantem zIndex acima
+      // dos existentes (cada elemento entra crescendo no stack).
+      const baseZ = state.elements.reduce((acc, e) => Math.max(acc, e.zIndex ?? 1), 0)
+      const stamped = action.elements.map((el, i) => ({ ...el, zIndex: baseZ + i + 1 }))
+      return { ...state, elements: [...state.elements, ...stamped] }
     }
 
     case 'patch':
@@ -429,7 +435,14 @@ export default function CanvasEditor({
         <div className="grid flex-1 grid-cols-[80px_minmax(0,1fr)_minmax(280px,340px)] overflow-hidden">
           <ElementsToolbar
             onAdd={(element) => { dispatch({ type: 'add', element }); setSelectedId(element.id) }}
+            onAddMany={(elements) => { dispatch({ type: 'add_many', elements }); setSelectedId(null) }}
             onUploadImage={handleUploadImage}
+            computeStartY={() => {
+              const others = state.elements.filter(e => e.kind !== 'brush_stroke')
+              if (others.length === 0) return 5
+              const lastY = Math.max(...others.map(e => e.box.y + e.box.h))
+              return Math.min(85, Math.max(2, lastY + 1))
+            }}
           />
 
           <main

@@ -180,14 +180,16 @@ export const DEFAULT_TYPOGRAPHY: TypographyStyle = {
 }
 
 export function makeTextElement(overrides?: Partial<TextElement>): TextElement {
+  const { typography: overrideTypography, ...restOverrides } = overrides ?? {}
   return {
     id: nextElementId('text'),
     kind: 'text',
     box: { ...DEFAULT_BOX },
-    typography: { ...DEFAULT_TYPOGRAPHY },
     content: 'Texto livre',
     zIndex: 1,
-    ...overrides,
+    ...restOverrides,
+    // Mescla typography (não substitui) — útil em macros que setam só fontSize
+    typography: { ...DEFAULT_TYPOGRAPHY, ...overrideTypography },
   }
 }
 
@@ -203,7 +205,10 @@ export function makeImageElement(overrides?: Partial<ImageElement>): ImageElemen
   }
 }
 
-export function makeLineElement(orientation: 'horizontal' | 'vertical' = 'horizontal'): LineElement {
+export function makeLineElement(
+  orientation: 'horizontal' | 'vertical' = 'horizontal',
+  overrides?: Partial<LineElement>,
+): LineElement {
   return {
     id: nextElementId('line'),
     kind: 'line',
@@ -214,10 +219,11 @@ export function makeLineElement(orientation: 'horizontal' | 'vertical' = 'horizo
     thickness: 1,
     color: '#0f172a',
     zIndex: 1,
+    ...overrides,
   }
 }
 
-export function makeDynamicTagElement(tagId: string): DynamicTagElement {
+export function makeDynamicTagElement(tagId: string, overrides?: Partial<DynamicTagElement>): DynamicTagElement {
   return {
     id: nextElementId('dynamic_tag'),
     kind: 'dynamic_tag',
@@ -225,6 +231,7 @@ export function makeDynamicTagElement(tagId: string): DynamicTagElement {
     tagId,
     typography: { ...DEFAULT_TYPOGRAPHY },
     zIndex: 1,
+    ...overrides,
   }
 }
 
@@ -256,7 +263,7 @@ export function makeBrushStrokeElement(
   }
 }
 
-export function makeRepeaterElement(source: RepeaterSource): RepeaterElement {
+export function makeRepeaterElement(source: RepeaterSource, overrides?: Partial<RepeaterElement>): RepeaterElement {
   const base: RepeaterElement = {
     id: nextElementId('repeater'),
     kind: 'repeater',
@@ -279,7 +286,8 @@ export function makeRepeaterElement(source: RepeaterSource): RepeaterElement {
       highlightField: 'is_controlled',
       highlightColor: '#dbeafe',  // azul claro — Receituário Azul
       highlightBadge: '★ CONTROLADO',
+      ...overrides,
     }
   }
-  return base
+  return { ...base, ...overrides }
 }

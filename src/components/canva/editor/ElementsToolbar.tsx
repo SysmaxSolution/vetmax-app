@@ -15,27 +15,30 @@
 import { useRef, useState, useMemo } from 'react'
 import {
   Type, Image as ImageIcon, Minus, Loader2,
-  Tag as TagIcon, ListOrdered, AlignLeft, Stamp, Search, X,
+  Tag as TagIcon, ListOrdered, AlignLeft, Stamp, Search, X, LayoutTemplate, Lightbulb,
 } from 'lucide-react'
 import {
   tagsByGroup, imageTagsByGroup, type DynamicTagDef, type DynamicImageTagDef,
-  TAG_GROUP_LABEL, type TagGroup, type ImageTagGroup,
+  TAG_GROUP_LABEL, type TagGroup,
 } from '@/lib/canva/dynamic-tags'
 import type {
-  CanvasElement, LineElement, RepeaterSource,
+  CanvasElement, RepeaterSource,
 } from '@/lib/canva/elements'
 import {
   makeTextElement, makeImageElement, makeLineElement,
   makeDynamicTagElement, makeDynamicImageElement, makeRepeaterElement,
 } from '@/lib/canva/elements'
+import { MACRO_BLOCKS, type MacroBlock } from '@/lib/canva/macros'
 
 interface Props {
   onAdd: (element: CanvasElement) => void
+  onAddMany: (elements: CanvasElement[]) => void
   onUploadImage: (file: File) => Promise<{ url: string; storagePath: string }>
+  computeStartY: () => number
 }
 
-export default function ElementsToolbar({ onAdd, onUploadImage }: Props) {
-  const [modal, setModal] = useState<'tags' | 'images' | 'repeater' | null>(null)
+export default function ElementsToolbar({ onAdd, onAddMany, onUploadImage, computeStartY }: Props) {
+  const [modal, setModal] = useState<'tags' | 'images' | 'repeater' | 'blocks' | null>(null)
   const [uploading, setUploading] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
 
@@ -89,8 +92,14 @@ export default function ElementsToolbar({ onAdd, onUploadImage }: Props) {
 
         <ToolButton
           icon={<ListOrdered className="w-5 h-5" />}
-          label="Repetir Lista"
+          label="Medicações e Listas"
           onClick={() => setModal('repeater')}
+        />
+
+        <ToolButton
+          icon={<LayoutTemplate className="w-5 h-5" />}
+          label="Blocos Prontos"
+          onClick={() => setModal('blocks')}
         />
 
         <div className="mt-auto text-[9px] text-slate-400 leading-tight px-1 pt-2">
@@ -115,6 +124,16 @@ export default function ElementsToolbar({ onAdd, onUploadImage }: Props) {
         <RepeaterModal
           onClose={() => setModal(null)}
           onPick={source => { onAdd(makeRepeaterElement(source)); setModal(null) }}
+        />
+      )}
+      {modal === 'blocks' && (
+        <BlocksModal
+          onClose={() => setModal(null)}
+          onPick={macro => {
+            const built = macro.build({ startY: computeStartY() })
+            onAddMany(built)
+            setModal(null)
+          }}
         />
       )}
     </>
@@ -149,6 +168,47 @@ function ToolButton({
       {icon}
       {!compact && <span className="text-[10px] font-medium leading-tight text-center">{label}</span>}
     </button>
+  )
+}
+
+// ── BlocksModal (macros prontos) ─────────────────────────────────────────────
+
+function BlocksModal({
+  onClose, onPick,
+}: { onClose: () => void; onPick: (macro: MacroBlock) => void }) {
+  return (
+    <ModalShell
+      title="Blocos Prontos"
+      subtitle="Conjuntos de elementos pré-posicionados — aceleram a montagem"
+      onClose={onClose}
+      maxWidth={680}
+    >
+      <div className="overflow-y-auto px-4 py-3">
+        <p className="mb-3 rounded-lg bg-violet-50 border border-violet-200 px-3 py-2 text-[11px] text-violet-700 leading-snug">
+          <strong>Para receituários completos:</strong> use <em>Receituário Padrão</em> —
+          ele já inclui o título, a linha separadora e a lista de medicações agrupada
+          por <strong>Tipo de Uso</strong> (oral, tópico, IV…) com destaque automático
+          para medicamentos controlados.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {MACRO_BLOCKS.map(m => (
+            <button
+              key={m.id}
+              onClick={() => onPick(m)}
+              className="group flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 text-left hover:border-violet-400 hover:bg-violet-50 transition-colors"
+            >
+              <span className="text-2xl flex-shrink-0 mt-0.5">{m.icon}</span>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-semibold text-slate-800 group-hover:text-violet-700">
+                  {m.label}
+                </div>
+                <div className="text-[11px] text-slate-500 leading-snug">{m.description}</div>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </ModalShell>
   )
 }
 
@@ -216,7 +276,22 @@ function TagsModal({
         <div className="flex-1 overflow-y-auto px-4 pb-4">
           {filteredGroups.length === 0 ? (
             <div className="rounded-lg border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
-              Nenhuma tag encontrada para &quot;{query}&quot;
+              <div>Nenhuma tag encontrada para &quot;{query}&quot;</div>
+              {isClinicalSearch(query) && (
+                <div className="mt-3 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-left text-[11px] text-amber-800 leading-snug">
+                  <strong className="flex items-center gap-1">
+                    <Lightbulb className="w-3.5 h-3.5" />
+                    Procurando medicações, posologia ou tipo de uso?
+                  </strong>
+                  <p className="mt-1">
+                    Essas informações vêm em forma de <strong>lista</strong> (cada
+                    receita pode ter várias medicações). Use o botão{' '}
+                    <strong>&quot;Medicações e Listas&quot;</strong> na barra lateral —
+                    ou abra <strong>&quot;Blocos Prontos&quot;</strong> e escolha{' '}
+                    <strong>Receituário Padrão</strong> para inserir o bloco completo.
+                  </p>
+                </div>
+              )}
             </div>
           ) : (
             filteredGroups.map(g => (
@@ -377,6 +452,19 @@ function ModalShell({
       <div className="fixed inset-0 -z-10" onClick={onClose} />
     </div>
   )
+}
+
+/** Detecta se a busca do usuário sugere que ele está procurando algo que
+ *  só está no Repeater (medicações/posologia/via de uso). */
+const CLINICAL_KEYWORDS = [
+  'medica', 'remedio', 'remédio', 'receit', 'posolog', 'orientac', 'orientação',
+  'via', 'uso', 'oral', 'topic', 'tópic', 'intraven', 'intramuscular', 'subcut',
+  'dose', 'frequenc', 'frequência', 'controla', 'manipula', 'duracao', 'duração',
+]
+function isClinicalSearch(q: string): boolean {
+  const n = q.trim().toLowerCase()
+  if (!n) return false
+  return CLINICAL_KEYWORDS.some(k => n.includes(k))
 }
 
 function GroupChip({
