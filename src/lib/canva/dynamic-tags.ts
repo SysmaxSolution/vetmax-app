@@ -64,7 +64,7 @@ export const DYNAMIC_TAGS: DynamicTagDef[] = [
   { id: 'vet.username',   label: 'Usuário (login)',    group: 'vet', path: 'vet.username',      preview: 'lais.silva' },
 ]
 
-export const TAG_GROUP_LABEL: Record<TagGroup, string> = {
+export const TAG_GROUP_LABEL: Record<TagGroup | ImageTagGroup, string> = {
   tutor:    'Tutor',
   pet:      'Pet',
   consulta: 'Consulta',
@@ -87,7 +87,7 @@ export function findTag(id: string): DynamicTagDef | undefined {
 
 // ── Dynamic IMAGES (logo, foto, assinatura) ──────────────────────────────────
 
-export type ImageTagGroup = 'clinica' | 'vet'
+export type ImageTagGroup = TagGroup
 
 export interface DynamicImageTagDef {
   id: string

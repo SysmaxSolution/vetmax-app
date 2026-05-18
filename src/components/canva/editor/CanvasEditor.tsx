@@ -48,7 +48,7 @@ interface Props {
 
 type DocAction =
   | { type: 'set_page'; page: PageConfig }
-  | { type: 'add'; element: CanvasElement }
+  | { type: 'add'; element: CanvasElement; autoPosition?: boolean }
   | { type: 'patch'; id: string; patch: Partial<CanvasElement> }
   | { type: 'delete'; id: string }
   | { type: 'move_z'; id: string; dir: 'front' | 'back' | 'forward' | 'backward' }
@@ -72,8 +72,26 @@ function docReducer(state: CanvasState, action: DocAction): CanvasState {
     case 'set_page':
       return { ...state, page: action.page }
 
-    case 'add':
-      return { ...state, elements: [...state.elements, action.element] }
+    case 'add': {
+      // Auto-cascade: novos elementos (que não são brush stroke / não foram
+      // posicionados explicitamente) descem em escada para não se empilharem.
+      const el = action.element
+      const shouldAutoPosition = action.autoPosition !== false && el.kind !== 'brush_stroke'
+      if (shouldAutoPosition) {
+        const others = state.elements.filter(e => e.kind !== 'brush_stroke')
+        if (others.length > 0) {
+          const lastY = Math.max(...others.map(e => e.box.y + e.box.h))
+          // Próximo elemento entra logo abaixo do "rodapé" do último,
+          // mas não passa de 85% pra não ficar fora da página
+          const nextY = Math.min(85, Math.max(2, lastY + 1))
+          el.box = { ...el.box, y: nextY }
+        }
+      }
+      // zIndex sempre acima dos existentes para o novo ficar visível
+      const maxZ = state.elements.reduce((acc, e) => Math.max(acc, e.zIndex ?? 1), 0)
+      el.zIndex = maxZ + 1
+      return { ...state, elements: [...state.elements, el] }
+    }
 
     case 'patch':
       return {

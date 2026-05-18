@@ -7,17 +7,19 @@
  *   1. Texto livre
  *   2. Imagem (upload via signed URL)
  *   3. Linha (H/V)
- *   4. Tag Dinâmica (popover com catálogo agrupado por entidade)
- *   5. Repeater (medicações, exames, vacinas)
+ *   4. Tag Dinâmica → abre TagsModal centralizado (busca + abas)
+ *   5. Imagem do Banco (logo, foto, assinatura) → abre ImagesModal
+ *   6. Repeater (medicações, exames, vacinas) → abre RepeaterModal
  */
 
-import { useRef, useState } from 'react'
+import { useRef, useState, useMemo } from 'react'
 import {
   Type, Image as ImageIcon, Minus, Loader2,
-  Tag as TagIcon, ListOrdered, AlignLeft, Stamp,
+  Tag as TagIcon, ListOrdered, AlignLeft, Stamp, Search, X,
 } from 'lucide-react'
 import {
   tagsByGroup, imageTagsByGroup, type DynamicTagDef, type DynamicImageTagDef,
+  TAG_GROUP_LABEL, type TagGroup, type ImageTagGroup,
 } from '@/lib/canva/dynamic-tags'
 import type {
   CanvasElement, LineElement, RepeaterSource,
@@ -33,9 +35,7 @@ interface Props {
 }
 
 export default function ElementsToolbar({ onAdd, onUploadImage }: Props) {
-  const [openTags, setOpenTags] = useState(false)
-  const [openImages, setOpenImages] = useState(false)
-  const [openRepeater, setOpenRepeater] = useState(false)
+  const [modal, setModal] = useState<'tags' | 'images' | 'repeater' | null>(null)
   const [uploading, setUploading] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
 
@@ -50,59 +50,74 @@ export default function ElementsToolbar({ onAdd, onUploadImage }: Props) {
   }
 
   return (
-    <aside className="flex flex-col items-stretch gap-2 border-r border-slate-200 bg-slate-50 p-3 w-[88px]">
-      <ToolButton icon={<Type className="w-5 h-5" />} label="Texto"
-        onClick={() => onAdd(makeTextElement())} />
+    <>
+      <aside className="flex flex-col items-stretch gap-2 border-r border-slate-200 bg-slate-50 p-3 overflow-y-auto">
+        <ToolButton icon={<Type className="w-5 h-5" />} label="Texto"
+          onClick={() => onAdd(makeTextElement())} />
 
-      <ToolButton icon={uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ImageIcon className="w-5 h-5" />}
-        label="Imagem"
-        onClick={() => fileInput.current?.click()}
-        disabled={uploading} />
+        <ToolButton icon={uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ImageIcon className="w-5 h-5" />}
+          label="Imagem"
+          onClick={() => fileInput.current?.click()}
+          disabled={uploading} />
 
-      <input
-        ref={fileInput}
-        type="file"
-        accept="image/png,image/jpeg,image/webp,image/svg+xml"
-        className="hidden"
-        onChange={e => { const f = e.target.files?.[0]; if (f) handleImageFile(f); e.target.value = '' }}
-      />
+        <input
+          ref={fileInput}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/svg+xml"
+          className="hidden"
+          onChange={e => { const f = e.target.files?.[0]; if (f) handleImageFile(f); e.target.value = '' }}
+        />
 
-      <div className="grid grid-cols-2 gap-1.5">
-        <ToolButton compact icon={<Minus className="w-4 h-4" />} label="Linha H"
-          onClick={() => onAdd(makeLineElement('horizontal'))} />
-        <ToolButton compact icon={<Minus className="w-4 h-4 rotate-90" />} label="Linha V"
-          onClick={() => onAdd(makeLineElement('vertical'))} />
-      </div>
+        <div className="grid grid-cols-2 gap-1.5">
+          <ToolButton compact icon={<Minus className="w-4 h-4" />} label="Linha H"
+            onClick={() => onAdd(makeLineElement('horizontal'))} />
+          <ToolButton compact icon={<Minus className="w-4 h-4 rotate-90" />} label="Linha V"
+            onClick={() => onAdd(makeLineElement('vertical'))} />
+        </div>
 
-      <Popover
-        open={openTags}
-        onOpenChange={setOpenTags}
-        trigger={<ToolButton icon={<TagIcon className="w-5 h-5" />} label="Tags Dinâmicas" />}
-      >
-        <TagsCatalog onPick={(tag) => { onAdd(makeDynamicTagElement(tag.id)); setOpenTags(false) }} />
-      </Popover>
+        <ToolButton
+          icon={<TagIcon className="w-5 h-5" />}
+          label="Tags Dinâmicas"
+          onClick={() => setModal('tags')}
+        />
 
-      <Popover
-        open={openImages}
-        onOpenChange={setOpenImages}
-        trigger={<ToolButton icon={<Stamp className="w-5 h-5" />} label="Imagens do Banco" />}
-      >
-        <ImagesCatalog onPick={(tag) => { onAdd(makeDynamicImageElement(tag.id)); setOpenImages(false) }} />
-      </Popover>
+        <ToolButton
+          icon={<Stamp className="w-5 h-5" />}
+          label="Imagens do Banco"
+          onClick={() => setModal('images')}
+        />
 
-      <Popover
-        open={openRepeater}
-        onOpenChange={setOpenRepeater}
-        trigger={<ToolButton icon={<ListOrdered className="w-5 h-5" />} label="Repetir Lista" />}
-      >
-        <RepeaterPicker onPick={(s) => { onAdd(makeRepeaterElement(s)); setOpenRepeater(false) }} />
-      </Popover>
+        <ToolButton
+          icon={<ListOrdered className="w-5 h-5" />}
+          label="Repetir Lista"
+          onClick={() => setModal('repeater')}
+        />
 
-      <div className="mt-auto text-[10px] text-slate-400 leading-tight px-1">
-        <AlignLeft className="w-3 h-3 inline mr-1" />
-        Arraste no canvas; clique para editar.
-      </div>
-    </aside>
+        <div className="mt-auto text-[9px] text-slate-400 leading-tight px-1 pt-2">
+          <AlignLeft className="w-3 h-3 inline mr-1" />
+          Arraste para mover; clique para editar.
+        </div>
+      </aside>
+
+      {modal === 'tags' && (
+        <TagsModal
+          onClose={() => setModal(null)}
+          onPick={tag => { onAdd(makeDynamicTagElement(tag.id)); setModal(null) }}
+        />
+      )}
+      {modal === 'images' && (
+        <ImagesModal
+          onClose={() => setModal(null)}
+          onPick={tag => { onAdd(makeDynamicImageElement(tag.id)); setModal(null) }}
+        />
+      )}
+      {modal === 'repeater' && (
+        <RepeaterModal
+          onClose={() => setModal(null)}
+          onPick={source => { onAdd(makeRepeaterElement(source)); setModal(null) }}
+        />
+      )}
+    </>
   )
 }
 
@@ -126,120 +141,257 @@ function ToolButton({
       className={`
         flex flex-col items-center justify-center gap-1
         rounded-lg border border-slate-200 bg-white
-        ${compact ? 'p-1.5' : 'p-2.5'}
+        ${compact ? 'p-1.5' : 'p-2'}
         text-slate-700 hover:border-violet-400 hover:bg-violet-50 hover:text-violet-700
         transition-colors disabled:opacity-50 disabled:cursor-not-allowed
       `}
     >
       {icon}
-      {!compact && <span className="text-[10px] font-medium">{label}</span>}
+      {!compact && <span className="text-[10px] font-medium leading-tight text-center">{label}</span>}
     </button>
   )
 }
 
-function Popover({
-  open, onOpenChange, trigger, children,
-}: {
-  open: boolean
-  onOpenChange: (v: boolean) => void
-  trigger: React.ReactNode
-  children: React.ReactNode
-}) {
+// ── TagsModal ────────────────────────────────────────────────────────────────
+
+type TagOrAll = TagGroup | 'all'
+
+function TagsModal({
+  onClose, onPick,
+}: { onClose: () => void; onPick: (tag: DynamicTagDef) => void }) {
+  const groups = useMemo(() => tagsByGroup(), [])
+  const [query, setQuery] = useState('')
+  const [activeGroup, setActiveGroup] = useState<TagOrAll>('all')
+
+  const filteredGroups = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return groups
+      .filter(g => activeGroup === 'all' || g.group === activeGroup)
+      .map(g => ({
+        ...g,
+        tags: g.tags.filter(t =>
+          !q
+            || t.label.toLowerCase().includes(q)
+            || t.id.toLowerCase().includes(q)
+            || (t.preview ?? '').toLowerCase().includes(q)
+        ),
+      }))
+      .filter(g => g.tags.length > 0)
+  }, [groups, query, activeGroup])
+
+  const totalShown = filteredGroups.reduce((acc, g) => acc + g.tags.length, 0)
+
   return (
-    <div className="relative">
-      <div onClick={() => onOpenChange(!open)} role="button" tabIndex={0}>{trigger}</div>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => onOpenChange(false)} />
-          <div className="absolute left-full top-0 ml-2 z-50 w-[280px] max-h-[480px] overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl">
-            {children}
-          </div>
-        </>
-      )}
-    </div>
+    <ModalShell title="Tags Dinâmicas" subtitle="Campos resolvidos em tempo de impressão" onClose={onClose}>
+      <div className="flex flex-col h-full min-h-0">
+        {/* Busca */}
+        <div className="relative px-4 pt-3 pb-2 flex-shrink-0">
+          <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+          <input
+            autoFocus
+            type="text"
+            placeholder="Buscar tag (ex: peso, telefone, CRMV)…"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            className="w-full rounded-lg border border-slate-300 pl-9 pr-3 py-2 text-sm focus:border-violet-500 focus:outline-none"
+          />
+        </div>
+
+        {/* Abas por grupo */}
+        <div className="flex items-center gap-1 px-4 pb-2 overflow-x-auto flex-shrink-0">
+          <GroupChip active={activeGroup === 'all'} onClick={() => setActiveGroup('all')}>
+            Todos
+          </GroupChip>
+          {(['pet', 'tutor', 'consulta', 'vet', 'clinica'] as TagGroup[]).map(g => (
+            <GroupChip key={g} active={activeGroup === g} onClick={() => setActiveGroup(g)}>
+              {TAG_GROUP_LABEL[g]}
+            </GroupChip>
+          ))}
+          <span className="ml-auto text-[11px] text-slate-500 flex-shrink-0">
+            {totalShown} tag{totalShown !== 1 ? 's' : ''}
+          </span>
+        </div>
+
+        {/* Conteúdo */}
+        <div className="flex-1 overflow-y-auto px-4 pb-4">
+          {filteredGroups.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
+              Nenhuma tag encontrada para &quot;{query}&quot;
+            </div>
+          ) : (
+            filteredGroups.map(g => (
+              <section key={g.group} className="mb-4 last:mb-0">
+                <h4 className="sticky top-0 bg-white py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 border-b border-slate-100">
+                  {g.label}
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-2">
+                  {g.tags.map(t => (
+                    <button
+                      key={t.id}
+                      onClick={() => onPick(t)}
+                      className="group flex items-start justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left hover:border-violet-400 hover:bg-violet-50 transition-colors"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-medium text-slate-800 group-hover:text-violet-700 truncate">
+                          {t.label}
+                        </div>
+                        {t.preview && (
+                          <div className="text-[10px] text-slate-400 truncate">{t.preview}</div>
+                        )}
+                      </div>
+                      <code className="text-[9px] text-slate-300 group-hover:text-violet-400 font-mono flex-shrink-0 mt-0.5">
+                        {`{{${t.id}}}`}
+                      </code>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ))
+          )}
+        </div>
+      </div>
+    </ModalShell>
   )
 }
 
-function TagsCatalog({ onPick }: { onPick: (tag: DynamicTagDef) => void }) {
-  const groups = tagsByGroup()
+// ── ImagesModal ──────────────────────────────────────────────────────────────
+
+function ImagesModal({
+  onClose, onPick,
+}: { onClose: () => void; onPick: (tag: DynamicImageTagDef) => void }) {
+  const groups = useMemo(() => imageTagsByGroup(), [])
   return (
-    <div className="p-2">
-      {groups.map(g => (
-        <section key={g.group} className="mb-2">
-          <h4 className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-            {g.label}
-          </h4>
-          <div className="grid grid-cols-1 gap-0.5">
-            {g.tags.map(t => (
-              <button
-                key={t.id}
-                onClick={() => onPick(t)}
-                className="flex items-center justify-between rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-700"
-              >
-                <span>{t.label}</span>
-                <span className="text-[10px] text-slate-400">{t.preview}</span>
-              </button>
-            ))}
-          </div>
-        </section>
-      ))}
-    </div>
+    <ModalShell
+      title="Imagens do Banco"
+      subtitle="Logo, foto e assinatura — resolvidas em tempo de impressão"
+      onClose={onClose}
+      maxWidth={520}
+    >
+      <div className="overflow-y-auto px-4 py-3">
+        {groups.map(g => (
+          <section key={g.group} className="mb-4 last:mb-0">
+            <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+              {g.label}
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {g.tags.map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => onPick(t)}
+                  className="group flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 text-left hover:border-violet-400 hover:bg-violet-50 transition-colors"
+                >
+                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-md bg-violet-100 text-violet-600">
+                    <Stamp className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium text-slate-800 group-hover:text-violet-700">
+                      {t.label}
+                    </div>
+                    <code className="text-[9px] text-slate-400 font-mono">{`{{${t.id}}}`}</code>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </section>
+        ))}
+        <p className="mt-2 rounded-lg bg-violet-50 border border-violet-200 px-3 py-2 text-[11px] text-violet-700 leading-snug">
+          As imagens são puxadas do cadastro da clínica (Gestão &gt; Aparência) e dos usuários
+          (Gestão &gt; Usuários &gt; Editar perfil) no momento da impressão.
+        </p>
+      </div>
+    </ModalShell>
   )
 }
 
-function ImagesCatalog({ onPick }: { onPick: (tag: DynamicImageTagDef) => void }) {
-  const groups = imageTagsByGroup()
-  return (
-    <div className="p-2">
-      <header className="px-2 py-1.5">
-        <h4 className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Imagens do Banco</h4>
-        <p className="text-[10px] text-slate-400 mt-0.5">Resolvidas em tempo de impressão</p>
-      </header>
-      {groups.map(g => (
-        <section key={g.group} className="mb-2">
-          <h5 className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-            {g.label}
-          </h5>
-          <div className="grid grid-cols-1 gap-0.5">
-            {g.tags.map(t => (
-              <button
-                key={t.id}
-                onClick={() => onPick(t)}
-                className="flex items-center justify-between rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-700"
-              >
-                <span>{t.label}</span>
-                <code className="text-[9px] text-slate-400 font-mono">{`{{${t.id}}}`}</code>
-              </button>
-            ))}
-          </div>
-        </section>
-      ))}
-    </div>
-  )
-}
+// ── RepeaterModal ────────────────────────────────────────────────────────────
 
-function RepeaterPicker({ onPick }: { onPick: (source: RepeaterSource) => void }) {
-  const opts: Array<{ source: RepeaterSource; label: string; hint: string }> = [
-    { source: 'prescriptions',  label: 'Medicações',       hint: 'Lista de medicamentos prescritos' },
-    { source: 'exam_items',     label: 'Itens de Exame',   hint: 'Solicitação de exames' },
-    { source: 'vaccines',       label: 'Vacinas',          hint: 'Histórico vacinal' },
-    { source: 'dynamic_fields', label: 'Campos Dinâmicos', hint: 'Pressão, glicemia, etc.' },
+function RepeaterModal({
+  onClose, onPick,
+}: { onClose: () => void; onPick: (source: RepeaterSource) => void }) {
+  const opts: Array<{ source: RepeaterSource; label: string; hint: string; icon: string }> = [
+    { source: 'prescriptions',  label: 'Medicações',       hint: 'Receituário com via, tipo e destaque de controlados', icon: '💊' },
+    { source: 'exam_items',     label: 'Itens de Exame',   hint: 'Solicitação de exames com urgência', icon: '🔬' },
+    { source: 'vaccines',       label: 'Vacinas',          hint: 'Histórico vacinal com próxima dose', icon: '💉' },
+    { source: 'dynamic_fields', label: 'Campos Dinâmicos', hint: 'Pressão, glicemia, saturação, etc.', icon: '📋' },
   ]
   return (
-    <div className="p-2">
-      <h4 className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-        Fonte da lista
-      </h4>
-      {opts.map(o => (
-        <button
-          key={o.source}
-          onClick={() => onPick(o.source)}
-          className="flex w-full flex-col items-start rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-700"
-        >
-          <span className="font-medium">{o.label}</span>
-          <span className="text-[10px] text-slate-400">{o.hint}</span>
-        </button>
-      ))}
+    <ModalShell
+      title="Lista Repetível"
+      subtitle="Itens que vêm do banco e são listados linha a linha"
+      onClose={onClose}
+      maxWidth={520}
+    >
+      <div className="overflow-y-auto px-4 py-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {opts.map(o => (
+          <button
+            key={o.source}
+            onClick={() => onPick(o.source)}
+            className="group flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 text-left hover:border-violet-400 hover:bg-violet-50 transition-colors"
+          >
+            <span className="text-2xl flex-shrink-0">{o.icon}</span>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-semibold text-slate-800 group-hover:text-violet-700">
+                {o.label}
+              </div>
+              <div className="text-[11px] text-slate-500 leading-snug">{o.hint}</div>
+            </div>
+          </button>
+        ))}
+      </div>
+    </ModalShell>
+  )
+}
+
+// ── ModalShell (compartilhado) ───────────────────────────────────────────────
+
+function ModalShell({
+  title, subtitle, onClose, children, maxWidth = 640,
+}: {
+  title: string
+  subtitle?: string
+  onClose: () => void
+  children: React.ReactNode
+  maxWidth?: number
+}) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+      <div
+        className="flex flex-col bg-white rounded-2xl shadow-2xl overflow-hidden w-full"
+        style={{ maxWidth, maxHeight: '85vh' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <header className="flex items-center justify-between border-b border-slate-200 px-4 py-3 flex-shrink-0">
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-slate-900 truncate">{title}</h2>
+            {subtitle && <p className="text-[11px] text-slate-500 truncate">{subtitle}</p>}
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded p-1.5 text-slate-500 hover:bg-slate-100 flex-shrink-0"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </header>
+        {children}
+      </div>
+      <div className="fixed inset-0 -z-10" onClick={onClose} />
     </div>
+  )
+}
+
+function GroupChip({
+  active, onClick, children,
+}: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-full px-3 py-1 text-[11px] font-medium whitespace-nowrap transition-colors ${
+        active
+          ? 'bg-violet-600 text-white'
+          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+      }`}
+    >
+      {children}
+    </button>
   )
 }
