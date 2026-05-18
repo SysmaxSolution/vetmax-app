@@ -1,9 +1,11 @@
 ﻿'use client'
 
 import { useState, useCallback, useRef, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   FileText, Plus, Loader2, Sparkles, Printer, CheckCircle2,
   X, FileCheck, AlertCircle, Wand2, Save, Search, ShieldAlert,
+  LayoutTemplate,
 } from 'lucide-react'
 import { DatePicker } from '@/components/ui/DatePicker'
 import {
@@ -163,6 +165,7 @@ export default function DocumentsSection({
   autoTriggerSuggestion, onAutoTriggerHandled,
   hasControlledMeds = false,
 }: Props) {
+  const router = useRouter()
   const [documents, setDocuments] = useState<PatientDocument[]>(initialDocuments)
   const activeSuggestionIndexRef  = useRef<number>(-1)
   const activeSuggestionTitleRef  = useRef<string>('')
@@ -547,6 +550,23 @@ export default function DocumentsSection({
                 {isGenerating
                   ? <><Loader2 className="w-4 h-4 animate-spin" />IA preenchendo campos...</>
                   : <><Sparkles className="w-4 h-4" />Gerar com IA</>}
+              </button>
+
+              {/* Rota alternativa: Canva Nativo (papel timbrado + sliders + impressão nativa) */}
+              <button
+                onClick={() => {
+                  if (!selectedTemplateId) return
+                  setShowModal(false)
+                  router.push(
+                    `/dashboard/laudos/novo?consultation_id=${consultation.id}&template_id=${selectedTemplateId}`,
+                  )
+                }}
+                disabled={!selectedTemplateId || isGenerating}
+                className="w-full flex items-center justify-center gap-2 px-5 py-2.5 border border-violet-300 text-violet-700 bg-violet-50 hover:bg-violet-100 font-medium rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Editor visual com papel timbrado de fundo, margens em cm e campos customizados"
+              >
+                <LayoutTemplate className="w-4 h-4" />
+                Gerar com Canva Nativo
               </button>
             </div>
           </div>

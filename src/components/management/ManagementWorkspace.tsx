@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import {
   BarChart3, Plus, Trash2, Building2, Users, Save, X,
   FileText, CheckCircle2, Mail, Copy, Check, Link as LinkIcon, Shield,
-  Upload, Image, Loader2, Send, Pencil,
+  Upload, Image, Loader2, Send, Pencil, Sparkles,
 } from 'lucide-react'
 import { useRef } from 'react'
 import { deleteTemplate } from '@/lib/actions/templates'
@@ -15,6 +15,8 @@ import type { DocumentTemplate, TemplateType, UserRole, Invitation, InvitationRo
 import type { ClinicConfig, ClinicSettingsConfig } from '@/lib/actions/clinic-settings'
 import { apiFetch } from '@/lib/api-fetch'
 import ImportTemplateModal from './ImportTemplateModal'
+import CanvaTemplateEditor from '@/components/canva/CanvaTemplateEditor'
+import { CANVA_DEFAULT_MARGINS, type CanvaBlockStyle } from '@/lib/canva/types'
 import { Toast } from '@/components/ui/toast'
 import ConveniosTab from './ConveniosTab'
 import RoomsTab from './RoomsTab'
@@ -146,6 +148,7 @@ export default function ManagementWorkspace({
   const [templates, setTemplates] = useState<DocumentTemplate[]>(initialTemplates)
   const [showModal, setShowModal] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState<DocumentTemplate | null>(null)
+  const [canvaEditing,    setCanvaEditing]    = useState<DocumentTemplate | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
@@ -490,9 +493,14 @@ export default function ManagementWorkspace({
                         </div>
                       </div>
                       <div className="flex items-center gap-1 flex-shrink-0">
+                        <button onClick={() => setCanvaEditing(template)}
+                          className="p-2 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-lg transition-colors"
+                          title="Configurar Canva Nativo (papel timbrado + margens)">
+                          <Sparkles className="w-4 h-4" />
+                        </button>
                         <button onClick={() => setEditingTemplate(template)}
                           className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                          title="Editar Layout">
+                          title="Editar Layout (legado)">
                           <Pencil className="w-4 h-4" />
                         </button>
                         <button onClick={() => handleDeleteTemplate(template.id)}
@@ -1038,6 +1046,28 @@ export default function ManagementWorkspace({
           onSuccess={handleTemplateAdded}
           clinicLogoUrl={logoUrl}
           editTemplate={editingTemplate}
+        />
+      )}
+
+      {/* Editor Canva Nativo — papel timbrado + sliders de margem + preview reativo */}
+      {canvaEditing && (
+        <CanvaTemplateEditor
+          templateId={canvaEditing.id}
+          templateName={canvaEditing.name}
+          initial={{
+            background_image_url: canvaEditing.background_image_url ?? null,
+            margins: {
+              top:    canvaEditing.margin_top    ?? CANVA_DEFAULT_MARGINS.top,
+              bottom: canvaEditing.margin_bottom ?? CANVA_DEFAULT_MARGINS.bottom,
+              left:   canvaEditing.margin_left   ?? CANVA_DEFAULT_MARGINS.left,
+              right:  canvaEditing.margin_right  ?? CANVA_DEFAULT_MARGINS.right,
+            },
+            block_style: (canvaEditing.block_style as CanvaBlockStyle) ?? 'solid',
+          }}
+          onClose={() => setCanvaEditing(null)}
+          onSaved={() => {
+            setToast({ type: 'success', message: 'Configuração Canva Nativo salva.' })
+          }}
         />
       )}
 

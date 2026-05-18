@@ -328,9 +328,16 @@ export interface DocumentTemplate {
   // Operacao Zero-Touch (migration 0139)
   cleaned_page_paths?: string[] | null  // PNGs limpos por pagina (bucket document-templates)
   // Motor docx-native (migration 0157) — docxtemplater + pizzip
-  engine?: 'pdf' | 'docx-native'
+  engine?: 'pdf' | 'docx-native' | 'canva-native'
   original_docx_path?: string | null
   docx_tags?: Array<{ literal: string; canonical: string; occurrences: number }> | null
+  // Canva Nativo (migration 0169) — HTML-to-PDF com papel timbrado de fundo
+  background_image_url?: string | null
+  margin_top?: number    | null   // cm (default 2.0)
+  margin_bottom?: number | null
+  margin_left?: number   | null
+  margin_right?: number  | null
+  block_style?: 'solid' | 'transparent' | null
   created_at: string
   updated_at?: string
 }

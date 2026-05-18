@@ -1,0 +1,110 @@
+/* =============================================================================
+ * Canva Nativo — CSS de impressão (motor R$ 0 de servidor).
+ *
+ * Importado globalmente em src/app/globals.css. Quando o usuário aciona
+ * Ctrl+P em uma página com .canva-print-shell, o navegador imprime APENAS
+ * a folha A4, sem chrome do dashboard, sem header de URL/data do Chrome.
+ * ========================================================================== */
+
+@page {
+  size: A4 portrait;
+  margin: 0;
+}
+
+@media print {
+  /* Esconde TUDO por padrão... */
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  /* ...e mostra apenas a área de impressão Canva. */
+  .canva-print-shell,
+  .canva-print-shell * {
+    visibility: visible !important;
+  }
+
+  .canva-print-shell {
+    position: absolute !important;
+    inset: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #fff !important;
+    min-height: 0 !important;
+  }
+
+  .canva-print-controls {
+    display: none !important;
+  }
+
+  .canva-print-area {
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .canva-a4-stack {
+    gap: 0 !important;
+  }
+
+  .canva-a4-page {
+    width: 21cm !important;
+    height: 29.7cm !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    page-break-after: always;
+    break-after: page;
+    page-break-inside: avoid;
+    break-inside: avoid;
+    overflow: hidden !important;
+  }
+
+  .canva-a4-page:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+
+  /* Evita quebrar bloco do pet em duas páginas */
+  .canva-patient-block {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+}
+
+/* Slider de margem — visual coerente com Tailwind do app */
+.canva-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  background: #e2e8f0;
+  border-radius: 999px;
+  outline: none;
+}
+.canva-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: #0f172a;
+  cursor: grab;
+  box-shadow: 0 1px 3px rgba(15,23,42,.25);
+  transition: transform 100ms ease;
+}
+.canva-slider::-webkit-slider-thumb:active {
+  cursor: grabbing;
+  transform: scale(1.12);
+}
+.canva-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: #0f172a;
+  border: none;
+  cursor: grab;
+}
