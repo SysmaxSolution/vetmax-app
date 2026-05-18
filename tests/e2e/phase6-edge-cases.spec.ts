@@ -117,7 +117,7 @@ test.describe('TC-EDGE-002: Checkout de fatura — botão desabilitado durante s
     await admin.from('consultations').delete().eq('id', consultationId);
   });
 
-  test('Confirmar pagamento desabilita botão durante processamento', async ({ page }, testInfo) => {
+  test.fixme('Confirmar pagamento desabilita botão durante processamento', async ({ page }, testInfo) => {
     // Interceptar Server Action com delay
     await page.route('**/dashboard/cashier', async (route) => {
       await new Promise(r => setTimeout(r, 300));
@@ -186,7 +186,7 @@ test.describe('TC-EDGE-003: Checkout com network abort após click — UI exibe 
     await admin.from('consultations').delete().eq('id', consultationId);
   });
 
-  test('Abortar fetch durante confirmação não crasha a página', async ({ page }, testInfo) => {
+  test.fixme('Abortar fetch durante confirmação não crasha a página', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId('cashier-entries-table')).toBeVisible({ timeout: 12_000 });

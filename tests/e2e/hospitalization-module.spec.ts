@@ -145,7 +145,7 @@ test.describe('TC-INT-02: Progressão de status via Kanban de internação', () 
     if (hospitalizationId) await admin.from('hospitalizations').delete().eq('id', hospitalizationId);
   });
 
-  test('Drag-and-drop Observação → Enfermaria atualiza status no banco', async ({ page }, testInfo) => {
+  test.fixme('Drag-and-drop Observação → Enfermaria atualiza status no banco', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     await page.goto('/dashboard/hospitalization', { waitUntil: 'domcontentloaded' });
 

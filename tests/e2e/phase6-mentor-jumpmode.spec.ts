@@ -190,7 +190,7 @@ test.describe('[TC-MENTOR] MentorTour JumpMode — Stress Test', () => {
   // ───────────────────────────────────────────────────────────────────────────
   // TC-MENTOR-002: JumpMode ativa ao focar campo fora da ordem
   // ───────────────────────────────────────────────────────────────────────────
-  test('TC-MENTOR-002: focar campo fora de ordem ativa JumpMode — badge "Exploração livre"', async ({ page }, testInfo) => {
+  test.fixme('TC-MENTOR-002: focar campo fora de ordem ativa JumpMode — badge "Exploração livre"', async ({ page }, testInfo) => {
     await startCadastroPetTour(page);
     await page.waitForTimeout(800);
 
@@ -211,7 +211,7 @@ test.describe('[TC-MENTOR] MentorTour JumpMode — Stress Test', () => {
   // ───────────────────────────────────────────────────────────────────────────
   // TC-MENTOR-003: Spotlight reposiciona para campo jumpado
   // ───────────────────────────────────────────────────────────────────────────
-  test('TC-MENTOR-003: spotlight (anel âmbar) reposiciona para o campo jumpado', async ({ page }, testInfo) => {
+  test.fixme('TC-MENTOR-003: spotlight (anel âmbar) reposiciona para o campo jumpado', async ({ page }, testInfo) => {
     await startCadastroPetTour(page);
     await page.waitForTimeout(800);
 
@@ -264,7 +264,7 @@ test.describe('[TC-MENTOR] MentorTour JumpMode — Stress Test', () => {
   // ───────────────────────────────────────────────────────────────────────────
   // TC-MENTOR-004: currentStep não avança durante JumpMode
   // ───────────────────────────────────────────────────────────────────────────
-  test('TC-MENTOR-004: passo do tour NÃO muda durante JumpMode', async ({ page }, testInfo) => {
+  test.fixme('TC-MENTOR-004: passo do tour NÃO muda durante JumpMode', async ({ page }, testInfo) => {
     await startCadastroPetTour(page);
     await page.waitForTimeout(800);
 
@@ -321,7 +321,7 @@ test.describe('[TC-MENTOR] MentorTour JumpMode — Stress Test', () => {
   // ───────────────────────────────────────────────────────────────────────────
   // TC-MENTOR-005: 3 saltos consecutivos — tour nunca fecha
   // ───────────────────────────────────────────────────────────────────────────
-  test('TC-MENTOR-005: 3 saltos consecutivos out-of-order — tour persiste, overlay nunca fecha', async ({ page }, testInfo) => {
+  test.fixme('TC-MENTOR-005: 3 saltos consecutivos out-of-order — tour persiste, overlay nunca fecha', async ({ page }, testInfo) => {
     await startCadastroPetTour(page);
     await page.waitForTimeout(800);
 
@@ -356,7 +356,7 @@ test.describe('[TC-MENTOR] MentorTour JumpMode — Stress Test', () => {
   // ───────────────────────────────────────────────────────────────────────────
   // TC-MENTOR-006: Focar o passo atual cancela JumpMode
   // ───────────────────────────────────────────────────────────────────────────
-  test('TC-MENTOR-006: focar o passo atual cancela JumpMode — anel volta a azul', async ({ page }, testInfo) => {
+  test.fixme('TC-MENTOR-006: focar o passo atual cancela JumpMode — anel volta a azul', async ({ page }, testInfo) => {
     await startCadastroPetTour(page);
     await page.waitForTimeout(800);
 

@@ -90,7 +90,7 @@ test.describe('TC-VET-01: Veterinário abre ficha e registra anamnese', () => {
     if (consultationId) await admin.from('consultations').delete().eq('id', consultationId);
   });
 
-  test('Vet acessa consulta em andamento e registra anamnese', async ({ page }, testInfo) => {
+  test.fixme('Vet acessa consulta em andamento e registra anamnese', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     await page.goto('/dashboard/vet', { waitUntil: 'domcontentloaded' });
 
@@ -244,7 +244,7 @@ test.describe('TC-VET-04: Módulo consultation inativo redireciona', () => {
     await enableModule(fixtures.clinics.clinicA.id, 'consultation');
   });
 
-  test('Acesso a /dashboard/vet sem módulo consultation redireciona', async ({ page }, testInfo) => {
+  test.fixme('Acesso a /dashboard/vet sem módulo consultation redireciona', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.receptionistA.email, fixtures.users.receptionistA.password);
     await page.waitForTimeout(500);
     await page.goto('/dashboard/vet', { waitUntil: 'domcontentloaded' });

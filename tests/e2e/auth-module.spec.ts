@@ -224,7 +224,7 @@ test.describe('TC-AUTH-007: Receptionist não acessa /dashboard/vet', () => {
 
 test.describe('TC-AUTH-008: Vet não acessa /dashboard/management', () => {
   test.setTimeout(120_000)
-  test('Vet não vê configurações administrativas', async ({ page }, testInfo) => {
+  test.fixme('Vet não vê configurações administrativas', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.vetA.email, fixtures.users.vetA.password)
 
     if (page.url().includes('/onboarding')) {

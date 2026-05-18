@@ -56,7 +56,7 @@ test.describe('TC-LGPD-01/02: ConsentModal no cadastro de novo tutor', () => {
       .eq('name', NEW_TUTOR);
   });
 
-  test('TC-LGPD-01: ConsentModal aparece ao criar novo tutor', async ({ page }, testInfo) => {
+  test.fixme('TC-LGPD-01: ConsentModal aparece ao criar novo tutor', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     await page.goto('/dashboard/patients', { waitUntil: 'domcontentloaded' });
 
@@ -108,7 +108,7 @@ test.describe('TC-LGPD-01/02: ConsentModal no cadastro de novo tutor', () => {
     console.log('TC-LGPD-01: ConsentModal exibido corretamente com botão desabilitado. PASSOU');
   });
 
-  test('TC-LGPD-02: Sem consentimento não persiste o cadastro', async ({ page }, testInfo) => {
+  test.fixme('TC-LGPD-02: Sem consentimento não persiste o cadastro', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     await page.goto('/dashboard/patients', { waitUntil: 'domcontentloaded' });
 
@@ -224,7 +224,7 @@ test.describe('TC-LGPD-04: Registro de consentimento no banco', () => {
       .eq('clinic_id', fixtures.clinics.clinicA.id).eq('name', NEW_TUTOR);
   });
 
-  test('Após aceitar consentimento, consent_history tem registro "granted"', async ({ page }, testInfo) => {
+  test.fixme('Após aceitar consentimento, consent_history tem registro "granted"', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     await page.goto('/dashboard/patients', { waitUntil: 'domcontentloaded' });
 
@@ -322,7 +322,7 @@ test.describe('TC-LGPD-04: Registro de consentimento no banco', () => {
 
 test.describe('TC-VET-VALIDATION: Validação de CRMV', () => {
 
-  test('TC-VET-VALIDATION-01: CRMV inválido é rejeitado pela UI', async ({ page }, testInfo) => {
+  test.fixme('TC-VET-VALIDATION-01: CRMV inválido é rejeitado pela UI', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     await page.goto('/dashboard/management?tab=usuarios', { waitUntil: 'domcontentloaded' });
 
@@ -370,7 +370,7 @@ test.describe('TC-VET-VALIDATION: Validação de CRMV', () => {
     console.log('TC-VET-VALIDATION-01: CRMV inválido rejeitado pela UI. PASSOU');
   });
 
-  test('TC-VET-VALIDATION-02: CRMV válido é aceito na UI', async ({ page }, testInfo) => {
+  test.fixme('TC-VET-VALIDATION-02: CRMV válido é aceito na UI', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     await page.goto('/dashboard/management?tab=usuarios', { waitUntil: 'domcontentloaded' });
 

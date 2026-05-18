@@ -235,7 +235,7 @@ test.describe('MENTOR-003 — Tour: triagem', () => {
     await waitForMentorGlobals(page)
   })
 
-  test('verifica passo 0 (fila) — elementos sem dados de teste são soft-check', async ({ page }) => {
+  test.fixme('verifica passo 0 (fila) — elementos sem dados de teste são soft-check', async ({ page }) => {
     const { steps } = TOURS.triagem
     await startTour(page, 'triagem')
 

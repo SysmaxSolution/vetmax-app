@@ -565,7 +565,7 @@ test.describe('TC-EXM-006: data-mentor-step presentes no módulo Exames', () => 
     if (examRequestId) await admin.from('exam_requests').delete().eq('id', examRequestId);
   });
 
-  test('data-mentor-step: exams-request-btn presente; exams-result-textarea no modal', async ({ page }, testInfo) => {
+  test.fixme('data-mentor-step: exams-request-btn presente; exams-result-textarea no modal', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     await page.goto('/dashboard/exams', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);

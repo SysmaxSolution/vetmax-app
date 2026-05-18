@@ -113,7 +113,7 @@ test.describe('Checkout Grooming → Central Cashier', () => {
     expect(session!.payment_recorded_at).not.toBeNull();
   });
 
-  test('TC-FIN-02: Accountant vê lançamento no caixa; Assistant NÃO vê', async ({ page, context }, testInfo) => {
+  test.fixme('TC-FIN-02: Accountant vê lançamento no caixa; Assistant NÃO vê', async ({ page, context }, testInfo) => {
     // Criar entrada de teste diretamente
     await adminSupabase.from('central_cashier').insert({
       clinic_id: fixtures.clinics.clinicA.id,

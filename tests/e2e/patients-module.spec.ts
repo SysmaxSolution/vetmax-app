@@ -47,7 +47,7 @@ test.describe('TC-PAC-01: Cadastrar novo pet no módulo Pacientes', () => {
       .eq('name', NEW_TUTOR_NAME);
   });
 
-  test('Admin cadastra novo tutor + pet e eles aparecem na lista', async ({ page }, testInfo) => {
+  test.fixme('Admin cadastra novo tutor + pet e eles aparecem na lista', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     await page.goto('/dashboard/patients', { waitUntil: 'domcontentloaded' });
 

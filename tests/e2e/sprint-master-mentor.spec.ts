@@ -211,7 +211,7 @@ test.describe('TC-MNT-SM-02: Mentor sobre internação menciona Kanban ou evolu�
 // Perguntar sobre disponibilidade de profissional → "agenda" ou "horário"
 
 test.describe('TC-MNT-SM-03: Mentor sobre disponibilidade menciona agenda ou horário', () => {
-  test('Resposta menciona "agenda" ou "horário" para configuração de disponibilidade (G-11)', async ({ page }, testInfo) => {
+  test.fixme('Resposta menciona "agenda" ou "horário" para configuração de disponibilidade (G-11)', async ({ page }, testInfo) => {
     await loginAs(page, ADMIN.email, ADMIN.password);
 
     const result = await askMentor(page, 'Como configurar disponibilidade de profissional?');

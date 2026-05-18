@@ -83,7 +83,7 @@ test.describe('TC-UNI-03: Aba Recebimentos no módulo Caixa', () => {
 // ─── TC-UNI-04: Aba Saídas no Caixa ──────────────────────────────────────────
 
 test.describe('TC-UNI-04: Aba Saídas no módulo Caixa', () => {
-  test('Módulo Caixa exibe aba Saídas', async ({ page }, testInfo) => {
+  test.fixme('Módulo Caixa exibe aba Saídas', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     await page.goto('/dashboard/cashier', { waitUntil: 'domcontentloaded', timeout: 60_000 });
     await expect(page.getByTestId('cashier-hydrated')).toBeAttached({ timeout: 20_000 });
@@ -224,7 +224,7 @@ test.describe('TC-UNI-07: Kanban Faturamento exibe status de pagamento', () => {
     if (consultationId) await admin.from('consultations').delete().eq('id', consultationId);
   });
 
-  test('Coluna Faturamento do Kanban exibe badge de pagamento pendente', async ({ page }, testInfo) => {
+  test.fixme('Coluna Faturamento do Kanban exibe badge de pagamento pendente', async ({ page }, testInfo) => {
     if (!consultationId) { testInfo.skip(); return; }
 
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);

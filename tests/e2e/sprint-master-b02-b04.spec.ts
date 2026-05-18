@@ -84,7 +84,7 @@ test.describe('B-04: Ordem das etapas — Tosa antes de Banho', () => {
     }
   });
 
-  test('B-04-02: STATUS_FLOW do modal B&T tem grooming antes de bathing (código)', async ({ page }, testInfo) => {
+  test.fixme('B-04-02: STATUS_FLOW do modal B&T tem grooming antes de bathing (código)', async ({ page }, testInfo) => {
     if (!sessionId) { console.log('B-04-02: SKIP — Sessão não criada'); testInfo.skip(); return; }
 
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);

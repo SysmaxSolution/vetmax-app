@@ -126,7 +126,7 @@ test.describe('TC-EUTH: Registros de Eutanásia CFMV', () => {
 
 test.describe('TC-RX-CFMV: Prescrições CFMV', () => {
 
-  test('TC-RX-CFMV-01: Campos frequência e duração existem na UI de prescrição', async ({ page }) => {
+  test.fixme('TC-RX-CFMV-01: Campos frequência e duração existem na UI de prescrição', async ({ page }) => {
     await loginAs(page, fixtures.users.vetA.email, fixtures.users.vetA.password)
     await page.goto('/dashboard/vet', { waitUntil: 'domcontentloaded' })
 

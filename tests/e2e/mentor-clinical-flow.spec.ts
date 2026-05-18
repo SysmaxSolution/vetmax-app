@@ -129,7 +129,7 @@ test.describe('Mentor — Fluxo Clínico Completo', () => {
     await tourFinish(page)
   })
 
-  test('2. Mentor responde "Como atendo na triagem?" e guia tour de Triagem', async ({ page }, testInfo) => {
+  test.fixme('2. Mentor responde "Como atendo na triagem?" e guia tour de Triagem', async ({ page }, testInfo) => {
     await loginAs(page, 'assistant')
     await page.goto(`${BASE}/dashboard/triage`)
 

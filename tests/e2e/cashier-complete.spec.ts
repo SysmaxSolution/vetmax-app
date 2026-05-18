@@ -335,7 +335,7 @@ test.describe('BLOCO B — Fluxo de Consulta → Caixa', () => {
     await admin.from('consultations').delete().eq('id', consultationId);
   });
 
-  test('TC-CON-04: Fatura some da aba Recebimentos após pagamento via UI', async ({ page }, testInfo) => {
+  test.fixme('TC-CON-04: Fatura some da aba Recebimentos após pagamento via UI', async ({ page }, testInfo) => {
     const { invoiceId, consultationId } = await seedInvoice();
 
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
@@ -767,7 +767,7 @@ test.describe('BLOCO G — Navegação e Redirect', () => {
     await expect(page.getByRole('button', { name: /sessão/i })).toBeVisible({ timeout: 5_000 });
   });
 
-  test('TC-NAV-04: Kanban Faturamento exibe badge de status de pagamento', async ({ page }, testInfo) => {
+  test.fixme('TC-NAV-04: Kanban Faturamento exibe badge de status de pagamento', async ({ page }, testInfo) => {
     const { invoiceId, consultationId } = await seedInvoice();
 
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);

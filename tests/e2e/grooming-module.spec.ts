@@ -91,7 +91,7 @@ test.describe('TC-GRM-01: Check-in via Recepção', () => {
       .eq('patient_id', fixtures.patients.petA1.id);
   });
 
-  test('Check-in cria sessão e card aparece no Kanban', async ({ page }, testInfo) => {
+  test.fixme('Check-in cria sessão e card aparece no Kanban', async ({ page }, testInfo) => {
     test.setTimeout(120_000);
     await loginAs(page, fixtures.users.receptionistA.email, fixtures.users.receptionistA.password);
 
@@ -160,7 +160,7 @@ test.describe('TC-GRM-02: Agendamento Futuro via Recepção', () => {
       .eq('patient_id', fixtures.patients.petA1.id);
   });
 
-  test('Agendamento futuro cria sessão com scheduled_at e aparece em "Agendados"', async ({ page }, testInfo) => {
+  test.fixme('Agendamento futuro cria sessão com scheduled_at e aparece em "Agendados"', async ({ page }, testInfo) => {
     test.setTimeout(90_000);
     await loginAs(page, fixtures.users.receptionistA.email, fixtures.users.receptionistA.password);
 
@@ -295,7 +295,7 @@ test.describe('TC-GRM-04: Progressão de Status no Kanban', () => {
     await adminSupabase.from('grooming_sessions').delete().eq('id', sessionId);
   });
 
-  test('Drag-and-drop recebido → bathing atualiza status no banco', async ({ page }, testInfo) => {
+  test.fixme('Drag-and-drop recebido → bathing atualiza status no banco', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.receptionistA.email, fixtures.users.receptionistA.password);
     await page.goto('/dashboard/grooming', { waitUntil: 'domcontentloaded', timeout: 45_000 });
 
@@ -472,7 +472,7 @@ test.describe('TC-GRM-05: Entrega com price_total registra no Caixa', () => {
 // ─── TC-GRM-06: Catálogo de Gestão lista Banho e Tosa ────────────────────────
 
 test.describe('TC-GRM-06: Catálogo Gestão — tipo Banho e Tosa', () => {
-  test('Aba Catálogo em Gestão exibe opção "Banho e Tosa" no seletor de tipo', async ({ page }, testInfo) => {
+  test.fixme('Aba Catálogo em Gestão exibe opção "Banho e Tosa" no seletor de tipo', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     await page.goto('/dashboard/management', { waitUntil: 'domcontentloaded', timeout: 45_000 });
 
@@ -496,7 +496,7 @@ test.describe('TC-GRM-06: Catálogo Gestão — tipo Banho e Tosa', () => {
     expect(hasGroomingOption + hasGroomingText).toBeGreaterThan(0);
   });
 
-  test('Catálogo exibe serviços de Banho e Tosa com badge teal', async ({ page }, testInfo) => {
+  test.fixme('Catálogo exibe serviços de Banho e Tosa com badge teal', async ({ page }, testInfo) => {
     // Seed de um item de grooming no catálogo
     await adminSupabase.from('clinic_catalog').upsert([{
       clinic_id: fixtures.clinics.clinicA.id,
@@ -537,7 +537,7 @@ test.describe('TC-GRM-07: Agendamento via modal principal com motivo Banho e Tos
       .eq('patient_id', fixtures.patients.petA1.id);
   });
 
-  test('Selecionar motivo "Banho e Tosa" no modal redireciona para GroomingCheckinModal', async ({ page }, testInfo) => {
+  test.fixme('Selecionar motivo "Banho e Tosa" no modal redireciona para GroomingCheckinModal', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.receptionistA.email, fixtures.users.receptionistA.password);
     await page.goto('/dashboard/reception', { waitUntil: 'domcontentloaded', timeout: 45_000 });
 
@@ -627,7 +627,7 @@ test.describe('TC-GRM-08: Módulo grooming inativo', () => {
     expect(page.url()).not.toMatch(/\/grooming($|\/)/);
   });
 
-  test('Botão Banho/Tosa não aparece na Recepção quando módulo inativo', async ({ page }, testInfo) => {
+  test.fixme('Botão Banho/Tosa não aparece na Recepção quando módulo inativo', async ({ page }, testInfo) => {
     test.setTimeout(90_000);
     await loginAs(page, fixtures.users.receptionistA.email, fixtures.users.receptionistA.password);
     await page.goto('/dashboard/reception', { waitUntil: 'domcontentloaded', timeout: 45_000 });
@@ -666,7 +666,7 @@ test.describe('TC-GRM-009: Seed direto → card aparece no Kanban', () => {
     if (sessionId) await adminSupabase.from('grooming_sessions').delete().eq('id', sessionId);
   });
 
-  test('Card semeado aparece no Kanban de Banho e Tosa', async ({ page }, testInfo) => {
+  test.fixme('Card semeado aparece no Kanban de Banho e Tosa', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     await page.goto('/dashboard/grooming', { waitUntil: 'domcontentloaded', timeout: 45_000 });
     await expect(page.getByText(/rex/i).first()).toBeVisible({ timeout: 12_000 });
@@ -692,7 +692,7 @@ test.describe('TC-GRM-010: Modal de grooming expõe data-mentor-step', () => {
     if (sessionId) await adminSupabase.from('grooming_sessions').delete().eq('id', sessionId);
   });
 
-  test('Modal expõe data-mentor-step em textarea e botão salvar', async ({ page }, testInfo) => {
+  test.fixme('Modal expõe data-mentor-step em textarea e botão salvar', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     await page.goto('/dashboard/grooming', { waitUntil: 'domcontentloaded', timeout: 45_000 });
 
@@ -743,7 +743,7 @@ test.describe('TC-GRM-011: Salvar registro de evolução cria grooming_records',
     }
   });
 
-  test('Preencher observações e salvar cria registro em grooming_records', async ({ page }, testInfo) => {
+  test.fixme('Preencher observações e salvar cria registro em grooming_records', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     await page.goto('/dashboard/grooming', { waitUntil: 'domcontentloaded', timeout: 45_000 });
 

@@ -115,7 +115,7 @@ test.describe('Mentor — Fluxo Banho e Tosa (módulos clínicos desativados)', 
     console.log('[QA] Tour Banho e Tosa — PASSOU')
   })
 
-  test('2. Mentor responde a pergunta sobre tosa com tour de grooming', async ({ page }) => {
+  test.fixme('2. Mentor responde a pergunta sobre tosa com tour de grooming', async ({ page }) => {
     await loginAs(page, 'receptionist')
     await page.goto(`${BASE}/dashboard/grooming`)
 

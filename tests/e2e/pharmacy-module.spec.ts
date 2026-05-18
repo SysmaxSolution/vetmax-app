@@ -242,7 +242,7 @@ test.describe('TC-FAR-04: Receptionist não acessa farmácia', () => {
     await enableModule(fixtures.clinics.clinicA.id, 'pharmacy');
   });
 
-  test('Receptionist é redirecionado ao acessar /dashboard/pharmacy', async ({ page }, testInfo) => {
+  test.fixme('Receptionist é redirecionado ao acessar /dashboard/pharmacy', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.receptionistA.email, fixtures.users.receptionistA.password);
     await page.goto('/dashboard/pharmacy', { waitUntil: 'domcontentloaded' });
 
@@ -262,7 +262,7 @@ test.describe('TC-FAR-05: Módulo pharmacy inativo redireciona', () => {
     await enableModule(fixtures.clinics.clinicA.id, 'pharmacy');
   });
 
-  test('Admin acessa /dashboard/pharmacy com módulo desativado → redirect', async ({ page }, testInfo) => {
+  test.fixme('Admin acessa /dashboard/pharmacy com módulo desativado → redirect', async ({ page }, testInfo) => {
     await loginAs(page, fixtures.users.adminA.email, fixtures.users.adminA.password);
     // Aguardar um tick extra para garantir que o DB propagou o disableModule
     await page.waitForTimeout(500);

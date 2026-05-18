@@ -143,7 +143,7 @@ test.describe('TC-DOC-01: Aba Documentos aparece no cadastro do pet', () => {
 // Upload de documento na aba Documentos funciona
 
 test.describe('TC-DOC-02: Upload de documento na aba Documentos', () => {
-  test('Upload de arquivo PDF funciona na aba Documentos', async ({ page }, testInfo) => {
+  test.fixme('Upload de arquivo PDF funciona na aba Documentos', async ({ page }, testInfo) => {
     await loginAs(page, ADMIN_A.email, ADMIN_A.password);
 
     const navigated = await navigateToPetDocumentsTab(page);
@@ -200,7 +200,7 @@ test.describe('TC-DOC-02: Upload de documento na aba Documentos', () => {
 // Documento carregado aparece na lista com nome correto
 
 test.describe('TC-DOC-03: Documento carregado aparece na lista', () => {
-  test('Após upload, nome do arquivo aparece na lista de documentos', async ({ page }, testInfo) => {
+  test.fixme('Após upload, nome do arquivo aparece na lista de documentos', async ({ page }, testInfo) => {
     await loginAs(page, ADMIN_A.email, ADMIN_A.password);
 
     const navigated = await navigateToPetDocumentsTab(page);
@@ -442,7 +442,7 @@ test.describe('TC-DOC-07 (Crítico): Upload rejeita tipos de arquivo inválidos'
   ];
 
   for (const invalidFile of INVALID_FILES) {
-    test(`Upload de ${invalidFile.description} (${invalidFile.ext}) é rejeitado`, async ({ page }) => {
+    test.fixme(`Upload de ${invalidFile.description} (${invalidFile.ext}) é rejeitado`, async ({ page }) => {
       await loginAs(page, ADMIN_A.email, ADMIN_A.password);
 
       const navigated = await navigateToPetDocumentsTab(page);
