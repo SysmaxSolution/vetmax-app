@@ -114,6 +114,60 @@ export async function updateTemplateCanvaConfig(
   return { ok: true }
 }
 
+// ── Criação de modelo em branco (entrada do Canvas Editor) ──────────────────
+
+export interface CreateBlankCanvasTemplateInput {
+  name: string
+  type: 'laudo' | 'receita' | 'encaminhamento' | 'termo' | 'exame' | 'outro'
+}
+
+export async function createBlankCanvasTemplate(
+  input: CreateBlankCanvasTemplateInput,
+): Promise<{ id: string }> {
+  const { profile } = await requireClinic()
+  if (profile.role !== 'admin') throw new Error('apenas admin pode criar modelos')
+
+  const name = input.name.trim()
+  if (!name) throw new Error('informe um nome para o modelo')
+
+  const admin = createAdminClient()
+
+  const blankCanvasState = {
+    version: 1,
+    page: {
+      size: 'A4',
+      orientation: 'portrait',
+      margins: { top: 2, bottom: 2, left: 2, right: 2 },
+      backgroundImageUrl: null,
+    },
+    elements: [],
+  }
+
+  const { data, error } = await admin
+    .from('document_templates')
+    .insert({
+      clinic_id: profile.clinic_id,
+      name,
+      type: input.type,
+      file_url: null,
+      extracted_fields: [],
+      canvas_state: blankCanvasState,
+      engine: 'canva-native',
+      margin_top: 2.0,
+      margin_bottom: 2.0,
+      margin_left: 2.0,
+      margin_right: 2.0,
+      block_style: 'solid',
+    })
+    .select('id')
+    .single()
+
+  if (error || !data) throw new Error(error?.message ?? 'falha ao criar modelo')
+
+  revalidatePath('/dashboard/management')
+  return { id: data.id }
+}
+
 // ── Canvas Editor (drag&drop) ────────────────────────────────────────────────
 
 /** Upload de imagens internas do canvas (logo, carimbo, etc.) — bucket bg. */

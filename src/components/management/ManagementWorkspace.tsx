@@ -16,6 +16,7 @@ import type { ClinicConfig, ClinicSettingsConfig } from '@/lib/actions/clinic-se
 import { apiFetch } from '@/lib/api-fetch'
 import ImportTemplateModal from './ImportTemplateModal'
 import CanvasEditor from '@/components/canva/editor/CanvasEditor'
+import NewCanvasTemplateDialog from '@/components/canva/editor/NewCanvasTemplateDialog'
 import { hydrateCanvasState, type CanvasState } from '@/lib/canva/canvas-state'
 import { Toast } from '@/components/ui/toast'
 import ConveniosTab from './ConveniosTab'
@@ -149,6 +150,7 @@ export default function ManagementWorkspace({
   const [showModal, setShowModal] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState<DocumentTemplate | null>(null)
   const [canvaEditing,    setCanvaEditing]    = useState<DocumentTemplate | null>(null)
+  const [showNewBlankDialog, setShowNewBlankDialog] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
@@ -449,9 +451,10 @@ export default function ManagementWorkspace({
               <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-600">
                 {templates.length} modelo{templates.length !== 1 ? 's' : ''}
               </span>
-              <button onClick={() => setShowModal(true)}
-                className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors">
-                <Plus className="w-4 h-4" /><span className="hidden sm:inline">Importar Novo Modelo</span>
+              <button onClick={() => setShowNewBlankDialog(true)}
+                className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-700 transition-colors"
+                title="Cria um modelo em branco e abre o editor visual">
+                <Sparkles className="w-4 h-4" /><span className="hidden sm:inline">Novo Modelo em Branco</span>
               </button>
             </div>
           </div>
@@ -461,7 +464,7 @@ export default function ManagementWorkspace({
               <div className="p-10 text-center">
                 <BarChart3 className="w-12 h-12 text-slate-200 mx-auto mb-3" />
                 <p className="text-sm font-medium text-slate-500">Nenhum modelo cadastrado</p>
-                <p className="text-xs text-slate-400 mt-1">Clique em "Importar Novo Modelo" para começar</p>
+                <p className="text-xs text-slate-400 mt-1">Clique em "Novo Modelo em Branco" para começar a editar visualmente</p>
               </div>
             ) : (
               templates.map(template => {
@@ -1058,6 +1061,29 @@ export default function ManagementWorkspace({
           onClose={() => setCanvaEditing(null)}
           onSaved={() => {
             setToast({ type: 'success', message: 'Modelo salvo.' })
+          }}
+        />
+      )}
+
+      {/* Diálogo de criação de modelo em branco — porta de entrada do Canvas */}
+      {showNewBlankDialog && (
+        <NewCanvasTemplateDialog
+          onClose={() => setShowNewBlankDialog(false)}
+          onCreated={(id, name, type) => {
+            const blankTemplate: DocumentTemplate = {
+              id,
+              clinic_id: clinicData?.id ?? '',
+              name,
+              type,
+              extracted_fields: [],
+              canvas_state: null,
+              engine: 'canva-native',
+              created_at: new Date().toISOString(),
+            }
+            setTemplates(prev => [blankTemplate, ...prev])
+            setShowNewBlankDialog(false)
+            setCanvaEditing(blankTemplate)
+            setToast({ type: 'success', message: `Modelo "${name}" criado. Monte arrastando elementos.` })
           }}
         />
       )}
