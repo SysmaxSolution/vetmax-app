@@ -495,16 +495,12 @@ export default function ManagementWorkspace({
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-1 flex-shrink-0">
+                      <div className="flex items-center gap-2 flex-shrink-0">
                         <button onClick={() => setCanvaEditing(template)}
-                          className="p-2 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-lg transition-colors"
-                          title="Configurar Canva Nativo (papel timbrado + margens)">
-                          <Sparkles className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => setEditingTemplate(template)}
-                          className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                          title="Editar Layout (legado)">
-                          <Pencil className="w-4 h-4" />
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200 rounded-lg transition-colors"
+                          title="Abrir editor visual (drag&drop)">
+                          <Pencil className="w-3.5 h-3.5" />
+                          Editar
                         </button>
                         <button onClick={() => handleDeleteTemplate(template.id)}
                           disabled={deletingId === template.id}

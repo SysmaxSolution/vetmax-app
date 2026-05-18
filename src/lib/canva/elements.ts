@@ -113,11 +113,28 @@ export interface RepeaterElement extends ElementCommon {
   /** Fonte da lista no banco. Ex: 'prescriptions', 'exam_items'. */
   source: RepeaterSource
   /** Template de cada linha — usa {{field}} para inserir colunas do item. */
-  itemTemplate: string       // ex: "{{name}} — {{posology}} ({{quantity}})"
+  itemTemplate: string       // ex: "{{medication}} — {{dose}} {{frequency}}"
   groupAndEnumerate: boolean // prefixa "1.", "2.", "3."
   maxLines?: number          // corte; resto vai pra próxima página
   lineSpacing?: number       // pt entre linhas
   typography: TypographyStyle
+
+  /** Campo do item para agrupar (ex: "route_of_administration",
+   *  "prescription_type"). Itens com mesmo valor caem sob um header. */
+  groupBy?: string
+  /** Template do cabeçalho de grupo. {{group}} = valor agrupador.
+   *  Default: "{{group}}". */
+  groupHeaderTemplate?: string
+  /** Tipografia opcional do cabeçalho de grupo. Falls back para typography. */
+  groupHeaderTypography?: TypographyStyle
+
+  /** Campo bool do item para destacar visualmente (ex: "is_controlled"). */
+  highlightField?: string
+  /** Cor de fundo aplicada na linha quando highlightField é true.
+   *  Default: '#dbeafe' (Receituário Azul). */
+  highlightColor?: string
+  /** Rótulo prefixado nas linhas destacadas (ex: "[CONTROLADO]"). */
+  highlightBadge?: string
 }
 
 export type RepeaterSource = 'prescriptions' | 'exam_items' | 'vaccines' | 'dynamic_fields'
@@ -211,17 +228,29 @@ export function makeDynamicImageElement(tagId: string): DynamicImageElement {
 }
 
 export function makeRepeaterElement(source: RepeaterSource): RepeaterElement {
-  return {
+  const base: RepeaterElement = {
     id: nextElementId('repeater'),
     kind: 'repeater',
     box: { x: 10, y: 40, w: 80, h: 25 },
     source,
-    itemTemplate: source === 'prescriptions'
-      ? '{{name}} — {{posology}}'
-      : '{{name}}',
+    itemTemplate: '{{name}}',
     groupAndEnumerate: true,
     lineSpacing: 4,
     typography: { ...DEFAULT_TYPOGRAPHY, fontSize: 10 },
     zIndex: 1,
   }
+  // Defaults clínicos por source
+  if (source === 'prescriptions') {
+    return {
+      ...base,
+      itemTemplate: '{{medication}} — {{dose}} · {{frequency}} · {{duration_days}} dias',
+      groupBy: 'route_of_administration',
+      groupHeaderTemplate: 'Uso {{group}}',
+      groupHeaderTypography: { ...DEFAULT_TYPOGRAPHY, fontSize: 10, fontWeight: 700 },
+      highlightField: 'is_controlled',
+      highlightColor: '#dbeafe',  // azul claro — Receituário Azul
+      highlightBadge: '★ CONTROLADO',
+    }
+  }
+  return base
 }

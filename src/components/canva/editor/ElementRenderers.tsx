@@ -222,7 +222,10 @@ function RepeaterRenderer({ e, ctx, isPrint }: { e: RepeaterElement; ctx?: Resol
   const items = readRepeaterSource(e.source, ctx)
   const lines = items.slice(0, e.maxLines ?? items.length)
 
-  if (lines.length === 0 && !isPrint) {
+  // Mock para preview no editor (sem ctx real)
+  const display = lines.length > 0 ? lines : (isPrint ? [] : MOCK_REPEATER[e.source])
+
+  if (display.length === 0 && !isPrint) {
     return (
       <div style={{
         width: '100%', height: '100%',
@@ -237,38 +240,117 @@ function RepeaterRenderer({ e, ctx, isPrint }: { e: RepeaterElement; ctx?: Resol
     )
   }
 
-  // Mock para preview no editor (sem ctx real): mostra 2 linhas exemplo
-  const display = lines.length > 0 ? lines : (isPrint ? [] : MOCK_REPEATER[e.source])
+  // Agrupamento opcional por campo (route_of_administration, prescription_type)
+  const groups = groupItems(display, e.groupBy)
+  let runningIndex = 0
 
   return (
-    <ol
+    <div
       style={{
         width: '100%', height: '100%',
-        listStyle: 'none', margin: 0, padding: 0,
+        margin: 0, padding: 0,
         overflow: 'hidden',
         ...typographyToCss(e.typography),
         ...blockToCss(e.block),
       }}
     >
-      {display.map((item, i) => (
-        <li
-          key={i}
-          style={{
-            display: 'flex', gap: 6, alignItems: 'baseline',
-            marginBottom: e.lineSpacing != null ? `${e.lineSpacing}pt` : undefined,
-            pageBreakInside: 'avoid', breakInside: 'avoid',
-          }}
-        >
-          {e.groupAndEnumerate && (
-            <span style={{ fontWeight: 600, minWidth: '1.5em' }}>{i + 1}.</span>
+      {groups.map((group, gi) => (
+        <section key={gi} style={{ marginBottom: gi < groups.length - 1 ? '0.25cm' : 0 }}>
+          {e.groupBy && group.key && (
+            <header
+              style={{
+                ...typographyToCss(e.groupHeaderTypography ?? { ...e.typography, fontWeight: 700 }),
+                borderBottom: '1px solid currentColor',
+                paddingBottom: 1,
+                marginBottom: '0.1cm',
+                opacity: 0.85,
+                pageBreakAfter: 'avoid',
+                breakAfter: 'avoid',
+              }}
+            >
+              {formatGroupHeader(e.groupHeaderTemplate ?? '{{group}}', group.key, e.source)}
+            </header>
           )}
-          <span style={{ flex: 1 }}>
-            {applyItemTemplate(e.itemTemplate, item)}
-          </span>
-        </li>
+          <ol style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+            {group.items.map(item => {
+              const i = runningIndex++
+              const isHighlighted = e.highlightField
+                ? Boolean(item[e.highlightField])
+                : false
+              return (
+                <li
+                  key={i}
+                  style={{
+                    display: 'flex', gap: 6, alignItems: 'baseline',
+                    marginBottom: e.lineSpacing != null ? `${e.lineSpacing}pt` : undefined,
+                    pageBreakInside: 'avoid', breakInside: 'avoid',
+                    background: isHighlighted ? (e.highlightColor ?? '#dbeafe') : undefined,
+                    borderRadius: isHighlighted ? 3 : undefined,
+                    padding: isHighlighted ? '1pt 4pt' : undefined,
+                  }}
+                >
+                  {e.groupAndEnumerate && (
+                    <span style={{ fontWeight: 600, minWidth: '1.5em' }}>{i + 1}.</span>
+                  )}
+                  <span style={{ flex: 1 }}>
+                    {isHighlighted && e.highlightBadge && (
+                      <strong style={{ marginRight: 4, fontSize: '0.85em' }}>{e.highlightBadge}</strong>
+                    )}
+                    {applyItemTemplate(e.itemTemplate, item)}
+                  </span>
+                </li>
+              )
+            })}
+          </ol>
+        </section>
       ))}
-    </ol>
+    </div>
   )
+}
+
+function groupItems(
+  items: Record<string, unknown>[],
+  groupBy?: string,
+): Array<{ key: string | null; items: Record<string, unknown>[] }> {
+  if (!groupBy) return [{ key: null, items }]
+  const map = new Map<string, Record<string, unknown>[]>()
+  for (const item of items) {
+    const raw = item[groupBy]
+    const key = raw === null || raw === undefined || raw === ''
+      ? '— sem categoria —'
+      : String(raw)
+    const existing = map.get(key)
+    if (existing) existing.push(item)
+    else map.set(key, [item])
+  }
+  return Array.from(map.entries()).map(([key, items]) => ({ key, items }))
+}
+
+function formatGroupHeader(template: string, value: string, source: RepeaterElement['source']): string {
+  // Tradução de valores técnicos para PT-BR amigável
+  const friendly = source === 'prescriptions' ? PRESCRIPTION_GROUP_LABEL[value.toLowerCase()] ?? value : value
+  return template.replace(/\{\{\s*group\s*\}\}/gi, friendly)
+}
+
+const PRESCRIPTION_GROUP_LABEL: Record<string, string> = {
+  // route_of_administration
+  oral:            'Oral',
+  topical:         'Tópico',
+  topica:          'Tópico',
+  topico:          'Tópico',
+  intramuscular:   'Intramuscular (IM)',
+  subcutaneous:    'Subcutâneo (SC)',
+  intravenous:     'Endovenoso (EV)',
+  intravenosa:     'Endovenoso (EV)',
+  oftalmic:        'Oftálmico',
+  otic:            'Otológico',
+  // prescription_type
+  common:          'Medicamentos Comuns',
+  comum:           'Medicamentos Comuns',
+  controlled:      'Medicamentos Controlados',
+  controlado:      'Medicamentos Controlados',
+  manipulated:     'Medicamentos Manipulados',
+  manipulado:      'Medicamentos Manipulados',
 }
 
 // ── Repeater data helpers ────────────────────────────────────────────────────
@@ -299,16 +381,47 @@ function labelForSource(source: RepeaterElement['source']): string {
 
 const MOCK_REPEATER: Record<RepeaterElement['source'], Record<string, unknown>[]> = {
   prescriptions: [
-    { name: 'Dipirona 25mg/mL', posology: '1mL a cada 8h por 5 dias', quantity: '1 frasco' },
-    { name: 'Drontal Plus',     posology: '1 comp por 10kg, dose única', quantity: '1 comprimido' },
+    {
+      medication: 'Dipirona 25mg/mL', dose: '1 mL',
+      frequency: 'a cada 8h', duration_days: 5,
+      route_of_administration: 'oral', prescription_type: 'common',
+      is_controlled: false,
+      orientation: 'Administrar com alimento.',
+    },
+    {
+      medication: 'Drontal Plus', dose: '1 comp por 10 kg',
+      frequency: 'dose única, repetir em 30 dias', duration_days: 1,
+      route_of_administration: 'oral', prescription_type: 'common',
+      is_controlled: false,
+    },
+    {
+      medication: 'Tramadol 50mg', dose: '50 mg',
+      frequency: 'a cada 12h', duration_days: 5,
+      route_of_administration: 'oral', prescription_type: 'controlled',
+      is_controlled: true,
+      orientation: 'Receituário azul. Manter fora do alcance.',
+    },
+    {
+      medication: 'Pomada Furacin', dose: 'Aplicar fina camada',
+      frequency: '3× ao dia', duration_days: 7,
+      route_of_administration: 'topical', prescription_type: 'common',
+      is_controlled: false,
+    },
+    {
+      medication: 'Cloridrato de Tramadol Manipulado', dose: '5 gotas',
+      frequency: 'a cada 8h', duration_days: 3,
+      route_of_administration: 'oral', prescription_type: 'manipulated',
+      is_controlled: true,
+    },
   ],
   exam_items: [
-    { name: 'Hemograma completo' },
-    { name: 'Ecocardiograma' },
+    { name: 'Hemograma completo', urgency: 'rotina' },
+    { name: 'Ecocardiograma',     urgency: 'urgente' },
+    { name: 'Bioquímica renal',   urgency: 'rotina' },
   ],
   vaccines: [
-    { name: 'V10 (polivalente)' },
-    { name: 'Antirrábica' },
+    { name: 'V10 (polivalente)', date: '15/04/2026', next: '15/04/2027' },
+    { name: 'Antirrábica',       date: '15/04/2026', next: '15/04/2027' },
   ],
   dynamic_fields: [
     { name: 'Pressão Arterial: 120/80 mmHg' },

@@ -317,6 +317,9 @@ function LineSection({ element, onPatch }: { element: LineElement; onPatch: Prop
 // ── Section: Repeater ────────────────────────────────────────────────────────
 
 function RepeaterSection({ element, onPatch }: { element: RepeaterElement; onPatch: Props['onPatch'] }) {
+  const isPresc = element.source === 'prescriptions'
+  const fieldOptions = REPEATER_FIELDS_BY_SOURCE[element.source] ?? []
+
   return (
     <Section title="Lista Repetível">
       <label className="block">
@@ -338,10 +341,27 @@ function RepeaterSection({ element, onPatch }: { element: RepeaterElement; onPat
         <input
           className="w-full rounded border border-slate-300 px-2 py-1 text-xs font-mono"
           value={element.itemTemplate}
-          placeholder="{{name}} — {{posology}}"
+          placeholder={isPresc ? '{{medication}} — {{dose}}' : '{{name}}'}
           onChange={e => onPatch({ itemTemplate: e.target.value } as Partial<CanvasElement>)}
         />
-        <span className="block text-[10px] text-slate-400 mt-0.5">Use <code>{'{{campo}}'}</code> para inserir colunas do item.</span>
+        {fieldOptions.length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {fieldOptions.map(f => (
+              <button
+                key={f.field}
+                type="button"
+                onClick={() => {
+                  const ins = `{{${f.field}}}`
+                  onPatch({ itemTemplate: `${element.itemTemplate}${element.itemTemplate.endsWith(' ') ? '' : ' '}${ins}` } as Partial<CanvasElement>)
+                }}
+                className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-mono text-slate-700 hover:bg-violet-100 hover:text-violet-700"
+                title={`Adicionar ${f.label}`}
+              >
+                {`{{${f.field}}}`}
+              </button>
+            ))}
+          </div>
+        )}
       </label>
 
       <div className="grid grid-cols-2 gap-2 mt-2">
@@ -351,7 +371,7 @@ function RepeaterSection({ element, onPatch }: { element: RepeaterElement; onPat
             checked={element.groupAndEnumerate}
             onChange={e => onPatch({ groupAndEnumerate: e.target.checked } as Partial<CanvasElement>)}
           />
-          Agrupar + Enumerar (1, 2, 3…)
+          Numerar (1, 2, 3…)
         </label>
         <NumField label="Espaçamento (pt)" value={element.lineSpacing ?? 4} step={1}
           onChange={v => onPatch({ lineSpacing: v } as Partial<CanvasElement>)} />
@@ -360,9 +380,104 @@ function RepeaterSection({ element, onPatch }: { element: RepeaterElement; onPat
       <NumField label="Máx. linhas (resto vai p/ próxima página)" value={element.maxLines ?? 0} step={1}
         onChange={v => onPatch({ maxLines: v || undefined } as Partial<CanvasElement>)} />
 
+      {/* Agrupamento */}
+      <div className="mt-3 border-t border-slate-200 pt-2 space-y-2">
+        <label className="block">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Agrupar por</span>
+          <select
+            className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
+            value={element.groupBy ?? ''}
+            onChange={e => onPatch({ groupBy: e.target.value || undefined } as Partial<CanvasElement>)}
+          >
+            <option value="">— Sem agrupamento —</option>
+            {fieldOptions.filter(f => f.groupable).map(f => (
+              <option key={f.field} value={f.field}>{f.label}</option>
+            ))}
+          </select>
+        </label>
+        {element.groupBy && (
+          <label className="block">
+            <span className="text-[10px] text-slate-600">Texto do cabeçalho de grupo</span>
+            <input
+              className="w-full rounded border border-slate-300 px-2 py-1 text-xs font-mono"
+              value={element.groupHeaderTemplate ?? '{{group}}'}
+              placeholder="Ex: Uso {{group}}"
+              onChange={e => onPatch({ groupHeaderTemplate: e.target.value } as Partial<CanvasElement>)}
+            />
+            <span className="block text-[10px] text-slate-400 mt-0.5">
+              <code>{'{{group}}'}</code> = valor do agrupador (traduzido para PT-BR).
+            </span>
+          </label>
+        )}
+      </div>
+
+      {/* Destaque visual de linhas */}
+      {isPresc && (
+        <div className="mt-3 border-t border-slate-200 pt-2 space-y-2">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 block">Destaque visual</span>
+          <label className="block">
+            <span className="text-[10px] text-slate-600">Campo de destaque (bool)</span>
+            <select
+              className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
+              value={element.highlightField ?? ''}
+              onChange={e => onPatch({ highlightField: e.target.value || undefined } as Partial<CanvasElement>)}
+            >
+              <option value="">— Nenhum —</option>
+              <option value="is_controlled">Medicamento Controlado</option>
+              <option value="requires_receipt">Requer Receituário</option>
+            </select>
+          </label>
+          {element.highlightField && (
+            <>
+              <ColorField label="Cor do destaque"
+                value={element.highlightColor ?? '#dbeafe'}
+                onChange={v => onPatch({ highlightColor: v } as Partial<CanvasElement>)} />
+              <label className="block">
+                <span className="text-[10px] text-slate-600">Selo na linha (badge)</span>
+                <input
+                  className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
+                  value={element.highlightBadge ?? ''}
+                  placeholder="ex: ★ CONTROLADO"
+                  onChange={e => onPatch({ highlightBadge: e.target.value } as Partial<CanvasElement>)}
+                />
+              </label>
+            </>
+          )}
+        </div>
+      )}
+
       <TypographyControls element={element} onPatch={onPatch} />
     </Section>
   )
+}
+
+/** Campos disponíveis por source — usados nos chips do template e no
+ *  seletor de Agrupamento. Cada source mantém só os campos que existem
+ *  no schema do banco. */
+const REPEATER_FIELDS_BY_SOURCE: Record<RepeaterElement['source'], Array<{ field: string; label: string; groupable?: boolean }>> = {
+  prescriptions: [
+    { field: 'medication',              label: 'Medicamento' },
+    { field: 'dose',                    label: 'Dose' },
+    { field: 'frequency',               label: 'Frequência' },
+    { field: 'duration_days',           label: 'Duração (dias)' },
+    { field: 'route_of_administration', label: 'Tipo de Uso (via)', groupable: true },
+    { field: 'prescription_type',       label: 'Tipo de Medicamento',  groupable: true },
+    { field: 'is_controlled',           label: 'Controlado?' },
+    { field: 'orientation',             label: 'Orientação' },
+    { field: 'prescriber_crmv',         label: 'CRMV do Prescritor' },
+  ],
+  exam_items: [
+    { field: 'name',    label: 'Nome' },
+    { field: 'urgency', label: 'Urgência', groupable: true },
+  ],
+  vaccines: [
+    { field: 'name', label: 'Vacina' },
+    { field: 'date', label: 'Data' },
+    { field: 'next', label: 'Próxima' },
+  ],
+  dynamic_fields: [
+    { field: 'name', label: 'Nome' },
+  ],
 }
 
 // ── Tipografia (compartilhada) ───────────────────────────────────────────────

@@ -4,7 +4,7 @@
  * CanvasEditor — orquestrador do Editor Visual de Modelos.
  *
  *   ┌─────────────────────────────────────────────────────┐
- *   │ Header (nome do template + Salvar)                  │
+ *   │ Header (nome + Undo/Redo + status + Salvar)          │
  *   ├─────────────────────────────────────────────────────┤
  *   │ PageSettingsPanel (size/orientation/margens/bg)     │
  *   ├──────┬──────────────────────────────┬───────────────┤
@@ -12,12 +12,15 @@
  *   │ bar  │                              │ (contextual)  │
  *   └──────┴──────────────────────────────┴───────────────┘
  *
- * Estado central via useReducer — actions ergonômicas (add, patch,
- * delete, select, moveZ). Salva canvas_state JSONB ao clicar em Salvar.
+ * Recursos:
+ * - Undo/Redo (Ctrl+Z, Ctrl+Shift+Z) via history stack (limite 50 frames)
+ * - Auto-save a cada 60s quando há mudanças não persistidas
+ * - Save manual via botão (debounce não-bloqueante)
+ * - Estado via useReducer com history middleware
  */
 
-import { useCallback, useReducer, useRef, useState, useTransition } from 'react'
-import { Loader2, Save, Sparkles, X } from 'lucide-react'
+import { useCallback, useEffect, useReducer, useRef, useState, useTransition } from 'react'
+import { Loader2, Paintbrush, Redo2, Save, Sparkles, Undo2, X } from 'lucide-react'
 import {
   defaultCanvasState, hydrateCanvasState, type CanvasState, type PageConfig,
 } from '@/lib/canva/canvas-state'
@@ -40,17 +43,30 @@ interface Props {
   onSaved?: () => void
 }
 
-// ── Reducer ──────────────────────────────────────────────────────────────────
+// ── Reducer com history (undo/redo) ──────────────────────────────────────────
 
-type Action =
+type DocAction =
   | { type: 'set_page'; page: PageConfig }
   | { type: 'add'; element: CanvasElement }
   | { type: 'patch'; id: string; patch: Partial<CanvasElement> }
   | { type: 'delete'; id: string }
   | { type: 'move_z'; id: string; dir: 'front' | 'back' | 'forward' | 'backward' }
+
+type HistoryAction =
+  | DocAction
+  | { type: 'undo' }
+  | { type: 'redo' }
   | { type: 'replace_state'; state: CanvasState }
 
-function reducer(state: CanvasState, action: Action): CanvasState {
+interface HistoryState {
+  past: CanvasState[]
+  present: CanvasState
+  future: CanvasState[]
+}
+
+const HISTORY_LIMIT = 50
+
+function docReducer(state: CanvasState, action: DocAction): CanvasState {
   switch (action.type) {
     case 'set_page':
       return { ...state, page: action.page }
@@ -86,10 +102,50 @@ function reducer(state: CanvasState, action: Action): CanvasState {
         elements: state.elements.map(e => e.id === action.id ? { ...e, zIndex: newZ } : e),
       }
     }
+  }
+}
+
+function historyReducer(state: HistoryState, action: HistoryAction): HistoryState {
+  switch (action.type) {
+    case 'undo': {
+      const prev = state.past[state.past.length - 1]
+      if (!prev) return state
+      return {
+        past:    state.past.slice(0, -1),
+        present: prev,
+        future:  [state.present, ...state.future],
+      }
+    }
+
+    case 'redo': {
+      const next = state.future[0]
+      if (!next) return state
+      return {
+        past:    [...state.past, state.present],
+        present: next,
+        future:  state.future.slice(1),
+      }
+    }
 
     case 'replace_state':
-      return action.state
+      return {
+        past:    [],
+        present: action.state,
+        future:  [],
+      }
+
+    default: {
+      const newPresent = docReducer(state.present, action)
+      if (newPresent === state.present) return state
+      const past = [...state.past, state.present]
+      if (past.length > HISTORY_LIMIT) past.shift()
+      return { past, present: newPresent, future: [] }
+    }
   }
+}
+
+function initHistory(state?: CanvasState | null): HistoryState {
+  return { past: [], present: hydrateCanvasState(state), future: [] }
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -97,20 +153,27 @@ function reducer(state: CanvasState, action: Action): CanvasState {
 export default function CanvasEditor({
   templateId, templateName, initialState, onClose, onSaved,
 }: Props) {
-  const [state, dispatch] = useReducer(
-    reducer,
-    initialState ?? defaultCanvasState(),
-    hydrateCanvasState,
-  )
+  const [history, dispatch] = useReducer(historyReducer, initialState, initHistory)
+  const state = history.present
+  const canUndo = history.past.length > 0
+  const canRedo = history.future.length > 0
+
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [savedAt, setSavedAt] = useState<string | null>(null)
+  const [savedAt, setSavedAt] = useState<Date | null>(null)
   const [isSaving, startSave] = useTransition()
+  const [isAutoSaving, setIsAutoSaving] = useState(false)
   const stageWrapper = useRef<HTMLDivElement>(null)
+
+  // Snapshot da última versão persistida — usado para detectar dirty state.
+  const lastSavedRef = useRef<string>(JSON.stringify(state))
 
   const selected = state.elements.find(e => e.id === selectedId) ?? null
 
-  // ── Handlers de drag/resize do stage ───────────────────────────────────────
+  const currentJson = JSON.stringify(state)
+  const isDirty = currentJson !== lastSavedRef.current
+
+  // ── Handlers de mutação ────────────────────────────────────────────────────
 
   const handleElementChange = useCallback((id: string, patch: Partial<CanvasElement>) => {
     dispatch({ type: 'patch', id, patch })
@@ -132,17 +195,31 @@ export default function CanvasEditor({
     dispatch({ type: 'move_z', id: selectedId, dir })
   }, [selectedId])
 
+  /** Pintar rápido: aplica cor no elemento selecionado de forma kind-aware:
+   *  - line → color da linha
+   *  - text/dynamic_tag/repeater → background do bloco
+   *  - image/dynamic_image → background do bloco (envelope visual) */
+  const handleQuickPaint = useCallback((color: string) => {
+    if (!selected) return
+    if (selected.kind === 'line') {
+      dispatch({ type: 'patch', id: selected.id, patch: { color } as Partial<CanvasElement> })
+    } else {
+      dispatch({
+        type: 'patch', id: selected.id,
+        patch: { block: { ...(selected.block ?? {}), backgroundColor: color } } as Partial<CanvasElement>,
+      })
+    }
+  }, [selected])
+
   // ── Upload helpers ─────────────────────────────────────────────────────────
 
   async function handleUploadBackground(file: File): Promise<{ url: string }> {
     const { upload_url, storage_path } = await getBackgroundUploadUrl(file.name)
     const put = await fetch(upload_url, {
-      method: 'PUT',
-      body: file,
+      method: 'PUT', body: file,
       headers: { 'Content-Type': file.type || 'application/octet-stream' },
     })
     if (!put.ok) throw new Error(`upload bg falhou (${put.status})`)
-    // Só agora — pós-PUT — o objeto existe e a signed read URL pode ser gerada.
     const { signed_read_url } = await getBackgroundReadUrl(storage_path)
     return { url: signed_read_url }
   }
@@ -150,8 +227,7 @@ export default function CanvasEditor({
   async function handleUploadImage(file: File): Promise<{ url: string; storagePath: string }> {
     const { upload_url, storage_path } = await getCanvasImageUploadUrl(file.name)
     const put = await fetch(upload_url, {
-      method: 'PUT',
-      body: file,
+      method: 'PUT', body: file,
       headers: { 'Content-Type': file.type || 'application/octet-stream' },
     })
     if (!put.ok) throw new Error(`upload imagem falhou (${put.status})`)
@@ -161,18 +237,88 @@ export default function CanvasEditor({
 
   // ── Save ───────────────────────────────────────────────────────────────────
 
+  const persist = useCallback(async (snapshot: CanvasState, json: string): Promise<void> => {
+    await updateTemplateCanvasState({ template_id: templateId, canvas_state: snapshot })
+    lastSavedRef.current = json
+    setSavedAt(new Date())
+  }, [templateId])
+
   function handleSave() {
     setError(null)
+    const snapshot = state
+    const json = currentJson
     startSave(async () => {
       try {
-        await updateTemplateCanvasState({ template_id: templateId, canvas_state: state })
-        setSavedAt(new Date().toLocaleTimeString('pt-BR'))
+        await persist(snapshot, json)
         onSaved?.()
       } catch (e: any) {
         setError(e?.message ?? 'falha ao salvar')
       }
     })
   }
+
+  // ── Auto-save a cada 60s (não dispara se nada mudou) ───────────────────────
+
+  useEffect(() => {
+    const id = window.setInterval(async () => {
+      // Não executa se já está salvando manualmente ou se nada mudou.
+      const snapshot = state
+      const json = JSON.stringify(snapshot)
+      if (json === lastSavedRef.current) return
+      if (isSaving || isAutoSaving) return
+      setIsAutoSaving(true)
+      try {
+        await persist(snapshot, json)
+      } catch (e) {
+        // Falha silenciosa no auto-save — não derruba o editor.
+        console.warn('[canva] auto-save falhou:', e)
+      } finally {
+        setIsAutoSaving(false)
+      }
+    }, 60_000)
+    return () => window.clearInterval(id)
+  }, [state, isSaving, isAutoSaving, persist])
+
+  // ── Atalhos de teclado: Ctrl+Z / Ctrl+Shift+Z / Ctrl+S ─────────────────────
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const mod = e.ctrlKey || e.metaKey
+      if (!mod) return
+      const k = e.key.toLowerCase()
+      // Ignora atalhos quando foco está num input editável
+      const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase()
+      const inEditable = tag === 'input' || tag === 'textarea' || (e.target as HTMLElement | null)?.isContentEditable
+      if (inEditable && k !== 's') return
+
+      if (k === 'z' && !e.shiftKey) { e.preventDefault(); dispatch({ type: 'undo' }) }
+      else if ((k === 'z' && e.shiftKey) || k === 'y') { e.preventDefault(); dispatch({ type: 'redo' }) }
+      else if (k === 's') { e.preventDefault(); handleSave() }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state, currentJson])
+
+  // ── Aviso antes de fechar a aba com mudanças não salvas ────────────────────
+
+  useEffect(() => {
+    function beforeUnload(e: BeforeUnloadEvent) {
+      if (isDirty) { e.preventDefault(); e.returnValue = '' }
+    }
+    window.addEventListener('beforeunload', beforeUnload)
+    return () => window.removeEventListener('beforeunload', beforeUnload)
+  }, [isDirty])
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+
+  const status: { label: string; tone: 'idle' | 'saving' | 'dirty' | 'saved' } = isSaving || isAutoSaving
+    ? { label: isAutoSaving ? 'Salvando automaticamente…' : 'Salvando…', tone: 'saving' }
+    : isDirty
+      ? { label: 'Alterações não salvas', tone: 'dirty' }
+      : savedAt
+        ? { label: `Salvo às ${savedAt.toLocaleTimeString('pt-BR')}`, tone: 'saved' }
+        : { label: 'Pronto para editar', tone: 'idle' }
 
   return (
     <div className="fixed inset-0 z-50 flex items-stretch bg-slate-900/40 backdrop-blur-sm">
@@ -187,10 +333,35 @@ export default function CanvasEditor({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {savedAt && <span className="text-xs text-emerald-600">Salvo às {savedAt}</span>}
+            <button
+              onClick={() => dispatch({ type: 'undo' })}
+              disabled={!canUndo}
+              title="Desfazer (Ctrl+Z)"
+              className="flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Undo2 className="w-3.5 h-3.5" /> Desfazer
+            </button>
+            <button
+              onClick={() => dispatch({ type: 'redo' })}
+              disabled={!canRedo}
+              title="Refazer (Ctrl+Shift+Z)"
+              className="flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Redo2 className="w-3.5 h-3.5" /> Refazer
+            </button>
+            <QuickPaint
+              disabled={!selected}
+              currentColor={
+                selected?.kind === 'line'
+                  ? (selected.color ?? '#0f172a')
+                  : (selected?.block?.backgroundColor ?? '#ffffff')
+              }
+              onPick={handleQuickPaint}
+            />
+            <StatusPill {...status} />
             <button
               onClick={handleSave}
-              disabled={isSaving}
+              disabled={isSaving || !isDirty}
               className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
             >
               {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -238,7 +409,7 @@ export default function CanvasEditor({
                 onElementChange={handleElementChange}
               />
               <p className="mt-3 text-center text-[11px] text-slate-500">
-                {state.elements.length} elemento{state.elements.length === 1 ? '' : 's'} · drag para mover, alças para redimensionar
+                {state.elements.length} elemento{state.elements.length === 1 ? '' : 's'} · drag para mover, alças para redimensionar · auto-save a cada 1 min
               </p>
             </div>
           </main>
@@ -252,5 +423,49 @@ export default function CanvasEditor({
         </div>
       </div>
     </div>
+  )
+}
+
+// ── Sub-components ───────────────────────────────────────────────────────────
+
+function QuickPaint({
+  disabled, currentColor, onPick,
+}: {
+  disabled: boolean
+  currentColor: string
+  onPick: (color: string) => void
+}) {
+  return (
+    <label
+      title={disabled ? 'Selecione um elemento para pintar' : 'Pintar elemento selecionado'}
+      className={`flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs ${
+        disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:bg-slate-100'
+      }`}
+    >
+      <Paintbrush className="w-3.5 h-3.5 text-slate-700" />
+      <span className="text-slate-700">Pintar</span>
+      <input
+        type="color"
+        disabled={disabled}
+        value={currentColor.startsWith('#') ? currentColor.slice(0, 7) : '#ffffff'}
+        onChange={e => onPick(e.target.value)}
+        className="h-4 w-5 cursor-pointer border-0 bg-transparent p-0"
+      />
+    </label>
+  )
+}
+
+function StatusPill({ label, tone }: { label: string; tone: 'idle' | 'saving' | 'dirty' | 'saved' }) {
+  const cls = {
+    idle:   'bg-slate-100 text-slate-600',
+    saving: 'bg-amber-50 text-amber-700',
+    dirty:  'bg-orange-50 text-orange-700',
+    saved:  'bg-emerald-50 text-emerald-700',
+  }[tone]
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${cls}`}>
+      {tone === 'saving' && <Loader2 className="w-3 h-3 animate-spin" />}
+      {label}
+    </span>
   )
 }

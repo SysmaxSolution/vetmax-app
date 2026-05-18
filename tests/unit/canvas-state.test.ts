@@ -112,11 +112,25 @@ describe('elements factories', () => {
     expect(e.kind).toBe('dynamic_tag')
   })
 
-  it('makeRepeaterElement de prescriptions usa template completo', () => {
+  it('makeRepeaterElement de prescriptions traz template + agrupamento clínico', () => {
     const e = makeRepeaterElement('prescriptions')
     expect(e.source).toBe('prescriptions')
-    expect(e.itemTemplate).toBe('{{name}} — {{posology}}')
+    // Schema da tabela prescriptions: medication, dose, frequency, duration_days, route_of_administration
+    expect(e.itemTemplate).toContain('{{medication}}')
+    expect(e.itemTemplate).toContain('{{dose}}')
+    expect(e.itemTemplate).toContain('{{frequency}}')
     expect(e.groupAndEnumerate).toBe(true)
+    // Agrupamento por via de administração + destaque de controlados
+    expect(e.groupBy).toBe('route_of_administration')
+    expect(e.highlightField).toBe('is_controlled')
+    expect(e.highlightColor).toBe('#dbeafe')  // azul receituário
+    expect(e.highlightBadge).toBeTruthy()
+  })
+
+  it('makeRepeaterElement de outros sources não traz config de prescrição', () => {
+    const e = makeRepeaterElement('exam_items')
+    expect(e.groupBy).toBeUndefined()
+    expect(e.highlightField).toBeUndefined()
   })
 
   it('IDs são únicos entre chamadas', () => {
