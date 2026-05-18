@@ -125,11 +125,31 @@ function EventDot({ type }: { type: TimelineEvent['type'] }) {
     hospitalization_evolution:{ bg: 'bg-orange-500',  icon: '🏥' },
     grooming_evolution:       { bg: 'bg-teal-500',    icon: '✂️' },
     whatsapp_notification:    { bg: 'bg-green-500',   icon: '📱' },
+    petlove_event:            { bg: 'bg-purple-500',  icon: '🐾' },
   }[type]
   if (!cfg) return <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-sm shadow-sm ring-2 ring-white bg-slate-400">❓</div>
   return (
     <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-sm shadow-sm ring-2 ring-white ${cfg.bg}`}>
       {cfg.icon}
+    </div>
+  )
+}
+
+function PetloveEventCard({ event }: { event: TimelineEvent }) {
+  const d = event.petlove_event!
+  const labels: Record<string, string> = {
+    patient_created: 'Cadastro via Convênio',
+    plan_updated:    'Plano atualizado',
+    price_updated:   'Preço atualizado',
+    entry_created:   'Título financeiro lançado',
+  }
+  return (
+    <div className="rounded-xl border border-purple-200 bg-purple-50 px-4 py-3">
+      <div className="flex items-center justify-between mb-1">
+        <p className="text-xs font-bold text-purple-700 uppercase tracking-wide">{labels[d.event_type] ?? 'Convênio'}</p>
+        <span className="text-[10px] text-purple-500">{new Date(event.date).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+      </div>
+      <p className="text-sm text-purple-900 break-words">{d.description}</p>
     </div>
   )
 }
@@ -947,6 +967,7 @@ export default function PetTimeline({ events, packageMap = {}, onPrint, onEdit, 
                       {event.type === 'hospitalization_evolution' && <HospitalizationEvolutionCard event={event} />}
                       {event.type === 'grooming_evolution'        && <GroomingEvolutionCard event={event} />}
                       {event.type === 'whatsapp_notification'     && <WhatsAppNotificationCard event={event} />}
+                      {event.type === 'petlove_event'             && <PetloveEventCard event={event} />}
                     </div>
                   </div>
                 </div>

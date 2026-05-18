@@ -19,6 +19,7 @@ export type TimelineEventType =
   | 'hospitalization_evolution'
   | 'grooming_evolution'
   | 'whatsapp_notification'
+  | 'petlove_event'
 
 export interface TimelineEvent {
   id: string
@@ -102,6 +103,12 @@ export interface TimelineEvent {
     tutor_name:   string | null
     tutor_phone:  string
   }
+  petlove_event?: {
+    id:              string
+    event_type:      'patient_created' | 'plan_updated' | 'price_updated' | 'entry_created'
+    description:     string
+    metadata:        Record<string, unknown>
+  }
 }
 
 // Ordem para mesmo timestamp (DESC)
@@ -117,6 +124,7 @@ const SORT_ORDER: Record<TimelineEventType, number> = {
   hospitalization_evolution: 7,
   grooming_evolution:        7.5,
   whatsapp_notification:     8,
+  petlove_event:             9,
 }
 
 // ─── Server Action ────────────────────────────────────────────────────────────
@@ -456,6 +464,28 @@ export async function getPetTimeline(
           reason:   appt.reason,
           status:   appt.status as 'scheduled' | 'confirmed',
           notes:    appt.notes,
+        },
+      })
+    }
+
+    // 10. Eventos da conciliação de convênio (Petlove)
+    const { data: petloveEvents } = await supabase
+      .from('patient_petlove_history')
+      .select('id, event_type, description, metadata, created_at')
+      .eq('patient_id', petId)
+      .eq('clinic_id', clinicId)
+      .order('created_at', { ascending: false })
+
+    for (const ev of petloveEvents ?? []) {
+      events.push({
+        id:   `petlove-${ev.id}`,
+        type: 'petlove_event',
+        date: ev.created_at,
+        petlove_event: {
+          id:          ev.id,
+          event_type:  ev.event_type as 'patient_created' | 'plan_updated' | 'price_updated' | 'entry_created',
+          description: ev.description,
+          metadata:    (ev.metadata as Record<string, unknown>) ?? {},
         },
       })
     }
