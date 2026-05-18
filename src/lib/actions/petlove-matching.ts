@@ -607,6 +607,30 @@ export async function bulkCreatePatientsFromPetlove(
         result.created_pet_insurance++
       }
 
+      // ─── Log no histórico: pet cadastrado via importação Petlove ──────────
+      // Resiliente: cada bulk register dispara o evento, independente de quem chamou.
+      try {
+        // Pega nome do convênio para a mensagem
+        const { data: prov } = await supabase
+          .from('insurance_providers').select('name').eq('id', providerId).maybeSingle()
+        const provName = prov?.name ?? 'Petlove'
+        await supabase.from('patient_petlove_history').insert({
+          clinic_id:     clinicId,
+          patient_id:    newPatient.id,
+          remittance_id: line.remittance_id,
+          event_type:    'patient_created',
+          description:   `Pet cadastrado via importação de convênio: ${provName} (plano ${line.plan_name_raw ?? '—'})`,
+          metadata:      {
+            provider_name: provName,
+            plan_name:     line.plan_name_raw,
+            microchip:     chip,
+            from_line_id:  line.id,
+          },
+        })
+      } catch {
+        // não bloqueia o bulk se o log falhar
+      }
+
       // ─── Atualiza TODAS as linhas (desta remessa) do mesmo pet ─────────────
       const orMatch = chip
         ? `microchip_raw.eq.${chip},microchip_raw.eq.#${chip}`

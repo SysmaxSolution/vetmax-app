@@ -14,6 +14,8 @@ import SMSConsentToggle from '@/components/reception/SMSConsentToggle'
 import { getPatientVaccines, type PatientVaccine } from '@/lib/actions/vaccines'
 import { getInsuranceProviders, type InsuranceProvider } from '@/lib/actions/insurance-providers'
 import { getPetInsurance, upsertPetInsurance, removePetInsurance, type PetInsurance } from '@/lib/actions/pet-insurance'
+import { getCustomPricesForPatient, getPetlovePatientHistory, type PatientCustomPrice, type PetlovePatientHistoryEvent } from '@/lib/actions/patient-custom-prices'
+import { PawPrint, Pin, History, UserPlus, ArrowRight, DollarSign, Receipt } from 'lucide-react'
 import VaccinationCard from '@/components/vet/VaccinationCard'
 import { BehaviorTagsSelector } from '@/components/ui/BehaviorTagsBadges'
 import { BreedCombobox } from '@/components/ui/BreedCombobox'
@@ -301,6 +303,10 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
   const [insCoverage,      setInsCoverage]      = useState<'active' | 'suspended' | 'cancelled'>('active')
   const selectedProvider = providers.find(p => p.id === insProviderId)
 
+  // ── Preços do Convênio + Histórico Petlove (carregados junto com convenio) ──
+  const [customPrices,    setCustomPrices]    = useState<PatientCustomPrice[] | null>(null)
+  const [petloveHistory,  setPetloveHistory]  = useState<PetlovePatientHistoryEvent[] | null>(null)
+
   // ── Documentos ──
   const [attachments,       setAttachments]      = useState<Attachment[] | null>(null)
   const [loadingDocs,       setLoadingDocs]      = useState(false)
@@ -438,6 +444,16 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
           setInsCoverage(res.coverage_status)
         }
         setLoadingInsurance(false)
+      })
+    }
+    if (customPrices === null) {
+      getCustomPricesForPatient(patId).then(res => {
+        setCustomPrices(Array.isArray(res) ? res : [])
+      })
+    }
+    if (petloveHistory === null) {
+      getPetlovePatientHistory(patId).then(res => {
+        setPetloveHistory(Array.isArray(res) ? res : [])
       })
     }
   }, [tab, createdPatientId]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -1240,6 +1256,75 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                             <Trash2 className="h-4 w-4" /> Remover
                           </button>
                         )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Preços fixados do convênio para este pet (patient_custom_prices) ── */}
+                  {currentInsurance && customPrices && customPrices.length > 0 && (
+                    <div className="bg-purple-50/60 rounded-2xl border border-purple-200 overflow-hidden">
+                      <header className="px-5 py-3 border-b border-purple-200 flex items-center justify-between">
+                        <h3 className="text-xs font-black text-purple-900 uppercase tracking-wider flex items-center gap-2">
+                          <PawPrint className="h-4 w-4" />
+                          Preços do Convênio fixados neste pet
+                        </h3>
+                        <span className="text-[10px] text-purple-500">{customPrices.length} procedimento{customPrices.length !== 1 ? 's' : ''}</span>
+                      </header>
+                      <div className="divide-y divide-purple-100 max-h-72 overflow-y-auto">
+                        {customPrices.map(p => (
+                          <div key={p.id} className="px-5 py-2.5 flex items-center justify-between gap-3">
+                            <div className="min-w-0 flex items-center gap-2">
+                              <Pin className="h-3 w-3 text-emerald-600 flex-shrink-0" />
+                              <div className="min-w-0">
+                                <p className="text-xs font-bold text-purple-900 truncate">{p.stock_item_name}</p>
+                                <p className="text-[10px] text-purple-500">{p.provider_name ?? 'Convênio'} · {p.observation_count} ocorrência{p.observation_count !== 1 ? 's' : ''}</p>
+                              </div>
+                            </div>
+                            <span className="text-sm font-black text-emerald-700 tabular-nums flex-shrink-0">
+                              {p.custom_price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      <footer className="px-5 py-2 bg-purple-100/60 text-[10px] text-purple-600">
+                        Valor sugerido automaticamente no próximo atendimento (último realizado pela planilha).
+                      </footer>
+                    </div>
+                  )}
+
+                  {/* ── Histórico Petlove (eventos da conciliação) ── */}
+                  {petloveHistory && petloveHistory.length > 0 && (
+                    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                      <header className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+                        <h3 className="text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                          <History className="h-4 w-4" />
+                          Histórico do Convênio
+                        </h3>
+                        <span className="text-[10px] text-slate-400">{petloveHistory.length} evento{petloveHistory.length !== 1 ? 's' : ''}</span>
+                      </header>
+                      <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto">
+                        {petloveHistory.map(e => {
+                          const map = {
+                            patient_created: { Icon: UserPlus,    cls: 'bg-purple-100 text-purple-700' },
+                            plan_updated:    { Icon: ArrowRight,  cls: 'bg-blue-100 text-blue-700' },
+                            price_updated:   { Icon: DollarSign,  cls: 'bg-amber-100 text-amber-700' },
+                            entry_created:   { Icon: Receipt,     cls: 'bg-emerald-100 text-emerald-700' },
+                          } as const
+                          const { Icon, cls } = map[e.event_type] ?? map.entry_created
+                          const d = new Date(e.created_at)
+                          const stamp = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+                          return (
+                            <div key={e.id} className="px-5 py-2.5 flex items-start gap-3">
+                              <span className={`inline-flex items-center justify-center w-6 h-6 rounded-md flex-shrink-0 mt-0.5 ${cls}`}>
+                                <Icon className="h-3 w-3" />
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-medium text-slate-800 break-words">{e.description}</p>
+                                <p className="text-[10px] text-slate-400 mt-0.5">{stamp}</p>
+                              </div>
+                            </div>
+                          )
+                        })}
                       </div>
                     </div>
                   )}

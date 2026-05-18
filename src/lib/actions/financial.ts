@@ -1070,7 +1070,10 @@ export async function getExtrato(
   const total_entradas = statements.filter(s => s.type === 'credit').reduce((acc, s) => acc + s.amount, 0)
   const total_saidas   = statements.filter(s => s.type === 'debit').reduce((acc, s) => acc + s.amount, 0)
 
-  // Busca initial_balance da conta e soma transações anteriores ao período
+  // Busca initial_balance + created_at do banco para aplicar a regra correta:
+  //   - Se start_date < created_at do banco: banco não existia → saldo_inicial = 0
+  //   - Se start_date >= created_at: aplica initial_balance + statements anteriores
+  // Isso garante que meses anteriores à criação do banco não herdam o saldo inicial.
   const [prevRes, bankRes] = await Promise.all([
     admin
       .from('bank_statements')
@@ -1080,13 +1083,20 @@ export async function getExtrato(
       .lt('date', filters.start_date),
     admin
       .from('bank_accounts')
-      .select('initial_balance')
+      .select('initial_balance, created_at')
       .eq('id', filters.bank_account_id)
       .eq('clinic_id', clinicId)
       .single(),
   ])
 
-  const baseBalance  = Number(bankRes.data?.initial_balance ?? 0)
+  // created_at é timestamptz; extrai só a parte de data (YYYY-MM-DD)
+  const bankCreatedDate = bankRes.data?.created_at
+    ? new Date(bankRes.data.created_at).toISOString().slice(0, 10)
+    : null
+
+  const periodStartsBeforeBankExisted = bankCreatedDate !== null && filters.start_date < bankCreatedDate
+
+  const baseBalance  = periodStartsBeforeBankExisted ? 0 : Number(bankRes.data?.initial_balance ?? 0)
   const saldo_inicial = baseBalance + (prevRes.data ?? []).reduce((acc, s) => {
     return acc + (s.type === 'credit' ? Number(s.amount) : -Number(s.amount))
   }, 0)
