@@ -51,15 +51,26 @@ function extractText(buffer: Buffer): string {
 }
 
 describe('wrapKnownTags', () => {
-  it('envolve tag conhecida com delimitadores', () => {
+  it('envolve tag conhecida com delimitadores duplos', () => {
     const { wrapped, found } = wrapKnownTags('Tutor: Custom_tutor — Pet: Custom_patient')
     expect(found).toBe(true)
-    expect(wrapped).toBe('Tutor: {Custom_tutor} — Pet: {Custom_patient}')
+    expect(wrapped).toBe('Tutor: {{Custom_tutor}} — Pet: {{Custom_patient}}')
   })
 
-  it('deduplica duplicatas consecutivas', () => {
+  it('idempotente: nao re-envolve tags que ja tem {{...}}', () => {
+    const { wrapped, found } = wrapKnownTags('Pet: {{Custom_patient}}')
+    expect(found).toBe(true)
+    expect(wrapped).toBe('Pet: {{Custom_patient}}')
+  })
+
+  it('mix: tags com e sem delim no mesmo paragrafo', () => {
+    const { wrapped } = wrapKnownTags('{{Custom_tutor}} | Custom_patient')
+    expect(wrapped).toBe('{{Custom_tutor}} | {{Custom_patient}}')
+  })
+
+  it('duas tags adjacentes sem delim viram duas tags com delim', () => {
     const { wrapped } = wrapKnownTags('Custom_patientCustom_patient')
-    expect(wrapped).toBe('{Custom_patient}')
+    expect(wrapped).toBe('{{Custom_patient}}{{Custom_patient}}')
   })
 
   it('nao envolve texto desconhecido', () => {
@@ -69,23 +80,22 @@ describe('wrapKnownTags', () => {
   })
 
   it('prefere tag mais longa em colisao de prefixo', () => {
-    // Medicamento1_posologia e prefixo de... nada na lista, mas testa robustez
     const { wrapped } = wrapKnownTags('Medicamento1_posologia: 1cp/12h')
-    expect(wrapped).toContain('{Medicamento1_posologia}')
+    expect(wrapped).toContain('{{Medicamento1_posologia}}')
   })
 })
 
 describe('preprocessDocxBuffer', () => {
-  it('injeta delimitadores em paragrafo simples', () => {
+  it('injeta delimitadores duplos em paragrafo simples', () => {
     const buf = makeDocx(
       `<w:p><w:r><w:t>Pet: Custom_patient</w:t></w:r></w:p>`,
     )
     const out = preprocessDocxBuffer(buf)
     const text = extractText(out)
-    expect(text).toBe('Pet: {Custom_patient}')
+    expect(text).toBe('Pet: {{Custom_patient}}')
   })
 
-  it('achata runs fragmentados', () => {
+  it('achata runs fragmentados de tag pura', () => {
     const buf = makeDocx(
       `<w:p>
         <w:r><w:t xml:space="preserve">CRMV: </w:t></w:r>
@@ -95,7 +105,32 @@ describe('preprocessDocxBuffer', () => {
     )
     const out = preprocessDocxBuffer(buf)
     const text = extractText(out)
-    expect(text).toBe('CRMV: {Code_crmv}')
+    expect(text).toBe('CRMV: {{Code_crmv}}')
+  })
+
+  it('achata runs com delimitadores ja fragmentados (mailmerge Word)', () => {
+    // Padrao real AlmaVet: `{{`, `tag`, `}}` em runs diferentes
+    const buf = makeDocx(
+      `<w:p>
+        <w:r><w:t>{{</w:t></w:r>
+        <w:r><w:t>Custom_patient</w:t></w:r>
+        <w:r><w:t>}}</w:t></w:r>
+      </w:p>`,
+    )
+    const out = preprocessDocxBuffer(buf)
+    const text = extractText(out)
+    expect(text).toBe('{{Custom_patient}}')
+  })
+
+  it('idempotente: documento ja com {{tag}} nao recebe wrap duplo', () => {
+    const buf = makeDocx(
+      `<w:p><w:r><w:t>Pet: {{Custom_patient}}</w:t></w:r></w:p>`,
+    )
+    const out = preprocessDocxBuffer(buf)
+    const text = extractText(out)
+    expect(text).toBe('Pet: {{Custom_patient}}')
+    expect(text).not.toContain('{{{')
+    expect(text).not.toContain('}}}')
   })
 
   it('preserva paragrafos sem tag', () => {
@@ -105,6 +140,20 @@ describe('preprocessDocxBuffer', () => {
     const out = preprocessDocxBuffer(buf)
     const text = extractText(out)
     expect(text).toBe('Texto comum')
+  })
+
+  // ── Bugs reais AlmaVet: Word particionou tag pelo meio com }} no meio ──
+  it.each([
+    ['{{Cidade_da_clinic}}a', '{{Cidade_da_clinica}}'],
+    ['{{Custo}}m_idade', '{{Custom_idade}}'],
+    ['{{ano_}}atendimento', '{{ano_atendimento}}'],
+    ['{{mes_}}atendimento', '{{mes_atendimento}}'],
+    ['{{Medicaments_via}}_uso', '{{Medicaments_via_uso}}'],
+    ['{{D}}ia_atendimento', '{{Dia_atendimento}}'],
+  ])('repara fragmentacao bizarra do Word: %s -> %s', (input, expected) => {
+    const buf = makeDocx(`<w:p><w:r><w:t>${input}</w:t></w:r></w:p>`)
+    const out = preprocessDocxBuffer(buf)
+    expect(extractText(out)).toBe(expected)
   })
 })
 
@@ -134,13 +183,22 @@ describe('renderDocxTemplate', () => {
     expect(extractText(buffer)).toBe('Tutor João | Pet Toby')
   })
 
-  it('substitui tag duplicada (AlmaVet pattern)', () => {
+  it('renderiza template ja mailmerge ({{tag}} nativo) — regressao Duplicate close tag', () => {
+    // Padrao real AlmaVet: documento ja vem com {{Custom_patient}} literal
+    const buf = makeDocx(
+      `<w:p><w:r><w:t>Pet: {{Custom_patient}}</w:t></w:r></w:p>`,
+    )
+    const { buffer } = renderDocxTemplate(buf, { patient_name: 'Toby' })
+    expect(extractText(buffer)).toBe('Pet: Toby')
+  })
+
+  it('renderiza tags adjacentes sem delim como dois valores', () => {
     const buf = makeDocx(
       `<w:p><w:r><w:t>Custom_patientCustom_patient</w:t></w:r></w:p>`,
     )
     const { buffer } = renderDocxTemplate(buf, { patient_name: 'Toby' })
-    // dedup deixa apenas 1 ocorrencia
-    expect(extractText(buffer)).toBe('Toby')
+    // wrap injeta {{Custom_patient}}{{Custom_patient}} → render duplica
+    expect(extractText(buffer)).toBe('TobyToby')
   })
 
   it('valor undefined vira string vazia (default)', () => {
@@ -150,6 +208,14 @@ describe('renderDocxTemplate', () => {
     const { buffer, tagsMissing } = renderDocxTemplate(buf, {})
     expect(extractText(buffer)).toBe('X  Y')
     expect(tagsMissing).toContain('Custom_patient')
+  })
+
+  it('nullStrategy=literal preserva {{tag}} quando sem valor', () => {
+    const buf = makeDocx(
+      `<w:p><w:r><w:t>Pet: Custom_patient</w:t></w:r></w:p>`,
+    )
+    const { buffer } = renderDocxTemplate(buf, {}, { nullStrategy: 'literal' })
+    expect(extractText(buffer)).toBe('Pet: {{Custom_patient}}')
   })
 
   it('acentos PT-BR sao preservados', () => {

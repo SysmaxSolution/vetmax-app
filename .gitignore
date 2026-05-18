@@ -12,6 +12,9 @@ dist/
 # Tokens de sessão dos testes E2E — gerados pelo global-setup, nunca commitar
 tests/.auth/
 
+# Templates DOCX reais de clientes — LGPD, nunca commitar
+scripts/uploaded-*.docx
+scripts/render-real-output.docx
 
 #Ignore vscode AI rules
 .github\instructions\codacy.instructions.md

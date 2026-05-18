@@ -20,6 +20,8 @@ import type {
   LayoutOverlay, PageDimensionsRecord,
 } from '@/types'
 import { uploadTemplatePdf, uploadCleanedPages, getCleanedPagesSignedUrls, getTemplateUploadUrls } from '@/lib/actions/template-storage'
+import { getDocxTemplateUploadUrl, scanDocxTemplate, getDocxTemplatePreviewPdf } from '@/lib/actions/template-docx-storage'
+import type { ScannedTag } from '@/lib/docx/scan-tags'
 import { createClient as createBrowserSupabase } from '@/lib/supabase/client'
 import { previewFilledPdfBase64 } from '@/lib/actions/document-generation'
 import { buildMockFieldValues } from '@/lib/pdf/mock-field-values'
@@ -48,6 +50,10 @@ interface FormState {
   layoutOverlays: LayoutOverlay[] | null
   // Operacao Zero-Touch (migration 0139) — PNGs limpos por pagina
   cleanedPagePaths: string[] | null
+  // Motor docx-native (migration 0157) — docxtemplater + pizzip
+  engine: 'pdf' | 'docx-native'
+  originalDocxPath: string | null
+  docxTags: ScannedTag[] | null
 }
 
 const FIELD_TYPES: FieldType[] = ['text', 'number', 'date', 'select', 'boolean', 'textarea']
@@ -410,12 +416,18 @@ export default function ImportTemplateModal({
     pageDimensions: editTemplate?.page_dimensions ?? null,
     layoutOverlays: editTemplate?.layout_overlays ?? null,
     cleanedPagePaths: editTemplate?.cleaned_page_paths ?? null,
+    engine: (editTemplate?.engine as 'pdf' | 'docx-native') ?? 'pdf',
+    originalDocxPath: editTemplate?.original_docx_path ?? null,
+    docxTags: editTemplate?.docx_tags ?? null,
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [filePreview, setFilePreview] = useState<{ name: string; size: number } | null>(null)
+  // Aviso amigavel para DOCX quando Gotenberg nao gerou preview visual.
+  // Nao bloqueia o save — apenas informa que o layout sera preservado.
+  const [docxPreviewWarning, setDocxPreviewWarning] = useState<string | null>(null)
 
   // Editor state
   const [viewMode, setViewMode] = useState<'preview' | 'layout' | 'fields'>('preview')
@@ -579,34 +591,125 @@ export default function ImportTemplateModal({
     let templateHtmlFallback: string | null = null
     try {
 
-      // IC-23: se for DOCX, converte para PDF (server-side mammoth→HTML,
-      // client-side jsPDF.html). A variavel `workingFile` segue como PDF
-      // do passo da rasterizacao em diante.
+      // Migration 0157: DOCX agora segue o motor docx-native (docxtemplater
+      // + pizzip). O arquivo .docx eh enviado DIRETO ao Storage e as tags
+      // sao escaneadas no server — sem conversao para PDF, sem canvas, sem
+      // pipeline Zero-Touch. Preserva 100% do layout original (margens,
+      // logos, fontes exoticas, posicionamento absoluto).
       let workingFile: File | null = selectedFile
-      if (workingFile && workingFile.name.toLowerCase().endsWith('.docx')) {
+      const isDocxFlow = !!(workingFile && workingFile.name.toLowerCase().endsWith('.docx'))
+      if (isDocxFlow && workingFile) {
         try {
-          console.log('[ImportTemplate] DOCX detectado — convertendo via mammoth + jsPDF...')
+          console.log('[ImportTemplate] DOCX detectado — pipeline docx-native (docxtemplater)')
+
+          // 1) signed upload URL + 2) scan tags  → em paralelo
           const docxFd = new FormData()
           docxFd.append('file', workingFile)
-          const { convertDocxToHtml } = await import('@/lib/actions/docx-convert')
-          const docxRes = await convertDocxToHtml(docxFd)
-          if ('error' in docxRes) {
-            setError('Falha conversao DOCX: ' + docxRes.error)
+          const [urlRes, scanRes] = await Promise.all([
+            getDocxTemplateUploadUrl({}),
+            scanDocxTemplate(docxFd),
+          ])
+
+          if ('error' in urlRes) {
+            setError('Falha gerando upload URL: ' + urlRes.error)
             setLoading(false)
             return
           }
-          console.log(`[ImportTemplate] DOCX → HTML: ${docxRes.html.length} bytes, ${docxRes.placeholders_detected.length} placeholders detectados`)
-          console.log('[ImportTemplate] placeholders:', docxRes.placeholders_detected)
+          if ('error' in scanRes) {
+            setError('Falha escaneando DOCX: ' + scanRes.error)
+            setLoading(false)
+            return
+          }
 
-          const { convertHtmlToPdfFile } = await import('@/lib/pdf/docx-to-pdf')
-          workingFile = await convertHtmlToPdfFile(docxRes.html, workingFile.name)
-          console.log(`[ImportTemplate] HTML → PDF: ${workingFile.size} bytes`)
-          // Atualiza state para o preview
-          setSelectedFile(workingFile)
+          // 3) Upload direto browser -> bucket (sem passar pelo Next.js)
+          const supa = createBrowserSupabase()
+          const up = await supa.storage
+            .from('document-templates')
+            .uploadToSignedUrl(urlRes.docx.path, urlRes.docx.token, workingFile, {
+              contentType:
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            })
+          if (up.error) {
+            setError('Erro upload DOCX: ' + up.error.message)
+            setLoading(false)
+            return
+          }
+
+          console.log(
+            `[ImportTemplate] DOCX -> ${urlRes.docx.path} | tags=${scanRes.tags.length} | unknown=${scanRes.unknownLiterals.length}`,
+          )
+          if (scanRes.unknownLiterals.length > 0) {
+            console.warn('[ImportTemplate] placeholders fora da whitelist:', scanRes.unknownLiterals)
+          }
+
+          // 4) Hidrata form. Motor docx-native NAO usa overlays/canvas — o
+          // editor visual nao se aplica; o usuario apenas confirma os
+          // campos detectados (extractedFields) e salva.
+          const fields: ExtractedField[] = scanRes.fields.map((f) => ({
+            field_name: f.field_name,
+            label: f.label,
+            type: f.field_type as ExtractedField['type'],
+            description: f.description || f.label,
+            required: f.is_required,
+          }))
+
+          // 5) Tenta gerar preview visual via Gotenberg (DOCX -> PDF -> PNGs).
+          //    Sem Gotenberg, segue sem preview — o layout original eh
+          //    preservado byte-a-byte no Storage e a clinica vai ver o
+          //    resultado real ao gerar o primeiro documento.
+          let previewImages: string[] | null = null
+          let previewPageCount: number = 1
+          let previewWarning: string | null = null
+          try {
+            const prev = await getDocxTemplatePreviewPdf(urlRes.docx.path)
+            if (prev.ok) {
+              const pdfBlob = new Blob(
+                [Uint8Array.from(atob(prev.pdf_base64), (c) => c.charCodeAt(0))],
+                { type: 'application/pdf' },
+              )
+              const pdfFile = new File([pdfBlob], 'preview.pdf', { type: 'application/pdf' })
+              const r = await pdfToImages(pdfFile, { scale: 150 / 72, previewFormat: 'png' })
+              previewImages = r.images
+              previewPageCount = r.images.length
+              console.log(`[ImportTemplate] preview DOCX -> ${r.images.length} pagina(s)`)
+            } else {
+              previewWarning =
+                prev.reason === 'not_configured'
+                  ? 'Gotenberg nao configurado — preview visual indisponivel. O layout original sera preservado byte-a-byte na geracao.'
+                  : `Preview indisponivel (${prev.reason}): ${prev.detail}. Layout original sera preservado.`
+              console.warn('[ImportTemplate] preview DOCX falhou:', prev)
+            }
+          } catch (pErr) {
+            console.warn('[ImportTemplate] erro inesperado no preview DOCX:', pErr)
+            previewWarning = 'Preview visual indisponivel — layout original sera preservado.'
+          }
+
+          setForm((prev) => ({
+            ...prev,
+            engine: 'docx-native',
+            originalDocxPath: urlRes.docx.path,
+            docxTags: scanRes.tags,
+            extractedFields: fields,
+            // limpa campos do motor PDF para evitar pista falsa no editor
+            originalPdfPath: null,
+            originalPdfSizeBytes: workingFile.size,
+            pageCount: previewPageCount,
+            pageDimensions: null,
+            layoutOverlays: null,
+            cleanedPagePaths: null,
+            pageImages: previewImages,
+            templateHtml: null,
+          }))
+          setDocxPreviewWarning(previewWarning)
+
+          // Pula direto para review — motor docx-native nao tem editor visual
+          setStep('review')
+          setLoading(false)
+          return
         } catch (docxErr) {
           const msg = docxErr instanceof Error ? docxErr.message : String(docxErr)
-          console.error('[ImportTemplate] Erro DOCX→PDF:', msg)
-          setError('Falha ao converter DOCX para PDF: ' + msg)
+          console.error('[ImportTemplate] Erro pipeline docx-native:', msg)
+          setError('Falha no fluxo DOCX: ' + msg)
           setLoading(false)
           return
         }
@@ -1240,6 +1343,10 @@ export default function ImportTemplateModal({
         layout_overlays: overlaysToSave.length > 0 ? overlaysToSave : form.layoutOverlays,
         // Operacao Zero-Touch (migration 0139) — PNGs limpos por pagina
         cleaned_page_paths: form.cleanedPagePaths,
+        // Motor docx-native (migration 0157)
+        engine: form.engine,
+        original_docx_path: form.originalDocxPath,
+        docx_tags: form.docxTags,
       }
 
       const result = isEditMode
@@ -1271,6 +1378,9 @@ export default function ImportTemplateModal({
         page_dimensions: form.pageDimensions,
         layout_overlays: finalLayoutOverlays,
         cleaned_page_paths: form.cleanedPagePaths,
+        engine: form.engine,
+        original_docx_path: form.originalDocxPath,
+        docx_tags: form.docxTags,
         created_at: editTemplate?.created_at ?? new Date().toISOString(),
       })
     } catch (err) {
@@ -1291,7 +1401,10 @@ export default function ImportTemplateModal({
 
   const stepSubtitle = {
     upload: 'Envie um documento de exemplo (PDF, DOCX, imagem) ou crie do zero',
-    review: `${form.extractedFields.length} campos detectados pela IA`,
+    review:
+      form.engine === 'docx-native'
+        ? `${form.extractedFields.length} variaveis extraidas do DOCX`
+        : `${form.extractedFields.length} campos detectados pela IA`,
     adding_field: 'Defina o novo campo manualmente',
     editor: 'Visualize e edite o layout do documento',
   }[step]
@@ -1398,6 +1511,17 @@ export default function ImportTemplateModal({
           {/* ── Step: Review Fields ── */}
           {step === 'review' && (
             <div className="px-6 py-6 space-y-4">
+              {/* Banner informativo do motor docx-native */}
+              {form.engine === 'docx-native' && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  <strong>Motor DOCX nativo:</strong> o arquivo original foi salvo no Storage byte-a-byte.
+                  Variaveis abaixo serao substituidas pelos dados do paciente preservando 100% do layout
+                  (margens, logo, fontes).{' '}
+                  {docxPreviewWarning && (
+                    <span className="block mt-1 text-amber-700">{docxPreviewWarning}</span>
+                  )}
+                </div>
+              )}
               {/* Toolbar: toggle all required + edit layout */}
               {form.extractedFields.length > 0 && (
                 <div className="flex items-center justify-between gap-2">
@@ -1420,22 +1544,31 @@ export default function ImportTemplateModal({
                       </button>
                     )
                   })()}
-                  <button
-                    onClick={() => {
-                      if (form.templateHtml) {
-                        setHtmlSource(form.templateHtml)
-                        setLayoutElements(htmlToLayout(form.templateHtml, form.extractedFields))
-                      } else {
-                        setHtmlSource('')
-                        // Initialize with empty — editor will build defaults from fields
-                        setLayoutElements([])
-                      }
-                      setStep('editor')
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50 transition-colors"
-                  >
-                    <Pencil className="w-3.5 h-3.5" />Editar Layout
-                  </button>
+                  {form.engine === 'docx-native' ? (
+                    <span
+                      className="text-xs text-slate-400"
+                      title="O editor de layout nao se aplica ao motor DOCX nativo — o layout vem do proprio arquivo Word."
+                    >
+                      Layout vem do DOCX
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        if (form.templateHtml) {
+                          setHtmlSource(form.templateHtml)
+                          setLayoutElements(htmlToLayout(form.templateHtml, form.extractedFields))
+                        } else {
+                          setHtmlSource('')
+                          // Initialize with empty — editor will build defaults from fields
+                          setLayoutElements([])
+                        }
+                        setStep('editor')
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50 transition-colors"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />Editar Layout
+                    </button>
+                  )}
                 </div>
               )}
 
