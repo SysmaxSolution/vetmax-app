@@ -48,10 +48,12 @@ export default function CanvasStage({
 
   const isPrint = mode === 'print'
 
+  const pageBg = state.page.backgroundColor || '#fff'
+
   const pageStyle: CSSProperties = isPrint
     ? {
         width: `${pageWcm}cm`, height: `${pageHcm}cm`,
-        position: 'relative', overflow: 'hidden', background: '#fff',
+        position: 'relative', overflow: 'hidden', background: pageBg,
         breakAfter: 'page', pageBreakAfter: 'always',
       }
     : {
@@ -59,7 +61,7 @@ export default function CanvasStage({
         aspectRatio: `${pageWcm} / ${pageHcm}`,
         position: 'relative',
         overflow: 'hidden',
-        background: '#fff',
+        background: pageBg,
         borderRadius: 6,
         boxShadow: '0 4px 24px rgba(15,23,42,.08)',
       }

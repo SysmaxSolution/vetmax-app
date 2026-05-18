@@ -18,6 +18,10 @@ export interface PageConfig {
   margins: { top: number; bottom: number; left: number; right: number }
   /** URL pública/signed do papel timbrado de fundo (opcional). */
   backgroundImageUrl?: string | null
+  /** Cor de fundo da folha. Renderizada ANTES do papel timbrado — funciona
+   *  como base sólida quando não há imagem, ou como tinta translúcida quando
+   *  há (depende da opacidade da cor escolhida). */
+  backgroundColor?: string | null
 }
 
 export interface CanvasState {

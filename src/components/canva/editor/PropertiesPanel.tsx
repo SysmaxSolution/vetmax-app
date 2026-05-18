@@ -30,26 +30,29 @@ interface Props {
 export default function PropertiesPanel({ element, onPatch, onDelete, onMoveZ }: Props) {
   if (!element) {
     return (
-      <aside className="w-[320px] border-l border-slate-200 bg-slate-50 p-4">
-        <div className="rounded-lg border border-dashed border-slate-300 p-6 text-center text-xs text-slate-500">
+      <aside className="min-w-0 overflow-y-auto border-l border-slate-200 bg-slate-50 p-3">
+        <div className="rounded-lg border border-dashed border-slate-300 p-5 text-center text-[11px] text-slate-500">
           Selecione um elemento no canvas para editar suas propriedades.
+          <span className="mt-2 block text-[10px] text-slate-400">
+            Dica: com nada selecionado, o botão Pintar aplica cor na folha inteira.
+          </span>
         </div>
       </aside>
     )
   }
 
   return (
-    <aside className="w-[320px] overflow-y-auto border-l border-slate-200 bg-slate-50 p-4">
-      <header className="mb-3 flex items-center justify-between">
-        <div>
-          <h3 className="text-sm font-semibold text-slate-800 capitalize">
+    <aside className="min-w-0 overflow-y-auto border-l border-slate-200 bg-slate-50 p-3">
+      <header className="mb-2 flex items-center justify-between sticky top-0 -mt-3 -mx-3 px-3 py-2 bg-slate-50 z-10 border-b border-slate-200">
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-slate-800 truncate">
             {kindLabel(element.kind)}
           </h3>
-          <p className="text-[11px] text-slate-500">id: {element.id.slice(-8)}</p>
+          <p className="text-[10px] text-slate-500 truncate">id: {element.id.slice(-8)}</p>
         </div>
         <button
           onClick={onDelete}
-          className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
+          className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 flex-shrink-0"
           title="Excluir elemento"
         >
           <Trash2 className="w-4 h-4" />
@@ -576,12 +579,14 @@ function BlockSection({ element, onPatch }: { element: CanvasElement; onPatch: P
 
 // ── Primitives ───────────────────────────────────────────────────────────────
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, children, defaultOpen = true }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
   return (
-    <section className="mb-4 rounded-xl border border-slate-200 bg-white p-3">
-      <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">{title}</h4>
-      {children}
-    </section>
+    <details open={defaultOpen} className="mb-2 rounded-xl border border-slate-200 bg-white">
+      <summary className="cursor-pointer list-none px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500 hover:text-slate-700 select-none">
+        {title}
+      </summary>
+      <div className="px-3 pb-3 pt-1">{children}</div>
+    </details>
   )
 }
 
@@ -589,14 +594,14 @@ function NumField({
   label, value, step = 1, onChange,
 }: { label: string; value: number; step?: number; onChange: (v: number) => void }) {
   return (
-    <label className="block">
-      <span className="text-[10px] text-slate-600">{label}</span>
+    <label className="block min-w-0">
+      <span className="text-[10px] text-slate-600 truncate block">{label}</span>
       <input
         type="number"
         step={step}
         value={Number.isFinite(value) ? value : 0}
         onChange={e => onChange(parseFloat(e.target.value) || 0)}
-        className="w-full rounded border border-slate-300 px-2 py-1 text-xs tabular-nums"
+        className="w-full min-w-0 rounded border border-slate-300 px-1.5 py-1 text-xs tabular-nums"
       />
     </label>
   )
@@ -604,20 +609,20 @@ function NumField({
 
 function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
-    <label className="block">
-      <span className="text-[10px] text-slate-600">{label}</span>
-      <div className="flex items-center gap-1">
+    <label className="block min-w-0">
+      <span className="text-[10px] text-slate-600 truncate block">{label}</span>
+      <div className="flex items-center gap-1 min-w-0">
         <input
           type="color"
           value={value.startsWith('#') ? value.slice(0, 7) : '#000000'}
           onChange={e => onChange(e.target.value)}
-          className="h-7 w-9 cursor-pointer rounded border border-slate-300"
+          className="h-7 w-8 cursor-pointer rounded border border-slate-300 flex-shrink-0"
         />
         <input
           type="text"
           value={value}
           onChange={e => onChange(e.target.value)}
-          className="flex-1 min-w-0 rounded border border-slate-300 px-2 py-1 text-[10px] font-mono"
+          className="flex-1 min-w-0 rounded border border-slate-300 px-1.5 py-1 text-[10px] font-mono"
         />
       </div>
     </label>

@@ -195,21 +195,24 @@ export default function CanvasEditor({
     dispatch({ type: 'move_z', id: selectedId, dir })
   }, [selectedId])
 
-  /** Pintar rápido: aplica cor no elemento selecionado de forma kind-aware:
-   *  - line → color da linha
-   *  - text/dynamic_tag/repeater → background do bloco
-   *  - image/dynamic_image → background do bloco (envelope visual) */
+  /** Pintar rápido dual-mode:
+   *  - Elemento selecionado: aplica cor kind-aware (line.color / block.backgroundColor)
+   *  - Nada selecionado: pinta a folha inteira (page.backgroundColor),
+   *    cobrindo "qualquer parte do documento" mesmo fora de elementos. */
   const handleQuickPaint = useCallback((color: string) => {
-    if (!selected) return
-    if (selected.kind === 'line') {
-      dispatch({ type: 'patch', id: selected.id, patch: { color } as Partial<CanvasElement> })
+    if (selected) {
+      if (selected.kind === 'line') {
+        dispatch({ type: 'patch', id: selected.id, patch: { color } as Partial<CanvasElement> })
+      } else {
+        dispatch({
+          type: 'patch', id: selected.id,
+          patch: { block: { ...(selected.block ?? {}), backgroundColor: color } } as Partial<CanvasElement>,
+        })
+      }
     } else {
-      dispatch({
-        type: 'patch', id: selected.id,
-        patch: { block: { ...(selected.block ?? {}), backgroundColor: color } } as Partial<CanvasElement>,
-      })
+      dispatch({ type: 'set_page', page: { ...state.page, backgroundColor: color } })
     }
-  }, [selected])
+  }, [selected, state.page])
 
   // ── Upload helpers ─────────────────────────────────────────────────────────
 
@@ -322,49 +325,46 @@ export default function CanvasEditor({
 
   return (
     <div className="fixed inset-0 z-50 flex items-stretch bg-slate-900/40 backdrop-blur-sm">
-      <div className="m-auto flex h-[96vh] w-[min(1480px,98vw)] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
-        {/* Header */}
-        <header className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
-          <div className="flex items-center gap-3">
-            <Sparkles className="w-5 h-5 text-violet-600" />
-            <div>
-              <h2 className="text-base font-semibold text-slate-900">Editor Canvas Visual</h2>
-              <p className="text-xs text-slate-500">{templateName} · motor Canvas Visual (drag&drop)</p>
+      <div className="m-auto flex h-[98vh] w-[min(1600px,99vw)] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+        {/* Header — duas linhas em telas estreitas, uma só em telas largas */}
+        <header className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <Sparkles className="w-5 h-5 text-violet-600 flex-shrink-0" />
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-slate-900 truncate">Editor Canvas Visual</h2>
+              <p className="text-[10px] text-slate-500 truncate">{templateName}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => dispatch({ type: 'undo' })}
-              disabled={!canUndo}
-              title="Desfazer (Ctrl+Z)"
-              className="flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <Undo2 className="w-3.5 h-3.5" /> Desfazer
-            </button>
-            <button
-              onClick={() => dispatch({ type: 'redo' })}
-              disabled={!canRedo}
-              title="Refazer (Ctrl+Shift+Z)"
-              className="flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <Redo2 className="w-3.5 h-3.5" /> Refazer
-            </button>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {/* Grupo: Undo/Redo */}
+            <div className="flex items-center gap-0.5 rounded-lg border border-slate-200 bg-white">
+              <IconHeaderBtn title="Desfazer (Ctrl+Z)" disabled={!canUndo} onClick={() => dispatch({ type: 'undo' })}>
+                <Undo2 className="w-3.5 h-3.5" />
+              </IconHeaderBtn>
+              <IconHeaderBtn title="Refazer (Ctrl+Shift+Z)" disabled={!canRedo} onClick={() => dispatch({ type: 'redo' })}>
+                <Redo2 className="w-3.5 h-3.5" />
+              </IconHeaderBtn>
+            </div>
+
             <QuickPaint
-              disabled={!selected}
               currentColor={
-                selected?.kind === 'line'
-                  ? (selected.color ?? '#0f172a')
-                  : (selected?.block?.backgroundColor ?? '#ffffff')
+                selected
+                  ? (selected.kind === 'line' ? (selected.color ?? '#0f172a') : (selected.block?.backgroundColor ?? '#ffffff'))
+                  : (state.page.backgroundColor ?? '#ffffff')
               }
+              target={selected ? 'element' : 'page'}
               onPick={handleQuickPaint}
             />
+
             <StatusPill {...status} />
+
             <button
               onClick={handleSave}
               disabled={isSaving || !isDirty}
-              className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+              title="Salvar (Ctrl+S)"
+              className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-50"
             >
-              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
               Salvar
             </button>
             {onClose && (
@@ -387,7 +387,7 @@ export default function CanvasEditor({
         />
 
         {/* Body: toolbar | stage | properties */}
-        <div className="grid flex-1 grid-cols-[88px_1fr_320px] overflow-hidden">
+        <div className="grid flex-1 grid-cols-[80px_minmax(0,1fr)_minmax(280px,340px)] overflow-hidden">
           <ElementsToolbar
             onAdd={(element) => { dispatch({ type: 'add', element }); setSelectedId(element.id) }}
             onUploadImage={handleUploadImage}
@@ -429,29 +429,45 @@ export default function CanvasEditor({
 // ── Sub-components ───────────────────────────────────────────────────────────
 
 function QuickPaint({
-  disabled, currentColor, onPick,
+  currentColor, target, onPick,
 }: {
-  disabled: boolean
   currentColor: string
+  target: 'element' | 'page'
   onPick: (color: string) => void
 }) {
+  const label = target === 'element' ? 'Pintar elemento' : 'Pintar página'
   return (
     <label
-      title={disabled ? 'Selecione um elemento para pintar' : 'Pintar elemento selecionado'}
-      className={`flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs ${
-        disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:bg-slate-100'
-      }`}
+      title={target === 'element'
+        ? 'Pinta o elemento selecionado (fundo/cor da linha).'
+        : 'Nada selecionado — pinta a folha inteira. Clique num elemento para pintar apenas ele.'}
+      className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs cursor-pointer hover:bg-slate-50"
     >
-      <Paintbrush className="w-3.5 h-3.5 text-slate-700" />
-      <span className="text-slate-700">Pintar</span>
+      <Paintbrush className={`w-3.5 h-3.5 ${target === 'page' ? 'text-violet-600' : 'text-slate-700'}`} />
+      <span className="text-slate-700">{label}</span>
       <input
         type="color"
-        disabled={disabled}
         value={currentColor.startsWith('#') ? currentColor.slice(0, 7) : '#ffffff'}
         onChange={e => onPick(e.target.value)}
         className="h-4 w-5 cursor-pointer border-0 bg-transparent p-0"
       />
     </label>
+  )
+}
+
+function IconHeaderBtn({
+  children, title, onClick, disabled,
+}: { children: React.ReactNode; title: string; onClick: () => void; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      title={title}
+      onClick={onClick}
+      disabled={disabled}
+      className="flex h-7 w-7 items-center justify-center text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed first:rounded-l-lg last:rounded-r-lg"
+    >
+      {children}
+    </button>
   )
 }
 
