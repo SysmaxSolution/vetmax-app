@@ -16,8 +16,9 @@ import {
 } from 'lucide-react'
 import type {
   CanvasElement, TextElement, ImageElement, LineElement,
-  DynamicTagElement, RepeaterElement, ElementPin,
+  DynamicTagElement, DynamicImageElement, RepeaterElement, ElementPin,
 } from '@/lib/canva/elements'
+import { findImageTag } from '@/lib/canva/dynamic-tags'
 
 interface Props {
   element: CanvasElement | null
@@ -61,11 +62,12 @@ export default function PropertiesPanel({ element, onPatch, onDelete, onMoveZ }:
 
       {element.kind === 'text' && <TextSection element={element} onPatch={onPatch} />}
       {element.kind === 'dynamic_tag' && <DynamicTagSection element={element} onPatch={onPatch} />}
+      {element.kind === 'dynamic_image' && <DynamicImageSection element={element} onPatch={onPatch} />}
       {element.kind === 'repeater' && <RepeaterSection element={element} onPatch={onPatch} />}
       {element.kind === 'image' && <ImageSection element={element} onPatch={onPatch} />}
       {element.kind === 'line' && <LineSection element={element} onPatch={onPatch} />}
 
-      {element.kind !== 'line' && element.kind !== 'image' && (
+      {element.kind !== 'line' && element.kind !== 'image' && element.kind !== 'dynamic_image' && (
         <BlockSection element={element} onPatch={onPatch} />
       )}
     </aside>
@@ -195,6 +197,53 @@ function DynamicTagSection({ element, onPatch }: { element: DynamicTagElement; o
         />
       </label>
       <TypographyControls element={element} onPatch={onPatch} />
+    </Section>
+  )
+}
+
+// ── Section: Dynamic Image (logo, avatar, assinatura) ───────────────────────
+
+function DynamicImageSection({
+  element, onPatch,
+}: { element: DynamicImageElement; onPatch: Props['onPatch'] }) {
+  const def = findImageTag(element.tagId)
+  return (
+    <Section title="Imagem do Banco">
+      <p className="text-[11px] text-slate-500">
+        {def?.label ?? element.tagId}
+      </p>
+      <p className="text-[10px] text-slate-400 mt-0.5">
+        Identificador: <code className="text-violet-700">{element.tagId}</code>
+      </p>
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <label className="block col-span-2">
+          <span className="text-[10px] text-slate-600">Ajuste de imagem</span>
+          <select
+            className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
+            value={element.objectFit ?? 'contain'}
+            onChange={e => onPatch({ objectFit: e.target.value as DynamicImageElement['objectFit'] } as Partial<CanvasElement>)}
+          >
+            <option value="contain">Conter (sem cortar)</option>
+            <option value="cover">Cobrir (corta excesso)</option>
+            <option value="fill">Esticar (distorce)</option>
+            <option value="none">Tamanho real</option>
+          </select>
+        </label>
+        <label className="block col-span-2">
+          <span className="text-[10px] text-slate-600">Texto se imagem não cadastrada</span>
+          <input
+            className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
+            value={element.fallbackText ?? ''}
+            placeholder='ex: "Logo da Clínica"'
+            onChange={e => onPatch({ fallbackText: e.target.value } as Partial<CanvasElement>)}
+          />
+        </label>
+      </div>
+      <div className="mt-2 rounded bg-violet-50 border border-violet-200 px-2 py-1.5 text-[10px] text-violet-700 leading-snug">
+        {def?.group === 'clinica'
+          ? 'Cadastre o logo em Gestão > Aparência ou Gestão > Clínica.'
+          : 'Cadastre foto/assinatura em Gestão > Usuários > Editar perfil.'}
+      </div>
     </Section>
   )
 }
@@ -492,10 +541,11 @@ function ToggleBtn({
 
 function kindLabel(k: CanvasElement['kind']): string {
   switch (k) {
-    case 'text':         return 'Texto'
-    case 'image':        return 'Imagem'
-    case 'line':         return 'Linha'
-    case 'dynamic_tag':  return 'Tag Dinâmica'
-    case 'repeater':     return 'Lista Repetível'
+    case 'text':           return 'Texto'
+    case 'image':          return 'Imagem'
+    case 'line':           return 'Linha'
+    case 'dynamic_tag':    return 'Tag Dinâmica'
+    case 'dynamic_image':  return 'Imagem do Banco'
+    case 'repeater':       return 'Lista Repetível'
   }
 }

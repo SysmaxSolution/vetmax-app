@@ -14,15 +14,17 @@
 import { useRef, useState } from 'react'
 import {
   Type, Image as ImageIcon, Minus, Loader2,
-  Tag as TagIcon, ListOrdered, AlignLeft,
+  Tag as TagIcon, ListOrdered, AlignLeft, Stamp,
 } from 'lucide-react'
-import { tagsByGroup, type DynamicTagDef } from '@/lib/canva/dynamic-tags'
+import {
+  tagsByGroup, imageTagsByGroup, type DynamicTagDef, type DynamicImageTagDef,
+} from '@/lib/canva/dynamic-tags'
 import type {
   CanvasElement, LineElement, RepeaterSource,
 } from '@/lib/canva/elements'
 import {
   makeTextElement, makeImageElement, makeLineElement,
-  makeDynamicTagElement, makeRepeaterElement,
+  makeDynamicTagElement, makeDynamicImageElement, makeRepeaterElement,
 } from '@/lib/canva/elements'
 
 interface Props {
@@ -32,6 +34,7 @@ interface Props {
 
 export default function ElementsToolbar({ onAdd, onUploadImage }: Props) {
   const [openTags, setOpenTags] = useState(false)
+  const [openImages, setOpenImages] = useState(false)
   const [openRepeater, setOpenRepeater] = useState(false)
   const [uploading, setUploading] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
@@ -77,6 +80,14 @@ export default function ElementsToolbar({ onAdd, onUploadImage }: Props) {
         trigger={<ToolButton icon={<TagIcon className="w-5 h-5" />} label="Tags Dinâmicas" />}
       >
         <TagsCatalog onPick={(tag) => { onAdd(makeDynamicTagElement(tag.id)); setOpenTags(false) }} />
+      </Popover>
+
+      <Popover
+        open={openImages}
+        onOpenChange={setOpenImages}
+        trigger={<ToolButton icon={<Stamp className="w-5 h-5" />} label="Imagens do Banco" />}
+      >
+        <ImagesCatalog onPick={(tag) => { onAdd(makeDynamicImageElement(tag.id)); setOpenImages(false) }} />
       </Popover>
 
       <Popover
@@ -167,6 +178,37 @@ function TagsCatalog({ onPick }: { onPick: (tag: DynamicTagDef) => void }) {
               >
                 <span>{t.label}</span>
                 <span className="text-[10px] text-slate-400">{t.preview}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  )
+}
+
+function ImagesCatalog({ onPick }: { onPick: (tag: DynamicImageTagDef) => void }) {
+  const groups = imageTagsByGroup()
+  return (
+    <div className="p-2">
+      <header className="px-2 py-1.5">
+        <h4 className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Imagens do Banco</h4>
+        <p className="text-[10px] text-slate-400 mt-0.5">Resolvidas em tempo de impressão</p>
+      </header>
+      {groups.map(g => (
+        <section key={g.group} className="mb-2">
+          <h5 className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+            {g.label}
+          </h5>
+          <div className="grid grid-cols-1 gap-0.5">
+            {g.tags.map(t => (
+              <button
+                key={t.id}
+                onClick={() => onPick(t)}
+                className="flex items-center justify-between rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-700"
+              >
+                <span>{t.label}</span>
+                <code className="text-[9px] text-slate-400 font-mono">{`{{${t.id}}}`}</code>
               </button>
             ))}
           </div>

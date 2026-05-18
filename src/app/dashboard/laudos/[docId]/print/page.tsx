@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { loadCanvaPatientDocument } from '@/lib/actions/canva-templates'
 import LaudoPrintable from '@/components/canva/LaudoPrintable'
+import { buildResolveContext } from '@/lib/canva/resolve-context'
 
 interface Props {
   params: Promise<{ docId: string }>
@@ -20,54 +21,22 @@ export default async function PrintLaudoPage({ params, searchParams }: Props) {
 
   const { data: doc } = await supabase
     .from('patient_documents')
-    .select('patient_id, consultation_id')
+    .select('patient_id, consultation_id, clinic_id')
     .eq('id', docId)
     .single()
 
-  let patientName: string | undefined
-  let species: string | undefined
-  let breed: string | undefined
-  let sex: string | undefined
-  let vetName: string | undefined
-  let crmv: string | undefined
-
-  if (doc) {
-    const [{ data: p }, { data: c }] = await Promise.all([
-      supabase.from('patients').select('name, species, breed, sex').eq('id', doc.patient_id).single(),
-      supabase.from('consultations').select('professional_id').eq('id', doc.consultation_id).single(),
-    ])
-    patientName = p?.name ?? undefined
-    species = p?.species ?? undefined
-    breed = p?.breed ?? undefined
-    sex = p?.sex ?? undefined
-
-    if (c?.professional_id) {
-      const { data: prof } = await supabase
-        .from('profiles')
-        .select('full_name, crmv')
-        .eq('id', c.professional_id)
-        .single()
-      vetName = prof?.full_name ?? undefined
-      crmv = prof?.crmv ?? undefined
-    }
-  }
+  const resolveContext = doc
+    ? await buildResolveContext(supabase, doc.clinic_id, doc.patient_id, doc.consultation_id)
+    : {}
 
   const patient = {
-    patient_name: patientName,
-    species,
-    breed,
-    sex,
-    date: new Date().toLocaleDateString('pt-BR'),
-    vet_name: vetName,
-    crmv,
-  }
-
-  // Contexto para resolver Dynamic Tags do Canvas Visual (quando o template
-  // tem canvas_state — o motor visual lê tutor/pet/consulta/vet via path).
-  const resolveContext = {
-    patient: { name: patientName, species, breed, sex },
-    consultation: { date: new Date().toLocaleDateString('pt-BR') },
-    vet: { full_name: vetName, crmv },
+    patient_name: (resolveContext.patient as any)?.name,
+    species:      (resolveContext.patient as any)?.species,
+    breed:        (resolveContext.patient as any)?.breed,
+    sex:          (resolveContext.patient as any)?.sex,
+    date:         new Date().toLocaleDateString('pt-BR'),
+    vet_name:     (resolveContext.vet as any)?.full_name,
+    crmv:         (resolveContext.vet as any)?.crmv,
   }
 
   return (

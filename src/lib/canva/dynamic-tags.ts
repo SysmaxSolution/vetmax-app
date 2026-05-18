@@ -45,14 +45,23 @@ export const DYNAMIC_TAGS: DynamicTagDef[] = [
   { id: 'consulta.complaint', label: 'Queixa Principal',    group: 'consulta', path: 'consultation.complaint',    preview: 'Tosse seca há 3 dias' },
 
   // ── Clínica ──────────────────────────────────────────────────────────────
-  { id: 'clinica.name',    label: 'Nome da Clínica',    group: 'clinica', path: 'clinic.name',    preview: 'AlmaVet' },
-  { id: 'clinica.cnpj',    label: 'CNPJ',               group: 'clinica', path: 'clinic.cnpj',    preview: '12.345.678/0001-90' },
-  { id: 'clinica.phone',   label: 'Telefone',           group: 'clinica', path: 'clinic.phone',   format: 'phone_br', preview: '(11) 3333-4444' },
-  { id: 'clinica.address', label: 'Endereço',           group: 'clinica', path: 'clinic.address', preview: 'Av. Paulista, 1000' },
+  { id: 'clinica.name',          label: 'Nome',               group: 'clinica', path: 'clinic.name',                              preview: 'AlmaVet' },
+  { id: 'clinica.cnpj',          label: 'CNPJ',               group: 'clinica', path: 'clinic.cnpj',                              preview: '12.345.678/0001-90' },
+  { id: 'clinica.phone',         label: 'Telefone',           group: 'clinica', path: 'clinic.phone',         format: 'phone_br', preview: '(11) 3333-4444' },
+  { id: 'clinica.address',       label: 'Endereço',           group: 'clinica', path: 'clinic.address',                           preview: 'Av. Paulista, 1000' },
+  { id: 'clinica.business_type', label: 'Tipo de Negócio',    group: 'clinica', path: 'clinic.business_type_label',               preview: 'Clínica Veterinária' },
+  { id: 'clinica.business_hours',label: 'Horário de Funcionamento', group: 'clinica', path: 'clinic.business_hours_label',         preview: 'Seg–Sex 08:00–18:00 · Sáb 08:00–12:00' },
+  { id: 'clinica.razao_social',  label: 'Razão Social',       group: 'clinica', path: 'clinic.razao_social',                      preview: 'AlmaVet Veterinária Ltda' },
 
-  // ── Médico Veterinário ───────────────────────────────────────────────────
-  { id: 'vet.name',  label: 'Nome do MV',  group: 'vet', path: 'vet.full_name', preview: 'Dra. Laís Silva' },
-  { id: 'vet.crmv',  label: 'CRMV',        group: 'vet', path: 'vet.crmv',      preview: 'CRMV-SP 12345' },
+  // ── Médico Veterinário / Usuário ─────────────────────────────────────────
+  { id: 'vet.name',       label: 'Nome do MV',         group: 'vet', path: 'vet.full_name',     preview: 'Dra. Laís Silva' },
+  { id: 'vet.nickname',   label: 'Apelido',            group: 'vet', path: 'vet.nickname',      preview: 'Dra. Laís' },
+  { id: 'vet.role',       label: 'Cargo',              group: 'vet', path: 'vet.role_label',    preview: 'Médica Veterinária' },
+  { id: 'vet.crmv',       label: 'CRMV',               group: 'vet', path: 'vet.crmv',          preview: 'CRMV-SP 12345' },
+  { id: 'vet.specialty',  label: 'Especialidade',      group: 'vet', path: 'vet.specialty',     preview: 'Cardiologia' },
+  { id: 'vet.phone',      label: 'Telefone',           group: 'vet', path: 'vet.phone',         format: 'phone_br', preview: '(11) 97777-6666' },
+  { id: 'vet.mapa_code',  label: 'Código MAPA',        group: 'vet', path: 'vet.mapa_code',     preview: 'SP-12345' },
+  { id: 'vet.username',   label: 'Usuário (login)',    group: 'vet', path: 'vet.username',      preview: 'lais.silva' },
 ]
 
 export const TAG_GROUP_LABEL: Record<TagGroup, string> = {
@@ -74,6 +83,47 @@ export function tagsByGroup(): Array<{ group: TagGroup; label: string; tags: Dyn
 
 export function findTag(id: string): DynamicTagDef | undefined {
   return DYNAMIC_TAGS.find(t => t.id === id)
+}
+
+// ── Dynamic IMAGES (logo, foto, assinatura) ──────────────────────────────────
+
+export type ImageTagGroup = 'clinica' | 'vet'
+
+export interface DynamicImageTagDef {
+  id: string
+  label: string
+  group: ImageTagGroup
+  /** Caminho que resolve para uma URL absoluta no contexto. */
+  path: string
+  /** Preview no editor quando context é mock. */
+  previewUrl?: string
+}
+
+export const DYNAMIC_IMAGE_TAGS: DynamicImageTagDef[] = [
+  { id: 'clinic.logo',      label: 'Logo da Clínica',           group: 'clinica', path: 'clinic.logo_url' },
+  { id: 'vet.photo',        label: 'Foto do MV (avatar)',       group: 'vet',     path: 'vet.photo_url' },
+  { id: 'vet.signature',    label: 'Assinatura Eletrônica',     group: 'vet',     path: 'vet.electronic_signature_url' },
+]
+
+export function findImageTag(id: string): DynamicImageTagDef | undefined {
+  return DYNAMIC_IMAGE_TAGS.find(t => t.id === id)
+}
+
+export function imageTagsByGroup(): Array<{ group: ImageTagGroup; label: string; tags: DynamicImageTagDef[] }> {
+  const groups: ImageTagGroup[] = ['clinica', 'vet']
+  return groups.map(g => ({
+    group: g,
+    label: TAG_GROUP_LABEL[g],
+    tags: DYNAMIC_IMAGE_TAGS.filter(t => t.group === g),
+  }))
+}
+
+export function resolveImageTagUrl(tagId: string, ctx: ResolveContext): string | null {
+  const def = findImageTag(tagId)
+  if (!def) return null
+  const v = getPath(ctx, def.path)
+  if (typeof v === 'string' && v.trim()) return v
+  return null
 }
 
 // ── Resolução em runtime ─────────────────────────────────────────────────────

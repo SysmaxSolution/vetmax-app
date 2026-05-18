@@ -8,7 +8,7 @@
  * Print fidelity: editor e LaudoPrintable consomem a MESMA estrutura.
  */
 
-export type ElementKind = 'text' | 'image' | 'line' | 'dynamic_tag' | 'repeater'
+export type ElementKind = 'text' | 'image' | 'line' | 'dynamic_tag' | 'dynamic_image' | 'repeater'
 
 /** Posição/tamanho em % do canvas (0-100). 0/0 = canto superior esquerdo. */
 export interface ElementBox {
@@ -91,6 +91,20 @@ export interface DynamicTagElement extends ElementCommon {
   fallback?: string
 }
 
+/**
+ * Imagem vinda do banco (logo da clínica, foto do MV, assinatura eletrônica).
+ * Diferente de ImageElement (URL fixa), DynamicImageElement resolve a URL
+ * em tempo de impressão a partir do tagId (catálogo DYNAMIC_IMAGE_TAGS).
+ */
+export interface DynamicImageElement extends ElementCommon {
+  kind: 'dynamic_image'
+  tagId: string              // chave do catálogo DYNAMIC_IMAGE_TAGS
+  alt?: string
+  objectFit?: 'cover' | 'contain' | 'fill' | 'none'
+  /** Mostrado quando a URL não resolve (clínica sem logo, vet sem assinatura). */
+  fallbackText?: string
+}
+
 /** Repeater — agrupamento dinâmico (medicações, exames, etc.).
  *  Renderiza source array linha-a-linha respeitando container.
  */
@@ -113,6 +127,7 @@ export type CanvasElement =
   | ImageElement
   | LineElement
   | DynamicTagElement
+  | DynamicImageElement
   | RepeaterElement
 
 // ── Factory helpers ──────────────────────────────────────────────────────────
@@ -180,6 +195,17 @@ export function makeDynamicTagElement(tagId: string): DynamicTagElement {
     box: { ...DEFAULT_BOX },
     tagId,
     typography: { ...DEFAULT_TYPOGRAPHY },
+    zIndex: 1,
+  }
+}
+
+export function makeDynamicImageElement(tagId: string): DynamicImageElement {
+  return {
+    id: nextElementId('dynamic_image'),
+    kind: 'dynamic_image',
+    box: { x: 5, y: 3, w: 18, h: 8 },  // logo no canto sup. esq. por default
+    tagId,
+    objectFit: 'contain',
     zIndex: 1,
   }
 }

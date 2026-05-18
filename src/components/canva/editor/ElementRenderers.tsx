@@ -10,9 +10,13 @@
 import type { CSSProperties } from 'react'
 import type {
   CanvasElement, TextElement, ImageElement, LineElement,
-  DynamicTagElement, RepeaterElement, TypographyStyle, BlockStyle,
+  DynamicTagElement, DynamicImageElement, RepeaterElement,
+  TypographyStyle, BlockStyle,
 } from '@/lib/canva/elements'
-import { resolveTagValue, type ResolveContext } from '@/lib/canva/dynamic-tags'
+import {
+  resolveTagValue, resolveImageTagUrl, findImageTag,
+  type ResolveContext,
+} from '@/lib/canva/dynamic-tags'
 
 // ── Estilo helpers ───────────────────────────────────────────────────────────
 
@@ -66,11 +70,12 @@ interface RenderProps {
 
 export function ElementRenderer({ element, ctx, isPrint }: RenderProps) {
   switch (element.kind) {
-    case 'text':         return <TextRenderer        e={element} isPrint={isPrint} />
-    case 'image':        return <ImageRenderer       e={element} isPrint={isPrint} />
-    case 'line':         return <LineRenderer        e={element} />
-    case 'dynamic_tag':  return <DynamicTagRenderer  e={element} ctx={ctx} isPrint={isPrint} />
-    case 'repeater':     return <RepeaterRenderer    e={element} ctx={ctx} isPrint={isPrint} />
+    case 'text':           return <TextRenderer          e={element} isPrint={isPrint} />
+    case 'image':          return <ImageRenderer         e={element} isPrint={isPrint} />
+    case 'line':           return <LineRenderer          e={element} />
+    case 'dynamic_tag':    return <DynamicTagRenderer    e={element} ctx={ctx} isPrint={isPrint} />
+    case 'dynamic_image':  return <DynamicImageRenderer  e={element} ctx={ctx} isPrint={isPrint} />
+    case 'repeater':       return <RepeaterRenderer      e={element} ctx={ctx} isPrint={isPrint} />
   }
 }
 
@@ -160,6 +165,56 @@ function DynamicTagRenderer({ e, ctx, isPrint }: { e: DynamicTagElement; ctx?: R
         color: isUnresolved ? '#7c3aed' : undefined,
       }}>{text}</span>
     </div>
+  )
+}
+
+function DynamicImageRenderer({ e, ctx, isPrint }: { e: DynamicImageElement; ctx?: ResolveContext; isPrint?: boolean }) {
+  const url = ctx ? resolveImageTagUrl(e.tagId, ctx) : null
+  const def = findImageTag(e.tagId)
+  const label = def?.label ?? e.tagId
+
+  if (!url) {
+    if (isPrint) {
+      // Em impressão: mostra fallback de texto OU vazio (não desenha placeholder)
+      if (!e.fallbackText) return <div style={{ width: '100%', height: '100%' }} />
+      return (
+        <div style={{
+          width: '100%', height: '100%',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: '9pt', color: '#94a3b8',
+        }}>{e.fallbackText}</div>
+      )
+    }
+    // No editor: placeholder visual instrutivo
+    return (
+      <div style={{
+        width: '100%', height: '100%',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        background: 'rgba(124,58,237,0.06)',
+        border: '1px dashed rgba(124,58,237,0.5)', borderRadius: 6,
+        color: '#7c3aed', fontSize: 10, padding: 4, textAlign: 'center',
+      }}>
+        <strong style={{ fontSize: 11 }}>{label}</strong>
+        <span style={{ fontSize: 9, opacity: 0.7 }}>{`{{${e.tagId}}}`}</span>
+        <span style={{ fontSize: 8, marginTop: 2, opacity: 0.6 }}>
+          Cadastre em Gestão {'>'} {def?.group === 'clinica' ? 'Aparência/Clínica' : 'Usuários'}
+        </span>
+      </div>
+    )
+  }
+
+  return (
+    <img
+      src={url}
+      alt={e.alt ?? label}
+      draggable={false}
+      style={{
+        width: '100%', height: '100%',
+        objectFit: e.objectFit ?? 'contain',
+        userSelect: 'none', pointerEvents: 'none',
+        ...blockToCss(e.block),
+      }}
+    />
   )
 }
 
