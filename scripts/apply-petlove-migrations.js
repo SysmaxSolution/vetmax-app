@@ -28,6 +28,7 @@ const MIGRATIONS = [
   '0165_financial_entries_petlove_source.sql',
   '0166_patient_custom_prices.sql',
   '0167_petlove_match_status_fix.sql',
+  '0168_patient_petlove_history.sql',
 ]
 
 async function run() {

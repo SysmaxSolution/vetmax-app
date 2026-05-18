@@ -216,6 +216,33 @@ export async function applyReconciliation(
     errors:                      [],
   }
 
+  // ─── Conta bancária default para liquidação ──────────────────────────────
+  // Todos os entries gerados pela conciliação Petlove são automaticamente
+  // marcados como liquidados na conta default. Bank_statements crédito são
+  // criados para que apareçam no Extrato.
+  const { data: defaultBank } = await supabase
+    .from('bank_accounts')
+    .select('id, name')
+    .eq('clinic_id', clinicId)
+    .eq('is_default', true)
+    .maybeSingle()
+
+  // Fallback: pega a primeira conta cadastrada se não houver default explícita
+  let bankAccountId = defaultBank?.id ?? null
+  if (!bankAccountId) {
+    const { data: anyBank } = await supabase
+      .from('bank_accounts')
+      .select('id')
+      .eq('clinic_id', clinicId)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle()
+    bankAccountId = anyBank?.id ?? null
+  }
+  if (!bankAccountId) {
+    result.errors.push('Nenhuma conta bancária cadastrada — entries serão criados sem vínculo bancário. Cadastre uma conta padrão em Financeiro > Cadastros > Bancos.')
+  }
+
   // ─── Pipeline autônomo: matching → bulk register → re-matching ───────────
   // Roda SEMPRE matching (idempotente — só atualiza o que mudou). Em seguida,
   // pets órfãos viram cadastros via bulk register e o matching reroda.
@@ -247,11 +274,28 @@ export async function applyReconciliation(
   // Carrega linhas FINAIS (após pipeline)
   const { data: lines, error: linesErr } = await supabase
     .from('petlove_remittance_lines')
-    .select('id, match_status, matched_invoice_item_id, matched_patient_id, matched_tutor_id, repass_value, coparticipation_value, procedure_name_raw, plan_name_raw, service_date, external_appointment_id, microchip_raw')
+    .select('id, match_status, matched_invoice_item_id, matched_patient_id, matched_tutor_id, repass_value, coparticipation_value, procedure_name_raw, plan_name_raw, service_date, external_appointment_id, microchip_raw, pet_name_raw, tutor_name_raw')
     .eq('clinic_id', clinicId)
     .eq('remittance_id', remittanceId)
   if (linesErr) return { error: linesErr.message }
   if (!lines || lines.length === 0) return { error: 'Remessa sem linhas para conciliar.' }
+
+  // Log de auto-criação de pets (issue 3: histórico no perfil)
+  if (result.auto_created_patients > 0) {
+    const newPatientIds = Array.from(new Set(
+      lines.filter(l => l.match_status === 'manual_resolved' && l.matched_patient_id).map(l => l.matched_patient_id!)
+    ))
+    for (const pid of newPatientIds) {
+      await supabase.from('patient_petlove_history').insert({
+        clinic_id:     clinicId,
+        patient_id:    pid,
+        remittance_id: remittanceId,
+        event_type:    'patient_created',
+        description:   `Cadastro criado automaticamente via remessa #${rem.remittance_number}`,
+        metadata:      { remittance_number: rem.remittance_number },
+      })
+    }
+  }
 
   // ─── Lookup: procedure_name_raw → stock_item_id (via mappings + auto-create) ─
   //
@@ -324,6 +368,86 @@ export async function applyReconciliation(
     if (stockItemId) mappingByName.set(name, stockItemId)
   }
 
+  // ─── Helper: cria entry + bank_statement + log de histórico ──────────────
+  async function insertPetloveEntry(opts: {
+    type: 'receivable' | 'payable'
+    description: string
+    amount: number
+    due_date: string
+    payment_date: string
+    source: 'petlove' | 'petlove_indicacao'
+    category: string
+    tutor_id: string | null
+    patient_id: string | null
+    notes: string
+    line_id: string | null
+  }): Promise<{ id: string } | null> {
+    const { data: fe, error: feErr } = await supabase
+      .from('financial_entries')
+      .insert({
+        clinic_id:          clinicId,
+        type:               opts.type,
+        description:        opts.description,
+        amount:             opts.amount,
+        due_date:           opts.due_date,
+        payment_date:       opts.payment_date,
+        status:             'paid',
+        source:             opts.source,
+        category:           opts.category,
+        tutor_id:           opts.tutor_id,
+        patient_id:         opts.patient_id,
+        settlement_bank_id: bankAccountId,
+        notes:              opts.notes,
+        created_by:         userId,
+      })
+      .select('id, document_number')
+      .single()
+    if (feErr || !fe) {
+      result.errors.push(`Entry: ${feErr?.message ?? 'falha'}`)
+      return null
+    }
+
+    // Lança no extrato bancário se houver conta
+    if (bankAccountId) {
+      await supabase.from('bank_statements').insert({
+        clinic_id:           clinicId,
+        bank_account_id:     bankAccountId,
+        date:                opts.payment_date,
+        amount:              opts.amount,
+        description:         opts.description,
+        type:                opts.type === 'receivable' ? 'credit' : 'debit',
+        reconciled_entry_id: fe.id,
+        import_batch_id:     remittanceId,
+      })
+    }
+
+    // Log no histórico do pet
+    if (opts.patient_id) {
+      await supabase.from('patient_petlove_history').insert({
+        clinic_id:     clinicId,
+        patient_id:    opts.patient_id,
+        remittance_id: remittanceId,
+        event_type:    'entry_created',
+        description:   `${opts.description} — ${opts.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`,
+        metadata:      { financial_entry_id: fe.id, source: opts.source, line_id: opts.line_id },
+      })
+    }
+
+    return { id: fe.id }
+  }
+
+  // ─── Helper: descrição com pet + tutor ────────────────────────────────────
+  type LineLike = {
+    pet_name_raw:   string | null
+    tutor_name_raw: string | null
+    service_date:   string
+  }
+  function buildDescription(line: LineLike, procName: string): string {
+    const petName = (line.pet_name_raw ?? '').trim() || '?'
+    const tutorName = (line.tutor_name_raw ?? '').trim() || '?'
+    return `Petlove · ${procName || 'Procedimento'} · ${petName} (${tutorName}) · ${fmtDateBR(line.service_date)}`
+  }
+
   // ─── Loop por linha — cada uma vira um título individual ──────────────────
   const nowIso = new Date().toISOString()
 
@@ -376,28 +500,21 @@ export async function applyReconciliation(
         const driftSuffix = hadDrift
           ? ` (ajuste drift: esperado ${expectedValue.toFixed(2)} → realizado ${repass.toFixed(2)})`
           : ''
-        const description = `Petlove · ${procName || 'Procedimento'} · ${fmtDateBR(line.service_date)}${driftSuffix}`
-
-        const { error: feErr } = await supabase
-          .from('financial_entries')
-          .insert({
-            clinic_id:    clinicId,
-            type:         'receivable',
-            description,
-            amount:       repass,
-            due_date:     line.service_date,
-            payment_date: rem.period_end,
-            status:       'paid',
-            source:       'petlove',
-            category:     'Convênios · Petlove',
-            tutor_id:     inv.tutor_id,
-            patient_id:   inv.patient_id,
-            notes:        `Remessa #${rem.remittance_number} · linha ${line.id}${hadDrift ? ` · drift ${(repass - expectedValue).toFixed(2)}` : ''}`,
-            created_by:   userId,
-          })
-        if (feErr) {
-          result.errors.push(`Entry tutor ${inv.tutor_id}: ${feErr.message}`)
-        } else {
+        const description = buildDescription(line, procName) + driftSuffix
+        const fe = await insertPetloveEntry({
+          type:         'receivable',
+          description,
+          amount:       repass,
+          due_date:     line.service_date,
+          payment_date: rem.period_end,
+          source:       'petlove',
+          category:     'Convênios · Petlove',
+          tutor_id:     inv.tutor_id,
+          patient_id:   inv.patient_id,
+          notes:        `Remessa #${rem.remittance_number} · linha ${line.id}${hadDrift ? ` · drift ${(repass - expectedValue).toFixed(2)}` : ''}`,
+          line_id:      line.id,
+        })
+        if (fe) {
           result.individual_entries_created++
           result.total_amount_individual += repass
           if (hadDrift) result.drift_adjusted_entries++
@@ -436,27 +553,21 @@ export async function applyReconciliation(
 
       if (!existing) {
         const isOrphan = line.match_status === 'orphan_invoice'
-        const description = `Petlove · ${procName || 'Procedimento'} · ${fmtDateBR(line.service_date)}${isOrphan ? ' (lançamento retroativo)' : ''}`
-        const { error: feErr } = await supabase
-          .from('financial_entries')
-          .insert({
-            clinic_id:    clinicId,
-            type:         'receivable',
-            description,
-            amount:       repass > 0 ? repass : 0.01,
-            due_date:     line.service_date,
-            payment_date: rem.period_end,
-            status:       'paid',
-            source:       'petlove',
-            category:     'Convênios · Petlove',
-            tutor_id:     line.matched_tutor_id,
-            patient_id:   line.matched_patient_id,
-            notes:        `Remessa #${rem.remittance_number} · linha ${line.id}${isOrphan ? ' · sem invoice_item prévio' : ' · pet criado via bulk register'}`,
-            created_by:   userId,
-          })
-        if (feErr) {
-          result.errors.push(`Entry tutor ${line.matched_tutor_id}: ${feErr.message}`)
-        } else {
+        const description = buildDescription(line, procName) + (isOrphan ? ' (retroativo)' : '')
+        const fe = await insertPetloveEntry({
+          type:         'receivable',
+          description,
+          amount:       repass > 0 ? repass : 0.01,
+          due_date:     line.service_date,
+          payment_date: rem.period_end,
+          source:       'petlove',
+          category:     'Convênios · Petlove',
+          tutor_id:     line.matched_tutor_id,
+          patient_id:   line.matched_patient_id,
+          notes:        `Remessa #${rem.remittance_number} · linha ${line.id}${isOrphan ? ' · sem invoice_item prévio' : ' · pet criado via bulk register'}`,
+          line_id:      line.id,
+        })
+        if (fe) {
           result.retroactive_entries_created++
           result.total_amount_individual += repass
         }
@@ -485,23 +596,20 @@ export async function applyReconciliation(
   // ─── Caso 4: títulos AVULSOS (bônus de indicação + ajustes) ──────────────
   const referral = Number(rem.referral_bonus_value) || 0
   if (referral > 0) {
-    const { error: feErr } = await supabase
-      .from('financial_entries')
-      .insert({
-        clinic_id:    clinicId,
-        type:         'receivable',
-        description:  `Petlove · Bônus de Indicação · Remessa #${rem.remittance_number}`,
-        amount:       referral,
-        due_date:     rem.period_end,
-        payment_date: rem.period_end,
-        status:       'paid',
-        source:       'petlove_indicacao',
-        category:     'Convênios · Petlove',
-        notes:        'Receita avulsa: bônus por indicação de novos clientes (não vinculado a atendimento).',
-        created_by:   userId,
-      })
-    if (feErr) result.errors.push(`Bônus indicação: ${feErr.message}`)
-    else {
+    const fe = await insertPetloveEntry({
+      type:         'receivable',
+      description:  `Petlove · Bônus de Indicação · Remessa #${rem.remittance_number}`,
+      amount:       referral,
+      due_date:     rem.period_end,
+      payment_date: rem.period_end,
+      source:       'petlove_indicacao',
+      category:     'Convênios · Petlove',
+      tutor_id:     null,
+      patient_id:   null,
+      notes:        'Receita avulsa: bônus por indicação de novos clientes (não vinculado a atendimento).',
+      line_id:      null,
+    })
+    if (fe) {
       result.standalone_entries_created++
       result.total_amount_standalone += referral
     }
@@ -509,23 +617,20 @@ export async function applyReconciliation(
 
   const credit = Number(rem.credit_adjustment) || 0
   if (credit > 0) {
-    const { error: feErr } = await supabase
-      .from('financial_entries')
-      .insert({
-        clinic_id:    clinicId,
-        type:         'receivable',
-        description:  `Petlove · Ajuste de Crédito · Remessa #${rem.remittance_number}`,
-        amount:       credit,
-        due_date:     rem.period_end,
-        payment_date: rem.period_end,
-        status:       'paid',
-        source:       'petlove',
-        category:     'Convênios · Petlove · Ajustes',
-        notes:        'Receita avulsa: ajuste de crédito informado no cabeçalho da remessa.',
-        created_by:   userId,
-      })
-    if (feErr) result.errors.push(`Ajuste crédito: ${feErr.message}`)
-    else {
+    const fe = await insertPetloveEntry({
+      type:         'receivable',
+      description:  `Petlove · Ajuste de Crédito · Remessa #${rem.remittance_number}`,
+      amount:       credit,
+      due_date:     rem.period_end,
+      payment_date: rem.period_end,
+      source:       'petlove',
+      category:     'Convênios · Petlove · Ajustes',
+      tutor_id:     null,
+      patient_id:   null,
+      notes:        'Receita avulsa: ajuste de crédito informado no cabeçalho da remessa.',
+      line_id:      null,
+    })
+    if (fe) {
       result.standalone_entries_created++
       result.total_amount_standalone += credit
     }
@@ -533,23 +638,20 @@ export async function applyReconciliation(
 
   const debit = Number(rem.debit_adjustment) || 0
   if (debit > 0) {
-    const { error: feErr } = await supabase
-      .from('financial_entries')
-      .insert({
-        clinic_id:    clinicId,
-        type:         'payable',
-        description:  `Petlove · Ajuste de Débito · Remessa #${rem.remittance_number}`,
-        amount:       debit,
-        due_date:     rem.period_end,
-        payment_date: rem.period_end,
-        status:       'paid',
-        source:       'petlove',
-        category:     'Convênios · Petlove · Ajustes',
-        notes:        'Despesa avulsa: ajuste de débito informado no cabeçalho da remessa.',
-        created_by:   userId,
-      })
-    if (feErr) result.errors.push(`Ajuste débito: ${feErr.message}`)
-    else result.standalone_entries_created++
+    const fe = await insertPetloveEntry({
+      type:         'payable',
+      description:  `Petlove · Ajuste de Débito · Remessa #${rem.remittance_number}`,
+      amount:       debit,
+      due_date:     rem.period_end,
+      payment_date: rem.period_end,
+      source:       'petlove',
+      category:     'Convênios · Petlove · Ajustes',
+      tutor_id:     null,
+      patient_id:   null,
+      notes:        'Despesa avulsa: ajuste de débito informado no cabeçalho da remessa.',
+      line_id:      null,
+    })
+    if (fe) result.standalone_entries_created++
   }
 
   // ─── Caso 5: pet_insurance.plan_type — atualiza quando mudou ─────────────
@@ -567,11 +669,23 @@ export async function applyReconciliation(
       .eq('patient_id', patientId)
       .maybeSingle()
     if (existing && existing.plan_type !== planName) {
+      const oldPlan = existing.plan_type
       const { error: updErr } = await supabase
         .from('pet_insurance')
         .update({ plan_type: planName, updated_at: nowIso })
         .eq('id', existing.id)
-      if (!updErr) result.pet_insurance_updated++
+      if (!updErr) {
+        result.pet_insurance_updated++
+        // Log da mudança de plano no histórico do pet
+        await supabase.from('patient_petlove_history').insert({
+          clinic_id:     clinicId,
+          patient_id:    patientId,
+          remittance_id: remittanceId,
+          event_type:    'plan_updated',
+          description:   `Plano atualizado: ${oldPlan} → ${planName}`,
+          metadata:      { old_plan: oldPlan, new_plan: planName, remittance_number: rem.remittance_number },
+        })
+      }
     }
   }
 
@@ -618,6 +732,14 @@ async function upsertCustomPrice(
     .maybeSingle()
 
   if (existing) {
+    // Fetch antigo valor para log
+    const { data: oldRow } = await supabase
+      .from('patient_custom_prices')
+      .select('custom_price')
+      .eq('id', existing.id)
+      .single()
+    const oldPrice = oldRow ? Number(oldRow.custom_price) : null
+
     const { error } = await supabase
       .from('patient_custom_prices')
       .update({
@@ -630,8 +752,25 @@ async function upsertCustomPrice(
         updated_at:         new Date().toISOString(),
       })
       .eq('id', existing.id)
-    if (!error) result.custom_prices_set++
-    else        result.errors.push(`custom_price ${stockItemId}: ${error.message}`)
+    if (!error) {
+      result.custom_prices_set++
+      // Log de mudança de preço (só se valor mudou)
+      if (oldPrice !== null && Math.abs(oldPrice - customPrice) > 0.001) {
+        // Busca nome do item para a descrição
+        const { data: item } = await supabase
+          .from('stock_items').select('name').eq('id', stockItemId).maybeSingle()
+        await supabase.from('patient_petlove_history').insert({
+          clinic_id:     clinicId,
+          patient_id:    patientId,
+          remittance_id: remittanceId,
+          event_type:    'price_updated',
+          description:   `Preço atualizado: ${item?.name ?? 'serviço'}  R$ ${oldPrice.toFixed(2)} → R$ ${customPrice.toFixed(2)}`,
+          metadata:      { stock_item_id: stockItemId, old_price: oldPrice, new_price: customPrice },
+        })
+      }
+    } else {
+      result.errors.push(`custom_price ${stockItemId}: ${error.message}`)
+    }
   } else {
     const { error } = await supabase
       .from('patient_custom_prices')

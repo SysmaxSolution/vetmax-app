@@ -37,6 +37,70 @@ async function getCtx(): Promise<ClinicCtx | { error: string }> {
   return { supabase: admin, clinicId: profile.clinic_id }
 }
 
+// ─── patientHasInsurance ──────────────────────────────────────────────────────
+// Verifica se o pet tem pet_insurance ativo. Usado para mostrar a aba
+// "Preços do Convênio" apenas quando faz sentido.
+export async function patientHasInsurance(patientId: string): Promise<{
+  has_insurance: boolean
+  provider_name: string | null
+  plan_type:     string | null
+} | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+  const { supabase, clinicId } = ctx
+
+  const { data } = await supabase
+    .from('pet_insurance')
+    .select('plan_type, insurance_providers(name)')
+    .eq('clinic_id', clinicId)
+    .eq('patient_id', patientId)
+    .eq('coverage_status', 'active')
+    .maybeSingle()
+
+  if (!data) return { has_insurance: false, provider_name: null, plan_type: null }
+  const provider = data.insurance_providers as unknown as { name: string } | null
+  return {
+    has_insurance: true,
+    provider_name: provider?.name ?? null,
+    plan_type:     data.plan_type ?? null,
+  }
+}
+
+// ─── getPetlovePatientHistory ─────────────────────────────────────────────────
+// Eventos auditáveis vindos da conciliação para este pet.
+export interface PetlovePatientHistoryEvent {
+  id:           string
+  event_type:   'patient_created' | 'plan_updated' | 'price_updated' | 'entry_created'
+  description:  string
+  metadata:     Record<string, unknown>
+  created_at:   string
+}
+
+export async function getPetlovePatientHistory(
+  patientId: string,
+): Promise<PetlovePatientHistoryEvent[] | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+  const { supabase, clinicId } = ctx
+
+  const { data, error } = await supabase
+    .from('patient_petlove_history')
+    .select('id, event_type, description, metadata, created_at')
+    .eq('clinic_id', clinicId)
+    .eq('patient_id', patientId)
+    .order('created_at', { ascending: false })
+    .limit(50)
+
+  if (error) return { error: error.message }
+  return (data ?? []).map(r => ({
+    id:          r.id,
+    event_type:  r.event_type as PetlovePatientHistoryEvent['event_type'],
+    description: r.description,
+    metadata:    (r.metadata as Record<string, unknown>) ?? {},
+    created_at:  r.created_at,
+  }))
+}
+
 // ─── getCustomPricesForPatient ────────────────────────────────────────────────
 // Lê a matriz de preços fixados deste pet. Usado pelo cadastro do pet e por
 // telas que iniciam um novo atendimento (recepção, vet) para sugerir o preço

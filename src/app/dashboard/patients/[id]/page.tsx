@@ -3,7 +3,9 @@ import { redirect, notFound } from 'next/navigation'
 import { getPatientById } from '@/lib/actions/timeline'
 import { getPatientVaccines } from '@/lib/actions/vaccines'
 import { getPetlovePriceHistoryForPet } from '@/lib/actions/petlove-import'
+import { patientHasInsurance, getPetlovePatientHistory } from '@/lib/actions/patient-custom-prices'
 import PetlovePriceHistory from '@/components/pet/PetlovePriceHistory'
+import PetlovePatientHistory from '@/components/pet/PetlovePatientHistory'
 import Link from 'next/link'
 import {
   ArrowLeft, PawPrint, User, Syringe, Calendar,
@@ -25,10 +27,12 @@ export default async function PatientProfilePage({ params }: { params: { id: str
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const [patientResult, vaccinesResult, petloveResult] = await Promise.all([
+  const [patientResult, vaccinesResult, petloveResult, insuranceResult, historyResult] = await Promise.all([
     getPatientById(params.id),
     getPatientVaccines(params.id),
     getPetlovePriceHistoryForPet(params.id),
+    patientHasInsurance(params.id),
+    getPetlovePatientHistory(params.id),
   ])
 
   if ('error' in patientResult) notFound()
@@ -36,6 +40,8 @@ export default async function PatientProfilePage({ params }: { params: { id: str
   const patient  = patientResult
   const vaccines = Array.isArray(vaccinesResult) ? vaccinesResult : []
   const petlovePrices = Array.isArray(petloveResult) ? petloveResult : []
+  const insurance = 'error' in insuranceResult ? null : insuranceResult
+  const petloveHistory = Array.isArray(historyResult) ? historyResult : []
   const today    = new Date().toISOString().split('T')[0]
 
   const overdue  = vaccines.filter(v => v.next_due_date && v.next_due_date < today)
@@ -169,8 +175,13 @@ export default async function PatientProfilePage({ params }: { params: { id: str
           )}
         </div>
 
-        {/* Tabela de Preços Históricos Petlove */}
-        <PetlovePriceHistory items={petlovePrices} />
+        {/* Aba/Seção Preços do Convênio — só aparece se o pet tem vínculo ativo */}
+        {insurance?.has_insurance && (
+          <PetlovePriceHistory items={petlovePrices} />
+        )}
+
+        {/* Histórico Petlove — eventos de conciliação (cadastro, plano, preço, título) */}
+        <PetlovePatientHistory events={petloveHistory} />
 
         {/* Histórico de Vacinas */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
