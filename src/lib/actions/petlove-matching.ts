@@ -227,16 +227,22 @@ export async function runMatchEngine(remittanceId: string): Promise<{ updated: n
     let confidence = 0
     let note: Record<string, unknown> = {}
 
-    if (!patient && nameKey) {
+    // Fallback por nome SÓ se a linha NÃO tem chip.
+    // Se tem chip e não bate, o pet é NOVO (não pode ser confundido com
+    // outro pet de mesmo nome de outro tutor — bug visual relatado pela
+    // Vet Teste: contava 8 a cadastrar mas marcava todos como orphan).
+    if (!patient && !chip && nameKey) {
       const candidates = petsByName.get(nameKey) ?? []
       if (candidates.length === 1) {
         patient = candidates[0]
         confidence = 55
-        note.fallback = 'name_only'
+        note.fallback = 'name_only_no_chip'
       } else if (candidates.length > 1) {
-        // Múltiplos pets com mesmo nome — não usa fallback, marca como missing
         note.ambiguity = `${candidates.length} pets com nome "${line.pet_name_raw}" — adicione microchip ao cadastro`
       }
+    } else if (!patient && chip) {
+      // Chip presente mas não bate → pet é novo, não tenta fallback
+      note.reason_chip = `chip ${chip} não encontrado na clínica`
     }
 
     if (!patient) {

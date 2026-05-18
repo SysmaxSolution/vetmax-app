@@ -11,8 +11,8 @@ export const VETMAX_KNOWLEDGE_BASE = `# VETMAX_KNOWLEDGE_BASE
      Use this file to answer any natural language question about system workflows, module usage,
      UI actions, inter-module relationships, and user tips. -->
 
-**version**: 1.2.0
-**last-updated**: 2026-05-10
+**version**: 1.3.0
+**last-updated**: 2026-05-18
 **scope**: All active VetMax modules — Recepção, Triagem, Consultório, Exames, Internação, Banho & Tosa, Caixa Central, Gestão, Farmácia, Pacientes, WhatsApp, Mentor
 **audience**: Mentor AI, support agents, onboarding staff
 
@@ -856,5 +856,75 @@ A: Sim, o fluxo clínico (recepção, triagem, consultório) funciona independen
 
 ---
 
-*END OF VETMAX_KNOWLEDGE_BASE — Version 1.2.0*
+## MODULE 13 — CONCILIAÇÃO DE CONVÊNIOS (PETLOVE)
+<!-- AI-CONTEXT: Módulo opt-in. Só aparece quando 'petlove_reconciliation' está ativo em Gestão > Acesso. -->
+
+### O que é
+Conciliação de Convênios é a rotina que **importa a planilha mensal da Petlove** (arquivo .xlsx que a Petlove envia para a clínica) e faz automaticamente:
+- Cadastra pets e tutores novos que aparecem na planilha mas não estão no sistema
+- Lança os títulos no Contas a Receber (1 título por procedimento, vinculado ao tutor e ao pet correto)
+- Identifica e ajusta divergências de valor (drift) centavo a centavo
+- Cria os procedimentos no estoque automaticamente (com valor zero — preço real fica por pet)
+- Atualiza o plano do pet quando a planilha indica que mudou ("Leve" → "Ideal" etc)
+- Fixa o preço de cada procedimento por pet (sugerido automaticamente no próximo atendimento)
+- Marca o bônus de indicação Petlove como receita avulsa
+- Cria lançamentos retroativos quando a recepção esqueceu de marcar um atendimento
+
+### Onde encontrar
+**Financeiro › 🐾 Conciliação Petlove** (tab roxa à direita das tabs normais)
+URL direta: \`/dashboard/financial/insurance-reconciliation\`
+
+### Pré-requisitos
+1. Módulo **"Conciliação Petlove"** ativo em Gestão › Configurações › Acesso (toggle protegido por Master Key)
+2. Pelo menos **uma conta bancária** cadastrada em Financeiro › Cadastros › Bancos (de preferência marcada como **padrão**)
+3. Permissão de admin / owner / manager
+
+### Fluxo de uso passo a passo
+1. **Importar a planilha**: arraste o arquivo .xlsx da Petlove na área roxa. Em ~2 segundos, a remessa entra no histórico.
+2. **Revisar**: clique no botão **"Revisar →"** ao lado da remessa importada.
+3. **Conferir os totais**: o painel "Pets na remessa" mostra quantos já cadastrados, quantos a cadastrar e total distinto.
+4. **(Opcional) Mapear procedimentos**: se aparecer banner roxo "Mapeamento Necessário", clique e vincule cada procedimento ao estoque (ou deixe em branco para auto-criar como serviço novo com valor zero).
+5. **Aprovar Conciliação**: clique no botão verde sticky no rodapé (ou ⌘+Enter). O pipeline autônomo executa tudo:
+   - Roda matching de chips e nomes
+   - Cria pets e tutores faltantes em lote (bulk auto-register)
+   - Roda matching de novo
+   - Cria 1 financial_entry individual por linha (vinculado a tutor + pet)
+   - Lança bank_statement na conta padrão (aparece em Extrato)
+   - Fixa patient_custom_prices (1 por pet × procedimento)
+   - Atualiza pet_insurance.plan_type quando mudou
+   - Cria bônus de indicação como título avulso
+6. **Confete** + dialog de sucesso com botões "Ver Títulos em A Receber" e "Voltar para Remessas".
+
+### Onde ver o resultado
+- **Títulos individuais**: Financeiro › Contas a Receber. Descrição inclui pet + tutor, ex: "Petlove · Vacina V10 · Snow (Armando) · 02/03/2026".
+- **Movimentações no Extrato**: Financeiro › Extrato. Selecione a conta bancária padrão e o período.
+- **Pets criados**: Pacientes. Pets criados via importação têm banner amarelo "Cadastro rápido via Petlove" alertando sobre campos faltantes (sexo, data de nascimento, peso). CPF e telefone do tutor recebem placeholder.
+- **Preços fixados por pet**: clique no pet (Editar) → aba **Convênio** (escudo). Mostra bloco roxo "Preços do Convênio fixados neste pet" com cada procedimento e valor.
+- **Histórico do pet**:
+  - No modal Editar → aba Convênio → bloco "Histórico do Convênio"
+  - No Feed do pet (botão verde "Histórico") → cards roxos com 🐾
+
+### Excluir / re-importar
+Botão lixeira ao lado de "Revisar →" abre modal de confirmação. Para remessas conciliadas, apaga em cascade:
+- Os títulos financeiros criados
+- As baixas no extrato bancário
+- Os preços fixados que vieram daquela remessa
+- Os eventos do histórico vinculados
+
+**Pets e tutores criados permanecem** (você editou os dados, não queremos perder isso).
+
+### Bônus de indicação
+Aparece no cabeçalho "Resumo Contas Médicas" da planilha. Vira um título avulso com source='petlove_indicacao' e category='Convênios · Petlove', sem vínculo a pet/tutor específico.
+
+### Limitações conhecidas
+- A planilha não traz sexo, data de nascimento, peso e alergias do pet → cadastros rápidos precisam ser completados na próxima visita
+- O tutor entra sem CPF real (placeholder PL-...) e sem telefone — banner amarelo no perfil avisa
+- Drift de valor acima de 15% é classificado como "Divergência" mas o sistema realiza o ajuste mesmo assim no valor da planilha
+
+### Convênios suportados hoje
+Atualmente apenas **Petlove**. Outros convênios podem ser adicionados estendendo o parser.
+
+---
+
+*END OF VETMAX_KNOWLEDGE_BASE — Version 1.3.0*
 `

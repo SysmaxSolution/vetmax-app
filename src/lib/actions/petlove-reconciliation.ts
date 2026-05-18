@@ -157,6 +157,13 @@ export async function deleteRemittance(
       .eq('last_remittance_id', remittanceId)
     if (cpErr) result.errors.push(`Remover custom_prices: ${cpErr.message}`)
     else result.removed_custom_prices = cpCount ?? 0
+
+    // 1d. patient_petlove_history vinculados a esta remessa
+    await supabase
+      .from('patient_petlove_history')
+      .delete()
+      .eq('clinic_id', clinicId)
+      .eq('remittance_id', remittanceId)
   }
 
   // 2. Conta linhas antes de deletar

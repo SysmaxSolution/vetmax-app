@@ -304,9 +304,31 @@ export default function ReviewDashboard({
             ) : (
               <>
                 <p className="font-semibold text-slate-900">Pronto para aprovar?</p>
-                <p className="text-xs text-slate-600 mt-0.5">
-                  O sistema vai baixar {data.counts.matched} itens casados, sinalizar {data.counts.partial} divergências, criar o título de A Receber em {formatBRL(data.remittance.total_gross_value)} e atualizar planos que mudaram.
-                </p>
+                <div className="text-xs text-slate-700 mt-1 space-y-0.5">
+                  <p>
+                    O sistema vai processar <strong>{data.remittance.lines_total}</strong> linhas
+                    {data.counts.unique_pets_total > 0 && <> de <strong>{data.counts.unique_pets_total}</strong> pets</>}
+                    {' '}totalizando{' '}
+                    <strong className="text-emerald-700">{formatBRL(data.remittance.total_gross_value)}</strong>:
+                  </p>
+                  <ul className="ml-2 text-[11px] text-slate-600 space-y-0.5">
+                    {data.counts.unique_pets_to_register > 0 && (
+                      <li>• <strong>{data.counts.unique_pets_to_register}</strong> pet{data.counts.unique_pets_to_register !== 1 ? 's' : ''} novo{data.counts.unique_pets_to_register !== 1 ? 's' : ''} cadastrado{data.counts.unique_pets_to_register !== 1 ? 's' : ''} automaticamente (com tutor)</li>
+                    )}
+                    <li>• <strong>{data.counts.matched + data.counts.partial + data.counts.orphan_invoice + data.counts.missing_patient_profile}</strong> títulos individuais em A Receber (1 por procedimento)</li>
+                    {data.counts.partial > 0 && (
+                      <li>• <strong>{data.counts.partial}</strong> divergência{data.counts.partial !== 1 ? 's' : ''} de valor (ajuste de drift centavo a centavo)</li>
+                    )}
+                    {data.counts.orphan_invoice > 0 && (
+                      <li>• <strong>{data.counts.orphan_invoice}</strong> lançamento{data.counts.orphan_invoice !== 1 ? 's' : ''} retroativo{data.counts.orphan_invoice !== 1 ? 's' : ''} (Petlove pagou e o sistema não tinha invoice)</li>
+                    )}
+                    <li>• <strong>~{data.remittance.lines_total}</strong> preços fixados nos perfis dos pets</li>
+                    {data.remittance.referral_bonus_value > 0 && (
+                      <li>• Bônus de indicação <strong>{formatBRL(data.remittance.referral_bonus_value)}</strong> como título avulso</li>
+                    )}
+                    <li>• Movimentações registradas no <strong>Extrato bancário</strong> da conta padrão</li>
+                  </ul>
+                </div>
                 {approveError && (
                   <p className="text-xs text-rose-700 mt-1.5 font-medium">❌ {approveError}</p>
                 )}
