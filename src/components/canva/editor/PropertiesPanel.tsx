@@ -16,7 +16,7 @@ import {
 } from 'lucide-react'
 import type {
   CanvasElement, TextElement, ImageElement, LineElement,
-  DynamicTagElement, DynamicImageElement, RepeaterElement, ElementPin,
+  DynamicTagElement, DynamicImageElement, RepeaterElement, BrushStrokeElement, ElementPin,
 } from '@/lib/canva/elements'
 import { findImageTag } from '@/lib/canva/dynamic-tags'
 
@@ -69,11 +69,60 @@ export default function PropertiesPanel({ element, onPatch, onDelete, onMoveZ }:
       {element.kind === 'repeater' && <RepeaterSection element={element} onPatch={onPatch} />}
       {element.kind === 'image' && <ImageSection element={element} onPatch={onPatch} />}
       {element.kind === 'line' && <LineSection element={element} onPatch={onPatch} />}
+      {element.kind === 'brush_stroke' && <BrushStrokeSection element={element} onPatch={onPatch} />}
 
-      {element.kind !== 'line' && element.kind !== 'image' && element.kind !== 'dynamic_image' && (
+      {element.kind !== 'line' && element.kind !== 'image'
+        && element.kind !== 'dynamic_image' && element.kind !== 'brush_stroke' && (
         <BlockSection element={element} onPatch={onPatch} />
       )}
     </aside>
+  )
+}
+
+// ── Section: Brush Stroke ────────────────────────────────────────────────────
+
+function BrushStrokeSection({
+  element, onPatch,
+}: { element: BrushStrokeElement; onPatch: Props['onPatch'] }) {
+  return (
+    <Section title="Pincel">
+      <p className="text-[11px] text-slate-500 mb-2">
+        {element.points.length} pontos · livre
+      </p>
+      <ColorField
+        label="Cor"
+        value={element.strokeColor}
+        onChange={v => onPatch({ strokeColor: v } as Partial<CanvasElement>)}
+      />
+      <div className="mt-2">
+        <label className="block">
+          <span className="flex items-center justify-between text-[10px] text-slate-600">
+            <span>Espessura</span>
+            <span className="tabular-nums font-semibold text-slate-700">{element.strokeWidth}px</span>
+          </span>
+          <input
+            type="range" min={1} max={40} step={1}
+            value={element.strokeWidth}
+            onChange={e => onPatch({ strokeWidth: parseInt(e.target.value, 10) } as Partial<CanvasElement>)}
+            className="canva-slider w-full"
+          />
+        </label>
+      </div>
+      <div className="mt-2">
+        <label className="block">
+          <span className="flex items-center justify-between text-[10px] text-slate-600">
+            <span>Opacidade</span>
+            <span className="tabular-nums font-semibold text-slate-700">{Math.round((element.opacity ?? 1) * 100)}%</span>
+          </span>
+          <input
+            type="range" min={0.1} max={1} step={0.05}
+            value={element.opacity ?? 1}
+            onChange={e => onPatch({ opacity: parseFloat(e.target.value) } as Partial<CanvasElement>)}
+            className="canva-slider w-full"
+          />
+        </label>
+      </div>
+    </Section>
   )
 }
 
@@ -667,5 +716,6 @@ function kindLabel(k: CanvasElement['kind']): string {
     case 'dynamic_tag':    return 'Tag Dinâmica'
     case 'dynamic_image':  return 'Imagem do Banco'
     case 'repeater':       return 'Lista Repetível'
+    case 'brush_stroke':   return 'Pincel'
   }
 }

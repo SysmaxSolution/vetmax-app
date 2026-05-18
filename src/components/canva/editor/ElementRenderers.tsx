@@ -10,7 +10,7 @@
 import type { CSSProperties } from 'react'
 import type {
   CanvasElement, TextElement, ImageElement, LineElement,
-  DynamicTagElement, DynamicImageElement, RepeaterElement,
+  DynamicTagElement, DynamicImageElement, RepeaterElement, BrushStrokeElement,
   TypographyStyle, BlockStyle,
 } from '@/lib/canva/elements'
 import {
@@ -76,7 +76,30 @@ export function ElementRenderer({ element, ctx, isPrint }: RenderProps) {
     case 'dynamic_tag':    return <DynamicTagRenderer    e={element} ctx={ctx} isPrint={isPrint} />
     case 'dynamic_image':  return <DynamicImageRenderer  e={element} ctx={ctx} isPrint={isPrint} />
     case 'repeater':       return <RepeaterRenderer      e={element} ctx={ctx} isPrint={isPrint} />
+    case 'brush_stroke':   return <BrushStrokeFallback   e={element} />
   }
+}
+
+/** Fallback quando um brush_stroke é renderizado fora do BrushLayer
+ *  (ex: print no LaudoPrintable que recebe canvas_state mas não usa stage). */
+function BrushStrokeFallback({ e }: { e: BrushStrokeElement }) {
+  return (
+    <svg
+      viewBox="0 0 100 100"
+      preserveAspectRatio="none"
+      style={{ width: '100%', height: '100%', overflow: 'visible' }}
+    >
+      <polyline
+        points={e.points.map(p => `${p.x},${p.y}`).join(' ')}
+        fill="none"
+        stroke={e.strokeColor}
+        strokeWidth={e.strokeWidth / 10}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        opacity={e.opacity ?? 1}
+      />
+    </svg>
+  )
 }
 
 function TextRenderer({ e, isPrint }: { e: TextElement; isPrint?: boolean }) {

@@ -20,11 +20,12 @@
  */
 
 import { useCallback, useEffect, useReducer, useRef, useState, useTransition } from 'react'
-import { Loader2, Paintbrush, Redo2, Save, Sparkles, Undo2, X } from 'lucide-react'
+import { Loader2, Paintbrush, Redo2, Save, Sparkles, Undo2, X, Eraser } from 'lucide-react'
 import {
   defaultCanvasState, hydrateCanvasState, type CanvasState, type PageConfig,
 } from '@/lib/canva/canvas-state'
 import type { CanvasElement } from '@/lib/canva/elements'
+import { makeBrushStrokeElement } from '@/lib/canva/elements'
 import {
   getBackgroundUploadUrl, getBackgroundReadUrl,
   getCanvasImageUploadUrl, getCanvasImageReadUrl,
@@ -165,6 +166,10 @@ export default function CanvasEditor({
   const [isAutoSaving, setIsAutoSaving] = useState(false)
   const stageWrapper = useRef<HTMLDivElement>(null)
 
+  // Modo Pincel — quando ativo, cliques no canvas pintam traços em vez de
+  // selecionar/arrastar elementos. ESC ou botão "Encerrar" sai.
+  const [brushMode, setBrushMode] = useState<{ color: string; size: number; opacity: number } | null>(null)
+
   // Snapshot da última versão persistida — usado para detectar dirty state.
   const lastSavedRef = useRef<string>(JSON.stringify(state))
 
@@ -195,24 +200,30 @@ export default function CanvasEditor({
     dispatch({ type: 'move_z', id: selectedId, dir })
   }, [selectedId])
 
-  /** Pintar rápido dual-mode:
-   *  - Elemento selecionado: aplica cor kind-aware (line.color / block.backgroundColor)
-   *  - Nada selecionado: pinta a folha inteira (page.backgroundColor),
-   *    cobrindo "qualquer parte do documento" mesmo fora de elementos. */
-  const handleQuickPaint = useCallback((color: string) => {
-    if (selected) {
-      if (selected.kind === 'line') {
-        dispatch({ type: 'patch', id: selected.id, patch: { color } as Partial<CanvasElement> })
-      } else {
-        dispatch({
-          type: 'patch', id: selected.id,
-          patch: { block: { ...(selected.block ?? {}), backgroundColor: color } } as Partial<CanvasElement>,
-        })
-      }
+  /** Pinta apenas o elemento selecionado (kind-aware). Quando nada está
+   *  selecionado, o admin usa o modo Pincel (handle separado) para
+   *  desenhar traços livres, ou o controle "Cor da página" no PageSettings. */
+  const handlePaintSelected = useCallback((color: string) => {
+    if (!selected) return
+    if (selected.kind === 'line') {
+      dispatch({ type: 'patch', id: selected.id, patch: { color } as Partial<CanvasElement> })
     } else {
-      dispatch({ type: 'set_page', page: { ...state.page, backgroundColor: color } })
+      dispatch({
+        type: 'patch', id: selected.id,
+        patch: { block: { ...(selected.block ?? {}), backgroundColor: color } } as Partial<CanvasElement>,
+      })
     }
-  }, [selected, state.page])
+  }, [selected])
+
+  /** Persistir um traço de pincel ao soltar o mouse (vem do CanvasStage). */
+  const handleBrushStrokeComplete = useCallback((
+    points: Array<{ x: number; y: number }>,
+    settings: { color: string; size: number; opacity?: number },
+  ) => {
+    const stroke = makeBrushStrokeElement(points, settings.color, settings.size)
+    if (settings.opacity != null) stroke.opacity = settings.opacity
+    dispatch({ type: 'add', element: stroke })
+  }, [])
 
   // ── Upload helpers ─────────────────────────────────────────────────────────
 
@@ -282,14 +293,19 @@ export default function CanvasEditor({
     return () => window.clearInterval(id)
   }, [state, isSaving, isAutoSaving, persist])
 
-  // ── Atalhos de teclado: Ctrl+Z / Ctrl+Shift+Z / Ctrl+S ─────────────────────
+  // ── Atalhos de teclado: Ctrl+Z / Ctrl+Shift+Z / Ctrl+S / ESC ───────────────
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      // ESC sai do modo Pincel (sem precisar de Ctrl)
+      if (e.key === 'Escape' && brushMode) {
+        e.preventDefault()
+        setBrushMode(null)
+        return
+      }
       const mod = e.ctrlKey || e.metaKey
       if (!mod) return
       const k = e.key.toLowerCase()
-      // Ignora atalhos quando foco está num input editável
       const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase()
       const inEditable = tag === 'input' || tag === 'textarea' || (e.target as HTMLElement | null)?.isContentEditable
       if (inEditable && k !== 's') return
@@ -301,7 +317,7 @@ export default function CanvasEditor({
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, currentJson])
+  }, [state, currentJson, brushMode])
 
   // ── Aviso antes de fechar a aba com mudanças não salvas ────────────────────
 
@@ -346,15 +362,20 @@ export default function CanvasEditor({
               </IconHeaderBtn>
             </div>
 
-            <QuickPaint
-              currentColor={
-                selected
-                  ? (selected.kind === 'line' ? (selected.color ?? '#0f172a') : (selected.block?.backgroundColor ?? '#ffffff'))
-                  : (state.page.backgroundColor ?? '#ffffff')
-              }
-              target={selected ? 'element' : 'page'}
-              onPick={handleQuickPaint}
-            />
+            {selected ? (
+              <QuickPaint
+                currentColor={
+                  selected.kind === 'line' ? (selected.color ?? '#0f172a') : (selected.block?.backgroundColor ?? '#ffffff')
+                }
+                onPick={handlePaintSelected}
+              />
+            ) : (
+              <BrushControl
+                active={brushMode}
+                onActivate={settings => setBrushMode(settings)}
+                onDeactivate={() => setBrushMode(null)}
+              />
+            )}
 
             <StatusPill {...status} />
 
@@ -405,8 +426,10 @@ export default function CanvasEditor({
               <CanvasStage
                 state={state}
                 selectedId={selectedId}
+                brush={brushMode}
                 onSelect={setSelectedId}
                 onElementChange={handleElementChange}
+                onBrushStrokeComplete={handleBrushStrokeComplete}
               />
               <p className="mt-3 text-center text-[11px] text-slate-500">
                 {state.elements.length} elemento{state.elements.length === 1 ? '' : 's'} · drag para mover, alças para redimensionar · auto-save a cada 1 min
@@ -429,22 +452,18 @@ export default function CanvasEditor({
 // ── Sub-components ───────────────────────────────────────────────────────────
 
 function QuickPaint({
-  currentColor, target, onPick,
+  currentColor, onPick,
 }: {
   currentColor: string
-  target: 'element' | 'page'
   onPick: (color: string) => void
 }) {
-  const label = target === 'element' ? 'Pintar elemento' : 'Pintar página'
   return (
     <label
-      title={target === 'element'
-        ? 'Pinta o elemento selecionado (fundo/cor da linha).'
-        : 'Nada selecionado — pinta a folha inteira. Clique num elemento para pintar apenas ele.'}
+      title="Pinta o elemento selecionado (fundo/cor da linha)."
       className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs cursor-pointer hover:bg-slate-50"
     >
-      <Paintbrush className={`w-3.5 h-3.5 ${target === 'page' ? 'text-violet-600' : 'text-slate-700'}`} />
-      <span className="text-slate-700">{label}</span>
+      <Paintbrush className="w-3.5 h-3.5 text-slate-700" />
+      <span className="text-slate-700">Pintar elemento</span>
       <input
         type="color"
         value={currentColor.startsWith('#') ? currentColor.slice(0, 7) : '#ffffff'}
@@ -452,6 +471,177 @@ function QuickPaint({
         className="h-4 w-5 cursor-pointer border-0 bg-transparent p-0"
       />
     </label>
+  )
+}
+
+/** BrushControl — popover com color picker + slider de espessura.
+ *  Ao ativar, o cursor do canvas vira crosshair e mouse events
+ *  desenham traços livres (handle em CanvasStage). */
+function BrushControl({
+  active, onActivate, onDeactivate,
+}: {
+  active: { color: string; size: number; opacity: number } | null
+  onActivate: (settings: { color: string; size: number; opacity: number }) => void
+  onDeactivate: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [color, setColor] = useState(active?.color ?? '#7c3aed')
+  const [size, setSize] = useState(active?.size ?? 3)
+  const [opacity, setOpacity] = useState(active?.opacity ?? 1)
+
+  function activate() {
+    onActivate({ color, size, opacity })
+    setOpen(false)
+  }
+
+  if (active) {
+    // Estado ativo: mostra preview + atalho de desativar
+    return (
+      <div className="relative flex items-center gap-1 rounded-lg border border-violet-400 bg-violet-50 px-2 py-1 text-xs">
+        <Paintbrush className="w-3.5 h-3.5 text-violet-700" />
+        <span className="text-violet-700 font-medium">Pintando</span>
+        <span
+          className="inline-block rounded-full border border-white shadow-sm"
+          style={{ background: active.color, width: Math.max(8, Math.min(active.size, 18)), height: Math.max(8, Math.min(active.size, 18)) }}
+          aria-hidden
+        />
+        <button
+          onClick={() => setOpen(o => !o)}
+          className="ml-1 text-violet-700 hover:underline"
+          title="Ajustar pincel"
+        >ajustar</button>
+        <button
+          onClick={onDeactivate}
+          className="ml-1 flex items-center gap-0.5 rounded bg-white border border-violet-300 px-1 text-violet-700 hover:bg-violet-100"
+          title="Encerrar pincel (ESC)"
+        >
+          <Eraser className="w-3 h-3" /> sair
+        </button>
+
+        {open && (
+          <BrushPopover
+            color={color} size={size} opacity={opacity}
+            onColor={c => { setColor(c); onActivate({ color: c, size, opacity }) }}
+            onSize={s => { setSize(s); onActivate({ color, size: s, opacity }) }}
+            onOpacity={o => { setOpacity(o); onActivate({ color, size, opacity: o }) }}
+            onClose={() => setOpen(false)}
+          />
+        )}
+      </div>
+    )
+  }
+
+  // Estado inativo: botão Pintar com pincel
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        title="Pintar livre (pincel) — cor + espessura"
+        className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
+      >
+        <Paintbrush className="w-3.5 h-3.5" />
+        Pintar
+      </button>
+      {open && (
+        <BrushPopover
+          color={color} size={size} opacity={opacity}
+          onColor={setColor} onSize={setSize} onOpacity={setOpacity}
+          onClose={() => setOpen(false)}
+          onActivate={activate}
+        />
+      )}
+    </div>
+  )
+}
+
+function BrushPopover({
+  color, size, opacity,
+  onColor, onSize, onOpacity, onClose, onActivate,
+}: {
+  color: string
+  size: number
+  opacity: number
+  onColor: (c: string) => void
+  onSize: (s: number) => void
+  onOpacity: (o: number) => void
+  onClose: () => void
+  onActivate?: () => void
+}) {
+  return (
+    <>
+      <div className="fixed inset-0 z-40" onClick={onClose} />
+      <div className="absolute right-0 top-full z-50 mt-1 w-[260px] rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
+        <div className="mb-2 flex items-center justify-between">
+          <h4 className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Pincel</h4>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        <label className="block mb-2">
+          <span className="text-[10px] text-slate-600">Cor</span>
+          <div className="flex items-center gap-1 mt-0.5">
+            <input
+              type="color"
+              value={color.startsWith('#') ? color.slice(0, 7) : '#7c3aed'}
+              onChange={e => onColor(e.target.value)}
+              className="h-7 w-9 cursor-pointer rounded border border-slate-300"
+            />
+            <input
+              type="text"
+              value={color}
+              onChange={e => onColor(e.target.value)}
+              className="flex-1 min-w-0 rounded border border-slate-300 px-2 py-1 text-[10px] font-mono"
+            />
+          </div>
+        </label>
+
+        <label className="block mb-2">
+          <span className="flex items-center justify-between text-[10px] text-slate-600">
+            <span>Espessura</span>
+            <span className="tabular-nums font-semibold text-slate-700">{size}px</span>
+          </span>
+          <input
+            type="range" min={1} max={40} step={1}
+            value={size}
+            onChange={e => onSize(parseInt(e.target.value, 10))}
+            className="canva-slider w-full"
+          />
+          {/* Preview da espessura */}
+          <div className="mt-1 flex items-center justify-center rounded bg-slate-50 py-2">
+            <span
+              className="rounded-full"
+              style={{ background: color, width: size, height: size, opacity }}
+            />
+          </div>
+        </label>
+
+        <label className="block mb-3">
+          <span className="flex items-center justify-between text-[10px] text-slate-600">
+            <span>Opacidade</span>
+            <span className="tabular-nums font-semibold text-slate-700">{Math.round(opacity * 100)}%</span>
+          </span>
+          <input
+            type="range" min={0.1} max={1} step={0.05}
+            value={opacity}
+            onChange={e => onOpacity(parseFloat(e.target.value))}
+            className="canva-slider w-full"
+          />
+        </label>
+
+        {onActivate && (
+          <button
+            onClick={onActivate}
+            className="w-full rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-700"
+          >
+            Ativar pincel
+          </button>
+        )}
+        <p className="mt-2 text-[10px] text-slate-400 leading-snug">
+          Arraste o mouse no canvas para pintar. ESC encerra o modo.
+        </p>
+      </div>
+    </>
   )
 }
 

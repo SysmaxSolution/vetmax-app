@@ -8,7 +8,7 @@
  * Print fidelity: editor e LaudoPrintable consomem a MESMA estrutura.
  */
 
-export type ElementKind = 'text' | 'image' | 'line' | 'dynamic_tag' | 'dynamic_image' | 'repeater'
+export type ElementKind = 'text' | 'image' | 'line' | 'dynamic_tag' | 'dynamic_image' | 'repeater' | 'brush_stroke'
 
 /** Posição/tamanho em % do canvas (0-100). 0/0 = canto superior esquerdo. */
 export interface ElementBox {
@@ -139,6 +139,17 @@ export interface RepeaterElement extends ElementCommon {
 
 export type RepeaterSource = 'prescriptions' | 'exam_items' | 'vaccines' | 'dynamic_fields'
 
+/** Traço livre do pincel. points em % do canvas (0-100). Renderizado
+ *  como SVG polyline com linecap round. Permanece editável (cor/espessura)
+ *  após criado via PropertiesPanel. */
+export interface BrushStrokeElement extends ElementCommon {
+  kind: 'brush_stroke'
+  points: Array<{ x: number; y: number }>
+  strokeColor: string
+  strokeWidth: number  // px no canvas (renderizado proporcionalmente)
+  opacity?: number     // 0-1
+}
+
 export type CanvasElement =
   | TextElement
   | ImageElement
@@ -146,6 +157,7 @@ export type CanvasElement =
   | DynamicTagElement
   | DynamicImageElement
   | RepeaterElement
+  | BrushStrokeElement
 
 // ── Factory helpers ──────────────────────────────────────────────────────────
 
@@ -224,6 +236,23 @@ export function makeDynamicImageElement(tagId: string): DynamicImageElement {
     tagId,
     objectFit: 'contain',
     zIndex: 1,
+  }
+}
+
+export function makeBrushStrokeElement(
+  points: Array<{ x: number; y: number }>,
+  strokeColor: string,
+  strokeWidth: number,
+): BrushStrokeElement {
+  return {
+    id: nextElementId('brush_stroke'),
+    kind: 'brush_stroke',
+    box: { x: 0, y: 0, w: 100, h: 100 },  // cobre o canvas; clique seleciona via stroke
+    points,
+    strokeColor,
+    strokeWidth,
+    locked: true,  // não arrastável; só editável via PropertiesPanel ou delete
+    zIndex: 2,     // por cima do papel timbrado, junto com elementos normais
   }
 }
 
