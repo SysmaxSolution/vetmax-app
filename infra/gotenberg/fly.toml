@@ -1,0 +1,73 @@
+# =============================================================================
+# Fly.io — Gotenberg (DOCX/HTML → PDF) para VetMax
+#
+# Estrategia: SEMPRE ATIVO (Opcao A) na regiao GRU (Sao Paulo).
+#   * auto_stop_machines = "off"     -> nao desliga a maquina entre requests
+#   * min_machines_running = 1       -> garante 1 instancia viva 24/7
+#   * regiao gru                     -> latencia baixa para clinicas BR + LGPD
+#
+# Conversao DOCX -> PDF de receituario clinico nao tolera cold-start de
+# 5-10s do LibreOffice. Trade-off de ~$12/mes vs. UX de Dra. Lais.
+#
+# Imagem upstream: gotenberg/gotenberg:8 (CHROMIUM + LibreOffice headless +
+# pdftk + libreoffice-fonts-pt-BR pre-instalados).
+#
+# Deploy:
+#   cd infra/gotenberg
+#   fly launch --no-deploy --name sysvetmax-gotenberg --region gru
+#     (aceita o fly.toml ja existente, NAO cria postgres/redis)
+#   fly secrets set DISABLE_GOOGLE_CHROME=1   # opcional, ver README
+#   fly deploy
+#   fly status
+# =============================================================================
+
+app = "sysvetmax-gotenberg"
+primary_region = "gru"
+
+[build]
+  # Dockerfile estende gotenberg/gotenberg:8 e permite futura customizacao
+  # de fontes/plugins sem mudar a versao em multiples lugares. Para usar a
+  # imagem oficial diretamente, troque por: image = "gotenberg/gotenberg:8"
+  dockerfile = "Dockerfile"
+
+# Override do entrypoint da imagem: passamos flags explicitas para que o
+# log do Fly mostre exatamente os parametros ativos. api-port = porta
+# interna, api-timeout = limite por requisicao (cobre DOCX grande),
+# libreoffice-restart-after = reinicia o LibreOffice apos N conversoes
+# (evita memory leak conhecido).
+[processes]
+  app = "gotenberg --api-port=3000 --api-timeout=60s --libreoffice-restart-after=10 --log-level=info"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "off"       # NAO desligar — evita cold-start LibreOffice
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 10
+    hard_limit = 20
+
+  # Health check: Gotenberg expoe /health no proprio servidor de API
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "15s"
+    method = "GET"
+    path = "/health"
+    protocol = "http"
+
+# VM size: Gotenberg + LibreOffice precisam ~512MB ociosos, picos a 1GB
+# durante conversao de DOCX com imagens. shared-cpu-1x @ 1024MB cobre
+# o volume previsto (clinica veterinaria, ~50 docs/dia).
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"
+  cpu_kind = "shared"
+  cpus = 1
+
+# Sem volumes persistentes — Gotenberg eh stateless (cada conversao isola
+# em /tmp e descarta apos response).
