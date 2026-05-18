@@ -36,10 +36,15 @@ async function requireClinic() {
 
 // ── Upload do papel timbrado de fundo ────────────────────────────────────────
 
+/**
+ * Etapa 1: assina o PUT do papel timbrado de fundo.
+ * Browser sobe o arquivo direto pro Supabase Storage usando upload_url.
+ * Para obter a URL de leitura, chame getBackgroundReadUrl(storage_path)
+ * APÓS o PUT completar — gerar antes resulta em "Object not found".
+ */
 export async function getBackgroundUploadUrl(filename: string): Promise<{
   upload_url: string
   storage_path: string
-  signed_read_url: string
 }> {
   const { profile } = await requireClinic()
   if (profile.role !== 'admin') throw new Error('apenas admin pode trocar papel timbrado')
@@ -57,17 +62,28 @@ export async function getBackgroundUploadUrl(filename: string): Promise<{
     .createSignedUploadUrl(path)
   if (upErr || !upload) throw new Error(upErr?.message ?? 'falha ao gerar URL de upload')
 
-  // signed read URL (1 ano) — o admin renova quando configurar o template
-  const { data: read, error: readErr } = await admin.storage
-    .from(BG_BUCKET)
-    .createSignedUrl(path, 60 * 60 * 24 * 365)
-  if (readErr || !read) throw new Error(readErr?.message ?? 'falha ao gerar URL de leitura')
+  return { upload_url: upload.signedUrl, storage_path: path }
+}
 
-  return {
-    upload_url: upload.signedUrl,
-    storage_path: path,
-    signed_read_url: read.signedUrl,
+/** Etapa 2: gera signed read URL (1 ano) APÓS o objeto existir no bucket. */
+export async function getBackgroundReadUrl(storagePath: string): Promise<{
+  signed_read_url: string
+}> {
+  const { profile } = await requireClinic()
+  if (profile.role !== 'admin') throw new Error('apenas admin pode acessar papel timbrado')
+
+  // Tenant guard: caminho começa com clinic_id?
+  if (!storagePath.startsWith(`${profile.clinic_id}/`)) {
+    throw new Error('caminho fora do escopo da clínica')
   }
+
+  const admin = createAdminClient()
+  const { data, error } = await admin.storage
+    .from(BG_BUCKET)
+    .createSignedUrl(storagePath, 60 * 60 * 24 * 365)
+  if (error || !data) throw new Error(error?.message ?? 'falha ao gerar URL de leitura')
+
+  return { signed_read_url: data.signedUrl }
 }
 
 // ── Atualizar configuração do template (canva-native) ────────────────────────
@@ -170,11 +186,15 @@ export async function createBlankCanvasTemplate(
 
 // ── Canvas Editor (drag&drop) ────────────────────────────────────────────────
 
-/** Upload de imagens internas do canvas (logo, carimbo, etc.) — bucket bg. */
+/**
+ * Etapa 1: assina o PUT de uma imagem interna do canvas (logo, carimbo).
+ * Browser faz o PUT; depois chama getCanvasImageReadUrl(storage_path)
+ * para obter a URL de leitura. Gerar read URL antes do PUT falha com
+ * "Object not found" no Supabase Storage.
+ */
 export async function getCanvasImageUploadUrl(filename: string): Promise<{
   upload_url: string
   storage_path: string
-  signed_read_url: string
 }> {
   const { profile } = await requireClinic()
   if (profile.role !== 'admin') throw new Error('apenas admin pode subir imagens do canvas')
@@ -190,10 +210,25 @@ export async function getCanvasImageUploadUrl(filename: string): Promise<{
   const { data: up, error: upErr } = await admin.storage.from(BG_BUCKET).createSignedUploadUrl(path)
   if (upErr || !up) throw new Error(upErr?.message ?? 'falha ao gerar URL upload')
 
-  const { data: read, error: rdErr } = await admin.storage.from(BG_BUCKET).createSignedUrl(path, 60 * 60 * 24 * 365)
-  if (rdErr || !read) throw new Error(rdErr?.message ?? 'falha ao gerar URL leitura')
+  return { upload_url: up.signedUrl, storage_path: path }
+}
 
-  return { upload_url: up.signedUrl, storage_path: path, signed_read_url: read.signedUrl }
+/** Etapa 2: gera signed read URL após o PUT da imagem do canvas. */
+export async function getCanvasImageReadUrl(storagePath: string): Promise<{
+  signed_read_url: string
+}> {
+  const { profile } = await requireClinic()
+  if (profile.role !== 'admin') throw new Error('apenas admin pode acessar imagens do canvas')
+
+  if (!storagePath.startsWith(`${profile.clinic_id}/`)) {
+    throw new Error('caminho fora do escopo da clínica')
+  }
+
+  const admin = createAdminClient()
+  const { data, error } = await admin.storage.from(BG_BUCKET).createSignedUrl(storagePath, 60 * 60 * 24 * 365)
+  if (error || !data) throw new Error(error?.message ?? 'falha ao gerar URL leitura')
+
+  return { signed_read_url: data.signedUrl }
 }
 
 export interface UpdateTemplateCanvasStateInput {

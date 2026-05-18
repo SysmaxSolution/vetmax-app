@@ -15,7 +15,7 @@ import {
   ImagePlus, Loader2, Save, Sparkles, Upload, X,
 } from 'lucide-react'
 import {
-  getBackgroundUploadUrl, updateTemplateCanvaConfig,
+  getBackgroundUploadUrl, getBackgroundReadUrl, updateTemplateCanvaConfig,
 } from '@/lib/actions/canva-templates'
 import {
   CANVA_DEFAULT_MARGINS,
@@ -77,9 +77,14 @@ export default function CanvaTemplateEditor({
     setError(null)
     setUploading(true)
     try {
-      const { upload_url, signed_read_url } = await getBackgroundUploadUrl(file.name)
-      const put = await fetch(upload_url, { method: 'PUT', body: file })
+      const { upload_url, storage_path } = await getBackgroundUploadUrl(file.name)
+      const put = await fetch(upload_url, {
+        method: 'PUT',
+        body: file,
+        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+      })
       if (!put.ok) throw new Error(`upload falhou (${put.status})`)
+      const { signed_read_url } = await getBackgroundReadUrl(storage_path)
       setBgUrl(signed_read_url)
     } catch (e: any) {
       setError(e?.message ?? 'falha no upload')

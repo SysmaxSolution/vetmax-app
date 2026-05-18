@@ -23,7 +23,8 @@ import {
 } from '@/lib/canva/canvas-state'
 import type { CanvasElement } from '@/lib/canva/elements'
 import {
-  getBackgroundUploadUrl, getCanvasImageUploadUrl,
+  getBackgroundUploadUrl, getBackgroundReadUrl,
+  getCanvasImageUploadUrl, getCanvasImageReadUrl,
   updateTemplateCanvasState,
 } from '@/lib/actions/canva-templates'
 import CanvasStage from './CanvasStage'
@@ -134,16 +135,27 @@ export default function CanvasEditor({
   // ── Upload helpers ─────────────────────────────────────────────────────────
 
   async function handleUploadBackground(file: File): Promise<{ url: string }> {
-    const { upload_url, signed_read_url } = await getBackgroundUploadUrl(file.name)
-    const put = await fetch(upload_url, { method: 'PUT', body: file })
+    const { upload_url, storage_path } = await getBackgroundUploadUrl(file.name)
+    const put = await fetch(upload_url, {
+      method: 'PUT',
+      body: file,
+      headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    })
     if (!put.ok) throw new Error(`upload bg falhou (${put.status})`)
+    // Só agora — pós-PUT — o objeto existe e a signed read URL pode ser gerada.
+    const { signed_read_url } = await getBackgroundReadUrl(storage_path)
     return { url: signed_read_url }
   }
 
   async function handleUploadImage(file: File): Promise<{ url: string; storagePath: string }> {
-    const { upload_url, signed_read_url, storage_path } = await getCanvasImageUploadUrl(file.name)
-    const put = await fetch(upload_url, { method: 'PUT', body: file })
+    const { upload_url, storage_path } = await getCanvasImageUploadUrl(file.name)
+    const put = await fetch(upload_url, {
+      method: 'PUT',
+      body: file,
+      headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    })
     if (!put.ok) throw new Error(`upload imagem falhou (${put.status})`)
+    const { signed_read_url } = await getCanvasImageReadUrl(storage_path)
     return { url: signed_read_url, storagePath: storage_path }
   }
 
