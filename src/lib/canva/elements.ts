@@ -98,9 +98,15 @@ export interface DynamicTagElement extends ElementCommon {
   fallback?: string
 }
 
-/** Parte de uma CompositeTagElement: uma resolução individual (tag + envoltórios). */
+/** Parte de uma CompositeTagElement. Pode ser:
+ *    - Uma resolução de tag dinâmica (tagId preenchido)
+ *    - Um texto estático (staticText preenchido, tagId vazio)
+ *  Permite mesclar text livre, dynamic_tag e composite_tag num único bloco.
+ */
 export interface CompositeTagPart {
-  tagId: string
+  tagId: string         // vazio quando é parte estática
+  /** Texto literal (usado quando tagId === ''). Suporta multilinhas. */
+  staticText?: string
   /** Texto antes da resolução desse campo (ex: "Tutor: "). */
   prefix?: string
   /** Texto depois (ex: " kg"). */

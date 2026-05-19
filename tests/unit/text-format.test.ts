@@ -41,9 +41,13 @@ describe('text-format', () => {
       expect(parseInlineMarkdown('<script>alert(1)</script>'))
         .toBe('&lt;script&gt;alert(1)&lt;/script&gt;')
     })
-    it('converte quebras de linha em <br>', () => {
+    it('preserva quebras de linha como \\n (sem converter para <br>)', () => {
+      // Justificar exige espaços horizontais colapsáveis. <br> faria browsers
+      // tratarem cada linha como "última linha" (left-aligned, ignorando
+      // justify). Solução: preservar \\n e usar white-space: pre-line no CSS
+      // do container — assim cada linha respeita o text-align configurado.
       expect(parseInlineMarkdown('linha 1\nlinha 2'))
-        .toBe('linha 1<br>linha 2')
+        .toBe('linha 1\nlinha 2')
     })
     it('aceita string vazia', () => {
       expect(parseInlineMarkdown('')).toBe('')

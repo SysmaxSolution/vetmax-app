@@ -25,7 +25,12 @@ export function escapeHtml(s: string): string {
 }
 
 /** Converte sintaxe markdown leve em HTML seguro. Aceita os 4 padrões.
- *  Ordem importa: **bold** antes de *italic* (senão *bold* fica como italic). */
+ *  Ordem importa: **bold** antes de *italic* (senão *bold* fica como italic).
+ *
+ *  NÃO converte \\n para <br> — quebras de linha são preservadas via
+ *  white-space: pre-line no container. Motivo: browsers tratam texto antes
+ *  de <br> como "última linha" e left-alinham mesmo com text-align: justify.
+ *  Com pre-line + \\n natural, cada linha lógica respeita o text-align. */
 export function parseInlineMarkdown(text: string): string {
   if (!text) return ''
   let html = escapeHtml(text)
@@ -37,8 +42,6 @@ export function parseInlineMarkdown(text: string): string {
   html = html.replace(/__([^_\n]+?)__/g, '<u>$1</u>')
   // ~~taxado~~
   html = html.replace(/~~([^~\n]+?)~~/g, '<s>$1</s>')
-  // Line breaks
-  html = html.replace(/\n/g, '<br>')
   return html
 }
 

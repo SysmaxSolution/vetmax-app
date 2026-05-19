@@ -27,9 +27,19 @@ import {
 import {
   defaultCanvasState, hydrateCanvasState, type CanvasState, type PageConfig,
 } from '@/lib/canva/canvas-state'
-import type { CanvasElement, DynamicTagElement, CompositeTagPart } from '@/lib/canva/elements'
+import type {
+  CanvasElement, DynamicTagElement, TextElement, CompositeTagElement, CompositeTagPart,
+} from '@/lib/canva/elements'
 import { makeBrushStrokeElement, makeCompositeTagElement, nextElementId } from '@/lib/canva/elements'
 import { findTag } from '@/lib/canva/dynamic-tags'
+
+/** Kinds que podem entrar numa mescla (gera um único CompositeTagElement). */
+type MergeableElement = TextElement | DynamicTagElement | CompositeTagElement
+const MERGEABLE_KINDS: Array<CanvasElement['kind']> = ['text', 'dynamic_tag', 'composite_tag']
+
+function isMergeable(el: CanvasElement | undefined): el is MergeableElement {
+  return !!el && MERGEABLE_KINDS.includes(el.kind)
+}
 import {
   getBackgroundUploadUrl, getBackgroundReadUrl,
   getCanvasImageUploadUrl, getCanvasImageReadUrl,
@@ -246,14 +256,14 @@ export default function CanvasEditor({
     })
   }, [])
 
-  // Elementos selecionados que são dynamic_tag (candidatos a mescla)
-  const selectedDynamicTags = useMemo(() => {
+  // Elementos selecionados elegíveis a mescla (text, dynamic_tag, composite_tag)
+  const selectedMergeable = useMemo<MergeableElement[]>(() => {
     return selectedIds
       .map(id => state.elements.find(e => e.id === id))
-      .filter((e): e is DynamicTagElement => !!e && e.kind === 'dynamic_tag')
+      .filter(isMergeable)
   }, [selectedIds, state.elements])
 
-  const canMerge = selectedDynamicTags.length >= 2
+  const canMerge = selectedMergeable.length >= 2
 
   // Snapshot da última versão persistida — usado para detectar dirty state.
   const lastSavedRef = useRef<string>(JSON.stringify(state))
@@ -331,26 +341,28 @@ export default function CanvasEditor({
   const zoomOut = useCallback(() => setZoom(z => Math.max(ZOOM_MIN, Number((z - ZOOM_STEP).toFixed(2)))), [])
   const zoomReset = useCallback(() => setZoom(1), [])
 
-  /** Confirma a mescla: cria composite_tag a partir das dynamic_tags selecionadas
-   *  (na ordem definida no modal), remove as originais. */
+  /** Confirma a mescla: cria composite_tag a partir dos elementos selecionados
+   *  (text, dynamic_tag, composite_tag, na ordem definida no modal), remove
+   *  os originais. */
   const handleConfirmMerge = useCallback((
     parts: CompositeTagPart[],
     separator: string,
   ) => {
     if (parts.length < 2) return
-    // Posiciona o composite onde estava o primeiro elemento (mais alto/esquerdo)
-    const firstTag = selectedDynamicTags.find(t => t.id === parts[0].tagId)
-      ?? selectedDynamicTags[0]
+    const first = selectedMergeable[0]
+    // Tipografia base: do primeiro elemento mergeable que tem typography
+    const baseTypography = ('typography' in first ? first.typography : undefined)
+      ?? selectedMergeable.find(el => 'typography' in el && el.typography)?.typography
     const composite = makeCompositeTagElement(parts, {
-      box: { ...firstTag.box },
+      box: { ...first.box },
       separator,
-      typography: { ...firstTag.typography },
-      zIndex: firstTag.zIndex,
+      typography: baseTypography ?? undefined,
+      zIndex: first.zIndex,
     })
-    dispatch({ type: 'merge_tags', ids: selectedDynamicTags.map(t => t.id), composite })
+    dispatch({ type: 'merge_tags', ids: selectedMergeable.map(t => t.id), composite })
     setSelectedIds([composite.id])
     setShowMergeModal(false)
-  }, [selectedDynamicTags])
+  }, [selectedMergeable])
 
   const handleMoveZ = useCallback((dir: 'front' | 'back' | 'forward' | 'backward') => {
     if (!selectedId) return
@@ -591,11 +603,11 @@ export default function CanvasEditor({
             {canMerge && (
               <button
                 onClick={() => setShowMergeModal(true)}
-                title={`Mesclar ${selectedDynamicTags.length} tags em uma única`}
+                title={`Mesclar ${selectedMergeable.length} elementos (texto/tags) em um único bloco`}
                 className="flex items-center gap-1 rounded-lg border border-violet-300 bg-violet-50 px-2 py-1 text-xs font-medium text-violet-700 hover:bg-violet-100"
               >
                 <Combine className="w-3.5 h-3.5" />
-                Mesclar ({selectedDynamicTags.length})
+                Mesclar ({selectedMergeable.length})
               </button>
             )}
 
@@ -750,7 +762,7 @@ export default function CanvasEditor({
 
         {showMergeModal && (
           <MergeTagsModal
-            tags={selectedDynamicTags}
+            elements={selectedMergeable}
             onClose={() => setShowMergeModal(false)}
             onConfirm={handleConfirmMerge}
           />
@@ -763,26 +775,58 @@ export default function CanvasEditor({
 // ── MergeTagsModal ───────────────────────────────────────────────────────────
 
 interface MergeDraftPart {
+  /** Vazio quando é parte estática de texto. */
   tagId: string
+  /** Texto literal — usado quando tagId === '' (parte estática). */
+  staticText?: string
+  /** Label amigável (Nome do Pet, "Texto", etc.) */
   label: string
   prefix: string
   suffix: string
+  origin: 'text' | 'tag' | 'composite_part'
+}
+
+/** Expande um elemento mergeable em uma ou mais MergeDraftPart. */
+function elementToMergeParts(el: MergeableElement): MergeDraftPart[] {
+  if (el.kind === 'text') {
+    return [{
+      tagId: '',
+      staticText: el.content,
+      label: '(Texto)',
+      prefix: '',
+      suffix: '',
+      origin: 'text',
+    }]
+  }
+  if (el.kind === 'dynamic_tag') {
+    return [{
+      tagId: el.tagId,
+      label: findTag(el.tagId)?.label ?? el.tagId,
+      prefix: el.prefix ?? '',
+      suffix: el.suffix ?? '',
+      origin: 'tag',
+    }]
+  }
+  // composite_tag — expande cada parte interna como parte separada
+  return el.parts.map(p => ({
+    tagId: p.tagId ?? '',
+    staticText: p.staticText,
+    label: p.tagId ? (findTag(p.tagId)?.label ?? p.tagId) : '(Texto)',
+    prefix: p.prefix ?? '',
+    suffix: p.suffix ?? '',
+    origin: 'composite_part' as const,
+  }))
 }
 
 function MergeTagsModal({
-  tags, onClose, onConfirm,
+  elements, onClose, onConfirm,
 }: {
-  tags: DynamicTagElement[]
+  elements: MergeableElement[]
   onClose: () => void
   onConfirm: (parts: CompositeTagPart[], separator: string) => void
 }) {
   const [parts, setParts] = useState<MergeDraftPart[]>(() =>
-    tags.map(t => ({
-      tagId: t.tagId,
-      label: findTag(t.tagId)?.label ?? t.tagId,
-      prefix: t.prefix ?? '',
-      suffix: t.suffix ?? '',
-    }))
+    elements.flatMap(elementToMergeParts)
   )
   const [separator, setSeparator] = useState(' · ')
 
@@ -803,7 +847,7 @@ function MergeTagsModal({
   }
 
   const preview = parts
-    .map(p => `${p.prefix}<${p.label}>${p.suffix}`)
+    .map(p => `${p.prefix}<${p.staticText ?? p.label}>${p.suffix}`)
     .join(separator)
 
   return (
@@ -835,43 +879,60 @@ function MergeTagsModal({
 
           {/* Partes */}
           <ol className="space-y-2">
-            {parts.map((p, i) => (
-              <li key={`${p.tagId}-${i}`} className="rounded-lg border border-slate-200 bg-white p-2.5">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[11px] font-semibold text-violet-700">
-                    {i + 1}. {p.label} <code className="ml-1 text-[10px] text-slate-400 font-mono">{`{{${p.tagId}}}`}</code>
-                  </span>
-                  <div className="flex gap-0.5">
-                    <button onClick={() => move(i, -1)} disabled={i === 0}
-                      className="rounded px-1.5 text-slate-500 hover:bg-slate-100 disabled:opacity-30" title="Subir">↑</button>
-                    <button onClick={() => move(i, +1)} disabled={i === parts.length - 1}
-                      className="rounded px-1.5 text-slate-500 hover:bg-slate-100 disabled:opacity-30" title="Descer">↓</button>
-                    <button onClick={() => removeAt(i)} disabled={parts.length <= 2}
-                      className="rounded px-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-30" title="Remover">×</button>
+            {parts.map((p, i) => {
+              const isStatic = !p.tagId
+              return (
+                <li key={`${i}-${p.tagId || 'static'}`} className="rounded-lg border border-slate-200 bg-white p-2.5">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[11px] font-semibold text-violet-700">
+                      {i + 1}. {p.label}
+                      {!isStatic && (
+                        <code className="ml-1 text-[10px] text-slate-400 font-mono">{`{{${p.tagId}}}`}</code>
+                      )}
+                    </span>
+                    <div className="flex gap-0.5">
+                      <button onClick={() => move(i, -1)} disabled={i === 0}
+                        className="rounded px-1.5 text-slate-500 hover:bg-slate-100 disabled:opacity-30" title="Subir">↑</button>
+                      <button onClick={() => move(i, +1)} disabled={i === parts.length - 1}
+                        className="rounded px-1.5 text-slate-500 hover:bg-slate-100 disabled:opacity-30" title="Descer">↓</button>
+                      <button onClick={() => removeAt(i)} disabled={parts.length <= 2}
+                        className="rounded px-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-30" title="Remover">×</button>
+                    </div>
                   </div>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <label className="block">
-                    <span className="text-[10px] text-slate-600">Texto antes</span>
-                    <input
-                      className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
-                      value={p.prefix}
-                      placeholder='ex: "Tutor: "'
-                      onChange={e => update(i, { prefix: e.target.value })}
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="text-[10px] text-slate-600">Texto depois</span>
-                    <input
-                      className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
-                      value={p.suffix}
-                      placeholder='ex: " kg"'
-                      onChange={e => update(i, { suffix: e.target.value })}
-                    />
-                  </label>
-                </div>
-              </li>
-            ))}
+                  {isStatic && (
+                    <label className="block mb-1.5">
+                      <span className="text-[10px] text-slate-600">Texto</span>
+                      <textarea
+                        className="w-full resize-y rounded border border-slate-300 px-2 py-1 text-xs"
+                        rows={2}
+                        value={p.staticText ?? ''}
+                        onChange={e => update(i, { staticText: e.target.value })}
+                      />
+                    </label>
+                  )}
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="block">
+                      <span className="text-[10px] text-slate-600">Texto antes</span>
+                      <input
+                        className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
+                        value={p.prefix}
+                        placeholder='ex: "Tutor: "'
+                        onChange={e => update(i, { prefix: e.target.value })}
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="text-[10px] text-slate-600">Texto depois</span>
+                      <input
+                        className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
+                        value={p.suffix}
+                        placeholder='ex: " kg"'
+                        onChange={e => update(i, { suffix: e.target.value })}
+                      />
+                    </label>
+                  </div>
+                </li>
+              )
+            })}
           </ol>
 
           <label className="block">
@@ -894,7 +955,12 @@ function MergeTagsModal({
           </button>
           <button
             onClick={() => onConfirm(
-              parts.map(p => ({ tagId: p.tagId, prefix: p.prefix, suffix: p.suffix })),
+              parts.map(p => ({
+                tagId: p.tagId,
+                staticText: p.staticText,
+                prefix: p.prefix,
+                suffix: p.suffix,
+              })),
               separator,
             )}
             disabled={parts.length < 2}
