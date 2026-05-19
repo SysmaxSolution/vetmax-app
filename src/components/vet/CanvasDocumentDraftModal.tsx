@@ -23,6 +23,7 @@ import {
 } from '@/lib/actions/canva-templates'
 import type { CanvasDraftResult } from '@/lib/actions/canva-templates'
 import CanvasStage from '@/components/canva/editor/CanvasStage'
+import { getAllPages } from '@/lib/canva/canvas-state'
 import type {
   CanvaContentJson, CanvaDynamicField,
 } from '@/lib/canva/types'
@@ -283,13 +284,22 @@ export default function CanvasDocumentDraftModal({
               <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-700">Preview ao vivo</span>
               <span>Atualiza enquanto você preenche.</span>
             </div>
-            <div style={{ width: '21cm', maxWidth: '100%' }} className="mx-auto">
-              <CanvasStage
-                state={draft.canvas_state}
-                mode="print"
-                resolveContext={draft.resolve_context}
-                fillableValues={fillableValues}
-              />
+            <div style={{ width: '21cm', maxWidth: '100%' }} className="mx-auto space-y-4">
+              {getAllPages(draft.canvas_state).map((p, idx) => (
+                <div key={idx} className="relative">
+                  {getAllPages(draft.canvas_state).length > 1 && (
+                    <div className="absolute -top-3 left-1 z-10 inline-flex items-center rounded-full bg-violet-600 px-2 py-0.5 text-[10px] font-semibold text-white shadow">
+                      Página {idx + 1}
+                    </div>
+                  )}
+                  <CanvasStage
+                    state={{ version: 1, page: p.page, elements: p.elements }}
+                    mode="print"
+                    resolveContext={draft.resolve_context}
+                    fillableValues={fillableValues}
+                  />
+                </div>
+              ))}
             </div>
           </section>
         </div>

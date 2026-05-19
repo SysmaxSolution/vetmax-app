@@ -21,6 +21,7 @@ import type {
   CanvaContentJson, CanvaDynamicField, CanvaTemplateConfig,
 } from '@/lib/canva/types'
 import type { CanvasState } from '@/lib/canva/canvas-state'
+import { getAllPages } from '@/lib/canva/canvas-state'
 import type { FillableFieldElement } from '@/lib/canva/elements'
 import type { ResolveContext } from '@/lib/canva/dynamic-tags'
 
@@ -279,13 +280,22 @@ export default function NewCanvaLaudoForm({
             <span>O laudo será impresso exatamente assim.</span>
           </div>
           {canvasState ? (
-            <div style={{ width: '21cm', maxWidth: '100%' }} className="mx-auto">
-              <CanvasStage
-                state={canvasState}
-                mode="print"
-                resolveContext={resolveContext}
-                fillableValues={fillableValues}
-              />
+            <div style={{ width: '21cm', maxWidth: '100%' }} className="mx-auto space-y-4">
+              {getAllPages(canvasState).map((p, idx) => (
+                <div key={idx} className="relative">
+                  {getAllPages(canvasState).length > 1 && (
+                    <div className="absolute -top-3 left-1 z-10 inline-flex items-center rounded-full bg-violet-600 px-2 py-0.5 text-[10px] font-semibold text-white shadow">
+                      Página {idx + 1}
+                    </div>
+                  )}
+                  <CanvasStage
+                    state={{ version: 1, page: p.page, elements: p.elements }}
+                    mode="print"
+                    resolveContext={resolveContext}
+                    fillableValues={fillableValues}
+                  />
+                </div>
+              ))}
             </div>
           ) : (
             <CanvaA4Preview

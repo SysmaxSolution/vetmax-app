@@ -18,9 +18,11 @@ interface Props {
   page: PageConfig
   onChange: (next: PageConfig) => void
   onUploadBackground: (file: File) => Promise<{ url: string }>
+  /** Quando setado (templates multi-page), mostra "Página X de Y" no topo. */
+  pageLabel?: string
 }
 
-export default function PageSettingsPanel({ page, onChange, onUploadBackground }: Props) {
+export default function PageSettingsPanel({ page, onChange, onUploadBackground, pageLabel }: Props) {
   const [uploading, setUploading] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
 
@@ -40,6 +42,14 @@ export default function PageSettingsPanel({ page, onChange, onUploadBackground }
 
   return (
     <div className="flex flex-wrap items-end gap-3 border-b border-slate-200 bg-white px-3 py-2 text-xs">
+      {pageLabel && (
+        <Group label="Editando">
+          <span className="inline-flex items-center gap-1 rounded border border-violet-300 bg-violet-50 px-2 py-1 text-[11px] font-semibold text-violet-700">
+            {pageLabel}
+          </span>
+        </Group>
+      )}
+
       {/* Tamanho */}
       <Group label="Tamanho">
         <div className="flex">

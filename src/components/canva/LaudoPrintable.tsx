@@ -18,6 +18,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Download, Loader2, Printer } from 'lucide-react'
 import type { CanvaContentJson, CanvaTemplateConfig } from '@/lib/canva/types'
 import type { CanvasState } from '@/lib/canva/canvas-state'
+import { getAllPages } from '@/lib/canva/canvas-state'
 import CanvaA4Preview from './CanvaA4Preview'
 import CanvasStage from './editor/CanvasStage'
 import type { ResolveContext } from '@/lib/canva/dynamic-tags'
@@ -160,11 +161,22 @@ export default function LaudoPrintable({
         style={{ width: '21cm' }}
       >
         {canvasState ? (
-          <CanvasStage
-            state={canvasState}
-            mode="print"
-            resolveContext={resolveContext}
-          />
+          // Multi-page: itera todas as páginas (página 1 + extras), separando
+          // cada CanvasStage com page-break para o @media print quebrar
+          // corretamente. Cada stage recebe um CanvasState single-page.
+          getAllPages(canvasState).map((p, idx) => (
+            <div
+              key={idx}
+              className="canva-print-page-wrapper"
+              style={idx > 0 ? { pageBreakBefore: 'always', breakBefore: 'page', marginTop: '1cm' } : undefined}
+            >
+              <CanvasStage
+                state={{ version: 1, page: p.page, elements: p.elements }}
+                mode="print"
+                resolveContext={resolveContext}
+              />
+            </div>
+          ))
         ) : (
           <CanvaA4Preview
             backgroundUrl={config.background_image_url}

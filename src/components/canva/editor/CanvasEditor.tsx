@@ -22,10 +22,11 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, useTransition } from 'react'
 import {
   Eye, EyeOff, Loader2, Paintbrush, Redo2, Save, Sparkles, Undo2, X, Eraser,
-  Combine, ZoomIn, ZoomOut, Maximize2,
+  Combine, ZoomIn, ZoomOut, Maximize2, FileText, FilePlus, Trash2,
 } from 'lucide-react'
 import {
-  defaultCanvasState, hydrateCanvasState, type CanvasState, type PageConfig,
+  defaultCanvasState, hydrateCanvasState, DEFAULT_PAGE_CONFIG,
+  type CanvasState, type PageConfig,
 } from '@/lib/canva/canvas-state'
 import type {
   CanvasElement, DynamicTagElement, TextElement, CompositeTagElement, CompositeTagPart,
@@ -198,7 +199,31 @@ function historyReducer(state: HistoryState, action: HistoryAction): HistoryStat
 }
 
 function initHistory(state?: CanvasState | null): HistoryState {
-  return { past: [], present: hydrateCanvasState(state), future: [] }
+  // O reducer opera sempre na "página atual" (single-page). Multi-page é
+  // coordenado por estado externo no componente (pageBuffer + pageIndex).
+  // Inicializamos sempre na página 1 (page + elements de top-level).
+  const cs = hydrateCanvasState(state)
+  const singlePage: CanvasState = {
+    version: 1,
+    page: cs.page,
+    elements: cs.elements,
+  }
+  return { past: [], present: singlePage, future: [] }
+}
+
+/** Snapshot de uma página (page + elements) — usado no buffer multi-page. */
+interface PageSnapshot {
+  page: PageConfig
+  elements: CanvasElement[]
+}
+
+/** Inicializa o buffer com TODAS as páginas (página 1 + extras) já hidratadas. */
+function initPageBuffer(initial?: CanvasState | null): PageSnapshot[] {
+  const cs = hydrateCanvasState(initial)
+  return [
+    { page: cs.page, elements: cs.elements },
+    ...((cs.extraPages ?? []).map(e => ({ page: e.page, elements: e.elements }))),
+  ]
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -210,6 +235,15 @@ export default function CanvasEditor({
   const state = history.present
   const canUndo = history.past.length > 0
   const canRedo = history.future.length > 0
+
+  // ── Multi-page ────────────────────────────────────────────────────────────
+  // pageBuffer guarda snapshots de TODAS as páginas. A página ativa (que
+  // o reducer manipula em `state`) também tem um slot aqui, mas o conteúdo
+  // do slot só é sincronizado nos momentos críticos (switch, save). Isso
+  // permite manter Undo/Redo isolado por página sem comprometer persistência.
+  const [pageIndex,  setPageIndex]  = useState(0)
+  const [pageBuffer, setPageBuffer] = useState<PageSnapshot[]>(() => initPageBuffer(initialState))
+  const pageCountUI = pageBuffer.length
 
   // selectedIds[0] = primary (mostrado no PropertiesPanel singular)
   // selectedIds[1+] = extras (multi-select via Ctrl/Cmd/Shift+Click)
@@ -266,12 +300,115 @@ export default function CanvasEditor({
   const canMerge = selectedMergeable.length >= 2
 
   // Snapshot da última versão persistida — usado para detectar dirty state.
-  const lastSavedRef = useRef<string>(JSON.stringify(state))
+  // Em multi-page, compara o canvas_state COMPLETO (todas as páginas).
+  const lastSavedRef = useRef<string>('')
 
   const selected = state.elements.find(e => e.id === selectedId) ?? null
 
-  const currentJson = JSON.stringify(state)
+  /** Constrói o CanvasState completo (página ativa + buffer) pra persistir. */
+  const buildFullCanvasState = useCallback((): CanvasState => {
+    // O slot da página ativa pode estar defasado — sincroniza com state atual
+    const pages = pageBuffer.map((snap, i) =>
+      i === pageIndex ? { page: state.page, elements: state.elements } : snap,
+    )
+    return {
+      version: 1,
+      page: pages[0].page,
+      elements: pages[0].elements,
+      extraPages: pages.length > 1
+        ? pages.slice(1).map(p => ({ page: p.page, elements: p.elements }))
+        : undefined,
+    }
+  }, [pageBuffer, pageIndex, state])
+
+  const fullCanvasState = useMemo(() => buildFullCanvasState(), [buildFullCanvasState])
+  const currentJson = useMemo(() => JSON.stringify(fullCanvasState), [fullCanvasState])
   const isDirty = currentJson !== lastSavedRef.current
+
+  // Inicializa lastSavedRef com o estado inicial completo (apenas uma vez)
+  useEffect(() => {
+    if (lastSavedRef.current === '') {
+      lastSavedRef.current = currentJson
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // ── Page handlers (switch/add/delete) ─────────────────────────────────────
+  /** Salva a página atual no buffer, troca pra outra, e dispara replace_state.
+   *  Reseta o history (undo/redo é por-página). */
+  const switchToPage = useCallback((targetIndex: number) => {
+    if (targetIndex === pageIndex) return
+    if (targetIndex < 0 || targetIndex >= pageBuffer.length) return
+    // Snapshot da página atual no buffer
+    setPageBuffer(prev => {
+      const next = [...prev]
+      next[pageIndex] = { page: state.page, elements: state.elements }
+      return next
+    })
+    setPageIndex(targetIndex)
+    const target = pageBuffer[targetIndex]
+    dispatch({
+      type: 'replace_state',
+      state: { version: 1, page: target.page, elements: target.elements },
+    })
+    setSelectedIds([])
+  }, [pageIndex, pageBuffer, state])
+
+  /** Adiciona nova página em branco no final do buffer, herda size/orientation
+   *  da página 1, e troca para a nova. */
+  const addNewPage = useCallback(() => {
+    // Snapshot da atual
+    const currentSnap: PageSnapshot = { page: state.page, elements: state.elements }
+    setPageBuffer(prev => {
+      const updated = [...prev]
+      updated[pageIndex] = currentSnap
+      const basePage: PageConfig = {
+        ...DEFAULT_PAGE_CONFIG,
+        size: prev[0].page.size,
+        orientation: prev[0].page.orientation,
+        margins: { ...prev[0].page.margins },
+        backgroundImageUrl: null,
+      }
+      const next = [...updated, { page: basePage, elements: [] as CanvasElement[] }]
+      // Swap pra nova após render
+      const newIdx = next.length - 1
+      setPageIndex(newIdx)
+      dispatch({
+        type: 'replace_state',
+        state: { version: 1, page: basePage, elements: [] },
+      })
+      setSelectedIds([])
+      return next
+    })
+  }, [pageIndex, state])
+
+  /** Remove a página por index. Página 1 nunca é removível.
+   *  Se a página ativa for removida, volta pra anterior. */
+  const deletePageAt = useCallback((index: number) => {
+    if (index === 0) return                 // nunca remove a primeira
+    if (pageBuffer.length <= 1) return      // garantia (não deveria acontecer)
+    setPageBuffer(prev => {
+      const next = prev.filter((_, i) => i !== index)
+      // Decide nova activeIndex
+      let newActive = pageIndex
+      if (pageIndex === index) {
+        newActive = Math.max(0, index - 1)
+      } else if (pageIndex > index) {
+        newActive = pageIndex - 1
+      }
+      setPageIndex(newActive)
+      // Atualiza state ativo se mudou
+      if (newActive !== pageIndex) {
+        const target = next[newActive]
+        dispatch({
+          type: 'replace_state',
+          state: { version: 1, page: target.page, elements: target.elements },
+        })
+        setSelectedIds([])
+      }
+      return next
+    })
+  }, [pageIndex, pageBuffer])
 
   // ── Handlers de mutação ────────────────────────────────────────────────────
 
@@ -428,8 +565,8 @@ export default function CanvasEditor({
 
   function handleSave() {
     setError(null)
-    const snapshot = state
-    const json = currentJson
+    const snapshot = buildFullCanvasState()
+    const json = JSON.stringify(snapshot)
     startSave(async () => {
       try {
         await persist(snapshot, json)
@@ -446,7 +583,8 @@ export default function CanvasEditor({
   async function handlePreview() {
     setError(null)
     if (isDirty) {
-      try { await persist(state, currentJson) }
+      const snapshot = buildFullCanvasState()
+      try { await persist(snapshot, JSON.stringify(snapshot)) }
       catch (e: any) { setError(`Salvar antes de pré-visualizar falhou: ${e?.message ?? e}`); return }
     }
     window.open(`/dashboard/laudos/preview/${templateId}`, '_blank', 'noopener,noreferrer')
@@ -457,7 +595,7 @@ export default function CanvasEditor({
   useEffect(() => {
     const id = window.setInterval(async () => {
       // Não executa se já está salvando manualmente ou se nada mudou.
-      const snapshot = state
+      const snapshot = buildFullCanvasState()
       const json = JSON.stringify(snapshot)
       if (json === lastSavedRef.current) return
       if (isSaving || isAutoSaving) return
@@ -472,7 +610,7 @@ export default function CanvasEditor({
       }
     }, 60_000)
     return () => window.clearInterval(id)
-  }, [state, isSaving, isAutoSaving, persist])
+  }, [buildFullCanvasState, isSaving, isAutoSaving, persist])
 
   // ── Atalhos de teclado ─────────────────────────────────────────────────────
   // Globais (ignorados quando foco está em input/textarea/contentEditable
@@ -689,12 +827,54 @@ export default function CanvasEditor({
           <div className="bg-red-50 px-5 py-2 text-xs text-red-700">{error}</div>
         )}
 
-        {/* Page settings */}
+        {/* Page settings — afeta APENAS a página ativa (multi-page) */}
         <PageSettingsPanel
           page={state.page}
           onChange={page => dispatch({ type: 'set_page', page })}
           onUploadBackground={handleUploadBackground}
+          pageLabel={pageCountUI > 1 ? `Página ${pageIndex + 1} de ${pageCountUI}` : undefined}
         />
+
+        {/* Tab bar de páginas — só aparece se tiver multi-page OU
+            quando o admin clica + pra adicionar a primeira página extra */}
+        <div className="flex items-center gap-1 border-b border-slate-200 bg-slate-50 px-3 py-1.5 overflow-x-auto">
+          {pageBuffer.map((_, i) => (
+            <div key={i} className="flex items-center">
+              <button
+                onClick={() => switchToPage(i)}
+                className={`flex items-center gap-1.5 rounded-l-lg px-3 py-1 text-xs font-medium transition-colors ${
+                  i === pageIndex
+                    ? 'bg-violet-600 text-white'
+                    : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <FileText className="w-3 h-3" />
+                Página {i + 1}
+              </button>
+              {pageBuffer.length > 1 && i !== 0 && (
+                <button
+                  onClick={() => deletePageAt(i)}
+                  title={`Excluir página ${i + 1}`}
+                  className={`rounded-r-lg px-1.5 py-1 text-xs transition-colors ${
+                    i === pageIndex
+                      ? 'bg-violet-700 text-white hover:bg-red-600'
+                      : 'bg-white border border-l-0 border-slate-200 text-slate-400 hover:bg-red-50 hover:text-red-600'
+                  }`}
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          ))}
+          <button
+            onClick={addNewPage}
+            title="Adicionar página em branco"
+            className="flex items-center gap-1 rounded-lg border border-dashed border-violet-300 bg-white px-3 py-1 text-xs font-medium text-violet-700 hover:bg-violet-50"
+          >
+            <FilePlus className="w-3 h-3" />
+            Adicionar página
+          </button>
+        </div>
 
         {/* Body: toolbar | stage | properties */}
         <div className="grid flex-1 grid-cols-[80px_minmax(0,1fr)_minmax(280px,340px)] overflow-hidden">
