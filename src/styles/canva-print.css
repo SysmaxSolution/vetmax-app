@@ -7,6 +7,15 @@
  *
  * Cores de fundo (blocos do paciente, destaque de controlados) preservadas
  * via print-color-adjust: exact (Chrome/Edge/Safari + Firefox).
+ *
+ * Estratégia anti-tela-branca:
+ *   visibility: hidden em body * (esconde conteúdo SEM remover do DOM/layout)
+ *   + visibility: visible nos descendentes do shell
+ *   + position: absolute no shell pra tirar do flow e ancorar em (0,0).
+ *
+ * NÃO usar display: none nos ancestrais — em apps Next.js o body tem um
+ * div root que contém TODA a hierarquia até chegar no shell. Esconder ele
+ * apaga o shell junto (tela branca).
  * ========================================================================== */
 
 @page {
@@ -28,24 +37,30 @@
     margin: 0 !important;
     padding: 0 !important;
     background: #fff !important;
-    width: auto !important;
-    height: auto !important;
   }
 
-  /* Esconde tudo que não seja a folha. display:none é mais forte que
-     visibility:hidden — evita reservar espaço em branco que causaria
-     páginas extras. */
-  body > *:not(.canva-print-shell) {
-    display: none !important;
+  /* Esconde TODO o conteúdo (mas preserva a hierarquia até o shell) */
+  body * {
+    visibility: hidden;
   }
 
+  /* Reativa visibilidade do shell e descendentes */
+  .canva-print-shell,
+  .canva-print-shell * {
+    visibility: visible !important;
+  }
+
+  /* Tira o shell do flow e ancora em (0,0) — quaisquer ancestrais
+     ocultos não afetam a posição/tamanho da folha A4. */
   .canva-print-shell {
-    position: static !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 21cm !important;
     padding: 0 !important;
     margin: 0 !important;
     background: #fff !important;
     min-height: 0 !important;
-    width: 21cm !important;
   }
 
   .canva-print-controls {
@@ -74,7 +89,6 @@
     page-break-inside: avoid;
     break-inside: avoid;
     overflow: hidden !important;
-    /* Guides de margem do editor não devem aparecer no print */
   }
 
   .canva-a4-page:last-child {
@@ -82,7 +96,7 @@
     break-after: auto;
   }
 
-  /* Esconde guides de margem dashed violeta — só do editor */
+  /* Esconde guides de margem dashed violeta — só do editor, não do print */
   .canva-a4-page > div[aria-hidden="true"] {
     display: none !important;
   }
