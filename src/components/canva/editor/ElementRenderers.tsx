@@ -333,8 +333,8 @@ function RepeaterRenderer({ e, ctx, isPrint }: { e: RepeaterElement; ctx?: Resol
                   borderBottomStyle: 'solid',
                   borderBottomWidth: '1px',
                   borderBottomColor: headerBorderColor,
-                  paddingBottom: '4px',
-                  marginBottom: '0.18cm',
+                  paddingBottom: '10px',
+                  marginBottom: '0.25cm',
                   pageBreakAfter: 'avoid',
                   breakAfter: 'avoid',
                 }}
