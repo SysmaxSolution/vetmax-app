@@ -1,16 +1,21 @@
 'use client'
 
 /**
- * LaudoPrintable — wrapper que coloca o CanvaA4Preview em modo print e
- * dispara window.print() (e opcionalmente html2canvas+jspdf para download).
+ * LaudoPrintable — visualização para impressão e download PDF.
  *
- * Renderizado em /dashboard/consultation/[id]/print/[docId]. O usuário cai
- * direto na visualização do laudo; pressionar Ctrl+P aciona o motor nativo
- * do navegador, que respeita o @page A4 do canva-print.css.
+ * Estratégia anti-desconfiguração:
+ *   1. Preview é renderizado em TAMANHO A4 REAL (21cm × 29.7cm) — sem
+ *      shrink/max-width. What-you-see-is-what-you-print.
+ *   2. Download PDF (html2canvas + jsPDF): força width/height A4 em px
+ *      explícitos (794 × 1123 @ 96dpi) com windowWidth/Height — evita
+ *      que html2canvas inferir tamanho a partir da viewport zoomed.
+ *   3. Imprimir (Ctrl+P): CSS @media print esconde tudo menos a folha,
+ *      força width: 21cm e print-color-adjust: exact para que cores de
+ *      fundo (blocos rosa, destaque azul de controlados) imprimam.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Download, Printer } from 'lucide-react'
+import { Download, Loader2, Printer } from 'lucide-react'
 import type { CanvaContentJson, CanvaTemplateConfig } from '@/lib/canva/types'
 import type { CanvasState } from '@/lib/canva/canvas-state'
 import CanvaA4Preview from './CanvaA4Preview'
@@ -43,6 +48,11 @@ interface Props {
   resolveContext?: ResolveContext
 }
 
+// A4 portrait em pixels a 96dpi — base do render no DOM e do html2canvas.
+// 21cm × 96 / 2.54 = 793.7 → 794. 29.7cm × 96 / 2.54 = 1122.5 → 1123.
+const A4_W_PX = 794
+const A4_H_PX = 1123
+
 export default function LaudoPrintable({
   documentTitle, config, content, patient, autoPrint, canvasState, resolveContext,
 }: Props) {
@@ -63,18 +73,39 @@ export default function LaudoPrintable({
         import('jspdf'),
       ])
 
-      const pages = printAreaRef.current.querySelectorAll<HTMLElement>('.canva-a4-page')
+      const pages = Array.from(printAreaRef.current.querySelectorAll<HTMLElement>('.canva-a4-page'))
       const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
       const W = 210, H = 297
 
+      // Para cada página, fixa explicitamente width/height em px e captura
+      // com windowWidth/Height idênticos. Garante que html2canvas trabalha
+      // num "viewport sintético" A4 — independe do zoom/scroll do browser.
       for (let i = 0; i < pages.length; i++) {
         const node = pages[i]
+
+        // Snapshot dos estilos inline pra restaurar depois da captura
+        const orig = {
+          width:  node.style.width,
+          height: node.style.height,
+        }
+        node.style.width  = `${A4_W_PX}px`
+        node.style.height = `${A4_H_PX}px`
+
         const canvas = await html2canvas(node, {
           scale: 2,
           useCORS: true,
           backgroundColor: '#ffffff',
           logging: false,
+          width:        A4_W_PX,
+          height:       A4_H_PX,
+          windowWidth:  A4_W_PX,
+          windowHeight: A4_H_PX,
         })
+
+        // Restaura estilos originais
+        node.style.width  = orig.width
+        node.style.height = orig.height
+
         const img = canvas.toDataURL('image/png')
         if (i > 0) pdf.addPage('a4', 'portrait')
         pdf.addImage(img, 'PNG', 0, 0, W, H, undefined, 'FAST')
@@ -95,17 +126,17 @@ export default function LaudoPrintable({
   }, [autoPrint, doPrint])
 
   return (
-    <div className="canva-print-shell min-h-screen bg-slate-100 p-6">
-      <div className="canva-print-controls mx-auto mb-4 flex max-w-[820px] items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
-        <h1 className="text-sm font-semibold text-slate-800">{documentTitle}</h1>
-        <div className="flex items-center gap-2">
+    <div className="canva-print-shell min-h-screen bg-slate-100 py-8">
+      <div className="canva-print-controls mx-auto mb-4 flex w-[21cm] items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
+        <h1 className="text-sm font-semibold text-slate-800 truncate">{documentTitle}</h1>
+        <div className="flex items-center gap-2 flex-shrink-0">
           <button
             type="button"
             onClick={doDownloadPdf}
             disabled={busy}
             className="flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
           >
-            <Download className="w-3.5 h-3.5" />
+            {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
             Baixar PDF
           </button>
           <button
@@ -120,9 +151,13 @@ export default function LaudoPrintable({
         </div>
       </div>
 
+      {/* Render em TAMANHO A4 REAL (21cm) — what-you-see-is-what-you-print.
+          Sem max-w shrink. O CanvasStage internamente usa width: 21cm via
+          mode='print', então é literal 794px @ 96dpi. */}
       <div
         ref={printAreaRef}
-        className="canva-print-area mx-auto max-w-[820px]"
+        className="canva-print-area mx-auto"
+        style={{ width: '21cm' }}
       >
         {canvasState ? (
           <CanvasStage

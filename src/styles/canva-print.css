@@ -4,6 +4,9 @@
  * Importado globalmente em src/app/globals.css. Quando o usuário aciona
  * Ctrl+P em uma página com .canva-print-shell, o navegador imprime APENAS
  * a folha A4, sem chrome do dashboard, sem header de URL/data do Chrome.
+ *
+ * Cores de fundo (blocos do paciente, destaque de controlados) preservadas
+ * via print-color-adjust: exact (Chrome/Edge/Safari + Firefox).
  * ========================================================================== */
 
 @page {
@@ -12,30 +15,37 @@
 }
 
 @media print {
-  /* Esconde TUDO por padrão... */
+  /* Cores fixas — imprime backgrounds e gradientes como aparecem na tela.
+     Sem isso, navegadores removem cores de fundo por padrão (economia de tinta),
+     destruindo destaques visuais como o fundo azul de medicamentos controlados. */
+  html, body, .canva-print-shell, .canva-print-shell * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
   html, body {
     margin: 0 !important;
     padding: 0 !important;
     background: #fff !important;
+    width: auto !important;
+    height: auto !important;
   }
 
-  body * {
-    visibility: hidden !important;
-  }
-
-  /* ...e mostra apenas a área de impressão Canva. */
-  .canva-print-shell,
-  .canva-print-shell * {
-    visibility: visible !important;
+  /* Esconde tudo que não seja a folha. display:none é mais forte que
+     visibility:hidden — evita reservar espaço em branco que causaria
+     páginas extras. */
+  body > *:not(.canva-print-shell) {
+    display: none !important;
   }
 
   .canva-print-shell {
-    position: absolute !important;
-    inset: 0 !important;
+    position: static !important;
     padding: 0 !important;
     margin: 0 !important;
     background: #fff !important;
     min-height: 0 !important;
+    width: 21cm !important;
   }
 
   .canva-print-controls {
@@ -43,6 +53,7 @@
   }
 
   .canva-print-area {
+    width: 21cm !important;
     max-width: none !important;
     margin: 0 !important;
     padding: 0 !important;
@@ -63,11 +74,17 @@
     page-break-inside: avoid;
     break-inside: avoid;
     overflow: hidden !important;
+    /* Guides de margem do editor não devem aparecer no print */
   }
 
   .canva-a4-page:last-child {
     page-break-after: auto;
     break-after: auto;
+  }
+
+  /* Esconde guides de margem dashed violeta — só do editor */
+  .canva-a4-page > div[aria-hidden="true"] {
+    display: none !important;
   }
 
   /* Evita quebrar bloco do pet em duas páginas */
