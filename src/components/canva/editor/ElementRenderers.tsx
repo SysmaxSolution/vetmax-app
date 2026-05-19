@@ -147,58 +147,99 @@ function TextRenderer({ e, isPrint }: { e: TextElement; isPrint?: boolean }) {
   const fallback = isPrint ? '' : 'Texto livre'
   const raw = e.content || fallback
 
-  const containerStyle: React.CSSProperties = {
+  const vAlign = e.typography.vAlign ?? 'top'
+  const needsVerticalFlex = vAlign === 'middle' || vAlign === 'bottom'
+
+  // Estilo do TEXTO em si — typography (font, size, color, **text-align**,
+  // line-height, letter-spacing) + word-wrap. SEM display flex aqui — caso
+  // contrário cada nó HTML inline (texto, <strong>, <em>) viraria flex item
+  // separado e text-align seria ignorado.
+  const textStyle: React.CSSProperties = {
     width: '100%',
-    height: '100%',
-    boxSizing: 'border-box',
-    overflow: 'hidden',
     whiteSpace: 'pre-wrap',
     overflowWrap: 'break-word',
     ...typographyToCss(e.typography),
-    ...blockToCss(e.block),
-    ...vAlignToFlex(e.typography.vAlign),
   }
 
-  // Modo lista — divide em tópicos e prefixa cada um
+  // Estilo do BLOCO (bg, border, radius, padding) — sempre no container externo.
+  const outerBlockStyle = blockToCss(e.block)
+
+  // ── Modo Lista ──────────────────────────────────────────────────────────
   if (e.listStyle && e.listStyle !== 'none') {
     const topics = splitIntoTopics(raw)
+    const listEl = (
+      <ol style={{ listStyle: 'none', margin: 0, padding: 0, width: '100%', ...textStyle }}>
+        {topics.map((line, i) => (
+          <li
+            key={i}
+            style={{
+              display: 'flex', gap: 6, alignItems: 'baseline',
+              marginBottom: '0.12cm',
+              pageBreakInside: 'avoid', breakInside: 'avoid',
+            }}
+          >
+            <span style={{ flexShrink: 0, minWidth: '1.4em', fontWeight: 600 }}>
+              {getListPrefix(e.listStyle!, i + 1, e.listChar)}
+            </span>
+            <span
+              style={{ flex: 1, minWidth: 0 }}
+              dangerouslySetInnerHTML={{ __html: parseInlineMarkdown(line) }}
+            />
+          </li>
+        ))}
+      </ol>
+    )
+    return wrapWithVAlign(listEl, vAlign, outerBlockStyle)
+  }
+
+  // ── Modo Texto Livre ───────────────────────────────────────────────────
+  const textEl = (
+    <div
+      style={textStyle}
+      dangerouslySetInnerHTML={{ __html: parseInlineMarkdown(raw) }}
+    />
+  )
+
+  // vAlign=top: HTML direto no container outer (sem wrapper extra —
+  // garante que resize do Rnd re-flow o texto imediatamente).
+  if (!needsVerticalFlex) {
     return (
-      <div style={containerStyle}>
-        <ol style={{ listStyle: 'none', margin: 0, padding: 0, width: '100%' }}>
-          {topics.map((line, i) => (
-            <li
-              key={i}
-              style={{
-                display: 'flex', gap: 6, alignItems: 'baseline',
-                marginBottom: '0.12cm',
-                pageBreakInside: 'avoid', breakInside: 'avoid',
-              }}
-            >
-              <span style={{ flexShrink: 0, minWidth: '1.4em', fontWeight: 600 }}>
-                {getListPrefix(e.listStyle!, i + 1, e.listChar)}
-              </span>
-              <span
-                style={{ flex: 1, minWidth: 0 }}
-                dangerouslySetInnerHTML={{ __html: parseInlineMarkdown(line) }}
-              />
-            </li>
-          ))}
-        </ol>
-      </div>
+      <div
+        style={{
+          width: '100%', height: '100%',
+          boxSizing: 'border-box', overflow: 'hidden',
+          ...textStyle, ...outerBlockStyle,
+        }}
+        dangerouslySetInnerHTML={{ __html: parseInlineMarkdown(raw) }}
+      />
     )
   }
 
-  // Modo texto livre: aplica HTML markdown DIRETO no container externo.
-  // Antes havia um <div style={{width:'100%'}}> wrapper interno; quando o
-  // Rnd aumentava o pai, esse wrapper mantinha o cálculo de layout antigo
-  // (browser não recalculava word-wrap até interação seguinte). Remover o
-  // wrapper deixa o conteúdo de texto ser child direto do container que tem
-  // width: 100% — re-flow imediato em qualquer resize.
+  // vAlign middle/bottom: flex COLUMN externo para empurrar verticalmente,
+  // mas o conteúdo de texto vive num bloco normal (flow inline preservado,
+  // text-align aplicado nele individualmente — não no container flex).
+  return wrapWithVAlign(textEl, vAlign, outerBlockStyle)
+}
+
+/** Envolve children com flex column quando vAlign != top. Mantém typography
+ *  do filho intacta — só posiciona verticalmente. */
+function wrapWithVAlign(
+  children: React.ReactNode,
+  vAlign: 'top' | 'middle' | 'bottom',
+  outerBlockStyle: React.CSSProperties,
+): React.ReactElement {
+  const justifyContent = vAlign === 'middle' ? 'center'
+    : vAlign === 'bottom' ? 'flex-end'
+    : 'flex-start'
   return (
-    <div
-      style={containerStyle}
-      dangerouslySetInnerHTML={{ __html: parseInlineMarkdown(raw) }}
-    />
+    <div style={{
+      width: '100%', height: '100%',
+      boxSizing: 'border-box', overflow: 'hidden',
+      display: 'flex', flexDirection: 'column', justifyContent,
+      ...outerBlockStyle,
+    }}>
+      {children}
+    </div>
   )
 }
 
