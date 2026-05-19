@@ -19,6 +19,9 @@ import {
   type ResolveContext,
 } from '@/lib/canva/dynamic-tags'
 import { MOCK_REPEATER_DATA } from '@/lib/canva/mock-data'
+import {
+  parseInlineMarkdown, getListPrefix, splitIntoTopics,
+} from '@/lib/canva/text-format'
 
 // ── Estilo helpers ───────────────────────────────────────────────────────────
 
@@ -141,20 +144,59 @@ function BrushStrokeFallback({ e }: { e: BrushStrokeElement }) {
 }
 
 function TextRenderer({ e, isPrint }: { e: TextElement; isPrint?: boolean }) {
+  const fallback = isPrint ? '' : 'Texto livre'
+  const raw = e.content || fallback
+
+  const containerStyle: React.CSSProperties = {
+    width: '100%',
+    height: '100%',
+    overflow: 'hidden',
+    whiteSpace: 'pre-wrap',
+    overflowWrap: 'break-word',
+    wordBreak: 'break-word',
+    ...typographyToCss(e.typography),
+    ...blockToCss(e.block),
+    ...vAlignToFlex(e.typography.vAlign),
+  }
+
+  // Modo lista — divide em tópicos e prefixa cada um
+  if (e.listStyle && e.listStyle !== 'none') {
+    const topics = splitIntoTopics(raw)
+    return (
+      <div style={containerStyle}>
+        <ol style={{ listStyle: 'none', margin: 0, padding: 0, width: '100%' }}>
+          {topics.map((line, i) => (
+            <li
+              key={i}
+              style={{
+                display: 'flex', gap: 6, alignItems: 'baseline',
+                marginBottom: '0.12cm',
+                pageBreakInside: 'avoid', breakInside: 'avoid',
+              }}
+            >
+              <span style={{ flexShrink: 0, minWidth: '1.4em', fontWeight: 600 }}>
+                {getListPrefix(e.listStyle!, i + 1, e.listChar)}
+              </span>
+              <span
+                style={{ flex: 1, minWidth: 0 }}
+                dangerouslySetInnerHTML={{ __html: parseInlineMarkdown(line) }}
+              />
+            </li>
+          ))}
+        </ol>
+      </div>
+    )
+  }
+
+  // Modo texto livre — com markdown inline. Usa div interno (não span) para
+  // garantir que ocupa 100% da largura do container e o texto se quebra
+  // no limite real do bloco (não no limite do span inline).
   return (
-    <div
-      style={{
-        width: '100%',
-        height: '100%',
-        overflow: 'hidden',
-        whiteSpace: 'pre-wrap',
-        wordWrap: 'break-word',
-        ...typographyToCss(e.typography),
-        ...blockToCss(e.block),
-        ...vAlignToFlex(e.typography.vAlign),
-      }}
-    >
-      <span style={{ width: '100%' }}>{e.content || (isPrint ? '' : 'Texto livre')}</span>
+    <div style={containerStyle}>
+      <div
+        style={{ width: '100%' }}
+        dangerouslySetInnerHTML={{ __html: parseInlineMarkdown(raw) }}
+      />
     </div>
   )
 }

@@ -59,10 +59,17 @@ interface ElementCommon {
 
 // ── Element variants ─────────────────────────────────────────────────────────
 
+export type TextListStyle = 'none' | 'decimal' | 'bullet' | 'dash' | 'arrow' | 'check' | 'custom'
+
 export interface TextElement extends ElementCommon {
   kind: 'text'
   content: string            // texto livre (suporta \n)
   typography: TypographyStyle
+  /** Quando setado, cada linha não-vazia de content vira um tópico
+   *  com prefixo automático (número, bullet, emoji etc.). */
+  listStyle?: TextListStyle
+  /** Caractere/emoji usado quando listStyle === 'custom' (ex: '🐾'). */
+  listChar?: string
 }
 
 export interface ImageElement extends ElementCommon {

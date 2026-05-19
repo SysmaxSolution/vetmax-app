@@ -22,7 +22,10 @@ import type {
   TypographyStyle,
 } from '@/lib/canva/elements'
 import { findImageTag, findTag } from '@/lib/canva/dynamic-tags'
+import { wrapTextareaSelection } from '@/lib/canva/text-format'
+import type { TextListStyle } from '@/lib/canva/elements'
 import EmojiPicker from './EmojiPicker'
+import { Strikethrough } from 'lucide-react'
 
 interface Props {
   element: CanvasElement | null
@@ -320,6 +323,19 @@ function PinSection({ element, onPatch }: { element: CanvasElement; onPatch: Pro
 
 function TextSection({ element, onPatch }: { element: TextElement; onPatch: Props['onPatch'] }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  /** Aplica markdown inline (B/I/U/S) na seleção atual do textarea. */
+  function applyInline(prefix: string, suffix: string) {
+    const ta = textareaRef.current
+    if (!ta) return
+    const next = wrapTextareaSelection(ta, prefix, suffix)
+    onPatch({ content: next.value } as Partial<CanvasElement>)
+    requestAnimationFrame(() => {
+      ta.focus()
+      ta.setSelectionRange(next.selectionStart, next.selectionEnd)
+    })
+  }
+
   return (
     <Section title="Texto">
       <div className="space-y-1.5">
@@ -327,7 +343,6 @@ function TextSection({ element, onPatch }: { element: TextElement; onPatch: Prop
           <span className="text-[10px] text-slate-600">Conteúdo</span>
           <EmojiPicker
             onPick={emoji => {
-              // Insere na posição do cursor (ou no final se sem foco)
               const ta = textareaRef.current
               const value = element.content
               if (!ta) {
@@ -338,7 +353,6 @@ function TextSection({ element, onPatch }: { element: TextElement; onPatch: Prop
               const end = ta.selectionEnd ?? value.length
               const next = value.slice(0, start) + emoji + value.slice(end)
               onPatch({ content: next } as Partial<CanvasElement>)
-              // Reposiciona o cursor depois do emoji inserido
               requestAnimationFrame(() => {
                 ta.focus()
                 const pos = start + emoji.length
@@ -347,16 +361,107 @@ function TextSection({ element, onPatch }: { element: TextElement; onPatch: Prop
             }}
           />
         </div>
+
+        {/* Toolbar de formatação inline parcial (markdown leve) */}
+        <div className="flex items-center gap-0.5 rounded border border-slate-200 bg-slate-50 px-1.5 py-1">
+          <span className="text-[9px] uppercase tracking-wider text-slate-500 mr-1">Selecione e:</span>
+          <ToggleBtn active={false} title="Negrito ao redor da seleção (**texto**)"
+            onClick={() => applyInline('**', '**')}
+            icon={<Bold className="w-3.5 h-3.5" />} />
+          <ToggleBtn active={false} title="Itálico (*texto*)"
+            onClick={() => applyInline('*', '*')}
+            icon={<Italic className="w-3.5 h-3.5" />} />
+          <ToggleBtn active={false} title="Sublinhado (__texto__)"
+            onClick={() => applyInline('__', '__')}
+            icon={<Underline className="w-3.5 h-3.5" />} />
+          <ToggleBtn active={false} title="Tachado (~~texto~~)"
+            onClick={() => applyInline('~~', '~~')}
+            icon={<Strikethrough className="w-3.5 h-3.5" />} />
+        </div>
+
         <textarea
           ref={textareaRef}
           className="w-full resize-y rounded border border-slate-300 px-2 py-1 text-xs focus:border-slate-900 focus:outline-none"
-          rows={3}
+          rows={4}
           value={element.content}
           onChange={e => onPatch({ content: e.target.value } as Partial<CanvasElement>)}
         />
+
+        <p className="text-[9px] text-slate-400 leading-snug">
+          Sintaxe: <code>**negrito**</code> · <code>*itálico*</code> ·{' '}
+          <code>__sublinhado__</code> · <code>~~tachado~~</code>
+        </p>
       </div>
+
+      <TextListControls element={element} onPatch={onPatch} />
       <TypographyControls element={element} onPatch={onPatch} />
     </Section>
+  )
+}
+
+/** Controles de lista (enumera tópicos por linha). */
+function TextListControls({
+  element, onPatch,
+}: { element: TextElement; onPatch: Props['onPatch'] }) {
+  const current = element.listStyle ?? 'none'
+  const styles: Array<{ id: TextListStyle; label: string; preview: string }> = [
+    { id: 'none',    label: 'Sem lista',   preview: '—' },
+    { id: 'decimal', label: 'Numerado',    preview: '1.' },
+    { id: 'bullet',  label: 'Bullet',      preview: '•' },
+    { id: 'dash',    label: 'Traço',       preview: '–' },
+    { id: 'arrow',   label: 'Seta',        preview: '→' },
+    { id: 'check',   label: 'Check',       preview: '✓' },
+    { id: 'custom',  label: 'Custom',      preview: element.listChar?.trim() || '🐾' },
+  ]
+  return (
+    <details className="mt-3 rounded-lg border border-slate-200 bg-white">
+      <summary className="cursor-pointer px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500 hover:text-slate-700">
+        Lista de Tópicos
+        {current !== 'none' && (
+          <span className="ml-2 inline-flex items-center rounded-full bg-violet-100 px-1.5 py-0.5 text-[9px] font-semibold text-violet-700">
+            {styles.find(s => s.id === current)?.preview}
+          </span>
+        )}
+      </summary>
+      <div className="px-3 pb-3 pt-2 space-y-2">
+        <p className="text-[10px] text-slate-500">
+          Cada linha do texto vira um tópico com prefixo automático.
+        </p>
+        <div className="grid grid-cols-4 gap-1">
+          {styles.map(s => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => onPatch({ listStyle: s.id } as Partial<CanvasElement>)}
+              title={s.label}
+              className={`flex flex-col items-center justify-center rounded border px-1 py-1.5 transition ${
+                current === s.id
+                  ? 'border-violet-600 bg-violet-50 text-violet-700'
+                  : 'border-slate-200 bg-white text-slate-700 hover:border-slate-400'
+              }`}
+            >
+              <span className="text-base leading-none">{s.preview}</span>
+              <span className="text-[9px] mt-0.5">{s.label}</span>
+            </button>
+          ))}
+        </div>
+        {current === 'custom' && (
+          <div className="flex items-center gap-1.5">
+            <input
+              className="flex-1 rounded border border-slate-300 px-2 py-1 text-xs"
+              value={element.listChar ?? ''}
+              placeholder="🐾"
+              maxLength={4}
+              onChange={e => onPatch({ listChar: e.target.value } as Partial<CanvasElement>)}
+            />
+            <EmojiPicker
+              onPick={emoji => onPatch({ listChar: emoji } as Partial<CanvasElement>)}
+              align="right"
+            />
+          </div>
+        )}
+      </div>
+    </details>
   )
 }
 
