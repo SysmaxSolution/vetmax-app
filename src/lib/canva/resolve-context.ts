@@ -10,6 +10,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ResolveContext } from './dynamic-tags'
+import { MOCK_PATIENT, MOCK_TUTOR, buildMockConsultation } from './mock-data'
 
 const ROLE_LABELS: Record<string, string> = {
   admin:        'Administrador',
@@ -134,54 +135,10 @@ export async function buildPreviewContext(
       .then(r => r.data),
   ])
 
-  const now = new Date()
-
-  const mockPet = {
-    name: 'Toby',
-    species: 'Canino',
-    breed: 'Golden Retriever',
-    sex: 'Macho',
-    age: '4 anos',
-    weight: 28.4,
-    color: 'Dourado',
-    microchip: '900215001234567',
-  }
-
-  const mockTutor = {
-    name: 'Maria Silva',
-    cpf: '12345678900',
-    email: 'maria@exemplo.com',
-    phone: '11988887777',
-    address: 'Rua das Flores, 123',
-  }
-
-  const mockConsultation = {
-    date: now.toISOString(),
-    datetime: now.toISOString(),
-    diagnosis: 'Suspeita de cardiopatia hipertrófica',
-    complaint: 'Tosse seca persistente há 3 dias',
-    weight: 28.4,
-    temperature: 38.5,
-    visit_reason_label: 'Consulta',
-    // Listas para o Repeater
-    prescriptions: [
-      { medication: 'Dipirona 25mg/mL', dose: '1 mL', frequency: 'a cada 8h', duration_days: 5, route_of_administration: 'oral', prescription_type: 'common', is_controlled: false },
-      { medication: 'Tramadol 50mg',    dose: '50 mg', frequency: 'a cada 12h', duration_days: 5, route_of_administration: 'oral', prescription_type: 'controlled', is_controlled: true },
-      { medication: 'Pomada Furacin',   dose: 'fina camada', frequency: '3× ao dia', duration_days: 7, route_of_administration: 'topical', prescription_type: 'common', is_controlled: false },
-    ],
-    exam_items: [
-      { name: 'Hemograma completo', urgency: 'rotina' },
-      { name: 'Ecocardiograma',     urgency: 'urgente' },
-    ],
-    vaccines: [
-      { name: 'V10 (polivalente)', date: '15/04/2026', next: '15/04/2027' },
-    ],
-  }
-
   return {
-    patient: mockPet,
-    tutor: mockTutor,
-    consultation: mockConsultation,
+    patient: { ...MOCK_PATIENT },
+    tutor: { ...MOCK_TUTOR },
+    consultation: buildMockConsultation(),
     clinic: clinic ? (() => {
       const { city, state: uf } = extractCityState(
         clinic.address ?? undefined,

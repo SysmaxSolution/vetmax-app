@@ -18,6 +18,7 @@ import {
   resolveTagValue, resolveImageTagUrl, findImageTag,
   type ResolveContext,
 } from '@/lib/canva/dynamic-tags'
+import { MOCK_REPEATER_DATA } from '@/lib/canva/mock-data'
 
 // ── Estilo helpers ───────────────────────────────────────────────────────────
 
@@ -445,52 +446,12 @@ function labelForSource(source: RepeaterElement['source']): string {
   }
 }
 
+// Mock para preview no editor — reusa MOCK_REPEATER_DATA (única fonte da
+// verdade compartilhada com buildPreviewContext, evita drift entre o que
+// o editor mostra e o que o PDF de preview gera).
 const MOCK_REPEATER: Record<RepeaterElement['source'], Record<string, unknown>[]> = {
-  prescriptions: [
-    {
-      medication: 'Dipirona 25mg/mL', dose: '1 mL',
-      frequency: 'a cada 8h', duration_days: 5,
-      route_of_administration: 'oral', prescription_type: 'common',
-      is_controlled: false,
-      orientation: 'Administrar com alimento.',
-    },
-    {
-      medication: 'Drontal Plus', dose: '1 comp por 10 kg',
-      frequency: 'dose única, repetir em 30 dias', duration_days: 1,
-      route_of_administration: 'oral', prescription_type: 'common',
-      is_controlled: false,
-    },
-    {
-      medication: 'Tramadol 50mg', dose: '50 mg',
-      frequency: 'a cada 12h', duration_days: 5,
-      route_of_administration: 'oral', prescription_type: 'controlled',
-      is_controlled: true,
-      orientation: 'Receituário azul. Manter fora do alcance.',
-    },
-    {
-      medication: 'Pomada Furacin', dose: 'Aplicar fina camada',
-      frequency: '3× ao dia', duration_days: 7,
-      route_of_administration: 'topical', prescription_type: 'common',
-      is_controlled: false,
-    },
-    {
-      medication: 'Cloridrato de Tramadol Manipulado', dose: '5 gotas',
-      frequency: 'a cada 8h', duration_days: 3,
-      route_of_administration: 'oral', prescription_type: 'manipulated',
-      is_controlled: true,
-    },
-  ],
-  exam_items: [
-    { name: 'Hemograma completo', urgency: 'rotina' },
-    { name: 'Ecocardiograma',     urgency: 'urgente' },
-    { name: 'Bioquímica renal',   urgency: 'rotina' },
-  ],
-  vaccines: [
-    { name: 'V10 (polivalente)', date: '15/04/2026', next: '15/04/2027' },
-    { name: 'Antirrábica',       date: '15/04/2026', next: '15/04/2027' },
-  ],
-  dynamic_fields: [
-    { name: 'Pressão Arterial: 120/80 mmHg' },
-    { name: 'Glicemia: 95 mg/dL' },
-  ],
+  prescriptions:  [...MOCK_REPEATER_DATA.prescriptions],
+  exam_items:     [...MOCK_REPEATER_DATA.exam_items],
+  vaccines:       [...MOCK_REPEATER_DATA.vaccines],
+  dynamic_fields: [...MOCK_REPEATER_DATA.dynamic_fields],
 }
