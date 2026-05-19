@@ -353,11 +353,14 @@ function RepeaterRenderer({ e, ctx, isPrint }: { e: RepeaterElement; ctx?: Resol
                     key={i}
                     style={{
                       display: 'flex', gap: 6, alignItems: 'baseline',
-                      marginBottom: e.lineSpacing != null ? `${e.lineSpacing}pt` : undefined,
+                      marginBottom: e.lineSpacing != null ? `${e.lineSpacing}pt` : '3pt',
                       pageBreakInside: 'avoid', breakInside: 'avoid',
                       background: isHighlighted ? (e.highlightColor ?? '#dbeafe') : undefined,
-                      borderRadius: isHighlighted ? 3 : undefined,
-                      padding: isHighlighted ? '1pt 4pt' : undefined,
+                      borderRadius: isHighlighted ? 4 : undefined,
+                      // Padding mais generoso (4-5px vert) para que a tarja azul
+                      // do destaque cubra o item inteiro com folga. 1pt era
+                      // ~0.35mm — virava traço fino no PDF rasterizado.
+                      padding: isHighlighted ? '5px 10px' : '1px 2px',
                     }}
                   >
                     {e.groupAndEnumerate && (
