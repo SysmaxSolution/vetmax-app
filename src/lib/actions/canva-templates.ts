@@ -16,6 +16,8 @@ import type {
 import { CANVA_DEFAULT_MARGINS, validateContent } from '@/lib/canva/types'
 import type { CanvasState } from '@/lib/canva/canvas-state'
 import { isCanvasState } from '@/lib/canva/canvas-state'
+import type { FillableFieldElement } from '@/lib/canva/elements'
+import type { VitalSigns } from '@/types'
 
 const BG_BUCKET = 'patient-documents-bg'
 
@@ -406,6 +408,220 @@ function stripCanvasAssetUrls(canvasState: unknown): unknown {
     ...cs,
     page: page ? { ...page, backgroundImageUrl: null } : page,
     elements: elements.map(el => el.kind === 'image' ? { ...el, url: '', storagePath: undefined } : el),
+  }
+}
+
+// ── IA preenchendo Fillable Fields do Canvas Visual ──────────────────────────
+
+export interface CanvasDraftResult {
+  template_id: string
+  template_name: string
+  template_type: string
+  /** Definições dos FillableFieldElement extraídos do canvas_state. */
+  fillable_definitions: FillableFieldElement[]
+  /** Valores que a IA conseguiu inferir do contexto + transcrição. */
+  fillable_values: Record<string, string>
+  /** fieldKeys que a IA preencheu. */
+  filled_keys: string[]
+  /** fieldKeys que ficaram vazios (IA não soube preencher). */
+  unfilled_keys: string[]
+}
+
+/**
+ * Gera rascunho de documento Canvas Visual usando IA — preenche os
+ * FillableFieldElement com base no contexto da consulta (transcrição de
+ * voz + notas do vet + sinais vitais + dados do pet/tutor).
+ *
+ * Mesmo padrão da legacy generateDocumentDraft, mas trabalha com canvas_state
+ * em vez de extracted_fields. Templates sem FillableFieldElement retornam
+ * um draft vazio (vet preenche manualmente no editor).
+ */
+export async function generateCanvasDocumentDraft(
+  templateId: string,
+  consultationId: string,
+  hint?: string,
+): Promise<CanvasDraftResult | { error: string }> {
+  const { profile } = await requireClinic()
+  const admin = createAdminClient()
+
+  // 1. Carrega template
+  const { data: template, error: tErr } = await admin
+    .from('document_templates')
+    .select('id, name, type, canvas_state')
+    .eq('id', templateId)
+    .eq('clinic_id', profile.clinic_id)
+    .single()
+  if (tErr || !template) return { error: 'Template não encontrado.' }
+  if (!isCanvasState(template.canvas_state)) {
+    return { error: 'Template não é Canvas Visual.' }
+  }
+
+  // 2. Extrai FillableFieldElement do canvas_state
+  const cs = template.canvas_state as CanvasState
+  const fillableDefs = cs.elements.filter(
+    (e): e is FillableFieldElement => e.kind === 'fillable_field',
+  )
+
+  // Sem campos preenchíveis → draft vazio (vet preenche manualmente, sem IA)
+  if (fillableDefs.length === 0) {
+    return {
+      template_id: template.id,
+      template_name: template.name,
+      template_type: template.type,
+      fillable_definitions: [],
+      fillable_values: {},
+      filled_keys: [],
+      unfilled_keys: [],
+    }
+  }
+
+  // 3. Carrega contexto da consulta (igual ao generateDocumentDraft legacy)
+  const { data: consult, error: cErr } = await admin
+    .from('consultations')
+    .select('id, visit_reason, weight, temperature, triage_notes, vet_notes, audio_transcript, vital_signs, patient_id')
+    .eq('id', consultationId)
+    .eq('clinic_id', profile.clinic_id)
+    .single()
+  if (cErr || !consult) return { error: 'Consulta não encontrada.' }
+
+  const { data: patient } = await admin
+    .from('patients')
+    .select('name, species, breed, gender, color, birth_date, neutered, allergies, chronic_diseases, past_surgeries, tutor_id')
+    .eq('id', consult.patient_id)
+    .eq('clinic_id', profile.clinic_id)
+    .single()
+
+  const { data: tutor } = patient?.tutor_id
+    ? await admin.from('tutors').select('name, cpf, phone').eq('id', patient.tutor_id).eq('clinic_id', profile.clinic_id).single()
+    : { data: null }
+
+  // 4. Reconstrói sinais vitais
+  let vitals: Partial<VitalSigns> = {}
+  if (consult.vital_signs && typeof consult.vital_signs === 'object') {
+    vitals = consult.vital_signs as Partial<VitalSigns>
+  } else if (consult.weight || consult.temperature || consult.triage_notes) {
+    try { vitals = JSON.parse(consult.triage_notes ?? '') } catch { /* texto livre */ }
+    vitals.weight = consult.weight ?? vitals.weight
+    vitals.temperature = consult.temperature ?? vitals.temperature
+  }
+
+  // 5. Idade do pet
+  const age = patient?.birth_date
+    ? (() => {
+        const months = Math.floor(
+          (Date.now() - new Date(patient.birth_date).getTime()) / (1000 * 60 * 60 * 24 * 30.5)
+        )
+        return months < 12 ? `${months} meses` : `${Math.floor(months / 12)} anos`
+      })()
+    : 'Não informada'
+
+  // 6. Pacote de contexto pra IA
+  const context = [
+    `DADOS DO ATENDIMENTO:`,
+    `Pet: ${patient?.name ?? 'N/I'} | Espécie: ${patient?.species ?? 'N/I'} | Raça: ${patient?.breed ?? 'N/I'}`,
+    `Sexo: ${patient?.gender ?? 'N/I'} | Idade: ${age} | Pelagem: ${patient?.color ?? 'N/I'} | Castrado: ${patient?.neutered ? 'Sim' : 'Não'}`,
+    `Alergias: ${patient?.allergies ?? 'Nenhuma conhecida'}`,
+    `Doenças crônicas: ${patient?.chronic_diseases ?? 'Nenhuma'}`,
+    `Cirurgias anteriores: ${patient?.past_surgeries ?? 'Nenhuma'}`,
+    ``,
+    `Tutor: ${tutor?.name ?? 'N/I'} | CPF: ${tutor?.cpf ?? 'N/I'} | Tel: ${tutor?.phone ?? 'N/I'}`,
+    ``,
+    `SINAIS VITAIS (Triagem):`,
+    `Peso: ${vitals.weight ?? 'N/I'} kg | Temp. Retal: ${vitals.temperature ?? 'N/I'}°C`,
+    `FC: ${vitals.heart_rate ?? 'N/I'} bpm | FR: ${vitals.respiratory_rate ?? 'N/I'} mov/min`,
+    `Mucosas: ${vitals.mucous_color ?? 'N/I'} | TRC: ${vitals.crt ?? 'N/I'}`,
+    `Queixa Principal: ${vitals.chief_complaint ?? 'N/I'}`,
+    ``,
+    `NOTAS DO VETERINÁRIO:`,
+    consult.vet_notes || 'Não registradas',
+    ``,
+    `TRANSCRIÇÃO DE VOZ:`,
+    consult.audio_transcript || 'Não disponível',
+  ].join('\n')
+
+  const fieldsDesc = fillableDefs
+    .map(f => {
+      const type = f.inputType ?? 'text'
+      const req = f.required ? ' [OBRIGATÓRIO]' : ''
+      const hintTxt = f.placeholder ? ` (formato: ${f.placeholder})` : ''
+      return `- ${f.fieldKey} — "${f.label.replace(/:\s*$/, '').trim()}"${req} (tipo: ${type})${hintTxt}`
+    })
+    .join('\n')
+
+  const hintSection = hint
+    ? `\nCONTEXTO ADICIONAL (sugestão de voz):\n"${hint}"\n`
+    : ''
+
+  const prompt = `Você é um assistente de documentação clínica veterinária. Preencha os CAMPOS do laudo abaixo com base nos dados do atendimento.
+
+${context}
+${hintSection}
+CAMPOS A PREENCHER — template "${template.name}" (${template.type}):
+${fieldsDesc}
+
+REGRAS ABSOLUTAS:
+1. Retorne APENAS um objeto JSON válido, sem markdown, sem texto extra
+2. Use os fieldKey exatos como chaves (snake_case)
+3. Preencha SOMENTE campos onde há informação concreta nos dados acima
+4. Para campos sem informação concreta, use null — NUNCA invente dados clínicos
+5. Datas em formato DD/MM/AAAA (ex: para "data_retirada_pontos", se a transcrição menciona "10 dias", calcule a partir de HOJE)
+6. Números sem unidades (ex: 12.5 não "12.5 kg")
+7. Texto em PT-BR formal e objetivo
+8. Hoje é ${new Date().toLocaleDateString('pt-BR')}
+
+Responda SOMENTE com o JSON:`
+
+  // 7. Chama IA
+  try {
+    const { default: Anthropic } = await import('@anthropic-ai/sdk')
+    const client = new Anthropic()
+    const response = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 1024,
+      messages: [{ role: 'user', content: prompt }],
+    })
+    const rawText = response.content[0].type === 'text' ? response.content[0].text.trim() : ''
+    let aiValues: Record<string, unknown> = {}
+    try {
+      const match = rawText.match(/\{[\s\S]*\}/)
+      if (match) aiValues = JSON.parse(match[0])
+    } catch {
+      // Sem fallback útil — segue retornando vazio para vet preencher
+      aiValues = {}
+    }
+
+    // 8. Normaliza valores: apenas strings não-vazias contam como "preenchido"
+    const fillable_values: Record<string, string> = {}
+    const filled_keys: string[] = []
+    const unfilled_keys: string[] = []
+
+    for (const def of fillableDefs) {
+      const raw = aiValues[def.fieldKey]
+      if (raw === null || raw === undefined || raw === '') {
+        // IA não preencheu — usa defaultValue se houver
+        if (def.defaultValue) {
+          fillable_values[def.fieldKey] = def.defaultValue
+          filled_keys.push(def.fieldKey)
+        } else {
+          unfilled_keys.push(def.fieldKey)
+        }
+      } else {
+        fillable_values[def.fieldKey] = String(raw)
+        filled_keys.push(def.fieldKey)
+      }
+    }
+
+    return {
+      template_id: template.id,
+      template_name: template.name,
+      template_type: template.type,
+      fillable_definitions: fillableDefs,
+      fillable_values,
+      filled_keys,
+      unfilled_keys,
+    }
+  } catch (e: any) {
+    return { error: e?.message ?? 'IA indisponível no momento.' }
   }
 }
 

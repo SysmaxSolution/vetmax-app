@@ -12,6 +12,7 @@ import {
   generateDocumentDraft, savePatientDocument, updatePatientDocument,
   type PatientDocument,
 } from '@/lib/actions/documents'
+import { generateCanvasDocumentDraft } from '@/lib/actions/canva-templates'
 import { uploadDocumentPdf } from '@/lib/actions/attachments'
 import type { Attachment } from '@/lib/actions/attachments'
 import { generateDocumentPdfBlob, blobToBase64 } from '@/lib/pdf-generator'
@@ -252,28 +253,50 @@ export default function DocumentsSection({
     setSaveSuccess(false)
   }
 
-  // ── Generate draft via AI (ou redireciona pro editor Canvas Visual) ─────────
+  // ── Generate draft via AI ──────────────────────────────────────────────────
   const handleGenerate = async () => {
     if (!selectedTemplateId) return
+    setIsGenerating(true)
+    setModalError(null)
 
-    // Templates do motor Canvas Visual têm canvas_state (e geralmente
-    // extracted_fields vazio). Não chama IA — redireciona pro form do vet
-    // em /dashboard/laudos/novo que carrega o canvas_state e mostra os
-    // FillableFieldElement (campos preenchíveis na consulta).
     const selectedTpl = allTemplates.find(t => t.id === selectedTemplateId)
+
+    // Canvas Visual: IA preenche fillable_fields via contexto + transcrição
+    // Resultado fica no sessionStorage (chave canva-draft-{template_id}) pra
+    // ser consumido pelo NewCanvaLaudoForm na rota /dashboard/laudos/novo.
     if (selectedTpl?.canvas_state) {
-      setShowModal(false)
-      setSelectedTemplateId('')
-      setActiveHint(undefined)
-      router.push(
-        `/dashboard/laudos/novo?consultation_id=${consultation.id}&template_id=${selectedTemplateId}`,
-      )
+      try {
+        const result = await generateCanvasDocumentDraft(
+          selectedTemplateId, consultation.id, activeHint,
+        )
+        if ('error' in result) { setModalError(result.error); return }
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem(
+            `canva-draft-${selectedTemplateId}`,
+            JSON.stringify({
+              fillable_values: result.fillable_values,
+              filled_keys: result.filled_keys,
+              unfilled_keys: result.unfilled_keys,
+              hint: activeHint,
+              timestamp: Date.now(),
+            }),
+          )
+        }
+        setShowModal(false)
+        setSelectedTemplateId('')
+        setActiveHint(undefined)
+        router.push(
+          `/dashboard/laudos/novo?consultation_id=${consultation.id}&template_id=${selectedTemplateId}`,
+        )
+      } catch (e: any) {
+        setModalError(e.message ?? 'Erro ao gerar documento Canvas.')
+      } finally {
+        setIsGenerating(false)
+      }
       return
     }
 
     // Fluxo legado — IA + extracted_fields
-    setIsGenerating(true)
-    setModalError(null)
     try {
       const result = await generateDocumentDraft(selectedTemplateId, consultation.id, activeHint)
       if ('error' in result) { setModalError(result.error); return }
@@ -567,9 +590,11 @@ export default function DocumentsSection({
                 </div>
               )}
 
-              {/* Botão principal — adapta texto/cor conforme o template selecionado:
-                  • Canvas Visual: redireciona direto pra form com canvas_state.
-                  • Legado: chama IA. */}
+              {/* Botão principal "Gerar Documento" — chama IA para ambos os motores.
+                  • Canvas Visual: IA preenche fillable_fields via contexto, salva
+                    em sessionStorage e abre /dashboard/laudos/novo (form mostra
+                    valores preenchidos + faltantes pro vet completar).
+                  • Legado: IA preenche extracted_fields, abre form de revisão. */}
               <button onClick={handleGenerate} disabled={!selectedTemplateId || isGenerating}
                 className={`w-full flex items-center justify-center gap-2 px-5 py-3 font-semibold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-white ${
                   selectedIsCanvas
@@ -578,16 +603,13 @@ export default function DocumentsSection({
                 }`}>
                 {isGenerating ? (
                   <><Loader2 className="w-4 h-4 animate-spin" />IA preenchendo campos...</>
-                ) : selectedIsCanvas ? (
-                  <><LayoutTemplate className="w-4 h-4" />Abrir editor do laudo</>
                 ) : (
-                  <><Sparkles className="w-4 h-4" />Gerar com IA</>
+                  <><Sparkles className="w-4 h-4" />Gerar Documento com IA</>
                 )}
               </button>
 
-              {/* Atalho secundário só faz sentido quando o template é legado
-                  (IA) — permite ao admin abrir o editor Canva sem usar IA. */}
-              {!selectedIsCanvas && selectedTemplateId && (
+              {/* Atalho: abrir no editor sem passar pela IA */}
+              {selectedTemplateId && (
                 <button
                   onClick={() => {
                     setShowModal(false)
@@ -596,11 +618,9 @@ export default function DocumentsSection({
                     )
                   }}
                   disabled={isGenerating}
-                  className="w-full flex items-center justify-center gap-2 px-5 py-2.5 border border-violet-300 text-violet-700 bg-violet-50 hover:bg-violet-100 font-medium rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Abrir o editor Canvas Visual sem IA"
+                  className="w-full flex items-center justify-center gap-2 px-5 py-2 border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 text-xs font-medium rounded-xl transition-colors disabled:opacity-50"
                 >
-                  <LayoutTemplate className="w-4 h-4" />
-                  Abrir no Canvas Visual
+                  Preencher manualmente (sem IA)
                 </button>
               )}
             </div>
