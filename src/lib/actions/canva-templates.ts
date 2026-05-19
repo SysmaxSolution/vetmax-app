@@ -172,17 +172,29 @@ export interface DuplicateTemplateInput {
   template_id: string
   target_clinic_ids: string[]
   new_name?: string
+  /** Quando true (default), copia papel timbrado e imagens fisicamente
+   *  no Storage para a clínica destino (mantém path correto da RLS).
+   *  Quando false, só estrutura — assets ficam vazios na cópia. */
+  replicate_assets?: boolean
+}
+
+export interface DuplicateTemplateResult {
+  created_ids: string[]
+  skipped: Array<{ clinic_id: string; reason: string }>
+  assets_copied: number
+  assets_failed: number
 }
 
 export async function duplicateTemplateToClinics(
   input: DuplicateTemplateInput,
-): Promise<{ created_ids: string[]; skipped: Array<{ clinic_id: string; reason: string }> }> {
+): Promise<DuplicateTemplateResult> {
   const { profile } = await requireSysmaxSupport()
   if (input.target_clinic_ids.length === 0) throw new Error('escolha ao menos uma clínica de destino')
 
+  const replicateAssets = input.replicate_assets !== false
   const admin = createAdminClient()
 
-  // 1. Lê template original — admin bypassa RLS (sysmax suporta cross-clinic)
+  // 1. Lê template original — admin bypassa RLS (sysmax suporte é cross-clinic)
   const { data: original, error: readErr } = await admin
     .from('document_templates')
     .select(`
@@ -198,12 +210,13 @@ export async function duplicateTemplateToClinics(
 
   const finalName = (input.new_name?.trim() || original.name)
 
-  // 2. Insere uma cópia por clínica (idempotência via nome — pula clínicas que
-  //    já tenham um template com o mesmo nome e tipo)
   const created_ids: string[] = []
   const skipped: Array<{ clinic_id: string; reason: string }> = []
+  let assets_copied = 0
+  let assets_failed = 0
 
   for (const clinicId of input.target_clinic_ids) {
+    // Idempotência via name + type
     const { data: existing } = await admin
       .from('document_templates')
       .select('id')
@@ -217,6 +230,29 @@ export async function duplicateTemplateToClinics(
       continue
     }
 
+    // 2. Copia os assets fisicamente — cada clínica fica com seu próprio path
+    //    no bucket (respeita RLS por clinic_id) mas conteúdo idêntico.
+    let bgUrl: string | null = null
+    let newCanvasState: unknown = original.canvas_state
+
+    if (replicateAssets) {
+      // Background da tabela document_templates (campo legado)
+      if (original.background_image_url) {
+        const cloned = await cloneStorageAsset(admin, original.background_image_url, null, clinicId)
+        if (cloned) { bgUrl = cloned.signedUrl; assets_copied++ }
+        else assets_failed++
+      }
+      // canvas_state (papel timbrado + image elements)
+      const result = await replicateCanvasAssets(admin, original.canvas_state, clinicId)
+      newCanvasState = result.state
+      assets_copied += result.copied
+      assets_failed += result.failed
+    } else {
+      // Modo estrutura-só: limpa as URLs
+      bgUrl = null
+      newCanvasState = stripCanvasAssetUrls(original.canvas_state)
+    }
+
     const { data: inserted, error: insErr } = await admin
       .from('document_templates')
       .insert({
@@ -227,7 +263,7 @@ export async function duplicateTemplateToClinics(
         extracted_fields: original.extracted_fields ?? [],
         template_html: original.template_html,
         page_images: original.page_images,
-        original_pdf_path: null,   // cada clínica precisa subir o próprio PDF
+        original_pdf_path: null,   // PDF original (motor pixel-perfect legado) — pula
         original_pdf_size_bytes: original.original_pdf_size_bytes,
         page_count: original.page_count,
         page_dimensions: original.page_dimensions,
@@ -235,15 +271,13 @@ export async function duplicateTemplateToClinics(
         page_images_storage_paths: null,
         cleaned_page_paths: null,
         engine: original.engine,
-        // canvas_state preserva a estrutura mas a URL do papel timbrado vira
-        // null — cada clínica precisa enviar o seu próprio asset
-        background_image_url: null,
+        background_image_url: bgUrl,
         margin_top: original.margin_top,
         margin_bottom: original.margin_bottom,
         margin_left: original.margin_left,
         margin_right: original.margin_right,
         block_style: original.block_style,
-        canvas_state: stripClinicAssets(original.canvas_state),
+        canvas_state: newCanvasState,
       })
       .select('id')
       .single()
@@ -257,29 +291,121 @@ export async function duplicateTemplateToClinics(
 
   revalidatePath('/dashboard/management')
 
-  // Log de auditoria simples — facilita rastrear replicações feitas pelo suporte
-  console.log(`[sysmax-support] ${profile.id} duplicou template ${input.template_id} para ${created_ids.length} clínica(s) (skipped: ${skipped.length})`)
+  console.log(
+    `[sysmax-support] ${profile.id} duplicou template ${input.template_id} para ` +
+    `${created_ids.length} clínica(s) (skipped: ${skipped.length}, ` +
+    `assets: ${assets_copied} copiados / ${assets_failed} falhos)`
+  )
 
-  return { created_ids, skipped }
+  return { created_ids, skipped, assets_copied, assets_failed }
 }
 
-/** Remove URLs de assets específicos de clínica do canvas_state copiado.
- *  Cada clínica deve subir seu próprio papel timbrado / imagens.
- *  Estrutura preservada — só as URLs viram null. */
-function stripClinicAssets(canvasState: unknown): unknown {
+// ── Storage asset replication helpers ────────────────────────────────────────
+
+type AdminClient = ReturnType<typeof createAdminClient>
+
+/** Extrai o storage_path de uma signed URL do bucket patient-documents-bg.
+ *  Formatos comuns:
+ *    /storage/v1/object/sign/patient-documents-bg/<clinic_id>/<file>?token=...
+ *    /storage/v1/object/public/patient-documents-bg/<clinic_id>/<file>
+ *    /storage/v1/render/image/sign/patient-documents-bg/<path>?...
+ */
+function extractStoragePath(url: string): string | null {
+  if (!url) return null
+  const m = url.match(
+    /\/storage\/v1\/(?:object|render\/image)\/(?:sign|public|authenticated)\/patient-documents-bg\/([^?]+)/,
+  )
+  if (!m) return null
+  try { return decodeURIComponent(m[1]) } catch { return m[1] }
+}
+
+/** Copia um asset do bucket patient-documents-bg para um novo path
+ *  pertencente à clínica destino. Retorna a signed URL nova (1 ano). */
+async function cloneStorageAsset(
+  admin: AdminClient,
+  sourceUrl: string | null | undefined,
+  knownSourcePath: string | null | undefined,
+  targetClinicId: string,
+): Promise<{ signedUrl: string; storagePath: string } | null> {
+  const sourcePath = knownSourcePath || (sourceUrl ? extractStoragePath(sourceUrl) : null)
+  if (!sourcePath) {
+    console.warn('[duplicate] sem storage_path extraível para asset:', sourceUrl)
+    return null
+  }
+
+  const fileName = sourcePath.split('/').pop() ?? `asset_${Date.now()}.png`
+  const ext = fileName.split('.').pop()?.toLowerCase() ?? 'png'
+  // Prefixo "dup_" deixa claro no bucket que veio de uma replicação
+  const targetPath = `${targetClinicId}/dup_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${ext}`
+
+  const { error: copyErr } = await admin.storage.from(BG_BUCKET).copy(sourcePath, targetPath)
+  if (copyErr) {
+    console.error(`[duplicate] copy ${sourcePath} → ${targetPath} falhou:`, copyErr.message)
+    return null
+  }
+
+  const { data: read, error: readErr } = await admin.storage
+    .from(BG_BUCKET)
+    .createSignedUrl(targetPath, 60 * 60 * 24 * 365)
+  if (readErr || !read) {
+    console.error(`[duplicate] signedUrl ${targetPath} falhou:`, readErr?.message)
+    return null
+  }
+
+  return { signedUrl: read.signedUrl, storagePath: targetPath }
+}
+
+/** Percorre canvas_state, copia background da página + URLs de image elements
+ *  para a clínica destino. Retorna o novo canvas_state com URLs atualizadas. */
+async function replicateCanvasAssets(
+  admin: AdminClient,
+  canvasState: unknown,
+  targetClinicId: string,
+): Promise<{ state: unknown; copied: number; failed: number }> {
+  if (!canvasState || typeof canvasState !== 'object') return { state: canvasState, copied: 0, failed: 0 }
+  const cs = { ...(canvasState as Record<string, unknown>) }
+  let copied = 0
+  let failed = 0
+
+  // Background da página
+  const page = cs.page as Record<string, unknown> | undefined
+  if (page?.backgroundImageUrl && typeof page.backgroundImageUrl === 'string') {
+    const cloned = await cloneStorageAsset(admin, page.backgroundImageUrl, null, targetClinicId)
+    if (cloned) { cs.page = { ...page, backgroundImageUrl: cloned.signedUrl }; copied++ }
+    else { failed++ }
+  }
+
+  // Image elements (kind='image' com url + storagePath opcional)
+  const elements = cs.elements as Array<Record<string, unknown>> | undefined
+  if (Array.isArray(elements)) {
+    const replaced = await Promise.all(elements.map(async el => {
+      if (el.kind === 'image' && typeof el.url === 'string' && el.url) {
+        const cloned = await cloneStorageAsset(
+          admin, el.url, typeof el.storagePath === 'string' ? el.storagePath : null,
+          targetClinicId,
+        )
+        if (cloned) { copied++; return { ...el, url: cloned.signedUrl, storagePath: cloned.storagePath } }
+        failed++
+        return el
+      }
+      return el
+    }))
+    cs.elements = replaced
+  }
+
+  return { state: cs, copied, failed }
+}
+
+/** Limpa URLs de assets (modo "estrutura-só" no Duplicate). */
+function stripCanvasAssetUrls(canvasState: unknown): unknown {
   if (!canvasState || typeof canvasState !== 'object') return canvasState
   const cs = canvasState as Record<string, unknown>
   const page = (cs.page as Record<string, unknown> | undefined) ?? null
   const elements = (cs.elements as Array<Record<string, unknown>> | undefined) ?? []
-
   return {
     ...cs,
     page: page ? { ...page, backgroundImageUrl: null } : page,
-    elements: elements.map(el => {
-      // Image element (URL própria) → limpa
-      if (el.kind === 'image') return { ...el, url: '', storagePath: undefined }
-      return el
-    }),
+    elements: elements.map(el => el.kind === 'image' ? { ...el, url: '', storagePath: undefined } : el),
   }
 }
 

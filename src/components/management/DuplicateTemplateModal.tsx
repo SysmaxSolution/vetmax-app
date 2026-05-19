@@ -13,7 +13,7 @@ import { useEffect, useMemo, useState, useTransition } from 'react'
 import { Copy, Loader2, Search, X, AlertCircle, CheckCircle2 } from 'lucide-react'
 import {
   listClinicsForSupport, duplicateTemplateToClinics,
-  type ClinicSummary,
+  type ClinicSummary, type DuplicateTemplateResult,
 } from '@/lib/actions/canva-templates'
 import type { DocumentTemplate } from '@/types'
 
@@ -34,7 +34,8 @@ export default function DuplicateTemplateModal({
   const [newName, setNewName] = useState(template.name)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitting, startSubmit] = useTransition()
-  const [result, setResult] = useState<{ created_ids: string[]; skipped: Array<{ clinic_id: string; reason: string }> } | null>(null)
+  const [result, setResult] = useState<DuplicateTemplateResult | null>(null)
+  const [replicateAssets, setReplicateAssets] = useState(true)
 
   useEffect(() => {
     listClinicsForSupport()
@@ -88,6 +89,7 @@ export default function DuplicateTemplateModal({
           template_id: template.id,
           target_clinic_ids: Array.from(selectedIds),
           new_name: newName !== template.name ? newName : undefined,
+          replicate_assets: replicateAssets,
         })
         setResult(res)
         onDuplicated?.({ created: res.created_ids.length, skipped: res.skipped.length })
@@ -123,6 +125,16 @@ export default function DuplicateTemplateModal({
               <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" />
               <div>
                 <strong>{result.created_ids.length}</strong> {result.created_ids.length === 1 ? 'clínica recebeu' : 'clínicas receberam'} o layout.
+                {result.assets_copied > 0 && (
+                  <span className="block text-emerald-700 mt-1 text-xs">
+                    {result.assets_copied} asset{result.assets_copied === 1 ? '' : 's'} (papel timbrado / imagens) copiado{result.assets_copied === 1 ? '' : 's'} fisicamente para os novos paths.
+                  </span>
+                )}
+                {result.assets_failed > 0 && (
+                  <span className="block text-amber-700 mt-1 text-xs">
+                    ⚠ {result.assets_failed} asset{result.assets_failed === 1 ? ' falhou' : 's falharam'} na cópia — verifique o log do servidor.
+                  </span>
+                )}
                 {result.skipped.length > 0 && (
                   <span className="block text-amber-700 mt-1 text-xs">
                     {result.skipped.length} pulada{result.skipped.length === 1 ? '' : 's'} (template com mesmo nome+tipo já existia).
@@ -237,10 +249,26 @@ export default function DuplicateTemplateModal({
                 </>
               )}
 
-              <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-[11px] text-amber-800 leading-snug">
-                <strong>Nota:</strong> a estrutura (margens, elementos, agrupamentos) é replicada,
-                mas o <em>papel timbrado de fundo</em> e <em>imagens locais</em> ficam vazios — cada
-                clínica precisa subir os próprios assets via Editor &gt; Trocar.
+              {/* Opção: replicar assets ou só estrutura */}
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={replicateAssets}
+                    onChange={e => setReplicateAssets(e.target.checked)}
+                    className="mt-0.5 flex-shrink-0"
+                  />
+                  <div className="text-[11px] leading-snug">
+                    <div className="font-semibold text-slate-800">
+                      Replicar papel timbrado e imagens (recomendado)
+                    </div>
+                    <div className="text-slate-600 mt-0.5">
+                      {replicateAssets
+                        ? 'Os assets serão COPIADOS fisicamente no Storage para cada clínica destino — cada uma fica com seu próprio path (compatível com RLS), mas conteúdo idêntico. Layout sai pronto pra uso.'
+                        : 'Apenas a ESTRUTURA é replicada (margens, elementos, agrupamentos). Papel timbrado e imagens ficam vazios — cada clínica precisa subir os próprios.'}
+                    </div>
+                  </div>
+                </label>
               </div>
 
               {submitError && (
