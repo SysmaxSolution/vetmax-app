@@ -4,19 +4,23 @@
  * Fluxo do veterinário no consultório (cliente-side):
  *   1. Inputs padrão (Medicamentos / Posologia / Observações)
  *   2. Campos customizados dinâmicos (DynamicFieldsEditor)
- *   3. Preview A4 reativo lateral
- *   4. Botão "Salvar e imprimir" → cria patient_document e redireciona p/ /print
+ *   3. Campos preenchíveis definidos no template (FillableFieldElement)
+ *      — required são validados antes do save (modal de erro)
+ *   4. Preview A4 reativo lateral
+ *   5. Botão "Salvar e imprimir" → cria patient_document e redireciona p/ /print
  */
 
 import { useRouter } from 'next/navigation'
-import { useState, useTransition } from 'react'
-import { Loader2, Printer, Save } from 'lucide-react'
+import { useMemo, useState, useTransition } from 'react'
+import { AlertCircle, Loader2, Printer, Save, SquarePen } from 'lucide-react'
 import { createCanvaPatientDocument } from '@/lib/actions/canva-templates'
 import CanvaA4Preview from '@/components/canva/CanvaA4Preview'
 import DynamicFieldsEditor from '@/components/canva/DynamicFieldsEditor'
 import type {
   CanvaContentJson, CanvaDynamicField, CanvaTemplateConfig,
 } from '@/lib/canva/types'
+import type { CanvasState } from '@/lib/canva/canvas-state'
+import type { FillableFieldElement } from '@/lib/canva/elements'
 
 interface PatientHeader {
   patient_name?: string
@@ -39,11 +43,12 @@ interface Props {
   patientId: string
   patient: PatientHeader
   config: CanvaTemplateConfig
+  canvasState?: CanvasState | null
 }
 
 export default function NewCanvaLaudoForm({
   templateId, templateName, templateType,
-  consultationId, patientId, patient, config,
+  consultationId, patientId, patient, config, canvasState,
 }: Props) {
   const router = useRouter()
   const [medicamentos, setMedicamentos] = useState('')
@@ -54,6 +59,24 @@ export default function NewCanvaLaudoForm({
   const [error, setError] = useState<string | null>(null)
   const [saving, startSave] = useTransition()
 
+  // Extrai os FillableFieldElement do canvas_state — admin definiu quais
+  // campos o vet deve preencher na consulta (ex: "Data para retirada dos pontos")
+  const fillableElements = useMemo<FillableFieldElement[]>(() => {
+    if (!canvasState) return []
+    return canvasState.elements.filter(
+      (e): e is FillableFieldElement => e.kind === 'fillable_field',
+    )
+  }, [canvasState])
+
+  // Estado dos valores preenchidos: { fieldKey: value }
+  const [fillableValues, setFillableValues] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {}
+    for (const f of fillableElements) {
+      if (f.defaultValue) init[f.fieldKey] = f.defaultValue
+    }
+    return init
+  })
+
   const content: CanvaContentJson = {
     static_fields: {
       medicamentos: medicamentos.trim(),
@@ -61,10 +84,29 @@ export default function NewCanvaLaudoForm({
       observacoes: observacoes.trim(),
     },
     dynamic_fields: dynamicFields,
+    fillable_fields: fillableValues,
+  }
+
+  /** Lista campos required não preenchidos. Bloqueia save se houver. */
+  function getMissingRequired(): FillableFieldElement[] {
+    return fillableElements.filter(f => {
+      if (!f.required) return false
+      const v = fillableValues[f.fieldKey]
+      return !v || v.trim() === ''
+    })
   }
 
   function save(printAfter: boolean) {
     setError(null)
+
+    const missing = getMissingRequired()
+    if (missing.length > 0) {
+      setError(
+        `Campos obrigatórios não preenchidos: ${missing.map(f => f.label.trim().replace(/:$/, '')).join(', ')}.`,
+      )
+      return
+    }
+
     startSave(async () => {
       try {
         const { id } = await createCanvaPatientDocument({
@@ -83,6 +125,10 @@ export default function NewCanvaLaudoForm({
         setError(e?.message ?? 'falha ao salvar')
       }
     })
+  }
+
+  function setFillable(key: string, value: string) {
+    setFillableValues(prev => ({ ...prev, [key]: value }))
   }
 
   return (
@@ -115,8 +161,9 @@ export default function NewCanvaLaudoForm({
       </header>
 
       {error && (
-        <div className="mx-auto mt-3 max-w-[1400px] rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
-          {error}
+        <div className="mx-auto mt-3 max-w-[1400px] rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700 flex items-start gap-2">
+          <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+          <span>{error}</span>
         </div>
       )}
 
@@ -133,6 +180,23 @@ export default function NewCanvaLaudoForm({
               />
             </label>
           </Card>
+
+          {fillableElements.length > 0 && (
+            <Card title="Campos da consulta" iconClass="text-violet-600">
+              <p className="text-[11px] text-slate-500 mb-2">
+                Campos definidos no template para preenchimento durante a consulta.
+                Campos marcados com <span className="text-red-500">*</span> são obrigatórios.
+              </p>
+              {fillableElements.map(f => (
+                <FillableInput
+                  key={f.id}
+                  field={f}
+                  value={fillableValues[f.fieldKey] ?? ''}
+                  onChange={v => setFillable(f.fieldKey, v)}
+                />
+              ))}
+            </Card>
+          )}
 
           <Card title="Conteúdo padrão">
             <Textarea label="Medicamentos" value={medicamentos} onChange={setMedicamentos} rows={3} />
@@ -167,10 +231,15 @@ export default function NewCanvaLaudoForm({
 
 // ── Sub-components ───────────────────────────────────────────────────────────
 
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
+function Card({
+  title, children, iconClass,
+}: { title: string; children: React.ReactNode; iconClass?: string }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <h2 className="mb-3 text-sm font-semibold text-slate-800">{title}</h2>
+      <h2 className={`mb-3 text-sm font-semibold ${iconClass ? 'flex items-center gap-2 text-slate-800' : 'text-slate-800'}`}>
+        {iconClass && <SquarePen className={`w-4 h-4 ${iconClass}`} />}
+        {title}
+      </h2>
       <div className="space-y-3">{children}</div>
     </div>
   )
@@ -188,6 +257,44 @@ function Textarea({
         value={value}
         onChange={e => onChange(e.target.value)}
       />
+    </label>
+  )
+}
+
+/** Input específico para FillableFieldElement — tipo varia conforme inputType. */
+function FillableInput({
+  field, value, onChange,
+}: {
+  field: FillableFieldElement
+  value: string
+  onChange: (v: string) => void
+}) {
+  const labelEl = (
+    <span className="text-xs font-medium text-slate-700">
+      {field.label.replace(/:\s*$/, '')}
+      {field.required && <span className="text-red-500 ml-0.5">*</span>}
+    </span>
+  )
+
+  const common = {
+    value,
+    placeholder: field.placeholder ?? '',
+    onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => onChange(e.target.value),
+    className: 'mt-1 w-full rounded border border-slate-300 px-2 py-1.5 text-sm focus:border-violet-500 focus:outline-none',
+  }
+
+  return (
+    <label className="block">
+      {labelEl}
+      {field.inputType === 'textarea' ? (
+        <textarea {...common} rows={2} />
+      ) : field.inputType === 'date' ? (
+        <input type="date" {...common} />
+      ) : field.inputType === 'number' ? (
+        <input type="number" step="any" {...common} />
+      ) : (
+        <input type="text" {...common} />
+      )}
     </label>
   )
 }

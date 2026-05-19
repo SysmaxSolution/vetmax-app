@@ -22,6 +22,11 @@ export interface CanvaStaticFields {
 export interface CanvaContentJson {
   static_fields: CanvaStaticFields
   dynamic_fields: CanvaDynamicField[]
+  /** Valores dos FillableFieldElement preenchidos pelo vet durante a
+   *  consulta. Chave = fieldKey definido no template; valor = texto/data/
+   *  número como string. Opcional para retrocompatibilidade com laudos
+   *  antigos. */
+  fillable_fields?: Record<string, string>
 }
 
 export interface CanvaMargins {

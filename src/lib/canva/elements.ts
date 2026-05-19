@@ -8,7 +8,7 @@
  * Print fidelity: editor e LaudoPrintable consomem a MESMA estrutura.
  */
 
-export type ElementKind = 'text' | 'image' | 'line' | 'dynamic_tag' | 'composite_tag' | 'dynamic_image' | 'repeater' | 'brush_stroke'
+export type ElementKind = 'text' | 'image' | 'line' | 'dynamic_tag' | 'composite_tag' | 'dynamic_image' | 'repeater' | 'brush_stroke' | 'fillable_field'
 
 /** Posição/tamanho em % do canvas (0-100). 0/0 = canto superior esquerdo. */
 export interface ElementBox {
@@ -186,6 +186,36 @@ export interface BrushStrokeElement extends ElementCommon {
   opacity?: number     // 0-1
 }
 
+export type FillableInputType = 'text' | 'date' | 'number' | 'textarea'
+
+/**
+ * Campo preenchível na consulta — o admin coloca no template (ex: "Data
+ * para retirada dos pontos:"), e o vet preenche durante o atendimento.
+ * Se required=true e não preenchido, o sistema bloqueia a geração do
+ * laudo até o vet preencher.
+ *
+ * O VALOR final fica em patient_documents.content_json.fillable_fields[fieldKey].
+ * O template tem apenas a definição do campo (label, placeholder, tipo).
+ */
+export interface FillableFieldElement extends ElementCommon {
+  kind: 'fillable_field'
+  /** Identificador único do campo dentro do template (snake_case).
+   *  Ex: "data_retirada_pontos". */
+  fieldKey: string
+  /** Rótulo mostrado antes do valor preenchido. Ex: "Data: ". */
+  label: string
+  /** Placeholder mostrado no editor e quando vazio em runtime.
+   *  Ex: "DD/MM/AAAA". */
+  placeholder?: string
+  /** Bloqueia geração do laudo se não preenchido. */
+  required?: boolean
+  /** Valor padrão pré-preenchido (admin sugere; vet pode trocar). */
+  defaultValue?: string
+  /** Tipo de input mostrado ao vet. */
+  inputType?: FillableInputType
+  typography: TypographyStyle
+}
+
 export type CanvasElement =
   | TextElement
   | ImageElement
@@ -195,6 +225,7 @@ export type CanvasElement =
   | DynamicImageElement
   | RepeaterElement
   | BrushStrokeElement
+  | FillableFieldElement
 
 // ── Factory helpers ──────────────────────────────────────────────────────────
 
@@ -297,6 +328,26 @@ export function makeDynamicImageElement(tagId: string): DynamicImageElement {
     tagId,
     objectFit: 'contain',
     zIndex: 1,
+  }
+}
+
+export function makeFillableFieldElement(
+  fieldKey: string,
+  label: string,
+  overrides?: Partial<FillableFieldElement>,
+): FillableFieldElement {
+  return {
+    id: nextElementId('fillable_field'),
+    kind: 'fillable_field',
+    box: { x: 10, y: 10, w: 60, h: 5 },
+    fieldKey,
+    label,
+    placeholder: '____________________',
+    required: false,
+    inputType: 'text',
+    typography: { ...DEFAULT_TYPOGRAPHY },
+    zIndex: 1,
+    ...overrides,
   }
 }
 

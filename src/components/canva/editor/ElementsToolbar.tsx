@@ -16,6 +16,7 @@ import { useRef, useState, useMemo } from 'react'
 import {
   Type, Image as ImageIcon, Minus, Loader2,
   Tag as TagIcon, ListOrdered, AlignLeft, Stamp, Search, X, LayoutTemplate, Lightbulb,
+  SquarePen,
 } from 'lucide-react'
 import {
   tagsByGroup, imageTagsByGroup, type DynamicTagDef, type DynamicImageTagDef,
@@ -27,6 +28,7 @@ import type {
 import {
   makeTextElement, makeImageElement, makeLineElement,
   makeDynamicTagElement, makeDynamicImageElement, makeRepeaterElement,
+  makeFillableFieldElement,
 } from '@/lib/canva/elements'
 import { MACRO_BLOCKS, type MacroBlock } from '@/lib/canva/macros'
 
@@ -100,6 +102,15 @@ export default function ElementsToolbar({ onAdd, onAddMany, onUploadImage, compu
           icon={<LayoutTemplate className="w-5 h-5" />}
           label="Blocos Prontos"
           onClick={() => setModal('blocks')}
+        />
+
+        <ToolButton
+          icon={<SquarePen className="w-5 h-5" />}
+          label="Campo Preenchível"
+          onClick={() => {
+            const key = `campo_${Date.now().toString(36)}`
+            onAdd(makeFillableFieldElement(key, 'Campo: '))
+          }}
         />
 
         <div className="mt-auto text-[9px] text-slate-400 leading-tight px-1 pt-2">

@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import NewCanvaLaudoForm from './NewCanvaLaudoForm'
 import type { CanvaTemplateConfig } from '@/lib/canva/types'
+import { hydrateCanvasState } from '@/lib/canva/canvas-state'
 
 interface Props {
   searchParams: Promise<{ consultation_id?: string; template_id?: string }>
@@ -24,7 +25,7 @@ export default async function NewCanvaLaudoPage({ searchParams }: Props) {
   const [{ data: tpl }, { data: consultation }] = await Promise.all([
     supabase
       .from('document_templates')
-      .select('id, name, type, background_image_url, margin_top, margin_bottom, margin_left, margin_right, block_style')
+      .select('id, name, type, background_image_url, margin_top, margin_bottom, margin_left, margin_right, block_style, canvas_state')
       .eq('id', template_id)
       .eq('clinic_id', profile.clinic_id)
       .single(),
@@ -76,6 +77,7 @@ export default async function NewCanvaLaudoPage({ searchParams }: Props) {
         crmv: vet?.crmv,
       }}
       config={config}
+      canvasState={hydrateCanvasState(tpl.canvas_state)}
     />
   )
 }

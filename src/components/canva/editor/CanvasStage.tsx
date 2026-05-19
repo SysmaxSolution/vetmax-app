@@ -33,6 +33,8 @@ interface Props {
   selectedId?: string | null
   selectedIds?: string[]
   resolveContext?: ResolveContext
+  /** Valores dos FillableFieldElement preenchidos pelo vet (runtime). */
+  fillableValues?: Record<string, string>
   mode?: 'edit' | 'print'
   /** Quando true, oculta guides visuais do editor (outlines de seleção,
    *  bordas dashed dos elementos, dashed violeta das margens). O preview
@@ -50,7 +52,8 @@ interface Props {
 }
 
 export default function CanvasStage({
-  state, selectedId, selectedIds, resolveContext, mode = 'edit', brush, cleanPreview, zoom,
+  state, selectedId, selectedIds, resolveContext, fillableValues,
+  mode = 'edit', brush, cleanPreview, zoom,
   onSelect, onElementChange, onBrushStrokeComplete,
 }: Props) {
   const multiSelected = new Set(selectedIds ?? (selectedId ? [selectedId] : []))
@@ -213,6 +216,7 @@ export default function CanvasStage({
             cleanPreview={!!cleanPreview}
             zoom={zoom ?? 1}
             resolveContext={resolveContext}
+            fillableValues={fillableValues}
             brushActive={!!brush}
             onSelect={onSelect}
             onChange={onElementChange}
@@ -305,6 +309,7 @@ interface WrapperProps {
   cleanPreview: boolean
   zoom: number
   resolveContext?: ResolveContext
+  fillableValues?: Record<string, string>
   brushActive: boolean
   onSelect?: (id: string | null, opts?: { append?: boolean }) => void
   onChange?: (id: string, patch: Partial<CanvasElement>) => void
@@ -312,7 +317,7 @@ interface WrapperProps {
 
 function ElementWrapper({
   element, stagePx, isPrint, isSelected, isPrimarySelected, cleanPreview, zoom,
-  resolveContext, brushActive, onSelect, onChange,
+  resolveContext, fillableValues, brushActive, onSelect, onChange,
 }: WrapperProps) {
   const transform = element.rotation ? `rotate(${element.rotation}deg)` : undefined
 
@@ -331,7 +336,7 @@ function ElementWrapper({
           transformOrigin: 'top left',
         }}
       >
-        <ElementRenderer element={element} ctx={resolveContext} isPrint />
+        <ElementRenderer element={element} ctx={resolveContext} isPrint fillableValues={fillableValues} />
       </div>
     )
   }
@@ -393,7 +398,7 @@ function ElementWrapper({
         onSelect?.(element.id, { append })
       }}
     >
-      <ElementRenderer element={element} ctx={resolveContext} />
+      <ElementRenderer element={element} ctx={resolveContext} fillableValues={fillableValues} />
     </Rnd>
   )
 }

@@ -18,7 +18,8 @@ import {
 import type {
   CanvasElement, TextElement, ImageElement, LineElement,
   DynamicTagElement, CompositeTagElement,
-  DynamicImageElement, RepeaterElement, BrushStrokeElement, ElementPin,
+  DynamicImageElement, RepeaterElement, BrushStrokeElement,
+  FillableFieldElement, FillableInputType, ElementPin,
   TypographyStyle,
 } from '@/lib/canva/elements'
 import { findImageTag, findTag } from '@/lib/canva/dynamic-tags'
@@ -78,12 +79,100 @@ export default function PropertiesPanel({ element, onPatch, onDelete, onMoveZ }:
       {element.kind === 'image' && <ImageSection element={element} onPatch={onPatch} />}
       {element.kind === 'line' && <LineSection element={element} onPatch={onPatch} />}
       {element.kind === 'brush_stroke' && <BrushStrokeSection element={element} onPatch={onPatch} />}
+      {element.kind === 'fillable_field' && <FillableFieldSection element={element} onPatch={onPatch} />}
 
       {element.kind !== 'line' && element.kind !== 'image'
         && element.kind !== 'dynamic_image' && element.kind !== 'brush_stroke' && (
         <BlockSection element={element} onPatch={onPatch} />
       )}
     </aside>
+  )
+}
+
+// ── Section: Fillable Field (preenchido na consulta) ─────────────────────────
+
+function FillableFieldSection({
+  element, onPatch,
+}: { element: FillableFieldElement; onPatch: Props['onPatch'] }) {
+  return (
+    <Section title="Campo Preenchível">
+      <p className="text-[11px] text-slate-600 leading-snug mb-2">
+        O <strong>veterinário</strong> preenche este campo durante a consulta.
+        Se marcado como obrigatório e não preenchido, o sistema bloqueia a
+        geração do laudo.
+      </p>
+
+      <label className="block">
+        <span className="text-[10px] text-slate-600">Identificador do campo (snake_case)</span>
+        <input
+          className="w-full rounded border border-slate-300 px-2 py-1 text-xs font-mono"
+          value={element.fieldKey}
+          placeholder="ex: data_retirada_pontos"
+          onChange={e => onPatch({
+            fieldKey: e.target.value.toLowerCase().replace(/[^\w]/g, '_'),
+          } as Partial<CanvasElement>)}
+        />
+        <span className="text-[10px] text-slate-400">
+          Único dentro do template. Não muda se já tem laudos preenchidos.
+        </span>
+      </label>
+
+      <label className="block mt-2">
+        <span className="text-[10px] text-slate-600">Rótulo (antes do valor)</span>
+        <input
+          className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
+          value={element.label}
+          placeholder='ex: "Data para retirada dos pontos: "'
+          onChange={e => onPatch({ label: e.target.value } as Partial<CanvasElement>)}
+        />
+      </label>
+
+      <label className="block mt-2">
+        <span className="text-[10px] text-slate-600">Placeholder (quando vazio)</span>
+        <input
+          className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
+          value={element.placeholder ?? ''}
+          placeholder="ex: DD/MM/AAAA"
+          onChange={e => onPatch({ placeholder: e.target.value } as Partial<CanvasElement>)}
+        />
+      </label>
+
+      <div className="grid grid-cols-2 gap-2 mt-2">
+        <label className="block">
+          <span className="text-[10px] text-slate-600">Tipo de entrada</span>
+          <select
+            className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
+            value={element.inputType ?? 'text'}
+            onChange={e => onPatch({ inputType: e.target.value as FillableInputType } as Partial<CanvasElement>)}
+          >
+            <option value="text">Texto curto</option>
+            <option value="textarea">Texto longo</option>
+            <option value="date">Data</option>
+            <option value="number">Número</option>
+          </select>
+        </label>
+        <label className="flex items-end gap-1.5 text-[11px] text-slate-700">
+          <input
+            type="checkbox"
+            checked={!!element.required}
+            onChange={e => onPatch({ required: e.target.checked } as Partial<CanvasElement>)}
+          />
+          <span>Obrigatório <span className="text-red-500">*</span></span>
+        </label>
+      </div>
+
+      <label className="block mt-2">
+        <span className="text-[10px] text-slate-600">Valor padrão (opcional)</span>
+        <input
+          className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
+          value={element.defaultValue ?? ''}
+          placeholder="ex: 10 dias"
+          onChange={e => onPatch({ defaultValue: e.target.value } as Partial<CanvasElement>)}
+        />
+      </label>
+
+      <TypographyControls element={element as unknown as TextElement} onPatch={onPatch} />
+    </Section>
   )
 }
 
@@ -1089,5 +1178,6 @@ function kindLabel(k: CanvasElement['kind']): string {
     case 'dynamic_image':  return 'Imagem do Banco'
     case 'repeater':       return 'Lista Repetível'
     case 'brush_stroke':   return 'Pincel'
+    case 'fillable_field': return 'Campo Preenchível'
   }
 }

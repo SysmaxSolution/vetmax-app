@@ -12,6 +12,7 @@ import type {
   CanvasElement, TextElement, ImageElement, LineElement,
   DynamicTagElement, CompositeTagElement,
   DynamicImageElement, RepeaterElement, BrushStrokeElement,
+  FillableFieldElement,
   TypographyStyle, BlockStyle,
 } from '@/lib/canva/elements'
 import {
@@ -71,9 +72,12 @@ interface RenderProps {
   element: CanvasElement
   ctx?: ResolveContext
   isPrint?: boolean
+  /** Valores preenchidos pelo vet — mapa fieldKey → valor. Vem do
+   *  patient_documents.content_json.fillable_fields. */
+  fillableValues?: Record<string, string>
 }
 
-export function ElementRenderer({ element, ctx, isPrint }: RenderProps) {
+export function ElementRenderer({ element, ctx, isPrint, fillableValues }: RenderProps) {
   switch (element.kind) {
     case 'text':            return <TextRenderer           e={element} isPrint={isPrint} />
     case 'image':           return <ImageRenderer          e={element} isPrint={isPrint} />
@@ -83,7 +87,48 @@ export function ElementRenderer({ element, ctx, isPrint }: RenderProps) {
     case 'dynamic_image':   return <DynamicImageRenderer   e={element} ctx={ctx} isPrint={isPrint} />
     case 'repeater':        return <RepeaterRenderer       e={element} ctx={ctx} isPrint={isPrint} />
     case 'brush_stroke':    return <BrushStrokeFallback    e={element} />
+    case 'fillable_field':  return <FillableFieldRenderer  e={element} value={fillableValues?.[element.fieldKey]} isPrint={isPrint} />
   }
+}
+
+function FillableFieldRenderer({
+  e, value, isPrint,
+}: { e: FillableFieldElement; value?: string; isPrint?: boolean }) {
+  const filled = value && value.trim() !== ''
+  const showValue = filled ? value : (e.defaultValue || e.placeholder || '____________________')
+  const isPlaceholder = !filled
+
+  return (
+    <div
+      style={{
+        width: '100%',
+        height: '100%',
+        overflow: 'hidden',
+        whiteSpace: 'normal',
+        overflowWrap: 'break-word',
+        ...typographyToCss(e.typography),
+        ...blockToCss(e.block),
+        ...vAlignToFlex(e.typography.vAlign),
+      }}
+    >
+      {e.label && (
+        <span style={{ fontWeight: 600, marginRight: 6 }}>{e.label}</span>
+      )}
+      <span style={{
+        // Em editor (não-print) e quando placeholder, destaca em violeta
+        color: !isPrint && isPlaceholder ? '#7c3aed' : undefined,
+        background: !isPrint && isPlaceholder ? 'rgba(124,58,237,0.06)' : undefined,
+        borderBottom: isPlaceholder && isPrint ? '1px solid currentColor' : undefined,
+        padding: !isPrint && isPlaceholder ? '0 4px' : undefined,
+        borderRadius: !isPrint && isPlaceholder ? 3 : undefined,
+      }}>
+        {showValue}
+        {e.required && !isPrint && !filled && (
+          <span style={{ color: '#dc2626', marginLeft: 2 }}>*</span>
+        )}
+      </span>
+    </div>
+  )
 }
 
 function CompositeTagRenderer({ e, ctx, isPrint }: { e: CompositeTagElement; ctx?: ResolveContext; isPrint?: boolean }) {
@@ -105,7 +150,7 @@ function CompositeTagRenderer({ e, ctx, isPrint }: { e: CompositeTagElement; ctx
       style={{
         width: '100%', height: '100%',
         overflow: 'hidden',
-        whiteSpace: 'pre-wrap', wordWrap: 'break-word',
+        whiteSpace: 'normal', overflowWrap: 'break-word',
         outline: isUnresolved ? '1px dashed rgba(16,185,129,0.5)' : undefined,
         ...typographyToCss(e.typography),
         ...blockToCss(e.block),
@@ -154,9 +199,14 @@ function TextRenderer({ e, isPrint }: { e: TextElement; isPrint?: boolean }) {
   // line-height, letter-spacing) + word-wrap. SEM display flex aqui — caso
   // contrário cada nó HTML inline (texto, <strong>, <em>) viraria flex item
   // separado e text-align seria ignorado.
+  //
+  // white-space: normal (não pre-wrap) — pre-wrap PRESERVA espaços do source,
+  // impedindo o browser de DISTRIBUIR espaços extras para justify funcionar.
+  // Quebras de linha do user (\\n) já viram <br> no parseInlineMarkdown — então
+  // perder pre-wrap não destrói os parágrafos.
   const textStyle: React.CSSProperties = {
     width: '100%',
-    whiteSpace: 'pre-wrap',
+    whiteSpace: 'normal',
     overflowWrap: 'break-word',
     ...typographyToCss(e.typography),
   }
@@ -206,7 +256,7 @@ function TextRenderer({ e, isPrint }: { e: TextElement; isPrint?: boolean }) {
     return (
       <div
         style={{
-          width: '100%', height: '100%',
+          height: '100%',
           boxSizing: 'border-box', overflow: 'hidden',
           ...textStyle, ...outerBlockStyle,
         }}
@@ -296,7 +346,7 @@ function DynamicTagRenderer({ e, ctx, isPrint }: { e: DynamicTagElement; ctx?: R
       style={{
         width: '100%', height: '100%',
         overflow: 'hidden',
-        whiteSpace: 'pre-wrap', wordWrap: 'break-word',
+        whiteSpace: 'normal', overflowWrap: 'break-word',
         outline: isUnresolved ? '1px dashed rgba(124,58,237,0.5)' : undefined,
         outlineOffset: 0,
         ...typographyToCss(e.typography),
