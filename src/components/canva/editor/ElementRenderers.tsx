@@ -318,18 +318,23 @@ function RepeaterRenderer({ e, ctx, isPrint }: { e: RepeaterElement; ctx?: Resol
       {groups.map((group, gi) => {
         const headerTyp = e.groupHeaderTypography ?? { ...e.typography, fontWeight: 700 as const }
         const enumTyp = e.enumerationTypography ?? { ...e.typography, fontWeight: 600 as const }
+        // Cor da borda: usa color da tipografia se houver, senão preto sólido.
+        // Antes era currentColor + opacity: 0.85 — afetava a borda também,
+        // deixando-a quase imperceptível na rasterização do html2canvas.
+        const headerBorderColor = headerTyp.color ?? '#0f172a'
         return (
-          <section key={gi} style={{ marginBottom: gi < groups.length - 1 ? '0.25cm' : 0 }}>
+          <section key={gi} style={{ marginBottom: gi < groups.length - 1 ? '0.3cm' : 0 }}>
             {e.groupBy && group.key && (
               <header
                 style={{
                   ...typographyToCss(headerTyp),
                   display: 'block',
                   width: '100%',
-                  borderBottom: '1px solid currentColor',
-                  paddingBottom: 1,
-                  marginBottom: '0.1cm',
-                  opacity: 0.85,
+                  borderBottomStyle: 'solid',
+                  borderBottomWidth: '1px',
+                  borderBottomColor: headerBorderColor,
+                  paddingBottom: '4px',
+                  marginBottom: '0.18cm',
                   pageBreakAfter: 'avoid',
                   breakAfter: 'avoid',
                 }}
