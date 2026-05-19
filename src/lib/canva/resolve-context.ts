@@ -117,6 +117,9 @@ function calculateAge(birthDate: string | null | undefined): string {
   return `${Math.max(0, months)} mes${months !== 1 ? 'es' : ''}`
 }
 
+// Usado em buildResolveContext quando o documentDate é a "agora".
+// Exportado para reuso em buildPreviewContext (mesma semântica de data).
+
 /**
  * buildPreviewContext — para pré-visualização do template no editor.
  * Usa clínica + vet REAIS do usuário logado (logo, CNPJ, CRMV próprios),
@@ -169,11 +172,19 @@ export async function buildPreviewContext(
   }
 }
 
+export interface BuildContextOptions {
+  /** Data a ser usada nas tags consulta.date/datetime/day/month/year/etc.
+   *  Default: data ATUAL (new Date()). Para impressão de doc salvo,
+   *  passar patient_document.created_at — preserva a data real da emissão. */
+  documentDate?: Date
+}
+
 export async function buildResolveContext(
   supabase: SupabaseClient,
   clinicId: string,
   patientId: string,
   consultationId: string,
+  options: BuildContextOptions = {},
 ): Promise<ResolveContext> {
   const [patient, consultation, clinic] = await Promise.all([
     supabase.from('patients')
@@ -218,8 +229,14 @@ export async function buildResolveContext(
     tutor: tutor ?? {},
 
     consultation: consultation ? {
-      date: consultation.created_at,
-      datetime: consultation.created_at,
+      // Data do DOCUMENTO sendo gerado (não da consulta original).
+      // Default: agora. Para print de doc salvo, page.tsx passa created_at
+      // do patient_document — preserva a data histórica da emissão.
+      date: (options.documentDate ?? new Date()).toISOString(),
+      datetime: (options.documentDate ?? new Date()).toISOString(),
+      // consultation_created_at fica disponível para casos que precisem
+      // da data REAL de início da consulta (separada do doc emitido).
+      consultation_created_at: consultation.created_at,
       diagnosis: consultation.suggested_diagnosis ?? consultation.vet_notes ?? '',
       complaint: chiefComplaint ?? '',
       weight: consultation.weight ?? null,

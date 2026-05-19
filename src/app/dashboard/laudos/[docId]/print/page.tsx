@@ -21,12 +21,18 @@ export default async function PrintLaudoPage({ params, searchParams }: Props) {
 
   const { data: doc } = await supabase
     .from('patient_documents')
-    .select('patient_id, consultation_id, clinic_id')
+    .select('patient_id, consultation_id, clinic_id, created_at')
     .eq('id', docId)
     .single()
 
+  // Para print histórico: usa created_at do doc para que consulta.date,
+  // consulta.month_name etc. mostrem a data REAL de quando foi emitido,
+  // não a data atual de quem está reimprimindo meses depois.
   const resolveContext = doc
-    ? await buildResolveContext(supabase, doc.clinic_id, doc.patient_id, doc.consultation_id)
+    ? await buildResolveContext(
+        supabase, doc.clinic_id, doc.patient_id, doc.consultation_id,
+        { documentDate: doc.created_at ? new Date(doc.created_at) : undefined },
+      )
     : {}
 
   const patient = {
