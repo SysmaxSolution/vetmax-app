@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   FileText, Plus, Loader2, Sparkles, Printer, CheckCircle2,
@@ -252,16 +252,31 @@ export default function DocumentsSection({
     setSaveSuccess(false)
   }
 
-  // ── Generate draft via AI ──────────────────────────────────────────────────
+  // ── Generate draft via AI (ou redireciona pro editor Canvas Visual) ─────────
   const handleGenerate = async () => {
     if (!selectedTemplateId) return
+
+    // Templates do motor Canvas Visual têm canvas_state (e geralmente
+    // extracted_fields vazio). Não chama IA — redireciona pro form do vet
+    // em /dashboard/laudos/novo que carrega o canvas_state e mostra os
+    // FillableFieldElement (campos preenchíveis na consulta).
+    const selectedTpl = allTemplates.find(t => t.id === selectedTemplateId)
+    if (selectedTpl?.canvas_state) {
+      setShowModal(false)
+      setSelectedTemplateId('')
+      setActiveHint(undefined)
+      router.push(
+        `/dashboard/laudos/novo?consultation_id=${consultation.id}&template_id=${selectedTemplateId}`,
+      )
+      return
+    }
+
+    // Fluxo legado — IA + extracted_fields
     setIsGenerating(true)
     setModalError(null)
     try {
       const result = await generateDocumentDraft(selectedTemplateId, consultation.id, activeHint)
       if ('error' in result) { setModalError(result.error); return }
-      // Resolve template_html from the selected template
-      const selectedTpl = allTemplates.find(t => t.id === selectedTemplateId)
       setDraft({
         template_id:        selectedTemplateId,
         template_name:      result.template_name,
@@ -283,6 +298,13 @@ export default function DocumentsSection({
       setIsGenerating(false)
     }
   }
+
+  /** Template selecionado é Canvas Visual? (tem canvas_state preenchido). */
+  const selectedIsCanvas = useMemo(() => {
+    if (!selectedTemplateId) return false
+    const tpl = allTemplates.find(t => t.id === selectedTemplateId)
+    return !!tpl?.canvas_state
+  }, [selectedTemplateId, allTemplates])
 
   // ── Update individual field ────────────────────────────────────────────────
   const updateField = useCallback((fieldName: string, value: any) => {
@@ -545,29 +567,42 @@ export default function DocumentsSection({
                 </div>
               )}
 
+              {/* Botão principal — adapta texto/cor conforme o template selecionado:
+                  • Canvas Visual: redireciona direto pra form com canvas_state.
+                  • Legado: chama IA. */}
               <button onClick={handleGenerate} disabled={!selectedTemplateId || isGenerating}
-                className="w-full flex items-center justify-center gap-2 px-5 py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                {isGenerating
-                  ? <><Loader2 className="w-4 h-4 animate-spin" />IA preenchendo campos...</>
-                  : <><Sparkles className="w-4 h-4" />Gerar com IA</>}
+                className={`w-full flex items-center justify-center gap-2 px-5 py-3 font-semibold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-white ${
+                  selectedIsCanvas
+                    ? 'bg-violet-600 hover:bg-violet-700'
+                    : 'bg-blue-600 hover:bg-blue-700'
+                }`}>
+                {isGenerating ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" />IA preenchendo campos...</>
+                ) : selectedIsCanvas ? (
+                  <><LayoutTemplate className="w-4 h-4" />Abrir editor do laudo</>
+                ) : (
+                  <><Sparkles className="w-4 h-4" />Gerar com IA</>
+                )}
               </button>
 
-              {/* Rota alternativa: Canva Nativo (papel timbrado + sliders + impressão nativa) */}
-              <button
-                onClick={() => {
-                  if (!selectedTemplateId) return
-                  setShowModal(false)
-                  router.push(
-                    `/dashboard/laudos/novo?consultation_id=${consultation.id}&template_id=${selectedTemplateId}`,
-                  )
-                }}
-                disabled={!selectedTemplateId || isGenerating}
-                className="w-full flex items-center justify-center gap-2 px-5 py-2.5 border border-violet-300 text-violet-700 bg-violet-50 hover:bg-violet-100 font-medium rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Editor visual com papel timbrado de fundo, margens em cm e campos customizados"
-              >
-                <LayoutTemplate className="w-4 h-4" />
-                Gerar com Canva Nativo
-              </button>
+              {/* Atalho secundário só faz sentido quando o template é legado
+                  (IA) — permite ao admin abrir o editor Canva sem usar IA. */}
+              {!selectedIsCanvas && selectedTemplateId && (
+                <button
+                  onClick={() => {
+                    setShowModal(false)
+                    router.push(
+                      `/dashboard/laudos/novo?consultation_id=${consultation.id}&template_id=${selectedTemplateId}`,
+                    )
+                  }}
+                  disabled={isGenerating}
+                  className="w-full flex items-center justify-center gap-2 px-5 py-2.5 border border-violet-300 text-violet-700 bg-violet-50 hover:bg-violet-100 font-medium rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Abrir o editor Canvas Visual sem IA"
+                >
+                  <LayoutTemplate className="w-4 h-4" />
+                  Abrir no Canvas Visual
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -828,26 +863,45 @@ function TemplateButton({
   onSelect: () => void
   isSysmax?: boolean
 }) {
+  // Detecta motor do template para informativos visuais corretos
+  const cs = template.canvas_state as { elements?: unknown[] } | null | undefined
+  const isCanvas = !!cs && Array.isArray(cs.elements) && cs.elements.length > 0
+  const elementCount = isCanvas ? (cs!.elements as unknown[]).length : 0
+  const fieldCount = template.extracted_fields?.length ?? 0
+
+  const subtitle = isCanvas
+    ? `${elementCount} elemento${elementCount === 1 ? '' : 's'} · Canvas Visual`
+    : `${fieldCount} campo${fieldCount === 1 ? '' : 's'}`
+
   return (
     <button
       onClick={onSelect}
       className={`w-full flex items-center justify-between p-3.5 rounded-xl border-2 transition-all text-left ${
-        selected ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+        selected
+          ? (isCanvas ? 'border-violet-500 bg-violet-50' : 'border-blue-500 bg-blue-50')
+          : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
       }`}
     >
       <div className="flex items-center gap-3 min-w-0">
-        <FileText className="w-4 h-4 text-slate-400 flex-shrink-0" />
+        <FileText className={`w-4 h-4 flex-shrink-0 ${isCanvas ? 'text-violet-500' : 'text-slate-400'}`} />
         <div className="min-w-0">
           <p className="text-sm font-medium text-slate-800 truncate">{template.name}</p>
           <p className="text-xs text-slate-400">
-            {template.extracted_fields.length} campos
+            {subtitle}
             {isSysmax && <span className="ml-1.5 text-slate-300">· Template padrão</span>}
           </p>
         </div>
       </div>
-      <span className={`ml-3 flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full ${TYPE_BADGE[template.type] ?? TYPE_BADGE.outro}`}>
-        {TYPE_LABELS[template.type] ?? template.type}
-      </span>
+      <div className="flex items-center gap-1.5 ml-3 flex-shrink-0">
+        {isCanvas && (
+          <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700">
+            CANVAS
+          </span>
+        )}
+        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${TYPE_BADGE[template.type] ?? TYPE_BADGE.outro}`}>
+          {TYPE_LABELS[template.type] ?? template.type}
+        </span>
+      </div>
     </button>
   )
 }
