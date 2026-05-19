@@ -22,29 +22,36 @@ export default async function NewCanvaLaudoPage({ searchParams }: Props) {
     .from('profiles').select('clinic_id').eq('id', user.id).single()
   if (!profile?.clinic_id) redirect('/dashboard?canva_error=no_clinic')
 
-  const [{ data: tpl }, { data: consultation }] = await Promise.all([
+  const [{ data: tpl, error: tplErr }, { data: consultation, error: consultErr }] = await Promise.all([
     supabase
       .from('document_templates')
       .select('id, name, type, background_image_url, margin_top, margin_bottom, margin_left, margin_right, block_style, canvas_state')
       .eq('id', template_id)
       .eq('clinic_id', profile.clinic_id)
       .single(),
+    // O campo é vet_id (não professional_id). FK inferida do nome da coluna.
     supabase
       .from('consultations')
       .select(`
         id,
         patient_id,
-        patients ( id, name, species, breed, sex, birth_date ),
-        professional_id,
-        profiles!consultations_professional_id_fkey ( full_name, crmv )
+        vet_id,
+        patients ( id, name, species, breed, gender, birth_date, color ),
+        profiles!vet_id ( full_name, crmv )
       `)
       .eq('id', consultation_id)
       .eq('clinic_id', profile.clinic_id)
       .single(),
   ])
 
-  if (!tpl) redirect('/dashboard/management?canva_error=template_not_found')
-  if (!consultation) redirect('/dashboard?canva_error=consultation_not_found')
+  if (!tpl) {
+    console.error('[laudos/novo] template não encontrado', template_id, tplErr?.message)
+    redirect(`/dashboard/management?canva_error=template_not_found&id=${template_id}`)
+  }
+  if (!consultation) {
+    console.error('[laudos/novo] consulta não encontrada', consultation_id, consultErr?.message)
+    redirect(`/dashboard/vet/${consultation_id}?canva_error=consultation_not_found`)
+  }
 
   const config: CanvaTemplateConfig = {
     background_image_url: tpl.background_image_url ?? null,
@@ -57,8 +64,13 @@ export default async function NewCanvaLaudoPage({ searchParams }: Props) {
     block_style: (tpl.block_style as 'solid' | 'transparent') ?? 'solid',
   }
 
-  const patient = consultation.patients as any
-  const vet = (consultation.profiles as any) ?? {}
+  // Supabase pode retornar patients/profiles como array OU objeto dependendo
+  // da inferência do FK. Normaliza para objeto único.
+  const patient = Array.isArray(consultation.patients)
+    ? consultation.patients[0]
+    : consultation.patients
+  const vetRaw = (consultation as { profiles?: unknown }).profiles
+  const vet = Array.isArray(vetRaw) ? vetRaw[0] : vetRaw
 
   return (
     <NewCanvaLaudoForm
@@ -71,7 +83,7 @@ export default async function NewCanvaLaudoPage({ searchParams }: Props) {
         patient_name: patient?.name,
         species: patient?.species,
         breed: patient?.breed,
-        sex: patient?.sex,
+        sex: patient?.gender,
         date: new Date().toLocaleDateString('pt-BR'),
         vet_name: vet?.full_name,
         crmv: vet?.crmv,
