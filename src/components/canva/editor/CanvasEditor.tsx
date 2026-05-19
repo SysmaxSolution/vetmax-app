@@ -19,13 +19,14 @@
  * - Estado via useReducer com history middleware
  */
 
-import { useCallback, useEffect, useReducer, useRef, useState, useTransition } from 'react'
-import { Loader2, Paintbrush, Redo2, Save, Sparkles, Undo2, X, Eraser } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, useTransition } from 'react'
+import { Loader2, Paintbrush, Redo2, Save, Sparkles, Undo2, X, Eraser, Combine } from 'lucide-react'
 import {
   defaultCanvasState, hydrateCanvasState, type CanvasState, type PageConfig,
 } from '@/lib/canva/canvas-state'
-import type { CanvasElement } from '@/lib/canva/elements'
-import { makeBrushStrokeElement } from '@/lib/canva/elements'
+import type { CanvasElement, DynamicTagElement, CompositeTagPart } from '@/lib/canva/elements'
+import { makeBrushStrokeElement, makeCompositeTagElement } from '@/lib/canva/elements'
+import { findTag } from '@/lib/canva/dynamic-tags'
 import {
   getBackgroundUploadUrl, getBackgroundReadUrl,
   getCanvasImageUploadUrl, getCanvasImageReadUrl,
@@ -52,7 +53,9 @@ type DocAction =
   | { type: 'add_many'; elements: CanvasElement[] }
   | { type: 'patch'; id: string; patch: Partial<CanvasElement> }
   | { type: 'delete'; id: string }
+  | { type: 'delete_many'; ids: string[] }
   | { type: 'move_z'; id: string; dir: 'front' | 'back' | 'forward' | 'backward' }
+  | { type: 'merge_tags'; ids: string[]; composite: CanvasElement }
 
 type HistoryAction =
   | DocAction
@@ -109,6 +112,18 @@ function docReducer(state: CanvasState, action: DocAction): CanvasState {
 
     case 'delete':
       return { ...state, elements: state.elements.filter(el => el.id !== action.id) }
+
+    case 'delete_many': {
+      const set = new Set(action.ids)
+      return { ...state, elements: state.elements.filter(el => !set.has(el.id)) }
+    }
+
+    case 'merge_tags': {
+      // Remove os elementos originais e insere a composite na posição do primeiro
+      const set = new Set(action.ids)
+      const remaining = state.elements.filter(el => !set.has(el.id))
+      return { ...state, elements: [...remaining, action.composite] }
+    }
 
     case 'move_z': {
       const all = [...state.elements].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
@@ -183,7 +198,10 @@ export default function CanvasEditor({
   const canUndo = history.past.length > 0
   const canRedo = history.future.length > 0
 
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  // selectedIds[0] = primary (mostrado no PropertiesPanel singular)
+  // selectedIds[1+] = extras (multi-select via Ctrl/Cmd/Shift+Click)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const selectedId = selectedIds[0] ?? null
   const [error, setError] = useState<string | null>(null)
   const [savedAt, setSavedAt] = useState<Date | null>(null)
   const [isSaving, startSave] = useTransition()
@@ -193,6 +211,32 @@ export default function CanvasEditor({
   // Modo Pincel — quando ativo, cliques no canvas pintam traços em vez de
   // selecionar/arrastar elementos. ESC ou botão "Encerrar" sai.
   const [brushMode, setBrushMode] = useState<{ color: string; size: number; opacity: number } | null>(null)
+
+  // Modal de mescla de tags
+  const [showMergeModal, setShowMergeModal] = useState(false)
+
+  const handleSelect = useCallback((id: string | null, opts?: { append?: boolean }) => {
+    if (id === null) {
+      setSelectedIds([])
+      return
+    }
+    setSelectedIds(prev => {
+      if (opts?.append) {
+        if (prev.includes(id)) return prev.filter(x => x !== id)
+        return [...prev, id]
+      }
+      return [id]
+    })
+  }, [])
+
+  // Elementos selecionados que são dynamic_tag (candidatos a mescla)
+  const selectedDynamicTags = useMemo(() => {
+    return selectedIds
+      .map(id => state.elements.find(e => e.id === id))
+      .filter((e): e is DynamicTagElement => !!e && e.kind === 'dynamic_tag')
+  }, [selectedIds, state.elements])
+
+  const canMerge = selectedDynamicTags.length >= 2
 
   // Snapshot da última versão persistida — usado para detectar dirty state.
   const lastSavedRef = useRef<string>(JSON.stringify(state))
@@ -214,10 +258,32 @@ export default function CanvasEditor({
   }, [selectedId])
 
   const handleDeleteSelected = useCallback(() => {
-    if (!selectedId) return
-    dispatch({ type: 'delete', id: selectedId })
-    setSelectedId(null)
-  }, [selectedId])
+    if (selectedIds.length === 0) return
+    if (selectedIds.length === 1) dispatch({ type: 'delete', id: selectedIds[0] })
+    else dispatch({ type: 'delete_many', ids: selectedIds })
+    setSelectedIds([])
+  }, [selectedIds])
+
+  /** Confirma a mescla: cria composite_tag a partir das dynamic_tags selecionadas
+   *  (na ordem definida no modal), remove as originais. */
+  const handleConfirmMerge = useCallback((
+    parts: CompositeTagPart[],
+    separator: string,
+  ) => {
+    if (parts.length < 2) return
+    // Posiciona o composite onde estava o primeiro elemento (mais alto/esquerdo)
+    const firstTag = selectedDynamicTags.find(t => t.id === parts[0].tagId)
+      ?? selectedDynamicTags[0]
+    const composite = makeCompositeTagElement(parts, {
+      box: { ...firstTag.box },
+      separator,
+      typography: { ...firstTag.typography },
+      zIndex: firstTag.zIndex,
+    })
+    dispatch({ type: 'merge_tags', ids: selectedDynamicTags.map(t => t.id), composite })
+    setSelectedIds([composite.id])
+    setShowMergeModal(false)
+  }, [selectedDynamicTags])
 
   const handleMoveZ = useCallback((dir: 'front' | 'back' | 'forward' | 'backward') => {
     if (!selectedId) return
@@ -386,6 +452,17 @@ export default function CanvasEditor({
               </IconHeaderBtn>
             </div>
 
+            {canMerge && (
+              <button
+                onClick={() => setShowMergeModal(true)}
+                title={`Mesclar ${selectedDynamicTags.length} tags em uma única`}
+                className="flex items-center gap-1 rounded-lg border border-violet-300 bg-violet-50 px-2 py-1 text-xs font-medium text-violet-700 hover:bg-violet-100"
+              >
+                <Combine className="w-3.5 h-3.5" />
+                Mesclar ({selectedDynamicTags.length})
+              </button>
+            )}
+
             {selected ? (
               <QuickPaint
                 currentColor={
@@ -434,8 +511,8 @@ export default function CanvasEditor({
         {/* Body: toolbar | stage | properties */}
         <div className="grid flex-1 grid-cols-[80px_minmax(0,1fr)_minmax(280px,340px)] overflow-hidden">
           <ElementsToolbar
-            onAdd={(element) => { dispatch({ type: 'add', element }); setSelectedId(element.id) }}
-            onAddMany={(elements) => { dispatch({ type: 'add_many', elements }); setSelectedId(null) }}
+            onAdd={(element) => { dispatch({ type: 'add', element }); setSelectedIds([element.id]) }}
+            onAddMany={(elements) => { dispatch({ type: 'add_many', elements }); setSelectedIds([]) }}
             onUploadImage={handleUploadImage}
             computeStartY={() => {
               const others = state.elements.filter(e => e.kind !== 'brush_stroke')
@@ -448,7 +525,7 @@ export default function CanvasEditor({
           <main
             ref={stageWrapper}
             className="flex justify-center overflow-y-auto bg-[radial-gradient(ellipse_at_top,rgba(124,58,237,0.06),transparent_60%)] p-6"
-            onMouseDown={e => { if (e.target === e.currentTarget) setSelectedId(null) }}
+            onMouseDown={e => { if (e.target === e.currentTarget) setSelectedIds([]) }}
           >
             <div
               className="w-full"
@@ -457,13 +534,20 @@ export default function CanvasEditor({
               <CanvasStage
                 state={state}
                 selectedId={selectedId}
+                selectedIds={selectedIds}
                 brush={brushMode}
-                onSelect={setSelectedId}
+                onSelect={handleSelect}
                 onElementChange={handleElementChange}
                 onBrushStrokeComplete={handleBrushStrokeComplete}
               />
               <p className="mt-3 text-center text-[11px] text-slate-500">
-                {state.elements.length} elemento{state.elements.length === 1 ? '' : 's'} · drag para mover, alças para redimensionar · auto-save a cada 1 min
+                {state.elements.length} elemento{state.elements.length === 1 ? '' : 's'}
+                {selectedIds.length > 1 && (
+                  <span className="ml-1 text-violet-600 font-medium">
+                    · {selectedIds.length} selecionados (Ctrl+Click)
+                  </span>
+                )}
+                {' · '}auto-save a cada 1 min
               </p>
             </div>
           </main>
@@ -475,6 +559,162 @@ export default function CanvasEditor({
             onMoveZ={handleMoveZ}
           />
         </div>
+
+        {showMergeModal && (
+          <MergeTagsModal
+            tags={selectedDynamicTags}
+            onClose={() => setShowMergeModal(false)}
+            onConfirm={handleConfirmMerge}
+          />
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── MergeTagsModal ───────────────────────────────────────────────────────────
+
+interface MergeDraftPart {
+  tagId: string
+  label: string
+  prefix: string
+  suffix: string
+}
+
+function MergeTagsModal({
+  tags, onClose, onConfirm,
+}: {
+  tags: DynamicTagElement[]
+  onClose: () => void
+  onConfirm: (parts: CompositeTagPart[], separator: string) => void
+}) {
+  const [parts, setParts] = useState<MergeDraftPart[]>(() =>
+    tags.map(t => ({
+      tagId: t.tagId,
+      label: findTag(t.tagId)?.label ?? t.tagId,
+      prefix: t.prefix ?? '',
+      suffix: t.suffix ?? '',
+    }))
+  )
+  const [separator, setSeparator] = useState(' · ')
+
+  function move(idx: number, dir: -1 | 1) {
+    const target = idx + dir
+    if (target < 0 || target >= parts.length) return
+    const next = [...parts]
+    const [removed] = next.splice(idx, 1)
+    next.splice(target, 0, removed)
+    setParts(next)
+  }
+  function update(idx: number, patch: Partial<MergeDraftPart>) {
+    setParts(prev => prev.map((p, i) => i === idx ? { ...p, ...patch } : p))
+  }
+  function removeAt(idx: number) {
+    if (parts.length <= 2) return
+    setParts(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  const preview = parts
+    .map(p => `${p.prefix}<${p.label}>${p.suffix}`)
+    .join(separator)
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+      <div className="flex w-full max-w-xl flex-col rounded-2xl bg-white shadow-2xl overflow-hidden" style={{ maxHeight: '85vh' }}>
+        <header className="flex items-center justify-between border-b border-slate-200 px-4 py-3 flex-shrink-0">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+              <Combine className="w-4 h-4 text-violet-600" />
+              Mesclar Tags
+            </h2>
+            <p className="text-[11px] text-slate-500">
+              {parts.length} tags serão combinadas em um único elemento
+            </p>
+          </div>
+          <button onClick={onClose} className="rounded p-1.5 text-slate-500 hover:bg-slate-100">
+            <X className="w-4 h-4" />
+          </button>
+        </header>
+
+        <div className="overflow-y-auto p-4 space-y-3">
+          {/* Preview */}
+          <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">
+              Pré-visualização
+            </div>
+            <div className="font-mono text-xs text-slate-700 break-all">{preview || '(vazio)'}</div>
+          </div>
+
+          {/* Partes */}
+          <ol className="space-y-2">
+            {parts.map((p, i) => (
+              <li key={`${p.tagId}-${i}`} className="rounded-lg border border-slate-200 bg-white p-2.5">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[11px] font-semibold text-violet-700">
+                    {i + 1}. {p.label} <code className="ml-1 text-[10px] text-slate-400 font-mono">{`{{${p.tagId}}}`}</code>
+                  </span>
+                  <div className="flex gap-0.5">
+                    <button onClick={() => move(i, -1)} disabled={i === 0}
+                      className="rounded px-1.5 text-slate-500 hover:bg-slate-100 disabled:opacity-30" title="Subir">↑</button>
+                    <button onClick={() => move(i, +1)} disabled={i === parts.length - 1}
+                      className="rounded px-1.5 text-slate-500 hover:bg-slate-100 disabled:opacity-30" title="Descer">↓</button>
+                    <button onClick={() => removeAt(i)} disabled={parts.length <= 2}
+                      className="rounded px-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-30" title="Remover">×</button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="block">
+                    <span className="text-[10px] text-slate-600">Texto antes</span>
+                    <input
+                      className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
+                      value={p.prefix}
+                      placeholder='ex: "Tutor: "'
+                      onChange={e => update(i, { prefix: e.target.value })}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-[10px] text-slate-600">Texto depois</span>
+                    <input
+                      className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
+                      value={p.suffix}
+                      placeholder='ex: " kg"'
+                      onChange={e => update(i, { suffix: e.target.value })}
+                    />
+                  </label>
+                </div>
+              </li>
+            ))}
+          </ol>
+
+          <label className="block">
+            <span className="text-[10px] text-slate-600">Separador entre as partes</span>
+            <input
+              className="w-full rounded border border-slate-300 px-2 py-1 text-xs font-mono"
+              value={separator}
+              onChange={e => setSeparator(e.target.value)}
+              placeholder=" · "
+            />
+            <span className="text-[10px] text-slate-400">
+              Comum: <code>{' · '}</code>, <code>{' — '}</code>, <code>{', '}</code>, <code>{' / '}</code>
+            </span>
+          </label>
+        </div>
+
+        <footer className="border-t border-slate-200 px-4 py-3 flex items-center justify-end gap-2 flex-shrink-0">
+          <button onClick={onClose} className="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100">
+            Cancelar
+          </button>
+          <button
+            onClick={() => onConfirm(
+              parts.map(p => ({ tagId: p.tagId, prefix: p.prefix, suffix: p.suffix })),
+              separator,
+            )}
+            disabled={parts.length < 2}
+            className="rounded-lg bg-violet-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-violet-700 disabled:opacity-50"
+          >
+            Mesclar {parts.length} tags
+          </button>
+        </footer>
       </div>
     </div>
   )

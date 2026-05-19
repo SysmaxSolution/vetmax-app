@@ -8,7 +8,7 @@
  * Print fidelity: editor e LaudoPrintable consomem a MESMA estrutura.
  */
 
-export type ElementKind = 'text' | 'image' | 'line' | 'dynamic_tag' | 'dynamic_image' | 'repeater' | 'brush_stroke'
+export type ElementKind = 'text' | 'image' | 'line' | 'dynamic_tag' | 'composite_tag' | 'dynamic_image' | 'repeater' | 'brush_stroke'
 
 /** Posição/tamanho em % do canvas (0-100). 0/0 = canto superior esquerdo. */
 export interface ElementBox {
@@ -91,6 +91,32 @@ export interface DynamicTagElement extends ElementCommon {
   fallback?: string
 }
 
+/** Parte de uma CompositeTagElement: uma resolução individual (tag + envoltórios). */
+export interface CompositeTagPart {
+  tagId: string
+  /** Texto antes da resolução desse campo (ex: "Tutor: "). */
+  prefix?: string
+  /** Texto depois (ex: " kg"). */
+  suffix?: string
+}
+
+/**
+ * Composite Tag — mescla 2+ Dynamic Tags num único elemento.
+ * Útil para gerar linhas como "Tutor: João Silva · CPF: 123.456.789-00".
+ * Cada parte pode ter prefix/suffix próprios; entre partes vai o separator.
+ */
+export interface CompositeTagElement extends ElementCommon {
+  kind: 'composite_tag'
+  parts: CompositeTagPart[]
+  /** Texto entre as partes (padrão " · "). */
+  separator: string
+  typography: TypographyStyle
+  /** Mostrado quando TODAS as partes resolvem para vazio. */
+  fallback?: string
+  /** Se true, oculta partes vazias (em vez de manter o separator duplicado). */
+  hideEmptyParts?: boolean
+}
+
 /**
  * Imagem vinda do banco (logo da clínica, foto do MV, assinatura eletrônica).
  * Diferente de ImageElement (URL fixa), DynamicImageElement resolve a URL
@@ -155,6 +181,7 @@ export type CanvasElement =
   | ImageElement
   | LineElement
   | DynamicTagElement
+  | CompositeTagElement
   | DynamicImageElement
   | RepeaterElement
   | BrushStrokeElement
@@ -230,6 +257,23 @@ export function makeDynamicTagElement(tagId: string, overrides?: Partial<Dynamic
     box: { ...DEFAULT_BOX },
     tagId,
     typography: { ...DEFAULT_TYPOGRAPHY },
+    zIndex: 1,
+    ...overrides,
+  }
+}
+
+export function makeCompositeTagElement(
+  parts: CompositeTagPart[],
+  overrides?: Partial<CompositeTagElement>,
+): CompositeTagElement {
+  return {
+    id: nextElementId('composite_tag'),
+    kind: 'composite_tag',
+    box: { ...DEFAULT_BOX, w: 80 },
+    parts,
+    separator: ' · ',
+    typography: { ...DEFAULT_TYPOGRAPHY },
+    hideEmptyParts: true,
     zIndex: 1,
     ...overrides,
   }

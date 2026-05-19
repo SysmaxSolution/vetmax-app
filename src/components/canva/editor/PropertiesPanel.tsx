@@ -16,9 +16,10 @@ import {
 } from 'lucide-react'
 import type {
   CanvasElement, TextElement, ImageElement, LineElement,
-  DynamicTagElement, DynamicImageElement, RepeaterElement, BrushStrokeElement, ElementPin,
+  DynamicTagElement, CompositeTagElement,
+  DynamicImageElement, RepeaterElement, BrushStrokeElement, ElementPin,
 } from '@/lib/canva/elements'
-import { findImageTag } from '@/lib/canva/dynamic-tags'
+import { findImageTag, findTag } from '@/lib/canva/dynamic-tags'
 
 interface Props {
   element: CanvasElement | null
@@ -65,6 +66,7 @@ export default function PropertiesPanel({ element, onPatch, onDelete, onMoveZ }:
 
       {element.kind === 'text' && <TextSection element={element} onPatch={onPatch} />}
       {element.kind === 'dynamic_tag' && <DynamicTagSection element={element} onPatch={onPatch} />}
+      {element.kind === 'composite_tag' && <CompositeTagSection element={element} onPatch={onPatch} />}
       {element.kind === 'dynamic_image' && <DynamicImageSection element={element} onPatch={onPatch} />}
       {element.kind === 'repeater' && <RepeaterSection element={element} onPatch={onPatch} />}
       {element.kind === 'image' && <ImageSection element={element} onPatch={onPatch} />}
@@ -76,6 +78,120 @@ export default function PropertiesPanel({ element, onPatch, onDelete, onMoveZ }:
         <BlockSection element={element} onPatch={onPatch} />
       )}
     </aside>
+  )
+}
+
+// ── Section: Composite Tag (mescla de tags) ──────────────────────────────────
+
+function CompositeTagSection({
+  element, onPatch,
+}: { element: CompositeTagElement; onPatch: Props['onPatch'] }) {
+  function updatePart(idx: number, patch: Partial<{ prefix: string; suffix: string }>) {
+    const next = element.parts.map((p, i) => i === idx ? { ...p, ...patch } : p)
+    onPatch({ parts: next } as Partial<CanvasElement>)
+  }
+  function movePart(idx: number, dir: -1 | 1) {
+    const target = idx + dir
+    if (target < 0 || target >= element.parts.length) return
+    const next = [...element.parts]
+    const [removed] = next.splice(idx, 1)
+    next.splice(target, 0, removed)
+    onPatch({ parts: next } as Partial<CanvasElement>)
+  }
+  function removePart(idx: number) {
+    if (element.parts.length <= 1) return
+    onPatch({ parts: element.parts.filter((_, i) => i !== idx) } as Partial<CanvasElement>)
+  }
+
+  return (
+    <Section title="Tags Mescladas">
+      <p className="text-[11px] text-slate-500 mb-2">
+        {element.parts.length} partes · separador <code className="font-mono text-[10px]">{JSON.stringify(element.separator)}</code>
+      </p>
+
+      <ol className="space-y-2">
+        {element.parts.map((p, i) => {
+          const def = findTag(p.tagId)
+          return (
+            <li key={i} className="rounded-lg border border-slate-200 bg-white p-2">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[10px] font-semibold text-violet-700">
+                  {i + 1}. {def?.label ?? p.tagId}
+                </span>
+                <div className="flex gap-0.5">
+                  <button
+                    onClick={() => movePart(i, -1)} disabled={i === 0}
+                    title="Mover para cima"
+                    className="rounded p-0.5 text-slate-400 hover:bg-slate-100 disabled:opacity-30"
+                  >↑</button>
+                  <button
+                    onClick={() => movePart(i, +1)} disabled={i === element.parts.length - 1}
+                    title="Mover para baixo"
+                    className="rounded p-0.5 text-slate-400 hover:bg-slate-100 disabled:opacity-30"
+                  >↓</button>
+                  <button
+                    onClick={() => removePart(i)} disabled={element.parts.length <= 1}
+                    title="Remover esta parte"
+                    className="rounded p-0.5 text-slate-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-30"
+                  >×</button>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                <label className="block">
+                  <span className="text-[10px] text-slate-600">Antes</span>
+                  <input
+                    className="w-full rounded border border-slate-300 px-1.5 py-0.5 text-xs"
+                    value={p.prefix ?? ''}
+                    placeholder='ex: "Tutor: "'
+                    onChange={e => updatePart(i, { prefix: e.target.value })}
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-[10px] text-slate-600">Depois</span>
+                  <input
+                    className="w-full rounded border border-slate-300 px-1.5 py-0.5 text-xs"
+                    value={p.suffix ?? ''}
+                    placeholder='ex: " kg"'
+                    onChange={e => updatePart(i, { suffix: e.target.value })}
+                  />
+                </label>
+              </div>
+            </li>
+          )
+        })}
+      </ol>
+
+      <label className="block mt-3">
+        <span className="text-[10px] text-slate-600">Separador entre as partes</span>
+        <input
+          className="w-full rounded border border-slate-300 px-2 py-1 text-xs font-mono"
+          value={element.separator}
+          placeholder=" · "
+          onChange={e => onPatch({ separator: e.target.value } as Partial<CanvasElement>)}
+        />
+      </label>
+
+      <label className="block mt-2">
+        <span className="text-[10px] text-slate-600">Texto se tudo vazio</span>
+        <input
+          className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
+          value={element.fallback ?? ''}
+          placeholder='ex: "Não informado"'
+          onChange={e => onPatch({ fallback: e.target.value } as Partial<CanvasElement>)}
+        />
+      </label>
+
+      <label className="flex items-center gap-1.5 mt-2 text-[11px] text-slate-700">
+        <input
+          type="checkbox"
+          checked={!!element.hideEmptyParts}
+          onChange={e => onPatch({ hideEmptyParts: e.target.checked } as Partial<CanvasElement>)}
+        />
+        Ocultar partes vazias na impressão
+      </label>
+
+      <TypographyControls element={element} onPatch={onPatch} />
+    </Section>
   )
 }
 
@@ -537,7 +653,7 @@ const REPEATER_FIELDS_BY_SOURCE: Record<RepeaterElement['source'], Array<{ field
 function TypographyControls({
   element, onPatch,
 }: {
-  element: TextElement | DynamicTagElement | RepeaterElement
+  element: TextElement | DynamicTagElement | CompositeTagElement | RepeaterElement
   onPatch: Props['onPatch']
 }) {
   const t = element.typography
@@ -714,6 +830,7 @@ function kindLabel(k: CanvasElement['kind']): string {
     case 'image':          return 'Imagem'
     case 'line':           return 'Linha'
     case 'dynamic_tag':    return 'Tag Dinâmica'
+    case 'composite_tag':  return 'Tags Mescladas'
     case 'dynamic_image':  return 'Imagem do Banco'
     case 'repeater':       return 'Lista Repetível'
     case 'brush_stroke':   return 'Pincel'

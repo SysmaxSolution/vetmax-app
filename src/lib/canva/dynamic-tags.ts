@@ -18,7 +18,12 @@ export interface DynamicTagDef {
 }
 
 export type TagGroup = 'tutor' | 'pet' | 'consulta' | 'clinica' | 'vet'
-export type TagFormat = 'date' | 'datetime' | 'weight_kg' | 'phone_br' | 'cpf_br' | 'currency_brl'
+export type TagFormat =
+  | 'date' | 'datetime' | 'time'
+  | 'day_2digits' | 'month_2digits' | 'month_name_br' | 'year_4digits' | 'weekday_br'
+  | 'weight_kg' | 'temperature_c'
+  | 'phone_br' | 'cpf_br' | 'currency_brl'
+  | 'uppercase'
 
 export const DYNAMIC_TAGS: DynamicTagDef[] = [
   // ── Tutor ────────────────────────────────────────────────────────────────
@@ -39,16 +44,28 @@ export const DYNAMIC_TAGS: DynamicTagDef[] = [
   { id: 'pet.microchip', label: 'Microchip',           group: 'pet',    path: 'patient.microchip',   preview: '900215001234567' },
 
   // ── Consulta ─────────────────────────────────────────────────────────────
-  { id: 'consulta.date',      label: 'Data da Consulta',    group: 'consulta', path: 'consultation.date',         format: 'date',     preview: '18/05/2026' },
-  { id: 'consulta.datetime',  label: 'Data + Hora',         group: 'consulta', path: 'consultation.datetime',     format: 'datetime', preview: '18/05/2026 14:30' },
-  { id: 'consulta.diagnosis', label: 'Diagnóstico',         group: 'consulta', path: 'consultation.diagnosis',    preview: 'Suspeita de cardiopatia' },
-  { id: 'consulta.complaint', label: 'Queixa Principal',    group: 'consulta', path: 'consultation.complaint',    preview: 'Tosse seca há 3 dias' },
+  { id: 'consulta.date',         label: 'Data da Consulta',    group: 'consulta', path: 'consultation.date',         format: 'date',           preview: '18/05/2026' },
+  { id: 'consulta.datetime',     label: 'Data + Hora',         group: 'consulta', path: 'consultation.datetime',     format: 'datetime',       preview: '18/05/2026 14:30' },
+  { id: 'consulta.time',         label: 'Hora da Consulta',    group: 'consulta', path: 'consultation.datetime',     format: 'time',           preview: '14:30' },
+  { id: 'consulta.day',          label: 'Dia (DD)',            group: 'consulta', path: 'consultation.date',         format: 'day_2digits',    preview: '18' },
+  { id: 'consulta.month',        label: 'Mês (MM)',            group: 'consulta', path: 'consultation.date',         format: 'month_2digits',  preview: '05' },
+  { id: 'consulta.month_name',   label: 'Mês por extenso',     group: 'consulta', path: 'consultation.date',         format: 'month_name_br',  preview: 'maio' },
+  { id: 'consulta.year',         label: 'Ano (AAAA)',          group: 'consulta', path: 'consultation.date',         format: 'year_4digits',   preview: '2026' },
+  { id: 'consulta.weekday',      label: 'Dia da Semana',       group: 'consulta', path: 'consultation.date',         format: 'weekday_br',     preview: 'segunda-feira' },
+  { id: 'consulta.diagnosis',    label: 'Diagnóstico',         group: 'consulta', path: 'consultation.diagnosis',    preview: 'Suspeita de cardiopatia' },
+  { id: 'consulta.complaint',    label: 'Queixa Principal',    group: 'consulta', path: 'consultation.complaint',    preview: 'Tosse seca há 3 dias' },
+  { id: 'consulta.weight',       label: 'Peso na Consulta',    group: 'consulta', path: 'consultation.weight',       format: 'weight_kg',      preview: '28,4 kg' },
+  { id: 'consulta.temperature',  label: 'Temperatura',         group: 'consulta', path: 'consultation.temperature',  format: 'temperature_c',  preview: '38,5 °C' },
+  { id: 'consulta.visit_reason', label: 'Motivo da Visita',    group: 'consulta', path: 'consultation.visit_reason_label', preview: 'Consulta de rotina' },
 
   // ── Clínica ──────────────────────────────────────────────────────────────
   { id: 'clinica.name',          label: 'Nome',               group: 'clinica', path: 'clinic.name',                              preview: 'AlmaVet' },
   { id: 'clinica.cnpj',          label: 'CNPJ',               group: 'clinica', path: 'clinic.cnpj',                              preview: '12.345.678/0001-90' },
   { id: 'clinica.phone',         label: 'Telefone',           group: 'clinica', path: 'clinic.phone',         format: 'phone_br', preview: '(11) 3333-4444' },
-  { id: 'clinica.address',       label: 'Endereço',           group: 'clinica', path: 'clinic.address',                           preview: 'Av. Paulista, 1000' },
+  { id: 'clinica.address',       label: 'Endereço Completo',  group: 'clinica', path: 'clinic.address',                           preview: 'Av. Paulista, 1000 — São Paulo/SP' },
+  { id: 'clinica.city',          label: 'Cidade',             group: 'clinica', path: 'clinic.city',                              preview: 'São Paulo' },
+  { id: 'clinica.state',         label: 'UF (Estado)',        group: 'clinica', path: 'clinic.state',         format: 'uppercase', preview: 'SP' },
+  { id: 'clinica.city_state',    label: 'Cidade / UF',        group: 'clinica', path: 'clinic.city_state',                        preview: 'São Paulo/SP' },
   { id: 'clinica.business_type', label: 'Tipo de Negócio',    group: 'clinica', path: 'clinic.business_type_label',               preview: 'Clínica Veterinária' },
   { id: 'clinica.business_hours',label: 'Horário de Funcionamento', group: 'clinica', path: 'clinic.business_hours_label',         preview: 'Seg–Sex 08:00–18:00 · Sáb 08:00–12:00' },
   { id: 'clinica.razao_social',  label: 'Razão Social',       group: 'clinica', path: 'clinic.razao_social',                      preview: 'AlmaVet Veterinária Ltda' },
@@ -153,14 +170,61 @@ export function resolveTagValue(tagId: string, ctx: ResolveContext): string {
   if (raw === null || raw === undefined || raw === '') return ''
 
   switch (def.format) {
-    case 'date':       return formatDateBR(raw)
-    case 'datetime':   return formatDateTimeBR(raw)
-    case 'weight_kg':  return formatWeightKg(raw)
-    case 'phone_br':   return formatPhoneBR(String(raw))
-    case 'cpf_br':     return formatCpfBR(String(raw))
-    case 'currency_brl': return formatBRL(raw)
-    default:           return String(raw)
+    case 'date':           return formatDateBR(raw)
+    case 'datetime':       return formatDateTimeBR(raw)
+    case 'time':           return formatTimeBR(raw)
+    case 'day_2digits':    return formatDayBR(raw)
+    case 'month_2digits':  return formatMonth2digits(raw)
+    case 'month_name_br':  return formatMonthName(raw)
+    case 'year_4digits':   return formatYear(raw)
+    case 'weekday_br':     return formatWeekday(raw)
+    case 'weight_kg':      return formatWeightKg(raw)
+    case 'temperature_c':  return formatTemperatureC(raw)
+    case 'phone_br':       return formatPhoneBR(String(raw))
+    case 'cpf_br':         return formatCpfBR(String(raw))
+    case 'currency_brl':   return formatBRL(raw)
+    case 'uppercase':      return String(raw).toUpperCase()
+    default:               return String(raw)
   }
+}
+
+function toDate(raw: unknown): Date | null {
+  const d = raw instanceof Date ? raw : new Date(String(raw))
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
+function formatTimeBR(raw: unknown): string {
+  const d = toDate(raw); if (!d) return ''
+  return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+}
+function formatDayBR(raw: unknown): string {
+  const d = toDate(raw); if (!d) return ''
+  return String(d.getDate()).padStart(2, '0')
+}
+function formatMonth2digits(raw: unknown): string {
+  const d = toDate(raw); if (!d) return ''
+  return String(d.getMonth() + 1).padStart(2, '0')
+}
+const MONTHS_BR = [
+  'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+  'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
+]
+function formatMonthName(raw: unknown): string {
+  const d = toDate(raw); if (!d) return ''
+  return MONTHS_BR[d.getMonth()]
+}
+function formatYear(raw: unknown): string {
+  const d = toDate(raw); if (!d) return ''
+  return String(d.getFullYear())
+}
+function formatWeekday(raw: unknown): string {
+  const d = toDate(raw); if (!d) return ''
+  return d.toLocaleDateString('pt-BR', { weekday: 'long' })
+}
+function formatTemperatureC(raw: unknown): string {
+  const n = typeof raw === 'number' ? raw : parseFloat(String(raw))
+  if (Number.isNaN(n)) return ''
+  return `${n.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} °C`
 }
 
 function formatDateBR(raw: unknown): string {

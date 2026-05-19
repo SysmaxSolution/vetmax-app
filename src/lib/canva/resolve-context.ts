@@ -24,6 +24,39 @@ const BUSINESS_TYPE_LABELS: Record<string, string> = {
   pet_aesthetics: 'Estética Pet',
 }
 
+const VISIT_REASON_LABELS: Record<string, string> = {
+  consultation: 'Consulta',
+  follow_up:    'Retorno',
+  emergency:    'Emergência',
+  vaccination:  'Vacinação',
+  exam:         'Exame',
+  surgery:      'Cirurgia',
+}
+
+/** Extrai cidade/UF do endereço (formato livre).
+ *  Heurísticas comuns no DB:
+ *  - "Rua X, 123 - Bairro - São Paulo/SP"
+ *  - "Av Y - São Paulo - SP"
+ *  - cnpj_data.municipio + cnpj_data.uf (preferido quando disponível) */
+function extractCityState(
+  address: string | null | undefined,
+  cnpjData: Record<string, unknown> | null | undefined,
+): { city: string; state: string } {
+  // Preferência 1: cnpj_data tem municipio/uf (vem da API de CNPJ)
+  const cMun = cnpjData?.municipio as string | undefined
+  const cUf = cnpjData?.uf as string | undefined
+  if (cMun || cUf) return { city: cMun ?? '', state: (cUf ?? '').toUpperCase() }
+
+  // Preferência 2: parse do address — padrão "...Cidade/UF" ou "...Cidade - UF"
+  if (!address) return { city: '', state: '' }
+  // Padrão "Cidade/UF" no final
+  const slashMatch = address.match(/([A-Za-zÀ-ú\s.]+)\s*[\/\-]\s*([A-Z]{2})\s*$/u)
+  if (slashMatch) {
+    return { city: slashMatch[1].trim(), state: slashMatch[2].trim() }
+  }
+  return { city: '', state: '' }
+}
+
 interface BusinessHourEntry {
   open?: string
   close?: string
@@ -131,14 +164,26 @@ export async function buildResolveContext(
       datetime: consultation.created_at,
       diagnosis: consultation.suggested_diagnosis ?? consultation.vet_notes ?? '',
       complaint: chiefComplaint ?? '',
+      weight: consultation.weight ?? null,
+      temperature: (vitalSigns?.temperature as number | undefined) ?? null,
+      visit_reason_label: VISIT_REASON_LABELS[(consultation as Record<string, unknown>).visit_reason as string] ?? '',
     } : {},
 
-    clinic: clinic ? {
-      ...clinic,
-      business_type_label: BUSINESS_TYPE_LABELS[clinic.business_type] ?? clinic.business_type,
-      business_hours_label: formatBusinessHoursLabel(clinic.business_hours),
-      razao_social: (clinic.cnpj_data as { razao_social?: string } | null)?.razao_social ?? clinic.name,
-    } : {},
+    clinic: clinic ? (() => {
+      const { city, state: uf } = extractCityState(
+        clinic.address ?? undefined,
+        clinic.cnpj_data as Record<string, unknown> | null | undefined,
+      )
+      return {
+        ...clinic,
+        city,
+        state: uf,
+        city_state: city && uf ? `${city}/${uf}` : (city || uf),
+        business_type_label: BUSINESS_TYPE_LABELS[clinic.business_type] ?? clinic.business_type,
+        business_hours_label: formatBusinessHoursLabel(clinic.business_hours),
+        razao_social: (clinic.cnpj_data as { razao_social?: string } | null)?.razao_social ?? clinic.name,
+      }
+    })() : {},
 
     vet: vet ? {
       ...vet,

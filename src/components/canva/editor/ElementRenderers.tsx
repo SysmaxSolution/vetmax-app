@@ -10,7 +10,8 @@
 import type { CSSProperties } from 'react'
 import type {
   CanvasElement, TextElement, ImageElement, LineElement,
-  DynamicTagElement, DynamicImageElement, RepeaterElement, BrushStrokeElement,
+  DynamicTagElement, CompositeTagElement,
+  DynamicImageElement, RepeaterElement, BrushStrokeElement,
   TypographyStyle, BlockStyle,
 } from '@/lib/canva/elements'
 import {
@@ -70,14 +71,50 @@ interface RenderProps {
 
 export function ElementRenderer({ element, ctx, isPrint }: RenderProps) {
   switch (element.kind) {
-    case 'text':           return <TextRenderer          e={element} isPrint={isPrint} />
-    case 'image':          return <ImageRenderer         e={element} isPrint={isPrint} />
-    case 'line':           return <LineRenderer          e={element} />
-    case 'dynamic_tag':    return <DynamicTagRenderer    e={element} ctx={ctx} isPrint={isPrint} />
-    case 'dynamic_image':  return <DynamicImageRenderer  e={element} ctx={ctx} isPrint={isPrint} />
-    case 'repeater':       return <RepeaterRenderer      e={element} ctx={ctx} isPrint={isPrint} />
-    case 'brush_stroke':   return <BrushStrokeFallback   e={element} />
+    case 'text':            return <TextRenderer           e={element} isPrint={isPrint} />
+    case 'image':           return <ImageRenderer          e={element} isPrint={isPrint} />
+    case 'line':            return <LineRenderer           e={element} />
+    case 'dynamic_tag':     return <DynamicTagRenderer     e={element} ctx={ctx} isPrint={isPrint} />
+    case 'composite_tag':   return <CompositeTagRenderer   e={element} ctx={ctx} isPrint={isPrint} />
+    case 'dynamic_image':   return <DynamicImageRenderer   e={element} ctx={ctx} isPrint={isPrint} />
+    case 'repeater':        return <RepeaterRenderer       e={element} ctx={ctx} isPrint={isPrint} />
+    case 'brush_stroke':    return <BrushStrokeFallback    e={element} />
   }
+}
+
+function CompositeTagRenderer({ e, ctx, isPrint }: { e: CompositeTagElement; ctx?: ResolveContext; isPrint?: boolean }) {
+  const renderedParts = e.parts.map(p => {
+    const v = ctx ? resolveTagValue(p.tagId, ctx) : ''
+    const display = v || (isPrint ? '' : `{{${p.tagId}}}`)
+    if (e.hideEmptyParts && !v && isPrint) return null
+    return `${p.prefix ?? ''}${display}${p.suffix ?? ''}`
+  }).filter(Boolean) as string[]
+
+  const text = renderedParts.length > 0
+    ? renderedParts.join(e.separator)
+    : (e.fallback ?? (isPrint ? '' : '(mescla vazia)'))
+
+  const isUnresolved = !ctx && !isPrint
+
+  return (
+    <div
+      style={{
+        width: '100%', height: '100%',
+        overflow: 'hidden',
+        whiteSpace: 'pre-wrap', wordWrap: 'break-word',
+        outline: isUnresolved ? '1px dashed rgba(16,185,129,0.5)' : undefined,
+        ...typographyToCss(e.typography),
+        ...blockToCss(e.block),
+        ...vAlignToFlex(e.typography.vAlign),
+      }}
+    >
+      <span style={{
+        width: '100%',
+        background: isUnresolved ? 'rgba(16,185,129,0.06)' : undefined,
+        color: isUnresolved ? '#059669' : undefined,
+      }}>{text}</span>
+    </div>
+  )
 }
 
 /** Fallback quando um brush_stroke é renderizado fora do BrushLayer

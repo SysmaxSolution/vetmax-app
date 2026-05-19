@@ -31,20 +31,22 @@ export interface BrushSettings {
 interface Props {
   state: CanvasState
   selectedId?: string | null
+  selectedIds?: string[]
   resolveContext?: ResolveContext
   mode?: 'edit' | 'print'
   /** Quando setado, o stage captura mouse events e desenha traços
    *  livres em vez de selecionar/arrastar elementos. */
   brush?: BrushSettings | null
-  onSelect?: (id: string | null) => void
+  onSelect?: (id: string | null, opts?: { append?: boolean }) => void
   onElementChange?: (id: string, patch: Partial<CanvasElement>) => void
   onBrushStrokeComplete?: (points: Array<{ x: number; y: number }>, settings: BrushSettings) => void
 }
 
 export default function CanvasStage({
-  state, selectedId, resolveContext, mode = 'edit', brush,
+  state, selectedId, selectedIds, resolveContext, mode = 'edit', brush,
   onSelect, onElementChange, onBrushStrokeComplete,
 }: Props) {
+  const multiSelected = new Set(selectedIds ?? (selectedId ? [selectedId] : []))
   const stageRef = useRef<HTMLDivElement>(null)
   const [stagePx, setStagePx] = useState({ w: 0, h: 0 })
 
@@ -187,7 +189,7 @@ export default function CanvasStage({
         isPrint={isPrint}
         selectedId={selectedId}
         brushActive={!!brush}
-        onSelect={onSelect}
+        onSelect={(id) => onSelect?.(id)}
       />
 
       {/* Outros elementos */}
@@ -199,7 +201,8 @@ export default function CanvasStage({
             element={el}
             stagePx={stagePx}
             isPrint={isPrint}
-            isSelected={selectedId === el.id}
+            isSelected={multiSelected.has(el.id)}
+            isPrimarySelected={selectedId === el.id}
             resolveContext={resolveContext}
             brushActive={!!brush}
             onSelect={onSelect}
@@ -289,14 +292,15 @@ interface WrapperProps {
   stagePx: { w: number; h: number }
   isPrint: boolean
   isSelected: boolean
+  isPrimarySelected: boolean
   resolveContext?: ResolveContext
   brushActive: boolean
-  onSelect?: (id: string | null) => void
+  onSelect?: (id: string | null, opts?: { append?: boolean }) => void
   onChange?: (id: string, patch: Partial<CanvasElement>) => void
 }
 
 function ElementWrapper({
-  element, stagePx, isPrint, isSelected, resolveContext, brushActive, onSelect, onChange,
+  element, stagePx, isPrint, isSelected, isPrimarySelected, resolveContext, brushActive, onSelect, onChange,
 }: WrapperProps) {
   const transform = element.rotation ? `rotate(${element.rotation}deg)` : undefined
 
@@ -358,7 +362,11 @@ function ElementWrapper({
         zIndex: element.zIndex ?? 1,
         transform,
         transformOrigin: 'top left',
-        outline: isSelected ? '2px solid #7c3aed' : '1px dashed rgba(15,23,42,0.18)',
+        outline: isPrimarySelected
+          ? '2px solid #7c3aed'
+          : isSelected
+            ? '2px solid #06b6d4'  // ciano para multi-select (não-primary)
+            : '1px dashed rgba(15,23,42,0.18)',
         outlineOffset: 0,
         cursor: brushActive ? 'crosshair' : (element.locked ? 'not-allowed' : 'move'),
         pointerEvents: brushActive ? 'none' : undefined,
@@ -366,7 +374,8 @@ function ElementWrapper({
       onMouseDown={(e: any) => {
         if (brushActive) return
         e.stopPropagation()
-        onSelect?.(element.id)
+        const append = e.ctrlKey || e.metaKey || e.shiftKey
+        onSelect?.(element.id, { append })
       }}
     >
       <ElementRenderer element={element} ctx={resolveContext} />
