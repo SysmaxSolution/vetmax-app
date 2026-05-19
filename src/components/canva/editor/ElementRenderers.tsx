@@ -158,7 +158,7 @@ function CompositeTagRenderer({ e, ctx, isPrint }: { e: CompositeTagElement; ctx
       style={{
         width: '100%', height: '100%',
         overflow: 'hidden',
-        whiteSpace: 'pre-line', overflowWrap: 'break-word',
+        whiteSpace: 'normal', overflowWrap: 'break-word',
         outline: isUnresolved ? '1px dashed rgba(16,185,129,0.5)' : undefined,
         ...typographyToCss(e.typography),
         ...blockToCss(e.block),
@@ -214,7 +214,10 @@ function TextRenderer({ e, isPrint }: { e: TextElement; isPrint?: boolean }) {
   // perder pre-wrap não destrói os parágrafos.
   const textStyle: React.CSSProperties = {
     width: '100%',
-    whiteSpace: 'pre-line',  // preserva \\n + colapsa espaços (permite justify)
+    // parseInlineMarkdown quebra \n em <p> separados — whiteSpace normal
+    // permite o browser fazer wrap natural dentro de cada parágrafo e o
+    // text-align: justify funciona linha a linha dentro de cada <p>.
+    whiteSpace: 'normal',
     overflowWrap: 'break-word',
     ...typographyToCss(e.typography),
   }
@@ -354,7 +357,7 @@ function DynamicTagRenderer({ e, ctx, isPrint }: { e: DynamicTagElement; ctx?: R
       style={{
         width: '100%', height: '100%',
         overflow: 'hidden',
-        whiteSpace: 'pre-line', overflowWrap: 'break-word',
+        whiteSpace: 'normal', overflowWrap: 'break-word',
         outline: isUnresolved ? '1px dashed rgba(124,58,237,0.5)' : undefined,
         outlineOffset: 0,
         ...typographyToCss(e.typography),
