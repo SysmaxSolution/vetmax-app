@@ -34,6 +34,10 @@ interface Props {
   selectedIds?: string[]
   resolveContext?: ResolveContext
   mode?: 'edit' | 'print'
+  /** Quando true, oculta guides visuais do editor (outlines de seleção,
+   *  bordas dashed dos elementos, dashed violeta das margens). O preview
+   *  fica idêntico ao PDF/print final. */
+  cleanPreview?: boolean
   /** Quando setado, o stage captura mouse events e desenha traços
    *  livres em vez de selecionar/arrastar elementos. */
   brush?: BrushSettings | null
@@ -43,7 +47,7 @@ interface Props {
 }
 
 export default function CanvasStage({
-  state, selectedId, selectedIds, resolveContext, mode = 'edit', brush,
+  state, selectedId, selectedIds, resolveContext, mode = 'edit', brush, cleanPreview,
   onSelect, onElementChange, onBrushStrokeComplete,
 }: Props) {
   const multiSelected = new Set(selectedIds ?? (selectedId ? [selectedId] : []))
@@ -164,8 +168,8 @@ export default function CanvasStage({
         />
       )}
 
-      {/* Guide de margens (apenas em modo edit) */}
-      {!isPrint && (
+      {/* Guide de margens (apenas em modo edit, sem cleanPreview) */}
+      {!isPrint && !cleanPreview && (
         <div
           aria-hidden
           style={{
@@ -203,6 +207,7 @@ export default function CanvasStage({
             isPrint={isPrint}
             isSelected={multiSelected.has(el.id)}
             isPrimarySelected={selectedId === el.id}
+            cleanPreview={!!cleanPreview}
             resolveContext={resolveContext}
             brushActive={!!brush}
             onSelect={onSelect}
@@ -293,6 +298,7 @@ interface WrapperProps {
   isPrint: boolean
   isSelected: boolean
   isPrimarySelected: boolean
+  cleanPreview: boolean
   resolveContext?: ResolveContext
   brushActive: boolean
   onSelect?: (id: string | null, opts?: { append?: boolean }) => void
@@ -300,7 +306,8 @@ interface WrapperProps {
 }
 
 function ElementWrapper({
-  element, stagePx, isPrint, isSelected, isPrimarySelected, resolveContext, brushActive, onSelect, onChange,
+  element, stagePx, isPrint, isSelected, isPrimarySelected, cleanPreview,
+  resolveContext, brushActive, onSelect, onChange,
 }: WrapperProps) {
   const transform = element.rotation ? `rotate(${element.rotation}deg)` : undefined
 
@@ -362,11 +369,13 @@ function ElementWrapper({
         zIndex: element.zIndex ?? 1,
         transform,
         transformOrigin: 'top left',
-        outline: isPrimarySelected
-          ? '2px solid #7c3aed'
-          : isSelected
-            ? '2px solid #06b6d4'  // ciano para multi-select (não-primary)
-            : '1px dashed rgba(15,23,42,0.18)',
+        outline: cleanPreview
+          ? 'none'
+          : isPrimarySelected
+            ? '2px solid #7c3aed'
+            : isSelected
+              ? '2px solid #06b6d4'  // ciano para multi-select (não-primary)
+              : '1px dashed rgba(15,23,42,0.18)',
         outlineOffset: 0,
         cursor: brushActive ? 'crosshair' : (element.locked ? 'not-allowed' : 'move'),
         pointerEvents: brushActive ? 'none' : undefined,

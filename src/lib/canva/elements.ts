@@ -333,6 +333,16 @@ export function makeRepeaterElement(source: RepeaterSource, overrides?: Partial<
       highlightField: 'is_controlled',
       highlightColor: '#dbeafe',  // azul claro — Receituário Azul
       highlightBadge: '★ CONTROLADO',
+      // Border real do bloco — aparece tanto no editor quanto no PDF/print.
+      // Sem isso, a "caixa" violeta do canvas é apenas guide do editor e
+      // some no PDF (confusão comum entre outline de seleção e border).
+      block: {
+        borderColor: '#0f172a',
+        borderWidth: 1,
+        borderRadius: 6,
+        paddingX: 12,
+        paddingY: 8,
+      },
       ...overrides,
     }
   }

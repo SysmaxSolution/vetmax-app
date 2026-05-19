@@ -20,7 +20,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, useTransition } from 'react'
-import { Eye, Loader2, Paintbrush, Redo2, Save, Sparkles, Undo2, X, Eraser, Combine } from 'lucide-react'
+import { Eye, EyeOff, Loader2, Paintbrush, Redo2, Save, Sparkles, Undo2, X, Eraser, Combine } from 'lucide-react'
 import {
   defaultCanvasState, hydrateCanvasState, type CanvasState, type PageConfig,
 } from '@/lib/canva/canvas-state'
@@ -214,6 +214,10 @@ export default function CanvasEditor({
 
   // Modal de mescla de tags
   const [showMergeModal, setShowMergeModal] = useState(false)
+
+  // Visualização limpa — esconde guides do editor (outlines de seleção,
+  // bordas dashed dos elementos, margem violeta). Mostra como vai imprimir.
+  const [cleanPreview, setCleanPreview] = useState(false)
 
   const handleSelect = useCallback((id: string | null, opts?: { append?: boolean }) => {
     if (id === null) {
@@ -493,6 +497,19 @@ export default function CanvasEditor({
             <StatusPill {...status} />
 
             <button
+              onClick={() => setCleanPreview(v => !v)}
+              title={cleanPreview ? 'Mostrar guias do editor' : 'Esconder guias — ver como vai imprimir'}
+              className={`flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                cleanPreview
+                  ? 'border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                  : 'border-slate-300 bg-white text-slate-700 hover:border-emerald-400 hover:bg-emerald-50 hover:text-emerald-700'
+              }`}
+            >
+              {cleanPreview ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              {cleanPreview ? 'Ver guias' : 'Visualização limpa'}
+            </button>
+
+            <button
               onClick={handlePreview}
               disabled={isSaving}
               title="Abrir pré-visualização em nova aba (com dados de exemplo)"
@@ -557,6 +574,7 @@ export default function CanvasEditor({
                 state={state}
                 selectedId={selectedId}
                 selectedIds={selectedIds}
+                cleanPreview={cleanPreview}
                 brush={brushMode}
                 onSelect={handleSelect}
                 onElementChange={handleElementChange}
