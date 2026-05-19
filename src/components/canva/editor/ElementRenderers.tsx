@@ -314,56 +314,62 @@ function RepeaterRenderer({ e, ctx, isPrint }: { e: RepeaterElement; ctx?: Resol
         ...blockToCss(e.block),
       }}
     >
-      {groups.map((group, gi) => (
-        <section key={gi} style={{ marginBottom: gi < groups.length - 1 ? '0.25cm' : 0 }}>
-          {e.groupBy && group.key && (
-            <header
-              style={{
-                ...typographyToCss(e.groupHeaderTypography ?? { ...e.typography, fontWeight: 700 }),
-                borderBottom: '1px solid currentColor',
-                paddingBottom: 1,
-                marginBottom: '0.1cm',
-                opacity: 0.85,
-                pageBreakAfter: 'avoid',
-                breakAfter: 'avoid',
-              }}
-            >
-              {formatGroupHeader(e.groupHeaderTemplate ?? '{{group}}', group.key, e.source)}
-            </header>
-          )}
-          <ol style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-            {group.items.map(item => {
-              const i = runningIndex++
-              const isHighlighted = e.highlightField
-                ? Boolean(item[e.highlightField])
-                : false
-              return (
-                <li
-                  key={i}
-                  style={{
-                    display: 'flex', gap: 6, alignItems: 'baseline',
-                    marginBottom: e.lineSpacing != null ? `${e.lineSpacing}pt` : undefined,
-                    pageBreakInside: 'avoid', breakInside: 'avoid',
-                    background: isHighlighted ? (e.highlightColor ?? '#dbeafe') : undefined,
-                    borderRadius: isHighlighted ? 3 : undefined,
-                    padding: isHighlighted ? '1pt 4pt' : undefined,
-                  }}
-                >
-                  {e.groupAndEnumerate && (
-                    <span style={{ fontWeight: 600, minWidth: '1.5em' }}>{i + 1}.</span>
-                  )}
-                  <span style={{ flex: 1 }}>
-                    {isHighlighted && e.highlightBadge && (
-                      <strong style={{ marginRight: 4, fontSize: '0.85em' }}>{e.highlightBadge}</strong>
+      {groups.map((group, gi) => {
+        const headerTyp = e.groupHeaderTypography ?? { ...e.typography, fontWeight: 700 as const }
+        const enumTyp = e.enumerationTypography ?? { ...e.typography, fontWeight: 600 as const }
+        return (
+          <section key={gi} style={{ marginBottom: gi < groups.length - 1 ? '0.25cm' : 0 }}>
+            {e.groupBy && group.key && (
+              <header
+                style={{
+                  ...typographyToCss(headerTyp),
+                  display: 'block',
+                  width: '100%',
+                  borderBottom: '1px solid currentColor',
+                  paddingBottom: 1,
+                  marginBottom: '0.1cm',
+                  opacity: 0.85,
+                  pageBreakAfter: 'avoid',
+                  breakAfter: 'avoid',
+                }}
+              >
+                {formatGroupHeader(e.groupHeaderTemplate ?? '{{group}}', group.key, e.source)}
+              </header>
+            )}
+            <ol style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+              {group.items.map(item => {
+                const i = runningIndex++
+                const isHighlighted = e.highlightField
+                  ? Boolean(item[e.highlightField])
+                  : false
+                return (
+                  <li
+                    key={i}
+                    style={{
+                      display: 'flex', gap: 6, alignItems: 'baseline',
+                      marginBottom: e.lineSpacing != null ? `${e.lineSpacing}pt` : undefined,
+                      pageBreakInside: 'avoid', breakInside: 'avoid',
+                      background: isHighlighted ? (e.highlightColor ?? '#dbeafe') : undefined,
+                      borderRadius: isHighlighted ? 3 : undefined,
+                      padding: isHighlighted ? '1pt 4pt' : undefined,
+                    }}
+                  >
+                    {e.groupAndEnumerate && (
+                      <span style={{ ...typographyToCss(enumTyp), minWidth: '1.5em' }}>{i + 1}.</span>
                     )}
-                    {applyItemTemplate(e.itemTemplate, item)}
-                  </span>
-                </li>
-              )
-            })}
-          </ol>
-        </section>
-      ))}
+                    <span style={{ flex: 1 }}>
+                      {isHighlighted && e.highlightBadge && (
+                        <strong style={{ marginRight: 4, fontSize: '0.85em' }}>{e.highlightBadge}</strong>
+                      )}
+                      {applyItemTemplate(e.itemTemplate, item)}
+                    </span>
+                  </li>
+                )
+              })}
+            </ol>
+          </section>
+        )
+      })}
     </div>
   )
 }

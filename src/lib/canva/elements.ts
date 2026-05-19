@@ -153,6 +153,9 @@ export interface RepeaterElement extends ElementCommon {
   groupHeaderTemplate?: string
   /** Tipografia opcional do cabeçalho de grupo. Falls back para typography. */
   groupHeaderTypography?: TypographyStyle
+  /** Tipografia opcional da numeração ("1.", "2.", "3."). Falls back para
+   *  typography com fontWeight=600. */
+  enumerationTypography?: TypographyStyle
 
   /** Campo bool do item para destacar visualmente (ex: "is_controlled"). */
   highlightField?: string

@@ -18,6 +18,7 @@ import type {
   CanvasElement, TextElement, ImageElement, LineElement,
   DynamicTagElement, CompositeTagElement,
   DynamicImageElement, RepeaterElement, BrushStrokeElement, ElementPin,
+  TypographyStyle,
 } from '@/lib/canva/elements'
 import { findImageTag, findTag } from '@/lib/canva/dynamic-tags'
 
@@ -614,7 +615,83 @@ function RepeaterSection({ element, onPatch }: { element: RepeaterElement; onPat
         </div>
       )}
 
-      <TypographyControls element={element} onPatch={onPatch} />
+      {/* Tipografia por sub-parte — permite centralizar APENAS o cabeçalho
+          de grupo (Uso Oral), manter conteúdo à esquerda, etc. */}
+      <div className="mt-3 border-t border-slate-200 pt-2 space-y-2">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 block">
+          Tipografia por parte
+        </span>
+
+        <details className="rounded border border-slate-200 bg-slate-50">
+          <summary className="cursor-pointer px-2 py-1.5 text-[11px] font-medium text-slate-700 hover:bg-slate-100">
+            Cabeçalho de Grupo (ex: &quot;Uso Oral&quot;)
+            {element.groupHeaderTypography?.align && element.groupHeaderTypography.align !== element.typography.align && (
+              <span className="ml-2 inline-flex items-center rounded-full bg-violet-100 px-1.5 py-0.5 text-[9px] font-semibold text-violet-700">
+                personalizado
+              </span>
+            )}
+          </summary>
+          <div className="px-2 py-2 bg-white border-t border-slate-200">
+            {!element.groupBy && (
+              <p className="mb-2 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded">
+                Defina &quot;Agrupar por&quot; acima para ver o cabeçalho na lista.
+              </p>
+            )}
+            <TypographyEditor
+              compact
+              value={element.groupHeaderTypography ?? { ...element.typography, fontWeight: 700 }}
+              onChange={next => onPatch({ groupHeaderTypography: next } as Partial<CanvasElement>)}
+            />
+            {element.groupHeaderTypography && (
+              <button
+                onClick={() => onPatch({ groupHeaderTypography: undefined } as Partial<CanvasElement>)}
+                className="mt-2 text-[10px] text-slate-500 hover:text-red-600 hover:underline"
+              >
+                Reset (herdar do conteúdo)
+              </button>
+            )}
+          </div>
+        </details>
+
+        <details className="rounded border border-slate-200 bg-slate-50">
+          <summary className="cursor-pointer px-2 py-1.5 text-[11px] font-medium text-slate-700 hover:bg-slate-100">
+            Numeração (1, 2, 3…)
+          </summary>
+          <div className="px-2 py-2 bg-white border-t border-slate-200">
+            {!element.groupAndEnumerate && (
+              <p className="mb-2 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded">
+                Ative &quot;Numerar&quot; acima para ver os números nas linhas.
+              </p>
+            )}
+            <TypographyEditor
+              compact
+              value={element.enumerationTypography ?? { ...element.typography, fontWeight: 600 }}
+              onChange={next => onPatch({ enumerationTypography: next } as Partial<CanvasElement>)}
+            />
+            {element.enumerationTypography && (
+              <button
+                onClick={() => onPatch({ enumerationTypography: undefined } as Partial<CanvasElement>)}
+                className="mt-2 text-[10px] text-slate-500 hover:text-red-600 hover:underline"
+              >
+                Reset (herdar do conteúdo)
+              </button>
+            )}
+          </div>
+        </details>
+
+        <details open className="rounded border border-slate-200 bg-slate-50">
+          <summary className="cursor-pointer px-2 py-1.5 text-[11px] font-medium text-slate-700 hover:bg-slate-100">
+            Conteúdo da linha
+          </summary>
+          <div className="px-2 py-2 bg-white border-t border-slate-200">
+            <TypographyEditor
+              compact
+              value={element.typography}
+              onChange={next => onPatch({ typography: next } as Partial<CanvasElement>)}
+            />
+          </div>
+        </details>
+      </div>
     </Section>
   )
 }
@@ -648,24 +725,29 @@ const REPEATER_FIELDS_BY_SOURCE: Record<RepeaterElement['source'], Array<{ field
   ],
 }
 
-// ── Tipografia (compartilhada) ───────────────────────────────────────────────
+// ── Tipografia (compartilhada — reusável em sub-partes do Repeater) ──────────
 
-function TypographyControls({
-  element, onPatch,
+/** Versão "primitiva" que recebe a typography direto. Permite editar
+ *  qualquer fatia tipográfica isolada (ex: groupHeaderTypography, enum). */
+function TypographyEditor({
+  value, onChange, compact,
 }: {
-  element: TextElement | DynamicTagElement | CompositeTagElement | RepeaterElement
-  onPatch: Props['onPatch']
+  value: TypographyStyle | undefined
+  onChange: (next: TypographyStyle) => void
+  compact?: boolean
 }) {
-  const t = element.typography
+  const t = value ?? {}
+  const patch = (partial: Partial<TypographyStyle>) => onChange({ ...t, ...partial })
+
   return (
-    <div className="mt-3 space-y-2 border-t border-slate-200 pt-3">
+    <div className="space-y-2">
       <div className="grid grid-cols-2 gap-2">
         <label className="block">
           <span className="text-[10px] text-slate-600">Fonte</span>
           <select
             className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
             value={t.fontFamily ?? 'Inter'}
-            onChange={e => onPatch({ typography: { ...t, fontFamily: e.target.value } } as Partial<CanvasElement>)}
+            onChange={e => patch({ fontFamily: e.target.value })}
           >
             <option value="Inter">Inter</option>
             <option value="Times New Roman">Times New Roman</option>
@@ -677,43 +759,63 @@ function TypographyControls({
           </select>
         </label>
         <NumField label="Tamanho (pt)" value={t.fontSize ?? 11} step={0.5}
-          onChange={v => onPatch({ typography: { ...t, fontSize: v } } as Partial<CanvasElement>)} />
+          onChange={v => patch({ fontSize: v })} />
       </div>
 
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 flex-wrap">
         <ToggleBtn active={t.fontWeight === 700} title="Negrito"
-          onClick={() => onPatch({ typography: { ...t, fontWeight: t.fontWeight === 700 ? 400 : 700 } } as Partial<CanvasElement>)}
+          onClick={() => patch({ fontWeight: t.fontWeight === 700 ? 400 : 700 })}
           icon={<Bold className="w-3.5 h-3.5" />} />
         <ToggleBtn active={t.fontStyle === 'italic'} title="Itálico"
-          onClick={() => onPatch({ typography: { ...t, fontStyle: t.fontStyle === 'italic' ? 'normal' : 'italic' } } as Partial<CanvasElement>)}
+          onClick={() => patch({ fontStyle: t.fontStyle === 'italic' ? 'normal' : 'italic' })}
           icon={<Italic className="w-3.5 h-3.5" />} />
         <ToggleBtn active={t.textDecoration === 'underline'} title="Sublinhado"
-          onClick={() => onPatch({ typography: { ...t, textDecoration: t.textDecoration === 'underline' ? 'none' : 'underline' } } as Partial<CanvasElement>)}
+          onClick={() => patch({ textDecoration: t.textDecoration === 'underline' ? 'none' : 'underline' })}
           icon={<Underline className="w-3.5 h-3.5" />} />
         <span className="mx-1 w-px h-5 bg-slate-300" />
-        <ToggleBtn active={t.align === 'left'}    title="Esquerda" onClick={() => onPatch({ typography: { ...t, align: 'left'    } } as Partial<CanvasElement>)} icon={<AlignLeft    className="w-3.5 h-3.5" />} />
-        <ToggleBtn active={t.align === 'center'}  title="Centro"   onClick={() => onPatch({ typography: { ...t, align: 'center'  } } as Partial<CanvasElement>)} icon={<AlignCenter  className="w-3.5 h-3.5" />} />
-        <ToggleBtn active={t.align === 'right'}   title="Direita"  onClick={() => onPatch({ typography: { ...t, align: 'right'   } } as Partial<CanvasElement>)} icon={<AlignRight   className="w-3.5 h-3.5" />} />
-        <ToggleBtn active={t.align === 'justify'} title="Justificado" onClick={() => onPatch({ typography: { ...t, align: 'justify' } } as Partial<CanvasElement>)} icon={<AlignJustify className="w-3.5 h-3.5" />} />
+        <ToggleBtn active={t.align === 'left'}    title="Esquerda" onClick={() => patch({ align: 'left' })}    icon={<AlignLeft    className="w-3.5 h-3.5" />} />
+        <ToggleBtn active={t.align === 'center'}  title="Centro"   onClick={() => patch({ align: 'center' })}  icon={<AlignCenter  className="w-3.5 h-3.5" />} />
+        <ToggleBtn active={t.align === 'right'}   title="Direita"  onClick={() => patch({ align: 'right' })}   icon={<AlignRight   className="w-3.5 h-3.5" />} />
+        <ToggleBtn active={t.align === 'justify'} title="Justificado" onClick={() => patch({ align: 'justify' })} icon={<AlignJustify className="w-3.5 h-3.5" />} />
       </div>
 
       <div className="grid grid-cols-2 gap-2">
         <ColorField label="Cor"
           value={t.color ?? '#0f172a'}
-          onChange={v => onPatch({ typography: { ...t, color: v } } as Partial<CanvasElement>)} />
-        <label className="block">
-          <span className="text-[10px] text-slate-600">Alinh. vertical</span>
-          <select
-            className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
-            value={t.vAlign ?? 'top'}
-            onChange={e => onPatch({ typography: { ...t, vAlign: e.target.value as 'top' | 'middle' | 'bottom' } } as Partial<CanvasElement>)}
-          >
-            <option value="top">Acima</option>
-            <option value="middle">Meio</option>
-            <option value="bottom">Abaixo</option>
-          </select>
-        </label>
+          onChange={v => patch({ color: v })} />
+        {!compact && (
+          <label className="block">
+            <span className="text-[10px] text-slate-600">Alinh. vertical</span>
+            <select
+              className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
+              value={t.vAlign ?? 'top'}
+              onChange={e => patch({ vAlign: e.target.value as 'top' | 'middle' | 'bottom' })}
+            >
+              <option value="top">Acima</option>
+              <option value="middle">Meio</option>
+              <option value="bottom">Abaixo</option>
+            </select>
+          </label>
+        )}
       </div>
+    </div>
+  )
+}
+
+/** Wrapper para Text/DynamicTag/Composite/Repeater — edita element.typography
+ *  via onPatch. Mantém a API antiga das sections; só repassa pro TypographyEditor. */
+function TypographyControls({
+  element, onPatch,
+}: {
+  element: TextElement | DynamicTagElement | CompositeTagElement | RepeaterElement
+  onPatch: Props['onPatch']
+}) {
+  return (
+    <div className="mt-3 border-t border-slate-200 pt-3">
+      <TypographyEditor
+        value={element.typography}
+        onChange={next => onPatch({ typography: next } as Partial<CanvasElement>)}
+      />
     </div>
   )
 }
