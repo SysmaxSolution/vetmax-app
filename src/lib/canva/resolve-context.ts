@@ -34,23 +34,28 @@ const VISIT_REASON_LABELS: Record<string, string> = {
   surgery:      'Cirurgia',
 }
 
-/** Extrai cidade/UF do endereço (formato livre).
- *  Heurísticas comuns no DB:
- *  - "Rua X, 123 - Bairro - São Paulo/SP"
- *  - "Av Y - São Paulo - SP"
- *  - cnpj_data.municipio + cnpj_data.uf (preferido quando disponível) */
+/** Resolve cidade/UF da clínica em 3 níveis de preferência:
+ *    1. Campos próprios (clinics.city, clinics.state) — migration 0171
+ *    2. cnpj_data.municipio / cnpj_data.uf (vem da API ReceitaWS)
+ *    3. Parse heurístico do address (formato livre)
+ *  Garante UF maiúsculo. */
 function extractCityState(
+  ownCity: string | null | undefined,
+  ownState: string | null | undefined,
   address: string | null | undefined,
   cnpjData: Record<string, unknown> | null | undefined,
 ): { city: string; state: string } {
-  // Preferência 1: cnpj_data tem municipio/uf (vem da API de CNPJ)
+  // Preferência 1: campos próprios (admin cadastrou explicitamente)
+  if (ownCity || ownState) {
+    return { city: (ownCity ?? '').trim(), state: (ownState ?? '').trim().toUpperCase() }
+  }
+  // Preferência 2: cnpj_data
   const cMun = cnpjData?.municipio as string | undefined
   const cUf = cnpjData?.uf as string | undefined
   if (cMun || cUf) return { city: cMun ?? '', state: (cUf ?? '').toUpperCase() }
 
-  // Preferência 2: parse do address — padrão "...Cidade/UF" ou "...Cidade - UF"
+  // Preferência 3: parse do address
   if (!address) return { city: '', state: '' }
-  // Padrão "Cidade/UF" no final
   const slashMatch = address.match(/([A-Za-zÀ-ú\s.]+)\s*[\/\-]\s*([A-Z]{2})\s*$/u)
   if (slashMatch) {
     return { city: slashMatch[1].trim(), state: slashMatch[2].trim() }
@@ -126,7 +131,7 @@ export async function buildPreviewContext(
 ): Promise<ResolveContext> {
   const [clinic, vet] = await Promise.all([
     supabase.from('clinics')
-      .select('id, name, cnpj, cnpj_data, phone, address, business_type, business_hours, logo_url')
+      .select('id, name, cnpj, cnpj_data, phone, address, business_type, business_hours, logo_url, city, state, cep, neighborhood')
       .eq('id', clinicId).single()
       .then(r => r.data),
     supabase.from('profiles')
@@ -141,6 +146,8 @@ export async function buildPreviewContext(
     consultation: buildMockConsultation(),
     clinic: clinic ? (() => {
       const { city, state: uf } = extractCityState(
+        clinic.city ?? undefined,
+        clinic.state ?? undefined,
         clinic.address ?? undefined,
         clinic.cnpj_data as Record<string, unknown> | null | undefined,
       )
@@ -178,7 +185,7 @@ export async function buildResolveContext(
       .eq('id', consultationId).single()
       .then(r => r.data),
     supabase.from('clinics')
-      .select('id, name, cnpj, cnpj_data, phone, address, business_type, business_hours, logo_url')
+      .select('id, name, cnpj, cnpj_data, phone, address, business_type, business_hours, logo_url, city, state, cep, neighborhood')
       .eq('id', clinicId).single()
       .then(r => r.data),
   ])
@@ -222,6 +229,8 @@ export async function buildResolveContext(
 
     clinic: clinic ? (() => {
       const { city, state: uf } = extractCityState(
+        clinic.city ?? undefined,
+        clinic.state ?? undefined,
         clinic.address ?? undefined,
         clinic.cnpj_data as Record<string, unknown> | null | undefined,
       )

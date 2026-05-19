@@ -33,9 +33,18 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { name, cnpj, address, phone, reception_checklist } = await request.json()
+    const {
+      name, cnpj, address, phone, reception_checklist,
+      city, state, cep, neighborhood,
+    } = await request.json()
 
     const admin = createAdminClient()
+
+    // Normaliza UF para 2 chars maiúsculas (evita inconsistência ao
+    // resolver clinica.state nas Dynamic Tags).
+    const normalizedState = typeof state === 'string'
+      ? state.trim().toUpperCase().slice(0, 2)
+      : null
 
     const { error } = await admin
       .from('clinics')
@@ -45,6 +54,10 @@ export async function POST(request: NextRequest) {
         address,
         phone,
         reception_checklist,
+        city:         typeof city === 'string' ? city.trim() || null : null,
+        state:        normalizedState || null,
+        cep:          typeof cep === 'string' ? cep.trim() || null : null,
+        neighborhood: typeof neighborhood === 'string' ? neighborhood.trim() || null : null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', profile.clinic_id)

@@ -96,6 +96,12 @@ export interface Clinic {
   business_type: BusinessType
   reception_checklist: string[] | null
   created_at: string
+  // Endereço estruturado (migration 0171). Campos opcionais — clínicas
+  // antigas podem ter só `address` (texto livre).
+  cep?: string | null
+  neighborhood?: string | null
+  city?: string | null
+  state?: string | null
 }
 
 export interface Profile {

@@ -162,6 +162,10 @@ export default function ManagementWorkspace({
   const [clinicCnpj, setClinicCnpj]       = useState(clinicData?.cnpj || '')
   const [clinicAddress, setClinicAddress] = useState(clinicData?.address || '')
   const [clinicPhone, setClinicPhone]     = useState(clinicData?.phone || '')
+  const [clinicCep, setClinicCep]                 = useState(clinicData?.cep || '')
+  const [clinicNeighborhood, setClinicNeighborhood] = useState(clinicData?.neighborhood || '')
+  const [clinicCity, setClinicCity]               = useState(clinicData?.city || '')
+  const [clinicState, setClinicState]             = useState(clinicData?.state || '')
   const [clinicChecklist, setClinicChecklist] = useState<string[]>(clinicData?.reception_checklist || [])
   const [newChecklistItem, setNewChecklistItem] = useState('')
   const [isSavingClinic, setIsSavingClinic] = useState(false)
@@ -324,6 +328,10 @@ export default function ManagementWorkspace({
           address:             clinicAddress,
           phone:               clinicPhone,
           reception_checklist: clinicChecklist,
+          cep:                 clinicCep,
+          neighborhood:        clinicNeighborhood,
+          city:                clinicCity,
+          state:               clinicState,
         }),
       })
       if (res.ok) {
@@ -346,7 +354,18 @@ export default function ManagementWorkspace({
     setClinicAddress(clinicData?.address || '')
     setClinicPhone(clinicData?.phone || '')
     setClinicChecklist(clinicData?.reception_checklist || [])
+    setClinicCep(clinicData?.cep || '')
+    setClinicNeighborhood(clinicData?.neighborhood || '')
+    setClinicCity(clinicData?.city || '')
+    setClinicState(clinicData?.state || '')
     setIsEditingClinic(false)
+  }
+
+  /** Formata CEP em 00000-000 enquanto o admin digita (aceita só dígitos). */
+  function formatCepInput(raw: string): string {
+    const d = raw.replace(/\D/g, '').slice(0, 8)
+    if (d.length <= 5) return d
+    return `${d.slice(0, 5)}-${d.slice(5)}`
   }
 
   // ── User role handler ──────────────────────────────────────────────────────
@@ -556,7 +575,7 @@ export default function ManagementWorkspace({
                 </div>
                 <div>
                   <h2 className="text-base font-semibold text-slate-900">Dados da Clínica</h2>
-                  <p className="text-xs text-slate-500">Nome, CNPJ, endereço e contato</p>
+                  <p className="text-xs text-slate-500">Nome, CNPJ, endereço, CEP, cidade e contato</p>
                 </div>
               </div>
               {!isEditingClinic && (
@@ -572,16 +591,24 @@ export default function ManagementWorkspace({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <InfoField label="Nome da Clínica" value={clinicName} />
                   <InfoField label="CNPJ" value={clinicCnpj} />
-                  <InfoField label="Endereço" value={clinicAddress} />
                   <InfoField label="Telefone" value={clinicPhone} />
+                  <InfoField label="CEP" value={clinicCep} />
+                  <InfoField label="Endereço (Rua, Número)" value={clinicAddress} />
+                  <InfoField label="Bairro" value={clinicNeighborhood} />
+                  <InfoField label="Cidade" value={clinicCity} />
+                  <InfoField label="Estado (UF)" value={clinicState} />
                 </div>
               ) : (
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <EditField label="Nome da Clínica" value={clinicName} onChange={setClinicName} placeholder="Ex: Clínica Veterinária ABC" />
                     <EditField label="CNPJ" value={clinicCnpj} onChange={setClinicCnpj} placeholder="00.000.000/0001-00" />
-                    <EditField label="Endereço" value={clinicAddress} onChange={setClinicAddress} placeholder="Rua, número, bairro" />
                     <EditField label="Telefone" value={clinicPhone} onChange={setClinicPhone} placeholder="(00) 00000-0000" />
+                    <EditField label="CEP" value={clinicCep} onChange={v => setClinicCep(formatCepInput(v))} placeholder="00000-000" />
+                    <EditField label="Endereço (Rua, Número)" value={clinicAddress} onChange={setClinicAddress} placeholder="Ex: Rua Prof. Antônio R. da Silva, 190" />
+                    <EditField label="Bairro" value={clinicNeighborhood} onChange={setClinicNeighborhood} placeholder="Ex: Pres. Medici" />
+                    <EditField label="Cidade" value={clinicCity} onChange={setClinicCity} placeholder="Ex: Ribeirão Preto" />
+                    <EditField label="Estado (UF)" value={clinicState} onChange={v => setClinicState(v.toUpperCase().slice(0, 2))} placeholder="SP" />
                   </div>
                   <div className="flex gap-3 pt-2">
                     <button onClick={handleSaveClinic} disabled={isSavingClinic}
