@@ -197,6 +197,9 @@ export default function DocumentsSection({
   const [reopenLoadingId,setReopenLoadingId]= useState<string | null>(null)
   const [deletingId,     setDeletingId]     = useState<string | null>(null)
   const [listError,      setListError]      = useState<string | null>(null)
+  // Modal de confirmação de exclusão — substitui window.confirm pra
+  // mensagem permanecer no padrão visual do sistema.
+  const [docToDelete,    setDocToDelete]    = useState<PatientDocument | null>(null)
   const [isSaving,       setIsSaving]       = useState(false)
   const [isUploadingPdf, setIsUploadingPdf] = useState(false)
   const [isUpdating,     setIsUpdating]     = useState(false)
@@ -272,10 +275,17 @@ export default function DocumentsSection({
   }
 
   // ── Excluir documento (Canvas ou legado — mesma tabela) ───────────────────
-  const handleDeleteDoc = async (doc: PatientDocument) => {
-    if (!window.confirm(`Excluir o documento "${doc.document_name}"? Esta ação não pode ser desfeita.`)) return
+  // Abre modal de confirmação; a exclusão real acontece em confirmDeleteDoc.
+  const handleDeleteDoc = (doc: PatientDocument) => {
+    setDocToDelete(doc)
+  }
+
+  const confirmDeleteDoc = async () => {
+    if (!docToDelete) return
+    const doc = docToDelete
     setDeletingId(doc.id)
     setListError(null)
+    setDocToDelete(null)
     try {
       await deletePatientDocument(doc.id)
       setDocuments(prev => prev.filter(d => d.id !== doc.id))
@@ -953,6 +963,53 @@ export default function DocumentsSection({
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmação de exclusão — UI do sistema, não window.confirm */}
+      {docToDelete && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-6"
+          onClick={() => setDocToDelete(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="px-6 py-5 border-b border-slate-100 flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                <Trash2 className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-slate-900">Excluir documento</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Esta ação não pode ser desfeita.</p>
+              </div>
+            </div>
+            <div className="px-6 py-4">
+              <p className="text-sm text-slate-700">
+                Tem certeza que deseja excluir o documento
+                {' '}<strong className="font-semibold text-slate-900">{docToDelete.document_name}</strong>?
+              </p>
+              <p className="text-xs text-slate-500 mt-2">
+                O documento será removido permanentemente do atendimento.
+              </p>
+            </div>
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-3">
+              <button
+                onClick={() => setDocToDelete(null)}
+                className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmDeleteDoc}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+                Excluir documento
+              </button>
+            </div>
           </div>
         </div>
       )}
