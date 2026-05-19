@@ -8,6 +8,7 @@
  * de Repeater (source, itemTemplate, groupAndEnumerate, maxLines).
  */
 
+import { useRef } from 'react'
 import {
   AlignCenter, AlignLeft, AlignRight, AlignJustify,
   ArrowDownToLine, ArrowUpFromLine, ChevronsDown, ChevronsUp,
@@ -21,6 +22,7 @@ import type {
   TypographyStyle,
 } from '@/lib/canva/elements'
 import { findImageTag, findTag } from '@/lib/canva/dynamic-tags'
+import EmojiPicker from './EmojiPicker'
 
 interface Props {
   element: CanvasElement | null
@@ -317,14 +319,42 @@ function PinSection({ element, onPatch }: { element: CanvasElement; onPatch: Pro
 // ── Section: Text ────────────────────────────────────────────────────────────
 
 function TextSection({ element, onPatch }: { element: TextElement; onPatch: Props['onPatch'] }) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
   return (
     <Section title="Texto">
-      <textarea
-        className="w-full resize-y rounded border border-slate-300 px-2 py-1 text-xs focus:border-slate-900 focus:outline-none"
-        rows={3}
-        value={element.content}
-        onChange={e => onPatch({ content: e.target.value } as Partial<CanvasElement>)}
-      />
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] text-slate-600">Conteúdo</span>
+          <EmojiPicker
+            onPick={emoji => {
+              // Insere na posição do cursor (ou no final se sem foco)
+              const ta = textareaRef.current
+              const value = element.content
+              if (!ta) {
+                onPatch({ content: value + emoji } as Partial<CanvasElement>)
+                return
+              }
+              const start = ta.selectionStart ?? value.length
+              const end = ta.selectionEnd ?? value.length
+              const next = value.slice(0, start) + emoji + value.slice(end)
+              onPatch({ content: next } as Partial<CanvasElement>)
+              // Reposiciona o cursor depois do emoji inserido
+              requestAnimationFrame(() => {
+                ta.focus()
+                const pos = start + emoji.length
+                ta.setSelectionRange(pos, pos)
+              })
+            }}
+          />
+        </div>
+        <textarea
+          ref={textareaRef}
+          className="w-full resize-y rounded border border-slate-300 px-2 py-1 text-xs focus:border-slate-900 focus:outline-none"
+          rows={3}
+          value={element.content}
+          onChange={e => onPatch({ content: e.target.value } as Partial<CanvasElement>)}
+        />
+      </div>
       <TypographyControls element={element} onPatch={onPatch} />
     </Section>
   )
@@ -338,7 +368,10 @@ function DynamicTagSection({ element, onPatch }: { element: DynamicTagElement; o
       <p className="text-[11px] text-slate-500">Identificador: <code className="text-violet-700">{element.tagId}</code></p>
       <div className="grid grid-cols-2 gap-2 mt-2">
         <label className="block">
-          <span className="text-[10px] text-slate-600">Prefixo</span>
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-slate-600">Prefixo</span>
+            <EmojiPicker onPick={emoji => onPatch({ prefix: (element.prefix ?? '') + emoji } as Partial<CanvasElement>)} />
+          </div>
           <input
             className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
             value={element.prefix ?? ''}
@@ -347,7 +380,10 @@ function DynamicTagSection({ element, onPatch }: { element: DynamicTagElement; o
           />
         </label>
         <label className="block">
-          <span className="text-[10px] text-slate-600">Sufixo</span>
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-slate-600">Sufixo</span>
+            <EmojiPicker onPick={emoji => onPatch({ suffix: (element.suffix ?? '') + emoji } as Partial<CanvasElement>)} />
+          </div>
           <input
             className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
             value={element.suffix ?? ''}
@@ -357,7 +393,10 @@ function DynamicTagSection({ element, onPatch }: { element: DynamicTagElement; o
         </label>
       </div>
       <label className="block mt-2">
-        <span className="text-[10px] text-slate-600">Fallback (quando vazio)</span>
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] text-slate-600">Fallback (quando vazio)</span>
+          <EmojiPicker onPick={emoji => onPatch({ fallback: (element.fallback ?? '') + emoji } as Partial<CanvasElement>)} />
+        </div>
         <input
           className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
           value={element.fallback ?? ''}
@@ -506,7 +545,10 @@ function RepeaterSection({ element, onPatch }: { element: RepeaterElement; onPat
       </label>
 
       <label className="block mt-2">
-        <span className="text-[10px] text-slate-600">Template da linha</span>
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] text-slate-600">Template da linha</span>
+          <EmojiPicker onPick={emoji => onPatch({ itemTemplate: element.itemTemplate + emoji } as Partial<CanvasElement>)} />
+        </div>
         <input
           className="w-full rounded border border-slate-300 px-2 py-1 text-xs font-mono"
           value={element.itemTemplate}
@@ -566,7 +608,10 @@ function RepeaterSection({ element, onPatch }: { element: RepeaterElement; onPat
         </label>
         {element.groupBy && (
           <label className="block">
-            <span className="text-[10px] text-slate-600">Texto do cabeçalho de grupo</span>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-slate-600">Texto do cabeçalho de grupo</span>
+              <EmojiPicker onPick={emoji => onPatch({ groupHeaderTemplate: (element.groupHeaderTemplate ?? '{{group}}') + emoji } as Partial<CanvasElement>)} />
+            </div>
             <input
               className="w-full rounded border border-slate-300 px-2 py-1 text-xs font-mono"
               value={element.groupHeaderTemplate ?? '{{group}}'}
@@ -602,7 +647,10 @@ function RepeaterSection({ element, onPatch }: { element: RepeaterElement; onPat
                 value={element.highlightColor ?? '#dbeafe'}
                 onChange={v => onPatch({ highlightColor: v } as Partial<CanvasElement>)} />
               <label className="block">
-                <span className="text-[10px] text-slate-600">Selo na linha (badge)</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-slate-600">Selo na linha (badge)</span>
+                  <EmojiPicker onPick={emoji => onPatch({ highlightBadge: (element.highlightBadge ?? '') + emoji } as Partial<CanvasElement>)} />
+                </div>
                 <input
                   className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
                   value={element.highlightBadge ?? ''}
