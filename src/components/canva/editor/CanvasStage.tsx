@@ -38,6 +38,9 @@ interface Props {
    *  bordas dashed dos elementos, dashed violeta das margens). O preview
    *  fica idêntico ao PDF/print final. */
   cleanPreview?: boolean
+  /** Fator de zoom aplicado no parent via transform: scale(). O Rnd usa
+   *  esse valor para ajustar drag/resize com a escala correta. */
+  zoom?: number
   /** Quando setado, o stage captura mouse events e desenha traços
    *  livres em vez de selecionar/arrastar elementos. */
   brush?: BrushSettings | null
@@ -47,7 +50,7 @@ interface Props {
 }
 
 export default function CanvasStage({
-  state, selectedId, selectedIds, resolveContext, mode = 'edit', brush, cleanPreview,
+  state, selectedId, selectedIds, resolveContext, mode = 'edit', brush, cleanPreview, zoom,
   onSelect, onElementChange, onBrushStrokeComplete,
 }: Props) {
   const multiSelected = new Set(selectedIds ?? (selectedId ? [selectedId] : []))
@@ -208,6 +211,7 @@ export default function CanvasStage({
             isSelected={multiSelected.has(el.id)}
             isPrimarySelected={selectedId === el.id}
             cleanPreview={!!cleanPreview}
+            zoom={zoom ?? 1}
             resolveContext={resolveContext}
             brushActive={!!brush}
             onSelect={onSelect}
@@ -299,6 +303,7 @@ interface WrapperProps {
   isSelected: boolean
   isPrimarySelected: boolean
   cleanPreview: boolean
+  zoom: number
   resolveContext?: ResolveContext
   brushActive: boolean
   onSelect?: (id: string | null, opts?: { append?: boolean }) => void
@@ -306,7 +311,7 @@ interface WrapperProps {
 }
 
 function ElementWrapper({
-  element, stagePx, isPrint, isSelected, isPrimarySelected, cleanPreview,
+  element, stagePx, isPrint, isSelected, isPrimarySelected, cleanPreview, zoom,
   resolveContext, brushActive, onSelect, onChange,
 }: WrapperProps) {
   const transform = element.rotation ? `rotate(${element.rotation}deg)` : undefined
@@ -341,6 +346,7 @@ function ElementWrapper({
     <Rnd
       size={{ width: wPx, height: hPx }}
       position={{ x: xPx, y: yPx }}
+      scale={zoom}
       disableDragging={element.locked || brushActive}
       enableResizing={element.locked || brushActive ? false : undefined}
       bounds="parent"

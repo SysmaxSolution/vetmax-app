@@ -68,7 +68,7 @@ export default function EmojiPicker({ onPick, align = 'right' }: Props) {
 
       {open && (
         <div
-          className={`absolute z-50 mt-1 w-[300px] rounded-xl border border-slate-200 bg-white shadow-xl ${
+          className={`absolute z-[120] mt-1 w-[300px] rounded-xl border border-slate-200 bg-white shadow-xl ${
             align === 'right' ? 'right-0' : 'left-0'
           }`}
         >

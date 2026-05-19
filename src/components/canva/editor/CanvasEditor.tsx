@@ -20,12 +20,15 @@
  */
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, useTransition } from 'react'
-import { Eye, EyeOff, Loader2, Paintbrush, Redo2, Save, Sparkles, Undo2, X, Eraser, Combine } from 'lucide-react'
+import {
+  Eye, EyeOff, Loader2, Paintbrush, Redo2, Save, Sparkles, Undo2, X, Eraser,
+  Combine, ZoomIn, ZoomOut, Maximize2,
+} from 'lucide-react'
 import {
   defaultCanvasState, hydrateCanvasState, type CanvasState, type PageConfig,
 } from '@/lib/canva/canvas-state'
 import type { CanvasElement, DynamicTagElement, CompositeTagPart } from '@/lib/canva/elements'
-import { makeBrushStrokeElement, makeCompositeTagElement } from '@/lib/canva/elements'
+import { makeBrushStrokeElement, makeCompositeTagElement, nextElementId } from '@/lib/canva/elements'
 import { findTag } from '@/lib/canva/dynamic-tags'
 import {
   getBackgroundUploadUrl, getBackgroundReadUrl,
@@ -219,6 +222,16 @@ export default function CanvasEditor({
   // bordas dashed dos elementos, margem violeta). Mostra como vai imprimir.
   const [cleanPreview, setCleanPreview] = useState(false)
 
+  // Clipboard local — Ctrl+C/V copia e cola elementos. Não usa o
+  // clipboard do SO (evita problemas de permissão e formato).
+  const [clipboard, setClipboard] = useState<CanvasElement[]>([])
+
+  // Zoom do canvas — visual transform: scale(zoom). 1 = 100%.
+  const [zoom, setZoom] = useState(1)
+  const ZOOM_MIN = 0.25
+  const ZOOM_MAX = 3
+  const ZOOM_STEP = 0.1
+
   const handleSelect = useCallback((id: string | null, opts?: { append?: boolean }) => {
     if (id === null) {
       setSelectedIds([])
@@ -267,6 +280,56 @@ export default function CanvasEditor({
     else dispatch({ type: 'delete_many', ids: selectedIds })
     setSelectedIds([])
   }, [selectedIds])
+
+  /** Copia os elementos selecionados pro clipboard interno. */
+  const handleCopy = useCallback(() => {
+    const sel = selectedIds
+      .map(id => state.elements.find(el => el.id === id))
+      .filter((el): el is CanvasElement => !!el)
+    if (sel.length === 0) return
+    // Deep clone para isolar do estado vivo
+    setClipboard(sel.map(el => JSON.parse(JSON.stringify(el)) as CanvasElement))
+  }, [selectedIds, state.elements])
+
+  /** Cola elementos do clipboard com offset visual. */
+  const handlePaste = useCallback(() => {
+    if (clipboard.length === 0) return
+    const cloned: CanvasElement[] = clipboard.map(el => ({
+      ...(JSON.parse(JSON.stringify(el)) as CanvasElement),
+      id: nextElementId(el.kind),
+      // Offset diagonal +2% para que o paste não fique exatamente sobre o original
+      box: {
+        ...el.box,
+        x: Math.min(95, el.box.x + 2),
+        y: Math.min(95, el.box.y + 2),
+      },
+    }))
+    dispatch({ type: 'add_many', elements: cloned })
+    setSelectedIds(cloned.map(c => c.id))
+  }, [clipboard])
+
+  /** Move elementos selecionados em uma direção (dx/dy em %). */
+  const handleNudge = useCallback((dx: number, dy: number) => {
+    if (selectedIds.length === 0) return
+    for (const id of selectedIds) {
+      const el = state.elements.find(e => e.id === id)
+      if (!el || el.locked) continue
+      dispatch({
+        type: 'patch', id,
+        patch: {
+          box: {
+            ...el.box,
+            x: Math.max(0, Math.min(100 - el.box.w, el.box.x + dx)),
+            y: Math.max(0, Math.min(100 - el.box.h, el.box.y + dy)),
+          },
+        } as Partial<CanvasElement>,
+      })
+    }
+  }, [selectedIds, state.elements])
+
+  const zoomIn  = useCallback(() => setZoom(z => Math.min(ZOOM_MAX, Number((z + ZOOM_STEP).toFixed(2)))), [])
+  const zoomOut = useCallback(() => setZoom(z => Math.max(ZOOM_MIN, Number((z - ZOOM_STEP).toFixed(2)))), [])
+  const zoomReset = useCallback(() => setZoom(1), [])
 
   /** Confirma a mescla: cria composite_tag a partir das dynamic_tags selecionadas
    *  (na ordem definida no modal), remove as originais. */
@@ -399,31 +462,88 @@ export default function CanvasEditor({
     return () => window.clearInterval(id)
   }, [state, isSaving, isAutoSaving, persist])
 
-  // ── Atalhos de teclado: Ctrl+Z / Ctrl+Shift+Z / Ctrl+S / ESC ───────────────
+  // ── Atalhos de teclado ─────────────────────────────────────────────────────
+  // Globais (ignorados quando foco está em input/textarea/contentEditable
+  // exceto Ctrl+S e ESC):
+  //   - ESC                  → sai do modo pincel
+  //   - DELETE / BACKSPACE   → apaga elementos selecionados
+  //   - Ctrl/Cmd+Z           → undo
+  //   - Ctrl/Cmd+Shift+Z / Y → redo
+  //   - Ctrl/Cmd+S           → salva
+  //   - Ctrl/Cmd+C           → copia selecionados
+  //   - Ctrl/Cmd+V           → cola clipboard
+  //   - Ctrl/Cmd+= / +       → zoom in
+  //   - Ctrl/Cmd+-           → zoom out
+  //   - Ctrl/Cmd+0           → reset zoom para 100%
+  //   - Setas (↑↓←→)         → move selecionados ±1% (5% com Shift)
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      // ESC sai do modo Pincel (sem precisar de Ctrl)
-      if (e.key === 'Escape' && brushMode) {
+      const target = e.target as HTMLElement | null
+      const tag = target?.tagName?.toLowerCase()
+      const inEditable = tag === 'input' || tag === 'textarea' || target?.isContentEditable
+      const mod = e.ctrlKey || e.metaKey
+      const k = e.key
+
+      // ESC sai do modo Pincel (mesmo em input)
+      if (k === 'Escape' && brushMode) {
         e.preventDefault()
         setBrushMode(null)
         return
       }
-      const mod = e.ctrlKey || e.metaKey
-      if (!mod) return
-      const k = e.key.toLowerCase()
-      const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase()
-      const inEditable = tag === 'input' || tag === 'textarea' || (e.target as HTMLElement | null)?.isContentEditable
-      if (inEditable && k !== 's') return
 
-      if (k === 'z' && !e.shiftKey) { e.preventDefault(); dispatch({ type: 'undo' }) }
-      else if ((k === 'z' && e.shiftKey) || k === 'y') { e.preventDefault(); dispatch({ type: 'redo' }) }
-      else if (k === 's') { e.preventDefault(); handleSave() }
+      // Ctrl+S salva — funciona em qualquer contexto
+      if (mod && k.toLowerCase() === 's') {
+        e.preventDefault()
+        handleSave()
+        return
+      }
+
+      // Demais atalhos só fora de campos editáveis
+      if (inEditable) return
+
+      // DELETE / BACKSPACE
+      if ((k === 'Delete' || k === 'Backspace') && selectedIds.length > 0) {
+        e.preventDefault()
+        handleDeleteSelected()
+        return
+      }
+
+      // Setas (sem modificador também — comuns em editores gráficos)
+      const arrowDeltas: Record<string, [number, number]> = {
+        'ArrowUp':    [0, -1],
+        'ArrowDown':  [0, +1],
+        'ArrowLeft':  [-1, 0],
+        'ArrowRight': [+1, 0],
+      }
+      if (k in arrowDeltas && selectedIds.length > 0) {
+        e.preventDefault()
+        const [dx, dy] = arrowDeltas[k]
+        const step = e.shiftKey ? 5 : 1  // Shift = passos maiores
+        handleNudge(dx * step, dy * step)
+        return
+      }
+
+      // Atalhos com modificador (Ctrl ou Cmd)
+      if (!mod) return
+      const kLower = k.toLowerCase()
+
+      if (kLower === 'z' && !e.shiftKey)               { e.preventDefault(); dispatch({ type: 'undo' }); return }
+      if ((kLower === 'z' && e.shiftKey) || kLower === 'y') { e.preventDefault(); dispatch({ type: 'redo' }); return }
+      if (kLower === 'c')                              { e.preventDefault(); handleCopy(); return }
+      if (kLower === 'v')                              { e.preventDefault(); handlePaste(); return }
+      // Zoom — '=' e '+' (Shift+=) ambos disparam zoom in
+      if (k === '=' || k === '+')                      { e.preventDefault(); zoomIn(); return }
+      if (k === '-' || k === '_')                      { e.preventDefault(); zoomOut(); return }
+      if (k === '0')                                   { e.preventDefault(); zoomReset(); return }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, currentJson, brushMode])
+  }, [
+    brushMode, selectedIds, handleSave, handleDeleteSelected,
+    handleCopy, handlePaste, handleNudge, zoomIn, zoomOut, zoomReset,
+  ])
 
   // ── Aviso antes de fechar a aba com mudanças não salvas ────────────────────
 
@@ -496,6 +616,23 @@ export default function CanvasEditor({
 
             <StatusPill {...status} />
 
+            {/* Zoom controls */}
+            <div className="flex items-center gap-0.5 rounded-lg border border-slate-200 bg-white">
+              <IconHeaderBtn title="Diminuir zoom (Ctrl -)" onClick={zoomOut} disabled={zoom <= ZOOM_MIN}>
+                <ZoomOut className="w-3.5 h-3.5" />
+              </IconHeaderBtn>
+              <button
+                onClick={zoomReset}
+                title="Reset zoom (Ctrl 0)"
+                className="px-2 text-[11px] font-medium text-slate-700 tabular-nums hover:bg-slate-100 h-7 min-w-[44px] border-x border-slate-200"
+              >
+                {Math.round(zoom * 100)}%
+              </button>
+              <IconHeaderBtn title="Aumentar zoom (Ctrl +)" onClick={zoomIn} disabled={zoom >= ZOOM_MAX}>
+                <ZoomIn className="w-3.5 h-3.5" />
+              </IconHeaderBtn>
+            </div>
+
             <button
               onClick={() => setCleanPreview(v => !v)}
               title={cleanPreview ? 'Mostrar guias do editor' : 'Esconder guias — ver como vai imprimir'}
@@ -563,31 +700,42 @@ export default function CanvasEditor({
 
           <main
             ref={stageWrapper}
-            className="flex justify-center overflow-y-auto bg-[radial-gradient(ellipse_at_top,rgba(124,58,237,0.06),transparent_60%)] p-6"
+            className="flex justify-center overflow-auto bg-[radial-gradient(ellipse_at_top,rgba(124,58,237,0.06),transparent_60%)] p-6"
             onMouseDown={e => { if (e.target === e.currentTarget) setSelectedIds([]) }}
           >
             <div
               className="w-full"
-              style={{ maxWidth: state.page.orientation === 'portrait' ? 720 : 980 }}
+              style={{
+                maxWidth: state.page.orientation === 'portrait' ? 720 : 980,
+                // Espaço extra do zoom para o overflow:auto poder rolar
+                paddingBottom: zoom > 1 ? `${(zoom - 1) * 60}%` : undefined,
+                paddingRight:  zoom > 1 ? `${(zoom - 1) * 60}%` : undefined,
+              }}
             >
-              <CanvasStage
-                state={state}
-                selectedId={selectedId}
-                selectedIds={selectedIds}
-                cleanPreview={cleanPreview}
-                brush={brushMode}
-                onSelect={handleSelect}
-                onElementChange={handleElementChange}
-                onBrushStrokeComplete={handleBrushStrokeComplete}
-              />
+              <div style={{ transform: `scale(${zoom})`, transformOrigin: 'top left' }}>
+                <CanvasStage
+                  state={state}
+                  selectedId={selectedId}
+                  selectedIds={selectedIds}
+                  cleanPreview={cleanPreview}
+                  brush={brushMode}
+                  zoom={zoom}
+                  onSelect={handleSelect}
+                  onElementChange={handleElementChange}
+                  onBrushStrokeComplete={handleBrushStrokeComplete}
+                />
+              </div>
               <p className="mt-3 text-center text-[11px] text-slate-500">
                 {state.elements.length} elemento{state.elements.length === 1 ? '' : 's'}
                 {selectedIds.length > 1 && (
                   <span className="ml-1 text-violet-600 font-medium">
-                    · {selectedIds.length} selecionados (Ctrl+Click)
+                    · {selectedIds.length} selecionados (Ctrl/Shift+Click)
                   </span>
                 )}
-                {' · '}auto-save a cada 1 min
+                {clipboard.length > 0 && (
+                  <span className="ml-1 text-emerald-600">· {clipboard.length} no clipboard (Ctrl+V)</span>
+                )}
+                {' · '}auto-save a cada 1 min · setas movem · Delete apaga
               </p>
             </div>
           </main>
