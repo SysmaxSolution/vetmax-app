@@ -18,6 +18,8 @@ import type { CanvasState } from '@/lib/canva/canvas-state'
 import { isCanvasState } from '@/lib/canva/canvas-state'
 import type { FillableFieldElement } from '@/lib/canva/elements'
 import type { VitalSigns } from '@/types'
+import type { ResolveContext } from '@/lib/canva/dynamic-tags'
+import { buildResolveContext } from '@/lib/canva/resolve-context'
 
 const BG_BUCKET = 'patient-documents-bg'
 
@@ -417,6 +419,25 @@ export interface CanvasDraftResult {
   template_id: string
   template_name: string
   template_type: string
+  /** Layout completo do template para renderizar preview ao vivo no
+   *  modal de consulta (sem precisar recarregar dados do servidor). */
+  canvas_state: CanvasState
+  /** Config legacy (background/margens/block_style) — fallback quando
+   *  canvas_state for null. */
+  template_config: CanvaTemplateConfig
+  /** Dados reais (clínica/vet/patient/tutor/consulta) para resolver
+   *  Dynamic Tags no preview. */
+  resolve_context: ResolveContext
+  /** Snapshot do patient header pra exibir no modal. */
+  patient_header: {
+    patient_name?: string
+    species?: string
+    breed?: string
+    sex?: string
+    date?: string
+    vet_name?: string
+    crmv?: string
+  }
   /** Definições dos FillableFieldElement extraídos do canvas_state. */
   fillable_definitions: FillableFieldElement[]
   /** Valores que a IA conseguiu inferir do contexto + transcrição. */
@@ -441,13 +462,13 @@ export async function generateCanvasDocumentDraft(
   consultationId: string,
   hint?: string,
 ): Promise<CanvasDraftResult | { error: string }> {
-  const { profile } = await requireClinic()
+  const { supabase, profile } = await requireClinic()
   const admin = createAdminClient()
 
-  // 1. Carrega template
+  // 1. Carrega template — incluindo config legacy para fallback do preview
   const { data: template, error: tErr } = await admin
     .from('document_templates')
-    .select('id, name, type, canvas_state')
+    .select('id, name, type, canvas_state, background_image_url, margin_top, margin_bottom, margin_left, margin_right, block_style')
     .eq('id', templateId)
     .eq('clinic_id', profile.clinic_id)
     .single()
@@ -456,18 +477,60 @@ export async function generateCanvasDocumentDraft(
     return { error: 'Template não é Canvas Visual.' }
   }
 
+  // 1.5. Pega patient_id da consulta (necessário pra buildResolveContext)
+  const { data: consultMeta } = await admin
+    .from('consultations')
+    .select('patient_id')
+    .eq('id', consultationId)
+    .eq('clinic_id', profile.clinic_id)
+    .single()
+  if (!consultMeta) return { error: 'Consulta não encontrada.' }
+
   // 2. Extrai FillableFieldElement do canvas_state
   const cs = template.canvas_state as CanvasState
   const fillableDefs = cs.elements.filter(
     (e): e is FillableFieldElement => e.kind === 'fillable_field',
   )
 
-  // Sem campos preenchíveis → draft vazio (vet preenche manualmente, sem IA)
-  if (fillableDefs.length === 0) {
+  // Helper: monta payload comum independente de ter ou não fillable_fields.
+  const buildBasePayload = async (): Promise<Omit<CanvasDraftResult,
+    'fillable_definitions' | 'fillable_values' | 'filled_keys' | 'unfilled_keys'>> => {
+    const resolveCtx = await buildResolveContext(
+      supabase, profile.clinic_id, consultMeta.patient_id, consultationId,
+    )
     return {
       template_id: template.id,
       template_name: template.name,
       template_type: template.type,
+      canvas_state: cs,
+      template_config: {
+        background_image_url: template.background_image_url ?? null,
+        margins: {
+          top:    Number(template.margin_top ?? 2),
+          bottom: Number(template.margin_bottom ?? 2),
+          left:   Number(template.margin_left ?? 2),
+          right:  Number(template.margin_right ?? 2),
+        },
+        block_style: (template.block_style as 'solid' | 'transparent') ?? 'solid',
+      },
+      resolve_context: resolveCtx,
+      patient_header: {
+        patient_name: (resolveCtx.patient as any)?.name,
+        species:      (resolveCtx.patient as any)?.species,
+        breed:        (resolveCtx.patient as any)?.breed,
+        sex:          (resolveCtx.patient as any)?.gender,
+        date:         new Date().toLocaleDateString('pt-BR'),
+        vet_name:     (resolveCtx.vet as any)?.full_name,
+        crmv:         (resolveCtx.vet as any)?.crmv,
+      },
+    }
+  }
+
+  // Sem campos preenchíveis → draft vazio (vet preenche manualmente, sem IA)
+  if (fillableDefs.length === 0) {
+    const base = await buildBasePayload()
+    return {
+      ...base,
       fillable_definitions: [],
       fillable_values: {},
       filled_keys: [],
@@ -611,10 +674,9 @@ Responda SOMENTE com o JSON:`
       }
     }
 
+    const base = await buildBasePayload()
     return {
-      template_id: template.id,
-      template_name: template.name,
-      template_type: template.type,
+      ...base,
       fillable_definitions: fillableDefs,
       fillable_values,
       filled_keys,

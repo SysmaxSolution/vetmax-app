@@ -12,7 +12,10 @@ import {
   generateDocumentDraft, savePatientDocument, updatePatientDocument,
   type PatientDocument,
 } from '@/lib/actions/documents'
-import { generateCanvasDocumentDraft } from '@/lib/actions/canva-templates'
+import {
+  generateCanvasDocumentDraft, type CanvasDraftResult,
+} from '@/lib/actions/canva-templates'
+import CanvasDocumentDraftModal from './CanvasDocumentDraftModal'
 import { uploadDocumentPdf } from '@/lib/actions/attachments'
 import type { Attachment } from '@/lib/actions/attachments'
 import { generateDocumentPdfBlob, blobToBase64 } from '@/lib/pdf-generator'
@@ -181,6 +184,9 @@ export default function DocumentsSection({
 
   // Review form state
   const [draft,          setDraft]          = useState<DraftState | null>(null)
+  // Draft Canvas Visual — modal independente do legado, mantém o vet no
+  // consultório enquanto preenche/salva/imprime documentos.
+  const [canvasDraft,    setCanvasDraft]    = useState<CanvasDraftResult | null>(null)
   const [isSaving,       setIsSaving]       = useState(false)
   const [isUploadingPdf, setIsUploadingPdf] = useState(false)
   const [isUpdating,     setIsUpdating]     = useState(false)
@@ -261,33 +267,19 @@ export default function DocumentsSection({
 
     const selectedTpl = allTemplates.find(t => t.id === selectedTemplateId)
 
-    // Canvas Visual: IA preenche fillable_fields via contexto + transcrição
-    // Resultado fica no sessionStorage (chave canva-draft-{template_id}) pra
-    // ser consumido pelo NewCanvaLaudoForm na rota /dashboard/laudos/novo.
+    // Canvas Visual: IA preenche fillable_fields, ABRE MODAL LOCAL com
+    // form + preview ao vivo + Salvar/Visualizar/Salvar e Imprimir.
+    // NÃO redireciona — vet continua na tela do consultório.
     if (selectedTpl?.canvas_state) {
       try {
         const result = await generateCanvasDocumentDraft(
           selectedTemplateId, consultation.id, activeHint,
         )
         if ('error' in result) { setModalError(result.error); return }
-        if (typeof window !== 'undefined') {
-          sessionStorage.setItem(
-            `canva-draft-${selectedTemplateId}`,
-            JSON.stringify({
-              fillable_values: result.fillable_values,
-              filled_keys: result.filled_keys,
-              unfilled_keys: result.unfilled_keys,
-              hint: activeHint,
-              timestamp: Date.now(),
-            }),
-          )
-        }
+        setCanvasDraft(result)
         setShowModal(false)
         setSelectedTemplateId('')
         setActiveHint(undefined)
-        router.push(
-          `/dashboard/laudos/novo?consultation_id=${consultation.id}&template_id=${selectedTemplateId}`,
-        )
       } catch (e: any) {
         setModalError(e.message ?? 'Erro ao gerar documento Canvas.')
       } finally {
@@ -868,6 +860,37 @@ export default function DocumentsSection({
             )}
           </div>
         </div>
+      )}
+
+      {/* Modal Canvas Visual — geração inline, sem sair do consultório */}
+      {canvasDraft && (
+        <CanvasDocumentDraftModal
+          draft={canvasDraft}
+          consultationId={consultation.id}
+          patientId={consultation.patient.id}
+          onClose={() => setCanvasDraft(null)}
+          onSaved={(docId, documentName) => {
+            // Adiciona placeholder na lista pra o vet ver o doc na hora
+            // (refresh real virá pelo onDocSaved padrão do parent).
+            setDocuments(prev => [
+              {
+                id: docId,
+                template_id: canvasDraft.template_id,
+                template_name: canvasDraft.template_name,
+                template_type: canvasDraft.template_type,
+                template_extracted_fields: null,
+                template_html: null,
+                page_images: null,
+                document_name: documentName,
+                content_data: {},
+                created_at: new Date().toISOString(),
+                template: { name: canvasDraft.template_name, type: canvasDraft.template_type },
+              } as PatientDocument,
+              ...prev,
+            ])
+            onDocSaved?.(documentName)
+          }}
+        />
       )}
     </>
   )
