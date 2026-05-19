@@ -150,10 +150,10 @@ function TextRenderer({ e, isPrint }: { e: TextElement; isPrint?: boolean }) {
   const containerStyle: React.CSSProperties = {
     width: '100%',
     height: '100%',
+    boxSizing: 'border-box',
     overflow: 'hidden',
     whiteSpace: 'pre-wrap',
     overflowWrap: 'break-word',
-    wordBreak: 'break-word',
     ...typographyToCss(e.typography),
     ...blockToCss(e.block),
     ...vAlignToFlex(e.typography.vAlign),
@@ -188,16 +188,17 @@ function TextRenderer({ e, isPrint }: { e: TextElement; isPrint?: boolean }) {
     )
   }
 
-  // Modo texto livre — com markdown inline. Usa div interno (não span) para
-  // garantir que ocupa 100% da largura do container e o texto se quebra
-  // no limite real do bloco (não no limite do span inline).
+  // Modo texto livre: aplica HTML markdown DIRETO no container externo.
+  // Antes havia um <div style={{width:'100%'}}> wrapper interno; quando o
+  // Rnd aumentava o pai, esse wrapper mantinha o cálculo de layout antigo
+  // (browser não recalculava word-wrap até interação seguinte). Remover o
+  // wrapper deixa o conteúdo de texto ser child direto do container que tem
+  // width: 100% — re-flow imediato em qualquer resize.
   return (
-    <div style={containerStyle}>
-      <div
-        style={{ width: '100%' }}
-        dangerouslySetInnerHTML={{ __html: parseInlineMarkdown(raw) }}
-      />
-    </div>
+    <div
+      style={containerStyle}
+      dangerouslySetInnerHTML={{ __html: parseInlineMarkdown(raw) }}
+    />
   )
 }
 
