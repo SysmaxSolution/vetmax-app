@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import NewCanvaLaudoForm from './NewCanvaLaudoForm'
 import type { CanvaTemplateConfig } from '@/lib/canva/types'
 import { hydrateCanvasState } from '@/lib/canva/canvas-state'
+import { buildResolveContext } from '@/lib/canva/resolve-context'
 
 interface Props {
   searchParams: Promise<{ consultation_id?: string; template_id?: string }>
@@ -72,6 +73,12 @@ export default async function NewCanvaLaudoPage({ searchParams }: Props) {
   const vetRaw = (consultation as { profiles?: unknown }).profiles
   const vet = Array.isArray(vetRaw) ? vetRaw[0] : vetRaw
 
+  // Contexto real para o preview do canvas — todas as Dynamic Tags
+  // (clinica.name, pet.weight, vet.crmv, etc.) resolvem com dados vivos.
+  const resolveContext = await buildResolveContext(
+    supabase, profile.clinic_id, consultation.patient_id, consultation_id,
+  )
+
   return (
     <NewCanvaLaudoForm
       templateId={tpl.id}
@@ -90,6 +97,7 @@ export default async function NewCanvaLaudoPage({ searchParams }: Props) {
       }}
       config={config}
       canvasState={hydrateCanvasState(tpl.canvas_state)}
+      resolveContext={resolveContext}
     />
   )
 }

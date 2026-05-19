@@ -15,12 +15,14 @@ import { useMemo, useState, useTransition } from 'react'
 import { AlertCircle, Loader2, Printer, Save, SquarePen } from 'lucide-react'
 import { createCanvaPatientDocument } from '@/lib/actions/canva-templates'
 import CanvaA4Preview from '@/components/canva/CanvaA4Preview'
+import CanvasStage from '@/components/canva/editor/CanvasStage'
 import DynamicFieldsEditor from '@/components/canva/DynamicFieldsEditor'
 import type {
   CanvaContentJson, CanvaDynamicField, CanvaTemplateConfig,
 } from '@/lib/canva/types'
 import type { CanvasState } from '@/lib/canva/canvas-state'
 import type { FillableFieldElement } from '@/lib/canva/elements'
+import type { ResolveContext } from '@/lib/canva/dynamic-tags'
 
 interface PatientHeader {
   patient_name?: string
@@ -44,6 +46,9 @@ interface Props {
   patient: PatientHeader
   config: CanvaTemplateConfig
   canvasState?: CanvasState | null
+  /** Dados reais da clínica/vet/patient/tutor/consulta para Dynamic Tags
+   *  resolverem no preview ao vivo. Vem do server (buildResolveContext). */
+  resolveContext?: ResolveContext
 }
 
 interface IADraft {
@@ -56,7 +61,7 @@ interface IADraft {
 
 export default function NewCanvaLaudoForm({
   templateId, templateName, templateType,
-  consultationId, patientId, patient, config, canvasState,
+  consultationId, patientId, patient, config, canvasState, resolveContext,
 }: Props) {
   const router = useRouter()
   const [medicamentos, setMedicamentos] = useState('')
@@ -262,20 +267,36 @@ export default function NewCanvaLaudoForm({
           </Card>
         </section>
 
-        {/* RIGHT — preview */}
+        {/* RIGHT — preview ao vivo
+            Quando o template tem canvas_state (motor Canvas Visual), renderiza
+            via CanvasStage em modo print com fillableValues + resolveContext
+            — vet vê EXATAMENTE o que vai imprimir (papel timbrado, logo,
+            fillable fields preenchidos, repeater de medicações, etc.).
+            Fallback pro CanvaA4Preview legado quando não há canvas_state. */}
         <section className="lg:sticky lg:top-6 lg:self-start">
           <div className="mb-2 flex items-center gap-2 text-xs text-slate-500">
             <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-700">Preview ao vivo</span>
             <span>O laudo será impresso exatamente assim.</span>
           </div>
-          <CanvaA4Preview
-            backgroundUrl={config.background_image_url}
-            margins={config.margins}
-            blockStyle={config.block_style}
-            patient={patient}
-            content={content}
-            documentTitle={docName}
-          />
+          {canvasState ? (
+            <div style={{ width: '21cm', maxWidth: '100%' }} className="mx-auto">
+              <CanvasStage
+                state={canvasState}
+                mode="print"
+                resolveContext={resolveContext}
+                fillableValues={fillableValues}
+              />
+            </div>
+          ) : (
+            <CanvaA4Preview
+              backgroundUrl={config.background_image_url}
+              margins={config.margins}
+              blockStyle={config.block_style}
+              patient={patient}
+              content={content}
+              documentTitle={docName}
+            />
+          )}
         </section>
       </div>
     </div>
