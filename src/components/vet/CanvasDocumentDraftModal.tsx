@@ -16,9 +16,11 @@
 
 import { useEffect, useMemo, useState, useTransition } from 'react'
 import {
-  AlertCircle, Download, Eye, Loader2, Printer, Save, Sparkles, X,
+  AlertCircle, Download, Eye, Loader2, Pencil, Printer, Save, Sparkles, X,
 } from 'lucide-react'
-import { createCanvaPatientDocument } from '@/lib/actions/canva-templates'
+import {
+  createCanvaPatientDocument, updateCanvaPatientDocument,
+} from '@/lib/actions/canva-templates'
 import type { CanvasDraftResult } from '@/lib/actions/canva-templates'
 import CanvasStage from '@/components/canva/editor/CanvasStage'
 import type {
@@ -29,16 +31,25 @@ interface Props {
   draft: CanvasDraftResult
   consultationId: string
   patientId: string
+  /** Quando presente, modal opera em MODO EDIÇÃO: persist chama
+   *  updateCanvaPatientDocument no documento existente em vez de criar
+   *  um novo. Usado ao reabrir docs já salvos pela lista do consultório. */
+  documentId?: string
+  /** Nome original do doc (modo edição). Preenche o input "Nome do
+   *  documento" pra preservar o nome anterior por padrão. */
+  initialDocumentName?: string
   onClose: () => void
-  /** Recebe o id do novo patient_document criado pra atualizar a lista. */
+  /** Recebe o id do patient_document (novo ou atualizado) pra atualizar
+   *  a lista. Em modo edição o id é o mesmo do documentId recebido. */
   onSaved: (docId: string, documentName: string) => void
 }
 
 export default function CanvasDocumentDraftModal({
-  draft, consultationId, patientId, onClose, onSaved,
+  draft, consultationId, patientId, documentId, initialDocumentName, onClose, onSaved,
 }: Props) {
+  const isEdit = !!documentId
   const [docName, setDocName] = useState(
-    `${draft.template_name} — ${draft.patient_header.patient_name ?? 'Pet'}`,
+    initialDocumentName ?? `${draft.template_name} — ${draft.patient_header.patient_name ?? 'Pet'}`,
   )
   const [fillableValues, setFillableValues] = useState<Record<string, string>>(
     () => ({ ...draft.fillable_values }),
@@ -80,6 +91,14 @@ export default function CanvasDocumentDraftModal({
       return null
     }
     try {
+      if (isEdit) {
+        const { id } = await updateCanvaPatientDocument({
+          document_id: documentId!,
+          document_name: docName.trim() || draft.template_name,
+          content_json: content,
+        })
+        return id
+      }
       const { id } = await createCanvaPatientDocument({
         template_id: draft.template_id,
         patient_id: patientId,
@@ -149,10 +168,12 @@ export default function CanvasDocumentDraftModal({
         {/* Header */}
         <header className="flex items-center justify-between border-b border-slate-200 px-5 py-3 flex-shrink-0">
           <div className="flex items-center gap-3 min-w-0">
-            <Sparkles className="w-5 h-5 text-violet-600 flex-shrink-0" />
+            {isEdit
+              ? <Pencil className="w-5 h-5 text-blue-600 flex-shrink-0" />
+              : <Sparkles className="w-5 h-5 text-violet-600 flex-shrink-0" />}
             <div className="min-w-0">
               <h2 className="text-base font-semibold text-slate-900 truncate">
-                Novo {draft.template_type}
+                {isEdit ? `Editando ${draft.template_type}` : `Novo ${draft.template_type}`}
               </h2>
               <p className="text-xs text-slate-500 truncate">
                 {draft.template_name} · {draft.patient_header.patient_name}
@@ -166,7 +187,7 @@ export default function CanvasDocumentDraftModal({
               className="flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
             >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              Salvar
+              {isEdit ? 'Atualizar' : 'Salvar'}
             </button>
             <button
               onClick={doView}
@@ -183,7 +204,7 @@ export default function CanvasDocumentDraftModal({
               className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
             >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
-              Salvar e Imprimir
+              {isEdit ? 'Atualizar e Imprimir' : 'Salvar e Imprimir'}
             </button>
             <button
               onClick={onClose}

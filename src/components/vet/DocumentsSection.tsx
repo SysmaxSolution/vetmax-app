@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import {
   FileText, Plus, Loader2, Sparkles, Printer, CheckCircle2,
   X, FileCheck, AlertCircle, Wand2, Save, Search, ShieldAlert,
-  LayoutTemplate,
+  LayoutTemplate, Trash2, Pencil,
 } from 'lucide-react'
 import { DatePicker } from '@/components/ui/DatePicker'
 import {
@@ -13,7 +13,8 @@ import {
   type PatientDocument,
 } from '@/lib/actions/documents'
 import {
-  generateCanvasDocumentDraft, type CanvasDraftResult,
+  generateCanvasDocumentDraft, loadCanvaDocumentForEdit,
+  deletePatientDocument, type CanvasDraftResult,
 } from '@/lib/actions/canva-templates'
 import CanvasDocumentDraftModal from './CanvasDocumentDraftModal'
 import { uploadDocumentPdf } from '@/lib/actions/attachments'
@@ -26,7 +27,7 @@ import type { DocumentTemplate, ExtractedField } from '@/types'
 
 const TYPE_LABELS: Record<string, string> = {
   laudo: 'Laudo', receita: 'Receita', encaminhamento: 'Encaminhamento',
-  termo: 'Termo', exame: 'Exame', outro: 'Outro',
+  termo: 'Termo', exame: 'Exame', carteirinha: 'Carteirinha', outro: 'Outro',
 }
 
 const TYPE_BADGE: Record<string, string> = {
@@ -35,6 +36,7 @@ const TYPE_BADGE: Record<string, string> = {
   encaminhamento: 'bg-purple-100 text-purple-700',
   termo:          'bg-amber-100 text-amber-700',
   exame:          'bg-indigo-100 text-indigo-700',
+  carteirinha:    'bg-violet-100 text-violet-700',
   outro:          'bg-slate-100 text-slate-600',
 }
 
@@ -186,7 +188,15 @@ export default function DocumentsSection({
   const [draft,          setDraft]          = useState<DraftState | null>(null)
   // Draft Canvas Visual — modal independente do legado, mantém o vet no
   // consultório enquanto preenche/salva/imprime documentos.
-  const [canvasDraft,    setCanvasDraft]    = useState<CanvasDraftResult | null>(null)
+  // Quando documentId está preenchido, o modal opera em modo edição
+  // (chama updateCanvaPatientDocument em vez de createCanvaPatientDocument).
+  const [canvasDraft,    setCanvasDraft]    = useState<
+    (CanvasDraftResult & { documentId?: string; existingDocName?: string }) | null
+  >(null)
+  // Reabrir Canvas doc (loading) e exclusão pendente
+  const [reopenLoadingId,setReopenLoadingId]= useState<string | null>(null)
+  const [deletingId,     setDeletingId]     = useState<string | null>(null)
+  const [listError,      setListError]      = useState<string | null>(null)
   const [isSaving,       setIsSaving]       = useState(false)
   const [isUploadingPdf, setIsUploadingPdf] = useState(false)
   const [isUpdating,     setIsUpdating]     = useState(false)
@@ -234,6 +244,46 @@ export default function DocumentsSection({
     setActiveHint(suggestion.motivo)
     setModalError(null)
     setShowModal(true)
+  }
+
+  // ── Re-open a saved Canvas Visual document for edit ───────────────────────
+  // Doc Canvas não tem extracted_fields — chamamos loadCanvaDocumentForEdit
+  // que devolve o CanvasDraftResult já hidratado com fillable_values salvos.
+  const handleOpenCanvasDoc = async (doc: PatientDocument) => {
+    setReopenLoadingId(doc.id)
+    setListError(null)
+    try {
+      const result = await loadCanvaDocumentForEdit(doc.id)
+      if ('error' in result) {
+        setListError(result.error)
+        return
+      }
+      const { document_id, existing_doc_name, ...rest } = result
+      setCanvasDraft({
+        ...rest,
+        documentId: document_id,
+        existingDocName: existing_doc_name,
+      })
+    } catch (e: any) {
+      setListError(e?.message ?? 'Falha ao abrir documento.')
+    } finally {
+      setReopenLoadingId(null)
+    }
+  }
+
+  // ── Excluir documento (Canvas ou legado — mesma tabela) ───────────────────
+  const handleDeleteDoc = async (doc: PatientDocument) => {
+    if (!window.confirm(`Excluir o documento "${doc.document_name}"? Esta ação não pode ser desfeita.`)) return
+    setDeletingId(doc.id)
+    setListError(null)
+    try {
+      await deletePatientDocument(doc.id)
+      setDocuments(prev => prev.filter(d => d.id !== doc.id))
+    } catch (e: any) {
+      setListError(e?.message ?? 'Falha ao excluir documento.')
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   // ── Re-open a saved document without AI call ───────────────────────────────
@@ -826,68 +876,123 @@ export default function DocumentsSection({
                 </p>
               </div>
             ) : (
-              <div className="divide-y divide-slate-100">
-                {documents.map(doc => {
-                  const canReopen = !!(doc.template_extracted_fields?.length)
-                  const typeStr = doc.template_type ?? doc.template?.type
-                  return (
-                    <div key={doc.id}
-                      className={`px-6 py-4 flex items-center justify-between gap-3 ${canReopen ? 'cursor-pointer hover:bg-slate-50 transition-colors group' : ''}`}
-                      onClick={() => canReopen && handleOpenSavedDoc(doc)}
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <FileCheck className={`w-4 h-4 flex-shrink-0 ${canReopen ? 'text-blue-400 group-hover:text-blue-600' : 'text-slate-400'}`} />
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-slate-800 truncate">{doc.document_name}</p>
-                          <p className="text-xs text-slate-400">
-                            {new Date(doc.created_at).toLocaleString('pt-BR', {
-                              day: '2-digit', month: '2-digit', year: 'numeric',
-                              hour: '2-digit', minute: '2-digit',
-                            })}
-                            {canReopen && <span className="ml-2 text-blue-400 group-hover:text-blue-600">· Clique para editar/imprimir</span>}
-                          </p>
+              <>
+                {listError && (
+                  <div className="mx-6 mt-3 flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
+                    <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />{listError}
+                  </div>
+                )}
+                <div className="divide-y divide-slate-100">
+                  {documents.map(doc => {
+                    const hasExtracted = !!(doc.template_extracted_fields?.length)
+                    // Canvas docs não têm extracted_fields — detectamos por
+                    // exclusão: tem template_id mas sem extracted_fields.
+                    const isCanvas = !hasExtracted && !!doc.template_id
+                    const canEdit = hasExtracted || isCanvas
+                    const typeStr = doc.template_type ?? doc.template?.type
+                    const isBusy = reopenLoadingId === doc.id || deletingId === doc.id
+
+                    const openHandler = () => {
+                      if (isBusy) return
+                      if (hasExtracted) handleOpenSavedDoc(doc)
+                      else if (isCanvas) handleOpenCanvasDoc(doc)
+                    }
+
+                    return (
+                      <div key={doc.id}
+                        className={`px-6 py-4 flex items-center justify-between gap-3 ${canEdit && !isBusy ? 'group hover:bg-slate-50 transition-colors' : ''}`}
+                      >
+                        <div
+                          className={`flex items-center gap-3 min-w-0 flex-1 ${canEdit && !isBusy ? 'cursor-pointer' : ''}`}
+                          onClick={openHandler}
+                        >
+                          <FileCheck className={`w-4 h-4 flex-shrink-0 ${canEdit ? 'text-blue-400 group-hover:text-blue-600' : 'text-slate-400'}`} />
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-slate-800 truncate">{doc.document_name}</p>
+                            <p className="text-xs text-slate-400">
+                              {new Date(doc.created_at).toLocaleString('pt-BR', {
+                                day: '2-digit', month: '2-digit', year: 'numeric',
+                                hour: '2-digit', minute: '2-digit',
+                              })}
+                              {canEdit && <span className="ml-2 text-blue-400 group-hover:text-blue-600">· Clique para editar/imprimir</span>}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {typeStr && (
+                            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${TYPE_BADGE[typeStr] ?? TYPE_BADGE.outro}`}>
+                              {TYPE_LABELS[typeStr] ?? typeStr}
+                            </span>
+                          )}
+                          {canEdit && (
+                            <button
+                              onClick={openHandler}
+                              disabled={isBusy}
+                              title="Editar documento"
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-50"
+                            >
+                              {reopenLoadingId === doc.id
+                                ? <Loader2 className="w-4 h-4 animate-spin" />
+                                : <Pencil className="w-4 h-4" />}
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleDeleteDoc(doc)}
+                            disabled={isBusy}
+                            title="Excluir documento"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                          >
+                            {deletingId === doc.id
+                              ? <Loader2 className="w-4 h-4 animate-spin" />
+                              : <Trash2 className="w-4 h-4" />}
+                          </button>
                         </div>
                       </div>
-                      {typeStr && (
-                        <span className={`ml-2 flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full ${TYPE_BADGE[typeStr] ?? TYPE_BADGE.outro}`}>
-                          {TYPE_LABELS[typeStr] ?? typeStr}
-                        </span>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
+                    )
+                  })}
+                </div>
+              </>
             )}
           </div>
         </div>
       )}
 
-      {/* Modal Canvas Visual — geração inline, sem sair do consultório */}
+      {/* Modal Canvas Visual — geração inline, sem sair do consultório.
+          Quando documentId está presente, opera em modo edição (update). */}
       {canvasDraft && (
         <CanvasDocumentDraftModal
           draft={canvasDraft}
           consultationId={consultation.id}
           patientId={consultation.patient.id}
+          documentId={canvasDraft.documentId}
+          initialDocumentName={canvasDraft.existingDocName}
           onClose={() => setCanvasDraft(null)}
           onSaved={(docId, documentName) => {
-            // Adiciona placeholder na lista pra o vet ver o doc na hora
-            // (refresh real virá pelo onDocSaved padrão do parent).
-            setDocuments(prev => [
-              {
-                id: docId,
-                template_id: canvasDraft.template_id,
-                template_name: canvasDraft.template_name,
-                template_type: canvasDraft.template_type,
-                template_extracted_fields: null,
-                template_html: null,
-                page_images: null,
-                document_name: documentName,
-                content_data: {},
-                created_at: new Date().toISOString(),
-                template: { name: canvasDraft.template_name, type: canvasDraft.template_type },
-              } as PatientDocument,
-              ...prev,
-            ])
+            // Edit: atualiza linha existente. Create: insere no topo.
+            setDocuments(prev => {
+              const existing = prev.findIndex(d => d.id === docId)
+              if (existing >= 0) {
+                const next = [...prev]
+                next[existing] = { ...next[existing], document_name: documentName }
+                return next
+              }
+              return [
+                {
+                  id: docId,
+                  template_id: canvasDraft.template_id,
+                  template_name: canvasDraft.template_name,
+                  template_type: canvasDraft.template_type,
+                  template_extracted_fields: null,
+                  template_html: null,
+                  page_images: null,
+                  document_name: documentName,
+                  content_data: {},
+                  created_at: new Date().toISOString(),
+                  template: { name: canvasDraft.template_name, type: canvasDraft.template_type },
+                } as PatientDocument,
+                ...prev,
+              ]
+            })
             onDocSaved?.(documentName)
           }}
         />

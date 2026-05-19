@@ -941,3 +941,154 @@ export async function loadCanvaPatientDocument(documentId: string): Promise<{
     },
   }
 }
+
+// ── Edit / Delete de documentos já gerados ───────────────────────────────────
+
+export interface UpdateCanvaPatientDocumentInput {
+  document_id: string
+  document_name: string
+  content_json: CanvaContentJson
+}
+
+/** Atualiza nome + content_json de um patient_document Canvas já criado.
+ *  Usado quando o vet reabre o documento no consultório pra ajustar
+ *  fillable_fields. NÃO toca em template_id, background, margens —
+ *  esses ficam congelados no snapshot original da geração. */
+export async function updateCanvaPatientDocument(
+  input: UpdateCanvaPatientDocumentInput,
+): Promise<{ id: string }> {
+  const { supabase, profile } = await requireClinic()
+
+  if (!validateContent(input.content_json)) {
+    throw new Error('content_json inválido (esperado static_fields + dynamic_fields[])')
+  }
+
+  const { data, error } = await supabase
+    .from('patient_documents')
+    .update({
+      document_name: input.document_name,
+      content_json: input.content_json,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', input.document_id)
+    .eq('clinic_id', profile.clinic_id)
+    .select('id')
+    .single()
+
+  if (error || !data) throw new Error(error?.message ?? 'falha ao atualizar documento')
+  revalidatePath('/dashboard/consultation')
+  revalidatePath(`/dashboard/laudos/${input.document_id}/print`)
+  return { id: data.id }
+}
+
+/** Exclui um patient_document — vale tanto pra docs Canvas quanto legados,
+ *  porque a tabela é a mesma. RLS por clinic_id garante isolamento. */
+export async function deletePatientDocument(documentId: string): Promise<{ id: string }> {
+  const { supabase, profile } = await requireClinic()
+
+  const { data, error } = await supabase
+    .from('patient_documents')
+    .delete()
+    .eq('id', documentId)
+    .eq('clinic_id', profile.clinic_id)
+    .select('id')
+    .single()
+
+  if (error || !data) throw new Error(error?.message ?? 'falha ao excluir documento')
+  revalidatePath('/dashboard/consultation')
+  return { id: data.id }
+}
+
+/** Carrega doc Canvas existente no shape CanvasDraftResult (+ document_id)
+ *  para reabertura no CanvasDocumentDraftModal em modo edição.
+ *  Reutiliza canvas_state ATUAL do template (não snapshot histórico). */
+export async function loadCanvaDocumentForEdit(documentId: string): Promise<
+  (CanvasDraftResult & { document_id: string; existing_doc_name: string }) | { error: string }
+> {
+  const { supabase, profile } = await requireClinic()
+
+  const { data: doc, error: docErr } = await supabase
+    .from('patient_documents')
+    .select('id, document_name, content_json, template_id, patient_id, consultation_id, created_at, background_image_url, margin_top, margin_bottom, margin_left, margin_right, block_style')
+    .eq('id', documentId)
+    .eq('clinic_id', profile.clinic_id)
+    .single()
+
+  if (docErr || !doc) return { error: 'Documento não encontrado.' }
+  if (!doc.template_id) return { error: 'Documento sem template — não pode ser editado no motor Canvas.' }
+
+  const { data: template, error: tplErr } = await supabase
+    .from('document_templates')
+    .select('id, name, type, canvas_state')
+    .eq('id', doc.template_id)
+    .eq('clinic_id', profile.clinic_id)
+    .single()
+
+  if (tplErr || !template) return { error: 'Template do documento não encontrado.' }
+  if (!isCanvasState(template.canvas_state)) {
+    return { error: 'Template não é Canvas Visual — use o motor legado pra editar.' }
+  }
+
+  const cs = template.canvas_state as CanvasState
+  const fillableDefs = cs.elements.filter(
+    (e): e is FillableFieldElement => e.kind === 'fillable_field',
+  )
+
+  // Para edição usamos a data ORIGINAL da emissão — assim consulta.date no
+  // preview reflete a data em que o documento foi gerado, não "agora".
+  const resolveCtx = await buildResolveContext(
+    supabase, profile.clinic_id, doc.patient_id, doc.consultation_id,
+    { documentDate: doc.created_at ? new Date(doc.created_at) : undefined },
+  )
+
+  // fillable_values vem do content_json salvo; vazios viram unfilled_keys
+  const content = (doc.content_json as CanvaContentJson) ?? { static_fields: {}, dynamic_fields: [] }
+  const savedFillable = content.fillable_fields ?? {}
+  const fillable_values: Record<string, string> = {}
+  const filled_keys: string[] = []
+  const unfilled_keys: string[] = []
+  for (const def of fillableDefs) {
+    const v = savedFillable[def.fieldKey]
+    if (v && String(v).trim() !== '') {
+      fillable_values[def.fieldKey] = String(v)
+      filled_keys.push(def.fieldKey)
+    } else {
+      unfilled_keys.push(def.fieldKey)
+    }
+  }
+
+  return {
+    document_id: doc.id,
+    existing_doc_name: doc.document_name,
+    template_id: template.id,
+    template_name: template.name,
+    template_type: template.type,
+    canvas_state: cs,
+    template_config: {
+      background_image_url: doc.background_image_url ?? null,
+      margins: {
+        top:    Number(doc.margin_top ?? 2),
+        bottom: Number(doc.margin_bottom ?? 2),
+        left:   Number(doc.margin_left ?? 2),
+        right:  Number(doc.margin_right ?? 2),
+      },
+      block_style: (doc.block_style as 'solid' | 'transparent') ?? 'solid',
+    },
+    resolve_context: resolveCtx,
+    patient_header: {
+      patient_name: (resolveCtx.patient as any)?.name,
+      species:      (resolveCtx.patient as any)?.species,
+      breed:        (resolveCtx.patient as any)?.breed,
+      sex:          (resolveCtx.patient as any)?.gender,
+      date:         doc.created_at
+        ? new Date(doc.created_at).toLocaleDateString('pt-BR')
+        : new Date().toLocaleDateString('pt-BR'),
+      vet_name:     (resolveCtx.vet as any)?.full_name,
+      crmv:         (resolveCtx.vet as any)?.crmv,
+    },
+    fillable_definitions: fillableDefs,
+    fillable_values,
+    filled_keys,
+    unfilled_keys,
+  }
+}

@@ -247,7 +247,7 @@ export interface TriageUpdatePayload {
 
 // ── Document Templates ───────────────────────────────────────────────────────
 
-export type TemplateType = 'laudo' | 'receita' | 'encaminhamento' | 'termo' | 'exame' | 'outro'
+export type TemplateType = 'laudo' | 'receita' | 'encaminhamento' | 'termo' | 'exame' | 'carteirinha' | 'outro'
 
 export type FieldType = 'text' | 'number' | 'date' | 'select' | 'boolean' | 'textarea'
 

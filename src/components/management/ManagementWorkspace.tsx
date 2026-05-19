@@ -61,12 +61,13 @@ const TYPE_COLORS: Record<TemplateType, { text: string; light: string }> = {
   encaminhamento: { text: 'text-orange-700', light: 'bg-orange-50' },
   termo:          { text: 'text-purple-700', light: 'bg-purple-50' },
   exame:          { text: 'text-teal-700',   light: 'bg-teal-50' },
+  carteirinha:    { text: 'text-violet-700', light: 'bg-violet-50' },
   outro:          { text: 'text-slate-700',  light: 'bg-slate-100' },
 }
 
 const TYPE_LABELS: Record<TemplateType, string> = {
   laudo: 'Laudo', receita: 'Receita', encaminhamento: 'Encaminhamento',
-  termo: 'Termo', exame: 'Exame', outro: 'Outro',
+  termo: 'Termo', exame: 'Exame', carteirinha: 'Carteirinha', outro: 'Outro',
 }
 
 const ROLE_LABELS: Record<string, string> = {
