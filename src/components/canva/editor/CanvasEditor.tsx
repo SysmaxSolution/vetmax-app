@@ -20,7 +20,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, useTransition } from 'react'
-import { Loader2, Paintbrush, Redo2, Save, Sparkles, Undo2, X, Eraser, Combine } from 'lucide-react'
+import { Eye, Loader2, Paintbrush, Redo2, Save, Sparkles, Undo2, X, Eraser, Combine } from 'lucide-react'
 import {
   defaultCanvasState, hydrateCanvasState, type CanvasState, type PageConfig,
 } from '@/lib/canva/canvas-state'
@@ -361,6 +361,18 @@ export default function CanvasEditor({
     })
   }
 
+  /** Abre a pré-visualização em nova aba. Salva o snapshot atual primeiro
+   *  (síncrono para garantir que o canvas_state remoto está atualizado),
+   *  depois window.open — não fecha o modal de edição. */
+  async function handlePreview() {
+    setError(null)
+    if (isDirty) {
+      try { await persist(state, currentJson) }
+      catch (e: any) { setError(`Salvar antes de pré-visualizar falhou: ${e?.message ?? e}`); return }
+    }
+    window.open(`/dashboard/laudos/preview/${templateId}`, '_blank', 'noopener,noreferrer')
+  }
+
   // ── Auto-save a cada 60s (não dispara se nada mudou) ───────────────────────
 
   useEffect(() => {
@@ -479,6 +491,16 @@ export default function CanvasEditor({
             )}
 
             <StatusPill {...status} />
+
+            <button
+              onClick={handlePreview}
+              disabled={isSaving}
+              title="Abrir pré-visualização em nova aba (com dados de exemplo)"
+              className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:border-violet-400 hover:bg-violet-50 hover:text-violet-700 disabled:opacity-50"
+            >
+              <Eye className="w-3.5 h-3.5" />
+              Pré-visualizar
+            </button>
 
             <button
               onClick={handleSave}

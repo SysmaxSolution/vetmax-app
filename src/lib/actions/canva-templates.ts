@@ -34,6 +34,24 @@ async function requireClinic() {
   return { supabase, user, profile }
 }
 
+/** Guard: apenas usuários is_sysmax = true podem executar a ação.
+ *  Usado para operações cross-clinic (replicação de templates). */
+async function requireSysmaxSupport() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('not authenticated')
+
+  const { data: profile, error } = await supabase
+    .from('profiles')
+    .select('id, clinic_id, role, is_sysmax')
+    .eq('id', user.id)
+    .single()
+
+  if (error || !profile) throw new Error('profile not found')
+  if (!profile.is_sysmax) throw new Error('apenas Sysmax Suporte pode executar esta ação')
+  return { supabase, user, profile }
+}
+
 // ── Upload do papel timbrado de fundo ────────────────────────────────────────
 
 /**
@@ -128,6 +146,141 @@ export async function updateTemplateCanvaConfig(
   if (error) throw new Error(error.message)
   revalidatePath('/dashboard/management')
   return { ok: true }
+}
+
+// ── Sysmax Suporte: replicação cross-clinic de templates ────────────────────
+
+export interface ClinicSummary {
+  id: string
+  name: string
+  business_type: string
+  status: string
+}
+
+export async function listClinicsForSupport(): Promise<ClinicSummary[]> {
+  await requireSysmaxSupport()
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('clinics')
+    .select('id, name, business_type, status')
+    .order('name')
+  if (error) throw new Error(error.message)
+  return (data ?? []) as ClinicSummary[]
+}
+
+export interface DuplicateTemplateInput {
+  template_id: string
+  target_clinic_ids: string[]
+  new_name?: string
+}
+
+export async function duplicateTemplateToClinics(
+  input: DuplicateTemplateInput,
+): Promise<{ created_ids: string[]; skipped: Array<{ clinic_id: string; reason: string }> }> {
+  const { profile } = await requireSysmaxSupport()
+  if (input.target_clinic_ids.length === 0) throw new Error('escolha ao menos uma clínica de destino')
+
+  const admin = createAdminClient()
+
+  // 1. Lê template original — admin bypassa RLS (sysmax suporta cross-clinic)
+  const { data: original, error: readErr } = await admin
+    .from('document_templates')
+    .select(`
+      name, type, file_url, extracted_fields, template_html, page_images,
+      original_pdf_path, original_pdf_size_bytes, page_count, page_dimensions,
+      layout_overlays, page_images_storage_paths, cleaned_page_paths,
+      engine, background_image_url, margin_top, margin_bottom, margin_left, margin_right,
+      block_style, canvas_state
+    `)
+    .eq('id', input.template_id)
+    .single()
+  if (readErr || !original) throw new Error(readErr?.message ?? 'template original não encontrado')
+
+  const finalName = (input.new_name?.trim() || original.name)
+
+  // 2. Insere uma cópia por clínica (idempotência via nome — pula clínicas que
+  //    já tenham um template com o mesmo nome e tipo)
+  const created_ids: string[] = []
+  const skipped: Array<{ clinic_id: string; reason: string }> = []
+
+  for (const clinicId of input.target_clinic_ids) {
+    const { data: existing } = await admin
+      .from('document_templates')
+      .select('id')
+      .eq('clinic_id', clinicId)
+      .eq('name', finalName)
+      .eq('type', original.type)
+      .maybeSingle()
+
+    if (existing) {
+      skipped.push({ clinic_id: clinicId, reason: `Já existe template "${finalName}" do tipo ${original.type}` })
+      continue
+    }
+
+    const { data: inserted, error: insErr } = await admin
+      .from('document_templates')
+      .insert({
+        clinic_id: clinicId,
+        name: finalName,
+        type: original.type,
+        file_url: original.file_url,
+        extracted_fields: original.extracted_fields ?? [],
+        template_html: original.template_html,
+        page_images: original.page_images,
+        original_pdf_path: null,   // cada clínica precisa subir o próprio PDF
+        original_pdf_size_bytes: original.original_pdf_size_bytes,
+        page_count: original.page_count,
+        page_dimensions: original.page_dimensions,
+        layout_overlays: original.layout_overlays,
+        page_images_storage_paths: null,
+        cleaned_page_paths: null,
+        engine: original.engine,
+        // canvas_state preserva a estrutura mas a URL do papel timbrado vira
+        // null — cada clínica precisa enviar o seu próprio asset
+        background_image_url: null,
+        margin_top: original.margin_top,
+        margin_bottom: original.margin_bottom,
+        margin_left: original.margin_left,
+        margin_right: original.margin_right,
+        block_style: original.block_style,
+        canvas_state: stripClinicAssets(original.canvas_state),
+      })
+      .select('id')
+      .single()
+
+    if (insErr || !inserted) {
+      skipped.push({ clinic_id: clinicId, reason: insErr?.message ?? 'falha ao inserir' })
+      continue
+    }
+    created_ids.push(inserted.id)
+  }
+
+  revalidatePath('/dashboard/management')
+
+  // Log de auditoria simples — facilita rastrear replicações feitas pelo suporte
+  console.log(`[sysmax-support] ${profile.id} duplicou template ${input.template_id} para ${created_ids.length} clínica(s) (skipped: ${skipped.length})`)
+
+  return { created_ids, skipped }
+}
+
+/** Remove URLs de assets específicos de clínica do canvas_state copiado.
+ *  Cada clínica deve subir seu próprio papel timbrado / imagens.
+ *  Estrutura preservada — só as URLs viram null. */
+function stripClinicAssets(canvasState: unknown): unknown {
+  if (!canvasState || typeof canvasState !== 'object') return canvasState
+  const cs = canvasState as Record<string, unknown>
+  const page = (cs.page as Record<string, unknown> | undefined) ?? null
+  const elements = (cs.elements as Array<Record<string, unknown>> | undefined) ?? []
+
+  return {
+    ...cs,
+    page: page ? { ...page, backgroundImageUrl: null } : page,
+    elements: elements.map(el => {
+      // Image element (URL própria) → limpa
+      if (el.kind === 'image') return { ...el, url: '', storagePath: undefined }
+      return el
+    }),
+  }
 }
 
 // ── Criação de modelo em branco (entrada do Canvas Editor) ──────────────────

@@ -17,6 +17,7 @@ import { apiFetch } from '@/lib/api-fetch'
 import ImportTemplateModal from './ImportTemplateModal'
 import CanvasEditor from '@/components/canva/editor/CanvasEditor'
 import NewCanvasTemplateDialog from '@/components/canva/editor/NewCanvasTemplateDialog'
+import DuplicateTemplateModal from './DuplicateTemplateModal'
 import { hydrateCanvasState, type CanvasState } from '@/lib/canva/canvas-state'
 import { Toast } from '@/components/ui/toast'
 import ConveniosTab from './ConveniosTab'
@@ -150,6 +151,7 @@ export default function ManagementWorkspace({
   const [showModal, setShowModal] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState<DocumentTemplate | null>(null)
   const [canvaEditing,    setCanvaEditing]    = useState<DocumentTemplate | null>(null)
+  const [duplicatingTemplate, setDuplicatingTemplate] = useState<DocumentTemplate | null>(null)
   const [showNewBlankDialog, setShowNewBlankDialog] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
@@ -502,6 +504,13 @@ export default function ManagementWorkspace({
                           <Pencil className="w-3.5 h-3.5" />
                           Editar
                         </button>
+                        {isSysmax && (
+                          <button onClick={() => setDuplicatingTemplate(template)}
+                            className="p-2 text-slate-400 hover:text-violet-700 hover:bg-violet-50 rounded-lg transition-colors"
+                            title="Duplicar layout para outras clínicas (Sysmax Suporte)">
+                            <Copy className="w-4 h-4" />
+                          </button>
+                        )}
                         <button onClick={() => handleDeleteTemplate(template.id)}
                           disabled={deletingId === template.id}
                           className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
@@ -1057,6 +1066,21 @@ export default function ManagementWorkspace({
           onClose={() => setCanvaEditing(null)}
           onSaved={() => {
             setToast({ type: 'success', message: 'Modelo salvo.' })
+          }}
+        />
+      )}
+
+      {/* Modal de duplicação — apenas para Sysmax Suporte */}
+      {duplicatingTemplate && isSysmax && (
+        <DuplicateTemplateModal
+          template={duplicatingTemplate}
+          currentClinicId={clinicData?.id ?? ''}
+          onClose={() => setDuplicatingTemplate(null)}
+          onDuplicated={({ created, skipped }) => {
+            setToast({
+              type: 'success',
+              message: `Layout duplicado para ${created} clínica${created === 1 ? '' : 's'}${skipped ? ` (${skipped} pulada${skipped === 1 ? '' : 's'})` : ''}.`,
+            })
           }}
         />
       )}

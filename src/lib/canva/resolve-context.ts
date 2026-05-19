@@ -111,6 +111,100 @@ function calculateAge(birthDate: string | null | undefined): string {
   return `${Math.max(0, months)} mes${months !== 1 ? 'es' : ''}`
 }
 
+/**
+ * buildPreviewContext — para pré-visualização do template no editor.
+ * Usa clínica + vet REAIS do usuário logado (logo, CNPJ, CRMV próprios),
+ * mas pet/tutor/consulta são mock fixo (Toby / Maria Silva / data de hoje).
+ * Assim o admin vê o layout com os próprios assets sem precisar de uma
+ * consulta de verdade aberta.
+ */
+export async function buildPreviewContext(
+  supabase: SupabaseClient,
+  clinicId: string,
+  userId: string,
+): Promise<ResolveContext> {
+  const [clinic, vet] = await Promise.all([
+    supabase.from('clinics')
+      .select('id, name, cnpj, cnpj_data, phone, address, business_type, business_hours, logo_url')
+      .eq('id', clinicId).single()
+      .then(r => r.data),
+    supabase.from('profiles')
+      .select('id, full_name, nickname, role, crmv, specialty, specialties, phone, photo_url, electronic_signature_url, mapa_code, username')
+      .eq('id', userId).single()
+      .then(r => r.data),
+  ])
+
+  const now = new Date()
+
+  const mockPet = {
+    name: 'Toby',
+    species: 'Canino',
+    breed: 'Golden Retriever',
+    sex: 'Macho',
+    age: '4 anos',
+    weight: 28.4,
+    color: 'Dourado',
+    microchip: '900215001234567',
+  }
+
+  const mockTutor = {
+    name: 'Maria Silva',
+    cpf: '12345678900',
+    email: 'maria@exemplo.com',
+    phone: '11988887777',
+    address: 'Rua das Flores, 123',
+  }
+
+  const mockConsultation = {
+    date: now.toISOString(),
+    datetime: now.toISOString(),
+    diagnosis: 'Suspeita de cardiopatia hipertrófica',
+    complaint: 'Tosse seca persistente há 3 dias',
+    weight: 28.4,
+    temperature: 38.5,
+    visit_reason_label: 'Consulta',
+    // Listas para o Repeater
+    prescriptions: [
+      { medication: 'Dipirona 25mg/mL', dose: '1 mL', frequency: 'a cada 8h', duration_days: 5, route_of_administration: 'oral', prescription_type: 'common', is_controlled: false },
+      { medication: 'Tramadol 50mg',    dose: '50 mg', frequency: 'a cada 12h', duration_days: 5, route_of_administration: 'oral', prescription_type: 'controlled', is_controlled: true },
+      { medication: 'Pomada Furacin',   dose: 'fina camada', frequency: '3× ao dia', duration_days: 7, route_of_administration: 'topical', prescription_type: 'common', is_controlled: false },
+    ],
+    exam_items: [
+      { name: 'Hemograma completo', urgency: 'rotina' },
+      { name: 'Ecocardiograma',     urgency: 'urgente' },
+    ],
+    vaccines: [
+      { name: 'V10 (polivalente)', date: '15/04/2026', next: '15/04/2027' },
+    ],
+  }
+
+  return {
+    patient: mockPet,
+    tutor: mockTutor,
+    consultation: mockConsultation,
+    clinic: clinic ? (() => {
+      const { city, state: uf } = extractCityState(
+        clinic.address ?? undefined,
+        clinic.cnpj_data as Record<string, unknown> | null | undefined,
+      )
+      return {
+        ...clinic,
+        city,
+        state: uf,
+        city_state: city && uf ? `${city}/${uf}` : (city || uf),
+        business_type_label: BUSINESS_TYPE_LABELS[clinic.business_type] ?? clinic.business_type,
+        business_hours_label: formatBusinessHoursLabel(clinic.business_hours),
+        razao_social: (clinic.cnpj_data as { razao_social?: string } | null)?.razao_social ?? clinic.name,
+      }
+    })() : {},
+    vet: vet ? {
+      ...vet,
+      role_label: ROLE_LABELS[vet.role] ?? vet.role,
+      specialty: vet.specialty ?? (Array.isArray(vet.specialties) ? vet.specialties.join(', ') : ''),
+    } : {},
+  }
+}
+
 export async function buildResolveContext(
   supabase: SupabaseClient,
   clinicId: string,
