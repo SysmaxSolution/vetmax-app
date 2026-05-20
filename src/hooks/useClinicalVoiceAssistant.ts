@@ -39,7 +39,10 @@ export function useClinicalVoiceAssistant({ onAutoSave, startTriggers, stopTrigg
   const processedFinalIndicesRef = useRef<Set<number>>(new Set())
   // Dedup por conteúdo: persiste entre restarts da engine (Chrome mobile reinicia ~60s)
   // para evitar que o mesmo texto seja acumulado duas vezes após um onend/restart.
-  const processedFinalTextsRef   = useRef<Set<string>>(new Set())
+  // Guarda os últimos N chunks tokenizados para comparação Jaccard — cobre re-emissões
+  // do engine que vêm com pequenas correções ("expressar"→"esperar", capitalização,
+  // sufixo extra). Igualdade exata sozinha não pega esses casos.
+  const lastFinalTokensRef       = useRef<string[][]>([])
   // Quando a wake word é detectada num chunk interim, o mesmo índice virará final
   // depois. Guardamos a posição do final do match para extrair só o sufixo do chunk
   // final (a frase que veio JUNTO com "assistente, ...").
@@ -68,6 +71,36 @@ export function useClinicalVoiceAssistant({ onAutoSave, startTriggers, stopTrigg
 
   function clearSilenceTimer() {
     if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null }
+  }
+
+  function tokenize(s: string): string[] {
+    return s.toLowerCase().match(/\p{L}+|\d+/gu) ?? []
+  }
+
+  // Jaccard de conjuntos de tokens — robusto a substituições isoladas, capitalização
+  // e sufixos extras. Threshold 0.7 captura re-emissões com 1-2 palavras trocadas
+  // sem disparar em frases curtas legitimamente parecidas (essas têm conjunto pequeno).
+  function jaccardSimilarity(a: string[], b: string[]): number {
+    if (!a.length || !b.length) return 0
+    const sa = new Set(a)
+    const sb = new Set(b)
+    let inter = 0
+    for (const t of sa) if (sb.has(t)) inter++
+    return inter / (sa.size + sb.size - inter)
+  }
+
+  function isFuzzyDuplicate(tokens: string[]): boolean {
+    if (tokens.length < 5) return false  // chunks curtos não deduplicam por Jaccard
+    for (const prev of lastFinalTokensRef.current) {
+      if (prev.length < 5) continue
+      if (jaccardSimilarity(tokens, prev) >= 0.7) return true
+    }
+    return false
+  }
+
+  function recordFinalChunk(tokens: string[]) {
+    lastFinalTokensRef.current.push(tokens)
+    if (lastFinalTokensRef.current.length > 8) lastFinalTokensRef.current.shift()
   }
 
   // Remove do início de `incoming` qualquer texto já presente no final de `base`,
@@ -111,7 +144,7 @@ export function useClinicalVoiceAssistant({ onAutoSave, startTriggers, stopTrigg
     const clean = rawText.replace(saveCmdReRef.current, '').replace(/\s{2,}/g, ' ').trim()
     finalTranscriptRef.current = ''
     processedFinalIndicesRef.current.clear()
-    processedFinalTextsRef.current.clear()
+    lastFinalTokensRef.current = []
     wakeChunkIndexRef.current  = -1
     wakeChunkOffsetRef.current = 0
     setState('IDLE')
@@ -169,7 +202,7 @@ export function useClinicalVoiceAssistant({ onAutoSave, startTriggers, stopTrigg
             recordingStartRef.current  = i
             finalTranscriptRef.current = ''
             processedFinalIndicesRef.current.clear()
-            processedFinalTextsRef.current.clear()
+            lastFinalTokensRef.current = []
             setState('RECORDING')
             setTranscript('')
             playBeep()
@@ -193,25 +226,24 @@ export function useClinicalVoiceAssistant({ onAutoSave, startTriggers, stopTrigg
             // Se for o chunk onde a wake word foi detectada, descarta o prefixo até o wake.
             if (i === wakeChunkIndexRef.current && wakeChunkOffsetRef.current > 0) {
               rawText = rawText.slice(wakeChunkOffsetRef.current).trimStart()
-              // Após processado uma vez como final, libera o flag (a engine pode reemitir
-              // o mesmo índice em restart, mas o dedup por texto/índice resolve).
               wakeChunkIndexRef.current  = -1
               wakeChunkOffsetRef.current = 0
             }
-            const textKey = rawText.trim().toLowerCase()
-            if (
-              rawText.trim() &&
-              !processedFinalIndicesRef.current.has(i) &&
-              !processedFinalTextsRef.current.has(textKey)
-            ) {
+            if (!rawText.trim() || processedFinalIndicesRef.current.has(i)) continue
+            const tokens = tokenize(rawText)
+            // Dedup fuzzy: chunks ≥5 tokens que repetem ≥70% do conjunto de tokens
+            // de algum chunk anterior são re-emissões do engine — descartar.
+            if (isFuzzyDuplicate(tokens)) {
               processedFinalIndicesRef.current.add(i)
-              processedFinalTextsRef.current.add(textKey)
-              const delta = removeLeadingOverlap(finalBuffer, rawText)
-              if (delta) {
-                newDeltaParts.push(delta)
-                finalBuffer  = (finalBuffer + ' ' + delta).trim()
-                hadNewFinals = true
-              }
+              continue
+            }
+            processedFinalIndicesRef.current.add(i)
+            recordFinalChunk(tokens)
+            const delta = removeLeadingOverlap(finalBuffer, rawText)
+            if (delta) {
+              newDeltaParts.push(delta)
+              finalBuffer  = (finalBuffer + ' ' + delta).trim()
+              hadNewFinals = true
             }
           } else {
             let raw = event.results[i][0].transcript
@@ -265,6 +297,7 @@ export function useClinicalVoiceAssistant({ onAutoSave, startTriggers, stopTrigg
     setState('IDLE')
     setTranscript('')
     finalTranscriptRef.current = ''
+    lastFinalTokensRef.current = []
     wakeChunkIndexRef.current  = -1
     wakeChunkOffsetRef.current = 0
   }, []) // eslint-disable-line react-hooks/exhaustive-deps

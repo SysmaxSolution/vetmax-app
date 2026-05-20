@@ -45,7 +45,8 @@ export function useGroomingVoiceAssistant({ onAutoSave, onSendWA, startTriggers,
   const onAutoSaveRef            = useRef(onAutoSave)
   const onSendWARef              = useRef(onSendWA)
   const processedFinalIndicesRef = useRef<Set<number>>(new Set())
-  const processedFinalTextsRef   = useRef<Set<string>>(new Set())
+  // Últimos N chunks tokenizados para dedup Jaccard contra re-emissão pós-restart do engine.
+  const lastFinalTokensRef       = useRef<string[][]>([])
   const wakeChunkIndexRef        = useRef<number>(-1)
   const wakeChunkOffsetRef       = useRef<number>(0)
 
@@ -93,6 +94,33 @@ export function useGroomingVoiceAssistant({ onAutoSave, onSendWA, startTriggers,
     if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null }
   }
 
+  function tokenize(s: string): string[] {
+    return s.toLowerCase().match(/\p{L}+|\d+/gu) ?? []
+  }
+
+  function jaccardSimilarity(a: string[], b: string[]): number {
+    if (!a.length || !b.length) return 0
+    const sa = new Set(a)
+    const sb = new Set(b)
+    let inter = 0
+    for (const t of sa) if (sb.has(t)) inter++
+    return inter / (sa.size + sb.size - inter)
+  }
+
+  function isFuzzyDuplicate(tokens: string[]): boolean {
+    if (tokens.length < 5) return false
+    for (const prev of lastFinalTokensRef.current) {
+      if (prev.length < 5) continue
+      if (jaccardSimilarity(tokens, prev) >= 0.7) return true
+    }
+    return false
+  }
+
+  function recordFinalChunk(tokens: string[]) {
+    lastFinalTokensRef.current.push(tokens)
+    if (lastFinalTokensRef.current.length > 8) lastFinalTokensRef.current.shift()
+  }
+
   // ─── Overlap dedup ───────────────────────────────────────────────────────────
 
   function removeLeadingOverlap(base: string, incoming: string): string {
@@ -133,7 +161,7 @@ export function useGroomingVoiceAssistant({ onAutoSave, onSendWA, startTriggers,
     const clean = rawText.replace(saveCmdReRef.current, '').replace(/\s{2,}/g, ' ').trim()
     finalTranscriptRef.current = ''
     processedFinalIndicesRef.current.clear()
-    processedFinalTextsRef.current.clear()
+    lastFinalTokensRef.current = []
     wakeChunkIndexRef.current  = -1
     wakeChunkOffsetRef.current = 0
     setState('CONFIRM_WA')
@@ -191,7 +219,7 @@ export function useGroomingVoiceAssistant({ onAutoSave, onSendWA, startTriggers,
             recordingStartRef.current  = i
             finalTranscriptRef.current = ''
             processedFinalIndicesRef.current.clear()
-            processedFinalTextsRef.current.clear()
+            lastFinalTokensRef.current = []
             setState('RECORDING')
             setTranscript('')
             playBeep()
@@ -217,20 +245,19 @@ export function useGroomingVoiceAssistant({ onAutoSave, onSendWA, startTriggers,
               wakeChunkIndexRef.current  = -1
               wakeChunkOffsetRef.current = 0
             }
-            const textKey = rawText.trim().toLowerCase()
-            if (
-              rawText.trim() &&
-              !processedFinalIndicesRef.current.has(i) &&
-              !processedFinalTextsRef.current.has(textKey)
-            ) {
+            if (!rawText.trim() || processedFinalIndicesRef.current.has(i)) continue
+            const tokens = tokenize(rawText)
+            if (isFuzzyDuplicate(tokens)) {
               processedFinalIndicesRef.current.add(i)
-              processedFinalTextsRef.current.add(textKey)
-              const delta = removeLeadingOverlap(finalBuffer, rawText)
-              if (delta) {
-                newDeltaParts.push(delta)
-                finalBuffer  = (finalBuffer + ' ' + delta).trim()
-                hadNewFinals = true
-              }
+              continue
+            }
+            processedFinalIndicesRef.current.add(i)
+            recordFinalChunk(tokens)
+            const delta = removeLeadingOverlap(finalBuffer, rawText)
+            if (delta) {
+              newDeltaParts.push(delta)
+              finalBuffer  = (finalBuffer + ' ' + delta).trim()
+              hadNewFinals = true
             }
           } else {
             let raw = event.results[i][0].transcript
@@ -304,6 +331,7 @@ export function useGroomingVoiceAssistant({ onAutoSave, onSendWA, startTriggers,
     setState('IDLE')
     setTranscript('')
     finalTranscriptRef.current = ''
+    lastFinalTokensRef.current = []
     wakeChunkIndexRef.current  = -1
     wakeChunkOffsetRef.current = 0
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
