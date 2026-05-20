@@ -40,6 +40,11 @@ export function useClinicalVoiceAssistant({ onAutoSave, startTriggers, stopTrigg
   // Dedup por conteúdo: persiste entre restarts da engine (Chrome mobile reinicia ~60s)
   // para evitar que o mesmo texto seja acumulado duas vezes após um onend/restart.
   const processedFinalTextsRef   = useRef<Set<string>>(new Set())
+  // Quando a wake word é detectada num chunk interim, o mesmo índice virará final
+  // depois. Guardamos a posição do final do match para extrair só o sufixo do chunk
+  // final (a frase que veio JUNTO com "assistente, ...").
+  const wakeChunkIndexRef        = useRef<number>(-1)
+  const wakeChunkOffsetRef       = useRef<number>(0)
 
   useEffect(() => { stateRef.current      = state      }, [state])
   useEffect(() => { onAutoSaveRef.current = onAutoSave }, [onAutoSave])
@@ -107,6 +112,8 @@ export function useClinicalVoiceAssistant({ onAutoSave, startTriggers, stopTrigg
     finalTranscriptRef.current = ''
     processedFinalIndicesRef.current.clear()
     processedFinalTextsRef.current.clear()
+    wakeChunkIndexRef.current  = -1
+    wakeChunkOffsetRef.current = 0
     setState('IDLE')
     setTranscript('')
     playBeep(660)
@@ -146,13 +153,23 @@ export function useClinicalVoiceAssistant({ onAutoSave, startTriggers, stopTrigg
       lastResultLenRef.current = event.results.length
       const curState = stateRef.current
 
-      // IDLE: detecta wake word
+      // IDLE: detecta wake word — só em FINAL (evita disparo em palavras parciais
+      // tipo "assist..." e em frases onde "assistente" aparece como substantivo).
       if (curState === 'IDLE') {
         for (let i = event.resultIndex; i < event.results.length; i++) {
+          if (!event.results[i].isFinal) continue
           const chunk = event.results[i][0].transcript
-          if (wakeWordReRef.current.test(chunk) || fuzzyMatchCustom(chunk, startTriggers ?? [])) {
-            recordingStartRef.current  = i + 1
+          const m     = wakeWordReRef.current.exec(chunk)
+          const fuzzy = !m && fuzzyMatchCustom(chunk, startTriggers ?? [])
+          if (m || fuzzy) {
+            // Preserva o sufixo do mesmo chunk (texto pós wake-word) para não
+            // perder "vamos começar a anotação" em "assistente, vamos começar a anotação".
+            wakeChunkIndexRef.current  = i
+            wakeChunkOffsetRef.current = m ? m.index + m[0].length : chunk.length
+            recordingStartRef.current  = i
             finalTranscriptRef.current = ''
+            processedFinalIndicesRef.current.clear()
+            processedFinalTextsRef.current.clear()
             setState('RECORDING')
             setTranscript('')
             playBeep()
@@ -162,31 +179,46 @@ export function useClinicalVoiceAssistant({ onAutoSave, startTriggers, stopTrigg
         return
       }
 
-      // RECORDING: acumula transcrição, detecta stop command
+      // RECORDING: acumula transcrição, detecta stop command (APENAS no delta novo).
       if (curState === 'RECORDING') {
-        let interim      = ''
-        // finalBuffer cresce à medida que cada final é processado; cada novo final
-        // é deduplicado contra o buffer JÁ ACUMULADO — cobre finais cumulativos do
-        // Chrome mobile ("a gente" → "a gente tá" → "a gente tá esperando" → ...).
-        let finalBuffer  = finalTranscriptRef.current
-        let hadNewFinals = false
+        let interim         = ''
+        let finalBuffer     = finalTranscriptRef.current
+        let hadNewFinals    = false
+        const newDeltaParts: string[] = []
 
         for (let i = event.resultIndex; i < event.results.length; i++) {
           if (i < recordingStartRef.current) continue
           if (event.results[i].isFinal) {
-            const rawText = event.results[i][0].transcript
+            let rawText = event.results[i][0].transcript
+            // Se for o chunk onde a wake word foi detectada, descarta o prefixo até o wake.
+            if (i === wakeChunkIndexRef.current && wakeChunkOffsetRef.current > 0) {
+              rawText = rawText.slice(wakeChunkOffsetRef.current).trimStart()
+              // Após processado uma vez como final, libera o flag (a engine pode reemitir
+              // o mesmo índice em restart, mas o dedup por texto/índice resolve).
+              wakeChunkIndexRef.current  = -1
+              wakeChunkOffsetRef.current = 0
+            }
             const textKey = rawText.trim().toLowerCase()
-            if (!processedFinalIndicesRef.current.has(i) && !processedFinalTextsRef.current.has(textKey)) {
+            if (
+              rawText.trim() &&
+              !processedFinalIndicesRef.current.has(i) &&
+              !processedFinalTextsRef.current.has(textKey)
+            ) {
               processedFinalIndicesRef.current.add(i)
               processedFinalTextsRef.current.add(textKey)
               const delta = removeLeadingOverlap(finalBuffer, rawText)
               if (delta) {
+                newDeltaParts.push(delta)
                 finalBuffer  = (finalBuffer + ' ' + delta).trim()
                 hadNewFinals = true
               }
             }
           } else {
-            interim = event.results[i][0].transcript
+            let raw = event.results[i][0].transcript
+            if (i === wakeChunkIndexRef.current && wakeChunkOffsetRef.current > 0) {
+              raw = raw.slice(wakeChunkOffsetRef.current).trimStart()
+            }
+            interim = raw
           }
         }
 
@@ -195,7 +227,13 @@ export function useClinicalVoiceAssistant({ onAutoSave, startTriggers, stopTrigg
         const displayInterim = removeLeadingOverlap(finalBuffer, interim)
         const fullText = (finalBuffer + (displayInterim ? ' ' + displayInterim : '')).trim()
 
-        if (saveCmdReRef.current.test(fullText) || fuzzyMatchCustom(fullText, stopTriggers ?? [])) {
+        // Stop-word: testa SÓ no que entrou agora (delta + interim).
+        // Evita disparo retroativo por palavra que entrou no buffer minutos atrás.
+        const newText = (newDeltaParts.join(' ') + ' ' + displayInterim).trim()
+        if (newText && (
+          saveCmdReRef.current.test(newText) ||
+          fuzzyMatchCustom(newText, stopTriggers ?? [])
+        )) {
           triggerSave(fullText)
           return
         }
@@ -227,6 +265,8 @@ export function useClinicalVoiceAssistant({ onAutoSave, startTriggers, stopTrigg
     setState('IDLE')
     setTranscript('')
     finalTranscriptRef.current = ''
+    wakeChunkIndexRef.current  = -1
+    wakeChunkOffsetRef.current = 0
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
