@@ -100,13 +100,21 @@ export default function ExamDetail({
 
   const handleVoiceAutoSave = useCallback((transcript: string) => {
     if (!transcript.trim()) return
-    setExamSuggestions(prev => [...prev, { tipo: 'laudo', motivo: transcript, title: 'Laudo por Voz', summary: transcript }])
-    setToast({
-      type: 'success',
-      message: aiMode === 'ai_assisted'
-        ? 'Transcrição capturada. Clique em "Gerar" para preencher o laudo com IA.'
-        : 'Transcrição capturada. O texto foi registrado exatamente como ditado.',
-    })
+    // Anexa ao "Recado para o MV" para que o texto ditado nunca se perca.
+    setExamNotes(prev => prev ? `${prev}\n${transcript}` : transcript)
+    if (aiMode === 'ai_assisted') {
+      // Em modo IA, também guarda como sugestão para servir de contexto ao "Gerar Novo Documento".
+      setExamSuggestions(prev => [...prev, { tipo: 'laudo', motivo: transcript, title: 'Laudo por Voz', summary: transcript }])
+      setToast({
+        type: 'success',
+        message: 'Transcrição registrada. Use "Gerar Novo Documento" para criar o laudo com IA.',
+      })
+    } else {
+      setToast({
+        type: 'success',
+        message: 'Transcrição registrada exatamente como ditado.',
+      })
+    }
   }, [aiMode])
 
   const voiceAssistant = useClinicalVoiceAssistant({

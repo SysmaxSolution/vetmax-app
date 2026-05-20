@@ -121,14 +121,37 @@ export default function TriageForm({
 
   // ─── Handsfree Voice Assistant ────────────────────────────────────────────
 
-  const savedTranscriptRef = useRef(savedTranscript)
-  useEffect(() => { savedTranscriptRef.current = savedTranscript }, [savedTranscript])
+  const savedTranscriptRef   = useRef(savedTranscript)
+  const selectedTemplateRef  = useRef(selectedTemplate)
+  useEffect(() => { savedTranscriptRef.current   = savedTranscript   }, [savedTranscript])
+  useEffect(() => { selectedTemplateRef.current  = selectedTemplate  }, [selectedTemplate])
 
   const handleVoiceAutoSave = useCallback(async (newChunk: string) => {
     const fullTranscript = [savedTranscriptRef.current, newChunk].filter(Boolean).join(' ')
     setSavedTranscript(fullTranscript)
     if (!newChunk.trim()) return
-    if (aiMode === 'ai_assisted') await extractAndFillVitalSigns(newChunk)
+
+    if (aiMode === 'transcribe_only') {
+      // Modo transcrição pura: anexa ao chief_complaint para não perder o texto ditado.
+      setVitalSigns(prev => ({
+        ...prev,
+        chief_complaint: prev.chief_complaint
+          ? `${prev.chief_complaint}\n${newChunk}`
+          : newChunk,
+      }))
+      setAiFilledFields(prev => new Set([...prev, 'chief_complaint']))
+      setToastMessage({ type: 'success', message: 'Transcrição registrada na queixa principal.' })
+      return
+    }
+
+    // Modo IA: extrai sinais vitais + vacinas E preenche campos do template em paralelo.
+    const tpl = selectedTemplateRef.current
+    await Promise.all([
+      extractAndFillVitalSigns(newChunk),
+      tpl && tpl.extracted_fields.length > 0
+        ? mapVoiceToTemplateFields(newChunk, tpl.extracted_fields)
+        : Promise.resolve(),
+    ])
   }, [aiMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const assistant = useClinicalVoiceAssistant({
