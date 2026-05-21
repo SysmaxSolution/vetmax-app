@@ -9,6 +9,7 @@ import {
   Settings, Plus, Save,
 } from 'lucide-react'
 import { useClinicalVoiceAssistant } from '@/hooks/useClinicalVoiceAssistant'
+import { useNativeKeepAwake } from '@/hooks/useNativeKeepAwake'
 import { getClinicVoiceTriggers, updateClinicVoiceTriggers } from '@/lib/actions/clinic-settings'
 import { useAiTranscriptionMode } from '@/components/providers/ClinicConfigProvider'
 import { returnToVet, dischargeFromExams } from '@/lib/actions/exams'
@@ -124,6 +125,7 @@ export default function ExamDetail({
   })
   const isRecording = voiceAssistant.state === 'RECORDING'
   const liveTranscript = voiceAssistant.transcript
+  useNativeKeepAwake(isRecording)
 
   useEffect(() => {
     getClinicVoiceTriggers().then(res => {

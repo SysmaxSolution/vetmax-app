@@ -64,6 +64,7 @@ const STATUS_NEXT_BTN: Record<GroomingStatus, string> = {
   delivered:      '',
 }
 import { useGroomingVoiceAssistant } from '@/hooks/useGroomingVoiceAssistant'
+import { useNativeKeepAwake } from '@/hooks/useNativeKeepAwake'
 import WhatsAppNotificationModal from '@/components/whatsapp/WhatsAppNotificationModal'
 
 // ─── Serviços e comportamentos ────────────────────────────────────────────────
@@ -323,6 +324,7 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
     startTriggers,
     stopTriggers,
   })
+  useNativeKeepAwake(assistant.state === 'RECORDING')
 
   // Auto-ativa o assistente quando o modal abre; desativa ao fechar
   useEffect(() => {

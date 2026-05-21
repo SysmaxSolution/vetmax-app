@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SysVetMax — Strings de privacidade iOS.
+  Cole estes pares <key>...</key><string>...</string> em
+  `ios/App/App/Info.plist` (dentro do <dict> raiz) após rodar `npx cap add ios`.
+
+  Sem essas strings, o iOS rejeita o app na review do App Store e o sistema
+  trava o microfone em runtime.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+
+  <!-- ─── Microfone (obrigatório para gravação de consulta) ─────────────── -->
+  <key>NSMicrophoneUsageDescription</key>
+  <string>O SysVetMax precisa acessar o microfone para transcrever consultas, evoluções e laudos por voz, agilizando o atendimento do médico-veterinário.</string>
+
+  <!-- ─── Reconhecimento de voz (SFSpeechRecognizer no iOS) ─────────────── -->
+  <key>NSSpeechRecognitionUsageDescription</key>
+  <string>O SysVetMax usa o reconhecimento de voz do iOS para converter o que é ditado em prontuário, prescrição e laudo.</string>
+
+  <!-- ─── Bluetooth (headset/AirPods para gravação) ─────────────────────── -->
+  <key>NSBluetoothAlwaysUsageDescription</key>
+  <string>O SysVetMax conecta-se a fones Bluetooth para captar áudio limpo durante a gravação de consultas.</string>
+
+  <!-- ─── App-bound domain (não obrigatório, mas recomendado) ───────────── -->
+  <key>WKAppBoundDomains</key>
+  <array>
+    <string>vetmax-app.vercel.app</string>
+  </array>
+
+  <!-- ─── Background audio (caso queiramos gravação em background) ─────── -->
+  <!-- Habilite SOMENTE se a sprint validar gravação enquanto a tela apaga. -->
+  <!--
+  <key>UIBackgroundModes</key>
+  <array>
+    <string>audio</string>
+  </array>
+  -->
+
+</dict>
+</plist>

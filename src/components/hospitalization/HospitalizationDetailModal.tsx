@@ -26,6 +26,7 @@ import { generatePrescriptionPdf, type PrescriptionData } from '@/lib/actions/re
 import PrescriptionModal from './PrescriptionModal'
 import WhatsAppNotificationModal from '@/components/whatsapp/WhatsAppNotificationModal'
 import { useClinicalVoiceAssistant } from '@/hooks/useClinicalVoiceAssistant'
+import { useNativeKeepAwake } from '@/hooks/useNativeKeepAwake'
 import { getClinicVoiceTriggers, updateClinicVoiceTriggers } from '@/lib/actions/clinic-settings'
 import { useAiTranscriptionMode } from '@/components/providers/ClinicConfigProvider'
 
@@ -174,6 +175,7 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
     stopTriggers,
   })
   const isRecording = voiceAssistant.state === 'RECORDING'
+  useNativeKeepAwake(isRecording)
 
   useEffect(() => {
     getClinicVoiceTriggers().then(res => {

@@ -1,4 +1,4 @@
-﻿import type { Metadata } from 'next'
+﻿import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -9,6 +9,23 @@ export const metadata: Metadata = {
     description: 'Sistema de Informação Hospitalar Veterinário com IA e transcrição por voz',
     type: 'website',
   },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'SysVetMax',
+  },
+  formatDetection: { telephone: false },
+}
+
+// viewport-fit=cover é o que habilita os env(safe-area-inset-*) no iOS;
+// sem ele, o Dynamic Island e a home indicator cobrem o conteúdo.
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: 'cover',
+  themeColor: '#ffffff',
 }
 
 export default function RootLayout({

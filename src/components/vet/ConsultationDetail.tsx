@@ -24,6 +24,7 @@ import ClinicalActionsSection from '@/components/vet/ClinicalActionsSection'
 import PetTimelineModal from '@/components/pet/PetTimelineModal'
 import NewAppointmentModal from '@/components/reception/NewAppointmentModal'
 import { useClinicalVoiceAssistant } from '@/hooks/useClinicalVoiceAssistant'
+import { useNativeKeepAwake } from '@/hooks/useNativeKeepAwake'
 import AttachmentsSection from '@/components/ui/AttachmentsSection'
 import MergedTriageSection, { type TriageVitals } from '@/components/vet/MergedTriageSection'
 import AdmitPetModal from '@/components/hospitalization/AdmitPetModal'
@@ -453,6 +454,10 @@ export default function ConsultationDetail({
   })
   const isRecording = voiceAssistant.state === 'RECORDING'
   const liveTranscript = voiceAssistant.transcript
+
+  // Mantém a tela acesa durante a gravação para o vet não perder áudio nem o
+  // SpeechRecognition ser pausado pelo lock-screen do iOS/Android.
+  useNativeKeepAwake(isRecording)
 
   useEffect(() => {
     getClinicVoiceTriggers().then(res => {

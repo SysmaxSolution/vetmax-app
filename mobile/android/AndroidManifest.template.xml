@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SysVetMax — Permissões nativas Android.
+  Cole estes blocos em `android/app/src/main/AndroidManifest.xml` após rodar
+  `npx cap add android`. Não substitua o arquivo todo — adicione apenas o que
+  está faltando dentro de <manifest> e <application>.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+  <!-- ─── Microfone e gravação de áudio ─────────────────────────────────── -->
+  <uses-permission android:name="android.permission.RECORD_AUDIO" />
+  <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
+  <!-- ─── Bluetooth (SCO para headset/AirPods) ───────────────────────────── -->
+  <!-- Android 12+ usa BLUETOOTH_CONNECT runtime; abaixo de 12 usa BLUETOOTH. -->
+  <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+  <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+  <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
+  <!-- ─── Rede + WebView ─────────────────────────────────────────────────── -->
+  <uses-permission android:name="android.permission.INTERNET" />
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+  <!-- ─── Manter tela acesa (keep-awake) ─────────────────────────────────── -->
+  <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+  <!-- ─── Reconhecimento de voz (Google Speech Services) ─────────────────── -->
+  <!-- Não exige permissão extra — usa RECORD_AUDIO acima. -->
+  <queries>
+    <intent>
+      <action android:name="android.speech.RecognitionService" />
+    </intent>
+  </queries>
+
+  <!--
+    Em <application>, garantir:
+    - android:usesCleartextTraffic="false" em produção
+    - android:requestLegacyExternalStorage="false"
+    - android:hardwareAccelerated="true"
+  -->
+</manifest>

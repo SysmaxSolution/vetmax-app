@@ -31,6 +31,7 @@ import { Toast } from '@/components/ui/toast'
 import { DatePicker } from '@/components/ui/DatePicker'
 import VaccinationCard from '@/components/vet/VaccinationCard'
 import { useClinicalVoiceAssistant } from '@/hooks/useClinicalVoiceAssistant'
+import { useNativeKeepAwake } from '@/hooks/useNativeKeepAwake'
 import { getClinicVoiceTriggers, updateClinicVoiceTriggers } from '@/lib/actions/clinic-settings'
 import { useAiTranscriptionMode } from '@/components/providers/ClinicConfigProvider'
 import VaccineStatusBadges from '@/components/vet/VaccineStatusBadges'
@@ -182,6 +183,7 @@ export default function TriageForm({
   }
 
   const isRecording = assistant.state === 'RECORDING'
+  useNativeKeepAwake(isRecording)
   const displayTranscript = isRecording
     ? [savedTranscript, assistant.transcript].filter(Boolean).join(' ')
     : savedTranscript

@@ -4,12 +4,67 @@
 /* Variável injetada pelo ThemeProvider para cor de fundo personalizada pelo usuário (Fase 4) */
 :root {
   --vetmax-user-bg: transparent;
+
+  /* Safe-area inset env() exposto como CSS var — permite usar em styled inline
+     e dentro de utility classes Tailwind via arbitrary properties. */
+  --safe-top:    env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left:   env(safe-area-inset-left, 0px);
+  --safe-right:  env(safe-area-inset-right, 0px);
 }
 
 /* Previne scroll horizontal em todos os módulos (MOB-* tests) */
 html, body {
   overflow-x: hidden;
+  /* iOS WebView: desabilita o "rubber band" elástico no eixo Y do <body>.
+     Telas que precisam rolar usam contêineres internos com overflow-y-auto. */
+  overscroll-behavior-y: none;
 }
+
+/* iOS/Capacitor — desativa o tap-highlight cinza nativo (parece amador). */
+html {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+/* ─── Safe-area utilities (Tailwind v4 @utility) ─────────────────────────── */
+/* Uso: <header class="pt-safe"> ... </header>
+        <footer class="pb-safe"> ... </footer>
+        <div class="px-safe"> ... </div>                                       */
+
+@utility pt-safe {
+  padding-top: calc(env(safe-area-inset-top, 0px) + var(--tw-pt, 0px));
+}
+@utility pb-safe {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--tw-pb, 0px));
+}
+@utility pl-safe {
+  padding-left: calc(env(safe-area-inset-left, 0px) + var(--tw-pl, 0px));
+}
+@utility pr-safe {
+  padding-right: calc(env(safe-area-inset-right, 0px) + var(--tw-pr, 0px));
+}
+@utility px-safe {
+  padding-left:  calc(env(safe-area-inset-left,  0px) + var(--tw-pl, 0px));
+  padding-right: calc(env(safe-area-inset-right, 0px) + var(--tw-pr, 0px));
+}
+@utility py-safe {
+  padding-top:    calc(env(safe-area-inset-top,    0px) + var(--tw-pt, 0px));
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--tw-pb, 0px));
+}
+@utility min-h-screen-safe {
+  /* Altura mínima do viewport menos as áreas seguras topo/base — para containers
+     "fullscreen" que precisam respeitar o Dynamic Island e a home indicator. */
+  min-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+}
+@utility h-screen-safe {
+  height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+}
+
+/* ─── Capacitor body class — aplicado pelo Capacitor runtime em apps nativos */
+/* Permite ocultar elementos que só fazem sentido no browser (PWA install
+   banners, top bar do site institucional, etc.) via .native-hidden.          */
+body.capacitor-native .native-hidden { display: none !important; }
 
 /* ─── G16-3: Mentor Highlight Animations ─────────────────────────────────── */
 
