@@ -16,6 +16,7 @@ import {
 } from '@/lib/actions/hospitalizations'
 import { searchPatientsForTriage, type TriagePatientSearchResult } from '@/lib/actions/triage'
 import { BehaviorTagsBadges } from '@/components/ui/BehaviorTagsBadges'
+import { useKanbanEdgeScroll } from '@/hooks/useKanbanEdgeScroll'
 import { PetAvatar } from '@/components/ui/PetAvatar'
 import { generateDischargeSummary, type DischargeSummary } from '@/lib/actions/reports'
 import HospitalizationDetailModal from './HospitalizationDetailModal'
@@ -221,6 +222,11 @@ export default function HospitalizationKanban({ initialBoard, clinicId }: Props)
   // ─── Drag & Drop ───────────────────────────────────────────────────────────
 
   const draggingCardRef = useRef<{ id: string; status: HospitalizationStatus } | null>(null)
+  const boardScrollRef  = useRef<HTMLElement | null>(null) as React.MutableRefObject<HTMLDivElement | null>
+
+  // Auto-scroll horizontal quando o usuário arrasta um card próximo às bordas
+  // (mobile primário — em desktop o layout vira grid e o hook fica no-op).
+  useKanbanEdgeScroll(boardScrollRef, draggingCardRef)
 
   const handleDragStart = (e: React.DragEvent, card: HospitalizationCard) => {
     try {
@@ -399,7 +405,11 @@ export default function HospitalizationKanban({ initialBoard, clinicId }: Props)
         </div>
       )}
 
-      <section data-mentor-step="hospitalization-list" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 min-h-[600px]">
+      <section
+        ref={boardScrollRef}
+        data-mentor-step="hospitalization-list"
+        className="flex md:grid md:grid-cols-2 lg:grid-cols-4 gap-4 min-h-[600px] overflow-x-auto md:overflow-visible snap-x snap-mandatory md:snap-none -mx-3 px-3 md:mx-0 md:px-0 pb-2"
+      >
         {COLUMNS.map(col => {
           const cards      = board[col.status]
           const isDragOver = dragOverCol === col.status
@@ -412,7 +422,7 @@ export default function HospitalizationKanban({ initialBoard, clinicId }: Props)
               onDragOver={(e) => handleDragOver(e, col.status)}
               onDragLeave={() => setDragOverCol(null)}
               onDrop={(e) => handleDrop(e, col.status)}
-              className={`flex flex-col rounded-2xl border-2 transition-all ${col.bg} ${
+              className={`flex flex-col rounded-2xl border-2 transition-all snap-center md:snap-align-none min-w-[85vw] md:min-w-0 flex-shrink-0 md:flex-shrink ${col.bg} ${
                 isDragOver ? `${col.border} ring-2 ring-violet-400 ring-offset-2 scale-[1.01]` : 'border-transparent'
               }`}
             >

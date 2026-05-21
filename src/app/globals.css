@@ -16,9 +16,12 @@
 /* Previne scroll horizontal em todos os módulos (MOB-* tests) */
 html, body {
   overflow-x: hidden;
-  /* iOS WebView: desabilita o "rubber band" elástico no eixo Y do <body>.
-     Telas que precisam rolar usam contêineres internos com overflow-y-auto. */
-  overscroll-behavior-y: none;
+  /* Garante que o conteúdo nunca trave em altura fixa do WebView (Android).
+     `overscroll-behavior-y: none` foi removido — bloqueava scroll natural
+     no WebView do Capacitor em alguns OEMs (Xiaomi, OnePlus). */
+}
+body {
+  min-height: 100dvh;
 }
 
 /* iOS/Capacitor — desativa o tap-highlight cinza nativo (parece amador). */

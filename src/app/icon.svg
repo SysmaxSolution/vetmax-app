@@ -1,9 +1,32 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <!-- toe pads -->
-  <ellipse cx="27" cy="32" rx="10" ry="13" fill="#0d9488" transform="rotate(-18 27 32)"/>
-  <ellipse cx="44" cy="23" rx="10" ry="13" fill="#0d9488" transform="rotate(-6 44 23)"/>
-  <ellipse cx="61" cy="23" rx="10" ry="13" fill="#0d9488" transform="rotate(6 61 23)"/>
-  <ellipse cx="78" cy="32" rx="10" ry="13" fill="#0d9488" transform="rotate(18 78 32)"/>
-  <!-- main pad -->
-  <ellipse cx="52" cy="67" rx="26" ry="22" fill="#0d9488"/>
+  <defs>
+    <linearGradient id="pawGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#14b8a6"/>
+      <stop offset="100%" stop-color="#0d9488"/>
+    </linearGradient>
+    <linearGradient id="pawGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#5eead4"/>
+      <stop offset="100%" stop-color="#2dd4bf"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Patinha 2 (atrás, menor, mais clara) — canto inferior direito -->
+  <g transform="translate(58 56) scale(0.5) translate(-50 -50)" opacity="0.55">
+    <ellipse cx="27" cy="32" rx="10" ry="13" fill="url(#pawGrad2)" transform="rotate(-18 27 32)"/>
+    <ellipse cx="44" cy="23" rx="10" ry="13" fill="url(#pawGrad2)" transform="rotate(-6 44 23)"/>
+    <ellipse cx="61" cy="23" rx="10" ry="13" fill="url(#pawGrad2)" transform="rotate(6 61 23)"/>
+    <ellipse cx="78" cy="32" rx="10" ry="13" fill="url(#pawGrad2)" transform="rotate(18 78 32)"/>
+    <ellipse cx="52" cy="67" rx="26" ry="22" fill="url(#pawGrad2)"/>
+  </g>
+
+  <!-- Patinha 1 (principal, à esquerda/topo, mais saturada) -->
+  <g transform="translate(38 44) scale(0.85) translate(-50 -50)">
+    <ellipse cx="27" cy="32" rx="10" ry="13" fill="url(#pawGrad)" transform="rotate(-18 27 32)"/>
+    <ellipse cx="44" cy="23" rx="10" ry="13" fill="url(#pawGrad)" transform="rotate(-6 44 23)"/>
+    <ellipse cx="61" cy="23" rx="10" ry="13" fill="url(#pawGrad)" transform="rotate(6 61 23)"/>
+    <ellipse cx="78" cy="32" rx="10" ry="13" fill="url(#pawGrad)" transform="rotate(18 78 32)"/>
+    <ellipse cx="52" cy="67" rx="26" ry="22" fill="url(#pawGrad)"/>
+    <!-- highlight sutil no pad principal para volume -->
+    <ellipse cx="45" cy="58" rx="14" ry="9" fill="#5eead4" opacity="0.32"/>
+  </g>
 </svg>

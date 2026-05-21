@@ -17,6 +17,7 @@ import { getPetInsurance, upsertPetInsurance, removePetInsurance, type PetInsura
 import { getCustomPricesForPatient, getPetlovePatientHistory, type PatientCustomPrice, type PetlovePatientHistoryEvent } from '@/lib/actions/patient-custom-prices'
 import { PawPrint, Pin, History, UserPlus, ArrowRight, DollarSign, Receipt } from 'lucide-react'
 import VaccinationCard from '@/components/vet/VaccinationCard'
+import { ShareButton } from '@/components/ui/ShareButton'
 import { BehaviorTagsSelector } from '@/components/ui/BehaviorTagsBadges'
 import { BreedCombobox } from '@/components/ui/BreedCombobox'
 import { lookupCepAction } from '@/lib/actions/cep'
@@ -1154,23 +1155,32 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                     initialVaccines={vaccines || []}
                     isFinalized={false}
                   />
-                  {/* Botão Compartilhar Histórico via WhatsApp */}
+                  {/* Botões Compartilhar Histórico — share nativo + atalho WhatsApp */}
                   {isEdit && patient?.id && (
-                    <div className="mt-4 pt-4 border-t border-slate-100">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const url = `${getClientAppUrl()}/public/vaccines/${patient.id}`
-                          const msg = `Olá! Aqui está o histórico de vacinação do ${patient.name} atualizado: ${url}`
-                          window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank', 'noopener,noreferrer')
-                        }}
-                        className="flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-green-700 transition-colors"
-                      >
-                        <Share2 className="h-4 w-4" />
-                        Compartilhar via WhatsApp
-                      </button>
-                      <p className="text-xs text-slate-400 mt-1.5">
-                        Gera um link público da carteira de vacinação para o tutor
+                    <div className="mt-4 pt-4 border-t border-slate-100 flex flex-col gap-2">
+                      <div className="flex flex-wrap gap-2">
+                        <ShareButton
+                          title={`Carteira de vacinação — ${patient.name}`}
+                          text={`Olá! Aqui está o histórico de vacinação do ${patient.name} atualizado:`}
+                          url={`${getClientAppUrl()}/public/vaccines/${patient.id}`}
+                          label="Compartilhar"
+                          variant="primary"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const url = `${getClientAppUrl()}/public/vaccines/${patient.id}`
+                            const msg = `Olá! Aqui está o histórico de vacinação do ${patient.name} atualizado: ${url}`
+                            window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank', 'noopener,noreferrer')
+                          }}
+                          className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-green-700 transition-colors active:scale-95"
+                        >
+                          <Share2 className="h-4 w-4" />
+                          WhatsApp
+                        </button>
+                      </div>
+                      <p className="text-xs text-slate-400">
+                        "Compartilhar" abre o menu de apps do celular (Telegram, e-mail, etc.). "WhatsApp" é atalho direto.
                       </p>
                     </div>
                   )}

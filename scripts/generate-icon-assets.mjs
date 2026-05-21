@@ -1,102 +1,65 @@
-// Gera os PNGs fonte para o @capacitor/assets a partir de src/app/icon.svg
-//
-// Saídas em assets/:
-//   icon-only.png        — 1024x1024, logo sobre fundo branco (iOS / fallback Android)
-//   icon-foreground.png  — 1024x1024, só o logo com padding (Android adaptive foreground)
-//   icon-background.png  — 1024x1024, branco sólido (Android adaptive background)
-//   splash.png           — 2732x2732, logo centralizado sobre branco (light)
-//   splash-dark.png      — 2732x2732, logo centralizado sobre slate-900 (dark)
+// Gera os PNGs fonte para o @capacitor/assets a partir do logo "2 patinhas".
+// Saídas em assets/.
 
 import sharp from 'sharp'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, readFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(__dirname, '..')
-const OUT = path.join(ROOT, 'assets')
+const OUT  = path.join(ROOT, 'assets')
 
 if (!existsSync(OUT)) await mkdir(OUT, { recursive: true })
 
-const TEAL = '#0d9488'
-const SLATE_900 = '#0f172a'
 const WHITE = '#ffffff'
+const SLATE_900 = '#0f172a'
 
-// Logo SVG (mesma forma de src/app/icon.svg)
-const pawSvg = `
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
-  <ellipse cx="27" cy="32" rx="10" ry="13" fill="${TEAL}" transform="rotate(-18 27 32)"/>
-  <ellipse cx="44" cy="23" rx="10" ry="13" fill="${TEAL}" transform="rotate(-6 44 23)"/>
-  <ellipse cx="61" cy="23" rx="10" ry="13" fill="${TEAL}" transform="rotate(6 61 23)"/>
-  <ellipse cx="78" cy="32" rx="10" ry="13" fill="${TEAL}" transform="rotate(18 78 32)"/>
-  <ellipse cx="52" cy="67" rx="26" ry="22" fill="${TEAL}"/>
-</svg>`
+// SVG fonte = src/app/icon.svg (mantém uma única fonte de verdade)
+const svgSource = await readFile(path.join(ROOT, 'src', 'app', 'icon.svg'), 'utf-8')
 
-const pawSvgWhite = pawSvg.replaceAll(TEAL, WHITE)
+// Versão monocromática branca (para splash dark) — substitui todos os fills coloridos por branco
+const svgWhite = svgSource
+  .replace(/fill="url\(#[^"]+\)"/g, 'fill="#ffffff"')
+  .replace(/fill="#[0-9a-fA-F]{6}"/g, 'fill="#ffffff"')
 
-// 1) Logo PNG em 1024x1024 (sobre transparente) — base de tudo
-const pawBuffer = await sharp(Buffer.from(pawSvg))
-  .resize(1024, 1024, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
-  .png()
-  .toBuffer()
+async function rasterize(svg, size, bgColor = null) {
+  return await sharp(Buffer.from(svg))
+    .resize(size, size, {
+      fit: 'contain',
+      background: bgColor ? bgColor : { r: 0, g: 0, b: 0, alpha: 0 },
+    })
+    .png()
+    .toBuffer()
+}
 
-// Logo branco para o splash escuro
-const pawWhiteBuffer = await sharp(Buffer.from(pawSvgWhite))
-  .resize(1024, 1024, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
-  .png()
-  .toBuffer()
-
-// 2) icon-only.png — logo sobre branco, com padding moderado (iOS prefere edge-to-edge)
-await sharp({
-  create: { width: 1024, height: 1024, channels: 4, background: WHITE },
-})
-  .composite([{
-    input: await sharp(pawBuffer).resize(720, 720).toBuffer(),
-    gravity: 'center',
-  }])
+// 1) icon-only.png (1024) — logo sobre branco edge-to-edge com padding moderado
+await sharp({ create: { width: 1024, height: 1024, channels: 4, background: WHITE } })
+  .composite([{ input: await rasterize(svgSource, 760), gravity: 'center' }])
   .png()
   .toFile(path.join(OUT, 'icon-only.png'))
 
-// 3) icon-foreground.png — Android adaptive: ~60% safe zone
-// O foreground precisa caber dentro de um círculo de 66dp num canvas de 108dp.
-// Em 1024x1024, o logo deve ocupar ~620x620 centralizado.
-await sharp({
-  create: { width: 1024, height: 1024, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
-})
-  .composite([{
-    input: await sharp(pawBuffer).resize(620, 620).toBuffer(),
-    gravity: 'center',
-  }])
+// 2) icon-foreground.png — Android adaptive: ~60% safe zone (transparent bg)
+await sharp({ create: { width: 1024, height: 1024, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
+  .composite([{ input: await rasterize(svgSource, 640), gravity: 'center' }])
   .png()
   .toFile(path.join(OUT, 'icon-foreground.png'))
 
-// 4) icon-background.png — branco sólido
-await sharp({
-  create: { width: 1024, height: 1024, channels: 4, background: WHITE },
-})
+// 3) icon-background.png — branco sólido
+await sharp({ create: { width: 1024, height: 1024, channels: 4, background: WHITE } })
   .png()
   .toFile(path.join(OUT, 'icon-background.png'))
 
-// 5) splash.png light — branco com logo grande centralizado
-await sharp({
-  create: { width: 2732, height: 2732, channels: 4, background: WHITE },
-})
-  .composite([{
-    input: await sharp(pawBuffer).resize(700, 700).toBuffer(),
-    gravity: 'center',
-  }])
+// 4) splash.png light — logo grande centralizado sobre branco
+await sharp({ create: { width: 2732, height: 2732, channels: 4, background: WHITE } })
+  .composite([{ input: await rasterize(svgSource, 800), gravity: 'center' }])
   .png()
   .toFile(path.join(OUT, 'splash.png'))
 
-// 6) splash-dark.png — slate-900 com logo branco
-await sharp({
-  create: { width: 2732, height: 2732, channels: 4, background: SLATE_900 },
-})
-  .composite([{
-    input: await sharp(pawWhiteBuffer).resize(700, 700).toBuffer(),
-    gravity: 'center',
-  }])
+// 5) splash-dark.png — logo branco sobre slate-900
+await sharp({ create: { width: 2732, height: 2732, channels: 4, background: SLATE_900 } })
+  .composite([{ input: await rasterize(svgWhite, 800), gravity: 'center' }])
   .png()
   .toFile(path.join(OUT, 'splash-dark.png'))
 

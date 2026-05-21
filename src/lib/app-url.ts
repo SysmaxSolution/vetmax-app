@@ -18,19 +18,24 @@ function stripTrailingSlash(url: string): string {
  * Resolve a URL pública da aplicação. Pode ser chamada em server e client.
  *
  * Prioridade:
- *   1. NEXT_PUBLIC_APP_URL (explícita — recomendada em produção)
- *   2. VERCEL_PROJECT_PRODUCTION_URL (auto-provida pela Vercel — fallback)
- *   3. PRODUCTION_DOMAIN (domínio corporativo final)
+ *   1. NEXT_PUBLIC_APP_URL — apenas se for domínio HTTPS público (não localhost).
+ *      Útil para ambientes de staging com domínio próprio.
+ *   2. PRODUCTION_DOMAIN — domínio corporativo canônico (sysvetmax.sysmaxsolutions.com).
+ *
+ * VERCEL_PROJECT_PRODUCTION_URL foi REMOVIDO da cascata: ele retorna o subdomínio
+ * interno do projeto Vercel (`sysmax-2305.vercel.app`) que não é o link público
+ * exposto a tutores em carteirinha de vacina, convites etc.
  */
 export function getAppUrl(): string {
   const configured = process.env.NEXT_PUBLIC_APP_URL?.trim()
-  if (configured && configured.startsWith('http')) {
+  if (
+    configured &&
+    configured.startsWith('https://') &&
+    !configured.includes('localhost') &&
+    !configured.includes('vercel.app')
+  ) {
     return stripTrailingSlash(configured)
   }
-
-  const vercelUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim()
-  if (vercelUrl) return `https://${vercelUrl}`
-
   return PRODUCTION_DOMAIN
 }
 
@@ -44,9 +49,21 @@ export function getAppUrl(): string {
  */
 export function getClientAppUrl(): string {
   const configured = process.env.NEXT_PUBLIC_APP_URL
-  if (configured && configured.startsWith('http')) {
+  if (
+    configured &&
+    configured.startsWith('https://') &&
+    !configured.includes('localhost') &&
+    !configured.includes('vercel.app')
+  ) {
     return stripTrailingSlash(configured)
   }
-  if (typeof window !== 'undefined') return window.location.origin
+  // Em apps Capacitor, window.location.origin é o domínio remoto carregado
+  // pelo WebView (sysvetmax.sysmaxsolutions.com), o que está correto.
+  // No browser tradicional, segue o mesmo princípio.
+  if (typeof window !== 'undefined') {
+    const origin = window.location.origin
+    // Exceto se for um subdomínio Vercel interno — força o canonical.
+    if (!origin.includes('vercel.app')) return origin
+  }
   return PRODUCTION_DOMAIN
 }

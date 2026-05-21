@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useKanbanEdgeScroll } from '@/hooks/useKanbanEdgeScroll'
 import { Scissors, Clock, CheckCircle2, Loader2, X, Calendar, DollarSign, CheckCheck, Trash2, Ban } from 'lucide-react'
 import { useRealtimeSync } from '@/hooks/useRealtimeSync'
 import { BehaviorTagsBadges } from '@/components/ui/BehaviorTagsBadges'
@@ -74,10 +75,18 @@ export default function GroomingKanban({ initialBoard, clinicId }: Props) {
 
   // ─── Drag & Drop ───────────────────────────────────────────────────────────
 
+  // Flag de "arrastando agora" para o auto-scroll horizontal. Não dispara
+  // re-render — é só uma ref para o hook.
+  const draggingCardRef = useRef<{ id: string } | null>(null)
+  const boardScrollRef  = useRef<HTMLDivElement | null>(null)
+  useKanbanEdgeScroll(boardScrollRef, draggingCardRef)
+
   const handleDragStart = (e: React.DragEvent, card: GroomingCard) => {
     e.dataTransfer.setData('cardId', card.id)
     e.dataTransfer.setData('currentStatus', card.status)
+    draggingCardRef.current = { id: card.id }
   }
+  const handleDragEnd = () => { draggingCardRef.current = null }
 
   const handleDragOver = (e: React.DragEvent, status: GroomingStatus) => {
     e.preventDefault()
@@ -232,8 +241,13 @@ export default function GroomingKanban({ initialBoard, clinicId }: Props) {
         </p>
       </div>
 
-      <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0 pb-1">
-      <div data-mentor-step="grooming-queue" className="flex gap-3 min-w-[1080px] md:min-w-0 md:grid md:grid-cols-3 lg:grid-cols-6 min-h-[500px] pb-2 md:pb-0 snap-x snap-mandatory md:snap-none">
+      <div ref={boardScrollRef} className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0 pb-1">
+      <div
+        data-mentor-step="grooming-queue"
+        onDragEnd={handleDragEnd}
+        onDrop={handleDragEnd}
+        className="flex gap-3 min-w-[1080px] md:min-w-0 md:grid md:grid-cols-3 lg:grid-cols-6 min-h-[500px] pb-2 md:pb-0 snap-x snap-mandatory md:snap-none"
+      >
         {COLUMNS.map(col => {
           const cards      = board[col.status]
           const isDragOver = dragOverCol === col.status
