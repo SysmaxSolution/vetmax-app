@@ -46,10 +46,14 @@ const config: CapacitorConfig = {
   // ──────────────────────────────────────────────────────────────────────────
   plugins: {
     SplashScreen: {
-      launchShowDuration: 1500,
+      // Mantém o splash nativo por 2.2s para dar tempo do WebView carregar a
+      // página remota antes do <SplashOverlay> React assumir.
+      launchShowDuration: 2200,
       launchAutoHide: true,
       backgroundColor: '#0f172a',
       showSpinner: false,
+      fadeOutDuration: 350,
+      androidScaleType: 'CENTER_CROP',
     },
     StatusBar: {
       style: 'DARK',

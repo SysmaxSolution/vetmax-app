@@ -1,5 +1,6 @@
 ﻿import type { Metadata, Viewport } from 'next'
 import './globals.css'
+import { SplashOverlay } from '@/components/ui/SplashOverlay'
 
 export const metadata: Metadata = {
   title: 'SysVetMax — HIS Veterinário',
@@ -35,7 +36,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR">
-      <body>{children}</body>
+      <body>
+        <SplashOverlay />
+        {children}
+      </body>
     </html>
   )
 }

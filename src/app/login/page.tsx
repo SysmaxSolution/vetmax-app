@@ -111,11 +111,39 @@ export default function LoginPage() {
   const errorMsg = state && 'error' in state ? state.error : null
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4">
-      <div className="w-full max-w-sm">
+    <div
+      className="relative flex min-h-screen flex-col items-center justify-center px-4 overflow-hidden"
+      style={{
+        background: `
+          radial-gradient(circle at 20% 15%, rgba(45,212,191,0.18) 0%, transparent 45%),
+          radial-gradient(circle at 80% 90%, rgba(20,184,166,0.14) 0%, transparent 50%),
+          linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)
+        `,
+      }}
+    >
+      {/* Patinhas decorativas flutuantes — sutilmente animadas */}
+      <div aria-hidden className="absolute inset-0 pointer-events-none overflow-hidden">
+        <svg className="login-paw-deco login-paw-deco-1" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <ellipse cx="27" cy="32" rx="10" ry="13" fill="#5eead4" transform="rotate(-18 27 32)"/>
+          <ellipse cx="44" cy="23" rx="10" ry="13" fill="#5eead4" transform="rotate(-6 44 23)"/>
+          <ellipse cx="61" cy="23" rx="10" ry="13" fill="#5eead4" transform="rotate(6 61 23)"/>
+          <ellipse cx="78" cy="32" rx="10" ry="13" fill="#5eead4" transform="rotate(18 78 32)"/>
+          <ellipse cx="52" cy="67" rx="26" ry="22" fill="#5eead4"/>
+        </svg>
+        <svg className="login-paw-deco login-paw-deco-2" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <ellipse cx="27" cy="32" rx="10" ry="13" fill="#14b8a6" transform="rotate(-18 27 32)"/>
+          <ellipse cx="44" cy="23" rx="10" ry="13" fill="#14b8a6" transform="rotate(-6 44 23)"/>
+          <ellipse cx="61" cy="23" rx="10" ry="13" fill="#14b8a6" transform="rotate(6 61 23)"/>
+          <ellipse cx="78" cy="32" rx="10" ry="13" fill="#14b8a6" transform="rotate(18 78 32)"/>
+          <ellipse cx="52" cy="67" rx="26" ry="22" fill="#14b8a6"/>
+        </svg>
+      </div>
+
+      <div className="relative w-full max-w-sm login-fade-in">
         <div className="mb-8 text-center">
-          <div className="mb-3 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-600 shadow-lg">
-            <svg className="h-8 w-8" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <div className="login-logo-wrap mb-3 inline-flex h-16 w-16 items-center justify-center rounded-2xl shadow-xl"
+               style={{ background: 'linear-gradient(135deg, #14b8a6 0%, #0d9488 100%)' }}>
+            <svg className="h-9 w-9" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
               <ellipse cx="27" cy="32" rx="10" ry="13" fill="white" transform="rotate(-18 27 32)"/>
               <ellipse cx="44" cy="23" rx="10" ry="13" fill="white" transform="rotate(-6 44 23)"/>
               <ellipse cx="61" cy="23" rx="10" ry="13" fill="white" transform="rotate(6 61 23)"/>
@@ -123,8 +151,8 @@ export default function LoginPage() {
               <ellipse cx="52" cy="67" rx="26" ry="22" fill="white"/>
             </svg>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">SysVetMax</h1>
-          <p className="mt-1 text-sm text-slate-500">Acesse sua clínica veterinária</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 login-rise">SysVetMax</h1>
+          <p className="mt-1 text-sm text-slate-500 login-rise-delay">Acesse sua clínica veterinária</p>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -189,6 +217,39 @@ export default function LoginPage() {
           </p>
         </div>
       </div>
+
+      <style jsx>{`
+        .login-fade-in     { animation: login-rise 0.55s cubic-bezier(.22,.61,.36,1) both; }
+        .login-logo-wrap   { animation: login-pop 0.7s cubic-bezier(.34,1.56,.64,1) both,
+                                        login-float 4s ease-in-out 0.7s infinite; }
+        .login-rise        { opacity: 0; transform: translateY(8px); animation: login-rise 0.5s ease-out 0.25s forwards; }
+        .login-rise-delay  { opacity: 0; transform: translateY(8px); animation: login-rise 0.5s ease-out 0.4s forwards; }
+        .login-paw-deco    { position: absolute; opacity: 0.07; pointer-events: none; }
+        .login-paw-deco-1  { top: -40px; left: -40px; width: 240px; height: 240px;
+                             animation: paw-drift1 18s ease-in-out infinite; }
+        .login-paw-deco-2  { bottom: -50px; right: -50px; width: 280px; height: 280px;
+                             animation: paw-drift2 22s ease-in-out infinite; }
+        @keyframes login-pop {
+          0%   { transform: scale(0.4) rotate(-8deg); opacity: 0; }
+          60%  { transform: scale(1.08) rotate(2deg); opacity: 1; }
+          100% { transform: scale(1) rotate(0); }
+        }
+        @keyframes login-float {
+          0%,100% { transform: translateY(0); }
+          50%     { transform: translateY(-4px); }
+        }
+        @keyframes login-rise {
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes paw-drift1 {
+          0%,100% { transform: translate(0,0) rotate(-12deg); }
+          50%     { transform: translate(20px,15px) rotate(-6deg); }
+        }
+        @keyframes paw-drift2 {
+          0%,100% { transform: translate(0,0) rotate(8deg); }
+          50%     { transform: translate(-15px,-20px) rotate(14deg); }
+        }
+      `}</style>
     </div>
   )
 }

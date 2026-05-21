@@ -11,6 +11,7 @@ import {
   type AppearanceMode,
 } from '@/lib/actions/ui-preferences'
 import { Toast } from '@/components/ui/toast'
+import { BackgroundImageAdjuster } from './BackgroundImageAdjuster'
 
 // ─── Presets ──────────────────────────────────────────────────────────────────
 
@@ -239,14 +240,17 @@ export default function AppearanceTab() {
 
             {draft.background_image_url ? (
               <div className="space-y-3">
-                <div
-                  className="w-full h-48 rounded-xl border border-slate-200 shadow-inner"
-                  style={{
-                    backgroundImage:    `url("${draft.background_image_url}")`,
-                    backgroundSize:     'cover',
-                    backgroundPosition: 'center',
-                    backgroundRepeat:   'no-repeat',
-                  }}
+                <BackgroundImageAdjuster
+                  imageUrl={draft.background_image_url}
+                  positionX={draft.background_position_x ?? 50}
+                  positionY={draft.background_position_y ?? 50}
+                  scale={draft.background_scale ?? 1.0}
+                  onChange={(next) => applyDraft({
+                    ...draft,
+                    background_position_x: next.positionX,
+                    background_position_y: next.positionY,
+                    background_scale:      next.scale,
+                  })}
                 />
                 <div className="flex gap-2">
                   <button

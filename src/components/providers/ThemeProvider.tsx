@@ -51,10 +51,16 @@ export function ThemeProvider({
 
   const sectionStyle: React.CSSProperties | undefined = useMemo(() => {
     if (hasImage) {
+      const posX  = preferences.background_position_x ?? 50
+      const posY  = preferences.background_position_y ?? 50
+      const scale = Math.max(1, Math.min(3, preferences.background_scale ?? 1))
+      // background-size auto-scaling: `cover` * scale% — quando scale=1 mantém
+      // o comportamento clássico cover; quando scale>1, faz zoom adicional.
+      const sizePct = Math.round(scale * 100)
       return {
         backgroundImage:    `url("${preferences.background_image_url}")`,
-        backgroundSize:     'cover',
-        backgroundPosition: 'center',
+        backgroundSize:     `${sizePct}% auto`,
+        backgroundPosition: `${posX}% ${posY}%`,
         backgroundRepeat:   'no-repeat',
         backgroundAttachment: 'fixed',
       }

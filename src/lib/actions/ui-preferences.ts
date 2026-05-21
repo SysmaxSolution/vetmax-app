@@ -11,6 +11,12 @@ export interface UiPreferences {
   custom_bg:             string | null
   background_image_url?: string | null
   appearance_mode?:      AppearanceMode
+  /** Posição horizontal da imagem de fundo (0-100, %). Default 50. */
+  background_position_x?: number
+  /** Posição vertical da imagem de fundo (0-100, %). Default 50. */
+  background_position_y?: number
+  /** Escala/zoom da imagem (1.0 = cover, max 3.0). Default 1.0. */
+  background_scale?:     number
 }
 
 const BRANDING_BUCKET = 'clinic-branding'
