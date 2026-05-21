@@ -15,7 +15,7 @@ import { useEffect, useState } from 'react'
 // ──────────────────────────────────────────────────────────────────────────────
 
 const SESSION_KEY = 'vetmax:splash-shown'
-const DURATION_MS = 1800
+const DURATION_MS = 4000
 
 export function SplashOverlay() {
   const [phase, setPhase] = useState<'hidden' | 'visible' | 'fading'>('hidden')
@@ -74,7 +74,7 @@ export function SplashOverlay() {
             SysVetMax
           </div>
           <div className="splash-tag mt-1.5 text-[11px] md:text-xs uppercase tracking-[0.18em] text-emerald-300">
-            Cuidando do seu pet
+            Cuidando do pet e de você
           </div>
           <div className="splash-progress mt-7 mx-auto" />
         </div>

@@ -46,9 +46,9 @@ const config: CapacitorConfig = {
   // ──────────────────────────────────────────────────────────────────────────
   plugins: {
     SplashScreen: {
-      // Mantém o splash nativo por 2.2s para dar tempo do WebView carregar a
-      // página remota antes do <SplashOverlay> React assumir.
-      launchShowDuration: 2200,
+      // 4s para o usuário ver a marca e o slogan antes da página de login
+      // assumir. Cobre tempo de carga do WebView + transição com o SplashOverlay.
+      launchShowDuration: 4000,
       launchAutoHide: true,
       backgroundColor: '#0f172a',
       showSpinner: false,
