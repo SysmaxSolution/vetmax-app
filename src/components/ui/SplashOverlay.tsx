@@ -50,9 +50,9 @@ export function SplashOverlay() {
         className="absolute inset-0"
         style={{
           background: `
-            radial-gradient(circle at 30% 20%, rgba(20,184,166,0.35) 0%, transparent 50%),
-            radial-gradient(circle at 70% 80%, rgba(45,212,191,0.25) 0%, transparent 50%),
-            linear-gradient(135deg, #0f172a 0%, #134e4a 100%)
+            radial-gradient(circle at 30% 20%, rgba(74,222,128,0.30) 0%, transparent 50%),
+            radial-gradient(circle at 70% 80%, rgba(37,99,235,0.28) 0%, transparent 50%),
+            linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%)
           `,
         }}
       />
@@ -61,40 +61,40 @@ export function SplashOverlay() {
           <div className="splash-logo-wrap mx-auto mb-6">
             <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" className="h-28 w-28 md:h-32 md:w-32">
               <defs>
-                <linearGradient id="splash-g1" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%"  stopColor="#5eead4"/>
-                  <stop offset="100%" stopColor="#14b8a6"/>
+                <linearGradient id="splash-paw" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%"   stopColor="#86EFAC"/>
+                  <stop offset="100%" stopColor="#22C55E"/>
                 </linearGradient>
-                <linearGradient id="splash-g2" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%"  stopColor="#a7f3d0"/>
-                  <stop offset="100%" stopColor="#5eead4"/>
+                <linearGradient id="splash-ecg" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%"   stopColor="#60A5FA"/>
+                  <stop offset="100%" stopColor="#2563EB"/>
                 </linearGradient>
               </defs>
-              <g transform="translate(58 56) scale(0.5) translate(-50 -50)" opacity="0.6">
-                <ellipse cx="27" cy="32" rx="10" ry="13" fill="url(#splash-g2)" transform="rotate(-18 27 32)"/>
-                <ellipse cx="44" cy="23" rx="10" ry="13" fill="url(#splash-g2)" transform="rotate(-6 44 23)"/>
-                <ellipse cx="61" cy="23" rx="10" ry="13" fill="url(#splash-g2)" transform="rotate(6 61 23)"/>
-                <ellipse cx="78" cy="32" rx="10" ry="13" fill="url(#splash-g2)" transform="rotate(18 78 32)"/>
-                <ellipse cx="52" cy="67" rx="26" ry="22" fill="url(#splash-g2)"/>
+              <g>
+                <ellipse cx="27" cy="32" rx="10" ry="13" fill="url(#splash-paw)" transform="rotate(-18 27 32)"/>
+                <ellipse cx="44" cy="23" rx="10" ry="13" fill="url(#splash-paw)" transform="rotate(-6 44 23)"/>
+                <ellipse cx="61" cy="23" rx="10" ry="13" fill="url(#splash-paw)" transform="rotate(6 61 23)"/>
+                <ellipse cx="78" cy="32" rx="10" ry="13" fill="url(#splash-paw)" transform="rotate(18 78 32)"/>
+                <ellipse cx="52" cy="67" rx="28" ry="23" fill="url(#splash-paw)"/>
               </g>
-              <g transform="translate(38 44) scale(0.85) translate(-50 -50)">
-                <ellipse cx="27" cy="32" rx="10" ry="13" fill="url(#splash-g1)" transform="rotate(-18 27 32)"/>
-                <ellipse cx="44" cy="23" rx="10" ry="13" fill="url(#splash-g1)" transform="rotate(-6 44 23)"/>
-                <ellipse cx="61" cy="23" rx="10" ry="13" fill="url(#splash-g1)" transform="rotate(6 61 23)"/>
-                <ellipse cx="78" cy="32" rx="10" ry="13" fill="url(#splash-g1)" transform="rotate(18 78 32)"/>
-                <ellipse cx="52" cy="67" rx="26" ry="22" fill="url(#splash-g1)"/>
-                <ellipse cx="45" cy="58" rx="14" ry="9" fill="#a7f3d0" opacity="0.4"/>
-              </g>
+              <path d="M 4 60 L 26 60 L 30 56 L 34 62 L 38 60 L 41 56 L 45 28 L 50 82 L 55 48 L 60 62 L 64 60 L 80 60 L 84 50 L 92 50"
+                    stroke="white" strokeWidth="6" fill="none" strokeLinecap="round" strokeLinejoin="round" opacity="0.95"/>
+              <path d="M 4 60 L 26 60 L 30 56 L 34 62 L 38 60 L 41 56 L 45 28 L 50 82 L 55 48 L 60 62 L 64 60 L 80 60 L 84 50 L 92 50"
+                    stroke="url(#splash-ecg)" strokeWidth="3.2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M 88 54 L 94 48 L 88 42 M 94 48 L 84 48"
+                    stroke="white" strokeWidth="6" fill="none" strokeLinecap="round" strokeLinejoin="round" opacity="0.95"/>
+              <path d="M 88 54 L 94 48 L 88 42 M 94 48 L 84 48"
+                    stroke="url(#splash-ecg)" strokeWidth="3.2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           </div>
           <div className="splash-title text-2xl md:text-3xl font-bold tracking-wide"
                style={{
-                 background: 'linear-gradient(90deg, #5eead4, #ffffff)',
+                 background: 'linear-gradient(90deg, #86efac, #ffffff)',
                  WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent',
                }}>
             SysVetMax
           </div>
-          <div className="splash-tag mt-1.5 text-[11px] md:text-xs uppercase tracking-[0.18em] text-teal-300">
+          <div className="splash-tag mt-1.5 text-[11px] md:text-xs uppercase tracking-[0.18em] text-emerald-300">
             Cuidando do seu pet
           </div>
           <div className="splash-progress mt-7 mx-auto" />
@@ -105,18 +105,18 @@ export function SplashOverlay() {
         .splash-logo-wrap {
           animation: splash-pop 0.7s cubic-bezier(.34,1.56,.64,1) both,
                      splash-float 3.5s ease-in-out 0.7s infinite;
-          filter: drop-shadow(0 12px 28px rgba(20,184,166,0.45));
+          filter: drop-shadow(0 12px 28px rgba(34,197,94,0.45));
         }
         .splash-title  { opacity: 0; transform: translateY(8px); animation: splash-rise 0.6s ease-out 0.35s forwards; }
         .splash-tag    { opacity: 0; transform: translateY(8px); animation: splash-rise 0.6s ease-out 0.55s forwards; }
         .splash-progress {
           width: 140px; height: 3px; border-radius: 3px;
-          background: rgba(94,234,212,0.18);
+          background: rgba(134,239,172,0.20);
           overflow: hidden; position: relative;
         }
         .splash-progress::after {
           content: ''; position: absolute; left: -40%; top: 0; height: 100%; width: 40%;
-          background: linear-gradient(90deg, transparent, #5eead4, transparent);
+          background: linear-gradient(90deg, transparent, #86efac, transparent);
           animation: splash-slide 1.4s ease-in-out infinite;
         }
         @keyframes splash-pop {

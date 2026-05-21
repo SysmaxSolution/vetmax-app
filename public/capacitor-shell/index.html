@@ -15,9 +15,9 @@
     }
     body {
       background:
-        radial-gradient(circle at 30% 20%, rgba(20,184,166,0.35) 0%, transparent 50%),
-        radial-gradient(circle at 70% 80%, rgba(45,212,191,0.25) 0%, transparent 50%),
-        linear-gradient(135deg, #0f172a 0%, #134e4a 100%);
+        radial-gradient(circle at 30% 20%, rgba(74,222,128,0.30) 0%, transparent 50%),
+        radial-gradient(circle at 70% 80%, rgba(37,99,235,0.28) 0%, transparent 50%),
+        linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -30,27 +30,27 @@
       animation: pop 0.7s cubic-bezier(.34,1.56,.64,1) both,
                  float 3.5s ease-in-out 0.7s infinite;
     }
-    .logo-wrap svg { width: 100%; height: 100%; filter: drop-shadow(0 10px 24px rgba(20,184,166,0.45)); }
+    .logo-wrap svg { width: 100%; height: 100%; filter: drop-shadow(0 10px 24px rgba(34,197,94,0.45)); }
     .title {
       font-size: 26px; font-weight: 700; letter-spacing: 0.5px;
-      background: linear-gradient(90deg, #5eead4, #ffffff);
+      background: linear-gradient(90deg, #86efac, #ffffff);
       -webkit-background-clip: text; background-clip: text; color: transparent;
       opacity: 0; transform: translateY(8px);
       animation: rise 0.6s ease-out 0.35s forwards;
     }
     .tag {
       margin-top: 6px; font-size: 12px; letter-spacing: 1.2px; text-transform: uppercase;
-      color: #5eead4; opacity: 0;
+      color: #86efac; opacity: 0;
       animation: rise 0.6s ease-out 0.55s forwards;
     }
     .progress {
       margin-top: 32px; width: 140px; height: 3px;
-      background: rgba(94,234,212,0.15); border-radius: 3px; overflow: hidden;
+      background: rgba(134,239,172,0.18); border-radius: 3px; overflow: hidden;
       position: relative; mx: auto;
     }
     .progress::after {
       content: ''; position: absolute; left: -40%; top: 0; height: 100%; width: 40%;
-      background: linear-gradient(90deg, transparent, #5eead4, transparent);
+      background: linear-gradient(90deg, transparent, #86efac, transparent);
       animation: slide 1.4s ease-in-out infinite;
     }
     @keyframes pop {
@@ -75,30 +75,30 @@
     <div class="logo-wrap">
       <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
         <defs>
-          <linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%"  stop-color="#5eead4"/>
-            <stop offset="100%" stop-color="#14b8a6"/>
+          <linearGradient id="paw-g" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%"   stop-color="#86EFAC"/>
+            <stop offset="100%" stop-color="#22C55E"/>
           </linearGradient>
-          <linearGradient id="g2" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%"  stop-color="#a7f3d0"/>
-            <stop offset="100%" stop-color="#5eead4"/>
+          <linearGradient id="ecg-g" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%"   stop-color="#60A5FA"/>
+            <stop offset="100%" stop-color="#2563EB"/>
           </linearGradient>
         </defs>
-        <g transform="translate(58 56) scale(0.5) translate(-50 -50)" opacity="0.6">
-          <ellipse cx="27" cy="32" rx="10" ry="13" fill="url(#g2)" transform="rotate(-18 27 32)"/>
-          <ellipse cx="44" cy="23" rx="10" ry="13" fill="url(#g2)" transform="rotate(-6 44 23)"/>
-          <ellipse cx="61" cy="23" rx="10" ry="13" fill="url(#g2)" transform="rotate(6 61 23)"/>
-          <ellipse cx="78" cy="32" rx="10" ry="13" fill="url(#g2)" transform="rotate(18 78 32)"/>
-          <ellipse cx="52" cy="67" rx="26" ry="22" fill="url(#g2)"/>
+        <g>
+          <ellipse cx="27" cy="32" rx="10" ry="13" fill="url(#paw-g)" transform="rotate(-18 27 32)"/>
+          <ellipse cx="44" cy="23" rx="10" ry="13" fill="url(#paw-g)" transform="rotate(-6 44 23)"/>
+          <ellipse cx="61" cy="23" rx="10" ry="13" fill="url(#paw-g)" transform="rotate(6 61 23)"/>
+          <ellipse cx="78" cy="32" rx="10" ry="13" fill="url(#paw-g)" transform="rotate(18 78 32)"/>
+          <ellipse cx="52" cy="67" rx="28" ry="23" fill="url(#paw-g)"/>
         </g>
-        <g transform="translate(38 44) scale(0.85) translate(-50 -50)">
-          <ellipse cx="27" cy="32" rx="10" ry="13" fill="url(#g1)" transform="rotate(-18 27 32)"/>
-          <ellipse cx="44" cy="23" rx="10" ry="13" fill="url(#g1)" transform="rotate(-6 44 23)"/>
-          <ellipse cx="61" cy="23" rx="10" ry="13" fill="url(#g1)" transform="rotate(6 61 23)"/>
-          <ellipse cx="78" cy="32" rx="10" ry="13" fill="url(#g1)" transform="rotate(18 78 32)"/>
-          <ellipse cx="52" cy="67" rx="26" ry="22" fill="url(#g1)"/>
-          <ellipse cx="45" cy="58" rx="14" ry="9" fill="#a7f3d0" opacity="0.4"/>
-        </g>
+        <path d="M 4 60 L 26 60 L 30 56 L 34 62 L 38 60 L 41 56 L 45 28 L 50 82 L 55 48 L 60 62 L 64 60 L 80 60 L 84 50 L 92 50"
+              stroke="white" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.95"/>
+        <path d="M 4 60 L 26 60 L 30 56 L 34 62 L 38 60 L 41 56 L 45 28 L 50 82 L 55 48 L 60 62 L 64 60 L 80 60 L 84 50 L 92 50"
+              stroke="url(#ecg-g)" stroke-width="3.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M 88 54 L 94 48 L 88 42 M 94 48 L 84 48"
+              stroke="white" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.95"/>
+        <path d="M 88 54 L 94 48 L 88 42 M 94 48 L 84 48"
+              stroke="url(#ecg-g)" stroke-width="3.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
     </div>
     <div class="title">SysVetMax</div>

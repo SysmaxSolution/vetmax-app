@@ -9,6 +9,7 @@ import { ThemeProvider } from '@/components/providers/ThemeProvider'
 import { MentorGlobalWrapper } from '@/components/mentor/MentorGlobalWrapper'
 import { Suspense } from 'react'
 import { UnauthorizedBanner } from '@/components/ui/UnauthorizedBanner'
+import { SysmaxFooter } from '@/components/ui/SysmaxFooter'
 import { Lock, AlertCircle } from 'lucide-react'
 import { getLowStockCount } from '@/lib/actions/stock'
 import type { UserClinicInfo } from '@/lib/actions/clinic-switcher'
@@ -190,6 +191,7 @@ export default async function DashboardLayout({
       <Suspense fallback={null}>
         <UnauthorizedBanner />
       </Suspense>
+      <SysmaxFooter />
     </section>
   )
 }

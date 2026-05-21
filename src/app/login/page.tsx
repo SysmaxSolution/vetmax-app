@@ -3,6 +3,7 @@
 import { useActionState, useState } from 'react'
 import { login, selectClinic } from '@/lib/actions/auth'
 import type { AuthState } from '@/lib/actions/auth'
+import { SysmaxFooter } from '@/components/ui/SysmaxFooter'
 import Link from 'next/link'
 import { Building2, ChevronRight, ArrowLeft, Eye, EyeOff } from 'lucide-react'
 
@@ -115,8 +116,8 @@ export default function LoginPage() {
       className="relative flex min-h-screen flex-col items-center justify-center px-4 overflow-hidden"
       style={{
         background: `
-          radial-gradient(circle at 20% 15%, rgba(45,212,191,0.18) 0%, transparent 45%),
-          radial-gradient(circle at 80% 90%, rgba(20,184,166,0.14) 0%, transparent 50%),
+          radial-gradient(circle at 20% 15%, rgba(74,222,128,0.18) 0%, transparent 45%),
+          radial-gradient(circle at 80% 90%, rgba(37,99,235,0.13) 0%, transparent 50%),
           linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)
         `,
       }}
@@ -124,31 +125,50 @@ export default function LoginPage() {
       {/* Patinhas decorativas flutuantes — sutilmente animadas */}
       <div aria-hidden className="absolute inset-0 pointer-events-none overflow-hidden">
         <svg className="login-paw-deco login-paw-deco-1" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-          <ellipse cx="27" cy="32" rx="10" ry="13" fill="#5eead4" transform="rotate(-18 27 32)"/>
-          <ellipse cx="44" cy="23" rx="10" ry="13" fill="#5eead4" transform="rotate(-6 44 23)"/>
-          <ellipse cx="61" cy="23" rx="10" ry="13" fill="#5eead4" transform="rotate(6 61 23)"/>
-          <ellipse cx="78" cy="32" rx="10" ry="13" fill="#5eead4" transform="rotate(18 78 32)"/>
-          <ellipse cx="52" cy="67" rx="26" ry="22" fill="#5eead4"/>
+          <ellipse cx="27" cy="32" rx="10" ry="13" fill="#4ADE80" transform="rotate(-18 27 32)"/>
+          <ellipse cx="44" cy="23" rx="10" ry="13" fill="#4ADE80" transform="rotate(-6 44 23)"/>
+          <ellipse cx="61" cy="23" rx="10" ry="13" fill="#4ADE80" transform="rotate(6 61 23)"/>
+          <ellipse cx="78" cy="32" rx="10" ry="13" fill="#4ADE80" transform="rotate(18 78 32)"/>
+          <ellipse cx="52" cy="67" rx="26" ry="22" fill="#4ADE80"/>
         </svg>
         <svg className="login-paw-deco login-paw-deco-2" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-          <ellipse cx="27" cy="32" rx="10" ry="13" fill="#14b8a6" transform="rotate(-18 27 32)"/>
-          <ellipse cx="44" cy="23" rx="10" ry="13" fill="#14b8a6" transform="rotate(-6 44 23)"/>
-          <ellipse cx="61" cy="23" rx="10" ry="13" fill="#14b8a6" transform="rotate(6 61 23)"/>
-          <ellipse cx="78" cy="32" rx="10" ry="13" fill="#14b8a6" transform="rotate(18 78 32)"/>
-          <ellipse cx="52" cy="67" rx="26" ry="22" fill="#14b8a6"/>
+          <ellipse cx="27" cy="32" rx="10" ry="13" fill="#2563EB" transform="rotate(-18 27 32)"/>
+          <ellipse cx="44" cy="23" rx="10" ry="13" fill="#2563EB" transform="rotate(-6 44 23)"/>
+          <ellipse cx="61" cy="23" rx="10" ry="13" fill="#2563EB" transform="rotate(6 61 23)"/>
+          <ellipse cx="78" cy="32" rx="10" ry="13" fill="#2563EB" transform="rotate(18 78 32)"/>
+          <ellipse cx="52" cy="67" rx="26" ry="22" fill="#2563EB"/>
         </svg>
       </div>
 
       <div className="relative w-full max-w-sm login-fade-in">
         <div className="mb-8 text-center">
-          <div className="login-logo-wrap mb-3 inline-flex h-16 w-16 items-center justify-center rounded-2xl shadow-xl"
-               style={{ background: 'linear-gradient(135deg, #14b8a6 0%, #0d9488 100%)' }}>
-            <svg className="h-9 w-9" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-              <ellipse cx="27" cy="32" rx="10" ry="13" fill="white" transform="rotate(-18 27 32)"/>
-              <ellipse cx="44" cy="23" rx="10" ry="13" fill="white" transform="rotate(-6 44 23)"/>
-              <ellipse cx="61" cy="23" rx="10" ry="13" fill="white" transform="rotate(6 61 23)"/>
-              <ellipse cx="78" cy="32" rx="10" ry="13" fill="white" transform="rotate(18 78 32)"/>
-              <ellipse cx="52" cy="67" rx="26" ry="22" fill="white"/>
+          <div className="login-logo-wrap mb-3 inline-flex h-16 w-16 items-center justify-center rounded-2xl shadow-xl bg-white">
+            <svg className="h-11 w-11" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="login-paw-g" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%"   stopColor="#4ADE80"/>
+                  <stop offset="100%" stopColor="#16A34A"/>
+                </linearGradient>
+                <linearGradient id="login-ecg-g" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%"   stopColor="#1E3A8A"/>
+                  <stop offset="100%" stopColor="#2563EB"/>
+                </linearGradient>
+              </defs>
+              <g>
+                <ellipse cx="27" cy="32" rx="10" ry="13" fill="url(#login-paw-g)" transform="rotate(-18 27 32)"/>
+                <ellipse cx="44" cy="23" rx="10" ry="13" fill="url(#login-paw-g)" transform="rotate(-6 44 23)"/>
+                <ellipse cx="61" cy="23" rx="10" ry="13" fill="url(#login-paw-g)" transform="rotate(6 61 23)"/>
+                <ellipse cx="78" cy="32" rx="10" ry="13" fill="url(#login-paw-g)" transform="rotate(18 78 32)"/>
+                <ellipse cx="52" cy="67" rx="28" ry="23" fill="url(#login-paw-g)"/>
+              </g>
+              <path d="M 4 60 L 26 60 L 30 56 L 34 62 L 38 60 L 41 56 L 45 28 L 50 82 L 55 48 L 60 62 L 64 60 L 80 60 L 84 50 L 92 50"
+                    stroke="white" strokeWidth="6" fill="none" strokeLinecap="round" strokeLinejoin="round" opacity="0.95"/>
+              <path d="M 4 60 L 26 60 L 30 56 L 34 62 L 38 60 L 41 56 L 45 28 L 50 82 L 55 48 L 60 62 L 64 60 L 80 60 L 84 50 L 92 50"
+                    stroke="url(#login-ecg-g)" strokeWidth="3.2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M 88 54 L 94 48 L 88 42 M 94 48 L 84 48"
+                    stroke="white" strokeWidth="6" fill="none" strokeLinecap="round" strokeLinejoin="round" opacity="0.95"/>
+              <path d="M 88 54 L 94 48 L 88 42 M 94 48 L 84 48"
+                    stroke="url(#login-ecg-g)" strokeWidth="3.2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 login-rise">SysVetMax</h1>
@@ -216,6 +236,10 @@ export default function LoginPage() {
             </Link>
           </p>
         </div>
+      </div>
+
+      <div className="relative w-full mt-8">
+        <SysmaxFooter />
       </div>
 
       <style jsx>{`
