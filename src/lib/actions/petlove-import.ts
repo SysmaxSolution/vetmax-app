@@ -4,6 +4,7 @@ import ExcelJS from 'exceljs'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
+import { runMatchEngine } from '@/lib/actions/petlove-matching'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -21,6 +22,10 @@ export interface PetloveRemittanceLineAST {
   procedure_name_raw:      string | null
   repass_value:            number
   coparticipation_value:   number
+  // ─── Campos extras presentes apenas no formato em aberto ────────────────────
+  gender_raw?:             string | null
+  procedure_status_raw?:   string | null
+  financial_status_raw?:   string | null
 }
 
 export interface PetloveRemittanceAST {
@@ -35,11 +40,23 @@ export interface PetloveRemittanceAST {
   total_gross_value:    number
   raw_summary:          Record<string, string | number>
   lines:                PetloveRemittanceLineAST[]
+  /** 'closed' = arquivo oficial com Resumo+Extrato; 'open' = extrato em aberto (aba única Worksheet). */
+  source_format:        'closed' | 'open'
+  /** true para formato 'open' — remessa-prévia, sobrescrita ao reimportar. */
+  is_preview:           boolean
 }
 
 export interface StageRemittanceResult {
-  remittance_id: string
-  lines_count:   number
+  remittance_id:        string
+  lines_count:          number
+  source_format:        'closed' | 'open'
+  /** Resumo dos side-effects aplicados quando is_preview=true (matching + cadastros + preços). */
+  preview_side_effects?: {
+    matched:          number
+    patients_updated: number
+    prices_updated:   number
+    errors:           string[]
+  }
 }
 
 export interface StageRemittanceError {
@@ -118,6 +135,8 @@ function cellText(v: unknown): string | null {
 }
 
 // ─── parsePetloveXlsx ─────────────────────────────────────────────────────────
+// Roteador: detecta o formato da planilha (fechada com Resumo+Extrato ou
+// aberta com aba única "Worksheet") e delega para o parser específico.
 
 export async function parsePetloveXlsx(buffer: ArrayBuffer): Promise<PetloveRemittanceAST | { error: string }> {
   const wb = new ExcelJS.Workbook()
@@ -127,12 +146,38 @@ export async function parsePetloveXlsx(buffer: ArrayBuffer): Promise<PetloveRemi
     return { error: 'Arquivo .xlsx inválido ou corrompido.' }
   }
 
-  const resumoSheet = wb.worksheets.find(ws => /resumo/i.test(ws.name)) ?? wb.worksheets[0]
+  const resumoSheet  = wb.worksheets.find(ws => /resumo/i.test(ws.name))
   const extratoSheet = wb.worksheets.find(ws => /extrato/i.test(ws.name))
 
-  if (!resumoSheet || !extratoSheet) {
-    return { error: 'Planilha fora do padrão Petlove: abas "Resumo Contas Médicas" e "Extrato Contas Médicas" são obrigatórias.' }
+  if (resumoSheet && extratoSheet) {
+    return parseClosedFormat(resumoSheet, extratoSheet)
   }
+
+  // Tenta detectar o formato "aberto" (aba única Worksheet sem cabeçalho de remessa).
+  const openSheet = wb.worksheets.find(ws => isOpenFormatSheet(ws))
+  if (openSheet) {
+    return parseOpenFormat(openSheet)
+  }
+
+  return { error: 'Planilha fora do padrão Petlove: esperado abas "Resumo Contas Médicas" e "Extrato Contas Médicas" (formato fechado) ou aba única com colunas Valor_Repasse/Valor_Copart (formato em aberto).' }
+}
+
+function isOpenFormatSheet(ws: ExcelJS.Worksheet): boolean {
+  if (ws.rowCount < 2) return false
+  const headers: string[] = []
+  ws.getRow(1).eachCell((cell) => {
+    const t = cellText(cell.value)
+    if (t) headers.push(normalizeLabel(t))
+  })
+  const joined = headers.join('|')
+  // Marcadores únicos do formato em aberto: Valor_Repasse + Valor_Copart com underscore
+  return /valor[_ ]repasse/.test(joined) && /valor[_ ]copart/.test(joined) && /atendimento/.test(joined)
+}
+
+async function parseClosedFormat(
+  resumoSheet: ExcelJS.Worksheet,
+  extratoSheet: ExcelJS.Worksheet,
+): Promise<PetloveRemittanceAST | { error: string }> {
 
   // ─── Cabeçalho (aba Resumo) ─────────────────────────────────────────────────
   const summaryMap: Record<string, string | number> = {}
@@ -235,6 +280,140 @@ export async function parsePetloveXlsx(buffer: ArrayBuffer): Promise<PetloveRemi
     total_gross_value,
     raw_summary: summaryMap,
     lines,
+    source_format: 'closed',
+    is_preview:    false,
+  }
+}
+
+// ─── parseOpenFormat ──────────────────────────────────────────────────────────
+// Formato em aberto: aba única ("Worksheet") sem cabeçalho de remessa.
+// Colunas observadas:
+//   Atendimento | Data de Realização | Nome do Cliente | Nome do Pet | Especie |
+//   Raça do pet | Genero | Plano do pet | Microchip | Matricula | Veterinário |
+//   Procedimento | Status Procedimento | Valor_Repasse | Valor_Copart | Status Financeiro
+//
+// Como não há número/período declarados, deriva-se:
+//   - period_start/end = min/max das datas das linhas
+//   - remittance_number sintético = "OPEN-<YYYYMM>" do mês da maior data
+//   - status = 'open' / is_preview = true
+
+async function parseOpenFormat(
+  sheet: ExcelJS.Worksheet,
+): Promise<PetloveRemittanceAST | { error: string }> {
+  const headerRow = sheet.getRow(1)
+  const colIndex: Record<string, number> = {}
+  headerRow.eachCell((cell, colNumber) => {
+    const label = normalizeLabel(cellText(cell.value))
+    if (label) colIndex[label] = colNumber
+  })
+
+  const find = (...candidates: string[]): number | undefined => {
+    for (const c of candidates) {
+      const key = normalizeLabel(c)
+      if (colIndex[key]) return colIndex[key]
+    }
+    return undefined
+  }
+
+  const COL = {
+    appt:    find('Atendimento'),
+    date:    find('Data de Realização', 'Data de Realizacao', 'Data do Atendimento'),
+    tutor:   find('Nome do Cliente'),
+    pet:     find('Nome do Pet'),
+    species: find('Espécie', 'Especie'),
+    breed:   find('Raça do pet', 'Raca do pet', 'Raça', 'Raca'),
+    gender:  find('Genero', 'Gênero'),
+    plan:    find('Plano do pet', 'Plano do Pet'),
+    chip:    find('Microchip'),
+    member:  find('Matrícula', 'Matricula'),
+    vet:     find('Veterinário', 'Veterinario'),
+    proc:    find('Procedimento'),
+    statusP: find('Status Procedimento'),
+    repass:  find('Valor_Repasse', 'Valor Repasse'),
+    copart:  find('Valor_Copart', 'Valor Coparticipação', 'Valor Coparticipacao'),
+    statusF: find('Status Financeiro'),
+  }
+
+  if (!COL.appt || !COL.date || !COL.proc || !COL.repass) {
+    return { error: 'Cabeçalho do formato em aberto não tem as colunas obrigatórias (Atendimento, Data de Realização, Procedimento, Valor_Repasse).' }
+  }
+
+  const lines: PetloveRemittanceLineAST[] = []
+
+  for (let r = 2; r <= sheet.rowCount; r++) {
+    const row = sheet.getRow(r)
+    const apptId = cellText(row.getCell(COL.appt).value)
+    if (!apptId) continue
+    const isoDate = toIsoDate(row.getCell(COL.date).value)
+    if (!isoDate) continue
+
+    const chipRaw = COL.chip ? cellText(row.getCell(COL.chip).value) : null
+    // Microchip no formato aberto vem sem '#'; normalizamos adicionando '#' para
+    // manter compatibilidade com o matcher existente.
+    const chipNormalized = chipRaw
+      ? (chipRaw.startsWith('#') ? chipRaw : `#${chipRaw.replace(/^#/, '')}`)
+      : null
+
+    lines.push({
+      external_appointment_id: apptId,
+      service_date:            isoDate,
+      tutor_name_raw:          COL.tutor   ? cellText(row.getCell(COL.tutor).value)   : null,
+      pet_name_raw:            COL.pet     ? cellText(row.getCell(COL.pet).value)     : null,
+      species_raw:             COL.species ? cellText(row.getCell(COL.species).value) : null,
+      breed_raw:               COL.breed   ? cellText(row.getCell(COL.breed).value)   : null,
+      plan_name_raw:           COL.plan    ? cellText(row.getCell(COL.plan).value)    : null,
+      microchip_raw:           chipNormalized,
+      membership_id_raw:       COL.member  ? cellText(row.getCell(COL.member).value)  : null,
+      veterinarian_raw:        COL.vet     ? cellText(row.getCell(COL.vet).value)     : null,
+      procedure_name_raw:      COL.proc    ? cellText(row.getCell(COL.proc).value)    : null,
+      repass_value:            toNumber(row.getCell(COL.repass).value),
+      coparticipation_value:   COL.copart  ? toNumber(row.getCell(COL.copart).value) : 0,
+      gender_raw:              COL.gender  ? cellText(row.getCell(COL.gender).value)  : null,
+      procedure_status_raw:    COL.statusP ? cellText(row.getCell(COL.statusP).value) : null,
+      financial_status_raw:    COL.statusF ? cellText(row.getCell(COL.statusF).value) : null,
+    })
+  }
+
+  if (lines.length === 0) {
+    return { error: 'Nenhum atendimento encontrado na planilha em aberto.' }
+  }
+
+  // Período = min/max das datas observadas
+  const sortedDates = lines.map(l => l.service_date).sort()
+  const period_start = sortedDates[0]
+  const period_end   = sortedDates[sortedDates.length - 1]
+
+  // Número sintético: "OPEN-YYYYMM" do mês da maior data (= últimas movimentações)
+  const [yEnd, mEnd] = period_end.split('-')
+  const remittance_number = `OPEN-${yEnd}${mEnd}`
+
+  // Totais derivados das linhas
+  const total_service_value = lines.reduce((acc, l) => acc + Number(l.repass_value), 0)
+  const total_gross_value   = lines.reduce((acc, l) => acc + Number(l.repass_value) + Number(l.coparticipation_value), 0)
+
+  const raw_summary: Record<string, string | number> = {
+    source:           'open_format',
+    lines_count:      lines.length,
+    period_start,
+    period_end,
+    derived_total_service_value: total_service_value,
+    derived_total_gross_value:   total_gross_value,
+  }
+
+  return {
+    remittance_number,
+    period_start,
+    period_end,
+    status_raw:           'Em aberto',
+    total_service_value:  Number(total_service_value.toFixed(2)),
+    referral_bonus_value: 0,
+    credit_adjustment:    0,
+    debit_adjustment:     0,
+    total_gross_value:    Number(total_gross_value.toFixed(2)),
+    raw_summary,
+    lines,
+    source_format: 'open',
+    is_preview:    true,
   }
 }
 
@@ -280,20 +459,69 @@ export async function stageRemittance(parsed: PetloveRemittanceAST): Promise<Sta
   const prov = await findOrCreatePetloveProvider(supabase, clinicId)
   if ('error' in prov) return prov
 
-  // Bloqueio de duplicidade
+  const initialStatus = parsed.source_format === 'open' ? 'open' : 'imported'
+
+  // Tratamento de duplicidade:
+  //  - Para formato fechado (status='imported'/'reviewed'/'reconciled') mantemos
+  //    o bloqueio histórico — o usuário deve excluir antes de reimportar.
+  //  - Para formato aberto (status='open' / is_preview=true) permitimos
+  //    sobrescrita: apaga linhas e regrava preservando o id da remessa
+  //    (mantém referências de patient_custom_prices.last_remittance_id).
   const { data: dupe } = await supabase
     .from('petlove_remittances')
-    .select('id, status, imported_at')
+    .select('id, status, is_preview, imported_at')
     .eq('clinic_id', clinicId)
     .eq('provider_id', prov.id)
     .eq('remittance_number', parsed.remittance_number)
     .maybeSingle()
+
   if (dupe) {
-    return {
-      error: 'Planilha já importada anteriormente.',
-      code: 'DUPLICATE_REMITTANCE',
-      existing_remittance_id: dupe.id,
+    const canOverwrite = dupe.is_preview === true && dupe.status === 'open' && parsed.source_format === 'open'
+    if (!canOverwrite) {
+      return {
+        error: 'Planilha já importada anteriormente.',
+        code: 'DUPLICATE_REMITTANCE',
+        existing_remittance_id: dupe.id,
+      }
     }
+
+    // Sobrescrita: apaga linhas antigas e atualiza header
+    const { error: delErr } = await supabase
+      .from('petlove_remittance_lines')
+      .delete()
+      .eq('remittance_id', dupe.id)
+      .eq('clinic_id', clinicId)
+    if (delErr) {
+      return { error: `Falha ao limpar linhas anteriores da remessa em aberto: ${delErr.message}` }
+    }
+
+    const { error: updErr } = await supabase
+      .from('petlove_remittances')
+      .update({
+        period_start:         parsed.period_start,
+        period_end:           parsed.period_end,
+        status:               'open',
+        is_preview:           true,
+        source_format:        'open',
+        total_service_value:  parsed.total_service_value,
+        referral_bonus_value: parsed.referral_bonus_value,
+        credit_adjustment:    parsed.credit_adjustment,
+        debit_adjustment:     parsed.debit_adjustment,
+        total_gross_value:    parsed.total_gross_value,
+        raw_summary:          parsed.raw_summary,
+        imported_by:          userId,
+        imported_at:          new Date().toISOString(),
+      })
+      .eq('id', dupe.id)
+    if (updErr) {
+      return { error: `Falha ao atualizar header da remessa em aberto: ${updErr.message}` }
+    }
+
+    const insErr = await insertLines(supabase, clinicId, dupe.id, parsed.lines)
+    if (insErr) return { error: insErr }
+
+    revalidatePath('/dashboard/financial/insurance-reconciliation')
+    return { remittance_id: dupe.id, lines_count: parsed.lines.length, source_format: parsed.source_format }
   }
 
   const { data: remittance, error: remErr } = await supabase
@@ -304,7 +532,9 @@ export async function stageRemittance(parsed: PetloveRemittanceAST): Promise<Sta
       remittance_number:    parsed.remittance_number,
       period_start:         parsed.period_start,
       period_end:           parsed.period_end,
-      status:               'imported',
+      status:               initialStatus,
+      is_preview:           parsed.is_preview,
+      source_format:        parsed.source_format,
       total_service_value:  parsed.total_service_value,
       referral_bonus_value: parsed.referral_bonus_value,
       credit_adjustment:    parsed.credit_adjustment,
@@ -320,9 +550,25 @@ export async function stageRemittance(parsed: PetloveRemittanceAST): Promise<Sta
     return { error: `Falha ao gravar header da remessa: ${remErr?.message ?? 'erro desconhecido'}` }
   }
 
-  const linesPayload = parsed.lines.map(l => ({
+  const insErr = await insertLines(supabase, clinicId, remittance.id, parsed.lines)
+  if (insErr) {
+    await supabase.from('petlove_remittances').delete().eq('id', remittance.id)
+    return { error: insErr }
+  }
+
+  revalidatePath('/dashboard/financial/insurance-reconciliation')
+  return { remittance_id: remittance.id, lines_count: parsed.lines.length, source_format: parsed.source_format }
+}
+
+async function insertLines(
+  supabase: ClinicCtx['supabase'],
+  clinicId: string,
+  remittanceId: string,
+  lines: PetloveRemittanceLineAST[],
+): Promise<string | null> {
+  const linesPayload = lines.map(l => ({
     clinic_id:               clinicId,
-    remittance_id:           remittance.id,
+    remittance_id:           remittanceId,
     external_appointment_id: l.external_appointment_id,
     service_date:            l.service_date,
     tutor_name_raw:          l.tutor_name_raw,
@@ -336,20 +582,17 @@ export async function stageRemittance(parsed: PetloveRemittanceAST): Promise<Sta
     procedure_name_raw:      l.procedure_name_raw,
     repass_value:            l.repass_value,
     coparticipation_value:   l.coparticipation_value,
+    gender_raw:              l.gender_raw            ?? null,
+    procedure_status_raw:    l.procedure_status_raw  ?? null,
+    financial_status_raw:    l.financial_status_raw  ?? null,
     match_status:            'pending',
   }))
 
-  const { error: linesErr } = await supabase
+  const { error } = await supabase
     .from('petlove_remittance_lines')
     .insert(linesPayload)
 
-  if (linesErr) {
-    await supabase.from('petlove_remittances').delete().eq('id', remittance.id)
-    return { error: `Falha ao gravar linhas da remessa: ${linesErr.message}` }
-  }
-
-  revalidatePath('/dashboard/financial/insurance-reconciliation')
-  return { remittance_id: remittance.id, lines_count: parsed.lines.length }
+  return error ? `Falha ao gravar linhas da remessa: ${error.message}` : null
 }
 
 // ─── uploadAndStagePetloveRemittance (entry-point do dropzone) ────────────────
@@ -366,7 +609,200 @@ export async function uploadAndStagePetloveRemittance(
   const parsed = await parsePetloveXlsx(buffer)
   if ('error' in parsed) return parsed
 
-  return stageRemittance(parsed)
+  const staged = await stageRemittance(parsed)
+  if ('error' in staged) return staged
+
+  // ─── Side-effects da prévia em aberto ─────────────────────────────────────
+  // Para o formato em aberto: roda matching automaticamente e propaga
+  // (a) atualização cadastral de pets já vinculados (campos vazios) e
+  // (b) preço fixado em patient_custom_prices para procedimentos mapeados.
+  if (parsed.is_preview) {
+    const sideEffects = await applyPreviewSideEffects(staged.remittance_id)
+    if (!('error' in sideEffects)) {
+      staged.preview_side_effects = sideEffects
+    }
+  }
+
+  return staged
+}
+
+// ─── applyPreviewSideEffects ──────────────────────────────────────────────────
+// Dispara matching automático e, para as linhas vinculadas a pets existentes,
+// (1) preenche campos cadastrais ainda vazios e (2) registra/atualiza
+// patient_custom_prices com o último repass observado. Sem mutação destrutiva:
+// nunca sobrescreve dado já preenchido no cadastro do pet.
+
+async function applyPreviewSideEffects(
+  remittanceId: string,
+): Promise<{ matched: number; patients_updated: number; prices_updated: number; errors: string[] } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+  const { supabase, clinicId } = ctx
+
+  // 1) Roda matching
+  const matchRes = await runMatchEngine(remittanceId)
+  if ('error' in matchRes) return { error: `Matching falhou: ${matchRes.error}` }
+
+  // 2) Localiza provider Petlove (necessário para patient_custom_prices)
+  const { data: provider } = await supabase
+    .from('insurance_providers')
+    .select('id')
+    .eq('clinic_id', clinicId)
+    .ilike('name', 'petlove')
+    .maybeSingle()
+  if (!provider?.id) {
+    return { matched: matchRes.matched ?? 0, patients_updated: 0, prices_updated: 0, errors: ['Convênio Petlove não localizado para a clínica.'] }
+  }
+  const providerId = provider.id
+
+  // 3) Carrega linhas que já têm pet identificado
+  const { data: lines, error: linesErr } = await supabase
+    .from('petlove_remittance_lines')
+    .select('id, service_date, matched_patient_id, gender_raw, species_raw, breed_raw, microchip_raw, plan_name_raw, procedure_name_raw, repass_value, match_status')
+    .eq('clinic_id', clinicId)
+    .eq('remittance_id', remittanceId)
+    .not('matched_patient_id', 'is', null)
+    .in('match_status', ['matched', 'partial', 'orphan_invoice'])
+
+  if (linesErr) return { error: `Falha ao carregar linhas para side-effects: ${linesErr.message}` }
+  if (!lines || lines.length === 0) {
+    return { matched: matchRes.matched ?? 0, patients_updated: 0, prices_updated: 0, errors: [] }
+  }
+
+  const errors: string[] = []
+  let patientsUpdated = 0
+  let pricesUpdated   = 0
+
+  // 4) Atualização cadastral (1× por pet)
+  const seenPatients = new Set<string>()
+  for (const line of lines) {
+    const patientId = line.matched_patient_id as string
+    if (seenPatients.has(patientId)) continue
+    seenPatients.add(patientId)
+
+    const { data: pat } = await supabase
+      .from('patients')
+      .select('id, microchip_id, microchip, breed, species, gender')
+      .eq('id', patientId)
+      .eq('clinic_id', clinicId)
+      .maybeSingle()
+    if (!pat) continue
+
+    const update: Record<string, unknown> = {}
+
+    // Microchip: preenche apenas se cadastro não tem
+    if (!pat.microchip_id && !pat.microchip && line.microchip_raw) {
+      const chip = (line.microchip_raw as string).replace(/^#/, '').trim()
+      if (chip) {
+        update.microchip_id = chip
+        update.microchip    = chip
+      }
+    }
+
+    // Gênero: preenche apenas se 'unknown' ou vazio
+    if ((!pat.gender || pat.gender === 'unknown') && line.gender_raw) {
+      const g = String(line.gender_raw).toLowerCase()
+      if (g.includes('macho'))                       update.gender = 'male'
+      else if (g.includes('fêmea') || g.includes('femea')) update.gender = 'female'
+    }
+
+    // Raça: preenche apenas se vazia
+    if (!pat.breed && line.breed_raw) {
+      update.breed = line.breed_raw
+    }
+
+    // Espécie: corrige apenas se está como 'exotic' (placeholder) ou vazio
+    if ((!pat.species || pat.species === 'exotic') && line.species_raw) {
+      update.species = mapSpeciesLocal(String(line.species_raw))
+    }
+
+    if (Object.keys(update).length > 0) {
+      const { error } = await supabase
+        .from('patients')
+        .update(update)
+        .eq('id', patientId)
+        .eq('clinic_id', clinicId)
+      if (error) errors.push(`patient ${patientId}: ${error.message}`)
+      else patientsUpdated++
+    }
+  }
+
+  // 5) patient_custom_prices: usa mappings existentes (não cria mapping novo)
+  const procNames = Array.from(new Set(
+    lines.map(l => l.procedure_name_raw).filter(Boolean) as string[],
+  ))
+
+  if (procNames.length > 0) {
+    const { data: mappings } = await supabase
+      .from('petlove_procedure_mappings')
+      .select('external_procedure_name, internal_stock_item_id')
+      .eq('clinic_id', clinicId)
+      .eq('provider_id', providerId)
+      .in('external_procedure_name', procNames)
+
+    const stockByProc = new Map<string, string>()
+    for (const m of mappings ?? []) {
+      if (m.internal_stock_item_id) stockByProc.set(m.external_procedure_name, m.internal_stock_item_id)
+    }
+
+    // Para cada (pet, procedimento), mantém apenas a observação mais recente
+    type Obs = { patient: string; stock: string; price: number; serviceDate: string }
+    const latestByKey = new Map<string, Obs>()
+    for (const line of lines) {
+      const stockId = line.procedure_name_raw ? stockByProc.get(line.procedure_name_raw as string) : null
+      if (!stockId) continue
+      const price = Number(line.repass_value)
+      if (!Number.isFinite(price) || price <= 0) continue
+      const key = `${line.matched_patient_id}::${stockId}`
+      const existing = latestByKey.get(key)
+      if (!existing || (line.service_date as string) > existing.serviceDate) {
+        latestByKey.set(key, {
+          patient:     line.matched_patient_id as string,
+          stock:       stockId,
+          price,
+          serviceDate: line.service_date as string,
+        })
+      }
+    }
+
+    for (const obs of latestByKey.values()) {
+      const { error } = await supabase
+        .from('patient_custom_prices')
+        .upsert({
+          clinic_id:          clinicId,
+          patient_id:         obs.patient,
+          stock_item_id:      obs.stock,
+          custom_price:       obs.price,
+          source:             'petlove_remittance',
+          provider_id:        providerId,
+          last_remittance_id: remittanceId,
+          last_seen_at:       new Date().toISOString(),
+          observation_count:  1,
+          updated_at:         new Date().toISOString(),
+        }, { onConflict: 'clinic_id,patient_id,stock_item_id' })
+      if (error) errors.push(`price ${obs.patient}/${obs.stock}: ${error.message}`)
+      else pricesUpdated++
+    }
+  }
+
+  return {
+    matched:          matchRes.matched ?? 0,
+    patients_updated: patientsUpdated,
+    prices_updated:   pricesUpdated,
+    errors,
+  }
+}
+
+function mapSpeciesLocal(raw: string): 'dog' | 'cat' | 'bird' | 'rabbit' | 'rodent' | 'reptile' | 'fish' | 'exotic' {
+  const s = raw.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+  if (/cachorro|cao|canino/.test(s)) return 'dog'
+  if (/gato|felino/.test(s))         return 'cat'
+  if (/passaro|ave/.test(s))         return 'bird'
+  if (/coelho/.test(s))              return 'rabbit'
+  if (/hamster|porquinho|rato/.test(s)) return 'rodent'
+  if (/reptil|tartaruga|cobra|iguana/.test(s)) return 'reptile'
+  if (/peixe/.test(s))               return 'fish'
+  return 'exotic'
 }
 
 // ─── listImportedRemittances (para histórico no UI) ───────────────────────────
@@ -380,6 +816,8 @@ export interface ImportedRemittanceSummary {
   total_gross_value: number
   lines_count:       number
   imported_at:       string
+  is_preview:        boolean
+  source_format:     'closed' | 'open'
 }
 
 // ─── getPetlovePriceHistoryForPet ─────────────────────────────────────────────
@@ -492,7 +930,7 @@ export async function listImportedRemittances(): Promise<ImportedRemittanceSumma
 
   const { data, error } = await supabase
     .from('petlove_remittances')
-    .select('id, remittance_number, period_start, period_end, status, total_gross_value, imported_at, petlove_remittance_lines(count)')
+    .select('id, remittance_number, period_start, period_end, status, is_preview, source_format, total_gross_value, imported_at, petlove_remittance_lines(count)')
     .eq('clinic_id', clinicId)
     .order('imported_at', { ascending: false })
     .limit(20)
@@ -507,5 +945,7 @@ export async function listImportedRemittances(): Promise<ImportedRemittanceSumma
     total_gross_value: Number(r.total_gross_value),
     lines_count:       Array.isArray(r.petlove_remittance_lines) ? (r.petlove_remittance_lines[0]?.count ?? 0) : 0,
     imported_at:       r.imported_at,
+    is_preview:        Boolean(r.is_preview),
+    source_format:     (r.source_format as 'closed' | 'open') ?? 'closed',
   }))
 }

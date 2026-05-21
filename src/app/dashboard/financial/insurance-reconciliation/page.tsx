@@ -49,7 +49,7 @@ export default async function InsuranceReconciliationPage() {
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Conciliação de Convênios</h1>
             <p className="text-sm text-slate-500 mt-1">
-              Importe a planilha mensal da Petlove para conciliar repasses, atualizar cadastros e identificar glosas.
+              Importe a remessa fechada para conciliar repasses ou o extrato em aberto para uma prévia que atualiza cadastros e preços.
             </p>
           </div>
         </header>

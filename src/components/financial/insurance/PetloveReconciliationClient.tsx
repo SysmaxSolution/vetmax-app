@@ -6,10 +6,17 @@ import { Upload, FileSpreadsheet, Loader2, CheckCircle2, AlertCircle, Clock, Arr
 import { uploadAndStagePetloveRemittance, type ImportedRemittanceSummary } from '@/lib/actions/petlove-import'
 import { deleteRemittance } from '@/lib/actions/petlove-reconciliation'
 
+type PreviewSummary = {
+  matched:          number
+  patients_updated: number
+  prices_updated:   number
+  errors:           string[]
+}
+
 type Status =
   | { kind: 'idle' }
   | { kind: 'uploading'; filename: string }
-  | { kind: 'success';    remittanceId: string; linesCount: number }
+  | { kind: 'success';    remittanceId: string; linesCount: number; sourceFormat: 'closed' | 'open'; previewSideEffects?: PreviewSummary }
   | { kind: 'duplicate';  message: string; existingRemittanceId?: string }
   | { kind: 'error';      message: string }
 
@@ -21,6 +28,7 @@ type DeleteRequest = {
 } | null
 
 const STATUS_STYLES: Record<string, string> = {
+  open:        'bg-sky-50 text-sky-700 border-sky-200',
   imported:    'bg-amber-50 text-amber-700 border-amber-200',
   reviewed:    'bg-blue-50 text-blue-700 border-blue-200',
   reconciled:  'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -28,6 +36,7 @@ const STATUS_STYLES: Record<string, string> = {
 }
 
 const STATUS_LABELS: Record<string, string> = {
+  open:       'Em aberto (prévia)',
   imported:   'Importada',
   reviewed:   'Em revisão',
   reconciled: 'Conciliada',
@@ -96,19 +105,31 @@ export default function PetloveReconciliationClient({
       return
     }
 
-    setStatus({ kind: 'success', remittanceId: result.remittance_id, linesCount: result.lines_count })
+    setStatus({
+      kind:                'success',
+      remittanceId:        result.remittance_id,
+      linesCount:          result.lines_count,
+      sourceFormat:        result.source_format,
+      previewSideEffects:  result.preview_side_effects,
+    })
 
-    // Refresh list (otimista — recarrega via página depois)
-    setRemittances(prev => [{
-      id:                result.remittance_id,
-      remittance_number: '(nova)',
-      period_start:      '',
-      period_end:        '',
-      status:            'imported',
-      total_gross_value: 0,
-      lines_count:       result.lines_count,
-      imported_at:       new Date().toISOString(),
-    }, ...prev])
+    // Refresh list (otimista — substitui se já existe, senão prepend)
+    const isPreview = result.source_format === 'open'
+    setRemittances(prev => {
+      const filtered = prev.filter(r => r.id !== result.remittance_id)
+      return [{
+        id:                result.remittance_id,
+        remittance_number: isPreview ? 'OPEN — em aberto' : '(nova)',
+        period_start:      '',
+        period_end:        '',
+        status:            isPreview ? 'open' : 'imported',
+        total_gross_value: 0,
+        lines_count:       result.lines_count,
+        imported_at:       new Date().toISOString(),
+        is_preview:        isPreview,
+        source_format:     result.source_format,
+      }, ...filtered]
+    })
   }, [])
 
   const onDrop = useCallback((e: React.DragEvent) => {
@@ -154,7 +175,7 @@ export default function PetloveReconciliationClient({
                 Processando {status.filename}…
               </p>
               <p className="text-xs text-purple-600">
-                Lendo as abas Resumo e Extrato. Isso leva alguns segundos.
+                Identificando o formato (Resumo+Extrato ou Worksheet em aberto). Pode levar alguns segundos.
               </p>
             </>
           ) : (
@@ -168,22 +189,50 @@ export default function PetloveReconciliationClient({
               <p className="text-sm text-purple-600">
                 ou clique para selecionar um arquivo (.xlsx, até 10 MB)
               </p>
+              <p className="text-[11px] text-purple-500 max-w-md mt-1">
+                Aceita tanto a remessa fechada (Resumo + Extrato) quanto o extrato em aberto (aba única Worksheet) — esta gera uma prévia atualizável.
+              </p>
             </>
           )}
         </div>
       </div>
 
       {/* Feedback do último upload */}
-      {status.kind === 'success' && (
+      {status.kind === 'success' && status.sourceFormat === 'closed' && (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 flex items-start gap-3">
           <CheckCircle2 className="h-5 w-5 text-emerald-600 flex-shrink-0 mt-0.5" />
           <div className="flex-1">
             <p className="font-semibold text-emerald-900">Remessa importada com sucesso!</p>
             <p className="text-sm text-emerald-700 mt-0.5">
               {status.linesCount} procedimento{status.linesCount !== 1 ? 's' : ''} gravado{status.linesCount !== 1 ? 's' : ''} em estado <strong>importada</strong>.
-              O motor de matching e a tela de revisão entram na Sprint 2.
+              Abra a revisão para rodar o matching e concluir a conciliação.
             </p>
             <p className="text-xs text-emerald-600 mt-2 font-mono">
+              ID: {status.remittanceId}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {status.kind === 'success' && status.sourceFormat === 'open' && (
+        <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 flex items-start gap-3">
+          <CheckCircle2 className="h-5 w-5 text-sky-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="font-semibold text-sky-900">Prévia em aberto registrada</p>
+            <p className="text-sm text-sky-700 mt-0.5">
+              {status.linesCount} atendimento{status.linesCount !== 1 ? 's' : ''} em aberto carregado{status.linesCount !== 1 ? 's' : ''}. Esta remessa fica em estado <strong>Em aberto</strong> e pode ser sobrescrita reimportando o mesmo período.
+            </p>
+            {status.previewSideEffects && (
+              <ul className="text-xs text-sky-800 mt-2 space-y-0.5 ml-1">
+                <li>• <strong>{status.previewSideEffects.matched}</strong> linha{status.previewSideEffects.matched !== 1 ? 's' : ''} casada{status.previewSideEffects.matched !== 1 ? 's' : ''} com pets já cadastrados</li>
+                <li>• <strong>{status.previewSideEffects.patients_updated}</strong> cadastro{status.previewSideEffects.patients_updated !== 1 ? 's' : ''} de pet enriquecido{status.previewSideEffects.patients_updated !== 1 ? 's' : ''} (chip / sexo / raça quando vazios)</li>
+                <li>• <strong>{status.previewSideEffects.prices_updated}</strong> preço{status.previewSideEffects.prices_updated !== 1 ? 's' : ''} fixado{status.previewSideEffects.prices_updated !== 1 ? 's' : ''} em patient_custom_prices</li>
+                {status.previewSideEffects.errors.length > 0 && (
+                  <li className="text-rose-700">• {status.previewSideEffects.errors.length} aviso{status.previewSideEffects.errors.length !== 1 ? 's' : ''} durante o processamento</li>
+                )}
+              </ul>
+            )}
+            <p className="text-xs text-sky-600 mt-2 font-mono">
               ID: {status.remittanceId}
             </p>
           </div>
