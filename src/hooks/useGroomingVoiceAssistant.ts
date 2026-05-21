@@ -45,8 +45,6 @@ export function useGroomingVoiceAssistant({ onAutoSave, onSendWA, startTriggers,
   const onAutoSaveRef            = useRef(onAutoSave)
   const onSendWARef              = useRef(onSendWA)
   const processedFinalIndicesRef = useRef<Set<number>>(new Set())
-  // Últimos N chunks tokenizados para dedup Jaccard contra re-emissão pós-restart do engine.
-  const lastFinalTokensRef       = useRef<string[][]>([])
   const wakeChunkIndexRef        = useRef<number>(-1)
   const wakeChunkOffsetRef       = useRef<number>(0)
 
@@ -98,27 +96,23 @@ export function useGroomingVoiceAssistant({ onAutoSave, onSendWA, startTriggers,
     return s.toLowerCase().match(/\p{L}+|\d+/gu) ?? []
   }
 
-  function jaccardSimilarity(a: string[], b: string[]): number {
-    if (!a.length || !b.length) return 0
-    const sa = new Set(a)
-    const sb = new Set(b)
-    let inter = 0
-    for (const t of sa) if (sb.has(t)) inter++
-    return inter / (sa.size + sb.size - inter)
-  }
-
-  function isFuzzyDuplicate(tokens: string[]): boolean {
-    if (tokens.length < 5) return false
-    for (const prev of lastFinalTokensRef.current) {
-      if (prev.length < 5) continue
-      if (jaccardSimilarity(tokens, prev) >= 0.7) return true
+  function buildShingles(tokens: string[], k = 3): Set<string> {
+    const out = new Set<string>()
+    if (tokens.length < k) return out
+    for (let i = 0; i + k <= tokens.length; i++) {
+      out.add(tokens.slice(i, i + k).join(' '))
     }
-    return false
+    return out
   }
 
-  function recordFinalChunk(tokens: string[]) {
-    lastFinalTokensRef.current.push(tokens)
-    if (lastFinalTokensRef.current.length > 8) lastFinalTokensRef.current.shift()
+  function isReemission(delta: string, baseShingles: Set<string>): boolean {
+    const dTokens = tokenize(delta)
+    if (dTokens.length < 5) return false
+    const dShingles = buildShingles(dTokens, 3)
+    if (dShingles.size === 0 || baseShingles.size === 0) return false
+    let common = 0
+    for (const s of dShingles) if (baseShingles.has(s)) common++
+    return common / dShingles.size >= 0.85
   }
 
   // ─── Overlap dedup ───────────────────────────────────────────────────────────
@@ -161,7 +155,6 @@ export function useGroomingVoiceAssistant({ onAutoSave, onSendWA, startTriggers,
     const clean = rawText.replace(saveCmdReRef.current, '').replace(/\s{2,}/g, ' ').trim()
     finalTranscriptRef.current = ''
     processedFinalIndicesRef.current.clear()
-    lastFinalTokensRef.current = []
     wakeChunkIndexRef.current  = -1
     wakeChunkOffsetRef.current = 0
     setState('CONFIRM_WA')
@@ -219,7 +212,6 @@ export function useGroomingVoiceAssistant({ onAutoSave, onSendWA, startTriggers,
             recordingStartRef.current  = i
             finalTranscriptRef.current = ''
             processedFinalIndicesRef.current.clear()
-            lastFinalTokensRef.current = []
             setState('RECORDING')
             setTranscript('')
             playBeep()
@@ -233,6 +225,7 @@ export function useGroomingVoiceAssistant({ onAutoSave, onSendWA, startTriggers,
       if (curState === 'RECORDING') {
         let interim         = ''
         let finalBuffer     = finalTranscriptRef.current
+        let bufferShingles  = buildShingles(tokenize(finalBuffer), 3)
         let hadNewFinals    = false
         const newDeltaParts: string[] = []
 
@@ -246,19 +239,18 @@ export function useGroomingVoiceAssistant({ onAutoSave, onSendWA, startTriggers,
               wakeChunkOffsetRef.current = 0
             }
             if (!rawText.trim() || processedFinalIndicesRef.current.has(i)) continue
-            const tokens = tokenize(rawText)
-            if (isFuzzyDuplicate(tokens)) {
-              processedFinalIndicesRef.current.add(i)
-              continue
-            }
             processedFinalIndicesRef.current.add(i)
-            recordFinalChunk(tokens)
             const delta = removeLeadingOverlap(finalBuffer, rawText)
-            if (delta) {
-              newDeltaParts.push(delta)
-              finalBuffer  = (finalBuffer + ' ' + delta).trim()
-              hadNewFinals = true
+            if (!delta) continue
+            if (isReemission(delta, bufferShingles)) continue
+            newDeltaParts.push(delta)
+            finalBuffer  = (finalBuffer + ' ' + delta).trim()
+            const newTokens = tokenize(finalBuffer)
+            const startIdx  = Math.max(0, newTokens.length - tokenize(delta).length - 2)
+            for (let j = startIdx; j + 3 <= newTokens.length; j++) {
+              bufferShingles.add(newTokens.slice(j, j + 3).join(' '))
             }
+            hadNewFinals = true
           } else {
             let raw = event.results[i][0].transcript
             if (i === wakeChunkIndexRef.current && wakeChunkOffsetRef.current > 0) {
@@ -331,7 +323,6 @@ export function useGroomingVoiceAssistant({ onAutoSave, onSendWA, startTriggers,
     setState('IDLE')
     setTranscript('')
     finalTranscriptRef.current = ''
-    lastFinalTokensRef.current = []
     wakeChunkIndexRef.current  = -1
     wakeChunkOffsetRef.current = 0
   }, []) // eslint-disable-line react-hooks/exhaustive-deps

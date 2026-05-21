@@ -37,12 +37,6 @@ export function useClinicalVoiceAssistant({ onAutoSave, startTriggers, stopTrigg
   const saveCmdReRef             = useRef<RegExp>(buildStopRe([]))
   const onAutoSaveRef            = useRef(onAutoSave)
   const processedFinalIndicesRef = useRef<Set<number>>(new Set())
-  // Dedup por conteúdo: persiste entre restarts da engine (Chrome mobile reinicia ~60s)
-  // para evitar que o mesmo texto seja acumulado duas vezes após um onend/restart.
-  // Guarda os últimos N chunks tokenizados para comparação Jaccard — cobre re-emissões
-  // do engine que vêm com pequenas correções ("expressar"→"esperar", capitalização,
-  // sufixo extra). Igualdade exata sozinha não pega esses casos.
-  const lastFinalTokensRef       = useRef<string[][]>([])
   // Quando a wake word é detectada num chunk interim, o mesmo índice virará final
   // depois. Guardamos a posição do final do match para extrair só o sufixo do chunk
   // final (a frase que veio JUNTO com "assistente, ...").
@@ -77,30 +71,27 @@ export function useClinicalVoiceAssistant({ onAutoSave, startTriggers, stopTrigg
     return s.toLowerCase().match(/\p{L}+|\d+/gu) ?? []
   }
 
-  // Jaccard de conjuntos de tokens — robusto a substituições isoladas, capitalização
-  // e sufixos extras. Threshold 0.7 captura re-emissões com 1-2 palavras trocadas
-  // sem disparar em frases curtas legitimamente parecidas (essas têm conjunto pequeno).
-  function jaccardSimilarity(a: string[], b: string[]): number {
-    if (!a.length || !b.length) return 0
-    const sa = new Set(a)
-    const sb = new Set(b)
-    let inter = 0
-    for (const t of sa) if (sb.has(t)) inter++
-    return inter / (sa.size + sb.size - inter)
-  }
-
-  function isFuzzyDuplicate(tokens: string[]): boolean {
-    if (tokens.length < 5) return false  // chunks curtos não deduplicam por Jaccard
-    for (const prev of lastFinalTokensRef.current) {
-      if (prev.length < 5) continue
-      if (jaccardSimilarity(tokens, prev) >= 0.7) return true
+  function buildShingles(tokens: string[], k = 3): Set<string> {
+    const out = new Set<string>()
+    if (tokens.length < k) return out
+    for (let i = 0; i + k <= tokens.length; i++) {
+      out.add(tokens.slice(i, i + k).join(' '))
     }
-    return false
+    return out
   }
 
-  function recordFinalChunk(tokens: string[]) {
-    lastFinalTokensRef.current.push(tokens)
-    if (lastFinalTokensRef.current.length > 8) lastFinalTokensRef.current.shift()
+  // Detecta se `delta` é re-emissão do que já existe em `baseShingles` (n-gramas
+  // de 3 tokens do buffer atual). Threshold 0.85 captura re-emissões pós-restart
+  // do engine sem disparar em correções legítimas (ex.: "direita" → "esquerda"
+  // numa frase parecida geram ~0.85; "esperar"/"expressar" + sufixo extra dão 0.95+).
+  function isReemission(delta: string, baseShingles: Set<string>): boolean {
+    const dTokens = tokenize(delta)
+    if (dTokens.length < 5) return false
+    const dShingles = buildShingles(dTokens, 3)
+    if (dShingles.size === 0 || baseShingles.size === 0) return false
+    let common = 0
+    for (const s of dShingles) if (baseShingles.has(s)) common++
+    return common / dShingles.size >= 0.85
   }
 
   // Remove do início de `incoming` qualquer texto já presente no final de `base`,
@@ -144,7 +135,6 @@ export function useClinicalVoiceAssistant({ onAutoSave, startTriggers, stopTrigg
     const clean = rawText.replace(saveCmdReRef.current, '').replace(/\s{2,}/g, ' ').trim()
     finalTranscriptRef.current = ''
     processedFinalIndicesRef.current.clear()
-    lastFinalTokensRef.current = []
     wakeChunkIndexRef.current  = -1
     wakeChunkOffsetRef.current = 0
     setState('IDLE')
@@ -202,7 +192,6 @@ export function useClinicalVoiceAssistant({ onAutoSave, startTriggers, stopTrigg
             recordingStartRef.current  = i
             finalTranscriptRef.current = ''
             processedFinalIndicesRef.current.clear()
-            lastFinalTokensRef.current = []
             setState('RECORDING')
             setTranscript('')
             playBeep()
@@ -216,6 +205,7 @@ export function useClinicalVoiceAssistant({ onAutoSave, startTriggers, stopTrigg
       if (curState === 'RECORDING') {
         let interim         = ''
         let finalBuffer     = finalTranscriptRef.current
+        let bufferShingles  = buildShingles(tokenize(finalBuffer), 3)
         let hadNewFinals    = false
         const newDeltaParts: string[] = []
 
@@ -230,21 +220,22 @@ export function useClinicalVoiceAssistant({ onAutoSave, startTriggers, stopTrigg
               wakeChunkOffsetRef.current = 0
             }
             if (!rawText.trim() || processedFinalIndicesRef.current.has(i)) continue
-            const tokens = tokenize(rawText)
-            // Dedup fuzzy: chunks ≥5 tokens que repetem ≥70% do conjunto de tokens
-            // de algum chunk anterior são re-emissões do engine — descartar.
-            if (isFuzzyDuplicate(tokens)) {
-              processedFinalIndicesRef.current.add(i)
-              continue
-            }
             processedFinalIndicesRef.current.add(i)
-            recordFinalChunk(tokens)
+            // 1º: extrai o delta tirando overlap nas bordas (ASR cumulativo).
             const delta = removeLeadingOverlap(finalBuffer, rawText)
-            if (delta) {
-              newDeltaParts.push(delta)
-              finalBuffer  = (finalBuffer + ' ' + delta).trim()
-              hadNewFinals = true
+            if (!delta) continue
+            // 2º: se o delta resultante ainda for praticamente uma cópia do buffer
+            // (re-emissão pós-restart com texto repetido no meio), descarta.
+            if (isReemission(delta, bufferShingles)) continue
+            newDeltaParts.push(delta)
+            finalBuffer  = (finalBuffer + ' ' + delta).trim()
+            // Atualiza shingles incrementalmente (3-grams começando até 2 tokens atrás).
+            const newTokens = tokenize(finalBuffer)
+            const startIdx  = Math.max(0, newTokens.length - tokenize(delta).length - 2)
+            for (let j = startIdx; j + 3 <= newTokens.length; j++) {
+              bufferShingles.add(newTokens.slice(j, j + 3).join(' '))
             }
+            hadNewFinals = true
           } else {
             let raw = event.results[i][0].transcript
             if (i === wakeChunkIndexRef.current && wakeChunkOffsetRef.current > 0) {
@@ -297,7 +288,6 @@ export function useClinicalVoiceAssistant({ onAutoSave, startTriggers, stopTrigg
     setState('IDLE')
     setTranscript('')
     finalTranscriptRef.current = ''
-    lastFinalTokensRef.current = []
     wakeChunkIndexRef.current  = -1
     wakeChunkOffsetRef.current = 0
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
