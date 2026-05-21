@@ -238,6 +238,8 @@ export default function ConsultationDetail({
   const [showDischargeModal, setShowDischargeModal] = useState(false)
   const [showFeed, setShowFeed] = useState(false)
   const [showAdmitModal,       setShowAdmitModal]       = useState(false)
+  // Motivo pré-extraído pela IA para o AdmitPetModal — atualizado pela voz no fluxo do Consultório.
+  const [admitInitialReason,   setAdmitInitialReason]   = useState<string>('')
   const [showExamRequestModal, setShowExamRequestModal] = useState(false)
   // Bloqueia a alta enquanto o PDF está sendo gerado/enviado ao storage
   const [isPdfUploading, setIsPdfUploading] = useState(false)
@@ -304,15 +306,32 @@ export default function ConsultationDetail({
   useEffect(() => { vetNotesRef.current = vetNotes }, [vetNotes])
 
   const handleVoiceAutoSave = useCallback(async (transcript: string) => {
+    // Diagnóstico — confirma que o callback foi chamado e em qual modo.
+    console.log('[VOICE→IA] handleVoiceAutoSave', {
+      aiMode,
+      transcriptLen: transcript.length,
+      preview: transcript.slice(0, 120),
+    })
+
+    if (!transcript.trim()) {
+      setToast({ type: 'error', message: 'Gravação vazia — nada a processar.' })
+      return
+    }
+
     // Modo "Apenas Transcrição" — anexa diretamente ao prontuário sem extração por IA
     if (aiMode === 'transcribe_only') {
       const newNotes = vetNotesRef.current ? `${vetNotesRef.current}\n\n${transcript}` : transcript
       setVetNotes(newNotes)
       autoSave(newNotes)
+      setToast({
+        type: 'success',
+        message: `Modo "Apenas Transcrição" ativo — texto colado no prontuário. Para a IA extrair medicações, retornos e internação, mude para "IA Assistida" em Gestão > Configurações.`,
+      })
       return
     }
 
     setIsExtractingVoice(true)
+    setToast({ type: 'success', message: `IA analisando ${transcript.length} caracteres da consulta...` })
     const result = await extractFullVoice(
       transcript,
       {
@@ -326,6 +345,8 @@ export default function ConsultationDetail({
     )
     setIsExtractingVoice(false)
 
+    console.log('[VOICE→IA] extractFullVoice resultado', result)
+
     if ('error' in result) {
       // Fallback: preserva a transcrição bruta para não perder o conteúdo gravado
       const fallbackNotes = vetNotesRef.current
@@ -333,7 +354,7 @@ export default function ConsultationDetail({
         : transcript
       setVetNotes(fallbackNotes)
       autoSave(fallbackNotes)
-      setToast({ type: 'error', message: `${result.error} — transcrição salva como texto bruto.` })
+      setToast({ type: 'error', message: `IA falhou: ${result.error} — transcrição salva como texto bruto.` })
       return
     }
 
@@ -413,6 +434,10 @@ export default function ConsultationDetail({
       setOutcomeTab('alta')
       setTimeout(() => setShowDischargeModal(true), 2000)
     } else if (result.suggested_routing === 'hospitalization') {
+      // Pré-preenche o motivo com as notas clínicas (SOAP gerado) ou, como
+      // fallback, com o transcript bruto da fala — assim o vet só confirma.
+      const motivo = result.notas_clinicas?.trim() || transcript.trim()
+      setAdmitInitialReason(motivo)
       setOutcomeTab('internacao')
       setTimeout(() => setShowAdmitModal(true), 2000)
     } else if (result.suggested_routing === 'waiting_exam') {
@@ -2040,8 +2065,10 @@ export default function ConsultationDetail({
           patientId={patient.id}
           patientName={patient.name}
           consultationId={consultation.id}
-          onClose={() => setShowAdmitModal(false)}
+          initialReason={admitInitialReason || undefined}
+          onClose={() => { setShowAdmitModal(false); setAdmitInitialReason('') }}
           onSuccess={(reason, status) => {
+            setAdmitInitialReason('')
             setToast({ type: 'success', message: `${patient.name} internado com sucesso! Acesse o Kanban de Internação.` })
             if (tutor.phone) {
               setWhatsAppHosp({ reason, status: status as 'observation' | 'ward' | 'icu' })

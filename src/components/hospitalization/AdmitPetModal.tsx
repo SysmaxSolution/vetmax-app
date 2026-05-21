@@ -35,6 +35,10 @@ interface Props {
   patientId:      string
   patientName:    string
   consultationId?: string
+  /** Motivo pré-preenchido pela IA quando vem do fluxo de voz do Consultório. */
+  initialReason?: string
+  /** Ala pré-selecionada pela IA (default: observation). */
+  initialStatus?: HospitalizationStatus
   onClose:        () => void
   onSuccess:      (reason: string, status: HospitalizationStatus) => void
 }
@@ -45,12 +49,15 @@ export default function AdmitPetModal({
   patientId,
   patientName,
   consultationId,
+  initialReason,
+  initialStatus,
   onClose,
   onSuccess,
 }: Props) {
   const aiMode = useAiTranscriptionMode()
-  const [status,          setStatus]          = useState<HospitalizationStatus>('observation')
-  const [reason,          setReason]          = useState('')
+  const [status,          setStatus]          = useState<HospitalizationStatus>(initialStatus ?? 'observation')
+  const [reason,          setReason]          = useState(initialReason ?? '')
+  const [fromAi]                              = useState(!!initialReason)
   const [error,           setError]           = useState<string | null>(null)
   const [isPending,       startTransition]    = useTransition()
   const [isRecording,     setIsRecording]     = useState(false)
@@ -183,10 +190,10 @@ export default function AdmitPetModal({
                 <label className="block text-sm font-semibold text-slate-700">
                   Motivo da Internação <span className="text-red-500">*</span>
                 </label>
-                {fromTranscription && (
+                {(fromTranscription || fromAi) && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700">
                     <Sparkles className="h-2.5 w-2.5" />
-                    Extraído por IA
+                    {fromAi ? 'Pré-preenchido pela IA' : 'Extraído por IA'}
                   </span>
                 )}
               </div>
