@@ -1,10 +1,12 @@
 'use client'
 
-import { useState, useTransition, useRef } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { X, BedDouble, Loader2, AlertTriangle, Mic, Square, Sparkles } from 'lucide-react'
 import { createHospitalization, type HospitalizationStatus } from '@/lib/actions/hospitalizations'
 import { extractAdmissionReason } from '@/lib/actions/ai_extraction'
 import { useAiTranscriptionMode } from '@/components/providers/ClinicConfigProvider'
+import { useFocusedVoiceCapture } from '@/hooks/useFocusedVoiceCapture'
+import { getClinicVoiceTriggers } from '@/lib/actions/clinic-settings'
 
 // ─── Opções de Ala ────────────────────────────────────────────────────────────
 
@@ -60,33 +62,26 @@ export default function AdmitPetModal({
   const [fromAi]                              = useState(!!initialReason)
   const [error,           setError]           = useState<string | null>(null)
   const [isPending,       startTransition]    = useTransition()
-  const [isRecording,     setIsRecording]     = useState(false)
   const [extracting,      setExtracting]      = useState(false)
   const [fromTranscription, setFromTranscription] = useState(false)
-  const recognitionRef    = useRef<any>(null)
-  const voiceAccumRef     = useRef('')
+  const [stopTriggers,    setStopTriggers]    = useState<string[]>([])
 
-  function toggleVoice() {
-    if (isRecording) { recognitionRef.current?.stop(); return }
-    const SR = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition
-    if (!SR) return
-    const rec = new SR()
-    rec.lang = 'pt-BR'
-    rec.continuous = true
-    rec.interimResults = false
-    voiceAccumRef.current = ''
-    rec.onstart  = () => setIsRecording(true)
-    rec.onerror  = () => setIsRecording(false)
-    rec.onresult = (e: any) => {
-      const chunk = Array.from(e.results).map((r: any) => r[0].transcript).join(' ')
-      voiceAccumRef.current = voiceAccumRef.current
-        ? `${voiceAccumRef.current} ${chunk}`
-        : chunk
-      setReason(voiceAccumRef.current)
-    }
-    rec.onend = async () => {
-      setIsRecording(false)
-      const raw = voiceAccumRef.current.trim()
+  // Carrega os triggers de parada da clínica para o microfone respeitar as
+  // mesmas palavras do Consultório (ex.: "encerrar gravação", "salvar").
+  useEffect(() => {
+    getClinicVoiceTriggers().then(res => {
+      if (!('error' in res)) setStopTriggers(res.stopTriggers)
+    })
+  }, [])
+
+  // Microfone padronizado — mesma stack do Consultório, sem wake word (já
+  // estamos dentro do modal, então `start()` substitui a wake).
+  const voice = useFocusedVoiceCapture({
+    stopTriggers,
+    onInterim: (text) => { setReason(text); setFromTranscription(false) },
+    onFinal: async (rawText) => {
+      const raw = rawText.trim()
+      if (!raw) return
       if (raw.length > 10 && aiMode === 'ai_assisted') {
         setExtracting(true)
         const extracted = await extractAdmissionReason(raw)
@@ -94,12 +89,13 @@ export default function AdmitPetModal({
         if (extracted) {
           setReason(extracted)
           setFromTranscription(true)
+          return
         }
       }
-    }
-    recognitionRef.current = rec
-    rec.start()
-  }
+      setReason(raw)
+    },
+  })
+  const isRecording = voice.isRecording
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -199,9 +195,9 @@ export default function AdmitPetModal({
               </div>
               <button
                 type="button"
-                onClick={toggleVoice}
+                onClick={voice.toggle}
                 disabled={extracting}
-                title={isRecording ? 'Parar gravação' : 'Ditar motivo por voz'}
+                title={isRecording ? 'Parar gravação ou diga "encerrar gravação"' : 'Ditar motivo por voz'}
                 className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-50 ${
                   isRecording
                     ? 'bg-red-100 text-red-700 hover:bg-red-200 animate-pulse'

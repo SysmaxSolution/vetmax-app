@@ -26,6 +26,7 @@ import { generatePrescriptionPdf, type PrescriptionData } from '@/lib/actions/re
 import PrescriptionModal from './PrescriptionModal'
 import WhatsAppNotificationModal from '@/components/whatsapp/WhatsAppNotificationModal'
 import { useClinicalVoiceAssistant } from '@/hooks/useClinicalVoiceAssistant'
+import { useFocusedVoiceCapture } from '@/hooks/useFocusedVoiceCapture'
 import { useNativeKeepAwake } from '@/hooks/useNativeKeepAwake'
 import { getClinicVoiceTriggers, updateClinicVoiceTriggers } from '@/lib/actions/clinic-settings'
 import { useAiTranscriptionMode } from '@/components/providers/ClinicConfigProvider'
@@ -106,7 +107,6 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
   const [voiceChatAnswer, setVoiceChatAnswer] = useState<VoiceChatResult | null>(null)
   const [isAskingHistory, setIsAskingHistory] = useState(false)
   const [isVoiceQuestion, setIsVoiceQuestion] = useState(false)
-  const voiceQuestionRef = useRef<any>(null)
 
   // Carregar histórico
   useEffect(() => {
@@ -334,27 +334,23 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
     setIsAskingHistory(false)
   }
 
-  const toggleVoiceQuestion = () => {
-    if (isVoiceQuestion) {
-      voiceQuestionRef.current?.stop()
+  // Microfone de "pergunta ao histórico" — padrão clínico (stop triggers da clínica).
+  const voiceQuestionMic = useFocusedVoiceCapture({
+    stopTriggers,
+    onInterim: (text) => setVoiceQuestion(text),
+    onFinal: async (final) => {
       setIsVoiceQuestion(false)
-      return
-    }
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-    if (!SpeechRecognition) return alert('Navegador não suporta reconhecimento de voz.')
-    const recognition = new SpeechRecognition()
-    recognition.lang = 'pt-BR'
-    recognition.interimResults = false
-    voiceQuestionRef.current = recognition
-    recognition.onstart = () => setIsVoiceQuestion(true)
-    recognition.onend   = () => setIsVoiceQuestion(false)
-    recognition.onerror = () => setIsVoiceQuestion(false)
-    recognition.onresult = async (event: any) => {
-      const question = event.results[0][0].transcript
-      setVoiceQuestion(question)
-      await handleAskHistory(question)
-    }
-    recognition.start()
+      const question = final.trim()
+      if (question) {
+        setVoiceQuestion(question)
+        await handleAskHistory(question)
+      }
+    },
+  })
+  const toggleVoiceQuestion = () => {
+    if (voiceQuestionMic.isRecording) { voiceQuestionMic.stop(); return }
+    setIsVoiceQuestion(true)
+    voiceQuestionMic.start()
   }
 
   // --- IA: Sugestão de Conduta Clínica ---

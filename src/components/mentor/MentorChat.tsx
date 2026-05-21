@@ -5,6 +5,8 @@ import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { findPetConsultation, type MentorPetResult } from '@/lib/actions/mentor'
 import { checkMentorDailyQuota } from '@/lib/actions/mentor-quota'
+import { getClinicVoiceTriggers } from '@/lib/actions/clinic-settings'
+import { useFocusedVoiceCapture } from '@/hooks/useFocusedVoiceCapture'
 import { useMentor, TOURS, INTENT_MAP } from './MentorContext'
 import { usePathname } from 'next/navigation'
 import { MentorHighlightOverlay, type MentorHighlight } from './MentorHighlightOverlay'
@@ -103,6 +105,7 @@ export function MentorChat({ idleEnabled = true, idleSeconds = 30, isFreePlan = 
   const [messages, setMessages]       = useState<Message[]>([GREET])
   const [input, setInput]             = useState('')
   const [listening, setListening]     = useState(false)
+  const [mentorStopTriggers, setMentorStopTriggers] = useState<string[]>([])
   const [isPending, startTransition]  = useTransition()
   // G16-4: Dual-mode — 'text' | 'visual'. Persiste em localStorage.
   const [mode, setMode]               = useState<'text' | 'visual'>('text')
@@ -110,6 +113,11 @@ export function MentorChat({ idleEnabled = true, idleSeconds = 30, isFreePlan = 
   const [activeHighlights, setActiveHighlights] = useState<MentorHighlight[]>([])
 
   useEffect(() => { setMounted(true) }, [])
+  useEffect(() => {
+    getClinicVoiceTriggers().then(res => {
+      if (!('error' in res)) setMentorStopTriggers(res.stopTriggers)
+    })
+  }, [])
 
   // Idle timer — exibe balão de ajuda após inatividade
   useEffect(() => {
@@ -348,42 +356,27 @@ export function MentorChat({ idleEnabled = true, idleSeconds = 30, isFreePlan = 
     addMsg(msg)
   }, [addMsg, router, startTour, setOpen])
 
-  // ── Voice input ───────────────────────────────────────────────────────────
+  // ── Voice input — padrão clínico (usa stop triggers da clínica) ───────────
+
+  const mentorVoice = useFocusedVoiceCapture({
+    stopTriggers: mentorStopTriggers,
+    onFinal: (text) => {
+      setListening(false)
+      const t = text.trim()
+      if (t) processInput(t)
+      else addMsg(mentorMsg('Não consegui capturar o áudio. Tente novamente ou use o teclado.'))
+    },
+  })
 
   const toggleVoice = useCallback(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SpeechRecognition) {
+    if (!(window.SpeechRecognition || window.webkitSpeechRecognition)) {
       addMsg(mentorMsg('Reconhecimento de voz não suportado neste navegador. Use Chrome ou Edge.'))
       return
     }
-
-    if (listening) {
-      recognitionRef.current?.stop()
-      setListening(false)
-      return
-    }
-
-    const rec = new SpeechRecognition()
-    rec.lang = 'pt-BR'
-    rec.interimResults = false
-    rec.maxAlternatives = 1
-    rec.continuous = false
-    recognitionRef.current = rec
-
-    rec.onresult = (event: SpeechRecognitionEvent) => {
-      const transcript = event.results[0][0].transcript
-      setListening(false)
-      processInput(transcript)
-    }
-    rec.onerror = () => {
-      setListening(false)
-      addMsg(mentorMsg('Não consegui capturar o áudio. Tente novamente ou use o teclado.'))
-    }
-    rec.onend = () => setListening(false)
-
-    rec.start()
+    if (mentorVoice.isRecording) { mentorVoice.stop(); setListening(false); return }
     setListening(true)
-  }, [listening, addMsg, processInput])
+    mentorVoice.start()
+  }, [mentorVoice, addMsg])
 
   // ── Submit ────────────────────────────────────────────────────────────────
 
