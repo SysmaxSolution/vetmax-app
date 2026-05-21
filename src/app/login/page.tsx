@@ -142,34 +142,13 @@ export default function LoginPage() {
 
       <div className="relative w-full max-w-sm login-fade-in">
         <div className="mb-8 text-center">
-          <div className="login-logo-wrap mb-3 inline-flex h-16 w-16 items-center justify-center rounded-2xl shadow-xl bg-white">
-            <svg className="h-11 w-11" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <linearGradient id="login-paw-g" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%"   stopColor="#4ADE80"/>
-                  <stop offset="100%" stopColor="#16A34A"/>
-                </linearGradient>
-                <linearGradient id="login-ecg-g" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%"   stopColor="#1E3A8A"/>
-                  <stop offset="100%" stopColor="#2563EB"/>
-                </linearGradient>
-              </defs>
-              <g>
-                <ellipse cx="27" cy="32" rx="10" ry="13" fill="url(#login-paw-g)" transform="rotate(-18 27 32)"/>
-                <ellipse cx="44" cy="23" rx="10" ry="13" fill="url(#login-paw-g)" transform="rotate(-6 44 23)"/>
-                <ellipse cx="61" cy="23" rx="10" ry="13" fill="url(#login-paw-g)" transform="rotate(6 61 23)"/>
-                <ellipse cx="78" cy="32" rx="10" ry="13" fill="url(#login-paw-g)" transform="rotate(18 78 32)"/>
-                <ellipse cx="52" cy="67" rx="28" ry="23" fill="url(#login-paw-g)"/>
-              </g>
-              <path d="M 4 60 L 26 60 L 30 56 L 34 62 L 38 60 L 41 56 L 45 28 L 50 82 L 55 48 L 60 62 L 64 60 L 80 60 L 84 50 L 92 50"
-                    stroke="white" strokeWidth="6" fill="none" strokeLinecap="round" strokeLinejoin="round" opacity="0.95"/>
-              <path d="M 4 60 L 26 60 L 30 56 L 34 62 L 38 60 L 41 56 L 45 28 L 50 82 L 55 48 L 60 62 L 64 60 L 80 60 L 84 50 L 92 50"
-                    stroke="url(#login-ecg-g)" strokeWidth="3.2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M 88 54 L 94 48 L 88 42 M 94 48 L 84 48"
-                    stroke="white" strokeWidth="6" fill="none" strokeLinecap="round" strokeLinejoin="round" opacity="0.95"/>
-              <path d="M 88 54 L 94 48 L 88 42 M 94 48 L 84 48"
-                    stroke="url(#login-ecg-g)" strokeWidth="3.2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
+          <div className="login-logo-wrap mx-auto mb-3 h-24 w-24 md:h-28 md:w-28">
+            <img
+              src="/brand-logo.png"
+              alt="SysVetMax"
+              className="h-full w-full object-contain"
+              draggable={false}
+            />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 login-rise">SysVetMax</h1>
           <p className="mt-1 text-sm text-slate-500 login-rise-delay">Acesse sua clínica veterinária</p>

@@ -58,34 +58,13 @@ export function SplashOverlay() {
       />
       <div className="absolute inset-0 flex items-center justify-center">
         <div className="text-center px-6">
-          <div className="splash-logo-wrap mx-auto mb-6">
-            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" className="h-28 w-28 md:h-32 md:w-32">
-              <defs>
-                <linearGradient id="splash-paw" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%"   stopColor="#86EFAC"/>
-                  <stop offset="100%" stopColor="#22C55E"/>
-                </linearGradient>
-                <linearGradient id="splash-ecg" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%"   stopColor="#60A5FA"/>
-                  <stop offset="100%" stopColor="#2563EB"/>
-                </linearGradient>
-              </defs>
-              <g>
-                <ellipse cx="27" cy="32" rx="10" ry="13" fill="url(#splash-paw)" transform="rotate(-18 27 32)"/>
-                <ellipse cx="44" cy="23" rx="10" ry="13" fill="url(#splash-paw)" transform="rotate(-6 44 23)"/>
-                <ellipse cx="61" cy="23" rx="10" ry="13" fill="url(#splash-paw)" transform="rotate(6 61 23)"/>
-                <ellipse cx="78" cy="32" rx="10" ry="13" fill="url(#splash-paw)" transform="rotate(18 78 32)"/>
-                <ellipse cx="52" cy="67" rx="28" ry="23" fill="url(#splash-paw)"/>
-              </g>
-              <path d="M 4 60 L 26 60 L 30 56 L 34 62 L 38 60 L 41 56 L 45 28 L 50 82 L 55 48 L 60 62 L 64 60 L 80 60 L 84 50 L 92 50"
-                    stroke="white" strokeWidth="6" fill="none" strokeLinecap="round" strokeLinejoin="round" opacity="0.95"/>
-              <path d="M 4 60 L 26 60 L 30 56 L 34 62 L 38 60 L 41 56 L 45 28 L 50 82 L 55 48 L 60 62 L 64 60 L 80 60 L 84 50 L 92 50"
-                    stroke="url(#splash-ecg)" strokeWidth="3.2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M 88 54 L 94 48 L 88 42 M 94 48 L 84 48"
-                    stroke="white" strokeWidth="6" fill="none" strokeLinecap="round" strokeLinejoin="round" opacity="0.95"/>
-              <path d="M 88 54 L 94 48 L 88 42 M 94 48 L 84 48"
-                    stroke="url(#splash-ecg)" strokeWidth="3.2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
+          <div className="splash-logo-wrap mx-auto mb-6 h-32 w-32 md:h-40 md:w-40">
+            <img
+              src="/brand-logo.png"
+              alt="SysVetMax"
+              className="h-full w-full object-contain"
+              draggable={false}
+            />
           </div>
           <div className="splash-title text-2xl md:text-3xl font-bold tracking-wide"
                style={{
