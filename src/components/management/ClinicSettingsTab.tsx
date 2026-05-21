@@ -217,8 +217,11 @@ export default function ClinicSettingsTab({ initialConfig, initialChecklist = []
                   Apenas Transcrição
                 </p>
                 <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
-                  O texto é registrado exatamente como foi falado, sem nenhuma alteração ou reformulação pela IA.
-                  Ideal para clínicas que preferem controle total sobre o conteúdo registrado.
+                  O texto registrado no prontuário fica exatamente como o vet falou — sem reformulação.
+                  Ideal para quem quer controle total sobre o que aparece nas notas clínicas.
+                </p>
+                <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                  A IA continua extraindo medicações aplicadas, documentos sugeridos, retornos, vacinas e roteamento (alta / internação / exames) a partir da fala.
                 </p>
               </div>
             </div>
@@ -243,11 +246,14 @@ export default function ClinicSettingsTab({ initialConfig, initialChecklist = []
               <Sparkles className={`h-4 w-4 flex-shrink-0 mt-0.5 ${aiMode === 'ai_assisted' ? 'text-violet-600' : 'text-slate-400'}`} />
               <div>
                 <p className={`text-sm font-semibold ${aiMode === 'ai_assisted' ? 'text-violet-900' : 'text-slate-700'}`}>
-                  Transcrição com Preenchimento Técnico
+                  Transcrição Reescrita pela IA
                 </p>
                 <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
-                  Após a gravação, a IA analisa o relato oral e preenche os campos clínicos automaticamente
-                  com linguagem técnica formal (conforme CFMV). Extrai sinais vitais, motivos de internação, laudos e mais.
+                  A IA reescreve o texto do prontuário em formato SOAP (Subjetivo, Objetivo, Avaliação, Plano)
+                  com linguagem técnica formal conforme CFMV.
+                </p>
+                <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                  Demais sugestões (medicações, documentos, retornos, internação) acontecem em ambos os modos.
                 </p>
                 {aiMode === 'ai_assisted' && (
                   <span className="inline-flex items-center gap-1 mt-2 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700">

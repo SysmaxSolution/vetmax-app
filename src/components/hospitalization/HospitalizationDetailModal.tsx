@@ -145,15 +145,17 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
 
   const handleVoiceAutoSave = useCallback(async (transcript: string) => {
     if (!transcript.trim()) return
-    if (aiMode === 'transcribe_only') {
-      setNotes(prev => prev + (prev ? ' ' : '') + transcript)
-      return
-    }
+    // Em AMBOS os modos: a IA extrai improvement_level e medicações.
+    // O aiMode só decide se as `notes` recebem o texto literal do vet ou o
+    // texto parafraseado pela IA (iaResult.notes).
     setIsProcessingVoice(true)
     try {
       const iaResult = await extractHospitalizationVoice(transcript.trim())
       if (iaResult && !iaResult.error) {
-        setNotes(prev => prev + (prev ? '\n' : '') + (iaResult.notes || transcript))
+        const noteText = aiMode === 'transcribe_only'
+          ? transcript                                  // literal
+          : (iaResult.notes || transcript)              // SOAP da IA ou fallback
+        setNotes(prev => prev + (prev ? '\n' : '') + noteText)
         if (iaResult.improvement_level) setStatus(iaResult.improvement_level)
         if (iaResult.medications && iaResult.medications.length > 0) {
           setMeds(prev => [...prev, ...iaResult.medications])

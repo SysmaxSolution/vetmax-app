@@ -306,11 +306,8 @@ export default function ConsultationDetail({
   useEffect(() => { vetNotesRef.current = vetNotes }, [vetNotes])
 
   const handleVoiceAutoSave = useCallback(async (transcript: string) => {
-    // Diagnóstico — confirma que o callback foi chamado e em qual modo.
     console.log('[VOICE→IA] handleVoiceAutoSave', {
-      aiMode,
-      transcriptLen: transcript.length,
-      preview: transcript.slice(0, 120),
+      aiMode, transcriptLen: transcript.length, preview: transcript.slice(0, 120),
     })
 
     if (!transcript.trim()) {
@@ -318,17 +315,11 @@ export default function ConsultationDetail({
       return
     }
 
-    // Modo "Apenas Transcrição" — anexa diretamente ao prontuário sem extração por IA
-    if (aiMode === 'transcribe_only') {
-      const newNotes = vetNotesRef.current ? `${vetNotesRef.current}\n\n${transcript}` : transcript
-      setVetNotes(newNotes)
-      autoSave(newNotes)
-      setToast({
-        type: 'success',
-        message: `Modo "Apenas Transcrição" ativo — texto colado no prontuário. Para a IA extrair medicações, retornos e internação, mude para "IA Assistida" em Gestão > Configurações.`,
-      })
-      return
-    }
+    // O modo só afeta O TEXTO que vai para o campo "Prontuário":
+    //   - transcribe_only → texto literal do que o vet falou
+    //   - ai_assisted     → SOAP estruturado e parafraseado pela IA (notas_clinicas)
+    // Em AMBOS os modos a IA extrai medicações, documentos sugeridos, retornos,
+    // vacinas, sinais vitais e roteamento (internação/alta/exames).
 
     setIsExtractingVoice(true)
     setToast({ type: 'success', message: `IA analisando ${transcript.length} caracteres da consulta...` })
@@ -344,11 +335,10 @@ export default function ConsultationDetail({
       flowConfig
     )
     setIsExtractingVoice(false)
-
     console.log('[VOICE→IA] extractFullVoice resultado', result)
 
     if ('error' in result) {
-      // Fallback: preserva a transcrição bruta para não perder o conteúdo gravado
+      // Fallback: pelo menos preserva a transcrição bruta no prontuário.
       const fallbackNotes = vetNotesRef.current
         ? `${vetNotesRef.current}\n\n${transcript}`
         : transcript
@@ -358,9 +348,12 @@ export default function ConsultationDetail({
       return
     }
 
-    // 1. Notas clínicas → prontuário + auto-save imediato
-    if (result.notas_clinicas.trim()) {
-      const newNotes = vetNotesRef.current ? `${vetNotesRef.current}\n\n${result.notas_clinicas}` : result.notas_clinicas
+    // 1. Texto do prontuário → respeita o modo
+    const notesForRecord = aiMode === 'transcribe_only'
+      ? transcript                              // literal — exatamente como falado
+      : (result.notas_clinicas?.trim() || transcript)  // SOAP IA, ou fallback ao bruto
+    if (notesForRecord.trim()) {
+      const newNotes = vetNotesRef.current ? `${vetNotesRef.current}\n\n${notesForRecord}` : notesForRecord
       setVetNotes(newNotes)
       autoSave(newNotes)
     }
@@ -456,8 +449,8 @@ export default function ConsultationDetail({
     if (result.suggested_routing === 'discharge')                              parts.push('alta detectada')
     setToast({ type: 'success', message: `IA Unificada: ${parts.join(' · ')}.` })
 
-    // 10. Cadastro Vivo — disparar modal (com deduplicação)
-    if (aiMode === 'ai_assisted') {
+    // 10. Cadastro Vivo — sempre rodar (independe do modo de transcrição)
+    {
       const liveData = await extractPatientDataFromTranscript(transcript)
       if (liveData) {
         const existingVaccineNames = new Set(initialVaccines.map(v => v.vaccine_name.toLowerCase()))

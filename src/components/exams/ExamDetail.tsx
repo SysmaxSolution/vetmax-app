@@ -101,21 +101,23 @@ export default function ExamDetail({
 
   const handleVoiceAutoSave = useCallback((transcript: string) => {
     if (!transcript.trim()) return
-    // Anexa ao "Recado para o MV" para que o texto ditado nunca se perca.
+    // Em AMBOS os modos: o texto vai para o "Recado para o MV" + vira sugestão
+    // para o "Gerar Novo Documento" (a IA usa como contexto). O aiMode só afeta
+    // se o texto da sugestão será literal (transcribe_only) ou reescrito pela IA
+    // no momento da geração do documento (ai_assisted).
     setExamNotes(prev => prev ? `${prev}\n${transcript}` : transcript)
-    if (aiMode === 'ai_assisted') {
-      // Em modo IA, também guarda como sugestão para servir de contexto ao "Gerar Novo Documento".
-      setExamSuggestions(prev => [...prev, { tipo: 'laudo', motivo: transcript, title: 'Laudo por Voz', summary: transcript }])
-      setToast({
-        type: 'success',
-        message: 'Transcrição registrada. Use "Gerar Novo Documento" para criar o laudo com IA.',
-      })
-    } else {
-      setToast({
-        type: 'success',
-        message: 'Transcrição registrada exatamente como ditado.',
-      })
-    }
+    setExamSuggestions(prev => [...prev, {
+      tipo: 'laudo',
+      motivo: transcript,
+      title: 'Laudo por Voz',
+      summary: transcript,
+    }])
+    setToast({
+      type: 'success',
+      message: aiMode === 'transcribe_only'
+        ? 'Transcrição registrada. Clique em "Gerar Novo Documento" para usar como laudo.'
+        : 'Transcrição registrada. Use "Gerar Novo Documento" — a IA reescreverá em formato de laudo.',
+    })
   }, [aiMode])
 
   const voiceAssistant = useClinicalVoiceAssistant({

@@ -132,20 +132,10 @@ export default function TriageForm({
     setSavedTranscript(fullTranscript)
     if (!newChunk.trim()) return
 
-    if (aiMode === 'transcribe_only') {
-      // Modo transcrição pura: anexa ao chief_complaint para não perder o texto ditado.
-      setVitalSigns(prev => ({
-        ...prev,
-        chief_complaint: prev.chief_complaint
-          ? `${prev.chief_complaint}\n${newChunk}`
-          : newChunk,
-      }))
-      setAiFilledFields(prev => new Set([...prev, 'chief_complaint']))
-      setToastMessage({ type: 'success', message: 'Transcrição registrada na queixa principal.' })
-      return
-    }
-
-    // Modo IA: extrai sinais vitais + vacinas E preenche campos do template em paralelo.
+    // Em AMBOS os modos a IA extrai sinais vitais, vacinas e campos do template.
+    // O aiMode só afeta como a chief_complaint final é escrita:
+    //   - transcribe_only → texto literal do vet
+    //   - ai_assisted     → IA reescreve com termos técnicos
     const tpl = selectedTemplateRef.current
     await Promise.all([
       extractAndFillVitalSigns(newChunk),
@@ -153,6 +143,18 @@ export default function TriageForm({
         ? mapVoiceToTemplateFields(newChunk, tpl.extracted_fields)
         : Promise.resolve(),
     ])
+
+    // Em transcribe_only, garantir que chief_complaint reflita o que foi DITO
+    // (mesmo se a IA tiver gerado um texto técnico parafraseado).
+    if (aiMode === 'transcribe_only') {
+      setVitalSigns(prev => ({
+        ...prev,
+        chief_complaint: prev.chief_complaint
+          ? `${prev.chief_complaint}\n${newChunk}`
+          : newChunk,
+      }))
+      setAiFilledFields(prev => new Set([...prev, 'chief_complaint']))
+    }
   }, [aiMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const assistant = useClinicalVoiceAssistant({
