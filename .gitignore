@@ -15,3 +15,34 @@ tests/.auth/
 
 #Ignore vscode AI rules
 .github\instructions\codacy.instructions.md
+
+# ─── Capacitor / Empacotamento móvel ─────────────────────────────────────────
+# Artefatos de build do Android Studio
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/captures/
+android/*.iml
+android/app/*.iml
+android/app/release/
+android/app/debug/
+
+# Artefatos do Xcode
+ios/App/Pods/
+ios/App/build/
+ios/App/DerivedData/
+ios/App/App.xcworkspace/xcuserdata/
+ios/App/App.xcodeproj/xcuserdata/
+ios/App/App.xcodeproj/project.xcworkspace/xcuserdata/
+ios/.gitignore_local
+
+# Keystore / certificados — NUNCA commitar
+*.keystore
+*.jks
+*.p12
+*.mobileprovision
+*.cer
+android/keystore.properties
+android/app/sysvetmax-release.keystore
