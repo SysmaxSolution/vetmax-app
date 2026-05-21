@@ -12,7 +12,7 @@ import type { CapacitorConfig } from '@capacitor/cli'
 // ──────────────────────────────────────────────────────────────────────────────
 
 const SERVER_URL =
-  process.env.CAPACITOR_SERVER_URL ?? 'https://vetmax-app.vercel.app'
+  process.env.CAPACITOR_SERVER_URL ?? 'https://sysvetmax.sysmaxsolutions.com'
 
 const isCustomLocal = SERVER_URL.startsWith('http://')
 
@@ -35,7 +35,8 @@ const config: CapacitorConfig = {
     allowNavigation: [
       '*.supabase.co',
       '*.supabase.in',
-      'vetmax-app.vercel.app',
+      'sysvetmax.sysmaxsolutions.com',
+      '*.sysmaxsolutions.com',
       '*.vercel.app',
     ],
   },

@@ -26,7 +26,7 @@
   <!-- ─── App-bound domain (não obrigatório, mas recomendado) ───────────── -->
   <key>WKAppBoundDomains</key>
   <array>
-    <string>vetmax-app.vercel.app</string>
+    <string>sysvetmax.sysmaxsolutions.com</string>
   </array>
 
   <!-- ─── Background audio (caso queiramos gravação em background) ─────── -->
