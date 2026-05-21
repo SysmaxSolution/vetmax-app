@@ -32,6 +32,8 @@ export interface ApplyReconciliationResult {
   total_amount_individual:         number
   /** Valor avulso (bônus + ajustes). */
   total_amount_standalone:         number
+  /** financial_entries pendentes da prévia em aberto que foram baixados (status pending → paid). */
+  pending_entries_settled:         number
   errors:                          string[]
 }
 
@@ -166,6 +168,28 @@ export async function deleteRemittance(
       .eq('remittance_id', remittanceId)
   }
 
+  // 1.5. Para prévias em aberto: limpa financial_entries pending vinculados
+  // às linhas desta remessa. Entries já baixados manualmente (status='paid')
+  // são preservados — a FK ON DELETE SET NULL desvincula sem apagar.
+  {
+    const { data: lineIds } = await supabase
+      .from('petlove_remittance_lines')
+      .select('id')
+      .eq('clinic_id', clinicId)
+      .eq('remittance_id', remittanceId)
+    const ids = (lineIds ?? []).map(l => l.id)
+    if (ids.length > 0) {
+      const { count: openCount } = await supabase
+        .from('financial_entries')
+        .delete({ count: 'exact' })
+        .eq('clinic_id', clinicId)
+        .eq('source', 'petlove_open')
+        .eq('status', 'pending')
+        .in('petlove_remittance_line_id', ids)
+      result.removed_financial_entries += openCount ?? 0
+    }
+  }
+
   // 2. Conta linhas antes de deletar
   const { count: linesCount } = await supabase
     .from('petlove_remittance_lines')
@@ -220,6 +244,7 @@ export async function applyReconciliation(
     pet_insurance_updated:       0,
     total_amount_individual:     0,
     total_amount_standalone:     0,
+    pending_entries_settled:     0,
     errors:                      [],
   }
 
@@ -375,7 +400,39 @@ export async function applyReconciliation(
     if (stockItemId) mappingByName.set(name, stockItemId)
   }
 
+  // ─── Pré-carga: contas a receber em aberto (prévia) deste clínic_id ─────────
+  // Indexamos por (external_appointment_id || procedure_name_raw) para que cada
+  // linha da remessa fechada possa baixar o entry pendente correspondente em
+  // vez de criar um duplicado. Atendimentos com vários procedimentos geram
+  // múltiplos entries — chave composta evita colisão.
+  type PendingEntryRef = { id: string; amount: number; line_id: string }
+  const pendingByApptProc = new Map<string, PendingEntryRef[]>()
+  const pendingKey = (apptId: string, proc: string | null) =>
+    `${apptId}||${(proc ?? '').toLowerCase()}`
+  {
+    const { data: openLines } = await supabase
+      .from('petlove_remittance_lines')
+      .select('id, external_appointment_id, procedure_name_raw, financial_entries:financial_entries!petlove_remittance_line_id(id, amount, status, source)')
+      .eq('clinic_id', clinicId)
+    for (const l of openLines ?? []) {
+      const fes = (l as { financial_entries?: { id: string; amount: number; status: string; source: string }[] }).financial_entries ?? []
+      const pending = fes.find(f => f.status === 'pending' && f.source === 'petlove_open')
+      if (!pending) continue
+      const key = pendingKey(
+        (l as { external_appointment_id: string }).external_appointment_id,
+        (l as { procedure_name_raw: string | null }).procedure_name_raw,
+      )
+      const arr = pendingByApptProc.get(key) ?? []
+      arr.push({ id: pending.id, amount: Number(pending.amount), line_id: (l as { id: string }).id })
+      pendingByApptProc.set(key, arr)
+    }
+  }
+  let pendingDownPayments = 0
+
   // ─── Helper: cria entry + bank_statement + log de histórico ──────────────
+  // Se houver entry pendente da prévia em aberto com mesma chave
+  // (external_appointment_id + procedure_name_raw), faz a baixa nele em
+  // vez de criar um novo.
   async function insertPetloveEntry(opts: {
     type: 'receivable' | 'payable'
     description: string
@@ -388,7 +445,64 @@ export async function applyReconciliation(
     patient_id: string | null
     notes: string
     line_id: string | null
+    /** Chave para casar com entries pendentes da prévia em aberto. */
+    external_appointment_id?: string
+    procedure_name_raw?: string | null
   }): Promise<{ id: string } | null> {
+    // Tenta baixar entry pendente da prévia em vez de criar duplicado
+    if (opts.external_appointment_id && opts.source === 'petlove') {
+      const key = pendingKey(opts.external_appointment_id, opts.procedure_name_raw ?? null)
+      const candidates = pendingByApptProc.get(key)
+      if (candidates && candidates.length > 0) {
+        const ref = candidates.shift()!
+        const { error: updErr } = await supabase
+          .from('financial_entries')
+          .update({
+            status:             'paid',
+            amount:             opts.amount,
+            payment_date:       opts.payment_date,
+            settlement_bank_id: bankAccountId,
+            source:             'petlove',
+            category:           opts.category,
+            description:        opts.description,
+            notes:              `${opts.notes} · baixa de prévia em aberto (entry ${ref.id})`,
+            tutor_id:           opts.tutor_id,
+            patient_id:         opts.patient_id,
+            updated_at:         new Date().toISOString(),
+          })
+          .eq('id', ref.id)
+          .eq('clinic_id', clinicId)
+        if (updErr) {
+          result.errors.push(`Baixa de entry pendente ${ref.id}: ${updErr.message}`)
+        } else {
+          if (bankAccountId) {
+            await supabase.from('bank_statements').insert({
+              clinic_id:           clinicId,
+              bank_account_id:     bankAccountId,
+              date:                opts.payment_date,
+              amount:              opts.amount,
+              description:         opts.description,
+              type:                opts.type === 'receivable' ? 'credit' : 'debit',
+              reconciled_entry_id: ref.id,
+              import_batch_id:     remittanceId,
+            })
+          }
+          if (opts.patient_id) {
+            await supabase.from('patient_petlove_history').insert({
+              clinic_id:     clinicId,
+              patient_id:    opts.patient_id,
+              remittance_id: remittanceId,
+              event_type:    'entry_paid',
+              description:   `${opts.description} — baixa: ${opts.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`,
+              metadata:      { financial_entry_id: ref.id, source: 'petlove', from_preview: true, line_id: opts.line_id },
+            })
+          }
+          pendingDownPayments++
+          return { id: ref.id }
+        }
+      }
+    }
+
     const { data: fe, error: feErr } = await supabase
       .from('financial_entries')
       .insert({
@@ -520,6 +634,8 @@ export async function applyReconciliation(
           patient_id:   inv.patient_id,
           notes:        `Remessa #${rem.remittance_number} · linha ${line.id}${hadDrift ? ` · drift ${(repass - expectedValue).toFixed(2)}` : ''}`,
           line_id:      line.id,
+          external_appointment_id: line.external_appointment_id,
+          procedure_name_raw:      procName,
         })
         if (fe) {
           result.individual_entries_created++
@@ -573,6 +689,8 @@ export async function applyReconciliation(
           patient_id:   line.matched_patient_id,
           notes:        `Remessa #${rem.remittance_number} · linha ${line.id}${isOrphan ? ' · sem invoice_item prévio' : ' · pet criado via bulk register'}`,
           line_id:      line.id,
+          external_appointment_id: line.external_appointment_id,
+          procedure_name_raw:      procName,
         })
         if (fe) {
           result.retroactive_entries_created++
@@ -706,6 +824,8 @@ export async function applyReconciliation(
       referral_financial_entry_id:  null,
     })
     .eq('id', remittanceId)
+
+  result.pending_entries_settled = pendingDownPayments
 
   revalidatePath(`/dashboard/financial/insurance-reconciliation/${remittanceId}/review`)
   revalidatePath('/dashboard/financial/insurance-reconciliation')

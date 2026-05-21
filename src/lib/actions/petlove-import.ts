@@ -50,12 +50,14 @@ export interface StageRemittanceResult {
   remittance_id:        string
   lines_count:          number
   source_format:        'closed' | 'open'
-  /** Resumo dos side-effects aplicados quando is_preview=true (matching + cadastros + preços). */
+  /** Resumo dos side-effects aplicados quando is_preview=true (matching + cadastros + preços + entries pendentes). */
   preview_side_effects?: {
-    matched:          number
-    patients_updated: number
-    prices_updated:   number
-    errors:           string[]
+    matched:                 number
+    patients_updated:        number
+    prices_updated:          number
+    pending_entries_created: number
+    pending_total_amount:    number
+    errors:                  string[]
   }
 }
 
@@ -485,7 +487,30 @@ export async function stageRemittance(parsed: PetloveRemittanceAST): Promise<Sta
       }
     }
 
-    // Sobrescrita: apaga linhas antigas e atualiza header
+    // Sobrescrita: antes de apagar as linhas, remove os financial_entries
+    // pendentes (status='pending', source='petlove_open') vinculados a elas.
+    // Entries já baixados manualmente (status='paid') NÃO são apagados —
+    // ficam órfãos com petlove_remittance_line_id=NULL (FK ON DELETE SET NULL).
+    const { data: oldLineIds } = await supabase
+      .from('petlove_remittance_lines')
+      .select('id')
+      .eq('remittance_id', dupe.id)
+      .eq('clinic_id', clinicId)
+    const idsToClear = (oldLineIds ?? []).map(l => l.id)
+    if (idsToClear.length > 0) {
+      const { error: feDelErr } = await supabase
+        .from('financial_entries')
+        .delete()
+        .eq('clinic_id', clinicId)
+        .eq('source', 'petlove_open')
+        .eq('status', 'pending')
+        .in('petlove_remittance_line_id', idsToClear)
+      if (feDelErr) {
+        return { error: `Falha ao limpar contas a receber pendentes da prévia anterior: ${feDelErr.message}` }
+      }
+    }
+
+    // Apaga linhas antigas e atualiza header
     const { error: delErr } = await supabase
       .from('petlove_remittance_lines')
       .delete()
@@ -614,12 +639,18 @@ export async function uploadAndStagePetloveRemittance(
 
   // ─── Side-effects da prévia em aberto ─────────────────────────────────────
   // Para o formato em aberto: roda matching automaticamente e propaga
-  // (a) atualização cadastral de pets já vinculados (campos vazios) e
-  // (b) preço fixado em patient_custom_prices para procedimentos mapeados.
+  // (a) atualização cadastral de pets já vinculados (campos vazios),
+  // (b) preço fixado em patient_custom_prices para procedimentos mapeados, e
+  // (c) criação de financial_entries com status='pending' para cada linha
+  //     com Status Procedimento = "Liberado" e repass > 0 — títulos a receber
+  //     que serão baixados quando a remessa fechada do período chegar.
   if (parsed.is_preview) {
-    const sideEffects = await applyPreviewSideEffects(staged.remittance_id)
-    if (!('error' in sideEffects)) {
-      staged.preview_side_effects = sideEffects
+    const ctxForUser = await getCtx()
+    if (!('error' in ctxForUser)) {
+      const sideEffects = await applyPreviewSideEffects(staged.remittance_id, ctxForUser.userId)
+      if (!('error' in sideEffects)) {
+        staged.preview_side_effects = sideEffects
+      }
     }
   }
 
@@ -634,7 +665,8 @@ export async function uploadAndStagePetloveRemittance(
 
 async function applyPreviewSideEffects(
   remittanceId: string,
-): Promise<{ matched: number; patients_updated: number; prices_updated: number; errors: string[] } | { error: string }> {
+  userId: string,
+): Promise<{ matched: number; patients_updated: number; prices_updated: number; pending_entries_created: number; pending_total_amount: number; errors: string[] } | { error: string }> {
   const ctx = await getCtx()
   if ('error' in ctx) return ctx
   const { supabase, clinicId } = ctx
@@ -651,14 +683,14 @@ async function applyPreviewSideEffects(
     .ilike('name', 'petlove')
     .maybeSingle()
   if (!provider?.id) {
-    return { matched: matchRes.matched ?? 0, patients_updated: 0, prices_updated: 0, errors: ['Convênio Petlove não localizado para a clínica.'] }
+    return { matched: matchRes.matched ?? 0, patients_updated: 0, prices_updated: 0, pending_entries_created: 0, pending_total_amount: 0, errors: ['Convênio Petlove não localizado para a clínica.'] }
   }
   const providerId = provider.id
 
   // 3) Carrega linhas que já têm pet identificado
   const { data: lines, error: linesErr } = await supabase
     .from('petlove_remittance_lines')
-    .select('id, service_date, matched_patient_id, gender_raw, species_raw, breed_raw, microchip_raw, plan_name_raw, procedure_name_raw, repass_value, match_status')
+    .select('id, service_date, matched_patient_id, matched_tutor_id, tutor_name_raw, pet_name_raw, gender_raw, species_raw, breed_raw, microchip_raw, plan_name_raw, procedure_name_raw, procedure_status_raw, repass_value, match_status')
     .eq('clinic_id', clinicId)
     .eq('remittance_id', remittanceId)
     .not('matched_patient_id', 'is', null)
@@ -666,7 +698,7 @@ async function applyPreviewSideEffects(
 
   if (linesErr) return { error: `Falha ao carregar linhas para side-effects: ${linesErr.message}` }
   if (!lines || lines.length === 0) {
-    return { matched: matchRes.matched ?? 0, patients_updated: 0, prices_updated: 0, errors: [] }
+    return { matched: matchRes.matched ?? 0, patients_updated: 0, prices_updated: 0, pending_entries_created: 0, pending_total_amount: 0, errors: [] }
   }
 
   const errors: string[] = []
@@ -785,12 +817,72 @@ async function applyPreviewSideEffects(
     }
   }
 
+  // 6) financial_entries pendentes ─────────────────────────────────────────────
+  // Para cada linha com tutor identificado, Status Procedimento = "Liberado" e
+  // repass > 0: cria um entry pending (a receber em aberto). Linhas sem tutor
+  // (missing_patient_profile que viraram orphan_invoice) ou em análise ficam
+  // fora — Em análise pode ser glosa, melhor não inflar A Receber.
+  let pendingEntriesCreated = 0
+  let pendingTotalAmount    = 0
+
+  for (const line of lines) {
+    const isLiberado = line.procedure_status_raw
+      ? String(line.procedure_status_raw).toLowerCase().includes('liberado')
+      : true  // se a planilha não trouxer o status, assume liberado (compat. com fechado)
+    if (!isLiberado) continue
+
+    const tutorId = line.matched_tutor_id as string | null
+    const patientId = line.matched_patient_id as string | null
+    const repass = Number(line.repass_value)
+    if (!tutorId || !Number.isFinite(repass) || repass <= 0) continue
+
+    const procName  = (line.procedure_name_raw as string | null)?.trim() || 'Procedimento'
+    const petName   = (line.pet_name_raw       as string | null)?.trim() || '?'
+    const tutorName = (line.tutor_name_raw     as string | null)?.trim() || '?'
+    const dueDate   = line.service_date as string
+
+    const description = `Petlove (em aberto) · ${procName} · ${petName} (${tutorName}) · ${fmtBR(dueDate)}`
+    const { error: feErr } = await supabase
+      .from('financial_entries')
+      .insert({
+        clinic_id:                  clinicId,
+        type:                       'receivable',
+        description,
+        amount:                     repass,
+        due_date:                   dueDate,
+        payment_date:               null,
+        status:                     'pending',
+        source:                     'petlove_open',
+        category:                   'Convênios · Petlove (em aberto)',
+        tutor_id:                   tutorId,
+        patient_id:                 patientId,
+        settlement_bank_id:         null,
+        notes:                      `Prévia ${remittanceId} · linha ${line.id}. Será baixado automaticamente quando a remessa fechada do período chegar.`,
+        created_by:                 userId,
+        petlove_remittance_line_id: line.id,
+      })
+    if (feErr) {
+      errors.push(`entry pending ${line.id}: ${feErr.message}`)
+    } else {
+      pendingEntriesCreated++
+      pendingTotalAmount += repass
+    }
+  }
+
   return {
-    matched:          matchRes.matched ?? 0,
-    patients_updated: patientsUpdated,
-    prices_updated:   pricesUpdated,
+    matched:                 matchRes.matched ?? 0,
+    patients_updated:        patientsUpdated,
+    prices_updated:          pricesUpdated,
+    pending_entries_created: pendingEntriesCreated,
+    pending_total_amount:    Number(pendingTotalAmount.toFixed(2)),
     errors,
   }
+}
+
+function fmtBR(iso: string): string {
+  if (!iso) return ''
+  const [y, m, d] = iso.split('-')
+  return `${d}/${m}/${y}`
 }
 
 function mapSpeciesLocal(raw: string): 'dog' | 'cat' | 'bird' | 'rabbit' | 'rodent' | 'reptile' | 'fish' | 'exotic' {
