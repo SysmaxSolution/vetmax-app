@@ -18,31 +18,9 @@ const PUBLIC_PATHS = [
   '/',
 ]
 
-const ROLE_ALLOWED_PATHS: Partial<Record<UserRole, string[]>> = {
-  receptionist: [
-    '/dashboard/reception',
-    '/dashboard/patients',
-    '/dashboard/cashier',
-    '/dashboard/grooming',
-  ],
-  assistant: [
-    '/dashboard/triage',
-    '/dashboard/reception',
-    '/dashboard/patients',
-  ],
-  pharmacist: [
-    '/dashboard/pharmacy',
-    '/dashboard/patients',
-  ],
-  vet: [
-    '/dashboard/vet',
-    '/dashboard/patients',
-    '/dashboard/exams',
-    '/dashboard/reception',
-    '/dashboard/hospitalization',
-  ],
-}
-
+// Decisão de design (2026-05-22, requisito do PO): controle de acesso aos
+// módulos do dashboard depende EXCLUSIVAMENTE de user_module_access. Sem
+// gate por role. Apenas /dashboard/management continua restrito a admin.
 const ROLE_HOME: Partial<Record<UserRole, string>> = {
   receptionist: '/dashboard/reception',
   assistant:    '/dashboard/triage',
@@ -58,10 +36,30 @@ function isPublicPath(pathname: string): boolean {
   )
 }
 
-function isRoleAllowed(role: string, pathname: string): boolean {
-  const allowed = ROLE_ALLOWED_PATHS[role as UserRole]
-  if (!allowed) return true
-  return allowed.some(p => pathname === p || pathname.startsWith(p + '/'))
+// /dashboard/<segmento> → key do módulo (alguns segmentos diferem do moduleKey).
+const PATH_SEGMENT_TO_MODULE: Record<string, string> = {
+  reception:       'reception',
+  patients:        'patients',
+  triage:          'triage',
+  vet:             'consultation',
+  exams:           'exams',
+  hospitalization: 'hospitalization',
+  grooming:        'grooming',
+  pharmacy:        'pharmacy',
+  sales:           'sales',
+  cashier:         'cashier',
+  registry:        'registry',
+  whatsapp:        'whatsapp_intelligent',
+  purchases:       'purchases',
+  financial:       'financial',
+  reports:         'reports',
+  appointments:    'reception',  // sub-tela de recepção
+}
+
+function moduleKeyFromPath(pathname: string): string | null {
+  const seg = pathname.split('/')[2]
+  if (!seg) return null
+  return PATH_SEGMENT_TO_MODULE[seg] ?? null
 }
 
 // ─── Proxy ────────────────────────────────────────────────────────────────────
@@ -125,27 +123,27 @@ export async function proxy(request: NextRequest) {
   if (pathname.startsWith('/dashboard')) {
     const role = request.cookies.get(ROLE_COOKIE)?.value ?? 'admin'
 
-    if (!isRoleAllowed(role, pathname)) {
-      // Override por usuário: o admin pode ter liberado explicitamente esse
-      // módulo em user_module_access (enabled=true), mesmo que o role padrão
-      // não o permita. Consultamos antes de bloquear.
-      const moduleFromPath = pathname.split('/')[2] // /dashboard/<module>/...
-      let overridden = false
-      if (moduleFromPath) {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user) {
-          const { data: row } = await supabase
-            .from('user_module_access')
-            .select('enabled')
-            .eq('user_id', user.id)
-            .eq('module_name', moduleFromPath)
-            .maybeSingle()
-          if (row?.enabled === true) overridden = true
-        }
-      }
-      if (!overridden) {
-        // Esconde em vez de bloquear: redireciona silenciosamente para a home
-        // do role do usuário, sem banner "Acesso negado".
+    // /dashboard/management permanece exclusivo do admin (controle de plano,
+    // cadastros de equipe etc.). Os demais módulos seguem user_module_access.
+    if (pathname.startsWith('/dashboard/management') && role !== 'admin') {
+      const home = ROLE_HOME[role as UserRole] ?? '/dashboard/reception'
+      const redirectUrl = request.nextUrl.clone()
+      redirectUrl.pathname = home
+      redirectUrl.search = ''
+      return NextResponse.redirect(redirectUrl)
+    }
+
+    // Controle por módulo: só bloqueia se admin marcou enabled=false explícito.
+    // Default permissivo: row ausente = permitido.
+    const moduleKey = moduleKeyFromPath(pathname)
+    if (moduleKey) {
+      const { data: row } = await supabase
+        .from('user_module_access')
+        .select('enabled')
+        .eq('user_id', user.id)
+        .eq('module_name', moduleKey)
+        .maybeSingle()
+      if (row?.enabled === false) {
         const home = ROLE_HOME[role as UserRole] ?? '/dashboard/reception'
         const redirectUrl = request.nextUrl.clone()
         redirectUrl.pathname = home

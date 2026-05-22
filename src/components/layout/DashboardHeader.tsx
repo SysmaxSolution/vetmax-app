@@ -57,9 +57,6 @@ interface DashboardHeaderProps {
   userRole:       UserRole
   logoUrl?:       string | null
   activeModules?: string[] | null
-  /** Módulos que o admin liberou EXPLICITAMENTE para este usuário, mesmo que
-   *  o role padrão não os incluísse. Override por usuário. */
-  roleOverrides?: string[]
   lowStockCount?:        number
   whatsappHandoffCount?: number
   userClinics?:          UserClinicInfo[]
@@ -80,7 +77,6 @@ export default function DashboardHeader({
   userRole,
   logoUrl,
   activeModules,
-  roleOverrides = [],
   lowStockCount = 0,
   whatsappHandoffCount = 0,
   userClinics,
@@ -125,12 +121,16 @@ export default function DashboardHeader({
     setMobileOpen(false)
   }
 
-  const overrideSet = new Set(roleOverrides)
+  // Decisão de design (2026-05-22, requisito do PO): a exibição do menu
+  // depende EXCLUSIVAMENTE de user_module_access (configurado em Gestão >
+  // Usuários > Direitos de Acesso). Sem fallback de role — se o admin não
+  // bloqueou explicitamente um módulo ativo da clínica para esse usuário, ele
+  // vê. O array `tab.roles` é mantido na declaração como documentação do
+  // default original, mas não filtra mais.
   const tabs = ALL_TABS.filter(tab => {
-    // Override explícito: se o admin liberou esse módulo para o usuário em
-    // user_module_access, mostra mesmo que o role padrão não o inclua.
-    const isOverridden = tab.moduleKey ? overrideSet.has(tab.moduleKey) : false
-    if (!isOverridden && !tab.roles.includes(userRole)) return false
+    // Gestão é exclusiva de admin (controle de plataforma — não faz sentido
+    // delegar via user_module_access). Mantemos apenas esse caso especial.
+    if (tab.href === '/dashboard/management' && userRole !== 'admin') return false
     if (tab.moduleKey && activeModules) {
       return activeModules.includes(tab.moduleKey)
     }
