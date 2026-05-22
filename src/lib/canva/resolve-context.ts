@@ -11,6 +11,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ResolveContext } from './dynamic-tags'
 import { MOCK_PATIENT, MOCK_TUTOR, buildMockConsultation } from './mock-data'
+import { extractEntitiesFromAnamnese } from '@/lib/actions/anamnese-extraction'
 
 const ROLE_LABELS: Record<string, string> = {
   admin:        'Administrador',
@@ -192,6 +193,16 @@ export interface BuildContextOptions {
    *  Default: data ATUAL (new Date()). Para impressão de doc salvo,
    *  passar patient_document.created_at — preserva a data real da emissão. */
   documentDate?: Date
+  /** Quando true (default), se a tabela `prescriptions` da consulta
+   *  estiver vazia E `vet_notes`/`audio_transcript` mencionarem
+   *  prescrições, chama o Nível 3 (extração IA) e injeta as receitas
+   *  inferidas em `consultation.prescriptions`. Desligue em testes ou
+   *  quando o caller já garantiu hidratação client-side. */
+  extractFromAnamnese?: boolean
+  /** Texto adicional do form em edição (ex: `static_fields.medicamentos`
+   *  ainda não persistido) que deve ser anexado ao texto enviado à IA.
+   *  Usado pelo preview ao vivo do consultório. */
+  extraAnamneseText?: string
 }
 
 // Normaliza enums do banco para os valores canônicos que o RepeaterRenderer
@@ -259,7 +270,7 @@ export async function buildResolveContext(
   ])
 
   // Mapeia para o shape que macros.ts/ElementRenderers consomem (mesmo de MOCK_PRESCRIPTIONS).
-  const prescriptions = (prescriptionsRaw ?? []).map(p => ({
+  let prescriptions: Array<Record<string, unknown>> = (prescriptionsRaw ?? []).map(p => ({
     medication:              p.medication,
     dose:                    p.dose,
     frequency:               p.frequency,
@@ -268,6 +279,35 @@ export async function buildResolveContext(
     prescription_type:       PRESC_TYPE_DB_TO_CANON[p.prescription_type as string] ?? p.prescription_type,
     route_of_administration: ROUTE_DB_TO_CANON[p.route_of_administration as string] ?? p.route_of_administration,
   }))
+
+  // Nível 3 — extração via IA quando a tabela `prescriptions` está vazia
+  // mas o MV ditou medicações em texto livre (vet_notes / audio_transcript
+  // / static_fields.medicamentos do form em edição).
+  const extractEnabled = options.extractFromAnamnese !== false
+  if (extractEnabled && prescriptions.length === 0) {
+    const consultRecord = consultation as Record<string, unknown> | null
+    const anamneseText = [
+      consultRecord?.vet_notes as string | null | undefined,
+      consultRecord?.audio_transcript as string | null | undefined,
+      options.extraAnamneseText,
+    ].filter(Boolean).join('\n\n')
+    if (anamneseText.trim().length > 0) {
+      try {
+        const extracted = await extractEntitiesFromAnamnese(anamneseText)
+        if (extracted.prescriptions.length > 0) {
+          prescriptions = extracted.prescriptions.map(p => ({
+            ...p,
+            // Sinaliza no contexto que estes vieram da camada IA — UI pode
+            // exibir badge "extraído da anamnese" no preview.
+            _source: extracted.source,
+            _confidence: extracted.confidence,
+          }))
+        }
+      } catch (e) {
+        console.error('[buildResolveContext] anamnese extraction failed:', e)
+      }
+    }
+  }
 
   // O macro de exames agrupa por `urgency` — preserva o status como agrupador
   // (pending/in_progress/completed) e expõe `name` para o itemTemplate "{{name}}".

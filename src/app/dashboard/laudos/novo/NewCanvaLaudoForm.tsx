@@ -25,7 +25,7 @@ import { getAllPages } from '@/lib/canva/canvas-state'
 import type { FillableFieldElement } from '@/lib/canva/elements'
 import type { ResolveContext } from '@/lib/canva/dynamic-tags'
 import type { FillableSource } from '@/lib/canva/fillable-prefill'
-import { parseMedicamentosText } from '@/lib/canva/parse-medicamentos'
+import { useCanvasHydrator } from '@/lib/canva/useCanvasHydrator'
 
 interface PatientHeader {
   patient_name?: string
@@ -140,29 +140,21 @@ export default function NewCanvaLaudoForm({
     fillable_fields: fillableValues,
   }
 
-  // Preview reactive: para que o Repeater de prescrições renderize o
-  // que o vet acabou de digitar (sem precisar salvar e abrir /print),
-  // mescla o resolveContext recebido do server com prescrições parseadas
-  // do textarea "Medicamentos". Se a consulta já tinha prescrições reais
-  // (tabela `prescriptions`), o textarea complementa apenas quando vazio.
-  const liveResolveContext = useMemo<ResolveContext | undefined>(() => {
-    if (!resolveContext) return resolveContext
-    const consultation = (resolveContext.consultation as Record<string, unknown> | undefined) ?? {}
-    const existing = Array.isArray(consultation.prescriptions) ? consultation.prescriptions : []
-    const parsed = parseMedicamentosText(medicamentos)
-    if (parsed.length === 0 && existing.length > 0) return resolveContext
-    const mergedPrescriptions = parsed.length > 0
-      ? parsed.map(p => ({
-          ...p,
-          frequency: p.frequency ?? (posologia.trim() || undefined),
-          orientation: p.orientation ?? (observacoes.trim() || undefined),
-        }))
-      : existing
-    return {
-      ...resolveContext,
-      consultation: { ...consultation, prescriptions: mergedPrescriptions },
-    }
-  }, [resolveContext, medicamentos, posologia, observacoes])
+  // Motor de Hidratação Universal — substitui o merge manual anterior.
+  // Pipeline em 3 níveis: cadastro/estruturados (já vêm em resolveContext
+  // pelo server) + parser determinístico (síncrono no keystroke) + IA com
+  // debounce de 700ms quando o MV digita anamnese livre. Banco de
+  // prescriptions tem precedência absoluta.
+  const {
+    hydratedContext: liveResolveContext,
+    status: hydratorStatus,
+    prescriptionsSource,
+    aiConfidence,
+  } = useCanvasHydrator(resolveContext, {
+    medicamentos,
+    posologia,
+    observacoes,
+  })
 
   /** Lista campos required não preenchidos. Bloqueia save se houver. */
   function getMissingRequired(): FillableFieldElement[] {
@@ -350,9 +342,31 @@ export default function NewCanvaLaudoForm({
             fillable fields preenchidos, repeater de medicações, etc.).
             Fallback pro CanvaA4Preview legado quando não há canvas_state. */}
         <section className="lg:sticky lg:top-6 lg:self-start">
-          <div className="mb-2 flex items-center gap-2 text-xs text-slate-500">
+          <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
             <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-700">Preview ao vivo</span>
             <span>O laudo será impresso exatamente assim.</span>
+            {prescriptionsSource === 'db' && (
+              <span className="rounded-full bg-sky-100 px-2 py-0.5 text-sky-700">Receita: cadastro</span>
+            )}
+            {prescriptionsSource === 'parser' && (
+              <span className="rounded-full bg-violet-100 px-2 py-0.5 text-violet-700">Receita: parser</span>
+            )}
+            {prescriptionsSource === 'ai' && (
+              <span className="rounded-full bg-fuchsia-100 px-2 py-0.5 text-fuchsia-700">
+                Receita: IA{aiConfidence ? ` · ${aiConfidence}` : ''}
+              </span>
+            )}
+            {prescriptionsSource === 'mixed' && (
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-700">Receita: parser + IA</span>
+            )}
+            {hydratorStatus === 'extracting' && (
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-600 inline-flex items-center gap-1">
+                <Loader2 className="w-3 h-3 animate-spin" /> Analisando anamnese…
+              </span>
+            )}
+            {hydratorStatus === 'error' && (
+              <span className="rounded-full bg-red-100 px-2 py-0.5 text-red-700">IA indisponível</span>
+            )}
           </div>
           {canvasState ? (
             <div style={{ width: '21cm', maxWidth: '100%' }} className="mx-auto space-y-4">
