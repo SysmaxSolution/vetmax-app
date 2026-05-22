@@ -188,6 +188,12 @@ export const ACCESS_CATALOG: AccessModule[] = [
     actions: ['view'],
     description: 'Assistente de orientação por voz/texto.',
   },
+  {
+    key:   'petlove_reconciliation',
+    label: 'Conciliação Petlove',
+    description: 'Importação de extratos e conciliação financeira do convênio Petlove.',
+    actions: ['view', 'create', 'edit', 'export', 'approve'],
+  },
 ]
 
 // Helper: lista chave de permissão única (module ou module.tab)
