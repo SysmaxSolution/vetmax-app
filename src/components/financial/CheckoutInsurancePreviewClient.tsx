@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { Wallet, CreditCard, FileClock, ShieldCheck, TrendingDown, Loader2 } from 'lucide-react'
-import { previewConsultationInsurance, type CheckoutInsurancePreview } from '@/lib/actions/insurance-checkout'
+import { previewConsultationInsurance } from '@/lib/actions/insurance-checkout'
+import type { CheckoutInsurancePreview } from '@/lib/actions/insurance-checkout.types'
 import TutorSummaryPrint from '@/components/financial/TutorSummaryPrint'
 
 interface Props {
@@ -48,11 +49,26 @@ export default function CheckoutInsurancePreviewClient(props: Props) {
     }
     let cancelled = false
     setLoading(true)
+    setError(null)
     previewConsultationInsurance(props.consultationId)
       .then(res => {
         if (cancelled) return
-        if ('error' in res) setError(res.error)
-        else                setPreview(res)
+        // Defesa: resposta pode vir como Promise rejection serializada, objeto
+        // de erro server-action, ou o payload válido. Verificamos a forma antes
+        // de aplicar 'in' (que crasha se res não for object).
+        if (!res || typeof res !== 'object') {
+          setError('Resposta inválida do servidor')
+          return
+        }
+        if ('error' in res && typeof res.error === 'string') {
+          setError(res.error)
+          return
+        }
+        if ('items' in res && Array.isArray((res as { items: unknown }).items)) {
+          setPreview(res as CheckoutInsurancePreview)
+          return
+        }
+        setError('Formato de resposta inesperado')
       })
       .catch(err => {
         if (cancelled) return

@@ -1,7 +1,7 @@
 'use client'
 
 import { Printer } from 'lucide-react'
-import type { CheckoutInsurancePreview } from '@/lib/actions/insurance-checkout'
+import type { CheckoutInsurancePreview } from '@/lib/actions/insurance-checkout.types'
 
 interface Props {
   consultationId: string
