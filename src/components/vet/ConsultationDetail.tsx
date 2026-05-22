@@ -34,6 +34,7 @@ import WhatsAppNotificationModal from '@/components/whatsapp/WhatsAppNotificatio
 import { RemoveFromQueueModal } from '@/components/ui/RemoveFromQueueModal'
 import { getHospitalizationByConsultation, type InternationFeedData } from '@/lib/actions/hospitalizations'
 import VaccinationCard from '@/components/vet/VaccinationCard'
+import InsuranceCard from '@/components/pet/InsuranceCard'
 import VaccineStatusBadges from '@/components/vet/VaccineStatusBadges'
 import { BehaviorTagsBadges } from '@/components/ui/BehaviorTagsBadges'
 import { LiveRegistrationModal } from '@/components/consultation/LiveRegistrationModal'
@@ -131,6 +132,7 @@ interface Props {
   flowConfig?:         FlowConfig
   userRole?:           string
   currentUserId?:      string
+  insuranceCard?:      import('@/lib/actions/insurance-coverage').InsuranceCardData | null
 }
 
 export default function ConsultationDetail({
@@ -145,6 +147,7 @@ export default function ConsultationDetail({
   flowConfig = { vet_merged_modules: [] },
   userRole,
   currentUserId,
+  insuranceCard,
 }: Props) {
   const router = useRouter()
   const aiMode = useAiTranscriptionMode()
@@ -1067,6 +1070,9 @@ export default function ConsultationDetail({
             )}
           </div>
         )}
+
+        {/* ── Convênio do pet — visível durante toda a consulta ───────────── */}
+        {insuranceCard?.has_insurance && <InsuranceCard data={insuranceCard} />}
 
         {/* ── Painel de Contexto ─────────────────────────────────────────── */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">

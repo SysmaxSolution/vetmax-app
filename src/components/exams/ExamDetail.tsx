@@ -18,6 +18,7 @@ import { PetAvatar } from '@/components/ui/PetAvatar'
 import DocumentsSection, { type PrintState } from '@/components/vet/DocumentsSection'
 import AttachmentsSection from '@/components/ui/AttachmentsSection'
 import WhatsAppNotificationModal from '@/components/whatsapp/WhatsAppNotificationModal'
+import InsuranceCard from '@/components/pet/InsuranceCard'
 import { RemoveFromQueueModal } from '@/components/ui/RemoveFromQueueModal'
 import AdmitPetModal from '@/components/hospitalization/AdmitPetModal'
 import type { VetConsultationDetail } from '@/lib/actions/vet'
@@ -47,6 +48,7 @@ interface Props {
   initialDocuments?:   PatientDocument[]
   initialAttachments?: Attachment[]
   userRole?:           string
+  insuranceCard?:      import('@/lib/actions/insurance-coverage').InsuranceCardData | null
 }
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
@@ -70,6 +72,7 @@ export default function ExamDetail({
   initialDocuments = [],
   initialAttachments = [],
   userRole,
+  insuranceCard,
 }: Props) {
   const router = useRouter()
   const aiMode = useAiTranscriptionMode()
@@ -340,6 +343,9 @@ export default function ExamDetail({
             )}
           </div>
         )}
+
+        {/* Convênio do pet — visível durante todo o laudo */}
+        {insuranceCard?.has_insurance && <InsuranceCard data={insuranceCard} />}
 
         {/* Painel de Contexto */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">

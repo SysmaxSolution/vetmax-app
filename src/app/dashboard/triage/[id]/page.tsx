@@ -2,6 +2,7 @@ import { getTriageConsultation, getTriageRecordById } from '@/lib/actions/triage
 import { getTemplates } from '@/lib/actions/templates'
 import { getClinicSettingsConfig } from '@/lib/actions/clinic-settings'
 import { getPatientVaccines } from '@/lib/actions/vaccines'
+import { getInsuranceCard } from '@/lib/actions/insurance-coverage'
 import TriageForm from '@/components/triage/TriageForm'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
@@ -78,8 +79,12 @@ export default async function TriageScreen({
     )
   }
 
-  const vaccinesResult = await getPatientVaccines(result.patient.id)
+  const [vaccinesResult, insuranceCardResult] = await Promise.all([
+    getPatientVaccines(result.patient.id),
+    getInsuranceCard(result.patient.id),
+  ])
   const initialVaccines = 'error' in vaccinesResult ? [] : vaccinesResult
+  const insuranceCard = 'error' in insuranceCardResult ? null : insuranceCardResult
 
   return (
     <div className="max-w-4xl mx-auto px-3 sm:px-6 py-6 sm:py-8">
@@ -90,6 +95,7 @@ export default async function TriageScreen({
         initialVaccines={initialVaccines}
         triageRequiredFields={triageRequiredFields}
         userRole={profile.role}
+        insuranceCard={insuranceCard}
       />
     </div>
   )

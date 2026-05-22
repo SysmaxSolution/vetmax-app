@@ -38,6 +38,8 @@ import VaccineStatusBadges from '@/components/vet/VaccineStatusBadges'
 import { BehaviorTagsBadges } from '@/components/ui/BehaviorTagsBadges'
 import WhatsAppNotificationModal from '@/components/whatsapp/WhatsAppNotificationModal'
 import { RemoveFromQueueModal } from '@/components/ui/RemoveFromQueueModal'
+import InsuranceCard from '@/components/pet/InsuranceCard'
+import type { InsuranceCardData } from '@/lib/actions/insurance-coverage'
 
 interface TriageFormProps {
   consultation:   TriageConsultationDetail
@@ -46,6 +48,7 @@ interface TriageFormProps {
   initialVaccines?: PatientVaccine[]
   triageRequiredFields?: string[]
   userRole?: string
+  insuranceCard?: InsuranceCardData | null
 }
 
 const MUCOUS_COLORS: { value: MucousColor; label: string; color: string }[] = [
@@ -68,6 +71,7 @@ export default function TriageForm({
   initialVaccines = [],
   triageRequiredFields = ['weight', 'temperature', 'chief_complaint'],
   userRole,
+  insuranceCard,
 }: TriageFormProps) {
   const router = useRouter()
   const aiMode = useAiTranscriptionMode()
@@ -759,6 +763,9 @@ export default function TriageForm({
             </div>
           )}
         </div>
+
+        {/* Convênio do pet — fica visível durante toda a triagem */}
+        {insuranceCard?.has_insurance && <InsuranceCard data={insuranceCard} />}
 
         {/* Triage Form */}
         <form id="triage-form" onSubmit={handleSubmit} className="space-y-6 pb-24">

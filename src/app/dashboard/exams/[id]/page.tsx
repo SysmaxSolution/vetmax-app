@@ -5,6 +5,7 @@ import { getVetConsultation } from '@/lib/actions/vet'
 import { getTemplates } from '@/lib/actions/templates'
 import { getPatientDocuments } from '@/lib/actions/documents'
 import { getAttachments } from '@/lib/actions/attachments'
+import { getInsuranceCard } from '@/lib/actions/insurance-coverage'
 import ExamDetail from '@/components/exams/ExamDetail'
 
 export const metadata = { title: 'Exames — Laudo | SysVetMax' }
@@ -45,8 +46,12 @@ export default async function ExamDetailPage({ params }: Props) {
   const templates         = 'error' in templatesResult ? [] : templatesResult
   const initialDocuments  = 'error' in docsResult      ? [] : docsResult
 
-  const attachResult      = await getAttachments(consultResult.patient.id, id)
-  const initialAttachments = 'error' in attachResult ? [] : attachResult
+  const [attachResult, insuranceCardResult] = await Promise.all([
+    getAttachments(consultResult.patient.id, id),
+    getInsuranceCard(consultResult.patient.id),
+  ])
+  const initialAttachments = 'error' in attachResult       ? [] : attachResult
+  const insuranceCard      = 'error' in insuranceCardResult ? null : insuranceCardResult
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-8 print:hidden">
@@ -57,6 +62,7 @@ export default async function ExamDetailPage({ params }: Props) {
         initialDocuments={initialDocuments}
         initialAttachments={initialAttachments}
         userRole={profile.role}
+        insuranceCard={insuranceCard}
       />
     </div>
   )

@@ -7,6 +7,7 @@ import { getPatientDocuments } from '@/lib/actions/documents'
 import { getAppliedMedications } from '@/lib/actions/pharmacy'
 import { getAttachments } from '@/lib/actions/attachments'
 import { getPatientVaccines } from '@/lib/actions/vaccines'
+import { getInsuranceCard } from '@/lib/actions/insurance-coverage'
 import ConsultationDetail from '@/components/vet/ConsultationDetail'
 import type { FlowConfig } from '@/lib/actions/clinic-settings'
 
@@ -48,12 +49,14 @@ export default async function VetConsultationPage({ params }: Props) {
   const initialMedications = 'error' in medsResult      ? [] : medsResult
   const flowConfig         = (clinicRow.data?.flow_config as FlowConfig | null) ?? { vet_merged_modules: [] }
 
-  const [attachResult, vaccinesResult] = await Promise.all([
+  const [attachResult, vaccinesResult, insuranceCardResult] = await Promise.all([
     getAttachments(vetResult.patient.id, id),
     getPatientVaccines(vetResult.patient.id),
+    getInsuranceCard(vetResult.patient.id),
   ])
   const initialAttachments = 'error' in attachResult   ? [] : attachResult
   const initialVaccines    = 'error' in vaccinesResult ? [] : vaccinesResult
+  const insuranceCard      = 'error' in insuranceCardResult ? null : insuranceCardResult
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-8 print:hidden">
@@ -69,6 +72,7 @@ export default async function VetConsultationPage({ params }: Props) {
         flowConfig={flowConfig}
         userRole={profile.role}
         currentUserId={user.id}
+        insuranceCard={insuranceCard}
       />
     </div>
   )

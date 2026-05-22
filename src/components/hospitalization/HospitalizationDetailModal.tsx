@@ -25,6 +25,8 @@ import { generateClinicalSummary, type ClinicalSummaryResult, askPatientHistory,
 import { generatePrescriptionPdf, type PrescriptionData } from '@/lib/actions/reports'
 import PrescriptionModal from './PrescriptionModal'
 import WhatsAppNotificationModal from '@/components/whatsapp/WhatsAppNotificationModal'
+import InsuranceCard from '@/components/pet/InsuranceCard'
+import { getInsuranceCard, type InsuranceCardData } from '@/lib/actions/insurance-coverage'
 import { useClinicalVoiceAssistant } from '@/hooks/useClinicalVoiceAssistant'
 import { useFocusedVoiceCapture } from '@/hooks/useFocusedVoiceCapture'
 import { useNativeKeepAwake } from '@/hooks/useNativeKeepAwake'
@@ -56,6 +58,18 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
   // Ref para guardar o "último contexto salvo" e disparar WA por voz (quando o
   // hook detectar "sim/enviar"). Sem esse ref a voz não saberia qual ctx montar.
   const lastSavedWaCtxRef = useRef<WhatsAppPendingCtx | null>(null)
+  const [insuranceCard, setInsuranceCard] = useState<InsuranceCardData | null>(null)
+
+  // Carrega card do convênio assim que o modal abre (uma vez por pet)
+  useEffect(() => {
+    if (!card?.patient?.id) return
+    let cancelled = false
+    getInsuranceCard(card.patient.id).then(res => {
+      if (cancelled || 'error' in res) return
+      setInsuranceCard(res)
+    })
+    return () => { cancelled = true }
+  }, [card?.patient?.id])
   const [selectedDocIds,   setSelectedDocIds]   = useState<Set<string>>(new Set())
   const [docPickerOpen,    setDocPickerOpen]    = useState(false)
   
@@ -610,6 +624,13 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
                 </div>
               </div>
               
+              {/* Convênio do pet — visível durante toda a internação */}
+              {insuranceCard?.has_insurance && (
+                <div className="mb-4">
+                  <InsuranceCard data={insuranceCard} />
+                </div>
+              )}
+
               <form onSubmit={handleSubmit} className="space-y-5">
                 {/* Estado */}
                 <div className="grid grid-cols-3 gap-2">
