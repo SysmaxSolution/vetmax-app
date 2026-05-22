@@ -34,6 +34,21 @@ const VISIT_REASON_LABELS: Record<string, string> = {
   surgery:      'Cirurgia',
 }
 
+// PT-BR canônico — mesmo mapa usado por VetWorkspace/PatientsWorkspace/etc.
+// Mantém consistência entre o que aparece nos prontuários e o que sai nos
+// laudos impressos (CFMV exige termos em português).
+const SPECIES_LABELS: Record<string, string> = {
+  dog: 'Canino', cat: 'Felino', feline: 'Felino', canine: 'Canino',
+  bird: 'Ave', rabbit: 'Coelho', rodent: 'Roedor', reptile: 'Réptil',
+  fish: 'Peixe', exotic: 'Exótico',
+}
+
+function translateSpecies(raw: string | null | undefined): string {
+  if (!raw) return ''
+  const k = String(raw).trim().toLowerCase()
+  return SPECIES_LABELS[k] ?? raw
+}
+
 /** Resolve cidade/UF da clínica em 3 níveis de preferência:
  *    1. Campos próprios (clinics.city, clinics.state) — migration 0171
  *    2. cnpj_data.municipio / cnpj_data.uf (vem da API ReceitaWS)
@@ -179,6 +194,33 @@ export interface BuildContextOptions {
   documentDate?: Date
 }
 
+// Normaliza enums do banco para os valores canônicos que o RepeaterRenderer
+// reconhece em PRESCRIPTION_GROUP_LABEL (src/components/canva/editor/ElementRenderers.tsx).
+// Sem isso, o agrupamento por via/tipo exibe literais como "iv" e "blue_receipt"
+// em vez de "Endovenoso (EV)" / "Medicamentos Controlados".
+const ROUTE_DB_TO_CANON: Record<string, string> = {
+  oral:       'oral',
+  iv:         'intravenous',
+  im:         'intramuscular',
+  subcutaneo: 'subcutaneous',
+  topico:     'topical',
+  inalacao:   'inalação',
+  outro:      'outras vias',
+}
+const PRESC_TYPE_DB_TO_CANON: Record<string, string> = {
+  standard:       'common',
+  blue_receipt:   'controlled',
+  yellow_receipt: 'controlled',
+  special:        'controlled',
+}
+
+function formatDateBRShort(raw: string | null | undefined): string {
+  if (!raw) return ''
+  const d = new Date(raw)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleDateString('pt-BR')
+}
+
 export async function buildResolveContext(
   supabase: SupabaseClient,
   clinicId: string,
@@ -186,20 +228,60 @@ export async function buildResolveContext(
   consultationId: string,
   options: BuildContextOptions = {},
 ): Promise<ResolveContext> {
-  const [patient, consultation, clinic] = await Promise.all([
+  const [patient, consultation, clinic, prescriptionsRaw, examRequestsRaw, vaccinesRaw] = await Promise.all([
     supabase.from('patients')
       .select('id, name, species, breed, gender, neutered, birth_date, microchip, color, tutor_id')
       .eq('id', patientId).single()
       .then(r => r.data),
     supabase.from('consultations')
-      .select('id, professional_id, vet_notes, suggested_diagnosis, created_at, weight, vital_signs')
+      .select('id, vet_id, vet_notes, suggested_diagnosis, created_at, weight, vital_signs, appointment_date')
       .eq('id', consultationId).single()
       .then(r => r.data),
     supabase.from('clinics')
       .select('id, name, cnpj, cnpj_data, phone, address, business_type, business_hours, logo_url, city, state, cep, neighborhood')
       .eq('id', clinicId).single()
       .then(r => r.data),
+    supabase.from('prescriptions')
+      .select('id, medication, dose, frequency, duration_days, is_controlled, prescription_type, route_of_administration, created_at')
+      .eq('consultation_id', consultationId)
+      .order('created_at', { ascending: true })
+      .then(r => r.data ?? []),
+    supabase.from('exam_requests')
+      .select('id, exam_type, status, notes, requested_at')
+      .eq('consultation_id', consultationId)
+      .order('requested_at', { ascending: true })
+      .then(r => r.data ?? []),
+    supabase.from('patient_vaccines')
+      .select('id, vaccine_name, date_administered, next_due_date')
+      .eq('patient_id', patientId)
+      .order('date_administered', { ascending: false })
+      .then(r => r.data ?? []),
   ])
+
+  // Mapeia para o shape que macros.ts/ElementRenderers consomem (mesmo de MOCK_PRESCRIPTIONS).
+  const prescriptions = (prescriptionsRaw ?? []).map(p => ({
+    medication:              p.medication,
+    dose:                    p.dose,
+    frequency:               p.frequency,
+    duration_days:           p.duration_days,
+    is_controlled:           Boolean(p.is_controlled),
+    prescription_type:       PRESC_TYPE_DB_TO_CANON[p.prescription_type as string] ?? p.prescription_type,
+    route_of_administration: ROUTE_DB_TO_CANON[p.route_of_administration as string] ?? p.route_of_administration,
+  }))
+
+  // O macro de exames agrupa por `urgency` — preserva o status como agrupador
+  // (pending/in_progress/completed) e expõe `name` para o itemTemplate "{{name}}".
+  const examItems = (examRequestsRaw ?? []).map(e => ({
+    name:    e.exam_type,
+    urgency: e.status ?? 'rotina',
+    notes:   e.notes ?? '',
+  }))
+
+  const vaccines = (vaccinesRaw ?? []).map(v => ({
+    name: v.vaccine_name,
+    date: formatDateBRShort(v.date_administered),
+    next: formatDateBRShort(v.next_due_date),
+  }))
 
   const tutor = patient?.tutor_id
     ? await supabase.from('tutors')
@@ -208,10 +290,14 @@ export async function buildResolveContext(
         .then(r => r.data)
     : null
 
-  const vet = consultation?.professional_id
+  // Schema usa vet_id (migration 0001). Se algum dia a tabela tiver
+  // professional_id também, manter o fallback evita regressão silenciosa.
+  const vetUserId = (consultation as Record<string, unknown> | null)?.vet_id
+    ?? (consultation as Record<string, unknown> | null)?.professional_id
+  const vet = vetUserId
     ? await supabase.from('profiles')
         .select('id, full_name, nickname, role, crmv, specialty, specialties, phone, photo_url, electronic_signature_url, mapa_code, username')
-        .eq('id', consultation.professional_id).single()
+        .eq('id', vetUserId as string).single()
         .then(r => r.data)
     : null
 
@@ -221,6 +307,9 @@ export async function buildResolveContext(
   return {
     patient: patient ? {
       ...patient,
+      // CFMV: laudos em PT-BR — traduz códigos do banco ("dog"/"cat") para
+      // o termo clínico correto exibido no editor e nos prints.
+      species: translateSpecies(patient.species),
       age: calculateAge(patient.birth_date),
       sex: patient.gender === 'male' ? 'Macho' : patient.gender === 'female' ? 'Fêmea' : 'Indef.',
       weight: consultation?.weight ?? null,
@@ -237,11 +326,20 @@ export async function buildResolveContext(
       // consultation_created_at fica disponível para casos que precisem
       // da data REAL de início da consulta (separada do doc emitido).
       consultation_created_at: consultation.created_at,
+      // Motivo da visita vem do campo `vital_signs.visit_reason` (triagem
+      // salva ali) quando existir; consultations.visit_reason não existe.
+      visit_reason_label:
+        VISIT_REASON_LABELS[(vitalSigns?.visit_reason as string) ?? ''] ?? '',
       diagnosis: consultation.suggested_diagnosis ?? consultation.vet_notes ?? '',
       complaint: chiefComplaint ?? '',
       weight: consultation.weight ?? null,
       temperature: (vitalSigns?.temperature as number | undefined) ?? null,
-      visit_reason_label: VISIT_REASON_LABELS[(consultation as Record<string, unknown>).visit_reason as string] ?? '',
+      // Listas consumidas pelo RepeaterElement (Receituário, Solicitação de
+      // Exames, Vacinas). Sem elas, os repeaters renderizam vazio mesmo
+      // quando o vet preencheu medicações na consulta.
+      prescriptions,
+      exam_items: examItems,
+      vaccines,
     } : {},
 
     clinic: clinic ? (() => {

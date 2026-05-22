@@ -24,6 +24,8 @@ import type { CanvasState } from '@/lib/canva/canvas-state'
 import { getAllPages } from '@/lib/canva/canvas-state'
 import type { FillableFieldElement } from '@/lib/canva/elements'
 import type { ResolveContext } from '@/lib/canva/dynamic-tags'
+import type { FillableSource } from '@/lib/canva/fillable-prefill'
+import { parseMedicamentosText } from '@/lib/canva/parse-medicamentos'
 
 interface PatientHeader {
   patient_name?: string
@@ -50,6 +52,11 @@ interface Props {
   /** Dados reais da clínica/vet/patient/tutor/consulta para Dynamic Tags
    *  resolverem no preview ao vivo. Vem do server (buildResolveContext). */
   resolveContext?: ResolveContext
+  /** Valores pré-resolvidos para os FillableFieldElement do template,
+   *  vindos da cadeia tag → cadastro → histórico → voz. */
+  prefillValues?: Record<string, string>
+  /** Origem de cada valor pré-preenchido — usado para mostrar badge. */
+  prefillSources?: Record<string, FillableSource>
 }
 
 interface IADraft {
@@ -63,6 +70,7 @@ interface IADraft {
 export default function NewCanvaLaudoForm({
   templateId, templateName, templateType,
   consultationId, patientId, patient, config, canvasState, resolveContext,
+  prefillValues, prefillSources,
 }: Props) {
   const router = useRouter()
   const [medicamentos, setMedicamentos] = useState('')
@@ -87,15 +95,23 @@ export default function NewCanvaLaudoForm({
   const [aiFilled, setAiFilled] = useState<Set<string>>(new Set())
   const draftLoadedRef = useState({ loaded: false })[0]
 
-  // Estado dos valores preenchidos: { fieldKey: value }
+  // Origem inicial de cada campo (banco / histórico / voz). Pode ser
+  // sobrescrita quando o vet edita um campo (vira manual).
+  const [fieldSources, setFieldSources] = useState<Record<string, FillableSource | 'manual'>>(
+    () => ({ ...(prefillSources ?? {}) }),
+  )
+
+  // Estado dos valores preenchidos: { fieldKey: value }.
+  // Prioridade:
+  //   1. Rascunho IA do sessionStorage (legado — vet clicou "Gerar via IA")
+  //   2. prefillValues vindos do server (tag → cadastro → histórico → voz)
+  //   3. defaultValue do template
   const [fillableValues, setFillableValues] = useState<Record<string, string>>(() => {
-    // Tenta carregar rascunho IA do sessionStorage (foi salvo antes do redirect)
     if (typeof window !== 'undefined') {
       try {
         const raw = sessionStorage.getItem(`canva-draft-${templateId}`)
         if (raw) {
           const parsed: IADraft = JSON.parse(raw)
-          // Aceita só rascunho recente (últimos 10 min)
           if (Date.now() - parsed.timestamp < 10 * 60 * 1000) {
             setIaDraft(parsed)
             setAiFilled(new Set(parsed.filled_keys))
@@ -105,10 +121,11 @@ export default function NewCanvaLaudoForm({
         }
       } catch { /* ignore */ }
     }
-    // Sem rascunho IA — usa defaultValue do template
-    const init: Record<string, string> = {}
+    const init: Record<string, string> = { ...(prefillValues ?? {}) }
     for (const f of fillableElements) {
-      if (f.defaultValue) init[f.fieldKey] = f.defaultValue
+      if (init[f.fieldKey] === undefined && f.defaultValue) {
+        init[f.fieldKey] = f.defaultValue
+      }
     }
     return init
   })
@@ -122,6 +139,30 @@ export default function NewCanvaLaudoForm({
     dynamic_fields: dynamicFields,
     fillable_fields: fillableValues,
   }
+
+  // Preview reactive: para que o Repeater de prescrições renderize o
+  // que o vet acabou de digitar (sem precisar salvar e abrir /print),
+  // mescla o resolveContext recebido do server com prescrições parseadas
+  // do textarea "Medicamentos". Se a consulta já tinha prescrições reais
+  // (tabela `prescriptions`), o textarea complementa apenas quando vazio.
+  const liveResolveContext = useMemo<ResolveContext | undefined>(() => {
+    if (!resolveContext) return resolveContext
+    const consultation = (resolveContext.consultation as Record<string, unknown> | undefined) ?? {}
+    const existing = Array.isArray(consultation.prescriptions) ? consultation.prescriptions : []
+    const parsed = parseMedicamentosText(medicamentos)
+    if (parsed.length === 0 && existing.length > 0) return resolveContext
+    const mergedPrescriptions = parsed.length > 0
+      ? parsed.map(p => ({
+          ...p,
+          frequency: p.frequency ?? (posologia.trim() || undefined),
+          orientation: p.orientation ?? (observacoes.trim() || undefined),
+        }))
+      : existing
+    return {
+      ...resolveContext,
+      consultation: { ...consultation, prescriptions: mergedPrescriptions },
+    }
+  }, [resolveContext, medicamentos, posologia, observacoes])
 
   /** Lista campos required não preenchidos. Bloqueia save se houver. */
   function getMissingRequired(): FillableFieldElement[] {
@@ -165,7 +206,28 @@ export default function NewCanvaLaudoForm({
 
   function setFillable(key: string, value: string) {
     setFillableValues(prev => ({ ...prev, [key]: value }))
+    // Quando o vet edita um campo auto-preenchido, ele "assume" o valor —
+    // marca como manual para o badge sumir.
+    setFieldSources(prev => (prev[key] && prev[key] !== 'manual'
+      ? { ...prev, [key]: 'manual' }
+      : prev
+    ))
   }
+
+  // Contagem para mostrar resumo de auto-preenchimento (banco/histórico/voz)
+  const autofillStats = useMemo(() => {
+    let tag = 0, patient = 0, history = 0, voice = 0
+    for (const f of fillableElements) {
+      const src = fieldSources[f.fieldKey]
+      const hasValue = (fillableValues[f.fieldKey] ?? '').trim() !== ''
+      if (!hasValue) continue
+      if (src === 'tag')     tag++
+      if (src === 'patient') patient++
+      if (src === 'history') history++
+      if (src === 'voice')   voice++
+    }
+    return { tag, patient, history, voice, total: tag + patient + history + voice }
+  }, [fillableElements, fieldSources, fillableValues])
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -230,9 +292,23 @@ export default function NewCanvaLaudoForm({
                   </div>
                 </div>
               )}
+              {!iaDraft && autofillStats.total > 0 && (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] text-emerald-700 mb-2 flex items-start gap-2">
+                  <span className="text-base flex-shrink-0">✨</span>
+                  <div>
+                    <strong>Preenchimento automático aplicado a {autofillStats.total} de {fillableElements.length} campos</strong>
+                    <div className="mt-0.5 text-emerald-600">
+                      {autofillStats.tag     > 0 && <>{autofillStats.tag} via cadastro do pet/tutor · </>}
+                      {autofillStats.patient > 0 && <>{autofillStats.patient} via histórico clínico · </>}
+                      {autofillStats.history > 0 && <>{autofillStats.history} via laudos anteriores · </>}
+                      {autofillStats.voice   > 0 && <>{autofillStats.voice} extraído(s) da gravação de voz</>}
+                    </div>
+                  </div>
+                </div>
+              )}
               <p className="text-[11px] text-slate-500 mb-2">
                 Campos marcados com <span className="text-red-500">*</span> são obrigatórios.
-                {iaDraft && <> Verde = preenchido pela IA · Amarelo = vazio · Vermelho = obrigatório vazio.</>}
+                {(iaDraft || autofillStats.total > 0) && <> Verde = preenchido automaticamente · Amarelo = vazio · Vermelho = obrigatório vazio.</>}
               </p>
               {fillableElements.map(f => (
                 <FillableInput
@@ -240,10 +316,9 @@ export default function NewCanvaLaudoForm({
                   field={f}
                   value={fillableValues[f.fieldKey] ?? ''}
                   filledByAI={aiFilled.has(f.fieldKey)}
+                  source={fieldSources[f.fieldKey]}
                   onChange={v => {
                     setFillable(f.fieldKey, v)
-                    // Se o vet edita um campo preenchido pela IA, ele "assume"
-                    // a edição — perde o highlight verde de IA.
                     if (aiFilled.has(f.fieldKey)) {
                       setAiFilled(prev => {
                         const next = new Set(prev)
@@ -291,7 +366,7 @@ export default function NewCanvaLaudoForm({
                   <CanvasStage
                     state={{ version: 1, page: p.page, elements: p.elements }}
                     mode="print"
-                    resolveContext={resolveContext}
+                    resolveContext={liveResolveContext}
                     fillableValues={fillableValues}
                   />
                 </div>
@@ -345,24 +420,35 @@ function Textarea({
   )
 }
 
+/** Rótulos PT-BR para origem do auto-preenchimento (mostrados como chip). */
+const SOURCE_LABEL: Record<string, { label: string; cls: string }> = {
+  tag:     { label: 'Cadastro',  cls: 'bg-sky-100 text-sky-700' },
+  patient: { label: 'Histórico', cls: 'bg-indigo-100 text-indigo-700' },
+  history: { label: 'Laudo anterior', cls: 'bg-purple-100 text-purple-700' },
+  voice:   { label: 'Voz',       cls: 'bg-emerald-100 text-emerald-700' },
+  default: { label: 'Padrão',    cls: 'bg-slate-100 text-slate-600' },
+}
+
 /** Input específico para FillableFieldElement — tipo varia conforme inputType.
  *  Aplica destaque visual: verde para preenchido pela IA, amarelo para vazio
- *  não-obrigatório, vermelho para obrigatório vazio (à la generateDocumentDraft
- *  legado). */
+ *  não-obrigatório, vermelho para obrigatório vazio. Mostra chip com a
+ *  origem do auto-preenchimento (Cadastro / Histórico / Laudo / Voz). */
 function FillableInput({
-  field, value, filledByAI, onChange,
+  field, value, filledByAI, source, onChange,
 }: {
   field: FillableFieldElement
   value: string
   filledByAI: boolean
+  source?: FillableSource | 'manual'
   onChange: (v: string) => void
 }) {
   const isEmpty = !value || value.trim() === ''
+  const autofilled = !isEmpty && source && source !== 'manual'
   const borderClass = isEmpty
     ? (field.required
         ? 'border-red-300 bg-red-50 focus:ring-red-400'
         : 'border-amber-300 bg-amber-50 focus:ring-amber-400')
-    : filledByAI
+    : (filledByAI || autofilled)
       ? 'border-emerald-400 bg-emerald-50 focus:ring-emerald-400'
       : 'border-slate-300 focus:ring-violet-400'
 
@@ -373,6 +459,7 @@ function FillableInput({
     className: `mt-1 w-full rounded border px-2 py-1.5 text-sm focus:ring-2 focus:border-transparent outline-none transition-colors ${borderClass}`,
   }
 
+  const sourceChip = autofilled && source && SOURCE_LABEL[source]
   return (
     <label className="block">
       <span className="text-xs font-medium text-slate-700 flex items-center gap-1">
@@ -381,6 +468,11 @@ function FillableInput({
         {!isEmpty && filledByAI && (
           <span className="ml-1 inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-700">
             IA
+          </span>
+        )}
+        {!isEmpty && !filledByAI && sourceChip && (
+          <span className={`ml-1 inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${sourceChip.cls}`}>
+            {sourceChip.label}
           </span>
         )}
         {isEmpty && (

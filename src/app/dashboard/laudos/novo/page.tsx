@@ -4,6 +4,8 @@ import NewCanvaLaudoForm from './NewCanvaLaudoForm'
 import type { CanvaTemplateConfig } from '@/lib/canva/types'
 import { hydrateCanvasState } from '@/lib/canva/canvas-state'
 import { buildResolveContext } from '@/lib/canva/resolve-context'
+import { prefillFillableFields } from '@/lib/canva/fillable-prefill'
+import type { FillableFieldElement } from '@/lib/canva/elements'
 
 interface Props {
   searchParams: Promise<{ consultation_id?: string; template_id?: string }>
@@ -79,6 +81,23 @@ export default async function NewCanvaLaudoPage({ searchParams }: Props) {
     supabase, profile.clinic_id, consultation.patient_id, consultation_id,
   )
 
+  // Auto-preenche os FillableFieldElement do template em 4 camadas:
+  // tag canônica → cadastro do pet → histórico de laudos → IA + transcript
+  // de voz da consulta. Permite que campos como "Tamanho da Aorta" sejam
+  // preenchidos automaticamente conforme o MV ditou na gravação.
+  const hydratedCanvasState = hydrateCanvasState(tpl.canvas_state)
+  const fillableDefs: FillableFieldElement[] = (hydratedCanvasState?.elements ?? [])
+    .filter((e): e is FillableFieldElement => e.kind === 'fillable_field')
+
+  const prefill = await prefillFillableFields({
+    supabase,
+    resolveContext,
+    patientId:      consultation.patient_id,
+    consultationId: consultation_id,
+    clinicId:       profile.clinic_id,
+    fillableDefs,
+  })
+
   return (
     <NewCanvaLaudoForm
       templateId={tpl.id}
@@ -96,8 +115,10 @@ export default async function NewCanvaLaudoPage({ searchParams }: Props) {
         crmv: vet?.crmv,
       }}
       config={config}
-      canvasState={hydrateCanvasState(tpl.canvas_state)}
+      canvasState={hydratedCanvasState}
       resolveContext={resolveContext}
+      prefillValues={prefill.values}
+      prefillSources={prefill.sources}
     />
   )
 }

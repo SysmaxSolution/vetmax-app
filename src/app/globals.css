@@ -155,8 +155,12 @@ body.capacitor-native .native-hidden { display: none !important; }
     overflow: visible !important;
     background: white !important;
   }
-  /* Esconde tudo que está na raiz do body — exceto o portal de impressão */
-  body > *:not(.vetmax-print-root) {
+  /* Esconde tudo que está na raiz do body — exceto o portal de impressão
+     OU uma árvore que contenha o shell do Canva (.canva-print-shell). Sem
+     a exceção :has(), o root do Next era ocultado e o LaudoPrintable
+     desaparecia da impressão (PDF em branco). A regra do canva-print.css
+     usa visibility:hidden/visible para isolar a folha A4 dentro do shell. */
+  body:not(:has(.canva-print-shell)) > *:not(.vetmax-print-root) {
     display: none !important;
   }
   /* O portal ocupa a folha inteira */
