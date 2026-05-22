@@ -114,6 +114,8 @@ export default function TituloModal({
   const [discountBaixaStr,  setDiscountBaixaStr]   = useState(
     entry ? fmtCurrency(String(Math.round((entry.discount ?? 0) * 100))) : '0,00'
   )
+  /** Quanto vai receber AGORA. Vazio = recebe o netAmount integral. */
+  const [amountReceivedStr, setAmountReceivedStr]  = useState('')
 
   const title = {
     create: isReceivable ? 'Novo Título a Receber' : 'Novo Título a Pagar',
@@ -193,12 +195,15 @@ export default function TituloModal({
     }
 
     startTransition(async () => {
+      const rawAmount = amountReceivedStr.trim()
+      const parsedAmount = rawAmount ? parseCurrency(rawAmount) : undefined
       const data: BaixarTituloData = {
         payment_date:        paymentDate,
         payment_method:      paymentMethod,
         settlement_bank_id:  settleBankId || undefined,
         interest:            parseCurrency(interestStr),
         discount:            parseCurrency(discountBaixaStr),
+        amount_received:     parsedAmount,
       }
       const res = await baixarTitulo(entry!.id, data)
       if (res?.error) { setError(res.error); return }
@@ -528,6 +533,35 @@ export default function TituloModal({
                 <span className={`text-lg font-bold ${netAmount < 0 ? 'text-red-600' : 'text-teal-700'}`}>
                   {formatCurrency(netAmount)}
                 </span>
+              </div>
+
+              {/* Baixa parcial: quanto vai receber/pagar AGORA */}
+              <div>
+                <label className={lc}>
+                  Quanto vai {isReceivable ? 'receber' : 'pagar'} agora?
+                  <span className="ml-1 text-[10px] text-slate-400 font-normal">(deixe vazio para baixar tudo)</span>
+                </label>
+                <div className="flex gap-2 items-center">
+                  <span className="text-sm text-slate-500 font-semibold">R$</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={amountReceivedStr}
+                    onChange={e => {
+                      const raw = e.target.value.replace(/\D/g, '')
+                      setAmountReceivedStr(raw ? fmtCurrency(raw) : '')
+                    }}
+                    placeholder={netAmount.toFixed(2).replace('.', ',')}
+                    className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold tabular-nums focus:outline-none focus:ring-2 focus:ring-teal-500/30"
+                  />
+                </div>
+                {amountReceivedStr.trim() && parseCurrency(amountReceivedStr) < netAmount - 0.005 && (
+                  <p className="mt-1.5 text-xs px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800">
+                    Baixa parcial. Saldo restante de{' '}
+                    <strong>{formatCurrency(netAmount - parseCurrency(amountReceivedStr))}</strong>
+                    {' '}ficará pendente como novo título filho desta fatura.
+                  </p>
+                )}
               </div>
             </>
           )}

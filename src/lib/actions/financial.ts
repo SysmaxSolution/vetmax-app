@@ -88,6 +88,13 @@ export interface BaixarTituloData {
   settlement_bank_id?: string
   interest?:           number
   discount?:           number
+  /**
+   * Quanto efetivamente entra no caixa AGORA. Quando omitido (ou >= netAmount),
+   * baixa integral. Quando menor, baixa parcial: o entry pai é reduzido para
+   * (netAmount - amount_received) e fica pending; um entry filho paid é criado
+   * com amount_received.
+   */
+  amount_received?:    number
 }
 
 // ─── Types G-10 ───────────────────────────────────────────────────────────────
@@ -597,23 +604,92 @@ export async function baixarTitulo(
 
   const admin = createAdminClient()
 
-  // Lê o valor base do título para calcular o líquido do extrato
+  // Lê o título completo (precisamos de mais campos para criar entry filho)
   const { data: current } = await admin
     .from('financial_entries')
-    .select('amount, discount, document_number')
+    .select('amount, discount, document_number, type, description, tutor_id, patient_id, category, invoice_id, source, due_date, professional_id, chart_of_accounts_id, created_by, is_clinic_discount')
     .eq('id', id)
     .eq('clinic_id', clinicId)
     .eq('status', 'pending')
     .single()
 
   if (!current) return { error: 'Título não encontrado ou já baixado.' }
+  const cur = current as Record<string, unknown>
 
-  const baseAmount    = Number((current as unknown as Record<string, unknown>).amount ?? 0)
-  const baseDiscount  = data.discount !== undefined ? data.discount : Number((current as unknown as Record<string, unknown>).discount ?? 0)
+  const baseAmount    = Number(cur.amount ?? 0)
+  const baseDiscount  = data.discount !== undefined ? data.discount : Number(cur.discount ?? 0)
   const baseInterest  = data.interest ?? 0
   const netAmount     = baseAmount - baseDiscount + baseInterest
-  const docNumber     = (current as unknown as Record<string, unknown>).document_number as string | null
+  const docNumber     = cur.document_number as string | null
 
+  // Limita amount_received ao netAmount (segurança)
+  const amountReceived = data.amount_received !== undefined
+    ? Math.max(0, Math.min(data.amount_received, netAmount))
+    : netAmount
+
+  const isPartial = amountReceived < netAmount - 0.01
+
+  if (isPartial) {
+    // BAIXA PARCIAL: cria entry filho paid com amount_received + reduz entry
+    // pai para o saldo restante (continua pending).
+    const restante = netAmount - amountReceived
+
+    // 1) Reduz o entry pai (continua pending)
+    const { error: updErr } = await admin
+      .from('financial_entries')
+      .update({
+        amount:        restante + baseDiscount - baseInterest, // mantém netAmount = restante após discount/interest
+        notes:         `Saldo após baixa parcial · original ${netAmount.toFixed(2)} · recebido ${amountReceived.toFixed(2)}`,
+      })
+      .eq('id', id)
+      .eq('clinic_id', clinicId)
+    if (updErr) return { error: 'Erro ao atualizar saldo do título: ' + updErr.message }
+
+    // 2) Cria entry filho paid com a baixa
+    await admin
+      .from('financial_entries')
+      .insert({
+        clinic_id:          clinicId,
+        type:               cur.type as string,
+        description:        `${cur.description} · baixa parcial`,
+        amount:             amountReceived,
+        discount:           0,
+        interest:           0,
+        due_date:           data.payment_date,
+        payment_date:       data.payment_date,
+        status:             'paid',
+        source:             'cashier',
+        category:           cur.category as string | null,
+        tutor_id:           cur.tutor_id as string | null,
+        patient_id:         cur.patient_id as string | null,
+        invoice_id:         cur.invoice_id as string | null,
+        professional_id:    cur.professional_id as string | null,
+        chart_of_accounts_id: cur.chart_of_accounts_id as string | null,
+        payment_method:     data.payment_method,
+        settlement_bank_id: data.settlement_bank_id || null,
+        notes:              `Baixa parcial de ${id}`,
+        created_by:         cur.created_by as string | null,
+      })
+
+    // Lança crédito no extrato pelo valor parcial
+    if (data.settlement_bank_id) {
+      await admin
+        .from('bank_statements')
+        .insert({
+          clinic_id:           clinicId,
+          bank_account_id:     data.settlement_bank_id,
+          date:                data.payment_date,
+          amount:              amountReceived,
+          description:         `Recebimento parcial ${fmtDocRef(docNumber)}`,
+          type:                'credit',
+          reconciled_entry_id: id,
+        })
+    }
+
+    return {}
+  }
+
+  // BAIXA INTEGRAL: comportamento original
   const updates: Record<string, unknown> = {
     status:             'paid',
     payment_date:       data.payment_date,

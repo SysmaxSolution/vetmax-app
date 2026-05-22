@@ -30,6 +30,8 @@ interface Props {
     procedure_pattern: string
     has_insurance:     boolean
   } | null) => void
+  /** Disparado quando a prévia é carregada — para o parent saber se há itens em carência. */
+  onWaitingDetected?: (items: Array<{ description: string; remaining: number }>) => void
 }
 
 const BRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -72,9 +74,6 @@ export default function CheckoutInsurancePreviewClient(props: Props) {
     previewConsultationInsurance(props.consultationId)
       .then(res => {
         if (cancelled) return
-        // Defesa: resposta pode vir como Promise rejection serializada, objeto
-        // de erro server-action, ou o payload válido. Verificamos a forma antes
-        // de aplicar 'in' (que crasha se res não for object).
         if (!res || typeof res !== 'object') {
           setError('Resposta inválida do servidor')
           return
@@ -84,7 +83,18 @@ export default function CheckoutInsurancePreviewClient(props: Props) {
           return
         }
         if ('items' in res && Array.isArray((res as { items: unknown }).items)) {
-          setPreview(res as CheckoutInsurancePreview)
+          const previewData = res as CheckoutInsurancePreview
+          setPreview(previewData)
+          // Detecta itens em carência e notifica o parent
+          const waiting = previewData.items
+            .filter(it => it.coverage.status === 'waiting')
+            .map(it => ({
+              description: it.description,
+              remaining:   it.coverage.waiting_remaining_days ?? 0,
+            }))
+          if (waiting.length > 0) {
+            props.onWaitingDetected?.(waiting)
+          }
           return
         }
         setError('Formato de resposta inesperado')
@@ -219,40 +229,56 @@ export default function CheckoutInsurancePreviewClient(props: Props) {
           </span>
         </div>
       ) : props.onApplyInsurance && totals.charge_now < totals.grand_total && (
-        <div className="px-5 py-2.5 border-t border-sky-200/60 bg-sky-50 flex items-center justify-between gap-2 flex-wrap">
-          <span className="text-[11px] text-sky-800">
+        <div className="px-5 py-2.5 border-t border-sky-200/60 bg-sky-50 space-y-2">
+          <p className="text-[11px] text-sky-800">
             {applied ? (
               <><strong>Cobertura aplicada</strong> — caixa cobra apenas {BRL(totals.charge_now)} do tutor. Saldo {BRL(totals.receivable)} fica como A Receber Petlove.</>
             ) : (
-              <>Clique para aplicar a cobertura — caixa cobra só {BRL(totals.charge_now)} do tutor e {BRL(totals.receivable)} vira A Receber Petlove.</>
+              <>Tutor tem cobertura Petlove — escolha como cobrar:</>
             )}
-          </span>
-          {applied ? (
-            <button
-              type="button"
-              onClick={() => { setApplied(false); props.onApplyInsurance?.(null) }}
-              className="text-[11px] font-semibold text-rose-700 hover:text-rose-900 px-3 py-1 rounded border border-rose-200 hover:bg-rose-50"
-            >
-              Remover cobertura
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => {
-                setApplied(true)
-                props.onApplyInsurance?.({
-                  charge_now:        totals.charge_now,
-                  receivable:        totals.receivable,
-                  clinic_discount:   totals.clinic_discount,
-                  procedure_pattern: preview.items[0]?.coverage.procedure_pattern ?? preview.items[0]?.description ?? '',
-                  has_insurance:     true,
-                })
-              }}
-              className="text-[11px] font-semibold text-white bg-sky-600 hover:bg-sky-700 px-3 py-1 rounded"
-            >
-              Aplicar cobertura no caixa
-            </button>
-          )}
+          </p>
+          <div className="flex items-center justify-end gap-2 flex-wrap">
+            {applied ? (
+              <button
+                type="button"
+                onClick={() => { setApplied(false); props.onApplyInsurance?.(null) }}
+                className="text-[11px] font-semibold text-rose-700 hover:text-rose-900 px-3 py-1 rounded border border-rose-200 hover:bg-rose-50"
+              >
+                Remover cobertura
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    // "Particular cheio" = cobertura cancelada, caixa cobra grand_total
+                    setApplied(false)
+                    props.onApplyInsurance?.(null)
+                  }}
+                  className="text-[11px] font-semibold text-slate-700 hover:text-slate-900 px-3 py-1 rounded border border-slate-300 hover:bg-slate-100"
+                  title="Tutor optou por pagar particular — cobertura ignorada nesta transação."
+                >
+                  Cobrar particular cheio · {BRL(totals.grand_total)}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setApplied(true)
+                    props.onApplyInsurance?.({
+                      charge_now:        totals.charge_now,
+                      receivable:        totals.receivable,
+                      clinic_discount:   totals.clinic_discount,
+                      procedure_pattern: preview.items[0]?.coverage.procedure_pattern ?? preview.items[0]?.description ?? '',
+                      has_insurance:     true,
+                    })
+                  }}
+                  className="text-[11px] font-semibold text-white bg-sky-600 hover:bg-sky-700 px-3 py-1 rounded"
+                >
+                  Aplicar cobertura · {BRL(totals.charge_now)}
+                </button>
+              </>
+            )}
+          </div>
         </div>
       )}
 

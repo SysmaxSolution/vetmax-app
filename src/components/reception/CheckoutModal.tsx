@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, Loader2, CreditCard, Banknote, Smartphone, Receipt } from 'lucide-react'
+import { X, Loader2, CreditCard, Banknote, Smartphone, Receipt, AlertCircle } from 'lucide-react'
 import { getInvoiceWithItems, processPayment, type InvoiceWithDetails, type PaymentMethod } from '@/lib/actions/billing'
 import InsuranceExportPanel from '@/components/reception/InsuranceExportPanel'
 import CheckoutInsurancePreviewClient from '@/components/financial/CheckoutInsurancePreviewClient'
@@ -65,6 +65,9 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
   } | null>(null)
   /** Valor que efetivamente entrará no caixa AGORA — editável pelo usuário. */
   const [amountReceivedInput, setAmountReceivedInput] = useState('')
+  /** Itens da consulta que estão em carência — mostra modal antes do checkout. */
+  const [waitingItems, setWaitingItems]   = useState<Array<{ description: string; remaining: number }>>([])
+  const [waitingAck,   setWaitingAck]     = useState(false)
 
   useEffect(() => {
     getInvoiceWithItems(invoiceId).then(res => {
@@ -315,6 +318,7 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
               patientName={invoice.patient.name}
               tutorName={invoice.tutor.name}
               alreadyApplied={insuranceAlreadyApplied}
+              onWaitingDetected={items => { setWaitingItems(items); setWaitingAck(false) }}
               onApplyInsurance={(split) => {
                 if (split) {
                   setInsuranceSplit({
@@ -472,6 +476,57 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
           </div>
         </div>
       </div>
+
+      {/* Modal de aviso de carência — bloqueia o checkout até o usuário decidir */}
+      {waitingItems.length > 0 && !waitingAck && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-5 space-y-3">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 flex-shrink-0">
+                <AlertCircle className="h-5 w-5 text-amber-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Procedimento em carência</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Esta consulta tem item{waitingItems.length > 1 ? 'ns' : ''} ainda em carência no plano do tutor.
+                </p>
+              </div>
+            </div>
+
+            <ul className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 space-y-1 text-xs">
+              {waitingItems.map(it => (
+                <li key={it.description} className="flex items-center justify-between text-amber-900">
+                  <span className="truncate">{it.description}</span>
+                  <span className="font-semibold flex-shrink-0">faltam {it.remaining}d</span>
+                </li>
+              ))}
+            </ul>
+
+            <p className="text-xs text-slate-600">
+              Pelo plano, o convênio só cobre após a carência. Como deseja proceder?
+            </p>
+
+            <div className="flex flex-col gap-2 pt-1">
+              <button
+                onClick={() => { setWaitingAck(true) /* continua o fluxo: pode aplicar cobertura ou cobrar cheio */ }}
+                className="rounded-xl bg-teal-600 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 transition-colors"
+              >
+                Cobrar particular cheio (sem convênio)
+              </button>
+              <button
+                onClick={onClose}
+                className="rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                Aguardar liberação · fechar caixa
+              </button>
+            </div>
+
+            <p className="text-[10px] text-slate-400 text-center pt-1">
+              Se a clínica decidir cobrar particular, o tutor não terá o benefício do plano nesta consulta.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
