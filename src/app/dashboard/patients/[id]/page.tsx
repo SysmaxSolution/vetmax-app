@@ -4,8 +4,10 @@ import { getPatientById } from '@/lib/actions/timeline'
 import { getPatientVaccines } from '@/lib/actions/vaccines'
 import { getPetlovePriceHistoryForPet } from '@/lib/actions/petlove-import'
 import { patientHasInsurance, getPetlovePatientHistory } from '@/lib/actions/patient-custom-prices'
+import { getInsuranceCard } from '@/lib/actions/insurance-coverage'
 import PetlovePriceHistory from '@/components/pet/PetlovePriceHistory'
 import PetlovePatientHistory from '@/components/pet/PetlovePatientHistory'
+import InsuranceCard from '@/components/pet/InsuranceCard'
 import Link from 'next/link'
 import {
   ArrowLeft, PawPrint, User, Syringe, Calendar,
@@ -27,12 +29,13 @@ export default async function PatientProfilePage({ params }: { params: { id: str
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const [patientResult, vaccinesResult, petloveResult, insuranceResult, historyResult] = await Promise.all([
+  const [patientResult, vaccinesResult, petloveResult, insuranceResult, historyResult, insuranceCardResult] = await Promise.all([
     getPatientById(params.id),
     getPatientVaccines(params.id),
     getPetlovePriceHistoryForPet(params.id),
     patientHasInsurance(params.id),
     getPetlovePatientHistory(params.id),
+    getInsuranceCard(params.id),
   ])
 
   if ('error' in patientResult) notFound()
@@ -41,6 +44,7 @@ export default async function PatientProfilePage({ params }: { params: { id: str
   const vaccines = Array.isArray(vaccinesResult) ? vaccinesResult : []
   const petlovePrices = Array.isArray(petloveResult) ? petloveResult : []
   const insurance = 'error' in insuranceResult ? null : insuranceResult
+  const insuranceCard = 'error' in insuranceCardResult ? null : insuranceCardResult
   const petloveHistory = Array.isArray(historyResult) ? historyResult : []
   const today    = new Date().toISOString().split('T')[0]
 
@@ -174,6 +178,11 @@ export default async function PatientProfilePage({ params }: { params: { id: str
             </div>
           )}
         </div>
+
+        {/* Card de Convênio — resumo do plano + carência por categoria */}
+        {insuranceCard?.has_insurance && (
+          <InsuranceCard data={insuranceCard} />
+        )}
 
         {/* Aba/Seção Preços do Convênio — só aparece se o pet tem vínculo ativo */}
         {insurance?.has_insurance && (
