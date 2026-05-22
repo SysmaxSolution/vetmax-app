@@ -8,6 +8,8 @@ import { deleteRemittance } from '@/lib/actions/petlove-reconciliation'
 
 type PreviewSummary = {
   matched:                 number
+  auto_created_patients:   number
+  auto_created_tutors:     number
   patients_updated:        number
   prices_updated:          number
   pending_entries_created: number
@@ -227,6 +229,9 @@ export default function PetloveReconciliationClient({
             {status.previewSideEffects && (
               <ul className="text-xs text-sky-800 mt-2 space-y-0.5 ml-1">
                 <li>• <strong>{status.previewSideEffects.matched}</strong> linha{status.previewSideEffects.matched !== 1 ? 's' : ''} casada{status.previewSideEffects.matched !== 1 ? 's' : ''} com pets já cadastrados</li>
+                {(status.previewSideEffects.auto_created_patients > 0 || status.previewSideEffects.auto_created_tutors > 0) && (
+                  <li>• <strong>{status.previewSideEffects.auto_created_patients}</strong> pet{status.previewSideEffects.auto_created_patients !== 1 ? 's' : ''} e <strong>{status.previewSideEffects.auto_created_tutors}</strong> tutor{status.previewSideEffects.auto_created_tutors !== 1 ? 'es' : ''} cadastrado{status.previewSideEffects.auto_created_patients !== 1 ? 's' : ''} automaticamente</li>
+                )}
                 <li>• <strong>{status.previewSideEffects.patients_updated}</strong> cadastro{status.previewSideEffects.patients_updated !== 1 ? 's' : ''} de pet enriquecido{status.previewSideEffects.patients_updated !== 1 ? 's' : ''} (chip / sexo / raça quando vazios)</li>
                 <li>• <strong>{status.previewSideEffects.prices_updated}</strong> preço{status.previewSideEffects.prices_updated !== 1 ? 's' : ''} fixado{status.previewSideEffects.prices_updated !== 1 ? 's' : ''} em patient_custom_prices</li>
                 <li>• <strong>{status.previewSideEffects.pending_entries_created}</strong> conta{status.previewSideEffects.pending_entries_created !== 1 ? 's' : ''} a receber pendente{status.previewSideEffects.pending_entries_created !== 1 ? 's' : ''} criada{status.previewSideEffects.pending_entries_created !== 1 ? 's' : ''} — total {status.previewSideEffects.pending_total_amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} (baixado automaticamente ao importar a remessa fechada do período)</li>

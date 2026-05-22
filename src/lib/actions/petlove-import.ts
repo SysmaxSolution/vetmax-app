@@ -4,7 +4,7 @@ import ExcelJS from 'exceljs'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
-import { runMatchEngine } from '@/lib/actions/petlove-matching'
+import { runMatchEngine, bulkCreatePatientsFromPetlove } from '@/lib/actions/petlove-matching'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -50,9 +50,11 @@ export interface StageRemittanceResult {
   remittance_id:        string
   lines_count:          number
   source_format:        'closed' | 'open'
-  /** Resumo dos side-effects aplicados quando is_preview=true (matching + cadastros + preços + entries pendentes). */
+  /** Resumo dos side-effects aplicados quando is_preview=true (bulk-create + matching + cadastros + preços + entries pendentes). */
   preview_side_effects?: {
     matched:                 number
+    auto_created_patients:   number
+    auto_created_tutors:     number
     patients_updated:        number
     prices_updated:          number
     pending_entries_created: number
@@ -666,16 +668,44 @@ export async function uploadAndStagePetloveRemittance(
 async function applyPreviewSideEffects(
   remittanceId: string,
   userId: string,
-): Promise<{ matched: number; patients_updated: number; prices_updated: number; pending_entries_created: number; pending_total_amount: number; errors: string[] } | { error: string }> {
+): Promise<{ matched: number; auto_created_patients: number; auto_created_tutors: number; patients_updated: number; prices_updated: number; pending_entries_created: number; pending_total_amount: number; errors: string[] } | { error: string }> {
   const ctx = await getCtx()
   if ('error' in ctx) return ctx
   const { supabase, clinicId } = ctx
 
-  // 1) Roda matching
+  const errors: string[] = []
+  let autoCreatedPatients = 0
+  let autoCreatedTutors   = 0
+
+  // 1) Roda matching inicial
   const matchRes = await runMatchEngine(remittanceId)
   if ('error' in matchRes) return { error: `Matching falhou: ${matchRes.error}` }
 
-  // 2) Localiza provider Petlove (necessário para patient_custom_prices)
+  // 2) Auto bulk-create: para cada linha em missing_patient_profile, cria
+  //    tutor + pet + pet_insurance, depois reroda matching. Sem isso, pets
+  //    novos ficariam fora dos entries pendentes.
+  const { data: missingLines } = await supabase
+    .from('petlove_remittance_lines')
+    .select('id')
+    .eq('clinic_id', clinicId)
+    .eq('remittance_id', remittanceId)
+    .eq('match_status', 'missing_patient_profile')
+
+  if (missingLines && missingLines.length > 0) {
+    const bulk = await bulkCreatePatientsFromPetlove(missingLines.map(l => l.id))
+    if (!('error' in bulk)) {
+      autoCreatedPatients = bulk.created_patients
+      autoCreatedTutors   = bulk.created_tutors
+      for (const err of bulk.errors) errors.push(`Bulk register: ${err}`)
+    } else {
+      errors.push(`Bulk register: ${bulk.error}`)
+    }
+    // Reroda matching agora que os pets existem
+    const r2 = await runMatchEngine(remittanceId)
+    if ('error' in r2) errors.push(`Re-matching pós bulk: ${r2.error}`)
+  }
+
+  // 3) Localiza provider Petlove (necessário para patient_custom_prices)
   const { data: provider } = await supabase
     .from('insurance_providers')
     .select('id')
@@ -683,25 +713,25 @@ async function applyPreviewSideEffects(
     .ilike('name', 'petlove')
     .maybeSingle()
   if (!provider?.id) {
-    return { matched: matchRes.matched ?? 0, patients_updated: 0, prices_updated: 0, pending_entries_created: 0, pending_total_amount: 0, errors: ['Convênio Petlove não localizado para a clínica.'] }
+    return { matched: matchRes.matched ?? 0, auto_created_patients: autoCreatedPatients, auto_created_tutors: autoCreatedTutors, patients_updated: 0, prices_updated: 0, pending_entries_created: 0, pending_total_amount: 0, errors: [...errors, 'Convênio Petlove não localizado para a clínica.'] }
   }
   const providerId = provider.id
 
-  // 3) Carrega linhas que já têm pet identificado
+  // 4) Carrega linhas que já têm pet identificado (após bulk-create + re-match)
+  //    Inclui 'manual_resolved' para pegar as linhas vinculadas pelo bulk.
   const { data: lines, error: linesErr } = await supabase
     .from('petlove_remittance_lines')
     .select('id, service_date, matched_patient_id, matched_tutor_id, tutor_name_raw, pet_name_raw, gender_raw, species_raw, breed_raw, microchip_raw, plan_name_raw, procedure_name_raw, procedure_status_raw, repass_value, match_status')
     .eq('clinic_id', clinicId)
     .eq('remittance_id', remittanceId)
     .not('matched_patient_id', 'is', null)
-    .in('match_status', ['matched', 'partial', 'orphan_invoice'])
+    .in('match_status', ['matched', 'partial', 'orphan_invoice', 'manual_resolved'])
 
   if (linesErr) return { error: `Falha ao carregar linhas para side-effects: ${linesErr.message}` }
   if (!lines || lines.length === 0) {
-    return { matched: matchRes.matched ?? 0, patients_updated: 0, prices_updated: 0, pending_entries_created: 0, pending_total_amount: 0, errors: [] }
+    return { matched: matchRes.matched ?? 0, auto_created_patients: autoCreatedPatients, auto_created_tutors: autoCreatedTutors, patients_updated: 0, prices_updated: 0, pending_entries_created: 0, pending_total_amount: 0, errors }
   }
 
-  const errors: string[] = []
   let patientsUpdated = 0
   let pricesUpdated   = 0
 
@@ -871,6 +901,8 @@ async function applyPreviewSideEffects(
 
   return {
     matched:                 matchRes.matched ?? 0,
+    auto_created_patients:   autoCreatedPatients,
+    auto_created_tutors:     autoCreatedTutors,
     patients_updated:        patientsUpdated,
     prices_updated:          pricesUpdated,
     pending_entries_created: pendingEntriesCreated,

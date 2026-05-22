@@ -270,7 +270,10 @@ export default function FinancialWorkspace({
     }
     if (filterStatus !== 'all') {
       if (filterStatus === 'pending') {
-        list = list.filter(e => e.status === 'pending' && !isOverdue(e))
+        // "Pendentes" = todos os títulos não baixados e não cancelados.
+        // Engloba pendentes em dia e atrasados — a tag visual "Atrasado"
+        // continua diferenciando-os no badge.
+        list = list.filter(e => e.status === 'pending')
       } else if (filterStatus === 'cancelled') {
         list = list.filter(e => e.status === 'cancelled')
       } else if (filterStatus === 'paid') {
