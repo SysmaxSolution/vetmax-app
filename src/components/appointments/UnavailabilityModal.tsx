@@ -134,10 +134,12 @@ export default function UnavailabilityModal({ defaultProfessionalId, onClose, on
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4 overflow-y-auto"
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-900/70 p-3 sm:p-4 overflow-y-auto"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="w-full max-w-xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="w-full max-w-xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
 
         {/* Header */}
         <div className="flex-shrink-0 flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-rose-50/50">
@@ -214,7 +216,7 @@ export default function UnavailabilityModal({ defaultProfessionalId, onClose, on
             </div>
 
             {dateMode === 'range' ? (
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
                   <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">De</p>
                   <DateInput value={rangeStart} onChange={setRangeStart} />
@@ -275,7 +277,7 @@ export default function UnavailabilityModal({ defaultProfessionalId, onClose, on
             </div>
 
             {timeMode === 'range' ? (
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
                   <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Das</p>
                   <TimePicker value={timeStart} onChange={setTimeStart} />
