@@ -13,6 +13,12 @@ interface Props {
   serviceDate?:   string
   clinicName?:    string
   /**
+   * Quando true, o componente assume que a cobertura JÁ FOI APLICADA na
+   * invoice (banco tem discount > 0 e entry is_clinic_discount). Esconde o
+   * botão "Aplicar cobertura" — não há mais ação a tomar, só visualização.
+   */
+  alreadyApplied?: boolean
+  /**
    * Disparado quando o usuário clica "Aplicar Cobertura". O parent (CheckoutModal)
    * deve ajustar o valor a receber para charge_now e enviar o split no payload
    * de processPayment para criar o entry pending de receivable.
@@ -200,8 +206,19 @@ export default function CheckoutInsurancePreviewClient(props: Props) {
         ))}
       </ul>
 
-      {/* Ações: aplicar / remover cobertura */}
-      {props.onApplyInsurance && totals.charge_now < totals.grand_total && (
+      {/* Ações: aplicar / remover cobertura — só quando a cobertura NÃO está
+          aplicada ainda no banco. Se alreadyApplied=true, mostramos apenas
+          estado consolidado (sem botão de re-aplicar, evita duplicação). */}
+      {props.alreadyApplied ? (
+        <div className="px-5 py-2.5 border-t border-sky-200/60 bg-sky-50 text-[11px] text-sky-800 flex items-center gap-2">
+          <ShieldCheck className="h-3.5 w-3.5 text-sky-600 flex-shrink-0" />
+          <span>
+            <strong>Cobertura já aplicada nesta fatura</strong> — desconto convênio
+            de {BRL(totals.clinic_discount)} contabilizado. Saldo {BRL(totals.receivable)}
+            aguardando repasse Petlove.
+          </span>
+        </div>
+      ) : props.onApplyInsurance && totals.charge_now < totals.grand_total && (
         <div className="px-5 py-2.5 border-t border-sky-200/60 bg-sky-50 flex items-center justify-between gap-2 flex-wrap">
           <span className="text-[11px] text-sky-800">
             {applied ? (

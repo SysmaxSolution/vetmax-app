@@ -114,9 +114,25 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
     return Math.min(dynamicSubtotal, raw)
   })()
 
-  // totalDue = subtotal - desconto manual - desconto do convênio (se aplicado)
-  const insuranceDiscount = insuranceSplit?.clinic_discount ?? 0
-  const totalDue = Math.max(0, dynamicSubtotal - discountValue - insuranceDiscount)
+  // Estado pré-existente da invoice (paid_amount + discount já gravados).
+  // Importante quando o caixa reabre uma invoice paid_partial — o Total a
+  // Pagar deve ser o SALDO restante, não o cheio.
+  const existingPaid     = invoice.paid_amount ?? 0
+  const existingDiscount = invoice.discount    ?? 0
+  // Detecta se a cobertura do convênio JÁ foi aplicada (há discount > 0 na
+  // invoice). Nesse caso, o split do CheckoutInsurancePreviewClient não
+  // precisa ser re-aplicado — apenas mostrado.
+  const insuranceAlreadyApplied = existingDiscount > 0.01 && existingPaid > 0
+
+  // Novo desconto desta operação (insurance_split desta sessão OU manual)
+  const insuranceDiscountThisOp = insuranceSplit?.clinic_discount ?? 0
+
+  // Subtotal real (com ajustes de preços feitos pelo caixa)
+  // O total da invoice já reflete subtotal - existingDiscount; quando o
+  // usuário aplica cobertura nova OU desconto novo, somamos ao discount.
+  const totalAmount = Math.max(0, dynamicSubtotal - existingDiscount - discountValue - insuranceDiscountThisOp)
+  const totalDue    = Math.max(0, totalAmount - existingPaid)
+
   const amountReceived = (() => {
     const raw = amountReceivedInput.trim()
     if (raw === '') return totalDue
@@ -181,6 +197,20 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
         </div>
 
         <div className="px-4 sm:px-6 py-5 space-y-5 overflow-y-auto flex-1">
+
+          {/* Faixa de aviso quando invoice já tem baixas (paid_partial) */}
+          {existingPaid > 0.01 && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs">
+              <p className="font-semibold text-emerald-900">
+                Fatura com baixa parcial · {fmt(existingPaid)} já recebido
+                {existingDiscount > 0 && ` · ${fmt(existingDiscount)} de desconto aplicado`}
+              </p>
+              <p className="text-emerald-700 mt-0.5">
+                Saldo a receber: <strong>{fmt(totalDue)}</strong>
+                {insuranceAlreadyApplied && ' · aguardando repasse Petlove'}
+              </p>
+            </div>
+          )}
 
           {/* Itens — estilo cupom fiscal */}
           <div>
@@ -284,6 +314,7 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
               consultationId={invoice.consultation_id}
               patientName={invoice.patient.name}
               tutorName={invoice.tutor.name}
+              alreadyApplied={insuranceAlreadyApplied}
               onApplyInsurance={(split) => {
                 if (split) {
                   setInsuranceSplit({
