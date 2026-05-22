@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Wallet, CreditCard, FileClock, ShieldCheck, TrendingDown, Loader2 } from 'lucide-react'
+import { Wallet, CreditCard, FileClock, ShieldCheck, TrendingDown, Loader2, Scissors } from 'lucide-react'
 import { previewConsultationInsurance } from '@/lib/actions/insurance-checkout'
 import type { CheckoutInsurancePreview } from '@/lib/actions/insurance-checkout.types'
 import TutorSummaryPrint from '@/components/financial/TutorSummaryPrint'
@@ -121,7 +121,7 @@ export default function CheckoutInsurancePreviewClient(props: Props) {
       </header>
 
       {/* Totalizadores */}
-      <div className="px-5 py-3 grid grid-cols-2 sm:grid-cols-4 gap-3 border-b border-sky-200/60">
+      <div className="px-5 py-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 border-b border-sky-200/60">
         <div className="rounded-lg bg-white px-3 py-2 border border-sky-100">
           <div className="flex items-center gap-1.5 text-[11px] text-sky-700 font-medium mb-0.5">
             <Wallet className="h-3 w-3" />
@@ -149,6 +149,13 @@ export default function CheckoutInsurancePreviewClient(props: Props) {
             Tutor economizou
           </div>
           <div className="text-base font-bold text-emerald-800 tabular-nums">{BRL(totals.tutor_saved)}</div>
+        </div>
+        <div className="rounded-lg bg-rose-50 px-3 py-2 border border-rose-200">
+          <div className="flex items-center gap-1.5 text-[11px] text-rose-700 font-medium mb-0.5">
+            <Scissors className="h-3 w-3" />
+            Desconto da clínica
+          </div>
+          <div className="text-base font-bold text-rose-800 tabular-nums">{BRL(totals.clinic_discount)}</div>
         </div>
       </div>
 

@@ -27,5 +27,6 @@ export interface CheckoutInsurancePreview {
     deferred_provider: number     // total que a Petlove cobra do tutor
     receivable:        number     // total que vira A Receber Petlove (em aberto)
     tutor_saved:       number     // economia do tutor frente ao particular
+    clinic_discount:   number     // diferença entre preço cheio e o que a clínica recebe pelo plano
   }
 }

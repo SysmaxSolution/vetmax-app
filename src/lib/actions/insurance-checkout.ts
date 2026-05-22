@@ -59,7 +59,7 @@ export async function previewConsultationInsurance(
       has_insurance: false,
       items:         [],
       totals: {
-        grand_total: 0, charge_now: 0, deferred_provider: 0, receivable: 0, tutor_saved: 0,
+        grand_total: 0, charge_now: 0, deferred_provider: 0, receivable: 0, tutor_saved: 0, clinic_discount: 0,
       },
     }
   }
@@ -163,8 +163,15 @@ export async function previewConsultationInsurance(
     deferred_provider: Number(sum(enriched.map(e => e.deferred_provider)).toFixed(2)),
     receivable:        Number(sum(enriched.map(e => e.receivable)).toFixed(2)),
     tutor_saved:       0,
+    clinic_discount:   0,
   }
-  totals.tutor_saved = Number((totals.grand_total - totals.charge_now - totals.deferred_provider).toFixed(2))
+  // Economia do tutor: o que ele NÃO paga em relação ao preço cheio particular.
+  // Inclui o que vai pra cobrança no cartão (Petlove desconta dele, mas é menos
+  // que o particular pediria).
+  totals.tutor_saved     = Number((totals.grand_total - totals.charge_now - totals.deferred_provider).toFixed(2))
+  // Desconto da clínica: quanto a clínica DEIXA de receber por aceitar o plano.
+  // Total cheio - (tutor caixa + tutor cartão + Petlove repasse).
+  totals.clinic_discount = Number((totals.grand_total - totals.charge_now - totals.deferred_provider - totals.receivable).toFixed(2))
 
   return {
     has_insurance: hasInsurance,

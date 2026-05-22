@@ -295,17 +295,30 @@ export async function checkProcedureCoverage(args: {
   //     para esse pet específico), depois petlove_procedure_mappings.last_seen_value
   //     (média da clínica). Esse valor é o REPASSE que a Petlove paga ao vet,
   //     usado pelo previewConsultationInsurance no split do caixa.
+  //
+  //     Match nos mappings é FUZZY (igual ao do catálogo): se o invoice_item
+  //     vier como "Consulta Veterinária" e o mapping tiver "Consulta Clínico
+  //     Geral", ainda casa por token (ambos contém "consulta").
   let observedRepass: number | undefined
   let observedSource: 'patient_custom_prices' | 'procedure_mapping' | null = null
   {
-    // Resolve stock_item_id via mapping
-    const { data: map } = await supabase
+    const { data: allMaps } = await supabase
       .from('petlove_procedure_mappings')
-      .select('internal_stock_item_id, last_seen_value')
+      .select('external_procedure_name, internal_stock_item_id, last_seen_value')
       .eq('clinic_id', clinicId)
       .eq('provider_id', insurance.provider_id)
-      .eq('external_procedure_name', procName)
-      .maybeSingle()
+
+    const targetNorm = normalizeName(procName)
+    let map = (allMaps ?? []).find(m => normalizeName(m.external_procedure_name) === targetNorm) ?? null
+    if (!map) {
+      const tokens = targetNorm.split(' ').filter(t => t.length >= 4)
+      if (tokens.length > 0) {
+        map = (allMaps ?? []).find(m => {
+          const mName = normalizeName(m.external_procedure_name)
+          return tokens.every(t => mName.includes(t))
+        }) ?? null
+      }
+    }
 
     if (map?.internal_stock_item_id) {
       const { data: custom } = await supabase
