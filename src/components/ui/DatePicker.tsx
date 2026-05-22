@@ -80,7 +80,7 @@ export function DatePicker({
     const top     = Math.max(8, Math.min(rawTop, vpH - popupH - 8))
     const rawLeft = rect.left
     const left    = Math.max(8, Math.min(rawLeft, vpW - popupW - 8))
-    setPopupStyle({ position: 'fixed', top, left, maxWidth: vpW - 16, zIndex: 9999 })
+    setPopupStyle({ position: 'fixed', top, left, maxWidth: vpW - 16, zIndex: 100000 })
   }
 
   useEffect(() => {
@@ -239,7 +239,7 @@ export function DateInput({
     // alinha borda direita do popup com borda direita do container
     const rawLeft = rect.right - popupW
     const left   = Math.max(8, Math.min(rawLeft, vpW - popupW - 8))
-    setPopupStyle({ position: 'fixed', top, left, maxWidth: vpW - 16, zIndex: 9999 })
+    setPopupStyle({ position: 'fixed', top, left, maxWidth: vpW - 16, zIndex: 100000 })
   }
 
   useEffect(() => {
