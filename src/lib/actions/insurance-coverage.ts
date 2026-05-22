@@ -24,6 +24,15 @@ export interface ProcedureCoverageResult {
   copay_charger?:     CopayCharger
   /** Dias restantes para sair da carência (apenas quando status='waiting'). */
   waiting_remaining_days?: number
+  /**
+   * Repasse REAL observado para este pet × procedimento, vindo de
+   * patient_custom_prices (preferencial) ou petlove_procedure_mappings
+   * (média da clínica). Quando presente, deve ser usado no split do caixa
+   * em vez do copay genérico do catálogo.
+   */
+  observed_repass?:   number
+  /** Fonte do observed_repass para auditoria. */
+  observed_source?:   'patient_custom_prices' | 'procedure_mapping' | null
   /** Mensagem curta pronta para exibir na UI. */
   message:            string
   /** Bandeira visual sugerida. */
@@ -84,6 +93,41 @@ function normalizePlanType(raw: string | null | undefined): string {
   return String(raw ?? '').replace(/^petlove\s+/i, '').trim()
 }
 
+/**
+ * Resolve a data de adesão real do pet ao plano:
+ *   1. pet_insurance.enrollment_date (quando preenchida — mais confiável)
+ *   2. MIN(service_date) de petlove_remittance_lines vinculadas ao pet
+ *      (= primeira evidência de uso do plano; pet já era cliente antes da
+ *      clínica entrar no convênio)
+ *   3. created_at do pet_insurance (data em que a clínica cadastrou o vínculo)
+ *
+ * O passo 2 corrige o falso "em carência" que aparecia para pets com
+ * histórico antigo em remessas anteriores.
+ */
+async function resolveEnrollmentDate(
+  supabase: ReturnType<typeof createAdminClient>,
+  clinicId: string,
+  patientId: string,
+  insurance: { enrollment_date: string | null; created_at: string },
+): Promise<string> {
+  if (insurance.enrollment_date) {
+    return insurance.enrollment_date
+  }
+  // Olha a remessa mais antiga deste pet
+  const { data: oldestLine } = await supabase
+    .from('petlove_remittance_lines')
+    .select('service_date')
+    .eq('clinic_id', clinicId)
+    .eq('matched_patient_id', patientId)
+    .order('service_date', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  if (oldestLine?.service_date) {
+    return oldestLine.service_date as string
+  }
+  return insurance.created_at.slice(0, 10)
+}
+
 type Ctx = {
   supabase: ReturnType<typeof createAdminClient>
   clinicId: string
@@ -120,9 +164,11 @@ export async function getInsuranceCard(patientId: string): Promise<InsuranceCard
 
   if (!insurance) return { has_insurance: false }
 
-  // Fallback de enrollment_date: created_at do convênio
-  const enrollmentDate: string = (insurance.enrollment_date as string | null)
-    ?? (insurance.created_at as string).slice(0, 10)
+  // Resolve enrollment_date: explícito → menor service_date observado → created_at
+  const enrollmentDate = await resolveEnrollmentDate(supabase, clinicId, patientId, {
+    enrollment_date: insurance.enrollment_date as string | null,
+    created_at:      insurance.created_at as string,
+  })
   const today = new Date().toISOString().slice(0, 10)
   const daysEnrolled = daysBetween(enrollmentDate, today)
 
@@ -245,6 +291,41 @@ export async function checkProcedureCoverage(args: {
     }
   }
 
+  // 2.5) Repasse observado — tenta primeiro patient_custom_prices (preferencial
+  //     para esse pet específico), depois petlove_procedure_mappings.last_seen_value
+  //     (média da clínica). Esse valor é o REPASSE que a Petlove paga ao vet,
+  //     usado pelo previewConsultationInsurance no split do caixa.
+  let observedRepass: number | undefined
+  let observedSource: 'patient_custom_prices' | 'procedure_mapping' | null = null
+  {
+    // Resolve stock_item_id via mapping
+    const { data: map } = await supabase
+      .from('petlove_procedure_mappings')
+      .select('internal_stock_item_id, last_seen_value')
+      .eq('clinic_id', clinicId)
+      .eq('provider_id', insurance.provider_id)
+      .eq('external_procedure_name', procName)
+      .maybeSingle()
+
+    if (map?.internal_stock_item_id) {
+      const { data: custom } = await supabase
+        .from('patient_custom_prices')
+        .select('custom_price')
+        .eq('clinic_id', clinicId)
+        .eq('patient_id', args.patientId)
+        .eq('stock_item_id', map.internal_stock_item_id)
+        .maybeSingle()
+      if (custom?.custom_price != null) {
+        observedRepass = Number(custom.custom_price)
+        observedSource = 'patient_custom_prices'
+      }
+    }
+    if (observedRepass === undefined && map?.last_seen_value != null) {
+      observedRepass = Number(map.last_seen_value)
+      observedSource = 'procedure_mapping'
+    }
+  }
+
   // 3) Match no catálogo: 1) nome exato (case insensitive), 2) tokens
   // Aceita tanto "Petlove Ideal" (vem do pet_insurance) quanto "Ideal" (catálogo seed)
   const planNormalized = normalizePlanType(insurance.plan_type)
@@ -273,6 +354,8 @@ export async function checkProcedureCoverage(args: {
       provider_name: providerName,
       plan_type: insurance.plan_type ?? undefined,
       procedure_pattern: procName,
+      observed_repass:   observedRepass,
+      observed_source:   observedSource,
       message:   `${providerName} ${insurance.plan_type}: catálogo não conhece "${procName}". Consulte o portal antes.`,
       badge:     'gray',
     }
@@ -285,13 +368,18 @@ export async function checkProcedureCoverage(args: {
       plan_type:         insurance.plan_type ?? undefined,
       procedure_pattern: match.procedure_pattern,
       category:          match.coverage_category,
+      observed_repass:   observedRepass,
+      observed_source:   observedSource,
       message:           `Não coberto pelo plano ${insurance.plan_type}. Tutor paga particular.`,
       badge:             'red',
     }
   }
 
-  // Carência
-  const enrollment = (insurance.enrollment_date as string | null) ?? (insurance.created_at as string).slice(0, 10)
+  // Carência — usa o mesmo resolver inteligente do getInsuranceCard
+  const enrollment = await resolveEnrollmentDate(supabase, clinicId, args.patientId, {
+    enrollment_date: insurance.enrollment_date as string | null,
+    created_at:      insurance.created_at as string,
+  })
   const today = new Date().toISOString().slice(0, 10)
   const daysEnrolled = daysBetween(enrollment, today)
   const remaining = Math.max(0, match.waiting_days - daysEnrolled)
@@ -305,6 +393,8 @@ export async function checkProcedureCoverage(args: {
       category:               match.coverage_category,
       copay_amount:           Number(match.copay_amount ?? 0),
       copay_charger:          match.copay_charger as CopayCharger,
+      observed_repass:        observedRepass,
+      observed_source:        observedSource,
       waiting_remaining_days: remaining,
       message:                `Em carência. Faltam ${remaining} dia${remaining !== 1 ? 's' : ''} para liberação.`,
       badge:                  'yellow',
@@ -326,6 +416,8 @@ export async function checkProcedureCoverage(args: {
     category:          match.coverage_category,
     copay_amount:      Number(match.copay_amount ?? 0),
     copay_charger:     match.copay_charger as CopayCharger,
+    observed_repass:   observedRepass,
+    observed_source:   observedSource,
     message:           copayLabel,
     badge:             'green',
   }

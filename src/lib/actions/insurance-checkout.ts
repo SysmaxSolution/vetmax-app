@@ -106,16 +106,33 @@ export async function previewConsultationInsurance(
       hasInsurance = true
     }
 
-    const totalPrice = Number(it.total_price)
-    const copay      = Number(cov.copay_amount ?? 0)
+    const totalPrice    = Number(it.total_price)
+    const observedRepass = cov.observed_repass != null ? Number(cov.observed_repass) : undefined
+    const catalogCopay   = Number(cov.copay_amount ?? 0)
+
+    // Quando há repasse real observado (de patient_custom_prices ou da média
+    // da clínica em petlove_procedure_mappings), o copay total é o que sobra
+    // do preço cheio depois do repasse. Esse caminho dá o split EXATO baseado
+    // em valores reais de remessas anteriores, ignorando o copay padrão do
+    // catálogo (que é só uma estimativa).
+    const copayTotal = observedRepass !== undefined
+      ? Math.max(0, totalPrice - observedRepass)
+      : catalogCopay
 
     let chargeNow = 0, deferred = 0, receivable = 0
 
-    if (cov.status === 'covered') {
-      if (cov.copay_charger === 'clinic')        { chargeNow = copay;          receivable = totalPrice - copay }
-      else if (cov.copay_charger === 'provider') { deferred  = copay;          receivable = totalPrice - copay }
-      else if (cov.copay_charger === 'mixed')    { chargeNow = copay / 2;      deferred = copay / 2; receivable = totalPrice - copay }
-      else                                        { receivable = totalPrice }
+    if (cov.status === 'covered' || (cov.status === 'unknown_procedure' && observedRepass !== undefined)) {
+      // covered + has observed = mesmo split do covered normal
+      // unknown + has observed = procedimento sem catálogo mas com histórico
+      //   de remessa fechada para esse pet — usa valor real observado
+      const charger = cov.copay_charger ?? 'clinic'
+      const repassValue = observedRepass !== undefined
+        ? observedRepass
+        : Math.max(0, totalPrice - catalogCopay)
+      if (charger === 'clinic')        { chargeNow = copayTotal;       receivable = repassValue }
+      else if (charger === 'provider') { deferred  = copayTotal;       receivable = repassValue }
+      else if (charger === 'mixed')    { chargeNow = copayTotal / 2;   deferred = copayTotal / 2; receivable = repassValue }
+      else                              { receivable = repassValue;     chargeNow = copayTotal }
     } else if (cov.status === 'waiting') {
       // Em carência: tutor paga particular agora; convênio não cobre
       chargeNow = totalPrice
@@ -123,7 +140,7 @@ export async function previewConsultationInsurance(
       // Não coberto: particular
       chargeNow = totalPrice
     } else {
-      // sem convênio / catálogo desconhecido: cobra cheio
+      // sem convênio / catálogo desconhecido E sem observed_repass: cobra cheio
       chargeNow = totalPrice
     }
 
