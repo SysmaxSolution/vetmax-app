@@ -30,23 +30,23 @@ const { data: clinic } = await admin.from('clinics')
 
 console.log('\nCLINIC active_modules:', clinic.active_modules)
 
-const { data: perms } = await admin.from('user_module_permissions')
-  .select('module, allowed')
+const { data: perms } = await admin.from('user_module_access')
+  .select('module_name, enabled')
   .eq('user_id', u.id)
   .eq('clinic_id', profile.clinic_id)
-  .order('module')
+  .order('module_name')
 
-console.log('\nUSER MODULE PERMISSIONS (user_module_permissions table):')
+console.log('\nUSER MODULE ACCESS (user_module_access table):')
 if (!perms || perms.length === 0) {
   console.log('  (NENHUMA — usuário herda todos os active_modules)')
 } else {
   for (const p of perms) {
-    console.log(`  ${p.module}: ${p.allowed ? 'ALLOWED' : 'DENIED'}`)
+    console.log(`  ${p.module_name}: ${p.enabled ? 'ALLOWED' : 'DENIED'}`)
   }
 }
 
 // Simula o cálculo que o dashboard/layout.tsx faz
-const userDisabled = new Set((perms ?? []).filter(p => p.allowed === false).map(p => p.module))
+const userDisabled = new Set((perms ?? []).filter(p => p.enabled === false).map(p => p.module_name))
 const computedActive = (clinic.active_modules ?? []).filter(m => !userDisabled.has(m))
 
 console.log('\nCOMPUTED activeModules para esse usuário:', computedActive)

@@ -139,15 +139,24 @@ export default async function DashboardLayout({
     .eq('clinic_id', profile.clinic_id)
     .eq('user_id', user.id)
 
+  // DEFAULT RESTRITIVO (decisão de PO 2026-05-22): admin e SysMax veem todos
+  // os módulos ativos da clínica. Demais usuários só veem o que tem row
+  // enabled=true em user_module_access. Row ausente OU enabled=false = não
+  // aparece no menu.
+  const isAdminOrSysmax = profile.role === 'admin' || isSysmax
+  const userEnabled = new Set(
+    (userModuleRows ?? [])
+      .filter((r: any) => r.enabled === true)
+      .map((r: any) => r.module_name as string)
+  )
   const userDisabled = new Set(
     (userModuleRows ?? [])
       .filter((r: any) => r.enabled === false)
       .map((r: any) => r.module_name as string)
   )
-  // activeModules para esse usuário: clinic.active_modules MENOS o que o
-  // admin desativou em user_module_access. É a única fonte de verdade do
-  // que ele vê no menu — decisão do PO em 2026-05-22.
-  const activeModules = clinicModules.filter(m => !userDisabled.has(m))
+  const activeModules = isAdminOrSysmax
+    ? clinicModules
+    : clinicModules.filter(m => userEnabled.has(m))
 
   // Esconder-em-vez-de-bloquear: se o usuário acessa diretamente a URL de um
   // módulo que o admin desativou para ele, redireciona silenciosamente para o

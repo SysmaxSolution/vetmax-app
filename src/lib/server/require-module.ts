@@ -33,10 +33,12 @@ export async function requireModuleAccess(moduleName: string) {
     .single()
   if (!profile?.clinic_id) redirect('/onboarding')
 
-  // SysMax (suporte interno) tem acesso a tudo.
-  if (profile.is_sysmax) return profile
+  // SysMax (suporte interno) e admin têm acesso a tudo da clínica.
+  if (profile.is_sysmax || profile.role === 'admin') return profile
 
-  // Verifica se o admin desabilitou explicitamente o módulo para o usuário.
+  // DEFAULT RESTRITIVO (decisão de PO 2026-05-22): para não-admin, só permite
+  // se admin marcou explicitamente enabled=true em user_module_access. Sem row
+  // ou enabled=false → bloqueia.
   const { data: row } = await admin
     .from('user_module_access')
     .select('enabled')
@@ -44,7 +46,7 @@ export async function requireModuleAccess(moduleName: string) {
     .eq('module_name', moduleName)
     .maybeSingle()
 
-  if (row?.enabled === false) redirect('/dashboard')
+  if (!row || row.enabled !== true) redirect('/dashboard')
 
   // Adicionalmente: respeita se o módulo está habilitado na CLÍNICA (active_modules)
   const { data: clinic } = await admin
