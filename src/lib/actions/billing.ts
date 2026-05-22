@@ -6,7 +6,7 @@ import { revalidatePath } from 'next/cache'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type InvoiceStatus  = 'pending' | 'paid' | 'cancelled'
+export type InvoiceStatus  = 'pending' | 'paid_partial' | 'paid' | 'cancelled'
 export type PaymentMethod  = 'pix' | 'credit' | 'debit' | 'cash'
 export type ItemType       = 'consultation' | 'medication' | 'exam' | 'other'
 
@@ -30,6 +30,7 @@ export interface Invoice {
   subtotal:        number
   discount:        number
   total_amount:    number
+  paid_amount:     number
   status:          InvoiceStatus
   payment_method:  PaymentMethod | null
   paid_at:         string | null
@@ -220,12 +221,12 @@ export async function getPendingInvoices(): Promise<InvoiceWithDetails[] | { err
     .from('invoices')
     .select(`
       id, clinic_id, consultation_id, patient_id, tutor_id,
-      subtotal, discount, total_amount, status, payment_method, paid_at, created_at,
+      subtotal, discount, total_amount, paid_amount, status, payment_method, paid_at, created_at,
       patients ( name, species ),
       tutors ( name, phone )
     `)
     .eq('clinic_id', profile.clinic_id)
-    .eq('status', 'pending')
+    .in('status', ['pending', 'paid_partial'])
     .order('created_at', { ascending: false })
 
   if (error) return { error: 'Erro ao buscar faturas: ' + error.message }
@@ -258,7 +259,7 @@ export async function getInvoiceWithItems(
     .from('invoices')
     .select(`
       id, clinic_id, consultation_id, patient_id, tutor_id,
-      subtotal, discount, total_amount, status, payment_method, paid_at, created_at,
+      subtotal, discount, total_amount, paid_amount, status, payment_method, paid_at, created_at,
       patients ( name, species ),
       tutors ( name, phone )
     `)
@@ -331,7 +332,7 @@ export async function processPayment(
   const { data: invoice, error: fetchErr } = await supabase
     .from('invoices')
     .select(`
-      id, subtotal, status, consultation_id,
+      id, subtotal, status, consultation_id, patient_id, tutor_id,
       patients ( name ),
       tutors ( name ),
       consultations ( vet_id, profiles!vet_id ( full_name ) )
@@ -341,7 +342,9 @@ export async function processPayment(
     .single()
 
   if (fetchErr || !invoice) return { error: 'Fatura não encontrada.' }
-  if (invoice.status !== 'pending') return { error: 'Esta fatura já foi processada.' }
+  if (invoice.status !== 'pending' && invoice.status !== 'paid_partial') {
+    return { error: 'Esta fatura já foi processada ou cancelada.' }
+  }
 
   // Se há overrides de preço, atualizar os itens e recalcular subtotal
   let subtotal = invoice.subtotal
@@ -366,32 +369,115 @@ export async function processPayment(
       .eq('id', invoiceId)
   }
 
+  // Carrega o estado atual da invoice (paid_amount, discount, total_amount,
+  // entries existentes) — essencial para baixa parcial onde já houve baixas anteriores.
+  const { data: currentInv } = await adminClient
+    .from('invoices')
+    .select('paid_amount, discount, total_amount')
+    .eq('id', invoiceId)
+    .single()
+  const existingPaidAmount = Number((currentInv as { paid_amount?: number })?.paid_amount ?? 0)
+
   // Desconto base + desconto do convênio (se houver split aplicado).
-  // O "clinic_discount" do split representa o que a clínica deixa de cobrar
-  // ao aceitar o plano — vira desconto contábil na invoice.
   const insuranceDiscount = Math.max(0, payload.insurance_split?.clinic_discount ?? 0)
   const baseDiscount      = Math.max(0, payload.discount)
   const discount          = Math.min(baseDiscount + insuranceDiscount, subtotal)
   const total_amount      = Math.max(0, subtotal - discount)
-  // Quanto cai no caixa AGORA. Por padrão = total_amount.
-  // Quando há baixa parcial (amount_received < total_amount), o resto vira
-  // entry pending (insurance_split.receivable_amount cobre esse cenário).
-  const amount_received = Math.max(0, Math.min(payload.amount_received ?? total_amount, total_amount))
+
+  // Saldo a receber ANTES desta baixa (já considerando paid_amount anterior)
+  const balanceBefore = Math.max(0, total_amount - existingPaidAmount)
+  // Quanto cai no caixa AGORA. Limitado ao saldo restante.
+  const amount_received = Math.max(0, Math.min(payload.amount_received ?? balanceBefore, balanceBefore))
+
+  const newPaidAmount = existingPaidAmount + amount_received
+  // Tolerância de centavo para comparações em ponto flutuante
+  const isFullyPaid = newPaidAmount >= total_amount - 0.01
+  const newStatus: 'paid_partial' | 'paid' = isFullyPaid ? 'paid' : 'paid_partial'
 
   const { error } = await supabase
     .from('invoices')
     .update({
       discount,
       total_amount,
-      status:         'paid',
+      paid_amount:    newPaidAmount,
+      status:         newStatus,
       payment_method: payload.payment_method,
-      paid_at:        new Date().toISOString(),
+      paid_at:        isFullyPaid ? new Date().toISOString() : null,
       updated_at:     new Date().toISOString(),
     })
     .eq('id', invoiceId)
     .eq('clinic_id', profile.clinic_id)
 
   if (error) return { error: 'Erro ao processar pagamento: ' + error.message }
+
+  // ─── Duplicata PAID: registra esta baixa como financial_entry ─────────────
+  const { data: paidEntry } = await adminClient
+    .from('financial_entries')
+    .insert({
+      clinic_id:      profile.clinic_id,
+      type:           'receivable',
+      description:    `Baixa invoice ${invoiceId.slice(0,8)} · ${(invoice as { patients?: { name?: string } }).patients?.name ?? '—'}`,
+      amount:         amount_received,
+      due_date:       new Date().toISOString().slice(0, 10),
+      payment_date:   new Date().toISOString().slice(0, 10),
+      status:         'paid',
+      source:         'cashier',
+      category:       'Recebimento de fatura',
+      tutor_id:       (invoice as { tutor_id?: string }).tutor_id ?? null,
+      patient_id:     (invoice as { patient_id?: string }).patient_id ?? null,
+      invoice_id:     invoiceId,
+      payment_method: payload.payment_method,
+      notes:          `Pagamento parcial/integral · método ${payload.payment_method}`,
+      created_by:     user.id,
+    })
+    .select('id')
+    .maybeSingle()
+
+  // ─── Duplicata PENDING: cria/atualiza o entry de saldo restante ───────────
+  // Se ainda há saldo após essa baixa, mantém/atualiza um entry pending da
+  // mesma invoice. Se a baixa quitou tudo, o pending anterior (se houver)
+  // é zerado e marcado como liquidado.
+  const balanceAfter = Math.max(0, total_amount - newPaidAmount)
+  const { data: existingPending } = await adminClient
+    .from('financial_entries')
+    .select('id, amount')
+    .eq('clinic_id', profile.clinic_id)
+    .eq('invoice_id', invoiceId)
+    .eq('status', 'pending')
+    .eq('source', 'cashier')
+    .maybeSingle()
+
+  if (balanceAfter > 0.01) {
+    if (existingPending) {
+      // Reduz o pending existente para o novo saldo
+      await adminClient
+        .from('financial_entries')
+        .update({ amount: balanceAfter, updated_at: new Date().toISOString() })
+        .eq('id', existingPending.id)
+    } else {
+      // Cria pending para o saldo restante
+      await adminClient
+        .from('financial_entries')
+        .insert({
+          clinic_id:      profile.clinic_id,
+          type:           'receivable',
+          description:    `Saldo invoice ${invoiceId.slice(0,8)} · ${(invoice as { patients?: { name?: string } }).patients?.name ?? '—'}`,
+          amount:         balanceAfter,
+          due_date:       new Date().toISOString().slice(0, 10),
+          status:         'pending',
+          source:         'cashier',
+          category:       'Saldo a receber',
+          tutor_id:       (invoice as { tutor_id?: string }).tutor_id ?? null,
+          patient_id:     (invoice as { patient_id?: string }).patient_id ?? null,
+          invoice_id:     invoiceId,
+          notes:          `Saldo após baixa parcial — total ${total_amount.toFixed(2)}, recebido ${newPaidAmount.toFixed(2)}`,
+          created_by:     user.id,
+        })
+    }
+  } else if (existingPending) {
+    // Saldo zerou — apaga o pending residual
+    await adminClient.from('financial_entries').delete().eq('id', existingPending.id)
+  }
 
   // Registrar recebimento no caixa central via RPC
   // Nota: p_session_id foi removido na migration 0128 — não passar
@@ -491,6 +577,7 @@ export async function processPayment(
         category:           'Convênios · Petlove (em aberto)',
         tutor_id:           tutorIdForEntry,
         patient_id:         patientIdForEntry,
+        invoice_id:         invoiceId,
         settlement_bank_id: null,
         notes:              `Split do caixa · invoice ${invoiceId}. Será baixado quando a remessa fechada do período chegar.`,
         created_by:         user.id,
@@ -498,10 +585,192 @@ export async function processPayment(
       .select('id')
       .maybeSingle()
     pendingEntryId = fe?.id
+
+    // Entry de "Desconto Convênio" — ajuste contábil que NÃO aparece como
+    // duplicata de saldo a receber (is_clinic_discount=true). Documenta a
+    // diferença entre o preço cheio e o que a clínica vai receber.
+    if (split.clinic_discount > 0.01) {
+      await adminClient
+        .from('financial_entries')
+        .insert({
+          clinic_id:           profile.clinic_id,
+          type:                'receivable',
+          description:         `Desconto Convênio · ${split.procedure_pattern ?? 'Procedimento'} · ${patientNameNotes}`,
+          amount:              split.clinic_discount,
+          due_date:            new Date().toISOString().slice(0, 10),
+          payment_date:        new Date().toISOString().slice(0, 10),
+          status:              'paid',
+          source:              'manual',
+          category:            'Ajuste · Desconto Convênio',
+          tutor_id:            tutorIdForEntry,
+          patient_id:          patientIdForEntry,
+          invoice_id:          invoiceId,
+          is_clinic_discount:  true,
+          notes:               `Diferença entre preço particular e total recebido pelo plano. Invoice ${invoiceId}.`,
+          created_by:          user.id,
+        })
+    }
   }
 
   revalidatePath('/dashboard/cashier')
   revalidatePath('/dashboard/reception/checkout')
   revalidatePath('/dashboard/financial')
   return { success: true, pending_entry_id: pendingEntryId }
+}
+
+// ─── reversePartialPayment ────────────────────────────────────────────────────
+//
+// Estorna uma baixa específica (financial_entry paid). Soma o valor de volta
+// no entry pending da mesma invoice (ou recria se foi consumido) e ajusta o
+// invoice.paid_amount + status.
+//
+// Exemplo: invoice R$ 150 com baixa de R$ 30 (status=paid_partial).
+//   reversePartialPayment(entry_id_da_baixa_30):
+//     - apaga financial_entry paid(30)
+//     - soma 30 no pending existente (que era 120 → vira 150)
+//     - paid_amount: 30 → 0
+//     - status: paid_partial → pending
+// Volta a aparecer no caixa para recebimento.
+
+export async function reversePartialPayment(
+  entryId: string,
+): Promise<{ success: true; invoice_status: string; remaining_balance: number } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const { data: profile } = await supabase
+    .from('profiles').select('clinic_id, role').eq('id', user.id).single()
+  if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
+  if (!['admin', 'owner', 'manager'].includes(profile.role)) {
+    return { error: 'Apenas admin/gerente pode estornar pagamentos.' }
+  }
+
+  const adminClient = createAdminClient()
+
+  // 1) Carrega a baixa
+  const { data: entry, error: entryErr } = await adminClient
+    .from('financial_entries')
+    .select('id, invoice_id, amount, status, source, is_clinic_discount')
+    .eq('id', entryId)
+    .eq('clinic_id', profile.clinic_id)
+    .single()
+  if (entryErr || !entry) return { error: 'Lançamento não encontrado.' }
+  if (entry.status !== 'paid') return { error: 'Apenas lançamentos pagos podem ser estornados.' }
+  if (entry.is_clinic_discount) return { error: 'Descontos de convênio não podem ser estornados isoladamente — estorne a invoice completa.' }
+  if (!entry.invoice_id) return { error: 'Lançamento sem vínculo de invoice — use o estorno tradicional.' }
+
+  const amount = Number(entry.amount)
+
+  // 2) Carrega a invoice
+  const { data: invoice } = await adminClient
+    .from('invoices')
+    .select('id, total_amount, paid_amount, status, patient_id, tutor_id, patients(name)')
+    .eq('id', entry.invoice_id)
+    .eq('clinic_id', profile.clinic_id)
+    .single()
+  if (!invoice) return { error: 'Invoice não encontrada.' }
+
+  // 3) Apaga a baixa
+  const { error: delErr } = await adminClient
+    .from('financial_entries')
+    .delete()
+    .eq('id', entryId)
+  if (delErr) return { error: `Falha ao estornar: ${delErr.message}` }
+
+  // 4) Soma o valor de volta no pending existente (ou cria)
+  const { data: existingPending } = await adminClient
+    .from('financial_entries')
+    .select('id, amount')
+    .eq('clinic_id', profile.clinic_id)
+    .eq('invoice_id', entry.invoice_id)
+    .eq('status', 'pending')
+    .eq('source', 'cashier')
+    .maybeSingle()
+
+  const newPaidAmount = Math.max(0, Number((invoice as { paid_amount?: number }).paid_amount ?? 0) - amount)
+  const newBalance    = Math.max(0, Number((invoice as { total_amount?: number }).total_amount ?? 0) - newPaidAmount)
+  const newStatus: 'pending' | 'paid_partial' = newPaidAmount > 0.01 ? 'paid_partial' : 'pending'
+
+  if (existingPending) {
+    await adminClient
+      .from('financial_entries')
+      .update({ amount: Number(existingPending.amount) + amount, updated_at: new Date().toISOString() })
+      .eq('id', existingPending.id)
+  } else {
+    const patName = ((invoice as { patients?: { name?: string } | { name?: string }[] }).patients)
+    const pn = Array.isArray(patName) ? patName[0]?.name : patName?.name
+    await adminClient
+      .from('financial_entries')
+      .insert({
+        clinic_id:   profile.clinic_id,
+        type:        'receivable',
+        description: `Saldo invoice ${entry.invoice_id.slice(0,8)} · ${pn ?? '—'} (estornado)`,
+        amount:      newBalance,
+        due_date:    new Date().toISOString().slice(0, 10),
+        status:      'pending',
+        source:      'cashier',
+        category:    'Saldo a receber',
+        tutor_id:    (invoice as { tutor_id?: string }).tutor_id ?? null,
+        patient_id:  (invoice as { patient_id?: string }).patient_id ?? null,
+        invoice_id:  entry.invoice_id,
+        notes:       `Estorno de baixa anterior. Saldo voltou ao recebimento.`,
+        created_by:  user.id,
+      })
+  }
+
+  // 5) Atualiza invoice
+  await adminClient
+    .from('invoices')
+    .update({
+      paid_amount: newPaidAmount,
+      status:      newStatus,
+      paid_at:     newStatus === 'pending' ? null : (invoice as { paid_at?: string | null }).paid_at ?? null,
+      updated_at:  new Date().toISOString(),
+    })
+    .eq('id', entry.invoice_id)
+    .eq('clinic_id', profile.clinic_id)
+
+  revalidatePath('/dashboard/cashier')
+  revalidatePath('/dashboard/financial')
+  return { success: true, invoice_status: newStatus, remaining_balance: newBalance }
+}
+
+// ─── listInvoiceDuplicatas ────────────────────────────────────────────────────
+// Lista as duplicatas (financial_entries) vinculadas a uma invoice — usado para
+// exibir histórico de baixas + saldo restante na UI.
+
+export interface InvoiceDuplicata {
+  id:                  string
+  amount:              number
+  status:              'pending' | 'paid' | 'cancelled'
+  source:              string
+  payment_method:      string | null
+  payment_date:        string | null
+  due_date:            string
+  description:         string
+  is_clinic_discount:  boolean
+  created_at:          string
+}
+
+export async function listInvoiceDuplicatas(
+  invoiceId: string,
+): Promise<InvoiceDuplicata[] | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const admin = createAdminClient()
+  const { data: profile } = await admin.from('profiles').select('clinic_id').eq('id', user.id).single()
+  if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
+
+  const { data, error } = await admin
+    .from('financial_entries')
+    .select('id, amount, status, source, payment_method, payment_date, due_date, description, is_clinic_discount, created_at')
+    .eq('clinic_id', profile.clinic_id)
+    .eq('invoice_id', invoiceId)
+    .order('created_at', { ascending: true })
+
+  if (error) return { error: error.message }
+  return (data ?? []) as InvoiceDuplicata[]
 }

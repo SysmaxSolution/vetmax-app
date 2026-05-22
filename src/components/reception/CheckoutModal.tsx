@@ -5,6 +5,7 @@ import { X, Loader2, CreditCard, Banknote, Smartphone, Receipt } from 'lucide-re
 import { getInvoiceWithItems, processPayment, type InvoiceWithDetails, type PaymentMethod } from '@/lib/actions/billing'
 import InsuranceExportPanel from '@/components/reception/InsuranceExportPanel'
 import CheckoutInsurancePreviewClient from '@/components/financial/CheckoutInsurancePreviewClient'
+import InvoiceDuplicatasList from '@/components/financial/InvoiceDuplicatasList'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -258,6 +259,15 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
               </p>
             )}
           </div>
+
+          {/* Duplicatas — histórico de baixas + saldo restante + estorno */}
+          {(invoice.paid_amount ?? 0) > 0 && (
+            <InvoiceDuplicatasList
+              invoiceId={invoice.id}
+              totalAmount={invoice.total_amount}
+              paidAmount={invoice.paid_amount ?? 0}
+            />
+          )}
 
           {/* Painel de Convênio (exibido automaticamente se o pet tiver convênio) */}
           <InsuranceExportPanel
