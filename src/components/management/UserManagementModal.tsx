@@ -970,38 +970,52 @@ export default function UserManagementModal({
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-teal-600" />
                 </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  {MODULE_OPTIONS.map(({ key, label }) => {
-                    const enabled  = moduleMap[key] !== false
-                    const isSaving = savingModule === key
-                    const disabled = user?.id === currentUserId
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => !disabled && handleToggleModule(key, enabled)}
-                        disabled={disabled || isSaving}
-                        className={`flex items-center justify-between gap-3 rounded-xl border-2 px-4 py-3 text-left transition-all ${
-                          enabled
-                            ? 'border-teal-300 bg-teal-50 text-teal-700'
-                            : 'border-slate-200 bg-white text-slate-400'
-                        } ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-sm cursor-pointer'}`}
-                      >
-                        <span className="text-sm font-medium">{label}</span>
-                        <div className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full ${
-                          enabled ? 'bg-teal-600' : 'bg-slate-200'
-                        }`}>
-                          {isSaving
-                            ? <Loader2 className="h-3 w-3 animate-spin text-white" />
-                            : enabled && <Check className="h-3 w-3 text-white" />
-                          }
-                        </div>
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
+              ) : (() => {
+                // Mostra apenas módulos ATIVOS na clínica — não faz sentido o admin
+                // habilitar/desabilitar para o usuário um módulo que a clínica
+                // sequer contratou. Se a clínica ativar o módulo depois, ele aparece
+                // automaticamente aqui na próxima vez que abrir o modal.
+                const visibleModules = MODULE_OPTIONS.filter(({ key }) => activeModules.includes(key))
+                if (visibleModules.length === 0) {
+                  return (
+                    <p className="text-sm text-slate-500 italic py-4">
+                      A clínica não tem nenhum módulo ativo. Habilite primeiro em <strong>Configurações &gt; Módulos</strong>.
+                    </p>
+                  )
+                }
+                return (
+                  <div className="grid grid-cols-2 gap-2">
+                    {visibleModules.map(({ key, label }) => {
+                      const enabled  = moduleMap[key] !== false
+                      const isSaving = savingModule === key
+                      const disabled = user?.id === currentUserId
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => !disabled && handleToggleModule(key, enabled)}
+                          disabled={disabled || isSaving}
+                          className={`flex items-center justify-between gap-3 rounded-xl border-2 px-4 py-3 text-left transition-all ${
+                            enabled
+                              ? 'border-teal-300 bg-teal-50 text-teal-700'
+                              : 'border-slate-200 bg-white text-slate-400'
+                          } ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-sm cursor-pointer'}`}
+                        >
+                          <span className="text-sm font-medium">{label}</span>
+                          <div className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full ${
+                            enabled ? 'bg-teal-600' : 'bg-slate-200'
+                          }`}>
+                            {isSaving
+                              ? <Loader2 className="h-3 w-3 animate-spin text-white" />
+                              : enabled && <Check className="h-3 w-3 text-white" />
+                            }
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
             </div>
           )}
 

@@ -7,9 +7,10 @@ import { ModulesProvider } from '@/components/providers/ModulesProvider'
 import { ClinicConfigProvider } from '@/components/providers/ClinicConfigProvider'
 import { ThemeProvider } from '@/components/providers/ThemeProvider'
 import { MentorGlobalWrapper } from '@/components/mentor/MentorGlobalWrapper'
+import { headers } from 'next/headers'
 import { Suspense } from 'react'
-import { UnauthorizedBanner } from '@/components/ui/UnauthorizedBanner'
 import { SysmaxFooter } from '@/components/ui/SysmaxFooter'
+import { getModuleFromPath } from '@/lib/module-theme'
 import { Lock, AlertCircle } from 'lucide-react'
 import { getLowStockCount } from '@/lib/actions/stock'
 import type { UserClinicInfo } from '@/lib/actions/clinic-switcher'
@@ -128,19 +129,37 @@ export default async function DashboardLayout({
 
   const clinicModules = (clinicConfig?.active_modules as string[] | null) ?? []
 
-  // G-08: Aplicar RBAC por usuário — busca permissões da tabela user_module_permissions
+  // RBAC por usuário — lê de user_module_access (tabela populada pelo modal
+  // "Gestão > Usuários > Permissões"). Colunas: module_name, enabled.
+  // Era lida da tabela user_module_permissions, que está vazia → o filtro
+  // nunca acatava o que o admin marcava. Bug crítico reportado em 2026-05-22.
   const { data: userModuleRows } = await admin
-    .from('user_module_permissions')
-    .select('module, allowed')
+    .from('user_module_access')
+    .select('module_name, enabled')
     .eq('clinic_id', profile.clinic_id)
     .eq('user_id', user.id)
 
   const userDisabled = new Set(
     (userModuleRows ?? [])
-      .filter((r: any) => r.allowed === false)
-      .map((r: any) => r.module as string)
+      .filter((r: any) => r.enabled === false)
+      .map((r: any) => r.module_name as string)
   )
   const activeModules = clinicModules.filter(m => !userDisabled.has(m))
+
+  // Esconder-em-vez-de-bloquear: se o usuário acessa diretamente a URL de um
+  // módulo que o admin desativou para ele, redireciona silenciosamente para o
+  // primeiro módulo permitido — sem mostrar "Acesso negado".
+  // O pathname vem do header injetado pelo proxy.ts em cada request.
+  if (profile.role !== 'admin' && !isSysmax) {
+    const hdrs = await headers()
+    const pathname = hdrs.get('x-pathname') ?? ''
+    const requestedModule = getModuleFromPath(pathname)
+    if (requestedModule && userDisabled.has(requestedModule)) {
+      // Escolhe primeiro módulo disponível na ordem natural do menu
+      const fallback = activeModules[0] ?? 'patients'
+      redirect(`/dashboard/${fallback}`)
+    }
+  }
 
   // Conta todas as conversas ativas (bot + human) para badge no módulo WhatsApp
   const whatsappHandoffCount = activeModules.includes('whatsapp_intelligent')
@@ -188,9 +207,11 @@ export default async function DashboardLayout({
         />
       )}
       <MentorGlobalWrapper />
-      <Suspense fallback={null}>
-        <UnauthorizedBanner />
-      </Suspense>
+      {/* UnauthorizedBanner removido: por decisão de UX (2026-05-22), URLs
+          inacessíveis redirecionam silenciosamente para a home do usuário —
+          sem aviso de "Acesso negado". Os links sem permissão já não aparecem
+          no menu. Mantemos a Suspense vazia para preservar a estrutura. */}
+      <Suspense fallback={null}>{null}</Suspense>
       <SysmaxFooter />
     </section>
   )

@@ -126,10 +126,14 @@ export async function proxy(request: NextRequest) {
     const role = request.cookies.get(ROLE_COOKIE)?.value ?? 'admin'
 
     if (!isRoleAllowed(role, pathname)) {
+      // Esconde em vez de bloquear: redireciona silenciosamente para a home
+      // do role do usuário, sem banner "Acesso negado". Os links dos módulos
+      // sem permissão já não aparecem no DashboardHeader graças ao filtro de
+      // activeModules — esse redirect é a rede de segurança para URLs digitadas.
       const home = ROLE_HOME[role as UserRole] ?? '/dashboard/reception'
       const redirectUrl = request.nextUrl.clone()
       redirectUrl.pathname = home
-      redirectUrl.search = '?error=unauthorized'
+      redirectUrl.search = ''
       return NextResponse.redirect(redirectUrl)
     }
   }
