@@ -138,15 +138,39 @@ export default function ClinicalActionsSection({
       })
       const json = await res.json()
       if (json.dose) {
-        setCalcSuggestion(json.dose)
+        // Preenche cada campo do form separadamente.
         if (!medDosage.trim()) setMedDosage(json.dose)
+        if (!medRoute.trim()  && json.route)  setMedRoute(normalizeRoute(json.route))
+        if (!medNotes.trim()) {
+          const notesParts: string[] = []
+          if (json.frequency) notesParts.push(String(json.frequency))
+          if (json.duration)  notesParts.push(`por ${json.duration}`)
+          if (json.aviso)     notesParts.push(`⚠ ${json.aviso}`)
+          if (notesParts.length > 0) setMedNotes(notesParts.join(' · '))
+        }
+        // Sumário curto na linha de "Sugestão IA"
+        const summary = [json.dose, json.route, json.frequency, json.duration]
+          .filter(Boolean).join(' · ')
+        setCalcSuggestion(summary || json.dose)
       } else {
-        setCalcSuggestion('Sem referência para este medicamento.')
+        setCalcSuggestion(json.aviso || 'Sem referência para este medicamento.')
       }
     } catch {
       setCalcSuggestion('Erro ao calcular dose.')
     }
     setCalcLoading(false)
+  }
+
+  /** Mapeia o que a IA retorna ("Oral", "Intravenosa", "IV"...) para um valor
+   * aceito pelo select de Via (IV / IM / SC / oral / topical / other). */
+  function normalizeRoute(s: string): string {
+    const t = s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    if (/intravenos|^iv$|^iv\b/.test(t))          return 'IV'
+    if (/intramuscul|^im$|^im\b/.test(t))         return 'IM'
+    if (/subcutan|^sc$|^sc\b/.test(t))            return 'SC'
+    if (/oral|via oral|po\b|peros/.test(t))       return 'oral'
+    if (/topic|cutaneo|topi/.test(t))             return 'topical'
+    return 'other'
   }
 
   return (

@@ -68,6 +68,12 @@ export default function CoverageChipClient(props: Props) {
 
   if (!res) return null
 
+  // Silencia quando o catálogo não conhece o procedimento — medicamentos comuns
+  // (dipirona, tramadol, etc.) nunca estão no catálogo Petlove e mostrar
+  // "Consultar portal" para tudo polui a UI sem agregar informação.
+  // Só renderiza para situações com info útil: coberto / carência / não coberto.
+  if (res.status === 'unknown_procedure' || res.status === 'no_insurance') return null
+
   const Icon = ICON_BY_BADGE[res.badge]
   const style = STYLE_BY_BADGE[res.badge]
 
@@ -75,11 +81,9 @@ export default function CoverageChipClient(props: Props) {
     return (
       <span className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md border ${style}`} title={res.message}>
         <Icon className="h-3 w-3 flex-shrink-0" />
-        {res.status === 'covered'           && `Coberto · copay R$ ${(res.copay_amount ?? 0).toFixed(2)}`}
-        {res.status === 'waiting'           && `Em carência · ${res.waiting_remaining_days}d`}
-        {res.status === 'not_covered'       && 'Não coberto · particular'}
-        {res.status === 'no_insurance'      && 'Sem convênio'}
-        {res.status === 'unknown_procedure' && 'Consultar portal'}
+        {res.status === 'covered'     && `Coberto · copay R$ ${(res.copay_amount ?? 0).toFixed(2)}`}
+        {res.status === 'waiting'     && `Em carência · ${res.waiting_remaining_days}d`}
+        {res.status === 'not_covered' && 'Não coberto · particular'}
       </span>
     )
   }
