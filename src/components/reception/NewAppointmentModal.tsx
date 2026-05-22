@@ -11,6 +11,7 @@ import { DateInput, TimePicker, DateTimePicker } from '@/components/ui/DatePicke
 import { getClinicProfessionals, type ClinicProfessional } from '@/lib/actions/professionals'
 import { getProfessionalSlots, checkProfessionalAvailability } from '@/lib/actions/appointment-slots'
 import { listCatalogPackages, sellPackageToPet, linkSessionToAppointment, type CatalogPackage } from '@/lib/actions/packages'
+import { localDateTimeToISO, localDateTimeInputToISO } from '@/lib/utils/datetime'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -226,7 +227,7 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
       const apptResult = await createAppointment({
         pet_id:               petId,
         tutor_id:             tutorId,
-        appointment_datetime: `${date}T${time}:00`,
+        appointment_datetime: localDateTimeToISO(date, time),
         reason,
         notes:                notes.trim() || undefined,
         professional_id:      professionalId || undefined,
@@ -260,7 +261,7 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
         services_requested: groomingServices,
         box_number:         groomingBox.trim() || undefined,
         notes:              groomingNotes.trim() || undefined,
-        scheduled_at:       groomingDate || undefined,
+        scheduled_at:       groomingDate ? localDateTimeInputToISO(groomingDate) : undefined,
         groomer_id:         groomingGroomerId || undefined,
       })
 
@@ -293,7 +294,7 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
     const result = await createAppointment({
       pet_id:               petId,
       tutor_id:             tutorId,
-      appointment_datetime: `${date}T${time}:00`,
+      appointment_datetime: localDateTimeToISO(date, time),
       reason,
       notes:                notes.trim() || undefined,
       professional_id:      professionalId || undefined,

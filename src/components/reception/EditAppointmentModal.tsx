@@ -7,6 +7,7 @@ import { getProfessionalSlots, checkProfessionalAvailability } from '@/lib/actio
 import { getClinicProfessionals, type ClinicProfessional } from '@/lib/actions/professionals'
 import { sendWhatsAppMessage } from '@/lib/actions/whatsapp'
 import { DateInput, TimePicker } from '@/components/ui/DatePicker'
+import { localDateTimeToISO } from '@/lib/utils/datetime'
 
 const SPECIES_EMOJI: Record<string, string> = {
   dog: '🐶', cat: '🐱', bird: '🐦', exotic: '🦜',
@@ -69,7 +70,7 @@ export default function EditAppointmentModal({ appointmentId, onClose, onSuccess
       if ('error' in res) { setError(res.error); return }
 
       const dt = new Date(res.appointment_datetime)
-      const d  = res.appointment_datetime.split('T')[0]
+      const d  = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
       const t  = `${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`
 
       setPetName(res.patient.name)
@@ -138,7 +139,7 @@ export default function EditAppointmentModal({ appointmentId, onClose, onSuccess
 
     setSaving(true); setError(null)
     const res = await updateAppointment(appointmentId, {
-      appointment_datetime: `${date}T${time}:00`,
+      appointment_datetime: localDateTimeToISO(date, time),
       professional_id:      professionalId || null,
       notes:                notes.trim() || null,
     })
