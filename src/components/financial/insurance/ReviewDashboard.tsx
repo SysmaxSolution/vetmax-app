@@ -33,6 +33,7 @@ export default function ReviewDashboard({
 
   const needsMatching = data.remittance.status === 'imported'
   const alreadyReconciled = data.remittance.status === 'reconciled'
+  const isPreview = data.remittance.is_preview === true || data.remittance.status === 'open'
   const unmappedCount = useMemo(
     () => mappingRows.filter(m => !m.mapping_id).length,
     [mappingRows],
@@ -62,6 +63,13 @@ export default function ReviewDashboard({
 
   async function handleApprove() {
     if (applying) return
+    // Bloqueio defensivo: applyReconciliation cria entries como 'paid' e só
+    // faz sentido para a remessa fechada (paga). Prévia em aberto já lançou
+    // os entries pendentes na importação.
+    if (isPreview) {
+      setApproveError('Esta é uma prévia em aberto. Os títulos pendentes já foram lançados no financeiro no momento da importação. A baixa ocorrerá automaticamente ao importar a remessa fechada do mesmo período.')
+      return
+    }
     setApproveError(null)
     setApplying(true)
     try {
@@ -97,7 +105,7 @@ export default function ReviewDashboard({
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
         e.preventDefault()
         if (needsMatching) handleRunEngine()
-        else handleApprove()
+        else if (!isPreview) handleApprove()
       }
     }
     window.addEventListener('keydown', handler)
@@ -290,9 +298,11 @@ export default function ReviewDashboard({
         <div className={`sticky bottom-4 z-10 rounded-2xl border shadow-lg p-4 flex items-center gap-4 ${
           alreadyReconciled
             ? 'border-slate-200 bg-slate-50'
-            : 'border-emerald-300 bg-gradient-to-r from-emerald-50 to-purple-50'
+            : isPreview
+              ? 'border-sky-300 bg-gradient-to-r from-sky-50 to-blue-50'
+              : 'border-emerald-300 bg-gradient-to-r from-emerald-50 to-purple-50'
         }`}>
-          <Sparkles className={`h-6 w-6 flex-shrink-0 ${alreadyReconciled ? 'text-slate-400' : 'text-emerald-600'}`} />
+          <Sparkles className={`h-6 w-6 flex-shrink-0 ${alreadyReconciled ? 'text-slate-400' : isPreview ? 'text-sky-600' : 'text-emerald-600'}`} />
           <div className="flex-1 min-w-0">
             {alreadyReconciled ? (
               <>
@@ -300,6 +310,25 @@ export default function ReviewDashboard({
                 <p className="text-xs text-slate-500 mt-0.5">
                   Os lançamentos estão em A Receber. Para refazer, estorne a conciliação.
                 </p>
+              </>
+            ) : isPreview ? (
+              <>
+                <p className="font-semibold text-sky-900">Prévia em aberto · contas a receber já lançadas</p>
+                <div className="text-xs text-sky-800 mt-1 space-y-0.5">
+                  <p>
+                    Esta planilha contém títulos que a Petlove ainda não pagou. Os
+                    {' '}<strong>{data.counts.matched + data.counts.partial + data.counts.orphan_invoice + data.counts.missing_patient_profile}</strong>{' '}
+                    lançamentos elegíveis (Status Procedimento = "Liberado") foram
+                    criados como <strong>pendentes</strong> em
+                    {' '}<a href="/dashboard/financial" className="underline hover:text-sky-900">Financeiro &gt; Contas a Receber</a>{' '}
+                    no momento da importação.
+                  </p>
+                  <p className="text-[11px] text-sky-700 mt-1">
+                    A baixa ocorrerá automaticamente quando você importar a
+                    remessa fechada do período (que vem com Resumo + Extrato).
+                    Você também pode baixar manualmente cada título na tela de A Receber.
+                  </p>
+                </div>
               </>
             ) : (
               <>
@@ -335,7 +364,7 @@ export default function ReviewDashboard({
               </>
             )}
           </div>
-          {!alreadyReconciled && (
+          {!alreadyReconciled && !isPreview && (
             <button
               onClick={handleApprove}
               disabled={applying}

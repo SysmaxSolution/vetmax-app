@@ -47,6 +47,8 @@ export interface ReviewBundle {
     total_gross_value:    number
     referral_bonus_value: number
     lines_total:          number
+    is_preview:           boolean
+    source_format:        'closed' | 'open'
   }
   matched:                RemittanceLineRow[]
   partial:                RemittanceLineRow[]
@@ -348,7 +350,7 @@ export async function getReviewBundle(remittanceId: string): Promise<ReviewBundl
 
   const { data: remittance, error: remErr } = await supabase
     .from('petlove_remittances')
-    .select('id, remittance_number, period_start, period_end, status, total_gross_value, referral_bonus_value')
+    .select('id, remittance_number, period_start, period_end, status, is_preview, source_format, total_gross_value, referral_bonus_value')
     .eq('clinic_id', clinicId)
     .eq('id', remittanceId)
     .single()
@@ -439,6 +441,8 @@ export async function getReviewBundle(remittanceId: string): Promise<ReviewBundl
       total_gross_value:    Number(remittance.total_gross_value),
       referral_bonus_value: Number(remittance.referral_bonus_value),
       lines_total:          all.length,
+      is_preview:           Boolean((remittance as { is_preview?: boolean }).is_preview),
+      source_format:        ((remittance as { source_format?: 'closed' | 'open' }).source_format) ?? 'closed',
     },
     matched,
     partial,
