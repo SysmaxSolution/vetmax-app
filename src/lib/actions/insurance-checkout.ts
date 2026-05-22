@@ -106,33 +106,30 @@ export async function previewConsultationInsurance(
       hasInsurance = true
     }
 
-    const totalPrice    = Number(it.total_price)
+    const totalPrice     = Number(it.total_price)
     const observedRepass = cov.observed_repass != null ? Number(cov.observed_repass) : undefined
     const catalogCopay   = Number(cov.copay_amount ?? 0)
 
-    // Quando há repasse real observado (de patient_custom_prices ou da média
-    // da clínica em petlove_procedure_mappings), o copay total é o que sobra
-    // do preço cheio depois do repasse. Esse caminho dá o split EXATO baseado
-    // em valores reais de remessas anteriores, ignorando o copay padrão do
-    // catálogo (que é só uma estimativa).
-    const copayTotal = observedRepass !== undefined
-      ? Math.max(0, totalPrice - observedRepass)
-      : catalogCopay
+    // Modelo Petlove: tabela com valores FIXOS, não complemento.
+    //   - Tutor paga: catalogCopay (valor tabelado do plano para o procedimento)
+    //   - Petlove paga: observedRepass (repasse fixo da Petlove)
+    //   - Clínica recebe total: catalogCopay + observedRepass
+    //   - Diferença para o preço particular = desconto que a clínica oferece
+    //
+    // Quem cobra o copay (clinic / provider / mixed) é definido no catálogo.
 
     let chargeNow = 0, deferred = 0, receivable = 0
 
     if (cov.status === 'covered' || (cov.status === 'unknown_procedure' && observedRepass !== undefined)) {
-      // covered + has observed = mesmo split do covered normal
-      // unknown + has observed = procedimento sem catálogo mas com histórico
-      //   de remessa fechada para esse pet — usa valor real observado
       const charger = cov.copay_charger ?? 'clinic'
-      const repassValue = observedRepass !== undefined
+      // Tutor paga sempre o copay tabelado (R$ 30 para Consulta no Ideal, por ex.)
+      if (charger === 'clinic')        { chargeNow = catalogCopay }
+      else if (charger === 'provider') { deferred  = catalogCopay }
+      else if (charger === 'mixed')    { chargeNow = catalogCopay / 2; deferred = catalogCopay / 2 }
+      // Petlove paga o repasse fixo da tabela (se conhecemos o histórico)
+      receivable = observedRepass !== undefined
         ? observedRepass
-        : Math.max(0, totalPrice - catalogCopay)
-      if (charger === 'clinic')        { chargeNow = copayTotal;       receivable = repassValue }
-      else if (charger === 'provider') { deferred  = copayTotal;       receivable = repassValue }
-      else if (charger === 'mixed')    { chargeNow = copayTotal / 2;   deferred = copayTotal / 2; receivable = repassValue }
-      else                              { receivable = repassValue;     chargeNow = copayTotal }
+        : Math.max(0, totalPrice - catalogCopay)  // fallback quando nunca caiu remessa: assume "tudo que sobra"
     } else if (cov.status === 'waiting') {
       // Em carência: tutor paga particular agora; convênio não cobre
       chargeNow = totalPrice
