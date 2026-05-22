@@ -9,12 +9,29 @@ import { sendInviteEmail } from '@/lib/actions/send-invite-email'
 
 export type InvitationState = { error: string } | { url: string; token: string; emailSent?: boolean } | null
 
+/** Lista de módulos a pré-configurar para o convidado no onboarding. */
+export type InvitationModuleAccess = Array<{ module_name: string; enabled: boolean }>
+
 export async function createInvitation(
   _prevState: InvitationState,
   formData: FormData
 ): Promise<InvitationState> {
   const email = (formData.get('email') as string).trim().toLowerCase()
   const role  = formData.get('role') as InvitationRole
+
+  // module_access vem serializado em JSON pelo formulário
+  let moduleAccess: InvitationModuleAccess = []
+  const rawAccess = formData.get('module_access') as string | null
+  if (rawAccess) {
+    try {
+      const parsed = JSON.parse(rawAccess)
+      if (Array.isArray(parsed)) {
+        moduleAccess = parsed
+          .filter(p => p && typeof p.module_name === 'string' && typeof p.enabled === 'boolean')
+          .map(p => ({ module_name: p.module_name, enabled: p.enabled }))
+      }
+    } catch { /* aceita array vazio em caso de JSON inválido */ }
+  }
 
   if (!email) return { error: 'Informe o e-mail do convidado.' }
   if (!['vet', 'assistant', 'receptionist', 'pharmacist'].includes(role)) {
@@ -68,10 +85,11 @@ export async function createInvitation(
   const { data: invitation, error } = await admin
     .from('invitations')
     .insert({
-      clinic_id:  profile.clinic_id,
+      clinic_id:     profile.clinic_id,
       email,
       role,
-      invited_by: user.id,
+      invited_by:    user.id,
+      module_access: moduleAccess,
     })
     .select('token')
     .single()

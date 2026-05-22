@@ -35,7 +35,7 @@ export async function completeOnboarding(
 
     const { data: invitation } = await admin
       .from('invitations')
-      .select('id, email, role, expires_at, accepted_at')
+      .select('id, email, role, expires_at, accepted_at, module_access')
       .eq('token', token)
       .eq('clinic_id', clinicId)
       .single()
@@ -87,6 +87,29 @@ export async function completeOnboarding(
       clinic_id: clinic.id,
       role,
     }, { onConflict: 'user_id,clinic_id' })
+
+    // Aplica os acessos pré-configurados pelo admin no momento do convite.
+    // O convite armazena array { module_name, enabled }; criamos as rows
+    // correspondentes em user_module_access para que o usuário JÁ logue com
+    // os módulos certos disponíveis.
+    const presetAccess = Array.isArray(invitation.module_access)
+      ? (invitation.module_access as Array<{ module_name: string; enabled: boolean }>)
+      : []
+    if (presetAccess.length > 0) {
+      const rows = presetAccess
+        .filter(p => p && typeof p.module_name === 'string')
+        .map(p => ({
+          clinic_id:   clinic.id,
+          user_id:     authData.user!.id,
+          module_name: p.module_name,
+          enabled:     p.enabled === true,
+        }))
+      if (rows.length > 0) {
+        await admin
+          .from('user_module_access')
+          .upsert(rows, { onConflict: 'clinic_id,user_id,module_name' })
+      }
+    }
 
     // Marca convite como aceito
     await admin

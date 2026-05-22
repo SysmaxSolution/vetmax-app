@@ -31,6 +31,28 @@ import type { ClinicUserFull } from '@/lib/actions/user-management'
 import type { Room } from '@/lib/actions/rooms'
 import UserManagementModal from './UserManagementModal'
 import UserAccessRightsModal from './UserAccessRightsModal'
+
+// Mapeamento dos keys de módulos para labels em PT-BR (espelha o catálogo).
+const MODULE_LABELS_PT: Record<string, string> = {
+  reception:             'Recepção',
+  patients:              'Pacientes',
+  triage:                'Triagem',
+  consultation:          'Consultório',
+  exams:                 'Exames',
+  hospitalization:       'Internação',
+  grooming:              'Banho e Tosa',
+  pharmacy:              'Farmácia / Estoque',
+  sales:                 'Vendas (PDV)',
+  cashier:               'Caixa',
+  registry:              'Cadastros',
+  purchases:             'Compras',
+  financial:             'Financeiro',
+  reports:               'Relatórios',
+  whatsapp:              'WhatsApp',
+  whatsapp_intelligent:  'WhatsApp IA',
+  mentor:                'Mentor IA',
+  petlove_reconciliation: 'Conciliação Petlove',
+}
 import type { WhatsAppSettingsDisplay } from '@/lib/actions/whatsapp'
 import PremiumPaywall from '@/components/paywall/PremiumPaywall'
 
@@ -279,6 +301,10 @@ export default function ManagementWorkspace({
 
   // Modal "Direitos de Acesso" — granular por módulo/aba/ação
   const [rightsModalTarget, setRightsModalTarget] = useState<ClinicUserFull | null>(null)
+
+  // Acessos pré-configurados do convite (Module → true/false). Aplicados em
+  // user_module_access no momento que o convidado completa o onboarding.
+  const [inviteModuleAccess, setInviteModuleAccess] = useState<Record<string, boolean>>({})
 
   // Invite state
   const [invitations, setInvitations] = useState<Invitation[]>(initialInvitations)
@@ -842,6 +868,75 @@ export default function ManagementWorkspace({
                     ))}
                   </select>
                 </div>
+
+                {/* Acessos pré-configurados — admin define ANTES de gerar o link.
+                    Aplicados em user_module_access quando o convidado completa o onboarding. */}
+                <div className="rounded-xl border border-indigo-200 bg-indigo-50/40 p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <p className="text-xs font-semibold text-indigo-900">Acessos do novo usuário</p>
+                      <p className="text-[11px] text-indigo-700">
+                        Marque os módulos que o usuário verá ao fazer o primeiro login.
+                      </p>
+                    </div>
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setInviteModuleAccess(prev => {
+                          const next = { ...prev }
+                          for (const m of activeModules) next[m] = true
+                          return next
+                        })}
+                        className="text-[11px] px-2 py-1 rounded-md text-emerald-700 hover:bg-emerald-100"
+                      >
+                        Liberar tudo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setInviteModuleAccess({})}
+                        className="text-[11px] px-2 py-1 rounded-md text-rose-700 hover:bg-rose-100"
+                      >
+                        Limpar
+                      </button>
+                    </div>
+                  </div>
+                  <input
+                    type="hidden"
+                    name="module_access"
+                    value={JSON.stringify(
+                      activeModules.map(m => ({ module_name: m, enabled: inviteModuleAccess[m] === true }))
+                    )}
+                  />
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-48 overflow-y-auto">
+                    {activeModules.length === 0 ? (
+                      <p className="text-xs text-slate-500 italic col-span-full">
+                        Nenhum módulo ativo na clínica.
+                      </p>
+                    ) : activeModules.map(modKey => {
+                      const enabled = inviteModuleAccess[modKey] === true
+                      return (
+                        <button
+                          type="button"
+                          key={modKey}
+                          onClick={() => setInviteModuleAccess(prev => ({ ...prev, [modKey]: !enabled }))}
+                          className={`flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-left transition-colors ${
+                            enabled
+                              ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
+                              : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+                          }`}
+                        >
+                          <span className="text-[12px] font-medium truncate">
+                            {MODULE_LABELS_PT[modKey] ?? modKey}
+                          </span>
+                          {enabled
+                            ? <Check className="h-3 w-3 text-emerald-600 flex-shrink-0" />
+                            : <span className="h-3 w-3 rounded-full border border-slate-300 flex-shrink-0" />}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
                 <div className="flex gap-2">
                   <button
                     type="submit"
