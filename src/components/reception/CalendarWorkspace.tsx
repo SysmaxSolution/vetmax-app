@@ -12,6 +12,7 @@ import 'react-big-calendar/lib/css/react-big-calendar.css'
 import {
   ChevronLeft, ChevronRight, Plus, Scissors, X, MessageCircle,
   Clock, User, Stethoscope, Loader2, CheckCircle2, AlertCircle,
+  CalendarOff, Trash2,
 } from 'lucide-react'
 import {
   confirmArrival, cancelAppointment,
@@ -23,10 +24,12 @@ import {
   type UnifiedCalendarEvent, type CalendarProfessional,
 } from '@/lib/actions/calendar'
 import { sendDailyScheduleToVets } from '@/lib/actions/daily-schedule-whatsapp'
+import { listUnavailabilitiesInRange, deleteUnavailability } from '@/lib/actions/unavailabilities'
 import PatientLink from '@/components/PatientLink'
 import NewAppointmentModal from './NewAppointmentModal'
 import EditAppointmentModal from './EditAppointmentModal'
 import ReceptionSubNav from './ReceptionSubNav'
+import UnavailabilityModal from '@/components/appointments/UnavailabilityModal'
 
 // ─── Localizer pt-BR ──────────────────────────────────────────────────────────
 
@@ -98,20 +101,44 @@ function serviceLabel(e: UnifiedCalendarEvent): string {
 
 // ─── RBC Event ────────────────────────────────────────────────────────────────
 
-interface RBCEvent {
-  id:         string
-  title:      string
-  start:      Date
-  end:        Date
-  resourceId: string
-  resource:   UnifiedCalendarEvent
+interface UnavailabilityOccurrence {
+  id:                string
+  base_id:           string
+  professional_id:   string
+  professional_name: string | null
+  title:             string | null
+  notes:             string | null
+  starts_at:         string
+  ends_at:           string
+  recurrence:        'none' | 'daily' | 'weekly' | 'monthly' | 'yearly'
 }
+
+type RBCEvent =
+  | {
+      kind:       'appointment'
+      id:         string
+      title:      string
+      start:      Date
+      end:        Date
+      resourceId: string
+      resource:   UnifiedCalendarEvent
+    }
+  | {
+      kind:       'unavailability'
+      id:         string
+      title:      string
+      start:      Date
+      end:        Date
+      resourceId: string
+      resource:   UnavailabilityOccurrence
+    }
 
 function toRBCEvents(raw: UnifiedCalendarEvent[]): RBCEvent[] {
   return raw.map(e => {
     const start = new Date(e.datetime.replace(' ', 'T'))
     const durationMs = e.type === 'grooming' ? 2 * 3600000 : 1800000
     return {
+      kind:       'appointment' as const,
       id:         e.id,
       title:      `${e.petName} — ${serviceLabel(e)}`,
       start,
@@ -120,6 +147,18 @@ function toRBCEvents(raw: UnifiedCalendarEvent[]): RBCEvent[] {
       resource:   e,
     }
   })
+}
+
+function toRBCUnavailabilities(raw: UnavailabilityOccurrence[]): RBCEvent[] {
+  return raw.map(u => ({
+    kind:       'unavailability' as const,
+    id:         u.id,
+    title:      `🚫 ${u.title ?? 'Indisponível'}`,
+    start:      new Date(u.starts_at),
+    end:        new Date(u.ends_at),
+    resourceId: u.professional_id,
+    resource:   u,
+  }))
 }
 
 // ─── Toolbar customizada ──────────────────────────────────────────────────────
@@ -131,13 +170,14 @@ interface ToolbarProps {
   onView:         (view: View) => void
   loading:        boolean
   onNewAppt:      () => void
+  onNewEvent:     () => void
   onSendSchedule: () => void
   sendingSchedule:boolean
 }
 
 function CustomToolbar({
   date, view, onNavigate, onView, loading,
-  onNewAppt, onSendSchedule, sendingSchedule,
+  onNewAppt, onNewEvent, onSendSchedule, sendingSchedule,
 }: ToolbarProps) {
   const label = useMemo(() => {
     if (view === 'month') return format(date, 'MMMM yyyy', { locale: ptBR })
@@ -214,6 +254,16 @@ function CustomToolbar({
             ? <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />
             : <MessageCircle className="h-3.5 w-3.5 text-green-600" />}
           <span className="hidden sm:inline">Agenda do Dia</span>
+        </button>
+
+        {/* Evento / Indisponibilidade */}
+        <button
+          onClick={onNewEvent}
+          title="Bloquear horários do profissional"
+          className="flex items-center gap-1.5 rounded-xl bg-rose-600 px-3 py-2 text-xs font-semibold text-white hover:bg-rose-700 transition-colors"
+        >
+          <CalendarOff className="h-3.5 w-3.5" />
+          Evento
         </button>
 
         {/* Novo Agendamento */}
@@ -375,17 +425,22 @@ export default function CalendarWorkspace({ clinicName }: Props) {
   const today  = new Date()
 
   const [events,        setEvents]        = useState<RBCEvent[]>([])
+  const [unavailEvents, setUnavailEvents] = useState<RBCEvent[]>([])
   const [professionals, setProfessionals] = useState<CalendarProfessional[]>([])
   const [vetCounts,     setVetCounts]     = useState<ProfessionalCount[]>([])
   const [view,          setView]          = useState<View>('month')
   const [date,          setDate]          = useState(today)
   const [loading,       setLoading]       = useState(false)
   const [selected,      setSelected]      = useState<UnifiedCalendarEvent | null>(null)
+  const [selectedUnavail, setSelectedUnavail] = useState<UnavailabilityOccurrence | null>(null)
   const [showNewAppt,   setShowNewAppt]   = useState(false)
+  const [showNewEvent,  setShowNewEvent]  = useState(false)
   const [editApptId,    setEditApptId]    = useState<string | null>(null)
   const [sendingSchedule, setSendingSchedule] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
   const [isPending, startTransition] = useTransition()
+
+  const allEvents = useMemo<RBCEvent[]>(() => [...events, ...unavailEvents], [events, unavailEvents])
 
   function showToastMsg(msg: string, type: 'success' | 'error' = 'success') {
     setToast({ msg, type })
@@ -405,11 +460,14 @@ export default function CalendarWorkspace({ clinicName }: Props) {
     else if (v === 'week') { start = startOfWeek(d, { locale: ptBR }); end = addDays(start, 6) }
     else { start = startOfDay(d); end = endOfDay(d) }
 
-    const result = await getUnifiedEventsForRange(
-      format(start, 'yyyy-MM-dd'),
-      format(end,   'yyyy-MM-dd'),
-    )
+    const startStr = format(start, 'yyyy-MM-dd')
+    const endStr   = format(end,   'yyyy-MM-dd')
+    const [result, unavailResult] = await Promise.all([
+      getUnifiedEventsForRange(startStr, endStr),
+      listUnavailabilitiesInRange(startStr, endStr),
+    ])
     if (!('error' in result)) setEvents(toRBCEvents(result))
+    if (Array.isArray(unavailResult)) setUnavailEvents(toRBCUnavailabilities(unavailResult))
     setLoading(false)
   }, [])
 
@@ -513,6 +571,17 @@ export default function CalendarWorkspace({ clinicName }: Props) {
         />
       )}
 
+      {showNewEvent && (
+        <UnavailabilityModal
+          onClose={() => setShowNewEvent(false)}
+          onSuccess={(count) => {
+            setShowNewEvent(false)
+            showToastMsg(`${count} bloqueio${count !== 1 ? 's' : ''} criado${count !== 1 ? 's' : ''}.`)
+            fetchRange(date, view)
+          }}
+        />
+      )}
+
       <ReceptionSubNav />
 
       <div className="space-y-4">
@@ -560,15 +629,18 @@ export default function CalendarWorkspace({ clinicName }: Props) {
         >
           <Calendar
             localizer={localizer}
-            events={events}
+            events={allEvents}
             view={view}
             date={date}
             onView={handleView}
             onNavigate={handleNavigate}
-            onSelectEvent={(evt: RBCEvent) => setSelected(evt.resource)}
+            onSelectEvent={(evt: RBCEvent) => {
+              if (evt.kind === 'unavailability') { setSelectedUnavail(evt.resource); setSelected(null) }
+              else { setSelected(evt.resource); setSelectedUnavail(null) }
+            }}
             eventPropGetter={(evt: RBCEvent) => ({
               style: {
-                backgroundColor: eventColor(evt.resource),
+                backgroundColor: evt.kind === 'unavailability' ? '#9ca3af' : eventColor(evt.resource),
                 borderRadius:    '6px',
                 border:          'none',
                 color:           '#fff',
@@ -576,6 +648,9 @@ export default function CalendarWorkspace({ clinicName }: Props) {
                 fontWeight:      600,
                 padding:         '2px 6px',
                 cursor:          'pointer',
+                backgroundImage: evt.kind === 'unavailability'
+                  ? 'repeating-linear-gradient(45deg, rgba(255,255,255,0.18) 0 4px, transparent 4px 8px)'
+                  : undefined,
               },
             })}
             messages={{
@@ -606,6 +681,7 @@ export default function CalendarWorkspace({ clinicName }: Props) {
                   onView={props.onView}
                   loading={loading}
                   onNewAppt={() => setShowNewAppt(true)}
+                  onNewEvent={() => setShowNewEvent(true)}
                   onSendSchedule={handleSendSchedule}
                   sendingSchedule={sendingSchedule}
                 />
@@ -626,7 +702,111 @@ export default function CalendarWorkspace({ clinicName }: Props) {
             isPending={isPending}
           />
         )}
+
+        {/* Card de detalhe da indisponibilidade */}
+        {selectedUnavail && (
+          <UnavailabilityDetailCard
+            occurrence={selectedUnavail}
+            onClose={() => setSelectedUnavail(null)}
+            onDeleted={() => {
+              setSelectedUnavail(null)
+              showToastMsg('Bloqueio excluído.')
+              fetchRange(date, view)
+            }}
+          />
+        )}
       </div>
     </>
+  )
+}
+
+// ─── Card de detalhe da Indisponibilidade ─────────────────────────────────────
+
+function UnavailabilityDetailCard({
+  occurrence, onClose, onDeleted,
+}: {
+  occurrence: UnavailabilityOccurrence
+  onClose:    () => void
+  onDeleted:  () => void
+}) {
+  const [deleting, setDeleting] = useState(false)
+  const start = new Date(occurrence.starts_at)
+  const end   = new Date(occurrence.ends_at)
+  const dateStr = format(start, "dd 'de' MMMM yyyy", { locale: ptBR })
+  const timeStr = `${format(start, 'HH:mm')} – ${format(end, 'HH:mm')}`
+
+  const RECURRENCE_LABEL: Record<string, string> = {
+    none: 'Não se repete', daily: 'Diariamente', weekly: 'Semanalmente',
+    monthly: 'Mensalmente', yearly: 'Anualmente',
+  }
+
+  async function handleDelete() {
+    if (!confirm(occurrence.recurrence === 'none'
+      ? 'Excluir este bloqueio?'
+      : 'Excluir TODAS as ocorrências desta recorrência?')) return
+    setDeleting(true)
+    const res = await deleteUnavailability(occurrence.base_id)
+    setDeleting(false)
+    if ('error' in res) { alert(res.error); return }
+    onDeleted()
+  }
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden animate-in slide-in-from-bottom-2 duration-200">
+      <div className="h-1.5 bg-rose-500" />
+      <div className="p-5 space-y-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <CalendarOff className="h-4 w-4 text-rose-600" />
+            <span className="font-bold text-slate-900 text-base">
+              {occurrence.title ?? 'Indisponível'}
+            </span>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors flex-shrink-0"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-0.5">
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+              <User className="h-3 w-3" /> Profissional
+            </p>
+            <p className="text-sm font-medium text-slate-800">{occurrence.professional_name ?? '—'}</p>
+          </div>
+          <div className="space-y-0.5">
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+              <Clock className="h-3 w-3" /> Horário
+            </p>
+            <p className="text-sm font-medium text-slate-800">{timeStr}</p>
+            <p className="text-xs text-slate-400">{dateStr}</p>
+          </div>
+        </div>
+
+        {occurrence.notes && (
+          <div className="text-xs text-slate-600 bg-slate-50 rounded-lg p-2.5 whitespace-pre-wrap">
+            {occurrence.notes}
+          </div>
+        )}
+
+        <div className="flex items-center justify-between pt-1 border-t border-slate-100">
+          <span className="inline-flex items-center text-xs font-bold px-2.5 py-1 rounded-full bg-rose-100 text-rose-700">
+            {RECURRENCE_LABEL[occurrence.recurrence] ?? occurrence.recurrence}
+          </span>
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={deleting}
+            className="flex items-center gap-1.5 text-xs font-semibold text-rose-600 hover:text-rose-700 disabled:opacity-50"
+          >
+            {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+            Excluir{occurrence.recurrence !== 'none' && ' série'}
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
