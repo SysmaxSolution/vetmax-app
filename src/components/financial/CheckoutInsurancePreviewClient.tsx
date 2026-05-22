@@ -120,42 +120,42 @@ export default function CheckoutInsurancePreviewClient(props: Props) {
         <span className="text-[11px] text-sky-700 font-medium">{preview.items.length} procedimento{preview.items.length !== 1 ? 's' : ''}</span>
       </header>
 
-      {/* Totalizadores */}
-      <div className="px-5 py-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 border-b border-sky-200/60">
-        <div className="rounded-lg bg-white px-3 py-2 border border-sky-100">
-          <div className="flex items-center gap-1.5 text-[11px] text-sky-700 font-medium mb-0.5">
-            <Wallet className="h-3 w-3" />
-            Cobrar do tutor AGORA
+      {/* Totalizadores — lista horizontal compacta que cabe em qualquer modal */}
+      <div className="px-4 py-3 border-b border-sky-200/60 space-y-1.5">
+        <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md bg-white border border-sky-100">
+          <div className="flex items-center gap-2 text-xs text-sky-800 min-w-0">
+            <Wallet className="h-3.5 w-3.5 text-sky-600 flex-shrink-0" />
+            <span className="truncate">Cobrar do tutor AGORA</span>
           </div>
-          <div className="text-base font-bold text-sky-900 tabular-nums">{BRL(totals.charge_now)}</div>
+          <span className="text-sm font-bold text-sky-900 tabular-nums flex-shrink-0">{BRL(totals.charge_now)}</span>
         </div>
-        <div className="rounded-lg bg-white px-3 py-2 border border-sky-100">
-          <div className="flex items-center gap-1.5 text-[11px] text-sky-700 font-medium mb-0.5">
-            <CreditCard className="h-3 w-3" />
-            Petlove cobra no cartão
+        <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md bg-white border border-sky-100">
+          <div className="flex items-center gap-2 text-xs text-sky-800 min-w-0">
+            <CreditCard className="h-3.5 w-3.5 text-sky-600 flex-shrink-0" />
+            <span className="truncate">Petlove cobra no cartão</span>
           </div>
-          <div className="text-base font-bold text-sky-900 tabular-nums">{BRL(totals.deferred_provider)}</div>
+          <span className="text-sm font-bold text-sky-900 tabular-nums flex-shrink-0">{BRL(totals.deferred_provider)}</span>
         </div>
-        <div className="rounded-lg bg-white px-3 py-2 border border-sky-100">
-          <div className="flex items-center gap-1.5 text-[11px] text-sky-700 font-medium mb-0.5">
-            <FileClock className="h-3 w-3" />
-            Vai pra A Receber Petlove
+        <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md bg-white border border-sky-100">
+          <div className="flex items-center gap-2 text-xs text-sky-800 min-w-0">
+            <FileClock className="h-3.5 w-3.5 text-sky-600 flex-shrink-0" />
+            <span className="truncate">A Receber Petlove (repasse)</span>
           </div>
-          <div className="text-base font-bold text-sky-900 tabular-nums">{BRL(totals.receivable)}</div>
+          <span className="text-sm font-bold text-sky-900 tabular-nums flex-shrink-0">{BRL(totals.receivable)}</span>
         </div>
-        <div className="rounded-lg bg-emerald-50 px-3 py-2 border border-emerald-200">
-          <div className="flex items-center gap-1.5 text-[11px] text-emerald-700 font-medium mb-0.5">
-            <TrendingDown className="h-3 w-3" />
-            Tutor economizou
+        <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md bg-emerald-50 border border-emerald-200">
+          <div className="flex items-center gap-2 text-xs text-emerald-800 min-w-0">
+            <TrendingDown className="h-3.5 w-3.5 text-emerald-600 flex-shrink-0" />
+            <span className="truncate">Tutor economizou</span>
           </div>
-          <div className="text-base font-bold text-emerald-800 tabular-nums">{BRL(totals.tutor_saved)}</div>
+          <span className="text-sm font-bold text-emerald-900 tabular-nums flex-shrink-0">{BRL(totals.tutor_saved)}</span>
         </div>
-        <div className="rounded-lg bg-rose-50 px-3 py-2 border border-rose-200">
-          <div className="flex items-center gap-1.5 text-[11px] text-rose-700 font-medium mb-0.5">
-            <Scissors className="h-3 w-3" />
-            Desconto da clínica
+        <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md bg-rose-50 border border-rose-200">
+          <div className="flex items-center gap-2 text-xs text-rose-800 min-w-0">
+            <Scissors className="h-3.5 w-3.5 text-rose-600 flex-shrink-0" />
+            <span className="truncate">Desconto da clínica</span>
           </div>
-          <div className="text-base font-bold text-rose-800 tabular-nums">{BRL(totals.clinic_discount)}</div>
+          <span className="text-sm font-bold text-rose-900 tabular-nums flex-shrink-0">{BRL(totals.clinic_discount)}</span>
         </div>
       </div>
 

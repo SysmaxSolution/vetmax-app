@@ -311,12 +311,26 @@ export async function checkProcedureCoverage(args: {
     const targetNorm = normalizeName(procName)
     let map = (allMaps ?? []).find(m => normalizeName(m.external_procedure_name) === targetNorm) ?? null
     if (!map) {
+      // Scoring: pega o mapping com MAIOR número de tokens em comum, exigindo
+      // pelo menos metade. Antes usávamos tokens.every — que falhava em
+      // "Consulta Veterinária" vs "Consulta Clínico Geral" porque o token
+      // "veterinaria" não aparecia no segundo.
       const tokens = targetNorm.split(' ').filter(t => t.length >= 4)
       if (tokens.length > 0) {
-        map = (allMaps ?? []).find(m => {
+        type MapRow = { external_procedure_name: string; internal_stock_item_id: string | null; last_seen_value: number | null }
+        const threshold = Math.ceil(tokens.length / 2)
+        let bestScore = 0
+        let bestMap: MapRow | null = null
+        for (const m of (allMaps ?? []) as MapRow[]) {
           const mName = normalizeName(m.external_procedure_name)
-          return tokens.every(t => mName.includes(t))
-        }) ?? null
+          let score = 0
+          for (const t of tokens) if (mName.includes(t)) score++
+          if (score >= threshold && score > bestScore) {
+            bestScore = score
+            bestMap = m
+          }
+        }
+        map = bestMap
       }
     }
 
