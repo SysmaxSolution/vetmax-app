@@ -30,6 +30,7 @@ import { updateUserPhone, getUserModuleAccess, setUserModuleAccess, updateUserNi
 import type { ClinicUserFull } from '@/lib/actions/user-management'
 import type { Room } from '@/lib/actions/rooms'
 import UserManagementModal from './UserManagementModal'
+import UserAccessRightsModal from './UserAccessRightsModal'
 import type { WhatsAppSettingsDisplay } from '@/lib/actions/whatsapp'
 import PremiumPaywall from '@/components/paywall/PremiumPaywall'
 
@@ -275,6 +276,9 @@ export default function ManagementWorkspace({
   // Modal de usuário (G-08 + G-10)
   const [userModalTarget, setUserModalTarget] = useState<ClinicUserFull | null | undefined>(undefined)
   // undefined = fechado, null = novo usuário, objeto = editar
+
+  // Modal "Direitos de Acesso" — granular por módulo/aba/ação
+  const [rightsModalTarget, setRightsModalTarget] = useState<ClinicUserFull | null>(null)
 
   // Invite state
   const [invitations, setInvitations] = useState<Invitation[]>(initialInvitations)
@@ -1024,6 +1028,14 @@ export default function ManagementWorkspace({
                     >
                       <Pencil className="h-4 w-4" />
                     </button>
+                    <button
+                      onClick={() => setRightsModalTarget(u as ClinicUserFull)}
+                      title="Direitos de acesso"
+                      disabled={u.id === currentUserId}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                    >
+                      <Shield className="h-4 w-4" />
+                    </button>
                   </div>
                 </div>
               ))}
@@ -1145,6 +1157,17 @@ export default function ManagementWorkspace({
           currentUserId={currentUserId}
           onClose={() => setUserModalTarget(undefined)}
           onSaved={() => { setUserModalTarget(undefined); window.location.reload() }}
+        />
+      )}
+
+      {/* Modal Direitos de Acesso — granular módulo/aba/ação */}
+      {rightsModalTarget && (
+        <UserAccessRightsModal
+          userId={rightsModalTarget.id}
+          userName={rightsModalTarget.full_name ?? 'Usuário'}
+          activeModules={activeModules}
+          currentUserId={currentUserId}
+          onClose={() => setRightsModalTarget(null)}
         />
       )}
     </>
