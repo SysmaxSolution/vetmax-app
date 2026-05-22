@@ -12,6 +12,18 @@ interface Props {
   tutorName?:     string
   serviceDate?:   string
   clinicName?:    string
+  /**
+   * Disparado quando o usuário clica "Aplicar Cobertura". O parent (CheckoutModal)
+   * deve ajustar o valor a receber para charge_now e enviar o split no payload
+   * de processPayment para criar o entry pending de receivable.
+   */
+  onApplyInsurance?: (split: {
+    charge_now:        number
+    receivable:        number
+    clinic_discount:   number
+    procedure_pattern: string
+    has_insurance:     boolean
+  } | null) => void
 }
 
 const BRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -41,6 +53,7 @@ export default function CheckoutInsurancePreviewClient(props: Props) {
   const [preview, setPreview] = useState<CheckoutInsurancePreview | null>(null)
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState<string | null>(null)
+  const [applied, setApplied] = useState(false)
 
   useEffect(() => {
     if (!props.consultationId) {
@@ -187,12 +200,49 @@ export default function CheckoutInsurancePreviewClient(props: Props) {
         ))}
       </ul>
 
+      {/* Ações: aplicar / remover cobertura */}
+      {props.onApplyInsurance && totals.charge_now < totals.grand_total && (
+        <div className="px-5 py-2.5 border-t border-sky-200/60 bg-sky-50 flex items-center justify-between gap-2 flex-wrap">
+          <span className="text-[11px] text-sky-800">
+            {applied ? (
+              <><strong>Cobertura aplicada</strong> — caixa cobra apenas {BRL(totals.charge_now)} do tutor. Saldo {BRL(totals.receivable)} fica como A Receber Petlove.</>
+            ) : (
+              <>Clique para aplicar a cobertura — caixa cobra só {BRL(totals.charge_now)} do tutor e {BRL(totals.receivable)} vira A Receber Petlove.</>
+            )}
+          </span>
+          {applied ? (
+            <button
+              type="button"
+              onClick={() => { setApplied(false); props.onApplyInsurance?.(null) }}
+              className="text-[11px] font-semibold text-rose-700 hover:text-rose-900 px-3 py-1 rounded border border-rose-200 hover:bg-rose-50"
+            >
+              Remover cobertura
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setApplied(true)
+                props.onApplyInsurance?.({
+                  charge_now:        totals.charge_now,
+                  receivable:        totals.receivable,
+                  clinic_discount:   totals.clinic_discount,
+                  procedure_pattern: preview.items[0]?.coverage.procedure_pattern ?? preview.items[0]?.description ?? '',
+                  has_insurance:     true,
+                })
+              }}
+              className="text-[11px] font-semibold text-white bg-sky-600 hover:bg-sky-700 px-3 py-1 rounded"
+            >
+              Aplicar cobertura no caixa
+            </button>
+          )}
+        </div>
+      )}
+
       <footer className="px-5 py-2 bg-sky-50/60 border-t border-sky-100 text-[10px] text-sky-700 flex items-center justify-between gap-3">
         <div>
           <strong>Total cheio (preço particular):</strong>{' '}
           <span className="tabular-nums">{BRL(totals.grand_total)}</span>
-          {' · '}
-          Esta é uma prévia da cobertura — não altera o faturamento.
         </div>
         {props.patientName && props.tutorName && (
           <TutorSummaryPrint

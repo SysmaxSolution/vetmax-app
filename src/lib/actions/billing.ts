@@ -291,8 +291,29 @@ export async function processPayment(
     payment_method:  PaymentMethod
     discount:        number
     item_prices?:    { id: string; unit_price: number }[]  // overrides editados no caixa
+    /**
+     * Quanto efetivamente entrou no caixa AGORA. Quando omitido, é igual a
+     * (subtotal - discount). Permite baixa parcial: o resto fica como
+     * saldo pendente vinculado à invoice (campo separado).
+     */
+    amount_received?: number
+    /**
+     * Split do convênio: tutor paga parte, conveniada repassa o resto.
+     * Quando presente:
+     *   - clinic_discount é APLICADO como desconto adicional na invoice
+     *     (representa o "desconto" que a clínica oferece ao plano)
+     *   - receivable_amount cria um financial_entry pending de fonte
+     *     receivable_source — depois baixado pela remessa fechada
+     */
+    insurance_split?: {
+      receivable_amount: number
+      receivable_source: 'petlove_open'
+      clinic_discount:   number
+      procedure_pattern?: string
+      due_date?:          string
+    }
   }
-): Promise<{ success: true } | { error: string }> {
+): Promise<{ success: true; pending_entry_id?: string } | { error: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Não autenticado.' }
@@ -345,8 +366,17 @@ export async function processPayment(
       .eq('id', invoiceId)
   }
 
-  const discount     = Math.max(0, Math.min(payload.discount, subtotal))
-  const total_amount = Math.max(0, subtotal - discount)
+  // Desconto base + desconto do convênio (se houver split aplicado).
+  // O "clinic_discount" do split representa o que a clínica deixa de cobrar
+  // ao aceitar o plano — vira desconto contábil na invoice.
+  const insuranceDiscount = Math.max(0, payload.insurance_split?.clinic_discount ?? 0)
+  const baseDiscount      = Math.max(0, payload.discount)
+  const discount          = Math.min(baseDiscount + insuranceDiscount, subtotal)
+  const total_amount      = Math.max(0, subtotal - discount)
+  // Quanto cai no caixa AGORA. Por padrão = total_amount.
+  // Quando há baixa parcial (amount_received < total_amount), o resto vira
+  // entry pending (insurance_split.receivable_amount cobre esse cenário).
+  const amount_received = Math.max(0, Math.min(payload.amount_received ?? total_amount, total_amount))
 
   const { error } = await supabase
     .from('invoices')
@@ -372,7 +402,7 @@ export async function processPayment(
   const { error: rpcErr } = await supabase.rpc('rpc_record_invoice_payment', {
     p_clinic_id:      profile.clinic_id,
     p_invoice_id:     invoiceId,
-    p_amount:         total_amount,
+    p_amount:         amount_received,
     p_payment_method: payload.payment_method,
     p_patient_name:   patientName,
     p_tutor_name:     tutorName,
@@ -415,7 +445,63 @@ export async function processPayment(
     })
   }
 
+  // ─── Split do convênio: cria entry pending para o repasse Petlove ──────────
+  // Será baixado automaticamente quando a remessa fechada for importada
+  // (applyReconciliation casa por external_appointment_id + procedure).
+  let pendingEntryId: string | undefined
+  if (payload.insurance_split && payload.insurance_split.receivable_amount > 0) {
+    const split = payload.insurance_split
+    const inv2 = invoice as { consultation_id: string | null; patients?: { name?: string } | null; tutors?: { name?: string } | null }
+    const patientNameNotes = inv2.patients?.name ?? '?'
+    const tutorNameNotes   = inv2.tutors?.name   ?? '?'
+    // Resolve patient_id e tutor_id via consultation
+    let patientIdForEntry: string | null = null
+    let tutorIdForEntry:   string | null = null
+    if (inv2.consultation_id) {
+      const { data: consult } = await adminClient
+        .from('consultations')
+        .select('patient_id, tutor_id')
+        .eq('id', inv2.consultation_id)
+        .maybeSingle()
+      patientIdForEntry = (consult as { patient_id?: string })?.patient_id ?? null
+      tutorIdForEntry   = (consult as { tutor_id?: string  })?.tutor_id   ?? null
+    }
+    const dueDate = split.due_date ?? (() => {
+      // Próximo mês dia 30 (calendário Petlove)
+      const d = new Date()
+      const nextMonth = d.getMonth() === 11 ? 0 : d.getMonth() + 1
+      const nextYear  = d.getMonth() === 11 ? d.getFullYear() + 1 : d.getFullYear()
+      const lastDay = new Date(nextYear, nextMonth + 1, 0).getDate()
+      const day = Math.min(30, lastDay)
+      return `${nextYear}-${String(nextMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    })()
+
+    const description = `Petlove (em aberto) · ${split.procedure_pattern ?? 'Procedimento'} · ${patientNameNotes} (${tutorNameNotes}) · split caixa`
+    const { data: fe } = await adminClient
+      .from('financial_entries')
+      .insert({
+        clinic_id:          profile.clinic_id,
+        type:               'receivable',
+        description,
+        amount:             split.receivable_amount,
+        due_date:           dueDate,
+        payment_date:       null,
+        status:             'pending',
+        source:             split.receivable_source,
+        category:           'Convênios · Petlove (em aberto)',
+        tutor_id:           tutorIdForEntry,
+        patient_id:         patientIdForEntry,
+        settlement_bank_id: null,
+        notes:              `Split do caixa · invoice ${invoiceId}. Será baixado quando a remessa fechada do período chegar.`,
+        created_by:         user.id,
+      })
+      .select('id')
+      .maybeSingle()
+    pendingEntryId = fe?.id
+  }
+
   revalidatePath('/dashboard/cashier')
   revalidatePath('/dashboard/reception/checkout')
-  return { success: true }
+  revalidatePath('/dashboard/financial')
+  return { success: true, pending_entry_id: pendingEntryId }
 }

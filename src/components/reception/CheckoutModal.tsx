@@ -51,6 +51,19 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('pix')
   const [submitting,    setSubmitting]    = useState(false)
   const [editingPrices, setEditingPrices] = useState<Record<string, string>>({})  // itemId → raw input
+  /**
+   * Split de convênio aplicado pelo botão "Aplicar cobertura no caixa".
+   * Quando ativo, o caixa cobra só charge_now do tutor; o resto vira entry
+   * pending de A Receber Petlove + desconto contábil.
+   */
+  const [insuranceSplit, setInsuranceSplit] = useState<{
+    charge_now:        number
+    receivable:        number
+    clinic_discount:   number
+    procedure_pattern: string
+  } | null>(null)
+  /** Valor que efetivamente entrará no caixa AGORA — editável pelo usuário. */
+  const [amountReceivedInput, setAmountReceivedInput] = useState('')
 
   useEffect(() => {
     getInvoiceWithItems(invoiceId).then(res => {
@@ -100,7 +113,16 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
     return Math.min(dynamicSubtotal, raw)
   })()
 
-  const totalDue = Math.max(0, dynamicSubtotal - discountValue)
+  // totalDue = subtotal - desconto manual - desconto do convênio (se aplicado)
+  const insuranceDiscount = insuranceSplit?.clinic_discount ?? 0
+  const totalDue = Math.max(0, dynamicSubtotal - discountValue - insuranceDiscount)
+  const amountReceived = (() => {
+    const raw = amountReceivedInput.trim()
+    if (raw === '') return totalDue
+    const parsed = parseFloat(raw.replace(',', '.'))
+    return Number.isFinite(parsed) ? Math.max(0, Math.min(parsed, totalDue)) : totalDue
+  })()
+  const restante = Math.max(0, totalDue - amountReceived)
 
   async function handleConfirm() {
     if (!invoice) return
@@ -118,10 +140,17 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
       payment_method: paymentMethod,
       discount:       discountValue,
       item_prices:    item_prices.length > 0 ? item_prices : undefined,
+      amount_received: amountReceived,
+      insurance_split: insuranceSplit ? {
+        receivable_amount: insuranceSplit.receivable,
+        receivable_source: 'petlove_open',
+        clinic_discount:   insuranceSplit.clinic_discount,
+        procedure_pattern: insuranceSplit.procedure_pattern,
+      } : undefined,
     })
     setSubmitting(false)
     if ('error' in res) { setError(res.error); return }
-    onSuccess(invoice.patient.name, totalDue)
+    onSuccess(invoice.patient.name, amountReceived)
   }
 
   return (
@@ -245,6 +274,20 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
               consultationId={invoice.consultation_id}
               patientName={invoice.patient.name}
               tutorName={invoice.tutor.name}
+              onApplyInsurance={(split) => {
+                if (split) {
+                  setInsuranceSplit({
+                    charge_now:        split.charge_now,
+                    receivable:        split.receivable,
+                    clinic_discount:   split.clinic_discount,
+                    procedure_pattern: split.procedure_pattern,
+                  })
+                  setAmountReceivedInput(split.charge_now.toFixed(2).replace('.', ','))
+                } else {
+                  setInsuranceSplit(null)
+                  setAmountReceivedInput('')
+                }
+              }}
             />
           )}
 
@@ -310,10 +353,51 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
             </div>
           </div>
 
-          {/* Total */}
-          <div className="rounded-xl bg-slate-900 px-5 py-4 flex items-center justify-between">
-            <span className="text-sm font-semibold text-slate-300">Total a Pagar</span>
-            <span className="text-2xl font-bold text-white">{fmt(totalDue)}</span>
+          {/* Total devido (após descontos) */}
+          <div className="rounded-xl bg-slate-900 px-5 py-3 flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-300 uppercase tracking-wide">Total a Pagar</span>
+            <span className="text-xl font-bold text-white">{fmt(totalDue)}</span>
+          </div>
+
+          {/* Quanto receber AGORA — permite baixa parcial */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">
+              Quanto vai receber agora?
+            </label>
+            <div className="flex gap-2 items-center">
+              <span className="text-sm text-slate-500 font-semibold">R$</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={amountReceivedInput}
+                onChange={e => setAmountReceivedInput(e.target.value)}
+                placeholder={totalDue.toFixed(2).replace('.', ',')}
+                className="flex-1 rounded-xl border border-slate-200 px-3 py-2.5 text-base font-semibold tabular-nums focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-400"
+              />
+              <button
+                type="button"
+                onClick={() => setAmountReceivedInput('')}
+                className="text-[11px] text-slate-500 hover:text-slate-700 underline whitespace-nowrap"
+              >
+                = total
+              </button>
+            </div>
+            {restante > 0.005 && (
+              <div className="mt-2 text-xs px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800">
+                Saldo restante:{' '}
+                <strong className="tabular-nums">{fmt(restante)}</strong>
+                {insuranceSplit ? (
+                  <> · será lançado como <strong>A Receber Petlove</strong> e baixado quando a remessa fechada chegar.</>
+                ) : (
+                  <> · ficará pendente para baixa futura.</>
+                )}
+              </div>
+            )}
+            {insuranceSplit && (
+              <div className="mt-2 text-[11px] px-3 py-1.5 rounded-lg bg-sky-50 border border-sky-200 text-sky-800">
+                Cobertura Petlove aplicada · desconto contábil de <strong>{fmt(insuranceSplit.clinic_discount)}</strong> · repasse de <strong>{fmt(insuranceSplit.receivable)}</strong> ficará como A Receber.
+              </div>
+            )}
           </div>
 
           {error && (
