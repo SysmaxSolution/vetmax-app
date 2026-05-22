@@ -411,27 +411,29 @@ export async function processPayment(
   if (error) return { error: 'Erro ao processar pagamento: ' + error.message }
 
   // ─── Duplicata PAID: registra esta baixa como financial_entry ─────────────
-  const { data: paidEntry } = await adminClient
-    .from('financial_entries')
-    .insert({
-      clinic_id:      profile.clinic_id,
-      type:           'receivable',
-      description:    `Baixa invoice ${invoiceId.slice(0,8)} · ${(invoice as { patients?: { name?: string } }).patients?.name ?? '—'}`,
-      amount:         amount_received,
-      due_date:       new Date().toISOString().slice(0, 10),
-      payment_date:   new Date().toISOString().slice(0, 10),
-      status:         'paid',
-      source:         'cashier',
-      category:       'Recebimento de fatura',
-      tutor_id:       (invoice as { tutor_id?: string }).tutor_id ?? null,
-      patient_id:     (invoice as { patient_id?: string }).patient_id ?? null,
-      invoice_id:     invoiceId,
-      payment_method: payload.payment_method,
-      notes:          `Pagamento parcial/integral · método ${payload.payment_method}`,
-      created_by:     user.id,
-    })
-    .select('id')
-    .maybeSingle()
+  // SÓ se houver entrada efetiva de caixa nesta operação. Quando amount_received
+  // = 0 mas há insurance_split, esta operação é só lançamento contábil/pending.
+  if (amount_received > 0.01) {
+    await adminClient
+      .from('financial_entries')
+      .insert({
+        clinic_id:      profile.clinic_id,
+        type:           'receivable',
+        description:    `Baixa invoice ${invoiceId.slice(0,8)} · ${(invoice as { patients?: { name?: string } }).patients?.name ?? '—'}`,
+        amount:         amount_received,
+        due_date:       new Date().toISOString().slice(0, 10),
+        payment_date:   new Date().toISOString().slice(0, 10),
+        status:         'paid',
+        source:         'cashier',
+        category:       'Recebimento de fatura',
+        tutor_id:       (invoice as { tutor_id?: string }).tutor_id ?? null,
+        patient_id:     (invoice as { patient_id?: string }).patient_id ?? null,
+        invoice_id:     invoiceId,
+        payment_method: payload.payment_method,
+        notes:          `Pagamento parcial/integral · método ${payload.payment_method}`,
+        created_by:     user.id,
+      })
+  }
 
   // ─── Duplicata PENDING: cria/atualiza o entry de saldo restante ───────────
   // Se ainda há saldo após essa baixa, mantém/atualiza um entry pending da
@@ -485,32 +487,48 @@ export async function processPayment(
   const patientName = inv.patients?.name ?? null
   const tutorName   = inv.tutors?.name   ?? null
 
-  const { error: rpcErr } = await supabase.rpc('rpc_record_invoice_payment', {
-    p_clinic_id:      profile.clinic_id,
-    p_invoice_id:     invoiceId,
-    p_amount:         amount_received,
-    p_payment_method: payload.payment_method,
-    p_patient_name:   patientName,
-    p_tutor_name:     tutorName,
-    p_recorded_by:    user.id,
-  })
+  // Só registra no caixa central se houver dinheiro/PIX/cartão entrando AGORA.
+  // central_cashier rejeita amount=0 pela constraint amount_not_zero — quando
+  // a operação é puramente contábil (split convênio com tutor já pago em outra
+  // baixa), pulamos o RPC.
+  if (amount_received > 0.01) {
+    const { error: rpcErr } = await supabase.rpc('rpc_record_invoice_payment', {
+      p_clinic_id:      profile.clinic_id,
+      p_invoice_id:     invoiceId,
+      p_amount:         amount_received,
+      p_payment_method: payload.payment_method,
+      p_patient_name:   patientName,
+      p_tutor_name:     tutorName,
+      p_recorded_by:    user.id,
+    })
 
-  if (rpcErr) {
-    // Rollback: a invoice não pode ficar 'paid' se o caixa não registrou o
-    // recebimento — isso gera o bug "invoice fantasma" (paid sem caixa ativo),
-    // invisível na aba Recebimentos e impossível de re-baixar.
-    console.error('[billing] rpc_record_invoice_payment error:', rpcErr.message)
-    await supabase
-      .from('invoices')
-      .update({
-        status:         'pending',
-        paid_at:        null,
-        payment_method: null,
-        updated_at:     new Date().toISOString(),
-      })
-      .eq('id', invoiceId)
-      .eq('clinic_id', profile.clinic_id)
-    return { error: 'Erro ao registrar no caixa: ' + rpcErr.message + '. Pagamento revertido, tente novamente.' }
+    if (rpcErr) {
+      // Rollback: a invoice não pode ficar 'paid' se o caixa não registrou o
+      // recebimento — isso gera o bug "invoice fantasma" (paid sem caixa ativo),
+      // invisível na aba Recebimentos e impossível de re-baixar.
+      console.error('[billing] rpc_record_invoice_payment error:', rpcErr.message)
+      await supabase
+        .from('invoices')
+        .update({
+          status:         'pending',
+          paid_at:        null,
+          payment_method: null,
+          paid_amount:    existingPaidAmount,
+          updated_at:     new Date().toISOString(),
+        })
+        .eq('id', invoiceId)
+        .eq('clinic_id', profile.clinic_id)
+      // Rollback da duplicata paid recém-criada (a propósito desta operação)
+      await adminClient
+        .from('financial_entries')
+        .delete()
+        .eq('clinic_id', profile.clinic_id)
+        .eq('invoice_id', invoiceId)
+        .eq('status', 'paid')
+        .eq('source', 'cashier')
+        .gte('created_at', new Date(Date.now() - 60_000).toISOString())
+      return { error: 'Erro ao registrar no caixa: ' + rpcErr.message + '. Pagamento revertido, tente novamente.' }
+    }
   }
 
   // Comissão automática do veterinário (fire-and-forget)

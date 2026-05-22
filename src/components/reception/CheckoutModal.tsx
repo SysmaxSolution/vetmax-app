@@ -427,9 +427,10 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
             </button>
             <button
               onClick={handleConfirm}
-              disabled={submitting}
+              disabled={submitting || (amountReceived <= 0.005 && !insuranceSplit)}
               data-mentor-step="cashier-confirm-payment-btn"
-              className="flex-1 rounded-xl bg-teal-600 py-3 text-sm font-semibold text-white hover:bg-teal-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              title={amountReceived <= 0.005 && !insuranceSplit ? 'Informe um valor maior que zero para receber, ou aplique a cobertura do convênio.' : undefined}
+              className="flex-1 rounded-xl bg-teal-600 py-3 text-sm font-semibold text-white hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {submitting ? (
                 <><Loader2 className="h-4 w-4 animate-spin" /> Processando...</>
