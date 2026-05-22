@@ -330,3 +330,110 @@ export async function checkBatchCoverage(args: {
   }
   return out
 }
+
+// ─── learnCoverageFromRemittance ─────────────────────────────────────────────
+// Após cada remessa fechada importada, refina insurance_plan_coverage:
+//   - Para cada procedure_pattern × plano observado, recalcula a média de
+//     coparticipation_value e atualiza copay_amount em insurance_plan_coverage.
+//   - Cria registro novo (is_covered=true) se o catálogo não conhecia o
+//     procedimento para aquele plano. Isso permite o catálogo aprender
+//     procedimentos novos da Petlove automaticamente.
+//
+// Idempotente — pode rodar várias vezes na mesma remessa sem duplicar.
+
+export async function learnCoverageFromRemittance(
+  remittanceId: string,
+): Promise<{ updated: number; created: number; errors: string[] } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+  const { supabase, clinicId } = ctx
+
+  // 1) Localiza a remessa + provider
+  const { data: rem } = await supabase
+    .from('petlove_remittances')
+    .select('id, provider_id, status')
+    .eq('clinic_id', clinicId)
+    .eq('id', remittanceId)
+    .maybeSingle()
+  if (!rem) return { error: 'Remessa não encontrada.' }
+  // Só aprende de remessa fechada — open/preview tem variação maior
+  if (rem.status === 'open') {
+    return { updated: 0, created: 0, errors: ['Remessa em aberto ignorada para auto-learn.'] }
+  }
+
+  // 2) Linhas da remessa com plano + procedimento + copay
+  const { data: lines } = await supabase
+    .from('petlove_remittance_lines')
+    .select('procedure_name_raw, plan_name_raw, coparticipation_value')
+    .eq('clinic_id', clinicId)
+    .eq('remittance_id', remittanceId)
+    .not('procedure_name_raw', 'is', null)
+    .not('plan_name_raw',      'is', null)
+
+  if (!lines || lines.length === 0) {
+    return { updated: 0, created: 0, errors: [] }
+  }
+
+  // 3) Agrega média por (plano normalizado, procedimento)
+  // Normaliza plan_name_raw para o padrão do catálogo: "Petlove Ideal" → "Ideal"
+  type Key = string
+  const acc = new Map<Key, { plan: string; proc: string; sum: number; count: number }>()
+  for (const l of lines) {
+    const planRaw = String(l.plan_name_raw).trim()
+    const plan = planRaw.replace(/^petlove\s+/i, '').trim()
+    const proc = String(l.procedure_name_raw).trim()
+    const copay = Number(l.coparticipation_value)
+    if (!proc || !plan || !Number.isFinite(copay) || copay < 0) continue
+    const k = `${plan}::${proc}`
+    const cur = acc.get(k) ?? { plan, proc, sum: 0, count: 0 }
+    cur.sum += copay
+    cur.count++
+    acc.set(k, cur)
+  }
+
+  const errors: string[] = []
+  let updated = 0, created = 0
+
+  for (const [, v] of acc) {
+    const avgCopay = Number((v.sum / v.count).toFixed(2))
+
+    const { data: existing } = await supabase
+      .from('insurance_plan_coverage')
+      .select('id, copay_amount')
+      .eq('provider_id', rem.provider_id)
+      .eq('plan_type', v.plan)
+      .eq('procedure_pattern', v.proc)
+      .maybeSingle()
+
+    if (existing) {
+      // Média móvel ponderada 70% histórico + 30% nova observação
+      const prev = Number(existing.copay_amount ?? avgCopay)
+      const blended = Number((prev * 0.7 + avgCopay * 0.3).toFixed(2))
+      const { error } = await supabase
+        .from('insurance_plan_coverage')
+        .update({ copay_amount: blended, updated_at: new Date().toISOString() })
+        .eq('id', existing.id)
+      if (error) errors.push(`update ${v.proc}: ${error.message}`)
+      else updated++
+    } else {
+      // Procedimento novo — adiciona ao catálogo com flag implícita "aprendido"
+      const { error } = await supabase
+        .from('insurance_plan_coverage')
+        .insert({
+          provider_id:       rem.provider_id,
+          plan_type:         v.plan,
+          procedure_pattern: v.proc,
+          coverage_category: 'outros',
+          is_covered:        true,
+          copay_amount:      avgCopay,
+          copay_charger:     'clinic',
+          waiting_days:      60,
+          notes:             `Aprendido automaticamente da remessa ${remittanceId}`,
+        })
+      if (error) errors.push(`insert ${v.proc}: ${error.message}`)
+      else created++
+    }
+  }
+
+  return { updated, created, errors }
+}

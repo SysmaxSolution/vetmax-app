@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { X, Loader2, CreditCard, Banknote, Smartphone, Receipt } from 'lucide-react'
 import { getInvoiceWithItems, processPayment, type InvoiceWithDetails, type PaymentMethod } from '@/lib/actions/billing'
 import InsuranceExportPanel from '@/components/reception/InsuranceExportPanel'
+import CheckoutInsurancePreview from '@/components/financial/CheckoutInsurancePreview'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -237,6 +238,15 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
             tutorName={invoice.tutor.name}
             items={invoice.items}
           />
+
+          {/* Caixa Inteligente — split tutor × cartão Petlove × repasse + botão imprimir */}
+          {invoice.consultation_id && (
+            <CheckoutInsurancePreview
+              consultationId={invoice.consultation_id}
+              patientName={invoice.patient.name}
+              tutorName={invoice.tutor.name}
+            />
+          )}
 
           {/* Desconto */}
           <div>

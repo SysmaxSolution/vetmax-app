@@ -6,6 +6,8 @@ import { ArrowLeft } from 'lucide-react'
 import { getReviewBundle } from '@/lib/actions/petlove-matching'
 import { getProcedureMappingStatus } from '@/lib/actions/petlove-mapping'
 import ReviewDashboard from '@/components/financial/insurance/ReviewDashboard'
+import GlosasDashboard from '@/components/financial/insurance/GlosasDashboard'
+import GlosaHistoryHint from '@/components/financial/insurance/GlosaHistoryHint'
 
 export const metadata = { title: 'Revisão de Remessa | SysVetMax' }
 
@@ -49,7 +51,13 @@ export default async function RemittanceReviewPage({ params }: { params: Promise
           Conciliação de Convênios
         </Link>
 
+        {/* Hint compacto de histórico — alerta sobre procedimentos que costumam ser glosados */}
+        <GlosaHistoryHint limit={5} />
+
         <ReviewDashboard bundle={bundle} initialMappingRows={initialMappingRows} />
+
+        {/* Painel de glosas detalhado — aparece para qualquer remessa do período */}
+        <GlosasDashboard remittanceId={id} />
       </main>
     </div>
   )

@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { runMatchEngine, bulkCreatePatientsFromPetlove } from '@/lib/actions/petlove-matching'
+import { learnCoverageFromRemittance } from '@/lib/actions/insurance-coverage'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -826,6 +827,14 @@ export async function applyReconciliation(
     .eq('id', remittanceId)
 
   result.pending_entries_settled = pendingDownPayments
+
+  // Auto-aprendizado: refina copay_amount em insurance_plan_coverage com a média
+  // observada nesta remessa (best-effort — falha não bloqueia a conciliação).
+  try {
+    await learnCoverageFromRemittance(remittanceId)
+  } catch (err) {
+    result.errors.push(`Auto-learn cobertura: ${err instanceof Error ? err.message : String(err)}`)
+  }
 
   revalidatePath(`/dashboard/financial/insurance-reconciliation/${remittanceId}/review`)
   revalidatePath('/dashboard/financial/insurance-reconciliation')

@@ -1620,6 +1620,7 @@ export default function ConsultationDetail({
           <div className="p-6">
             <ClinicalActionsSection
               consultationId={consultation.id}
+              patientId={patient.id}
               medications={clinicalMeds}
               isFinalized={isFinalized}
               pesoKg={vital_signs?.weight ?? null}

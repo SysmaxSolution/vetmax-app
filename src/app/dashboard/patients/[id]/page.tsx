@@ -8,6 +8,7 @@ import { getInsuranceCard } from '@/lib/actions/insurance-coverage'
 import PetlovePriceHistory from '@/components/pet/PetlovePriceHistory'
 import PetlovePatientHistory from '@/components/pet/PetlovePatientHistory'
 import InsuranceCard from '@/components/pet/InsuranceCard'
+import GlosaHistoryHint from '@/components/financial/insurance/GlosaHistoryHint'
 import Link from 'next/link'
 import {
   ArrowLeft, PawPrint, User, Syringe, Calendar,
@@ -181,7 +182,10 @@ export default async function PatientProfilePage({ params }: { params: { id: str
 
         {/* Card de Convênio — resumo do plano + carência por categoria */}
         {insuranceCard?.has_insurance && (
-          <InsuranceCard data={insuranceCard} />
+          <>
+            <InsuranceCard data={insuranceCard} />
+            <GlosaHistoryHint limit={5} />
+          </>
         )}
 
         {/* Aba/Seção Preços do Convênio — só aparece se o pet tem vínculo ativo */}

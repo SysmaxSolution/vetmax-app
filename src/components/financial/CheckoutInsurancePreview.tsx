@@ -1,8 +1,14 @@
 import { Wallet, CreditCard, FileClock, ShieldCheck, TrendingDown } from 'lucide-react'
 import { previewConsultationInsurance } from '@/lib/actions/insurance-checkout'
+import TutorSummaryPrint from '@/components/financial/TutorSummaryPrint'
 
 interface Props {
   consultationId: string
+  /** Quando passados, exibe o botão "Resumo para o tutor" no rodapé. */
+  patientName?:   string
+  tutorName?:     string
+  serviceDate?:   string
+  clinicName?:    string
 }
 
 const BRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -27,7 +33,7 @@ const STATUS_LABEL: Record<string, string> = {
  * Server component: olha a consulta, cruza com o convênio do pet e mostra
  * "Você cobra X agora · Petlove cobra Y · Resta Z em A Receber".
  */
-export default async function CheckoutInsurancePreview({ consultationId }: Props) {
+export default async function CheckoutInsurancePreview({ consultationId, patientName, tutorName, serviceDate, clinicName }: Props) {
   const preview = await previewConsultationInsurance(consultationId)
 
   if ('error' in preview) {
@@ -121,11 +127,23 @@ export default async function CheckoutInsurancePreview({ consultationId }: Props
         ))}
       </ul>
 
-      <footer className="px-5 py-2 bg-sky-50/60 border-t border-sky-100 text-[10px] text-sky-700">
-        <strong>Total cheio (preço particular):</strong>{' '}
-        <span className="tabular-nums">{BRL(totals.grand_total)}</span>
-        {' · '}
-        Esta é uma prévia — clique em <em>&quot;Aplicar prévia&quot;</em> para gravar a marcação no faturamento.
+      <footer className="px-5 py-2 bg-sky-50/60 border-t border-sky-100 text-[10px] text-sky-700 flex items-center justify-between gap-3">
+        <div>
+          <strong>Total cheio (preço particular):</strong>{' '}
+          <span className="tabular-nums">{BRL(totals.grand_total)}</span>
+          {' · '}
+          Esta é uma prévia — clique em <em>&quot;Aplicar prévia&quot;</em> para gravar a marcação no faturamento.
+        </div>
+        {patientName && tutorName && (
+          <TutorSummaryPrint
+            consultationId={consultationId}
+            patientName={patientName}
+            tutorName={tutorName}
+            serviceDate={serviceDate ?? new Date().toISOString().slice(0, 10)}
+            preview={preview}
+            clinicName={clinicName}
+          />
+        )}
       </footer>
     </section>
   )

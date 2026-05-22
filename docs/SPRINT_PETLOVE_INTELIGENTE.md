@@ -1,45 +1,69 @@
-# Sprint Petlove Inteligente — Resumo e Manual
+# Sprint Petlove Inteligente — Resumo, Manual e Status Real
 
-Entregue em 2026-05-22.
+Entregue em 2026-05-22. **Auditoria + plug completo em 2026-05-22 (revisão).**
 
 ## Sumário
 
 A sprint dotou o VetMax de uma camada de inteligência sobre o convênio Petlove
-(e qualquer outro provedor que seja semeado no mesmo padrão), para responder
-antes do atendimento: "está coberto? a carência foi cumprida? quanto o tutor
-paga?", e para identificar glosas depois.
+(e qualquer outro provedor seguindo o mesmo padrão), para responder antes do
+atendimento: "está coberto? a carência foi cumprida? quanto o tutor paga?", e
+para identificar glosas depois.
+
+---
+
+## ✅ Status real (após revisão completa)
+
+| Feature | Plug | Aparece em |
+|---|---|---|
+| **Cartão Azul do Convênio** | ✅ | Perfil do pet, Triagem, Consulta MV, Exames, Internação |
+| **Selo de Cobertura (chip verde/amarelo/vermelho)** | ✅ | Ao digitar medicação na seção clínica do consultório |
+| **Caixa Inteligente** (split tutor × cartão × repasse) | ✅ | Modal de Checkout (caixa) |
+| **Resumo para o Tutor** (botão imprimir) | ✅ | Rodapé do Caixa Inteligente |
+| **Painel de Glosas** | ✅ | Tela de Revisão da Remessa |
+| **Hint de Histórico de Glosas** | ✅ | Topo da Revisão + Perfil do pet |
+| **Auto-aprendizado de copay** | ✅ | Roda automático em cada `applyReconciliation` |
 
 ---
 
 ## CHANGELOG
 
+### Migrations
+- **0176** — `pet_insurance.enrollment_date` + tabela `insurance_plan_coverage` (3 clínicas × 4 planos × 27 procedimentos = 324 registros semeados).
+
 ### Arquivos NOVOS
 
 | Arquivo | Função |
 |---|---|
-| `supabase/migrations/0176_insurance_intelligence_layer.sql` | Migration aditiva: `pet_insurance.enrollment_date` + tabela `insurance_plan_coverage`. |
-| `scripts/apply-0176-insurance-intelligence.js` | Aplicador da migration no Supabase remoto. |
-| `scripts/seed-petlove-coverage.mjs` | Seed inicial dos 4 planos Petlove (Leve, Tranquilo, Ideal, Premium) × 27 procedimentos. |
-| `src/lib/actions/insurance-coverage.ts` | Server actions: `getInsuranceCard(patientId)`, `checkProcedureCoverage(args)`, `checkBatchCoverage(args)`. |
-| `src/lib/actions/insurance-checkout.ts` | Server actions: `previewConsultationInsurance(consultationId)`, `applyCheckoutInsuranceMarking(consultationId)`. |
-| `src/lib/actions/petlove-glosas.ts` | Server actions: `getGlosasForRemittance(remittanceId)`, `getGlosaHistoryByProcedure()`. |
-| `src/components/pet/InsuranceCard.tsx` | Card no prontuário do pet com plano, carência por categoria e badges. |
-| `src/components/pet/CoverageChip.tsx` | Chip server-component reusável: `<CoverageChip patientId procedureName />`. |
-| `src/components/financial/CheckoutInsurancePreview.tsx` | Prévia do caixa: split tutor agora × cartão Petlove × repasse. |
-| `src/components/financial/TutorSummaryPrint.tsx` | Botão que abre janela de impressão com o resumo do atendimento para o tutor. |
-| `src/components/financial/insurance/GlosasDashboard.tsx` | Painel de glosas por remessa: lista, top procedimentos, perda total. |
-| `src/components/financial/insurance/GlosaHistoryHint.tsx` | Hint compacto com histórico de glosas (últimos 6 meses). |
+| `supabase/migrations/0176_insurance_intelligence_layer.sql` | Migration aditiva |
+| `scripts/apply-0176-insurance-intelligence.js` | Aplicador da migration |
+| `scripts/seed-petlove-coverage.mjs` | Seed inicial dos 4 planos × 27 procedimentos |
+| `src/lib/actions/insurance-coverage.ts` | Server actions de cobertura + auto-learn |
+| `src/lib/actions/insurance-checkout.ts` | Server actions do caixa inteligente |
+| `src/lib/actions/petlove-glosas.ts` | Server actions de glosas |
+| `src/components/pet/InsuranceCard.tsx` | Cartão de convênio (server component) |
+| `src/components/pet/CoverageChip.tsx` | Selo server (uso em telas server) |
+| `src/components/pet/CoverageChipClient.tsx` | Selo client com debounce — uso em forms |
+| `src/components/financial/CheckoutInsurancePreview.tsx` | Quadro azul do caixa |
+| `src/components/financial/TutorSummaryPrint.tsx` | Botão imprimir resumo para o tutor |
+| `src/components/financial/insurance/GlosasDashboard.tsx` | Painel vermelho de glosas |
+| `src/components/financial/insurance/GlosaHistoryHint.tsx` | Hint compacto de glosas |
 
 ### Arquivos MODIFICADOS
 
 | Arquivo | O que mudou |
 |---|---|
-| `src/app/dashboard/patients/[id]/page.tsx` | + import e renderização do `InsuranceCard` no perfil do pet. Nenhum código removido. |
-| `supabase/migrations/0176_*.sql` | + coluna `enrollment_date` em `pet_insurance` (aditiva, NULL permitido). |
-
-### Migration aplicada
-
-- **0176** — `pet_insurance.enrollment_date` + tabela `insurance_plan_coverage` (3 clínicas × 4 planos × 27 procedimentos = 324 registros semeados).
+| `src/app/dashboard/patients/[id]/page.tsx` | + import + render `InsuranceCard` + `GlosaHistoryHint` |
+| `src/app/dashboard/triage/[id]/page.tsx` | + `getInsuranceCard` + prop ao TriageForm |
+| `src/app/dashboard/vet/[id]/page.tsx` | + `getInsuranceCard` + prop ao ConsultationDetail |
+| `src/app/dashboard/exams/[id]/page.tsx` | + `getInsuranceCard` + prop ao ExamDetail |
+| `src/app/dashboard/financial/insurance-reconciliation/[id]/review/page.tsx` | + `GlosaHistoryHint` (topo) + `GlosasDashboard` (rodapé) |
+| `src/components/triage/TriageForm.tsx` | + prop `insuranceCard` + render do card |
+| `src/components/vet/ConsultationDetail.tsx` | + prop + render do card + passa `patientId` ao ClinicalActionsSection |
+| `src/components/vet/ClinicalActionsSection.tsx` | + prop `patientId` + render do `CoverageChipClient` |
+| `src/components/exams/ExamDetail.tsx` | + prop + render do card |
+| `src/components/hospitalization/HospitalizationDetailModal.tsx` | + `getInsuranceCard` via useEffect + render do card |
+| `src/components/reception/CheckoutModal.tsx` | + `CheckoutInsurancePreview` abaixo do InsuranceExportPanel |
+| `src/lib/actions/petlove-reconciliation.ts` | + chamada de `learnCoverageFromRemittance` após reconcile |
 
 ---
 
@@ -48,154 +72,161 @@ paga?", e para identificar glosas depois.
 ### 🐶 O que é Petlove?
 
 A Petlove é um plano de saúde para o pet. O tutor paga uma mensalidade e a
-Petlove paga uma parte dos atendimentos que o pet fizer na clínica. Como um
-plano de saúde de gente, só que para cachorro e gato.
+Petlove paga uma parte dos atendimentos. Como um plano de saúde de gente,
+só que para cachorro e gato.
 
 ### 💡 O que mudou no VetMax?
 
 Agora o sistema **entende quando o pet tem plano** e ajuda o veterinário a
 não errar e a não perder dinheiro.
 
-### 📋 As 5 telas novas, em linguagem simples
+### 📋 As 7 funcionalidades novas, em linguagem simples
 
-#### 1) **Cartão Azul do Convênio** (no prontuário do pet)
+#### 1) 💳 **Cartão Azul do Convênio**
 
-Quando você abre o prontuário de um pet que tem plano Petlove, agora aparece
-um **cartão azul** no topo dizendo:
+Quando você abre um pet com plano Petlove, aparece um **cartão azul** no topo
+mostrando:
 
-- Qual o plano (Leve, Tranquilo, Ideal ou Premium)
+- Plano contratado (Leve, Tranquilo, Ideal ou Premium)
 - Há quantos dias o tutor é cliente
-- Que tipos de procedimento já podem ser feitos
-- Que tipos ainda precisam esperar (carência)
+- Quais procedimentos já podem ser feitos
+- Quais ainda estão em carência (e quantos dias faltam)
 
-> **Pense assim:** é como uma "carteirinha digital" que mostra na hora se você
-> pode ou não atender aquele pet pelo plano hoje.
+**Aparece em:** Perfil do pet, Triagem, Consulta MV, Exames, Internação
 
-#### 2) **Selo de Cobertura ao escolher um procedimento**
+> **Pense assim:** é uma "carteirinha digital" sempre à vista durante o atendimento.
 
-Quando o veterinário vai marcar um procedimento (uma vacina, um exame, uma
-cirurgia), o sistema mostra um **selo colorido** dizendo:
+#### 2) 🚦 **Selo de Cobertura (semáforo)**
 
-- 🟢 **Verde** — pode fazer, está coberto. O tutor paga só R$ X de taxa.
-- 🟡 **Amarelo** — está coberto, mas o pet ainda está na carência. Falta XX
-  dias para liberar.
-- 🔴 **Vermelho** — esse procedimento não está no plano do pet. O tutor vai
-  precisar pagar valor cheio (particular).
-- ⚪ **Cinza** — sem plano ou sistema não conhece esse procedimento ainda.
+Quando o veterinário digita um nome de medicação ou procedimento, aparece um
+selo colorido logo abaixo:
 
-> **Pense assim:** semáforo. Verde pode, amarelo cuidado, vermelho não. Evita
-> fazer um procedimento que a Petlove vai recusar pagar depois.
+- 🟢 **Verde** — coberto. Mostra o copay (R$ X).
+- 🟡 **Amarelo** — coberto, mas em carência. Mostra quantos dias faltam.
+- 🔴 **Vermelho** — não coberto pelo plano. Cobrar particular.
+- ⚪ **Cinza** — sem convênio ou procedimento desconhecido.
 
-#### 3) **Caixa Inteligente** (na hora do pagamento)
+**Aparece em:** Seção clínica do prontuário (ao digitar o nome do medicamento)
 
-Antes, quando o tutor ia pagar, o caixa tinha que calcular na mão quanto era
-do tutor e quanto era do plano. Agora o sistema mostra um **quadro azul**:
+#### 3) 💰 **Caixa Inteligente**
 
-| Onde | Quanto |
+Quando o caixa abre uma fatura para cobrar, aparece um **quadro azul** com 4
+caixinhas:
+
+| Caixinha | O que significa |
 |---|---|
-| 💵 **Cobrar do tutor agora no caixa** | R$ X |
-| 💳 **Petlove vai cobrar no cartão** (em até 30 dias) | R$ Y |
-| 📄 **Vai pra "A Receber" do convênio** (a clínica recebe depois) | R$ Z |
-| 💚 **Tutor economizou** | R$ W |
+| 💵 Cobrar do tutor agora no caixa | Coparticipação que **a clínica** cobra |
+| 💳 Petlove cobra no cartão | Coparticipação que **a Petlove** cobra |
+| 📄 Vai para "A Receber" Petlove | Valor que a Petlove vai pagar no fim do mês |
+| 💚 Tutor economizou | Quanto custaria sem o plano |
 
-> **Pense assim:** uma planilha já pronta dizendo "esse aqui você cobra agora,
-> esse aqui não cobra porque a Petlove desconta do cartão dele depois".
+**Aparece em:** Modal de Checkout no caixa
 
-#### 4) **Resumo para o tutor levar pra casa**
+#### 4) 🖨️ **Resumo para o Tutor**
 
-Botão "Resumo para o tutor" — gera uma folha bonitinha para imprimir ou
-salvar em PDF mostrando ao tutor:
+Botão **"Resumo para o tutor"** no rodapé do Caixa Inteligente. Abre uma
+janela de impressão (vira PDF facilmente) com tudo que aconteceu — o tutor
+leva pra casa.
 
-- O que foi feito hoje
-- Quanto custaria sem o plano (preço cheio)
-- Quanto ele pagou no caixa
-- Quanto a Petlove vai cobrar no cartão
-- Quanto ele economizou usando o plano
+#### 5) 🚫 **Painel de Glosas**
 
-> **Pense assim:** é como aquele papel que o supermercado dá no fim mostrando
-> "você economizou R$ 50 com os descontos". Vira propaganda do bom serviço.
+Quando você abre uma remessa Petlove fechada, aparece um **painel vermelho**
+no final da página mostrando:
 
-#### 5) **Painel de Glosas** (depois que a Petlove paga)
+- Quantos atendimentos a Petlove **não pagou**
+- Quanto a clínica perdeu (R$)
+- Top procedimentos glosados
+- Lista completa atendimento por atendimento
 
-"Glosa" é quando a clínica fez o atendimento, mandou pra Petlove, mas a
-Petlove **se recusou a pagar**. Acontece muito quando falta documento,
-quando o procedimento estava em carência, ou quando passa do prazo.
+**Aparece em:** Revisão de Remessa (após a importação fechada)
 
-Agora, quando a remessa fechada da Petlove chega no sistema, aparece um
-**painel vermelho** mostrando:
+#### 6) ⚠️ **Hint de Histórico de Glosas**
 
-- Quantos atendimentos não foram pagos
-- Quanto a clínica perdeu (em reais)
-- Quais procedimentos a Petlove mais recusou pagar
-- A lista completa, atendimento por atendimento
+Caixa amarela compacta com os procedimentos que mais foram glosados nos
+últimos 6 meses. Funciona como **aviso prévio** — antes de fazer aquele
+procedimento, você lembra que a Petlove costuma recusar.
 
-> **Pense assim:** é como uma "lista do que tem que ir atrás" — sem o
-> painel, esses valores ficariam perdidos. Agora a clínica vê e pode pedir
-> revisão (recurso) na Petlove.
+**Aparece em:** Topo da Revisão de Remessa + Perfil do pet (abaixo do cartão)
+
+#### 7) 🤖 **Auto-aprendizado de Copay**
+
+Toda vez que uma remessa fechada é conciliada, o sistema **automaticamente**
+recalcula a coparticipação média de cada procedimento × plano e atualiza o
+catálogo. Procedimentos novos da Petlove que ainda não estavam no catálogo
+são **adicionados sozinhos**.
+
+**Funcionamento:** invisível ao usuário, roda em background no `applyReconciliation`.
 
 ---
 
 ### 🎯 Como usar no dia a dia
 
 #### Cenário 1: Tutor chega na recepção
-1. Você abre o prontuário do pet
-2. Vê o **cartão azul** lá em cima — confirma que tem plano Petlove ativo
-3. Olha as carências: "Cirurgia faltam 45 dias" → ainda não pode operar
-4. Atende normal
+1. Recepcionista clica no nome do pet → vê o **cartão azul** com o plano
+2. Vê a carência: "Cirurgia: 45d" → ainda não pode operar pelo plano
+3. Conversa com o tutor antes de marcar
 
-#### Cenário 2: Veterinário vai propor procedimento
-1. Antes de fazer, dá uma olhada no selo de cobertura
-2. Se for verde, faz tranquilo
-3. Se for amarelo, conversa com o tutor: "Pode esperar X dias ou paga particular?"
-4. Se for vermelho, já avisa o tutor que vai ser particular antes
+#### Cenário 2: Veterinário propõe procedimento
+1. Vet digita "Vacina Antirrábica" no campo de medicação
+2. Selo verde aparece: "Coberto · copay R$ 25,00"
+3. Faz a vacina tranquilo — sabe que a Petlove vai pagar a maior parte
+
+Outro caso:
+1. Vet digita "Cirurgia castração"
+2. Selo amarelo: "Em carência · faltam 60 dias"
+3. Conversa com tutor: "Esperar 60 dias ou paga particular?"
 
 #### Cenário 3: Cobrar no caixa
-1. Olha o quadro azul "Caixa Inteligente"
-2. Cobra do tutor só o que está em "Cobrar do tutor agora"
-3. Avisa: "A Petlove vai descontar mais R$ Y no seu cartão até 30 dias"
-4. Imprime o "Resumo para o tutor" e entrega — fideliza
+1. Caixa abre o Checkout
+2. **Quadro azul** mostra:
+   - Cobrar agora: R$ 30
+   - Petlove cobrará no cartão: R$ 12,50
+   - A receber Petlove: R$ 35
+   - Tutor economizou: R$ 22,50
+3. Cobra apenas R$ 30 do tutor
+4. Clica "Resumo para o tutor" → imprime/PDF → entrega ao tutor
 
-#### Cenário 4: Final do mês quando a Petlove paga
-1. Importa a remessa fechada como sempre
-2. Abre o "Painel de Glosas"
-3. Vê o que não veio: "Microchipagem do Bob não foi pago — R$ 10"
-4. Junta documentação e pede recurso direto na Petlove
-5. Sistema mostra o histórico — você aprende quais procedimentos a Petlove
-   mais glosa e começa a tomar cuidado
+#### Cenário 4: Final do mês, importou remessa Petlove
+1. Vai em Conciliação Petlove → abre a remessa fechada
+2. No topo, vê o **hint amarelo**: "Microchipagem foi glosada 5× nos últimos 6 meses"
+3. No rodapé, vê o **painel vermelho**: 12 atendimentos não pagos, perda R$ 178
+4. Lista mostra quais foram — junta documentação e contesta na Petlove
 
 ---
 
 ### 🛠️ Para o pessoal de tecnologia
 
-#### Como integrar em telas existentes
+#### Componentes prontos para reuso
 
-**Card de convênio** — já está no prontuário do pet automaticamente.
-
-**Chip de cobertura** — use em qualquer tela:
 ```tsx
-import CoverageChip from '@/components/pet/CoverageChip'
-<CoverageChip patientId={pet.id} procedureName="Vacina V8" />
-<CoverageChip patientId={pet.id} stockItemId={item.id} detailed />
-```
+// Card de convênio em qualquer tela server
+import InsuranceCard from '@/components/pet/InsuranceCard'
+import { getInsuranceCard } from '@/lib/actions/insurance-coverage'
 
-**Prévia do caixa** — em qualquer tela de fechamento de consulta:
-```tsx
+const card = await getInsuranceCard(patientId)
+{!('error' in card) && card.has_insurance && <InsuranceCard data={card} />}
+
+// Selo de cobertura em forms client
+import CoverageChipClient from '@/components/pet/CoverageChipClient'
+<CoverageChipClient patientId={pet.id} procedureName={medName} />
+<CoverageChipClient patientId={pet.id} stockItemId={item.id} detailed />
+
+// Prévia do caixa
 import CheckoutInsurancePreview from '@/components/financial/CheckoutInsurancePreview'
-<CheckoutInsurancePreview consultationId={consult.id} />
-```
+<CheckoutInsurancePreview
+  consultationId={consult.id}
+  patientName={pet.name}
+  tutorName={tutor.name}
+/>
 
-**Painel de glosas** — após import de remessa fechada:
-```tsx
+// Painel de glosas
 import GlosasDashboard from '@/components/financial/insurance/GlosasDashboard'
 <GlosasDashboard remittanceId={remittance.id} />
+
+// Hint de histórico de glosas
+import GlosaHistoryHint from '@/components/financial/insurance/GlosaHistoryHint'
+<GlosaHistoryHint limit={5} />
 ```
-
-#### Auto-aprendizado do catálogo
-
-A tabela `insurance_plan_coverage` foi semeada com dados públicos da Petlove.
-A cada remessa fechada importada, o sistema pode refinar `copay_amount` com a
-média observada (TODO: ativar `learnCoverageFromRemittance(remittanceId)` no
-fluxo de `applyReconciliation`).
 
 #### Estendendo para outros provedores
 
@@ -203,12 +234,20 @@ Para suportar Porto Pet Saúde, Petsaúde, etc., basta semear a tabela
 `insurance_plan_coverage` com os procedimentos × planos do novo provider.
 Toda a lógica de UI já funciona genericamente — usa `provider_id`.
 
+#### Auto-aprendizado de copay
+
+Implementado em `learnCoverageFromRemittance(remittanceId)` em
+`src/lib/actions/insurance-coverage.ts`. Roda dentro de `applyReconciliation`
+após a remessa ser conciliada. Refina copays com média móvel ponderada
+(70% histórico + 30% nova observação) e adiciona procedimentos novos ao
+catálogo automaticamente.
+
 ---
 
 ## Próximos passos sugeridos (fora do escopo)
 
-- **Auto-aprendizado de copay** alimentado pelas remessas fechadas
 - **Botão "Recurso de Glosa"** que monta o pacote (NF + prontuário + foto + autorização) e exporta PDF/ZIP
 - **API/Browser automation com Portal Petlove Central** para autorizar atendimento direto do VetMax
 - **IA preditiva de glosa** baseada em histórico (avisa amarelo antes de aprovar procedimento de risco)
 - **Catálogo de cobertura compartilhado entre clínicas** (federalizar o seed)
+- **Versão React Native do CoverageChipClient** para apps mobile da clínica

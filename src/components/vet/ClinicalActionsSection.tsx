@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Syringe, Plus, Trash2, Loader2, Check, ChevronDown, Pencil, AlertTriangle } from 'lucide-react'
 import type { AppliedMedication } from '@/lib/actions/pharmacy'
+import CoverageChipClient from '@/components/pet/CoverageChipClient'
 
 // ─── DCBs Controlados (CFMV — Receita de Controle Especial) ──────────────────
 // Lista B1/B2 (psicotrópicos) e Lista A (entorpecentes)
@@ -29,6 +30,7 @@ function isControlledDrug(name: string): boolean {
 
 interface Props {
   consultationId: string
+  patientId?: string
   medications: AppliedMedication[]
   isFinalized: boolean
   pesoKg?: number | null
@@ -57,7 +59,7 @@ const ROUTE_LABELS: Record<string, string> = {
 // ─── Componente ───────────────────────────────────────────────────────────────
 
 export default function ClinicalActionsSection({
-  medications, isFinalized, pesoKg, onAdd, onDelete, onUpdate,
+  patientId, medications, isFinalized, pesoKg, onAdd, onDelete, onUpdate,
 }: Props) {
   const [showForm,       setShowForm]       = useState(false)
   const [medName,        setMedName]        = useState('')
@@ -189,6 +191,12 @@ export default function ClinicalActionsSection({
                   <AlertTriangle className="w-3 h-3 flex-shrink-0" />
                   <span className="font-semibold">Receita de Controle Especial</span>
                   <span className="text-blue-500">— exige receituário azul/especial (CFMV)</span>
+                </div>
+              )}
+              {/* Selo de cobertura do convênio (cobre vacinas e medicações mapeadas no catálogo) */}
+              {patientId && medName.trim().length > 2 && (
+                <div className="mt-1.5">
+                  <CoverageChipClient patientId={patientId} procedureName={medName} />
                 </div>
               )}
             </div>
