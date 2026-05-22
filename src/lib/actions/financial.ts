@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/server'
 
 export type EntryType   = 'receivable' | 'payable'
 export type EntryStatus = 'pending' | 'paid' | 'cancelled'
-export type EntrySource = 'manual' | 'cashier'
+export type EntrySource = 'manual' | 'cashier' | 'petlove' | 'petlove_indicacao' | 'petlove_open' | 'commission'
 
 export interface FinancialEntry {
   id:                   string
@@ -43,6 +43,9 @@ export interface FinancialEntry {
   source:               EntrySource
   cashier_entry_id:     string | null
   cashier_outflow_id:   string | null
+  // vínculo com invoice mestre (duplicatas) + flag de ajuste contábil
+  invoice_id:           string | null
+  is_clinic_discount:   boolean
 }
 
 export interface FinancialSummary {
@@ -276,6 +279,10 @@ export async function listEntries(
     .select(ENTRY_SELECT)
     .eq('clinic_id', clinicId)
     .eq('type', filters.type)
+    // Oculta entries de ajuste contábil (descontos de convênio aplicados via
+    // split do caixa). Aparecem no histórico da invoice via InvoiceDuplicatasList,
+    // mas NÃO devem poluir a lista de A Receber/A Pagar.
+    .eq('is_clinic_discount', false)
     .order('due_date', { ascending: true })
     .order('created_at', { ascending: false })
 
@@ -293,6 +300,134 @@ export async function listEntries(
   const { data, error } = await query.limit(500)
   if (error) return { error: 'Erro ao buscar títulos: ' + error.message }
   return (data ?? []).map(row => mapEntry(row as unknown as Record<string, unknown>))
+}
+
+// ─── getEntryContext ─────────────────────────────────────────────────────────
+// Retorna informações contextuais sobre um entry para a UI exibir mensagens
+// inteligentes (ex.: "Aguardando repasse Petlove — tutor pagou R$ X em DD/MM").
+//
+// Para entries vinculados a uma invoice (invoice_id), retorna:
+//   • outras duplicatas paid (source='cashier', não is_clinic_discount) com
+//     valor e data — representam quanto o tutor já desembolsou
+//   • clinic_discount entry da invoice — desconto contábil oferecido ao plano
+//   • total_amount e paid_amount atuais da invoice
+
+export interface EntryContext {
+  entry_id:           string
+  source:             EntrySource
+  is_clinic_discount: boolean
+  invoice_id:         string | null
+  /** Outras baixas (paid) da mesma invoice — quanto o tutor já desembolsou. */
+  paid_in_cashier: Array<{
+    id:             string
+    amount:         number
+    payment_date:   string
+    payment_method: string | null
+  }>
+  /** Desconto contábil oferecido ao plano (se aplicável). */
+  clinic_discount?: { amount: number; description: string }
+  /** Estado da invoice mestre. */
+  invoice?: {
+    id:           string
+    subtotal:     number
+    total_amount: number
+    paid_amount:  number
+    discount:     number
+    status:       string
+  }
+  /** Mensagem pronta para exibir como aviso na UI. */
+  message?:           string
+  /** Tipo de confirmação sugerido ao baixar este entry. */
+  confirm_kind?:      'petlove_repass' | 'standard'
+}
+
+export async function getEntryContext(entryId: string): Promise<EntryContext | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  const admin = createAdminClient()
+
+  const { data: entry } = await admin
+    .from('financial_entries')
+    .select('id, invoice_id, source, is_clinic_discount, amount')
+    .eq('clinic_id', clinicId)
+    .eq('id', entryId)
+    .maybeSingle()
+  if (!entry) return { error: 'Lançamento não encontrado.' }
+
+  const result: EntryContext = {
+    entry_id:           entry.id,
+    source:             entry.source as EntrySource,
+    is_clinic_discount: Boolean(entry.is_clinic_discount),
+    invoice_id:         entry.invoice_id ?? null,
+    paid_in_cashier:    [],
+    confirm_kind:       entry.source === 'petlove_open' ? 'petlove_repass' : 'standard',
+  }
+
+  if (!entry.invoice_id) {
+    return result
+  }
+
+  // Carrega outras duplicatas paid (caixa) + invoice mestre + entry de desconto
+  const { data: invoice } = await admin
+    .from('invoices')
+    .select('id, subtotal, total_amount, paid_amount, discount, status')
+    .eq('id', entry.invoice_id)
+    .maybeSingle()
+
+  if (invoice) {
+    result.invoice = {
+      id:           invoice.id,
+      subtotal:     Number((invoice as { subtotal: number }).subtotal),
+      total_amount: Number((invoice as { total_amount: number }).total_amount),
+      paid_amount:  Number((invoice as { paid_amount: number }).paid_amount ?? 0),
+      discount:     Number((invoice as { discount: number }).discount ?? 0),
+      status:       (invoice as { status: string }).status,
+    }
+  }
+
+  const { data: paidEntries } = await admin
+    .from('financial_entries')
+    .select('id, amount, payment_date, payment_method')
+    .eq('clinic_id', clinicId)
+    .eq('invoice_id', entry.invoice_id)
+    .eq('status', 'paid')
+    .eq('source', 'cashier')
+    .eq('is_clinic_discount', false)
+    .order('payment_date', { ascending: true })
+
+  result.paid_in_cashier = (paidEntries ?? []).map(e => ({
+    id:             (e as { id: string }).id,
+    amount:         Number((e as { amount: number }).amount),
+    payment_date:   (e as { payment_date: string }).payment_date,
+    payment_method: (e as { payment_method: string | null }).payment_method,
+  }))
+
+  const { data: discountEntry } = await admin
+    .from('financial_entries')
+    .select('amount, description')
+    .eq('clinic_id', clinicId)
+    .eq('invoice_id', entry.invoice_id)
+    .eq('is_clinic_discount', true)
+    .maybeSingle()
+  if (discountEntry) {
+    result.clinic_discount = {
+      amount:      Number((discountEntry as { amount: number }).amount),
+      description: (discountEntry as { description: string }).description,
+    }
+  }
+
+  // Monta mensagem pronta para o aviso na UI
+  if (entry.source === 'petlove_open' && entry.is_clinic_discount === false) {
+    const totalPaidInCashier = result.paid_in_cashier.reduce((s, p) => s + p.amount, 0)
+    const lastPaid = result.paid_in_cashier[result.paid_in_cashier.length - 1]
+    const dateBR = lastPaid ? lastPaid.payment_date.split('-').reverse().join('/') : null
+    const ticketNum = entry.invoice_id.slice(0, 8).toUpperCase()
+    result.message = totalPaidInCashier > 0
+      ? `Aguardando repasse da PetLove · #${ticketNum} · Tutor já pagou R$ ${totalPaidInCashier.toFixed(2).replace('.', ',')} em ${dateBR}`
+      : `Aguardando repasse da PetLove · #${ticketNum}`
+  }
+
+  return result
 }
 
 // ─── updateEntry ──────────────────────────────────────────────────────────────
@@ -1337,6 +1472,8 @@ function mapEntry(raw: Record<string, unknown>): FinancialEntry {
     source:               (raw.source              as EntrySource) ?? 'manual',
     cashier_entry_id:     (raw.cashier_entry_id    as string | null) ?? null,
     cashier_outflow_id:   (raw.cashier_outflow_id  as string | null) ?? null,
+    invoice_id:           (raw.invoice_id          as string | null) ?? null,
+    is_clinic_discount:   Boolean(raw.is_clinic_discount),
   }
 }
 

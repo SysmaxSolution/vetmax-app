@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useTransition } from 'react'
-import { X, Loader2, Trash2, CheckCircle, AlertCircle, RotateCcw, Hash } from 'lucide-react'
+import { useState, useEffect, useTransition } from 'react'
+import { X, Loader2, Trash2, CheckCircle, AlertCircle, RotateCcw, Hash, ShieldCheck } from 'lucide-react'
 import {
   createEntry, updateEntry, deleteEntry, baixarTitulo, reverseFinancialEntry,
-  type FinancialEntry, type EntryType, type BaixarTituloData,
+  getEntryContext,
+  type FinancialEntry, type EntryType, type BaixarTituloData, type EntryContext,
 } from '@/lib/actions/financial'
 
 // ─── Static lists ─────────────────────────────────────────────────────────────
@@ -93,6 +94,18 @@ export default function TituloModal({
   const [professionalId,    setProfessionalId]     = useState(entry?.professional_id ?? currentUserId ?? '')
   const [notes,             setNotes]              = useState(entry?.notes ?? '')
 
+  // ── Contexto do entry (info contextual: invoice mestre, valores já recebidos) ──
+  const [entryContext, setEntryContext] = useState<EntryContext | null>(null)
+  useEffect(() => {
+    if (!entry?.id || innerMode !== 'baixar') return
+    let cancelled = false
+    getEntryContext(entry.id).then(res => {
+      if (cancelled || 'error' in res) return
+      setEntryContext(res)
+    })
+    return () => { cancelled = true }
+  }, [entry?.id, innerMode])
+
   // ── Campos da baixa ────────────────────────────────────────────────────────
   const [paymentDate,       setPaymentDate]        = useState(entry?.payment_date ?? todayStr())
   const [paymentMethod,     setPaymentMethod]      = useState(entry?.payment_method ?? '')
@@ -171,6 +184,13 @@ export default function TituloModal({
     setError(null)
     if (!paymentDate)   { setError('Informe a data de recebimento.'); return }
     if (!paymentMethod) { setError('Informe a modalidade de recebimento.'); return }
+
+    // Confirmação extra para repasse Petlove
+    if (entryContext?.confirm_kind === 'petlove_repass') {
+      if (!confirm('Documento aguardando repasse. Deseja confirmar o recebimento do repasse da Petlove?')) {
+        return
+      }
+    }
 
     startTransition(async () => {
       const data: BaixarTituloData = {
@@ -402,6 +422,47 @@ export default function TituloModal({
                 </div>
               </div>
 
+              {/* Banner contexto Petlove (aparece apenas se source='petlove_open') */}
+              {entryContext?.confirm_kind === 'petlove_repass' && (
+                <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3">
+                  <div className="flex items-start gap-2.5">
+                    <ShieldCheck className="h-4 w-4 text-sky-600 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-sky-900">
+                        {entryContext.message ?? 'Aguardando repasse da PetLove'}
+                      </p>
+                      {entryContext.paid_in_cashier.length > 0 && (
+                        <ul className="mt-1.5 space-y-0.5 text-[11px] text-sky-800">
+                          {entryContext.paid_in_cashier.map(p => (
+                            <li key={p.id}>
+                              ✓ Tutor pagou <strong>R$ {p.amount.toFixed(2).replace('.', ',')}</strong>
+                              {p.payment_method && ` em ${p.payment_method.toUpperCase()}`}
+                              {' · '}
+                              {p.payment_date.split('-').reverse().join('/')}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {entryContext.clinic_discount && (
+                        <p className="mt-1 text-[11px] text-sky-700">
+                          Desconto convênio aplicado: R$ {entryContext.clinic_discount.amount.toFixed(2).replace('.', ',')}
+                        </p>
+                      )}
+                      {entryContext.invoice && (
+                        <p className="mt-1.5 text-[10px] text-sky-600 font-mono">
+                          Fatura #{entryContext.invoice.id.slice(0, 8).toUpperCase()} ·
+                          {' '}Total a receber pelo plano: R$ {entryContext.invoice.total_amount.toFixed(2).replace('.', ',')}
+                        </p>
+                      )}
+                      <p className="mt-2 text-[11px] text-sky-700 italic">
+                        Ao confirmar, este título será baixado como repasse Petlove recebido.
+                        Normalmente isso acontece automaticamente ao importar a remessa fechada do mês.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Data + Banco */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
@@ -611,7 +672,9 @@ export default function TituloModal({
                   className="flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60 transition-colors"
                 >
                   {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
-                  {isReceivable ? 'Confirmar Recebimento' : 'Confirmar Pagamento'}
+                  {entryContext?.confirm_kind === 'petlove_repass'
+                    ? 'Confirmar Repasse Petlove'
+                    : (isReceivable ? 'Confirmar Recebimento' : 'Confirmar Pagamento')}
                 </button>
               ) : (
                 <button

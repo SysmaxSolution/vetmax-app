@@ -69,6 +69,18 @@ function StatusBadge({ entry }: { entry: FinancialEntry }) {
   if (entry.status === 'cancelled') {
     return <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">Cancelado</span>
   }
+  // Pending vinculado a convênio Petlove em aberto — aviso visual específico
+  if (entry.status === 'pending' && entry.source === 'petlove_open') {
+    return (
+      <span
+        className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-700"
+        title="Aguardando repasse da PetLove. Será baixado automaticamente quando a remessa fechada do período chegar."
+      >
+        <span className="h-1.5 w-1.5 rounded-full bg-sky-500" />
+        Aguardando Petlove
+      </span>
+    )
+  }
   if (isOverdue(entry)) {
     return <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">Atrasado</span>
   }
