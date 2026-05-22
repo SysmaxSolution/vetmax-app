@@ -584,10 +584,31 @@ function readRepeaterSource(source: RepeaterElement['source'], ctx?: ResolveCont
 }
 
 function applyItemTemplate(template: string, item: Record<string, unknown>): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => {
+  // 1. Substitui {{key}} pelo valor (string vazia se ausente).
+  const raw = template.replace(/\{\{(\w+)\}\}/g, (_, key) => {
     const v = item[key]
-    return v === null || v === undefined ? '' : String(v)
+    if (v === null || v === undefined) return ''
+    const s = String(v).trim()
+    return s
   })
+  // 2. Limpa "separadores órfãos" — quando o template é
+  //    "{{medication}} — {{dose}} · {{frequency}} · {{duration_days}} dias"
+  //    e os campos estão vazios, sobra "Amoxilina —  ·  ·  dias".
+  //    Remove: sufixos pendurados " · ·", "—  ·", " · dias" final sem número, etc.
+  return raw
+    // separadores duplicados consecutivos: " · ·" → " ·"; " —  ·" → " ·"
+    .replace(/\s*[—–|·•]\s*(?=[—–|·•])/g, '')
+    // separador imediatamente antes de "dias"/"vez(es)" sem número antes
+    .replace(/[—–|·•]\s*(dias?|vezes?|horas?|h)\b/gi, '$1')
+    // separador no fim da string
+    .replace(/\s*[—–|·•]\s*$/g, '')
+    // separador logo no começo
+    .replace(/^\s*[—–|·•]\s*/g, '')
+    // sequência de palavras-unidade sem valor: " dias" no final
+    .replace(/(?:^|\s)(dias?|vezes?|horas?)\s*$/i, '')
+    // colapsa espaços múltiplos
+    .replace(/\s{2,}/g, ' ')
+    .trim()
 }
 
 function labelForSource(source: RepeaterElement['source']): string {

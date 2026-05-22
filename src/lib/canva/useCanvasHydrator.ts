@@ -26,7 +26,9 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ResolveContext } from './dynamic-tags'
-import { parseMedicamentosText, type ParsedPrescription } from './parse-medicamentos'
+import {
+  parseMedicamentosText, prescriptionsHaveStructure, type ParsedPrescription,
+} from './parse-medicamentos'
 
 export type HydratorStatus = 'idle' | 'parsing' | 'extracting' | 'ready' | 'error'
 export type PrescriptionsSource = 'db' | 'parser' | 'ai' | 'mixed' | 'empty'
@@ -99,16 +101,25 @@ export function useCanvasHydrator(
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
+  // O parser produziu itens estruturados (com dose/freq/duração)?
+  // Se não, mesmo com `parsed.length > 0` precisamos chamar a IA para
+  // tentar extrair estrutura — caso contrário o template renderiza
+  // "Amoxilina — · · dias" com separadores órfãos.
+  const parserIsStructured = useMemo(
+    () => prescriptionsHaveStructure(parsedPrescriptions),
+    [parsedPrescriptions],
+  )
+
   // Texto enviado à IA: anamnese extra (vet_notes do consultório editado)
-  // + medicamentos quando o parser determinístico não capturou tudo.
+  // + medicamentos quando o parser não conseguiu estruturar.
   const aiInputText = useMemo(() => {
     const parts: string[] = []
     if (live.anamneseExtra?.trim()) parts.push(live.anamneseExtra.trim())
-    if ((live.medicamentos?.trim().length ?? 0) > 0 && parsedPrescriptions.length === 0) {
+    if ((live.medicamentos?.trim().length ?? 0) > 0 && !parserIsStructured) {
       parts.push(live.medicamentos!.trim())
     }
     return parts.join('\n\n')
-  }, [live.anamneseExtra, live.medicamentos, parsedPrescriptions.length])
+  }, [live.anamneseExtra, live.medicamentos, parserIsStructured])
 
   useEffect(() => {
     // Desliga IA quando: feature off, banco já tem prescrições reais
@@ -189,9 +200,17 @@ export function useCanvasHydrator(
       }
     }
     const fromAi = aiPrescriptions && aiPrescriptions.length > 0
-    if (parsedPrescriptions.length > 0 && fromAi) {
-      // Parser + IA → preferência ao parser (mais conservador, sem alucinação),
-      // mas usa AI items que tenham medication nova (não duplicado).
+    // Quando o parser NÃO trouxe estrutura mas a IA trouxe, a IA vence
+    // (evita item bruto sem dose/freq/duração no template).
+    if (!parserIsStructured && fromAi) {
+      return {
+        effectivePrescriptions: aiPrescriptions!.map(enrichItem),
+        prescriptionsSource: 'ai' as PrescriptionsSource,
+      }
+    }
+    if (parserIsStructured && fromAi) {
+      // Parser estruturado + IA → preferência ao parser, IA adiciona itens
+      // não duplicados (nome diferente).
       const seen = new Set(parsedPrescriptions.map(p => p.medication.toLowerCase()))
       const extra = aiPrescriptions!.filter(p => !seen.has(p.medication.toLowerCase()))
       return {
@@ -213,7 +232,7 @@ export function useCanvasHydrator(
     }
     return { effectivePrescriptions: [], prescriptionsSource: 'empty' as PrescriptionsSource }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dbPrescriptions, parsedPrescriptions, aiPrescriptions, live.posologia, live.observacoes])
+  }, [dbPrescriptions, parsedPrescriptions, parserIsStructured, aiPrescriptions, live.posologia, live.observacoes])
 
   const hydratedContext = useMemo<ResolveContext | undefined>(() => {
     if (!initialContext) return initialContext

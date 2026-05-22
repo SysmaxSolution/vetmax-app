@@ -14,7 +14,7 @@
 // Convenção respeitada pelo diretório `src/lib/ai/`.
 import Anthropic from '@anthropic-ai/sdk'
 import type { ParsedPrescription } from '@/lib/canva/parse-medicamentos'
-import { parseMedicamentosText } from '@/lib/canva/parse-medicamentos'
+import { parseMedicamentosText, prescriptionsHaveStructure } from '@/lib/canva/parse-medicamentos'
 
 export interface ExtractedAnamneseEntities {
   prescriptions: ParsedPrescription[]
@@ -145,13 +145,22 @@ export async function extractEntitiesFromAnamneseCore(
   }
 
   // Parser determinístico primeiro — quando o vet colou linha-a-linha
-  // bem formatada, evita chamada custosa à IA.
+  // bem formatada (ex: "Dipirona — 1 mL · a cada 8h · 5 dias"), evita
+  // chamada custosa à IA. Só aceita o resultado se for ESTRUTURADO
+  // (pelo menos um item com dose/frequência/duração). Sem isso, um
+  // medicamento solto vira { medication: "Amoxilina" } e o template
+  // renderiza separadores vazios — melhor deixar a IA tentar.
   const parsed = parseMedicamentosText(raw)
-  if (parsed.length > 0) {
+  if (prescriptionsHaveStructure(parsed)) {
     return { prescriptions: parsed, confidence: 'high', source: 'parser' }
   }
 
   if (!process.env.ANTHROPIC_API_KEY || !looksLikePrescription(raw)) {
+    // Sem IA disponível: devolve o que o parser conseguiu (mesmo sem
+    // estrutura) — melhor que vazio. Mas com confiança baixa.
+    if (parsed.length > 0) {
+      return { prescriptions: parsed, confidence: 'low', source: 'parser' }
+    }
     return { prescriptions: [], confidence: 'high', source: 'empty' }
   }
 

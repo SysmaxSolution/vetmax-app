@@ -36,6 +36,19 @@ export interface ParsedPrescription {
 const CONTROLLED_RE  = /\b(controlad[ao]|controll?ed|receituario azul|azul)\b/i
 const MANIPULATED_RE = /\b(manipulad[ao]|manipulated|manipula[çc][aã]o)\b/i
 
+// Linhas em prosa narrativa ("Receitarei ao tutor...", "Vou prescrever...")
+// NÃO são candidatas ao parser determinístico — extrair estrutura delas
+// é trabalho da IA (extractEntitiesFromAnamneseCore). Se aceitas aqui,
+// o texto inteiro vira `medication` e os campos dose/freq/duration ficam
+// vazios, sujando o template com separadores órfãos.
+const PROSE_INTRO_RE =
+  /^\s*(receitar(ei)?|receito|vou (receitar|prescrever|indicar)|prescr(everei|evo|i[cç][aã]o)|indic(o|arei|a)\b|administrar|aplicar|iniciar (tratamento|com)|manter (com )?|tratamento com)\b/i
+
+// Heurística de "tem estrutura" usada pelo extractor para decidir se o
+// parser produziu algo aproveitável. Linhas com pelo menos 2 separadores
+// fortes contam como estruturadas.
+const STRONG_SEPARATOR_RE = /\s*[—–|·•]\s*/g
+
 const ROUTE_KEYWORDS: Array<[RegExp, ParsedPrescription['route_of_administration']]> = [
   [/\b(t[oó]pic[ao]|topical|pomada|creme)\b/i,    'topical'],
   [/\b(intravenos[ao]|endovenos[ao]|i\.?v\.?|ev)\b/i, 'intravenous'],
@@ -64,10 +77,15 @@ function parseDurationDays(token: string | undefined): string | undefined {
 }
 
 /** Tenta parsear UMA linha "Nome - Dose - Frequência - Duração" em
- *  qualquer ordem dos separadores comuns. */
+ *  qualquer ordem dos separadores comuns. Devolve null para linhas em
+ *  prosa narrativa (deixa a IA estruturar) — evita sujar o template com
+ *  o texto bruto colocado em `medication`. */
 function parseLine(rawLine: string): ParsedPrescription | null {
   const line = rawLine.trim()
   if (!line) return null
+
+  // Prosa narrativa: rejeita e deixa a IA decidir.
+  if (PROSE_INTRO_RE.test(line)) return null
 
   const isControlled  = CONTROLLED_RE.test(line)
   const isManipulated = MANIPULATED_RE.test(line)
@@ -78,11 +96,14 @@ function parseLine(rawLine: string): ParsedPrescription | null {
   if (parts.length < 2) {
     parts = line.split(/\s+-\s+/).map(stripTags).filter(Boolean)
   }
+
+  // Sem separador algum E mais de 6 palavras → muito provavelmente
+  // prosa não-estruturada. Rejeita para a IA tentar.
+  if (parts.length < 2 && line.split(/\s+/).length > 6) return null
   if (parts.length === 0) return null
 
   const [medication, dose, frequency, duration] = parts
 
-  // Linha sem separadores — joga tudo em medication.
   const item: ParsedPrescription = {
     medication: stripTags(medication ?? line),
     dose: dose?.trim() || undefined,
@@ -94,6 +115,12 @@ function parseLine(rawLine: string): ParsedPrescription | null {
   }
   if (!item.medication) return null
   return item
+}
+
+/** True quando ao menos um item carrega informação útil além de
+ *  `medication`. O extractor usa para decidir se chama a IA. */
+export function prescriptionsHaveStructure(items: ParsedPrescription[]): boolean {
+  return items.some(p => Boolean(p.dose || p.frequency || p.duration_days))
 }
 
 /** Parse do conteúdo bruto do textarea em uma lista de prescrições. */
