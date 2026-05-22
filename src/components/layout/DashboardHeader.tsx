@@ -57,6 +57,9 @@ interface DashboardHeaderProps {
   userRole:       UserRole
   logoUrl?:       string | null
   activeModules?: string[] | null
+  /** Módulos que o admin liberou EXPLICITAMENTE para este usuário, mesmo que
+   *  o role padrão não os incluísse. Override por usuário. */
+  roleOverrides?: string[]
   lowStockCount?:        number
   whatsappHandoffCount?: number
   userClinics?:          UserClinicInfo[]
@@ -77,6 +80,7 @@ export default function DashboardHeader({
   userRole,
   logoUrl,
   activeModules,
+  roleOverrides = [],
   lowStockCount = 0,
   whatsappHandoffCount = 0,
   userClinics,
@@ -121,8 +125,12 @@ export default function DashboardHeader({
     setMobileOpen(false)
   }
 
+  const overrideSet = new Set(roleOverrides)
   const tabs = ALL_TABS.filter(tab => {
-    if (!tab.roles.includes(userRole)) return false
+    // Override explícito: se o admin liberou esse módulo para o usuário em
+    // user_module_access, mostra mesmo que o role padrão não o inclua.
+    const isOverridden = tab.moduleKey ? overrideSet.has(tab.moduleKey) : false
+    if (!isOverridden && !tab.roles.includes(userRole)) return false
     if (tab.moduleKey && activeModules) {
       return activeModules.includes(tab.moduleKey)
     }

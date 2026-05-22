@@ -144,6 +144,14 @@ export default async function DashboardLayout({
       .filter((r: any) => r.enabled === false)
       .map((r: any) => r.module_name as string)
   )
+  // Override explícito do admin: módulos que o admin marcou como `enabled=true`
+  // em user_module_access. Esses devem aparecer no menu MESMO QUE o role padrão
+  // não os habilite (ex.: receptionist com acesso liberado ao Consultório).
+  const userEnabledOverrides = new Set(
+    (userModuleRows ?? [])
+      .filter((r: any) => r.enabled === true)
+      .map((r: any) => r.module_name as string)
+  )
   const activeModules = clinicModules.filter(m => !userDisabled.has(m))
 
   // Esconder-em-vez-de-bloquear: se o usuário acessa diretamente a URL de um
@@ -180,6 +188,7 @@ export default async function DashboardLayout({
         userRole={profile.role as any}
         logoUrl={clinicConfig?.logo_url ?? null}
         activeModules={activeModules.length > 0 ? activeModules : null}
+        roleOverrides={Array.from(userEnabledOverrides)}
         lowStockCount={lowStockCount}
         whatsappHandoffCount={whatsappHandoffCount}
         userClinics={isSysmax ? userClinics : (userClinics.length > 1 ? userClinics : undefined)}

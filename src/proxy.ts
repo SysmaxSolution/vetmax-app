@@ -126,15 +126,32 @@ export async function proxy(request: NextRequest) {
     const role = request.cookies.get(ROLE_COOKIE)?.value ?? 'admin'
 
     if (!isRoleAllowed(role, pathname)) {
-      // Esconde em vez de bloquear: redireciona silenciosamente para a home
-      // do role do usuário, sem banner "Acesso negado". Os links dos módulos
-      // sem permissão já não aparecem no DashboardHeader graças ao filtro de
-      // activeModules — esse redirect é a rede de segurança para URLs digitadas.
-      const home = ROLE_HOME[role as UserRole] ?? '/dashboard/reception'
-      const redirectUrl = request.nextUrl.clone()
-      redirectUrl.pathname = home
-      redirectUrl.search = ''
-      return NextResponse.redirect(redirectUrl)
+      // Override por usuário: o admin pode ter liberado explicitamente esse
+      // módulo em user_module_access (enabled=true), mesmo que o role padrão
+      // não o permita. Consultamos antes de bloquear.
+      const moduleFromPath = pathname.split('/')[2] // /dashboard/<module>/...
+      let overridden = false
+      if (moduleFromPath) {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          const { data: row } = await supabase
+            .from('user_module_access')
+            .select('enabled')
+            .eq('user_id', user.id)
+            .eq('module_name', moduleFromPath)
+            .maybeSingle()
+          if (row?.enabled === true) overridden = true
+        }
+      }
+      if (!overridden) {
+        // Esconde em vez de bloquear: redireciona silenciosamente para a home
+        // do role do usuário, sem banner "Acesso negado".
+        const home = ROLE_HOME[role as UserRole] ?? '/dashboard/reception'
+        const redirectUrl = request.nextUrl.clone()
+        redirectUrl.pathname = home
+        redirectUrl.search = ''
+        return NextResponse.redirect(redirectUrl)
+      }
     }
   }
 
