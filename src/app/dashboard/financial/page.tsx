@@ -1,6 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
-import { redirect } from 'next/navigation'
+import { requireModuleAccess } from '@/lib/server/require-module'
 import {
   listEntries, getFinancialSummary,
   listBankAccounts, listChartOfAccounts, listCreditCards, listEmployees,
@@ -11,19 +9,7 @@ import FinancialWorkspace from '@/components/financial/FinancialWorkspace'
 export const metadata = { title: 'Financeiro | SysVetMax' }
 
 export default async function FinancialPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const admin = createAdminClient()
-  const { data: profile } = await admin
-    .from('profiles')
-    .select('role, clinic_id')
-    .eq('id', user.id)
-    .single()
-
-  if (!profile || profile.role !== 'admin') redirect('/dashboard')
-
+  const profile = await requireModuleAccess('financial')
   const isAdmin = profile.role === 'admin'
 
   const [
@@ -60,7 +46,7 @@ export default async function FinancialPage() {
       initialEmployees={Array.isArray(employeesRes) ? employeesRes : []}
       isAdmin={isAdmin}
       clinicProfiles={clinicProfilesRes}
-      currentUserId={user.id}
+      currentUserId={profile.id}
     />
   )
 }

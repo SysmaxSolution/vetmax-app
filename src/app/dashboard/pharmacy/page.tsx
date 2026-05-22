@@ -1,32 +1,21 @@
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { redirect } from 'next/navigation'
+import { requireModuleAccess } from '@/lib/server/require-module'
 import { getPharmacyStockV2 } from '@/lib/actions/stock'
 import PharmacyWorkspace from '@/components/pharmacy/PharmacyWorkspace'
 
 export const metadata = { title: 'Estoque | SysVetMax' }
 
 export default async function PharmacyPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+  const profile = await requireModuleAccess('pharmacy')
 
+  // Re-busca active_modules da clínica caso seja necessário para feature flags
   const admin = createAdminClient()
-  const { data: profile } = await admin
-    .from('profiles')
-    .select('role, clinic_id')
-    .eq('id', user.id)
+  const { data: clinicRow } = await admin
+    .from('clinics')
+    .select('active_modules')
+    .eq('id', profile.clinic_id)
     .single()
-
-  if (!profile || !['admin', 'vet'].includes(profile.role)) redirect('/dashboard')
-
-  let activeModules: string[] = []
-  if (profile.clinic_id) {
-    const { data: clinicRow } = await supabase.from('clinics').select('active_modules').eq('id', profile.clinic_id).single()
-    const mods = clinicRow?.active_modules as string[] | null
-    if (mods && !mods.includes('pharmacy')) redirect('/dashboard')
-    activeModules = mods ?? []
-  }
+  const activeModules = (clinicRow?.active_modules as string[] | null) ?? []
 
   const stockResult = await getPharmacyStockV2()
   const stock = Array.isArray(stockResult) ? stockResult : []

@@ -1,6 +1,4 @@
-﻿import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
-import { redirect } from 'next/navigation'
+﻿import { requireModuleAccess } from '@/lib/server/require-module'
 import { listCashierEntries, getCashierSummary } from '@/lib/actions/core-management'
 import { getCashierDashboard, getCurrentSession, listOutflows } from '@/lib/actions/cashier-sessions'
 import { getPendingInvoices } from '@/lib/actions/billing'
@@ -9,23 +7,8 @@ import CashierPageClient from '@/components/cashier/CashierPageClient'
 
 export const metadata = { title: 'Caixa | SysVetMax' }
 
-const ALLOWED_ROLES = ['admin', 'owner', 'manager', 'accountant', 'receptionist']
-
 export default async function CashierPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const admin = createAdminClient()
-  const { data: profile } = await admin
-    .from('profiles')
-    .select('full_name, role, clinic_id, clinics(name)')
-    .eq('id', user.id)
-    .single()
-
-  if (!profile?.clinic_id) redirect('/onboarding')
-  if (!ALLOWED_ROLES.includes(profile.role)) redirect('/dashboard')
-
+  const profile = await requireModuleAccess('cashier')
   const clinicName = (profile.clinics as unknown as { name: string } | null)?.name ?? 'Minha Clínica'
 
   const today        = new Date().toISOString().split('T')[0]
