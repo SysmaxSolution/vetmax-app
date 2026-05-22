@@ -249,6 +249,7 @@ export default function ConsultationDetail({
   // WhatsApp ao dar alta
   const [attachDocsOnDischarge, setAttachDocsOnDischarge] = useState(false)
   const [showWhatsAppDischarge, setShowWhatsAppDischarge] = useState(false)
+  const [voiceConfirmedWA, setVoiceConfirmedWA] = useState(false)
   const [savedDocTitles, setSavedDocTitles] = useState<string[]>([])
 
   // WhatsApp ao internar
@@ -467,6 +468,10 @@ export default function ConsultationDetail({
 
   const voiceAssistant = useClinicalVoiceAssistant({
     onAutoSave: handleVoiceAutoSave,
+    onSendWA: () => {
+      setVoiceConfirmedWA(true)
+      setShowWhatsAppDischarge(true)
+    },
     startTriggers,
     stopTriggers,
   })
@@ -783,7 +788,8 @@ export default function ConsultationDetail({
       {showWhatsAppDischarge && tutor.phone && (
         <WhatsAppNotificationModal
           isOpen={showWhatsAppDischarge}
-          onClose={() => { setShowWhatsAppDischarge(false); router.push('/dashboard/vet') }}
+          autoSend={voiceConfirmedWA}
+          onClose={() => { setShowWhatsAppDischarge(false); setVoiceConfirmedWA(false); router.push('/dashboard/vet') }}
           trigger={attachDocsOnDischarge && savedDocTitles.length > 0 ? 'documents_sent' : 'consultation_finished'}
           context={{
             petName:        patient.name,

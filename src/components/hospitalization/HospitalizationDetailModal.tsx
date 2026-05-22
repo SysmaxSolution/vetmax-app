@@ -52,6 +52,10 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
   // WhatsApp
   type WhatsAppPendingCtx = { trigger: 'hospitalization_evolution_saved' | 'hospitalization_discharge'; notes: string; statusSaved: 'piorou' | 'estavel' | 'melhorou'; medNames: string[]; attachedDocNames?: string[] }
   const [whatsappPending,  setWhatsappPending]  = useState<WhatsAppPendingCtx | null>(null)
+  const [voiceConfirmedWA, setVoiceConfirmedWA] = useState(false)
+  // Ref para guardar o "último contexto salvo" e disparar WA por voz (quando o
+  // hook detectar "sim/enviar"). Sem esse ref a voz não saberia qual ctx montar.
+  const lastSavedWaCtxRef = useRef<WhatsAppPendingCtx | null>(null)
   const [selectedDocIds,   setSelectedDocIds]   = useState<Set<string>>(new Set())
   const [docPickerOpen,    setDocPickerOpen]    = useState(false)
   
@@ -173,6 +177,14 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
 
   const voiceAssistant = useClinicalVoiceAssistant({
     onAutoSave: handleVoiceAutoSave,
+    onSendWA: () => {
+      // O modal WA já foi aberto pelo handleVoiceAutoSave via setWhatsappPending.
+      // Aqui apenas marcamos para o modal enviar automaticamente.
+      setVoiceConfirmedWA(true)
+      if (!whatsappPending && lastSavedWaCtxRef.current) {
+        setWhatsappPending(lastSavedWaCtxRef.current)
+      }
+    },
     startTriggers,
     stopTriggers,
   })
@@ -436,13 +448,15 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
         const selDocs = selectedDocIds.size > 0
           ? documents.filter(d => selectedDocIds.has(d.id)).map(d => d.file_name)
           : undefined
-        setWhatsappPending({
+        const ctx: WhatsAppPendingCtx = {
           trigger:          isDischarge ? 'hospitalization_discharge' : 'hospitalization_evolution_saved',
           notes:            notes,
           statusSaved:      status,
           medNames:         meds.filter(m => m.name.trim()).map(m => m.name),
           attachedDocNames: selDocs,
-        })
+        }
+        lastSavedWaCtxRef.current = ctx
+        setWhatsappPending(ctx)
       } else {
         resetForm()
         onSaved?.()
@@ -1080,7 +1094,8 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
     {whatsappPending && card.tutor?.phone && (
       <WhatsAppNotificationModal
         isOpen={!!whatsappPending}
-        onClose={() => { setWhatsappPending(null); resetForm(); onSaved?.() }}
+        autoSend={voiceConfirmedWA}
+        onClose={() => { setWhatsappPending(null); setVoiceConfirmedWA(false); lastSavedWaCtxRef.current = null; resetForm(); onSaved?.() }}
         trigger={whatsappPending.trigger}
         context={{
           petName:         card.patient.name,

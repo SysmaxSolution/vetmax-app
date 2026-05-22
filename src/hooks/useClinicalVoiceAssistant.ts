@@ -3,11 +3,25 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { buildWakeRe, buildStopRe, fuzzyMatchCustom } from '@/lib/voice-triggers'
 
-export type ClinicalVoiceState = 'IDLE' | 'RECORDING'
+export type ClinicalVoiceState = 'IDLE' | 'RECORDING' | 'CONFIRM_WA'
 
 interface Opts {
   /** Chamado quando há texto para salvar (silêncio de 15s ou comando de parada) */
   onAutoSave:     (transcript: string) => void
+  /**
+   * Chamado quando o usuário confirma envio de WhatsApp por voz ("sim/enviar/pode").
+   *
+   * Quando passado, o hook entra em CONFIRM_WA após salvar — o que faz o
+   * Speech Recognition ficar ouvindo a resposta sim/não enquanto o modal de
+   * WhatsApp está aberto. Compatível com o `autoSend` do WhatsAppNotificationModal:
+   * a tela seta `voiceConfirmedWA=true` quando este callback dispara, e o modal
+   * envia automaticamente.
+   *
+   * Se omitido, o hook volta direto para IDLE após salvar (comportamento original).
+   */
+  onSendWA?:      () => void
+  /** Chamado quando o usuário recusa envio por voz ("não/cancelar"). Opcional. */
+  onSkipWA?:      () => void
   /** Gatilhos customizados da clínica para ativar gravação */
   startTriggers?: string[]
   /** Gatilhos customizados da clínica para encerrar gravação */
@@ -22,7 +36,7 @@ interface Opts {
  * Uma única instância SpeechRecognition com continuous=true; nunca reiniciada pelo usuário.
  * API: activate(), deactivate(), manualToggle()
  */
-export function useClinicalVoiceAssistant({ onAutoSave, startTriggers, stopTriggers }: Opts) {
+export function useClinicalVoiceAssistant({ onAutoSave, onSendWA, onSkipWA, startTriggers, stopTriggers }: Opts) {
   const [state,      setState]      = useState<ClinicalVoiceState>('IDLE')
   const [transcript, setTranscript] = useState('')
 
@@ -36,6 +50,8 @@ export function useClinicalVoiceAssistant({ onAutoSave, startTriggers, stopTrigg
   const wakeWordReRef            = useRef<RegExp>(buildWakeRe([]))
   const saveCmdReRef             = useRef<RegExp>(buildStopRe([]))
   const onAutoSaveRef            = useRef(onAutoSave)
+  const onSendWARef              = useRef(onSendWA)
+  const onSkipWARef              = useRef(onSkipWA)
   const processedFinalIndicesRef = useRef<Set<number>>(new Set())
   // Quando a wake word é detectada num chunk interim, o mesmo índice virará final
   // depois. Guardamos a posição do final do match para extrair só o sufixo do chunk
@@ -45,10 +61,29 @@ export function useClinicalVoiceAssistant({ onAutoSave, startTriggers, stopTrigg
 
   useEffect(() => { stateRef.current      = state      }, [state])
   useEffect(() => { onAutoSaveRef.current = onAutoSave }, [onAutoSave])
+  useEffect(() => { onSendWARef.current   = onSendWA   }, [onSendWA])
+  useEffect(() => { onSkipWARef.current   = onSkipWA   }, [onSkipWA])
   useEffect(() => {
     wakeWordReRef.current = buildWakeRe(startTriggers ?? [])
     saveCmdReRef.current  = buildStopRe(stopTriggers  ?? [])
   }, [startTriggers, stopTriggers])
+
+  /**
+   * TTS curto para feedback. Não bloqueia — só dispara se window.speechSynthesis
+   * estiver disponível.
+   */
+  function speak(text: string) {
+    try {
+      window.speechSynthesis.cancel()
+      const utt = new SpeechSynthesisUtterance(text)
+      utt.lang = 'pt-BR'; utt.rate = 1.05
+      const voices = window.speechSynthesis.getVoices()
+      const pt = voices.find(v => v.lang.startsWith('pt') && v.name.includes('Google'))
+              ?? voices.find(v => v.lang.startsWith('pt'))
+      if (pt) utt.voice = pt
+      window.speechSynthesis.speak(utt)
+    } catch { /* noop */ }
+  }
 
   function playBeep(freq = 880) {
     try {
@@ -137,10 +172,18 @@ export function useClinicalVoiceAssistant({ onAutoSave, startTriggers, stopTrigg
     processedFinalIndicesRef.current.clear()
     wakeChunkIndexRef.current  = -1
     wakeChunkOffsetRef.current = 0
-    setState('IDLE')
     setTranscript('')
     playBeep(660)
     onAutoSaveRef.current(clean)
+    // Se a tela passou onSendWA, entra em CONFIRM_WA para ouvir sim/não.
+    // O Speech Recognition continua ativo — a tela vai abrir o modal de WA
+    // com autoSend=true quando o callback dispara.
+    if (onSendWARef.current) {
+      setState('CONFIRM_WA')
+      speak('Salvo. Deseja enviar WhatsApp?')
+    } else {
+      setState('IDLE')
+    }
   }
 
   function startRec() {
@@ -268,6 +311,25 @@ export function useClinicalVoiceAssistant({ onAutoSave, startTriggers, stopTrigg
             if (stateRef.current === 'RECORDING') triggerSave(finalTranscriptRef.current)
           }, 15_000)
         }
+        return
+      }
+
+      // CONFIRM_WA: aguarda "sim/enviar/pode/manda" ou "não/cancelar".
+      // Disparado apenas quando a tela passou onSendWA.
+      if (curState === 'CONFIRM_WA') {
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const text = event.results[i][0].transcript.toLowerCase()
+          if (/\b(enviar|sim|pode|manda)\b/.test(text)) {
+            setState('IDLE'); setTranscript('')
+            onSendWARef.current?.()
+            return
+          }
+          if (/\b(agora n[aã]o|n[aã]o|cancelar|deixa|depois)\b/.test(text)) {
+            setState('IDLE'); setTranscript('')
+            onSkipWARef.current?.()
+            return
+          }
+        }
       }
     }
 
@@ -285,6 +347,7 @@ export function useClinicalVoiceAssistant({ onAutoSave, startTriggers, stopTrigg
     clearSilenceTimer()
     const r = recognitionRef.current
     if (r) { r.onend = null; r.onerror = null; try { r.stop() } catch { } recognitionRef.current = null }
+    window.speechSynthesis?.cancel()
     setState('IDLE')
     setTranscript('')
     finalTranscriptRef.current = ''

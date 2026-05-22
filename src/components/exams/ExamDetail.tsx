@@ -80,6 +80,7 @@ export default function ExamDetail({
   const [isReturning,   setIsReturning]   = useState(false)
   const [showConfirm,   setShowConfirm]   = useState(false)
   const [showWhatsApp,  setShowWhatsApp]  = useState(false)
+  const [voiceConfirmedWA, setVoiceConfirmedWA] = useState(false)
   const [showRemoveModal,  setShowRemoveModal]  = useState(false)
   const [showAdmitModal,   setShowAdmitModal]   = useState(false)
   const [isDischargingExam, setIsDischargingExam] = useState(false)
@@ -122,6 +123,10 @@ export default function ExamDetail({
 
   const voiceAssistant = useClinicalVoiceAssistant({
     onAutoSave: handleVoiceAutoSave,
+    onSendWA: () => {
+      setVoiceConfirmedWA(true)
+      setShowWhatsApp(true)
+    },
     startTriggers,
     stopTriggers,
   })
@@ -249,7 +254,8 @@ export default function ExamDetail({
       {/* WhatsApp — Exame Concluído */}
       <WhatsAppNotificationModal
         isOpen={showWhatsApp}
-        onClose={() => { setShowWhatsApp(false); router.push('/dashboard/exams') }}
+        autoSend={voiceConfirmedWA}
+        onClose={() => { setShowWhatsApp(false); setVoiceConfirmedWA(false); router.push('/dashboard/exams') }}
         trigger="exam_completed"
         context={{
           petName:    patient.name,

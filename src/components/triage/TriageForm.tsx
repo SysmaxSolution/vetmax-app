@@ -73,6 +73,9 @@ export default function TriageForm({
   const aiMode = useAiTranscriptionMode()
   const [isLoading, setIsLoading] = useState(false)
   const [showWhatsApp, setShowWhatsApp] = useState(false)
+  /** Quando o usuário disser "sim/enviar/pode" por voz após o save, marcamos
+   * voiceConfirmedWA=true e passamos pro modal via autoSend para envio automático. */
+  const [voiceConfirmedWA, setVoiceConfirmedWA] = useState(false)
   const [showRemoveModal, setShowRemoveModal] = useState(false)
   const [isExtractingFields, setIsExtractingFields] = useState(false)
 
@@ -159,6 +162,11 @@ export default function TriageForm({
 
   const assistant = useClinicalVoiceAssistant({
     onAutoSave: handleVoiceAutoSave,
+    onSendWA: () => {
+      // Voz disse "sim/enviar/pode" → marca para autoSend e abre o modal
+      setVoiceConfirmedWA(true)
+      setShowWhatsApp(true)
+    },
     startTriggers,
     stopTriggers,
   })
@@ -429,8 +437,10 @@ export default function TriageForm({
       {/* WhatsApp — Triagem Concluída */}
       <WhatsAppNotificationModal
         isOpen={showWhatsApp}
+        autoSend={voiceConfirmedWA}
         onClose={() => {
           setShowWhatsApp(false)
+          setVoiceConfirmedWA(false)
           router.push(isEditMode ? '/dashboard/triage' : `/dashboard/vet/${consultation.id}`)
         }}
         trigger="triage_completed"
