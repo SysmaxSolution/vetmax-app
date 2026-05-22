@@ -9,7 +9,6 @@ import {
 } from 'lucide-react'
 import {
   adminUpdateUser, adminChangePassword, uploadUserSignature,
-  getUserModuleAccess, setUserModuleAccess,
   type ClinicUserFull,
 } from '@/lib/actions/user-management'
 import {
@@ -19,7 +18,6 @@ import {
 } from '@/lib/actions/commissions'
 import type { Room } from '@/lib/actions/rooms'
 import type { UserRole } from '@/types'
-import UserPermissionsMatrix from './UserPermissionsMatrix'
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -75,7 +73,9 @@ export default function UserManagementModal({
   user, rooms, activeModules, currentUserId, onClose, onSaved,
 }: Props) {
   const isNew = user === null
-  const [activeTab, setActiveTab] = useState<'usuario' | 'acessos' | 'permissoes' | 'comissoes'>('usuario')
+  // Acessos (ON/OFF de módulos) e Permissões (granular) foram MOVIDOS para o
+  // botão "Direitos de Acesso" ao lado de Editar — UserAccessRightsModal.
+  const [activeTab, setActiveTab] = useState<'usuario' | 'comissoes'>('usuario')
   const [saving, setSaving]       = useState(false)
   const [error, setError]         = useState<string | null>(null)
   const [success, setSuccess]     = useState<string | null>(null)
@@ -107,11 +107,6 @@ export default function UserManagementModal({
   const photoRef = useRef<HTMLInputElement>(null)
   const sigRef   = useRef<HTMLInputElement>(null)
 
-  // ── Módulos (aba Acessos) ──────────────────────────────────────────────────
-  const [moduleMap,      setModuleMap]      = useState<Record<string, boolean>>({})
-  const [loadingModules, setLoadingModules] = useState(false)
-  const [savingModule,   setSavingModule]   = useState<string | null>(null)
-
   // ── Comissões ──────────────────────────────────────────────────────────────
   const [commissions,    setCommissions]    = useState<UserCommission[]>([])
   const [loadingComm,    setLoadingComm]    = useState(false)
@@ -134,17 +129,8 @@ export default function UserManagementModal({
 
   const [, startTransition] = useTransition()
 
-  useEffect(() => {
-    if (activeTab !== 'acessos' || isNew || !user) return
-    setLoadingModules(true)
-    getUserModuleAccess(user.id).then(res => {
-      setLoadingModules(false)
-      if ('error' in res) return
-      const map: Record<string, boolean> = {}
-      for (const r of res) map[r.module_name] = r.enabled
-      setModuleMap(map)
-    })
-  }, [activeTab, isNew, user?.id])
+  // useEffect da aba "acessos" foi removido — funcionalidade migrada para o
+  // modal UserAccessRightsModal (botão "Direitos de Acesso").
 
   useEffect(() => {
     if (activeTab !== 'comissoes' || isNew || !user) return
@@ -214,19 +200,6 @@ export default function UserManagementModal({
     setSignatureUrl(res.url)
     setSuccess('Assinatura salva!')
     setTimeout(() => setSuccess(null), 2000)
-  }
-
-  async function handleToggleModule(key: string, current: boolean) {
-    if (!user) return
-    const next = !current
-    setSavingModule(key)
-    setModuleMap(prev => ({ ...prev, [key]: next }))
-    const res = await setUserModuleAccess(user.id, key, next)
-    setSavingModule(null)
-    if ('error' in res) {
-      setModuleMap(prev => ({ ...prev, [key]: current }))
-      setError(res.error)
-    }
   }
 
   async function handleSaveCommission() {
@@ -299,10 +272,11 @@ export default function UserManagementModal({
     setSpecialties(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s])
   }
 
+  // Acessos e Permissões foram movidos para o modal "Direitos de Acesso"
+  // (ícone de escudo ao lado de Editar). Aqui mantém-se apenas o cadastro e
+  // a configuração de comissões.
   const TABS = [
     { key: 'usuario',    label: 'Usuário',    Icon: User    },
-    { key: 'acessos',    label: 'Módulos',    Icon: Shield  },
-    { key: 'permissoes', label: 'Permissões', Icon: Lock    },
     { key: 'comissoes',  label: 'Comissões',  Icon: Percent },
   ] as const
 
@@ -940,84 +914,8 @@ export default function UserManagementModal({
             </div>
           )}
 
-          {/* ── Aba Permissões Granulares ── */}
-          {activeTab === 'permissoes' && !isNew && user && (
-            <UserPermissionsMatrix
-              userId={user.id}
-              userFullName={user.full_name}
-              isAdmin={user.role === 'admin'}
-              onToast={(type, message) => {
-                if (type === 'error') setError(message)
-                else setSuccess(message)
-              }}
-            />
-          )}
-
-          {/* ── Aba Acessos ── */}
-          {activeTab === 'acessos' && !isNew && (
-            <div className="space-y-4">
-              <p className="text-sm text-slate-500">
-                Defina quais módulos <strong className="text-slate-800">{user?.full_name}</strong> pode acessar.
-                Módulos desativados não aparecem na navegação para este usuário.
-              </p>
-              {user?.id === currentUserId && (
-                <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-                  <AlertTriangle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-amber-700">Você não pode alterar seus próprios acessos.</p>
-                </div>
-              )}
-              {loadingModules ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-teal-600" />
-                </div>
-              ) : (() => {
-                // Mostra apenas módulos ATIVOS na clínica — não faz sentido o admin
-                // habilitar/desabilitar para o usuário um módulo que a clínica
-                // sequer contratou. Se a clínica ativar o módulo depois, ele aparece
-                // automaticamente aqui na próxima vez que abrir o modal.
-                const visibleModules = MODULE_OPTIONS.filter(({ key }) => activeModules.includes(key))
-                if (visibleModules.length === 0) {
-                  return (
-                    <p className="text-sm text-slate-500 italic py-4">
-                      A clínica não tem nenhum módulo ativo. Habilite primeiro em <strong>Configurações &gt; Módulos</strong>.
-                    </p>
-                  )
-                }
-                return (
-                  <div className="grid grid-cols-2 gap-2">
-                    {visibleModules.map(({ key, label }) => {
-                      const enabled  = moduleMap[key] !== false
-                      const isSaving = savingModule === key
-                      const disabled = user?.id === currentUserId
-                      return (
-                        <button
-                          key={key}
-                          type="button"
-                          onClick={() => !disabled && handleToggleModule(key, enabled)}
-                          disabled={disabled || isSaving}
-                          className={`flex items-center justify-between gap-3 rounded-xl border-2 px-4 py-3 text-left transition-all ${
-                            enabled
-                              ? 'border-teal-300 bg-teal-50 text-teal-700'
-                              : 'border-slate-200 bg-white text-slate-400'
-                          } ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-sm cursor-pointer'}`}
-                        >
-                          <span className="text-sm font-medium">{label}</span>
-                          <div className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full ${
-                            enabled ? 'bg-teal-600' : 'bg-slate-200'
-                          }`}>
-                            {isSaving
-                              ? <Loader2 className="h-3 w-3 animate-spin text-white" />
-                              : enabled && <Check className="h-3 w-3 text-white" />
-                            }
-                          </div>
-                        </button>
-                      )
-                    })}
-                  </div>
-                )
-              })()}
-            </div>
-          )}
+          {/* Acessos e Permissões Granulares foram movidos para o modal
+              "Direitos de Acesso" — ícone de escudo na linha do usuário. */}
 
         </div>
 

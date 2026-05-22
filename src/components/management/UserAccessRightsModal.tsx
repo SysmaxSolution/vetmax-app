@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from 'react'
 import {
   X, ChevronRight, ChevronDown, Check, Loader2, Shield, Search,
-  AlertTriangle, ToggleLeft, ToggleRight,
+  AlertTriangle, ToggleLeft, ToggleRight, Eye,
 } from 'lucide-react'
 import {
   ACCESS_CATALOG, ACTION_LABELS, buildPermissionKey,
@@ -13,7 +13,7 @@ import {
   getUserAccessRights, setUserAccessRight, setUserAccessRightsBulk,
   type GranularPermissionRow,
 } from '@/lib/actions/access-rights'
-import { getUserModuleAccess } from '@/lib/actions/user-management'
+import { getUserModuleAccess, setUserModuleAccess } from '@/lib/actions/user-management'
 
 interface Props {
   userId:       string
@@ -30,21 +30,37 @@ function permKey(module: string, action: AccessAction) {
   return `${module}:${action}`
 }
 
+type Tab = 'modules' | 'rights'
+
 export default function UserAccessRightsModal({
   userId, userName, activeModules, currentUserId, onClose,
 }: Props) {
   const isSelfEditing = userId === currentUserId
 
+  const [tab, setTab] = useState<Tab>('modules')
+
+  // ── Estado: aba "Módulos" (toggle ON/OFF — user_module_access) ────────────
+  const [moduleMap, setModuleMap] = useState<Record<string, boolean>>({})
+  const [savingModule, setSavingModule] = useState<string | null>(null)
+
+  // ── Estado: aba "Direitos detalhados" (granular — user_permissions_granular)
   const [perms,    setPerms]    = useState<PermMap>(new Map())
-  const [disabledModules, setDisabledModules] = useState<Set<string>>(new Set())
-  const [loading,  setLoading]  = useState(true)
   const [savingKey, setSavingKey] = useState<string | null>(null)
-  const [error,    setError]    = useState<string | null>(null)
   const [search,   setSearch]   = useState('')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [isBulkLoading, startBulk] = useTransition()
 
-  // Carrega permissões + módulos desabilitados (do toggle ON/OFF) ao montar
+  // ── Compartilhado ──────────────────────────────────────────────────────────
+  const [loading,  setLoading]  = useState(true)
+  const [error,    setError]    = useState<string | null>(null)
+
+  // Conjunto de módulos efetivamente desabilitados — derivado de moduleMap
+  // (true = liberado, false ou ausente = bloqueado no novo default restritivo).
+  const disabledModules = new Set(
+    activeModules.filter(m => moduleMap[m] !== true)
+  )
+
+  // Carrega permissões + módulos ao montar
   useEffect(() => {
     if (isSelfEditing) { setLoading(false); return }
     Promise.all([
@@ -57,12 +73,37 @@ export default function UserAccessRightsModal({
       for (const r of rightsRes) m.set(permKey(r.module, r.action), r.allowed)
       setPerms(m)
       if (!('error' in accessRes)) {
-        const dis = new Set<string>()
-        for (const r of accessRes) if (r.enabled === false) dis.add(r.module_name)
-        setDisabledModules(dis)
+        const map: Record<string, boolean> = {}
+        for (const r of accessRes) map[r.module_name] = r.enabled
+        setModuleMap(map)
       }
     })
   }, [userId, isSelfEditing])
+
+  async function handleToggleModule(moduleName: string, currentlyEnabled: boolean) {
+    if (isSelfEditing) return
+    setSavingModule(moduleName)
+    setError(null)
+    const res = await setUserModuleAccess(userId, moduleName, !currentlyEnabled)
+    setSavingModule(null)
+    if ('error' in res) { setError(res.error); return }
+    setModuleMap(prev => ({ ...prev, [moduleName]: !currentlyEnabled }))
+  }
+
+  async function bulkAllModules(enable: boolean) {
+    if (isSelfEditing) return
+    setError(null)
+    // Aplica sequencialmente (UI atualiza progressivamente).
+    for (const m of activeModules) {
+      const cur = moduleMap[m] === true
+      if (cur === enable) continue
+      setSavingModule(m)
+      const res = await setUserModuleAccess(userId, m, enable)
+      if ('error' in res) { setError(res.error); break }
+      setModuleMap(prev => ({ ...prev, [m]: enable }))
+    }
+    setSavingModule(null)
+  }
 
   // Filtra módulos pelo que está ativo NA CLÍNICA + busca
   const visibleModules = ACCESS_CATALOG
@@ -153,7 +194,35 @@ export default function UserAccessRightsModal({
           </button>
         </div>
 
-        {/* Search + alerta self-edit */}
+        {/* Abas */}
+        <div className="border-b border-slate-200 px-6 flex-shrink-0">
+          <div className="flex gap-1 -mb-px">
+            <button
+              type="button"
+              onClick={() => setTab('modules')}
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                tab === 'modules'
+                  ? 'border-indigo-600 text-indigo-700'
+                  : 'border-transparent text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <span className="inline-flex items-center gap-1.5"><Eye className="h-3.5 w-3.5" />Módulos visíveis</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab('rights')}
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                tab === 'rights'
+                  ? 'border-indigo-600 text-indigo-700'
+                  : 'border-transparent text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <span className="inline-flex items-center gap-1.5"><Shield className="h-3.5 w-3.5" />Direitos detalhados</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Self-editing alert + busca (apenas na aba de direitos) */}
         <div className="border-b border-slate-200 px-6 py-3 flex-shrink-0 space-y-3">
           {isSelfEditing && (
             <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
@@ -161,22 +230,88 @@ export default function UserAccessRightsModal({
               <p className="text-xs text-amber-700">Você não pode alterar seus próprios direitos de acesso.</p>
             </div>
           )}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Buscar módulo ou aba…"
-              className="w-full rounded-xl border border-slate-300 pl-9 pr-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-            />
-          </div>
+          {tab === 'rights' && (
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Buscar módulo ou aba…"
+                className="w-full rounded-xl border border-slate-300 pl-9 pr-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+              />
+            </div>
+          )}
         </div>
 
-        {/* Lista de módulos */}
+        {/* Conteúdo */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-indigo-600" />
+            </div>
+          ) : tab === 'modules' ? (
+            // ── Aba 1: Módulos visíveis (toggle ON/OFF por módulo) ───────────
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-slate-500">
+                  Marque os módulos que <strong className="text-slate-700">{userName}</strong> verá no menu.
+                </p>
+                <div className="flex gap-1">
+                  <button
+                    type="button"
+                    disabled={isSelfEditing}
+                    onClick={() => bulkAllModules(true)}
+                    className="px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 rounded-md disabled:opacity-30"
+                  >
+                    Liberar tudo
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isSelfEditing}
+                    onClick={() => bulkAllModules(false)}
+                    className="px-2.5 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50 rounded-md disabled:opacity-30"
+                  >
+                    Bloquear tudo
+                  </button>
+                </div>
+              </div>
+              {activeModules.length === 0 ? (
+                <p className="text-sm text-slate-500 italic py-4 text-center">
+                  A clínica não tem módulos ativos.
+                </p>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  {activeModules.map(modKey => {
+                    const catalogEntry = ACCESS_CATALOG.find(c => c.key === modKey)
+                    const label = catalogEntry?.label ?? modKey
+                    const enabled = moduleMap[modKey] === true
+                    const isSaving = savingModule === modKey
+                    return (
+                      <button
+                        key={modKey}
+                        type="button"
+                        disabled={isSelfEditing || isSaving}
+                        onClick={() => handleToggleModule(modKey, enabled)}
+                        className={`flex items-center justify-between gap-3 rounded-xl border-2 px-4 py-3 text-left transition-all ${
+                          enabled
+                            ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
+                            : 'border-slate-200 bg-white text-slate-500'
+                        } ${isSelfEditing ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-sm cursor-pointer'}`}
+                      >
+                        <span className="text-sm font-medium">{label}</span>
+                        <div className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full ${
+                          enabled ? 'bg-emerald-600' : 'bg-slate-200'
+                        }`}>
+                          {isSaving
+                            ? <Loader2 className="h-3 w-3 animate-spin text-white" />
+                            : enabled && <Check className="h-3 w-3 text-white" />
+                          }
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           ) : visibleModules.length === 0 ? (
             <p className="text-sm text-slate-500 italic py-8 text-center">
