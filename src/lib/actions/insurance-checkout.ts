@@ -97,7 +97,12 @@ export async function previewConsultationInsurance(
 
     if (cov.provider_name) providerName = cov.provider_name
     if (cov.plan_type)     planType     = cov.plan_type
-    if (cov.status === 'covered' || cov.status === 'waiting' || cov.status === 'not_covered') {
+    // Considera o pet "com convênio" sempre que o checkProcedureCoverage
+    // identificou o provider — mesmo que o procedimento específico não esteja
+    // no catálogo (unknown_procedure). Antes só marcávamos com covered/waiting/
+    // not_covered, o que escondia o quadro quando todos os procedimentos eram
+    // desconhecidos (ex.: "Consulta Veterinária" não está no catálogo seed).
+    if (cov.provider_name && cov.status !== 'no_insurance') {
       hasInsurance = true
     }
 

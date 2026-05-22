@@ -68,6 +68,22 @@ function daysBetween(fromIso: string, toIso: string): number {
   return Math.floor((b - a) / 86400000)
 }
 
+/**
+ * Normaliza o nome do plano para casar com o catálogo `insurance_plan_coverage`.
+ *
+ * O pet_insurance vem com prefixo do provider ("Petlove Ideal"), mas o seed
+ * do catálogo usa apenas o tier ("Ideal"). Aceitamos ambos os formatos.
+ *
+ * Exemplos:
+ *   "Petlove Ideal"      → "Ideal"
+ *   "Ideal"              → "Ideal"
+ *   "Petlove Tranquilo"  → "Tranquilo"
+ *   "Premium"            → "Premium"
+ */
+function normalizePlanType(raw: string | null | undefined): string {
+  return String(raw ?? '').replace(/^petlove\s+/i, '').trim()
+}
+
 type Ctx = {
   supabase: ReturnType<typeof createAdminClient>
   clinicId: string
@@ -111,11 +127,13 @@ export async function getInsuranceCard(patientId: string): Promise<InsuranceCard
   const daysEnrolled = daysBetween(enrollmentDate, today)
 
   // Busca carências por categoria nesse plano
+  // Aceita tanto "Petlove Ideal" (vem do pet_insurance) quanto "Ideal" (catálogo)
+  const planNormalized = normalizePlanType(insurance.plan_type)
   const { data: coverage } = await supabase
     .from('insurance_plan_coverage')
     .select('coverage_category, waiting_days')
     .eq('provider_id', insurance.provider_id)
-    .eq('plan_type', insurance.plan_type)
+    .in('plan_type', [insurance.plan_type ?? '', planNormalized])
 
   // Para cada categoria, calcula dias restantes (max(0, waiting - enrolled))
   const byCategoryMax = new Map<string, number>()
@@ -228,11 +246,13 @@ export async function checkProcedureCoverage(args: {
   }
 
   // 3) Match no catálogo: 1) nome exato (case insensitive), 2) tokens
+  // Aceita tanto "Petlove Ideal" (vem do pet_insurance) quanto "Ideal" (catálogo seed)
+  const planNormalized = normalizePlanType(insurance.plan_type)
   const { data: catalog } = await supabase
     .from('insurance_plan_coverage')
     .select('procedure_pattern, coverage_category, is_covered, copay_amount, copay_charger, waiting_days')
     .eq('provider_id', insurance.provider_id)
-    .eq('plan_type', insurance.plan_type)
+    .in('plan_type', [insurance.plan_type ?? '', planNormalized])
 
   const target = normalizeName(procName)
   let match = (catalog ?? []).find(c => normalizeName(c.procedure_pattern) === target) ?? null

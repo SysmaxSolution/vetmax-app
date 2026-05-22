@@ -79,11 +79,13 @@ const CIRURGIAS = [
 //   Ideal:     + especialistas + cirurgias + castração + anestesia + internação
 //   Premium:   Ideal completo (cobre tudo)
 
+// Plan names with the "Petlove " prefix to match pet_insurance.plan_type
+// (which comes from the remittance file as "Petlove Leve", "Petlove Ideal", etc).
 const COVERAGE = {
-  'Leve':       { consulta: true, vacina: true, exame_simples: true, exame_imagem: false, procedimento_clinico: true,  especialista: false, cirurgia: false, castracao: false, anestesia: false, internacao: false },
-  'Tranquilo':  { consulta: true, vacina: true, exame_simples: true, exame_imagem: true,  procedimento_clinico: true,  especialista: false, cirurgia: false, castracao: false, anestesia: false, internacao: false },
-  'Ideal':      { consulta: true, vacina: true, exame_simples: true, exame_imagem: true,  procedimento_clinico: true,  especialista: true,  cirurgia: true,  castracao: true,  anestesia: true,  internacao: true  },
-  'Premium':    { consulta: true, vacina: true, exame_simples: true, exame_imagem: true,  procedimento_clinico: true,  especialista: true,  cirurgia: true,  castracao: true,  anestesia: true,  internacao: true  },
+  'Petlove Leve':      { consulta: true, vacina: true, exame_simples: true, exame_imagem: false, procedimento_clinico: true,  especialista: false, cirurgia: false, castracao: false, anestesia: false, internacao: false },
+  'Petlove Tranquilo': { consulta: true, vacina: true, exame_simples: true, exame_imagem: true,  procedimento_clinico: true,  especialista: false, cirurgia: false, castracao: false, anestesia: false, internacao: false },
+  'Petlove Ideal':     { consulta: true, vacina: true, exame_simples: true, exame_imagem: true,  procedimento_clinico: true,  especialista: true,  cirurgia: true,  castracao: true,  anestesia: true,  internacao: true  },
+  'Petlove Premium':   { consulta: true, vacina: true, exame_simples: true, exame_imagem: true,  procedimento_clinico: true,  especialista: true,  cirurgia: true,  castracao: true,  anestesia: true,  internacao: true  },
 }
 
 // Carência (dias) por categoria — média dos prazos oficiais
