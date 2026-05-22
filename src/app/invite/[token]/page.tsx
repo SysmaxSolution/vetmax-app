@@ -14,8 +14,51 @@ export default async function InvitePage({
   params: Promise<{ token: string }>
 }) {
   const { token } = await params
-  const { invitation, error } = await fetchInvitationByToken(token)
+  const { invitation, alreadyAccepted, error } = await fetchInvitationByToken(token)
 
+  // ── Caso 1: convite já foi aceito (conta já existe) ─────────────────────────
+  // Não é erro — apenas avisa e oferece o caminho certo (login / esqueci a senha).
+  if (alreadyAccepted) {
+    const acceptedDate = new Date(alreadyAccepted.accepted_at).toLocaleDateString('pt-BR', {
+      day: '2-digit', month: 'long', year: 'numeric',
+    })
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4">
+        <div className="w-full max-w-sm text-center">
+          <div className="mb-4 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-100">
+            <svg className="h-7 w-7 text-teal-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+            </svg>
+          </div>
+          <h1 className="text-xl font-bold text-slate-900">Sua conta já está criada!</h1>
+          <p className="mt-2 text-sm text-slate-500">
+            Você ingressou em <span className="font-semibold text-slate-700">{alreadyAccepted.clinic_name}</span> em {acceptedDate}.
+          </p>
+          <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 text-left">
+            <p className="text-xs text-slate-400 font-medium">E-mail da sua conta</p>
+            <p className="text-sm font-semibold text-slate-800 break-all">{alreadyAccepted.email}</p>
+          </div>
+          <Link
+            href="/login"
+            className="mt-5 block w-full rounded-xl bg-teal-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 transition-colors"
+          >
+            Fazer login
+          </Link>
+          <Link
+            href="/forgot-password"
+            className="mt-3 inline-block text-sm font-medium text-teal-600 hover:underline"
+          >
+            Esqueci minha senha
+          </Link>
+          <p className="mt-6 text-xs text-slate-400">
+            Não consegue lembrar a senha? Use a opção acima ou peça ao administrador para redefinir no cadastro do seu usuário.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Caso 2: erro real (convite não existe / expirou) ───────────────────────
   if (error || !invitation) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4">
@@ -25,7 +68,7 @@ export default async function InvitePage({
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
             </svg>
           </div>
-          <h1 className="text-xl font-bold text-slate-900">Convite inválido</h1>
+          <h1 className="text-xl font-bold text-slate-900">Convite indisponível</h1>
           <p className="mt-2 text-sm text-slate-500">{error}</p>
           <Link href="/login" className="mt-6 inline-block rounded-xl bg-teal-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 transition-colors">
             Ir para o Login

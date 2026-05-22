@@ -141,6 +141,8 @@ export async function revokeInvitation(invitationId: string): Promise<{ error?: 
 // Chamado pela página /invite/[token] — não requer autenticação
 export async function fetchInvitationByToken(token: string): Promise<{
   invitation: Invitation & { clinic_name: string; inviter_name: string } | null
+  /** Quando o convite já foi usado, devolvemos o email para a UI orientar o login. */
+  alreadyAccepted?: { email: string; clinic_name: string; accepted_at: string }
   error?: string
 }> {
   const admin = createAdminClient()
@@ -153,17 +155,28 @@ export async function fetchInvitationByToken(token: string): Promise<{
 
   if (error || !data) return { invitation: null, error: 'Convite não encontrado.' }
 
-  if (data.accepted_at) return { invitation: null, error: 'Este convite já foi utilizado.' }
-
-  if (new Date(data.expires_at) < new Date()) {
-    return { invitation: null, error: 'Este convite expirou. Solicite um novo convite ao administrador.' }
-  }
-
-  // Busca nome da clínica e do convidante em paralelo
+  // Busca nome da clínica e do convidante (usado nos 3 caminhos abaixo)
   const [clinicResult, inviterResult] = await Promise.all([
     admin.from('clinics').select('name').eq('id', data.clinic_id).single(),
     admin.from('profiles').select('full_name').eq('id', data.invited_by).single(),
   ])
+
+  if (data.accepted_at) {
+    // Caso "convite já foi aceito": NÃO é erro do sistema. Retorna info para a
+    // UI exibir uma mensagem positiva e oferecer login / recuperação de senha.
+    return {
+      invitation: null,
+      alreadyAccepted: {
+        email:       data.email,
+        clinic_name: clinicResult.data?.name ?? 'Clínica',
+        accepted_at: data.accepted_at,
+      },
+    }
+  }
+
+  if (new Date(data.expires_at) < new Date()) {
+    return { invitation: null, error: 'Este convite expirou. Solicite um novo convite ao administrador.' }
+  }
 
   return {
     invitation: {
