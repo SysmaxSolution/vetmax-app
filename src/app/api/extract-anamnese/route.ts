@@ -12,16 +12,22 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { extractEntitiesFromAnamnese } from '@/lib/actions/anamnese-extraction'
+import { createClient } from '@/lib/supabase/server'
+import { extractEntitiesFromAnamneseCore } from '@/lib/ai/anamnese-extractor'
 
 export async function POST(request: NextRequest) {
   try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+    }
     const body = await request.json().catch(() => ({}))
     const text = typeof body?.text === 'string' ? body.text : ''
     if (!text.trim()) {
       return NextResponse.json({ prescriptions: [], confidence: 'high', source: 'empty' })
     }
-    const result = await extractEntitiesFromAnamnese(text)
+    const result = await extractEntitiesFromAnamneseCore(text)
     return NextResponse.json(result)
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)

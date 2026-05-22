@@ -11,7 +11,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ResolveContext } from './dynamic-tags'
 import { MOCK_PATIENT, MOCK_TUTOR, buildMockConsultation } from './mock-data'
-import { extractEntitiesFromAnamnese } from '@/lib/actions/anamnese-extraction'
+import { extractEntitiesFromAnamneseCore } from '@/lib/ai/anamnese-extractor'
 
 const ROLE_LABELS: Record<string, string> = {
   admin:        'Administrador',
@@ -293,7 +293,7 @@ export async function buildResolveContext(
     ].filter(Boolean).join('\n\n')
     if (anamneseText.trim().length > 0) {
       try {
-        const extracted = await extractEntitiesFromAnamnese(anamneseText)
+        const extracted = await extractEntitiesFromAnamneseCore(anamneseText)
         if (extracted.prescriptions.length > 0) {
           prescriptions = extracted.prescriptions.map(p => ({
             ...p,
