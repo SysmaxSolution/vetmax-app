@@ -68,9 +68,12 @@ export async function previewConsultationInsurance(
   if (!consult) return { error: 'Consulta não encontrada.' }
 
   // 2) Pega invoice_items da consulta
+  //    Nota: invoice_items NÃO tem stock_item_id — apenas description (texto) e
+  //    external_procedure_name (quando já foi conciliado). Usamos esses dois
+  //    para identificar o procedimento no catálogo de cobertura.
   const { data: items } = await supabase
     .from('invoice_items')
-    .select('id, description, quantity, total_price, stock_item_id, invoices!inner(consultation_id)')
+    .select('id, description, external_procedure_name, quantity, total_price, invoices!inner(consultation_id)')
     .eq('invoices.consultation_id', consultationId)
 
   if (!items || items.length === 0) {
@@ -90,10 +93,12 @@ export async function previewConsultationInsurance(
   let hasInsurance = false
 
   for (const it of items) {
+    // Preferimos external_procedure_name (já mapeado pelo conciliador) quando
+    // existir — bate mais preciso com o catálogo. Fallback para description.
+    const externalName = (it as { external_procedure_name?: string | null }).external_procedure_name
     const cov = await checkProcedureCoverage({
       patientId:     consult.patient_id,
-      stockItemId:   (it as { stock_item_id?: string }).stock_item_id,
-      procedureName: it.description,
+      procedureName: externalName?.trim() || it.description,
     })
 
     if ('error' in cov) {
