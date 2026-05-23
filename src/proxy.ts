@@ -1,6 +1,7 @@
 ﻿import { createServerClient } from '@supabase/ssr'
 import { NextRequest, NextResponse } from 'next/server'
 import type { UserRole } from '@/types'
+import { getAppUrl } from '@/lib/app-url'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -65,7 +66,14 @@ function moduleKeyFromPath(pathname: string): string | null {
 // ─── Proxy ────────────────────────────────────────────────────────────────────
 
 export async function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl
+  const { pathname, search } = request.nextUrl
+
+  // Acessos por subdomínios obsoletos da Vercel são redirecionados para o
+  // domínio canônico, preservando path e query (?code=… do email Supabase etc).
+  const host = request.headers.get('host') ?? ''
+  if (host.endsWith('.vercel.app')) {
+    return NextResponse.redirect(`${getAppUrl()}${pathname}${search}`, 308)
+  }
 
   // Encaminha x-pathname/x-url para Server Components — necessário para
   // src/app/dashboard/template.tsx aplicar enforcement de plano (default-deny).

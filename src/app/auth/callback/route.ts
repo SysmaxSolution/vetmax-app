@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import type { User } from '@supabase/supabase-js'
+import { getAppUrl } from '@/lib/app-url'
 
 const ROLE_COOKIE = 'vetmax-role'
 const ROLE_COOKIE_OPTIONS = {
@@ -140,10 +141,14 @@ async function routeOAuthUser(user: User, origin: string): Promise<NextResponse>
 // ─── GET /auth/callback ───────────────────────────────────────────────────────
 
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url)
+  const { searchParams } = new URL(request.url)
   const code       = searchParams.get('code')
   const token_hash = searchParams.get('token_hash')
   const type       = (searchParams.get('type') ?? '') as string
+
+  // Domínio canônico — força redirect para sysvetmax.sysmaxsolutions.com mesmo
+  // quando o link de email chegou por um subdomínio Vercel obsoleto.
+  const origin = getAppUrl()
 
   // ── Path 1: Password Recovery (PKCE) ──────────────────────────────────────
   if (type === 'recovery' && code) {

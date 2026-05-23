@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { CheckCircle2, Mail, RefreshCw, Loader2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { getClientAppUrl } from '@/lib/app-url'
 
 export default function EmailConfirmadoPage() {
   const [email, setEmail]       = useState('')
@@ -17,7 +18,7 @@ export default function EmailConfirmadoPage() {
     setSending(true)
     setErr('')
     const supabase = createClient()
-    const appUrl   = window.location.origin
+    const appUrl   = getClientAppUrl()
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim().toLowerCase(),
       options: { emailRedirectTo: `${appUrl}/auth/callback?type=magiclink` },
