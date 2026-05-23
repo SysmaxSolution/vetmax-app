@@ -25,6 +25,8 @@ import PetTimelineModal from '@/components/pet/PetTimelineModal'
 import NewAppointmentModal from '@/components/reception/NewAppointmentModal'
 import { useClinicalVoiceAssistant } from '@/hooks/useClinicalVoiceAssistant'
 import { useNativeKeepAwake } from '@/hooks/useNativeKeepAwake'
+import { usePetCoverageSemaforo } from '@/hooks/usePetCoverageSemaforo'
+import CoverageChip from '@/components/vet/CoverageChip'
 import AttachmentsSection from '@/components/ui/AttachmentsSection'
 import MergedTriageSection, { type TriageVitals } from '@/components/vet/MergedTriageSection'
 import AdmitPetModal from '@/components/hospitalization/AdmitPetModal'
@@ -475,6 +477,14 @@ export default function ConsultationDetail({
   })
   const isRecording = voiceAssistant.state === 'RECORDING'
   const liveTranscript = voiceAssistant.transcript
+
+  // Semáforo Petlove — análise IA em tempo real do procedimento ditado,
+  // ancorado no textarea principal da consulta (Anamnese / Notas Clínicas).
+  const coverageSemaforo = usePetCoverageSemaforo({
+    patientId:   patient.id,
+    transcript:  liveTranscript,
+    isListening: isRecording,
+  })
 
   // Mantém a tela acesa durante a gravação para o vet não perder áudio nem o
   // SpeechRecognition ser pausado pelo lock-screen do iOS/Android.
@@ -1275,24 +1285,30 @@ export default function ConsultationDetail({
             <label htmlFor="vet-notes-textarea" className="block text-sm font-semibold text-slate-700 mb-2">
               Anamnese / Notas Clínicas *
             </label>
-            <textarea
-              id="vet-notes-textarea"
-              data-mentor-step="vet-notes-textarea"
-              ref={notasRef}
-              value={vetNotes}
-              onChange={(e) => {
-                setVetNotes(e.target.value)
-                if (hasNotesError && e.target.value.trim()) setHasNotesError(false)
-              }}
-              disabled={isFinalized}
-              rows={10}
-              placeholder={`Registre as notas clínicas da consulta:\n\nANAMNESE:\n...\n\nEXAME FÍSICO:\n...\n\nCONDUTA:\n...`}
-              className={`w-full px-4 py-3 border rounded-xl outline-none resize-none text-sm text-slate-700 leading-relaxed transition-all duration-300 disabled:bg-slate-50 disabled:text-slate-500 ${
-                hasNotesError
-                  ? `border-red-500 ring-2 ring-red-200 bg-red-50/30 focus:ring-red-300 focus:border-red-500${notesErrorPulsing ? ' animate-pulse' : ''}`
-                  : 'border-slate-300 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400'
-              }`}
-            />
+            <div className="relative">
+              <textarea
+                id="vet-notes-textarea"
+                data-mentor-step="vet-notes-textarea"
+                ref={notasRef}
+                value={vetNotes}
+                onChange={(e) => {
+                  setVetNotes(e.target.value)
+                  if (hasNotesError && e.target.value.trim()) setHasNotesError(false)
+                }}
+                disabled={isFinalized}
+                rows={10}
+                placeholder={`Registre as notas clínicas da consulta:\n\nANAMNESE:\n...\n\nEXAME FÍSICO:\n...\n\nCONDUTA:\n...`}
+                className={`w-full px-4 py-3 border rounded-xl outline-none resize-none text-sm text-slate-700 leading-relaxed transition-all duration-300 disabled:bg-slate-50 disabled:text-slate-500 ${
+                  hasNotesError
+                    ? `border-red-500 ring-2 ring-red-200 bg-red-50/30 focus:ring-red-300 focus:border-red-500${notesErrorPulsing ? ' animate-pulse' : ''}`
+                    : 'border-slate-300 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400'
+                }`}
+              />
+              {/* Semáforo Petlove — chip flutuante de cobertura por voz. z-20
+                  para sobrepor o ring de focus do textarea sem ficar atrás
+                  de cards adjacentes em layouts densos. */}
+              <CoverageChip state={coverageSemaforo} className="z-20" />
+            </div>
 
             {/* Live transcript */}
             {(isRecording || liveTranscript) && (
