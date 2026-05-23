@@ -13,6 +13,8 @@ import {
 } from '@/lib/actions/hospitalization-prescriptions'
 import { useMedicationScheduler, type MedicationAlert } from '@/hooks/useMedicationScheduler'
 import { medicationTickStore } from '@/lib/medication-tick'
+import StockItemSelector from './StockItemSelector'
+import type { StockItemLite } from '@/lib/actions/stock-consumption'
 
 /**
  * Modal de controle de medicação do paciente internado.
@@ -77,6 +79,7 @@ export default function MedicationApplicationModal({
   const [error, setError]         = useState<string | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [isPending, startTransition] = useTransition()
+  const [feedback, setFeedback] = useState<{ tone: 'amber' | 'rose' | 'slate'; msg: string } | null>(null)
 
   // Mapa rápido prescriptionId → alerta (para mostrar urgência por linha).
   const alertByPresc = useMemo(() => {
@@ -106,11 +109,25 @@ export default function MedicationApplicationModal({
     if (pendingId) return
     setPendingId({ id: presc.id, action: 'apply' })
     setError(null)
+    setFeedback(null)
     startTransition(async () => {
       const res = await applyHospitalizationDose(presc.id, {
         scheduled_for: scheduledFor?.toISOString(),
       })
       if ('error' in res) { setError(res.error); setPendingId(null); return }
+
+      // Toast diferenciado conforme o resultado da baixa de estoque (Bloco 3).
+      const stock = res.stock
+      if (stock && 'error' in stock) {
+        setFeedback({ tone: 'slate', msg: `Dose registrada. Estoque não foi atualizado: ${stock.error}` })
+      } else if (stock?.requires_reconciliation) {
+        setFeedback(stock.matched
+          ? { tone: 'rose',  msg: `Dose registrada. Estoque insuficiente em ${presc.medication_name} — marcado para reconciliação.` }
+          : { tone: 'slate', msg: 'Dose registrada. Sem vínculo com estoque — conciliar manualmente.' })
+      } else if (stock?.below_minimum) {
+        setFeedback({ tone: 'amber', msg: `Estoque baixo em ${presc.medication_name}: ${stock.quantity_after} restante(s).` })
+      }
+
       await finalizeUpdate()
       setPendingId(null)
     })
@@ -305,6 +322,20 @@ export default function MedicationApplicationModal({
               {error}
             </div>
           )}
+
+          {feedback && (
+            <div className={`rounded-xl border px-4 py-2.5 text-xs flex items-start gap-2 ${
+              feedback.tone === 'amber' ? 'bg-amber-50 border-amber-200 text-amber-700' :
+              feedback.tone === 'rose'  ? 'bg-rose-50 border-rose-200 text-rose-700'   :
+                                          'bg-slate-50 border-slate-200 text-slate-600'
+            }`}>
+              <span className="font-semibold">⚠</span>
+              <span className="flex-1">{feedback.msg}</span>
+              <button onClick={() => setFeedback(null)} className="text-current opacity-60 hover:opacity-100">
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -340,18 +371,25 @@ function NewPrescriptionForm({
   onCancel:  () => void
   onCreated: () => void | Promise<void>
 }) {
-  const [medication, setMedication] = useState('')
-  const [dose,       setDose]       = useState('')
-  const [route,      setRoute]      = useState<string>('IV')
-  const [frequency,  setFrequency]  = useState<number | null>(8)
-  const [duration,   setDuration]   = useState('')
-  const [notes,      setNotes]      = useState('')
-  const [saving,     setSaving]     = useState(false)
-  const [err,        setErr]        = useState<string | null>(null)
+  const [medication,   setMedication]   = useState('')
+  const [dose,         setDose]         = useState('')
+  const [route,        setRoute]        = useState<string>('IV')
+  const [frequency,    setFrequency]    = useState<number | null>(8)
+  const [duration,     setDuration]     = useState('')
+  const [notes,        setNotes]        = useState('')
+  const [stockItem,    setStockItem]    = useState<StockItemLite | null>(null)
+  const [qtyPerDose,   setQtyPerDose]   = useState<string>('1')
+  const [saving,       setSaving]       = useState(false)
+  const [err,          setErr]          = useState<string | null>(null)
 
   async function handleSave() {
     setErr(null)
     if (!medication.trim()) { setErr('Informe o medicamento.'); return }
+    const qtyNum = parseFloat(qtyPerDose.replace(',', '.'))
+    if (stockItem && !(qtyNum > 0)) {
+      setErr('Informe a quantidade consumida por dose (> 0).')
+      return
+    }
     setSaving(true)
     const res = await createHospitalizationPrescription({
       hospitalization_id: hospitalizationId,
@@ -361,10 +399,19 @@ function NewPrescriptionForm({
       frequency_hours:    frequency,
       duration_hours:     duration ? parseInt(duration, 10) || null : null,
       notes:              notes.trim() || null,
+      stock_item_id:      stockItem?.id ?? null,
+      quantity_per_dose:  stockItem ? qtyNum : null,
     })
     setSaving(false)
     if ('error' in res) { setErr(res.error); return }
     await onCreated()
+  }
+
+  // Quando o vet seleciona o item, sugere o nome dele se o campo "medication"
+  // ainda estiver vazio (UX: evita ter que digitar duas vezes).
+  function handlePickStockItem(item: StockItemLite | null) {
+    setStockItem(item)
+    if (item && !medication.trim()) setMedication(item.name)
   }
 
   return (
@@ -443,6 +490,33 @@ function NewPrescriptionForm({
           placeholder="Ex: Diluir em 10ml de soro · Administrar lentamente..."
           className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm resize-none focus:border-violet-500 focus:outline-none"
         />
+      </div>
+
+      {/* ── Vínculo com estoque (opcional, fecha o ciclo de auditoria) ── */}
+      <div className="pt-2 border-t border-violet-200/60 space-y-2">
+        <p className="text-[10px] font-bold text-violet-700 uppercase tracking-wide">Baixa Automática de Estoque (opcional)</p>
+        <div>
+          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Item do Estoque</label>
+          <StockItemSelector value={stockItem?.id ?? null} onChange={handlePickStockItem} />
+        </div>
+        {stockItem && (
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+              Quantidade por dose ({stockItem.unit}) *
+            </label>
+            <input
+              type="number"
+              min="0.001"
+              step="0.001"
+              value={qtyPerDose}
+              onChange={(e) => setQtyPerDose(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none"
+            />
+            <p className="text-[10px] text-slate-400 mt-1">
+              Cada aplicação decrementa {qtyPerDose || '?'} {stockItem.unit} de "{stockItem.name}" automaticamente.
+            </p>
+          </div>
+        )}
       </div>
 
       {err && (

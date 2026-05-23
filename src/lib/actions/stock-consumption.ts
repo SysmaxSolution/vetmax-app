@@ -108,6 +108,75 @@ export async function consumeStockForApplication(
   }
 }
 
+// ─── Busca de stock_items para o dropdown da prescrição ─────────────────────
+
+export interface StockItemLite {
+  id:            string
+  name:          string
+  sku:           string | null
+  barcode:       string | null
+  category:      string
+  unit:          string
+  quantity:      number
+  min_quantity:  number
+  is_controlled: boolean
+  /** Marcador derivado: quantity <= min_quantity (badge "estoque baixo" no UI). */
+  is_below_min:  boolean
+}
+
+/**
+ * Busca stock_items por nome, SKU ou barcode (ILIKE).
+ * Filtra is_service=false (medicação/produto, não serviço) e ordena por nome.
+ * Limita a 20 resultados para manter o autocomplete leve.
+ */
+export async function searchStockItems(query: string): Promise<StockItemLite[] | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const admin = createAdminClient()
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('clinic_id')
+    .eq('id', user.id)
+    .single()
+  if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
+
+  const trimmed = (query ?? '').trim()
+  let qb = admin
+    .from('stock_items')
+    .select('id, name, sku, barcode, category, unit, quantity, min_quantity, is_controlled')
+    .eq('clinic_id', profile.clinic_id)
+    .eq('is_service', false)
+    .order('name', { ascending: true })
+    .limit(20)
+
+  if (trimmed.length >= 2) {
+    const pat = `%${trimmed}%`
+    qb = qb.or(`name.ilike.${pat},sku.ilike.${pat},barcode.ilike.${pat}`)
+  }
+
+  const { data, error } = await qb
+  if (error) return { error: error.message }
+
+  return (data ?? []).map((row): StockItemLite => {
+    const quantity     = Number(row.quantity ?? 0)
+    const min_quantity = Number(row.min_quantity ?? 0)
+    return {
+      id:            row.id as string,
+      name:          row.name as string,
+      sku:           (row.sku     as string | null) ?? null,
+      barcode:       (row.barcode as string | null) ?? null,
+      category:      row.category as string,
+      unit:          row.unit as string,
+      quantity,
+      min_quantity,
+      is_controlled: Boolean(row.is_controlled),
+      is_below_min:  quantity <= min_quantity,
+    }
+  })
+}
+
 // ─── Listagem de divergências (consumido por futura tela de Gestão) ─────────
 
 export interface ReconciliationItem {
