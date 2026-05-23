@@ -444,19 +444,18 @@ export default function UserManagementModal({
                     ))}
                   </select>
                 </div>
-                {(role === 'vet' || role === 'assistant') && (
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">
-                      Intervalo de Agendamento (min)
-                    </label>
-                    <input
-                      type="number" min="15" max="240" step="15"
-                      value={appointmentInterval}
-                      onChange={e => setAppointmentInterval(e.target.value)}
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
-                    />
-                  </div>
-                )}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">
+                    Intervalo de Agendamento (min)
+                  </label>
+                  <input
+                    type="number" min="15" max="240" step="15"
+                    value={appointmentInterval}
+                    onChange={e => setAppointmentInterval(e.target.value)}
+                    title="Duração padrão de cada atendimento na agenda deste profissional"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                  />
+                </div>
               </div>
 
               {/* Especialidades */}

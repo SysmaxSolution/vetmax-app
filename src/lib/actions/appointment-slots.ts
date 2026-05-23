@@ -11,6 +11,24 @@ export type SlotInfo = {
   intervalMinutes: number
 }
 
+// Fuso horário de referência (todas as clínicas no Brasil — Brasília).
+// Importante: server actions rodam na Vercel em UTC; usar getHours() aqui
+// leria 12h para um agendamento de 09h BRT (offset -03:00). Sempre extrair
+// HH/MM no fuso da clínica via Intl.DateTimeFormat.
+const CLINIC_TZ = 'America/Sao_Paulo'
+
+function hhmmInClinicTz(date: Date): { hh: number; mm: number } {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: CLINIC_TZ,
+    hour:     '2-digit',
+    minute:   '2-digit',
+    hour12:   false,
+  }).formatToParts(date)
+  const hh = parseInt(parts.find(p => p.type === 'hour')?.value   ?? '0', 10)
+  const mm = parseInt(parts.find(p => p.type === 'minute')?.value ?? '0', 10)
+  return { hh: hh === 24 ? 0 : hh, mm }
+}
+
 export async function getProfessionalSlots(
   professionalId: string,
   date: string,
@@ -53,7 +71,8 @@ export async function getProfessionalSlots(
   const ranges: BookedRange[] = []
   for (const appt of (appts ?? [])) {
     const dt          = new Date(appt.appointment_datetime)
-    const baseMinutes = dt.getHours() * 60 + dt.getMinutes()
+    const { hh, mm }  = hhmmInClinicTz(dt)
+    const baseMinutes = hh * 60 + mm
     const endMinutes  = Math.min(baseMinutes + intervalMinutes, 24 * 60)
     const fmt = (total: number) =>
       `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
