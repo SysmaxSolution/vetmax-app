@@ -22,6 +22,7 @@ export interface UnifiedCalendarEvent {
   source?:          string        // 'manual' | 'whatsapp'
   professionalId:   string | null
   professionalName: string | null
+  durationMinutes:  number        // duração do bloco na agenda (default 60 / 120 grooming)
 }
 
 export interface CalendarProfessional {
@@ -69,7 +70,7 @@ export async function getUnifiedCalendarEvents(
         id, appointment_datetime, reason, status, notes, source, professional_id,
         patients:pet_id ( id, name, species ),
         tutors:tutor_id ( id, name ),
-        professional:profiles!professional_id ( full_name )
+        professional:profiles!professional_id ( full_name, appointment_interval_minutes )
       `)
       .eq('clinic_id', auth.clinicId)
       .gte('appointment_datetime', dayStart)
@@ -119,6 +120,7 @@ export async function getUnifiedCalendarEvents(
       source:           (a as any).source ?? 'manual',
       professionalId:   (a as any).professional_id ?? null,
       professionalName: prof?.full_name ?? null,
+      durationMinutes:  prof?.appointment_interval_minutes ?? 60,
     })
   }
 
@@ -141,6 +143,7 @@ export async function getUnifiedCalendarEvents(
       services:         g.services_requested ?? [],
       professionalId:   (g as any).groomer_id ?? null,
       professionalName: groomer?.full_name ?? null,
+      durationMinutes:  120,
     })
   }
 
@@ -171,7 +174,7 @@ export async function getUnifiedEventsForRange(
       .select(`id, appointment_datetime, reason, status, source, professional_id,
                patients:pet_id ( id, name, species ),
                tutors:tutor_id ( id, name ),
-               professional:profiles!professional_id ( full_name )`)
+               professional:profiles!professional_id ( full_name, appointment_interval_minutes )`)
       .eq('clinic_id', auth.clinicId)
       .gte('appointment_datetime', rangeStart)
       .lte('appointment_datetime', rangeEnd)
@@ -215,6 +218,7 @@ export async function getUnifiedEventsForRange(
       source:           (a as any).source ?? 'manual',
       professionalId:   (a as any).professional_id ?? null,
       professionalName: prof?.full_name ?? null,
+      durationMinutes:  prof?.appointment_interval_minutes ?? 60,
     })
   }
 
@@ -234,6 +238,7 @@ export async function getUnifiedEventsForRange(
       services:         g.services_requested ?? [],
       professionalId:   (g as any).groomer_id ?? null,
       professionalName: groomer?.full_name ?? null,
+      durationMinutes:  120,
     })
   }
 

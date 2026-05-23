@@ -128,7 +128,7 @@ type RBCEvent =
 function toRBCEvents(raw: UnifiedCalendarEvent[]): RBCEvent[] {
   return raw.map(e => {
     const start      = new Date(e.datetime.replace(' ', 'T'))
-    const durationMs = e.type === 'grooming' ? 2 * 60 * 60 * 1000 : 30 * 60 * 1000
+    const durationMs = (e.durationMinutes ?? (e.type === 'grooming' ? 120 : 60)) * 60000
     return {
       kind:       'appointment' as const,
       id:         e.id,
