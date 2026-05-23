@@ -27,6 +27,8 @@ import { getAllPages } from '@/lib/canva/canvas-state'
 import type {
   CanvaContentJson, CanvaDynamicField,
 } from '@/lib/canva/types'
+import CanvasStructuredDataAccordion from '@/components/vet/CanvasStructuredDataAccordion'
+import type { ResolveContext } from '@/lib/canva/dynamic-tags'
 
 interface Props {
   draft: CanvasDraftResult
@@ -56,6 +58,10 @@ export default function CanvasDocumentDraftModal({
     () => ({ ...draft.fillable_values }),
   )
   const [aiFilled, setAiFilled] = useState<Set<string>>(() => new Set(draft.filled_keys))
+  // ── Bloco 3 / 2.5 — overrides do side panel (Dados Estruturados) ────────
+  // Path no ResolveContext → valor digitado pelo vet. Sobrescreve sem mutar
+  // o resolveContext original (preserva sincronia com server-side).
+  const [structuredOverrides, setStructuredOverrides] = useState<Record<string, string>>({})
   const [observacoes, setObservacoes] = useState('')
   const [dynamicFields, setDynamicFields] = useState<CanvaDynamicField[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -142,6 +148,45 @@ export default function CanvasDocumentDraftModal({
       onClose()
     })
   }
+
+  /**
+   * Atualiza um override do painel de Dados Estruturados. Edição granular —
+   * só a chave específica muda no Map; o useMemo do enrichedContext só
+   * re-resolve elementos do canvas que referenciam aquele path.
+   */
+  function setStructuredOverride(path: string, value: string) {
+    setStructuredOverrides(prev => {
+      const next = { ...prev }
+      if (value === '') delete next[path]
+      else next[path] = value
+      return next
+    })
+  }
+
+  /**
+   * Deep-merge dos overrides no resolveContext sem mutar o original.
+   * Os paths usam dot-notation (ex.: 'consultation.weight').
+   */
+  const enrichedContext = useMemo<ResolveContext>(() => {
+    const base = draft.resolve_context ?? {}
+    const keys = Object.keys(structuredOverrides)
+    if (keys.length === 0) return base
+    // Clone seletivo apenas dos branches tocados pelos overrides.
+    const next: Record<string, Record<string, unknown>> = {
+      tutor:        { ...(base.tutor ?? {}) },
+      patient:      { ...(base.patient ?? {}) },
+      consultation: { ...(base.consultation ?? {}) },
+      clinic:       { ...(base.clinic ?? {}) },
+      vet:          { ...(base.vet ?? {}) },
+    }
+    for (const path of keys) {
+      const [root, leaf] = path.split('.')
+      if (!root || !leaf) continue
+      if (!(root in next)) continue
+      next[root][leaf] = structuredOverrides[path]
+    }
+    return next as ResolveContext
+  }, [draft.resolve_context, structuredOverrides])
 
   function setFillable(key: string, value: string) {
     setFillableValues(prev => ({ ...prev, [key]: value }))
@@ -239,6 +284,13 @@ export default function CanvasDocumentDraftModal({
               </label>
             </Card>
 
+            {/* Dados Estruturados — sincroniza bidirecional com o preview. */}
+            <CanvasStructuredDataAccordion
+              ctx={enrichedContext}
+              overrides={structuredOverrides}
+              setOverride={setStructuredOverride}
+            />
+
             {fillableElements.length > 0 && (
               <Card title="Campos da consulta">
                 <div className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-[11px] text-violet-700 mb-3 flex items-start gap-2">
@@ -295,7 +347,7 @@ export default function CanvasDocumentDraftModal({
                   <CanvasStage
                     state={{ version: 1, page: p.page, elements: p.elements }}
                     mode="print"
-                    resolveContext={draft.resolve_context}
+                    resolveContext={enrichedContext}
                     fillableValues={fillableValues}
                   />
                 </div>
