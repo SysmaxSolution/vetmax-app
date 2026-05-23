@@ -14,7 +14,7 @@ import PatientLink from '@/components/PatientLink'
 import UnavailabilityModal from '@/components/appointments/UnavailabilityModal'
 import {
   ChevronLeft, ChevronRight, Loader2, X,
-  Clock, User, Scissors, Stethoscope, CalendarOff, Trash2,
+  Clock, User, Scissors, Stethoscope, CalendarOff, Trash2, MessageCircle,
 } from 'lucide-react'
 
 // ─── Localizer pt-BR ──────────────────────────────────────────────────────────
@@ -311,9 +311,22 @@ function EventDetailCard({ event, onClose }: { event: UnifiedCalendarEvent; onCl
 
         {/* Status + badge */}
         <div className="flex items-center justify-between pt-1 border-t border-slate-100">
-          <span className={`inline-flex items-center text-xs font-bold px-2.5 py-1 rounded-full ${status.cls}`}>
-            {status.label}
-          </span>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className={`inline-flex items-center text-xs font-bold px-2.5 py-1 rounded-full ${status.cls}`}>
+              {status.label}
+            </span>
+            {event.botConfirmationStatus && (
+              <span
+                className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200"
+                title="Atualizado automaticamente pelo Bot WhatsApp"
+              >
+                <MessageCircle className="h-3 w-3" />
+                {event.botConfirmationStatus === 'confirmed'   && 'Confirmado pelo Bot'}
+                {event.botConfirmationStatus === 'rescheduled' && 'Remarcado pelo Bot'}
+                {event.botConfirmationStatus === 'cancelled'   && 'Cancelado pelo Bot'}
+              </span>
+            )}
+          </div>
           <span className="text-xs text-slate-400">
             {event.source === 'whatsapp' && '📱 via WhatsApp · '}
             {event.type === 'grooming' ? 'Banho & Tosa' : 'Consulta'}

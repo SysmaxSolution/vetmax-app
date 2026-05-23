@@ -173,7 +173,7 @@ async function processInboundMessage(params: {
   // 2. Busca ou cria conversa — quando bot inativo cria como 'human' para atendimento manual
   let { data: conversation } = await admin
     .from('whatsapp_conversations')
-    .select('id, status, tutor_name')
+    .select('id, status, tutor_name, pending_appointment_id')
     .eq('clinic_id', clinicId)
     .eq('tutor_phone', phone)
     .neq('status', 'closed')
@@ -188,7 +188,7 @@ async function processInboundMessage(params: {
     const { data: newConv } = await admin
       .from('whatsapp_conversations')
       .insert({ clinic_id: clinicId, tutor_phone: phone, tutor_name: tutorName, status: initialStatus })
-      .select('id, status, tutor_name')
+      .select('id, status, tutor_name, pending_appointment_id')
       .single()
     conversation = newConv
   } else if (!conversation.tutor_name && tutorName) {
@@ -239,20 +239,48 @@ async function processInboundMessage(params: {
     return
   }
 
-  // 8. Chama o agente IA
-  console.info(`[WPP Bot] clinicId=${clinicId} — chamando agente IA`)
+  // 8. Se houver appointment pendente de confirmação, carrega o datetime para contexto
+  let pendingAppointmentAt: string | null = null
+  if (conversation.pending_appointment_id) {
+    const { data: pending } = await admin
+      .from('appointments')
+      .select('appointment_datetime, status')
+      .eq('id', conversation.pending_appointment_id)
+      .maybeSingle()
+    // Se o agendamento já não está mais agendável (cancelado/completed), ignora o vínculo
+    if (pending && pending.status === 'scheduled') {
+      pendingAppointmentAt = pending.appointment_datetime as string
+    } else {
+      await admin.from('whatsapp_conversations')
+        .update({ pending_appointment_id: null })
+        .eq('id', conversation.id)
+      conversation.pending_appointment_id = null
+    }
+  }
+
+  // 9. Chama o agente IA
+  console.info(`[WPP Bot] clinicId=${clinicId} — chamando agente IA pending=${conversation.pending_appointment_id ?? 'nenhum'}`)
   const result = await runWhatsappAgent({
     clinicId,
-    conversationId:    conversation.id,
-    userMessage:       messageText,
-    tutorName:         tutorName ?? conversation.tutor_name,
-    tutorPhone:        phone,
-    personalityPrompt: botConfig.personality_prompt ?? null,
-    canBook:           botConfig.can_book,
-    canInformPrices:   botConfig.can_inform_prices,
+    conversationId:        conversation.id,
+    userMessage:           messageText,
+    tutorName:             tutorName ?? conversation.tutor_name,
+    tutorPhone:            phone,
+    personalityPrompt:     botConfig.personality_prompt ?? null,
+    canBook:               botConfig.can_book,
+    canInformPrices:       botConfig.can_inform_prices,
+    pendingAppointmentId:  conversation.pending_appointment_id,
+    pendingAppointmentAt,
   })
 
-  console.info(`[WPP Bot] resposta="${result.reply.substring(0, 80)}" handoff=${result.handoff}`)
+  console.info(`[WPP Bot] resposta="${result.reply.substring(0, 80)}" handoff=${result.handoff} resolved=${result.confirmationResolved ?? '—'}`)
+
+  // Se o bot resolveu o agendamento (confirm/reschedule/cancel), libera o vínculo
+  if (result.confirmationResolved && conversation.pending_appointment_id) {
+    await admin.from('whatsapp_conversations')
+      .update({ pending_appointment_id: null })
+      .eq('id', conversation.id)
+  }
 
   // 9. Salva resposta no banco
   await admin.from('whatsapp_messages').insert({

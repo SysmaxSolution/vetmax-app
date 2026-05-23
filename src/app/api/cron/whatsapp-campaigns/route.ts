@@ -62,30 +62,76 @@ export async function GET(request: NextRequest) {
       const eligible = await getEligibleTutors(admin, clinic.id, campaign)
       if (!eligible.length) continue
 
-      // Filtra tutores que já receberam esta campanha nas últimas 23h
-      const { data: recentLogs } = await admin
-        .from('whatsapp_campaign_logs')
-        .select('tutor_id')
-        .eq('campaign_id', campaign.id)
-        .gte('sent_at', new Date(Date.now() - 23 * 3600_000).toISOString())
+      // Confirmação de agendamento usa appointment.bot_confirmation_sent_at como
+      // deduplicador (cada appointment só recebe a pergunta uma vez). As demais
+      // campanhas continuam evitando reenvio por tutor nas últimas 23h.
+      let toSend: EligibleTarget[]
+      if (campaign.trigger_type === 'appointment_confirmation') {
+        toSend = eligible.slice(0, 50)
+      } else {
+        const { data: recentLogs } = await admin
+          .from('whatsapp_campaign_logs')
+          .select('tutor_id')
+          .eq('campaign_id', campaign.id)
+          .gte('sent_at', new Date(Date.now() - 23 * 3600_000).toISOString())
 
-      const sentIds = new Set((recentLogs ?? []).map(l => l.tutor_id))
-      const toSend  = eligible.filter(t => !sentIds.has(t.tutorId)).slice(0, 50)
+        const sentIds = new Set((recentLogs ?? []).map(l => l.tutor_id))
+        toSend = eligible.filter(t => !sentIds.has(t.tutorId)).slice(0, 50)
+      }
 
       for (const target of toSend) {
         try {
-          const message = await generateCampaignMessage({
-            clinicName: clinic.name,
-            tutorName:  target.tutorName,
-            petName:    target.petName,
-            context:    target.context,
-          })
+          const message = target.appointmentId
+            ? buildConfirmationMessage(target)
+            : await generateCampaignMessage({
+                clinicName: clinic.name,
+                tutorName:  target.tutorName,
+                petName:    target.petName,
+                context:    target.context,
+              })
 
           await evolutionSendText(
             { apiUrl, instanceId: instanceName, apiKey },
             target.phone,
             message,
           )
+
+          if (target.appointmentId) {
+            await admin
+              .from('appointments')
+              .update({ bot_confirmation_sent_at: new Date().toISOString() })
+              .eq('id', target.appointmentId)
+
+            // Vincula a conversa atual ao agendamento pendente (cria se não existir).
+            const { data: existingConv } = await admin
+              .from('whatsapp_conversations')
+              .select('id')
+              .eq('clinic_id', clinic.id)
+              .eq('tutor_phone', target.phone)
+              .maybeSingle()
+
+            if (existingConv) {
+              await admin
+                .from('whatsapp_conversations')
+                .update({
+                  pending_appointment_id: target.appointmentId,
+                  tutor_name: target.tutorName,
+                  pet_name:   target.petName,
+                  status:     'bot',
+                  last_message_at: new Date().toISOString(),
+                })
+                .eq('id', existingConv.id)
+            } else {
+              await admin.from('whatsapp_conversations').insert({
+                clinic_id:              clinic.id,
+                tutor_phone:            target.phone,
+                tutor_name:             target.tutorName,
+                pet_name:               target.petName,
+                pending_appointment_id: target.appointmentId,
+                status:                 'bot',
+              })
+            }
+          }
 
           await admin.from('whatsapp_campaign_logs').insert({
             clinic_id:  clinic.id,
@@ -110,11 +156,14 @@ export async function GET(request: NextRequest) {
 // ─── Queries de elegibilidade ─────────────────────────────────────────────────
 
 interface EligibleTarget {
-  tutorId:   string
-  tutorName: string
-  phone:     string
-  petName:   string
-  context:   string
+  tutorId:        string
+  tutorName:      string
+  phone:          string
+  petName:        string
+  context:        string
+  // Preenchido apenas para o trigger appointment_confirmation:
+  appointmentId?: string
+  appointmentAt?: string   // ISO datetime
 }
 
 async function getEligibleTutors(
@@ -123,12 +172,29 @@ async function getEligibleTutors(
   campaign: { trigger_type: string; days_threshold: number },
 ): Promise<EligibleTarget[]> {
   switch (campaign.trigger_type) {
-    case 'no_visit':       return queryNoVisit(admin, clinicId, campaign.days_threshold)
-    case 'vaccine_due':    return queryVaccineDue(admin, clinicId, campaign.days_threshold)
-    case 'pending_return': return queryPendingReturn(admin, clinicId, campaign.days_threshold)
-    case 'grooming_due':   return queryGroomingDue(admin, clinicId, campaign.days_threshold)
+    case 'no_visit':                 return queryNoVisit(admin, clinicId, campaign.days_threshold)
+    case 'vaccine_due':              return queryVaccineDue(admin, clinicId, campaign.days_threshold)
+    case 'pending_return':           return queryPendingReturn(admin, clinicId, campaign.days_threshold)
+    case 'grooming_due':             return queryGroomingDue(admin, clinicId, campaign.days_threshold)
+    case 'appointment_confirmation': return queryAppointmentConfirmation(admin, clinicId, campaign.days_threshold)
     default: return []
   }
+}
+
+function buildConfirmationMessage(t: EligibleTarget): string {
+  const dt = new Date(t.appointmentAt!)
+  const dateLabel = dt.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })
+  const timeLabel = dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  return [
+    `Olá, ${t.tutorName}! 🐾`,
+    ``,
+    `Passando para confirmar o agendamento de ${t.petName} para ${dateLabel} às ${timeLabel}.`,
+    ``,
+    `Responda:`,
+    `• CONFIRMAR — está tudo certo`,
+    `• REMARCAR — escolher outra data`,
+    `• CANCELAR — desmarcar`,
+  ].join('\n')
 }
 
 // Tutores sem visita (consulta ou tosa) há mais de N dias
@@ -280,4 +346,47 @@ async function queryGroomingDue(
       petName:   (t.patients as { name: string }[])?.[0]?.name ?? 'seu pet',
       context:   `não faz banho e tosa há mais de ${days} dias`,
     }))
+}
+
+// Agendamentos cuja data cai dentro da janela [now+Ndays, now+Ndays+1 dia)
+// e que ainda não receberam a pergunta de confirmação do bot.
+async function queryAppointmentConfirmation(
+  admin: ReturnType<typeof createAdminClient>,
+  clinicId: string,
+  days: number,
+): Promise<EligibleTarget[]> {
+  const windowStart = new Date(Date.now() + days * 86_400_000).toISOString()
+  const windowEnd   = new Date(Date.now() + (days + 1) * 86_400_000).toISOString()
+
+  const { data } = await admin
+    .from('appointments')
+    .select(`
+      id,
+      appointment_datetime,
+      tutor_id,
+      tutors:tutor_id ( id, name, phone ),
+      patients:pet_id ( name )
+    `)
+    .eq('clinic_id', clinicId)
+    .eq('status', 'scheduled')
+    .is('bot_confirmation_sent_at', null)
+    .gte('appointment_datetime', windowStart)
+    .lt('appointment_datetime', windowEnd)
+
+  const results: EligibleTarget[] = []
+  for (const a of (data ?? [])) {
+    const tutor   = (Array.isArray(a.tutors)   ? a.tutors[0]   : a.tutors)   as { id: string; name: string; phone: string } | null
+    const patient = (Array.isArray(a.patients) ? a.patients[0] : a.patients) as { name: string } | null
+    if (!tutor?.id || !tutor.phone) continue
+    results.push({
+      tutorId:       tutor.id,
+      tutorName:     tutor.name,
+      phone:         tutor.phone,
+      petName:       patient?.name ?? 'seu pet',
+      context:       'confirmação de agendamento',
+      appointmentId: a.id,
+      appointmentAt: a.appointment_datetime as string,
+    })
+  }
+  return results
 }

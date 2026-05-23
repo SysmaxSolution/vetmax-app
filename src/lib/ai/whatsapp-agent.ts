@@ -91,6 +91,32 @@ const TOOLS: Anthropic.Tool[] = [
   },
 ]
 
+// Tools disponíveis apenas quando há um agendamento pendente de confirmação
+const CONFIRMATION_TOOLS: Anthropic.Tool[] = [
+  {
+    name: 'confirm_appointment',
+    description: 'Confirma o agendamento pendente. Use quando o tutor disser que vai comparecer (CONFIRMAR, "tá certo", "vou sim", "ok", "confirmo", etc).',
+    input_schema: { type: 'object' as const, properties: {}, required: [] },
+  },
+  {
+    name: 'cancel_appointment',
+    description: 'Cancela o agendamento pendente. Use quando o tutor disser CANCELAR, "não vou", "desmarcar", etc. O cancelamento é definitivo.',
+    input_schema: { type: 'object' as const, properties: {}, required: [] },
+  },
+  {
+    name: 'reschedule_appointment',
+    description: 'Remarca o agendamento pendente para uma nova data e horário. Antes de chamar, use get_availability para confirmar que o slot escolhido está livre. O tutor deve ter escolhido um horário entre as opções oferecidas.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        new_date: { type: 'string', description: 'Nova data no formato YYYY-MM-DD' },
+        new_time: { type: 'string', description: 'Novo horário no formato HH:MM' },
+      },
+      required: ['new_date', 'new_time'],
+    },
+  },
+]
+
 const SURGERY_TOOL: Anthropic.Tool = {
   name: 'escalate_urgency_to_reception',
   description: 'Use SOMENTE quando (1) o veterinário está em Modo Cirurgia E (2) a mensagem indica urgência médica real: convulsão, dificuldade respiratória, trauma grave, envenenamento, desmaio, sangramento intenso, inconsciência. Cria alerta sonoro na recepção e envia push ao veterinário.',
@@ -319,6 +345,79 @@ async function execBookAppointment(params: {
   return `Agendamento confirmado! ${petName} está marcado para ${dateLabel} às ${time}. Até lá!`
 }
 
+// ─── Executores de confirmação de agendamento ─────────────────────────────────
+
+async function execConfirmAppointment(appointmentId: string): Promise<string> {
+  const admin = createAdminClient()
+  const now   = new Date().toISOString()
+  const { error } = await admin
+    .from('appointments')
+    .update({
+      status:                  'confirmed',
+      bot_confirmation_status: 'confirmed',
+      bot_confirmation_at:     now,
+    })
+    .eq('id', appointmentId)
+  if (error) return `Erro ao confirmar: ${error.message}`
+  return 'Agendamento marcado como confirmado. Pode responder ao tutor agradecendo a confirmação.'
+}
+
+async function execCancelAppointment(appointmentId: string): Promise<string> {
+  const admin = createAdminClient()
+  const now   = new Date().toISOString()
+  const { error } = await admin
+    .from('appointments')
+    .update({
+      status:                  'cancelled',
+      bot_confirmation_status: 'cancelled',
+      bot_confirmation_at:     now,
+    })
+    .eq('id', appointmentId)
+  if (error) return `Erro ao cancelar: ${error.message}`
+  return 'Agendamento cancelado. Pode responder ao tutor confirmando o cancelamento e oferecendo ajuda para reagendar quando quiser.'
+}
+
+async function execRescheduleAppointment(params: {
+  appointmentId: string
+  newDate:       string
+  newTime:       string
+}): Promise<string> {
+  const admin    = createAdminClient()
+  const datetime = `${params.newDate}T${params.newTime}:00`
+  const now      = new Date().toISOString()
+
+  // Verifica conflito no novo slot
+  const slotStart = `${params.newDate}T${params.newTime}:00`
+  const slotEnd   = `${params.newDate}T${params.newTime}:59`
+  const { data: conflict } = await admin
+    .from('appointments')
+    .select('id')
+    .eq('clinic_id', (await admin.from('appointments').select('clinic_id').eq('id', params.appointmentId).single()).data?.clinic_id ?? '')
+    .neq('status', 'cancelled')
+    .neq('id', params.appointmentId)
+    .gte('appointment_datetime', slotStart)
+    .lte('appointment_datetime', slotEnd)
+    .maybeSingle()
+
+  if (conflict) {
+    return `Slot ${params.newDate} ${params.newTime} já ocupado. Peça ao tutor para escolher outro horário entre os disponíveis.`
+  }
+
+  const { error } = await admin
+    .from('appointments')
+    .update({
+      appointment_datetime:    datetime,
+      status:                  'scheduled',
+      bot_confirmation_status: 'rescheduled',
+      bot_confirmation_at:     now,
+    })
+    .eq('id', params.appointmentId)
+  if (error) return `Erro ao remarcar: ${error.message}`
+
+  const dateLabel = new Date(`${params.newDate}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  return `Agendamento remarcado para ${dateLabel} às ${params.newTime}. Confirme ao tutor.`
+}
+
 // ─── Main agent ───────────────────────────────────────────────────────────────
 
 export type AgentResult = {
@@ -328,15 +427,17 @@ export type AgentResult = {
 }
 
 export async function runWhatsappAgent(params: {
-  clinicId:          string
-  conversationId:    string
-  userMessage:       string
-  tutorName:         string | null
-  tutorPhone:        string
-  personalityPrompt?: string | null
-  canBook?:          boolean
-  canInformPrices?:  boolean
-}): Promise<AgentResult> {
+  clinicId:               string
+  conversationId:         string
+  userMessage:            string
+  tutorName:              string | null
+  tutorPhone:             string
+  personalityPrompt?:     string | null
+  canBook?:               boolean
+  canInformPrices?:       boolean
+  pendingAppointmentId?:  string | null
+  pendingAppointmentAt?:  string | null   // ISO datetime do appointment pendente
+}): Promise<AgentResult & { confirmationResolved?: 'confirmed' | 'rescheduled' | 'cancelled' }> {
   const admin = createAdminClient()
 
   // Verifica se algum veterinário está em Modo Cirurgia
@@ -386,6 +487,20 @@ Para emergências ou pedidos fora do escopo, transfira para um atendente humano.
     ? 'RESTRIÇÃO: Você NÃO pode confirmar agendamentos diretamente. Quando o tutor quiser agendar, use get_availability para informar os dias e horários disponíveis e, em seguida, use request_human_handoff (reason: "agendamento_pendente_confirmacao") para transferir ao atendente que fará a confirmação.'
     : ''
 
+  // Contexto de confirmação de agendamento — ativado quando a conversa tem um
+  // appointment pendente vindo da campanha appointment_confirmation.
+  let confirmationContext = ''
+  if (params.pendingAppointmentId && params.pendingAppointmentAt) {
+    const dt = new Date(params.pendingAppointmentAt)
+    const dateLabel = dt.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })
+    const timeLabel = dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    confirmationContext = `\nCONFIRMAÇÃO DE AGENDAMENTO PENDENTE: O tutor recebeu um lembrete sobre o agendamento marcado para ${dateLabel} às ${timeLabel}. A próxima mensagem dele deve ser interpretada como:
+- Se for CONFIRMAR / "tá certo" / "vou sim" / "ok" / "confirmo" → chame confirm_appointment.
+- Se for CANCELAR / "não vou" / "desmarcar" → chame cancel_appointment.
+- Se for REMARCAR / "preciso mudar" / "outro dia" → pergunte para qual dia ele prefere, use get_availability para listar horários e, depois que o tutor escolher, chame reschedule_appointment com a nova data e horário.
+Não chame book_appointment neste fluxo — sempre use reschedule_appointment para alterar a data deste agendamento existente.`
+  }
+
   const systemPrompt = [
     params.personalityPrompt ?? defaultPersonality,
     tutorGreeting,
@@ -393,6 +508,7 @@ Para emergências ou pedidos fora do escopo, transfira para um atendente humano.
     surgeryContext,
     priceRestriction,
     bookingRestriction,
+    confirmationContext,
     'Use as ferramentas disponíveis quando precisar de dados reais antes de responder.',
   ].filter(Boolean).join('\n')
 
@@ -402,7 +518,13 @@ Para emergências ou pedidos fora do escopo, transfira para um atendente humano.
     if (t.name === 'book_appointment' && !canBook)         return false
     return true
   })
-  const activeTools = vetInfo.isInSurgery ? [...baseTools, SURGERY_TOOL] : baseTools
+  let activeTools = vetInfo.isInSurgery ? [...baseTools, SURGERY_TOOL] : baseTools
+  if (params.pendingAppointmentId) {
+    activeTools = [...activeTools, ...CONFIRMATION_TOOLS]
+  }
+
+  // Resultado lateral: indica ao caller qual decisão o bot tomou (para limpar pending_appointment_id)
+  let confirmationResolved: 'confirmed' | 'rescheduled' | 'cancelled' | undefined
 
   // Agentic loop — máximo 5 iterações
   let currentMessages = [...messages]
@@ -443,7 +565,7 @@ Para emergências ou pedidos fora do escopo, transfira para um atendente humano.
     if (response.stop_reason === 'end_turn') {
       const textBlock = response.content.find(b => b.type === 'text')
       const reply = textBlock?.type === 'text' ? textBlock.text.trim() : ''
-      return { reply: reply || 'Desculpe, não consegui processar sua mensagem.', handoff: false }
+      return { reply: reply || 'Desculpe, não consegui processar sua mensagem.', handoff: false, confirmationResolved }
     }
 
     // stop_reason = tool_use → executa ferramentas e continua
@@ -480,6 +602,25 @@ Para emergências ou pedidos fora do escopo, transfira para um atendente humano.
           notes:      input.notes ?? '',
         })
 
+        if (block.name === 'confirm_appointment' && params.pendingAppointmentId) {
+          result = await execConfirmAppointment(params.pendingAppointmentId)
+          confirmationResolved = 'confirmed'
+        }
+        if (block.name === 'cancel_appointment' && params.pendingAppointmentId) {
+          result = await execCancelAppointment(params.pendingAppointmentId)
+          confirmationResolved = 'cancelled'
+        }
+        if (block.name === 'reschedule_appointment' && params.pendingAppointmentId) {
+          result = await execRescheduleAppointment({
+            appointmentId: params.pendingAppointmentId,
+            newDate:       input.new_date,
+            newTime:       input.new_time,
+          })
+          if (!result.startsWith('Slot') && !result.startsWith('Erro')) {
+            confirmationResolved = 'rescheduled'
+          }
+        }
+
         toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: result })
       }
 
@@ -494,5 +635,5 @@ Para emergências ou pedidos fora do escopo, transfira para um atendente humano.
     break
   }
 
-  return { reply: 'Desculpe, não consegui processar sua solicitação no momento.', handoff: false }
+  return { reply: 'Desculpe, não consegui processar sua solicitação no momento.', handoff: false, confirmationResolved }
 }

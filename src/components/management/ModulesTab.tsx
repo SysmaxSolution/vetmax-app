@@ -7,7 +7,6 @@ import {
   PawPrint, Banknote, FolderKanban, DollarSign, FileBarChart2,
 } from 'lucide-react'
 import { updateClinicConfig, type ClinicConfig } from '@/lib/actions/clinic-settings'
-import WhatsappIntelligentSetup from './Settings/WhatsappIntelligentSetup'
 
 // ─── Module definitions ───────────────────────────────────────────────────────
 
@@ -98,7 +97,6 @@ export default function ModulesTab({ initialConfig, onToast }: Props) {
   }
 
   const pendingMod = MODULES.find(m => m.key === pendingToggle?.key)
-  const whatsappIntelligentActive = activeModules.includes('whatsapp_intelligent')
 
   return (
     <div className="space-y-4">
@@ -243,10 +241,6 @@ export default function ModulesTab({ initialConfig, onToast }: Props) {
         </div>
       </div>
 
-      {/* Setup WhatsApp — visível somente quando WhatsApp Inteligente está ativo */}
-      {whatsappIntelligentActive && (
-        <WhatsappIntelligentSetup onToast={onToast} />
-      )}
     </div>
   )
 }

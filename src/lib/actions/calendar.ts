@@ -23,6 +23,7 @@ export interface UnifiedCalendarEvent {
   professionalId:   string | null
   professionalName: string | null
   durationMinutes:  number        // duração do bloco na agenda (default 60 / 120 grooming)
+  botConfirmationStatus?: 'confirmed' | 'rescheduled' | 'cancelled' | null
 }
 
 export interface CalendarProfessional {
@@ -67,7 +68,7 @@ export async function getUnifiedCalendarEvents(
     supabase
       .from('appointments')
       .select(`
-        id, appointment_datetime, reason, status, notes, source, professional_id,
+        id, appointment_datetime, reason, status, notes, source, professional_id, bot_confirmation_status,
         patients:pet_id ( id, name, species ),
         tutors:tutor_id ( id, name ),
         professional:profiles!professional_id ( full_name, appointment_interval_minutes )
@@ -121,6 +122,7 @@ export async function getUnifiedCalendarEvents(
       professionalId:   (a as any).professional_id ?? null,
       professionalName: prof?.full_name ?? null,
       durationMinutes:  prof?.appointment_interval_minutes ?? 60,
+      botConfirmationStatus: ((a as any).bot_confirmation_status ?? null) as UnifiedCalendarEvent['botConfirmationStatus'],
     })
   }
 
@@ -171,7 +173,7 @@ export async function getUnifiedEventsForRange(
   const [apptRes, groomRes] = await Promise.all([
     supabase
       .from('appointments')
-      .select(`id, appointment_datetime, reason, status, source, professional_id,
+      .select(`id, appointment_datetime, reason, status, source, professional_id, bot_confirmation_status,
                patients:pet_id ( id, name, species ),
                tutors:tutor_id ( id, name ),
                professional:profiles!professional_id ( full_name, appointment_interval_minutes )`)
@@ -219,6 +221,7 @@ export async function getUnifiedEventsForRange(
       professionalId:   (a as any).professional_id ?? null,
       professionalName: prof?.full_name ?? null,
       durationMinutes:  prof?.appointment_interval_minutes ?? 60,
+      botConfirmationStatus: ((a as any).bot_confirmation_status ?? null) as UnifiedCalendarEvent['botConfirmationStatus'],
     })
   }
 

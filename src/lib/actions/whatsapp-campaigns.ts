@@ -5,7 +5,12 @@ import { createAdminClient } from '@/lib/supabase/admin'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type TriggerType = 'no_visit' | 'vaccine_due' | 'pending_return' | 'grooming_due'
+export type TriggerType =
+  | 'no_visit'
+  | 'vaccine_due'
+  | 'pending_return'
+  | 'grooming_due'
+  | 'appointment_confirmation'
 
 export interface Campaign {
   id?:            string

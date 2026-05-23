@@ -53,13 +53,22 @@ const CAMPAIGN_DEFS: {
     daysLabel:   'Dias sem banho/tosa',
     defaultDays: 45,
   },
+  {
+    type:        'appointment_confirmation',
+    label:       'Confirmação de Agendamento',
+    description: 'Bot pergunta ao tutor X dias antes se confirma, remarca ou cancela o agendamento. Resposta atualiza a agenda automaticamente.',
+    showDays:    true,
+    daysLabel:   'Antecedência (dias)',
+    defaultDays: 1,
+  },
 ]
 
 const TRIGGER_LABELS: Record<string, string> = {
-  no_visit:       'Reativação',
-  vaccine_due:    'Vacina',
-  pending_return: 'Retorno',
-  grooming_due:   'Tosa',
+  no_visit:                 'Reativação',
+  vaccine_due:              'Vacina',
+  pending_return:           'Retorno',
+  grooming_due:             'Tosa',
+  appointment_confirmation: 'Confirmação',
 }
 
 function timeLabel(iso: string): string {
