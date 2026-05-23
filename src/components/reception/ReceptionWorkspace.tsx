@@ -21,6 +21,7 @@ import type { ReceptionQueueItem, ReceptionHistoryItem } from '@/lib/actions/con
 import type { SearchResult } from '@/lib/actions/tutors'
 import type { VisitReason, PatientSpecies } from '@/types'
 import { getPatientById, type PatientsListItem } from '@/lib/actions/timeline'
+import QuickPetRegisterModal from './QuickPetRegisterModal'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const SPECIES_LABELS: Record<string, { label: string; emoji: string; color: string }> = {
@@ -365,6 +366,7 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
   >(null)
   const [editPatient,    setEditPatient]    = useState<PatientsListItem | null>(null)
   const [loadingPetEditId, setLoadingPetEditId] = useState<string | null>(null)
+  const [showQuickRegister, setShowQuickRegister] = useState(false)
 
   async function handleOpenPet(patientId: string) {
     setLoadingPetEditId(patientId)
@@ -678,18 +680,31 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
               <h2 className="text-base font-semibold text-slate-900">Busca Inteligente</h2>
               <p className="text-sm text-slate-500">Pesquise por CPF do Tutor, nome do Tutor ou nome do Pet</p>
             </div>
-            <button
-              data-mentor-step="reception-new-btn"
-              onClick={() => setModal({ type: 'new_tutor_and_pet' })}
-              title="Alt+N"
-              className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition-colors hover:shadow-md flex-shrink-0"
-            >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-              </svg>
-              Novo Cadastro
-              <kbd className="hidden sm:inline-flex items-center rounded bg-blue-500 px-1.5 py-0.5 text-[10px] font-medium text-blue-100">Alt+N</kbd>
-            </button>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                onClick={() => setShowQuickRegister(true)}
+                title="Cadastro mínimo (4 campos) — para agendar agora e completar depois"
+                className="flex items-center gap-1.5 rounded-xl bg-amber-500 px-3 py-2.5 text-sm font-semibold text-white hover:bg-amber-600 transition-colors hover:shadow-md"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+                </svg>
+                <span className="hidden sm:inline">Cadastro Rápido</span>
+                <span className="sm:hidden">Rápido</span>
+              </button>
+              <button
+                data-mentor-step="reception-new-btn"
+                onClick={() => setModal({ type: 'new_tutor_and_pet' })}
+                title="Cadastro completo (todas as abas) · Alt+N"
+                className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition-colors hover:shadow-md"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+                Novo Cadastro
+                <kbd className="hidden sm:inline-flex items-center rounded bg-blue-500 px-1.5 py-0.5 text-[10px] font-medium text-blue-100">Alt+N</kbd>
+              </button>
+            </div>
           </div>
           <div className="relative">
             <div className="pointer-events-none absolute inset-y-0 left-4 flex items-center">
@@ -911,6 +926,27 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
           patient={editPatient}
           onClose={() => setEditPatient(null)}
           onSuccess={() => { setEditPatient(null); router.refresh() }}
+        />
+      )}
+
+      {showQuickRegister && (
+        <QuickPetRegisterModal
+          onClose={() => setShowQuickRegister(false)}
+          onSuccess={(r) => {
+            setShowQuickRegister(false)
+            showToast(`Cadastro rápido criado: ${r.patientName} · ${r.tutorName}`)
+            if (r.scheduleAfter) {
+              setNewApptPet({
+                id:        r.patientId,
+                name:      r.patientName,
+                species:   r.petSpecies,
+                tutorId:   r.tutorId,
+                tutorName: r.tutorName,
+              })
+            } else {
+              router.refresh()
+            }
+          }}
         />
       )}
 

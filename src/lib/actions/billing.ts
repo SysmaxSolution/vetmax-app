@@ -313,6 +313,15 @@ export async function processPayment(
       procedure_pattern?: string
       due_date?:          string
     }
+    /**
+     * Quando o método é cartão (credit/debit), obrigatório para conciliação
+     * com a maquininha. Persistido em invoices.card_*.
+     */
+    card_details?: {
+      acquirer:      string
+      nsu:           string
+      authorization: string
+    }
   }
 ): Promise<{ success: true } | { error: string }> {
   const supabase = await createClient()
@@ -423,6 +432,11 @@ export async function processPayment(
       payment_method: payload.payment_method,
       paid_at:        isFullyPaid ? new Date().toISOString() : null,
       updated_at:     new Date().toISOString(),
+      ...(payload.card_details ? {
+        card_acquirer:      payload.card_details.acquirer.trim(),
+        card_nsu:           payload.card_details.nsu.trim(),
+        card_authorization: payload.card_details.authorization.trim(),
+      } : {}),
     })
     .eq('id', invoiceId)
     .eq('clinic_id', profile.clinic_id)

@@ -6,6 +6,7 @@ import { getInvoiceWithItems, processPayment, type InvoiceWithDetails, type Paym
 import InsuranceExportPanel from '@/components/reception/InsuranceExportPanel'
 import CheckoutInsurancePreviewClient from '@/components/financial/CheckoutInsurancePreviewClient'
 import InvoiceDuplicatasList from '@/components/financial/InvoiceDuplicatasList'
+import CardPaymentDetailsModal from './CardPaymentDetailsModal'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -68,6 +69,9 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
   /** Itens da consulta que estão em carência — mostra modal antes do checkout. */
   const [waitingItems, setWaitingItems]   = useState<Array<{ description: string; remaining: number }>>([])
   const [waitingAck,   setWaitingAck]     = useState(false)
+  /** Detalhes do cartão (administradora, NSU, autorização) — obrigatório quando método é credit/debit. */
+  const [cardDetails,  setCardDetails]    = useState<{ acquirer: string; nsu: string; authorization: string } | null>(null)
+  const [showCardModal, setShowCardModal] = useState(false)
 
   useEffect(() => {
     getInvoiceWithItems(invoiceId).then(res => {
@@ -144,8 +148,18 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
   })()
   const restante = Math.max(0, totalDue - amountReceived)
 
-  async function handleConfirm() {
+  async function handleConfirm(overrideCardDetails?: { acquirer: string; nsu: string; authorization: string }) {
     if (!invoice) return
+
+    const effectiveCardDetails = overrideCardDetails ?? cardDetails
+
+    // Cartão (crédito/débito) exige dados de conciliação antes de prosseguir.
+    const requiresCard = paymentMethod === 'credit' || paymentMethod === 'debit'
+    if (requiresCard && !effectiveCardDetails) {
+      setShowCardModal(true)
+      return
+    }
+
     setSubmitting(true)
 
     // Montar overrides de preço para itens editados
@@ -167,11 +181,17 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
         clinic_discount:   insuranceSplit.clinic_discount,
         procedure_pattern: insuranceSplit.procedure_pattern,
       } : undefined,
+      card_details: requiresCard && effectiveCardDetails ? effectiveCardDetails : undefined,
     })
     setSubmitting(false)
     if ('error' in res) { setError(res.error); return }
     onSuccess(invoice.patient.name, amountReceived)
   }
+
+  // Limpa os dados de cartão quando o usuário troca o método de pagamento
+  useEffect(() => {
+    if (paymentMethod !== 'credit' && paymentMethod !== 'debit') setCardDetails(null)
+  }, [paymentMethod])
 
   return (
     <div
@@ -461,7 +481,7 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
               Cancelar
             </button>
             <button
-              onClick={handleConfirm}
+              onClick={() => handleConfirm()}
               disabled={submitting || (amountReceived <= 0.005 && !insuranceSplit)}
               data-mentor-step="cashier-confirm-payment-btn"
               title={amountReceived <= 0.005 && !insuranceSplit ? 'Informe um valor maior que zero para receber, ou aplique a cobertura do convênio.' : undefined}
@@ -526,6 +546,19 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
             </p>
           </div>
         </div>
+      )}
+
+      {showCardModal && (paymentMethod === 'credit' || paymentMethod === 'debit') && (
+        <CardPaymentDetailsModal
+          paymentMethod={paymentMethod}
+          amount={amountReceived}
+          onCancel={() => setShowCardModal(false)}
+          onConfirm={(details) => {
+            setCardDetails(details)
+            setShowCardModal(false)
+            void handleConfirm(details)
+          }}
+        />
       )}
     </div>
   )
