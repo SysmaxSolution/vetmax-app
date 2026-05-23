@@ -32,6 +32,8 @@ import { formatPetAge } from '@/lib/utils/pet-age'
 import { DatePicker } from '@/components/ui/DatePicker'
 import VaccinationCard from '@/components/vet/VaccinationCard'
 import { useClinicalVoiceAssistant } from '@/hooks/useClinicalVoiceAssistant'
+import { usePetCoverageSemaforo } from '@/hooks/usePetCoverageSemaforo'
+import CoverageChip from '@/components/vet/CoverageChip'
 import { useNativeKeepAwake } from '@/hooks/useNativeKeepAwake'
 import { getClinicVoiceTriggers, updateClinicVoiceTriggers } from '@/lib/actions/clinic-settings'
 import { useAiTranscriptionMode } from '@/components/providers/ClinicConfigProvider'
@@ -199,6 +201,13 @@ export default function TriageForm({
 
   const isRecording = assistant.state === 'RECORDING'
   useNativeKeepAwake(isRecording)
+
+  // Semáforo Petlove — ancorado no textarea "Anamnese / Observações".
+  const coverageSemaforo = usePetCoverageSemaforo({
+    patientId:   consultation.patient.id,
+    transcript:  assistant.transcript,
+    isListening: isRecording,
+  })
   const displayTranscript = isRecording
     ? [savedTranscript, assistant.transcript].filter(Boolean).join(' ')
     : savedTranscript
@@ -956,19 +965,23 @@ export default function TriageForm({
               )}
             </h3>
             <label htmlFor="chief-complaint-field" className="sr-only">Anamnese / Histórico / Observações</label>
-            <textarea
-              id="chief-complaint-field"
-              value={vitalSigns.chief_complaint}
-              onChange={(e) => {
-                setVitalSigns((prev) => ({ ...prev, chief_complaint: e.target.value }))
-                if (fieldErrors.chief_complaint) setFieldErrors((prev) => { const n = { ...prev }; delete n.chief_complaint; return n })
-                setAiFilledFields((prev) => { const n = new Set(prev); n.delete('chief_complaint'); return n })
-              }}
-              className={`w-full h-32 px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none ${
-                fieldErrors.chief_complaint ? 'border-red-400 bg-red-50' : aiHighlight('chief_complaint') || 'border-slate-300'
-              }`}
-              placeholder="Use o Motor de Voz acima ou digite aqui a queixa principal do animal..."
-            />
+            <div className="relative">
+              <textarea
+                id="chief-complaint-field"
+                value={vitalSigns.chief_complaint}
+                onChange={(e) => {
+                  setVitalSigns((prev) => ({ ...prev, chief_complaint: e.target.value }))
+                  if (fieldErrors.chief_complaint) setFieldErrors((prev) => { const n = { ...prev }; delete n.chief_complaint; return n })
+                  setAiFilledFields((prev) => { const n = new Set(prev); n.delete('chief_complaint'); return n })
+                }}
+                className={`w-full h-32 px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none ${
+                  fieldErrors.chief_complaint ? 'border-red-400 bg-red-50' : aiHighlight('chief_complaint') || 'border-slate-300'
+                }`}
+                placeholder="Use o Motor de Voz acima ou digite aqui a queixa principal do animal..."
+              />
+              {/* Semáforo Petlove — chip flutuante de cobertura por voz. */}
+              <CoverageChip state={coverageSemaforo} className="z-20" />
+            </div>
             {fieldErrors.chief_complaint && <p className="text-xs text-red-600 mt-1">{fieldErrors.chief_complaint}</p>}
           </div>
 

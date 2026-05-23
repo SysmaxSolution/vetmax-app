@@ -29,6 +29,8 @@ import InsuranceCard from '@/components/pet/InsuranceCard'
 import { getInsuranceCard, type InsuranceCardData } from '@/lib/actions/insurance-coverage'
 import { useClinicalVoiceAssistant } from '@/hooks/useClinicalVoiceAssistant'
 import { useFocusedVoiceCapture } from '@/hooks/useFocusedVoiceCapture'
+import { usePetCoverageSemaforo } from '@/hooks/usePetCoverageSemaforo'
+import CoverageChip from '@/components/vet/CoverageChip'
 import { useNativeKeepAwake } from '@/hooks/useNativeKeepAwake'
 import { getClinicVoiceTriggers, updateClinicVoiceTriggers } from '@/lib/actions/clinic-settings'
 import { useAiTranscriptionMode } from '@/components/providers/ClinicConfigProvider'
@@ -204,6 +206,13 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
   })
   const isRecording = voiceAssistant.state === 'RECORDING'
   useNativeKeepAwake(isRecording)
+
+  // Semáforo Petlove — ancorado no textarea "Observações Clínicas" da evolução.
+  const coverageSemaforo = usePetCoverageSemaforo({
+    patientId:   card.patient.id,
+    transcript:  voiceAssistant.transcript,
+    isListening: isRecording,
+  })
 
   useEffect(() => {
     getClinicVoiceTriggers().then(res => {
@@ -652,7 +661,11 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
                 {/* Notas */}
                 <div>
                   <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Observações Clínicas</label>
-                  <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Ex: Animal mais alerta, aceitou alimentação..." className="w-full mt-1 p-3 rounded-xl border-slate-200 text-sm focus:ring-violet-500 focus:border-violet-500 min-h-[100px]" />
+                  <div className="relative mt-1">
+                    <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Ex: Animal mais alerta, aceitou alimentação..." className="w-full p-3 rounded-xl border-slate-200 text-sm focus:ring-violet-500 focus:border-violet-500 min-h-[100px]" />
+                    {/* Semáforo Petlove — chip flutuante de cobertura por voz. */}
+                    <CoverageChip state={coverageSemaforo} className="z-20" />
+                  </div>
                 </div>
 
                 {/* Medicações Estruturadas */}
