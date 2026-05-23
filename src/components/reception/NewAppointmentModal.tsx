@@ -12,6 +12,8 @@ import { getClinicProfessionals, type ClinicProfessional } from '@/lib/actions/p
 import { getProfessionalSlots, checkProfessionalAvailability } from '@/lib/actions/appointment-slots'
 import { listCatalogPackages, sellPackageToPet, linkSessionToAppointment, type CatalogPackage } from '@/lib/actions/packages'
 import { localDateTimeToISO, localDateTimeInputToISO } from '@/lib/utils/datetime'
+import TimeWheelPicker from '@/components/ui/TimeWheelPicker'
+import type { BookedRange } from '@/lib/actions/appointment-slots'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -90,7 +92,9 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
   const [professionals, setProfessionals]       = useState<ClinicProfessional[]>([])
   const [loadingProfessionals, setLoadingProfessionals] = useState(true)
   const [bookedTimes, setBookedTimes]           = useState<string[]>([])
+  const [bookedRanges, setBookedRanges]         = useState<BookedRange[]>([])
   const [intervalMinutes, setIntervalMinutes]   = useState(60)
+  const [wheelTime, setWheelTime]               = useState<string | null>(null)
   const [loadingSlots, setLoadingSlots]         = useState(false)
   const [scheduleMode,         setScheduleMode]         = useState<'regular' | 'package'>('regular')
   const [catalogPackages,      setCatalogPackages]       = useState<CatalogPackage[]>([])
@@ -109,12 +113,13 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
 
   // Carrega slots ocupados quando profissional + data mudam
   useEffect(() => {
-    if (!professionalId || !date) { setBookedTimes([]); return }
+    if (!professionalId || !date) { setBookedTimes([]); setBookedRanges([]); return }
     setLoadingSlots(true)
     getProfessionalSlots(professionalId, date).then(res => {
       setLoadingSlots(false)
       if ('error' in res) return
       setBookedTimes(res.bookedTimes)
+      setBookedRanges(res.bookedRanges)
       setIntervalMinutes(res.intervalMinutes)
       // Se o horário atual está ocupado, limpa
       if (time && res.bookedTimes.includes(time)) setTime('')
@@ -320,18 +325,30 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
   const currentTutorName = defaultPet?.tutorName ?? selectedPet?.tutor.name
   const currentSpecies   = defaultPet?.species   ?? selectedPet?.species ?? ''
 
-  // Gera grade de horários de 07:00 a 19:00 no intervalo do profissional (ou 60 min)
+  // Gera grade de horários no passo do profissional + mescla starts "quebrados"
+  // de agendamentos já existentes (ex.: 10:30 quando o padrão é 10:00).
   function buildTimeSlots(): string[] {
     const step  = intervalMinutes > 0 ? intervalMinutes : 60
-    const slots: string[] = []
+    const set = new Set<string>()
     for (let m = 7 * 60; m <= 19 * 60; m += step) {
       const hh = String(Math.floor(m / 60)).padStart(2, '0')
       const mm = String(m % 60).padStart(2, '0')
-      slots.push(`${hh}:${mm}`)
+      set.add(`${hh}:${mm}`)
     }
-    return slots
+    for (const r of bookedRanges) set.add(r.start)
+    return Array.from(set).sort()
   }
   const timeSlots = buildTimeSlots()
+
+  function rangeFor(slot: string): { start: string; end: string } {
+    const [h, m] = slot.split(':').map(Number)
+    const start = h * 60 + m
+    const end = Math.min(start + intervalMinutes, 24 * 60 - 1)
+    return {
+      start: slot,
+      end:   `${String(Math.floor(end / 60)).padStart(2, '0')}:${String(end % 60).padStart(2, '0')}`,
+    }
+  }
 
   return (
     <div
@@ -702,33 +719,48 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
                 {/* Horário — grid de slots se profissional selecionado, TimePicker livre caso contrário */}
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
-                    Horário
+                    Horário <span className="text-[10px] text-slate-400 font-normal">· bloco de {intervalMinutes}min</span>
                     {loadingSlots && <Loader2 className="h-3 w-3 animate-spin text-slate-400" />}
                   </label>
                   {professionalId && date ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {timeSlots.map(slot => {
-                        const occupied = bookedTimes.includes(slot)
-                        const selected = time === slot
-                        return (
-                          <button
-                            key={slot}
-                            type="button"
-                            disabled={occupied}
-                            onClick={() => setTime(slot)}
-                            className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                              selected
-                                ? 'bg-teal-600 border-teal-600 text-white shadow-sm'
-                                : occupied
-                                  ? 'bg-slate-100 border-slate-200 text-slate-300 line-through cursor-not-allowed'
-                                  : 'bg-white border-slate-200 text-slate-700 hover:border-teal-400 hover:text-teal-700'
-                            }`}
-                          >
-                            {slot}
+                    <>
+                      <div className="flex flex-wrap gap-1.5">
+                        {timeSlots.map(slot => {
+                          const occupied = bookedTimes.includes(slot)
+                          const selected = time === slot
+                          return (
+                            <button
+                              key={slot}
+                              type="button"
+                              disabled={occupied}
+                              onClick={() => setWheelTime(slot)}
+                              title={occupied
+                                ? `Ocupado (${slot} – ${rangeFor(slot).end})`
+                                : `Clique para ajustar (${slot} – ${rangeFor(slot).end})`
+                              }
+                              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                                selected
+                                  ? 'bg-teal-600 border-teal-600 text-white shadow-sm'
+                                  : occupied
+                                    ? 'bg-slate-100 border-slate-200 text-slate-300 line-through cursor-not-allowed'
+                                    : 'bg-white border-slate-200 text-slate-700 hover:border-teal-400 hover:text-teal-700'
+                              }`}
+                            >
+                              {slot}
+                            </button>
+                          )
+                        })}
+                      </div>
+                      {time && (
+                        <p className="mt-2 text-[11px] text-teal-700">
+                          Selecionado: <span className="font-semibold">{time} – {rangeFor(time).end}</span>
+                          {' · '}
+                          <button type="button" onClick={() => setWheelTime(time)} className="underline hover:text-teal-800">
+                            ajustar minutos
                           </button>
-                        )
-                      })}
-                    </div>
+                        </p>
+                      )}
+                    </>
                   ) : (
                     <TimePicker value={time} onChange={setTime} />
                   )}
@@ -736,6 +768,16 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
                     <p className="mt-1 text-[11px] text-slate-400">Selecione a data para ver os horários disponíveis</p>
                   )}
                 </div>
+
+                {wheelTime !== null && (
+                  <TimeWheelPicker
+                    initialValue={wheelTime}
+                    durationMinutes={intervalMinutes}
+                    blockedRanges={bookedRanges}
+                    onCancel={() => setWheelTime(null)}
+                    onConfirm={(v) => { setTime(v); setWheelTime(null) }}
+                  />
+                )}
 
                 {/* Notas */}
                 <div>

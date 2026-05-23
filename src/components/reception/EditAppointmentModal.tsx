@@ -8,6 +8,8 @@ import { getClinicProfessionals, type ClinicProfessional } from '@/lib/actions/p
 import { sendWhatsAppMessage } from '@/lib/actions/whatsapp'
 import { DateInput, TimePicker } from '@/components/ui/DatePicker'
 import { localDateTimeToISO } from '@/lib/utils/datetime'
+import TimeWheelPicker from '@/components/ui/TimeWheelPicker'
+import type { BookedRange } from '@/lib/actions/appointment-slots'
 
 const SPECIES_EMOJI: Record<string, string> = {
   dog: '🐶', cat: '🐱', bird: '🐦', exotic: '🦜',
@@ -54,9 +56,11 @@ export default function EditAppointmentModal({ appointmentId, onClose, onSuccess
   // Slots
   const [professionals,    setProfessionals]    = useState<ClinicProfessional[]>([])
   const [bookedTimes,      setBookedTimes]      = useState<string[]>([])
+  const [bookedRanges,     setBookedRanges]     = useState<BookedRange[]>([])
   const [intervalMinutes,  setIntervalMinutes]  = useState(60)
   const [loadingSlots,     setLoadingSlots]     = useState(false)
   const [loadingProfs,     setLoadingProfs]     = useState(true)
+  const [wheelTime,        setWheelTime]        = useState<string | null>(null)
 
   // Post-save WhatsApp
   const [saved,           setSaved]           = useState(false)
@@ -95,28 +99,42 @@ export default function EditAppointmentModal({ appointmentId, onClose, onSuccess
 
   // ── Load slots ────────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!professionalId || !date) { setBookedTimes([]); return }
+    if (!professionalId || !date) { setBookedTimes([]); setBookedRanges([]); return }
     setLoadingSlots(true)
     getProfessionalSlots(professionalId, date, appointmentId).then(res => {
       setLoadingSlots(false)
       if ('error' in res) return
       setBookedTimes(res.bookedTimes)
+      setBookedRanges(res.bookedRanges)
       setIntervalMinutes(res.intervalMinutes)
     })
   }, [professionalId, date, appointmentId])
 
-  // ── Time slots grid ───────────────────────────────────────────────────────────
+  // ── Time slots grid (grade + starts quebrados) ────────────────────────────────
   function buildTimeSlots(): string[] {
     const step = intervalMinutes > 0 ? intervalMinutes : 60
-    const slots: string[] = []
+    const set  = new Set<string>()
     for (let m = 7 * 60; m <= 19 * 60; m += step) {
       const hh = String(Math.floor(m / 60)).padStart(2, '0')
       const mm = String(m % 60).padStart(2, '0')
-      slots.push(`${hh}:${mm}`)
+      set.add(`${hh}:${mm}`)
     }
-    return slots
+    for (const r of bookedRanges) set.add(r.start)
+    // Garante que o horário atual do appointment editado apareça na grade
+    if (time) set.add(time)
+    return Array.from(set).sort()
   }
   const timeSlots = buildTimeSlots()
+
+  function rangeFor(slot: string): { start: string; end: string } {
+    const [h, m] = slot.split(':').map(Number)
+    const start = h * 60 + m
+    const end = Math.min(start + intervalMinutes, 24 * 60 - 1)
+    return {
+      start: slot,
+      end:   `${String(Math.floor(end / 60)).padStart(2, '0')}:${String(end % 60).padStart(2, '0')}`,
+    }
+  }
 
   // ── Detect changes ────────────────────────────────────────────────────────────
   const dateChanged = date !== origDate
@@ -318,37 +336,62 @@ export default function EditAppointmentModal({ appointmentId, onClose, onSuccess
             {/* Horário */}
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
-                Horário
+                Horário <span className="text-[10px] text-slate-400 font-normal">· bloco de {intervalMinutes}min</span>
                 {loadingSlots && <Loader2 className="h-3 w-3 animate-spin text-slate-400" />}
               </label>
               {professionalId && date ? (
-                <div className="flex flex-wrap gap-1.5">
-                  {timeSlots.map(slot => {
-                    const occupied = bookedTimes.includes(slot)
-                    const selected = time === slot
-                    return (
-                      <button
-                        key={slot}
-                        type="button"
-                        disabled={occupied}
-                        onClick={() => setTime(slot)}
-                        className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                          selected
-                            ? 'bg-blue-600 border-blue-600 text-white shadow-sm'
-                            : occupied
-                              ? 'bg-slate-100 border-slate-200 text-slate-300 line-through cursor-not-allowed'
-                              : 'bg-white border-slate-200 text-slate-700 hover:border-blue-400 hover:text-blue-700'
-                        }`}
-                      >
-                        {slot}
+                <>
+                  <div className="flex flex-wrap gap-1.5">
+                    {timeSlots.map(slot => {
+                      const occupied = slot !== time && bookedTimes.includes(slot)
+                      const selected = time === slot
+                      return (
+                        <button
+                          key={slot}
+                          type="button"
+                          disabled={occupied}
+                          onClick={() => setWheelTime(slot)}
+                          title={occupied
+                            ? `Ocupado (${slot} – ${rangeFor(slot).end})`
+                            : `Clique para ajustar (${slot} – ${rangeFor(slot).end})`
+                          }
+                          className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                            selected
+                              ? 'bg-blue-600 border-blue-600 text-white shadow-sm'
+                              : occupied
+                                ? 'bg-slate-100 border-slate-200 text-slate-300 line-through cursor-not-allowed'
+                                : 'bg-white border-slate-200 text-slate-700 hover:border-blue-400 hover:text-blue-700'
+                          }`}
+                        >
+                          {slot}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {time && (
+                    <p className="mt-2 text-[11px] text-blue-700">
+                      Selecionado: <span className="font-semibold">{time} – {rangeFor(time).end}</span>
+                      {' · '}
+                      <button type="button" onClick={() => setWheelTime(time)} className="underline hover:text-blue-800">
+                        ajustar minutos
                       </button>
-                    )
-                  })}
-                </div>
+                    </p>
+                  )}
+                </>
               ) : (
                 <TimePicker value={time} onChange={setTime} />
               )}
             </div>
+
+            {wheelTime !== null && (
+              <TimeWheelPicker
+                initialValue={wheelTime}
+                durationMinutes={intervalMinutes}
+                blockedRanges={bookedRanges}
+                onCancel={() => setWheelTime(null)}
+                onConfirm={(v) => { setTime(v); setWheelTime(null) }}
+              />
+            )}
 
             {/* Notas */}
             <div>

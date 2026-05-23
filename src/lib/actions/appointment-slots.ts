@@ -3,8 +3,11 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
+export type BookedRange = { start: string; end: string } // 'HH:MM'
+
 export type SlotInfo = {
   bookedTimes:     string[]
+  bookedRanges:    BookedRange[]
   intervalMinutes: number
 }
 
@@ -47,18 +50,21 @@ export async function getProfessionalSlots(
   if (error) return { error: error.message }
 
   const blocked = new Set<string>()
+  const ranges: BookedRange[] = []
   for (const appt of (appts ?? [])) {
     const dt          = new Date(appt.appointment_datetime)
     const baseMinutes = dt.getHours() * 60 + dt.getMinutes()
-    for (let offset = 0; offset < intervalMinutes; offset += 30) {
+    const endMinutes  = Math.min(baseMinutes + intervalMinutes, 24 * 60)
+    const fmt = (total: number) =>
+      `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
+    ranges.push({ start: fmt(baseMinutes), end: fmt(endMinutes) })
+    for (let offset = 0; offset < intervalMinutes; offset += 5) {
       const total = baseMinutes + offset
-      const hh = String(Math.floor(total / 60)).padStart(2, '0')
-      const mm = String(total % 60).padStart(2, '0')
-      if (total < 24 * 60) blocked.add(`${hh}:${mm}`)
+      if (total < 24 * 60) blocked.add(fmt(total))
     }
   }
 
-  return { bookedTimes: Array.from(blocked), intervalMinutes }
+  return { bookedTimes: Array.from(blocked), bookedRanges: ranges, intervalMinutes }
 }
 
 export async function checkProfessionalAvailability(
@@ -72,15 +78,17 @@ export async function checkProfessionalAvailability(
 
   const step     = slots.intervalMinutes > 0 ? slots.intervalMinutes : 60
   const [hh, mm] = time.split(':').map(Number)
-  const startMin = hh * 60 + mm
+  const newStart = hh * 60 + mm
+  const newEnd   = newStart + step
 
-  for (let offset = 0; offset < step; offset += 30) {
-    const total  = startMin + offset
-    const slotHH = String(Math.floor(total / 60)).padStart(2, '0')
-    const slotMM = String(total % 60).padStart(2, '0')
-    const slot   = `${slotHH}:${slotMM}`
-    if (slots.bookedTimes.includes(slot)) {
-      return { available: false, conflictAt: slot }
+  for (const r of slots.bookedRanges) {
+    const [rsH, rsM] = r.start.split(':').map(Number)
+    const [reH, reM] = r.end.split(':').map(Number)
+    const rs = rsH * 60 + rsM
+    const re = reH * 60 + reM
+    // Sobreposição de intervalos: [newStart, newEnd) ∩ [rs, re) ≠ ∅
+    if (newStart < re && rs < newEnd) {
+      return { available: false, conflictAt: r.start }
     }
   }
   return { available: true }
