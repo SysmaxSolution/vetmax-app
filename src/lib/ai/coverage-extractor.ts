@@ -92,6 +92,36 @@ function stripJsonFences(s: string): string {
     .trim()
 }
 
+/**
+ * Fire-and-forget de telemetria de drift (resposta inválida do LLM).
+ * Não bloqueia o caller — falhas de log nunca impactam a UI.
+ */
+async function logDrift(input: string, rawOutput: string, reason: string): Promise<void> {
+  try {
+    // Import dinâmico evita ciclo (admin client → server → core).
+    const { createAdminClient } = await import('@/lib/supabase/admin')
+    const admin = createAdminClient()
+    await admin
+      .from('error_logs')
+      .insert({
+        clinic_id:     null,
+        user_id:       null,
+        path:          'lib/ai/coverage-extractor',
+        error_message: reason,
+        stack_trace:   null,
+        user_journey:  {
+          input_snippet: input.slice(0, 800),
+          output_raw:    rawOutput.slice(0, 800),
+          model:         'claude-haiku-4-5-20251001',
+          timestamp:     new Date().toISOString(),
+        },
+        severity:      'warn',
+        module:        'ai-coverage-drift',
+        source:        'server',
+      })
+  } catch { /* telemetria não pode quebrar fluxo */ }
+}
+
 // ─── Core ────────────────────────────────────────────────────────────────────
 
 export interface ExtractOptions {
@@ -134,13 +164,24 @@ export async function extractCoverageCore(
     const first = response.content[0]
     const raw   = first && first.type === 'text' ? first.text : ''
     const cleaned = stripJsonFences(raw)
-    if (!cleaned) return null
+    if (!cleaned) {
+      void logDrift(trimmed, raw, 'empty_response')
+      return null
+    }
 
     let parsedJson: unknown
-    try { parsedJson = JSON.parse(cleaned) } catch { return null }
+    try {
+      parsedJson = JSON.parse(cleaned)
+    } catch {
+      void logDrift(trimmed, raw, 'invalid_json')
+      return null
+    }
 
     const result = LlmResponseSchema.safeParse(parsedJson)
-    if (!result.success) return null
+    if (!result.success) {
+      void logDrift(trimmed, raw, `schema_violation:${result.error.issues.map(i => i.path.join('.')).join('|')}`)
+      return null
+    }
     return result.data
   } catch (err) {
     // AbortError não polui logs — é o caminho esperado quando o lock suspende
