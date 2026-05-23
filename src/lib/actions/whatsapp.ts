@@ -198,64 +198,6 @@ export type WhatsAppContext = {
 
 // ─── WhatsApp Settings ────────────────────────────────────────────────────────
 
-export type WhatsAppSettingsDisplay = {
-  id:                  string
-  providerName:        'z-api' | 'sysmax' | 'evolution-api'
-  apiUrl:              string | null
-  instanceIdMasked:    string   // primeiros 4 chars + ********
-  tokenMasked:         string   // primeiros 4 chars + ********
-  clientTokenMasked:   string | null
-  instanceIdPrefix:    string   // primeiros 4 chars (para comparação no front)
-  tokenPrefix:         string
-  clientTokenPrefix:   string | null
-  isActive:            boolean
-}
-
-/** Retorna as configurações mascaradas para exibição no formulário. */
-export async function getWhatsAppSettings(): Promise<WhatsAppSettingsDisplay | null> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('clinic_id')
-    .eq('id', user.id)
-    .single()
-  if (!profile?.clinic_id) return null
-
-  const { data } = await supabase
-    .from('clinic_whatsapp_settings')
-    .select('id, provider_name, api_url, instance_id, token, client_token, is_active')
-    .eq('clinic_id', profile.clinic_id)
-    .single()
-
-  if (!data) return null
-
-  const mask = (v: string | null): { masked: string | null; prefix: string | null } => {
-    if (!v) return { masked: null, prefix: null }
-    const prefix = v.slice(0, 4)
-    return { masked: `${prefix}********`, prefix }
-  }
-
-  const inst  = mask(data.instance_id)
-  const tok   = mask(data.token)
-  const cTok  = mask(data.client_token)
-
-  return {
-    id:                 data.id,
-    providerName:       data.provider_name as 'z-api' | 'sysmax',
-    apiUrl:             data.api_url,
-    instanceIdMasked:   inst.masked ?? '',
-    tokenMasked:        tok.masked  ?? '',
-    clientTokenMasked:  cTok.masked,
-    instanceIdPrefix:   inst.prefix ?? '',
-    tokenPrefix:        tok.prefix  ?? '',
-    clientTokenPrefix:  cTok.prefix,
-    isActive:           data.is_active,
-  }
-}
-
 /** Verifica se a clínica tem WhatsApp configurado e ativo. */
 export async function isWhatsAppEnabled(): Promise<boolean> {
   const supabase = await createClient()
@@ -277,86 +219,6 @@ export async function isWhatsAppEnabled(): Promise<boolean> {
     .maybeSingle()
 
   return !!data
-}
-
-export type SaveWhatsAppSettingsInput = {
-  providerName:  'z-api' | 'sysmax' | 'evolution-api'
-  apiUrl:        string | null
-  instanceId:    string    // valor completo ou '' para não alterar (sentinel vazio = preservar)
-  token:         string
-  clientToken:   string | null
-  isActive:      boolean
-  // flags de "não alterado" — front envia true quando o campo não foi editado
-  keepInstanceId?:   boolean
-  keepToken?:        boolean
-  keepClientToken?:  boolean
-}
-
-/** Upsert das configurações de WhatsApp da clínica. */
-export async function saveWhatsAppSettings(
-  input: SaveWhatsAppSettingsInput
-): Promise<{ success: true } | { error: string }> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Não autenticado.' }
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('clinic_id')
-    .eq('id', user.id)
-    .single()
-  if (!profile?.clinic_id) return { error: 'Clínica não encontrada.' }
-
-  // Se campos sensíveis não foram alterados, buscamos o valor atual para preservar
-  let instanceId   = input.instanceId
-  let token        = input.token
-  let clientToken  = input.clientToken
-
-  if (input.keepInstanceId || input.keepToken || input.keepClientToken) {
-    const { data: existing } = await supabase
-      .from('clinic_whatsapp_settings')
-      .select('instance_id, token, client_token')
-      .eq('clinic_id', profile.clinic_id)
-      .single()
-
-    if (existing) {
-      if (input.keepInstanceId)  instanceId  = existing.instance_id
-      if (input.keepToken)       token       = existing.token
-      if (input.keepClientToken) clientToken = existing.client_token
-    }
-  }
-
-  // Sanitiza client_token: máscara de asteriscos nunca deve chegar ao banco
-  const clientTokenFinal = (clientToken && !/^\*+$/.test(clientToken.trim()))
-    ? clientToken.trim()
-    : null
-
-  console.log('[WhatsApp] saveWhatsAppSettings — campos para upsert:', {
-    clinic_id:       profile.clinic_id,
-    provider_name:   input.providerName,
-    has_instance_id: !!instanceId,
-    has_token:       !!token,
-    has_client_token: !!clientTokenFinal,
-    keep_instance:   input.keepInstanceId,
-    keep_token:      input.keepToken,
-    keep_client:     input.keepClientToken,
-    is_active:       input.isActive,
-  })
-
-  const { error } = await supabase
-    .from('clinic_whatsapp_settings')
-    .upsert({
-      clinic_id:     profile.clinic_id,
-      provider_name: input.providerName,
-      api_url:       input.apiUrl || null,
-      instance_id:   instanceId,
-      token,
-      client_token:  clientTokenFinal,
-      is_active:     input.isActive,
-    }, { onConflict: 'clinic_id' })
-
-  if (error) return { error: error.message }
-  return { success: true }
 }
 
 // ─── Geração de mensagem com Claude ──────────────────────────────────────────
@@ -601,7 +463,7 @@ export async function generateWhatsAppMessage(
   }
 }
 
-// ─── Envio via provedor configurado no banco ──────────────────────────────────
+// ─── Envio via Evolution API ──────────────────────────────────────────────────
 
 function formatBRPhone(raw: string): string {
   const digits = raw.replace(/\D/g, '')
@@ -609,15 +471,12 @@ function formatBRPhone(raw: string): string {
   return '55' + digits
 }
 
-/** Busca credenciais ativas da clínica do usuário logado.
- *  Para a Evolution API (provedor gerenciado pela plataforma) as credenciais
- *  vêm das variáveis de ambiente do servidor — nunca são expostas ao banco. */
+/** Busca o nome da instância Evolution da clínica logada. Credenciais da
+ *  plataforma (URL e API key) ficam em env vars no servidor — nunca no banco. */
 async function getActiveCredentials(): Promise<{
   instanceId: string
-  token: string
-  clientToken: string | null
-  apiUrl: string | null
-  provider: string
+  apiKey:     string
+  apiUrl:     string
 } | null> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -632,34 +491,21 @@ async function getActiveCredentials(): Promise<{
 
   const { data } = await supabase
     .from('clinic_whatsapp_settings')
-    .select('instance_id, token, client_token, api_url, provider_name')
+    .select('instance_id, evolution_instance_name')
     .eq('clinic_id', profile.clinic_id)
     .eq('is_active', true)
     .single()
 
   if (!data) return null
 
-  // Para Evolution API gerenciada: sempre usa as env vars da plataforma.
-  // Assim as chaves de API nunca precisam ser armazenadas por clínica.
-  if (data.provider_name === 'evolution-api') {
-    const platformApiUrl = process.env.EVOLUTION_API_URL ?? data.api_url
-    const platformApiKey = process.env.EVOLUTION_API_KEY ?? data.token
-    return {
-      instanceId:  data.instance_id,
-      token:       platformApiKey ?? '',
-      clientToken: null,
-      apiUrl:      platformApiUrl ?? null,
-      provider:    'evolution-api',
-    }
-  }
+  const apiUrl = process.env.EVOLUTION_API_URL
+  const apiKey = process.env.EVOLUTION_API_KEY
+  if (!apiUrl || !apiKey) return null
 
-  return {
-    instanceId:  data.instance_id,
-    token:       data.token,
-    clientToken: data.client_token,
-    apiUrl:      data.api_url,
-    provider:    data.provider_name,
-  }
+  const instanceId = data.evolution_instance_name ?? data.instance_id
+  if (!instanceId) return null
+
+  return { instanceId, apiKey, apiUrl }
 }
 
 export async function sendWhatsAppMessage(params: {
@@ -693,126 +539,23 @@ export async function sendWhatsAppMessage(params: {
   const creds = await getActiveCredentials()
 
   if (!creds) {
-    return { error: 'WhatsApp não configurado para esta clínica. Configure em Gestão → Configurações.' }
+    return { error: 'WhatsApp não configurado para esta clínica. Leia o QR Code em Gestão → Configurações → WhatsApp.' }
   }
 
   const phone = formatBRPhone(params.phone)
 
-  // ── Evolution API ─────────────────────────────────────────────────────────
-  if (creds.provider === 'evolution-api') {
-    if (!creds.apiUrl) return { error: 'Evolution API: URL da instância não configurada.' }
-
-    const evolutionCreds = {
-      apiUrl:     creds.apiUrl,
-      instanceId: creds.instanceId,
-      apiKey:     creds.token,
-    }
-
-    try {
-      const validAttachments = (params.attachments ?? []).filter(a => a.signedUrl)
-      const singleAttachment = validAttachments.length === 1
-
-      if (!singleAttachment) {
-        await evolutionSendText(evolutionCreds, phone, params.message)
-      }
-
-      await logNotification(params)
-
-      const failedAttachments: string[] = []
-
-      if (validAttachments.length > 0) {
-        await new Promise(r => setTimeout(r, 1500))
-
-        const results = await Promise.allSettled(
-          validAttachments.map((a, i) =>
-            new Promise<void>((resolve, reject) =>
-              setTimeout(async () => {
-                try {
-                  await evolutionSendMedia(evolutionCreds, phone, {
-                    mediaUrl: a.signedUrl,
-                    fileName: a.name,
-                    mimeType: a.mimeType,
-                    caption:  singleAttachment ? params.message : a.name.replace(/\.[^.]+$/, ''),
-                  })
-                  resolve()
-                } catch (e) { reject(e) }
-              }, i * 1500)
-            )
-          )
-        )
-        results.forEach((r, i) => {
-          if (r.status === 'rejected') {
-            const errMsg = (r.reason as any)?.message ?? String(r.reason)
-            console.error(`[WhatsApp/Evolution] Falha ao enviar anexo "${validAttachments[i].name}": ${errMsg}`)
-            failedAttachments.push(validAttachments[i].name)
-          }
-        })
-      }
-
-      return failedAttachments.length > 0
-        ? { success: true, failedAttachments }
-        : { success: true }
-    } catch (err: any) {
-      console.error('[WhatsApp/Evolution] Erro:', err)
-      return { error: 'Erro Evolution API: ' + (err?.message ?? String(err)) }
-    }
+  const evolutionCreds = {
+    apiUrl:     creds.apiUrl,
+    instanceId: creds.instanceId,
+    apiKey:     creds.apiKey,
   }
 
-  // ── Z-API / Sysmax ────────────────────────────────────────────────────────
-  // Z-API: URL canônica usando instanceId e token (token vai na URL, não no header)
-  const url = creds.provider === 'z-api'
-    ? `https://api.z-api.io/instances/${creds.instanceId}/token/${creds.token}/send-text`
-    : `${creds.apiUrl}/send-text`
-
   try {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-
-    if (creds.provider === 'z-api') {
-      // Seta Client-Token e imediatamente deleta se o valor for inválido
-      // (nulo, vazio, ou máscara de asteriscos). Garante que nenhum header
-      // vazio chegue ao fetch mesmo que o objeto seja mutado externamente.
-      const ct = creds.clientToken?.trim() ?? ''
-      headers['Client-Token'] = ct
-      if (!ct || /^\*+$/.test(ct)) {
-        delete headers['Client-Token']
-      }
-    } else {
-      headers['Authorization'] = `Bearer ${creds.token}`
-    }
-
-    console.info(
-      '[WhatsApp] Enviando requisição',
-      `provider: ${creds.provider}`,
-      `headers presentes: ${JSON.stringify(Object.keys(headers))}`,
-    )
-
-    const body = creds.provider === 'z-api'
-      ? JSON.stringify({ phone, message: params.message })
-      : JSON.stringify({ phone, message: params.message, instance: creds.instanceId })
-
-    const validAttachments = creds.provider === 'z-api'
-      ? (params.attachments ?? []).filter(a => a.signedUrl)
-      : []
-
-    // Consolidação de caption:
-    // - 1 anexo  → não envia texto separado; a mensagem vai como caption do arquivo
-    // - 0 ou N>1 → envia texto primeiro; anexos recebem legenda curta (nome sem extensão)
+    const validAttachments = (params.attachments ?? []).filter(a => a.signedUrl)
     const singleAttachment = validAttachments.length === 1
 
     if (!singleAttachment) {
-      // Envia o texto principal normalmente
-      const res = await fetch(url, { method: 'POST', headers, body })
-
-      if (!res.ok) {
-        const bodyText = await res.text()
-        console.error(
-          `[WhatsApp] Falha no envio — status: ${res.status}`,
-          `url: ${url}`,
-          `headers enviados: ${JSON.stringify(Object.keys(headers))}`,
-          `resposta do provedor: ${bodyText}`,
-        )
-        return { error: `Provedor retornou ${res.status}: ${bodyText}` }
-      }
+      await evolutionSendText(evolutionCreds, phone, params.message)
     }
 
     await logNotification(params)
@@ -820,21 +563,29 @@ export async function sendWhatsAppMessage(params: {
     const failedAttachments: string[] = []
 
     if (validAttachments.length > 0) {
-      // Delay de 2s para evitar que a Z-API ignore requisições subsequentes
-      await new Promise(r => setTimeout(r, 2000))
+      await new Promise(r => setTimeout(r, 1500))
 
       const results = await Promise.allSettled(
-        validAttachments.map((a, i) => {
-          const caption = singleAttachment
-            ? params.message                              // mensagem carinhosa como caption
-            : a.name.replace(/\.[^.]+$/, '')             // legenda curta: "Receita do Snow"
-          return sendZApiFile({ creds, phone, url: a.signedUrl, fileName: a.name, mimeType: a.mimeType, caption, delay: i * 1500 })
-        })
+        validAttachments.map((a, i) =>
+          new Promise<void>((resolve, reject) =>
+            setTimeout(async () => {
+              try {
+                await evolutionSendMedia(evolutionCreds, phone, {
+                  mediaUrl: a.signedUrl,
+                  fileName: a.name,
+                  mimeType: a.mimeType,
+                  caption:  singleAttachment ? params.message : a.name.replace(/\.[^.]+$/, ''),
+                })
+                resolve()
+              } catch (e) { reject(e) }
+            }, i * 1500)
+          )
+        )
       )
       results.forEach((r, i) => {
         if (r.status === 'rejected') {
-          const errMsg = r.reason?.message ?? String(r.reason)
-          console.error(`[WhatsApp] Falha ao enviar anexo "${validAttachments[i].name}": ${errMsg}`)
+          const errMsg = (r.reason as any)?.message ?? String(r.reason)
+          console.error(`[WhatsApp/Evolution] Falha ao enviar anexo "${validAttachments[i].name}": ${errMsg}`)
           failedAttachments.push(validAttachments[i].name)
         }
       })
@@ -844,137 +595,8 @@ export async function sendWhatsAppMessage(params: {
       ? { success: true, failedAttachments }
       : { success: true }
   } catch (err: any) {
-    console.error('[WhatsApp] Erro de rede:', err)
-    return { error: 'Erro de rede ao enviar WhatsApp: ' + (err?.message ?? String(err)) }
-  }
-}
-
-// ─── Envio de arquivo individual via Z-API ────────────────────────────────────
-
-async function sendZApiFile(params: {
-  creds:    { instanceId: string; token: string; clientToken: string | null }
-  phone:    string
-  url:      string
-  fileName: string
-  mimeType: string
-  caption?: string
-  delay?:   number     // ms de espera antes de enviar (sequenciamento de múltiplos anexos)
-}): Promise<void> {
-  const { creds, phone, url, mimeType, caption, delay } = params
-
-  if (delay) await new Promise(r => setTimeout(r, delay))
-
-  // Detecta o tipo real do arquivo via magic bytes (HEAD request) quando a extensão é ambígua
-  async function sniffMediaType(): Promise<'image' | 'video' | 'document'> {
-    const rawExt = params.fileName.split('.').pop()?.toLowerCase() ?? ''
-    const knownImageExts  = ['jpg', 'jpeg', 'png', 'gif', 'webp']
-    const knownVideoExts  = ['mp4', 'mov', 'avi', 'webm']
-    const knownDocExts    = ['pdf', 'doc', 'docx', 'xls', 'xlsx']
-
-    // Extensões conhecidas — confia sem HEAD request
-    if (knownImageExts.includes(rawExt) || mimeType.startsWith('image/')) return 'image'
-    if (knownVideoExts.includes(rawExt) || mimeType.startsWith('video/')) return 'video'
-    if (knownDocExts.includes(rawExt)   || mimeType === 'application/pdf') return 'document'
-
-    // Extensão ambígua (ex: .url, .bin) — inspeciona os primeiros bytes
-    try {
-      const headRes = await fetch(url, { method: 'GET', headers: { Range: 'bytes=0-7' } })
-      const buf     = await headRes.arrayBuffer()
-      const bytes   = new Uint8Array(buf)
-      const sig     = Array.from(bytes).map(b => String.fromCharCode(b)).join('')
-
-      if (sig.startsWith('%PDF'))             return 'document'
-      if (bytes[0] === 0xFF && bytes[1] === 0xD8) return 'image'   // JPEG
-      if (sig.startsWith('\x89PNG'))          return 'image'        // PNG
-      if (sig.startsWith('GIF8'))             return 'image'        // GIF
-      if (bytes[0] === 0x00 && bytes[4] === 0x66 && bytes[5] === 0x74) return 'video' // MP4 ftyp
-    } catch (e) {
-      console.warn('[WhatsApp] Falha ao inspecionar magic bytes, assumindo document:', e)
-    }
-
-    console.warn(`[WhatsApp] Tipo não reconhecido para "${params.fileName}" (mime: ${mimeType}, ext: ${rawExt}) — assumindo document`)
-    return 'document'
-  }
-
-  type MediaType = 'image' | 'video' | 'document'
-  const mediaType: MediaType = await sniffMediaType()
-
-  // Metadados canônicos por tipo
-  const metaMap: Record<MediaType, { mimeType: string; extension: string }> = {
-    image:    { mimeType: 'image/jpeg',       extension: 'jpg' },
-    video:    { mimeType: 'video/mp4',         extension: 'mp4' },
-    document: { mimeType: 'application/pdf',  extension: 'pdf' },
-  }
-  const meta = metaMap[mediaType]
-
-  // Garante que o fileName termine com a extensão correta
-  const baseName = params.fileName.endsWith(`.${meta.extension}`)
-    ? params.fileName
-    : `${params.fileName.replace(/\.[^.]+$/, '')}.${meta.extension}`
-
-  // Endpoint:
-  //   documents → send-document/{extension}  (ex: send-document/pdf)
-  //   images    → send-image/url
-  //   videos    → send-video/url
-  const endpointMap: Record<MediaType, string> = {
-    image:    'send-image/url',
-    video:    'send-video/url',
-    document: `send-document/${meta.extension}`,
-  }
-
-  const payloadKeyMap: Record<MediaType, string> = {
-    image:    'image',
-    video:    'video',
-    document: 'document',
-  }
-
-  const endpoint   = endpointMap[mediaType]
-  const payloadKey = payloadKeyMap[mediaType]
-  const apiUrl     = `https://api.z-api.io/instances/${creds.instanceId}/token/${creds.token}/${endpoint}`
-
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  const ct = creds.clientToken?.trim() ?? ''
-  if (ct && !/^\*+$/.test(ct)) headers['Client-Token'] = ct
-
-  // Payload limpo por tipo — sem campos extras que a Z-API desconhece
-  const payload: Record<string, string> = { phone, [payloadKey]: url }
-  if (mediaType === 'document') payload.fileName = baseName
-  if (caption?.trim()) payload.caption = caption.trim()
-
-  const body = JSON.stringify(payload)
-
-  console.log('[WhatsApp] Enviando arquivo via Z-API', {
-    fileName:  baseName,
-    mediaType,
-    caption:   caption ? caption.slice(0, 60) + (caption.length > 60 ? '…' : '') : '(sem caption)',
-    endpoint:  apiUrl,          // URL completa para confirmação de rota
-    phone,
-  })
-
-  const res = await fetch(apiUrl, { method: 'POST', headers, body })
-  const responseText = await res.text()
-
-  if (!res.ok) {
-    console.error(`[WhatsApp] Z-API rejeitou arquivo — endpoint: ${endpoint}`, {
-      fileName: baseName,
-      mediaType,
-      status:   res.status,
-      response: responseText,
-      fileUrl:  url,
-    })
-    throw new Error(`Z-API [${endpoint}] ${res.status}: ${responseText}`)
-  }
-
-  // Loga o messageId retornado pela Z-API para rastreio
-  try {
-    const parsed = JSON.parse(responseText)
-    console.log('[WhatsApp] Arquivo enviado com sucesso:', baseName, {
-      mediaType,
-      status:    res.status,
-      messageId: parsed?.zaapId ?? parsed?.messageId ?? parsed?.id ?? '(não retornado)',
-    })
-  } catch {
-    console.log('[WhatsApp] Arquivo enviado com sucesso:', baseName, { mediaType, status: res.status })
+    console.error('[WhatsApp/Evolution] Erro:', err)
+    return { error: 'Erro Evolution API: ' + (err?.message ?? String(err)) }
   }
 }
 

@@ -11,9 +11,7 @@ import { updateClinicConfig } from '@/lib/actions/clinic-settings'
 import ModulesTab from '../ModulesTab'
 import ClinicSettingsTab from '../ClinicSettingsTab'
 import CsvImporter from '../CsvImporter'
-import WhatsappSettings from './WhatsappSettings'
 import WhatsappIntelligentSetup from './WhatsappIntelligentSetup'
-import type { WhatsAppSettingsDisplay } from '@/lib/actions/whatsapp'
 
 // ─── Category definitions ─────────────────────────────────────────────────────
 
@@ -42,7 +40,6 @@ interface Props {
   initialClinicConfig:      ClinicConfig | null
   initialSettingsConfig?:   ClinicSettingsConfig | null
   initialChecklist?:        string[]
-  initialWhatsappSettings?: WhatsAppSettingsDisplay | null
   activeModules?:           string[]
   onToast: (type: 'success' | 'error', msg: string) => void
 }
@@ -53,7 +50,6 @@ export default function SettingsWorkspace({
   initialClinicConfig,
   initialSettingsConfig,
   initialChecklist = [],
-  initialWhatsappSettings = null,
   activeModules = [],
   onToast,
 }: Props) {
@@ -129,19 +125,13 @@ export default function SettingsWorkspace({
           <div className="space-y-6">
             <SectionHeader icon={<Sparkles className="h-5 w-5 text-slate-600" />} title="Inteligência Artificial" description="Comportamento da IA nas gravações de voz e transcrições" />
             <AiSettings initialConfig={initialClinicConfig} onToast={onToast} />
-            {activeModules.includes('whatsapp_intelligent') && (
-              <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Bot WhatsApp Inteligente</p>
-                <WhatsappIntelligentSetup onToast={onToast} />
-              </div>
-            )}
           </div>
         )}
 
         {activeCategory === 'whatsapp' && (
           <div className="space-y-6">
-            <SectionHeader icon={<MessageCircle className="h-5 w-5 text-slate-600" />} title="WhatsApp" description="Configurações do provedor, instância e notificações" />
-            <WhatsappSettings initial={initialWhatsappSettings} onToast={onToast} />
+            <SectionHeader icon={<MessageCircle className="h-5 w-5 text-slate-600" />} title="WhatsApp" description="Leia o QR Code para conectar a instância da clínica — atende bot e disparos automáticos" />
+            <WhatsappIntelligentSetup onToast={onToast} />
           </div>
         )}
 

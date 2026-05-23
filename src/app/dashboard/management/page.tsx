@@ -5,7 +5,6 @@ import { getTemplates } from '@/lib/actions/templates'
 import { getClinicInvitations } from '@/lib/actions/invitations'
 import { getClinicConfig, getClinicSettingsConfig } from '@/lib/actions/clinic-settings'
 import { getRooms } from '@/lib/actions/rooms'
-import { getWhatsAppSettings } from '@/lib/actions/whatsapp'
 import ManagementWorkspace from '@/components/management/ManagementWorkspace'
 import { Suspense } from 'react'
 import type { DocumentTemplate } from '@/types'
@@ -30,7 +29,7 @@ export default async function ManagementPage() {
 
   const clinicName = (profile.clinics as unknown as { name: string } | null)?.name ?? 'Minha Clínica'
 
-  const [templatesResult, clinicResult, usersResult, invitationsResult, configResult, roomsResult, settingsConfigResult, whatsAppSettingsResult, subResult] = await Promise.all([
+  const [templatesResult, clinicResult, usersResult, invitationsResult, configResult, roomsResult, settingsConfigResult, subResult] = await Promise.all([
     getTemplates(),
     admin
       .from('clinics')
@@ -47,7 +46,6 @@ export default async function ManagementPage() {
     getClinicConfig(),
     getRooms(),
     getClinicSettingsConfig(),
-    getWhatsAppSettings(),
     admin
       .from('tenant_subscriptions')
       .select('plan_name')
@@ -64,7 +62,6 @@ export default async function ManagementPage() {
   const initialClinicConfig = 'error' in configResult ? null : configResult
   const initialSettingsConfig = 'error' in settingsConfigResult ? null : settingsConfigResult
   const initialRooms = Array.isArray(roomsResult) ? roomsResult : []
-  const initialWhatsAppSettings = whatsAppSettingsResult ?? null
   const planName: string = (subResult as any)?.data?.plan_name ?? 'free'
 
   return (
@@ -83,7 +80,6 @@ export default async function ManagementPage() {
         initialRooms={initialRooms}
         activeModules={activeModules}
         isSysmax={!!profile.is_sysmax}
-        initialWhatsAppSettings={initialWhatsAppSettings}
         planName={planName}
       />
     </Suspense>

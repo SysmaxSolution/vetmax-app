@@ -40,15 +40,22 @@ export async function sendDailyScheduleToVets(): Promise<DailyScheduleResult | {
   const clinicId = profile.clinic_id
   const admin    = createAdminClient()
 
-  // Configuração de WhatsApp da clínica
+  // Instância Evolution da clínica (gerenciada via QR Code)
   const { data: whatsappCfg } = await admin
-    .from('whatsapp_instances')
-    .select('instance_id, api_url, token, provider_name')
+    .from('clinic_whatsapp_settings')
+    .select('instance_id, evolution_instance_name')
     .eq('clinic_id', clinicId)
     .eq('is_active', true)
     .single()
 
   if (!whatsappCfg) return { error: 'WhatsApp não configurado para esta clínica.' }
+
+  const apiUrl = process.env.EVOLUTION_API_URL
+  const apiKey = process.env.EVOLUTION_API_KEY
+  if (!apiUrl || !apiKey) return { error: 'Evolution API não configurada no servidor.' }
+
+  const instanceId = whatsappCfg.evolution_instance_name ?? whatsappCfg.instance_id
+  if (!instanceId) return { error: 'Instância Evolution não encontrada para a clínica.' }
 
   const today     = new Date().toISOString().split('T')[0]   // yyyy-MM-dd
   const todayStart = `${today}T00:00:00`
@@ -161,11 +168,7 @@ export async function sendDailyScheduleToVets(): Promise<DailyScheduleResult | {
     lines.push('', 'Bom atendimento! 🩺')
     const message = lines.join('\n')
 
-    const creds: EvolutionCreds = {
-      apiUrl:     whatsappCfg.api_url,
-      instanceId: whatsappCfg.instance_id,
-      apiKey:     whatsappCfg.token,
-    }
+    const creds: EvolutionCreds = { apiUrl, instanceId, apiKey }
 
     try {
       await evolutionSendText(creds, phone, message)

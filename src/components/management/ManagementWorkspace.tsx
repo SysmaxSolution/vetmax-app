@@ -53,7 +53,6 @@ const MODULE_LABELS_PT: Record<string, string> = {
   mentor:                'Mentor IA',
   petlove_reconciliation: 'Conciliação Petlove',
 }
-import type { WhatsAppSettingsDisplay } from '@/lib/actions/whatsapp'
 import PremiumPaywall from '@/components/paywall/PremiumPaywall'
 
 type ClinicUser = ClinicUserFull
@@ -72,7 +71,6 @@ interface ManagementWorkspaceProps {
   initialRooms?:                Room[]
   activeModules?:               string[]
   isSysmax?:                    boolean
-  initialWhatsAppSettings?:     WhatsAppSettingsDisplay | null
   planName?:                    string
 }
 
@@ -163,7 +161,7 @@ function UserInlineField({ label, value, placeholder, onSave }: {
 export default function ManagementWorkspace({
   initialTemplates, clinicData, users, initialInvitations, userLimit, currentUserId, userEmail, userFullName,
   initialClinicConfig, initialSettingsConfig = null, initialRooms = [],
-  activeModules = [], isSysmax = false, initialWhatsAppSettings = null,
+  activeModules = [], isSysmax = false,
   planName = 'enterprise',
 }: ManagementWorkspaceProps) {
   // PLG: tabs bloqueadas no Free
@@ -587,7 +585,6 @@ export default function ManagementWorkspace({
         <SettingsWorkspace
           initialClinicConfig={initialClinicConfig}
           initialSettingsConfig={initialSettingsConfig}
-          initialWhatsappSettings={initialWhatsAppSettings}
           initialChecklist={(clinicData?.reception_checklist as string[] | null) ?? []}
           activeModules={activeModules}
           onToast={(type, message) => setToast({ type, message })}
