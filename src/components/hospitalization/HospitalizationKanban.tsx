@@ -22,6 +22,7 @@ import { generateDischargeSummary, type DischargeSummary } from '@/lib/actions/r
 import HospitalizationDetailModal from './HospitalizationDetailModal'
 import WhatsAppNotificationModal from '@/components/whatsapp/WhatsAppNotificationModal'
 import MedicationAlertBadge from './MedicationAlertBadge'
+import MedicationApplicationModal from './MedicationApplicationModal'
 import { useMedicationScheduler } from '@/hooks/useMedicationScheduler'
 import {
   listHospitalizationPrescriptions,
@@ -137,6 +138,7 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
   // ─── Prescrições ativas agrupadas por hospitalization_id ────────────────
   // 1 fetch único; cada card usa useMedicationScheduler com seu slice.
   const [prescriptionsByHosp, setPrescriptionsByHosp] = useState<Map<string, HospPrescription[]>>(new Map())
+  const [medModalCard, setMedModalCard] = useState<HospitalizationCard | null>(null)
 
   const refreshPrescriptions = useCallback(async () => {
     if (isFreePlan) return   // plano free não persiste internação
@@ -510,7 +512,7 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
                       prescriptions={prescriptionsByHosp.get(card.id) ?? EMPTY_PRESCRIPTIONS}
                       onDragStart={handleDragStart}
                       onDragEnd={handleDragEnd}
-                      onOpenMedAlert={() => setSelectedCard(card)}
+                      onOpenMedAlert={() => setMedModalCard(card)}
                       onDischarge={handleDischargeRequest}
                       onOpen={() => setSelectedCard(card)}
                     />
@@ -541,6 +543,17 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
         <HospitalizationDetailModal
           card={selectedCard}
           onClose={() => setSelectedCard(null)}
+        />
+      )}
+
+      {/* Modal de Medicação (click no badge de alerta) */}
+      {medModalCard && (
+        <MedicationApplicationModal
+          hospitalizationId={medModalCard.id}
+          patientName={medModalCard.patient.name}
+          prescriptions={prescriptionsByHosp.get(medModalCard.id) ?? EMPTY_PRESCRIPTIONS}
+          onClose={() => setMedModalCard(null)}
+          onUpdate={refreshPrescriptions}
         />
       )}
 
