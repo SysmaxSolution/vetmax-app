@@ -69,6 +69,42 @@ html {
    banners, top bar do site institucional, etc.) via .native-hidden.          */
 body.capacitor-native .native-hidden { display: none !important; }
 
+/* ─── Médication Scheduler — pulse não-reflow ───────────────────────────────
+   Animações compostas APENAS por box-shadow / transform / opacity para não
+   forçar layout reflow durante o tick. O Kanban rola fluido mesmo com 20
+   cards piscando em paralelo. */
+
+@keyframes med-pulse-overdue {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.55); }
+  50%      { box-shadow: 0 0 0 8px rgba(244, 63, 94, 0); }
+}
+
+@keyframes med-pulse-imminent {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.45); }
+  50%      { box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); }
+}
+
+@keyframes med-icon-pulse {
+  0%, 100% { transform: scale(1);    opacity: 1; }
+  50%      { transform: scale(1.18); opacity: 0.75; }
+}
+
+.med-card-overdue {
+  animation: med-pulse-overdue 1.4s ease-in-out infinite;
+  border-color: rgb(244 63 94 / 0.55);
+}
+
+.med-card-imminent {
+  animation: med-pulse-imminent 1.8s ease-in-out infinite;
+  border-color: rgb(245 158 11 / 0.55);
+}
+
+.med-icon-pulse {
+  animation: med-icon-pulse 1.2s ease-in-out infinite;
+  transform-origin: center;
+  will-change: transform, opacity;
+}
+
 /* ─── G16-3: Mentor Highlight Animations ─────────────────────────────────── */
 
 @keyframes mentor-pulse {

@@ -21,6 +21,12 @@ import { PetAvatar } from '@/components/ui/PetAvatar'
 import { generateDischargeSummary, type DischargeSummary } from '@/lib/actions/reports'
 import HospitalizationDetailModal from './HospitalizationDetailModal'
 import WhatsAppNotificationModal from '@/components/whatsapp/WhatsAppNotificationModal'
+import MedicationAlertBadge from './MedicationAlertBadge'
+import { useMedicationScheduler } from '@/hooks/useMedicationScheduler'
+import {
+  listHospitalizationPrescriptions,
+  type HospPrescription,
+} from '@/lib/actions/hospitalization-prescriptions'
 
 const WARD_LABELS: Record<string, string> = {
   observation: 'Observação',
@@ -93,6 +99,10 @@ interface Props {
   isFreePlan?:  boolean
 }
 
+// Constante estável: cards sem prescrição compartilham a mesma referência —
+// evita re-render no useMedicationScheduler por mudança falsa de identidade.
+const EMPTY_PRESCRIPTIONS: HospPrescription[] = []
+
 // ─── Componente Principal ─────────────────────────────────────────────────────
 
 export default function HospitalizationKanban({ initialBoard, clinicId, isFreePlan = false }: Props) {
@@ -124,7 +134,29 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
   const [whatsappReview,     setWhatsappReview]     = useState<HospitalizationCard | null>(null)
   const [whatsappDischarge,  setWhatsappDischarge]  = useState<HospitalizationCard | null>(null)
 
+  // ─── Prescrições ativas agrupadas por hospitalization_id ────────────────
+  // 1 fetch único; cada card usa useMedicationScheduler com seu slice.
+  const [prescriptionsByHosp, setPrescriptionsByHosp] = useState<Map<string, HospPrescription[]>>(new Map())
+
+  const refreshPrescriptions = useCallback(async () => {
+    if (isFreePlan) return   // plano free não persiste internação
+    const res = await listHospitalizationPrescriptions()
+    if (Array.isArray(res)) {
+      const map = new Map<string, HospPrescription[]>()
+      for (const p of res) {
+        const arr = map.get(p.hospitalization_id) ?? []
+        arr.push(p)
+        map.set(p.hospitalization_id, arr)
+      }
+      setPrescriptionsByHosp(map)
+    }
+  }, [isFreePlan])
+
+  useEffect(() => { void refreshPrescriptions() }, [refreshPrescriptions])
+
   useRealtimeSync({ table: 'hospitalizations', clinicId })
+  useRealtimeSync({ table: 'hospitalization_dose_administrations', clinicId, onEvent: refreshPrescriptions })
+  useRealtimeSync({ table: 'hospitalization_prescriptions',        clinicId, onEvent: refreshPrescriptions })
 
   // Keep boardRef in sync for native DOM event handlers
   useEffect(() => { boardRef.current = board }, [board])
@@ -475,8 +507,10 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
                     <KanbanCard
                       key={card.id}
                       card={card}
+                      prescriptions={prescriptionsByHosp.get(card.id) ?? EMPTY_PRESCRIPTIONS}
                       onDragStart={handleDragStart}
                       onDragEnd={handleDragEnd}
+                      onOpenMedAlert={() => setSelectedCard(card)}
                       onDischarge={handleDischargeRequest}
                       onOpen={() => setSelectedCard(card)}
                     />
@@ -604,15 +638,25 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
 // ─── Componente Interno: KanbanCard ───────────────────────────────────────────
 
 interface CardProps {
-  card:        HospitalizationCard
-  onDragStart: (e: React.DragEvent, card: HospitalizationCard) => void
-  onDragEnd:   () => void
-  onDischarge: (card: HospitalizationCard) => void
-  onOpen:      () => void
+  card:          HospitalizationCard
+  prescriptions: HospPrescription[]
+  onDragStart:   (e: React.DragEvent, card: HospitalizationCard) => void
+  onDragEnd:     () => void
+  onDischarge:   (card: HospitalizationCard) => void
+  onOpen:        () => void
+  onOpenMedAlert?: (card: HospitalizationCard) => void
 }
 
-function KanbanCard({ card, onDragStart, onDragEnd, onDischarge, onOpen }: CardProps) {
+function KanbanCard({ card, prescriptions, onDragStart, onDragEnd, onDischarge, onOpen, onOpenMedAlert }: CardProps) {
   const hours = Math.floor((Date.now() - new Date(card.created_at).getTime()) / (1000 * 60 * 60))
+  const scheduler = useMedicationScheduler(prescriptions)
+
+  // Classe de pulse no card inteiro — apenas border + box-shadow (sem reflow).
+  const pulseClass = scheduler.isAlerting
+    ? 'med-card-overdue'
+    : scheduler.hasImminent
+      ? 'med-card-imminent'
+      : ''
 
   return (
     <div
@@ -621,7 +665,7 @@ function KanbanCard({ card, onDragStart, onDragEnd, onDischarge, onOpen }: CardP
       onDragStart={(e) => onDragStart(e, card)}
       onDragEnd={onDragEnd}
       onClick={onOpen}
-      className="group relative p-4 rounded-2xl border bg-white shadow-sm hover:shadow-md hover:border-violet-300 transition-all cursor-pointer mb-3 active:scale-95"
+      className={`group relative p-4 rounded-2xl border bg-white shadow-sm hover:shadow-md hover:border-violet-300 transition-all cursor-pointer mb-3 active:scale-95 ${pulseClass}`}
     >
       <div className="flex items-start gap-3">
         <PetAvatar name={card.patient.name} species={card.patient.species} photoUrl={card.patient.photo_url} size="sm" className="rounded-xl border border-slate-200" />
@@ -629,6 +673,10 @@ function KanbanCard({ card, onDragStart, onDragEnd, onDischarge, onOpen }: CardP
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-1">
             <h4 className="font-bold text-slate-900 text-sm truncate">{card.patient.name}</h4>
+            <MedicationAlertBadge
+              scheduler={scheduler}
+              onClick={() => onOpenMedAlert?.(card)}
+            />
             {card.status === 'ready_for_discharge' && (
               <button
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDischarge(card) }}
