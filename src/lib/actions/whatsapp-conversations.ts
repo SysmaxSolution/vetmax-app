@@ -192,6 +192,47 @@ export async function returnToBot(
   return { success: true }
 }
 
+// ─── Bulk actions ─────────────────────────────────────────────────────────────
+
+/**
+ * Aplica em lote uma transição de status sobre múltiplas conversas da clínica.
+ * Não permite mexer em conversas de OUTRA clínica (filtro clinic_id no UPDATE).
+ */
+async function bulkUpdateStatus(
+  conversationIds: string[],
+  status: 'bot' | 'human' | 'closed',
+): Promise<{ updated: number } | { error: string }> {
+  if (!conversationIds || conversationIds.length === 0) {
+    return { error: 'Nenhuma conversa selecionada.' }
+  }
+
+  const auth = await getClinicId()
+  if ('error' in auth) return auth
+
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('whatsapp_conversations')
+    .update({ status })
+    .eq('clinic_id', auth.clinicId)
+    .in('id', conversationIds)
+    .select('id')
+
+  if (error) return { error: error.message }
+  return { updated: (data ?? []).length }
+}
+
+export async function takeOverConversationsBulk(
+  conversationIds: string[],
+): Promise<{ updated: number } | { error: string }> {
+  return bulkUpdateStatus(conversationIds, 'human')
+}
+
+export async function returnConversationsToBotBulk(
+  conversationIds: string[],
+): Promise<{ updated: number } | { error: string }> {
+  return bulkUpdateStatus(conversationIds, 'bot')
+}
+
 // ─── Close conversation ───────────────────────────────────────────────────────
 
 export async function closeConversation(
