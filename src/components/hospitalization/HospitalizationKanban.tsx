@@ -90,11 +90,12 @@ const COLUMNS: {
 interface Props {
   initialBoard: HospitalizationBoard
   clinicId:     string
+  isFreePlan?:  boolean
 }
 
 // ─── Componente Principal ─────────────────────────────────────────────────────
 
-export default function HospitalizationKanban({ initialBoard, clinicId }: Props) {
+export default function HospitalizationKanban({ initialBoard, clinicId, isFreePlan = false }: Props) {
   const router = useRouter()
   const [board, setBoard]                   = useState<HospitalizationBoard>(initialBoard)
   const boardRef = useRef<HospitalizationBoard>(initialBoard)
@@ -375,6 +376,25 @@ export default function HospitalizationKanban({ initialBoard, clinicId }: Props)
 
   return (
     <section className="space-y-6">
+      {isFreePlan && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-3 flex items-start gap-3">
+          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-amber-500 text-white flex items-center justify-center font-bold">i</div>
+          <div className="flex-1 text-sm">
+            <p className="font-semibold text-amber-900">Modo Demonstrativo · Plano Free</p>
+            <p className="text-amber-800 mt-0.5">
+              A internação está disponível apenas para visualização. Para admitir pacientes, registrar evolução clínica
+              e dar alta, faça upgrade para um plano pago.
+            </p>
+          </div>
+          <a
+            href="/dashboard/management?tab=subscription"
+            className="self-center rounded-xl bg-amber-600 hover:bg-amber-700 px-3 py-1.5 text-xs font-semibold text-white shadow-sm"
+          >
+            Fazer upgrade
+          </a>
+        </div>
+      )}
+
       <div className="flex items-start justify-between gap-4">
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
@@ -385,10 +405,16 @@ export default function HospitalizationKanban({ initialBoard, clinicId }: Props)
         </div>
         <button
           type="button"
-          onClick={() => setShowAdmitModal(true)}
+          onClick={() => {
+            if (isFreePlan) { alert('Funcionalidade disponível em planos pagos. Faça upgrade para admitir pacientes.'); return }
+            setShowAdmitModal(true)
+          }}
           aria-hidden={showAdmitModal ? 'true' : undefined}
           tabIndex={showAdmitModal ? -1 : undefined}
-          className="flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-700 transition-colors shadow-sm flex-shrink-0"
+          title={isFreePlan ? 'Recurso bloqueado no plano Free — use para conhecer a tela.' : undefined}
+          className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-sm flex-shrink-0 transition-colors ${
+            isFreePlan ? 'bg-violet-300 cursor-not-allowed' : 'bg-violet-600 hover:bg-violet-700'
+          }`}
         >
           <Plus className="h-4 w-4" />
           Admitir Paciente

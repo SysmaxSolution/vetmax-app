@@ -18,6 +18,7 @@ export interface FinancialEntry {
   discount:             number
   interest:             number
   due_date:             string
+  issue_date:           string | null
   payment_date:         string | null
   status:               EntryStatus
   payment_method:       string | null
@@ -72,6 +73,7 @@ export interface CreateEntryData {
   description:          string
   amount:               number
   due_date:             string
+  issue_date?:          string | null
   discount?:            number
   payment_method?:      string
   tutor_id?:            string
@@ -254,6 +256,7 @@ export async function createEntry(
       amount:               data.amount,
       discount:             data.discount ?? 0,
       due_date:             data.due_date,
+      issue_date:           data.issue_date ?? null,
       payment_method:       data.payment_method       || null,
       tutor_id:             data.tutor_id             || null,
       patient_id:           data.patient_id           || null,
@@ -451,6 +454,7 @@ export async function updateEntry(
   if (data.amount               !== undefined) updates.amount               = data.amount
   if (data.discount             !== undefined) updates.discount             = data.discount ?? 0
   if (data.due_date             !== undefined) updates.due_date             = data.due_date
+  if (data.issue_date           !== undefined) updates.issue_date           = data.issue_date           || null
   if (data.payment_method       !== undefined) updates.payment_method       = data.payment_method       || null
   if (data.tutor_id             !== undefined) updates.tutor_id             = data.tutor_id             || null
   if (data.patient_id           !== undefined) updates.patient_id           = data.patient_id           || null
@@ -1526,6 +1530,7 @@ function mapEntry(raw: Record<string, unknown>): FinancialEntry {
     discount:             Number(raw.discount ?? 0),
     interest:             Number(raw.interest ?? 0),
     due_date:             raw.due_date             as string,
+    issue_date:           (raw.issue_date          as string | null) ?? null,
     payment_date:         (raw.payment_date        as string | null) ?? null,
     status:               raw.status               as EntryStatus,
     payment_method:       (raw.payment_method      as string | null) ?? null,

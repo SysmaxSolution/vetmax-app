@@ -20,6 +20,7 @@ import GroomingCheckinModal from '@/components/grooming/GroomingCheckinModal'
 import type { ReceptionQueueItem, ReceptionHistoryItem } from '@/lib/actions/consultations'
 import type { SearchResult } from '@/lib/actions/tutors'
 import type { VisitReason, PatientSpecies } from '@/types'
+import { getPatientById, type PatientsListItem } from '@/lib/actions/timeline'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const SPECIES_LABELS: Record<string, { label: string; emoji: string; color: string }> = {
@@ -248,9 +249,18 @@ import { formatPetAge } from '@/lib/utils/pet-age'
 const calcAge = formatPetAge
 
 // ─── Queue Card ───────────────────────────────────────────────────────────────
-function QueueCard({ item, onMoveToTriage, triageActive }: { item: ReceptionQueueItem; onMoveToTriage: (id: string) => void; triageActive: boolean }) {
+function QueueCard({
+  item, onMoveToTriage, triageActive, onOpenPet, loadingPetId,
+}: {
+  item: ReceptionQueueItem
+  onMoveToTriage: (id: string) => void
+  triageActive: boolean
+  onOpenPet: (patientId: string) => void
+  loadingPetId: string | null
+}) {
   const hasPendingPayment = item.payment_status === 'pending'
   const age = calcAge(item.patient.birth_date ?? null)
+  const isLoading = loadingPetId === item.patient.id
   return (
     <div
       title={triageActive ? 'Duplo clique para chamar triagem' : 'Duplo clique para enviar ao consultório'}
@@ -259,10 +269,26 @@ function QueueCard({ item, onMoveToTriage, triageActive }: { item: ReceptionQueu
         hasPendingPayment ? 'border-red-300' : 'border-slate-200'
       }`}
     >
-      <PetAvatar name={item.patient.name} species={item.patient.species} photoUrl={item.patient.photo_url} size="md" />
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onOpenPet(item.patient.id) }}
+        disabled={isLoading}
+        title="Abrir cadastro do pet/tutor"
+        className="flex-shrink-0 rounded-full hover:ring-2 hover:ring-teal-300 transition-shadow disabled:opacity-60"
+      >
+        <PetAvatar name={item.patient.name} species={item.patient.species} photoUrl={item.patient.photo_url} size="md" />
+      </button>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <p className="font-semibold text-slate-900">{item.patient.name}</p>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onOpenPet(item.patient.id) }}
+            disabled={isLoading}
+            className="font-semibold text-slate-900 hover:text-teal-700 hover:underline disabled:opacity-60"
+            title="Abrir cadastro do pet/tutor"
+          >
+            {item.patient.name}
+          </button>
           <SpeciesBadge species={item.patient.species} />
           {age && <span className="text-xs text-slate-500 bg-slate-100 rounded-full px-2 py-0.5">{age}</span>}
           {item.patient.breed && <span className="text-xs text-slate-400">{item.patient.breed}</span>}
@@ -337,6 +363,16 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
     | { type: 'add_pet'; tutorId: string; tutorName: string }
     | null
   >(null)
+  const [editPatient,    setEditPatient]    = useState<PatientsListItem | null>(null)
+  const [loadingPetEditId, setLoadingPetEditId] = useState<string | null>(null)
+
+  async function handleOpenPet(patientId: string) {
+    setLoadingPetEditId(patientId)
+    const res = await getPatientById(patientId)
+    setLoadingPetEditId(null)
+    if ('error' in res) { showToast('Erro ao carregar cadastro: ' + res.error, 'error'); return }
+    setEditPatient(res)
+  }
   const [checkInModal, setCheckInModal] = useState<{
     mode: 'new_checkin' | 'scheduled_checkin' | 'edit_existing'
     patientId?: string
@@ -779,7 +815,14 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
           ) : (
             <div data-mentor-step="reception-queue" className="space-y-3">
               {queue.map(item => (
-                <QueueCard key={item.id} item={item} onMoveToTriage={handleMoveToTriage} triageActive={triageActive} />
+                <QueueCard
+                  key={item.id}
+                  item={item}
+                  onMoveToTriage={handleMoveToTriage}
+                  triageActive={triageActive}
+                  onOpenPet={handleOpenPet}
+                  loadingPetId={loadingPetEditId}
+                />
               ))}
             </div>
           )}
@@ -861,6 +904,13 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
           tutorName={modal.tutorName}
           onClose={() => setModal(null)}
           onSuccess={handleModalSuccess}
+        />
+      )}
+      {editPatient && (
+        <PatientFullModal
+          patient={editPatient}
+          onClose={() => setEditPatient(null)}
+          onSuccess={() => { setEditPatient(null); router.refresh() }}
         />
       )}
 

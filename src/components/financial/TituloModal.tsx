@@ -89,6 +89,9 @@ export default function TituloModal({
   const [amountStr,         setAmountStr]          = useState(entry ? fmtCurrency(String(Math.round(entry.amount * 100))) : '')
   const [discountStr,       setDiscountStr]        = useState(entry ? fmtCurrency(String(Math.round((entry.discount ?? 0) * 100))) : '0,00')
   const [dueDate,           setDueDate]            = useState(entry?.due_date ?? todayStr())
+  const [issueDate,         setIssueDate]          = useState(entry?.issue_date ?? todayStr())
+  /** Quando true, calcula due_date automaticamente como issue_date + 30 dias. */
+  const [dueAutoFromIssue,  setDueAutoFromIssue]   = useState(!entry)
   const [category,          setCategory]           = useState(entry?.category ?? '')
   const [chartAccountsId,   setChartAccountsId]   = useState(entry?.chart_of_accounts_id ?? '')
   const [professionalId,    setProfessionalId]     = useState(entry?.professional_id ?? currentUserId ?? '')
@@ -167,6 +170,7 @@ export default function TituloModal({
         amount,
         discount,
         due_date:             dueDate,
+        issue_date:           issueDate || null,
         category:             category             || undefined,
         notes:                notes                || undefined,
         professional_id:      professionalId       || undefined,
@@ -319,12 +323,34 @@ export default function TituloModal({
                   </div>
                 </div>
                 <div>
-                  <label className={lc}>Vencimento</label>
+                  <label className={lc}>Data de Realização</label>
+                  <input
+                    type="date"
+                    value={issueDate}
+                    onChange={e => {
+                      const v = e.target.value
+                      setIssueDate(v)
+                      if (dueAutoFromIssue && v) {
+                        const d = new Date(`${v}T00:00:00`)
+                        d.setDate(d.getDate() + 30)
+                        setDueDate(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`)
+                      }
+                    }}
+                    className={fc}
+                    title="Quando o procedimento/serviço foi executado (pode ser retroativa)"
+                  />
+                </div>
+                <div>
+                  <label className={lc}>
+                    Vencimento
+                    {dueAutoFromIssue && <span className="ml-1 text-[10px] font-normal text-teal-600">· auto +30d</span>}
+                  </label>
                   <input
                     type="date"
                     value={dueDate}
-                    onChange={e => setDueDate(e.target.value)}
+                    onChange={e => { setDueDate(e.target.value); setDueAutoFromIssue(false) }}
                     className={fc}
+                    title="Data limite para pagamento — não confundir com a data de realização"
                   />
                 </div>
               </div>
