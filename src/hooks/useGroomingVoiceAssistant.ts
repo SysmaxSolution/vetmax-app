@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { buildWakeRe, buildStopRe, fuzzyMatchCustom } from '@/lib/voice-triggers'
+import { voiceLock, VOICE_PRIORITY, generateVoiceOwnerId } from '@/lib/voice/lock'
 
 export type VoiceAssistantState = 'IDLE' | 'RECORDING' | 'CONFIRM_WA'
 
@@ -35,10 +36,14 @@ export function useGroomingVoiceAssistant({ onAutoSave, onSendWA, startTriggers,
   // ─── Refs (evitam closures stale nos handlers do SR) ─────────────────────────
   const recognitionRef           = useRef<any>(null)
   const silenceTimerRef          = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const silenceTimerRemainingRef = useRef<number | null>(null)
+  const silenceTimerStartedAtRef = useRef<number>(0)
   const finalTranscriptRef       = useRef('')       // texto finalizado acumulado durante RECORDING
   const recordingStartRef        = useRef(0)        // índice em event.results onde RECORDING começou
   const lastResultLenRef         = useRef(0)        // último event.results.length visto (para manualToggle)
   const isActivatedRef           = useRef(false)    // true após activate(), false após deactivate()
+  const isSuspendedRef           = useRef(false)
+  const ownerIdRef               = useRef<string>(generateVoiceOwnerId('grooming'))
   const stateRef                 = useRef<VoiceAssistantState>('IDLE')
   const wakeWordReRef            = useRef<RegExp>(buildWakeRe([]))
   const saveCmdReRef             = useRef<RegExp>(buildStopRe([]))
@@ -90,6 +95,31 @@ export function useGroomingVoiceAssistant({ onAutoSave, onSendWA, startTriggers,
 
   function clearSilenceTimer() {
     if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null }
+    silenceTimerRemainingRef.current = null
+  }
+
+  function armSilenceTimer(ms: number) {
+    clearSilenceTimer()
+    silenceTimerStartedAtRef.current = Date.now()
+    silenceTimerRef.current = setTimeout(() => {
+      if (stateRef.current === 'RECORDING') triggerSave(finalTranscriptRef.current)
+    }, ms)
+  }
+
+  function pauseSilenceTimer() {
+    if (!silenceTimerRef.current) return
+    const elapsed = Date.now() - silenceTimerStartedAtRef.current
+    const remaining = Math.max(0, 15_000 - elapsed)
+    clearTimeout(silenceTimerRef.current)
+    silenceTimerRef.current = null
+    silenceTimerRemainingRef.current = remaining
+  }
+
+  function resumeSilenceTimer() {
+    const rem = silenceTimerRemainingRef.current
+    if (rem === null) return
+    silenceTimerRemainingRef.current = null
+    armSilenceTimer(rem)
   }
 
   function tokenize(s: string): string[] {
@@ -166,6 +196,7 @@ export function useGroomingVoiceAssistant({ onAutoSave, onSendWA, startTriggers,
   // ─── Motor: ÚNICA instância contínua ─────────────────────────────────────────
 
   function startRec() {
+    if (isSuspendedRef.current) return
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     if (!SR || recognitionRef.current) return
 
@@ -181,7 +212,7 @@ export function useGroomingVoiceAssistant({ onAutoSave, onSendWA, startTriggers,
     r.onerror = (e: any) => {
       if (e.error === 'aborted') return
       recognitionRef.current = null
-      if (isActivatedRef.current) {
+      if (isActivatedRef.current && !isSuspendedRef.current) {
         if (stateRef.current === 'RECORDING') recordingStartRef.current = 0
         setTimeout(startRec, 400)
       }
@@ -189,7 +220,7 @@ export function useGroomingVoiceAssistant({ onAutoSave, onSendWA, startTriggers,
 
     r.onend = () => {
       recognitionRef.current = null
-      if (isActivatedRef.current) {
+      if (isActivatedRef.current && !isSuspendedRef.current) {
         if (stateRef.current === 'RECORDING') recordingStartRef.current = 0
         setTimeout(startRec, 300)
       }
@@ -276,12 +307,7 @@ export function useGroomingVoiceAssistant({ onAutoSave, onSendWA, startTriggers,
         }
 
         setTranscript(fullText)
-        if (hadNewFinals) {
-          clearSilenceTimer()
-          silenceTimerRef.current = setTimeout(() => {
-            if (stateRef.current === 'RECORDING') triggerSave(finalTranscriptRef.current)
-          }, 15_000)
-        }
+        if (hadNewFinals) armSilenceTimer(15_000)
         return
       }
 
@@ -306,19 +332,43 @@ export function useGroomingVoiceAssistant({ onAutoSave, onSendWA, startTriggers,
 
   // ─── API pública ──────────────────────────────────────────────────────────────
 
+  function suspendEngine() {
+    isSuspendedRef.current = true
+    pauseSilenceTimer()
+    const r = recognitionRef.current
+    if (r) { r.onend = null; r.onerror = null; try { r.stop() } catch { } recognitionRef.current = null }
+  }
+
+  function resumeEngine() {
+    isSuspendedRef.current = false
+    if (isActivatedRef.current) {
+      startRec()
+      resumeSilenceTimer()
+    }
+  }
+
   /** Inicia a escuta contínua. Chamar no mount do componente consumidor. */
   const activate = useCallback(() => {
     if (isActivatedRef.current || recognitionRef.current) return
     isActivatedRef.current = true
-    startRec()
+    const { isActive } = voiceLock.acquire({
+      id:        ownerIdRef.current,
+      priority:  VOICE_PRIORITY.AMBIENT,
+      onSuspend: suspendEngine,
+      onResume:  resumeEngine,
+    })
+    isSuspendedRef.current = !isActive
+    if (isActive) startRec()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Para a escuta e reseta o estado. Chamar no unmount do componente consumidor. */
   const deactivate = useCallback(() => {
     isActivatedRef.current = false
+    isSuspendedRef.current = false
     clearSilenceTimer()
     const r = recognitionRef.current
     if (r) { r.onend = null; r.onerror = null; try { r.stop() } catch { } recognitionRef.current = null }
+    voiceLock.release(ownerIdRef.current)
     window.speechSynthesis?.cancel()
     setState('IDLE')
     setTranscript('')
@@ -348,9 +398,11 @@ export function useGroomingVoiceAssistant({ onAutoSave, onSendWA, startTriggers,
   useEffect(() => {
     return () => {
       isActivatedRef.current = false
+      isSuspendedRef.current = false
       clearSilenceTimer()
       const r = recognitionRef.current
       if (r) { r.onend = null; r.onerror = null; try { r.stop() } catch { } }
+      voiceLock.release(ownerIdRef.current)
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 

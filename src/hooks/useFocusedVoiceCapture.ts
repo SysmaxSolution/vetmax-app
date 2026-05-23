@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { buildStopRe, fuzzyMatchCustom } from '@/lib/voice-triggers'
+import { voiceLock, VOICE_PRIORITY, generateVoiceOwnerId } from '@/lib/voice/lock'
 
 // ──────────────────────────────────────────────────────────────────────────────
 // useFocusedVoiceCapture
@@ -37,12 +38,19 @@ export function useFocusedVoiceCapture({ stopTriggers, onInterim, onFinal, silen
   const recognitionRef     = useRef<any>(null)
   const finalBufferRef     = useRef('')
   const silenceTimerRef    = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const silenceTimerRemainingRef = useRef<number | null>(null)
+  const silenceTimerStartedAtRef = useRef<number>(0)
+  const silenceMsRef       = useRef<number>(silenceMs)
   const isActivatedRef     = useRef(false)
+  const isSuspendedRef     = useRef(false)
+  const ownerIdRef         = useRef<string>(generateVoiceOwnerId('focused'))
   const stopReRef          = useRef<RegExp>(buildStopRe([]))
   const stopTriggersRef    = useRef<string[]>([])
   const onFinalRef         = useRef(onFinal)
   const onInterimRef       = useRef<typeof onInterim>(onInterim)
   const processedIdxRef    = useRef<Set<number>>(new Set())
+
+  useEffect(() => { silenceMsRef.current = silenceMs }, [silenceMs])
 
   useEffect(() => { onFinalRef.current  = onFinal  }, [onFinal])
   useEffect(() => { onInterimRef.current = onInterim }, [onInterim])
@@ -66,6 +74,31 @@ export function useFocusedVoiceCapture({ stopTriggers, onInterim, onFinal, silen
 
   function clearSilenceTimer() {
     if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null }
+    silenceTimerRemainingRef.current = null
+  }
+
+  function armSilenceTimer(ms: number) {
+    clearSilenceTimer()
+    silenceTimerStartedAtRef.current = Date.now()
+    silenceTimerRef.current = setTimeout(() => {
+      if (isActivatedRef.current && !isSuspendedRef.current) finalize()
+    }, ms)
+  }
+
+  function pauseSilenceTimer() {
+    if (!silenceTimerRef.current) return
+    const elapsed = Date.now() - silenceTimerStartedAtRef.current
+    const remaining = Math.max(0, silenceMsRef.current - elapsed)
+    clearTimeout(silenceTimerRef.current)
+    silenceTimerRef.current = null
+    silenceTimerRemainingRef.current = remaining
+  }
+
+  function resumeSilenceTimer() {
+    const rem = silenceTimerRemainingRef.current
+    if (rem === null) return
+    silenceTimerRemainingRef.current = null
+    armSilenceTimer(rem)
   }
 
   function finalize() {
@@ -77,8 +110,10 @@ export function useFocusedVoiceCapture({ stopTriggers, onInterim, onFinal, silen
     finalBufferRef.current = ''
     processedIdxRef.current.clear()
     isActivatedRef.current = false
+    isSuspendedRef.current = false
     const r = recognitionRef.current
     if (r) { r.onend = null; r.onerror = null; try { r.stop() } catch {} recognitionRef.current = null }
+    voiceLock.release(ownerIdRef.current)
     setIsRecording(false)
     setTranscript('')
     playBeep(660)
@@ -86,6 +121,7 @@ export function useFocusedVoiceCapture({ stopTriggers, onInterim, onFinal, silen
   }
 
   function startEngine() {
+    if (isSuspendedRef.current) return
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     if (!SR || recognitionRef.current) return
 
@@ -100,11 +136,11 @@ export function useFocusedVoiceCapture({ stopTriggers, onInterim, onFinal, silen
     r.onerror = (e: any) => {
       if (e.error === 'aborted') return
       recognitionRef.current = null
-      if (isActivatedRef.current) setTimeout(startEngine, 400)
+      if (isActivatedRef.current && !isSuspendedRef.current) setTimeout(startEngine, 400)
     }
     r.onend = () => {
       recognitionRef.current = null
-      if (isActivatedRef.current) setTimeout(startEngine, 300)
+      if (isActivatedRef.current && !isSuspendedRef.current) setTimeout(startEngine, 300)
     }
 
     r.onresult = (event: any) => {
@@ -137,15 +173,25 @@ export function useFocusedVoiceCapture({ stopTriggers, onInterim, onFinal, silen
       }
 
       // Reseta timer de silêncio quando há texto novo finalizado
-      if (added) {
-        clearSilenceTimer()
-        silenceTimerRef.current = setTimeout(() => {
-          if (isActivatedRef.current) finalize()
-        }, silenceMs)
-      }
+      if (added) armSilenceTimer(silenceMsRef.current)
     }
 
     r.start()
+  }
+
+  function suspendEngine() {
+    isSuspendedRef.current = true
+    pauseSilenceTimer()
+    const r = recognitionRef.current
+    if (r) { r.onend = null; r.onerror = null; try { r.stop() } catch { } recognitionRef.current = null }
+  }
+
+  function resumeEngine() {
+    isSuspendedRef.current = false
+    if (isActivatedRef.current) {
+      startEngine()
+      resumeSilenceTimer()
+    }
   }
 
   const start = useCallback(() => {
@@ -156,7 +202,14 @@ export function useFocusedVoiceCapture({ stopTriggers, onInterim, onFinal, silen
     isActivatedRef.current = true
     setIsRecording(true)
     playBeep(880)
-    startEngine()
+    const { isActive } = voiceLock.acquire({
+      id:        ownerIdRef.current,
+      priority:  VOICE_PRIORITY.FOCUSED,
+      onSuspend: suspendEngine,
+      onResume:  resumeEngine,
+    })
+    isSuspendedRef.current = !isActive
+    if (isActive) startEngine()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const stop = useCallback(() => {
@@ -171,9 +224,11 @@ export function useFocusedVoiceCapture({ stopTriggers, onInterim, onFinal, silen
 
   useEffect(() => () => {
     isActivatedRef.current = false
+    isSuspendedRef.current = false
     clearSilenceTimer()
     const r = recognitionRef.current
     if (r) { r.onend = null; r.onerror = null; try { r.stop() } catch {} }
+    voiceLock.release(ownerIdRef.current)
   }, [])
 
   return { isRecording, transcript, start, stop, toggle }

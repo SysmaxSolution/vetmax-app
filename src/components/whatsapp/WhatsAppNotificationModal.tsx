@@ -12,6 +12,7 @@ import {
 } from '@/lib/actions/whatsapp'
 import { uploadWhatsAppAttachment } from '@/lib/actions/whatsapp-upload'
 import { useWhatsAppGate } from '@/components/providers/WhatsAppGateProvider'
+import { voiceLock, VOICE_PRIORITY, generateVoiceOwnerId } from '@/lib/voice/lock'
 
 // ─── Emoji Picker ─────────────────────────────────────────────────────────────
 
@@ -231,16 +232,26 @@ export default function WhatsAppNotificationModal({
     handleSendRef.current()
   }, [autoSend, message, isGenerating, isSending, sent])
 
-  // B-02 — Reconhecimento de voz para "sim"/"não" no modal
+  // B-02 — Reconhecimento de voz para "sim"/"não" no modal.
+  // Usa voiceLock priority=EXCLUSIVE para suspender qualquer ambient/focused
+  // ativo (clinical da consulta, grooming etc.) e evitar colisão de canal.
   const voiceRecogRef   = useRef<any>(null)
   const voiceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const voiceLockOwnerId = useRef<string>(generateVoiceOwnerId('wa-confirm'))
   const [listeningVoice, setListeningVoice] = useState(false)
 
-  const startVoice = useCallback(() => {
+  function stopWaEngine() {
+    if (voiceTimeoutRef.current) { clearTimeout(voiceTimeoutRef.current); voiceTimeoutRef.current = null }
+    const rec = voiceRecogRef.current
+    if (rec) { rec.onend = null; rec.onerror = null; rec.onresult = null; try { rec.stop() } catch {} }
+    voiceRecogRef.current = null
+    setListeningVoice(false)
+  }
+
+  function startWaEngine() {
     const SR = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition
     if (!SR) return
-    try { voiceRecogRef.current?.stop() } catch {}
-    if (voiceTimeoutRef.current) clearTimeout(voiceTimeoutRef.current)
+    stopWaEngine()
     const rec = new SR()
     rec.lang = 'pt-BR'
     rec.continuous = false
@@ -256,16 +267,30 @@ export default function WhatsAppNotificationModal({
       else if (no) onClose()
     }
     voiceRecogRef.current = rec
-    rec.start()
-    voiceTimeoutRef.current = setTimeout(() => { try { rec.stop() } catch {} }, 12000)
-  }, [onClose])
+    try { rec.start() } catch {}
+    voiceTimeoutRef.current = setTimeout(() => stopWaEngine(), 12000)
+  }
+
+  const startVoice = useCallback(() => {
+    // Adquire o lock priority=EXCLUSIVE — clinical/focused/grooming ativos
+    // recebem onSuspend automaticamente e o canal fica para o WA.
+    const { isActive } = voiceLock.acquire({
+      id:        voiceLockOwnerId.current,
+      priority:  VOICE_PRIORITY.EXCLUSIVE,
+      onSuspend: stopWaEngine,
+      onResume:  startWaEngine,
+    })
+    // Como EXCLUSIVE é a maior priority, isActive deve ser true sempre — mas
+    // se um outro EXCLUSIVE coexistir, respeitamos a janela onResume.
+    if (isActive) startWaEngine()
+  }, [])
 
   useEffect(() => {
     if (!isOpen || sent || isGenerating || autoSend) return
     startVoice()
     return () => {
-      if (voiceTimeoutRef.current) clearTimeout(voiceTimeoutRef.current)
-      try { voiceRecogRef.current?.stop() } catch {}
+      stopWaEngine()
+      voiceLock.release(voiceLockOwnerId.current)
     }
   }, [isOpen, sent, isGenerating]) // eslint-disable-line react-hooks/exhaustive-deps
 
