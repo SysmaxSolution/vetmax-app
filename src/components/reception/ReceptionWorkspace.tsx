@@ -244,16 +244,8 @@ function TutorProfile({
 }
 
 // ─── Age helper ──────────────────────────────────────────────────────────────
-function calcAge(birthDate: string | null): string | null {
-  if (!birthDate) return null
-  const born = new Date(birthDate)
-  const now   = new Date()
-  const months = (now.getFullYear() - born.getFullYear()) * 12 + (now.getMonth() - born.getMonth())
-  if (months < 1)  return '< 1 mês'
-  if (months < 12) return `${months} ${months === 1 ? 'mês' : 'meses'}`
-  const years = Math.floor(months / 12)
-  return `${years} ${years === 1 ? 'ano' : 'anos'}`
-}
+import { formatPetAge } from '@/lib/utils/pet-age'
+const calcAge = formatPetAge
 
 // ─── Queue Card ───────────────────────────────────────────────────────────────
 function QueueCard({ item, onMoveToTriage, triageActive }: { item: ReceptionQueueItem; onMoveToTriage: (id: string) => void; triageActive: boolean }) {

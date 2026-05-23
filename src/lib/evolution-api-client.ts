@@ -51,6 +51,21 @@ export async function evolutionFetchContactByLid(
   }
 }
 
+/**
+ * Converte markdown estilo CommonMark (gerado pela IA do bot) para o dialeto
+ * de formatação suportado pelo WhatsApp:
+ *   **bold**   → *bold*
+ *   __italic__ → _italic_
+ *   ~~strike~~ → ~strike~
+ * `*` e `_` simples já no padrão WhatsApp são preservados.
+ */
+function normalizeWhatsAppMarkdown(text: string): string {
+  return text
+    .replace(/\*\*([^*\n]+?)\*\*/g, '*$1*')
+    .replace(/__([^_\n]+?)__/g,     '_$1_')
+    .replace(/~~([^~\n]+?)~~/g,     '~$1~')
+}
+
 export async function evolutionSendText(
   creds: EvolutionCreds,
   phone: string,
@@ -58,8 +73,9 @@ export async function evolutionSendText(
 ): Promise<void> {
   const number = formatPhone(phone)
   const url    = `${creds.apiUrl}/message/sendText/${creds.instanceId}`
+  const normalizedMessage = normalizeWhatsAppMarkdown(message)
   // v2.x: campo "text" direto (v1.x usava textMessage: { text })
-  const body   = JSON.stringify({ number, text: message })
+  const body   = JSON.stringify({ number, text: normalizedMessage })
 
   console.info(`[Evolution] sendText → number="${number}" | ${url}`)
 

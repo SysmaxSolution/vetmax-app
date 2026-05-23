@@ -28,6 +28,7 @@ import {
 import type { VitalSigns, MucousColor, CRT, DocumentTemplate, ExtractedField, ReproductiveStatus } from '@/types'
 import { REPRODUCTIVE_STATUS_OPTIONS } from '@/types'
 import { Toast } from '@/components/ui/toast'
+import { formatPetAge } from '@/lib/utils/pet-age'
 import { DatePicker } from '@/components/ui/DatePicker'
 import VaccinationCard from '@/components/vet/VaccinationCard'
 import { useClinicalVoiceAssistant } from '@/hooks/useClinicalVoiceAssistant'
@@ -487,17 +488,26 @@ export default function TriageForm({
         </div>
 
         {/* CTA Banner */}
-        {!isEditMode && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg px-5 py-3 flex items-center gap-3">
-            <div className="flex-shrink-0 w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-              <span className="text-white text-sm font-bold">1</span>
+        {!isEditMode && (() => {
+          const required: string[] = []
+          if (triageRequiredFields.includes('weight'))          required.push('peso')
+          if (triageRequiredFields.includes('temperature'))     required.push('temperatura')
+          if (triageRequiredFields.includes('chief_complaint')) required.push('queixa principal')
+          const helper = required.length === 0
+            ? 'Nenhum campo é obrigatório nesta clínica — preencha o que tiver disponível.'
+            : `Obrigatório${required.length > 1 ? 's' : ''} nesta clínica: ${required.join(', ')}.`
+          return (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg px-5 py-3 flex items-center gap-3">
+              <div className="flex-shrink-0 w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                <span className="text-white text-sm font-bold">1</span>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-blue-900">Preencha os Sinais Vitais e Queixa Principal</p>
+                <p className="text-xs text-blue-700 mt-0.5">{helper}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-semibold text-blue-900">Preencha os Sinais Vitais e Queixa Principal</p>
-              <p className="text-xs text-blue-700 mt-0.5">Peso e temperatura são obrigatórios para encaminhar ao médico veterinário.</p>
-            </div>
-          </div>
-        )}
+          )
+        })()}
 
         {/* Patient Information Card */}
         <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
@@ -554,12 +564,7 @@ export default function TriageForm({
                 {consultation.patient.birth_date && (
                   <p className="text-sm text-slate-600 mt-0.5">
                     <span className="font-medium">Idade:</span>{' '}
-                    {(() => {
-                      const months = Math.floor((Date.now() - new Date(consultation.patient.birth_date).getTime()) / (1000*60*60*24*30.5))
-                      if (months < 1) return '< 1 mês'
-                      if (months < 12) return `${months} ${months === 1 ? 'mês' : 'meses'}`
-                      const y = Math.floor(months / 12); return `${y} ${y === 1 ? 'ano' : 'anos'}`
-                    })()}
+                    {formatPetAge(consultation.patient.birth_date) ?? '—'}
                   </p>
                 )}
                 <div className="mt-3">

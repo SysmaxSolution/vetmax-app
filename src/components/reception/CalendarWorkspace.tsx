@@ -25,7 +25,9 @@ import {
 } from '@/lib/actions/calendar'
 import { sendDailyScheduleToVets } from '@/lib/actions/daily-schedule-whatsapp'
 import { listUnavailabilitiesInRange, deleteUnavailability } from '@/lib/actions/unavailabilities'
+import { getPatientById, type PatientsListItem } from '@/lib/actions/timeline'
 import PatientLink from '@/components/PatientLink'
+import PatientFullModal from '@/components/patients/PatientFullModal'
 import NewAppointmentModal from './NewAppointmentModal'
 import EditAppointmentModal from './EditAppointmentModal'
 import ReceptionSubNav from './ReceptionSubNav'
@@ -287,10 +289,12 @@ interface DetailCardProps {
   onCheckIn:   (id: string) => void
   onCancel:    (id: string, type: 'appointment' | 'grooming') => void
   onEdit:      (id: string) => void
+  onOpenPet:   (petId: string) => void
+  loadingPet:  boolean
   isPending:   boolean
 }
 
-function EventDetailCard({ event, onClose, onCheckIn, onCancel, onEdit, isPending }: DetailCardProps) {
+function EventDetailCard({ event, onClose, onCheckIn, onCancel, onEdit, onOpenPet, loadingPet, isPending }: DetailCardProps) {
   const color   = eventColor(event)
   const status  = STATUS_LABELS[event.status] ?? { label: event.status, cls: 'bg-slate-100 text-slate-600' }
   const service = serviceLabel(event)
@@ -309,17 +313,21 @@ function EventDetailCard({ event, onClose, onCheckIn, onCancel, onEdit, isPendin
       <div className="p-5 space-y-4">
         {/* Header */}
         <div className="flex items-start justify-between gap-3">
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2">
-              {isAppt
-                ? <Stethoscope className="h-4 w-4 text-blue-600" />
-                : <Scissors className="h-4 w-4 text-teal-600" />}
-              <span className="font-bold text-slate-900 text-base">{event.petName}</span>
-            </div>
-            {event.petId && (
-              <PatientLink id={event.petId} name={event.petName} size="sm" className="ml-6" />
-            )}
-          </div>
+          <button
+            type="button"
+            disabled={!event.petId || loadingPet}
+            onClick={() => event.petId && onOpenPet(event.petId)}
+            title="Abrir cadastro do pet/tutor"
+            className="flex items-center gap-2 -ml-1 px-1 py-0.5 rounded-lg hover:bg-slate-50 disabled:cursor-not-allowed group text-left"
+          >
+            {isAppt
+              ? <Stethoscope className="h-4 w-4 text-blue-600" />
+              : <Scissors className="h-4 w-4 text-teal-600" />}
+            <span className="font-bold text-slate-900 text-base group-hover:text-blue-600 group-hover:underline">
+              {event.petName}
+            </span>
+            {loadingPet && <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />}
+          </button>
           <button
             onClick={onClose}
             className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors flex-shrink-0"
@@ -435,6 +443,16 @@ export default function CalendarWorkspace({ clinicName }: Props) {
   const [selectedUnavail, setSelectedUnavail] = useState<UnavailabilityOccurrence | null>(null)
   const [showNewAppt,   setShowNewAppt]   = useState(false)
   const [showNewEvent,  setShowNewEvent]  = useState(false)
+  const [editPatient,   setEditPatient]   = useState<PatientsListItem | null>(null)
+  const [loadingPetId,  setLoadingPetId]  = useState<string | null>(null)
+
+  async function handleOpenPet(petId: string) {
+    setLoadingPetId(petId)
+    const res = await getPatientById(petId)
+    setLoadingPetId(null)
+    if ('error' in res) { showToastMsg(res.error, 'error'); return }
+    setEditPatient(res)
+  }
   const [editApptId,    setEditApptId]    = useState<string | null>(null)
   const [sendingSchedule, setSendingSchedule] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
@@ -699,7 +717,18 @@ export default function CalendarWorkspace({ clinicName }: Props) {
             onCheckIn={handleCheckIn}
             onCancel={handleCancel}
             onEdit={id => { setSelected(null); setEditApptId(id) }}
+            onOpenPet={handleOpenPet}
+            loadingPet={loadingPetId === selected.petId}
             isPending={isPending}
+          />
+        )}
+
+        {/* Modal de Edição de Pet/Tutor (disparado pelo clique no nome do pet) */}
+        {editPatient && (
+          <PatientFullModal
+            patient={editPatient}
+            onClose={() => setEditPatient(null)}
+            onSuccess={() => setEditPatient(null)}
           />
         )}
 

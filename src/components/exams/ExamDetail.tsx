@@ -13,6 +13,7 @@ import { useNativeKeepAwake } from '@/hooks/useNativeKeepAwake'
 import { getClinicVoiceTriggers, updateClinicVoiceTriggers } from '@/lib/actions/clinic-settings'
 import { useAiTranscriptionMode } from '@/components/providers/ClinicConfigProvider'
 import { returnToVet, dischargeFromExams } from '@/lib/actions/exams'
+import { formatPetAge } from '@/lib/utils/pet-age'
 import { Toast } from '@/components/ui/toast'
 import { PetAvatar } from '@/components/ui/PetAvatar'
 import DocumentsSection, { type PrintState } from '@/components/vet/DocumentsSection'
@@ -54,13 +55,7 @@ interface Props {
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
 function calcAge(birthDate: string | null): string {
-  if (!birthDate) return 'Não informada'
-  const birth = new Date(birthDate)
-  const today = new Date()
-  const months = (today.getFullYear() - birth.getFullYear()) * 12 + (today.getMonth() - birth.getMonth())
-  if (months < 12) return `${months} ${months === 1 ? 'mês' : 'meses'}`
-  const years = Math.floor(months / 12)
-  return `${years} ${years === 1 ? 'ano' : 'anos'}`
+  return formatPetAge(birthDate) ?? 'Não informada'
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────

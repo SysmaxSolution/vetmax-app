@@ -99,14 +99,9 @@ const PROBABILITY_BADGE: Record<string, string> = {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+import { formatPetAge } from '@/lib/utils/pet-age'
 function calcAge(birthDate: string | null): string {
-  if (!birthDate) return 'Não informada'
-  const birth = new Date(birthDate)
-  const today = new Date()
-  const months = (today.getFullYear() - birth.getFullYear()) * 12 + (today.getMonth() - birth.getMonth())
-  if (months < 12) return `${months} ${months === 1 ? 'mês' : 'meses'}`
-  const years = Math.floor(months / 12)
-  return `${years} ${years === 1 ? 'ano' : 'anos'}`
+  return formatPetAge(birthDate) ?? 'Não informada'
 }
 
 function formatDate(iso: string): string {

@@ -5,6 +5,7 @@ import { Search, Users, Pencil, Plus } from 'lucide-react'
 import { getPatientsList, type PatientsListItem } from '@/lib/actions/timeline'
 import PetTimelineModal from '@/components/pet/PetTimelineModal'
 import PatientFullModal from '@/components/patients/PatientFullModal'
+import { formatPetAge } from '@/lib/utils/pet-age'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -23,16 +24,7 @@ const GENDER_LABELS: Record<string, string> = {
   male: 'Macho', female: 'Fêmea', unknown: 'N/I',
 }
 
-function calcAge(birthDate: string | null): string | null {
-  if (!birthDate) return null
-  const birth = new Date(birthDate)
-  const today = new Date()
-  const months = (today.getFullYear() - birth.getFullYear()) * 12 + (today.getMonth() - birth.getMonth())
-  if (months < 1) return '< 1 mês'
-  if (months < 12) return `${months} ${months === 1 ? 'mês' : 'meses'}`
-  const years = Math.floor(months / 12)
-  return `${years} ${years === 1 ? 'ano' : 'anos'}`
-}
+const calcAge = formatPetAge
 
 function formatCpf(cpf: string) {
   return cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')

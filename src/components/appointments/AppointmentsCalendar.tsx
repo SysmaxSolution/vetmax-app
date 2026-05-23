@@ -10,7 +10,8 @@ import { ptBR } from 'date-fns/locale'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 import { getUnifiedEventsForRange, type UnifiedCalendarEvent, type CalendarProfessional } from '@/lib/actions/calendar'
 import { listUnavailabilitiesInRange, deleteUnavailability } from '@/lib/actions/unavailabilities'
-import PatientLink from '@/components/PatientLink'
+import { getPatientById, type PatientsListItem } from '@/lib/actions/timeline'
+import PatientFullModal from '@/components/patients/PatientFullModal'
 import UnavailabilityModal from '@/components/appointments/UnavailabilityModal'
 import {
   ChevronLeft, ChevronRight, Loader2, X,
@@ -244,7 +245,12 @@ function CustomToolbar({ date, view, onNavigate, onView, loading, onNewEvent }: 
 
 // ─── Card de detalhes rico ────────────────────────────────────────────────────
 
-function EventDetailCard({ event, onClose }: { event: UnifiedCalendarEvent; onClose: () => void }) {
+function EventDetailCard({ event, onClose, onOpenPet, loadingPetEdit }: {
+  event: UnifiedCalendarEvent
+  onClose: () => void
+  onOpenPet: (petId: string) => void
+  loadingPetEdit: boolean
+}) {
   const color   = eventColor(event)
   const status  = STATUS_LABELS[event.status] ?? { label: event.status, cls: 'bg-slate-100 text-slate-600' }
   const service = serviceLabel(event)
@@ -259,18 +265,22 @@ function EventDetailCard({ event, onClose }: { event: UnifiedCalendarEvent; onCl
       <div className="p-5 space-y-4">
         {/* Header */}
         <div className="flex items-start justify-between gap-3">
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2">
-              {event.type === 'grooming'
-                ? <Scissors className="h-4 w-4 text-teal-600" />
-                : <Stethoscope className="h-4 w-4 text-blue-600" />
-              }
-              <span className="font-bold text-slate-900 text-base">{event.petName}</span>
-            </div>
-            {event.petId && (
-              <PatientLink id={event.petId} name={event.petName} size="sm" className="ml-6" />
-            )}
-          </div>
+          <button
+            type="button"
+            disabled={!event.petId || loadingPetEdit}
+            onClick={() => event.petId && onOpenPet(event.petId)}
+            title="Abrir cadastro do pet/tutor"
+            className="flex items-center gap-2 -ml-1 px-1 py-0.5 rounded-lg hover:bg-slate-50 disabled:cursor-not-allowed group text-left"
+          >
+            {event.type === 'grooming'
+              ? <Scissors className="h-4 w-4 text-teal-600" />
+              : <Stethoscope className="h-4 w-4 text-blue-600" />
+            }
+            <span className="font-bold text-slate-900 text-base group-hover:text-blue-600 group-hover:underline">
+              {event.petName}
+            </span>
+            {loadingPetEdit && <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />}
+          </button>
           <button
             onClick={onClose}
             className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors flex-shrink-0"
@@ -362,6 +372,16 @@ export default function AppointmentsCalendar({ initialEvents, initialDate, profe
   const [selected,       setSelected]       = useState<UnifiedCalendarEvent | null>(null)
   const [selectedUnavail, setSelectedUnavail] = useState<UnavailabilityOccurrence | null>(null)
   const [showEventModal, setShowEventModal] = useState(false)
+  const [editPatient, setEditPatient]       = useState<PatientsListItem | null>(null)
+  const [loadingPetEditId, setLoadingPetEditId] = useState<string | null>(null)
+
+  const handleOpenPet = useCallback(async (petId: string) => {
+    setLoadingPetEditId(petId)
+    const res = await getPatientById(petId)
+    setLoadingPetEditId(null)
+    if ('error' in res) { alert('Erro ao carregar pet: ' + res.error); return }
+    setEditPatient(res)
+  }, [])
 
   const allEvents = useMemo<RBCEvent[]>(() => [...events, ...unavailEvents], [events, unavailEvents])
 
@@ -503,7 +523,21 @@ export default function AppointmentsCalendar({ initialEvents, initialDate, profe
 
       {/* Card de detalhe do evento selecionado */}
       {selected && (
-        <EventDetailCard event={selected} onClose={() => setSelected(null)} />
+        <EventDetailCard
+          event={selected}
+          onClose={() => setSelected(null)}
+          onOpenPet={handleOpenPet}
+          loadingPetEdit={loadingPetEditId === selected.petId}
+        />
+      )}
+
+      {/* Modal de Edição de Pet/Tutor disparado pelo clique no nome do pet */}
+      {editPatient && (
+        <PatientFullModal
+          patient={editPatient}
+          onClose={() => setEditPatient(null)}
+          onSuccess={() => setEditPatient(null)}
+        />
       )}
 
       {/* Card de detalhe da indisponibilidade selecionada */}
