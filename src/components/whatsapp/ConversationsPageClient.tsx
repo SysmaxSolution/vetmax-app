@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useTransition } from 'react'
-import { MessageCircle, Send, RefreshCw, Bot, User, X, ArrowLeft, RotateCcw } from 'lucide-react'
+import { MessageCircle, Send, Bot, User, X, ArrowLeft, RotateCcw } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import {
   getWhatsappConversations,
@@ -110,12 +110,13 @@ export default function ConversationsPageClient({
     return () => { void supabase.removeChannel(channel) }
   }, [clinicId])
 
-  // Polling de fallback (intervalo aumentado pois Realtime cobre atualizações em tempo real)
+  // Polling de fallback raro — Realtime cobre o caminho principal; este intervalo
+  // só protege contra desconexão do WebSocket.
   useEffect(() => {
     const id = setInterval(async () => {
       const res = await getWhatsappConversations()
       if (Array.isArray(res)) setConversations(res)
-    }, 30000)
+    }, 60000)
     return () => clearInterval(id)
   }, [])
 
@@ -124,7 +125,7 @@ export default function ConversationsPageClient({
     const id = setInterval(async () => {
       const res = await getConversationMessages(selectedId)
       if (Array.isArray(res)) setMessages(res)
-    }, 20000)
+    }, 60000)
     return () => clearInterval(id)
   }, [selectedId])
 
@@ -241,13 +242,16 @@ export default function ConversationsPageClient({
                 : 'Sem conversas aguardando atendimento humano'}
             </p>
           </div>
-          <button
-            onClick={refreshAll}
-            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100 transition-colors"
+          <span
+            className="flex items-center gap-2 text-xs font-medium text-emerald-700"
+            title="Conversas atualizam automaticamente em tempo real"
           >
-            <RefreshCw className="h-4 w-4" />
-            Atualizar
-          </button>
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+            </span>
+            Ao vivo
+          </span>
         </div>
 
         {/* 2-panel layout */}
