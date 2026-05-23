@@ -199,6 +199,116 @@ export async function importNFeXML(
   return getOrderWithItems(order.id, ctx.clinic_id)
 }
 
+// ─── Entrada manual (sem XML) ─────────────────────────────────────────────────
+
+export interface ManualPurchaseItem {
+  description: string
+  quantity:    number
+  unit_price:  number
+  unit?:       string | null
+  ean?:        string | null
+  ncm?:        string | null
+}
+
+export interface ManualPurchasePayload {
+  supplier_id: string | null
+  issue_date:  string | null   // 'YYYY-MM-DD'
+  notes?:      string | null
+  items:       ManualPurchaseItem[]
+}
+
+export async function createManualPurchaseOrder(
+  payload: ManualPurchasePayload,
+): Promise<PurchaseOrder | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return { error: ctx.error as string }
+
+  if (!['admin', 'owner', 'manager'].includes(ctx.role)) {
+    return { error: 'Apenas administradores podem registrar entradas manuais.' }
+  }
+
+  if (!payload.items || payload.items.length === 0) {
+    return { error: 'Informe ao menos um item.' }
+  }
+  for (const it of payload.items) {
+    if (!it.description.trim())     return { error: 'Descrição do item é obrigatória.' }
+    if (!(it.quantity > 0))         return { error: `Quantidade inválida para "${it.description}".` }
+    if (!(it.unit_price >= 0))      return { error: `Preço unitário inválido para "${it.description}".` }
+  }
+
+  const total = payload.items.reduce((s, it) => s + it.quantity * it.unit_price, 0)
+  const admin = createAdminClient()
+
+  const { data: order, error: orderErr } = await admin
+    .from('purchase_orders')
+    .insert({
+      clinic_id:   ctx.clinic_id,
+      supplier_id: payload.supplier_id,
+      nfe_key:     null,
+      nfe_number:  null,
+      nfe_series:  null,
+      issue_date:  payload.issue_date || null,
+      total_value: total,
+      status:      'pending',
+      xml_content: null,
+      notes:       payload.notes ?? 'Entrada manual (sem NF-e)',
+      created_by:  ctx.user_id,
+    })
+    .select('id')
+    .single()
+
+  if (orderErr || !order) {
+    return { error: `Erro ao criar entrada manual: ${orderErr?.message ?? ''}` }
+  }
+
+  // Auto-match dos itens contra estoque (EAN ou nome)
+  for (const item of payload.items) {
+    let stock_item_id: string | null = null
+    let is_matched = false
+
+    if (item.ean) {
+      const { data: found } = await admin
+        .from('stock_items')
+        .select('id')
+        .eq('clinic_id', ctx.clinic_id)
+        .eq('barcode', item.ean)
+        .maybeSingle()
+      if (found) { stock_item_id = found.id; is_matched = true }
+    }
+
+    if (!stock_item_id) {
+      const { data: found } = await admin
+        .from('stock_items')
+        .select('id')
+        .eq('clinic_id', ctx.clinic_id)
+        .ilike('name', item.description.substring(0, 30))
+        .maybeSingle()
+      if (found) { stock_item_id = found.id; is_matched = true }
+    }
+
+    const total_price = item.quantity * item.unit_price
+    await admin.from('purchase_order_items').insert({
+      purchase_order_id: order.id,
+      stock_item_id,
+      description:  item.description.trim(),
+      ncm:          item.ncm || null,
+      ean:          item.ean || null,
+      cfop:         null,
+      quantity:     item.quantity,
+      unit:         item.unit || null,
+      unit_price:   item.unit_price,
+      total_price,
+      tax_icms:     null,
+      tax_pis:      null,
+      tax_cofins:   null,
+      is_matched,
+    })
+  }
+
+  revalidatePath('/dashboard/purchases')
+  return getOrderWithItems(order.id, ctx.clinic_id)
+}
+
 // ─── Get order with items ─────────────────────────────────────────────────────
 
 async function getOrderWithItems(

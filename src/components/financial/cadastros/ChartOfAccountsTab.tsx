@@ -3,9 +3,10 @@
 import { useState, useTransition, useMemo } from 'react'
 import {
   listChartOfAccounts, createChartOfAccount, deleteChartOfAccount,
+  updateChartOfAccount, replicateDefaultChartOfAccounts,
   type ChartOfAccount, type CreateChartOfAccountData,
 } from '@/lib/actions/financial'
-import { Plus, Trash2, X, Loader2, AlertCircle, BookOpen, ChevronRight } from 'lucide-react'
+import { Plus, Trash2, X, Loader2, AlertCircle, BookOpen, ChevronRight, Pencil, Sparkles } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -34,17 +35,23 @@ const labelClass = 'block text-xs font-semibold text-slate-500 uppercase mb-1.5'
 
 // ─── Add modal ────────────────────────────────────────────────────────────────
 
-function AddAccountModal({
+function AccountFormModal({
   parents,
+  initial,
   onClose,
   onSuccess,
 }: {
   parents: ChartOfAccount[]
+  initial?: ChartOfAccount
   onClose: () => void
   onSuccess: (accounts: ChartOfAccount[]) => void
 }) {
+  const isEdit = !!initial
   const [form, setForm] = useState<CreateChartOfAccountData>({
-    code: '', name: '', type: 'receita', parent_id: undefined,
+    code:      initial?.code      ?? '',
+    name:      initial?.name      ?? '',
+    type:      initial?.type      ?? 'receita',
+    parent_id: initial?.parent_id ?? undefined,
   })
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -55,7 +62,9 @@ function AddAccountModal({
     if (!form.name.trim()) { setError('Nome obrigatório.'); return }
 
     startTransition(async () => {
-      const res = await createChartOfAccount(form)
+      const res = isEdit && initial
+        ? await updateChartOfAccount(initial.id, form)
+        : await createChartOfAccount(form)
       if ('error' in res) { setError((res as { error: string }).error); return }
       const listRes = await listChartOfAccounts()
       onSuccess(Array.isArray(listRes) ? listRes : [])
@@ -66,7 +75,7 @@ function AddAccountModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="w-full max-w-md rounded-2xl bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-          <h2 className="text-base font-bold text-slate-800">Nova Conta</h2>
+          <h2 className="text-base font-bold text-slate-800">{isEdit ? 'Editar Conta' : 'Nova Conta'}</h2>
           <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 transition-colors">
             <X className="h-4 w-4" />
           </button>
@@ -100,7 +109,7 @@ function AddAccountModal({
             <label className={labelClass}>Conta Pai (opcional)</label>
             <select value={form.parent_id ?? ''} onChange={e => setForm(f => ({ ...f, parent_id: e.target.value || undefined }))} className={fieldClass}>
               <option value="">— Sem pai (conta raiz) —</option>
-              {parents.filter(p => !p.parent_id).map(p => (
+              {parents.filter(p => !p.parent_id && p.id !== initial?.id).map(p => (
                 <option key={p.id} value={p.id}>{p.code} — {p.name}</option>
               ))}
             </select>
@@ -119,7 +128,7 @@ function AddAccountModal({
           <button onClick={handleSave} disabled={isPending}
             className="flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60">
             {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Criar Conta
+            {isEdit ? 'Salvar Alterações' : 'Criar Conta'}
           </button>
         </div>
       </div>
@@ -133,10 +142,12 @@ function AccountRow({
   account,
   children,
   onDelete,
+  onEdit,
 }: {
   account: ChartOfAccount
   children?: React.ReactNode
   onDelete: (id: string) => void
+  onEdit:   (account: ChartOfAccount) => void
 }) {
   const [expanded, setExpanded] = useState(true)
   const hasChildren = !!children
@@ -162,12 +173,22 @@ function AccountRow({
         {account.is_system ? (
           <span className="text-xs text-slate-400 shrink-0">Sistema</span>
         ) : (
-          <button
-            onClick={() => onDelete(account.id)}
-            className="opacity-0 group-hover:opacity-100 rounded-lg p-1 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
+          <div className="flex items-center gap-0.5 shrink-0">
+            <button
+              onClick={() => onEdit(account)}
+              title="Editar conta"
+              className="opacity-0 group-hover:opacity-100 rounded-lg p-1 text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-all"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => onDelete(account.id)}
+              title="Excluir conta"
+              className="opacity-0 group-hover:opacity-100 rounded-lg p-1 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
         )}
       </div>
 
@@ -182,7 +203,23 @@ export default function ChartOfAccountsTab({ initialAccounts }: Props) {
   const [accounts, setAccounts] = useState<ChartOfAccount[]>(initialAccounts)
   const [filterType, setFilterType] = useState<AccountType | 'all'>('all')
   const [showModal, setShowModal] = useState(false)
+  const [editing, setEditing] = useState<ChartOfAccount | null>(null)
+  const [replicating, setReplicating] = useState(false)
+  const [replicateMsg, setReplicateMsg] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+
+  async function handleReplicate() {
+    if (!confirm('Replicar o plano de contas padrão Sysmax? Contas com mesmo código serão preservadas.')) return
+    setReplicating(true)
+    setReplicateMsg(null)
+    const res = await replicateDefaultChartOfAccounts()
+    setReplicating(false)
+    if ('error' in res) { setReplicateMsg('Erro: ' + res.error); return }
+    setReplicateMsg(`${res.created} conta${res.created !== 1 ? 's' : ''} criada${res.created !== 1 ? 's' : ''}, ${res.skipped} já existia${res.skipped !== 1 ? 'm' : ''}.`)
+    const listRes = await listChartOfAccounts()
+    if (Array.isArray(listRes)) setAccounts(listRes)
+    setTimeout(() => setReplicateMsg(null), 5000)
+  }
 
   // Build tree
   const tree = useMemo(() => {
@@ -230,12 +267,27 @@ export default function ChartOfAccountsTab({ initialAccounts }: Props) {
         </div>
         <div className="flex-1" />
         <button
+          onClick={handleReplicate}
+          disabled={replicating}
+          title="Cria as contas padrão Sysmax (já existentes são preservadas)"
+          className="flex items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-100 disabled:opacity-60"
+        >
+          {replicating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+          Replicar Padrão
+        </button>
+        <button
           onClick={() => setShowModal(true)}
           className="flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700"
         >
           <Plus className="h-4 w-4" /> Nova Conta
         </button>
       </div>
+
+      {replicateMsg && (
+        <div className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-2 text-xs font-semibold text-teal-700">
+          {replicateMsg}
+        </div>
+      )}
 
       {/* Tree */}
       {tree.roots.length === 0 ? (
@@ -248,11 +300,11 @@ export default function ChartOfAccountsTab({ initialAccounts }: Props) {
           {tree.roots.map(root => {
             const children = tree.childrenOf(root.id)
             return (
-              <AccountRow key={root.id} account={root} onDelete={handleDelete}>
+              <AccountRow key={root.id} account={root} onDelete={handleDelete} onEdit={setEditing}>
                 {children.length > 0 ? (
                   <div className="space-y-1">
                     {children.map(child => (
-                      <AccountRow key={child.id} account={child} onDelete={handleDelete} />
+                      <AccountRow key={child.id} account={child} onDelete={handleDelete} onEdit={setEditing} />
                     ))}
                   </div>
                 ) : undefined}
@@ -267,10 +319,19 @@ export default function ChartOfAccountsTab({ initialAccounts }: Props) {
       </p>
 
       {showModal && (
-        <AddAccountModal
+        <AccountFormModal
           parents={rootParents}
           onClose={() => setShowModal(false)}
           onSuccess={handleModalSuccess}
+        />
+      )}
+
+      {editing && (
+        <AccountFormModal
+          parents={rootParents}
+          initial={editing}
+          onClose={() => setEditing(null)}
+          onSuccess={(updated) => { setAccounts(updated); setEditing(null) }}
         />
       )}
     </div>

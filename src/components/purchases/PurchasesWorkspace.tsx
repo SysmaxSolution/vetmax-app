@@ -8,9 +8,10 @@ import { NFXMLImporter } from './NFXMLImporter'
 import { PurchaseOrderCard } from './PurchaseOrderCard'
 import { SupplierFormModal } from './SupplierFormModal'
 import { ExportXmlModal } from './ExportXmlModal'
+import ManualEntryModal from './ManualEntryModal'
 import { listSuppliers } from '@/lib/actions/suppliers'
 import { listPurchaseOrders } from '@/lib/actions/purchases'
-import { Package, Upload, Users, RefreshCcw, Archive } from 'lucide-react'
+import { Package, Upload, Users, RefreshCcw, Archive, PackagePlus } from 'lucide-react'
 
 type Tab = 'entradas' | 'fornecedores'
 
@@ -25,6 +26,7 @@ export default function PurchasesWorkspace({ initialOrders, initialSuppliers }: 
   const [orders, setOrders]         = useState<PurchaseOrder[]>(initialOrders)
   const [suppliers, setSuppliers]   = useState<Supplier[]>(initialSuppliers)
   const [showImporter, setShowImporter] = useState(false)
+  const [showManualEntry, setShowManualEntry] = useState(false)
   const [showSupplierForm, setShowSupplierForm] = useState(false)
   const [showExportModal, setShowExportModal]   = useState(false)
   const [editingSupplier, setEditingSupplier]   = useState<Supplier | null>(null)
@@ -82,6 +84,14 @@ export default function PurchasesWorkspace({ initialOrders, initialSuppliers }: 
                 >
                   <Archive className="h-4 w-4" />
                   Exportar XML Contabilidade
+                </button>
+                <button
+                  onClick={() => setShowManualEntry(true)}
+                  className="flex items-center gap-1.5 rounded-lg border border-purple-300 bg-white px-3 py-2 text-sm font-medium text-purple-700 hover:bg-purple-50"
+                  title="Registrar entrada manual sem NF-e XML"
+                >
+                  <PackagePlus className="h-4 w-4" />
+                  Entrada Manual
                 </button>
                 <button
                   onClick={() => setShowImporter(true)}
@@ -208,6 +218,17 @@ export default function PurchasesWorkspace({ initialOrders, initialSuppliers }: 
         <NFXMLImporter
           onClose={() => setShowImporter(false)}
           onImported={onOrderImported}
+        />
+      )}
+
+      {showManualEntry && (
+        <ManualEntryModal
+          suppliers={suppliers}
+          onClose={() => setShowManualEntry(false)}
+          onSuccess={(order) => {
+            setOrders(prev => [order, ...prev])
+            setShowManualEntry(false)
+          }}
         />
       )}
 

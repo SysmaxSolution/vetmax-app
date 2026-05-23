@@ -930,6 +930,43 @@ export async function createChartOfAccount(
   return row as ChartOfAccount
 }
 
+export async function updateChartOfAccount(
+  id: string,
+  data: Partial<CreateChartOfAccountData>
+): Promise<ChartOfAccount | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+
+  const admin = createAdminClient()
+  const { data: existing } = await admin
+    .from('chart_of_accounts')
+    .select('is_system')
+    .eq('id', id)
+    .eq('clinic_id', clinicId)
+    .single()
+  if (!existing) return { error: 'Conta não encontrada.' }
+  if (existing.is_system) return { error: 'Contas do sistema não podem ser editadas.' }
+
+  const patch: Record<string, unknown> = {}
+  if (data.code      !== undefined) patch.code      = data.code.trim()
+  if (data.name      !== undefined) patch.name      = data.name.trim()
+  if (data.type      !== undefined) patch.type      = data.type
+  if (data.parent_id !== undefined) patch.parent_id = data.parent_id || null
+
+  if (Object.keys(patch).length === 0) return { error: 'Nada a atualizar.' }
+
+  const { data: row, error } = await admin
+    .from('chart_of_accounts')
+    .update(patch)
+    .eq('id', id)
+    .eq('clinic_id', clinicId)
+    .select('id, clinic_id, code, name, type, parent_id, is_system, is_active, created_at')
+    .single()
+
+  if (error) return { error: 'Erro ao atualizar conta: ' + error.message }
+  return row as ChartOfAccount
+}
+
 export async function deleteChartOfAccount(id: string): Promise<{ error?: string }> {
   const clinicId = await getClinicId()
   if (!clinicId) return { error: 'Não autenticado.' }
@@ -953,6 +990,113 @@ export async function deleteChartOfAccount(id: string): Promise<{ error?: string
 
   if (error) return { error: 'Erro ao desativar conta: ' + error.message }
   return {}
+}
+
+// ─── Plano de contas PADRÃO (replicável para qualquer clínica nova) ──────────
+
+const DEFAULT_CHART_OF_ACCOUNTS: Array<{
+  code: string
+  name: string
+  type: 'receita' | 'despesa' | 'ativo' | 'passivo'
+  children?: Array<{ code: string; name: string; type: 'receita' | 'despesa' | 'ativo' | 'passivo' }>
+}> = [
+  {
+    code: '3', name: 'RECEITAS', type: 'receita',
+    children: [
+      { code: '3.1', name: 'Consultas e Retornos',           type: 'receita' },
+      { code: '3.2', name: 'Vacinação',                       type: 'receita' },
+      { code: '3.3', name: 'Cirurgia',                        type: 'receita' },
+      { code: '3.4', name: 'Exames',                          type: 'receita' },
+      { code: '3.5', name: 'Banho & Tosa',                    type: 'receita' },
+      { code: '3.6', name: 'Internação',                      type: 'receita' },
+      { code: '3.7', name: 'Venda de Produtos',               type: 'receita' },
+      { code: '3.8', name: 'Convênios — Repasse',             type: 'receita' },
+    ],
+  },
+  {
+    code: '4', name: 'DESPESAS', type: 'despesa',
+    children: [
+      { code: '4.1', name: 'Folha de Pagamento',              type: 'despesa' },
+      { code: '4.2', name: 'Pró-labore',                      type: 'despesa' },
+      { code: '4.3', name: 'Aluguel e Condomínio',            type: 'despesa' },
+      { code: '4.4', name: 'Água, Luz, Internet',             type: 'despesa' },
+      { code: '4.5', name: 'Compras — Medicamentos',          type: 'despesa' },
+      { code: '4.6', name: 'Compras — Materiais',             type: 'despesa' },
+      { code: '4.7', name: 'Compras — Limpeza',               type: 'despesa' },
+      { code: '4.8', name: 'Manutenção / Equipamentos',       type: 'despesa' },
+      { code: '4.9', name: 'Marketing',                       type: 'despesa' },
+      { code: '4.10', name: 'Impostos e Taxas',               type: 'despesa' },
+      { code: '4.11', name: 'Software e Assinaturas',         type: 'despesa' },
+      { code: '4.12', name: 'Maquininha de Cartão (Taxas)',   type: 'despesa' },
+    ],
+  },
+  {
+    code: '1', name: 'ATIVOS', type: 'ativo',
+    children: [
+      { code: '1.1', name: 'Caixa',                           type: 'ativo' },
+      { code: '1.2', name: 'Bancos',                          type: 'ativo' },
+      { code: '1.3', name: 'A Receber',                       type: 'ativo' },
+      { code: '1.4', name: 'Estoque',                         type: 'ativo' },
+    ],
+  },
+  {
+    code: '2', name: 'PASSIVOS', type: 'passivo',
+    children: [
+      { code: '2.1', name: 'Fornecedores',                    type: 'passivo' },
+      { code: '2.2', name: 'A Pagar',                         type: 'passivo' },
+      { code: '2.3', name: 'Empréstimos',                     type: 'passivo' },
+    ],
+  },
+]
+
+/**
+ * Cria as contas do plano padrão Sysmax na clínica logada.
+ * Idempotente: pula contas cujo `code` já existe (qualquer status).
+ */
+export async function replicateDefaultChartOfAccounts(): Promise<
+  { created: number; skipped: number } | { error: string }
+> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+
+  const admin = createAdminClient()
+  const { data: existing } = await admin
+    .from('chart_of_accounts')
+    .select('id, code')
+    .eq('clinic_id', clinicId)
+
+  const existingByCode = new Map<string, string>()
+  for (const row of (existing ?? [])) existingByCode.set(row.code as string, row.id as string)
+
+  let created = 0
+  let skipped = 0
+  for (const root of DEFAULT_CHART_OF_ACCOUNTS) {
+    let parentId: string | undefined = existingByCode.get(root.code)
+    if (!parentId) {
+      const { data: newRoot, error } = await admin
+        .from('chart_of_accounts')
+        .insert({ clinic_id: clinicId, code: root.code, name: root.name, type: root.type, parent_id: null, is_system: false })
+        .select('id')
+        .single()
+      if (error || !newRoot) return { error: `Erro ao criar conta raiz ${root.code}: ${error?.message}` }
+      parentId = newRoot.id as string
+      existingByCode.set(root.code, parentId)
+      created++
+    } else {
+      skipped++
+    }
+
+    for (const child of root.children ?? []) {
+      if (existingByCode.has(child.code)) { skipped++; continue }
+      const { error } = await admin
+        .from('chart_of_accounts')
+        .insert({ clinic_id: clinicId, code: child.code, name: child.name, type: child.type, parent_id: parentId, is_system: false })
+      if (error) return { error: `Erro ao criar conta ${child.code}: ${error.message}` }
+      created++
+    }
+  }
+
+  return { created, skipped }
 }
 
 // ─── CreditCards (G-10) ───────────────────────────────────────────────────────
