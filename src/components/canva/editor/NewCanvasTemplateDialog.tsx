@@ -14,6 +14,7 @@
 import { useState, useTransition } from 'react'
 import { Copy, Loader2, Plus, Sparkles, X } from 'lucide-react'
 import { createBlankCanvasTemplate } from '@/lib/actions/canva-templates'
+import type { CanvasState } from '@/lib/canva/canvas-state'
 import InheritTemplatePicker from './InheritTemplatePicker'
 
 type TemplateType = 'laudo' | 'receita' | 'encaminhamento' | 'termo' | 'exame' | 'outro'
@@ -29,7 +30,14 @@ const TYPE_OPTIONS: { value: TemplateType; label: string; hint: string }[] = [
 
 interface Props {
   onClose: () => void
-  onCreated: (templateId: string, name: string, type: TemplateType) => void
+  /** canvasState vem populado quando o usuário herdou de um modelo
+   *  existente; undefined/null indica criação em branco. */
+  onCreated: (
+    templateId: string,
+    name: string,
+    type: TemplateType,
+    canvasState?: CanvasState | null,
+  ) => void
 }
 
 export default function NewCanvasTemplateDialog({ onClose, onCreated }: Props) {

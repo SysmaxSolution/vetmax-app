@@ -17,6 +17,7 @@ import {
   listCanvasTemplatesForInherit,
   type InheritableTemplateSummary,
 } from '@/lib/actions/canva-templates'
+import type { CanvasState } from '@/lib/canva/canvas-state'
 
 type TemplateType = InheritableTemplateSummary['type']
 
@@ -34,7 +35,12 @@ interface Props {
   type: TemplateType
   onBack: () => void
   onClose: () => void
-  onCreated: (templateId: string, name: string, type: TemplateType) => void
+  onCreated: (
+    templateId: string,
+    name: string,
+    type: TemplateType,
+    canvasState?: CanvasState | null,
+  ) => void
 }
 
 export default function InheritTemplatePicker({ name, type, onBack, onClose, onCreated }: Props) {
@@ -69,12 +75,12 @@ export default function InheritTemplatePicker({ name, type, onBack, onClose, onC
     setSubmitError(null)
     startSubmit(async () => {
       try {
-        const { id } = await createCanvasTemplateFromExisting({
+        const { id, canvas_state } = await createCanvasTemplateFromExisting({
           name,
           type,
           source_template_id: selectedId,
         })
-        onCreated(id, name, type)
+        onCreated(id, name, type, canvas_state)
       } catch (e: any) {
         setSubmitError(e?.message ?? 'falha ao herdar modelo')
       }

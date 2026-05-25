@@ -793,7 +793,7 @@ export interface CreateCanvasTemplateFromExistingInput {
  *  novos paths — assim deletar o pai não quebra o filho. */
 export async function createCanvasTemplateFromExisting(
   input: CreateCanvasTemplateFromExistingInput,
-): Promise<{ id: string }> {
+): Promise<{ id: string; canvas_state: CanvasState }> {
   const { profile } = await requireClinic()
   if (profile.role !== 'admin') throw new Error('apenas admin pode criar modelos')
 
@@ -819,9 +819,13 @@ export async function createCanvasTemplateFromExisting(
   }
 
   // 2. Clona assets (papel timbrado + image elements) para novos paths
-  const { state: newCanvasState } = await replicateCanvasAssets(
+  const { state: clonedRaw } = await replicateCanvasAssets(
     admin, source.canvas_state, profile.clinic_id,
   )
+  if (!isCanvasState(clonedRaw)) {
+    throw new Error('canvas_state clonado ficou inválido — abortando herança')
+  }
+  const newCanvasState: CanvasState = clonedRaw
 
   // 3. Clona background da coluna legada (se houver)
   let bgUrl: string | null = null
@@ -853,7 +857,7 @@ export async function createCanvasTemplateFromExisting(
   if (insErr || !inserted) throw new Error(insErr?.message ?? 'falha ao criar modelo herdado')
 
   revalidatePath('/dashboard/management')
-  return { id: inserted.id }
+  return { id: inserted.id, canvas_state: newCanvasState }
 }
 
 // ── Canvas Editor (drag&drop) ────────────────────────────────────────────────

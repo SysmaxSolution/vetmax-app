@@ -1221,21 +1221,27 @@ export default function ManagementWorkspace({
       {showNewBlankDialog && (
         <NewCanvasTemplateDialog
           onClose={() => setShowNewBlankDialog(false)}
-          onCreated={(id, name, type) => {
-            const blankTemplate: DocumentTemplate = {
+          onCreated={(id, name, type, canvasState) => {
+            const inherited = !!canvasState
+            const newTemplate: DocumentTemplate = {
               id,
               clinic_id: clinicData?.id ?? '',
               name,
               type,
               extracted_fields: [],
-              canvas_state: null,
+              canvas_state: canvasState ?? null,
               engine: 'canva-native',
               created_at: new Date().toISOString(),
             }
-            setTemplates(prev => [blankTemplate, ...prev])
+            setTemplates(prev => [newTemplate, ...prev])
             setShowNewBlankDialog(false)
-            setCanvaEditing(blankTemplate)
-            setToast({ type: 'success', message: `Modelo "${name}" criado. Monte arrastando elementos.` })
+            setCanvaEditing(newTemplate)
+            setToast({
+              type: 'success',
+              message: inherited
+                ? `Modelo "${name}" criado a partir do herdado. Ajuste os elementos conforme precisar.`
+                : `Modelo "${name}" criado. Monte arrastando elementos.`,
+            })
           }}
         />
       )}
