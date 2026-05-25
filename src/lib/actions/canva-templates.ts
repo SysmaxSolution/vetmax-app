@@ -741,6 +741,121 @@ export async function createBlankCanvasTemplate(
   return { id: data.id }
 }
 
+// ── Herdar de modelo existente (lista + clonagem dentro da mesma clínica) ───
+
+export interface InheritableTemplateSummary {
+  id: string
+  name: string
+  type: 'laudo' | 'receita' | 'encaminhamento' | 'termo' | 'exame' | 'outro'
+  updated_at: string | null
+  has_background: boolean
+  element_count: number
+}
+
+/** Lista templates Canvas Visual da clínica do usuário, para herdar layout.
+ *  Filtra somente os que têm canvas_state válido (engine canva-native ou
+ *  templates legados que tenham sido convertidos). */
+export async function listCanvasTemplatesForInherit(): Promise<InheritableTemplateSummary[]> {
+  const { supabase, profile } = await requireClinic()
+
+  const { data, error } = await supabase
+    .from('document_templates')
+    .select('id, name, type, updated_at, canvas_state, background_image_url')
+    .eq('clinic_id', profile.clinic_id)
+    .order('updated_at', { ascending: false })
+    .limit(200)
+
+  if (error) throw new Error(error.message)
+
+  return (data ?? [])
+    .filter(t => isCanvasState(t.canvas_state))
+    .map(t => {
+      const cs = t.canvas_state as CanvasState
+      return {
+        id: t.id,
+        name: t.name,
+        type: t.type as InheritableTemplateSummary['type'],
+        updated_at: t.updated_at,
+        has_background: Boolean(cs.page?.backgroundImageUrl || t.background_image_url),
+        element_count: Array.isArray(cs.elements) ? cs.elements.length : 0,
+      }
+    })
+}
+
+export interface CreateCanvasTemplateFromExistingInput {
+  name: string
+  type: 'laudo' | 'receita' | 'encaminhamento' | 'termo' | 'exame' | 'outro'
+  source_template_id: string
+}
+
+/** Cria um novo template Canvas clonando canvas_state + assets de um template
+ *  existente da MESMA clínica. Assets são fisicamente copiados no Storage para
+ *  novos paths — assim deletar o pai não quebra o filho. */
+export async function createCanvasTemplateFromExisting(
+  input: CreateCanvasTemplateFromExistingInput,
+): Promise<{ id: string }> {
+  const { profile } = await requireClinic()
+  if (profile.role !== 'admin') throw new Error('apenas admin pode criar modelos')
+
+  const name = input.name.trim()
+  if (!name) throw new Error('informe um nome para o modelo')
+
+  const admin = createAdminClient()
+
+  // 1. Lê o source — admin client + filtro explícito de clinic_id garante isolamento
+  const { data: source, error: srcErr } = await admin
+    .from('document_templates')
+    .select(`
+      canvas_state, background_image_url,
+      margin_top, margin_bottom, margin_left, margin_right, block_style
+    `)
+    .eq('id', input.source_template_id)
+    .eq('clinic_id', profile.clinic_id)
+    .single()
+
+  if (srcErr || !source) throw new Error(srcErr?.message ?? 'template de origem não encontrado')
+  if (!isCanvasState(source.canvas_state)) {
+    throw new Error('template de origem não é Canvas Visual')
+  }
+
+  // 2. Clona assets (papel timbrado + image elements) para novos paths
+  const { state: newCanvasState } = await replicateCanvasAssets(
+    admin, source.canvas_state, profile.clinic_id,
+  )
+
+  // 3. Clona background da coluna legada (se houver)
+  let bgUrl: string | null = null
+  if (source.background_image_url) {
+    const cloned = await cloneStorageAsset(admin, source.background_image_url, null, profile.clinic_id)
+    if (cloned) bgUrl = cloned.signedUrl
+  }
+
+  const { data: inserted, error: insErr } = await admin
+    .from('document_templates')
+    .insert({
+      clinic_id: profile.clinic_id,
+      name,
+      type: input.type,
+      file_url: null,
+      extracted_fields: [],
+      canvas_state: newCanvasState,
+      engine: 'canva-native',
+      background_image_url: bgUrl,
+      margin_top: source.margin_top ?? 2.0,
+      margin_bottom: source.margin_bottom ?? 2.0,
+      margin_left: source.margin_left ?? 2.0,
+      margin_right: source.margin_right ?? 2.0,
+      block_style: source.block_style ?? 'solid',
+    })
+    .select('id')
+    .single()
+
+  if (insErr || !inserted) throw new Error(insErr?.message ?? 'falha ao criar modelo herdado')
+
+  revalidatePath('/dashboard/management')
+  return { id: inserted.id }
+}
+
 // ── Canvas Editor (drag&drop) ────────────────────────────────────────────────
 
 /**

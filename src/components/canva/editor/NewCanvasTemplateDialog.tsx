@@ -12,8 +12,9 @@
  */
 
 import { useState, useTransition } from 'react'
-import { Loader2, Plus, Sparkles, X } from 'lucide-react'
+import { Copy, Loader2, Plus, Sparkles, X } from 'lucide-react'
 import { createBlankCanvasTemplate } from '@/lib/actions/canva-templates'
+import InheritTemplatePicker from './InheritTemplatePicker'
 
 type TemplateType = 'laudo' | 'receita' | 'encaminhamento' | 'termo' | 'exame' | 'outro'
 
@@ -36,6 +37,7 @@ export default function NewCanvasTemplateDialog({ onClose, onCreated }: Props) {
   const [type, setType] = useState<TemplateType>('receita')
   const [error, setError] = useState<string | null>(null)
   const [submitting, startSubmit] = useTransition()
+  const [pickerOpen, setPickerOpen] = useState(false)
 
   function submit() {
     setError(null)
@@ -52,6 +54,27 @@ export default function NewCanvasTemplateDialog({ onClose, onCreated }: Props) {
         setError(e?.message ?? 'falha ao criar modelo')
       }
     })
+  }
+
+  function openInheritPicker() {
+    setError(null)
+    if (!name.trim()) {
+      setError('Informe um nome antes de herdar um modelo.')
+      return
+    }
+    setPickerOpen(true)
+  }
+
+  if (pickerOpen) {
+    return (
+      <InheritTemplatePicker
+        name={name.trim()}
+        type={type}
+        onBack={() => setPickerOpen(false)}
+        onClose={onClose}
+        onCreated={onCreated}
+      />
+    )
   }
 
   return (
@@ -124,6 +147,15 @@ export default function NewCanvasTemplateDialog({ onClose, onCreated }: Props) {
             className="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100"
           >
             Cancelar
+          </button>
+          <button
+            onClick={openInheritPicker}
+            disabled={submitting || !name.trim()}
+            title="Aproveitar layout, papel timbrado e elementos de um modelo já existente"
+            className="flex items-center gap-1.5 rounded-lg border border-violet-300 bg-white px-3 py-1.5 text-sm font-medium text-violet-700 hover:bg-violet-50 disabled:opacity-50"
+          >
+            <Copy className="w-4 h-4" />
+            Herdar de modelo…
           </button>
           <button
             onClick={submit}
