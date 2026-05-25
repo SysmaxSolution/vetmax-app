@@ -2,9 +2,11 @@
 
 import { useState, useTransition, useRef, useEffect } from 'react'
 import { checkInPatientWithContacts, updateConsultation } from '@/lib/actions/consultations'
+import { addServiceToConsultation } from '@/lib/actions/services'
 import type { VisitReason, PaymentStatus } from '@/types'
 import { DateInput } from '@/components/ui/DatePicker'
 import ActivePackagesBanner from './ActivePackagesBanner'
+import ServiceComboBox, { type SelectedService } from './ServiceComboBox'
 
 const VISIT_REASON_OPTIONS: { value: VisitReason; label: string; emoji: string; color: string }[] = [
   { value: 'consultation', label: 'Consulta', emoji: '👨‍⚕️', color: 'bg-slate-100 text-slate-700' },
@@ -64,6 +66,9 @@ export function CheckInModal({
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>(existingConsultation?.payment_status ?? 'pending')
   const [scheduledDate, setScheduledDate] = useState<string>(existingConsultation?.scheduled_date?.split('T')[0] ?? '')
   const [weight, setWeight] = useState<string>('')
+  // Bloco Serviços (Refator 2026-05-25) — array de stock_items lançados.
+  // Opcional no check-in; guard de obrigatoriedade fica no encerramento.
+  const [services, setServices] = useState<SelectedService[]>([])
 
   // Contatos obrigatórios
   const [address, setAddress] = useState<string>(tutorAddress ?? '')
@@ -159,6 +164,27 @@ export function CheckInModal({
         setError(result.error)
       } else {
         const consultationId = isEdit ? existingConsultation!.id : (result as any).id
+
+        // Lança os serviços selecionados em consultation_services (snapshot
+        // de preço/nome dentro da action). Erros aqui NÃO revertem o
+        // check-in — exibimos warning mas o paciente já está na fila.
+        if (services.length > 0) {
+          const failures: string[] = []
+          for (const s of services) {
+            const r = await addServiceToConsultation({
+              consultation_id: consultationId,
+              stock_item_id:   s.id,
+              quantity:        s.quantity ?? 1,
+              added_at_stage:  'reception',
+            })
+            if ('error' in r) failures.push(`${s.name}: ${r.error}`)
+          }
+          if (failures.length > 0) {
+            setError(`Check-in OK, mas alguns serviços não foram lançados:\n${failures.join('\n')}`)
+            return
+          }
+        }
+
         onSuccess({
           consultationId,
           patientName,
@@ -205,9 +231,10 @@ export function CheckInModal({
               <ActivePackagesBanner petId={patientId} petName={patientName} />
             )}
 
-            {/* ── Motivo da Visita ── */}
+            {/* ── Motivo da Visita (classificação clínica) ── */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-3">Motivo da Visita *</label>
+              <p className="text-[11px] text-slate-500 mb-2 -mt-2">Classificação clínica usada na agenda e filtros — não é o serviço cobrado.</p>
               <div className="grid grid-cols-2 gap-2">
                 {VISIT_REASON_OPTIONS.map(option => (
                   <button
@@ -226,6 +253,15 @@ export function CheckInModal({
                 ))}
               </div>
             </div>
+
+            {/* ── Serviços Lançados (catálogo dinâmico do estoque) ── */}
+            {!isEdit && (
+              <ServiceComboBox
+                selected={services}
+                onChange={setServices}
+                label="Serviços Lançados"
+              />
+            )}
 
             {/* ── Status de Pagamento ── */}
             <div>
