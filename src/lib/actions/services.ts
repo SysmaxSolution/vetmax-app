@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
+import { logAudit } from '@/lib/actions/audit'
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -151,6 +152,22 @@ export async function addServiceToConsultation(
     .single()
 
   if (error) return { error: 'Erro ao adicionar serviço: ' + error.message }
+
+  // Auditoria CFMV — quem lançou o serviço, quando, com que preço/qty/stage.
+  await logAudit({
+    action:      'CONSULTATION_SERVICE_ADD',
+    entity_type: 'consultations',
+    entity_id:   payload.consultation_id,
+    details: {
+      service_line_id: data.id,
+      stock_item_id:   payload.stock_item_id,
+      name:            item.name,
+      price_snapshot:  price,
+      quantity:        payload.quantity ?? 1,
+      added_at_stage:  payload.added_at_stage ?? 'reception',
+    },
+  })
+
   revalidatePath('/dashboard/reception')
   revalidatePath('/dashboard/vet')
   return { id: data.id as string }
@@ -168,6 +185,16 @@ export async function cancelConsultationService(
   if ('error' in ctx) return ctx
 
   const admin = createAdminClient()
+
+  // Snapshot pré-cancelamento para incluir no audit_log (consultation_id +
+  // dados do serviço cancelado).
+  const { data: lineBefore } = await admin
+    .from('consultation_services')
+    .select('consultation_id, stock_item_id, name_snapshot, price_snapshot, quantity')
+    .eq('id', serviceLineId)
+    .eq('clinic_id', ctx.clinicId)
+    .single()
+
   const { error } = await admin
     .from('consultation_services')
     .update({
@@ -180,6 +207,23 @@ export async function cancelConsultationService(
     .is('cancelled_at', null)   // não re-cancela
 
   if (error) return { error: error.message }
+
+  if (lineBefore) {
+    await logAudit({
+      action:      'CONSULTATION_SERVICE_REMOVE',
+      entity_type: 'consultations',
+      entity_id:   lineBefore.consultation_id as string,
+      details: {
+        service_line_id: serviceLineId,
+        stock_item_id:   lineBefore.stock_item_id,
+        name:            lineBefore.name_snapshot,
+        price_snapshot:  Number(lineBefore.price_snapshot ?? 0),
+        quantity:        Number(lineBefore.quantity ?? 1),
+        cancel_reason:   reason?.trim() || null,
+      },
+    })
+  }
+
   revalidatePath('/dashboard/reception')
   revalidatePath('/dashboard/vet')
   return { success: true }

@@ -11,6 +11,8 @@ import {
   Settings,
 } from 'lucide-react'
 import { saveVetNotes, finalizeConsultation, reopenConsultation, savePrescription, type VetConsultationDetail } from '@/lib/actions/vet'
+import { hasActiveConsultationService } from '@/lib/actions/services'
+import ConsultationServicesPanel from '@/components/vet/ConsultationServicesPanel'
 import InsuranceAuditBanner from '@/components/consultation/InsuranceAuditBanner'
 import type { AuditResult } from '@/lib/actions/insurance-audit'
 import { updatePatientFromLiveReg } from '@/lib/actions/pets'
@@ -193,6 +195,15 @@ export default function ConsultationDetail({
   const [newStopInput,   setNewStopInput]   = useState('')
   const [isReopening, setIsReopening] = useState(false)
   const isFinalized = consultation.status === 'completed' || consultation.status === 'hospitalized'
+
+  // Refator de Serviços (2026-05-25): guard de finalização. Vet só pode dar
+  // alta quando há ao menos uma linha ativa em consultation_services.
+  const [hasService, setHasService] = useState(false)
+  async function refreshHasService() {
+    const r = await hasActiveConsultationService(consultation.id)
+    if (!('error' in r)) setHasService(r.has)
+  }
+  useEffect(() => { void refreshHasService() }, [consultation.id])
 
   const handleReopen = async () => {
     setIsReopening(true)
@@ -619,6 +630,15 @@ export default function ConsultationDetail({
     if (nextStatus === 'completed' && !isReviewedByVet) {
       setToast({ type: 'error', message: 'Confirme a revisão do prontuário (CFMV) para finalizar.' })
       return
+    }
+    // Guard de Serviços — alta exige ao menos um serviço lançado.
+    if (nextStatus === 'completed' && !hasService) {
+      // Recheca no servidor em caso de race (linha adicionada agora).
+      await refreshHasService()
+      if (!hasService) {
+        setToast({ type: 'error', message: 'Lance ao menos um serviço (Consulta, Exame, etc.) antes de encerrar o atendimento.' })
+        return
+      }
     }
     // Para alta final, abre checklist de confirmação
     if (nextStatus === 'completed') {
@@ -1478,6 +1498,13 @@ export default function ConsultationDetail({
             </div>
           </div>
         )}
+
+        {/* ── Serviços lançados (refator 2026-05-25) ───────────────────── */}
+        <ConsultationServicesPanel
+          consultationId={consultation.id}
+          isFinalized={isFinalized}
+          onChange={refreshHasService}
+        />
 
         {/* ── Carteira de Vacinação ────────────────────────────────────── */}
         <VaccinationCard
