@@ -46,15 +46,20 @@ interface Props {
   /** Quando setado, o stage captura mouse events e desenha traços
    *  livres em vez de selecionar/arrastar elementos. */
   brush?: BrushSettings | null
+  /** Quando setado, o cursor vira crosshair e o próximo clique no stage
+   *  dispara onPlace(x, y) em %. Elementos existentes ficam inertes para
+   *  o usuário poder clicar "em cima" deles. */
+  armed?: { label: string } | null
   onSelect?: (id: string | null, opts?: { append?: boolean }) => void
   onElementChange?: (id: string, patch: Partial<CanvasElement>) => void
   onBrushStrokeComplete?: (points: Array<{ x: number; y: number }>, settings: BrushSettings) => void
+  onPlace?: (x: number, y: number) => void
 }
 
 export default function CanvasStage({
   state, selectedId, selectedIds, resolveContext, fillableValues,
-  mode = 'edit', brush, cleanPreview, zoom,
-  onSelect, onElementChange, onBrushStrokeComplete,
+  mode = 'edit', brush, armed, cleanPreview, zoom,
+  onSelect, onElementChange, onBrushStrokeComplete, onPlace,
 }: Props) {
   const multiSelected = new Set(selectedIds ?? (selectedId ? [selectedId] : []))
   const stageRef = useRef<HTMLDivElement>(null)
@@ -92,7 +97,7 @@ export default function CanvasStage({
         background: pageBg,
         borderRadius: 6,
         boxShadow: '0 4px 24px rgba(15,23,42,.08)',
-        cursor: brush ? 'crosshair' : undefined,
+        cursor: (brush || armed) ? 'crosshair' : undefined,
       }
 
   const bg = state.page.backgroundImageUrl
@@ -109,7 +114,7 @@ export default function CanvasStage({
   }
 
   function handlePointerDown(e: ReactPointerEvent<HTMLDivElement>) {
-    if (!brush || isPrint) return
+    if (armed || !brush || isPrint) return
     e.preventDefault()
     e.stopPropagation()
     ;(e.target as Element).setPointerCapture?.(e.pointerId)
@@ -151,6 +156,18 @@ export default function CanvasStage({
       className="canva-a4-page"
       style={pageStyle}
       onMouseDown={e => {
+        if (armed && onPlace) {
+          // Captura a coordenada do clique e dispara colocação. Não importa
+          // se o clique foi no fundo ou sobre um elemento — quando armed,
+          // os elementos ficam com pointer-events:none.
+          const rect = stageRef.current?.getBoundingClientRect()
+          if (rect && rect.width && rect.height) {
+            const x = ((e.clientX - rect.left) / rect.width) * 100
+            const y = ((e.clientY - rect.top)  / rect.height) * 100
+            onPlace(x, y)
+          }
+          return
+        }
         if (brush) return
         if (e.target === e.currentTarget && onSelect) onSelect(null)
       }}
@@ -218,6 +235,7 @@ export default function CanvasStage({
             resolveContext={resolveContext}
             fillableValues={fillableValues}
             brushActive={!!brush}
+            armedActive={!!armed}
             onSelect={onSelect}
             onChange={onElementChange}
           />
@@ -311,13 +329,14 @@ interface WrapperProps {
   resolveContext?: ResolveContext
   fillableValues?: Record<string, string>
   brushActive: boolean
+  armedActive: boolean
   onSelect?: (id: string | null, opts?: { append?: boolean }) => void
   onChange?: (id: string, patch: Partial<CanvasElement>) => void
 }
 
 function ElementWrapper({
   element, stagePx, isPrint, isSelected, isPrimarySelected, cleanPreview, zoom,
-  resolveContext, fillableValues, brushActive, onSelect, onChange,
+  resolveContext, fillableValues, brushActive, armedActive, onSelect, onChange,
 }: WrapperProps) {
   const transform = element.rotation ? `rotate(${element.rotation}deg)` : undefined
 
@@ -352,8 +371,8 @@ function ElementWrapper({
       size={{ width: wPx, height: hPx }}
       position={{ x: xPx, y: yPx }}
       scale={zoom}
-      disableDragging={element.locked || brushActive}
-      enableResizing={element.locked || brushActive ? false : undefined}
+      disableDragging={element.locked || brushActive || armedActive}
+      enableResizing={element.locked || brushActive || armedActive ? false : undefined}
       bounds="parent"
       onDragStop={(_, d) => {
         if (!onChange) return
@@ -388,11 +407,11 @@ function ElementWrapper({
               ? '2px solid #06b6d4'  // ciano para multi-select (não-primary)
               : '1px dashed rgba(15,23,42,0.18)',
         outlineOffset: 0,
-        cursor: brushActive ? 'crosshair' : (element.locked ? 'not-allowed' : 'move'),
-        pointerEvents: brushActive ? 'none' : undefined,
+        cursor: (brushActive || armedActive) ? 'crosshair' : (element.locked ? 'not-allowed' : 'move'),
+        pointerEvents: (brushActive || armedActive) ? 'none' : undefined,
       }}
       onMouseDown={(e: any) => {
-        if (brushActive) return
+        if (brushActive || armedActive) return
         e.stopPropagation()
         const append = e.ctrlKey || e.metaKey || e.shiftKey
         onSelect?.(element.id, { append })

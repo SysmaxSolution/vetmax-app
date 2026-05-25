@@ -16,7 +16,7 @@ import { useRef, useState, useMemo } from 'react'
 import {
   Type, Image as ImageIcon, Minus, Loader2,
   Tag as TagIcon, ListOrdered, AlignLeft, Stamp, Search, X, LayoutTemplate, Lightbulb,
-  SquarePen,
+  SquarePen, Check, MousePointerClick,
 } from 'lucide-react'
 import {
   tagsByGroup, imageTagsByGroup, type DynamicTagDef, type DynamicImageTagDef,
@@ -35,11 +35,35 @@ import { MACRO_BLOCKS, type MacroBlock } from '@/lib/canva/macros'
 interface Props {
   onAdd: (element: CanvasElement) => void
   onAddMany: (elements: CanvasElement[]) => void
+  /** Armar inserção: o próximo clique no canvas vai posicionar os elementos
+   *  produzidos por factory(x, y). label aparece na faixa do banner. */
+  onArm: (factory: (x: number, y: number) => CanvasElement[], label: string) => void
+  /** True enquanto há uma inserção armada — usado para feedback visual. */
+  armed: boolean
   onUploadImage: (file: File) => Promise<{ url: string; storagePath: string }>
   computeStartY: () => number
 }
 
-export default function ElementsToolbar({ onAdd, onAddMany, onUploadImage, computeStartY }: Props) {
+/** Reposiciona um elemento já criado em (x, y) % preservando dimensões.
+ *  Linhas precisam ficar centradas no clique para o usuário acertar a posição
+ *  visual onde quer (a linha horizontal padrão é larga, vertical é alta). */
+function placedAt(el: CanvasElement, x: number, y: number): CanvasElement {
+  if (el.kind === 'line') {
+    return {
+      ...el,
+      box: {
+        ...el.box,
+        x: el.orientation === 'horizontal' ? Math.max(0, x - el.box.w / 2) : x,
+        y: el.orientation === 'vertical'   ? Math.max(0, y - el.box.h / 2) : y,
+      },
+    }
+  }
+  return { ...el, box: { ...el.box, x, y } }
+}
+
+export default function ElementsToolbar({
+  onAdd, onAddMany, onArm, armed, onUploadImage, computeStartY,
+}: Props) {
   const [modal, setModal] = useState<'tags' | 'images' | 'repeater' | 'blocks' | null>(null)
   const [uploading, setUploading] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
@@ -48,7 +72,11 @@ export default function ElementsToolbar({ onAdd, onAddMany, onUploadImage, compu
     setUploading(true)
     try {
       const { url, storagePath } = await onUploadImage(f)
-      onAdd(makeImageElement({ url, storagePath }))
+      // Após upload, arma — usuário escolhe onde encaixar
+      onArm(
+        (x, y) => [placedAt(makeImageElement({ url, storagePath }), x, y)],
+        'Imagem',
+      )
     } finally {
       setUploading(false)
     }
@@ -56,9 +84,14 @@ export default function ElementsToolbar({ onAdd, onAddMany, onUploadImage, compu
 
   return (
     <>
-      <aside className="flex flex-col items-stretch gap-2 border-r border-slate-200 bg-slate-50 p-3 overflow-y-auto">
+      <aside className={`flex flex-col items-stretch gap-2 border-r p-3 overflow-y-auto transition-colors ${
+        armed ? 'border-violet-300 bg-violet-50/50' : 'border-slate-200 bg-slate-50'
+      }`}>
         <ToolButton icon={<Type className="w-5 h-5" />} label="Texto"
-          onClick={() => onAdd(makeTextElement())} />
+          onClick={() => onArm(
+            (x, y) => [placedAt(makeTextElement(), x, y)],
+            'Texto',
+          )} />
 
         <ToolButton icon={uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ImageIcon className="w-5 h-5" />}
           label="Imagem"
@@ -75,9 +108,15 @@ export default function ElementsToolbar({ onAdd, onAddMany, onUploadImage, compu
 
         <div className="grid grid-cols-2 gap-1.5">
           <ToolButton compact icon={<Minus className="w-4 h-4" />} label="Linha H"
-            onClick={() => onAdd(makeLineElement('horizontal'))} />
+            onClick={() => onArm(
+              (x, y) => [placedAt(makeLineElement('horizontal'), x, y)],
+              'Linha horizontal',
+            )} />
           <ToolButton compact icon={<Minus className="w-4 h-4 rotate-90" />} label="Linha V"
-            onClick={() => onAdd(makeLineElement('vertical'))} />
+            onClick={() => onArm(
+              (x, y) => [placedAt(makeLineElement('vertical'), x, y)],
+              'Linha vertical',
+            )} />
         </div>
 
         <ToolButton
@@ -107,34 +146,59 @@ export default function ElementsToolbar({ onAdd, onAddMany, onUploadImage, compu
         <ToolButton
           icon={<SquarePen className="w-5 h-5" />}
           label="Campo Preenchível"
-          onClick={() => {
-            const key = `campo_${Date.now().toString(36)}`
-            onAdd(makeFillableFieldElement(key, 'Campo: '))
-          }}
+          onClick={() => onArm(
+            (x, y) => {
+              const key = `campo_${Date.now().toString(36)}`
+              return [placedAt(makeFillableFieldElement(key, 'Campo: '), x, y)]
+            },
+            'Campo Preenchível',
+          )}
         />
 
         <div className="mt-auto text-[9px] text-slate-400 leading-tight px-1 pt-2">
-          <AlignLeft className="w-3 h-3 inline mr-1" />
-          Arraste para mover; clique para editar.
+          <MousePointerClick className="w-3 h-3 inline mr-1" />
+          Escolha um elemento e clique onde quer inseri-lo.
         </div>
       </aside>
 
       {modal === 'tags' && (
         <TagsModal
           onClose={() => setModal(null)}
-          onPick={tag => { onAdd(makeDynamicTagElement(tag.id)); setModal(null) }}
+          onPickMany={tags => {
+            // Empilha as tags verticalmente em torno do ponto de clique.
+            // Tag default tem h ≈ DEFAULT_BOX.h ≈ 4-5%; usamos 5.5 como gap
+            // para evitar sobreposição visual mesmo com tipografia maior.
+            const GAP = 5.5
+            onArm(
+              (x, y) => tags.map((t, i) => placedAt(makeDynamicTagElement(t.id), x, y + i * GAP)),
+              tags.length === 1 ? `Tag ${tags[0].label}` : `${tags.length} tags`,
+            )
+            setModal(null)
+          }}
         />
       )}
       {modal === 'images' && (
         <ImagesModal
           onClose={() => setModal(null)}
-          onPick={tag => { onAdd(makeDynamicImageElement(tag.id)); setModal(null) }}
+          onPick={tag => {
+            onArm(
+              (x, y) => [placedAt(makeDynamicImageElement(tag.id), x, y)],
+              tag.label,
+            )
+            setModal(null)
+          }}
         />
       )}
       {modal === 'repeater' && (
         <RepeaterModal
           onClose={() => setModal(null)}
-          onPick={source => { onAdd(makeRepeaterElement(source)); setModal(null) }}
+          onPick={source => {
+            onArm(
+              (x, y) => [placedAt(makeRepeaterElement(source), x, y)],
+              'Lista repetível',
+            )
+            setModal(null)
+          }}
         />
       )}
       {modal === 'blocks' && (
@@ -228,11 +292,21 @@ function BlocksModal({
 type TagOrAll = TagGroup | 'all'
 
 function TagsModal({
-  onClose, onPick,
-}: { onClose: () => void; onPick: (tag: DynamicTagDef) => void }) {
+  onClose, onPickMany,
+}: { onClose: () => void; onPickMany: (tags: DynamicTagDef[]) => void }) {
   const groups = useMemo(() => tagsByGroup(), [])
   const [query, setQuery] = useState('')
   const [activeGroup, setActiveGroup] = useState<TagOrAll>('all')
+  // Múltipla seleção: ids escolhidos preservam a ORDEM (vira a ordem de
+  // empilhamento no canvas). Por isso usamos array em vez de Set.
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+
+  // Lookup id → tag, pra reconstruir a ordem na hora de submeter
+  const tagById = useMemo(() => {
+    const m = new Map<string, DynamicTagDef>()
+    for (const g of groups) for (const t of g.tags) m.set(t.id, t)
+    return m
+  }, [groups])
 
   const filteredGroups = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -252,8 +326,20 @@ function TagsModal({
 
   const totalShown = filteredGroups.reduce((acc, g) => acc + g.tags.length, 0)
 
+  function toggle(t: DynamicTagDef) {
+    setSelectedIds(prev =>
+      prev.includes(t.id) ? prev.filter(x => x !== t.id) : [...prev, t.id]
+    )
+  }
+
+  function confirm() {
+    if (selectedIds.length === 0) return
+    const ordered = selectedIds.map(id => tagById.get(id)).filter((x): x is DynamicTagDef => !!x)
+    onPickMany(ordered)
+  }
+
   return (
-    <ModalShell title="Tags Dinâmicas" subtitle="Campos resolvidos em tempo de impressão" onClose={onClose}>
+    <ModalShell title="Tags Dinâmicas" subtitle="Selecione uma ou várias — empilham no canvas a partir do clique" onClose={onClose}>
       <div className="flex flex-col h-full min-h-0">
         {/* Busca */}
         <div className="relative px-4 pt-3 pb-2 flex-shrink-0">
@@ -311,30 +397,83 @@ function TagsModal({
                   {g.label}
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-2">
-                  {g.tags.map(t => (
-                    <button
-                      key={t.id}
-                      onClick={() => onPick(t)}
-                      className="group flex items-start justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left hover:border-violet-400 hover:bg-violet-50 transition-colors"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-medium text-slate-800 group-hover:text-violet-700 truncate">
-                          {t.label}
+                  {g.tags.map(t => {
+                    const idx = selectedIds.indexOf(t.id)
+                    const isSelected = idx !== -1
+                    return (
+                      <button
+                        key={t.id}
+                        onClick={() => toggle(t)}
+                        className={`group relative flex items-start justify-between gap-2 rounded-lg border px-3 py-2 text-left transition-colors ${
+                          isSelected
+                            ? 'border-violet-500 bg-violet-50'
+                            : 'border-slate-200 bg-white hover:border-violet-400 hover:bg-violet-50'
+                        }`}
+                      >
+                        {/* Badge com ordem da seleção */}
+                        <span className={`absolute -top-1.5 -left-1.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold transition-opacity ${
+                          isSelected
+                            ? 'bg-violet-600 text-white shadow-sm opacity-100'
+                            : 'opacity-0'
+                        }`}>
+                          {isSelected ? idx + 1 : ''}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className={`text-sm font-medium truncate ${
+                            isSelected ? 'text-violet-800' : 'text-slate-800 group-hover:text-violet-700'
+                          }`}>
+                            {t.label}
+                          </div>
+                          {t.preview && (
+                            <div className="text-[10px] text-slate-400 truncate">{t.preview}</div>
+                          )}
                         </div>
-                        {t.preview && (
-                          <div className="text-[10px] text-slate-400 truncate">{t.preview}</div>
-                        )}
-                      </div>
-                      <code className="text-[9px] text-slate-300 group-hover:text-violet-400 font-mono flex-shrink-0 mt-0.5">
-                        {`{{${t.id}}}`}
-                      </code>
-                    </button>
-                  ))}
+                        <code className={`text-[9px] font-mono flex-shrink-0 mt-0.5 ${
+                          isSelected ? 'text-violet-500' : 'text-slate-300 group-hover:text-violet-400'
+                        }`}>
+                          {`{{${t.id}}}`}
+                        </code>
+                      </button>
+                    )
+                  })}
                 </div>
               </section>
             ))
           )}
         </div>
+
+        {/* Footer com contador + ação */}
+        <footer className="flex items-center justify-between gap-2 border-t border-slate-200 px-4 py-3 flex-shrink-0">
+          <div className="text-[11px] text-slate-500">
+            {selectedIds.length === 0
+              ? 'Clique para selecionar uma ou várias tags'
+              : <>
+                  <strong className="text-violet-700">{selectedIds.length}</strong> tag{selectedIds.length === 1 ? '' : 's'} selecionada{selectedIds.length === 1 ? '' : 's'}
+                  {selectedIds.length > 1 && ' — serão empilhadas no canvas'}
+                </>
+            }
+          </div>
+          <div className="flex items-center gap-2">
+            {selectedIds.length > 0 && (
+              <button
+                onClick={() => setSelectedIds([])}
+                className="rounded-lg px-2 py-1 text-[11px] font-medium text-slate-500 hover:bg-slate-100"
+              >
+                Limpar
+              </button>
+            )}
+            <button
+              onClick={confirm}
+              disabled={selectedIds.length === 0}
+              className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-violet-700 disabled:opacity-50"
+            >
+              <Check className="w-3.5 h-3.5" />
+              {selectedIds.length <= 1
+                ? 'Inserir tag'
+                : `Inserir ${selectedIds.length} tags`}
+            </button>
+          </div>
+        </footer>
       </div>
     </ModalShell>
   )

@@ -22,7 +22,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, useTransition } from 'react'
 import {
   Eye, EyeOff, Loader2, Paintbrush, Redo2, Save, Sparkles, Undo2, X, Eraser,
-  Combine, ZoomIn, ZoomOut, Maximize2, FileText, FilePlus, Trash2,
+  Combine, ZoomIn, ZoomOut, Maximize2, FileText, FilePlus, Trash2, MousePointerClick,
 } from 'lucide-react'
 import {
   defaultCanvasState, hydrateCanvasState, DEFAULT_PAGE_CONFIG,
@@ -258,6 +258,14 @@ export default function CanvasEditor({
   // Modo Pincel — quando ativo, cliques no canvas pintam traços em vez de
   // selecionar/arrastar elementos. ESC ou botão "Encerrar" sai.
   const [brushMode, setBrushMode] = useState<{ color: string; size: number; opacity: number } | null>(null)
+
+  // Modo "place-on-click" — quando armed, o próximo clique no canvas insere
+  // o(s) elemento(s) produzidos por factory(x, y) naquela coordenada (em %).
+  // ESC cancela. Mutuamente exclusivo com brushMode.
+  const [armed, setArmed] = useState<{
+    factory: (x: number, y: number) => CanvasElement[]
+    label: string
+  } | null>(null)
 
   // Modal de mescla de tags
   const [showMergeModal, setShowMergeModal] = useState(false)
@@ -521,6 +529,31 @@ export default function CanvasEditor({
     }
   }, [selected])
 
+  /** Arma a próxima inserção: cursor vira crosshair e o próximo clique no
+   *  canvas dispara a factory naquela coordenada. Cancela brush se ativo. */
+  const handleArm = useCallback((
+    factory: (x: number, y: number) => CanvasElement[],
+    label: string,
+  ) => {
+    setBrushMode(null)
+    setArmed({ factory, label })
+  }, [])
+
+  const handleCancelArm = useCallback(() => setArmed(null), [])
+
+  /** Posiciona os elementos armados nas coordenadas do clique. */
+  const handlePlace = useCallback((x: number, y: number) => {
+    if (!armed) return
+    const cx = Math.max(0, Math.min(100, x))
+    const cy = Math.max(0, Math.min(100, y))
+    const elements = armed.factory(cx, cy)
+    if (elements.length === 0) { setArmed(null); return }
+    // add_many respeita as coordenadas explícitas (não faz auto-cascade)
+    dispatch({ type: 'add_many', elements })
+    setSelectedIds(elements.map(e => e.id))
+    setArmed(null)
+  }, [armed])
+
   /** Persistir um traço de pincel ao soltar o mouse (vem do CanvasStage). */
   const handleBrushStrokeComplete = useCallback((
     points: Array<{ x: number; y: number }>,
@@ -635,10 +668,11 @@ export default function CanvasEditor({
       const mod = e.ctrlKey || e.metaKey
       const k = e.key
 
-      // ESC sai do modo Pincel (mesmo em input)
-      if (k === 'Escape' && brushMode) {
+      // ESC sai do modo Pincel ou cancela armed (mesmo em input)
+      if (k === 'Escape' && (brushMode || armed)) {
         e.preventDefault()
         setBrushMode(null)
+        setArmed(null)
         return
       }
 
@@ -691,7 +725,7 @@ export default function CanvasEditor({
     return () => window.removeEventListener('keydown', onKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    brushMode, selectedIds, handleSave, handleDeleteSelected,
+    brushMode, armed, selectedIds, handleSave, handleDeleteSelected,
     handleCopy, handlePaste, handleNudge, zoomIn, zoomOut, zoomReset,
   ])
 
@@ -881,6 +915,8 @@ export default function CanvasEditor({
           <ElementsToolbar
             onAdd={(element) => { dispatch({ type: 'add', element }); setSelectedIds([element.id]) }}
             onAddMany={(elements) => { dispatch({ type: 'add_many', elements }); setSelectedIds([]) }}
+            onArm={handleArm}
+            armed={!!armed}
             onUploadImage={handleUploadImage}
             computeStartY={() => {
               const others = state.elements.filter(e => e.kind !== 'brush_stroke')
@@ -904,6 +940,20 @@ export default function CanvasEditor({
                 paddingRight:  zoom > 1 ? `${(zoom - 1) * 60}%` : undefined,
               }}
             >
+              {armed && (
+                <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border border-violet-300 bg-violet-50 px-3 py-1.5 text-[11px] text-violet-800">
+                  <span className="flex items-center gap-1.5">
+                    <MousePointerClick className="w-3.5 h-3.5" />
+                    Clique no canvas para inserir <strong>{armed.label}</strong>. ESC cancela.
+                  </span>
+                  <button
+                    onClick={handleCancelArm}
+                    className="rounded border border-violet-300 bg-white px-2 py-0.5 text-violet-700 hover:bg-violet-100"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              )}
               <div style={{ transform: `scale(${zoom})`, transformOrigin: 'top left' }}>
                 <CanvasStage
                   state={state}
@@ -911,10 +961,12 @@ export default function CanvasEditor({
                   selectedIds={selectedIds}
                   cleanPreview={cleanPreview}
                   brush={brushMode}
+                  armed={armed ? { label: armed.label } : null}
                   zoom={zoom}
                   onSelect={handleSelect}
                   onElementChange={handleElementChange}
                   onBrushStrokeComplete={handleBrushStrokeComplete}
+                  onPlace={handlePlace}
                 />
               </div>
               <p className="mt-3 text-center text-[11px] text-slate-500">
