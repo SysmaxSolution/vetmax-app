@@ -334,15 +334,13 @@ export async function submitTriageAndMoveToDoctor(
 
   const admin = createAdminClient()
 
-  // weight e temperature: sempre obrigatórios (CFMV — incontornável)
-  if (!vitalSigns.weight || vitalSigns.weight <= 0) {
-    return { error: 'Peso é obrigatório e deve ser > 0.' }
-  }
-  if (!vitalSigns.temperature || vitalSigns.temperature <= 0) {
-    return { error: 'Temperatura retal é obrigatória e deve ser > 0.' }
-  }
-
-  // Campos adicionais: validados conforme configuração da clínica
+  // TODOS os campos da triagem (inclusive weight/temperature) são
+  // configuráveis em Gestão > Configurações > Acesso > Campos
+  // Obrigatórios. Se admin desmarcou, recepção pode enviar para o
+  // consultório sem preencher esses sinais vitais — o MV completa
+  // dentro da consulta. Esta server action espelha a regra do
+  // TriageForm client; sem isso o client liberava mas o server
+  // bloqueava (UX quebrada).
   const { data: triageSettings } = await admin
     .from('clinic_settings')
     .select('triage_required_fields')
@@ -352,6 +350,12 @@ export async function submitTriageAndMoveToDoctor(
     ? triageSettings.triage_required_fields
     : ['weight', 'temperature', 'chief_complaint']
 
+  if (triageRequiredFields.includes('weight') && (!vitalSigns.weight || vitalSigns.weight <= 0)) {
+    return { error: 'Peso é obrigatório e deve ser > 0.' }
+  }
+  if (triageRequiredFields.includes('temperature') && (!vitalSigns.temperature || vitalSigns.temperature <= 0)) {
+    return { error: 'Temperatura retal é obrigatória e deve ser > 0.' }
+  }
   if (triageRequiredFields.includes('chief_complaint') && !vitalSigns.chief_complaint?.trim()) {
     return { error: 'Queixa principal é obrigatória.' }
   }
