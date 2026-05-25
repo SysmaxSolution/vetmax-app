@@ -79,8 +79,11 @@ export async function generateInvoice(
     .maybeSingle()
   if (existing) return { id: existing.id }
 
-  // Buscar consulta com paciente e tutor + catálogo de preços em paralelo
-  const [consultResult, catalogResult] = await Promise.all([
+  // Fonte primária do faturamento (Refator 2026-05-25): consultation_services
+  // (n:n com snapshot de price/name no momento da seleção). clinic_catalog
+  // permanece apenas como fallback de medicações que vieram de
+  // applied_medications sem vínculo direto com stock_item.
+  const [consultResult, servicesResult, catalogResult] = await Promise.all([
     admin
       .from('consultations')
       .select(`
@@ -92,6 +95,13 @@ export async function generateInvoice(
       .eq('id', consultationId)
       .single(),
     admin
+      .from('consultation_services')
+      .select('id, stock_item_id, name_snapshot, price_snapshot, quantity, added_at_stage, stock_items ( category )')
+      .eq('clinic_id', profile.clinic_id)
+      .eq('consultation_id', consultationId)
+      .is('cancelled_at', null)
+      .order('created_at', { ascending: true }),
+    admin
       .from('clinic_catalog')
       .select('item_type, name, price')
       .eq('clinic_id', profile.clinic_id)
@@ -101,42 +111,61 @@ export async function generateInvoice(
   if (consultResult.error || !consultResult.data) return { error: 'Consulta não encontrada.' }
 
   const consultation = consultResult.data
+  const services     = servicesResult.data ?? []
   const catalog      = catalogResult.data ?? []
 
   const patient = consultation.patients as any
   const tutor   = patient?.tutors as any
   if (!patient?.id || !tutor?.id) return { error: 'Paciente ou tutor não encontrado.' }
 
-  // Preço da consulta — primeiro item do catálogo com item_type='consultation'
-  const catalogConsult = catalog.find(c => c.item_type === 'consultation')
-  const priceConsult   = catalogConsult?.price ?? 0
+  // Guard de encerramento: sem serviços ativos a fatura iria zerada para o
+  // Caixa Central. Decisão do PO: nunca permitir alta zerada.
+  if (services.length === 0) {
+    return {
+      error: 'Nenhum serviço lançado nesta consulta. Adicione ao menos um serviço antes de encerrar o atendimento.',
+    }
+  }
 
-  // Buscar medicações aplicadas
-  const { data: medications } = await admin
-    .from('applied_medications')
-    .select('medication_name, dosage, route')
-    .eq('consultation_id', consultationId)
-    .eq('clinic_id', profile.clinic_id)
+  // Mapping stock_items.category → invoice_items.item_type (enum legacy).
+  function categoryToItemType(category?: string | null): ItemType {
+    if (category === 'exam') return 'exam'
+    if (category === 'medication' || category === 'controlled_medication') return 'medication'
+    if (category === 'vet_service' || category === 'service') return 'consultation'
+    return 'other'
+  }
 
-  // Montar itens da fatura
+  // Itens da fatura: 1 linha por consultation_services ativo.
   const items: Array<{
     item_type:   ItemType
     description: string
     quantity:    number
     unit_price:  number
     total_price: number
-  }> = [
-    {
-      item_type:   'consultation',
-      description: catalogConsult?.name ?? 'Consulta Veterinária',
-      quantity:    1,
-      unit_price:  priceConsult,
-      total_price: priceConsult,
-    },
-  ]
+  }> = services.map((s: any) => {
+    const cat   = (Array.isArray(s.stock_items) ? s.stock_items[0]?.category : s.stock_items?.category) as string | undefined
+    const qty   = Number(s.quantity ?? 1)
+    const unit  = Number(s.price_snapshot ?? 0)
+    return {
+      item_type:   categoryToItemType(cat),
+      description: s.name_snapshot as string,
+      quantity:    qty,
+      unit_price:  unit,
+      total_price: unit * qty,
+    }
+  })
+
+  // Medicações aplicadas — caminho LEGADO mantido para retrocompat.
+  // Quando a clínica usa hospitalization_prescriptions com stock_item_id
+  // (Bloco 4 do scheduler), as medicações já caem em consultation_services
+  // ou stock_movements direto. applied_medications continua coberto enquanto
+  // o módulo de prescrição clínica do consultório não for migrado.
+  const { data: medications } = await admin
+    .from('applied_medications')
+    .select('medication_name, dosage, route')
+    .eq('consultation_id', consultationId)
+    .eq('clinic_id', profile.clinic_id)
 
   for (const med of medications ?? []) {
-    // Buscar no catálogo pelo nome (case-insensitive, sem acentos)
     const medKey     = normalizeName(med.medication_name)
     const catalogMed = catalog.find(
       c => c.item_type === 'medication' && normalizeName(c.name) === medKey
