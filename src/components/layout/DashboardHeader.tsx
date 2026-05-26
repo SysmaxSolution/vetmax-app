@@ -17,6 +17,21 @@ import { updateClinicStatus } from '@/lib/actions/clinic-status'
 import type { ClinicStatus } from '@/lib/actions/clinic-status'
 import { setSurgeryMode } from '@/lib/actions/surgery-mode'
 import { getTabTheme, getModuleFromPath, MODULE_THEME } from '@/lib/module-theme'
+import { useUpgradeModal } from '@/components/upgrade/UpgradeProvider'
+import type { UpgradeFeatureKey } from '@/components/upgrade/UpgradeModal'
+
+/**
+ * Módulos que, em vez de simplesmente sumirem do menu para clínicas Free,
+ * aparecem como item "promovido" — cinza com Lock e "PRO", e o clique
+ * abre o UpgradeModal. Mantém-se o gatilho de upsell visível no menu
+ * para features estratégicas, sem poluir com todos os módulos pagos.
+ *
+ * Por design — qualquer moduleKey AUSENTE desse mapa segue a regra antiga
+ * (some do menu se não estiver em activeModules).
+ */
+const PROMOTED_LOCKED_FEATURES: Record<string, UpgradeFeatureKey> = {
+  hospitalization: 'hospitalization',
+}
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
 
@@ -132,10 +147,30 @@ export default function DashboardHeader({
     // delegar via user_module_access). Mantemos apenas esse caso especial.
     if (tab.href === '/dashboard/management' && userRole !== 'admin') return false
     if (tab.moduleKey && activeModules) {
+      // Módulos "promovidos" passam pelo filtro mesmo sem estarem em
+      // activeModules — aparecerão lockeados e abrirão o UpgradeModal
+      // no clique (gatilho de upsell freemium).
+      if (PROMOTED_LOCKED_FEATURES[tab.moduleKey]) return true
       return activeModules.includes(tab.moduleKey)
     }
     return true
   })
+
+  const { open: openUpgrade } = useUpgradeModal()
+
+  /**
+   * Returns the upgrade feature key for a tab that is promoted-locked,
+   * or null when the tab should just navigate normally.
+   * Um tab é "promoted-locked" quando: (a) moduleKey ∈ PROMOTED_LOCKED_FEATURES
+   * E (b) o módulo NÃO está em activeModules (Free real).
+   */
+  function promotedLockKey(tab: Tab): UpgradeFeatureKey | null {
+    if (!tab.moduleKey) return null
+    const key = PROMOTED_LOCKED_FEATURES[tab.moduleKey]
+    if (!key) return null
+    if (activeModules?.includes(tab.moduleKey)) return null
+    return key
+  }
 
   const isActive = (href: string) =>
     href === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(href)
@@ -260,7 +295,8 @@ export default function DashboardHeader({
               tab.href === '/dashboard/pharmacy' ? lowStockCount :
               tab.href === '/dashboard/whatsapp'  ? whatsappHandoffCount : 0
             const showBadge = badgeCount > 0
-            const locked    = isLocked(tab.href)
+            const promotedKey = promotedLockKey(tab)
+            const locked    = promotedKey !== null || isLocked(tab.href)
             return (
               <Link
                 key={tab.href}
@@ -268,6 +304,7 @@ export default function DashboardHeader({
                 id={tab.id}
                 data-testid={tab.id}
                 title={locked ? `${tab.label} — disponível no Plano PRO` : undefined}
+                onClick={promotedKey ? (e => { e.preventDefault(); openUpgrade(promotedKey) }) : undefined}
                 className={`relative flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                   locked
                     ? 'text-slate-400 hover:bg-slate-100/60 opacity-70'
@@ -341,7 +378,8 @@ export default function DashboardHeader({
               {tabs.map((tab) => {
                 const theme      = getTabTheme(tab.href)
                 const active     = isActive(tab.href)
-                const locked     = isLocked(tab.href)
+                const promotedKey = promotedLockKey(tab)
+                const locked     = promotedKey !== null || isLocked(tab.href)
                 const badgeCount =
                   tab.href === '/dashboard/pharmacy' ? lowStockCount :
                   tab.href === '/dashboard/whatsapp'  ? whatsappHandoffCount : 0
@@ -351,7 +389,10 @@ export default function DashboardHeader({
                     key={tab.href}
                     href={tab.href}
                     id={tab.id}
-                    onClick={closeMobileMenu}
+                    onClick={promotedKey
+                      ? (e => { e.preventDefault(); closeMobileMenu(); openUpgrade(promotedKey) })
+                      : closeMobileMenu
+                    }
                     className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors ${
                       locked
                         ? 'text-slate-400 opacity-70 hover:bg-slate-50/60 font-medium'

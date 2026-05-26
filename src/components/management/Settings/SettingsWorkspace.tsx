@@ -12,6 +12,9 @@ import ModulesTab from '../ModulesTab'
 import ClinicSettingsTab from '../ClinicSettingsTab'
 import CsvImporter from '../CsvImporter'
 import WhatsappIntelligentSetup from './WhatsappIntelligentSetup'
+import { useUpgradeModal } from '@/components/upgrade/UpgradeProvider'
+import type { UpgradeFeatureKey } from '@/components/upgrade/UpgradeModal'
+import { Lock, ArrowUpRight } from 'lucide-react'
 
 // ─── Category definitions ─────────────────────────────────────────────────────
 
@@ -54,6 +57,10 @@ export default function SettingsWorkspace({
   onToast,
 }: Props) {
   const [activeCategory, setActiveCategory] = useState<Category>('geral')
+  const { open: openUpgrade } = useUpgradeModal()
+
+  const whatsappUnlocked = activeModules.includes('whatsapp_intelligent')
+  const reportsUnlocked  = activeModules.includes('reports')
 
   return (
     <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 min-h-[600px]">
@@ -131,7 +138,17 @@ export default function SettingsWorkspace({
         {activeCategory === 'whatsapp' && (
           <div className="space-y-6">
             <SectionHeader icon={<MessageCircle className="h-5 w-5 text-slate-600" />} title="WhatsApp" description="Leia o QR Code para conectar a instância da clínica — atende bot e disparos automáticos" />
-            <WhatsappIntelligentSetup onToast={onToast} />
+            {whatsappUnlocked
+              ? <WhatsappIntelligentSetup onToast={onToast} />
+              : (
+                <UpsellCard
+                  feature="whatsapp_intelligent"
+                  title="Habilitar WhatsApp Bot"
+                  body="Conecte o WhatsApp da sua clínica e deixe a IA confirmar agendamentos, responder dúvidas e triar urgências 24/7. Disponível no Plano Pro."
+                  onClick={() => openUpgrade('whatsapp_intelligent')}
+                />
+              )
+            }
           </div>
         )}
 
@@ -145,7 +162,17 @@ export default function SettingsWorkspace({
         {activeCategory === 'relatorios' && (
           <div className="space-y-6">
             <SectionHeader icon={<BarChart3 className="h-5 w-5 text-slate-600" />} title="Relatórios" description="Gerencie quais relatórios estão disponíveis para sua clínica" />
-            <ReportsSettings />
+            {reportsUnlocked
+              ? <ReportsSettings />
+              : (
+                <UpsellCard
+                  feature="reports_export"
+                  title="Habilitar Relatórios Avançados em PDF"
+                  body="DRE, Curva ABC, Comissões e relatórios operacionais — tudo exportável em PDF com a logo da clínica. Disponível no Plano Pro."
+                  onClick={() => openUpgrade('reports_export')}
+                />
+              )
+            }
           </div>
         )}
 
@@ -156,6 +183,48 @@ export default function SettingsWorkspace({
             <SupportCard />
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+// ─── UpsellCard — exibido no lugar do conteúdo real quando o módulo
+// não está liberado pelo plano (Freemium 2026-05-26). Click abre o
+// UpgradeModal via useUpgradeModal().
+// ─────────────────────────────────────────────────────────────────────────────
+
+function UpsellCard({
+  feature, title, body, onClick,
+}: {
+  feature:  UpgradeFeatureKey
+  title:    string
+  body:     string
+  onClick:  () => void
+}) {
+  return (
+    <div className="rounded-2xl border-2 border-dashed border-violet-200 bg-gradient-to-br from-violet-50 to-indigo-50 p-6">
+      <div className="flex items-start gap-4">
+        <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-violet-600 shadow-md shadow-violet-200">
+          <Lock className="h-5 w-5 text-white" />
+        </div>
+        <div className="flex-1">
+          <div className="flex items-center gap-2 mb-1">
+            <h3 className="text-base font-bold text-slate-900">{title}</h3>
+            <span className="text-[10px] font-bold uppercase tracking-wide text-violet-700 bg-violet-100 px-2 py-0.5 rounded-full">
+              Pro
+            </span>
+          </div>
+          <p className="text-sm text-slate-600 leading-relaxed mb-4">{body}</p>
+          <button
+            type="button"
+            onClick={onClick}
+            data-feature={feature}
+            className="inline-flex items-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-700 px-4 py-2 text-sm font-bold text-white shadow-md shadow-violet-200 transition-colors"
+          >
+            Quero habilitar
+            <ArrowUpRight className="h-4 w-4" />
+          </button>
+        </div>
       </div>
     </div>
   )

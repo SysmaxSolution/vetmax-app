@@ -15,6 +15,7 @@ import { Lock, AlertCircle } from 'lucide-react'
 import { getLowStockCount } from '@/lib/actions/stock'
 import type { UserClinicInfo } from '@/lib/actions/clinic-switcher'
 import OnboardingWizard from '@/components/onboarding/OnboardingWizard'
+import { UpgradeProvider } from '@/components/upgrade/UpgradeProvider'
 import { FREE_ROUTES } from '@/config/access-matrix'
 import type { PlanName, BusinessType } from '@/types'
 
@@ -205,7 +206,9 @@ export default async function DashboardLayout({
         <ClinicConfigProvider aiTranscriptionMode={(clinicData as any)?.ai_transcription_mode ?? 'ai_assisted'}>
           <ModulesProvider modules={activeModules}>
             <WhatsAppGateProvider enabled={whatsAppEnabled}>
-              {children}
+              <UpgradeProvider planName={planName} activeModules={activeModules}>
+                {children}
+              </UpgradeProvider>
             </WhatsAppGateProvider>
           </ModulesProvider>
         </ClinicConfigProvider>
