@@ -31,8 +31,12 @@ export type UpgradeFeatureKey =
                    // para substituir a copy default.
 
 export interface UpgradeOverride {
-  title?: string
-  pitch?: string
+  title?:   string
+  pitch?:   string
+  /** Sobrescreve a URL de demo da feature. Útil quando o gatilho é
+   *  pro_module e cada módulo tem seu próprio vídeo (ex.: ModulesTab).
+   *  Passe null para forçar ocultar o link mesmo que o catálogo tenha. */
+  tourUrl?: string | null
 }
 
 interface FeatureMeta {
@@ -44,7 +48,10 @@ interface FeatureMeta {
   pitch:       string
   /** Bullets de valor — exibidos como lista no corpo. */
   benefits:    string[]
-  /** URL opcional de vídeo demo / tour visual — quando null, link de demo não é exibido. */
+  /** URL de vídeo demo / tour visual. Quando null OU undefined, o link
+   *  "Ver demo de 30 segundos" não é renderizado. Preencher com a URL
+   *  pública (Loom, Vimeo, Mux, CDN) assim que o material estiver
+   *  pronto para que o link apareça automaticamente em produção. */
   tourUrl:     string | null
 }
 
@@ -133,10 +140,15 @@ const SALES_EMAIL    = 'comercial@sysmaxsolutions.com'
 
 export default function UpgradeModal({ featureKey, override, onClose }: Props) {
   const base = UPGRADE_FEATURES[featureKey]
+  // tourUrl: override pode passar null explícito para FORÇAR ocultar — por
+  // isso usamos `'tourUrl' in (override ?? {})` em vez de `??`. Sem o key
+  // explícito, herda do catálogo. O render checa truthy (cobre null+undef).
+  const tourUrl = (override && 'tourUrl' in override) ? override.tourUrl : base.tourUrl
   const meta = {
     ...base,
     title: override?.title ?? base.title,
     pitch: override?.pitch ?? base.pitch,
+    tourUrl,
   }
   const Icon = meta.icon
 
@@ -204,7 +216,11 @@ export default function UpgradeModal({ featureKey, override, onClose }: Props) {
               ))}
             </ul>
 
-            {meta.tourUrl && (
+            {/* Renderiza só quando tourUrl é uma string não-vazia. null,
+                undefined e '' são todos falsy → link fica oculto. PO
+                preenche a URL no catálogo (ou via override) quando o
+                Loom/Vimeo correspondente estiver pronto. */}
+            {meta.tourUrl ? (
               <a
                 href={meta.tourUrl}
                 target="_blank"
@@ -215,7 +231,7 @@ export default function UpgradeModal({ featureKey, override, onClose }: Props) {
                 Ver demo de 30 segundos
                 <ArrowUpRight className="h-3 w-3 ml-auto" />
               </a>
-            )}
+            ) : null}
           </div>
 
           {/* Footer CTAs */}
