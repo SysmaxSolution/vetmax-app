@@ -51,11 +51,15 @@ interface Props {
   initialHasPets: boolean
   clinicId: string
   userRole: string
+  /** Segmento da clínica — controla saudação e copy do wizard (Freemium 2026-05-26). */
+  businessType?: 'vet_clinic' | 'pet_aesthetics'
 }
 
 export default function OnboardingWizard({
   initialHasLogo, initialHasPets, clinicId, userRole,
+  businessType = 'vet_clinic',
 }: Props) {
+  const isAesthetics = businessType === 'pet_aesthetics'
   const [open,        setOpen]        = useState(false)
   const [step1Done,   setStep1Done]   = useState(initialHasLogo)
   const [step2Done,   setStep2Done]   = useState(initialHasPets)
@@ -126,11 +130,15 @@ export default function OnboardingWizard({
                 </div>
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-white/60">
-                    Mentor de IA · SysVetMax
+                    {isAesthetics ? 'Centro de Estética · SysVetMax' : 'Mentor de IA · SysVetMax'}
                   </p>
                   <div className="flex items-center gap-2 mt-0.5">
                     <h2 className="text-base font-bold text-white">
-                      {allDone ? '🎉 Tudo configurado!' : 'Bem-vindo!'}
+                      {allDone
+                        ? '🎉 Tudo configurado!'
+                        : isAesthetics
+                          ? 'Bem-vindo à sua Estética!'
+                          : 'Bem-vindo à sua Clínica!'}
                     </h2>
                     <span className="rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-bold text-white tabular-nums">
                       {doneCount}/3
@@ -152,8 +160,12 @@ export default function OnboardingWizard({
           <div className="px-6 py-5 space-y-4 bg-slate-50">
             <p className="text-sm leading-relaxed text-slate-600">
               {allDone
-                ? 'Sua clínica está pronta para operar. Explore todas as funcionalidades!'
-                : 'Sou seu Mentor de IA. Para que você veja a mágica acontecer, vamos configurar o básico da sua clínica em 3 passos rápidos?'}
+                ? isAesthetics
+                  ? 'Seu centro de estética está pronto para operar. Explore o módulo Banho e Tosa!'
+                  : 'Sua clínica está pronta para operar. Explore todas as funcionalidades!'
+                : isAesthetics
+                  ? 'Sou seu Mentor de IA. Vamos preparar o seu centro de estética em 3 passos rápidos? Você tem acesso a Recepção, Pacientes, Caixa, Banho e Tosa e Gestão no seu plano Free.'
+                  : 'Sou seu Mentor de IA. Para que você veja a mágica acontecer, vamos configurar o básico da sua clínica em 3 passos rápidos? Você tem acesso a Recepção, Pacientes, Caixa, Consultório e Gestão no seu plano Free.'}
             </p>
 
             {/* Steps */}

@@ -5,8 +5,10 @@ import Link from 'next/link'
 import {
   Loader2, CheckCircle2, Building2, Search,
   UserCircle2, Phone, CreditCard, Eye, EyeOff, AtSign,
+  Stethoscope, Scissors,
 } from 'lucide-react'
 import { signUpWithClinic, searchClinics } from '@/lib/actions/auth'
+import type { BusinessType } from '@/types'
 
 // ─── Formatadores ─────────────────────────────────────────────────────────────
 
@@ -47,6 +49,10 @@ interface CnpjData {
 export default function RegisterPage() {
   // Modo de clínica
   const [clinicMode, setClinicMode] = useState<'new' | 'existing'>('new')
+
+  // Segmento do negócio (Freemium 2026-05-26): obrigatório para nova clínica.
+  // Adesão a clínica existente herda o businessType da clínica selecionada.
+  const [businessType, setBusinessType] = useState<BusinessType | null>(null)
 
   // Nova clínica
   const [clinicName, setClinicName]   = useState('')
@@ -146,7 +152,13 @@ export default function RegisterPage() {
     if (clinicMode === 'existing' && selectedClinic) {
       formData.set('clinic_id', selectedClinic.id)
     } else {
+      if (!businessType) {
+        setError('Selecione o segmento da sua clínica antes de continuar.')
+        setLoading(false)
+        return
+      }
       formData.set('clinic_name', clinicName)
+      formData.set('business_type', businessType)
       const cnpjDigits = cnpj.replace(/\D/g, '')
       if (cnpjDigits.length === 14) formData.set('cnpj', cnpjDigits)
     }
@@ -240,12 +252,83 @@ export default function RegisterPage() {
             {/* Nova clínica */}
             {clinicMode === 'new' && (
               <div className="space-y-3">
+
+                {/* ── Segmento (Freemium) ── */}
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-2 ml-1">
+                    Qual é o seu modelo de negócio?
+                  </p>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    {([
+                      {
+                        id:       'vet_clinic'     as const,
+                        title:    'Clínica Veterinária',
+                        icon:     Stethoscope,
+                        accent:   'teal',
+                        modules:  'Recepção, Consultório e Gestão',
+                      },
+                      {
+                        id:       'pet_aesthetics' as const,
+                        title:    'Estética & Banho e Tosa',
+                        icon:     Scissors,
+                        accent:   'indigo',
+                        modules:  'Recepção, Banho e Tosa e Gestão',
+                      },
+                    ]).map(opt => {
+                      const Icon     = opt.icon
+                      const selected = businessType === opt.id
+                      const accent   = opt.accent
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => setBusinessType(opt.id)}
+                          className={`flex flex-col items-start gap-1.5 rounded-xl border-2 px-3 py-3 text-left transition-all ${
+                            selected
+                              ? accent === 'teal'
+                                ? 'border-teal-500 bg-teal-50 shadow-md shadow-teal-100'
+                                : 'border-indigo-500 bg-indigo-50 shadow-md shadow-indigo-100'
+                              : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                          }`}
+                        >
+                          <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${
+                            selected
+                              ? accent === 'teal' ? 'bg-teal-600 text-white' : 'bg-indigo-600 text-white'
+                              : 'bg-slate-100 text-slate-500'
+                          }`}>
+                            <Icon className="h-4 w-4" />
+                          </div>
+                          <p className={`text-xs font-bold leading-tight ${
+                            selected
+                              ? accent === 'teal' ? 'text-teal-800' : 'text-indigo-800'
+                              : 'text-slate-700'
+                          }`}>
+                            {opt.title}
+                          </p>
+                          <p className="text-[10px] leading-snug text-slate-500">
+                            <span className="font-semibold">Módulos Free:</span> {opt.modules}
+                          </p>
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {!businessType && (
+                    <p className="mt-1.5 text-[11px] text-slate-400 ml-1">
+                      Selecione um segmento para liberar o cadastro.
+                    </p>
+                  )}
+                </div>
+
                 <input
                   value={clinicName}
                   onChange={e => setClinicName(e.target.value)}
                   required
                   className={fieldClass}
-                  placeholder="Nome da Clínica Veterinária"
+                  placeholder={
+                    businessType === 'pet_aesthetics'
+                      ? 'Nome do Centro de Estética'
+                      : 'Nome da Clínica Veterinária'
+                  }
                 />
 
                 {/* CNPJ */}
@@ -440,7 +523,11 @@ export default function RegisterPage() {
           {/* Submit */}
           <button
             type="submit"
-            disabled={loading || (clinicMode === 'existing' && !selectedClinic)}
+            disabled={
+              loading ||
+              (clinicMode === 'existing' && !selectedClinic) ||
+              (clinicMode === 'new' && !businessType)
+            }
             className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-teal-100 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : null}

@@ -216,6 +216,7 @@ export default async function DashboardLayout({
           initialHasPets={(petCountResult.count ?? 0) > 0}
           clinicId={profile.clinic_id}
           userRole={profile.role}
+          businessType={businessType}
         />
       )}
       <MentorGlobalWrapper />
