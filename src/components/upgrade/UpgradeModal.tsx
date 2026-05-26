@@ -17,7 +17,7 @@
  */
 
 import { X, ArrowUpRight, MessageCircle, Mail, PlayCircle, Sparkles, type LucideIcon } from 'lucide-react'
-import { BedDouble, MessageSquareText, FileBarChart2, Lock } from 'lucide-react'
+import { BedDouble, MessageSquareText, FileBarChart2, Lock, Cpu } from 'lucide-react'
 
 // ─── Catálogo de features pagas ──────────────────────────────────────────────
 
@@ -25,6 +25,7 @@ export type UpgradeFeatureKey =
   | 'hospitalization'
   | 'whatsapp_intelligent'
   | 'reports_export'
+  | 'continuous_flow'
   | 'pro_module'   // genérica — usada quando o gatilho vem do ModulesTab por
                    // qualquer módulo PRO. Quem chama passa override.title/pitch
                    // para substituir a copy default.
@@ -84,6 +85,19 @@ const UPGRADE_FEATURES: Record<UpgradeFeatureKey, FeatureMeta> = {
       'Curva ABC de serviços e medicamentos',
       'Comissões por profissional com filtros',
       'Agenda diária / semanal para impressão na recepção',
+    ],
+    tourUrl: null,
+  },
+  continuous_flow: {
+    icon:       Cpu,
+    title:      'Fluxo Contínuo no Consultório',
+    targetPlan: 'Plano Pro',
+    pitch:      'Una Triagem, Consultório e Exames em uma única tela e deixe o MV ditar tudo num só áudio — a IA preenche cada módulo automaticamente.',
+    benefits: [
+      'Triagem incorporada ao Consultório (sinais vitais no mesmo fluxo)',
+      'Exames com ditado de laudo dentro da consulta',
+      'IA Unificada: 1 áudio preenche prontuário + laudo + sinais vitais',
+      'Reduz cliques e tempo médio de atendimento em ~30%',
     ],
     tourUrl: null,
   },

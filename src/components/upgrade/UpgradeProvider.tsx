@@ -49,6 +49,7 @@ const FEATURE_TO_MODULE: Record<UpgradeFeatureKey, string | null> = {
   hospitalization:      'hospitalization',
   whatsapp_intelligent: 'whatsapp_intelligent',
   reports_export:       'reports',
+  continuous_flow:      null,  // não é módulo — feature flag em clinics.continuous_flow
   pro_module:           null,
 }
 

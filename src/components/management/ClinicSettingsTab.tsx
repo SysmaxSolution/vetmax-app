@@ -4,12 +4,14 @@ import { useState } from 'react'
 import {
   X, ToggleLeft, ToggleRight, Cpu,
   Save, Loader2, CheckCircle2, ClipboardList, Plus, Sparkles, FileText,
+  Lock, ArrowUpRight,
 } from 'lucide-react'
 import {
   updateClinicConfig,
   updateRequiredFields,
   type FlowConfig, type ClinicConfig, type ClinicSettingsConfig, type AiTranscriptionMode,
 } from '@/lib/actions/clinic-settings'
+import { useUpgradeModal } from '@/components/upgrade/UpgradeProvider'
 
 const MERGEABLE = [
   { key: 'triage' as const, label: 'Triagem', desc: 'Coleta de sinais vitais dentro do Consultório' },
@@ -37,12 +39,19 @@ interface Props {
   initialConfig:          ClinicConfig | null
   initialChecklist?:      string[]
   initialSettingsConfig?: ClinicSettingsConfig | null
+  /** SysMax mantém UX completa (sem paywall). Free vê paywall no Fluxo Contínuo. */
+  isSysmax?:              boolean
   onToast: (type: 'success' | 'error', msg: string) => void
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function ClinicSettingsTab({ initialConfig, initialChecklist = [], initialSettingsConfig, onToast }: Props) {
+export default function ClinicSettingsTab({
+  initialConfig, initialChecklist = [], initialSettingsConfig,
+  isSysmax = false,
+  onToast,
+}: Props) {
+  const { open: openUpgrade } = useUpgradeModal()
   const [continuousFlow,      setContinuousFlow]      = useState(initialConfig?.continuous_flow ?? false)
   const [mergedModules,       setMergedModules]       = useState<Array<'triage'|'exams'>>(
     initialConfig?.flow_config?.vet_merged_modules ?? []
@@ -277,6 +286,35 @@ export default function ClinicSettingsTab({ initialConfig, initialChecklist = []
       </div>
 
       {/* ── Sessão 3: Fluxo Contínuo ──────────────────────────────────────────── */}
+      {!isSysmax ? (
+        <div className="rounded-2xl border-2 border-dashed border-violet-200 bg-gradient-to-br from-violet-50 to-indigo-50 p-6">
+          <div className="flex items-start gap-4">
+            <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-violet-600 shadow-md shadow-violet-200">
+              <Lock className="h-5 w-5 text-white" />
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <Cpu className="h-4 w-4 text-violet-700" />
+                <h3 className="text-base font-bold text-slate-900">Fluxo Contínuo</h3>
+                <span className="text-[10px] font-bold uppercase tracking-wide text-violet-700 bg-violet-100 px-2 py-0.5 rounded-full">
+                  Pro
+                </span>
+              </div>
+              <p className="text-sm text-slate-600 leading-relaxed mb-4">
+                Una Triagem, Consultório e Exames numa única tela. O MV grava um único áudio e a IA preenche todos os módulos automaticamente.
+              </p>
+              <button
+                type="button"
+                onClick={() => openUpgrade('continuous_flow')}
+                className="inline-flex items-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-700 px-4 py-2 text-sm font-bold text-white shadow-md shadow-violet-200 transition-colors"
+              >
+                Habilitar Fluxo Contínuo
+                <ArrowUpRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
       <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
         <div className="border-b border-slate-100 px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -348,6 +386,7 @@ export default function ClinicSettingsTab({ initialConfig, initialChecklist = []
           </button>
         </div>
       </div>
+      )}
 
       {/* ── Required Fields Config ── */}
       <RequiredFieldsConfig initialSettingsConfig={initialSettingsConfig ?? null} onToast={onToast} />

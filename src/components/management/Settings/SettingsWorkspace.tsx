@@ -134,6 +134,7 @@ export default function SettingsWorkspace({
               initialConfig={initialClinicConfig}
               initialChecklist={initialChecklist}
               initialSettingsConfig={initialSettingsConfig}
+              isSysmax={isSysmax}
               onToast={onToast}
             />
           </div>
