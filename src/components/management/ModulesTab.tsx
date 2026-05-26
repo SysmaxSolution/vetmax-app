@@ -3,10 +3,24 @@
 import { useState, useRef } from 'react'
 import {
   ToggleLeft, ToggleRight, Loader2, Save, Shield, AlertTriangle, Eye, EyeOff,
+  Lock, CheckCircle2,
   Hotel, Syringe, FlaskConical, Scissors, ShoppingBag, Stethoscope, ClipboardList, MessageCircle, Sparkles, Bot, ShoppingCart, Truck,
   PawPrint, Banknote, FolderKanban, DollarSign, FileBarChart2,
 } from 'lucide-react'
 import { updateClinicConfig, type ClinicConfig } from '@/lib/actions/clinic-settings'
+import { useUpgradeModal } from '@/components/upgrade/UpgradeProvider'
+import { isModuleFree } from '@/config/access-matrix'
+import type { UpgradeFeatureKey } from '@/components/upgrade/UpgradeModal'
+
+// Mapa de módulos com gatilho de upgrade específico no catálogo
+// (UpgradeModal.UPGRADE_FEATURES). Para os demais módulos PRO, o
+// componente cai no genérico 'pro_module' com override de title/pitch
+// vindos do MODULES[i].label/desc.
+const MODULE_TO_FEATURE: Record<string, UpgradeFeatureKey> = {
+  hospitalization:      'hospitalization',
+  whatsapp_intelligent: 'whatsapp_intelligent',
+  reports:              'reports_export',
+}
 
 // ─── Module definitions ───────────────────────────────────────────────────────
 
@@ -47,12 +61,21 @@ const MASTER_KEY_ENV = process.env.NEXT_PUBLIC_MODULE_MASTER_KEY ?? 'vetmax-MAST
 
 interface Props {
   initialConfig: ClinicConfig | null
+  /** Quando true, mantém a UX antiga com Master Key. Quando false (admin Free / Pro), aplica o paywall granular por módulo. */
+  isSysmax?:     boolean
+  /** Necessário para decidir quais módulos são Free no segmento da clínica. */
+  businessType?: 'vet_clinic' | 'pet_aesthetics'
   onToast:       (type: 'success' | 'error', msg: string) => void
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function ModulesTab({ initialConfig, onToast }: Props) {
+export default function ModulesTab({
+  initialConfig,
+  isSysmax = false,
+  businessType = 'vet_clinic',
+  onToast,
+}: Props) {
   const [activeModules, setActiveModules] = useState<string[]>(
     initialConfig?.active_modules ?? ['reception', 'triage', 'consultation', 'exams']
   )
@@ -62,14 +85,38 @@ export default function ModulesTab({ initialConfig, onToast }: Props) {
   const [masterKeyError, setMasterKeyError]         = useState<string | null>(null)
   const [showMasterKey, setShowMasterKey]           = useState(false)
   const masterKeyInputRef = useRef<HTMLInputElement>(null)
+  const { open: openUpgrade } = useUpgradeModal()
 
-  // Qualquer toggle (ativar ou desativar) exige MASTER_KEY
+  // Click no toggle — dois caminhos:
+  //  - SysMax (operação interna): dialog de Master Key (UX antiga, intocada).
+  //  - Admin Free / Pro: módulos Free do segmento são read-only; módulos
+  //    PRO disparam UpgradeModal (genérico ou específico, conforme catálogo).
   function requestToggle(mod: ModuleDef) {
-    const willEnable = !activeModules.includes(mod.key)
-    setPendingToggle({ key: mod.key, willEnable })
-    setMasterKeyInput('')
-    setMasterKeyError(null)
-    setTimeout(() => masterKeyInputRef.current?.focus(), 50)
+    if (isSysmax) {
+      const willEnable = !activeModules.includes(mod.key)
+      setPendingToggle({ key: mod.key, willEnable })
+      setMasterKeyInput('')
+      setMasterKeyError(null)
+      setTimeout(() => masterKeyInputRef.current?.focus(), 50)
+      return
+    }
+
+    // Não-SysMax
+    if (isModuleFree(mod.key, businessType)) {
+      onToast('success', `${mod.label} já está incluído no seu plano.`)
+      return
+    }
+
+    // Módulo PRO → UpgradeModal
+    const featureKey = MODULE_TO_FEATURE[mod.key] ?? 'pro_module'
+    if (featureKey === 'pro_module') {
+      openUpgrade({
+        feature: 'pro_module',
+        override: { title: mod.label, pitch: mod.desc },
+      })
+    } else {
+      openUpgrade(featureKey)
+    }
   }
 
   function confirmMasterKey() {
@@ -183,7 +230,11 @@ export default function ModulesTab({ initialConfig, onToast }: Props) {
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="border-b border-slate-100 px-6 py-4">
           <h2 className="text-base font-semibold text-slate-900">Módulos do Sistema</h2>
-          <p className="text-xs text-slate-500">Qualquer alteração requer a Master Key da Sysmax Solutions</p>
+          <p className="text-xs text-slate-500">
+            {isSysmax
+              ? 'Qualquer alteração requer a Master Key da Sysmax Solutions'
+              : 'Módulos inclusos no seu plano e quais estão disponíveis para upgrade'}
+          </p>
         </div>
 
         <div
@@ -193,52 +244,90 @@ export default function ModulesTab({ initialConfig, onToast }: Props) {
         >
           {MODULES.map(mod => {
             const active = activeModules.includes(mod.key)
+            const isFree = !isSysmax && isModuleFree(mod.key, businessType)
+            const isPro  = !isSysmax && !isFree
+
             return (
               <div
                 key={mod.key}
                 data-testid={`module-card-${mod.key}`}
-                className={`flex items-center gap-4 px-6 py-4 transition-colors ${active ? 'bg-white' : 'bg-slate-50/50'}`}
+                className={`flex items-center gap-4 px-6 py-4 transition-colors ${active || isFree ? 'bg-white' : 'bg-slate-50/50'}`}
               >
                 <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl ${mod.color}`}>
                   {mod.icon}
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  <p className={`text-sm font-semibold ${active ? 'text-slate-900' : 'text-slate-400'}`}>
-                    {mod.label}
-                  </p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className={`text-sm font-semibold ${active || isFree ? 'text-slate-900' : 'text-slate-500'}`}>
+                      {mod.label}
+                    </p>
+                    {isFree && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                        <CheckCircle2 className="h-3 w-3" /> Incluso
+                      </span>
+                    )}
+                    {isPro && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-violet-700 bg-violet-100 px-2 py-0.5 rounded-full">
+                        <Lock className="h-3 w-3" /> Pro
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-slate-500">{mod.desc}</p>
                 </div>
 
-                <button
-                  id={`module-toggle-${mod.key}`}
-                  data-testid={`module-toggle-${mod.key}`}
-                  onClick={() => requestToggle(mod)}
-                  className={`flex-shrink-0 transition-colors ${active ? 'text-teal-600' : 'text-slate-300'}`}
-                  title={active ? 'Desativar módulo' : 'Ativar módulo'}
-                >
-                  {active
-                    ? <ToggleRight className="h-7 w-7" />
-                    : <ToggleLeft  className="h-7 w-7" />}
-                </button>
+                {isSysmax ? (
+                  <button
+                    id={`module-toggle-${mod.key}`}
+                    data-testid={`module-toggle-${mod.key}`}
+                    onClick={() => requestToggle(mod)}
+                    className={`flex-shrink-0 transition-colors ${active ? 'text-teal-600' : 'text-slate-300'}`}
+                    title={active ? 'Desativar módulo' : 'Ativar módulo'}
+                  >
+                    {active
+                      ? <ToggleRight className="h-7 w-7" />
+                      : <ToggleLeft  className="h-7 w-7" />}
+                  </button>
+                ) : isFree ? (
+                  // Módulo Free: read-only com check verde (já está ativo via trigger 0189)
+                  <div
+                    className="flex-shrink-0 text-emerald-500"
+                    title="Já incluído no seu plano"
+                  >
+                    <CheckCircle2 className="h-6 w-6" />
+                  </div>
+                ) : (
+                  // Módulo PRO: botão que abre UpgradeModal
+                  <button
+                    id={`module-toggle-${mod.key}`}
+                    data-testid={`module-toggle-${mod.key}`}
+                    onClick={() => requestToggle(mod)}
+                    className="flex-shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-violet-600 hover:bg-violet-700 px-3 py-1.5 text-xs font-bold text-white transition-colors shadow-sm"
+                    title="Disponível no Plano Pro — clique para falar com a Sysmax Solutions"
+                  >
+                    <Lock className="h-3 w-3" /> Ativar
+                  </button>
+                )}
               </div>
             )
           })}
         </div>
 
-        <div className="px-6 pb-5 pt-3">
-          <button
-            id="btn-save-modules"
-            data-testid="btn-save-modules"
-            onClick={handleSave}
-            disabled={saving}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 transition-colors disabled:opacity-50"
-          >
-            {saving
-              ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando...</>
-              : <><Save className="h-4 w-4" /> Salvar Módulos</>}
-          </button>
-        </div>
+        {isSysmax && (
+          <div className="px-6 pb-5 pt-3">
+            <button
+              id="btn-save-modules"
+              data-testid="btn-save-modules"
+              onClick={handleSave}
+              disabled={saving}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 transition-colors disabled:opacity-50"
+            >
+              {saving
+                ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando...</>
+                : <><Save className="h-4 w-4" /> Salvar Módulos</>}
+            </button>
+          </div>
+        )}
       </div>
 
     </div>

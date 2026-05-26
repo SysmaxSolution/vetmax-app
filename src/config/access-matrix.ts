@@ -30,10 +30,27 @@ export const ALWAYS_ALLOWED: string[] = [
 
 // ── Tabs da Gestão bloqueadas no plano Free ───────────────────────────────────
 // Aplica-se a /dashboard/management?tab=<tab>
+// Refator Freemium 2026-05-26: 'configuracoes' foi liberada — o paywall agora
+// é granular dentro de Configurações > Acesso, módulo a módulo. SysMax
+// continua mexendo via Master Key; admin Free vê o catálogo e cada módulo
+// PRO dispara UpgradeModal.
 export const MANAGEMENT_TAB_BLOCKED_ON_FREE: string[] = [
   'templates',       // Modelos de Documentos
-  'configuracoes',   // Configurações da Clínica
 ]
+
+// ── Módulos incluídos no plano Free por business_type ────────────────────────
+// Espelha o que o trigger trg_clinics_freemium_seed (migration 0189) escreve
+// em clinics.active_modules para clínicas novas. ModulesTab usa este mapa
+// para marcar quais toggles são "Incluso" vs "PRO". Edite os dois juntos
+// quando precisar reabrir a lista do Free.
+export const FREE_MODULES: Record<BusinessType, string[]> = {
+  vet_clinic:     ['cashier', 'reception', 'patients', 'consultation', 'management'],
+  pet_aesthetics: ['cashier', 'reception', 'patients', 'grooming',     'management'],
+}
+
+export function isModuleFree(moduleKey: string, businessType: BusinessType): boolean {
+  return (FREE_MODULES[businessType] ?? FREE_MODULES.vet_clinic).includes(moduleKey)
+}
 
 export function isManagementTabAllowed(tab: string | null, plan: PlanName): boolean {
   if (plan !== 'free') return true

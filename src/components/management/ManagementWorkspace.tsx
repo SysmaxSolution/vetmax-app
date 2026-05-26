@@ -164,9 +164,13 @@ export default function ManagementWorkspace({
   activeModules = [], isSysmax = false,
   planName = 'enterprise',
 }: ManagementWorkspaceProps) {
-  // PLG: tabs bloqueadas no Free
+  // PLG: tabs bloqueadas no Free.
+  // 'configuracoes' foi LIBERADA no refator Freemium 2026-05-26 — Free
+  // entra em Configurações > Acesso e o paywall agora é granular por
+  // módulo (ver ModulesTab). Templates segue bloqueada porque é fluxo
+  // PRO inteiro (editor de laudo customizado).
   const isFreePlan      = planName === 'free' && !isSysmax
-  const blockedTabsFree = new Set(['templates', 'configuracoes'])
+  const blockedTabsFree = new Set(['templates'])
   const searchParams = useSearchParams()
   const activeTab = (searchParams.get('tab') as ActiveTab | null) ?? 'templates'
   const [templates, setTemplates] = useState<DocumentTemplate[]>(initialTemplates)
@@ -587,6 +591,8 @@ export default function ManagementWorkspace({
           initialSettingsConfig={initialSettingsConfig}
           initialChecklist={(clinicData?.reception_checklist as string[] | null) ?? []}
           activeModules={activeModules}
+          isSysmax={isSysmax}
+          businessType={(clinicData?.business_type as 'vet_clinic' | 'pet_aesthetics' | undefined) ?? 'vet_clinic'}
           onToast={(type, message) => setToast({ type, message })}
         />
       )}

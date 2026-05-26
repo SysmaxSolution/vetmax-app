@@ -33,7 +33,7 @@ export default async function ManagementPage() {
     getTemplates(),
     admin
       .from('clinics')
-      .select('id, name, cnpj, address, phone, reception_checklist, user_limit, logo_url, active_modules, continuous_flow, flow_config, business_hours, working_days, holiday_work')
+      .select('id, name, cnpj, address, phone, reception_checklist, user_limit, logo_url, active_modules, continuous_flow, flow_config, business_hours, working_days, holiday_work, business_type')
       .eq('id', profile.clinic_id)
       .single(),
     admin

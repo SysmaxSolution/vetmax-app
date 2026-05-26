@@ -17,7 +17,7 @@
  */
 
 import { X, ArrowUpRight, MessageCircle, Mail, PlayCircle, Sparkles, type LucideIcon } from 'lucide-react'
-import { BedDouble, MessageSquareText, FileBarChart2 } from 'lucide-react'
+import { BedDouble, MessageSquareText, FileBarChart2, Lock } from 'lucide-react'
 
 // ─── Catálogo de features pagas ──────────────────────────────────────────────
 
@@ -25,6 +25,14 @@ export type UpgradeFeatureKey =
   | 'hospitalization'
   | 'whatsapp_intelligent'
   | 'reports_export'
+  | 'pro_module'   // genérica — usada quando o gatilho vem do ModulesTab por
+                   // qualquer módulo PRO. Quem chama passa override.title/pitch
+                   // para substituir a copy default.
+
+export interface UpgradeOverride {
+  title?: string
+  pitch?: string
+}
 
 interface FeatureMeta {
   icon:        LucideIcon
@@ -79,6 +87,19 @@ const UPGRADE_FEATURES: Record<UpgradeFeatureKey, FeatureMeta> = {
     ],
     tourUrl: null,
   },
+  pro_module: {
+    icon:       Lock,
+    title:      'Módulo PRO',
+    targetPlan: 'Plano Pro',
+    pitch:      'Este módulo está disponível no Plano Pro. Fale com a Sysmax Solutions para fazer upgrade e desbloquear funcionalidades avançadas para sua clínica.',
+    benefits: [
+      'Funcionalidades avançadas específicas do módulo',
+      'Integração total com o restante do sistema',
+      'Suporte prioritário da equipe Sysmax',
+      'Sem limite de usuários no plano Pro',
+    ],
+    tourUrl: null,
+  },
 }
 
 export function getFeatureMeta(key: UpgradeFeatureKey): FeatureMeta {
@@ -89,14 +110,20 @@ export function getFeatureMeta(key: UpgradeFeatureKey): FeatureMeta {
 
 interface Props {
   featureKey: UpgradeFeatureKey
+  override?:  UpgradeOverride
   onClose:    () => void
 }
 
 const SALES_WHATSAPP = '5511999999999'  // placeholder — PO substitui pelo número real do comercial
 const SALES_EMAIL    = 'comercial@sysmaxsolutions.com'
 
-export default function UpgradeModal({ featureKey, onClose }: Props) {
-  const meta = UPGRADE_FEATURES[featureKey]
+export default function UpgradeModal({ featureKey, override, onClose }: Props) {
+  const base = UPGRADE_FEATURES[featureKey]
+  const meta = {
+    ...base,
+    title: override?.title ?? base.title,
+    pitch: override?.pitch ?? base.pitch,
+  }
   const Icon = meta.icon
 
   const whatsappMsg = encodeURIComponent(

@@ -17,12 +17,16 @@
  */
 
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
-import UpgradeModal, { type UpgradeFeatureKey } from './UpgradeModal'
+import UpgradeModal, { type UpgradeFeatureKey, type UpgradeOverride } from './UpgradeModal'
+
+export type OpenInput =
+  | UpgradeFeatureKey
+  | { feature: UpgradeFeatureKey; override?: UpgradeOverride }
 
 interface UpgradeContextValue {
   planName:      string
   activeModules: string[]
-  open:          (feature: UpgradeFeatureKey) => void
+  open:          (input: OpenInput) => void
   /**
    * Retorna true quando a feature está liberada pelo plano atual
    * (módulo presente em activeModules). Usado pelos triggers para
@@ -34,13 +38,18 @@ interface UpgradeContextValue {
 const UpgradeContext = createContext<UpgradeContextValue | null>(null)
 
 // ─── Mapeamento feature → módulo do active_modules ───────────────────────────
-// As 3 features iniciais espelham módulos do tenant. Quando criarmos
-// features que NÃO são módulos (ex.: "Limite de 100 pets"), basta adicionar
-// uma chave aqui com fallback para planName.
-const FEATURE_TO_MODULE: Record<UpgradeFeatureKey, string> = {
+// As features espelham módulos do tenant. Quando criarmos features que NÃO
+// são módulos (ex.: "Limite de 100 pets"), basta adicionar uma chave aqui
+// com fallback para planName.
+//
+// pro_module é a feature genérica do ModulesTab — não tem 1:1 com um
+// módulo específico, então retorna false sempre (nunca está "unlocked").
+// O componente que dispara já decide se chama ou não via FREE_MODULES.
+const FEATURE_TO_MODULE: Record<UpgradeFeatureKey, string | null> = {
   hospitalization:      'hospitalization',
   whatsapp_intelligent: 'whatsapp_intelligent',
   reports_export:       'reports',
+  pro_module:           null,
 }
 
 interface ProviderProps {
@@ -54,18 +63,23 @@ export function UpgradeProvider({
   activeModules = [],
   children,
 }: ProviderProps) {
-  const [openFeature, setOpenFeature] = useState<UpgradeFeatureKey | null>(null)
+  const [openState, setOpenState] = useState<{ feature: UpgradeFeatureKey; override?: UpgradeOverride } | null>(null)
 
   const isUnlocked = useCallback((feature: UpgradeFeatureKey) => {
     const mod = FEATURE_TO_MODULE[feature]
+    if (mod === null) return false   // pro_module — genérica, nunca "unlocked"
     return activeModules.includes(mod)
   }, [activeModules])
 
-  const open = useCallback((feature: UpgradeFeatureKey) => {
-    setOpenFeature(feature)
+  const open = useCallback((input: OpenInput) => {
+    if (typeof input === 'string') {
+      setOpenState({ feature: input })
+    } else {
+      setOpenState({ feature: input.feature, override: input.override })
+    }
   }, [])
 
-  const close = useCallback(() => setOpenFeature(null), [])
+  const close = useCallback(() => setOpenState(null), [])
 
   const ctx = useMemo<UpgradeContextValue>(() => ({
     planName,
@@ -77,7 +91,13 @@ export function UpgradeProvider({
   return (
     <UpgradeContext.Provider value={ctx}>
       {children}
-      {openFeature && <UpgradeModal featureKey={openFeature} onClose={close} />}
+      {openState && (
+        <UpgradeModal
+          featureKey={openState.feature}
+          override={openState.override}
+          onClose={close}
+        />
+      )}
     </UpgradeContext.Provider>
   )
 }

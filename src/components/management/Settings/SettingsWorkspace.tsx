@@ -44,6 +44,8 @@ interface Props {
   initialSettingsConfig?:   ClinicSettingsConfig | null
   initialChecklist?:        string[]
   activeModules?:           string[]
+  isSysmax?:                boolean
+  businessType?:            'vet_clinic' | 'pet_aesthetics'
   onToast: (type: 'success' | 'error', msg: string) => void
 }
 
@@ -54,13 +56,17 @@ export default function SettingsWorkspace({
   initialSettingsConfig,
   initialChecklist = [],
   activeModules = [],
+  isSysmax = false,
+  businessType = 'vet_clinic',
   onToast,
 }: Props) {
   const [activeCategory, setActiveCategory] = useState<Category>('geral')
   const { open: openUpgrade } = useUpgradeModal()
 
-  const whatsappUnlocked = activeModules.includes('whatsapp_intelligent')
-  const reportsUnlocked  = activeModules.includes('reports')
+  // SysMax nunca vê paywall — segue operando direto sobre o setup real,
+  // independentemente do que está em active_modules da clínica visualizada.
+  const whatsappUnlocked = isSysmax || activeModules.includes('whatsapp_intelligent')
+  const reportsUnlocked  = isSysmax || activeModules.includes('reports')
 
   return (
     <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 min-h-[600px]">
@@ -118,7 +124,12 @@ export default function SettingsWorkspace({
         {activeCategory === 'acesso' && (
           <div className="space-y-6">
             <SectionHeader icon={<Shield className="h-5 w-5 text-slate-600" />} title="Controle de Acesso" description="Módulos ativos e campos obrigatórios de check-in e triagem" />
-            <ModulesTab initialConfig={initialClinicConfig} onToast={onToast} />
+            <ModulesTab
+              initialConfig={initialClinicConfig}
+              isSysmax={isSysmax}
+              businessType={businessType}
+              onToast={onToast}
+            />
             <ClinicSettingsTab
               initialConfig={initialClinicConfig}
               initialChecklist={initialChecklist}
