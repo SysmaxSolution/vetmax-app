@@ -2,11 +2,11 @@
 
 import { useState } from 'react'
 import {
-  Building2, Shield, Sparkles, MessageCircle, Calculator,
+  Building2, Shield, MessageCircle, Calculator,
   BarChart3, Wrench, ToggleLeft, ToggleRight, Save, Loader2,
-  FileText, Cpu, HelpCircle,
+  HelpCircle,
 } from 'lucide-react'
-import type { ClinicConfig, ClinicSettingsConfig, AiTranscriptionMode, FlowConfig } from '@/lib/actions/clinic-settings'
+import type { ClinicConfig, ClinicSettingsConfig, FlowConfig } from '@/lib/actions/clinic-settings'
 import { updateClinicConfig } from '@/lib/actions/clinic-settings'
 import ModulesTab from '../ModulesTab'
 import ClinicSettingsTab from '../ClinicSettingsTab'
@@ -18,7 +18,9 @@ import { Lock, ArrowUpRight } from 'lucide-react'
 
 // ─── Category definitions ─────────────────────────────────────────────────────
 
-type Category = 'geral' | 'acesso' | 'ia' | 'whatsapp' | 'contabil' | 'relatorios' | 'utilitarios'
+// Categoria 'ia' removida em 2026-05-26 (cleanup de drift): IA mode e Fluxo
+// Contínuo agora são exclusivos da categoria 'acesso' (ClinicSettingsTab).
+type Category = 'geral' | 'acesso' | 'whatsapp' | 'contabil' | 'relatorios' | 'utilitarios'
 
 interface CategoryDef {
   key: Category
@@ -29,8 +31,7 @@ interface CategoryDef {
 
 const CATEGORIES: CategoryDef[] = [
   { key: 'geral',        label: 'Geral',       icon: <Building2    className="h-4 w-4" />, description: 'Horário e dados operacionais'        },
-  { key: 'acesso',       label: 'Acesso',      icon: <Shield       className="h-4 w-4" />, description: 'Módulos e campos obrigatórios'        },
-  { key: 'ia',           label: 'IA',          icon: <Sparkles     className="h-4 w-4" />, description: 'Transcrição e comportamento da IA'   },
+  { key: 'acesso',       label: 'Acesso',      icon: <Shield       className="h-4 w-4" />, description: 'Módulos, IA e fluxo contínuo'        },
   { key: 'whatsapp',     label: 'WhatsApp',    icon: <MessageCircle className="h-4 w-4" />, description: 'Evolution API e notificações'        },
   { key: 'contabil',     label: 'Contábil',    icon: <Calculator   className="h-4 w-4" />, description: 'Plano de contas e dados fiscais'     },
   { key: 'relatorios',   label: 'Relatórios',  icon: <BarChart3    className="h-4 w-4" />, description: 'Relatórios disponíveis'              },
@@ -137,13 +138,6 @@ export default function SettingsWorkspace({
               isSysmax={isSysmax}
               onToast={onToast}
             />
-          </div>
-        )}
-
-        {activeCategory === 'ia' && (
-          <div className="space-y-6">
-            <SectionHeader icon={<Sparkles className="h-5 w-5 text-slate-600" />} title="Inteligência Artificial" description="Comportamento da IA nas gravações de voz e transcrições" />
-            <AiSettings initialConfig={initialClinicConfig} onToast={onToast} />
           </div>
         )}
 
@@ -262,196 +256,6 @@ function SectionHeader({ icon, title, description }: {
   )
 }
 
-// ─── AiSettings ── (AI mode + Continuous flow) ────────────────────────────────
-
-function AiSettings({ initialConfig, onToast }: {
-  initialConfig: ClinicConfig | null
-  onToast: (type: 'success' | 'error', msg: string) => void
-}) {
-  const [aiMode, setAiMode] = useState<AiTranscriptionMode>(
-    initialConfig?.ai_transcription_mode ?? 'ai_assisted'
-  )
-  const [savingAiMode, setSavingAiMode] = useState(false)
-
-  const [continuousFlow, setContinuousFlow] = useState(initialConfig?.continuous_flow ?? false)
-  const [mergedModules, setMergedModules] = useState<Array<'triage' | 'exams'>>(
-    initialConfig?.flow_config?.vet_merged_modules ?? []
-  )
-  const [savingFlow, setSavingFlow] = useState(false)
-
-  const MERGEABLE = [
-    { key: 'triage' as const, label: 'Triagem', desc: 'Coleta de sinais vitais dentro do Consultório' },
-    { key: 'exams'  as const, label: 'Exames',  desc: 'Ditado de laudos dentro do Consultório' },
-  ]
-
-  function toggleMerged(key: 'triage' | 'exams') {
-    setMergedModules(prev => prev.includes(key) ? prev.filter(m => m !== key) : [...prev, key])
-  }
-
-  async function saveAiMode() {
-    setSavingAiMode(true)
-    const res = await updateClinicConfig({ ai_transcription_mode: aiMode })
-    setSavingAiMode(false)
-    if ('error' in res) { onToast('error', res.error); return }
-    onToast('success', 'Comportamento da IA atualizado!')
-  }
-
-  async function saveFlow() {
-    setSavingFlow(true)
-    const res = await updateClinicConfig({
-      continuous_flow: continuousFlow,
-      flow_config: { vet_merged_modules: continuousFlow ? mergedModules : [] },
-    })
-    setSavingFlow(false)
-    if ('error' in res) { onToast('error', res.error); return }
-    onToast('success', 'Fluxo contínuo configurado!')
-  }
-
-  return (
-    <div className="space-y-6">
-      {/* ── Modo de Transcrição ────────────────────────────────────────────────── */}
-      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-        <div className="border-b border-slate-100 px-6 py-4 flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-50">
-            <Sparkles className="h-4 w-4 text-violet-600" />
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-slate-900">Comportamento da IA nas Gravações</h3>
-            <p className="text-xs text-slate-500">Define como o sistema processa o áudio ditado em todas as telas</p>
-          </div>
-        </div>
-        <div className="px-6 py-5 space-y-3">
-          <button
-            type="button"
-            onClick={() => setAiMode('transcribe_only')}
-            className={`w-full flex items-start gap-4 rounded-xl border-2 px-4 py-4 text-left transition-all ${
-              aiMode === 'transcribe_only' ? 'border-violet-400 bg-violet-50' : 'border-slate-200 bg-white hover:border-slate-300'
-            }`}
-          >
-            <div className={`mt-0.5 h-4 w-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${aiMode === 'transcribe_only' ? 'border-violet-500' : 'border-slate-300'}`}>
-              {aiMode === 'transcribe_only' && <div className="h-2 w-2 rounded-full bg-violet-500" />}
-            </div>
-            <div className="flex items-start gap-3 min-w-0">
-              <FileText className={`h-4 w-4 flex-shrink-0 mt-0.5 ${aiMode === 'transcribe_only' ? 'text-violet-600' : 'text-slate-400'}`} />
-              <div>
-                <p className={`text-sm font-semibold ${aiMode === 'transcribe_only' ? 'text-violet-900' : 'text-slate-700'}`}>Apenas Transcrição</p>
-                <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
-                  O texto registrado no prontuário fica exatamente como o vet falou.
-                </p>
-                <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
-                  A IA continua sugerindo medicações aplicadas, documentos, retornos, vacinas e internação a partir da fala.
-                </p>
-              </div>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setAiMode('ai_assisted')}
-            className={`w-full flex items-start gap-4 rounded-xl border-2 px-4 py-4 text-left transition-all ${
-              aiMode === 'ai_assisted' ? 'border-violet-400 bg-violet-50' : 'border-slate-200 bg-white hover:border-slate-300'
-            }`}
-          >
-            <div className={`mt-0.5 h-4 w-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${aiMode === 'ai_assisted' ? 'border-violet-500' : 'border-slate-300'}`}>
-              {aiMode === 'ai_assisted' && <div className="h-2 w-2 rounded-full bg-violet-500" />}
-            </div>
-            <div className="flex items-start gap-3 min-w-0">
-              <Sparkles className={`h-4 w-4 flex-shrink-0 mt-0.5 ${aiMode === 'ai_assisted' ? 'text-violet-600' : 'text-slate-400'}`} />
-              <div>
-                <p className={`text-sm font-semibold ${aiMode === 'ai_assisted' ? 'text-violet-900' : 'text-slate-700'}`}>Transcrição Reescrita pela IA</p>
-                <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
-                  A IA reescreve o texto do prontuário em formato SOAP com linguagem técnica formal (CFMV).
-                </p>
-                <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
-                  Demais sugestões (medicações, documentos, retornos, internação) acontecem em ambos os modos.
-                </p>
-                {aiMode === 'ai_assisted' && (
-                  <span className="inline-flex items-center gap-1 mt-2 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700">
-                    <Sparkles className="h-2.5 w-2.5" /> Recomendado
-                  </span>
-                )}
-              </div>
-            </div>
-          </button>
-
-          <button
-            onClick={saveAiMode}
-            disabled={savingAiMode}
-            className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-violet-600 py-2.5 text-sm font-semibold text-white hover:bg-violet-700 transition-colors disabled:opacity-50"
-          >
-            {savingAiMode
-              ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando...</>
-              : <><Save className="h-4 w-4" /> Salvar Comportamento da IA</>}
-          </button>
-        </div>
-      </div>
-
-      {/* ── Fluxo Contínuo ────────────────────────────────────────────────────── */}
-      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-        <div className="border-b border-slate-100 px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50">
-              <Cpu className="h-4 w-4 text-amber-600" />
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold text-slate-900">Fluxo Contínuo</h3>
-              <p className="text-xs text-slate-500">Incorpore módulos diretamente no Consultório</p>
-            </div>
-          </div>
-          <button
-            onClick={() => setContinuousFlow(v => !v)}
-            className={`transition-colors ${continuousFlow ? 'text-amber-500' : 'text-slate-300'}`}
-          >
-            {continuousFlow ? <ToggleRight className="h-7 w-7" /> : <ToggleLeft className="h-7 w-7" />}
-          </button>
-        </div>
-        <div className="px-6 py-5">
-          {!continuousFlow ? (
-            <div className="flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">
-              <Cpu className="h-4 w-4 flex-shrink-0" />
-              Ative o Fluxo Contínuo para escolher quais etapas o MV realiza na mesma tela
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Etapas incorporadas no Consultório do MV</p>
-              {MERGEABLE.map(mod => {
-                const merged = mergedModules.includes(mod.key)
-                return (
-                  <div key={mod.key} className={`flex items-center justify-between rounded-xl border px-4 py-3 transition-colors ${merged ? 'border-amber-200 bg-amber-50' : 'border-slate-100'}`}>
-                    <div>
-                      <p className="text-sm font-medium text-slate-800">{mod.label}</p>
-                      <p className="text-xs text-slate-500">{mod.desc}</p>
-                    </div>
-                    <button
-                      onClick={() => toggleMerged(mod.key)}
-                      className={`transition-colors ${merged ? 'text-amber-500' : 'text-slate-300'}`}
-                    >
-                      {merged ? <ToggleRight className="h-7 w-7" /> : <ToggleLeft className="h-7 w-7" />}
-                    </button>
-                  </div>
-                )
-              })}
-              {mergedModules.length > 0 && (
-                <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-xs text-amber-700">
-                  <span className="font-semibold">IA Unificada ativada:</span> o veterinário grava um único áudio e o sistema preenche todos os módulos mesclados automaticamente.
-                </div>
-              )}
-            </div>
-          )}
-          <button
-            onClick={saveFlow}
-            disabled={savingFlow}
-            className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-amber-500 py-2.5 text-sm font-semibold text-white hover:bg-amber-600 transition-colors disabled:opacity-50"
-          >
-            {savingFlow
-              ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando...</>
-              : <><Save className="h-4 w-4" /> Salvar Configuração de Fluxo</>}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
 
 // ─── AccountingSettings ───────────────────────────────────────────────────────
 

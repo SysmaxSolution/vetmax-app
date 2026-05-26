@@ -192,8 +192,8 @@ export default function ManagementWorkspace({
   const [clinicNeighborhood, setClinicNeighborhood] = useState(clinicData?.neighborhood || '')
   const [clinicCity, setClinicCity]               = useState(clinicData?.city || '')
   const [clinicState, setClinicState]             = useState(clinicData?.state || '')
-  const [clinicChecklist, setClinicChecklist] = useState<string[]>(clinicData?.reception_checklist || [])
-  const [newChecklistItem, setNewChecklistItem] = useState('')
+  // reception_checklist removido em 2026-05-26 (cleanup de drift): aba 'Acesso'
+  // do SettingsWorkspace (via ClinicSettingsTab.tsx) é a única responsável.
   const [isSavingClinic, setIsSavingClinic] = useState(false)
 
   // Logo state
@@ -360,7 +360,6 @@ export default function ManagementWorkspace({
           cnpj:                clinicCnpj,
           address:             clinicAddress,
           phone:               clinicPhone,
-          reception_checklist: clinicChecklist,
           cep:                 clinicCep,
           neighborhood:        clinicNeighborhood,
           city:                clinicCity,
@@ -386,7 +385,6 @@ export default function ManagementWorkspace({
     setClinicCnpj(clinicData?.cnpj || '')
     setClinicAddress(clinicData?.address || '')
     setClinicPhone(clinicData?.phone || '')
-    setClinicChecklist(clinicData?.reception_checklist || [])
     setClinicCep(clinicData?.cep || '')
     setClinicNeighborhood(clinicData?.neighborhood || '')
     setClinicCity(clinicData?.city || '')
@@ -708,69 +706,6 @@ export default function ManagementWorkspace({
                 className="hidden"
                 onChange={e => { const f = e.target.files?.[0]; if (f) handleLogoFile(f); e.target.value = '' }}
               />
-            </div>
-          </div>
-
-          {/* Checklist de Recepção */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200">
-            <div className="border-b border-slate-100 px-6 py-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100">
-                  <CheckCircle2 className="h-4 w-4 text-slate-600" />
-                </div>
-                <div>
-                  <h2 className="text-base font-semibold text-slate-900">Checklist de Recepção</h2>
-                  <p className="text-xs text-slate-500">Itens exibidos durante o check-in</p>
-                </div>
-              </div>
-            </div>
-            <div className="p-6 space-y-3">
-              {isEditingClinic && (
-                <div className="flex gap-2 mb-4">
-                  <input
-                    type="text"
-                    value={newChecklistItem}
-                    onChange={e => setNewChecklistItem(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter' && newChecklistItem.trim()) {
-                        setClinicChecklist(prev => [...prev, newChecklistItem.trim()])
-                        setNewChecklistItem('')
-                      }
-                    }}
-                    className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Ex: Verificar carteira de vacinação"
-                  />
-                  <button
-                    onClick={() => {
-                      if (newChecklistItem.trim()) {
-                        setClinicChecklist(prev => [...prev, newChecklistItem.trim()])
-                        setNewChecklistItem('')
-                      }
-                    }}
-                    className="px-4 py-2 bg-blue-100 text-blue-700 text-sm font-medium rounded-lg hover:bg-blue-200 transition-colors"
-                  >
-                    + Adicionar
-                  </button>
-                </div>
-              )}
-              {clinicChecklist.length === 0 ? (
-                <p className="text-sm text-slate-400 italic text-center py-4">Nenhum item configurado</p>
-              ) : (
-                clinicChecklist.map((item, i) => (
-                  <div key={i} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                    <div className="flex items-center gap-2 text-sm text-slate-700">
-                      <CheckCircle2 className="w-4 h-4 text-slate-400 flex-shrink-0" />
-                      {item}
-                    </div>
-                    {isEditingClinic && (
-                      <button onClick={() => setClinicChecklist(prev => prev.filter((_, idx) => idx !== i))}
-                        className="text-red-400 hover:text-red-600 text-xs font-medium transition-colors">
-                        Remover
-                      </button>
-                    )}
-                  </div>
-                ))
-              )}
             </div>
           </div>
 
