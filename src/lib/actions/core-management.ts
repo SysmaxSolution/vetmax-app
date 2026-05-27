@@ -16,6 +16,11 @@ export type CentralCashierEntry = {
   patient_name?: string
   tutor_name?: string
   payment_method?: string
+  payment_card_id?: string | null
+  card_nsu?: string | null
+  card_authorization?: string | null
+  card_installments?: number | null
+  effective_date?: string | null
   created_at: string
   recorded_by?: string
 }

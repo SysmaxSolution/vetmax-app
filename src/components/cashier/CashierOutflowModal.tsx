@@ -8,6 +8,7 @@ import SupplierAutocomplete from '@/components/registry/suppliers/SupplierAutoco
 
 const CATEGORY_OPTIONS: { value: CashierOutflow['category']; label: string }[] = [
   { value: 'sangria',             label: 'Sangria de Caixa' },
+  { value: 'troco',               label: 'Troco devolvido' },
   { value: 'despesa_operacional', label: 'Despesa Operacional' },
   { value: 'fornecedor',          label: 'Pagamento a Fornecedor' },
   { value: 'estorno',             label: 'Estorno em Dinheiro' },

@@ -740,6 +740,127 @@ export async function processPayment(
   return { success: true }
 }
 
+// ─── processSplitPayment (split em múltiplos métodos) ─────────────────────────
+//
+// Quando o caixa recebe uma fatura em mais de uma forma (ex.: parte cartão +
+// parte pix), chama a RPC rpc_record_split_payment que faz tudo atomicamente:
+//   - cria N invoice_payment_splits
+//   - cria N financial_entries paid (uma por método)
+//   - cria N central_cashier recorded
+//   - atualiza invoice.paid_amount + status
+//
+// Cada split contém os dados de cartão quando aplicável (NSU/liberação/cartão).
+
+export interface PaymentSplitInput {
+  amount:              number
+  payment_method:      'pix' | 'credit' | 'debit' | 'cash' | 'voucher' | 'convenio' | 'transfer' | 'other'
+  payment_card_id?:    string | null
+  installments?:       number
+  card_acquirer?:      string | null
+  card_brand?:         string | null
+  card_nsu?:           string | null
+  card_authorization?: string | null
+}
+
+export async function processSplitPayment(
+  invoiceId: string,
+  splits:    PaymentSplitInput[],
+  options?:  { effective_date?: string; discount?: number }
+): Promise<{ success: true; status: string; paid_amount: number; total_amount: number } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const { data: profile } = await supabase
+    .from('profiles').select('clinic_id').eq('id', user.id).single()
+  if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
+
+  if (splits.length === 0) return { error: 'Informe ao menos um pagamento.' }
+
+  const admin = createAdminClient()
+
+  // Carrega dados básicos da invoice para preencher labels do caixa
+  const { data: inv } = await admin
+    .from('invoices')
+    .select(`
+      id, status, total_amount, paid_amount, discount, consultation_id,
+      patients ( name ),
+      tutors   ( name ),
+      consultations ( vet_id, profiles!vet_id ( full_name ) )
+    `)
+    .eq('id', invoiceId)
+    .eq('clinic_id', profile.clinic_id)
+    .single()
+  if (!inv) return { error: 'Fatura não encontrada.' }
+  if (inv.status === 'cancelled' || inv.status === 'paid') {
+    return { error: 'Fatura já está fechada ou cancelada.' }
+  }
+
+  const patientName = (inv as any).patients?.name ?? null
+  const tutorName   = (inv as any).tutors?.name   ?? null
+
+  // Aplica desconto extra se informado
+  if (options?.discount && options.discount > 0) {
+    const newTotal = Math.max(0, Number(inv.total_amount) - options.discount)
+    const newDiscount = Number(inv.discount ?? 0) + options.discount
+    await admin
+      .from('invoices')
+      .update({ discount: newDiscount, total_amount: newTotal, updated_at: new Date().toISOString() })
+      .eq('id', invoiceId)
+  }
+
+  const { data, error } = await supabase.rpc('rpc_record_split_payment', {
+    p_clinic_id:      profile.clinic_id,
+    p_invoice_id:     invoiceId,
+    p_recorded_by:    user.id,
+    p_patient_name:   patientName,
+    p_tutor_name:     tutorName,
+    p_splits:         splits.map(s => ({
+      amount:             s.amount,
+      payment_method:     s.payment_method,
+      payment_card_id:    s.payment_card_id ?? null,
+      installments:       s.installments ?? 1,
+      card_acquirer:      s.card_acquirer ?? null,
+      card_brand:         s.card_brand ?? null,
+      card_nsu:           s.card_nsu ?? null,
+      card_authorization: s.card_authorization ?? null,
+    })),
+    p_effective_date: options?.effective_date ?? null,
+  })
+
+  if (error) return { error: `Erro ao processar pagamento: ${error.message}` }
+
+  const result = data as { paid_amount: number; total_amount: number; status: string }
+
+  // Comissão (fire-and-forget)
+  const consultations = (inv as any).consultations
+  const vetId   = consultations?.vet_id ?? null
+  const vetName = consultations?.profiles?.full_name ?? null
+  if (vetId && Number(result.total_amount) > 0) {
+    import('./commissions').then(({ processAmountCommission }) => {
+      processAmountCommission({
+        clinic_id:         profile.clinic_id,
+        professional_id:   vetId,
+        professional_name: vetName ?? 'Veterinário',
+        amount:            Number(result.total_amount),
+        description:       `Comissão Consulta — ${patientName ?? 'Paciente'}, Data: ${new Date().toISOString().split('T')[0]} - Profissional: ${vetName ?? 'Veterinário'}`,
+        date:              new Date().toISOString().split('T')[0],
+        item_types:        ['all', 'service'],
+      }).catch(() => {})
+    })
+  }
+
+  revalidatePath('/dashboard/cashier')
+  revalidatePath('/dashboard/reception/checkout')
+  revalidatePath('/dashboard/financial')
+  return {
+    success:      true,
+    status:       result.status,
+    paid_amount:  Number(result.paid_amount),
+    total_amount: Number(result.total_amount),
+  }
+}
+
 // ─── reversePartialPayment ────────────────────────────────────────────────────
 //
 // Estorna uma baixa específica (financial_entry paid). Soma o valor de volta

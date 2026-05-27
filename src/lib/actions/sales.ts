@@ -24,7 +24,23 @@ export interface CreateSaleParams {
   discount_amount?: number
   tutor_id?:        string | null
   consultation_id?: string | null
+  patient_id?:      string | null
   notes?:           string | null
+  /**
+   * Quando informado, registra cada split em invoice_payment_splits-like:
+   * para PDV usamos central_cashier com payment_method e dados de cartão por split.
+   * Para vendas com 1 método, o payment_method principal cobre tudo.
+   */
+  splits?: Array<{
+    amount:              number
+    payment_method:      string
+    payment_card_id?:    string | null
+    installments?:       number
+    card_acquirer?:      string | null
+    card_brand?:         string | null
+    card_nsu?:           string | null
+    card_authorization?: string | null
+  }>
 }
 
 export interface Sale {
@@ -156,6 +172,7 @@ export async function createSale(
     p_tutor_id:        params.tutor_id ?? null,
     p_consultation_id: params.consultation_id ?? null,
     p_notes:           params.notes ?? null,
+    p_patient_id:      params.patient_id ?? null,
   })
 
   if (error) return { error: 'Erro ao registrar venda: ' + error.message }
@@ -165,6 +182,58 @@ export async function createSale(
 
   const saleId = (data as any).id as string
   const total  = Number((data as any).total)
+
+  // Quando há splits (múltiplos métodos), substituímos o lançamento único do
+  // central_cashier por uma linha por split — preservando NSU/parcelas para
+  // conciliação. O total continua sendo o mesmo da venda; arquivamos o lançamento
+  // único criado pela RPC e inserimos os splits no caixa.
+  if (params.splits && params.splits.length > 0) {
+    const admin = createAdminClient()
+    await admin
+      .from('central_cashier')
+      .update({ status: 'archived' })
+      .eq('clinic_id', params.clinic_id)
+      .eq('source_module', 'sales')
+      .eq('source_id', saleId)
+
+    // Carrega nomes para preencher caixa
+    let tutorName: string | null = null
+    let patientName: string | null = null
+    if (params.tutor_id) {
+      const { data: t } = await admin.from('tutors').select('name').eq('id', params.tutor_id).maybeSingle()
+      tutorName = (t as { name?: string } | null)?.name ?? null
+    }
+    if (params.patient_id) {
+      const { data: p } = await admin.from('patients').select('name, tutor_id').eq('id', params.patient_id).maybeSingle()
+      patientName = (p as { name?: string } | null)?.name ?? null
+      if (!tutorName) {
+        const tId = (p as { tutor_id?: string } | null)?.tutor_id
+        if (tId) {
+          const { data: t } = await admin.from('tutors').select('name').eq('id', tId).maybeSingle()
+          tutorName = (t as { name?: string } | null)?.name ?? null
+        }
+      }
+    }
+
+    for (const split of params.splits) {
+      await admin.from('central_cashier').insert({
+        clinic_id:          params.clinic_id,
+        source_module:      'sales',
+        source_id:          saleId,
+        amount:             split.amount,
+        status:             'recorded',
+        payment_method:     split.payment_method,
+        recorded_by:        user.id,
+        tutor_name:         tutorName,
+        patient_name:       patientName,
+        reason:             `Venda PDV — ${patientName ?? tutorName ?? 'avulsa'}`,
+        payment_card_id:    split.payment_card_id ?? null,
+        card_nsu:           split.card_nsu ?? null,
+        card_authorization: split.card_authorization ?? null,
+        card_installments:  split.payment_method === 'credit' ? (split.installments ?? 1) : null,
+      })
+    }
+  }
 
   // Processar comissões de forma não-bloqueante
   const { data: sellerProfile } = await supabase

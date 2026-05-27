@@ -14,6 +14,7 @@ import CashierTabReceivables from './CashierTabReceivables'
 import CashierTabOutflows from './CashierTabOutflows'
 import CashierTabSession from './CashierTabSession'
 import CashierTabReports from './CashierTabReports'
+import PreviousDayCashierAlert from './PreviousDayCashierAlert'
 
 type Tab = 'overview' | 'receivables' | 'outflows' | 'session' | 'reports'
 
@@ -96,6 +97,9 @@ export default function CashierPageClient({
         <p className="mt-0.5 text-sm text-slate-500">Central de recebimentos, saídas e gestão de sessão</p>
       </div>
 
+      {/* Alerta de caixa do dia anterior em aberto */}
+      <PreviousDayCashierAlert onResolved={refresh} />
+
       {/* Sentinel: só aparece no DOM após hidratação React (useEffect) */}
       {hydrated && <span data-testid="cashier-hydrated" className="sr-only" aria-hidden="true" />}
 
@@ -135,6 +139,7 @@ export default function CashierPageClient({
             summary={summary}
             userRole={userRole}
             sessionId={session?.id}
+            onOpenReceivables={() => setActiveTab('receivables')}
           />
         </div>
       )}

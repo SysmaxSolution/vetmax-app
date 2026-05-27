@@ -25,7 +25,7 @@ export interface CashierOutflow {
   clinic_id: string
   session_id?: string
   amount: number
-  category: 'sangria' | 'despesa_operacional' | 'fornecedor' | 'estorno' | 'other'
+  category: 'sangria' | 'despesa_operacional' | 'fornecedor' | 'estorno' | 'troco' | 'other'
   description: string
   supplier_id?: string | null
   created_by: string

@@ -3,7 +3,8 @@
 import { useState, useCallback } from 'react'
 import {
   DollarSign, CheckCircle2, Archive, RefreshCw, Loader2, Filter,
-  TrendingUp, AlertCircle, Clock, BadgeCheck, RotateCcw, Minus,
+  TrendingUp, AlertCircle, Clock, BadgeCheck, RotateCcw, Minus, Plus,
+  Receipt, Calendar, CreditCard, Smartphone, Banknote, Building2, Wallet,
 } from 'lucide-react'
 import {
   listCashierEntries, verifyCashierEntry, archiveCashierEntry,
@@ -11,8 +12,8 @@ import {
 } from '@/lib/actions/core-management'
 import CashierReversalModal from './CashierReversalModal'
 import CashierOutflowModal from './CashierOutflowModal'
-
-// ─── Constants ────────────────────────────────────────────────────────────────
+import CashierInflowModal from './CashierInflowModal'
+import CashierEditDateModal from './CashierEditDateModal'
 
 const MODULE_LABELS: Record<string, string> = {
   grooming:     'Banho e Tosa',
@@ -21,6 +22,7 @@ const MODULE_LABELS: Record<string, string> = {
   exam:         'Exame',
   manual:       'Manual',
   adjustment:   'Ajuste',
+  sales:        'PDV',
 }
 
 const STATUS_CONFIG = {
@@ -29,6 +31,17 @@ const STATUS_CONFIG = {
   verified: { label: 'Verificado',  cls: 'bg-emerald-100 text-emerald-700', icon: <BadgeCheck   className="h-3 w-3" /> },
   archived: { label: 'Arquivado',   cls: 'bg-slate-100 text-slate-500',     icon: <Archive      className="h-3 w-3" /> },
   reversed: { label: 'Estornado',   cls: 'bg-red-100 text-red-600',         icon: <RotateCcw    className="h-3 w-3" /> },
+}
+
+const PAYMENT_METHOD_LABEL: Record<string, { label: string; icon: React.ComponentType<{ className?: string }> }> = {
+  pix:       { label: 'PIX',         icon: Smartphone  },
+  credit:    { label: 'Crédito',     icon: CreditCard  },
+  debit:     { label: 'Débito',      icon: CreditCard  },
+  cash:      { label: 'Dinheiro',    icon: Banknote    },
+  voucher:   { label: 'Vale',        icon: Wallet      },
+  convenio:  { label: 'Convênio',    icon: Wallet      },
+  transfer:  { label: 'Transf.',     icon: Building2   },
+  other:     { label: 'Outro',       icon: Receipt     },
 }
 
 function fmt(v: number) {
@@ -42,18 +55,24 @@ function fmtDate(iso: string) {
   })
 }
 
-// ─── Props ────────────────────────────────────────────────────────────────────
+function fmtEffectiveDate(iso: string) {
+  return new Date(iso + 'T00:00:00').toLocaleDateString('pt-BR', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+  })
+}
 
 interface Props {
   initialEntries: CentralCashierEntry[]
   summary:        CashierSummary | null
   userRole:       string
   sessionId?:     string
+  /** Callback opcional para abrir a aba de Recebimentos (botão "Receber Pendentes"). */
+  onOpenReceivables?: () => void
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
-
-export default function CentralCashierWorkspace({ initialEntries, summary, userRole, sessionId }: Props) {
+export default function CentralCashierWorkspace({
+  initialEntries, summary, userRole, sessionId, onOpenReceivables,
+}: Props) {
   const [entries,        setEntries]        = useState<CentralCashierEntry[]>(initialEntries)
   const [loading,        setLoading]        = useState(false)
   const [actionId,       setActionId]       = useState<string | null>(null)
@@ -62,10 +81,13 @@ export default function CentralCashierWorkspace({ initialEntries, summary, userR
   const [toast,          setToast]          = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
   const [reversalEntry,  setReversalEntry]  = useState<CentralCashierEntry | null>(null)
   const [showOutflow,    setShowOutflow]    = useState(false)
+  const [showInflow,     setShowInflow]     = useState(false)
+  const [editingDate,    setEditingDate]    = useState<CentralCashierEntry | null>(null)
 
   const isAccountant = ['admin', 'owner', 'accountant'].includes(userRole)
   const isAdmin      = ['admin', 'owner'].includes(userRole)
-  const isManager    = ['admin', 'owner', 'manager'].includes(userRole)
+  const isManager    = ['admin', 'owner', 'manager', 'accountant'].includes(userRole)
+  const canEditDate  = ['admin', 'owner', 'manager', 'accountant'].includes(userRole)
 
   function showToast(msg: string, type: 'success' | 'error') {
     setToast({ type, msg })
@@ -106,8 +128,8 @@ export default function CentralCashierWorkspace({ initialEntries, summary, userR
   })
 
   const totalDisplayed = displayed.reduce((s, e) => s + Number(e.amount), 0)
-
-  const uniqueModules = [...new Set(entries.map(e => e.source_module))]
+  const uniqueModules  = [...new Set(entries.map(e => e.source_module))]
+  const pendingCount   = entries.filter(e => e.status === 'pending').length
 
   return (
     <div className="space-y-6">
@@ -136,22 +158,58 @@ export default function CentralCashierWorkspace({ initialEntries, summary, userR
           onToast={showToast}
         />
       )}
+      {showInflow && (
+        <CashierInflowModal
+          onClose={() => setShowInflow(false)}
+          onSuccess={refresh}
+          onToast={showToast}
+        />
+      )}
+      {editingDate && (
+        <CashierEditDateModal
+          entry={editingDate}
+          onClose={() => setEditingDate(null)}
+          onSuccess={refresh}
+          onToast={showToast}
+        />
+      )}
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">Caixa Central</h1>
           <p className="text-sm text-slate-500 mt-0.5">Consolidado de todas as receitas da clínica</p>
         </div>
-        <div className="flex items-center gap-2">
-          {isManager && (
+        <div className="flex items-center gap-2 flex-wrap">
+          {pendingCount > 0 && onOpenReceivables && (
             <button
-              onClick={() => setShowOutflow(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-medium hover:bg-red-100 transition-colors"
+              onClick={onOpenReceivables}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold shadow-sm"
             >
-              <Minus className="h-4 w-4" />
-              Registrar Saída
+              <Receipt className="h-4 w-4" />
+              Receber Pendentes
+              <span className="rounded-full bg-white/30 text-white text-[10px] font-bold px-1.5 py-0.5 leading-none">
+                {pendingCount}
+              </span>
             </button>
+          )}
+          {isManager && (
+            <>
+              <button
+                onClick={() => setShowInflow(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-medium hover:bg-emerald-100 transition-colors"
+              >
+                <Plus className="h-4 w-4" />
+                Lançar Entrada
+              </button>
+              <button
+                onClick={() => setShowOutflow(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-medium hover:bg-red-100 transition-colors"
+              >
+                <Minus className="h-4 w-4" />
+                Registrar Saída
+              </button>
+            </>
           )}
           <button
             id="btn-refresh-cashier"
@@ -263,93 +321,135 @@ export default function CentralCashierWorkspace({ initialEntries, summary, userR
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50">
-                <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Data</th>
-                <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Módulo</th>
-                <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Descrição</th>
-                <th className="text-right px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Valor</th>
-                <th className="text-center px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
-                {isAccountant && (
-                  <th className="text-center px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Ações</th>
-                )}
+                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Data</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Módulo</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Pet / Tutor</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Descrição</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Forma Pgto</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Valor</th>
+                <th className="text-center px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
+                <th className="text-center px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {displayed.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-14 text-sm text-slate-400">
+                  <td colSpan={8} className="text-center py-14 text-sm text-slate-400">
                     Nenhum lançamento encontrado
                   </td>
                 </tr>
               ) : (
                 displayed.map(entry => {
-                  const sc = STATUS_CONFIG[entry.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.recorded
+                  const sc      = STATUS_CONFIG[entry.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.recorded
+                  const pm      = PAYMENT_METHOD_LABEL[entry.payment_method ?? '']
+                  const PmIcon  = pm?.icon ?? Receipt
+                  const effDate = entry.effective_date
                   return (
                     <tr
                       key={entry.id}
                       data-testid={`cashier-row-${entry.id}`}
                       className="hover:bg-slate-50 transition-colors"
                     >
-                      <td className="px-5 py-3.5 text-slate-600 text-xs whitespace-nowrap">
-                        {fmtDate(entry.created_at)}
+                      <td className="px-4 py-3 text-slate-600 text-xs whitespace-nowrap">
+                        {effDate && effDate !== entry.created_at.slice(0,10) ? (
+                          <div className="flex flex-col">
+                            <span className="font-semibold text-amber-700 flex items-center gap-1">
+                              <Calendar className="h-3 w-3" /> {fmtEffectiveDate(effDate)}
+                            </span>
+                            <span className="text-[10px] text-slate-400">lanç. {fmtDate(entry.created_at)}</span>
+                          </div>
+                        ) : (
+                          fmtDate(entry.created_at)
+                        )}
                       </td>
-                      <td className="px-5 py-3.5">
+                      <td className="px-4 py-3">
                         <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs font-medium">
                           {MODULE_LABELS[entry.source_module] ?? entry.source_module}
                         </span>
                       </td>
-                      <td className="px-5 py-3.5 text-slate-700 max-w-[200px] truncate">
+                      <td className="px-4 py-3 text-xs text-slate-700">
+                        {entry.patient_name || entry.tutor_name ? (
+                          <div className="flex flex-col">
+                            {entry.patient_name && <span className="font-semibold">{entry.patient_name}</span>}
+                            {entry.tutor_name && <span className="text-slate-500">{entry.tutor_name}</span>}
+                          </div>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-slate-700 max-w-[200px] truncate text-xs">
                         {entry.reason ?? '—'}
                       </td>
-                      <td className="px-5 py-3.5 text-right font-semibold text-slate-900 tabular-nums">
+                      <td className="px-4 py-3">
+                        {pm ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-medium">
+                            <PmIcon className="h-3 w-3" />
+                            {pm.label}
+                            {entry.card_installments && entry.card_installments > 1 && (
+                              <span className="text-[10px] text-slate-500">{entry.card_installments}x</span>
+                            )}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold text-slate-900 tabular-nums text-sm">
                         {fmt(Number(entry.amount))}
                       </td>
-                      <td className="px-5 py-3.5 text-center">
+                      <td className="px-4 py-3 text-center">
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${sc.cls}`}>
                           {sc.icon}{sc.label}
                         </span>
                       </td>
-                      {isAccountant && (
-                        <td className="px-5 py-3.5 text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            {entry.status === 'recorded' && (
-                              <button
-                                data-testid={`btn-verify-${entry.id}`}
-                                onClick={() => handleVerify(entry.id)}
-                                disabled={actionId === entry.id}
-                                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium hover:bg-emerald-100 transition-colors disabled:opacity-50"
-                                title="Verificar"
-                              >
-                                {actionId === entry.id
-                                  ? <Loader2 className="h-3 w-3 animate-spin" />
-                                  : <BadgeCheck className="h-3 w-3" />}
-                                Verificar
-                              </button>
-                            )}
-                            {entry.status !== 'archived' && isAdmin && (
-                              <button
-                                data-testid={`btn-archive-${entry.id}`}
-                                onClick={() => handleArchive(entry.id)}
-                                disabled={actionId === entry.id}
-                                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-slate-600 text-xs font-medium hover:bg-slate-100 transition-colors disabled:opacity-50"
-                                title="Arquivar"
-                              >
-                                <Archive className="h-3 w-3" />
-                              </button>
-                            )}
-                            {entry.status !== 'archived' && isManager && (
-                              <button
-                                data-testid={`btn-reverse-${entry.id}`}
-                                onClick={() => setReversalEntry(entry)}
-                                disabled={actionId === entry.id}
-                                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-50 border border-red-200 text-red-600 text-xs font-medium hover:bg-red-100 transition-colors disabled:opacity-50"
-                                title="Estornar"
-                              >
-                                <RotateCcw className="h-3 w-3" />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      )}
+                      <td className="px-4 py-3 text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          {canEditDate && entry.status !== 'archived' && entry.status !== 'reversed' && (
+                            <button
+                              data-testid={`btn-edit-date-${entry.id}`}
+                              onClick={() => setEditingDate(entry)}
+                              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-xs font-medium hover:bg-amber-100 transition-colors"
+                              title="Editar data retroativa"
+                            >
+                              <Calendar className="h-3 w-3" />
+                            </button>
+                          )}
+                          {isAccountant && entry.status === 'recorded' && (
+                            <button
+                              data-testid={`btn-verify-${entry.id}`}
+                              onClick={() => handleVerify(entry.id)}
+                              disabled={actionId === entry.id}
+                              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium hover:bg-emerald-100 transition-colors disabled:opacity-50"
+                              title="Verificar"
+                            >
+                              {actionId === entry.id
+                                ? <Loader2 className="h-3 w-3 animate-spin" />
+                                : <BadgeCheck className="h-3 w-3" />}
+                            </button>
+                          )}
+                          {isAccountant && entry.status !== 'archived' && isAdmin && (
+                            <button
+                              data-testid={`btn-archive-${entry.id}`}
+                              onClick={() => handleArchive(entry.id)}
+                              disabled={actionId === entry.id}
+                              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-50 border border-slate-200 text-slate-600 text-xs font-medium hover:bg-slate-100 transition-colors disabled:opacity-50"
+                              title="Arquivar"
+                            >
+                              <Archive className="h-3 w-3" />
+                            </button>
+                          )}
+                          {isManager && entry.status !== 'archived' && entry.status !== 'reversed' && (
+                            <button
+                              data-testid={`btn-reverse-${entry.id}`}
+                              onClick={() => setReversalEntry(entry)}
+                              disabled={actionId === entry.id}
+                              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-red-50 border border-red-200 text-red-600 text-xs font-medium hover:bg-red-100 transition-colors disabled:opacity-50"
+                              title="Estornar"
+                            >
+                              <RotateCcw className="h-3 w-3" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   )
                 })

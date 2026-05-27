@@ -8,7 +8,7 @@ import {
   cancelConsultationService,
   type ConsultationServiceLine,
 } from '@/lib/actions/services'
-import ServiceComboBox, { type SelectedService } from '@/components/reception/ServiceComboBox'
+import ServiceSelectionModal from './ServiceSelectionModal'
 
 /**
  * Painel "Serviços lançados" no ConsultationDetail.
@@ -52,8 +52,7 @@ const STAGE_COLOR: Record<string, string> = {
 export default function ConsultationServicesPanel({ consultationId, isFinalized, onChange }: Props) {
   const [lines, setLines] = useState<ConsultationServiceLine[]>([])
   const [loading, setLoading] = useState(true)
-  const [showCombo, setShowCombo] = useState(false)
-  const [picked, setPicked] = useState<SelectedService[]>([])
+  const [showModal, setShowModal] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -68,32 +67,29 @@ export default function ConsultationServicesPanel({ consultationId, isFinalized,
 
   const activeLines = lines.filter(l => l.cancelled_at === null)
   const total       = activeLines.reduce((s, l) => s + l.price_snapshot * l.quantity, 0)
+  const activeStockIds = activeLines.map(l => l.stock_item_id)
 
-  function commitPicked() {
-    if (picked.length === 0) return
+  async function handleModalConfirm(picked: Array<{ item: { id: string; name: string }; quantity: number }>) {
     setError(null)
-    startTransition(async () => {
-      const failures: string[] = []
-      for (const s of picked) {
-        const r = await addServiceToConsultation({
-          consultation_id: consultationId,
-          stock_item_id:   s.id,
-          quantity:        s.quantity ?? 1,
-          added_at_stage:  'vet',
-        })
-        if ('error' in r) failures.push(`${s.name}: ${r.error}`)
-      }
-      if (failures.length > 0) setError(failures.join(' · '))
-      setPicked([])
-      setShowCombo(false)
-      await refresh()
-      onChange?.()
-    })
+    const failures: string[] = []
+    for (const s of picked) {
+      const r = await addServiceToConsultation({
+        consultation_id: consultationId,
+        stock_item_id:   s.item.id,
+        quantity:        s.quantity,
+        added_at_stage:  'vet',
+      })
+      if ('error' in r) failures.push(`${s.item.name}: ${r.error}`)
+    }
+    if (failures.length > 0) setError(failures.join(' · '))
+    setShowModal(false)
+    await refresh()
+    onChange?.()
   }
 
   function handleCancel(line: ConsultationServiceLine) {
     const reason = prompt(`Remover "${line.name_snapshot}"? Motivo opcional para auditoria:`)
-    if (reason === null) return   // user cancelou o prompt
+    if (reason === null) return
     setPendingId(line.id)
     setError(null)
     startTransition(async () => {
@@ -168,43 +164,16 @@ export default function ConsultationServicesPanel({ consultationId, isFinalized,
       )}
 
       {!isFinalized && (
-        <div className="px-4 py-3 border-t border-slate-100 space-y-2">
-          {showCombo ? (
-            <>
-              <ServiceComboBox
-                selected={picked}
-                onChange={setPicked}
-                label="Adicionar serviço"
-                placeholder="Buscar serviço por nome, SKU ou EAN..."
-              />
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => { setShowCombo(false); setPicked([]) }}
-                  className="flex-1 rounded-lg border border-slate-200 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  disabled={picked.length === 0 || isPending}
-                  onClick={commitPicked}
-                  className="flex-1 rounded-lg bg-blue-600 hover:bg-blue-700 py-1.5 text-xs font-semibold text-white disabled:opacity-50 flex items-center justify-center gap-1.5"
-                >
-                  {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
-                  Adicionar {picked.length > 0 ? `(${picked.length})` : ''}
-                </button>
-              </div>
-            </>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setShowCombo(true)}
-              className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-blue-300 bg-blue-50/40 hover:bg-blue-50 py-1.5 text-xs font-semibold text-blue-700"
-            >
-              <Plus className="h-3 w-3" /> Adicionar serviço
-            </button>
-          )}
+        <div className="px-4 py-3 border-t border-slate-100">
+          <button
+            type="button"
+            onClick={() => setShowModal(true)}
+            disabled={isPending}
+            data-mentor-step="vet-insert-service-btn"
+            className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-blue-300 bg-blue-50/40 hover:bg-blue-50 py-2 text-xs font-semibold text-blue-700 disabled:opacity-50"
+          >
+            <Plus className="h-3 w-3" /> Inserir serviços / itens
+          </button>
         </div>
       )}
 
@@ -212,6 +181,14 @@ export default function ConsultationServicesPanel({ consultationId, isFinalized,
         <div className="px-4 py-2 bg-red-50 border-t border-red-200 text-xs text-red-700">
           {error}
         </div>
+      )}
+
+      {showModal && (
+        <ServiceSelectionModal
+          alreadyAddedIds={activeStockIds}
+          onCancel={() => setShowModal(false)}
+          onConfirm={handleModalConfirm}
+        />
       )}
     </div>
   )
