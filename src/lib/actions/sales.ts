@@ -185,8 +185,8 @@ export async function createSale(
 
   // Quando há splits (múltiplos métodos), substituímos o lançamento único do
   // central_cashier por uma linha por split — preservando NSU/parcelas para
-  // conciliação. O total continua sendo o mesmo da venda; arquivamos o lançamento
-  // único criado pela RPC e inserimos os splits no caixa.
+  // conciliação. Também criamos card_installments e pending entries
+  // (source=card_acquirer) para parcelas de cartão.
   if (params.splits && params.splits.length > 0) {
     const admin = createAdminClient()
     await admin
@@ -233,6 +233,26 @@ export async function createSale(
         card_installments:  split.payment_method === 'credit' ? (split.installments ?? 1) : null,
       })
     }
+
+    // Gera invoice_payment_splits + card_installments para parcelas de cartão.
+    // Métodos não-cartão não geram card_installments (a entrada já é em caixa).
+    await supabase.rpc('rpc_record_sale_card_splits', {
+      p_clinic_id:    params.clinic_id,
+      p_sale_id:      saleId,
+      p_recorded_by:  user.id,
+      p_patient_name: patientName,
+      p_tutor_name:   tutorName,
+      p_splits:       params.splits.map(s => ({
+        amount:             s.amount,
+        payment_method:     s.payment_method,
+        payment_card_id:    s.payment_card_id ?? null,
+        installments:       s.installments ?? 1,
+        card_acquirer:      s.card_acquirer ?? null,
+        card_brand:         s.card_brand ?? null,
+        card_nsu:           s.card_nsu ?? null,
+        card_authorization: s.card_authorization ?? null,
+      })),
+    })
   }
 
   // Processar comissões de forma não-bloqueante

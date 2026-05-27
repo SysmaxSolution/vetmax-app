@@ -19,7 +19,7 @@ import {
   Plus, RefreshCcw, Search, Filter,
   TrendingUp, AlertTriangle, CheckCircle2,
   ChevronDown, DollarSign, BookOpen, Receipt, GitMerge,
-  ArrowDownCircle, RotateCcw, PawPrint,
+  ArrowDownCircle, RotateCcw, PawPrint, CreditCard as CreditCardIcon,
 } from 'lucide-react'
 import { useModule } from '@/components/providers/ModulesProvider'
 
@@ -328,16 +328,22 @@ export default function FinancialWorkspace({
   ]
 
   const petloveEnabled = useModule('petlove_reconciliation')
-  const externalTabs: { href: string; label: string; icon: typeof PawPrint; tone: string }[] = petloveEnabled
-    ? [
-        {
+  const externalTabs: { href: string; label: string; icon: typeof PawPrint; tone: string }[] = [
+    {
+      href:  '/dashboard/financial/cards',
+      label: 'Cartões',
+      icon:  CreditCardIcon,
+      tone:  'text-indigo-700 hover:bg-indigo-50 border-indigo-200',
+    },
+    ...(petloveEnabled
+      ? [{
           href:  '/dashboard/financial/insurance-reconciliation',
           label: 'Conciliação Petlove',
           icon:  PawPrint,
           tone:  'text-purple-700 hover:bg-purple-50 border-purple-200',
-        },
-      ]
-    : []
+        }]
+      : []),
+  ]
 
   const cadastrosSubTabs: { id: CadastrosSubTab; label: string }[] = [
     { id: 'bancos',       label: 'Bancos' },

@@ -81,13 +81,20 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
     )
   }
 
-  const dynamicSubtotal = invoice.items.reduce((sum, item) => {
+  const itemsSubtotal = invoice.items.reduce((sum, item) => {
     const raw = editingPrices[item.id]
     const price = raw !== undefined
       ? (parseFloat(raw.replace(',', '.')) || 0)
       : item.unit_price
     return sum + Math.max(0, price) * item.quantity
   }, 0)
+  // Fallback: quando invoice_items está vazio ou zerado mas a invoice tem subtotal
+  // (cenário comum em invoices legadas ou geradas antes do refator
+  // consultation_services), usamos o subtotal/total da própria invoice.
+  const invoiceSubtotalFallback = Number(invoice.subtotal ?? 0) > 0
+    ? Number(invoice.subtotal)
+    : Number(invoice.total_amount ?? 0) + Number(invoice.discount ?? 0)
+  const dynamicSubtotal = itemsSubtotal > 0.005 ? itemsSubtotal : invoiceSubtotalFallback
 
   const discountValue = (() => {
     const raw = parseFloat(discountInput.replace(',', '.')) || 0
@@ -218,6 +225,19 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
                 )}
               </div>
               <div className="rounded-xl border border-slate-200 overflow-hidden divide-y divide-slate-100">
+                {invoice.items.length === 0 && invoiceSubtotalFallback > 0 && (
+                  <div className="flex items-center justify-between px-4 py-3 bg-white gap-3">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <span className="text-xs font-medium px-1.5 py-0.5 rounded flex-shrink-0 bg-blue-100 text-blue-700">
+                        Consulta
+                      </span>
+                      <span className="text-sm text-slate-700 truncate">Serviços da consulta</span>
+                    </div>
+                    <span className="text-sm font-semibold text-slate-800 px-2">
+                      {fmt(invoiceSubtotalFallback)}
+                    </span>
+                  </div>
+                )}
                 {invoice.items.map((item) => {
                   const rawInput  = editingPrices[item.id]
                   const isEditing = rawInput !== undefined

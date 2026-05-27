@@ -305,11 +305,66 @@ export async function getInvoiceWithItems(
     .order('created_at', { ascending: true })
 
   const inv = invoice as any
+  let finalItems = (items ?? []) as InvoiceItem[]
+
+  // Fallback: invoice_items vazio mas há consultation_services ativos com preço.
+  // Reidrata invoice_items a partir do snapshot — corrige invoices criadas antes
+  // do refator de consultation_services ou que perderam seus items por algum bug.
+  const itemsSubtotal = finalItems.reduce((s, it) => s + (Number(it.unit_price) * Number(it.quantity)), 0)
+  if ((finalItems.length === 0 || itemsSubtotal < 0.005) && inv.consultation_id && Number(inv.subtotal) > 0.005) {
+    const admin = createAdminClient()
+    const { data: services } = await admin
+      .from('consultation_services')
+      .select('id, name_snapshot, price_snapshot, quantity, stock_items ( category )')
+      .eq('clinic_id', profile.clinic_id)
+      .eq('consultation_id', inv.consultation_id)
+      .is('cancelled_at', null)
+      .order('created_at', { ascending: true })
+
+    if (services && services.length > 0) {
+      type SvcRow = {
+        id: string
+        name_snapshot: string
+        price_snapshot: number | string
+        quantity: number | string
+        stock_items?: { category?: string } | { category?: string }[] | null
+      }
+      const rows = (services as unknown as SvcRow[]).map(s => {
+        const catSource = Array.isArray(s.stock_items) ? s.stock_items[0]?.category : s.stock_items?.category
+        const cat = typeof catSource === 'string' ? catSource : 'service'
+        const itemType: InvoiceItem['item_type'] =
+          cat === 'exam' ? 'exam' :
+          cat === 'medication' || cat === 'controlled_medication' ? 'medication' :
+          cat === 'vet_service' || cat === 'service' ? 'consultation' :
+          'other'
+        const unit = Number(s.price_snapshot ?? 0)
+        const qty  = Number(s.quantity ?? 1)
+        return {
+          invoice_id:  invoiceId,
+          item_type:   itemType,
+          description: s.name_snapshot,
+          quantity:    qty,
+          unit_price:  unit,
+          total_price: unit * qty,
+        }
+      })
+
+      const { data: inserted } = await admin
+        .from('invoice_items')
+        .insert(rows)
+        .select('id, invoice_id, item_type, description, quantity, unit_price, total_price, created_at')
+
+      if (inserted && inserted.length > 0) {
+        finalItems = inserted as InvoiceItem[]
+      }
+    }
+  }
+
   return {
     ...inv,
     patient: inv.patients ?? { name: '—', species: '' },
     tutor:   inv.tutors   ?? { name: '—', phone: '' },
-    items:   (items ?? []) as InvoiceItem[],
+    items:   finalItems,
   } as InvoiceWithDetails
 }
 
