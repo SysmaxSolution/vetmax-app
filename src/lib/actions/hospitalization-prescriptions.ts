@@ -285,6 +285,32 @@ export async function applyHospitalizationDose(
       medications:        [{ name: medName, dose: doseTxt, route: routeTxt, notes: detalhe }],
       improvement_level:  'estavel',
     })
+
+    // Conta da Internação (Regra 4): lança a medicação aplicada como item da
+    // conta. Valor = unit_price do estoque × quantidade consumida (0 se sem
+    // vínculo de estoque/preço). Itemiza a medicação para faturamento.
+    let chargeAmount = 0
+    if (presc.stock_item_id) {
+      const { data: stk } = await admin
+        .from('stock_items')
+        .select('unit_price')
+        .eq('id', presc.stock_item_id as string)
+        .single()
+      const unitPrice = Number(stk?.unit_price ?? 0)
+      chargeAmount = unitPrice * (qty && qty > 0 ? qty : 1)
+    }
+    await admin.from('hospitalization_charges').insert({
+      clinic_id:          ctx.clinicId,
+      hospitalization_id: presc.hospitalization_id as string,
+      kind:               'medication',
+      description:        [medName, detalhe].filter(Boolean).join(' — '),
+      quantity:           1,
+      unit_amount:        chargeAmount,
+      amount:             chargeAmount,
+      status:             'open',
+      source_ref:         administrationId,
+      created_by:         ctx.userId,
+    })
   }
 
   revalidatePath('/dashboard/hospitalization')
