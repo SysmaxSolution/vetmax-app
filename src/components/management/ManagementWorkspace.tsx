@@ -1137,8 +1137,21 @@ export default function ManagementWorkspace({
           templateName={canvaEditing.name}
           initialState={hydrateCanvasState(canvaEditing.canvas_state)}
           onClose={() => setCanvaEditing(null)}
-          onSaved={() => {
-            setToast({ type: 'success', message: 'Modelo salvo.' })
+          onSaved={(canvasState, opts) => {
+            // Sincroniza o state local com o que acabou de ser persistido —
+            // sem isso, reabrir o editor depois de fechar carrega o snapshot
+            // stale (problema clássico de templates criados via "Herdar":
+            // mostravam o layout do fonte porque o canvas_state não atualizava).
+            const editingId = canvaEditing.id
+            setTemplates(prev => prev.map(t =>
+              t.id === editingId ? { ...t, canvas_state: canvasState } : t
+            ))
+            setCanvaEditing(prev =>
+              prev && prev.id === editingId ? { ...prev, canvas_state: canvasState } : prev
+            )
+            if (!opts?.isAuto) {
+              setToast({ type: 'success', message: 'Modelo salvo.' })
+            }
           }}
         />
       )}

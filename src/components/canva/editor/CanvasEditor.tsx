@@ -56,7 +56,10 @@ interface Props {
   templateName: string
   initialState?: CanvasState | null
   onClose?: () => void
-  onSaved?: () => void
+  /** Disparado após persistir o canvas_state (manual ou auto-save).
+   *  Parent deve atualizar seu state local com o snapshot retornado para
+   *  que a reabertura do editor mostre o estado atual e não o stale. */
+  onSaved?: (canvasState: CanvasState, opts?: { isAuto?: boolean }) => void
 }
 
 // ── Reducer com history (undo/redo) ──────────────────────────────────────────
@@ -603,7 +606,7 @@ export default function CanvasEditor({
     startSave(async () => {
       try {
         await persist(snapshot, json)
-        onSaved?.()
+        onSaved?.(snapshot)
       } catch (e: any) {
         setError(e?.message ?? 'falha ao salvar')
       }
@@ -617,7 +620,10 @@ export default function CanvasEditor({
     setError(null)
     if (isDirty) {
       const snapshot = buildFullCanvasState()
-      try { await persist(snapshot, JSON.stringify(snapshot)) }
+      try {
+        await persist(snapshot, JSON.stringify(snapshot))
+        onSaved?.(snapshot, { isAuto: true })
+      }
       catch (e: any) { setError(`Salvar antes de pré-visualizar falhou: ${e?.message ?? e}`); return }
     }
     window.open(`/dashboard/laudos/preview/${templateId}`, '_blank', 'noopener,noreferrer')
@@ -635,6 +641,7 @@ export default function CanvasEditor({
       setIsAutoSaving(true)
       try {
         await persist(snapshot, json)
+        onSaved?.(snapshot, { isAuto: true })
       } catch (e) {
         // Falha silenciosa no auto-save — não derruba o editor.
         console.warn('[canva] auto-save falhou:', e)
