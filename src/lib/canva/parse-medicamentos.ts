@@ -31,6 +31,8 @@ export interface ParsedPrescription {
   prescription_type:       'common' | 'controlled' | 'manipulated'
   route_of_administration: 'oral' | 'topical' | 'intravenous' | 'intramuscular' | 'subcutaneous' | string
   orientation?:            string
+  /** Forma farmacêutica / apresentação (Cápsula, Comprimido, Pomada…). */
+  pharmaceutical_form?:    string
 }
 
 const CONTROLLED_RE  = /\b(controlad[ao]|controll?ed|receituario azul|azul)\b/i

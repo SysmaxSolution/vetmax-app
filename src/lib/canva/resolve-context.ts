@@ -253,7 +253,7 @@ export async function buildResolveContext(
       .eq('id', clinicId).single()
       .then(r => r.data),
     supabase.from('prescriptions')
-      .select('id, medication, dose, frequency, duration_days, is_controlled, prescription_type, route_of_administration, created_at')
+      .select('id, medication, dose, frequency, duration_days, is_controlled, prescription_type, route_of_administration, pharmaceutical_form, created_at')
       .eq('consultation_id', consultationId)
       .order('created_at', { ascending: true })
       .then(r => r.data ?? []),
@@ -278,6 +278,7 @@ export async function buildResolveContext(
     is_controlled:           Boolean(p.is_controlled),
     prescription_type:       PRESC_TYPE_DB_TO_CANON[p.prescription_type as string] ?? p.prescription_type,
     route_of_administration: ROUTE_DB_TO_CANON[p.route_of_administration as string] ?? p.route_of_administration,
+    pharmaceutical_form:     p.pharmaceutical_form ?? '',
   }))
 
   // Nível 3 — extração via IA quando a tabela `prescriptions` está vazia

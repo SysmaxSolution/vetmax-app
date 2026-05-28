@@ -43,6 +43,7 @@ REGRAS INQUEBRÁVEIS:
    - manipulated — quando MV diz "manipulado", "farmácia de manipulação".
    - common — padrão.
 7. is_controlled = true sempre que prescription_type = 'controlled'.
+8. pharmaceutical_form = forma/apresentação do medicamento (Cápsula, Comprimido, Pomada, Solução, Suspensão, Xarope, Gotas, Injetável). Infira do nome/contexto quando claro (ex: "150 mg" em cápsula → "Cápsula"; "pomada" → "Pomada"). Se não der pra inferir com segurança, use null. NÃO confunda com a via (route_of_administration).
 
 FORMATO DE SAÍDA — APENAS JSON, sem markdown, sem prosa:
 {
@@ -55,7 +56,8 @@ FORMATO DE SAÍDA — APENAS JSON, sem markdown, sem prosa:
       "route_of_administration": "oral",
       "prescription_type": "common",
       "is_controlled": false,
-      "orientation": "Administrar após alimentação"
+      "orientation": "Administrar após alimentação",
+      "pharmaceutical_form": "Solução"
     }
   ],
   "confidence": "high"
@@ -128,6 +130,7 @@ function normalizePrescription(raw: unknown): ParsedPrescription | null {
     prescription_type:       type,
     is_controlled:           isControlled,
     orientation:             optString(r.orientation ?? r.notes ?? r.observation),
+    pharmaceutical_form:     optString(r.pharmaceutical_form ?? r.form ?? r.presentation),
   }
 }
 

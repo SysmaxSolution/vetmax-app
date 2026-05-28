@@ -294,6 +294,7 @@ export default function ConsultationDetail({
   const [newDurationDays, setNewDurationDays] = useState<string>('')
   const [newIsControlled, setNewIsControlled] = useState(false)
   const [newRoute, setNewRoute] = useState<'oral' | 'iv' | 'im' | 'subcutaneo' | 'topico' | 'inalacao' | 'outro'>('oral')
+  const [newPharmaceuticalForm, setNewPharmaceuticalForm] = useState('')
   const [prescriptionSaved, setPrescriptionSaved] = useState(false)
   const [showEuthanasiaModal, setShowEuthanasiaModal] = useState(false)
 
@@ -1831,6 +1832,32 @@ export default function ConsultationDetail({
                         <option value="outro">Outra via</option>
                       </select>
                     </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">
+                        Forma Farmacêutica
+                        <span className="ml-1 font-normal text-slate-400">(aparece no receituário, ex: Cápsula, Pomada)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={newPharmaceuticalForm}
+                        onChange={e => setNewPharmaceuticalForm(e.target.value)}
+                        list="pharmaceutical-form-options"
+                        placeholder="Ex: Cápsula, Comprimido, Pomada, Solução…"
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                      />
+                      <datalist id="pharmaceutical-form-options">
+                        <option value="Cápsula" />
+                        <option value="Comprimido" />
+                        <option value="Pomada" />
+                        <option value="Creme" />
+                        <option value="Solução" />
+                        <option value="Suspensão" />
+                        <option value="Xarope" />
+                        <option value="Gotas" />
+                        <option value="Injetável" />
+                        <option value="Spray" />
+                      </datalist>
+                    </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block text-xs font-semibold text-slate-600 mb-1">
@@ -1907,6 +1934,7 @@ export default function ConsultationDetail({
                           is_controlled:          newIsControlled,
                           prescription_type:      newIsControlled ? 'blue_receipt' : 'standard',
                           route_of_administration: newRoute,
+                          pharmaceutical_form:    newPharmaceuticalForm.trim() || undefined,
                         })
                         if ('error' in result) {
                           setToast({ type: 'error', message: result.error })
@@ -1919,6 +1947,7 @@ export default function ConsultationDetail({
                         setNewDurationDays('')
                         setNewIsControlled(false)
                         setNewRoute('oral')
+                        setNewPharmaceuticalForm('')
                         setPrescriptionSaved(true)
                         setTimeout(() => setPrescriptionSaved(false), 2000)
                       }}

@@ -964,6 +964,7 @@ const REPEATER_FIELDS_BY_SOURCE: Record<RepeaterElement['source'], Array<{ field
   prescriptions: [
     { field: 'medication',              label: 'Medicamento' },
     { field: 'dose',                    label: 'Dose' },
+    { field: 'pharmaceutical_form',     label: 'Forma (Cáp/Pomada)' },
     { field: 'frequency',               label: 'Frequência' },
     { field: 'duration_days',           label: 'Duração (dias)' },
     { field: 'route_of_administration', label: 'Tipo de Uso (via)', groupable: true },
@@ -1152,12 +1153,11 @@ function ItemTemplateLinesEditor({
     setAt(idx, { template: `${cur}${cur && !cur.endsWith(' ') ? ' ' : ''}${token}` })
   }
   function applyPreset() {
-    // Usa apenas campos reais da tabela prescriptions. O lado direito do
-    // pontilhado fica livre (digite "Cáp"/"Pomada" após o {{LEADER}} ou
-    // crie o campo de forma farmacêutica). Linha 2 monta a posologia a
-    // partir de frequency+duration; linha 3 mostra OBS só se houver.
+    // Layout Almavet com campos reais de prescriptions. Linha 1: nome+dose,
+    // pontilhado expansível e a forma farmacêutica (Cáp/Pomada) à direita.
+    // Linha 2: posologia (frequência+duração). Linha 3: OBS só se houver.
     onChange([
-      { template: '{{medication}} {{dose}}{{LEADER}}', leaderDots: true, style: { fontWeight: 700 } },
+      { template: '{{medication}} {{dose}}{{LEADER}}{{pharmaceutical_form}}', leaderDots: true, style: { fontWeight: 700 } },
       { template: '{{frequency}}, durante {{duration_days}} dias consecutivos.', marginBottom: 0 },
       { template: 'OBS: {{orientation}}', style: { fontStyle: 'italic' }, hideIfEmpty: true, marginBottom: 6 },
     ])

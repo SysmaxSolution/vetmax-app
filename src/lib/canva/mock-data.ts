@@ -49,12 +49,14 @@ export const MOCK_PRESCRIPTIONS = [
     route_of_administration: 'oral', prescription_type: 'common',
     is_controlled: false,
     orientation: 'Administrar com alimento.',
+    pharmaceutical_form: 'Solução',
   },
   {
     medication: 'Drontal Plus', dose: '1 comp por 10 kg',
     frequency: 'dose única, repetir em 30 dias', duration_days: 1,
     route_of_administration: 'oral', prescription_type: 'common',
     is_controlled: false,
+    pharmaceutical_form: 'Comprimido',
   },
   {
     medication: 'Tramadol 50mg', dose: '50 mg',
@@ -62,18 +64,21 @@ export const MOCK_PRESCRIPTIONS = [
     route_of_administration: 'oral', prescription_type: 'controlled',
     is_controlled: true,
     orientation: 'Receituário azul. Manter fora do alcance.',
+    pharmaceutical_form: 'Cápsula',
   },
   {
     medication: 'Cloridrato de Tramadol Manipulado', dose: '5 gotas',
     frequency: 'a cada 8h', duration_days: 3,
     route_of_administration: 'oral', prescription_type: 'manipulated',
     is_controlled: true,
+    pharmaceutical_form: 'Gotas',
   },
   {
     medication: 'Pomada Furacin', dose: 'Aplicar fina camada',
     frequency: '3× ao dia', duration_days: 7,
     route_of_administration: 'topical', prescription_type: 'common',
     is_controlled: false,
+    pharmaceutical_form: 'Pomada',
   },
 ]
 

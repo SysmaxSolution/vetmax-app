@@ -510,7 +510,8 @@ export async function savePrescription(params: {
   is_controlled?:    boolean       // Medicamento controlado (receituário azul)
   prescription_type?: 'standard' | 'blue_receipt' | 'yellow_receipt' | 'special'
   route_of_administration?: 'oral' | 'iv' | 'im' | 'subcutaneo' | 'topico' | 'inalacao' | 'outro'
-}): Promise<{ id: string; medication: string; dose: string | null; is_controlled: boolean; prescription_type: string; route_of_administration: string } | { error: string }> {
+  pharmaceutical_form?: string     // forma/apresentação (Cápsula, Pomada, Comprimido…)
+}): Promise<{ id: string; medication: string; dose: string | null; is_controlled: boolean; prescription_type: string; route_of_administration: string; pharmaceutical_form: string | null } | { error: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Não autenticado.' }
@@ -531,7 +532,11 @@ export async function savePrescription(params: {
     if (!profile.crmv) return { error: 'CFMV: cadastre seu CRMV antes de prescrever medicamento controlado.' }
   }
 
-  // Controlados usam rpc_create_prescription (valida CRMV no banco)
+  const pharmaceuticalForm = params.pharmaceutical_form?.trim() || null
+
+  // Controlados usam rpc_create_prescription (valida CRMV no banco). A RPC
+  // não conhece pharmaceutical_form (campo aditivo da 0195), então gravamos
+  // num UPDATE subsequente pelo id retornado.
   if (isControlled) {
     const { data: rpcData, error: rpcError } = await supabase.rpc('rpc_create_prescription', {
       p_clinic_id:       profile.clinic_id,
@@ -544,7 +549,16 @@ export async function savePrescription(params: {
       p_prescription_type: params.prescription_type ?? 'blue_receipt',
     })
     if (rpcError) return { error: 'Erro ao salvar prescrição controlada: ' + rpcError.message }
-    return rpcData as { id: string; medication: string; dose: string | null; is_controlled: boolean; prescription_type: string; route_of_administration: string }
+    const created = rpcData as { id: string; medication: string; dose: string | null; is_controlled: boolean; prescription_type: string; route_of_administration: string }
+
+    if (pharmaceuticalForm && created?.id) {
+      const adminCtl = createAdminClient()
+      await adminCtl.from('prescriptions')
+        .update({ pharmaceutical_form: pharmaceuticalForm })
+        .eq('id', created.id)
+        .eq('clinic_id', profile.clinic_id)
+    }
+    return { ...created, pharmaceutical_form: pharmaceuticalForm }
   }
 
   // Não-controlados: insert direto
@@ -559,7 +573,8 @@ export async function savePrescription(params: {
     is_controlled:            false,
     prescription_type:        params.prescription_type ?? 'standard',
     route_of_administration:  params.route_of_administration ?? 'oral',
-  }).select('id, medication, dose, is_controlled, prescription_type, route_of_administration').single()
+    pharmaceutical_form:      pharmaceuticalForm,
+  }).select('id, medication, dose, is_controlled, prescription_type, route_of_administration, pharmaceutical_form').single()
 
   if (error) return { error: 'Erro ao salvar prescrição: ' + error.message }
   return data
