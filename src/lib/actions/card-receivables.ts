@@ -67,7 +67,7 @@ export async function listCardInstallments(
     .from('card_installments')
     .select(`
       *,
-      clinic_payment_cards ( label ),
+      credit_cards ( name ),
       invoices ( patients ( name ), tutors ( name ) )
     `)
     .eq('clinic_id', ctx.clinic_id)
@@ -85,7 +85,7 @@ export async function listCardInstallments(
 
   return (data ?? []).map((row: any) => ({
     ...row,
-    card_label:   row.clinic_payment_cards?.label ?? null,
+    card_label:   row.credit_cards?.name ?? null,
     patient_name: row.invoices?.patients?.name ?? null,
     tutor_name:   row.invoices?.tutors?.name ?? null,
   })) as CardInstallment[]

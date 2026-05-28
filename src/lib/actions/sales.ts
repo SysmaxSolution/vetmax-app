@@ -40,6 +40,7 @@ export interface CreateSaleParams {
     card_brand?:         string | null
     card_nsu?:           string | null
     card_authorization?: string | null
+    transaction_date?:   string | null
   }>
 }
 
@@ -251,6 +252,7 @@ export async function createSale(
         card_brand:         s.card_brand ?? null,
         card_nsu:           s.card_nsu ?? null,
         card_authorization: s.card_authorization ?? null,
+        transaction_date:   s.transaction_date ?? null,
       })),
     })
   }

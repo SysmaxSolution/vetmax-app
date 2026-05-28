@@ -63,6 +63,7 @@ export default function CheckoutModal({
                   card_brand:         s.card_brand ?? null,
                   card_nsu:           s.card_nsu ?? null,
                   card_authorization: s.card_authorization ?? null,
+                  transaction_date:   s.transaction_date ?? null,
                 }))
               : undefined,
           }

@@ -1,116 +1,99 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { CreditCard, Plus, X, Check, Loader2 } from 'lucide-react'
+import { CreditCard, X, Check, Loader2, ExternalLink, AlertCircle } from 'lucide-react'
+import Link from 'next/link'
 import {
   listPaymentCards,
-  createPaymentCard,
   type PaymentCard,
-  type CardType,
 } from '@/lib/actions/payment-cards'
 
 export interface CardPaymentResult {
-  card:           PaymentCard | null
-  installments:   number
-  card_acquirer:  string
-  card_brand:     string | null
-  card_nsu:       string
+  card:               PaymentCard
+  amount:             number
+  installments:       number
+  card_acquirer:      string
+  card_brand:         string | null
+  card_nsu:           string
   card_authorization: string
+  transaction_date:   string
 }
 
 interface Props {
-  /** Limita os cartões exibidos. 'credit' mostra apenas credito; 'debit' apenas debito. */
-  paymentMethod: 'credit' | 'debit'
-  amount:        number
-  onCancel:      () => void
-  onConfirm:     (result: CardPaymentResult) => void
+  paymentMethod:     'credit' | 'debit'
+  /** Saldo máximo permitido para este split (default = saldo restante). */
+  maxAmount:         number
+  /** Valor sugerido inicial. */
+  suggestedAmount:   number
+  onCancel:          () => void
+  onConfirm:         (result: CardPaymentResult) => void
 }
 
-const COMMON_ACQUIRERS = ['Cielo', 'Stone', 'Rede', 'GetNet', 'PagSeguro', 'SafraPay', 'Mercado Pago']
-const COMMON_BRANDS    = ['Visa', 'Mastercard', 'Elo', 'Hipercard', 'Amex']
+function fmt(v: number) {
+  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
 
-export default function CardSelectionModal({ paymentMethod, amount, onCancel, onConfirm }: Props) {
-  const [cards,          setCards]          = useState<PaymentCard[]>([])
-  const [loading,        setLoading]        = useState(true)
-  const [selectedCard,   setSelectedCard]   = useState<PaymentCard | null>(null)
-  const [installments,   setInstallments]   = useState(1)
-  const [nsu,            setNsu]            = useState('')
-  const [authorization,  setAuthorization]  = useState('')
-  const [error,          setError]          = useState<string | null>(null)
-  const [showRegister,   setShowRegister]   = useState(false)
-  const [submitting,     setSubmitting]     = useState(false)
-
-  // Form: novo cartão
-  const [newLabel,    setNewLabel]    = useState('')
-  const [newAcquirer, setNewAcquirer] = useState('')
-  const [newBrand,    setNewBrand]    = useState('')
-  const [newFee,      setNewFee]      = useState('0')
-  const [newDays,     setNewDays]     = useState('1')
-  const [newMaxInst,  setNewMaxInst]  = useState(paymentMethod === 'credit' ? '12' : '1')
+export default function CardSelectionModal({
+  paymentMethod, maxAmount, suggestedAmount, onCancel, onConfirm,
+}: Props) {
+  const [cards,         setCards]         = useState<PaymentCard[]>([])
+  const [loading,       setLoading]       = useState(true)
+  const [selectedCard,  setSelectedCard]  = useState<PaymentCard | null>(null)
+  const [amount,        setAmount]        = useState(suggestedAmount.toFixed(2).replace('.', ','))
+  const [installments,  setInstallments]  = useState(1)
+  const [nsu,           setNsu]           = useState('')
+  const [authorization, setAuthorization] = useState('')
+  const [txnDate,       setTxnDate]       = useState(() => new Date().toISOString().slice(0, 10))
+  const [error,         setError]         = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
       setLoading(true)
       const res = await listPaymentCards({ card_type: paymentMethod, only_active: true })
       setLoading(false)
-      if ('error' in res) {
-        setError(res.error)
-        return
-      }
+      if ('error' in res) { setError(res.error); return }
       setCards(res)
-      if (res.length === 0) setShowRegister(true)
-      else setSelectedCard(res[0])
+      if (res.length === 1) setSelectedCard(res[0])
     }
     void load()
   }, [paymentMethod])
 
-  async function handleRegister() {
-    setError(null)
-    if (!newLabel.trim() || !newAcquirer.trim()) {
-      setError('Apelido e administradora são obrigatórios.')
-      return
-    }
-    setSubmitting(true)
-    const res = await createPaymentCard({
-      label:            newLabel,
-      acquirer:         newAcquirer,
-      card_type:        paymentMethod as CardType,
-      brand:            newBrand || null,
-      fee_percent:      parseFloat(newFee.replace(',', '.')) || 0,
-      settlement_days:  parseInt(newDays) || 1,
-      max_installments: parseInt(newMaxInst) || 1,
-    })
-    if ('error' in res) {
-      setSubmitting(false)
-      setError(res.error)
-      return
-    }
-    const listRes = await listPaymentCards({ card_type: paymentMethod, only_active: true })
-    setSubmitting(false)
-    if (!('error' in listRes)) {
-      setCards(listRes)
-      const created = listRes.find(c => c.id === res.id) ?? null
-      if (created) setSelectedCard(created)
-      setShowRegister(false)
-    }
-  }
-
   function handleConfirm() {
     setError(null)
     if (!selectedCard) { setError('Selecione um cartão.'); return }
-    if (!nsu.trim()) { setError('Informe o NSU.'); return }
+
+    const parsedAmount = parseFloat(amount.replace(',', '.'))
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      setError('Informe um valor válido.')
+      return
+    }
+    if (parsedAmount > maxAmount + 0.005) {
+      setError(`Valor não pode exceder o saldo restante (${fmt(maxAmount)}).`)
+      return
+    }
+
+    if (!nsu.trim())           { setError('Informe o NSU.'); return }
     if (!authorization.trim()) { setError('Informe o número de liberação.'); return }
+    if (!txnDate)              { setError('Informe a data da transação.'); return }
+    if (txnDate > new Date().toISOString().slice(0, 10)) {
+      setError('Data da transação não pode ser futura.')
+      return
+    }
+
     if (paymentMethod === 'credit' && installments > selectedCard.max_installments) {
       setError(`Este cartão aceita no máximo ${selectedCard.max_installments}x.`)
       return
     }
+
     onConfirm({
       card:               selectedCard,
+      amount:             parsedAmount,
       installments,
-      card_acquirer:      selectedCard.acquirer,
+      card_acquirer:      selectedCard.acquirer || selectedCard.label,
       card_brand:         selectedCard.brand,
       card_nsu:           nsu.trim(),
       card_authorization: authorization.trim(),
+      transaction_date:   txnDate,
     })
   }
 
@@ -133,7 +116,7 @@ export default function CardSelectionModal({ paymentMethod, amount, onCancel, on
                 Cartão {paymentMethod === 'credit' ? 'de Crédito' : 'de Débito'}
               </h2>
               <p className="text-[11px] text-slate-500">
-                {amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} · selecione o cartão e informe os dados
+                Saldo restante {fmt(maxAmount)} · informe os dados da transação
               </p>
             </div>
           </div>
@@ -142,209 +125,178 @@ export default function CardSelectionModal({ paymentMethod, amount, onCancel, on
           </button>
         </div>
 
-        <div className="px-5 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
+        <div className="px-5 py-5 space-y-4 max-h-[75vh] overflow-y-auto">
 
           {loading ? (
             <div className="flex items-center justify-center py-10 text-slate-400">
               <Loader2 className="h-5 w-5 animate-spin mr-2" /> Carregando cartões...
             </div>
-          ) : showRegister ? (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-slate-800">Cadastrar novo cartão</h3>
-                {cards.length > 0 && (
-                  <button
-                    onClick={() => setShowRegister(false)}
-                    className="text-xs text-indigo-600 hover:underline"
-                  >
-                    Voltar para lista
-                  </button>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Apelido <span className="text-rose-500">*</span></label>
-                <input
-                  value={newLabel}
-                  onChange={e => setNewLabel(e.target.value)}
-                  placeholder='Ex.: "Cielo Mesa 1"'
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Administradora <span className="text-rose-500">*</span></label>
-                <div className="flex flex-wrap gap-1.5 mb-2">
-                  {COMMON_ACQUIRERS.map(a => (
-                    <button
-                      key={a}
-                      type="button"
-                      onClick={() => setNewAcquirer(a)}
-                      className={`px-2.5 py-1 rounded-lg border text-xs font-semibold ${
-                        newAcquirer === a
-                          ? 'bg-indigo-600 border-indigo-600 text-white'
-                          : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-300'
-                      }`}
-                    >
-                      {a}
-                    </button>
-                  ))}
-                </div>
-                <input
-                  value={newAcquirer}
-                  onChange={e => setNewAcquirer(e.target.value)}
-                  placeholder="Ou digite outra"
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Bandeira</label>
-                <div className="flex flex-wrap gap-1.5">
-                  {COMMON_BRANDS.map(b => (
-                    <button
-                      key={b}
-                      type="button"
-                      onClick={() => setNewBrand(b)}
-                      className={`px-2.5 py-1 rounded-lg border text-xs font-semibold ${
-                        newBrand === b
-                          ? 'bg-violet-600 border-violet-600 text-white'
-                          : 'bg-white border-slate-200 text-slate-600 hover:border-violet-300'
-                      }`}
-                    >
-                      {b}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">Taxa (%)</label>
-                  <input
-                    value={newFee}
-                    onChange={e => setNewFee(e.target.value)}
-                    placeholder="0,00"
-                    inputMode="decimal"
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">Repasse (D+)</label>
-                  <input
-                    value={newDays}
-                    onChange={e => setNewDays(e.target.value)}
-                    inputMode="numeric"
-                    placeholder="1"
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
-                  />
-                </div>
-                {paymentMethod === 'credit' && (
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">Máx. parc.</label>
-                    <input
-                      value={newMaxInst}
-                      onChange={e => setNewMaxInst(e.target.value)}
-                      inputMode="numeric"
-                      placeholder="12"
-                      className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
-                    />
-                  </div>
-                )}
-              </div>
-
-              <button
-                type="button"
-                onClick={handleRegister}
-                disabled={submitting}
-                className="w-full rounded-xl bg-indigo-600 hover:bg-indigo-700 py-2.5 text-sm font-semibold text-white disabled:opacity-50 flex items-center justify-center gap-2"
+          ) : cards.length === 0 ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3 text-center">
+              <p className="text-sm font-semibold text-amber-900">
+                Nenhum cartão {paymentMethod === 'credit' ? 'de crédito' : 'de débito'} cadastrado
+              </p>
+              <p className="text-xs text-amber-800">
+                Cadastre as maquininhas/cartões em Financeiro &gt; Cadastros &gt; Cartões antes de receber
+                pagamentos por cartão.
+              </p>
+              <Link
+                href="/dashboard/financial?tab=cadastros&sub=cartoes"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-amber-700 hover:bg-amber-800 px-4 py-2 text-xs font-semibold text-white"
               >
-                {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                Cadastrar e usar
-              </button>
+                <ExternalLink className="h-3.5 w-3.5" />
+                Abrir cadastro de cartões
+              </Link>
             </div>
           ) : (
             <>
-              <div className="space-y-1.5">
-                <p className="text-xs font-semibold text-slate-600">Selecione o cartão</p>
-                <div className="space-y-1.5">
-                  {cards.map(c => {
-                    const active = selectedCard?.id === c.id
-                    return (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => setSelectedCard(c)}
-                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border-2 transition-all ${
-                          active
-                            ? 'border-indigo-500 bg-indigo-50'
-                            : 'border-slate-200 bg-white hover:border-slate-300'
-                        }`}
-                      >
-                        <div className="text-left">
-                          <p className="text-sm font-semibold text-slate-900">{c.label}</p>
-                          <p className="text-[11px] text-slate-500">
-                            {c.acquirer}{c.brand ? ` · ${c.brand}` : ''} · Taxa {c.fee_percent}% · D+{c.settlement_days}
-                          </p>
-                        </div>
-                        {active && <Check className="h-4 w-4 text-indigo-600 flex-shrink-0" />}
-                      </button>
-                    )
-                  })}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowRegister(true)}
-                  className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-indigo-300 bg-indigo-50/40 hover:bg-indigo-50 py-2 text-xs font-semibold text-indigo-700"
+              {/* Cartão */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                  Cartão <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  value={selectedCard?.id ?? ''}
+                  onChange={e => {
+                    const c = cards.find(x => x.id === e.target.value)
+                    if (c) {
+                      setSelectedCard(c)
+                      // Reset parcelas se o novo cartão tiver menos max_installments
+                      setInstallments(prev => Math.min(prev, c.max_installments))
+                    } else {
+                      setSelectedCard(null)
+                    }
+                  }}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                 >
-                  <Plus className="h-3 w-3" /> Cadastrar novo cartão
-                </button>
+                  <option value="">Selecione um cartão...</option>
+                  {cards.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.label}
+                      {c.acquirer ? ` · ${c.acquirer}` : ''}
+                      {c.brand ? ` · ${c.brand}` : ''}
+                      {` · Taxa ${c.fee_percent}% · D+${c.settlement_days}`}
+                    </option>
+                  ))}
+                </select>
+                {selectedCard && (
+                  <p className="mt-1.5 text-[11px] text-indigo-700">
+                    Aceita até <strong>{selectedCard.max_installments}x</strong> · repasse em <strong>D+{selectedCard.settlement_days}</strong> · taxa <strong>{selectedCard.fee_percent}%</strong>
+                  </p>
+                )}
               </div>
 
+              <div className="grid grid-cols-2 gap-3">
+                {/* Valor */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                    Valor <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm text-slate-500 font-semibold">R$</span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={amount}
+                      onChange={e => setAmount(e.target.value)}
+                      placeholder={maxAmount.toFixed(2).replace('.', ',')}
+                      className="flex-1 rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-semibold tabular-nums focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAmount(maxAmount.toFixed(2).replace('.', ','))}
+                    className="mt-1 text-[10px] text-indigo-600 hover:underline"
+                  >
+                    Usar saldo restante
+                  </button>
+                </div>
+
+                {/* Data da Transação */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                    Data da Transação <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={txnDate}
+                    onChange={e => setTxnDate(e.target.value)}
+                    max={new Date().toISOString().slice(0, 10)}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  />
+                </div>
+              </div>
+
+              {/* Parcelas (apenas crédito) */}
               {paymentMethod === 'credit' && selectedCard && (
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Parcelas</label>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                    Quantidade de Parcelas
+                  </label>
                   <select
                     value={installments}
                     onChange={e => setInstallments(Number(e.target.value))}
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none"
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                   >
-                    {Array.from({ length: selectedCard.max_installments }, (_, i) => i + 1).map(n => (
-                      <option key={n} value={n}>
-                        {n}x {n > 1 ? `de ${(amount / n).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}` : 'à vista'}
-                      </option>
-                    ))}
+                    {Array.from({ length: selectedCard.max_installments }, (_, i) => i + 1).map(n => {
+                      const parsedAmount = parseFloat(amount.replace(',', '.')) || 0
+                      return (
+                        <option key={n} value={n}>
+                          {n}x
+                          {n > 1 && parsedAmount > 0
+                            ? ` de ${fmt(parsedAmount / n)}`
+                            : parsedAmount > 0 ? ' à vista' : ''}
+                        </option>
+                      )
+                    })}
                   </select>
                 </div>
               )}
 
+              {/* NSU + Liberação */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">NSU <span className="text-rose-500">*</span></label>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                    NSU <span className="text-rose-500">*</span>
+                  </label>
                   <input
                     value={nsu}
                     onChange={e => setNsu(e.target.value.replace(/\s/g, ''))}
                     placeholder="Ex: 123456789"
                     inputMode="numeric"
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-mono focus:border-indigo-500 focus:outline-none"
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-mono focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Liberação <span className="text-rose-500">*</span></label>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                    Número de Liberação <span className="text-rose-500">*</span>
+                  </label>
                   <input
                     value={authorization}
                     onChange={e => setAuthorization(e.target.value.replace(/\s/g, ''))}
                     placeholder="Ex: 987654"
                     inputMode="numeric"
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-mono focus:border-indigo-500 focus:outline-none"
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-mono focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                   />
                 </div>
               </div>
+
+              <Link
+                href="/dashboard/financial?tab=cadastros&sub=cartoes"
+                target="_blank"
+                className="inline-flex items-center gap-1 text-[11px] text-indigo-600 hover:underline"
+              >
+                <ExternalLink className="h-3 w-3" />
+                Gerenciar cartões cadastrados
+              </Link>
             </>
           )}
 
           {error && (
-            <div className="rounded-xl bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-600">{error}</div>
+            <div className="flex items-start gap-2 rounded-xl bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+              <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+              <span>{error}</span>
+            </div>
           )}
         </div>
 
@@ -356,16 +308,14 @@ export default function CardSelectionModal({ paymentMethod, amount, onCancel, on
           >
             Voltar
           </button>
-          {!showRegister && (
-            <button
-              type="button"
-              onClick={handleConfirm}
-              disabled={!selectedCard}
-              className="flex-1 rounded-xl bg-indigo-600 hover:bg-indigo-700 py-2.5 text-sm font-semibold text-white disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              <Check className="h-4 w-4" /> Confirmar
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={handleConfirm}
+            disabled={cards.length === 0 || !selectedCard}
+            className="flex-[2] rounded-xl bg-indigo-600 hover:bg-indigo-700 py-2.5 text-sm font-semibold text-white disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            <Check className="h-4 w-4" /> Confirmar Cartão
+          </button>
         </div>
       </div>
     </div>

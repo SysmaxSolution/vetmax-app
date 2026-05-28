@@ -165,6 +165,7 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
         card_brand:         s.card_brand,
         card_nsu:           s.card_nsu,
         card_authorization: s.card_authorization,
+        transaction_date:   s.transaction_date,
       })),
       { discount: insuranceSplit?.clinic_discount }
     )

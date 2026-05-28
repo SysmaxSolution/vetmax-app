@@ -815,6 +815,7 @@ export interface PaymentSplitInput {
   card_brand?:         string | null
   card_nsu?:           string | null
   card_authorization?: string | null
+  transaction_date?:   string | null
 }
 
 export async function processSplitPayment(
@@ -879,6 +880,7 @@ export async function processSplitPayment(
       card_brand:         s.card_brand ?? null,
       card_nsu:           s.card_nsu ?? null,
       card_authorization: s.card_authorization ?? null,
+      transaction_date:   s.transaction_date ?? null,
     })),
     p_effective_date: options?.effective_date ?? null,
   })

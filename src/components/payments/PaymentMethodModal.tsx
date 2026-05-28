@@ -18,6 +18,7 @@ export interface PaymentSplit {
   card_brand:          string | null
   card_nsu:            string | null
   card_authorization:  string | null
+  transaction_date:    string | null
   label:               string
 }
 
@@ -71,6 +72,8 @@ export default function PaymentMethodModal({ totalDue, subject, disableSplit, on
     }
     setPendingMethod(method)
     setPendingAmount(remaining.toFixed(2).replace('.', ','))
+    // Para cartão crédito/débito, o próprio CardSelectionModal coleta valor,
+    // NSU, liberação, data e parcelas — abrimos direto.
     if (method === 'credit' || method === 'debit') {
       setShowCardModal(method)
     }
@@ -97,6 +100,7 @@ export default function PaymentMethodModal({ totalDue, subject, disableSplit, on
       card_brand:         null,
       card_nsu:           null,
       card_authorization: null,
+      transaction_date:   null,
       label,
     }
     setSplits(prev => [...prev, split])
@@ -106,26 +110,26 @@ export default function PaymentMethodModal({ totalDue, subject, disableSplit, on
   }
 
   function handleCardConfirm(result: CardPaymentResult) {
-    if (!pendingMethod || !showCardModal) return
-    const parsed = parseFloat(pendingAmount.replace(',', '.'))
-    const amountToCharge = Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, remaining) : remaining
+    if (!showCardModal) return
+    const amountToCharge = Math.min(result.amount, remaining)
     if (amountToCharge <= 0) {
       setShowCardModal(null)
       setPendingMethod(null)
       setError('Sem saldo restante.')
       return
     }
-    const label = `${METHOD_OPTIONS.find(o => o.key === showCardModal)?.label} · ${result.card?.label ?? result.card_acquirer}${result.installments > 1 ? ` · ${result.installments}x` : ''}`
+    const label = `${METHOD_OPTIONS.find(o => o.key === showCardModal)?.label} · ${result.card.label}${result.installments > 1 ? ` · ${result.installments}x` : ''}`
     const split: PaymentSplit = {
       id:                 crypto.randomUUID(),
       amount:             amountToCharge,
       payment_method:     showCardModal,
-      payment_card_id:    result.card?.id ?? null,
+      payment_card_id:    result.card.id,
       installments:       result.installments,
       card_acquirer:      result.card_acquirer,
       card_brand:         result.card_brand,
       card_nsu:           result.card_nsu,
       card_authorization: result.card_authorization,
+      transaction_date:   result.transaction_date,
       label,
     }
     setSplits(prev => [...prev, split])
@@ -310,7 +314,8 @@ export default function PaymentMethodModal({ totalDue, subject, disableSplit, on
       {showCardModal && (
         <CardSelectionModal
           paymentMethod={showCardModal}
-          amount={Math.min(parseFloat(pendingAmount.replace(',', '.')) || remaining, remaining)}
+          maxAmount={remaining}
+          suggestedAmount={Math.min(parseFloat(pendingAmount.replace(',', '.')) || remaining, remaining)}
           onCancel={() => { setShowCardModal(null); setPendingMethod(null) }}
           onConfirm={handleCardConfirm}
         />
