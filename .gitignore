@@ -7,6 +7,21 @@ node_modules/
 *.env
 dist/
 
+# Apps / clones aninhados — não fazem parte deste repositório
+/vetmax-app/
+/healthmax-app/
+/site/
+/Obsidian/
+
+# Worktrees de agentes Claude
+/.claude/worktrees/
+
+# Logs e artefatos locais
+*.log
+
+# Arquivo-lixo de redirecionamento de shell mal-formado
+{await
+
 # Claude Code — nunca commitar permissões locais (podem conter tokens inline)
 .claude/settings.local.json
 .vercel
