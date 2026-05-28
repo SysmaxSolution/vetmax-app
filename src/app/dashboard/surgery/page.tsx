@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation'
 import { Syringe } from 'lucide-react'
 import { isCentroCirurgico } from '@/lib/actions/clinic-settings'
-import { requireModuleAccess } from '@/lib/server/require-module'
 
 export const metadata = { title: 'Centro Cirúrgico | SysVetMax' }
 
@@ -9,14 +8,12 @@ export const metadata = { title: 'Centro Cirúrgico | SysVetMax' }
 // Scaffold da Fase 0 — o Kanban Cirúrgico (Preparo → Sala → RPA) e a
 // SurgeryFichaModal (acordeão) chegam na Fase 3.
 export default async function SurgeryPage() {
-  // Gate 1 — feature flag (módulo só "existe" quando a clínica o ativou).
+  // Gate único — feature flag flow_config.centro_cirurgico, ativada em
+  // Gestão → Configurações → Acesso → Módulos do Sistema. O módulo é dirigido
+  // pela flag (não por active_modules), então não usamos requireModuleAccess.
   // Flag off ⇒ rota não responde (zero mudança de comportamento).
   const enabled = await isCentroCirurgico()
   if (!enabled) redirect('/dashboard')
-
-  // Gate 2 — RBAC padrão por usuário (user_module_access + active_modules).
-  // Admin/SysMax passam direto; demais exigem grant explícito.
-  await requireModuleAccess('surgery')
 
   return (
     <main className="max-w-[1400px] mx-auto px-4 py-6 sm:px-6">
