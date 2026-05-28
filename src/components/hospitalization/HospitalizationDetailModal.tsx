@@ -7,7 +7,7 @@ import {
   User, ClipboardList, Mic, MicOff, Plus, Trash2, Clock,
   Paperclip, FileText, Image as ImageIcon, File, Upload, ExternalLink,
   Brain, AlertTriangle, CheckCircle, Siren, MessageSquare, Volume2, VolumeX,
-  ChevronDown, ChevronUp, MessageCircle, Settings,
+  ChevronDown, ChevronUp, MessageCircle, Settings, HeartPulse, Droplets,
 } from 'lucide-react'
 import {
   addClinicalEvolution,
@@ -33,7 +33,11 @@ import { usePetCoverageSemaforo } from '@/hooks/usePetCoverageSemaforo'
 import CoverageChip from '@/components/vet/CoverageChip'
 import { useNativeKeepAwake } from '@/hooks/useNativeKeepAwake'
 import { getClinicVoiceTriggers, updateClinicVoiceTriggers } from '@/lib/actions/clinic-settings'
-import { useAiTranscriptionMode } from '@/components/providers/ClinicConfigProvider'
+import { useAiTranscriptionMode, useInternacaoCompleta } from '@/components/providers/ClinicConfigProvider'
+import VitalsTab from './VitalsTab'
+import FluidTherapyTab from './FluidTherapyTab'
+import MedicationApplicationModal from './MedicationApplicationModal'
+import { listHospitalizationPrescriptions, type HospPrescription } from '@/lib/actions/hospitalization-prescriptions'
 
 interface Props {
   card:             HospitalizationCard
@@ -44,6 +48,16 @@ interface Props {
 
 export default function HospitalizationDetailModal({ card, onClose, prefilledStatus, onSaved }: Props) {
   const aiMode = useAiTranscriptionMode()
+  const internacaoCompleta = useInternacaoCompleta()
+  const admissionWeight = (card as { weight_at_admission?: number | null }).weight_at_admission ?? null
+  // Aprazamento de prescrições direto do card (popula o Mapa de Execução).
+  const [showMedModal, setShowMedModal] = useState(false)
+  const [prescriptions, setPrescriptions] = useState<HospPrescription[]>([])
+  const reloadPrescriptions = useCallback(async () => {
+    const res = await listHospitalizationPrescriptions(card.id)
+    if (Array.isArray(res)) setPrescriptions(res)
+  }, [card.id])
+  useEffect(() => { if (internacaoCompleta) void reloadPrescriptions() }, [internacaoCompleta, reloadPrescriptions])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [records, setRecords] = useState<HospitalizationRecord[]>([])
   const [loadingRecords, setLoadingRecords] = useState(true)
@@ -89,8 +103,9 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
   // Toast de confirmação de save
   const [saveToast, setSaveToast] = useState<string | null>(null)
 
-  // Aba ativa na coluna direita
-  const [activeRightTab, setActiveRightTab] = useState<'timeline' | 'documents'>('timeline')
+  // Aba ativa na coluna direita. Sinais Vitais e Fluidoterapia só sob a flag
+  // Internação Completa.
+  const [activeRightTab, setActiveRightTab] = useState<'timeline' | 'documents' | 'vitals' | 'fluids'>('timeline')
 
   // Estado da IA Clínica
   const [aiSuggestion, setAiSuggestion] = useState<ClinicalSummaryResult | null>(null)
@@ -574,6 +589,18 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {internacaoCompleta && (
+              <button
+                type="button"
+                onClick={() => setShowMedModal(true)}
+                data-testid="open-medications-btn"
+                className="flex items-center gap-1.5 bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold px-3 py-1.5 rounded-full transition-colors shadow-sm"
+                title="Medicações e aprazamento"
+              >
+                <Pill className="h-3.5 w-3.5" />
+                Medicações
+              </button>
+            )}
             {card.status === 'ready_for_discharge' && card.tutor?.phone && (
               <button
                 type="button"
@@ -886,6 +913,34 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
                 )}
               </button>
 
+              {/* Abas clínicas avançadas (Internação Completa) */}
+              {internacaoCompleta && (
+                <>
+                  <button
+                    onClick={() => setActiveRightTab('vitals')}
+                    data-testid="tab-vitals"
+                    className={`flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition-all ${
+                      activeRightTab === 'vitals'
+                        ? 'border-rose-600 text-rose-700'
+                        : 'border-transparent text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    <HeartPulse className="h-3.5 w-3.5" /> Sinais Vitais
+                  </button>
+                  <button
+                    onClick={() => setActiveRightTab('fluids')}
+                    data-testid="tab-fluids"
+                    className={`flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition-all ${
+                      activeRightTab === 'fluids'
+                        ? 'border-cyan-600 text-cyan-700'
+                        : 'border-transparent text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    <Droplets className="h-3.5 w-3.5" /> Fluidoterapia
+                  </button>
+                </>
+              )}
+
               {/* Botão de Voz: Perguntar ao Prontuário */}
               <button
                 type="button"
@@ -1110,6 +1165,16 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
                 )}
               </div>
             )}
+
+            {/* ─── Aba: Sinais Vitais (Internação Completa) ─── */}
+            {activeRightTab === 'vitals' && internacaoCompleta && (
+              <VitalsTab hospitalizationId={card.id} admissionWeight={admissionWeight} />
+            )}
+
+            {/* ─── Aba: Fluidoterapia + Balanço Hídrico (Internação Completa) ─── */}
+            {activeRightTab === 'fluids' && internacaoCompleta && (
+              <FluidTherapyTab hospitalizationId={card.id} admissionWeight={admissionWeight} />
+            )}
           </div>
         </div>
       </div>
@@ -1120,6 +1185,17 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
           data={prescriptionData}
           card={card}
           onClose={() => setPrescriptionData(null)}
+        />
+      )}
+
+      {/* ─── Medicações / Aprazamento (popula o Mapa de Execução) ─────────── */}
+      {showMedModal && (
+        <MedicationApplicationModal
+          hospitalizationId={card.id}
+          patientName={card.patient.name}
+          prescriptions={prescriptions}
+          onClose={() => setShowMedModal(false)}
+          onUpdate={reloadPrescriptions}
         />
       )}
     </div>
