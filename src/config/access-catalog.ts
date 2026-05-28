@@ -88,6 +88,16 @@ export const ACCESS_CATALOG: AccessModule[] = [
     ],
   },
   {
+    key:   'surgery',
+    label: 'Centro Cirúrgico',
+    description: 'Bloco cirúrgico: Kanban Preparo→Sala→RPA, ficha cirúrgica e kits.',
+    tabs: [
+      { key: 'board',     label: 'Kanban Cirúrgico',  actions: ['view', 'edit'] },
+      { key: 'ficha',     label: 'Ficha Cirúrgica',   actions: ['view', 'create', 'edit'] },
+      { key: 'discharge', label: 'Encaminhar Pós-Op', actions: ['view', 'approve'] },
+    ],
+  },
+  {
     key:   'pharmacy',
     label: 'Farmácia',
     tabs: [

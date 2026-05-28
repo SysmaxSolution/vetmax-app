@@ -138,6 +138,7 @@ export default function SettingsWorkspace({
               isSysmax={isSysmax}
               onToast={onToast}
             />
+            <HospitalSurgeryFlags initialConfig={initialClinicConfig} onToast={onToast} />
           </div>
         )}
 
@@ -350,6 +351,86 @@ function AccountingSettings({ initialConfig, onToast }: {
           ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando...</>
           : <><Save className="h-4 w-4" /> Salvar Configurações Contábeis</>}
       </button>
+    </div>
+  )
+}
+
+// ─── HospitalSurgeryFlags — flags da Sprint Internação/Cirurgia ───────────────
+// Persiste flow_config.internacao_completa e flow_config.centro_cirurgico.
+// Off (default) = comportamento atual intacto. Segue o padrão de AccountingSettings.
+
+function HospitalSurgeryFlags({ initialConfig, onToast }: {
+  initialConfig: ClinicConfig | null
+  onToast: (type: 'success' | 'error', msg: string) => void
+}) {
+  const flow = initialConfig?.flow_config as (FlowConfig & { internacao_completa?: boolean; centro_cirurgico?: boolean }) | undefined
+  const [internacaoCompleta, setInternacaoCompleta] = useState<boolean>(flow?.internacao_completa ?? false)
+  const [centroCirurgico,    setCentroCirurgico]    = useState<boolean>(flow?.centro_cirurgico ?? false)
+  const [saving, setSaving] = useState(false)
+
+  async function handleSave() {
+    setSaving(true)
+    const base: FlowConfig = initialConfig?.flow_config ?? { vet_merged_modules: [] }
+    const res = await updateClinicConfig({
+      flow_config: { ...base, internacao_completa: internacaoCompleta, centro_cirurgico: centroCirurgico } as FlowConfig,
+    })
+    setSaving(false)
+    if ('error' in res) { onToast('error', res.error); return }
+    onToast('success', 'Configurações de Internação/Cirurgia salvas!')
+  }
+
+  const ROWS: { value: boolean; set: (v: boolean) => void; title: string; desc: string }[] = [
+    {
+      value: internacaoCompleta, set: setInternacaoCompleta,
+      title: 'Internação Completa',
+      desc:  'Versão avançada da Internação: alertas ativos de medicação, sinais vitais, mapa de execução, fluidoterapia e conta da internação. Desligado mantém o fluxo atual.',
+    },
+    {
+      value: centroCirurgico, set: setCentroCirurgico,
+      title: 'Centro Cirúrgico',
+      desc:  'Habilita o módulo Centro Cirúrgico no menu lateral (Kanban Preparo→Sala→RPA, ficha cirúrgica, kits cirúrgicos).',
+    },
+  ]
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div className="border-b border-slate-100 px-6 py-4 flex items-center gap-3">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-pink-50">
+          <Shield className="h-4 w-4 text-pink-600" />
+        </div>
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900">Internação Completa e Centro Cirúrgico</h3>
+          <p className="text-xs text-slate-500">Recursos hospitalares avançados (ativação independente)</p>
+        </div>
+      </div>
+      <div className="divide-y divide-slate-50">
+        {ROWS.map(row => (
+          <div key={row.title} className={`flex items-center gap-4 px-6 py-4 transition-colors ${row.value ? 'bg-white' : 'bg-slate-50/50'}`}>
+            <div className="flex-1 min-w-0">
+              <p className={`text-sm font-semibold ${row.value ? 'text-slate-900' : 'text-slate-500'}`}>{row.title}</p>
+              <p className="text-xs text-slate-500">{row.desc}</p>
+            </div>
+            <button
+              onClick={() => row.set(!row.value)}
+              className={`flex-shrink-0 transition-colors ${row.value ? 'text-pink-600' : 'text-slate-300'}`}
+              title={row.value ? `Desativar ${row.title}` : `Ativar ${row.title}`}
+            >
+              {row.value ? <ToggleRight className="h-7 w-7" /> : <ToggleLeft className="h-7 w-7" />}
+            </button>
+          </div>
+        ))}
+      </div>
+      <div className="px-6 pb-5 pt-3">
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex items-center gap-2 px-5 py-2.5 bg-pink-600 text-white text-sm font-semibold rounded-xl hover:bg-pink-700 transition-colors disabled:opacity-50"
+        >
+          {saving
+            ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando...</>
+            : <><Save className="h-4 w-4" /> Salvar Recursos Hospitalares</>}
+        </button>
+      </div>
     </div>
   )
 }

@@ -6,7 +6,7 @@ import {
   LogOut, Home, Stethoscope, TestTubes, Users, BarChart3, PawPrint,
   BedDouble, Package, Scissors, Banknote, FolderKanban, MessageCircle,
   ShoppingCart, Activity, ClipboardList, DollarSign, FileBarChart2,
-  Menu, X, Lock,
+  Menu, X, Lock, Syringe,
 } from 'lucide-react'
 import type { UserRole } from '@/types'
 import { useState, useEffect } from 'react'
@@ -52,6 +52,7 @@ const ALL_TABS: Tab[] = [
   { label: 'Consultório',  href: '/dashboard/vet',             icon: Stethoscope,   roles: ['vet','admin'],                            moduleKey: 'consultation'    },
   { label: 'Exames',       href: '/dashboard/exams',           icon: TestTubes,     roles: ['assistant','vet','admin'],                moduleKey: 'exams'           },
   { label: 'Internação',   href: '/dashboard/hospitalization', icon: BedDouble,     roles: ['vet','admin','assistant'],                moduleKey: 'hospitalization' },
+  { label: 'Centro Cirúrgico', href: '/dashboard/surgery',     icon: Syringe,       roles: ['vet','admin','assistant'],                moduleKey: 'surgery'         },
   { label: 'Banho e Tosa', href: '/dashboard/grooming',        icon: Scissors,      roles: ['receptionist','admin','assistant'],       moduleKey: 'grooming'        },
   { label: 'Cadastros',    href: '/dashboard/registry',        icon: FolderKanban,  roles: ['admin','accountant' as UserRole,'receptionist'], moduleKey: 'registry' },
   { label: 'Compras',      href: '/dashboard/purchases',       icon: ClipboardList, roles: ['admin'],                                  moduleKey: 'purchases'       },
@@ -78,6 +79,8 @@ interface DashboardHeaderProps {
   isSysmax?:             boolean
   clinicStatus?:         string
   isSurgeryMode?:        boolean
+  /** flow_config.centro_cirurgico — exibe o item "Centro Cirúrgico" no menu. */
+  centroCirurgico?:      boolean
   // PLG
   planName?:      string
   allowedRoutes?: string[]
@@ -98,6 +101,7 @@ export default function DashboardHeader({
   isSysmax = false,
   clinicStatus,
   isSurgeryMode = false,
+  centroCirurgico = false,
   planName = 'free',
   allowedRoutes = [],
 }: DashboardHeaderProps) {
@@ -146,6 +150,9 @@ export default function DashboardHeader({
     // Gestão é exclusiva de admin (controle de plataforma — não faz sentido
     // delegar via user_module_access). Mantemos apenas esse caso especial.
     if (tab.href === '/dashboard/management' && userRole !== 'admin') return false
+    // Centro Cirúrgico é gated pela feature flag flow_config.centro_cirurgico,
+    // não por active_modules — só aparece quando a clínica o ativou.
+    if (tab.href === '/dashboard/surgery') return centroCirurgico
     if (tab.moduleKey && activeModules) {
       // Módulos "promovidos" passam pelo filtro mesmo sem estarem em
       // activeModules — aparecerão lockeados e abrirão o UpgradeModal

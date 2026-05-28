@@ -110,6 +110,11 @@ export const PAYWALL_COPY: Record<string, PaywallCopy> = {
     description: 'Kanban de internados com prescrição digital, evolução clínica, medições de sinais vitais e protocolo de alta médica.',
     feature:     'Internação',
   },
+  '/dashboard/surgery': {
+    title:       'Centro Cirúrgico',
+    description: 'Bloco cirúrgico dedicado: Kanban Preparo→Sala→RPA, ficha cirúrgica single-page, ficha anestésica, relatório por voz e kits com baixa automática de estoque.',
+    feature:     'Centro Cirúrgico',
+  },
   '/dashboard/purchases': {
     title:       'Módulo de Compras',
     description: 'Importe NF-e de fornecedores automaticamente, gerencie pedidos e controle seu CMV com precisão.',

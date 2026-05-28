@@ -24,6 +24,9 @@ export type HospitalizationCard = {
   notes:           string | null
   created_at:      string
   discharged_at:   string | null
+  isolation_required: boolean
+  box_id:          string | null
+  estimated_discharge: string | null
   patient: {
     id:            string
     name:          string
@@ -74,6 +77,7 @@ export async function getHospitalizationsBoard(): Promise<HospitalizationBoard |
     .from('hospitalizations')
     .select(`
       id, clinic_id, patient_id, consultation_id, status, reason, notes, created_at, discharged_at,
+      isolation_required, box_id, estimated_discharge,
       patients ( id, name, species, breed, birth_date, gender, neutered, coat_color, photo_url, behavior_tags, tutors ( name, phone ) )
     `)
     .eq('clinic_id', clinicId)
@@ -102,6 +106,9 @@ export async function getHospitalizationsBoard(): Promise<HospitalizationBoard |
       notes:           h.notes ?? null,
       created_at:      h.created_at,
       discharged_at:   h.discharged_at ?? null,
+      isolation_required: (h as any).isolation_required ?? false,
+      box_id:          (h as any).box_id ?? null,
+      estimated_discharge: (h as any).estimated_discharge ?? null,
       patient: {
         id:            p?.id ?? '',
         name:          p?.name ?? '—',

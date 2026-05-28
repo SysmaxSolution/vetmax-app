@@ -13,6 +13,11 @@ export type FlowConfig = {
   mentor_idle_seconds?:  number
   verify_cpf_cnpj?:      boolean
   verify_cep?:           boolean
+  /** Liga a versão avançada do módulo de Internação (alertas ativos, sinais
+   *  vitais, mapa de execução, fluidoterapia, conta). Off = fluxo atual. */
+  internacao_completa?:  boolean
+  /** Liga o módulo Centro Cirúrgico (/dashboard/surgery) no menu lateral. */
+  centro_cirurgico?:     boolean
 }
 
 export type BusinessHourEntry = { open: string; close: string } | null
@@ -138,6 +143,42 @@ export async function isModuleActive(moduleKey: string): Promise<boolean> {
   const modules = clinic?.active_modules as string[] | null
   if (modules === null || modules === undefined) return true
   return modules.includes(moduleKey)
+}
+
+// ─── Feature flags da Sprint Internação/Cirurgia (flow_config) ───────────────
+
+/** Lê uma flag booleana de clinics.flow_config para a clínica do usuário logado. */
+async function getFlowFlag(flag: keyof FlowConfig): Promise<boolean> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return false
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('clinic_id')
+    .eq('id', user.id)
+    .single()
+  if (!profile?.clinic_id) return false
+
+  const admin = createAdminClient()
+  const { data: clinic } = await admin
+    .from('clinics')
+    .select('flow_config')
+    .eq('id', profile.clinic_id)
+    .single()
+
+  const flow = (clinic?.flow_config ?? {}) as FlowConfig
+  return flow[flag] === true
+}
+
+/** TRUE quando a clínica ativou a versão avançada da Internação. */
+export async function isInternacaoCompleta(): Promise<boolean> {
+  return getFlowFlag('internacao_completa')
+}
+
+/** TRUE quando a clínica ativou o módulo Centro Cirúrgico. */
+export async function isCentroCirurgico(): Promise<boolean> {
+  return getFlowFlag('centro_cirurgico')
 }
 
 // ─── Upload Logo ──────────────────────────────────────────────────────────────

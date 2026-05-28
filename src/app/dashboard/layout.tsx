@@ -52,7 +52,7 @@ export default async function DashboardLayout({
   const [{ data: clinicData }, whatsAppRow, clinicsResult, petCountResult, subResult] = await Promise.all([
     admin
       .from('clinics')
-      .select('logo_url, active_modules, status, ai_transcription_mode, business_type, ui_preferences')
+      .select('logo_url, active_modules, status, ai_transcription_mode, business_type, ui_preferences, flow_config')
       .eq('id', profile.clinic_id)
       .single(),
     supabase
@@ -99,6 +99,11 @@ export default async function DashboardLayout({
   const planName       = ((subResult as any)?.data?.plan_name ?? 'free') as PlanName
   const businessType   = ((clinicData as any)?.business_type ?? 'vet_clinic') as BusinessType
   const allowedRoutes  = FREE_ROUTES[businessType] ?? FREE_ROUTES.vet_clinic
+
+  // Feature flags da Sprint Internação/Cirurgia (clinics.flow_config).
+  const flowConfig         = ((clinicData as any)?.flow_config ?? {}) as { internacao_completa?: boolean; centro_cirurgico?: boolean }
+  const internacaoCompleta = flowConfig.internacao_completa === true
+  const centroCirurgico    = flowConfig.centro_cirurgico === true
 
   // Bloqueio de clínica em análise (SysMax nunca é bloqueado)
   if (clinicStatus === 'pending' && !isSysmax) {
@@ -201,9 +206,14 @@ export default async function DashboardLayout({
         isSurgeryMode={!!(profile as any).is_in_surgery}
         planName={planName}
         allowedRoutes={allowedRoutes}
+        centroCirurgico={centroCirurgico}
       />
       <ThemeProvider initialPreferences={(clinicData as any)?.ui_preferences ?? null}>
-        <ClinicConfigProvider aiTranscriptionMode={(clinicData as any)?.ai_transcription_mode ?? 'ai_assisted'}>
+        <ClinicConfigProvider
+          aiTranscriptionMode={(clinicData as any)?.ai_transcription_mode ?? 'ai_assisted'}
+          internacaoCompleta={internacaoCompleta}
+          centroCirurgico={centroCirurgico}
+        >
           <ModulesProvider modules={activeModules}>
             <WhatsAppGateProvider enabled={whatsAppEnabled}>
               <UpgradeProvider planName={planName} activeModules={activeModules}>

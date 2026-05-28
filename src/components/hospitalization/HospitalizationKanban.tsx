@@ -1,9 +1,12 @@
 ﻿'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { Clock, BedDouble, LogOut, Loader2, Sparkles, X, Stethoscope, FileText, Plus } from 'lucide-react'
+import { Clock, BedDouble, LogOut, Loader2, Sparkles, X, Stethoscope, FileText, Plus, Bell, BellRing, Biohazard, LayoutGrid, CalendarClock } from 'lucide-react'
 import { useRealtimeSync } from '@/hooks/useRealtimeSync'
+import { useInternacaoCompleta } from '@/components/providers/ClinicConfigProvider'
+import { useMedicationAlarm } from '@/hooks/useMedicationAlarm'
+import ExecutionMapView from './ExecutionMapView'
 import {
   updateHospitalizationStatus,
   addHospitalizationLog,
@@ -108,6 +111,8 @@ const EMPTY_PRESCRIPTIONS: HospPrescription[] = []
 
 export default function HospitalizationKanban({ initialBoard, clinicId, isFreePlan = false }: Props) {
   const router = useRouter()
+  const internacaoCompleta = useInternacaoCompleta()
+  const [view, setView] = useState<'kanban' | 'execution'>('kanban')
   const [board, setBoard]                   = useState<HospitalizationBoard>(initialBoard)
   const boardRef = useRef<HospitalizationBoard>(initialBoard)
   const [showAdmitModal, setShowAdmitModal] = useState(false)
@@ -155,6 +160,20 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
   }, [isFreePlan])
 
   useEffect(() => { void refreshPrescriptions() }, [refreshPrescriptions])
+
+  // Alertas Ativos de Enfermagem — som + push quando uma dose vence (só sob
+  // a flag Internação Completa). Roda no nível da ala (todas as prescrições).
+  const allPrescriptions = useMemo(
+    () => Array.from(prescriptionsByHosp.values()).flat(),
+    [prescriptionsByHosp],
+  )
+  const alarm = useMedicationAlarm(allPrescriptions, internacaoCompleta)
+
+  // Todos os cards ativos (para o Mapa de Execução).
+  const allCards = useMemo(
+    () => [...board.observation, ...board.ward, ...board.icu, ...board.ready_for_discharge],
+    [board],
+  )
 
   useRealtimeSync({ table: 'hospitalizations', clinicId })
   useRealtimeSync({ table: 'hospitalization_dose_administrations', clinicId, onEvent: refreshPrescriptions })
@@ -465,6 +484,62 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
         </div>
       )}
 
+      {/* Barra de controle (Internação Completa): alternância de visão + sino de alertas */}
+      {internacaoCompleta && (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+            <button
+              type="button"
+              onClick={() => setView('kanban')}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                view === 'kanban' ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" /> Mapa de Internação
+            </button>
+            <button
+              type="button"
+              onClick={() => setView('execution')}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                view === 'execution' ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <CalendarClock className="h-3.5 w-3.5" /> Mapa de Execução
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => { void alarm.enableAlarms() }}
+            title={alarm.permission === 'granted' && alarm.soundReady
+              ? 'Alertas de medicação ativos (som + notificação)'
+              : 'Ativar alertas sonoros e notificações de medicação'}
+            className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold border transition-colors ${
+              alarm.hasOverdue
+                ? 'bg-rose-600 border-rose-600 text-white animate-pulse'
+                : alarm.permission === 'granted' && alarm.soundReady
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            {alarm.permission === 'granted' && alarm.soundReady
+              ? <BellRing className="h-3.5 w-3.5" />
+              : <Bell className="h-3.5 w-3.5" />}
+            {alarm.hasOverdue
+              ? `${alarm.overdueCount} dose${alarm.overdueCount !== 1 ? 's' : ''} atrasada${alarm.overdueCount !== 1 ? 's' : ''}`
+              : alarm.permission === 'granted' && alarm.soundReady
+                ? 'Alertas ativos'
+                : 'Ativar alertas'}
+          </button>
+        </div>
+      )}
+
+      {view === 'execution' && internacaoCompleta && (
+        <ExecutionMapView cards={allCards} prescriptionsByHosp={prescriptionsByHosp} />
+      )}
+
+      {view === 'kanban' && (
+      <>
       <section
         ref={boardScrollRef}
         data-mentor-step="hospitalization-list"
@@ -537,6 +612,8 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
           💡 Arraste os cards para mover • Clique no card para ver a evolução • Coluna Alta abre o fluxo de alta inteligente
         </p>
       </div>
+      </>
+      )}
 
       {/* Modal de Evolução Clínica (click no card) */}
       {selectedCard && !pendingMove && (
@@ -678,8 +755,17 @@ function KanbanCard({ card, prescriptions, onDragStart, onDragEnd, onDischarge, 
       onDragStart={(e) => onDragStart(e, card)}
       onDragEnd={onDragEnd}
       onClick={onOpen}
-      className={`group relative p-4 rounded-2xl border bg-white shadow-sm hover:shadow-md hover:border-violet-300 transition-all cursor-pointer mb-3 active:scale-95 ${pulseClass}`}
+      className={`group relative p-4 rounded-2xl border bg-white shadow-sm hover:shadow-md transition-all cursor-pointer mb-3 active:scale-95 ${pulseClass} ${
+        card.isolation_required
+          ? 'border-rose-400 ring-2 ring-rose-300 hover:border-rose-500'
+          : 'hover:border-violet-300'
+      }`}
     >
+      {card.isolation_required && (
+        <div className="mb-2 flex items-center gap-1 rounded-lg bg-rose-100 border border-rose-300 px-2 py-1 text-[10px] font-bold uppercase text-rose-700">
+          <Biohazard className="h-3 w-3" /> Isolamento — EPI obrigatório
+        </div>
+      )}
       <div className="flex items-start gap-3">
         <PetAvatar name={card.patient.name} species={card.patient.species} photoUrl={card.patient.photo_url} size="sm" className="rounded-xl border border-slate-200" />
 

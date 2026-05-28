@@ -205,7 +205,7 @@ export async function applyHospitalizationDose(
   // confere clinic_id (RLS já protege, mas defesa em profundidade).
   const { data: presc } = await admin
     .from('hospitalization_prescriptions')
-    .select('hospitalization_id, status, clinic_id, medication_name, stock_item_id, quantity_per_dose')
+    .select('hospitalization_id, status, clinic_id, medication_name, dose, route, stock_item_id, quantity_per_dose')
     .eq('id', prescriptionId)
     .eq('clinic_id', ctx.clinicId)
     .single()
@@ -248,6 +248,43 @@ export async function applyHospitalizationDose(
       notes:           opts.notes?.trim() || null,
     })
     stock = consumption
+  }
+
+  // ── Timeline de Plantão à prova de erros (Internação Completa) ───────────
+  // Quando a flag flow_config.internacao_completa está ativa, cada dose
+  // confirmada injeta um log IMUTÁVEL na Linha do Tempo (hospitalization_records)
+  // — remédio, dose, via, hora e usuário logado. A UI não oferece editar/excluir
+  // esses registros. Flag off → comportamento atual (só dose_administrations).
+  const { data: clinicRow } = await admin
+    .from('clinics')
+    .select('flow_config')
+    .eq('id', ctx.clinicId)
+    .single()
+  const internacaoCompleta = (clinicRow?.flow_config as { internacao_completa?: boolean } | null)?.internacao_completa === true
+
+  if (internacaoCompleta) {
+    const { data: profile } = await admin
+      .from('profiles')
+      .select('full_name')
+      .eq('id', ctx.userId)
+      .single()
+    const userName  = profile?.full_name ?? 'Enfermagem'
+    const appliedAt = opts.applied_at ?? new Date().toISOString()
+    const hora      = new Date(appliedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    const medName   = (presc.medication_name as string) ?? 'Medicação'
+    const doseTxt   = (presc.dose  as string | null) ?? ''
+    const routeTxt  = (presc.route as string | null) ?? ''
+    const detalhe   = [doseTxt, routeTxt].filter(Boolean).join(' • ')
+
+    await admin.from('hospitalization_records').insert({
+      hospitalization_id: presc.hospitalization_id as string,
+      clinic_id:          ctx.clinicId,
+      user_id:            ctx.userId,
+      user_name:          userName,
+      notes:              `💉 Dose administrada às ${hora} por ${userName}.`,
+      medications:        [{ name: medName, dose: doseTxt, route: routeTxt, notes: detalhe }],
+      improvement_level:  'estavel',
+    })
   }
 
   revalidatePath('/dashboard/hospitalization')
