@@ -18,7 +18,7 @@ import {
 import type {
   CanvasElement, TextElement, ImageElement, LineElement,
   DynamicTagElement, CompositeTagElement,
-  DynamicImageElement, RepeaterElement, BrushStrokeElement,
+  DynamicImageElement, RepeaterElement, RepeaterItemLine, BrushStrokeElement,
   FillableFieldElement, FillableInputType, ElementPin,
   TypographyStyle,
 } from '@/lib/canva/elements'
@@ -769,6 +769,14 @@ function RepeaterSection({ element, onPatch }: { element: RepeaterElement; onPat
         )}
       </label>
 
+      {/* Layout estruturado (multi-linha + leader dots) — quando setado,
+          tem precedência sobre o "Template da linha" acima. */}
+      <ItemTemplateLinesEditor
+        lines={element.itemTemplateLines}
+        fieldOptions={fieldOptions}
+        onChange={lines => onPatch({ itemTemplateLines: lines } as Partial<CanvasElement>)}
+      />
+
       <div className="grid grid-cols-2 gap-2 mt-2">
         <label className="flex items-center gap-1.5 text-[11px] text-slate-700">
           <input
@@ -784,6 +792,17 @@ function RepeaterSection({ element, onPatch }: { element: RepeaterElement; onPat
 
       <NumField label="Máx. linhas (resto vai p/ próxima página)" value={element.maxLines ?? 0} step={1}
         onChange={v => onPatch({ maxLines: v || undefined } as Partial<CanvasElement>)} />
+
+      <NumField
+        label="Máx. itens por página (auto-paginação)"
+        value={element.maxItemsPerPage ?? 0}
+        step={1}
+        onChange={v => onPatch({ maxItemsPerPage: v || undefined } as Partial<CanvasElement>)}
+      />
+      <span className="block text-[10px] text-slate-400 -mt-1">
+        Quando passar desse total, o sistema gera páginas extras automaticamente.
+        Elementos com pin <strong>todas as páginas</strong> repetem em cada uma.
+      </span>
 
       {/* Agrupamento */}
       <div className="mt-3 border-t border-slate-200 pt-2 space-y-2">
@@ -1096,6 +1115,198 @@ function Section({ title, children, defaultOpen = true }: { title: string; child
       </summary>
       <div className="px-3 pb-3 pt-1">{children}</div>
     </details>
+  )
+}
+
+function ItemTemplateLinesEditor({
+  lines, fieldOptions, onChange,
+}: {
+  lines: RepeaterItemLine[] | undefined
+  fieldOptions: Array<{ field: string; label: string; groupable?: boolean }>
+  onChange: (lines: RepeaterItemLine[] | undefined) => void
+}) {
+  const active = !!lines && lines.length > 0
+  const list = lines ?? []
+
+  function setAt(idx: number, patch: Partial<RepeaterItemLine>) {
+    const next = list.map((l, i) => i === idx ? { ...l, ...patch } : l)
+    onChange(next)
+  }
+  function add() {
+    onChange([...list, { template: '', leaderDots: false }])
+  }
+  function remove(idx: number) {
+    const next = list.filter((_, i) => i !== idx)
+    onChange(next.length > 0 ? next : undefined)
+  }
+  function move(idx: number, dir: -1 | 1) {
+    const target = idx + dir
+    if (target < 0 || target >= list.length) return
+    const next = [...list]
+    const [removed] = next.splice(idx, 1)
+    next.splice(target, 0, removed)
+    onChange(next)
+  }
+  function insertToken(idx: number, token: string) {
+    const cur = list[idx]?.template ?? ''
+    setAt(idx, { template: `${cur}${cur && !cur.endsWith(' ') ? ' ' : ''}${token}` })
+  }
+  function applyPreset() {
+    onChange([
+      { template: '{{medication}} {{dose}}{{LEADER}}{{type}}', leaderDots: true, style: { fontWeight: 700 } },
+      { template: '{{posology}}', marginBottom: 0 },
+      { template: 'OBS: {{notes}}', style: { fontStyle: 'italic' }, hideIfEmpty: true, marginBottom: 4 },
+    ])
+  }
+
+  return (
+    <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50/50">
+      <div className="flex items-center justify-between px-2 py-1.5 border-b border-slate-200">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+          Layout multi-linha do item
+          {active && <span className="ml-1 text-violet-600">(ativo)</span>}
+        </span>
+        <div className="flex items-center gap-1">
+          {!active && (
+            <button
+              type="button"
+              onClick={applyPreset}
+              className="rounded bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-700 hover:bg-violet-200"
+              title="Pré-carrega o layout Almavet: medicamento + tipo (pontilhado), posologia, OBS"
+            >
+              Preset Almavet
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={add}
+            className="rounded bg-white border border-slate-300 px-2 py-0.5 text-[10px] font-medium text-slate-700 hover:bg-slate-100"
+          >
+            + Linha
+          </button>
+          {active && (
+            <button
+              type="button"
+              onClick={() => onChange(undefined)}
+              className="rounded px-2 py-0.5 text-[10px] font-medium text-slate-500 hover:bg-red-50 hover:text-red-700"
+              title="Desativa layout estruturado — volta a usar o Template da linha"
+            >
+              Limpar
+            </button>
+          )}
+        </div>
+      </div>
+
+      {!active ? (
+        <div className="px-3 py-2 text-[10px] text-slate-500 leading-snug">
+          Sem layout estruturado: o item usa o <strong>Template da linha</strong> acima.
+          Adicione linhas aqui para configurar layout multi-linha (nome + posologia + OBS),
+          com pontilhado expansível via <code>{'{{LEADER}}'}</code>.
+        </div>
+      ) : (
+        <ol className="space-y-1 px-2 py-2">
+          {list.map((line, idx) => (
+            <li key={idx} className="rounded border border-slate-200 bg-white p-2">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] font-semibold text-violet-700">
+                  Linha {idx + 1}
+                </span>
+                <div className="flex gap-0.5">
+                  <button onClick={() => move(idx, -1)} disabled={idx === 0}
+                    className="rounded px-1.5 text-slate-500 hover:bg-slate-100 disabled:opacity-30" title="Subir">↑</button>
+                  <button onClick={() => move(idx, +1)} disabled={idx === list.length - 1}
+                    className="rounded px-1.5 text-slate-500 hover:bg-slate-100 disabled:opacity-30" title="Descer">↓</button>
+                  <button onClick={() => remove(idx)}
+                    className="rounded px-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50" title="Remover">×</button>
+                </div>
+              </div>
+              <input
+                className="w-full rounded border border-slate-300 px-2 py-1 text-xs font-mono"
+                value={line.template}
+                placeholder='ex: {{medication}} {{dose}}{{LEADER}}{{type}}'
+                onChange={e => setAt(idx, { template: e.target.value })}
+              />
+              {fieldOptions.length > 0 && (
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {fieldOptions.map(f => (
+                    <button
+                      key={f.field}
+                      type="button"
+                      onClick={() => insertToken(idx, `{{${f.field}}}`)}
+                      className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-mono text-slate-700 hover:bg-violet-100 hover:text-violet-700"
+                      title={`Inserir ${f.label}`}
+                    >
+                      {`{{${f.field}}}`}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => insertToken(idx, '{{LEADER}}')}
+                    className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-mono text-violet-700 hover:bg-violet-200"
+                    title="Régua pontilhada que estica até o final da linha"
+                  >
+                    {'{{LEADER}}'}
+                  </button>
+                </div>
+              )}
+              <div className="mt-1.5 grid grid-cols-2 gap-2">
+                <label className="flex items-center gap-1 text-[10px] text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={!!line.leaderDots}
+                    onChange={e => setAt(idx, { leaderDots: e.target.checked })}
+                  />
+                  Pontilhado expansível
+                </label>
+                <label className="flex items-center gap-1 text-[10px] text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={!!line.hideIfEmpty}
+                    onChange={e => setAt(idx, { hideIfEmpty: e.target.checked })}
+                  />
+                  Ocultar se vazio
+                </label>
+              </div>
+              <div className="mt-1.5 grid grid-cols-3 gap-1.5 text-[10px]">
+                <label className="flex items-center gap-1 text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={line.style?.fontWeight === 700}
+                    onChange={e => setAt(idx, {
+                      style: { ...line.style, fontWeight: e.target.checked ? 700 : 400 },
+                    })}
+                  />
+                  Negrito
+                </label>
+                <label className="flex items-center gap-1 text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={line.style?.fontStyle === 'italic'}
+                    onChange={e => setAt(idx, {
+                      style: { ...line.style, fontStyle: e.target.checked ? 'italic' : 'normal' },
+                    })}
+                  />
+                  Itálico
+                </label>
+                <label className="flex items-center gap-1 text-slate-700">
+                  Sep:
+                  <input
+                    type="number"
+                    min={0}
+                    max={20}
+                    step={1}
+                    value={line.marginBottom ?? 0}
+                    onChange={e => setAt(idx, { marginBottom: Number(e.target.value) || undefined })}
+                    className="w-12 rounded border border-slate-300 px-1 py-0.5 text-[10px]"
+                    title="Margem (pt) abaixo desta linha"
+                  />
+                </label>
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
   )
 }
 

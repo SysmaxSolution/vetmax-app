@@ -35,6 +35,10 @@ interface Props {
   resolveContext?: ResolveContext
   /** Valores dos FillableFieldElement preenchidos pelo vet (runtime). */
   fillableValues?: Record<string, string>
+  /** Slices de Repeater por id, usado quando o LaudoPrintable gera páginas
+   *  virtuais extras para overflow. Cada repeater pode receber um intervalo
+   *  diferente de itens em cada página virtual. */
+  repeaterSlices?: Record<string, { start: number; end: number }>
   mode?: 'edit' | 'print'
   /** Quando true, oculta guides visuais do editor (outlines de seleção,
    *  bordas dashed dos elementos, dashed violeta das margens). O preview
@@ -58,6 +62,7 @@ interface Props {
 
 export default function CanvasStage({
   state, selectedId, selectedIds, resolveContext, fillableValues,
+  repeaterSlices,
   mode = 'edit', brush, armed, cleanPreview, zoom,
   onSelect, onElementChange, onBrushStrokeComplete, onPlace,
 }: Props) {
@@ -234,6 +239,7 @@ export default function CanvasStage({
             zoom={zoom ?? 1}
             resolveContext={resolveContext}
             fillableValues={fillableValues}
+            repeaterItemSlice={el.kind === 'repeater' ? repeaterSlices?.[el.id] : undefined}
             brushActive={!!brush}
             armedActive={!!armed}
             onSelect={onSelect}
@@ -328,6 +334,7 @@ interface WrapperProps {
   zoom: number
   resolveContext?: ResolveContext
   fillableValues?: Record<string, string>
+  repeaterItemSlice?: { start: number; end: number }
   brushActive: boolean
   armedActive: boolean
   onSelect?: (id: string | null, opts?: { append?: boolean }) => void
@@ -336,7 +343,8 @@ interface WrapperProps {
 
 function ElementWrapper({
   element, stagePx, isPrint, isSelected, isPrimarySelected, cleanPreview, zoom,
-  resolveContext, fillableValues, brushActive, armedActive, onSelect, onChange,
+  resolveContext, fillableValues, repeaterItemSlice,
+  brushActive, armedActive, onSelect, onChange,
 }: WrapperProps) {
   const transform = element.rotation ? `rotate(${element.rotation}deg)` : undefined
 
@@ -355,7 +363,7 @@ function ElementWrapper({
           transformOrigin: 'top left',
         }}
       >
-        <ElementRenderer element={element} ctx={resolveContext} isPrint fillableValues={fillableValues} />
+        <ElementRenderer element={element} ctx={resolveContext} isPrint fillableValues={fillableValues} repeaterItemSlice={repeaterItemSlice} />
       </div>
     )
   }
@@ -417,7 +425,7 @@ function ElementWrapper({
         onSelect?.(element.id, { append })
       }}
     >
-      <ElementRenderer element={element} ctx={resolveContext} fillableValues={fillableValues} />
+      <ElementRenderer element={element} ctx={resolveContext} fillableValues={fillableValues} repeaterItemSlice={repeaterItemSlice} />
     </Rnd>
   )
 }

@@ -147,14 +147,44 @@ export interface DynamicImageElement extends ElementCommon {
 /** Repeater — agrupamento dinâmico (medicações, exames, etc.).
  *  Renderiza source array linha-a-linha respeitando container.
  */
+/** Uma linha visual dentro de cada item do Repeater. Permite layout
+ *  multi-linha por medicamento (linha 1: nome+dose+tipo com leader dots,
+ *  linha 2: posologia, linha 3: OBS, etc.). */
+export interface RepeaterItemLine {
+  /** Template da linha. {{field}} insere coluna do item.
+   *  Token especial {{LEADER}} (apenas quando leaderDots=true): divide a
+   *  linha em ANTES/DEPOIS e estica uma régua pontilhada no meio até o
+   *  texto depois encostar à borda direita. Ex:
+   *  "{{medication}} {{dose}}{{LEADER}}{{type}}" → "Gabapentina 150mg........Cáp" */
+  template: string
+  /** Tipografia opcional desta linha (sobrepõe a default do repeater). */
+  style?: Partial<TypographyStyle>
+  /** Quando true, processa o token {{LEADER}} expandindo pontilhado. */
+  leaderDots?: boolean
+  /** Esconde a linha quando todos os campos referenciados estão vazios.
+   *  Útil para linha "OBS:" que só aparece se houver observações. */
+  hideIfEmpty?: boolean
+  /** Espaço extra (pt) abaixo desta linha — separa visualmente blocos
+   *  (ex: 4pt depois da linha de OBS para separar do próximo item). */
+  marginBottom?: number
+}
+
 export interface RepeaterElement extends ElementCommon {
   kind: 'repeater'
   /** Fonte da lista no banco. Ex: 'prescriptions', 'exam_items'. */
   source: RepeaterSource
-  /** Template de cada linha — usa {{field}} para inserir colunas do item. */
+  /** Template de cada linha — usa {{field}} para inserir colunas do item.
+   *  LEGADO: se itemTemplateLines estiver setado, ele tem precedência. */
   itemTemplate: string       // ex: "{{medication}} — {{dose}} {{frequency}}"
+  /** Layout multi-linha por item — substitui itemTemplate quando setado.
+   *  Cada elemento do array vira uma linha visual dentro do item. */
+  itemTemplateLines?: RepeaterItemLine[]
   groupAndEnumerate: boolean // prefixa "1.", "2.", "3."
   maxLines?: number          // corte; resto vai pra próxima página
+  /** Máximo de itens por página. Quando setado e o número total de itens
+   *  exceder, o LaudoPrintable gera páginas virtuais extras na hora de
+   *  imprimir (página 2 = slice [N..2N-1] + elementos pinados, etc.). */
+  maxItemsPerPage?: number
   lineSpacing?: number       // pt entre linhas
   typography: TypographyStyle
 

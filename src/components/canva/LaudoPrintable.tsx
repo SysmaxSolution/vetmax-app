@@ -14,14 +14,64 @@
  *      fundo (blocos rosa, destaque azul de controlados) imprimam.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Download, Loader2, Printer } from 'lucide-react'
 import type { CanvaContentJson, CanvaTemplateConfig } from '@/lib/canva/types'
-import type { CanvasState } from '@/lib/canva/canvas-state'
+import type { CanvasState, PageConfig } from '@/lib/canva/canvas-state'
 import { getAllPages } from '@/lib/canva/canvas-state'
+import type { CanvasElement, RepeaterElement } from '@/lib/canva/elements'
 import CanvaA4Preview from './CanvaA4Preview'
 import CanvasStage from './editor/CanvasStage'
+import { readRepeaterSource } from './editor/ElementRenderers'
 import type { ResolveContext } from '@/lib/canva/dynamic-tags'
+
+/** Página real ou virtual (gerada por overflow do repeater). */
+interface ExpandedPage {
+  page: PageConfig
+  elements: CanvasElement[]
+  /** Map de repeater id → slice de itens. Quando vazio/undefined, o
+   *  repeater renderiza tudo (comportamento legado). Quando setado,
+   *  cada repeater pega só o intervalo correspondente. */
+  repeaterSlices?: Record<string, { start: number; end: number }>
+  /** Etiqueta opcional pra debug ("1", "1 (cont.)", etc.). */
+  label?: string
+}
+
+/** Expande páginas reais em páginas virtuais quando algum Repeater tem
+ *  maxItemsPerPage e mais itens reais que isso. Cada página virtual herda
+ *  os MESMOS elementos da página real — assim cabeçalhos, assinaturas e
+ *  rodapés aparecem em todas, e o repeater muda apenas seu slice. */
+function expandPagesForRepeaterOverflow(
+  pages: ReturnType<typeof getAllPages>,
+  resolveContext: ResolveContext | undefined,
+): ExpandedPage[] {
+  const out: ExpandedPage[] = []
+  for (const p of pages) {
+    const repeaters = p.elements.filter((el): el is RepeaterElement => el.kind === 'repeater')
+    // Pega o primeiro repeater paginável da página (suporte a múltiplos
+    // repeaters paginados na MESMA página é raro — fica como evolução futura)
+    const paged = repeaters.find(r => r.maxItemsPerPage && r.maxItemsPerPage > 0)
+    if (!paged) {
+      out.push({ page: p.page, elements: p.elements })
+      continue
+    }
+    const items = readRepeaterSource(paged.source, resolveContext)
+    const effectiveTotal = Math.min(items.length, paged.maxLines ?? items.length)
+    const max = paged.maxItemsPerPage!
+    const slices = Math.max(1, Math.ceil(effectiveTotal / max))
+    for (let s = 0; s < slices; s++) {
+      out.push({
+        page: p.page,
+        elements: p.elements,
+        repeaterSlices: {
+          [paged.id]: { start: s * max, end: Math.min(effectiveTotal, (s + 1) * max) },
+        },
+        label: slices > 1 ? `${p.index + 1}${s > 0 ? ` (cont. ${s + 1}/${slices})` : ''}` : undefined,
+      })
+    }
+  }
+  return out
+}
 
 interface PatientHeader {
   patient_name?: string
@@ -64,6 +114,14 @@ export default function LaudoPrintable({
     if (typeof window === 'undefined') return
     window.print()
   }, [])
+
+  // Páginas finais para o print: páginas reais + páginas virtuais geradas
+  // por overflow do Repeater (maxItemsPerPage). Memoizado pra evitar
+  // re-calcular slices a cada render do html2canvas.
+  const expandedPages = useMemo<ExpandedPage[]>(() => {
+    if (!canvasState) return []
+    return expandPagesForRepeaterOverflow(getAllPages(canvasState), resolveContext)
+  }, [canvasState, resolveContext])
 
   const doDownloadPdf = useCallback(async () => {
     if (typeof window === 'undefined' || !printAreaRef.current) return
@@ -161,10 +219,10 @@ export default function LaudoPrintable({
         style={{ width: '21cm' }}
       >
         {canvasState ? (
-          // Multi-page: itera todas as páginas (página 1 + extras), separando
-          // cada CanvasStage com page-break para o @media print quebrar
-          // corretamente. Cada stage recebe um CanvasState single-page.
-          getAllPages(canvasState).map((p, idx) => (
+          // Multi-page: páginas reais (extraPages) + virtuais (overflow do
+          // repeater com maxItemsPerPage). Cada stage recebe um CanvasState
+          // single-page e o slice do repeater para a página correspondente.
+          expandedPages.map((p, idx) => (
             <div
               key={idx}
               className="canva-print-page-wrapper"
@@ -174,6 +232,7 @@ export default function LaudoPrintable({
                 state={{ version: 1, page: p.page, elements: p.elements }}
                 mode="print"
                 resolveContext={resolveContext}
+                repeaterSlices={p.repeaterSlices}
               />
             </div>
           ))

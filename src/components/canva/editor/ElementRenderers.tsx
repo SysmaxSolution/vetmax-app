@@ -11,7 +11,7 @@ import type { CSSProperties } from 'react'
 import type {
   CanvasElement, TextElement, ImageElement, LineElement,
   DynamicTagElement, CompositeTagElement,
-  DynamicImageElement, RepeaterElement, BrushStrokeElement,
+  DynamicImageElement, RepeaterElement, RepeaterItemLine, BrushStrokeElement,
   FillableFieldElement,
   TypographyStyle, BlockStyle,
 } from '@/lib/canva/elements'
@@ -75,9 +75,12 @@ interface RenderProps {
   /** Valores preenchidos pelo vet — mapa fieldKey → valor. Vem do
    *  patient_documents.content_json.fillable_fields. */
   fillableValues?: Record<string, string>
+  /** Slice [start, end) aplicado ao Repeater quando há auto-paginação.
+   *  Página 1 recebe [0, N), página 2 recebe [N, 2N), etc. */
+  repeaterItemSlice?: { start: number; end: number }
 }
 
-export function ElementRenderer({ element, ctx, isPrint, fillableValues }: RenderProps) {
+export function ElementRenderer({ element, ctx, isPrint, fillableValues, repeaterItemSlice }: RenderProps) {
   switch (element.kind) {
     case 'text':            return <TextRenderer           e={element} isPrint={isPrint} />
     case 'image':           return <ImageRenderer          e={element} isPrint={isPrint} />
@@ -85,7 +88,7 @@ export function ElementRenderer({ element, ctx, isPrint, fillableValues }: Rende
     case 'dynamic_tag':     return <DynamicTagRenderer     e={element} ctx={ctx} isPrint={isPrint} />
     case 'composite_tag':   return <CompositeTagRenderer   e={element} ctx={ctx} isPrint={isPrint} />
     case 'dynamic_image':   return <DynamicImageRenderer   e={element} ctx={ctx} isPrint={isPrint} />
-    case 'repeater':        return <RepeaterRenderer       e={element} ctx={ctx} isPrint={isPrint} />
+    case 'repeater':        return <RepeaterRenderer       e={element} ctx={ctx} isPrint={isPrint} itemSlice={repeaterItemSlice} />
     case 'brush_stroke':    return <BrushStrokeFallback    e={element} />
     case 'fillable_field':  return <FillableFieldRenderer  e={element} value={fillableValues?.[element.fieldKey]} isPrint={isPrint} />
   }
@@ -424,12 +427,26 @@ function DynamicImageRenderer({ e, ctx, isPrint }: { e: DynamicImageElement; ctx
   )
 }
 
-function RepeaterRenderer({ e, ctx, isPrint }: { e: RepeaterElement; ctx?: ResolveContext; isPrint?: boolean }) {
+function RepeaterRenderer({
+  e, ctx, isPrint, itemSlice,
+}: {
+  e: RepeaterElement
+  ctx?: ResolveContext
+  isPrint?: boolean
+  itemSlice?: { start: number; end: number }
+}) {
   const items = readRepeaterSource(e.source, ctx)
-  const lines = items.slice(0, e.maxLines ?? items.length)
+  const beforeMax = items.slice(0, e.maxLines ?? items.length)
+  // Aplica slice de auto-paginação (vem do LaudoPrintable em páginas extras)
+  const lines = itemSlice
+    ? beforeMax.slice(itemSlice.start, itemSlice.end)
+    : beforeMax
 
-  // Mock para preview no editor (sem ctx real)
-  const display = lines.length > 0 ? lines : (isPrint ? [] : MOCK_REPEATER[e.source])
+  // Mock para preview no editor (sem ctx real). Quando há slice, página
+  // 2+ pode ficar vazia em preview — pula o placeholder.
+  const display = lines.length > 0
+    ? lines
+    : (isPrint || itemSlice ? [] : MOCK_REPEATER[e.source])
 
   if (display.length === 0 && !isPrint) {
     return (
@@ -448,14 +465,22 @@ function RepeaterRenderer({ e, ctx, isPrint }: { e: RepeaterElement; ctx?: Resol
 
   // Agrupamento opcional por campo (route_of_administration, prescription_type)
   const groups = groupItems(display, e.groupBy)
-  let runningIndex = 0
+  // Numeração continua entre páginas virtuais: na página 2 (slice 8-16) o
+  // primeiro item é o "9.", não "1.". O offset é o início do slice.
+  let runningIndex = itemSlice?.start ?? 0
 
   return (
     <div
       style={{
-        width: '100%', height: '100%',
+        width: '100%',
+        // No PRINT, deixa altura natural — conteúdo cresce e não é cortado
+        // (auto-paginação garante que o total não exceda a folha via slice).
+        // No editor, mantém o height do box pra o admin ver o limite visual.
+        height: isPrint ? 'auto' : '100%',
         margin: 0, padding: 0,
-        overflow: 'hidden',
+        // overflow hidden só no editor (cortar pré-visualização excessiva);
+        // no print precisa ser visible pra leader dots não serem clipados.
+        overflow: isPrint ? 'visible' : 'hidden',
         ...typographyToCss(e.typography),
         ...blockToCss(e.block),
       }}
@@ -511,12 +536,15 @@ function RepeaterRenderer({ e, ctx, isPrint }: { e: RepeaterElement; ctx?: Resol
                     {e.groupAndEnumerate && (
                       <span style={{ ...typographyToCss(enumTyp), minWidth: '1.5em' }}>{i + 1}.</span>
                     )}
-                    <span style={{ flex: 1 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
                       {isHighlighted && e.highlightBadge && (
                         <strong style={{ marginRight: 4, fontSize: '0.85em' }}>{e.highlightBadge}</strong>
                       )}
-                      {applyItemTemplate(e.itemTemplate, item)}
-                    </span>
+                      {/* Layout estruturado (multi-linha + leader dots) vs legado */}
+                      {e.itemTemplateLines && e.itemTemplateLines.length > 0
+                        ? <RepeaterItemLines lines={e.itemTemplateLines} item={item} baseTypography={e.typography} />
+                        : applyItemTemplate(e.itemTemplate, item)}
+                    </div>
                   </li>
                 )
               })}
@@ -525,6 +553,81 @@ function RepeaterRenderer({ e, ctx, isPrint }: { e: RepeaterElement; ctx?: Resol
         )
       })}
     </div>
+  )
+}
+
+/** Renderiza um item do Repeater como várias linhas visuais.
+ *  Suporta leader dots (régua pontilhada que estica entre dois textos)
+ *  via token {{LEADER}} no template da linha. */
+function RepeaterItemLines({
+  lines, item, baseTypography,
+}: {
+  lines: RepeaterItemLine[]
+  item: Record<string, unknown>
+  baseTypography: TypographyStyle
+}) {
+  return (
+    <>
+      {lines.map((line, idx) => {
+        // Hide-if-empty: se nenhum {{field}} resolveu nada e a linha é
+        // marcada como hideIfEmpty, suprime ela inteira.
+        if (line.hideIfEmpty) {
+          const stripped = applyItemTemplate(line.template.replace(/\{\{LEADER\}\}/g, ''), item).trim()
+          if (!stripped) return null
+        }
+
+        const mergedStyle: CSSProperties = {
+          ...typographyToCss({ ...baseTypography, ...(line.style ?? {}) }),
+          // Quebra natural quando o texto é longo
+          whiteSpace: 'pre-wrap',
+          overflowWrap: 'break-word',
+          marginBottom: line.marginBottom != null ? `${line.marginBottom}pt` : undefined,
+          // Evita quebra de página DENTRO do item (mas permite ENTRE itens)
+          breakInside: 'avoid', pageBreakInside: 'avoid',
+        }
+
+        // Leader dots: divide o template em [before] {{LEADER}} [after]
+        if (line.leaderDots && line.template.includes('{{LEADER}}')) {
+          const [rawBefore, rawAfter = ''] = line.template.split('{{LEADER}}')
+          const before = applyItemTemplate(rawBefore, item)
+          const after = applyItemTemplate(rawAfter, item)
+          return (
+            <div
+              key={idx}
+              style={{
+                ...mergedStyle,
+                display: 'flex',
+                alignItems: 'baseline',
+                gap: 0,
+              }}
+            >
+              <span style={{ whiteSpace: 'pre-wrap' }}>{before}</span>
+              {/* Régua pontilhada — flex:1 estica até o "after" colar à direita.
+                  translateY compensa o baseline para os pontos ficarem visualmente
+                  na linha de base do texto, não acima. */}
+              <span
+                aria-hidden
+                style={{
+                  flex: 1,
+                  borderBottom: '1px dotted currentColor',
+                  margin: '0 4px',
+                  transform: 'translateY(-2px)',
+                  alignSelf: 'baseline',
+                  minWidth: '0.5cm',
+                }}
+              />
+              <span style={{ whiteSpace: 'pre-wrap' }}>{after}</span>
+            </div>
+          )
+        }
+
+        return (
+          <div key={idx} style={mergedStyle}>
+            {applyItemTemplate(line.template, item)}
+          </div>
+        )
+      })}
+    </>
   )
 }
 
@@ -575,7 +678,7 @@ const PRESCRIPTION_GROUP_LABEL: Record<string, string> = {
 
 // ── Repeater data helpers ────────────────────────────────────────────────────
 
-function readRepeaterSource(source: RepeaterElement['source'], ctx?: ResolveContext): Record<string, unknown>[] {
+export function readRepeaterSource(source: RepeaterElement['source'], ctx?: ResolveContext): Record<string, unknown>[] {
   if (!ctx) return []
   const consultation = ctx.consultation as Record<string, unknown> | undefined
   if (!consultation) return []
