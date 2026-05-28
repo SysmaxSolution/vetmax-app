@@ -26,9 +26,15 @@ Hooks client: `internacaoCompleta`/`centroCirurgico` em `src/components/provider
 - [x] `supabase/migrations/0196_internacao_completa_base.sql` — `clinical_vitals` (compartilhada hosp×surgery, XOR, IoT-ready) + ALTER `hospitalizations` (box_id, estimated_discharge, weight_at_admission, attending_vet_id, personal_belongings, diet_notes, fasting, **isolation_required**).
 - [~] Fase 1 já iniciada: `HospitalizationKanban.tsx` (+92) e `hospitalization-prescriptions.ts` (+39) — isolamento/timeline em andamento.
 
-> **VERIFICAR NO INÍCIO DA PRÓXIMA SESSÃO:** se a migration `0196` já foi aplicada no Supabase
-> remoto (`npx supabase migration list`). Os arquivos `supabase/.temp/*` modificados sugerem que um
-> `db push` foi executado, mas confirmar. Próximas migrations a partir de **0197**.
+> **Migration `0196` JÁ APLICADA no Supabase remoto** (confirmado via `migration list`; objetos
+> `clinical_vitals` + colunas de `hospitalizations` presentes). **`0197` está OCUPADA** por
+> `0197_audit_logs_lgpd.sql` (realocada de um `0188` duplicado). **Próximas migrations da sprint
+> começam em `0198`.**
+>
+> ⚠️ **NÃO rode `supabase db push --include-all`** — o histórico de migrations tem ~19 prefixos
+> duplicados pré-existentes (merges de branches) e muitas migrations aplicadas-mas-não-registradas.
+> Aplique novas migrations via script `pg` direto (ex.: `scripts/apply-0196-internacao-base.mjs`),
+> sempre com `IF NOT EXISTS`/idempotente.
 
 ## Roteiro restante
 
