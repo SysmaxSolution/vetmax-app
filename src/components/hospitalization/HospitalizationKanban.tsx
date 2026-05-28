@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { Clock, BedDouble, LogOut, Loader2, Sparkles, X, Stethoscope, FileText, Plus, Bell, BellRing, Biohazard, LayoutGrid, CalendarClock } from 'lucide-react'
+import { Clock, BedDouble, LogOut, Loader2, Sparkles, X, Stethoscope, FileText, Plus, Bell, BellRing, Biohazard, LayoutGrid, CalendarClock, Lock } from 'lucide-react'
 import { useRealtimeSync } from '@/hooks/useRealtimeSync'
 import { useInternacaoCompleta } from '@/components/providers/ClinicConfigProvider'
 import { useMedicationAlarm } from '@/hooks/useMedicationAlarm'
@@ -31,6 +31,7 @@ import {
   listHospitalizationPrescriptions,
   type HospPrescription,
 } from '@/lib/actions/hospitalization-prescriptions'
+import { getOpenBalances } from '@/lib/actions/hospitalization-charges'
 
 const WARD_LABELS: Record<string, string> = {
   observation: 'Observação',
@@ -161,19 +162,38 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
 
   useEffect(() => { void refreshPrescriptions() }, [refreshPrescriptions])
 
-  // Alertas Ativos de Enfermagem — som + push quando uma dose vence (só sob
-  // a flag Internação Completa). Roda no nível da ala (todas as prescrições).
-  const allPrescriptions = useMemo(
-    () => Array.from(prescriptionsByHosp.values()).flat(),
-    [prescriptionsByHosp],
-  )
-  const alarm = useMedicationAlarm(allPrescriptions, internacaoCompleta)
-
   // Todos os cards ativos (para o Mapa de Execução).
   const allCards = useMemo(
     () => [...board.observation, ...board.ward, ...board.icu, ...board.ready_for_discharge],
     [board],
   )
+
+  // Regra 4 — Alta Médica cessa o aprazamento: prescrições de internações em
+  // ready_for_discharge NÃO entram no alarme de enfermagem.
+  const readyForDischargeIds = useMemo(
+    () => new Set(board.ready_for_discharge.map(c => c.id)),
+    [board.ready_for_discharge],
+  )
+
+  // Alertas Ativos de Enfermagem — som + push quando uma dose vence (só sob
+  // a flag Internação Completa). Roda no nível da ala (exclui alta médica).
+  const allPrescriptions = useMemo(
+    () => Array.from(prescriptionsByHosp.entries())
+      .filter(([hospId]) => !readyForDischargeIds.has(hospId))
+      .flatMap(([, list]) => list),
+    [prescriptionsByHosp, readyForDischargeIds],
+  )
+  const alarm = useMedicationAlarm(allPrescriptions, internacaoCompleta)
+
+  // Regra 4 — saldos em aberto das internações em alta médica (gate da Alta
+  // Administrativa no card).
+  const [openBalances, setOpenBalances] = useState<Record<string, number>>({})
+  useEffect(() => {
+    if (!internacaoCompleta) return
+    const ids = board.ready_for_discharge.map(c => c.id)
+    if (ids.length === 0) { setOpenBalances({}); return }
+    getOpenBalances(ids).then(res => { if (!('error' in res)) setOpenBalances(res) })
+  }, [internacaoCompleta, board.ready_for_discharge])
 
   useRealtimeSync({ table: 'hospitalizations', clinicId })
   useRealtimeSync({ table: 'hospitalization_dose_administrations', clinicId, onEvent: refreshPrescriptions })
@@ -190,7 +210,7 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
     const currentBoard = boardRef.current
     const card = currentBoard[oldStatus as keyof HospitalizationBoard]?.find(c => c.id === cardId)
     if (!card) return
-    if (newStatus === 'ready_for_discharge') {
+    if (newStatus === 'ready_for_discharge' && !internacaoCompleta) {
       setPendingDischarge({ card, fromStatus: oldStatus })
       return
     }
@@ -210,7 +230,7 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
       return
     }
     setPendingMove({ card, fromStatus: oldStatus, toStatus: newStatus })
-  }, [])
+  }, [internacaoCompleta])
 
   useEffect(() => {
     // ── HTML5 drag events (real browser) ───────────────────────────────────
@@ -314,13 +334,16 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
     const card = board[oldStatus as keyof HospitalizationBoard]?.find(c => c.id === cardId)
     if (!card) return
 
-    // Coluna Alta → intercepta com modal de decisão
-    if (newStatus === 'ready_for_discharge') {
+    // Coluna Alta:
+    //  - flag off (legado): abre o modal de decisão de alta (1 clique).
+    //  - flag on (Regra 4): arrastar = Alta Médica → persiste ready_for_discharge
+    //    (cessa diária/aprazamento). A Alta Administrativa vem depois, no card.
+    if (newStatus === 'ready_for_discharge' && !internacaoCompleta) {
       setPendingDischarge({ card, fromStatus: oldStatus })
       return
     }
 
-    // Colunas clínicas → persiste diretamente e depois abre modal de Evolução opcional
+    // Colunas clínicas (e Alta Médica sob a flag) → persiste e abre Evolução opcional
     const snapshot = board
     setBoard(prev => {
       const next = { ...prev }
@@ -585,6 +608,8 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
                       key={card.id}
                       card={card}
                       prescriptions={prescriptionsByHosp.get(card.id) ?? EMPTY_PRESCRIPTIONS}
+                      internacaoCompleta={internacaoCompleta}
+                      openBalance={openBalances[card.id] ?? 0}
                       onDragStart={handleDragStart}
                       onDragEnd={handleDragEnd}
                       onOpenMedAlert={() => setMedModalCard(card)}
@@ -620,6 +645,22 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
         <HospitalizationDetailModal
           card={selectedCard}
           onClose={() => setSelectedCard(null)}
+          onStatusChanged={(s) => {
+            const target = selectedCard
+            if (s === 'discharged') {
+              removeCardFromBoard(target.id)
+              if (target.tutor?.phone) setWhatsappDischarge(target)
+            } else if (s === 'ready_for_discharge') {
+              setBoard(prev => {
+                const next = { ...prev }
+                ;(Object.keys(next) as (keyof HospitalizationBoard)[]).forEach(col => {
+                  next[col] = next[col].filter(c => c.id !== target.id)
+                })
+                next.ready_for_discharge = [...next.ready_for_discharge, { ...target, status: 'ready_for_discharge' }]
+                return next
+              })
+            }
+          }}
         />
       )}
 
@@ -730,6 +771,9 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
 interface CardProps {
   card:          HospitalizationCard
   prescriptions: HospPrescription[]
+  internacaoCompleta: boolean
+  /** Saldo em aberto da conta (Regra 4) — gate da Alta Administrativa. */
+  openBalance:   number
   onDragStart:   (e: React.DragEvent, card: HospitalizationCard) => void
   onDragEnd:     () => void
   onDischarge:   (card: HospitalizationCard) => void
@@ -737,7 +781,7 @@ interface CardProps {
   onOpenMedAlert?: (card: HospitalizationCard) => void
 }
 
-function KanbanCard({ card, prescriptions, onDragStart, onDragEnd, onDischarge, onOpen, onOpenMedAlert }: CardProps) {
+function KanbanCard({ card, prescriptions, internacaoCompleta, openBalance, onDragStart, onDragEnd, onDischarge, onOpen, onOpenMedAlert }: CardProps) {
   const hours = Math.floor((Date.now() - new Date(card.created_at).getTime()) / (1000 * 60 * 60))
   const scheduler = useMedicationScheduler(prescriptions)
 
@@ -777,17 +821,43 @@ function KanbanCard({ card, prescriptions, onDragStart, onDragEnd, onDischarge, 
               onClick={() => onOpenMedAlert?.(card)}
             />
             {card.status === 'ready_for_discharge' && (
-              <button
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDischarge(card) }}
-                onPointerDown={(e) => e.stopPropagation()}
-                draggable={false}
-                data-mentor-step="hosp-discharge-btn"
-                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors text-xs font-semibold"
-                title="Dar Alta"
-              >
-                <LogOut className="h-3 w-3" />
-                Dar Alta
-              </button>
+              internacaoCompleta ? (
+                // Regra 4 — Alta Administrativa: habilitada só com a conta zerada.
+                (() => {
+                  const settled = openBalance <= 0
+                  return (
+                    <button
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (settled) onDischarge(card) }}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      draggable={false}
+                      disabled={!settled}
+                      data-testid="kanban-alta-administrativa"
+                      data-mentor-step="hosp-discharge-btn"
+                      className={`flex items-center gap-1 px-2 py-1 rounded-lg transition-colors text-xs font-semibold ${
+                        settled ? 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100' : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                      }`}
+                      title={settled
+                        ? 'Alta Administrativa — encerrar internação'
+                        : `Conta pendente: ${openBalance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} — liquide na aba Conta`}
+                    >
+                      {settled ? <LogOut className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
+                      {settled ? 'Alta Adm.' : 'Conta pendente'}
+                    </button>
+                  )
+                })()
+              ) : (
+                <button
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDischarge(card) }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  draggable={false}
+                  data-mentor-step="hosp-discharge-btn"
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors text-xs font-semibold"
+                  title="Dar Alta"
+                >
+                  <LogOut className="h-3 w-3" />
+                  Dar Alta
+                </button>
+              )
             )}
           </div>
           <p className="text-[10px] text-slate-500 font-medium truncate uppercase">

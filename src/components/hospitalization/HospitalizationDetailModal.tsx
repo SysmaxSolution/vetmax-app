@@ -7,7 +7,7 @@ import {
   User, ClipboardList, Mic, MicOff, Plus, Trash2, Clock,
   Paperclip, FileText, Image as ImageIcon, File, Upload, ExternalLink,
   Brain, AlertTriangle, CheckCircle, Siren, MessageSquare, Volume2, VolumeX,
-  ChevronDown, ChevronUp, MessageCircle, Settings, HeartPulse, Droplets,
+  ChevronDown, ChevronUp, MessageCircle, Settings, HeartPulse, Droplets, Receipt,
 } from 'lucide-react'
 import {
   addClinicalEvolution,
@@ -37,6 +37,7 @@ import { useAiTranscriptionMode, useInternacaoCompleta } from '@/components/prov
 import VitalsTab from './VitalsTab'
 import FluidTherapyTab from './FluidTherapyTab'
 import MedicationApplicationModal from './MedicationApplicationModal'
+import ContaTab from './ContaTab'
 import { listHospitalizationPrescriptions, type HospPrescription } from '@/lib/actions/hospitalization-prescriptions'
 
 interface Props {
@@ -44,9 +45,11 @@ interface Props {
   onClose:          () => void
   prefilledStatus?: 'piorou' | 'estavel' | 'melhorou'
   onSaved?:         () => void
+  /** Disparado após Alta Médica/Administrativa (Conta tab) — board atualiza o card. */
+  onStatusChanged?: (newStatus: string) => void
 }
 
-export default function HospitalizationDetailModal({ card, onClose, prefilledStatus, onSaved }: Props) {
+export default function HospitalizationDetailModal({ card, onClose, prefilledStatus, onSaved, onStatusChanged }: Props) {
   const aiMode = useAiTranscriptionMode()
   const internacaoCompleta = useInternacaoCompleta()
   const admissionWeight = (card as { weight_at_admission?: number | null }).weight_at_admission ?? null
@@ -105,7 +108,7 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
 
   // Aba ativa na coluna direita. Sinais Vitais e Fluidoterapia só sob a flag
   // Internação Completa.
-  const [activeRightTab, setActiveRightTab] = useState<'timeline' | 'documents' | 'vitals' | 'fluids'>('timeline')
+  const [activeRightTab, setActiveRightTab] = useState<'timeline' | 'documents' | 'vitals' | 'fluids' | 'conta'>('timeline')
 
   // Estado da IA Clínica
   const [aiSuggestion, setAiSuggestion] = useState<ClinicalSummaryResult | null>(null)
@@ -938,6 +941,17 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
                   >
                     <Droplets className="h-3.5 w-3.5" /> Fluidoterapia
                   </button>
+                  <button
+                    onClick={() => setActiveRightTab('conta')}
+                    data-testid="tab-conta"
+                    className={`flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition-all ${
+                      activeRightTab === 'conta'
+                        ? 'border-emerald-600 text-emerald-700'
+                        : 'border-transparent text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    <Receipt className="h-3.5 w-3.5" /> Conta
+                  </button>
                 </>
               )}
 
@@ -1174,6 +1188,16 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
             {/* ─── Aba: Fluidoterapia + Balanço Hídrico (Internação Completa) ─── */}
             {activeRightTab === 'fluids' && internacaoCompleta && (
               <FluidTherapyTab hospitalizationId={card.id} admissionWeight={admissionWeight} />
+            )}
+
+            {/* ─── Aba: Conta + Máquina de Alta (Internação Completa, Regra 4) ─── */}
+            {activeRightTab === 'conta' && internacaoCompleta && (
+              <ContaTab
+                hospitalizationId={card.id}
+                consultationId={card.consultation_id}
+                status={card.status}
+                onStatusChanged={(s) => { onStatusChanged?.(s); onClose() }}
+              />
             )}
           </div>
         </div>
