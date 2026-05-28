@@ -30,6 +30,10 @@ interface ModuleDef {
   desc:  string
   icon:  React.ReactNode
   color: string
+  /** Quando true, a ativação é persistida em clinics.flow_config (não em
+   *  active_modules). Mesmo fluxo de UI (toggle + Master Key + Salvar Módulos),
+   *  mas grava a flag de feature dos recursos hospitalares avançados. */
+  flow?: boolean
 }
 
 const MODULES: ModuleDef[] = [
@@ -40,6 +44,8 @@ const MODULES: ModuleDef[] = [
   { key: 'consultation',         label: 'Consultório',                desc: 'Prontuário e conduta médica',                                               icon: <Syringe        className="h-5 w-5" />, color: 'text-indigo-600 bg-indigo-50'  },
   { key: 'exams',                label: 'Exames',                     desc: 'Laudos e resultados laboratoriais',                                         icon: <FlaskConical   className="h-5 w-5" />, color: 'text-violet-600 bg-violet-50'  },
   { key: 'hospitalization',      label: 'Internação',                 desc: 'Gestão de internados e alta hospitalar',                                   icon: <Hotel          className="h-5 w-5" />, color: 'text-pink-600 bg-pink-50'      },
+  { key: 'internacao_completa',  label: 'Internação Completa',        desc: 'Versão avançada da Internação: alertas de medicação, sinais vitais, mapa de execução, fluidoterapia e conta', icon: <Hotel className="h-5 w-5" />, color: 'text-pink-600 bg-pink-50', flow: true },
+  { key: 'centro_cirurgico',     label: 'Centro Cirúrgico',           desc: 'Bloco cirúrgico no menu lateral: Kanban Preparo→Sala→RPA, ficha cirúrgica e kits',                          icon: <Syringe className="h-5 w-5" />, color: 'text-red-600 bg-red-50', flow: true },
   { key: 'grooming',             label: 'Banho e Tosa',               desc: 'Fila de grooming com registros por voz',                                   icon: <Scissors       className="h-5 w-5" />, color: 'text-rose-600 bg-rose-50'      },
   { key: 'registry',             label: 'Cadastros',                  desc: 'Espécies, raças, convênios e tabela de preços',                            icon: <FolderKanban   className="h-5 w-5" />, color: 'text-slate-600 bg-slate-100'   },
   { key: 'purchases',            label: 'Compras',                    desc: 'Importação de NF-e XML, fornecedores e atualização de estoque',             icon: <Truck          className="h-5 w-5" />, color: 'text-purple-600 bg-purple-50'  },
@@ -79,6 +85,15 @@ export default function ModulesTab({
   const [activeModules, setActiveModules] = useState<string[]>(
     initialConfig?.active_modules ?? ['reception', 'triage', 'consultation', 'exams']
   )
+  // Flags de recursos hospitalares avançados — mesmas linhas da lista, mas
+  // persistidas em flow_config (não em active_modules).
+  const [flowFlags, setFlowFlags] = useState<Record<string, boolean>>(() => {
+    const flow = (initialConfig?.flow_config ?? {}) as { internacao_completa?: boolean; centro_cirurgico?: boolean }
+    return {
+      internacao_completa: flow.internacao_completa === true,
+      centro_cirurgico:    flow.centro_cirurgico    === true,
+    }
+  })
   const [saving, setSaving]                         = useState(false)
   const [pendingToggle, setPendingToggle]           = useState<{ key: string; willEnable: boolean } | null>(null)
   const [masterKeyInput, setMasterKeyInput]         = useState('')
@@ -93,7 +108,9 @@ export default function ModulesTab({
   //    PRO disparam UpgradeModal (genérico ou específico, conforme catálogo).
   function requestToggle(mod: ModuleDef) {
     if (isSysmax) {
-      const willEnable = !activeModules.includes(mod.key)
+      const willEnable = mod.flow
+        ? !flowFlags[mod.key]
+        : !activeModules.includes(mod.key)
       setPendingToggle({ key: mod.key, willEnable })
       setMasterKeyInput('')
       setMasterKeyError(null)
@@ -126,9 +143,14 @@ export default function ModulesTab({
     }
     if (pendingToggle) {
       const { key, willEnable } = pendingToggle
-      setActiveModules(prev =>
-        willEnable ? [...prev, key] : prev.filter(k => k !== key)
-      )
+      const mod = MODULES.find(m => m.key === key)
+      if (mod?.flow) {
+        setFlowFlags(prev => ({ ...prev, [key]: willEnable }))
+      } else {
+        setActiveModules(prev =>
+          willEnable ? [...prev, key] : prev.filter(k => k !== key)
+        )
+      }
     }
     setPendingToggle(null)
     setMasterKeyInput('')
@@ -137,7 +159,17 @@ export default function ModulesTab({
 
   async function handleSave() {
     setSaving(true)
-    const res = await updateClinicConfig({ active_modules: activeModules })
+    // Persiste em uma chamada: active_modules (módulos padrão) + flow_config
+    // (recursos hospitalares avançados — Internação Completa / Centro Cirúrgico).
+    const base: FlowConfig = initialConfig?.flow_config ?? { vet_merged_modules: [] }
+    const res = await updateClinicConfig({
+      active_modules: activeModules,
+      flow_config: {
+        ...base,
+        internacao_completa: flowFlags.internacao_completa,
+        centro_cirurgico:    flowFlags.centro_cirurgico,
+      } as FlowConfig,
+    })
     setSaving(false)
     if ('error' in res) { onToast('error', res.error); return }
     onToast('success', 'Módulos salvos!')
@@ -243,8 +275,8 @@ export default function ModulesTab({
           className="divide-y divide-slate-50"
         >
           {MODULES.map(mod => {
-            const active = activeModules.includes(mod.key)
-            const isFree = !isSysmax && isModuleFree(mod.key, businessType)
+            const active = mod.flow ? !!flowFlags[mod.key] : activeModules.includes(mod.key)
+            const isFree = !isSysmax && !mod.flow && isModuleFree(mod.key, businessType)
             const isPro  = !isSysmax && !isFree
 
             return (
@@ -313,10 +345,6 @@ export default function ModulesTab({
           })}
         </div>
 
-        {/* Recursos Hospitalares Avançados — ÚNICO ponto de ativação (sem card
-            separado). Persiste em clinics.flow_config, não em active_modules. */}
-        <HospitalFeatureToggles initialConfig={initialConfig} onToast={onToast} />
-
         {isSysmax && (
           <div className="px-6 pb-5 pt-3">
             <button
@@ -338,83 +366,3 @@ export default function ModulesTab({
   )
 }
 
-// ─── Recursos Hospitalares Avançados (flow_config) ──────────────────────────
-// Ativação de Internação Completa / Centro Cirúrgico vive AQUI, dentro do card
-// "Módulos do Sistema" — ponto único, sem card separado e sem duplicar como
-// linha de active_modules. Persiste em clinics.flow_config (mesmo mecanismo dos
-// gates já implantados: helpers isInternacaoCompleta/isCentroCirurgico, hooks e
-// DashboardHeader). Off (default) = comportamento atual intacto.
-
-function HospitalFeatureToggles({ initialConfig, onToast }: {
-  initialConfig: ClinicConfig | null
-  onToast:       (type: 'success' | 'error', msg: string) => void
-}) {
-  const flow = initialConfig?.flow_config as (FlowConfig & { internacao_completa?: boolean; centro_cirurgico?: boolean }) | undefined
-  const [internacaoCompleta, setInternacaoCompleta] = useState<boolean>(flow?.internacao_completa ?? false)
-  const [centroCirurgico,    setCentroCirurgico]    = useState<boolean>(flow?.centro_cirurgico ?? false)
-  const [saving, setSaving] = useState(false)
-
-  async function handleSave() {
-    setSaving(true)
-    const base: FlowConfig = initialConfig?.flow_config ?? { vet_merged_modules: [] }
-    const res = await updateClinicConfig({
-      flow_config: { ...base, internacao_completa: internacaoCompleta, centro_cirurgico: centroCirurgico } as FlowConfig,
-    })
-    setSaving(false)
-    if ('error' in res) { onToast('error', res.error); return }
-    onToast('success', 'Recursos hospitalares salvos!')
-  }
-
-  const ROWS: { value: boolean; set: (v: boolean) => void; title: string; desc: string }[] = [
-    {
-      value: internacaoCompleta, set: setInternacaoCompleta,
-      title: 'Internação Completa',
-      desc:  'Versão avançada da Internação: alertas ativos de medicação, sinais vitais, mapa de execução, fluidoterapia e conta. Desligado mantém o fluxo atual.',
-    },
-    {
-      value: centroCirurgico, set: setCentroCirurgico,
-      title: 'Centro Cirúrgico',
-      desc:  'Habilita o módulo Centro Cirúrgico no menu lateral (Kanban Preparo→Sala→RPA, ficha cirúrgica, kits cirúrgicos).',
-    },
-  ]
-
-  return (
-    <div className="border-t border-slate-100 px-6 py-4">
-      <div className="flex items-center gap-2 mb-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-pink-50 flex-shrink-0">
-          <Shield className="h-4 w-4 text-pink-600" />
-        </div>
-        <div>
-          <h3 className="text-sm font-semibold text-slate-900">Recursos Hospitalares Avançados</h3>
-          <p className="text-xs text-slate-500">Ativação independente — Internação Completa e Centro Cirúrgico</p>
-        </div>
-      </div>
-      <div className="divide-y divide-slate-50 rounded-xl border border-slate-100 overflow-hidden">
-        {ROWS.map(row => (
-          <div key={row.title} className={`flex items-center gap-4 px-4 py-3 transition-colors ${row.value ? 'bg-white' : 'bg-slate-50/50'}`}>
-            <div className="flex-1 min-w-0">
-              <p className={`text-sm font-semibold ${row.value ? 'text-slate-900' : 'text-slate-500'}`}>{row.title}</p>
-              <p className="text-xs text-slate-500">{row.desc}</p>
-            </div>
-            <button
-              onClick={() => row.set(!row.value)}
-              className={`flex-shrink-0 transition-colors ${row.value ? 'text-pink-600' : 'text-slate-300'}`}
-              title={row.value ? `Desativar ${row.title}` : `Ativar ${row.title}`}
-            >
-              {row.value ? <ToggleRight className="h-7 w-7" /> : <ToggleLeft className="h-7 w-7" />}
-            </button>
-          </div>
-        ))}
-      </div>
-      <button
-        onClick={handleSave}
-        disabled={saving}
-        className="mt-3 flex items-center gap-2 px-5 py-2.5 bg-pink-600 text-white text-sm font-semibold rounded-xl hover:bg-pink-700 transition-colors disabled:opacity-50"
-      >
-        {saving
-          ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando...</>
-          : <><Save className="h-4 w-4" /> Salvar Recursos Hospitalares</>}
-      </button>
-    </div>
-  )
-}
