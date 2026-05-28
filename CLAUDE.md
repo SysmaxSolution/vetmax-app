@@ -53,4 +53,5 @@ src/types/                  ← TypeScript interfaces
 ## ☁️ Diretrizes para Rotinas Autônomas na Nuvem (Routines)
 1. **Obrigatório PLAN Mode**: Ao atuar de forma autônoma via Routine, você DEVE gerar um plano de execução primeiro e cruzar com as regras de Integridade Clínica acima.
 2. **Camada de Contingência**: NUNCA commite direto na main. Toda correção autônoma deve ser feita em uma branch `fix/` ou `feature/` e um PR deve ser aberto para o Diretor aprovar.
+   - **Exceção vigente (autorizada pelo Diretor/PO em 2026-05-28):** a Sprint **Internação Completa + Centro Cirúrgico** opera com **commit direto na `main` + deploy contínuo** (push em `vetmax` e `origin`). Essa exceção vale apenas para esta sprint; os demais trabalhos seguem a regra de branch + PR acima.
 3. **Escalabilidade**: Em rotinas de Pentest ou QA, limite os testes simulados para não onerar o banco de dados de produção do Supabase.
