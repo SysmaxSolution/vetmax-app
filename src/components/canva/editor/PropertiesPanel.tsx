@@ -1152,10 +1152,14 @@ function ItemTemplateLinesEditor({
     setAt(idx, { template: `${cur}${cur && !cur.endsWith(' ') ? ' ' : ''}${token}` })
   }
   function applyPreset() {
+    // Usa apenas campos reais da tabela prescriptions. O lado direito do
+    // pontilhado fica livre (digite "Cáp"/"Pomada" após o {{LEADER}} ou
+    // crie o campo de forma farmacêutica). Linha 2 monta a posologia a
+    // partir de frequency+duration; linha 3 mostra OBS só se houver.
     onChange([
-      { template: '{{medication}} {{dose}}{{LEADER}}{{type}}', leaderDots: true, style: { fontWeight: 700 } },
-      { template: '{{posology}}', marginBottom: 0 },
-      { template: 'OBS: {{notes}}', style: { fontStyle: 'italic' }, hideIfEmpty: true, marginBottom: 4 },
+      { template: '{{medication}} {{dose}}{{LEADER}}', leaderDots: true, style: { fontWeight: 700 } },
+      { template: '{{frequency}}, durante {{duration_days}} dias consecutivos.', marginBottom: 0 },
+      { template: 'OBS: {{orientation}}', style: { fontStyle: 'italic' }, hideIfEmpty: true, marginBottom: 6 },
     ])
   }
 
