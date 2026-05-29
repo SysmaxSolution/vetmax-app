@@ -3,6 +3,10 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
+import {
+  buildUnifiedPrompt, normalizeUnifiedExtraction,
+  type VoiceContext, type UnifiedVoiceExtraction,
+} from '@/lib/voice/unified-extraction'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -104,6 +108,38 @@ Responda SOMENTE com o texto do motivo, sem aspas, sem prefixo, sem explicação
   } catch (e) {
     console.error('[AI] extractAdmissionReason failed:', e)
     return null
+  }
+}
+
+// ─── Extração Unificada de Voz Clínica (multi-domínio) ───────────────────────
+//
+// Schema/normalização vivem em '@/lib/voice/unified-extraction' (módulo puro,
+// testável). Aqui só a server action que chama a IA.
+
+/**
+ * Extrai um ditado clínico em payload multi-domínio (5 abas da Internação ou
+ * Ficha/Checklist/Relatório da Cirurgia). Determinístico no parsing: nunca
+ * lança — em falha, retorna { error }.
+ */
+export async function extractUnifiedClinicalVoice(
+  transcript: string,
+  context: VoiceContext = 'hospitalization',
+): Promise<UnifiedVoiceExtraction | { error: string }> {
+  if (!transcript || transcript.trim().length < 2) return { error: 'Transcrição vazia.' }
+  try {
+    const message = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1500,
+      messages: [{ role: 'user', content: buildUnifiedPrompt(transcript, context) }],
+    })
+    const content = message.content[0]
+    if (content.type !== 'text') return { error: 'IA não retornou texto.' }
+    const match = content.text.match(/\{[\s\S]*\}/)
+    if (!match) return { error: 'IA não retornou JSON válido.' }
+    return normalizeUnifiedExtraction(JSON.parse(match[0]))
+  } catch (e) {
+    console.error('[AI] extractUnifiedClinicalVoice failed:', e)
+    return { error: 'Erro ao processar o ditado clínico.' }
   }
 }
 
