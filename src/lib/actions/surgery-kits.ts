@@ -78,6 +78,57 @@ export async function createServiceKit(payload: { name: string; description?: st
   return { id: kit.id as string }
 }
 
+export async function getServiceKit(id: string): Promise<ServiceKit | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+  const admin = createAdminClient()
+  const { data: kit, error } = await admin
+    .from('service_kits')
+    .select('id, name, description')
+    .eq('id', id).eq('clinic_id', ctx.clinicId).single()
+  if (error || !kit) return { error: error?.message ?? 'Kit não encontrado.' }
+  const { data: items } = await admin
+    .from('service_kit_items')
+    .select('stock_item_id, item_name, quantity')
+    .eq('kit_id', id).eq('clinic_id', ctx.clinicId)
+    .order('sort_order', { ascending: true })
+  return {
+    id: kit.id as string, name: kit.name as string, description: (kit.description as string | null) ?? null,
+    item_count: items?.length ?? 0,
+    items: (items ?? []).map((i): KitItem => ({
+      stock_item_id: (i.stock_item_id as string | null) ?? null,
+      item_name: i.item_name as string, quantity: Number(i.quantity ?? 1),
+    })),
+  }
+}
+
+export async function updateServiceKit(id: string, payload: { name: string; description?: string | null; items: KitItem[] }): Promise<{ success: true } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+  if (!payload.name?.trim()) return { error: 'Informe o nome do kit.' }
+  const items = (payload.items ?? []).filter(i => i.item_name?.trim() && i.quantity > 0)
+  if (items.length === 0) return { error: 'Adicione ao menos um insumo ao kit.' }
+
+  const admin = createAdminClient()
+  const { error: upErr } = await admin.from('service_kits')
+    .update({ name: payload.name.trim(), description: payload.description?.trim() || null })
+    .eq('id', id).eq('clinic_id', ctx.clinicId)
+  if (upErr) return { error: 'Erro ao atualizar kit: ' + upErr.message }
+
+  // Substitui os insumos (delete + reinsert) para refletir a edição.
+  await admin.from('service_kit_items').delete().eq('kit_id', id).eq('clinic_id', ctx.clinicId)
+  const rows = items.map((i, idx) => ({
+    clinic_id: ctx.clinicId, kit_id: id,
+    stock_item_id: i.stock_item_id ?? null, item_name: i.item_name.trim(),
+    quantity: i.quantity, sort_order: idx,
+  }))
+  const { error: itErr } = await admin.from('service_kit_items').insert(rows)
+  if (itErr) return { error: 'Erro ao salvar insumos: ' + itErr.message }
+
+  revalidatePath('/dashboard/surgery')
+  return { success: true }
+}
+
 export async function deleteServiceKit(id: string): Promise<{ success: true } | { error: string }> {
   const ctx = await getCtx()
   if ('error' in ctx) return ctx
