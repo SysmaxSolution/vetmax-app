@@ -8,6 +8,7 @@ import {
 import { useClinicalVoiceAssistant } from '@/hooks/useClinicalVoiceAssistant'
 import { useUnifiedVoiceDraft } from '@/hooks/useUnifiedClinicalVoice'
 import VoiceReviewPanel from './VoiceReviewPanel'
+import SurgeryStageFeed from './SurgeryStageFeed'
 import {
   getSurgery, updateSurgeryChecklist, updateSurgeryReport,
   listSurgeryVitals, recordSurgeryVital, sendSurgeryToInternacao,
@@ -254,6 +255,10 @@ export default function SurgeryFichaModal({ surgeryId, onClose, onChanged }: Pro
                       <ShieldAlert className="h-3.5 w-3.5" /> Termo de consentimento pendente — obrigatório antes do procedimento (CFMV).
                     </p>
                   )}
+                  <div className="pt-2 border-t border-slate-100">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Anotações cronológicas</p>
+                    <SurgeryStageFeed surgeryId={surgeryId} stage="preop" locked={surgery?.status === 'done' || surgery?.status === 'canceled'} />
+                  </div>
                 </div>
               </Section>
 
@@ -288,6 +293,10 @@ export default function SurgeryFichaModal({ surgeryId, onClose, onChanged }: Pro
                       ))}
                     </div>
                   )}
+                  <div className="pt-2 border-t border-slate-100">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Anotações cronológicas</p>
+                    <SurgeryStageFeed surgeryId={surgeryId} stage="anesthesia" locked={surgery?.status === 'done' || surgery?.status === 'canceled'} />
+                  </div>
                 </div>
               </Section>
 
@@ -299,6 +308,10 @@ export default function SurgeryFichaModal({ surgeryId, onClose, onChanged }: Pro
                   <button onClick={saveReport} disabled={savingReport} className="flex items-center gap-1.5 rounded-lg bg-violet-600 hover:bg-violet-700 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">
                     {savingReport ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Salvar Relatório
                   </button>
+                  <div className="pt-2 border-t border-slate-100">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Anotações cronológicas</p>
+                    <SurgeryStageFeed surgeryId={surgeryId} stage="report" locked={surgery?.status === 'done' || surgery?.status === 'canceled'} />
+                  </div>
                 </div>
               </Section>
 
