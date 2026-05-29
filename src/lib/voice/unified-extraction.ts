@@ -45,6 +45,9 @@ export interface VoiceMedication {
   notes:           string | null
   /** Marcado quando faltam dose/via/frequência — exige revisão manual. */
   needs_review:    boolean
+  /** Marcado quando uma medicação anterior do draft já tem o mesmo princípio
+   *  ativo + dose normalizada (heurística de duplicação por re-ditado). */
+  is_duplicate_suggestion?: boolean
 }
 export interface VoiceChecklist {
   fasting_confirmed: boolean | null
@@ -153,6 +156,36 @@ export function normalizeUnifiedExtraction(raw: any): UnifiedVoiceExtraction {
   return { notes: _str(r.notes) ?? '', improvement_level, vitals, fluids, clinical_data, tasks, medications, checklist }
 }
 
+// Heurística de duplicação de medicação entre gravações sucessivas.
+//
+//  - Nome: minúsculas, sem acentos, sem concentração inline (250mg / 1 ml / 0,5g
+//    no final do nome quando dose explícita está separada). Compara o "núcleo"
+//    do princípio ativo.
+//  - Dose: minúsculas, sem espaços, sem unidade quando os dígitos coincidem.
+//    Ex.: "250 mg" ≡ "250mg".
+const _stripAccents = (s: string): string => s.normalize('NFD').replace(/[̀-ͯ]/g, '')
+export function normalizeMedName(name: string | null | undefined): string {
+  if (!name) return ''
+  let s = _stripAccents(name).toLowerCase().trim()
+  // Tira concentração inline trailing (ex.: "amoxicilina 250mg" → "amoxicilina")
+  s = s.replace(/\s*\d+(?:[.,]\d+)?\s*(?:mg|ml|g|mcg|ui)\b\s*$/i, '')
+  // Compacta espaços e símbolos.
+  return s.replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim()
+}
+export function normalizeDose(dose: string | null | undefined): string {
+  if (!dose) return ''
+  return _stripAccents(dose).toLowerCase().replace(/\s+/g, '').replace(',', '.')
+}
+function isLikelyDuplicateMed(a: VoiceMedication, b: VoiceMedication): boolean {
+  const nA = normalizeMedName(a.name), nB = normalizeMedName(b.name)
+  if (!nA || !nB) return false
+  if (nA !== nB) return false
+  // Se nenhum dos dois tem dose: mesmo nome já basta para marcar como possível duplicata.
+  if (!a.dose && !b.dose) return true
+  // Se ambos têm dose: comparar dose normalizada.
+  return normalizeDose(a.dose) === normalizeDose(b.dose)
+}
+
 // Merge por campo: escalar/objeto vazio recebe o novo valor; campo já preenchido
 // é mantido (nunca sobrescreve). Listas SOMAM (append). Garante o requisito de
 // múltiplas gravações cumulativas que nunca apagam o que já foi ditado.
@@ -168,6 +201,11 @@ function _mergeObj<T extends Record<string, any>>(cur: T | null, inc: T | null):
 
 /** Acumula duas extrações (gravações sucessivas) sem perder dados anteriores. */
 export function mergeExtractions(a: UnifiedVoiceExtraction, b: UnifiedVoiceExtraction): UnifiedVoiceExtraction {
+  // Marca cada medicação NOVA (de b) como possível duplicata se já existe em a.
+  const medsB = b.medications.map(m => {
+    const dup = a.medications.some(existing => isLikelyDuplicateMed(existing, m))
+    return dup ? { ...m, is_duplicate_suggestion: true } : m
+  })
   return {
     notes: [a.notes, b.notes].filter(s => s && s.trim()).join('\n').trim(),
     improvement_level: a.improvement_level ?? b.improvement_level,
@@ -175,7 +213,7 @@ export function mergeExtractions(a: UnifiedVoiceExtraction, b: UnifiedVoiceExtra
     fluids: [...a.fluids, ...b.fluids],
     clinical_data: _mergeObj(a.clinical_data, b.clinical_data),
     tasks: [...a.tasks, ...b.tasks],
-    medications: [...a.medications, ...b.medications],
+    medications: [...a.medications, ...medsB],
     checklist: _mergeObj(a.checklist, b.checklist),
   }
 }

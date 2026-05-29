@@ -4,6 +4,7 @@
 
 import {
   normalizeUnifiedExtraction, mergeExtractions, summarizeExtraction, EMPTY_EXTRACTION,
+  normalizeMedName, normalizeDose,
 } from '@/lib/voice/unified-extraction'
 
 describe('normalizeUnifiedExtraction', () => {
@@ -93,6 +94,42 @@ describe('mergeExtractions (cumulativo, sem sobrescrever)', () => {
     const m2 = mergeExtractions(m, normalizeUnifiedExtraction({ notes: 'Aceitou alimentação.' }))
     expect(m2.notes).toContain('Paciente alerta.')
     expect(m2.notes).toContain('Aceitou alimentação.')
+  })
+})
+
+describe('dedup heurística de medicações', () => {
+  test('TC-UVE-030 → normalizeMedName remove acentos, caixa e concentração inline', () => {
+    expect(normalizeMedName('Amoxicilina 250mg')).toBe('amoxicilina')
+    expect(normalizeMedName('Dipirona Sódica')).toBe('dipirona sodica')
+    expect(normalizeMedName('Cefazolina   1g')).toBe('cefazolina')
+  })
+
+  test('TC-UVE-031 → normalizeDose compacta unidade/vírgula', () => {
+    expect(normalizeDose('250 mg')).toBe('250mg')
+    expect(normalizeDose('0,5ml')).toBe('0.5ml')
+  })
+
+  test('TC-UVE-032 → 2ª gravação com MESMA med+dose é marcada como duplicata', () => {
+    const a = normalizeUnifiedExtraction({ medications: [{ name: 'Dipirona', dose: '500mg', route: 'IV', frequency_hours: 8 }] })
+    const b = normalizeUnifiedExtraction({ medications: [{ name: 'Dipirona', dose: '500 mg', route: 'IV', frequency_hours: 8 }] })
+    const m = mergeExtractions(a, b)
+    expect(m.medications).toHaveLength(2)
+    expect(m.medications[0].is_duplicate_suggestion).toBeFalsy()
+    expect(m.medications[1].is_duplicate_suggestion).toBe(true)
+  })
+
+  test('TC-UVE-033 → med com nome diferente NÃO é duplicata', () => {
+    const a = normalizeUnifiedExtraction({ medications: [{ name: 'Dipirona', dose: '500mg', route: 'IV', frequency_hours: 8 }] })
+    const b = normalizeUnifiedExtraction({ medications: [{ name: 'Amoxicilina', dose: '500mg', route: 'IV', frequency_hours: 8 }] })
+    const m = mergeExtractions(a, b)
+    expect(m.medications[1].is_duplicate_suggestion).toBeFalsy()
+  })
+
+  test('TC-UVE-034 → mesma med com dose DIFERENTE não é duplicata', () => {
+    const a = normalizeUnifiedExtraction({ medications: [{ name: 'Dipirona', dose: '500mg', route: 'IV', frequency_hours: 8 }] })
+    const b = normalizeUnifiedExtraction({ medications: [{ name: 'Dipirona', dose: '1g',    route: 'IV', frequency_hours: 8 }] })
+    const m = mergeExtractions(a, b)
+    expect(m.medications[1].is_duplicate_suggestion).toBeFalsy()
   })
 })
 

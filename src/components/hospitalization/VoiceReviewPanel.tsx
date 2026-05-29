@@ -194,7 +194,8 @@ export default function VoiceReviewPanel(props: Props) {
             <Section icon={<Pill className="h-3.5 w-3.5 text-violet-500" />} title="Medicações (prescrição)">
               <div className="space-y-1.5">
                 {draft.medications.map((m, i) => (
-                  <div key={i} className={`rounded-lg border px-2 py-1.5 ${m.needs_review ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-white'}`} data-testid={`voice-med-${i}`}>
+                  <div key={i} className={`rounded-lg border px-2 py-1.5 ${m.is_duplicate_suggestion ? 'border-amber-400 bg-amber-100/60' : m.needs_review ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-white'}`} data-testid={`voice-med-${i}`}>
+                    {m.is_duplicate_suggestion && <p className="mb-1 text-[10px] font-bold text-amber-800 flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Possível duplicata — mesma medicação/dose já no draft.</p>}
                     <div className="flex items-center gap-1.5">
                       <input value={m.name} onChange={e => patchMed(i, { name: e.target.value })} placeholder="Medicamento" className="flex-1 min-w-0 rounded-md border border-slate-300 px-2 py-1 text-xs font-semibold" />
                       <button onClick={() => removeMed(i)} className="text-slate-300 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>
