@@ -16,9 +16,12 @@ import type { SchedulerResult } from '@/hooks/useMedicationScheduler'
 interface Props {
   scheduler: SchedulerResult
   onClick?: (e: React.MouseEvent) => void
+  /** Liga a animação de pulso do ícone (med-icon-pulse). Off ⇒ badge estático
+   *  (recurso de alerta animado é exclusivo da Internação Completa). Default true. */
+  animate?: boolean
 }
 
-export default function MedicationAlertBadge({ scheduler, onClick }: Props) {
+export default function MedicationAlertBadge({ scheduler, onClick, animate = true }: Props) {
   if (!scheduler.isAlerting && !scheduler.hasImminent) return null
 
   const overdueCount  = scheduler.alerts.filter(a => a.isOverdue).length
@@ -49,7 +52,7 @@ export default function MedicationAlertBadge({ scheduler, onClick }: Props) {
       title={ariaLabel}
       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold ${colorClasses}`}
     >
-      <Pill className={`h-3 w-3 ${isUrgent ? 'med-icon-pulse' : ''}`} aria-hidden />
+      <Pill className={`h-3 w-3 ${isUrgent && animate ? 'med-icon-pulse' : ''}`} aria-hidden />
       {isUrgent ? overdueCount : imminentCount}
     </button>
   )

@@ -851,12 +851,13 @@ function KanbanCard({ card, prescriptions, internacaoCompleta, openBalance, onDr
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-1">
             <h4 className="font-bold text-slate-900 text-sm truncate">{card.patient.name}</h4>
-            {internacaoCompleta && (
-              <MedicationAlertBadge
-                scheduler={scheduler}
-                onClick={() => onOpenMedAlert?.(card)}
-              />
-            )}
+            {/* Badge sempre visível; a animação de pulso (med-icon-pulse) e o
+                alarme sonoro são exclusivos da Internação Completa. */}
+            <MedicationAlertBadge
+              scheduler={scheduler}
+              animate={internacaoCompleta}
+              onClick={() => onOpenMedAlert?.(card)}
+            />
             {card.status === 'ready_for_discharge' && (
               internacaoCompleta ? (
                 // Regra 4 — Alta Administrativa: habilitada só com a conta zerada.
