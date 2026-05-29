@@ -7,6 +7,7 @@ import {
   buildUnifiedPrompt, normalizeUnifiedExtraction,
   type VoiceContext, type UnifiedVoiceExtraction,
 } from '@/lib/voice/unified-extraction'
+import { formatClinicDate, formatClinicDateTime } from '@/lib/time'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -186,7 +187,7 @@ export async function generateClinicalSummary(
         const medsText = Array.isArray(r.medications) && r.medications.length > 0
           ? r.medications.map((m: any) => `${m.name} ${m.dose} ${m.route}`.trim()).join(', ')
           : 'Nenhuma medicação registrada'
-        return `[Evolução ${i + 1}] ${new Date(r.created_at).toLocaleString('pt-BR')} — ${r.user_name}
+        return `[Evolução ${i + 1}] ${formatClinicDateTime(r.created_at)} — ${r.user_name}
 Estado clínico: ${r.improvement_level}
 Observações: ${r.notes || 'Sem observações'}
 Medicações aplicadas: ${medsText}`
@@ -194,7 +195,7 @@ Medicações aplicadas: ${medsText}`
     : 'Nenhuma evolução de plantão registrada.'
 
   const docsText = (docs ?? []).length > 0
-    ? (docs ?? []).map(d => `- ${d.file_name} (${d.file_type}) — ${new Date(d.created_at).toLocaleDateString('pt-BR')}`).join('\n')
+    ? (docs ?? []).map(d => `- ${d.file_name} (${d.file_type}) — ${formatClinicDate(d.created_at)}`).join('\n')
     : 'Nenhum documento clínico anexado.'
 
   const prompt = `Você é um sistema de apoio à decisão clínica veterinária, operando sob as diretrizes éticas do CFMV (Conselho Federal de Medicina Veterinária), conforme a Resolução CFMV nº 1.138/2016 (prontuários veterinários) e o Código de Ética Médico-Veterinário.
@@ -345,7 +346,7 @@ export async function askPatientHistory(
         const medsText = Array.isArray(r.medications) && r.medications.length > 0
           ? r.medications.map((m: any) => `${m.name} ${m.dose} ${m.route}`.trim()).join(', ')
           : 'sem medicação'
-        return `[${new Date(r.created_at).toLocaleString('pt-BR')}] ${r.user_name} — ${r.improvement_level.toUpperCase()}
+        return `[${formatClinicDateTime(r.created_at)}] ${r.user_name} — ${r.improvement_level.toUpperCase()}
 Observações: ${r.notes || 'sem observações'}
 Medicações: ${medsText}`
       }).join('\n\n')
@@ -361,7 +362,7 @@ Medicações: ${medsText}`
     ? (prescriptions ?? []).map(p => {
         const freq = p.frequency_hours ? `${p.frequency_hours}/${p.frequency_hours}h` : 'dose única/SOS'
         const dur  = p.duration_hours ? ` por ${p.duration_hours}h` : ''
-        return `• ${p.medication_name}${p.dose ? ` ${p.dose}` : ''}${p.route ? ` ${p.route}` : ''} (${freq}${dur}) — iniciada ${new Date(p.started_at).toLocaleString('pt-BR')}${p.notes ? ` · ${p.notes}` : ''}`
+        return `• ${p.medication_name}${p.dose ? ` ${p.dose}` : ''}${p.route ? ` ${p.route}` : ''} (${freq}${dur}) — iniciada ${formatClinicDateTime(p.started_at)}${p.notes ? ` · ${p.notes}` : ''}`
       }).join('\n')
     : 'Nenhuma prescrição ativa.'
 
@@ -384,7 +385,7 @@ Medicações: ${medsText}`
           v.glucose     != null ? `Glic ${v.glucose}`     : null,
           v.pain_score  != null ? `Dor ${v.pain_score}/10` : null,
         ].filter(Boolean).join(' · ')
-        return `[${new Date(v.recorded_at).toLocaleString('pt-BR')}] ${parts || '—'}${v.notes ? ` · ${v.notes}` : ''}`
+        return `[${formatClinicDateTime(v.recorded_at)}] ${parts || '—'}${v.notes ? ` · ${v.notes}` : ''}`
       }).join('\n')
     : 'Sem aferições recentes.'
 
@@ -394,7 +395,7 @@ Medicações: ${medsText}`
 **Pet:** ${petInfo}
 **Motivo da internação:** ${hosp.reason ?? 'não informado'}
 **Status:** ${statusMap[hosp.status] ?? hosp.status}
-**Internado desde:** ${new Date(hosp.created_at).toLocaleString('pt-BR')}
+**Internado desde:** ${formatClinicDateTime(hosp.created_at)}
 ${hosp.notes ? `**Observações iniciais:** ${hosp.notes}` : ''}
 
 ## Linha do Tempo (mais recentes primeiro)

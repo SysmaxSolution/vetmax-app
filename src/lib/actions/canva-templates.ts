@@ -14,6 +14,7 @@ import type {
   CanvaContentJson, CanvaTemplateConfig, CanvaBlockStyle, CanvaDynamicField,
 } from '@/lib/canva/types'
 import { CANVA_DEFAULT_MARGINS, validateContent } from '@/lib/canva/types'
+import { formatClinicDate } from '@/lib/time'
 import type { CanvasState } from '@/lib/canva/canvas-state'
 import { isCanvasState } from '@/lib/canva/canvas-state'
 import type { FillableFieldElement } from '@/lib/canva/elements'
@@ -519,7 +520,7 @@ export async function generateCanvasDocumentDraft(
         species:      (resolveCtx.patient as any)?.species,
         breed:        (resolveCtx.patient as any)?.breed,
         sex:          (resolveCtx.patient as any)?.gender,
-        date:         new Date().toLocaleDateString('pt-BR'),
+        date:         formatClinicDate(new Date()),
         vet_name:     (resolveCtx.vet as any)?.full_name,
         crmv:         (resolveCtx.vet as any)?.crmv,
       },
@@ -630,7 +631,7 @@ REGRAS ABSOLUTAS:
 5. Datas em formato DD/MM/AAAA (ex: para "data_retirada_pontos", se a transcrição menciona "10 dias", calcule a partir de HOJE)
 6. Números sem unidades (ex: 12.5 não "12.5 kg")
 7. Texto em PT-BR formal e objetivo
-8. Hoje é ${new Date().toLocaleDateString('pt-BR')}
+8. Hoje é ${formatClinicDate(new Date())}
 
 Responda SOMENTE com o JSON:`
 
@@ -1199,9 +1200,7 @@ export async function loadCanvaDocumentForEdit(documentId: string): Promise<
       species:      (resolveCtx.patient as any)?.species,
       breed:        (resolveCtx.patient as any)?.breed,
       sex:          (resolveCtx.patient as any)?.gender,
-      date:         doc.created_at
-        ? new Date(doc.created_at).toLocaleDateString('pt-BR')
-        : new Date().toLocaleDateString('pt-BR'),
+      date:         formatClinicDate(doc.created_at ?? new Date()),
       vet_name:     (resolveCtx.vet as any)?.full_name,
       crmv:         (resolveCtx.vet as any)?.crmv,
     },

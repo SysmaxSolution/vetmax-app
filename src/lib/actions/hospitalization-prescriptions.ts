@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { consumeStockForApplication, type StockConsumptionResult } from '@/lib/actions/stock-consumption'
+import { formatClinicTime } from '@/lib/time'
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -270,7 +271,10 @@ export async function applyHospitalizationDose(
       .single()
     const userName  = profile?.full_name ?? 'Enfermagem'
     const appliedAt = opts.applied_at ?? new Date().toISOString()
-    const hora      = new Date(appliedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    // IMPORTANTE: usa o helper formatClinicTime para garantir o horário NO
+    // timezone da clínica. Sem o helper, Node em UTC no Vercel renderizaria
+    // 3h adiantado (ex.: "20:36" no log vs "17:36" no card cliente).
+    const hora      = formatClinicTime(appliedAt)
     const medName   = (presc.medication_name as string) ?? 'Medicação'
     const doseTxt   = (presc.dose  as string | null) ?? ''
     const routeTxt  = (presc.route as string | null) ?? ''

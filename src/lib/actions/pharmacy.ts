@@ -371,9 +371,12 @@ export async function extractFullVoice(
   if (!transcript.trim()) return { error: 'Transcrição vazia.' }
 
   const today = new Date()
-  const todayIso = today.toISOString().split('T')[0]
+  // Usa o timezone da clínica para `todayIso`/`todayFormatted` — Node em UTC no
+  // Vercel mudaria o dia 3h antes do real (ex.: 21h BRT → "amanhã" no UTC).
+  const todayIso = today.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }) // "2026-05-29"
   const todayFormatted = today.toLocaleDateString('pt-BR', {
     weekday: 'long', day: '2-digit', month: 'long', year: 'numeric',
+    timeZone: 'America/Sao_Paulo',
   })
 
   const merged = flowConfig?.vet_merged_modules ?? []
