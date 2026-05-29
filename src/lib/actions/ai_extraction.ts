@@ -305,6 +305,33 @@ export async function askPatientHistory(
     .eq('hospitalization_id', hospitalizationId)
     .eq('clinic_id', profile.clinic_id)
 
+  // 4. Prescrições ativas (Mapa de Execução)
+  const { data: prescriptions } = await admin
+    .from('hospitalization_prescriptions')
+    .select('medication_name, dose, route, frequency_hours, duration_hours, notes, started_at')
+    .eq('hospitalization_id', hospitalizationId)
+    .eq('clinic_id', profile.clinic_id)
+    .eq('status', 'active')
+    .order('started_at', { ascending: false })
+
+  // 5. Tarefas agendadas (exame/procedimento/alimentação)
+  const { data: tasks } = await admin
+    .from('hospitalization_tasks')
+    .select('kind, description, frequency_hours, started_at')
+    .eq('hospitalization_id', hospitalizationId)
+    .eq('clinic_id', profile.clinic_id)
+    .eq('status', 'active')
+    .order('started_at', { ascending: false })
+
+  // 6. Sinais vitais recentes (até 5)
+  const { data: vitals } = await admin
+    .from('clinical_vitals')
+    .select('recorded_at, temperature, heart_rate, resp_rate, weight, blood_pressure, glucose, spo2, pain_score, notes')
+    .eq('hospitalization_id', hospitalizationId)
+    .eq('clinic_id', profile.clinic_id)
+    .order('recorded_at', { ascending: false })
+    .limit(5)
+
   const pet = hosp.patients as any
   const petInfo = `${pet?.name ?? 'Animal'} — ${pet?.species ?? ''}${pet?.breed ? ` (${pet.breed})` : ''}`
 
@@ -328,6 +355,39 @@ Medicações: ${medsText}`
     ? (docs ?? []).map(d => `• ${d.file_name} (${d.file_type})`).join('\n')
     : 'Nenhum documento.'
 
+  const kindLabel: Record<string, string> = { exam: 'Exame', procedure: 'Procedimento', feeding: 'Alimentação', other: 'Tarefa' }
+
+  const prescriptionsText = (prescriptions ?? []).length > 0
+    ? (prescriptions ?? []).map(p => {
+        const freq = p.frequency_hours ? `${p.frequency_hours}/${p.frequency_hours}h` : 'dose única/SOS'
+        const dur  = p.duration_hours ? ` por ${p.duration_hours}h` : ''
+        return `• ${p.medication_name}${p.dose ? ` ${p.dose}` : ''}${p.route ? ` ${p.route}` : ''} (${freq}${dur}) — iniciada ${new Date(p.started_at).toLocaleString('pt-BR')}${p.notes ? ` · ${p.notes}` : ''}`
+      }).join('\n')
+    : 'Nenhuma prescrição ativa.'
+
+  const tasksText = (tasks ?? []).length > 0
+    ? (tasks ?? []).map(t => {
+        const freq = t.frequency_hours ? `${t.frequency_hours}/${t.frequency_hours}h` : 'única'
+        return `• [${kindLabel[t.kind] ?? t.kind}] ${t.description} (${freq})`
+      }).join('\n')
+    : 'Nenhuma tarefa agendada.'
+
+  const vitalsText = (vitals ?? []).length > 0
+    ? (vitals ?? []).map(v => {
+        const parts = [
+          v.temperature != null ? `T ${v.temperature}°C` : null,
+          v.heart_rate  != null ? `FC ${v.heart_rate}`   : null,
+          v.resp_rate   != null ? `FR ${v.resp_rate}`    : null,
+          v.spo2        != null ? `SpO₂ ${v.spo2}%`       : null,
+          v.weight      != null ? `Peso ${v.weight}kg`    : null,
+          v.blood_pressure ? `PA ${v.blood_pressure}` : null,
+          v.glucose     != null ? `Glic ${v.glucose}`     : null,
+          v.pain_score  != null ? `Dor ${v.pain_score}/10` : null,
+        ].filter(Boolean).join(' · ')
+        return `[${new Date(v.recorded_at).toLocaleString('pt-BR')}] ${parts || '—'}${v.notes ? ` · ${v.notes}` : ''}`
+      }).join('\n')
+    : 'Sem aferições recentes.'
+
   const prompt = `Você é o Assistente Clínico do SysVetMax, apoio ao Médico Veterinário. Responda de forma concisa e objetiva em português, com linguagem técnica veterinária.
 
 ## Prontuário
@@ -340,6 +400,15 @@ ${hosp.notes ? `**Observações iniciais:** ${hosp.notes}` : ''}
 ## Linha do Tempo (mais recentes primeiro)
 ${evolutionsText}
 
+## Prescrições Ativas (Mapa de Execução)
+${prescriptionsText}
+
+## Tarefas Agendadas
+${tasksText}
+
+## Sinais Vitais Recentes
+${vitalsText}
+
 ## Documentos Anexados
 ${docsText}
 
@@ -347,7 +416,7 @@ ${docsText}
 "${question}"
 
 ## Instrução
-Responda com base EXCLUSIVAMENTE nas informações acima. Se a informação não constar no prontuário, diga claramente que não há registro. Máximo 3 frases. Seja direto e objetivo.
+Responda com base EXCLUSIVAMENTE nas informações acima — incluindo prescrições ativas, tarefas e vitais recentes quando a pergunta envolver medicação, exames, alimentação ou condição clínica atual. Se a informação não constar, diga claramente que não há registro. Máximo 3 frases. Seja direto e objetivo.
 
 AVISO: Esta resposta é apoio técnico ao MV responsável (CFMV Res. 1.138/2016).`
 
