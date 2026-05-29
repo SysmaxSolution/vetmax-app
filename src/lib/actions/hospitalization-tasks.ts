@@ -132,3 +132,46 @@ export async function updateTaskStatus(id: string, status: TaskStatus): Promise<
   revalidatePath('/dashboard/hospitalization')
   return { success: true }
 }
+
+/** Edita os campos de uma tarefa agendada (tipo, descrição, frequência). */
+export async function updateHospitalizationTask(
+  id: string,
+  fields: { kind?: TaskKind; description?: string; frequency_hours?: number | null },
+): Promise<{ success: true } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+  const patch: Record<string, unknown> = {}
+  if (fields.kind !== undefined) {
+    if (!['exam', 'procedure', 'feeding', 'other'].includes(fields.kind)) return { error: 'Tipo inválido.' }
+    patch.kind = fields.kind
+  }
+  if (fields.description !== undefined) {
+    if (!fields.description.trim()) return { error: 'Descrição da tarefa é obrigatória.' }
+    patch.description = fields.description.trim()
+  }
+  if (fields.frequency_hours !== undefined) patch.frequency_hours = NUM(fields.frequency_hours)
+  if (Object.keys(patch).length === 0) return { success: true }
+
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('hospitalization_tasks')
+    .update(patch)
+    .eq('id', id).eq('clinic_id', ctx.clinicId)
+  if (error) return { error: error.message }
+  revalidatePath('/dashboard/hospitalization')
+  return { success: true }
+}
+
+/** Remove uma tarefa agendada. */
+export async function deleteHospitalizationTask(id: string): Promise<{ success: true } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('hospitalization_tasks')
+    .delete()
+    .eq('id', id).eq('clinic_id', ctx.clinicId)
+  if (error) return { error: error.message }
+  revalidatePath('/dashboard/hospitalization')
+  return { success: true }
+}
