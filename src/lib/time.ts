@@ -1,0 +1,47 @@
+// Helper de formatação de tempo no timezone da clínica.
+//
+// Problema corrigido: chamadas a `toLocaleTimeString('pt-BR', { hour, minute })`
+// **server-side** (Node em UTC no Vercel) renderizam o horário UTC, e o cliente
+// usa o timezone do browser — gerando inconsistência (ex.: 17:36 no card,
+// 20:36 na string persistida em hospitalization_records.notes).
+//
+// Solução: TODA renderização de data/hora — server e cliente — passa por estes
+// helpers, que SEMPRE recebem um `timeZone` explícito (default America/Sao_Paulo).
+//
+// Quando `clinics.timezone` for adicionado ao schema, basta passar o valor da
+// clínica via parâmetro `tz`.
+
+export const DEFAULT_CLINIC_TZ = 'America/Sao_Paulo'
+
+type Input = Date | string | number
+
+function toDate(input: Input): Date {
+  return input instanceof Date ? input : new Date(input)
+}
+
+/** "17:36" — hora local da clínica. */
+export function formatClinicTime(input: Input, tz: string = DEFAULT_CLINIC_TZ): string {
+  return toDate(input).toLocaleTimeString('pt-BR', {
+    hour: '2-digit', minute: '2-digit', timeZone: tz,
+  })
+}
+
+/** "29/05/2026" — data local da clínica. */
+export function formatClinicDate(input: Input, tz: string = DEFAULT_CLINIC_TZ): string {
+  return toDate(input).toLocaleDateString('pt-BR', { timeZone: tz })
+}
+
+/** "29/05/2026 17:36" — data + hora local da clínica. */
+export function formatClinicDateTime(input: Input, tz: string = DEFAULT_CLINIC_TZ): string {
+  return toDate(input).toLocaleString('pt-BR', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', timeZone: tz,
+  })
+}
+
+/** "29/05 17:36" — formato compacto p/ feeds e listas. */
+export function formatClinicShort(input: Input, tz: string = DEFAULT_CLINIC_TZ): string {
+  return toDate(input).toLocaleString('pt-BR', {
+    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: tz,
+  })
+}
