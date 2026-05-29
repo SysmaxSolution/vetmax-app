@@ -125,6 +125,7 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
   const [dischargeSuccessMsg, setDischargeSuccessMsg] = useState('')
   const [dragOverCol, setDragOverCol]       = useState<HospitalizationStatus | null>(null)
   const [selectedCard, setSelectedCard]     = useState<HospitalizationCard | null>(null)
+  const [detailInitialTab, setDetailInitialTab] = useState<'tarefas' | undefined>(undefined)
   const [pendingDischarge, setPendingDischarge] = useState<{
     card:       HospitalizationCard
     fromStatus: HospitalizationStatus
@@ -589,7 +590,15 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
       )}
 
       {view === 'execution' && internacaoCompleta && (
-        <ExecutionMapView cards={allCards} prescriptionsByHosp={prescriptionsByHosp} tasksByHosp={tasksByHosp} />
+        <ExecutionMapView
+          cards={allCards}
+          prescriptionsByHosp={prescriptionsByHosp}
+          tasksByHosp={tasksByHosp}
+          onLineClick={(card, type) => {
+            if (type === 'med') { setMedModalCard(card) }
+            else { setDetailInitialTab('tarefas'); setSelectedCard(card) }
+          }}
+        />
       )}
 
       {view === 'occupancy' && internacaoCompleta && (
@@ -663,7 +672,7 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
                       onDragEnd={handleDragEnd}
                       onOpenMedAlert={() => setMedModalCard(card)}
                       onDischarge={handleDischargeRequest}
-                      onOpen={() => setSelectedCard(card)}
+                      onOpen={() => { setDetailInitialTab(undefined); setSelectedCard(card) }}
                     />
                   ))
                 )}
@@ -693,7 +702,8 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
       {selectedCard && !pendingMove && (
         <HospitalizationDetailModal
           card={selectedCard}
-          onClose={() => setSelectedCard(null)}
+          initialTab={detailInitialTab}
+          onClose={() => { setSelectedCard(null); setDetailInitialTab(undefined) }}
           onSaved={() => { void refreshPrescriptions(); void refreshTasks() }}
           onCardUpdated={(patch) => {
             const id = selectedCard.id
@@ -934,6 +944,9 @@ function KanbanCard({ card, prescriptions, internacaoCompleta, openBalance, onDr
           <p className="text-[10px] text-slate-500 font-medium truncate uppercase">
             {card.patient.breed || 'SRD'}
           </p>
+          {card.tutor?.name && (
+            <p className="text-[10px] text-slate-400 truncate">Tutor: {card.tutor.name}</p>
+          )}
           <div className="flex flex-wrap gap-x-2 mt-0.5">
             {card.patient.gender && card.patient.gender !== 'unknown' && (
               <span className="text-[10px] text-slate-400">{card.patient.gender === 'male' ? 'Macho' : 'Fêmea'}</span>

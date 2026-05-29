@@ -138,9 +138,11 @@ interface Props {
   cards:               HospitalizationCard[]
   prescriptionsByHosp: Map<string, HospPrescription[]>
   tasksByHosp?:        Map<string, HospTask[]>
+  /** Clique numa linha: 'med' abre a tela de medicações; 'task' abre a aba Tarefas do card. */
+  onLineClick?:        (card: HospitalizationCard, type: LineType) => void
 }
 
-export default function ExecutionMapView({ cards, prescriptionsByHosp, tasksByHosp }: Props) {
+export default function ExecutionMapView({ cards, prescriptionsByHosp, tasksByHosp, onLineClick }: Props) {
   // Re-render a cada tick (15s) para recalcular os estados dos slots.
   useSyncExternalStore(
     medicationTickStore.subscribe,
@@ -212,7 +214,13 @@ export default function ExecutionMapView({ cards, prescriptionsByHosp, tasksByHo
             </div>
             <div className="divide-y divide-slate-50">
               {lines.map(line => (
-                <div key={`${line.type}-${line.id}`} className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-2" data-testid={line.type === 'task' ? `map-task-${line.id}` : undefined}>
+                <div
+                  key={`${line.type}-${line.id}`}
+                  onClick={onLineClick ? () => onLineClick(card, line.type) : undefined}
+                  className={`px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-2 ${onLineClick ? 'cursor-pointer hover:bg-violet-50/50 transition-colors' : ''}`}
+                  data-testid={line.type === 'task' ? `map-task-${line.id}` : `map-med-${line.id}`}
+                  title={onLineClick ? (line.type === 'med' ? 'Abrir medicações' : 'Abrir tarefas') : undefined}
+                >
                   <div className="sm:w-56 flex-shrink-0">
                     <p className="text-sm font-semibold text-slate-800 flex items-center gap-1.5">
                       {line.type === 'med' ? <Pill className="h-3.5 w-3.5 text-violet-500" /> : <TaskIcon kind={line.taskKind!} />} {line.name}

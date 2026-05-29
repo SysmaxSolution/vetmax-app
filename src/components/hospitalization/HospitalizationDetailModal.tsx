@@ -51,9 +51,11 @@ interface Props {
   onStatusChanged?: (newStatus: string) => void
   /** Disparado ao salvar Dados Clínicos (isolamento/leito/alta) — badge acende no board. */
   onCardUpdated?: (patch: { isolation_required?: boolean; box_id?: string | null; estimated_discharge?: string | null }) => void
+  /** Aba inicial da coluna direita (ex.: abrir direto em 'tarefas' a partir do Mapa de Execução). */
+  initialTab?: 'timeline' | 'documents' | 'vitals' | 'fluids' | 'conta' | 'dados' | 'tarefas'
 }
 
-export default function HospitalizationDetailModal({ card, onClose, prefilledStatus, onSaved, onStatusChanged, onCardUpdated }: Props) {
+export default function HospitalizationDetailModal({ card, onClose, prefilledStatus, onSaved, onStatusChanged, onCardUpdated, initialTab }: Props) {
   const aiMode = useAiTranscriptionMode()
   const internacaoCompleta = useInternacaoCompleta()
   const admissionWeight = (card as { weight_at_admission?: number | null }).weight_at_admission ?? null
@@ -112,7 +114,7 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
 
   // Aba ativa na coluna direita. Sinais Vitais e Fluidoterapia só sob a flag
   // Internação Completa.
-  const [activeRightTab, setActiveRightTab] = useState<'timeline' | 'documents' | 'vitals' | 'fluids' | 'conta' | 'dados' | 'tarefas'>('timeline')
+  const [activeRightTab, setActiveRightTab] = useState<'timeline' | 'documents' | 'vitals' | 'fluids' | 'conta' | 'dados' | 'tarefas'>(initialTab ?? 'timeline')
 
   // Estado da IA Clínica
   const [aiSuggestion, setAiSuggestion] = useState<ClinicalSummaryResult | null>(null)
