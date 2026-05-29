@@ -406,7 +406,31 @@ export async function confirmPurchaseReceipt(
 
     if (!stock) continue
 
-    const newQty = (stock.quantity ?? 0) + item.quantity
+    const qtyBefore = Number(stock.quantity ?? 0)
+
+    // ── Retroalimentação FIFO: TODA entrada de NF-e cria um lote em
+    //    stock_batches (sem furo de FIFO na entrada de notas). Lote-base do
+    //    saldo prévio se o item ainda não tinha lotes; depois espelha
+    //    stock_items.quantity = SUM(lotes).
+    const { count: batchCount } = await admin
+      .from('stock_batches').select('id', { count: 'exact', head: true }).eq('stock_item_id', item.stock_item_id)
+    if ((batchCount ?? 0) === 0 && qtyBefore !== 0) {
+      await admin.from('stock_batches').insert({
+        clinic_id: ctx.clinic_id, stock_item_id: item.stock_item_id, quantity: qtyBefore, received_at: new Date().toISOString(),
+      })
+    }
+    await admin.from('stock_batches').insert({
+      clinic_id:     ctx.clinic_id,
+      stock_item_id: item.stock_item_id,
+      batch_number:  (item as { batch_number?: string | null }).batch_number ?? null,
+      expiry_date:   (item as { expiry_date?: string | null }).expiry_date ?? null,
+      quantity:      item.quantity,
+      received_at:   new Date().toISOString(),
+      supplier:      null,
+    })
+    const { data: batches } = await admin
+      .from('stock_batches').select('quantity').eq('stock_item_id', item.stock_item_id)
+    const newQty = (batches ?? []).reduce((s, b) => s + Number(b.quantity ?? 0), 0)
 
     await admin.from('stock_items').update({
       quantity:     newQty,
