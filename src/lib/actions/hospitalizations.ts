@@ -459,6 +459,87 @@ export async function confirmDischarge(
   return { success: true }
 }
 
+// ─── Ficha Enriquecida (Internação Completa) ──────────────────────────────────
+
+export interface HospClinicalData {
+  box_id:              string | null
+  estimated_discharge: string | null
+  diet_notes:          string | null
+  fasting:             boolean
+  isolation_required:  boolean
+  weight_at_admission: number | null
+  personal_belongings: string | null
+}
+
+export async function getHospitalizationClinicalData(hospitalizationId: string): Promise<HospClinicalData | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+  const clinicId = await getClinicId(supabase, user.id)
+  if (!clinicId) return { error: 'Perfil sem clínica.' }
+
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('hospitalizations')
+    .select('box_id, estimated_discharge, diet_notes, fasting, isolation_required, weight_at_admission, personal_belongings')
+    .eq('id', hospitalizationId).eq('clinic_id', clinicId).single()
+  if (error || !data) return { error: 'Internação não encontrada.' }
+  return {
+    box_id:              (data.box_id as string | null) ?? null,
+    estimated_discharge: (data.estimated_discharge as string | null) ?? null,
+    diet_notes:          (data.diet_notes as string | null) ?? null,
+    fasting:             data.fasting === true,
+    isolation_required:  data.isolation_required === true,
+    weight_at_admission: data.weight_at_admission === null || data.weight_at_admission === undefined ? null : Number(data.weight_at_admission),
+    personal_belongings: (data.personal_belongings as string | null) ?? null,
+  }
+}
+
+
+/**
+ * Atualiza os dados clínicos/operacionais da internação (ficha enriquecida):
+ * leito/box, previsão de alta, dieta, jejum, isolamento (Regra 2), peso de
+ * admissão e pertences. Campos da migration 0196.
+ */
+export async function updateHospitalizationClinicalData(
+  hospitalizationId: string,
+  fields: {
+    box_id?:              string | null
+    estimated_discharge?: string | null
+    diet_notes?:          string | null
+    fasting?:             boolean
+    isolation_required?:  boolean
+    weight_at_admission?: number | null
+    personal_belongings?: string | null
+  }
+): Promise<{ success: true } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+  const clinicId = await getClinicId(supabase, user.id)
+  if (!clinicId) return { error: 'Perfil sem clínica.' }
+
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  if ('box_id'              in fields) patch.box_id              = fields.box_id || null
+  if ('estimated_discharge' in fields) patch.estimated_discharge = fields.estimated_discharge || null
+  if ('diet_notes'          in fields) patch.diet_notes          = fields.diet_notes?.trim() || null
+  if ('fasting'             in fields) patch.fasting             = fields.fasting === true
+  if ('isolation_required'  in fields) patch.isolation_required  = fields.isolation_required === true
+  if ('weight_at_admission' in fields) patch.weight_at_admission = (fields.weight_at_admission === null || fields.weight_at_admission === undefined || Number.isNaN(fields.weight_at_admission)) ? null : Number(fields.weight_at_admission)
+  if ('personal_belongings' in fields) patch.personal_belongings = fields.personal_belongings?.trim() || null
+
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('hospitalizations')
+    .update(patch)
+    .eq('id', hospitalizationId)
+    .eq('clinic_id', clinicId)
+  if (error) return { error: 'Erro ao salvar dados clínicos: ' + error.message }
+
+  revalidatePath('/dashboard/hospitalization')
+  return { success: true }
+}
+
 // ─── Central de Documentos ────────────────────────────────────────────────────
 
 export type HospDocument = {

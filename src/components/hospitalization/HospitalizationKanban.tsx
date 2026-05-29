@@ -32,6 +32,7 @@ import {
   type HospPrescription,
 } from '@/lib/actions/hospitalization-prescriptions'
 import { getOpenBalances } from '@/lib/actions/hospitalization-charges'
+import { listHospitalizationTasks, type HospTask } from '@/lib/actions/hospitalization-tasks'
 
 const WARD_LABELS: Record<string, string> = {
   observation: 'Observação',
@@ -160,7 +161,24 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
     }
   }, [isFreePlan])
 
+  // Tarefas de enfermagem (exame/procedimento/alimentação) p/ o Mapa de Execução.
+  const [tasksByHosp, setTasksByHosp] = useState<Map<string, HospTask[]>>(new Map())
+  const refreshTasks = useCallback(async () => {
+    if (isFreePlan) return
+    const res = await listHospitalizationTasks()
+    if (Array.isArray(res)) {
+      const map = new Map<string, HospTask[]>()
+      for (const t of res) {
+        const arr = map.get(t.hospitalization_id) ?? []
+        arr.push(t)
+        map.set(t.hospitalization_id, arr)
+      }
+      setTasksByHosp(map)
+    }
+  }, [isFreePlan])
+
   useEffect(() => { void refreshPrescriptions() }, [refreshPrescriptions])
+  useEffect(() => { void refreshTasks() }, [refreshTasks])
 
   // Todos os cards ativos (para o Mapa de Execução).
   const allCards = useMemo(
@@ -558,7 +576,7 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
       )}
 
       {view === 'execution' && internacaoCompleta && (
-        <ExecutionMapView cards={allCards} prescriptionsByHosp={prescriptionsByHosp} />
+        <ExecutionMapView cards={allCards} prescriptionsByHosp={prescriptionsByHosp} tasksByHosp={tasksByHosp} />
       )}
 
       {view === 'kanban' && (
@@ -645,6 +663,18 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
         <HospitalizationDetailModal
           card={selectedCard}
           onClose={() => setSelectedCard(null)}
+          onSaved={() => { void refreshPrescriptions(); void refreshTasks() }}
+          onCardUpdated={(patch) => {
+            const id = selectedCard.id
+            setSelectedCard(prev => prev ? { ...prev, ...patch } as HospitalizationCard : prev)
+            setBoard(prev => {
+              const next = { ...prev }
+              ;(Object.keys(next) as (keyof HospitalizationBoard)[]).forEach(col => {
+                next[col] = next[col].map(c => c.id === id ? { ...c, ...patch } as HospitalizationCard : c)
+              })
+              return next
+            })
+          }}
           onStatusChanged={(s) => {
             const target = selectedCard
             if (s === 'discharged') {

@@ -7,7 +7,7 @@ import {
   User, ClipboardList, Mic, MicOff, Plus, Trash2, Clock,
   Paperclip, FileText, Image as ImageIcon, File, Upload, ExternalLink,
   Brain, AlertTriangle, CheckCircle, Siren, MessageSquare, Volume2, VolumeX,
-  ChevronDown, ChevronUp, MessageCircle, Settings, HeartPulse, Droplets, Receipt,
+  ChevronDown, ChevronUp, MessageCircle, Settings, HeartPulse, Droplets, Receipt, BedDouble, ListChecks,
 } from 'lucide-react'
 import {
   addClinicalEvolution,
@@ -38,6 +38,8 @@ import VitalsTab from './VitalsTab'
 import FluidTherapyTab from './FluidTherapyTab'
 import MedicationApplicationModal from './MedicationApplicationModal'
 import ContaTab from './ContaTab'
+import DadosClinicosTab from './DadosClinicosTab'
+import TarefasTab from './TarefasTab'
 import { listHospitalizationPrescriptions, type HospPrescription } from '@/lib/actions/hospitalization-prescriptions'
 
 interface Props {
@@ -47,9 +49,11 @@ interface Props {
   onSaved?:         () => void
   /** Disparado após Alta Médica/Administrativa (Conta tab) — board atualiza o card. */
   onStatusChanged?: (newStatus: string) => void
+  /** Disparado ao salvar Dados Clínicos (isolamento/leito/alta) — badge acende no board. */
+  onCardUpdated?: (patch: { isolation_required?: boolean; box_id?: string | null; estimated_discharge?: string | null }) => void
 }
 
-export default function HospitalizationDetailModal({ card, onClose, prefilledStatus, onSaved, onStatusChanged }: Props) {
+export default function HospitalizationDetailModal({ card, onClose, prefilledStatus, onSaved, onStatusChanged, onCardUpdated }: Props) {
   const aiMode = useAiTranscriptionMode()
   const internacaoCompleta = useInternacaoCompleta()
   const admissionWeight = (card as { weight_at_admission?: number | null }).weight_at_admission ?? null
@@ -108,7 +112,7 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
 
   // Aba ativa na coluna direita. Sinais Vitais e Fluidoterapia só sob a flag
   // Internação Completa.
-  const [activeRightTab, setActiveRightTab] = useState<'timeline' | 'documents' | 'vitals' | 'fluids' | 'conta'>('timeline')
+  const [activeRightTab, setActiveRightTab] = useState<'timeline' | 'documents' | 'vitals' | 'fluids' | 'conta' | 'dados' | 'tarefas'>('timeline')
 
   // Estado da IA Clínica
   const [aiSuggestion, setAiSuggestion] = useState<ClinicalSummaryResult | null>(null)
@@ -889,7 +893,7 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
           <div className="bg-slate-50/50 rounded-2xl border border-slate-100 h-[calc(100vh-200px)] flex flex-col overflow-hidden">
 
             {/* Tabs */}
-            <div className="border-b border-slate-200 bg-slate-100/80 backdrop-blur-md z-10 flex items-center">
+            <div className="border-b border-slate-200 bg-slate-100/80 backdrop-blur-md z-10 flex items-center overflow-x-auto">
               <button
                 onClick={() => setActiveRightTab('timeline')}
                 className={`flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition-all ${
@@ -951,6 +955,24 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
                     }`}
                   >
                     <Receipt className="h-3.5 w-3.5" /> Conta
+                  </button>
+                  <button
+                    onClick={() => setActiveRightTab('dados')}
+                    data-testid="tab-dados"
+                    className={`flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 whitespace-nowrap transition-all ${
+                      activeRightTab === 'dados' ? 'border-violet-600 text-violet-700' : 'border-transparent text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    <BedDouble className="h-3.5 w-3.5" /> Dados Clínicos
+                  </button>
+                  <button
+                    onClick={() => setActiveRightTab('tarefas')}
+                    data-testid="tab-tarefas"
+                    className={`flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 whitespace-nowrap transition-all ${
+                      activeRightTab === 'tarefas' ? 'border-violet-600 text-violet-700' : 'border-transparent text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    <ListChecks className="h-3.5 w-3.5" /> Tarefas
                   </button>
                 </>
               )}
@@ -1198,6 +1220,16 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
                 status={card.status}
                 onStatusChanged={(s) => { onStatusChanged?.(s); onClose() }}
               />
+            )}
+
+            {/* ─── Aba: Dados Clínicos (ficha enriquecida + isolamento) ─── */}
+            {activeRightTab === 'dados' && internacaoCompleta && (
+              <DadosClinicosTab hospitalizationId={card.id} onSaved={(patch) => onCardUpdated?.(patch)} />
+            )}
+
+            {/* ─── Aba: Tarefas (exame/procedimento/alimentação → Mapa) ─── */}
+            {activeRightTab === 'tarefas' && internacaoCompleta && (
+              <TarefasTab hospitalizationId={card.id} onChanged={() => onSaved?.()} />
             )}
           </div>
         </div>

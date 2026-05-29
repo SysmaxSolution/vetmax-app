@@ -1,10 +1,11 @@
 'use client'
 
 import { useMemo, useSyncExternalStore } from 'react'
-import { Printer, Pill, Biohazard, Clock } from 'lucide-react'
+import { Printer, Pill, Biohazard, Clock, FlaskConical, Stethoscope, Utensils, ClipboardList } from 'lucide-react'
 import { medicationTickStore } from '@/lib/medication-tick'
 import type { HospitalizationCard } from '@/lib/actions/hospitalizations'
 import type { HospPrescription } from '@/lib/actions/hospitalization-prescriptions'
+import type { HospTask, TaskKind } from '@/lib/actions/hospitalization-tasks'
 
 /**
  * Mapa de Execução Visual (Internação Completa).
@@ -33,13 +34,34 @@ function dayBounds(now: number): { start: number; end: number } {
   return { start, end: start + 24 * 3_600_000 }
 }
 
-function computeSlots(p: HospPrescription, now: number): Slot[] {
+/** Item agendável genérico — medicação (last_applied_at) ou tarefa (last_done_at). */
+interface Schedulable {
+  status:          string
+  frequency_hours: number | null
+  started_at:      string
+  duration_hours:  number | null
+  lastAt:          string | null
+}
+
+// Linha unificada da grade: medicação ou tarefa de enfermagem.
+type LineType = 'med' | 'task'
+interface Line {
+  id:       string
+  type:     LineType
+  taskKind?: TaskKind
+  name:     string
+  sub:      string
+  slots:    Slot[]
+  single:   boolean   // SOS / tarefa única (sem grade fixa)
+}
+
+function computeSlots(p: Schedulable, now: number): Slot[] {
   if (p.status !== 'active') return []
-  if (p.frequency_hours === null || p.frequency_hours <= 0) return [] // SOS — sem grade fixa
+  if (p.frequency_hours === null || p.frequency_hours <= 0) return [] // SOS / única — sem grade fixa
 
   const startedAt = new Date(p.started_at).getTime()
   const freqMs    = p.frequency_hours * 3_600_000
-  const lastApplied = p.last_applied_at ? new Date(p.last_applied_at).getTime() : null
+  const lastApplied = p.lastAt ? new Date(p.lastAt).getTime() : null
   const { start, end } = dayBounds(now)
 
   // Fim do ciclo, se houver duração definida.
@@ -78,12 +100,47 @@ function fmt(d: Date): string {
   return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 }
 
-interface Props {
-  cards:              HospitalizationCard[]
-  prescriptionsByHosp: Map<string, HospPrescription[]>
+const TASK_KIND_LABEL: Record<TaskKind, string> = { exam: 'Exame', procedure: 'Procedimento', feeding: 'Alimentação', other: 'Tarefa' }
+
+function TaskIcon({ kind }: { kind: TaskKind }) {
+  const cls = 'h-3.5 w-3.5'
+  if (kind === 'exam')      return <FlaskConical className={`${cls} text-sky-500`} />
+  if (kind === 'procedure') return <Stethoscope  className={`${cls} text-amber-500`} />
+  if (kind === 'feeding')   return <Utensils     className={`${cls} text-emerald-500`} />
+  return <ClipboardList className={`${cls} text-slate-400`} />
 }
 
-export default function ExecutionMapView({ cards, prescriptionsByHosp }: Props) {
+// Constrói as linhas da grade unificando medicações e tarefas de enfermagem.
+function buildLines(prescriptions: HospPrescription[], tasks: HospTask[], now: number): Line[] {
+  const lines: Line[] = []
+  for (const p of prescriptions.filter(x => x.status === 'active')) {
+    const single = p.frequency_hours === null || p.frequency_hours <= 0
+    lines.push({
+      id: p.id, type: 'med', name: p.medication_name,
+      sub: [[p.dose, p.route].filter(Boolean).join(' • '), single ? 'SOS' : `${p.frequency_hours}/${p.frequency_hours}h`].filter(Boolean).join(' • '),
+      slots: computeSlots({ status: p.status, frequency_hours: p.frequency_hours, started_at: p.started_at, duration_hours: p.duration_hours, lastAt: p.last_applied_at }, now),
+      single,
+    })
+  }
+  for (const t of tasks.filter(x => x.status === 'active')) {
+    const single = t.frequency_hours === null || t.frequency_hours <= 0
+    lines.push({
+      id: t.id, type: 'task', taskKind: t.kind, name: t.description,
+      sub: [TASK_KIND_LABEL[t.kind], single ? 'única' : `${t.frequency_hours}/${t.frequency_hours}h`].join(' • '),
+      slots: computeSlots({ status: t.status, frequency_hours: t.frequency_hours, started_at: t.started_at, duration_hours: t.duration_hours, lastAt: t.last_done_at }, now),
+      single,
+    })
+  }
+  return lines
+}
+
+interface Props {
+  cards:               HospitalizationCard[]
+  prescriptionsByHosp: Map<string, HospPrescription[]>
+  tasksByHosp?:        Map<string, HospTask[]>
+}
+
+export default function ExecutionMapView({ cards, prescriptionsByHosp, tasksByHosp }: Props) {
   // Re-render a cada tick (15s) para recalcular os estados dos slots.
   useSyncExternalStore(
     medicationTickStore.subscribe,
@@ -95,14 +152,13 @@ export default function ExecutionMapView({ cards, prescriptionsByHosp }: Props) 
 
   const rows = useMemo(() => {
     return cards
-      .map(card => {
-        const prescriptions = prescriptionsByHosp.get(card.id) ?? []
-        const active = prescriptions.filter(p => p.status === 'active')
-        return { card, prescriptions: active }
-      })
-      .filter(r => r.prescriptions.length > 0)
+      .map(card => ({
+        card,
+        lines: buildLines(prescriptionsByHosp.get(card.id) ?? [], tasksByHosp?.get(card.id) ?? [], now),
+      }))
+      .filter(r => r.lines.length > 0)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cards, prescriptionsByHosp, medicationTickStore.getSnapshot()])
+  }, [cards, prescriptionsByHosp, tasksByHosp, medicationTickStore.getSnapshot()])
 
   function handlePrint() {
     printExecutionSheet(rows, now)
@@ -112,8 +168,8 @@ export default function ExecutionMapView({ cards, prescriptionsByHosp }: Props) 
     return (
       <div className="rounded-2xl border-2 border-dashed border-slate-200 p-10 text-center">
         <Clock className="h-10 w-10 text-slate-200 mx-auto mb-3" />
-        <p className="text-sm font-semibold text-slate-500">Sem prescrições ativas</p>
-        <p className="text-xs text-slate-400 mt-1">As medicações com aprazamento aparecem aqui em grade horária.</p>
+        <p className="text-sm font-semibold text-slate-500">Sem prescrições ou tarefas ativas</p>
+        <p className="text-xs text-slate-400 mt-1">Medicações e tarefas (exames, procedimentos, alimentação) com aprazamento aparecem aqui em grade horária.</p>
       </div>
     )
   }
@@ -136,7 +192,7 @@ export default function ExecutionMapView({ cards, prescriptionsByHosp }: Props) 
       </div>
 
       <div className="space-y-4">
-        {rows.map(({ card, prescriptions }) => (
+        {rows.map(({ card, lines }) => (
           <div
             key={card.id}
             className={`rounded-2xl border bg-white shadow-sm overflow-hidden ${
@@ -155,35 +211,29 @@ export default function ExecutionMapView({ cards, prescriptionsByHosp }: Props) 
               )}
             </div>
             <div className="divide-y divide-slate-50">
-              {prescriptions.map(p => {
-                const slots = computeSlots(p, now)
-                return (
-                  <div key={p.id} className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-2">
-                    <div className="sm:w-56 flex-shrink-0">
-                      <p className="text-sm font-semibold text-slate-800 flex items-center gap-1.5">
-                        <Pill className="h-3.5 w-3.5 text-violet-500" /> {p.medication_name}
-                      </p>
-                      <p className="text-[11px] text-slate-500">
-                        {[p.dose, p.route].filter(Boolean).join(' • ')}
-                        {p.frequency_hours ? ` • ${p.frequency_hours}/${p.frequency_hours}h` : ' • SOS'}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {slots.length === 0 ? (
-                        <span className="text-[11px] text-violet-600 font-semibold">SOS / dose única</span>
-                      ) : slots.map((s, i) => (
-                        <span
-                          key={i}
-                          className={`px-2 py-0.5 rounded-md border text-[11px] tabular-nums ${SLOT_STYLE[s.status]}`}
-                          title={s.status}
-                        >
-                          {fmt(s.at)}
-                        </span>
-                      ))}
-                    </div>
+              {lines.map(line => (
+                <div key={`${line.type}-${line.id}`} className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-2" data-testid={line.type === 'task' ? `map-task-${line.id}` : undefined}>
+                  <div className="sm:w-56 flex-shrink-0">
+                    <p className="text-sm font-semibold text-slate-800 flex items-center gap-1.5">
+                      {line.type === 'med' ? <Pill className="h-3.5 w-3.5 text-violet-500" /> : <TaskIcon kind={line.taskKind!} />} {line.name}
+                    </p>
+                    <p className="text-[11px] text-slate-500">{line.sub}</p>
                   </div>
-                )
-              })}
+                  <div className="flex flex-wrap gap-1.5">
+                    {line.slots.length === 0 ? (
+                      <span className="text-[11px] text-violet-600 font-semibold">{line.single ? (line.type === 'task' ? 'Tarefa única' : 'SOS / dose única') : '—'}</span>
+                    ) : line.slots.map((s, i) => (
+                      <span
+                        key={i}
+                        className={`px-2 py-0.5 rounded-md border text-[11px] tabular-nums ${SLOT_STYLE[s.status]}`}
+                        title={s.status}
+                      >
+                        {fmt(s.at)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         ))}
@@ -195,21 +245,21 @@ export default function ExecutionMapView({ cards, prescriptionsByHosp }: Props) 
 // ─── Folha de internação imprimível ──────────────────────────────────────────
 
 function printExecutionSheet(
-  rows: { card: HospitalizationCard; prescriptions: HospPrescription[] }[],
+  rows: { card: HospitalizationCard; lines: Line[] }[],
   now: number,
 ) {
   const dateLabel = new Date(now).toLocaleDateString('pt-BR')
-  const body = rows.map(({ card, prescriptions }) => {
+  const body = rows.map(({ card, lines }) => {
     const iso = card.isolation_required
       ? '<span style="color:#b91c1c;font-weight:bold"> ⚠ ISOLAMENTO (EPI)</span>' : ''
-    const presRows = prescriptions.map(p => {
-      const slots = computeSlots(p, now)
-      const times = slots.length === 0
-        ? 'SOS / dose única'
-        : slots.map(s => `${fmt(s.at)} ☐`).join('&nbsp;&nbsp;')
+    const presRows = lines.map(line => {
+      const times = line.slots.length === 0
+        ? (line.single ? (line.type === 'task' ? 'Tarefa única' : 'SOS / dose única') : '—')
+        : line.slots.map(s => `${fmt(s.at)} ☐`).join('&nbsp;&nbsp;')
+      const tipo = line.type === 'task' ? (TASK_KIND_LABEL[line.taskKind!] ?? 'Tarefa') : 'Medicação'
       return `<tr>
-        <td style="padding:4px 6px;border:1px solid #e2e8f0;font-weight:bold">${p.medication_name}</td>
-        <td style="padding:4px 6px;border:1px solid #e2e8f0">${[p.dose, p.route].filter(Boolean).join(' / ') || '—'}</td>
+        <td style="padding:4px 6px;border:1px solid #e2e8f0;font-weight:bold">${line.name}</td>
+        <td style="padding:4px 6px;border:1px solid #e2e8f0">${tipo}${line.sub ? ` — ${line.sub}` : ''}</td>
         <td style="padding:4px 6px;border:1px solid #e2e8f0">${times}</td>
       </tr>`
     }).join('')
@@ -217,9 +267,9 @@ function printExecutionSheet(
       <h3 style="margin:14px 0 4px;font-size:13px">${card.patient.name} — ${card.patient.species}${card.patient.breed ? ' / ' + card.patient.breed : ''}${iso}</h3>
       <table style="width:100%;border-collapse:collapse;font-size:11px">
         <thead><tr style="background:#f1f5f9">
-          <th style="padding:4px 6px;border:1px solid #e2e8f0;text-align:left">Medicação</th>
-          <th style="padding:4px 6px;border:1px solid #e2e8f0;text-align:left">Dose / Via</th>
-          <th style="padding:4px 6px;border:1px solid #e2e8f0;text-align:left">Horários (☐ = assinar ao aplicar)</th>
+          <th style="padding:4px 6px;border:1px solid #e2e8f0;text-align:left">Item</th>
+          <th style="padding:4px 6px;border:1px solid #e2e8f0;text-align:left">Tipo / Detalhe</th>
+          <th style="padding:4px 6px;border:1px solid #e2e8f0;text-align:left">Horários (☐ = assinar ao executar)</th>
         </tr></thead>
         <tbody>${presRows}</tbody>
       </table>`
