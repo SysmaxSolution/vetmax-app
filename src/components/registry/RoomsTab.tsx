@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { Loader2, Plus, Pencil, X, BedDouble, DoorOpen, Wrench, CheckCircle2, EyeOff } from 'lucide-react'
 import {
   getRooms, createRoom, updateRoom, toggleRoomActive,
-  type Room, type RoomType, type RoomOperationalStatus,
+  type Room, type RoomType, type RoomOperationalStatus, type RoomCareLevel,
 } from '@/lib/actions/rooms'
 
 /**
@@ -31,6 +31,7 @@ interface Draft {
   capacity: string
   daily_rate: string
   operational_status: RoomOperationalStatus
+  default_care_level: '' | RoomCareLevel
 }
 
 export default function RoomsTab({ kind }: Props) {
@@ -52,11 +53,11 @@ export default function RoomsTab({ kind }: Props) {
 
   function newDraft() {
     setError(null)
-    setDraft({ name: '', type: isBox ? 'hospitalization' : 'surgery', capacity: '1', daily_rate: '', operational_status: 'active' })
+    setDraft({ name: '', type: isBox ? 'hospitalization' : 'surgery', capacity: '1', daily_rate: '', operational_status: 'active', default_care_level: '' })
   }
   function editDraft(r: Room) {
     setError(null)
-    setDraft({ id: r.id, name: r.name, type: r.type, capacity: String(r.capacity ?? 1), daily_rate: r.daily_rate ? String(r.daily_rate) : '', operational_status: r.operational_status })
+    setDraft({ id: r.id, name: r.name, type: r.type, capacity: String(r.capacity ?? 1), daily_rate: r.daily_rate ? String(r.daily_rate) : '', operational_status: r.operational_status, default_care_level: r.default_care_level ?? '' })
   }
 
   async function save() {
@@ -65,9 +66,10 @@ export default function RoomsTab({ kind }: Props) {
     const capacity = Math.max(1, parseInt(draft.capacity || '1', 10) || 1)
     const daily_rate = isBox ? (parseFloat((draft.daily_rate || '0').replace(',', '.')) || 0) : 0
     setBusy(true); setError(null)
+    const default_care_level = isBox ? (draft.default_care_level || null) : null
     const res = draft.id
-      ? await updateRoom(draft.id, { name: draft.name.trim(), type: draft.type, capacity, daily_rate, operational_status: draft.operational_status })
-      : await createRoom(draft.name.trim(), draft.type, capacity, { daily_rate, operational_status: draft.operational_status })
+      ? await updateRoom(draft.id, { name: draft.name.trim(), type: draft.type, capacity, daily_rate, operational_status: draft.operational_status, default_care_level })
+      : await createRoom(draft.name.trim(), draft.type, capacity, { daily_rate, operational_status: draft.operational_status, default_care_level })
     setBusy(false)
     if ('error' in res) { setError(res.error); return }
     setDraft(null); await reload()
@@ -117,11 +119,24 @@ export default function RoomsTab({ kind }: Props) {
                 className="mt-0.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none" />
             </label>
             {isBox && (
-              <label className="block">
-                <span className="text-[10px] font-bold text-slate-500 uppercase">Valor da Diária (R$)</span>
-                <input type="number" min="0" step="0.01" value={draft.daily_rate} onChange={e => setDraft({ ...draft, daily_rate: e.target.value })} placeholder="Ex.: 300,00"
-                  className="mt-0.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none" />
-              </label>
+              <>
+                <label className="block">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase">Valor da Diária (R$)</span>
+                  <input type="number" min="0" step="0.01" value={draft.daily_rate} onChange={e => setDraft({ ...draft, daily_rate: e.target.value })} placeholder="Ex.: 300,00 (fallback se não houver tarifa por categoria)"
+                    className="mt-0.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none" />
+                </label>
+                <label className="block">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase">Categoria padrão</span>
+                  <select value={draft.default_care_level} onChange={e => setDraft({ ...draft, default_care_level: e.target.value as Draft['default_care_level'] })}
+                    className="mt-0.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-teal-500 focus:outline-none">
+                    <option value="">— Sem categoria —</option>
+                    <option value="enfermaria">Enfermaria</option>
+                    <option value="semi_intensiva">Semi-Intensiva</option>
+                    <option value="uti">UTI</option>
+                    <option value="isolamento">Isolamento</option>
+                  </select>
+                </label>
+              </>
             )}
             <label className="block">
               <span className="text-[10px] font-bold text-slate-500 uppercase">Status de Operação</span>

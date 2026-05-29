@@ -52,6 +52,7 @@ export default function RoomsTab({ initialRooms }: Props) {
         active: true,
         daily_rate: 0,
         operational_status: 'active',
+        default_care_level: null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }])

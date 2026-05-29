@@ -40,6 +40,7 @@ export default function DadosClinicosTab({ hospitalizationId, onSaved }: Props) 
   const [d, setD] = useState<HospClinicalData>({
     box_id: null, estimated_discharge: null, diet_notes: null, fasting: false,
     isolation_required: false, weight_at_admission: null, personal_belongings: null,
+    care_level: null, animal_size: null,
   })
 
   useEffect(() => {
@@ -73,6 +74,8 @@ export default function DadosClinicosTab({ hospitalizationId, onSaved }: Props) 
       diet_notes:          d.diet_notes,
       weight_at_admission: d.weight_at_admission,
       personal_belongings: d.personal_belongings,
+      care_level:          d.care_level,
+      animal_size:         d.animal_size,
     })
     setSaving(false)
     if ('error' in res) { setError(res.error); return }
@@ -112,10 +115,42 @@ export default function DadosClinicosTab({ hospitalizationId, onSaved }: Props) 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label className="block">
           <span className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1"><BedDouble className="h-3 w-3" /> Leito / Box</span>
-          <select value={d.box_id ?? ''} onChange={e => setD(p => ({ ...p, box_id: e.target.value || null }))}
+          <select value={d.box_id ?? ''} onChange={e => {
+              const boxId = e.target.value || null
+              const room = rooms.find(r => r.id === boxId)
+              // Pré-fill da categoria a partir do default_care_level do box (só se ainda não houver).
+              setD(p => ({
+                ...p,
+                box_id: boxId,
+                care_level: p.care_level ?? (room?.default_care_level ?? null),
+              }))
+            }}
             className="mt-0.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-violet-500 focus:outline-none">
             <option value="">— Sem leito —</option>
             {rooms.map(r => <option key={r.id} value={r.id}>{r.name}{r.type === 'hospitalization' ? '' : ` (${r.type})`}</option>)}
+          </select>
+        </label>
+        <label className="block">
+          <span className="text-[10px] font-bold text-slate-500 uppercase">Categoria (diária)</span>
+          <select value={d.care_level ?? ''} onChange={e => setD(p => ({ ...p, care_level: (e.target.value || null) as HospClinicalData['care_level'] }))}
+            data-testid="select-care-level"
+            className="mt-0.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-violet-500 focus:outline-none">
+            <option value="">— Sem categoria (usa diária do box) —</option>
+            <option value="enfermaria">Enfermaria</option>
+            <option value="semi_intensiva">Semi-Intensiva</option>
+            <option value="uti">UTI</option>
+            <option value="isolamento">Isolamento</option>
+          </select>
+        </label>
+        <label className="block">
+          <span className="text-[10px] font-bold text-slate-500 uppercase">Porte do Animal</span>
+          <select value={d.animal_size ?? ''} onChange={e => setD(p => ({ ...p, animal_size: (e.target.value || null) as HospClinicalData['animal_size'] }))}
+            data-testid="select-animal-size"
+            className="mt-0.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-violet-500 focus:outline-none">
+            <option value="">— Não definido —</option>
+            <option value="small">Pequeno</option>
+            <option value="medium">Médio</option>
+            <option value="large">Grande</option>
           </select>
         </label>
         <label className="block">

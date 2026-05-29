@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache'
 
 export type RoomType = 'consultation' | 'surgery' | 'grooming' | 'exam' | 'hospitalization'
 export type RoomOperationalStatus = 'active' | 'maintenance'
+export type RoomCareLevel = 'enfermaria' | 'semi_intensiva' | 'uti' | 'isolamento'
 
 export interface Room {
   id: string
@@ -16,6 +17,7 @@ export interface Room {
   active: boolean
   daily_rate: number
   operational_status: RoomOperationalStatus
+  default_care_level: RoomCareLevel | null
   created_at: string
   updated_at: string
 }
@@ -27,7 +29,7 @@ export async function getRooms(): Promise<Room[] | { error: string }> {
 
   const { data, error } = await supabase
     .from('rooms')
-    .select('id, clinic_id, name, type, capacity, active, daily_rate, operational_status, created_at, updated_at')
+    .select('id, clinic_id, name, type, capacity, active, daily_rate, operational_status, default_care_level, created_at, updated_at')
     .order('name')
 
   if (error) return { error: error.message }
@@ -35,6 +37,7 @@ export async function getRooms(): Promise<Room[] | { error: string }> {
     ...(r as Room),
     daily_rate:         Number((r as { daily_rate?: number }).daily_rate ?? 0),
     operational_status: ((r as { operational_status?: RoomOperationalStatus }).operational_status ?? 'active'),
+    default_care_level: ((r as { default_care_level?: RoomCareLevel | null }).default_care_level ?? null),
   }))
 }
 
@@ -42,7 +45,7 @@ export async function createRoom(
   name: string,
   type: RoomType,
   capacity: number = 1,
-  extra?: { daily_rate?: number; operational_status?: RoomOperationalStatus }
+  extra?: { daily_rate?: number; operational_status?: RoomOperationalStatus; default_care_level?: RoomCareLevel | null }
 ): Promise<{ id: string } | { error: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -64,6 +67,7 @@ export async function createRoom(
       clinic_id: profile.clinic_id, name: name.trim(), type, capacity,
       daily_rate:         extra?.daily_rate && extra.daily_rate > 0 ? extra.daily_rate : 0,
       operational_status: extra?.operational_status ?? 'active',
+      default_care_level: extra?.default_care_level ?? null,
     })
     .select('id')
     .single()
@@ -76,7 +80,7 @@ export async function createRoom(
 
 export async function updateRoom(
   id: string,
-  updates: { name?: string; type?: RoomType; capacity?: number; active?: boolean; daily_rate?: number; operational_status?: RoomOperationalStatus }
+  updates: { name?: string; type?: RoomType; capacity?: number; active?: boolean; daily_rate?: number; operational_status?: RoomOperationalStatus; default_care_level?: RoomCareLevel | null }
 ): Promise<{ success: true } | { error: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

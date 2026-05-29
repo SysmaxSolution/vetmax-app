@@ -469,6 +469,8 @@ export interface HospClinicalData {
   isolation_required:  boolean
   weight_at_admission: number | null
   personal_belongings: string | null
+  care_level:          'enfermaria' | 'semi_intensiva' | 'uti' | 'isolamento' | null
+  animal_size:         'small' | 'medium' | 'large' | null
 }
 
 export async function getHospitalizationClinicalData(hospitalizationId: string): Promise<HospClinicalData | { error: string }> {
@@ -481,7 +483,7 @@ export async function getHospitalizationClinicalData(hospitalizationId: string):
   const admin = createAdminClient()
   const { data, error } = await admin
     .from('hospitalizations')
-    .select('box_id, estimated_discharge, diet_notes, fasting, isolation_required, weight_at_admission, personal_belongings')
+    .select('box_id, estimated_discharge, diet_notes, fasting, isolation_required, weight_at_admission, personal_belongings, care_level, animal_size')
     .eq('id', hospitalizationId).eq('clinic_id', clinicId).single()
   if (error || !data) return { error: 'Internação não encontrada.' }
   return {
@@ -492,6 +494,8 @@ export async function getHospitalizationClinicalData(hospitalizationId: string):
     isolation_required:  data.isolation_required === true,
     weight_at_admission: data.weight_at_admission === null || data.weight_at_admission === undefined ? null : Number(data.weight_at_admission),
     personal_belongings: (data.personal_belongings as string | null) ?? null,
+    care_level:          (data.care_level as HospClinicalData['care_level']) ?? null,
+    animal_size:         (data.animal_size as HospClinicalData['animal_size']) ?? null,
   }
 }
 
@@ -511,6 +515,8 @@ export async function updateHospitalizationClinicalData(
     isolation_required?:  boolean
     weight_at_admission?: number | null
     personal_belongings?: string | null
+    care_level?:          'enfermaria' | 'semi_intensiva' | 'uti' | 'isolamento' | null
+    animal_size?:         'small' | 'medium' | 'large' | null
   }
 ): Promise<{ success: true } | { error: string }> {
   const supabase = await createClient()
@@ -527,6 +533,8 @@ export async function updateHospitalizationClinicalData(
   if ('isolation_required'  in fields) patch.isolation_required  = fields.isolation_required === true
   if ('weight_at_admission' in fields) patch.weight_at_admission = (fields.weight_at_admission === null || fields.weight_at_admission === undefined || Number.isNaN(fields.weight_at_admission)) ? null : Number(fields.weight_at_admission)
   if ('personal_belongings' in fields) patch.personal_belongings = fields.personal_belongings?.trim() || null
+  if ('care_level'          in fields) patch.care_level          = fields.care_level ?? null
+  if ('animal_size'         in fields) patch.animal_size         = fields.animal_size ?? null
 
   const admin = createAdminClient()
   const { error } = await admin

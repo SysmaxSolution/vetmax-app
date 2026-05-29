@@ -1,14 +1,15 @@
 'use client'
 
 import { useState } from 'react'
-import { Truck, BedDouble, DoorOpen, Package } from 'lucide-react'
+import { Truck, BedDouble, DoorOpen, Package, Receipt } from 'lucide-react'
 import type { Supplier } from '@/lib/actions/suppliers'
 import SuppliersTab from './suppliers/SuppliersTab'
 import RoomsTab from './RoomsTab'
 import KitsTab from './KitsTab'
-import { useCentroCirurgico } from '@/components/providers/ClinicConfigProvider'
+import RatesTab from './RatesTab'
+import { useCentroCirurgico, useInternacaoCompleta } from '@/components/providers/ClinicConfigProvider'
 
-type Tab = 'suppliers' | 'boxes' | 'salas' | 'kits'
+type Tab = 'suppliers' | 'boxes' | 'salas' | 'kits' | 'rates'
 
 interface Props {
   initialSuppliers: Supplier[]
@@ -17,13 +18,15 @@ interface Props {
 
 export default function RegistryWorkspace({ initialSuppliers, userRole }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('suppliers')
-  const centroCirurgico = useCentroCirurgico()
+  const centroCirurgico   = useCentroCirurgico()
+  const internacaoCompleta = useInternacaoCompleta()
 
   const TABS: { key: Tab; label: string; icon: React.ElementType }[] = [
     { key: 'suppliers', label: 'Fornecedores', icon: Truck },
     { key: 'boxes',     label: 'Boxes',        icon: BedDouble },
     { key: 'salas',     label: 'Salas',        icon: DoorOpen },
-    ...(centroCirurgico ? [{ key: 'kits' as Tab, label: 'Kits Cirúrgicos', icon: Package }] : []),
+    ...(centroCirurgico    ? [{ key: 'kits'  as Tab, label: 'Kits Cirúrgicos',   icon: Package }] : []),
+    ...(internacaoCompleta ? [{ key: 'rates' as Tab, label: 'Tarifas de Diária', icon: Receipt }] : []),
   ]
 
   return (
@@ -65,6 +68,7 @@ export default function RegistryWorkspace({ initialSuppliers, userRole }: Props)
       {activeTab === 'boxes' && <RoomsTab kind="box" />}
       {activeTab === 'salas' && <RoomsTab kind="sala" />}
       {activeTab === 'kits' && <KitsTab />}
+      {activeTab === 'rates' && <RatesTab />}
     </>
   )
 }
