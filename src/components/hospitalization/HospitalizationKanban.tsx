@@ -7,6 +7,7 @@ import { useRealtimeSync } from '@/hooks/useRealtimeSync'
 import { useInternacaoCompleta } from '@/components/providers/ClinicConfigProvider'
 import { useMedicationAlarm } from '@/hooks/useMedicationAlarm'
 import ExecutionMapView from './ExecutionMapView'
+import OccupancyMapView from './OccupancyMapView'
 import {
   updateHospitalizationStatus,
   addHospitalizationLog,
@@ -114,7 +115,7 @@ const EMPTY_PRESCRIPTIONS: HospPrescription[] = []
 export default function HospitalizationKanban({ initialBoard, clinicId, isFreePlan = false }: Props) {
   const router = useRouter()
   const internacaoCompleta = useInternacaoCompleta()
-  const [view, setView] = useState<'kanban' | 'execution'>('kanban')
+  const [view, setView] = useState<'kanban' | 'execution' | 'occupancy'>('kanban')
   const [board, setBoard]                   = useState<HospitalizationBoard>(initialBoard)
   const boardRef = useRef<HospitalizationBoard>(initialBoard)
   const [showAdmitModal, setShowAdmitModal] = useState(false)
@@ -547,6 +548,16 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
             >
               <CalendarClock className="h-3.5 w-3.5" /> Mapa de Execução
             </button>
+            <button
+              type="button"
+              onClick={() => setView('occupancy')}
+              data-testid="view-occupancy"
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                view === 'occupancy' ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <BedDouble className="h-3.5 w-3.5" /> Mapa de Ocupação
+            </button>
           </div>
 
           <button
@@ -577,6 +588,10 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
 
       {view === 'execution' && internacaoCompleta && (
         <ExecutionMapView cards={allCards} prescriptionsByHosp={prescriptionsByHosp} tasksByHosp={tasksByHosp} />
+      )}
+
+      {view === 'occupancy' && internacaoCompleta && (
+        <OccupancyMapView cards={allCards} />
       )}
 
       {view === 'kanban' && (
