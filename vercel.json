@@ -1,16 +1,8 @@
 {
   "crons": [
     {
-      "path": "/api/cron/whatsapp-campaigns",
-      "schedule": "0 9 * * *"
-    },
-    {
       "path": "/api/cron/classify-errors",
       "schedule": "0 2 * * *"
-    },
-    {
-      "path": "/api/cron/apply-approved-fixes",
-      "schedule": "*/15 * * * *"
     },
     {
       "path": "/api/cron/hospitalization-dailies",
