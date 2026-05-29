@@ -135,7 +135,7 @@ interface Props {
   onClose:    () => void
 }
 
-const SALES_WHATSAPP = '5511999999999'  // placeholder — PO substitui pelo número real do comercial
+const SALES_WHATSAPP = '5516997023340'  // WhatsApp comercial Sysmax Solutions
 const SALES_EMAIL    = 'comercial@sysmaxsolutions.com'
 
 export default function UpgradeModal({ featureKey, override, onClose }: Props) {
