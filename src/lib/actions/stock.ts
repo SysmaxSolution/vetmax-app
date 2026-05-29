@@ -429,6 +429,19 @@ export async function addStockItemV2(input: {
     return { error: 'Erro ao cadastrar item: ' + error.message }
   }
 
+  // Retroalimentação FIFO: item com saldo inicial já nasce com seu 1º lote.
+  if (!(input.is_service ?? false) && input.quantity > 0) {
+    await admin.from('stock_batches').insert({
+      clinic_id:     ctx.clinic_id,
+      stock_item_id: (data as { id: string }).id,
+      batch_number:  input.batch_number?.trim() || null,
+      expiry_date:   input.expiry_date || null,
+      quantity:      input.quantity,
+      received_at:   new Date().toISOString(),
+      supplier:      input.supplier?.trim() || null,
+    })
+  }
+
   revalidatePath('/dashboard/pharmacy')
   return data as StockItemV2
 }
@@ -478,7 +491,8 @@ export async function updateStockItemV2(
 export async function restockItemV2(
   itemId:      string,
   quantityToAdd: number,
-  notes?:      string
+  notes?:      string,
+  opts?:       { expiryDate?: string | null; batchNumber?: string | null },
 ): Promise<{ success: true; new_quantity: number } | { error: string }> {
   const ctx = await getClinicAndUser()
   if (!ctx) return { error: 'Não autenticado.' }
@@ -495,7 +509,31 @@ export async function restockItemV2(
   if (!current) return { error: 'Item não encontrado.' }
 
   const qtyBefore = Number(current.quantity)
-  const qtyAfter  = qtyBefore + quantityToAdd
+
+  // Retroalimentação FIFO: a entrada de saldo cria um NOVO lote em stock_batches
+  // com a validade informada, mantendo a roda do FIFO girando. Se o item ainda
+  // não tem lotes, cria um lote-base com o saldo atual para o espelho
+  // stock_items.quantity = SUM(lotes) permanecer consistente.
+  const { count: batchCount } = await admin
+    .from('stock_batches').select('id', { count: 'exact', head: true }).eq('stock_item_id', itemId)
+  if ((batchCount ?? 0) === 0 && qtyBefore !== 0) {
+    await admin.from('stock_batches').insert({
+      clinic_id: ctx.clinic_id, stock_item_id: itemId, quantity: qtyBefore, received_at: new Date().toISOString(),
+    })
+  }
+  await admin.from('stock_batches').insert({
+    clinic_id:    ctx.clinic_id,
+    stock_item_id: itemId,
+    batch_number: opts?.batchNumber?.trim() || null,
+    expiry_date:  opts?.expiryDate || null,
+    quantity:     quantityToAdd,
+    received_at:  new Date().toISOString(),
+  })
+
+  // Espelha o somatório dos lotes (fonte da verdade = SUM dos batches).
+  const { data: batches } = await admin
+    .from('stock_batches').select('quantity').eq('stock_item_id', itemId)
+  const qtyAfter = (batches ?? []).reduce((s, b) => s + Number(b.quantity ?? 0), 0)
 
   const { error } = await admin
     .from('stock_items')

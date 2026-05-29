@@ -1207,13 +1207,19 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
 function RestockForm({ item, onDone, onError }: {
   item: StockItemV2; onDone: (qty: number) => void; onError: (msg: string) => void
 }) {
-  const [qty, setQty]     = useState('')
-  const [notes, setNotes] = useState('')
+  const [qty, setQty]       = useState('')
+  const [notes, setNotes]   = useState('')
+  const [expiry, setExpiry] = useState('')
+  const [batch, setBatch]   = useState('')
   const [saving, setSaving] = useState(false)
   async function handle() {
     if (!qty || Number(qty) <= 0) { onError('Informe uma quantidade válida.'); return }
     setSaving(true)
-    const res = await restockItemV2(item.id, Number(qty), notes || undefined)
+    // Retroalimentação FIFO: cria um novo lote com a validade informada.
+    const res = await restockItemV2(item.id, Number(qty), notes || undefined, {
+      expiryDate:  expiry || null,
+      batchNumber: batch  || null,
+    })
     setSaving(false)
     if ('error' in res) { onError(res.error); return }
     onDone(res.new_quantity)
@@ -1224,6 +1230,18 @@ function RestockForm({ item, onDone, onError }: {
       <input type="number" min="0.001" step="0.001" value={qty} onChange={e => setQty(e.target.value)}
         placeholder="Quantidade a adicionar"
         className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" />
+      <div className="grid grid-cols-2 gap-2">
+        <label className="block">
+          <span className="text-[10px] font-bold text-slate-500 uppercase">Validade do lote</span>
+          <input type="date" value={expiry} onChange={e => setExpiry(e.target.value)}
+            className="mt-0.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" />
+        </label>
+        <label className="block">
+          <span className="text-[10px] font-bold text-slate-500 uppercase">Nº do lote</span>
+          <input value={batch} onChange={e => setBatch(e.target.value)} placeholder="opcional"
+            className="mt-0.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" />
+        </label>
+      </div>
       <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Nota: NF, fornecedor… (opcional)"
         className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" />
       <button onClick={handle} disabled={saving}
