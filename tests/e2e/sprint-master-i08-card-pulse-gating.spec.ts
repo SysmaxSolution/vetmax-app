@@ -87,20 +87,20 @@ test.describe('TC-I08-01: flag ON ⇒ pulse + badge no card', () => {
   })
 })
 
-test.describe('TC-I08-02: flag OFF ⇒ card idêntico ao legado (sem pulse/badge)', () => {
+test.describe('TC-I08-02: flag OFF ⇒ badge VISÍVEL, sem pulse (decisão do PO)', () => {
   let prev: Record<string, unknown>; let hospId: string | null = null
   test.beforeEach(async () => { prev = await setInternacaoCompleta(false); hospId = await seedHospWithOverdueDose() })
   test.afterEach(async () => { await cleanup(hospId); await restoreFlowConfig(prev) })
 
-  test('TC-I08-02: card sem pulse e sem badge', async ({ page }, testInfo) => {
+  test('TC-I08-02: badge aparece, mas sem pulse no card (animação/som só com flag ON)', async ({ page }, testInfo) => {
     if (!(await gotoKanban(page))) { console.log('TC-I08-02: SKIP — kanban não carregou'); testInfo.skip(); return }
     const card = page.locator(`[data-testid="hospitalization-card-${hospId}"]`)
     if (!(await card.isVisible({ timeout: 6_000 }).catch(() => false))) { console.log('TC-I08-02: SKIP — card ausente (cold-start UI)'); testInfo.skip(); return }
     const cls = (await card.getAttribute('class').catch(() => '')) ?? ''
     const hasPulse = /med-card-(overdue|imminent)/.test(cls)
-    const badge = await page.getByRole('button', { name: /atrasada|chegando/i }).first().isVisible({ timeout: 2_000 }).catch(() => false)
-    console.log(`TC-I08-02: pulse=${hasPulse}, badge=${badge} (ambos esperados: false)`)
+    const badge = await page.getByRole('button', { name: /atrasada|chegando/i }).first().isVisible({ timeout: 3_000 }).catch(() => false)
+    console.log(`TC-I08-02: pulse=${hasPulse} (esperado false), badge=${badge} (esperado true)`)
     expect(hasPulse).toBe(false)
-    expect(badge).toBe(false)
+    expect(badge).toBe(true)
   })
 })
