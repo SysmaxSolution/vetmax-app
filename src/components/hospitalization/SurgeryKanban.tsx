@@ -155,6 +155,7 @@ export default function SurgeryKanban({ initialBoard, clinicId }: Props) {
                       <PetAvatar name={card.patient.name} species={card.patient.species} photoUrl={card.patient.photo_url} size="sm" className="rounded-xl border border-slate-200" />
                       <div className="flex-1 min-w-0">
                         <h4 className="font-bold text-slate-900 text-sm truncate">{card.patient.name}</h4>
+                        {card.tutor?.name && <p className="text-[11px] text-slate-400 truncate">Tutor: {card.tutor.name}</p>}
                         <p className="text-[11px] text-slate-500 truncate">{card.procedure_name}</p>
                         <div className="mt-1 flex items-center gap-1.5">
                           {card.asa_risk && <span className="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-1.5 rounded">ASA {card.asa_risk}</span>}

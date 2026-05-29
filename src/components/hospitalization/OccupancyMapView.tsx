@@ -110,6 +110,7 @@ export default function OccupancyMapView({ cards, onAssign, onAdmitToBox }: Prop
               <GripVertical className="h-3 w-3 text-slate-300 flex-shrink-0" /> {c.patient.name}
             </p>
             <p className="text-[10px] text-slate-500 truncate">{c.patient.species}{c.patient.breed ? ` • ${c.patient.breed}` : ''} • {internedFor(c.created_at)}</p>
+            {c.tutor?.name && <p className="text-[10px] text-slate-400 truncate">Tutor: {c.tutor.name}</p>}
           </>
         )}
       </div>

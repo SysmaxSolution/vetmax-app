@@ -29,6 +29,7 @@ export interface SurgeryCard {
   patient: {
     id: string; name: string; species: string; breed: string | null; photo_url: string | null
   }
+  tutor: { name: string } | null
 }
 
 export interface SurgeryBoard {
@@ -55,6 +56,7 @@ async function getCtx(): Promise<{ clinicId: string; userId: string } | { error:
 
 function toCard(s: Record<string, any>): SurgeryCard {
   const p = s.patients as any
+  const t = p?.tutors as any
   return {
     id: s.id, clinic_id: s.clinic_id, patient_id: s.patient_id,
     procedure_name: s.procedure_name, status: s.status as SurgeryStatus,
@@ -64,6 +66,7 @@ function toCard(s: Record<string, any>): SurgeryCard {
       id: p?.id ?? '', name: p?.name ?? '—', species: p?.species ?? '',
       breed: p?.breed ?? null, photo_url: p?.photo_url ?? null,
     },
+    tutor: t?.name ? { name: t.name as string } : null,
   }
 }
 
@@ -76,7 +79,7 @@ export async function getSurgeriesBoard(): Promise<SurgeryBoard | { error: strin
   const admin = createAdminClient()
   const { data, error } = await admin
     .from('surgeries')
-    .select('id, clinic_id, patient_id, procedure_name, status, asa_risk, postop_hospitalization_id, patients ( id, name, species, breed, photo_url )')
+    .select('id, clinic_id, patient_id, procedure_name, status, asa_risk, postop_hospitalization_id, patients ( id, name, species, breed, photo_url, tutors ( name ) )')
     .eq('clinic_id', ctx.clinicId)
     .in('status', ['preparo', 'sala', 'rpa'])
     .order('created_at', { ascending: true })
@@ -151,7 +154,7 @@ export async function getSurgery(id: string): Promise<SurgeryDetail | { error: s
   const admin = createAdminClient()
   const { data: s, error } = await admin
     .from('surgeries')
-    .select('id, clinic_id, patient_id, consultation_id, procedure_name, status, asa_risk, checklist, surgical_report, notes, postop_hospitalization_id, patients ( id, name, species, breed, photo_url )')
+    .select('id, clinic_id, patient_id, consultation_id, procedure_name, status, asa_risk, checklist, surgical_report, notes, postop_hospitalization_id, patients ( id, name, species, breed, photo_url, tutors ( name ) )')
     .eq('id', id).eq('clinic_id', ctx.clinicId).single()
   if (error || !s) return { error: 'Cirurgia não encontrada.' }
   return {
