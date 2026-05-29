@@ -785,12 +785,17 @@ function KanbanCard({ card, prescriptions, internacaoCompleta, openBalance, onDr
   const hours = Math.floor((Date.now() - new Date(card.created_at).getTime()) / (1000 * 60 * 60))
   const scheduler = useMedicationScheduler(prescriptions)
 
-  // Classe de pulse no card inteiro — apenas border + box-shadow (sem reflow).
-  const pulseClass = scheduler.isAlerting
-    ? 'med-card-overdue'
-    : scheduler.hasImminent
-      ? 'med-card-imminent'
-      : ''
+  // Alerta visual de medicação (pulse no card + badge piscando) é recurso da
+  // Internação Completa. Gated pela flag: OFF ⇒ card idêntico ao legado (sem
+  // pulse, sem badge). Animação via box-shadow (card) e transform/opacity
+  // (ícone) — sem reflow, definida em globals.css, sem inline style.
+  const pulseClass = internacaoCompleta
+    ? (scheduler.isAlerting
+        ? 'med-card-overdue'
+        : scheduler.hasImminent
+          ? 'med-card-imminent'
+          : '')
+    : ''
 
   return (
     <div
@@ -816,10 +821,12 @@ function KanbanCard({ card, prescriptions, internacaoCompleta, openBalance, onDr
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-1">
             <h4 className="font-bold text-slate-900 text-sm truncate">{card.patient.name}</h4>
-            <MedicationAlertBadge
-              scheduler={scheduler}
-              onClick={() => onOpenMedAlert?.(card)}
-            />
+            {internacaoCompleta && (
+              <MedicationAlertBadge
+                scheduler={scheduler}
+                onClick={() => onOpenMedAlert?.(card)}
+              />
+            )}
             {card.status === 'ready_for_discharge' && (
               internacaoCompleta ? (
                 // Regra 4 — Alta Administrativa: habilitada só com a conta zerada.

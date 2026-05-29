@@ -74,14 +74,13 @@ body.capacitor-native .native-hidden { display: none !important; }
    forçar layout reflow durante o tick. O Kanban rola fluido mesmo com 20
    cards piscando em paralelo. */
 
-@keyframes med-pulse-overdue {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.55); }
-  50%      { box-shadow: 0 0 0 8px rgba(244, 63, 94, 0); }
-}
-
-@keyframes med-pulse-imminent {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.45); }
-  50%      { box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); }
+/* Anel de pulse via pseudo-elemento, animado APENAS com transform+opacity
+   (composite-only / GPU — sem reflow nem repaint do card). A borda estática
+   indica o estado; o ::after cresce e some, dando o "piscar" sem onerar o
+   layout. Mantém a rolagem do Kanban fluida com vários cards piscando. */
+@keyframes med-card-ring {
+  0%   { transform: scale(1);     opacity: 0.6; }
+  100% { transform: scale(1.045); opacity: 0; }
 }
 
 @keyframes med-icon-pulse {
@@ -89,15 +88,26 @@ body.capacitor-native .native-hidden { display: none !important; }
   50%      { transform: scale(1.18); opacity: 0.75; }
 }
 
-.med-card-overdue {
-  animation: med-pulse-overdue 1.4s ease-in-out infinite;
-  border-color: rgb(244 63 94 / 0.55);
+.med-card-overdue,
+.med-card-imminent { position: relative; }
+
+.med-card-overdue::after,
+.med-card-imminent::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 18px;            /* ~ rounded-2xl (16px) + inset de 2px */
+  border: 2px solid currentColor;
+  pointer-events: none;
+  will-change: transform, opacity;
+  animation: med-card-ring 1.4s ease-out infinite;
 }
 
-.med-card-imminent {
-  animation: med-pulse-imminent 1.8s ease-in-out infinite;
-  border-color: rgb(245 158 11 / 0.55);
-}
+.med-card-overdue        { border-color: rgb(244 63 94 / 0.55); }
+.med-card-overdue::after { color: rgb(244 63 94 / 0.85); }
+
+.med-card-imminent        { border-color: rgb(245 158 11 / 0.55); }
+.med-card-imminent::after { color: rgb(245 158 11 / 0.7); animation-duration: 1.9s; }
 
 .med-icon-pulse {
   animation: med-icon-pulse 1.2s ease-in-out infinite;
