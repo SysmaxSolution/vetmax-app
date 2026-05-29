@@ -50,6 +50,8 @@ export default function RoomsTab({ initialRooms }: Props) {
         type: newType,
         capacity: parseInt(newCapacity) || 1,
         active: true,
+        daily_rate: 0,
+        operational_status: 'active',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }])

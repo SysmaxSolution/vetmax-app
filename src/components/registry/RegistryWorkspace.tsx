@@ -1,14 +1,17 @@
 'use client'
 
 import { useState } from 'react'
-import { Truck } from 'lucide-react'
+import { Truck, BedDouble, DoorOpen } from 'lucide-react'
 import type { Supplier } from '@/lib/actions/suppliers'
 import SuppliersTab from './suppliers/SuppliersTab'
+import RoomsTab from './RoomsTab'
 
-type Tab = 'suppliers'
+type Tab = 'suppliers' | 'boxes' | 'salas'
 
 const TABS: { key: Tab; label: string; icon: React.ElementType }[] = [
   { key: 'suppliers', label: 'Fornecedores', icon: Truck },
+  { key: 'boxes',     label: 'Boxes',        icon: BedDouble },
+  { key: 'salas',     label: 'Salas',        icon: DoorOpen },
 ]
 
 interface Props {
@@ -55,6 +58,8 @@ export default function RegistryWorkspace({ initialSuppliers, userRole }: Props)
       {activeTab === 'suppliers' && (
         <SuppliersTab initialSuppliers={initialSuppliers} userRole={userRole} />
       )}
+      {activeTab === 'boxes' && <RoomsTab kind="box" />}
+      {activeTab === 'salas' && <RoomsTab kind="sala" />}
     </>
   )
 }

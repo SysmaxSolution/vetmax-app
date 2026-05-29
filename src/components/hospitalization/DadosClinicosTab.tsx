@@ -47,7 +47,8 @@ export default function DadosClinicosTab({ hospitalizationId, onSaved }: Props) 
     Promise.all([getHospitalizationClinicalData(hospitalizationId), getRooms()]).then(([cd, rs]) => {
       if (cancelled) return
       if (!('error' in cd)) setD(cd)
-      if (Array.isArray(rs)) setRooms(rs.filter(r => r.active))
+      // Só boxes de internação operacionais (Cadastros > Boxes).
+      if (Array.isArray(rs)) setRooms(rs.filter(r => r.active && r.type === 'hospitalization' && r.operational_status !== 'maintenance'))
       setLoading(false)
     })
     return () => { cancelled = true }
