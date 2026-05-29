@@ -1,12 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Loader2, Plus, Check, CircleStop, FlaskConical, Stethoscope, Utensils, ClipboardList, Pencil, Trash2, X } from 'lucide-react'
+import { Loader2, Plus, Check, CircleStop, FlaskConical, Stethoscope, Utensils, ClipboardList, Pencil, Trash2 } from 'lucide-react'
 import {
   listHospitalizationTasks, createHospitalizationTask, markTaskDone, updateTaskStatus,
   updateHospitalizationTask, deleteHospitalizationTask,
   type HospTask, type TaskKind,
 } from '@/lib/actions/hospitalization-tasks'
+import NestedModal from '@/components/ui/NestedModal'
 
 /**
  * Aba "Tarefas" do card de internação (Internação Completa). Agenda exames,
@@ -74,41 +75,46 @@ export default function TarefasTab({ hospitalizationId, onChanged }: Props) {
     await reload(); onChanged?.()
   }
 
+  // Campos do formulário (reusados inline e dentro do NestedModal de edição).
+  const formFields = (
+    <>
+      <div className="flex flex-wrap gap-1.5">
+        {KIND_OPTS.map(k => (
+          <button key={k.value} type="button" onClick={() => setKind(k.value)} data-testid={`task-kind-${k.value}`}
+            className={`flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold border transition-colors ${kind === k.value ? 'bg-violet-600 border-violet-600 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+            {k.icon} {k.label}
+          </button>
+        ))}
+      </div>
+      <div className="flex items-center gap-2">
+        <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Ex.: Ração úmida; Raio-X tórax; Curativo…"
+          className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none" />
+        <select value={freq === null ? 'null' : String(freq)} onChange={e => setFreq(e.target.value === 'null' ? null : Number(e.target.value))}
+          className="rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm focus:border-violet-500 focus:outline-none">
+          {FREQ_OPTS.map(o => <option key={o.label} value={o.value === null ? 'null' : String(o.value)}>{o.label}</option>)}
+        </select>
+        <button onClick={handleSave} disabled={busy} data-testid="task-create-btn"
+          className="flex items-center gap-1 rounded-lg bg-violet-600 hover:bg-violet-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">
+          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} {editingId ? 'Salvar' : 'Agendar'}
+        </button>
+      </div>
+      {error && <p className="text-xs text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">{error}</p>}
+    </>
+  )
+
   return (
     <div className="flex-1 overflow-y-auto p-5 space-y-4" data-testid="tarefas-tab">
-      {/* Agendar tarefa */}
+      {/* Agendar tarefa (inline) */}
       <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-bold text-slate-900">{editingId ? 'Editar Tarefa' : 'Agendar Tarefa'}</h3>
-          {editingId && (
-            <button type="button" onClick={resetForm} className="flex items-center gap-1 text-[11px] font-semibold text-slate-400 hover:text-slate-600">
-              <X className="h-3 w-3" /> Cancelar edição
-            </button>
-          )}
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {KIND_OPTS.map(k => (
-            <button key={k.value} type="button" onClick={() => setKind(k.value)} data-testid={`task-kind-${k.value}`}
-              className={`flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold border transition-colors ${kind === k.value ? 'bg-violet-600 border-violet-600 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
-              {k.icon} {k.label}
-            </button>
-          ))}
-        </div>
-        <div className="flex items-center gap-2">
-          <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Ex.: Ração úmida; Raio-X tórax; Curativo…"
-            className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none" />
-          <select value={freq === null ? 'null' : String(freq)} onChange={e => setFreq(e.target.value === 'null' ? null : Number(e.target.value))}
-            className="rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm focus:border-violet-500 focus:outline-none">
-            {FREQ_OPTS.map(o => <option key={o.label} value={o.value === null ? 'null' : String(o.value)}>{o.label}</option>)}
-          </select>
-          <button onClick={handleSave} disabled={busy} data-testid="task-create-btn"
-            className="flex items-center gap-1 rounded-lg bg-violet-600 hover:bg-violet-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">
-            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} {editingId ? 'Salvar' : 'Agendar'}
-          </button>
-        </div>
-        {error && <p className="text-xs text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">{error}</p>}
-        <p className="text-[11px] text-slate-400">As tarefas aparecem no Mapa de Execução junto com as medicações.</p>
+        <h3 className="text-sm font-bold text-slate-900">Agendar Tarefa</h3>
+        {!editingId && formFields}
+        {!editingId && <p className="text-[11px] text-slate-400">As tarefas aparecem no Mapa de Execução junto com as medicações.</p>}
       </div>
+
+      {/* Editar tarefa: overlay sobre o modal pai (Diretiva #12) */}
+      <NestedModal open={!!editingId} onClose={resetForm} title="Editar Tarefa" testId="nested-task-edit">
+        <div className="space-y-3">{formFields}</div>
+      </NestedModal>
 
       {/* Lista */}
       <div>
