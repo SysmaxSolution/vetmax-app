@@ -262,8 +262,8 @@ export default function CardSelectionModal({
                   <input
                     value={nsu}
                     onChange={e => setNsu(e.target.value.replace(/\s/g, ''))}
-                    placeholder="Ex: 123456789"
-                    inputMode="numeric"
+                    placeholder="Ex: 123456789 ou A1B2C3"
+                    inputMode="text"
                     className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-mono focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                   />
                 </div>
@@ -274,8 +274,8 @@ export default function CardSelectionModal({
                   <input
                     value={authorization}
                     onChange={e => setAuthorization(e.target.value.replace(/\s/g, ''))}
-                    placeholder="Ex: 987654"
-                    inputMode="numeric"
+                    placeholder="Ex: 987654 ou AB1234"
+                    inputMode="text"
                     className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-mono focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                   />
                 </div>

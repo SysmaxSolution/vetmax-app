@@ -3,17 +3,22 @@
 import { useState, useMemo, useCallback } from 'react'
 import {
   CreditCard, Filter, RefreshCw, CheckCircle2, AlertCircle, Loader2, X, Check,
-  Calendar, TrendingUp, Clock, Receipt, FileText, Ban,
+  Calendar, TrendingUp, Clock, Receipt, FileText, Ban, Pencil, Search,
+  ChevronDown, ChevronUp, Save,
 } from 'lucide-react'
 import {
   listCardInstallments,
+  getCardInstallmentsSummary,
   settleCardInstallment,
   settleCardInstallmentsBatch,
   cancelCardInstallment,
+  updateCardInstallment,
   type CardInstallment,
   type CardInstallmentsSummary,
 } from '@/lib/actions/card-receivables'
 import type { PaymentCard } from '@/lib/actions/payment-cards'
+
+const BRAND_OPTIONS = ['Visa', 'Mastercard', 'Elo', 'Amex', 'Hipercard', 'Outro']
 
 const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
   pending:    { label: 'Pendente',    cls: 'bg-amber-100 text-amber-700'  },
@@ -62,6 +67,18 @@ export default function CardReceivablesWorkspace({
   const [toast,        setToast]        = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
   const [settleModal,  setSettleModal]  = useState<CardInstallment | null>(null)
   const [batchModal,   setBatchModal]   = useState(false)
+  const [detailModal,  setDetailModal]  = useState<CardInstallment | null>(null)
+
+  // Filtros avançados
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [nsuFilter,    setNsuFilter]    = useState('')
+  const [authFilter,   setAuthFilter]   = useState('')
+  const [acquirerFilter, setAcquirerFilter] = useState('')
+  const [brandFilter,  setBrandFilter]  = useState('')
+  const [ptFilter,     setPtFilter]     = useState('')   // pet/tutor
+  const [valueFilter,  setValueFilter]  = useState('')   // valor bruto OU líquido
+  const [txnFrom,      setTxnFrom]      = useState('')
+  const [txnTo,        setTxnTo]        = useState('')
 
   const canSettle = ['admin', 'owner', 'manager', 'accountant'].includes(userRole)
 
@@ -72,13 +89,24 @@ export default function CardReceivablesWorkspace({
 
   const refresh = useCallback(async () => {
     setLoading(true)
-    const res = await listCardInstallments({
-      status:    statusFilter === 'all' ? undefined : statusFilter,
-      card_id:   cardFilter === 'all' ? undefined : cardFilter,
-      method:    methodFilter === 'all' ? undefined : methodFilter,
-      from_date: fromDate || undefined,
-      to_date:   toDate || undefined,
-    })
+    // KPIs do topo (summary) acompanham apenas o range de previsão, não os demais
+    // filtros — refletem o panorama de pendentes/liquidados como no carregamento.
+    const [res, sum] = await Promise.all([
+      listCardInstallments({
+        status:        statusFilter === 'all' ? undefined : statusFilter,
+        card_id:       cardFilter === 'all' ? undefined : cardFilter,
+        method:        methodFilter === 'all' ? undefined : methodFilter,
+        from_date:     fromDate || undefined,
+        to_date:       toDate || undefined,
+        nsu:           nsuFilter.trim() || undefined,
+        authorization: authFilter.trim() || undefined,
+        acquirer:      acquirerFilter.trim() || undefined,
+        brand:         brandFilter || undefined,
+        txn_from:      txnFrom || undefined,
+        txn_to:        txnTo || undefined,
+      }),
+      getCardInstallmentsSummary({ from_date: fromDate || undefined, to_date: toDate || undefined }),
+    ])
     setLoading(false)
     if (Array.isArray(res)) {
       setInstallments(res)
@@ -86,7 +114,8 @@ export default function CardReceivablesWorkspace({
     } else {
       showToast(res.error, 'error')
     }
-  }, [statusFilter, cardFilter, methodFilter, fromDate, toDate])
+    if (sum && !('error' in sum)) setSummary(sum)
+  }, [statusFilter, cardFilter, methodFilter, fromDate, toDate, nsuFilter, authFilter, acquirerFilter, brandFilter, txnFrom, txnTo])
 
   function toggleSelected(id: string) {
     setSelected(prev => {
@@ -138,27 +167,51 @@ export default function CardReceivablesWorkspace({
     await refresh()
   }
 
-  async function handleCancel(inst: CardInstallment) {
-    const reason = prompt(`Cancelar parcela ${inst.installment_number}/${inst.total_installments} de ${fmt(inst.gross_amount)}? Motivo:`)
-    if (!reason) return
+  async function handleCancel(inst: CardInstallment, reason: string) {
     setActionId(inst.id)
     const res = await cancelCardInstallment(inst.id, reason)
     setActionId(null)
     if ('error' in res) { showToast(res.error, 'error'); return }
     showToast('Parcela cancelada.', 'success')
+    setDetailModal(null)
+    await refresh()
+  }
+
+  async function handleUpdate(input: Parameters<typeof updateCardInstallment>[0]) {
+    setActionId(input.installment_id)
+    const res = await updateCardInstallment(input)
+    setActionId(null)
+    if ('error' in res) { showToast(res.error, 'error'); return }
+    showToast('Movimentação atualizada.', 'success')
+    setDetailModal(null)
     await refresh()
   }
 
   const filtered = useMemo(() => {
+    const has = (hay: string | null | undefined, needle: string) =>
+      (hay ?? '').toLowerCase().includes(needle.trim().toLowerCase())
+    const digits = (s: string) => s.replace(/\D/g, '')
+    const valNeedle = digits(valueFilter)
+
     return installments.filter(i => {
       if (statusFilter !== 'all' && i.status !== statusFilter) return false
       if (cardFilter   !== 'all' && i.payment_card_id !== cardFilter) return false
       if (methodFilter !== 'all' && i.payment_method !== methodFilter) return false
       if (fromDate && i.expected_settlement_date < fromDate) return false
       if (toDate && i.expected_settlement_date > toDate) return false
+      if (nsuFilter.trim()      && !has(i.card_nsu, nsuFilter)) return false
+      if (authFilter.trim()     && !has(i.card_authorization, authFilter)) return false
+      if (acquirerFilter.trim() && !has(i.card_acquirer, acquirerFilter)) return false
+      if (brandFilter           && !has(i.card_brand, brandFilter)) return false
+      if (ptFilter.trim()       && !has(`${i.patient_name ?? ''} ${i.tutor_name ?? ''}`, ptFilter)) return false
+      if (valNeedle && !(digits(Number(i.gross_amount).toFixed(2)).includes(valNeedle) ||
+                         digits(Number(i.net_amount).toFixed(2)).includes(valNeedle))) return false
+      if (txnFrom && (i.transaction_date ?? '') < txnFrom) return false
+      if (txnTo   && (i.transaction_date ?? '') > txnTo) return false
       return true
     })
-  }, [installments, statusFilter, cardFilter, methodFilter, fromDate, toDate])
+  }, [installments, statusFilter, cardFilter, methodFilter, fromDate, toDate,
+      nsuFilter, authFilter, acquirerFilter, brandFilter, ptFilter, valueFilter, txnFrom, txnTo])
 
   const filteredTotalGross = filtered.reduce((s, i) => s + Number(i.gross_amount), 0)
   const filteredTotalNet   = filtered.reduce((s, i) => s + Number(i.net_amount), 0)
@@ -332,10 +385,81 @@ export default function CardReceivablesWorkspace({
           Aplicar
         </button>
 
+        <button
+          onClick={() => setShowAdvanced(v => !v)}
+          className="flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+        >
+          {showAdvanced ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          Filtros avançados
+        </button>
+
         <span className="text-xs text-slate-500 ml-auto">
           {filtered.length} parcela(s) · Bruto {fmt(filteredTotalGross)} · Líquido {fmt(filteredTotalNet)} · Taxa {fmt(filteredTotalFee)}
         </span>
       </div>
+
+      {/* Advanced filters */}
+      {showAdvanced && (
+        <div className="bg-white rounded-xl border border-slate-200 px-4 py-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] font-semibold text-slate-500 uppercase">NSU</span>
+            <input value={nsuFilter} onChange={e => setNsuFilter(e.target.value)} placeholder="Ex: A1B2C3"
+              className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] font-semibold text-slate-500 uppercase">Nº Liberação</span>
+            <input value={authFilter} onChange={e => setAuthFilter(e.target.value)} placeholder="Ex: 987654"
+              className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] font-semibold text-slate-500 uppercase">Pet / Tutor</span>
+            <input value={ptFilter} onChange={e => setPtFilter(e.target.value)} placeholder="Nome do pet ou tutor"
+              className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] font-semibold text-slate-500 uppercase">Valor (bruto ou líquido)</span>
+            <input value={valueFilter} onChange={e => setValueFilter(e.target.value)} inputMode="decimal" placeholder="Ex: 150,00"
+              className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] font-semibold text-slate-500 uppercase">Administradora</span>
+            <input value={acquirerFilter} onChange={e => setAcquirerFilter(e.target.value)} placeholder="Ex: Cielo, Stone"
+              className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] font-semibold text-slate-500 uppercase">Bandeira</span>
+            <select value={brandFilter} onChange={e => setBrandFilter(e.target.value)}
+              className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20">
+              <option value="">Todas</option>
+              {BRAND_OPTIONS.map(b => <option key={b} value={b}>{b}</option>)}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] font-semibold text-slate-500 uppercase">Transação de</span>
+            <input type="date" value={txnFrom} onChange={e => setTxnFrom(e.target.value)}
+              className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] font-semibold text-slate-500 uppercase">Transação até</span>
+            <input type="date" value={txnTo} onChange={e => setTxnTo(e.target.value)}
+              className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
+          </label>
+          <div className="sm:col-span-2 lg:col-span-4 flex items-center gap-2">
+            <button onClick={refresh} disabled={loading}
+              className="rounded-lg bg-indigo-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">
+              Aplicar filtros
+            </button>
+            <button
+              onClick={() => {
+                setNsuFilter(''); setAuthFilter(''); setAcquirerFilter(''); setBrandFilter('')
+                setPtFilter(''); setValueFilter(''); setTxnFrom(''); setTxnTo('')
+              }}
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50">
+              Limpar
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Table */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -353,6 +477,7 @@ export default function CardReceivablesWorkspace({
                     />
                   )}
                 </th>
+                <th className="text-left px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Transação</th>
                 <th className="text-left px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Previsão</th>
                 <th className="text-left px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Cartão</th>
                 <th className="text-left px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Tipo</th>
@@ -369,7 +494,7 @@ export default function CardReceivablesWorkspace({
             <tbody className="divide-y divide-slate-50">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="text-center py-14 text-sm text-slate-400">
+                  <td colSpan={13} className="text-center py-14 text-sm text-slate-400">
                     Nenhuma parcela de cartão encontrada com esses filtros
                   </td>
                 </tr>
@@ -378,8 +503,8 @@ export default function CardReceivablesWorkspace({
                   const sc = STATUS_CONFIG[i.status] ?? STATUS_CONFIG.pending
                   const isPending = i.status === 'pending'
                   return (
-                    <tr key={i.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-3 py-3">
+                    <tr key={i.id} onClick={() => setDetailModal(i)} className="hover:bg-indigo-50/40 transition-colors cursor-pointer">
+                      <td className="px-3 py-3" onClick={e => e.stopPropagation()}>
                         {isPending && canSettle && (
                           <input
                             type="checkbox"
@@ -388,6 +513,9 @@ export default function CardReceivablesWorkspace({
                             className="rounded"
                           />
                         )}
+                      </td>
+                      <td className="px-3 py-3 whitespace-nowrap text-xs">
+                        <span className="font-semibold text-slate-700">{fmtDate(i.transaction_date)}</span>
                       </td>
                       <td className="px-3 py-3 whitespace-nowrap text-xs">
                         <div className="flex flex-col">
@@ -434,35 +562,14 @@ export default function CardReceivablesWorkspace({
                           {sc.label}
                         </span>
                       </td>
-                      <td className="px-3 py-3 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          {canSettle && isPending && (
-                            <>
-                              <button
-                                onClick={() => setSettleModal(i)}
-                                disabled={actionId === i.id}
-                                className="rounded-lg bg-emerald-50 border border-emerald-200 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 flex items-center gap-1"
-                                title="Liquidar"
-                              >
-                                {actionId === i.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
-                                Liquidar
-                              </button>
-                              <button
-                                onClick={() => handleCancel(i)}
-                                disabled={actionId === i.id}
-                                className="rounded-lg bg-red-50 border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
-                                title="Cancelar"
-                              >
-                                <Ban className="h-3 w-3" />
-                              </button>
-                            </>
-                          )}
-                          {!isPending && i.bank_statement_ref && (
-                            <span className="text-[10px] text-slate-400 font-mono" title={`Extrato: ${i.bank_statement_ref}`}>
-                              <FileText className="h-3 w-3 inline" /> {i.bank_statement_ref.slice(0, 8)}
-                            </span>
-                          )}
-                        </div>
+                      <td className="px-3 py-3 text-center" onClick={e => e.stopPropagation()}>
+                        <button
+                          onClick={() => setDetailModal(i)}
+                          className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-50 inline-flex items-center gap-1"
+                          title="Ver detalhes / ações"
+                        >
+                          <Search className="h-3 w-3" /> Detalhes
+                        </button>
                       </td>
                     </tr>
                   )
@@ -472,6 +579,18 @@ export default function CardReceivablesWorkspace({
           </table>
         </div>
       </div>
+
+      {detailModal && (
+        <InstallmentDetailModal
+          installment={detailModal}
+          canManage={canSettle}
+          busy={actionId === detailModal.id}
+          onClose={() => setDetailModal(null)}
+          onSettle={() => { const i = detailModal; setDetailModal(null); setSettleModal(i) }}
+          onCancel={reason => handleCancel(detailModal, reason)}
+          onSave={handleUpdate}
+        />
+      )}
 
       {settleModal && (
         <SettleSingleModal
@@ -700,6 +819,186 @@ function SettleBatchModal({ count, total, onCancel, onConfirm }: {
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  )
+}
+
+// ─── InstallmentDetailModal ─────────────────────────────────────────────────
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">{label}</p>
+      <p className="text-sm text-slate-800">{children}</p>
+    </div>
+  )
+}
+
+const editInputCls = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20'
+
+function InstallmentDetailModal({
+  installment, canManage, busy, onClose, onSettle, onCancel, onSave,
+}: {
+  installment: CardInstallment
+  canManage:   boolean
+  busy:        boolean
+  onClose:     () => void
+  onSettle:    () => void
+  onCancel:    (reason: string) => void
+  onSave:      (input: Parameters<typeof updateCardInstallment>[0]) => void
+}) {
+  const i = installment
+  const isPending = i.status === 'pending'
+  const sc = STATUS_CONFIG[i.status] ?? STATUS_CONFIG.pending
+  const [mode, setMode] = useState<'view' | 'edit' | 'cancel'>('view')
+
+  const [acquirer,   setAcquirer]   = useState(i.card_acquirer ?? '')
+  const [brand,      setBrand]      = useState(i.card_brand ?? '')
+  const [nsu,        setNsu]        = useState(i.card_nsu ?? '')
+  const [auth,       setAuth]       = useState(i.card_authorization ?? '')
+  const [txnDate,    setTxnDate]    = useState(i.transaction_date ?? '')
+  const [settleDate, setSettleDate] = useState(i.expected_settlement_date ?? '')
+  const [gross,      setGross]      = useState(Number(i.gross_amount).toFixed(2).replace('.', ','))
+  const [feePct,     setFeePct]     = useState(String(i.fee_percent).replace('.', ','))
+  const [reason,     setReason]     = useState('')
+
+  const grossNum   = parseFloat(gross.replace(',', '.')) || 0
+  const pctNum     = parseFloat(feePct.replace(',', '.')) || 0
+  const feePreview = Math.round(grossNum * pctNum) / 100
+  const netPreview = grossNum - feePreview
+
+  function submitEdit() {
+    onSave({
+      installment_id:           i.id,
+      card_nsu:                 nsu.trim() || null,
+      card_authorization:       auth.trim() || null,
+      card_acquirer:            acquirer.trim() || null,
+      card_brand:               brand.trim() || null,
+      transaction_date:         txnDate || null,
+      gross_amount:             grossNum,
+      fee_percent:              pctNum,
+      expected_settlement_date: settleDate || null,
+    })
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 sticky top-0 bg-white">
+          <div>
+            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <CreditCard className="h-4 w-4 text-indigo-600" />
+              Movimentação de cartão
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {METHOD_LABEL[i.payment_method] ?? i.payment_method} · Parcela {i.installment_number}/{i.total_installments}
+              <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${sc.cls}`}>{sc.label}</span>
+            </p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
+        </div>
+
+        <div className="p-5 space-y-5">
+          {/* ─── VIEW ─── */}
+          {mode === 'view' && (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                <Field label="Cartão">{i.card_label ?? i.card_acquirer ?? '—'}</Field>
+                <Field label="Administradora">{i.card_acquirer ?? '—'}</Field>
+                <Field label="Bandeira">{i.card_brand ?? '—'}</Field>
+                <Field label="Pet / Tutor">{i.patient_name ?? i.tutor_name ?? '—'}</Field>
+                <Field label="NSU"><span className="font-mono">{i.card_nsu ?? '—'}</span></Field>
+                <Field label="Nº Liberação"><span className="font-mono">{i.card_authorization ?? '—'}</span></Field>
+                <Field label="Data transação">{fmtDate(i.transaction_date)}</Field>
+                <Field label="Previsão repasse">{fmtDate(i.expected_settlement_date)}</Field>
+                <Field label="Liquidado em">{i.settled_at ? new Date(i.settled_at).toLocaleDateString('pt-BR') : '—'}</Field>
+              </div>
+              <div className="rounded-xl bg-slate-50 px-4 py-3 grid grid-cols-3 gap-3 text-sm">
+                <div><p className="text-[10px] text-slate-500 uppercase">Bruto</p><p className="font-bold text-slate-900 tabular-nums">{fmt(i.gross_amount)}</p></div>
+                <div><p className="text-[10px] text-slate-500 uppercase">Taxa ({i.fee_percent}%)</p><p className="font-bold text-rose-700 tabular-nums">-{fmt(i.fee_amount)}</p></div>
+                <div><p className="text-[10px] text-slate-500 uppercase">Líquido</p><p className="font-bold text-emerald-700 tabular-nums">{fmt(i.net_amount)}</p></div>
+              </div>
+              {i.bank_statement_ref && (
+                <Field label="Extrato"><span className="font-mono inline-flex items-center gap-1"><FileText className="h-3 w-3" /> {i.bank_statement_ref}</span></Field>
+              )}
+              {i.notes && <Field label="Observações">{i.notes}</Field>}
+
+              {canManage && isPending && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <button onClick={() => setMode('edit')} className="flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100">
+                    <Pencil className="h-3.5 w-3.5" /> Editar
+                  </button>
+                  <button onClick={onSettle} className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
+                    <Check className="h-3.5 w-3.5" /> Liquidar
+                  </button>
+                  <button onClick={() => setMode('cancel')} className="flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100">
+                    <Ban className="h-3.5 w-3.5" /> Cancelar
+                  </button>
+                </div>
+              )}
+              {!isPending && (
+                <p className="text-xs text-slate-400">Apenas parcelas pendentes podem ser editadas, liquidadas ou canceladas.</p>
+              )}
+            </>
+          )}
+
+          {/* ─── EDIT ─── */}
+          {mode === 'edit' && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className="block"><span className="text-[11px] font-semibold text-slate-500 uppercase">Administradora</span>
+                  <input value={acquirer} onChange={e => setAcquirer(e.target.value)} className={editInputCls} /></label>
+                <label className="block"><span className="text-[11px] font-semibold text-slate-500 uppercase">Bandeira</span>
+                  <select value={brand} onChange={e => setBrand(e.target.value)} className={editInputCls}>
+                    <option value="">—</option>
+                    {BRAND_OPTIONS.map(b => <option key={b} value={b}>{b}</option>)}
+                  </select></label>
+                <label className="block"><span className="text-[11px] font-semibold text-slate-500 uppercase">NSU</span>
+                  <input value={nsu} onChange={e => setNsu(e.target.value.replace(/\s/g, ''))} className={`${editInputCls} font-mono`} /></label>
+                <label className="block"><span className="text-[11px] font-semibold text-slate-500 uppercase">Nº Liberação</span>
+                  <input value={auth} onChange={e => setAuth(e.target.value.replace(/\s/g, ''))} className={`${editInputCls} font-mono`} /></label>
+                <label className="block"><span className="text-[11px] font-semibold text-slate-500 uppercase">Data da transação</span>
+                  <input type="date" value={txnDate} onChange={e => setTxnDate(e.target.value)} className={editInputCls} /></label>
+                <label className="block"><span className="text-[11px] font-semibold text-slate-500 uppercase">Previsão de repasse</span>
+                  <input type="date" value={settleDate} onChange={e => setSettleDate(e.target.value)} className={editInputCls} /></label>
+                <label className="block"><span className="text-[11px] font-semibold text-slate-500 uppercase">Valor bruto (R$)</span>
+                  <input value={gross} onChange={e => setGross(e.target.value)} inputMode="decimal" className={`${editInputCls} tabular-nums`} /></label>
+                <label className="block"><span className="text-[11px] font-semibold text-slate-500 uppercase">Taxa (%)</span>
+                  <input value={feePct} onChange={e => setFeePct(e.target.value.replace(/[^0-9.,]/g, ''))} inputMode="decimal" className={`${editInputCls} tabular-nums`} /></label>
+              </div>
+              <div className="rounded-xl bg-slate-50 px-4 py-3 grid grid-cols-3 gap-3 text-sm">
+                <div><p className="text-[10px] text-slate-500 uppercase">Bruto</p><p className="font-bold text-slate-900 tabular-nums">{fmt(grossNum)}</p></div>
+                <div><p className="text-[10px] text-slate-500 uppercase">Taxa</p><p className="font-bold text-rose-700 tabular-nums">-{fmt(feePreview)}</p></div>
+                <div><p className="text-[10px] text-slate-500 uppercase">Líquido</p><p className="font-bold text-emerald-700 tabular-nums">{fmt(netPreview)}</p></div>
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => setMode('view')} className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Voltar</button>
+                <button onClick={submitEdit} disabled={busy} className="flex-1 rounded-xl bg-indigo-600 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2">
+                  {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Save className="h-4 w-4" /> Salvar</>}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ─── CANCEL ─── */}
+          {mode === 'cancel' && (
+            <div className="space-y-3">
+              <p className="text-sm text-slate-700">
+                Cancelar a parcela {i.installment_number}/{i.total_installments} de <strong>{fmt(i.gross_amount)}</strong>?
+                Isso também cancela o título a receber vinculado.
+              </p>
+              <label className="block"><span className="text-[11px] font-semibold text-slate-500 uppercase">Motivo do cancelamento *</span>
+                <textarea value={reason} onChange={e => setReason(e.target.value)} rows={3} className={editInputCls} placeholder="Ex: estorno na maquininha" /></label>
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => setMode('view')} className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Voltar</button>
+                <button onClick={() => onCancel(reason)} disabled={busy || !reason.trim()} className="flex-1 rounded-xl bg-red-600 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2">
+                  {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Ban className="h-4 w-4" /> Confirmar cancelamento</>}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

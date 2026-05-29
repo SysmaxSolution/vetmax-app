@@ -24,6 +24,7 @@ export interface CardInstallment {
   fee_amount:               number
   net_amount:               number
   expected_settlement_date: string
+  transaction_date:         string | null
   status:                   CardInstallmentStatus
   settled_at:               string | null
   settled_amount:           number | null
@@ -50,10 +51,18 @@ async function getCtx(): Promise<{ clinic_id: string; user_id: string; role: str
 export interface CardInstallmentsFilter {
   status?:     CardInstallmentStatus | 'all'
   card_id?:    string
+  /** Range sobre a previsão de repasse (expected_settlement_date). */
   from_date?:  string
   to_date?:    string
   acquirer?:   string
   method?:     'credit' | 'debit' | 'voucher'
+  /** Filtros avançados. */
+  nsu?:           string
+  authorization?: string
+  brand?:         string
+  /** Range sobre a data da transação no terminal (transaction_date). */
+  txn_from?:   string
+  txn_to?:     string
 }
 
 export async function listCardInstallments(
@@ -77,8 +86,13 @@ export async function listCardInstallments(
   if (filter.card_id)  q = q.eq('payment_card_id', filter.card_id)
   if (filter.method)   q = q.eq('payment_method', filter.method)
   if (filter.acquirer) q = q.ilike('card_acquirer', `%${filter.acquirer}%`)
+  if (filter.brand)    q = q.ilike('card_brand', `%${filter.brand}%`)
+  if (filter.nsu)           q = q.ilike('card_nsu', `%${filter.nsu}%`)
+  if (filter.authorization) q = q.ilike('card_authorization', `%${filter.authorization}%`)
   if (filter.from_date) q = q.gte('expected_settlement_date', filter.from_date)
   if (filter.to_date)   q = q.lte('expected_settlement_date', filter.to_date)
+  if (filter.txn_from)  q = q.gte('transaction_date', filter.txn_from)
+  if (filter.txn_to)    q = q.lte('transaction_date', filter.txn_to)
 
   const { data, error } = await q.limit(500)
   if (error) return { error: error.message }
@@ -225,6 +239,45 @@ export async function cancelCardInstallment(
   })
   if (error) return { error: error.message }
 
+  revalidatePath('/dashboard/financial/cards')
+  return { success: true }
+}
+
+/**
+ * Edita uma parcela de cartão PENDENTE (conciliação + valores) e mantém o título
+ * a receber vinculado coerente. Apenas status 'pending' (validado na RPC).
+ */
+export async function updateCardInstallment(input: {
+  installment_id:            string
+  card_nsu?:                 string | null
+  card_authorization?:       string | null
+  card_acquirer?:            string | null
+  card_brand?:               string | null
+  transaction_date?:         string | null
+  gross_amount?:             number | null
+  fee_percent?:              number | null
+  expected_settlement_date?: string | null
+}): Promise<{ success: true } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+
+  const supabase = await createClient()
+  const { error } = await supabase.rpc('rpc_update_card_installment', {
+    p_installment_id:           input.installment_id,
+    p_clinic_id:                ctx.clinic_id,
+    p_updated_by:               ctx.user_id,
+    p_card_nsu:                 input.card_nsu ?? null,
+    p_card_authorization:       input.card_authorization ?? null,
+    p_card_acquirer:            input.card_acquirer ?? null,
+    p_card_brand:               input.card_brand ?? null,
+    p_transaction_date:         input.transaction_date ?? null,
+    p_gross_amount:             input.gross_amount ?? null,
+    p_fee_percent:              input.fee_percent ?? null,
+    p_expected_settlement_date: input.expected_settlement_date ?? null,
+  })
+  if (error) return { error: error.message }
+
+  revalidatePath('/dashboard/financial')
   revalidatePath('/dashboard/financial/cards')
   return { success: true }
 }

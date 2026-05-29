@@ -111,7 +111,7 @@ export default function CardPaymentDetailsModal({ paymentMethod, amount, onCance
                 value={nsu}
                 onChange={e => setNsu(e.target.value.replace(/\s/g, ''))}
                 placeholder="Ex: 123456789"
-                inputMode="numeric"
+                inputMode="text"
                 className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-mono focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
               />
             </div>
@@ -123,7 +123,7 @@ export default function CardPaymentDetailsModal({ paymentMethod, amount, onCance
                 value={authorization}
                 onChange={e => setAuthorization(e.target.value.replace(/\s/g, ''))}
                 placeholder="Ex: 987654"
-                inputMode="numeric"
+                inputMode="text"
                 className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-mono focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
               />
             </div>

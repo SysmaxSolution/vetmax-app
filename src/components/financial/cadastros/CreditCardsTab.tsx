@@ -71,20 +71,33 @@ function CardModal({
         }
       : emptyForm()
   )
+  // Campos numéricos como string para permitir edição livre (apagar o 0, usar vírgula).
+  const [feePercent,     setFeePercent]     = useState<string>(card ? String(card.fee_percent).replace('.', ',') : '')
+  const [daysToReceive,  setDaysToReceive]  = useState<string>(card ? String(card.days_to_receive) : '30')
+  const [maxInstallments, setMaxInstallments] = useState<string>(card ? String(card.installments_max) : '1')
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const [confirmDel, setConfirmDel] = useState(false)
 
   function handleSave() {
     setError(null)
+    const feeVal   = feePercent.trim()     === '' ? 0 : parseFloat(feePercent.replace(',', '.'))
+    const daysVal  = daysToReceive.trim()  === '' ? 0 : parseInt(daysToReceive, 10)
+    const instaVal = maxInstallments.trim() === '' ? 1 : parseInt(maxInstallments, 10)
+
     if (!form.name.trim()) { setError('Nome obrigatório.'); return }
-    if (form.fee_percent < 0 || form.fee_percent > 100) { setError('Taxa deve ser entre 0% e 100%.'); return }
-    if (form.installments_max < 1) { setError('Máximo de parcelas deve ser >= 1.'); return }
+    if (!Number.isFinite(feeVal) || feeVal < 0 || feeVal > 100) { setError('Taxa deve ser entre 0% e 100%.'); return }
+    if (!Number.isFinite(instaVal) || instaVal < 1) { setError('Máximo de parcelas deve ser >= 1.'); return }
+    if (!Number.isFinite(daysVal) || daysVal < 0) { setError('Prazo (dias) inválido.'); return }
+
+    const payload: CreateCreditCardData = {
+      ...form, fee_percent: feeVal, days_to_receive: daysVal, installments_max: instaVal,
+    }
 
     startTransition(async () => {
       const res = mode === 'create'
-        ? await createCreditCard(form)
-        : await updateCreditCard(card!.id, form)
+        ? await createCreditCard(payload)
+        : await updateCreditCard(card!.id, payload)
 
       if ('error' in res) { setError((res as { error: string }).error); return }
       const listRes = await listCreditCards()
@@ -145,27 +158,27 @@ function CardModal({
             <div>
               <label className={labelClass}>Taxa (%)</label>
               <input
-                type="number" min={0} max={100} step={0.01}
-                value={form.fee_percent}
-                onChange={e => setForm(f => ({ ...f, fee_percent: Number(e.target.value) }))}
-                className={fieldClass} placeholder="2.50"
+                type="text" inputMode="decimal"
+                value={feePercent}
+                onChange={e => setFeePercent(e.target.value.replace(/[^0-9.,]/g, ''))}
+                className={fieldClass} placeholder="2,50"
               />
             </div>
             <div>
               <label className={labelClass}>Prazo (dias)</label>
               <input
-                type="number" min={0}
-                value={form.days_to_receive}
-                onChange={e => setForm(f => ({ ...f, days_to_receive: Number(e.target.value) }))}
+                type="text" inputMode="numeric"
+                value={daysToReceive}
+                onChange={e => setDaysToReceive(e.target.value.replace(/[^0-9]/g, ''))}
                 className={fieldClass} placeholder="30"
               />
             </div>
             <div>
               <label className={labelClass}>Máx. Parcelas</label>
               <input
-                type="number" min={1} max={48}
-                value={form.installments_max}
-                onChange={e => setForm(f => ({ ...f, installments_max: Number(e.target.value) }))}
+                type="text" inputMode="numeric"
+                value={maxInstallments}
+                onChange={e => setMaxInstallments(e.target.value.replace(/[^0-9]/g, ''))}
                 className={fieldClass} placeholder="12"
               />
             </div>
