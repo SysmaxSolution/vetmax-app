@@ -2,8 +2,9 @@
 
 import { useMemo, useState, useTransition } from 'react'
 import {
-  Pill, X, Loader2, Check, Pause, CircleStop, AlertTriangle, Plus, ClockAlert,
+  Pill, X, Loader2, Check, Pause, CircleStop, AlertTriangle, Plus, ClockAlert, FileStack,
 } from 'lucide-react'
+import ProtocolPicker from './ProtocolPicker'
 import {
   applyHospitalizationDose,
   createHospitalizationPrescription,
@@ -78,6 +79,7 @@ export default function MedicationApplicationModal({
   const [pendingId, setPendingId] = useState<{ id: string; action: 'apply' | 'pause' | 'finish' } | null>(null)
   const [error, setError]         = useState<string | null>(null)
   const [showCreate, setShowCreate] = useState(false)
+  const [showProtocols, setShowProtocols] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [feedback, setFeedback] = useState<{ tone: 'amber' | 'rose' | 'slate'; msg: string } | null>(null)
 
@@ -341,13 +343,23 @@ export default function MedicationApplicationModal({
         {/* Footer */}
         <div className="flex-shrink-0 flex gap-2 px-5 py-3 border-t border-slate-100">
           {!showCreate && (
-            <button
-              type="button"
-              onClick={() => setShowCreate(true)}
-              className="flex items-center gap-1.5 rounded-xl border border-violet-200 bg-violet-50 hover:bg-violet-100 px-3 py-2 text-xs font-semibold text-violet-700"
-            >
-              <Plus className="h-3.5 w-3.5" /> Nova Prescrição
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => setShowCreate(true)}
+                className="flex items-center gap-1.5 rounded-xl border border-violet-200 bg-violet-50 hover:bg-violet-100 px-3 py-2 text-xs font-semibold text-violet-700"
+              >
+                <Plus className="h-3.5 w-3.5" /> Nova Prescrição
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowProtocols(true)}
+                data-testid="open-protocols-btn"
+                className="flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 px-3 py-2 text-xs font-semibold text-indigo-700"
+              >
+                <FileStack className="h-3.5 w-3.5" /> Aplicar Protocolo
+              </button>
+            </>
           )}
           <button
             type="button"
@@ -358,6 +370,15 @@ export default function MedicationApplicationModal({
           </button>
         </div>
       </div>
+
+      {/* Protocolos de prescrição (Fase 2) — unroll 1-clique no Mapa de Execução */}
+      {showProtocols && (
+        <ProtocolPicker
+          hospitalizationId={hospitalizationId}
+          onClose={() => setShowProtocols(false)}
+          onApplied={finalizeUpdate}
+        />
+      )}
     </div>
   )
 }
