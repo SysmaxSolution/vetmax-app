@@ -6,6 +6,8 @@ import {
   Mic, MicOff, Plus, Save, FileStack, Zap, Receipt, BedDouble, CheckCircle2, ShieldAlert,
 } from 'lucide-react'
 import { useClinicalVoiceAssistant } from '@/hooks/useClinicalVoiceAssistant'
+import { useUnifiedVoiceDraft } from '@/hooks/useUnifiedClinicalVoice'
+import VoiceReviewPanel from './VoiceReviewPanel'
 import {
   getSurgery, updateSurgeryChecklist, updateSurgeryReport,
   listSurgeryVitals, recordSurgeryVital, sendSurgeryToInternacao,
@@ -100,13 +102,19 @@ export default function SurgeryFichaModal({ surgeryId, onClose, onChanged }: Pro
     return () => { cancelled = true }
   }, [surgeryId, reloadVitals, reloadAccount])
 
-  // ── Voz mãos-livres (useClinicalVoiceAssistant) → anexa ao relatório ──
-  const handleVoiceSave = useCallback((text: string) => {
+  // ── Voz unificada (extração multi-domínio: vitais/checklist/relatório) ──
+  const uvoice = useUnifiedVoiceDraft('surgery')
+
+  const reloadSurgery = useCallback(async () => {
+    const s = await getSurgery(surgeryId)
+    if (!('error' in s)) { setSurgery(s); setChecklist(s.checklist ?? {}); setReport(s.surgical_report ?? '') }
+  }, [surgeryId])
+
+  const handleVoiceSave = useCallback(async (text: string) => {
     if (!text.trim()) return
-    setReport(prev => (prev ? prev + '\n' : '') + text.trim())
-    // expande a seção do relatório se estiver fechada
-    setOpenSet(prev => new Set(prev).add('report'))
-  }, [])
+    const uni = await uvoice.ingest(text)
+    if (uni) setOpenSet(prev => new Set(prev).add('report'))
+  }, [uvoice])
   const voice = useClinicalVoiceAssistant({ onAutoSave: handleVoiceSave })
   const isRecording = voice.state === 'RECORDING'
   useEffect(() => { voice.activate(); return () => voice.deactivate() }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -192,10 +200,35 @@ export default function SurgeryFichaModal({ surgeryId, onClose, onChanged }: Pro
                     {isRecording ? <Mic className="h-3.5 w-3.5" /> : <MicOff className="h-3.5 w-3.5" />}
                     {isRecording ? 'Ouvindo… (diga "finalizar")' : 'Gravar por voz'}
                   </button>
-                  <span className="text-[11px] text-slate-500">Ditado preenche o <strong>Relatório Cirúrgico</strong>.</span>
+                  <span className="text-[11px] text-slate-500">Ditado preenche <strong>Ficha Anestésica, Checklist e Relatório</strong> (revise abaixo).</span>
                 </div>
                 {isRecording && voice.transcript && <p className="text-[11px] text-violet-600 italic truncate">"{voice.transcript}"</p>}
+                {uvoice.isProcessing && <p className="text-[11px] text-violet-600 flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Estruturando ditado…</p>}
               </div>
+
+              {/* Painel de revisão da voz (vitais anestésicos / checklist / relatório) */}
+              {uvoice.hasDraft && (
+                <VoiceReviewPanel
+                  context="surgery"
+                  surgeryId={surgeryId}
+                  draft={uvoice.draft}
+                  setDraft={uvoice.setDraft}
+                  isRecording={isRecording}
+                  isProcessing={uvoice.isProcessing}
+                  transcript={voice.transcript}
+                  hasDraft={uvoice.hasDraft}
+                  lastSummary={uvoice.summary}
+                  error={uvoice.error}
+                  showMic={false}
+                  onToggleMic={() => voice.manualToggle()}
+                  clearDraft={uvoice.clear}
+                  onPersisted={() => {
+                    setKitToast('Ditado salvo: ficha atualizada.')
+                    void reloadSurgery(); void reloadVitals()
+                    setTimeout(() => setKitToast(null), 4000)
+                  }}
+                />
+              )}
 
               {/* 1. Checklist Pré-Op */}
               <Section id="checklist" icon={<ClipboardCheck className="h-5 w-5" />} title="Checklist Pré-Operatório" subtitle="Jejum, exames, consentimento" open={openSet.has('checklist')} onToggle={() => toggle('checklist')} accentClass="bg-amber-50 text-amber-600">

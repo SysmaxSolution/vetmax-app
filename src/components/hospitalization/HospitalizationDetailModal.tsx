@@ -21,7 +21,9 @@ import {
 } from '@/lib/actions/hospitalizations'
 import { createClient } from '@/lib/supabase/client'
 import { extractHospitalizationVoice } from '@/lib/actions/pharmacy'
-import { generateClinicalSummary, type ClinicalSummaryResult, askPatientHistory, type VoiceChatResult } from '@/lib/actions/ai_extraction'
+import { generateClinicalSummary, type ClinicalSummaryResult, askPatientHistory, type VoiceChatResult, extractUnifiedClinicalVoice } from '@/lib/actions/ai_extraction'
+import { useUnifiedVoiceDraft } from '@/hooks/useUnifiedClinicalVoice'
+import VoiceReviewPanel from './VoiceReviewPanel'
 import { generatePrescriptionPdf, type PrescriptionData } from '@/lib/actions/reports'
 import PrescriptionModal from './PrescriptionModal'
 import WhatsAppNotificationModal from '@/components/whatsapp/WhatsAppNotificationModal'
@@ -100,6 +102,9 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
   
   // Estado da Voz
   const [isProcessingVoice, setIsProcessingVoice] = useState(false)
+  // Voz unificada (Internação Completa): draft multi-aba revisável.
+  const uvoice = useUnifiedVoiceDraft('hospitalization')
+  const [unifiedRefreshKey, setUnifiedRefreshKey] = useState(0)
 
   // Handsfree voice assistant
   const [startTriggers,  setStartTriggers]  = useState<string[]>([])
@@ -189,11 +194,23 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
 
   const handleVoiceAutoSave = useCallback(async (transcript: string) => {
     if (!transcript.trim()) return
-    // Em AMBOS os modos: a IA extrai improvement_level e medicações.
-    // O aiMode só decide se as `notes` recebem o texto literal do vet ou o
-    // texto parafraseado pela IA (iaResult.notes).
     setIsProcessingVoice(true)
     try {
+      // Internação Completa: extração multi-domínio. Preenche a evolução
+      // (esquerda) E acumula um draft das abas (Sinais Vitais, Fluido, Dados,
+      // Tarefas, Medicações) que o usuário revisa antes de persistir.
+      if (internacaoCompleta) {
+        const uni = await uvoice.ingest(transcript.trim())
+        if (uni) {
+          const noteText = aiMode === 'transcribe_only' ? transcript : (uni.notes || transcript)
+          if (noteText.trim()) setNotes(prev => prev + (prev ? '\n' : '') + noteText)
+          if (uni.improvement_level) setStatus(uni.improvement_level)
+        } else {
+          setNotes(prev => prev + (prev ? ' ' : '') + transcript)
+        }
+        return
+      }
+      // Modo legado (flag off): só evolução (notes/status/medicações aplicadas).
       const iaResult = await extractHospitalizationVoice(transcript.trim())
       if (iaResult && !iaResult.error) {
         const noteText = aiMode === 'transcribe_only'
@@ -213,7 +230,7 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
     } finally {
       setIsProcessingVoice(false)
     }
-  }, [aiMode]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [aiMode, internacaoCompleta]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const voiceAssistant = useClinicalVoiceAssistant({
     onAutoSave: handleVoiceAutoSave,
@@ -894,6 +911,32 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
           {/* Coluna Direita: Tabbed (Linha do Tempo + Documentos) */}
           <div className="bg-slate-50/50 rounded-2xl border border-slate-100 h-[calc(100vh-200px)] flex flex-col overflow-hidden">
 
+            {/* Voz unificada (Internação Completa): grava e roteia p/ todas as abas */}
+            {internacaoCompleta && (
+              <div className="flex-shrink-0 max-h-[48%] overflow-y-auto p-2 border-b border-slate-200">
+                <VoiceReviewPanel
+                  context="hospitalization"
+                  hospitalizationId={card.id}
+                  draft={uvoice.draft}
+                  setDraft={uvoice.setDraft}
+                  isRecording={isRecording}
+                  isProcessing={isProcessingVoice || uvoice.isProcessing}
+                  transcript={voiceAssistant.transcript}
+                  hasDraft={uvoice.hasDraft}
+                  lastSummary={uvoice.summary}
+                  error={uvoice.error}
+                  onToggleMic={() => voiceAssistant.manualToggle()}
+                  clearDraft={uvoice.clear}
+                  onPersisted={(r) => {
+                    setSaveToast(`Salvo por voz: ${[r.vitals && 'vitais', r.fluids && `${r.fluids} fluido(s)`, r.tasks && `${r.tasks} tarefa(s)`, r.medications && `${r.medications} medicação(ões)`, r.clinical_data && 'dados clínicos'].filter(Boolean).join(', ') || 'registros'}.`)
+                    setTimeout(() => setSaveToast(null), 4000)
+                    void reloadPrescriptions(); onSaved?.()
+                    setUnifiedRefreshKey(k => k + 1)
+                  }}
+                />
+              </div>
+            )}
+
             {/* Tabs */}
             <div className="border-b border-slate-200 bg-slate-100/80 backdrop-blur-md z-10 flex items-center overflow-x-auto">
               <button
@@ -1206,12 +1249,12 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
 
             {/* ─── Aba: Sinais Vitais (Internação Completa) ─── */}
             {activeRightTab === 'vitals' && internacaoCompleta && (
-              <VitalsTab hospitalizationId={card.id} admissionWeight={admissionWeight} />
+              <VitalsTab key={`vitals-${unifiedRefreshKey}`} hospitalizationId={card.id} admissionWeight={admissionWeight} />
             )}
 
             {/* ─── Aba: Fluidoterapia + Balanço Hídrico (Internação Completa) ─── */}
             {activeRightTab === 'fluids' && internacaoCompleta && (
-              <FluidTherapyTab hospitalizationId={card.id} admissionWeight={admissionWeight} />
+              <FluidTherapyTab key={`fluids-${unifiedRefreshKey}`} hospitalizationId={card.id} admissionWeight={admissionWeight} />
             )}
 
             {/* ─── Aba: Conta + Máquina de Alta (Internação Completa, Regra 4) ─── */}
@@ -1231,7 +1274,7 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
 
             {/* ─── Aba: Tarefas (exame/procedimento/alimentação → Mapa) ─── */}
             {activeRightTab === 'tarefas' && internacaoCompleta && (
-              <TarefasTab hospitalizationId={card.id} onChanged={() => onSaved?.()} />
+              <TarefasTab key={`tarefas-${unifiedRefreshKey}`} hospitalizationId={card.id} onChanged={() => onSaved?.()} />
             )}
           </div>
         </div>
