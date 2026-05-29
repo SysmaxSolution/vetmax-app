@@ -184,6 +184,19 @@ export default function SurgeryFichaModal({ surgeryId, onClose, onChanged }: Pro
             <>
               {error && <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-2.5 text-sm text-red-600">{error}</div>}
 
+              {/* Barra de voz — topo do acordeão (mãos livres) */}
+              <div className="rounded-2xl border border-violet-200 bg-violet-50/60 px-4 py-3 flex flex-col gap-1.5" data-testid="surgery-voice-bar">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button type="button" onClick={() => voice.manualToggle()} data-testid="surgery-voice-btn"
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${isRecording ? 'bg-rose-100 text-rose-700 animate-pulse' : 'bg-violet-600 text-white hover:bg-violet-700'}`}>
+                    {isRecording ? <Mic className="h-3.5 w-3.5" /> : <MicOff className="h-3.5 w-3.5" />}
+                    {isRecording ? 'Ouvindo… (diga "finalizar")' : 'Gravar por voz'}
+                  </button>
+                  <span className="text-[11px] text-slate-500">Ditado preenche o <strong>Relatório Cirúrgico</strong>.</span>
+                </div>
+                {isRecording && voice.transcript && <p className="text-[11px] text-violet-600 italic truncate">"{voice.transcript}"</p>}
+              </div>
+
               {/* 1. Checklist Pré-Op */}
               <Section id="checklist" icon={<ClipboardCheck className="h-5 w-5" />} title="Checklist Pré-Operatório" subtitle="Jejum, exames, consentimento" open={openSet.has('checklist')} onToggle={() => toggle('checklist')} accentClass="bg-amber-50 text-amber-600">
                 <div className="space-y-2 pt-2">
@@ -248,14 +261,6 @@ export default function SurgeryFichaModal({ surgeryId, onClose, onChanged }: Pro
               {/* 3. Relatório Cirúrgico (voz mãos-livres) */}
               <Section id="report" icon={<FileText className="h-5 w-5" />} title="Relatório Cirúrgico" subtitle="Ditado por voz (mãos livres) ou texto" open={openSet.has('report')} onToggle={() => toggle('report')} accentClass="bg-violet-50 text-violet-600">
                 <div className="pt-2 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <button type="button" onClick={() => voice.manualToggle()} data-testid="surgery-voice-btn"
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${isRecording ? 'bg-rose-100 text-rose-700 animate-pulse' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
-                      {isRecording ? <Mic className="h-3.5 w-3.5" /> : <MicOff className="h-3.5 w-3.5" />}
-                      {isRecording ? 'Ouvindo… (diga "finalizar")' : 'Ditar relatório'}
-                    </button>
-                    {isRecording && voice.transcript && <span className="text-[11px] text-violet-600 italic truncate">"{voice.transcript}"</span>}
-                  </div>
                   <textarea value={report} onChange={e => setReport(e.target.value)} rows={6} placeholder="Descrição da técnica cirúrgica, achados, intercorrências…"
                     className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none resize-y" />
                   <button onClick={saveReport} disabled={savingReport} className="flex items-center gap-1.5 rounded-lg bg-violet-600 hover:bg-violet-700 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">
