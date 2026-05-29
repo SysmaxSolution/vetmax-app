@@ -14,6 +14,7 @@ import {
   confirmDischarge,
   sendToVetReview,
   createHospitalization,
+  updateHospitalizationClinicalData,
   type HospitalizationBoard,
   type HospitalizationCard,
   type HospitalizationStatus
@@ -119,6 +120,7 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
   const [board, setBoard]                   = useState<HospitalizationBoard>(initialBoard)
   const boardRef = useRef<HospitalizationBoard>(initialBoard)
   const [showAdmitModal, setShowAdmitModal] = useState(false)
+  const [admitBox, setAdmitBox] = useState<{ id: string; name: string } | null>(null)
   const [admitSuccessMsg, setAdmitSuccessMsg] = useState('')
   const [dischargeSuccessMsg, setDischargeSuccessMsg] = useState('')
   const [dragOverCol, setDragOverCol]       = useState<HospitalizationStatus | null>(null)
@@ -591,7 +593,21 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
       )}
 
       {view === 'occupancy' && internacaoCompleta && (
-        <OccupancyMapView cards={allCards} />
+        <OccupancyMapView
+          cards={allCards}
+          onAssign={(hospId, boxId) => {
+            // Realocação otimista no board + persistência do box_id.
+            setBoard(prev => {
+              const next = { ...prev }
+              ;(Object.keys(next) as (keyof HospitalizationBoard)[]).forEach(col => {
+                next[col] = next[col].map(c => c.id === hospId ? { ...c, box_id: boxId } as HospitalizationCard : c)
+              })
+              return next
+            })
+            void updateHospitalizationClinicalData(hospId, { box_id: boxId })
+          }}
+          onAdmitToBox={(box) => { setAdmitBox(box); setShowAdmitModal(true) }}
+        />
       )}
 
       {view === 'kanban' && (
@@ -800,9 +816,11 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
       {/* Modal de Admissão */}
       {showAdmitModal && (
         <AdmitModal
-          onClose={() => setShowAdmitModal(false)}
+          preselectedBox={admitBox}
+          onClose={() => { setShowAdmitModal(false); setAdmitBox(null) }}
           onSuccess={(msg) => {
             setAdmitSuccessMsg(msg)
+            setAdmitBox(null)
             setTimeout(() => { setAdmitSuccessMsg(''); router.refresh() }, 3000)
           }}
         />
@@ -1161,7 +1179,7 @@ function DischargeModal({ card, isProcessing, onConfirm, onSendToReview, onCance
 
 // ─── Componente Interno: AdmitModal ───────────────────────────────────────────
 
-function AdmitModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (msg: string) => void }) {
+function AdmitModal({ onClose, onSuccess, preselectedBox }: { onClose: () => void; onSuccess: (msg: string) => void; preselectedBox?: { id: string; name: string } | null }) {
   const [search, setSearch] = useState('')
   const [results, setResults] = useState<TriagePatientSearchResult[]>([])
   const [selected, setSelected] = useState<TriagePatientSearchResult | null>(null)
@@ -1186,9 +1204,13 @@ function AdmitModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (m
       status: 'observation',
       reason: reason.trim(),
     })
+    if ('error' in result) { setLoading(false); setError(result.error); return }
+    // Admissão direta por clique: já aloca o leito pré-selecionado.
+    if (preselectedBox) {
+      await updateHospitalizationClinicalData(result.id, { box_id: preselectedBox.id })
+    }
     setLoading(false)
-    if ('error' in result) { setError(result.error); return }
-    onSuccess('Paciente admitido! Internação registrada com sucesso.')
+    onSuccess(`Paciente admitido!${preselectedBox ? ` Leito ${preselectedBox.name} alocado.` : ' Internação registrada com sucesso.'}`)
     onClose()
   }
 
@@ -1239,6 +1261,13 @@ function AdmitModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (m
             onChange={e => setReason(e.target.value)}
             className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
           />
+          {preselectedBox && (
+            <div className="flex items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-sm" data-testid="admit-preselected-box">
+              <BedDouble className="h-4 w-4 text-violet-600 flex-shrink-0" />
+              <span className="text-slate-700">Leito: <strong className="text-violet-700">{preselectedBox.name}</strong></span>
+              <span className="ml-auto text-[10px] font-bold uppercase text-violet-500">pré-selecionado</span>
+            </div>
+          )}
         </div>
         <div className="flex gap-3">
           <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">
