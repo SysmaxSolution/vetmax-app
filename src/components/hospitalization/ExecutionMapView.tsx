@@ -3,6 +3,7 @@
 import { useMemo, useSyncExternalStore } from 'react'
 import { Printer, Pill, Biohazard, Clock, FlaskConical, Stethoscope, Utensils, ClipboardList } from 'lucide-react'
 import { medicationTickStore } from '@/lib/medication-tick'
+import { formatClinicTime, formatClinicDate } from '@/lib/time'
 import type { HospitalizationCard } from '@/lib/actions/hospitalizations'
 import type { HospPrescription } from '@/lib/actions/hospitalization-prescriptions'
 import type { HospTask, TaskKind } from '@/lib/actions/hospitalization-tasks'
@@ -97,7 +98,7 @@ const SLOT_STYLE: Record<SlotStatus, string> = {
 }
 
 function fmt(d: Date): string {
-  return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  return formatClinicTime(d)
 }
 
 const TASK_KIND_LABEL: Record<TaskKind, string> = { exam: 'Exame', procedure: 'Procedimento', feeding: 'Alimentação', other: 'Tarefa' }
@@ -256,7 +257,7 @@ function printExecutionSheet(
   rows: { card: HospitalizationCard; lines: Line[] }[],
   now: number,
 ) {
-  const dateLabel = new Date(now).toLocaleDateString('pt-BR')
+  const dateLabel = formatClinicDate(new Date(now))
   const body = rows.map(({ card, lines }) => {
     const iso = card.isolation_required
       ? '<span style="color:#b91c1c;font-weight:bold"> ⚠ ISOLAMENTO (EPI)</span>' : ''

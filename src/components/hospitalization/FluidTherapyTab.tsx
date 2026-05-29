@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { Droplets, Loader2, Plus, Calculator, Trash2, ArrowDownToLine, ArrowUpFromLine } from 'lucide-react'
+import { formatClinicShort } from '@/lib/time'
 import {
   getFluidBalance, recordFluid, deleteFluidEntry,
   type FluidBalanceSummary, type FluidKind, type FluidDirection,
@@ -33,7 +34,7 @@ const OUT_KINDS: { kind: FluidKind; label: string }[] = [
 const DROP_FACTORS = { macro: 20, micro: 60 } as const
 
 function fmtTime(iso: string): string {
-  return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+  return formatClinicShort(iso)
 }
 
 export default function FluidTherapyTab({ hospitalizationId, admissionWeight }: Props) {

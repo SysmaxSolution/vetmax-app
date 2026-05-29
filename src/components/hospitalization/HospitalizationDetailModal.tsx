@@ -24,6 +24,7 @@ import { extractHospitalizationVoice } from '@/lib/actions/pharmacy'
 import { generateClinicalSummary, type ClinicalSummaryResult, askPatientHistory, type VoiceChatResult, extractUnifiedClinicalVoice } from '@/lib/actions/ai_extraction'
 import { useUnifiedVoiceDraft } from '@/hooks/useUnifiedClinicalVoice'
 import VoiceReviewPanel from './VoiceReviewPanel'
+import { formatClinicTime, formatClinicDate } from '@/lib/time'
 import { generatePrescriptionPdf, type PrescriptionData } from '@/lib/actions/reports'
 import PrescriptionModal from './PrescriptionModal'
 import WhatsAppNotificationModal from '@/components/whatsapp/WhatsAppNotificationModal'
@@ -1134,9 +1135,9 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
                             <div className="text-right">
                               <div className="flex items-center gap-1 text-slate-700 font-bold text-xs justify-end">
                                 <Clock className="h-3 w-3 text-violet-500" />
-                                {new Date(record.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                {formatClinicTime(record.created_at)}
                               </div>
-                              <span className="text-[10px] text-slate-400">{new Date(record.created_at).toLocaleDateString('pt-BR')}</span>
+                              <span className="text-[10px] text-slate-400">{formatClinicDate(record.created_at)}</span>
                             </div>
                           </div>
                           {record.notes && (
@@ -1221,7 +1222,7 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-bold text-slate-800 truncate">{doc.file_name}</p>
                           <p className="text-[10px] text-slate-400">
-                            {doc.user_name} • {new Date(doc.created_at).toLocaleDateString('pt-BR')}
+                            {doc.user_name} • {formatClinicDate(doc.created_at)}
                           </p>
                         </div>
                         <div className="flex items-center gap-1 flex-shrink-0">

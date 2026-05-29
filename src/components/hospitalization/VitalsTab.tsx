@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { Activity, Loader2, Plus, Thermometer, HeartPulse, Wind, Scale, Droplet, TrendingUp } from 'lucide-react'
+import { formatClinicShort } from '@/lib/time'
 import {
   listClinicalVitals, recordClinicalVital,
   type ClinicalVital, type RecordVitalPayload,
@@ -40,8 +41,7 @@ const TREND_FIELDS: { key: FieldKey; label: string; unit: string; color: string 
 ]
 
 function fmtTime(iso: string): string {
-  const d = new Date(iso)
-  return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+  return formatClinicShort(iso)
 }
 
 // ─── Sparkline SVG (sem libs) ──────────────────────────────────────────────────

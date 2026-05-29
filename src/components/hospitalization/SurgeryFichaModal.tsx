@@ -9,6 +9,7 @@ import { useClinicalVoiceAssistant } from '@/hooks/useClinicalVoiceAssistant'
 import { useUnifiedVoiceDraft } from '@/hooks/useUnifiedClinicalVoice'
 import VoiceReviewPanel from './VoiceReviewPanel'
 import SurgeryStageFeed from './SurgeryStageFeed'
+import { formatClinicTime } from '@/lib/time'
 import {
   getSurgery, updateSurgeryChecklist, updateSurgeryReport,
   listSurgeryVitals, recordSurgeryVital, sendSurgeryToInternacao,
@@ -286,7 +287,7 @@ export default function SurgeryFichaModal({ surgeryId, onClose, onChanged }: Pro
                     <div className="space-y-1 max-h-40 overflow-y-auto">
                       {vitals.map(v => (
                         <div key={v.id} className="flex flex-wrap gap-x-3 text-[11px] text-slate-600 border border-slate-100 rounded-lg px-2.5 py-1.5">
-                          <span className="text-slate-400">{new Date(v.recorded_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                          <span className="text-slate-400">{formatClinicTime(v.recorded_at)}</span>
                           {v.temperature != null && <span>T {v.temperature}°C</span>}{v.heart_rate != null && <span>FC {v.heart_rate}</span>}
                           {v.resp_rate != null && <span>FR {v.resp_rate}</span>}{v.spo2 != null && <span>SpO₂ {v.spo2}%</span>}{v.blood_pressure && <span>PA {v.blood_pressure}</span>}
                         </div>

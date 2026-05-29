@@ -6,6 +6,7 @@ import {
   listSurgeryRecords, createSurgeryRecord, updateSurgeryRecord, deleteSurgeryRecord,
   type SurgeryRecord, type SurgeryStage,
 } from '@/lib/actions/surgery-records'
+import { formatClinicShort } from '@/lib/time'
 
 /**
  * Mini-feed cronológico por etapa do acordeão de cirurgia (preop / anesthesia /
@@ -21,8 +22,7 @@ interface Props {
 }
 
 function fmt(iso: string): string {
-  const d = new Date(iso)
-  return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+  return formatClinicShort(iso)
 }
 
 export default function SurgeryStageFeed({ surgeryId, stage, locked = false }: Props) {

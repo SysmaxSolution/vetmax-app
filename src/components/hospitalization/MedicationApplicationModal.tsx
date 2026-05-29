@@ -5,6 +5,7 @@ import {
   Pill, X, Loader2, Check, Pause, CircleStop, AlertTriangle, Plus, ClockAlert, FileStack,
 } from 'lucide-react'
 import ProtocolPicker from './ProtocolPicker'
+import { formatClinicTime } from '@/lib/time'
 import {
   applyHospitalizationDose,
   createHospitalizationPrescription,
@@ -66,8 +67,7 @@ function formatRelative(ms: number): string {
 }
 
 function formatTime(iso: string): string {
-  const d = new Date(iso)
-  return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  return formatClinicTime(iso)
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────

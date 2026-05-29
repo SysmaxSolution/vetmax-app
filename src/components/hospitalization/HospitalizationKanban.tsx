@@ -6,6 +6,7 @@ import { Clock, BedDouble, LogOut, Loader2, Sparkles, X, Stethoscope, FileText, 
 import { useRealtimeSync } from '@/hooks/useRealtimeSync'
 import { useInternacaoCompleta } from '@/components/providers/ClinicConfigProvider'
 import { useMedicationAlarm } from '@/hooks/useMedicationAlarm'
+import { formatClinicDate, formatClinicDateTime } from '@/lib/time'
 import ExecutionMapView from './ExecutionMapView'
 import OccupancyMapView from './OccupancyMapView'
 import {
@@ -995,8 +996,8 @@ function printDischargePdf(s: DischargeSummary) {
   const levelColor: Record<string, string> = {
     piorou: '#ef4444', estavel: '#f59e0b', melhorou: '#10b981',
   }
-  const fmt  = (iso: string) => new Date(iso).toLocaleString('pt-BR')
-  const fmtd = (iso: string) => new Date(iso).toLocaleDateString('pt-BR')
+  const fmt  = (iso: string) => formatClinicDateTime(iso)
+  const fmtd = (iso: string) => formatClinicDate(iso)
   const dischargedLabel = s.discharged_at ? fmt(s.discharged_at) : fmt(new Date().toISOString())
 
   const medsHtml = (meds: DischargeSummary['records'][0]['medications']) =>
