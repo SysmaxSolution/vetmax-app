@@ -21,6 +21,7 @@ export interface PaymentCard {
   fee_percent:      number
   settlement_days:  number       // mapeado de credit_cards.days_to_receive
   max_installments: number       // mapeado de credit_cards.installments_max
+  requires_nsu:     boolean      // mapeado de credit_cards.requires_nsu
   is_active:        boolean
   notes:            string | null
   created_at:       string
@@ -55,6 +56,7 @@ function mapCardRow(row: {
   installments_max: number
   fee_percent:      number
   days_to_receive:  number
+  requires_nsu?:    boolean
   is_active:        boolean
   created_at:       string
 }, ctxType?: 'credit' | 'debit' | 'voucher'): PaymentCard {
@@ -73,6 +75,7 @@ function mapCardRow(row: {
     fee_percent:      Number(row.fee_percent ?? 0),
     settlement_days:  Number(row.days_to_receive ?? (card_type === 'debit' ? 1 : 30)),
     max_installments: Number(row.installments_max ?? 1),
+    requires_nsu:     Boolean(row.requires_nsu ?? false),
     is_active:        Boolean(row.is_active),
     notes:            null,
     created_at:       row.created_at,
@@ -87,7 +90,7 @@ export async function listPaymentCards(
   const supabase = await createClient()
   let q = supabase
     .from('credit_cards')
-    .select('id, clinic_id, name, administrator, brand, type, installments_max, fee_percent, days_to_receive, is_active, created_at')
+    .select('id, clinic_id, name, administrator, brand, type, installments_max, fee_percent, days_to_receive, requires_nsu, is_active, created_at')
     .eq('clinic_id', ctx.clinic_id)
 
   if (filter?.only_active !== false) q = q.eq('is_active', true)

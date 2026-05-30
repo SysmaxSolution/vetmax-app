@@ -11,6 +11,7 @@ import {
 import type { UserRole } from '@/types'
 import { useState, useEffect } from 'react'
 import { ClinicSwitcher } from '@/components/layout/ClinicSwitcher'
+import OmnisearchTrigger from '@/components/layout/OmnisearchTrigger'
 import { ImageLightbox } from '@/components/ui/ImageLightbox'
 import type { UserClinicInfo } from '@/lib/actions/clinic-switcher'
 import { updateClinicStatus } from '@/lib/actions/clinic-status'
@@ -254,6 +255,8 @@ export default function DashboardHeader({
           </div>
 
           <div className="flex items-center gap-3">
+            <OmnisearchTrigger />
+
             {isSysmax && (
               <select
                 value={currentStatus}

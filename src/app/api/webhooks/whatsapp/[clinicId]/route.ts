@@ -77,8 +77,6 @@ export async function POST(
 
     console.info(`[WPP Webhook] MESSAGES_UPSERT jid=${jid} fromMe=${fromMe}`)
 
-    // Ignora mensagens do próprio bot e de grupos
-    if (fromMe) return NextResponse.json({ received: true })
     if (!jid || jid.endsWith('@g.us')) return NextResponse.json({ received: true })
 
     // body.sender = número da clínica (instância), não do remetente — não usar para phone
@@ -118,6 +116,73 @@ export async function POST(
       ((msgObj?.extendedTextMessage as Record<string, unknown> | undefined)?.text as string | undefined) ??
       ((msgObj?.imageMessage as Record<string, unknown> | undefined)?.caption as string | undefined) ??
       null
+
+    // ── HANDOFF AUTOMÁTICO (Sprint 2026-05-30) ──────────────────────────────
+    // fromMe=true significa que a mensagem partiu da própria instância. Pode
+    // ser: (a) eco do que o bot acabou de mandar, (b) eco do que a recepção
+    // mandou pela UI web, ou (c) a clínica respondeu pelo APARELHO físico.
+    // Os dois primeiros já gravamos em whatsapp_messages como outbound antes
+    // do echo voltar; o terceiro NÃO. Por isso o dedup por conteúdo recente:
+    // se o texto bate com um outbound dos últimos 60s, é eco — descarta. Se
+    // não bate (ou veio sem texto: áudio/sticker/imagem sem caption), é a
+    // clínica falando direto do celular → marca a conversa como 'human' e o
+    // bot pausa até que a sessão seja fechada manualmente pela UI.
+    if (fromMe) {
+      const { data: conv } = await admin
+        .from('whatsapp_conversations')
+        .select('id, status')
+        .eq('clinic_id', clinicId)
+        .eq('tutor_phone', phone)
+        .neq('status', 'closed')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (!conv) {
+        // Sem conversa ativa: clínica iniciou contato novo pelo aparelho.
+        // Não criamos conversa aqui — quando o tutor responder, o fluxo
+        // inbound cria normalmente. Apenas registra e segue.
+        console.info(`[WPP Webhook] fromMe sem conversa ativa para ${phone}, ignorando`)
+        return NextResponse.json({ received: true })
+      }
+
+      // Dedup: confere se é eco do bot/recepção web (texto idêntico nos últimos 60s)
+      if (messageText?.trim()) {
+        const since = new Date(Date.now() - 60_000).toISOString()
+        const { data: echo } = await admin
+          .from('whatsapp_messages')
+          .select('id, sent_by')
+          .eq('conversation_id', conv.id)
+          .eq('direction', 'outbound')
+          .eq('content', messageText)
+          .gte('created_at', since)
+          .limit(1)
+          .maybeSingle()
+        if (echo) {
+          console.info(`[WPP Webhook] fromMe eco de sent_by=${echo.sent_by}, ignorando`)
+          return NextResponse.json({ received: true })
+        }
+      }
+
+      // Handoff real: clínica respondeu pelo aparelho próprio
+      const updates: Record<string, unknown> = { last_message_at: new Date().toISOString() }
+      if (conv.status !== 'human') updates.status = 'human'
+      await admin.from('whatsapp_conversations').update(updates).eq('id', conv.id)
+
+      // Persiste a mensagem manual no histórico (sent_by='human')
+      if (messageText?.trim()) {
+        await admin.from('whatsapp_messages').insert({
+          conversation_id: conv.id,
+          clinic_id:       clinicId,
+          direction:       'outbound',
+          content:         messageText,
+          sent_by:         'human',
+        })
+      }
+
+      console.info(`[WPP Webhook] HANDOFF fromMe=true conv=${conv.id} → status=human`)
+      return NextResponse.json({ received: true })
+    }
 
     console.info(`[WPP Webhook] phone=${phone} pushName=${pushName} messageText="${messageText?.substring(0, 50)}"`)
 

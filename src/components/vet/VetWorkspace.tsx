@@ -9,6 +9,7 @@ import { searchPatientsForTriage, type TriagePatientSearchResult } from '@/lib/a
 import { useRealtimeSync } from '@/hooks/useRealtimeSync'
 import { BehaviorTagsBadges } from '@/components/ui/BehaviorTagsBadges'
 import PatientFullModal from '@/components/patients/PatientFullModal'
+import AttendanceCardMenu from '@/components/shared/AttendanceCardMenu'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -258,7 +259,14 @@ export default function VetWorkspace({ queue, completed, clinicId }: VetWorkspac
                           </p>
                         )}
                       </div>
-                      <ArrowRight className="w-5 h-5 text-slate-400 flex-shrink-0 mt-1" />
+                      <div className="flex-shrink-0 flex items-center gap-1 mt-0">
+                        <AttendanceCardMenu
+                          entity="consultation"
+                          id={item.id}
+                          patientName={item.patient.name}
+                        />
+                        <ArrowRight className="w-5 h-5 text-slate-400 mt-1" />
+                      </div>
                     </div>
                   </Link>
                 ))

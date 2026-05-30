@@ -72,8 +72,10 @@ export default function CardSelectionModal({
       return
     }
 
-    if (!nsu.trim())           { setError('Informe o NSU.'); return }
-    if (!authorization.trim()) { setError('Informe o número de liberação.'); return }
+    if (selectedCard.requires_nsu) {
+      if (!nsu.trim())           { setError('Informe o NSU.'); return }
+      if (!authorization.trim()) { setError('Informe o número de liberação.'); return }
+    }
     if (!txnDate)              { setError('Informe a data da transação.'); return }
     if (txnDate > new Date().toISOString().slice(0, 10)) {
       setError('Data da transação não pode ser futura.')
@@ -253,33 +255,39 @@ export default function CardSelectionModal({
                 </div>
               )}
 
-              {/* NSU + Liberação */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                    NSU <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    value={nsu}
-                    onChange={e => setNsu(e.target.value.replace(/\s/g, ''))}
-                    placeholder="Ex: 123456789 ou A1B2C3"
-                    inputMode="text"
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-mono focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                  />
+              {/* NSU + Liberação — obrigatórios apenas quando credit_cards.requires_nsu=true */}
+              {selectedCard && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                      NSU {selectedCard.requires_nsu
+                        ? <span className="text-rose-500">*</span>
+                        : <span className="text-slate-400 font-normal">(opcional)</span>}
+                    </label>
+                    <input
+                      value={nsu}
+                      onChange={e => setNsu(e.target.value.replace(/\s/g, ''))}
+                      placeholder={selectedCard.requires_nsu ? 'Ex: 123456789 ou A1B2C3' : 'Opcional'}
+                      inputMode="text"
+                      className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-mono focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                      Número de Liberação {selectedCard.requires_nsu
+                        ? <span className="text-rose-500">*</span>
+                        : <span className="text-slate-400 font-normal">(opcional)</span>}
+                    </label>
+                    <input
+                      value={authorization}
+                      onChange={e => setAuthorization(e.target.value.replace(/\s/g, ''))}
+                      placeholder={selectedCard.requires_nsu ? 'Ex: 987654 ou AB1234' : 'Opcional'}
+                      inputMode="text"
+                      className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-mono focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                    Número de Liberação <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    value={authorization}
-                    onChange={e => setAuthorization(e.target.value.replace(/\s/g, ''))}
-                    placeholder="Ex: 987654 ou AB1234"
-                    inputMode="text"
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-mono focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                  />
-                </div>
-              </div>
+              )}
 
               <Link
                 href="/dashboard/financial?tab=cadastros&sub=cartoes"

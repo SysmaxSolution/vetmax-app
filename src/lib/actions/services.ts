@@ -299,3 +299,73 @@ export async function getConsultationServicesTotal(
   const total  = active.reduce((sum, l) => sum + l.price_snapshot * l.quantity, 0)
   return { total, count: active.length }
 }
+
+// ─── Cadastro rápido inline (Sprint 2026-05-30) ──────────────────────────────
+
+/**
+ * Cria um item (serviço ou produto) direto do fluxo da recepção e retorna
+ * já no formato ServiceItem para que o caller possa adicioná-lo ao carrinho
+ * sem refazer busca. Não cria lote FIFO de produto: nascem com saldo 0.
+ *
+ * Defaults pensados para o cenário recepcionista: is_service=true, category
+ * 'vet_service', unit 'un'. PO pode trocar antes de salvar.
+ */
+export async function createQuickService(input: {
+  name:        string
+  unit_price:  number
+  category?:   string
+  unit?:       string
+  is_service?: boolean
+}): Promise<ServiceItem | { error: string }> {
+  const ctx = await getClinicCtx()
+  if ('error' in ctx) return ctx
+
+  const name = (input.name ?? '').trim()
+  if (!name)              return { error: 'Nome obrigatório.' }
+  if (name.length < 2)    return { error: 'Nome muito curto.' }
+  if (!Number.isFinite(input.unit_price) || input.unit_price < 0) {
+    return { error: 'Preço inválido.' }
+  }
+
+  const isService = input.is_service ?? true
+  const category  = input.category ?? (isService ? 'vet_service' : 'clinic_product')
+  const unit      = (input.unit ?? 'un').trim() || 'un'
+
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('stock_items')
+    .insert({
+      clinic_id:    ctx.clinicId,
+      name,
+      category,
+      unit,
+      unit_price:   input.unit_price,
+      quantity:     isService ? 0 : 0,
+      min_quantity: 0,
+      is_service:   isService,
+      is_controlled: false,
+    })
+    .select('id, name, category, unit, unit_price, sku, barcode, is_controlled, is_service, quantity')
+    .single()
+
+  if (error) {
+    if (error.code === '23505') return { error: 'Já existe um item com esse nome.' }
+    return { error: 'Erro ao cadastrar item: ' + error.message }
+  }
+
+  revalidatePath('/dashboard/pharmacy')
+  revalidatePath('/dashboard/reception')
+
+  return {
+    id:            data.id as string,
+    name:          data.name as string,
+    category:      data.category as string,
+    unit:          data.unit as string,
+    unit_price:    Number(data.unit_price ?? 0),
+    sku:           (data.sku as string | null) ?? null,
+    barcode:       (data.barcode as string | null) ?? null,
+    is_controlled: Boolean(data.is_controlled),
+    is_service:    Boolean(data.is_service),
+    quantity:      Number(data.quantity ?? 0),
+  }
+}

@@ -12,6 +12,7 @@ import { searchPatientsForTriage, type TriagePatientSearchResult } from '@/lib/a
 import { useRealtimeSync } from '@/hooks/useRealtimeSync'
 import { BehaviorTagsBadges } from '@/components/ui/BehaviorTagsBadges'
 import { PetAvatar } from '@/components/ui/PetAvatar'
+import AttendanceCardMenu from '@/components/shared/AttendanceCardMenu'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -81,6 +82,15 @@ function ExamCard({
           <Clock className="h-3.5 w-3.5 text-amber-500" />
           <span className="text-xs text-amber-600 font-medium">{calcWaiting(item.created_at)}</span>
         </div>
+      </div>
+
+      {/* Menu kebab (Cancelar) */}
+      <div className="self-start">
+        <AttendanceCardMenu
+          entity="consultation"
+          id={item.id}
+          patientName={item.patient.name}
+        />
       </div>
 
       {/* Ações */}
@@ -328,15 +338,22 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
                         <span className="text-xs text-slate-500">Tutor: {req.tutor.name}</span>
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      aria-label="Preencher exame"
-                      onClick={e => { e.stopPropagation(); setResultModalId(req.id); setResultText('') }}
-                      className="flex-shrink-0 flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition-colors shadow-sm"
-                    >
-                      <FlaskConical className="h-4 w-4" />
-                      Registrar Resultado
-                    </button>
+                    <div className="flex-shrink-0 flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                      <AttendanceCardMenu
+                        entity="exam"
+                        id={req.id}
+                        patientName={req.patient.name}
+                      />
+                      <button
+                        type="button"
+                        aria-label="Preencher exame"
+                        onClick={e => { e.stopPropagation(); setResultModalId(req.id); setResultText('') }}
+                        className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition-colors shadow-sm"
+                      >
+                        <FlaskConical className="h-4 w-4" />
+                        Registrar Resultado
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

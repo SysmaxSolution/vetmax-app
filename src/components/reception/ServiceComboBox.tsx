@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Search, Loader2, Plus, X, Tag, Sparkles } from 'lucide-react'
+import { Search, Loader2, Plus, X, Tag, Sparkles, PlusCircle } from 'lucide-react'
 import { searchServices, type ServiceItem } from '@/lib/actions/services'
+import QuickServiceModal from './QuickServiceModal'
 
 /**
  * Combobox de serviços para a Recepção — substitui o seletor fixo de
@@ -51,6 +52,7 @@ export default function ServiceComboBox({
   const [query,     setQuery]     = useState('')
   const [results,   setResults]   = useState<ServiceItem[]>([])
   const [searching, setSearching] = useState(false)
+  const [quickModal, setQuickModal] = useState(false)
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const wrapperRef  = useRef<HTMLDivElement>(null)
 
@@ -152,23 +154,34 @@ export default function ServiceComboBox({
         </div>
       )}
 
-      {/* Trigger + dropdown */}
+      {/* Trigger + [+ Novo] + dropdown */}
       <div className="relative">
-        <button
-          type="button"
-          onClick={() => setOpen(v => !v)}
-          className={`w-full flex items-center justify-between gap-2 rounded-lg border bg-white px-3 py-2 text-sm transition-colors ${
-            required && selected.length === 0
-              ? 'border-rose-200 hover:border-rose-300'
-              : 'border-slate-300 hover:border-teal-400'
-          }`}
-        >
-          <span className="flex items-center gap-2 text-slate-500">
-            <Plus className="h-3.5 w-3.5" />
-            {selected.length === 0 ? 'Adicionar serviço' : 'Adicionar outro serviço'}
-          </span>
-          <span className="text-[10px] text-slate-400">{selected.length} no carrinho</span>
-        </button>
+        <div className="flex items-stretch gap-1.5">
+          <button
+            type="button"
+            onClick={() => setOpen(v => !v)}
+            className={`flex-1 flex items-center justify-between gap-2 rounded-lg border bg-white px-3 py-2 text-sm transition-colors ${
+              required && selected.length === 0
+                ? 'border-rose-200 hover:border-rose-300'
+                : 'border-slate-300 hover:border-teal-400'
+            }`}
+          >
+            <span className="flex items-center gap-2 text-slate-500">
+              <Plus className="h-3.5 w-3.5" />
+              {selected.length === 0 ? 'Adicionar serviço' : 'Adicionar outro serviço'}
+            </span>
+            <span className="text-[10px] text-slate-400">{selected.length} no carrinho</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setQuickModal(true)}
+            title="Cadastrar item novo sem sair da recepção"
+            className="flex items-center gap-1 rounded-lg border border-teal-200 bg-teal-50 px-2.5 text-xs font-semibold text-teal-700 hover:bg-teal-100 transition-colors whitespace-nowrap"
+          >
+            <PlusCircle className="h-3.5 w-3.5" />
+            Novo
+          </button>
+        </div>
 
         {open && (
           <div className="absolute top-full left-0 right-0 mt-1 max-h-72 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl z-30">
@@ -235,6 +248,20 @@ export default function ServiceComboBox({
         <p className="text-[11px] text-rose-600 italic">
           Ao menos um serviço será necessário para encerrar o atendimento.
         </p>
+      )}
+
+      {quickModal && (
+        <QuickServiceModal
+          initialName={query}
+          onClose={() => setQuickModal(false)}
+          onCreated={item => {
+            // Auto-adiciona ao carrinho para a recepcionista não ter que buscar de novo
+            onChange([...selected, item])
+            setQuickModal(false)
+            setOpen(false)
+            setQuery('')
+          }}
+        />
       )}
     </div>
   )

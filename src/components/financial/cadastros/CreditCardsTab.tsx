@@ -44,7 +44,7 @@ interface Props {
 
 const emptyForm = (): CreateCreditCardData => ({
   name: '', administrator: '', brand: 'other', type: 'credit',
-  installments_max: 1, fee_percent: 0, days_to_receive: 30,
+  installments_max: 1, fee_percent: 0, days_to_receive: 30, requires_nsu: false,
 })
 
 // ─── Modal ────────────────────────────────────────────────────────────────────
@@ -68,6 +68,7 @@ function CardModal({
           installments_max: card.installments_max,
           fee_percent: card.fee_percent,
           days_to_receive: card.days_to_receive,
+          requires_nsu: card.requires_nsu ?? false,
         }
       : emptyForm()
   )
@@ -92,6 +93,7 @@ function CardModal({
 
     const payload: CreateCreditCardData = {
       ...form, fee_percent: feeVal, days_to_receive: daysVal, installments_max: instaVal,
+      requires_nsu: form.requires_nsu ?? false,
     }
 
     startTransition(async () => {
@@ -183,6 +185,22 @@ function CardModal({
               />
             </div>
           </div>
+
+          <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 cursor-pointer hover:bg-slate-100 transition-colors">
+            <input
+              type="checkbox"
+              checked={form.requires_nsu ?? false}
+              onChange={e => setForm(f => ({ ...f, requires_nsu: e.target.checked }))}
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+            />
+            <span className="flex-1">
+              <span className="text-sm font-semibold text-slate-800">Exigir NSU e Nº de Liberação</span>
+              <span className="block text-xs text-slate-500 mt-0.5">
+                Marcado: o caixa/PDV obriga NSU e Nº de Liberação no recebimento (típico de POS Cielo, Stone, Rede).
+                Desmarcado: ambos opcionais — útil para link de pagamento, cartão tokenizado in-app e vouchers.
+              </span>
+            </span>
+          </label>
 
           {error && (
             <div className="flex items-start gap-2 rounded-xl bg-red-50 border border-red-200 px-3 py-2">
