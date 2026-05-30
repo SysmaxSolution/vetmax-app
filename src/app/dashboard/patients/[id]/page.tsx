@@ -21,22 +21,23 @@ const SPECIES_LABELS: Record<string, string> = {
   rodent: 'Roedor', reptile: 'Réptil', fish: 'Peixe', exotic: 'Silvestre/Exótico',
 }
 
-export async function generateMetadata({ params }: { params: { id: string } }) {
+export async function generateMetadata(_: { params: Promise<{ id: string }> }) {
   return { title: 'Perfil do Paciente' }
 }
 
-export default async function PatientProfilePage({ params }: { params: { id: string } }) {
+export default async function PatientProfilePage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
   const [patientResult, vaccinesResult, petloveResult, insuranceResult, historyResult, insuranceCardResult] = await Promise.all([
-    getPatientById(params.id),
-    getPatientVaccines(params.id),
-    getPetlovePriceHistoryForPet(params.id),
-    patientHasInsurance(params.id),
-    getPetlovePatientHistory(params.id),
-    getInsuranceCard(params.id),
+    getPatientById(id),
+    getPatientVaccines(id),
+    getPetlovePriceHistoryForPet(id),
+    patientHasInsurance(id),
+    getPetlovePatientHistory(id),
+    getInsuranceCard(id),
   ])
 
   if ('error' in patientResult) notFound()

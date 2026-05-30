@@ -384,6 +384,76 @@ export async function openOrCreateDirectChat(
   return { chat_id: chatId }
 }
 
+/**
+ * Cria uma sala de grupo (kind='group') com título e N participantes além
+ * do criador (que vira owner). Validações: título obrigatório, ao menos 1
+ * participante adicional, máximo 50 membros (limite arbitrário para evitar
+ * "broadcast lists").
+ */
+export async function createGroupChat(input: {
+  title:       string
+  member_ids:  string[]
+}): Promise<{ chat_id: string } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+
+  const title = (input.title ?? '').trim()
+  if (!title)            return { error: 'Título obrigatório.' }
+  if (title.length > 80) return { error: 'Título muito longo (máx 80).' }
+
+  const members = (input.member_ids ?? []).filter(id => id && id !== ctx.user_id)
+  const unique  = Array.from(new Set(members))
+  if (unique.length === 0)  return { error: 'Selecione ao menos um participante.' }
+  if (unique.length > 50)   return { error: 'Limite de 50 participantes por grupo.' }
+
+  const admin = createAdminClient()
+
+  // Confirma que todos os ids pertencem à mesma clínica
+  const { data: validProfiles } = await admin
+    .from('profiles').select('id, clinic_id').in('id', unique)
+  const validIds = (validProfiles ?? [])
+    .filter(p => p.clinic_id === ctx.clinic_id)
+    .map(p => p.id as string)
+  if (validIds.length !== unique.length) {
+    return { error: 'Algum participante não pertence à clínica.' }
+  }
+
+  const { data: chat, error } = await admin
+    .from('chats')
+    .insert({
+      clinic_id:  ctx.clinic_id,
+      kind:       'group',
+      title,
+      created_by: ctx.user_id,
+    })
+    .select('id')
+    .single()
+  if (error || !chat) return { error: error?.message ?? 'Falha ao criar grupo.' }
+
+  const chatId = chat.id as string
+  const rows = [
+    { chat_id: chatId, clinic_id: ctx.clinic_id, user_id: ctx.user_id, role: 'owner' },
+    ...validIds.map(uid => ({
+      chat_id: chatId, clinic_id: ctx.clinic_id, user_id: uid, role: 'member',
+    })),
+  ]
+  const { error: pErr } = await admin.from('chat_participants').insert(rows)
+  if (pErr) return { error: pErr.message }
+
+  // Mensagem system inicial
+  await admin.from('chat_messages').insert({
+    chat_id:   chatId,
+    clinic_id: ctx.clinic_id,
+    sent_by:   ctx.user_id,
+    kind:      'system',
+    body:      `Grupo "${title}" criado por ${ctx.full_name ?? 'usuário'}.`,
+    metadata:  { event: 'group_created' },
+  })
+
+  revalidatePath('/dashboard/internal-chat')
+  return { chat_id: chatId }
+}
+
 // ─── Anexos automáticos: PDFs gerados (receitas, termos, exames) ────────────
 
 /**
@@ -477,6 +547,110 @@ export async function attachDocumentToEntityChat(input: {
       byte_size:     input.byte_size ?? null,
       source_entity: input.source_entity,
       source_id:     input.source_id ?? null,
+    })
+  if (attErr) return { error: 'Falha ao anexar: ' + attErr.message }
+
+  return { message_id: msg.id as string, chat_id: chatId }
+}
+
+// ─── Upload manual de anexo (UI) ─────────────────────────────────────────────
+
+const CHAT_ATT_BUCKET = 'chat-attachments'
+const MAX_BYTES = 25 * 1024 * 1024  // 25MB
+
+/**
+ * Upload de um arquivo ao Chat Interno. Aceita FormData de um <form> com
+ * campos: chat_id (text) e file (File). Aceita QUALQUER mime; valida tamanho
+ * (25MB). Cria a chat_message portadora + chat_attachment com signed URL.
+ *
+ * O bucket é privado: o file_url salvo é uma signed URL de 7 dias. Para chats
+ * que exigem persistência longa, refresh sob demanda pode ser feito depois.
+ */
+export async function uploadChatAttachment(
+  formData: FormData,
+): Promise<{ message_id: string; chat_id: string } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+
+  const chatId = (formData.get('chat_id') as string | null)?.trim() ?? ''
+  const file   = formData.get('file') as File | null
+
+  if (!chatId) return { error: 'chat_id obrigatório.' }
+  if (!file)   return { error: 'Arquivo obrigatório.' }
+  if (file.size === 0) return { error: 'Arquivo vazio.' }
+  if (file.size > MAX_BYTES) return { error: `Arquivo maior que ${Math.round(MAX_BYTES / 1024 / 1024)}MB.` }
+
+  const admin = createAdminClient()
+
+  // Confirma participação no chat
+  const { data: part } = await admin
+    .from('chat_participants')
+    .select('id')
+    .eq('chat_id', chatId)
+    .eq('user_id', ctx.user_id)
+    .is('left_at', null)
+    .maybeSingle()
+  if (!part) return { error: 'Sem acesso a este chat.' }
+
+  const ext = (file.name.split('.').pop() ?? 'bin').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8) || 'bin'
+  const objectId = crypto.randomUUID()
+  const path = `${ctx.clinic_id}/${chatId}/${objectId}.${ext}`
+
+  const arrayBuf = await file.arrayBuffer()
+  const { error: upErr } = await admin.storage
+    .from(CHAT_ATT_BUCKET)
+    .upload(path, new Uint8Array(arrayBuf), {
+      contentType: file.type || 'application/octet-stream',
+      upsert: false,
+    })
+  if (upErr) return { error: 'Falha no upload: ' + upErr.message }
+
+  // Signed URL longa (7 dias). Refresh pode ser adicionado depois.
+  const { data: signed, error: signErr } = await admin.storage
+    .from(CHAT_ATT_BUCKET)
+    .createSignedUrl(path, 60 * 60 * 24 * 7)
+  if (signErr || !signed) {
+    await admin.storage.from(CHAT_ATT_BUCKET).remove([path])
+    return { error: 'Falha ao gerar URL: ' + (signErr?.message ?? '') }
+  }
+
+  // chat_messages: portadora do anexo
+  const { data: msg, error: msgErr } = await admin
+    .from('chat_messages')
+    .insert({
+      chat_id:   chatId,
+      clinic_id: ctx.clinic_id,
+      sent_by:   ctx.user_id,
+      kind:      'attachment',
+      body:      `📎 ${file.name}`,
+      metadata:  { uploader: ctx.user_id, original_name: file.name },
+    })
+    .select('id')
+    .single()
+  if (msgErr || !msg) {
+    await admin.storage.from(CHAT_ATT_BUCKET).remove([path])
+    return { error: 'Falha ao registrar mensagem: ' + (msgErr?.message ?? '') }
+  }
+
+  const inferredKind: 'pdf' | 'image' | 'file' =
+       file.type.startsWith('image/')   ? 'image'
+     : file.type === 'application/pdf'  ? 'pdf'
+     : ext === 'pdf'                    ? 'pdf'
+     : 'file'
+
+  const { error: attErr } = await admin
+    .from('chat_attachments')
+    .insert({
+      message_id:   msg.id,
+      chat_id:      chatId,
+      clinic_id:    ctx.clinic_id,
+      kind:         inferredKind,
+      title:        file.name,
+      file_url:     signed.signedUrl,
+      storage_path: path,
+      mime_type:    file.type || null,
+      byte_size:    file.size,
+      source_entity: 'other',
     })
   if (attErr) return { error: 'Falha ao anexar: ' + attErr.message }
 

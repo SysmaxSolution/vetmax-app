@@ -1,11 +1,11 @@
 'use client'
 
 import { useEffect, useRef, useState, useTransition, useCallback } from 'react'
-import { Send, Search, Plus, X, MessageSquare, Users, Loader2, Paperclip, FileText } from 'lucide-react'
+import { Send, Search, Plus, X, MessageSquare, Users, Loader2, Paperclip, FileText, Check, UserPlus } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import {
   listMyChats, listChatMessages, sendChatMessage, markChatRead,
-  searchUsersForChat, openOrCreateDirectChat,
+  searchUsersForChat, openOrCreateDirectChat, createGroupChat, uploadChatAttachment,
   type ChatSummary, type ChatMessage, type ChatUserOption,
 } from '@/lib/actions/internal-chat'
 
@@ -44,10 +44,16 @@ export default function InternalChatWorkspace({ initialChats, clinicId, userId, 
   const [loadingMsgs, setLoadingMsgs] = useState(false)
   const [draft,     setDraft]     = useState('')
   const [newChatOpen, setNewChatOpen] = useState(false)
+  const [newChatMode, setNewChatMode] = useState<'direct' | 'group'>('direct')
   const [userSearch,  setUserSearch]  = useState('')
   const [userResults, setUserResults] = useState<ChatUserOption[]>([])
+  const [groupSelected, setGroupSelected] = useState<ChatUserOption[]>([])
+  const [groupTitle,    setGroupTitle]    = useState('')
+  const [groupError,    setGroupError]    = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
   const [pending, startTransition] = useTransition()
   const scrollRef = useRef<HTMLDivElement | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   // ── Carrega mensagens ao trocar de chat
   const loadMessages = useCallback(async (chatId: string) => {
@@ -139,6 +145,14 @@ export default function InternalChatWorkspace({ initialChats, clinicId, userId, 
   }
 
   async function handlePickUser(opt: ChatUserOption) {
+    if (newChatMode === 'group') {
+      setGroupSelected(prev =>
+        prev.some(s => s.user_id === opt.user_id)
+          ? prev.filter(s => s.user_id !== opt.user_id)
+          : [...prev, opt]
+      )
+      return
+    }
     setNewChatOpen(false)
     startTransition(async () => {
       const res = await openOrCreateDirectChat(opt.user_id)
@@ -146,6 +160,49 @@ export default function InternalChatWorkspace({ initialChats, clinicId, userId, 
       await refreshChats()
       setActiveId(res.chat_id)
     })
+  }
+
+  function closeNewChat() {
+    setNewChatOpen(false)
+    setNewChatMode('direct')
+    setUserSearch('')
+    setUserResults([])
+    setGroupSelected([])
+    setGroupTitle('')
+    setGroupError(null)
+  }
+
+  function handleCreateGroup() {
+    setGroupError(null)
+    if (!groupTitle.trim())          { setGroupError('Informe um título para o grupo.'); return }
+    if (groupSelected.length === 0)  { setGroupError('Selecione ao menos um participante.'); return }
+    startTransition(async () => {
+      const res = await createGroupChat({
+        title: groupTitle.trim(),
+        member_ids: groupSelected.map(g => g.user_id),
+      })
+      if ('error' in res) { setGroupError(res.error); return }
+      closeNewChat()
+      await refreshChats()
+      setActiveId(res.chat_id)
+    })
+  }
+
+  async function handleFilePicked(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file || !activeId) return
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('chat_id', activeId)
+      fd.append('file', file)
+      const res = await uploadChatAttachment(fd)
+      if ('error' in res) { alert(res.error); return }
+      await loadMessages(activeId)
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
   }
 
   const activeChat = chats.find(c => c.id === activeId) ?? null
@@ -309,6 +366,22 @@ export default function InternalChatWorkspace({ initialChats, clinicId, userId, 
               </div>
 
               <form onSubmit={handleSend} className="border-t border-slate-100 p-3 flex items-end gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="hidden"
+                  onChange={handleFilePicked}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading || pending}
+                  title="Anexar arquivo (até 25MB)"
+                  aria-label="Anexar arquivo"
+                  className="flex items-center justify-center h-10 w-10 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-violet-700 disabled:opacity-50 transition-colors"
+                >
+                  {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+                </button>
                 <textarea
                   value={draft}
                   onChange={e => setDraft(e.target.value)}
@@ -332,61 +405,156 @@ export default function InternalChatWorkspace({ initialChats, clinicId, userId, 
         </section>
       </div>
 
-      {/* ── Modal: iniciar novo chat ──────────────────────────────────── */}
+      {/* ── Modal: iniciar novo chat (Direto ou Grupo) ────────────────── */}
       {newChatOpen && (
         <div
           role="dialog"
           aria-modal="true"
-          className="fixed inset-0 z-[10010] flex items-start justify-center bg-slate-900/60 backdrop-blur-sm p-4 pt-[15vh]"
-          onClick={() => setNewChatOpen(false)}
+          className="fixed inset-0 z-[10010] flex items-start justify-center bg-slate-900/60 backdrop-blur-sm p-4 pt-[10vh]"
+          onClick={closeNewChat}
         >
           <div
             className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl"
             onClick={e => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-              <div className="flex items-center gap-2">
-                <Search className="h-4 w-4 text-slate-400" />
-                <input
-                  autoFocus
-                  value={userSearch}
-                  onChange={e => setUserSearch(e.target.value)}
-                  placeholder="Buscar colega por nome…"
-                  className="bg-transparent text-sm focus:outline-none w-full"
-                />
+            {/* Tabs Direta / Grupo */}
+            <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2 bg-slate-50">
+              <div className="flex gap-1 rounded-lg bg-white border border-slate-200 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setNewChatMode('direct')}
+                  className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-semibold transition-colors ${
+                    newChatMode === 'direct'
+                      ? 'bg-violet-600 text-white'
+                      : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  <MessageSquare className="h-3.5 w-3.5" />
+                  Conversa direta
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewChatMode('group')}
+                  className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-semibold transition-colors ${
+                    newChatMode === 'group'
+                      ? 'bg-violet-600 text-white'
+                      : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  <Users className="h-3.5 w-3.5" />
+                  Grupo
+                </button>
               </div>
               <button
                 type="button"
                 aria-label="Fechar"
-                onClick={() => setNewChatOpen(false)}
+                onClick={closeNewChat}
                 className="rounded-full p-1 text-slate-400 hover:bg-slate-100"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <ul className="max-h-[60vh] overflow-y-auto">
+
+            {newChatMode === 'group' && (
+              <div className="border-b border-slate-100 px-4 py-3 space-y-2 bg-violet-50/40">
+                <input
+                  value={groupTitle}
+                  onChange={e => setGroupTitle(e.target.value)}
+                  placeholder="Nome do grupo (ex.: Plantão Noturno)"
+                  maxLength={80}
+                  className="w-full rounded-lg border border-violet-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+                />
+                {groupSelected.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {groupSelected.map(s => (
+                      <span
+                        key={s.user_id}
+                        className="inline-flex items-center gap-1 rounded-full bg-violet-100 text-violet-700 text-xs font-medium px-2 py-0.5"
+                      >
+                        {s.full_name ?? 'Sem nome'}
+                        <button
+                          type="button"
+                          onClick={() => setGroupSelected(prev => prev.filter(x => x.user_id !== s.user_id))}
+                          aria-label="Remover"
+                          className="text-violet-500 hover:text-violet-900"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {groupError && (
+                  <p className="text-xs text-red-600">{groupError}</p>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3">
+              <Search className="h-4 w-4 text-slate-400" />
+              <input
+                autoFocus
+                value={userSearch}
+                onChange={e => setUserSearch(e.target.value)}
+                placeholder={newChatMode === 'group' ? 'Adicionar colega ao grupo…' : 'Buscar colega…'}
+                className="bg-transparent text-sm focus:outline-none w-full"
+              />
+            </div>
+            <ul className="max-h-[40vh] overflow-y-auto">
               {userResults.length === 0 ? (
                 <li className="px-4 py-8 text-center text-xs text-slate-400">
                   Nenhum usuário encontrado
                 </li>
-              ) : userResults.map(u => (
-                <li key={u.user_id}>
-                  <button
-                    type="button"
-                    onClick={() => handlePickUser(u)}
-                    className="flex w-full items-center gap-3 px-4 py-2.5 hover:bg-slate-50 text-left"
-                  >
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 font-bold text-xs">
-                      {(u.full_name ?? '?').slice(0, 1).toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-slate-900 truncate">{u.full_name ?? 'Sem nome'}</p>
-                      <p className="text-[11px] text-slate-500 capitalize">{u.role}</p>
-                    </div>
-                  </button>
-                </li>
-              ))}
+              ) : userResults.map(u => {
+                const picked = newChatMode === 'group' && groupSelected.some(s => s.user_id === u.user_id)
+                return (
+                  <li key={u.user_id}>
+                    <button
+                      type="button"
+                      onClick={() => handlePickUser(u)}
+                      className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors ${
+                        picked ? 'bg-violet-50' : 'hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 font-bold text-xs">
+                        {(u.full_name ?? '?').slice(0, 1).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-slate-900 truncate">{u.full_name ?? 'Sem nome'}</p>
+                        <p className="text-[11px] text-slate-500 capitalize">{u.role}</p>
+                      </div>
+                      {newChatMode === 'group' && picked && (
+                        <Check className="h-4 w-4 text-violet-600" />
+                      )}
+                      {newChatMode === 'group' && !picked && (
+                        <UserPlus className="h-4 w-4 text-slate-300" />
+                      )}
+                    </button>
+                  </li>
+                )
+              })}
             </ul>
+
+            {newChatMode === 'group' && (
+              <div className="border-t border-slate-100 px-4 py-3 flex gap-2">
+                <button
+                  type="button"
+                  onClick={closeNewChat}
+                  disabled={pending}
+                  className="flex-1 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCreateGroup}
+                  disabled={pending || !groupTitle.trim() || groupSelected.length === 0}
+                  className="flex-[1.4] rounded-lg bg-violet-600 hover:bg-violet-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50 transition-colors"
+                >
+                  {pending ? 'Criando…' : `Criar grupo (${groupSelected.length})`}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
