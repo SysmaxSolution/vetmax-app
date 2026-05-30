@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LogOut, Home, Stethoscope, TestTubes, Users, BarChart3, PawPrint,
-  BedDouble, Package, Scissors, Banknote, FolderKanban, MessageCircle,
+  BedDouble, Package, Scissors, Banknote, FolderKanban, MessageCircle, MessageSquare,
   ShoppingCart, Activity, ClipboardList, DollarSign, FileBarChart2,
   Menu, X, Lock, Syringe,
 } from 'lucide-react'
@@ -12,6 +12,7 @@ import type { UserRole } from '@/types'
 import { useState, useEffect } from 'react'
 import { ClinicSwitcher } from '@/components/layout/ClinicSwitcher'
 import OmnisearchTrigger from '@/components/layout/OmnisearchTrigger'
+import NotificationBell from '@/components/layout/NotificationBell'
 import { ImageLightbox } from '@/components/ui/ImageLightbox'
 import type { UserClinicInfo } from '@/lib/actions/clinic-switcher'
 import { updateClinicStatus } from '@/lib/actions/clinic-status'
@@ -63,6 +64,7 @@ const ALL_TABS: Tab[] = [
   { label: 'Relatórios',   href: '/dashboard/reports',         icon: FileBarChart2, roles: ['admin'],                                  moduleKey: 'reports'         },
   { label: 'Gestão',       href: '/dashboard/management',      icon: BarChart3,     roles: ['admin']                                                                },
   { label: 'WhatsApp',     href: '/dashboard/whatsapp',        icon: MessageCircle, roles: ['receptionist','admin','vet','assistant'], moduleKey: 'whatsapp_intelligent' },
+  { label: 'Chat Interno', href: '/dashboard/internal-chat',   icon: MessageSquare, roles: ['receptionist','admin','vet','assistant'] },
 ]
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -256,6 +258,7 @@ export default function DashboardHeader({
 
           <div className="flex items-center gap-3">
             <OmnisearchTrigger />
+            <NotificationBell clinicId={clinicId} />
 
             {isSysmax && (
               <select

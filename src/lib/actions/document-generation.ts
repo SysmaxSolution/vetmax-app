@@ -474,6 +474,37 @@ export async function generateFilledDocument(
 
   revalidatePath('/dashboard/vet')
 
+  // Hook do Chat Interno: anexa o PDF gerado na sala do atendimento (se houver
+  // consultation_id). Fire-and-forget — se falhar, não bloqueia o gerador.
+  if (input.consultation_id) {
+    try {
+      const { attachDocumentToEntityChat } = await import('@/lib/actions/internal-chat')
+      const tplType = (template.type ?? '').toLowerCase()
+      const sourceEntity: 'prescription' | 'term' | 'exam' | 'laudo' | 'receipt' | 'other' =
+          tplType.includes('prescription') || tplType.includes('receit')                       ? 'prescription'
+        : tplType.includes('term')         || tplType.includes('consent') || tplType.includes('responsab') ? 'term'
+        : tplType.includes('exam')                                                              ? 'exam'
+        : tplType.includes('laudo')                                                             ? 'laudo'
+        : 'other'
+      await attachDocumentToEntityChat({
+        clinic_id:     profile.clinic_id,
+        user_id:       user.id,
+        entity_type:   'consultation',
+        entity_id:     input.consultation_id,
+        title:         input.document_name || template.name,
+        file_url:      signedData.signedUrl,
+        storage_path:  storagePath,
+        mime_type:     'application/pdf',
+        byte_size:     filledPdfBytes.length,
+        source_entity: sourceEntity,
+        source_id:     documentId,
+        body:          `📎 ${input.document_name || template.name} (gerado no consultório)`,
+      })
+    } catch (e) {
+      console.warn('[chat-anexo] falha ao anexar PDF ao chat do atendimento:', e)
+    }
+  }
+
   return {
     document_id: documentId,
     storage_path: storagePath,
