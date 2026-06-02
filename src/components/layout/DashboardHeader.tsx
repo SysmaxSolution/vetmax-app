@@ -33,7 +33,16 @@ import ChatContextButton from '@/components/internal-chat/ChatContextButton'
  * (some do menu se não estiver em activeModules).
  */
 const PROMOTED_LOCKED_FEATURES: Record<string, UpgradeFeatureKey> = {
-  hospitalization: 'hospitalization',
+  hospitalization:      'hospitalization',
+  surgery:              'surgery',
+  triage:               'triage',
+  exams:                'exams',
+  financial:            'financial',
+  pharmacy:             'pharmacy',
+  purchases:            'purchases',
+  sales:                'sales',
+  whatsapp_intelligent: 'whatsapp_intelligent',
+  internal_chat:        'internal_chat',
 }
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
@@ -65,7 +74,7 @@ const ALL_TABS: Tab[] = [
   { label: 'Relatórios',   href: '/dashboard/reports',         icon: FileBarChart2, roles: ['admin'],                                  moduleKey: 'reports'         },
   { label: 'Gestão',       href: '/dashboard/management',      icon: BarChart3,     roles: ['admin']                                                                },
   { label: 'WhatsApp',     href: '/dashboard/whatsapp',        icon: MessageCircle, roles: ['receptionist','admin','vet','assistant'], moduleKey: 'whatsapp_intelligent' },
-  { label: 'Chat Interno', href: '/dashboard/internal-chat',   icon: MessageSquare, roles: ['receptionist','admin','vet','assistant'] },
+  { label: 'Chat Interno', href: '/dashboard/internal-chat',   icon: MessageSquare, roles: ['receptionist','admin','vet','assistant'], moduleKey: 'internal_chat' },
 ]
 
 // ─── Props ────────────────────────────────────────────────────────────────────

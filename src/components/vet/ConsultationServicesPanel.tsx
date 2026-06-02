@@ -10,6 +10,7 @@ import {
 } from '@/lib/actions/services'
 import { updateConsultationServicePricingSplit } from '@/lib/actions/insurance-pricing'
 import ServiceSelectionModal from './ServiceSelectionModal'
+import { useUpgradeModal } from '@/components/upgrade/UpgradeProvider'
 
 /**
  * Painel "Serviços lançados" no ConsultationDetail.
@@ -93,6 +94,9 @@ export default function ConsultationServicesPanel({
   }
 
   useEffect(() => { void refresh() }, [consultationId])
+
+  const { planName, open: openUpgrade } = useUpgradeModal()
+  const splitLocked = planName === 'free'
 
   const activeLines = lines.filter(l => l.cancelled_at === null)
   const total       = activeLines.reduce((s, l) => s + l.price_snapshot * l.quantity, 0)
@@ -299,15 +303,27 @@ export default function ConsultationServicesPanel({
                   )}
                 </div>
 
-                {/* Editor de split convênio (Item 5) */}
+                {/* Editor de split convênio (Item 5) — bloqueado no plano free */}
                 {!isFinalized && petHasInsurance && !showSplitEditor && (
-                  <button
-                    type="button"
-                    onClick={() => startSplitEditor(line)}
-                    className="mt-2 text-[10px] font-semibold text-indigo-700 hover:text-indigo-900 hover:underline"
-                  >
-                    + Definir coparticipação e repasse Petlove
-                  </button>
+                  splitLocked ? (
+                    <button
+                      type="button"
+                      onClick={() => openUpgrade('insurance_pricing')}
+                      className="mt-2 inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500 hover:text-indigo-700 hover:underline"
+                      title="Disponível no Plano Pro"
+                    >
+                      <Shield className="h-3 w-3" />
+                      Definir coparticipação e repasse · Plano Pro
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => startSplitEditor(line)}
+                      className="mt-2 text-[10px] font-semibold text-indigo-700 hover:text-indigo-900 hover:underline"
+                    >
+                      + Definir coparticipação e repasse Petlove
+                    </button>
+                  )
                 )}
 
                 {!isFinalized && showSplitEditor && draft && (

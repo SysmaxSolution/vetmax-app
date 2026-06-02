@@ -17,7 +17,7 @@
  */
 
 import { X, ArrowUpRight, MessageCircle, Mail, PlayCircle, Sparkles, type LucideIcon } from 'lucide-react'
-import { BedDouble, MessageSquareText, FileBarChart2, Lock, Cpu } from 'lucide-react'
+import { BedDouble, MessageSquareText, FileBarChart2, Lock, Cpu, MessageSquare, Syringe, FlaskConical, Stethoscope, DollarSign, ShoppingBag, Truck, ShoppingCart, Shield, Boxes } from 'lucide-react'
 
 // ─── Catálogo de features pagas ──────────────────────────────────────────────
 
@@ -26,6 +26,16 @@ export type UpgradeFeatureKey =
   | 'whatsapp_intelligent'
   | 'reports_export'
   | 'continuous_flow'
+  | 'internal_chat'
+  | 'triage'
+  | 'exams'
+  | 'financial'
+  | 'pharmacy'
+  | 'purchases'
+  | 'sales'
+  | 'surgery'
+  | 'insurance_pricing'
+  | 'stock_kits'
   | 'pro_module'   // genérica — usada quando o gatilho vem do ModulesTab por
                    // qualquer módulo PRO. Quem chama passa override.title/pitch
                    // para substituir a copy default.
@@ -105,6 +115,136 @@ const UPGRADE_FEATURES: Record<UpgradeFeatureKey, FeatureMeta> = {
       'Exames com ditado de laudo dentro da consulta',
       'IA Unificada: 1 áudio preenche prontuário + laudo + sinais vitais',
       'Reduz cliques e tempo médio de atendimento em ~30%',
+    ],
+    tourUrl: null,
+  },
+  internal_chat: {
+    icon:       MessageSquare,
+    title:      'Chat Interno',
+    targetPlan: 'Plano Pro',
+    pitch:      'Tire a equipe do WhatsApp pessoal. Mensagens com contexto, salas automáticas por consulta/internação/cirurgia, anexos e leitura em tempo real.',
+    benefits: [
+      'Salas criadas automaticamente para cada atendimento ativo',
+      'Sininho consolidado com badge de não lidas e som configurável',
+      'Anexos PDF/imagem direto no chat sem sair da consulta',
+      'Histórico permanente, vinculado ao prontuário e auditável (LGPD)',
+    ],
+    tourUrl: null,
+  },
+  triage: {
+    icon:       Stethoscope,
+    title:      'Triagem Clínica',
+    targetPlan: 'Plano Pro',
+    pitch:      'Fila de triagem com sinais vitais por voz, anamnese guiada e integração direta com o consultório.',
+    benefits: [
+      'Sinais vitais (peso, temperatura, FC, FR, mucosas) por voz',
+      'Anamnese guiada com perguntas adaptadas ao motivo da visita',
+      'Encaminhamento direto pro consultório, sem retrabalho',
+      'Banner visual de risco quando triagem detecta urgência',
+    ],
+    tourUrl: null,
+  },
+  exams: {
+    icon:       FlaskConical,
+    title:      'Módulo de Exames',
+    targetPlan: 'Plano Pro',
+    pitch:      'Solicitação digital, laudo com assinatura eletrônica e PDF entregue ao tutor em segundos.',
+    benefits: [
+      'Pedido de exame direto da consulta, em 2 cliques',
+      'Laudo ditado por voz com IA transcrevendo em tempo real',
+      'PDF assinado digitalmente CRMV — entregue por WhatsApp',
+      'Histórico de exames consolidado no prontuário do pet',
+    ],
+    tourUrl: null,
+  },
+  financial: {
+    icon:       DollarSign,
+    title:      'Financeiro',
+    targetPlan: 'Plano Pro',
+    pitch:      'Descubra para onde vai o seu dinheiro. DRE, fluxo de caixa, contas a pagar/receber e conciliação bancária.',
+    benefits: [
+      'DRE mensal e fluxo de caixa atualizados em tempo real',
+      'Contas a pagar e a receber com vencimento integrado',
+      'Conciliação bancária e cartão com extrato',
+      'Comissão por profissional com filtros e exportação',
+    ],
+    tourUrl: null,
+  },
+  pharmacy: {
+    icon:       ShoppingBag,
+    title:      'Estoque Avançado',
+    targetPlan: 'Plano Pro',
+    pitch:      'Controle total: alertas de validade, ponto de reposição, rastreabilidade por lote e baixa automática do consultório.',
+    benefits: [
+      'Validade e ponto de reposição com alerta visual',
+      'Baixa automática conforme prescrição/aplicação no consultório',
+      'Rastreabilidade por lote — útil em recall de fabricante',
+      'Kits e pacotes (medicamentos + insumos) em 1 clique',
+    ],
+    tourUrl: null,
+  },
+  purchases: {
+    icon:       Truck,
+    title:      'Compras + NF-e',
+    targetPlan: 'Plano Pro',
+    pitch:      'Importe a NF-e XML do fornecedor e o estoque atualiza sozinho. Sem digitação, sem erro.',
+    benefits: [
+      'Importação NF-e XML com matching automático por NCM/EAN',
+      'Cadastro de fornecedores e histórico de compras',
+      'CMV calculado por produto/serviço com precisão',
+      'Pedido de compra inteligente baseado em consumo histórico',
+    ],
+    tourUrl: null,
+  },
+  sales: {
+    icon:       ShoppingCart,
+    title:      'Vendas (PDV Completo)',
+    targetPlan: 'Plano Pro',
+    pitch:      'PDV completo com catálogo, carrinho, recibo e integração com estoque e emissão de NFS-e.',
+    benefits: [
+      'Catálogo completo de produtos e serviços',
+      'Carrinho multi-item com desconto por linha',
+      'Recibos térmicos e emissão de NFS-e integrada',
+      'Vendas independentes de consulta — balcão, banho e tosa, etc.',
+    ],
+    tourUrl: null,
+  },
+  surgery: {
+    icon:       Syringe,
+    title:      'Centro Cirúrgico',
+    targetPlan: 'Plano Pro',
+    pitch:      'Bloco cirúrgico completo: Kanban Preparo→Sala→RPA, ficha cirúrgica e ficha anestésica, kits com baixa automática.',
+    benefits: [
+      'Kanban Preparo → Sala → Recuperação Pós-Anestésica',
+      'Ficha cirúrgica single-page com timeline visual',
+      'Ficha anestésica com curva de sinais vitais',
+      'Kits cirúrgicos com baixa automática no estoque',
+    ],
+    tourUrl: null,
+  },
+  insurance_pricing: {
+    icon:       Shield,
+    title:      'Vínculo de serviços com convênios',
+    targetPlan: 'Plano Pro',
+    pitch:      'Defina preço de convênio por serviço, split coparticipação/repasse e tabela travada por pet.',
+    benefits: [
+      'Preço base de convênio por serviço, editável por operadora',
+      'Split coparticipação (tutor) + repasse (plano) automático no checkout',
+      'Tabela travada por pet — caixa cobra exatamente o acordado',
+      'Conciliação Petlove centavo-a-centavo na remessa mensal',
+    ],
+    tourUrl: null,
+  },
+  stock_kits: {
+    icon:       Boxes,
+    title:      'Estoque — Kits e Pacotes',
+    targetPlan: 'Plano Pro',
+    pitch:      'Monte kits de medicamentos + insumos + serviços e lance tudo de uma vez. Baixa automática no estoque.',
+    benefits: [
+      'Kit cirúrgico, vacinal, castração — montagem livre',
+      'Lançamento em 1 clique na consulta ou cirurgia',
+      'Baixa automática item a item no estoque',
+      'Custo total do kit calculado em tempo real',
     ],
     tourUrl: null,
   },

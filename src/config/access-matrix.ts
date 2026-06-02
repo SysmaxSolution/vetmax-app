@@ -140,6 +140,11 @@ export const PAYWALL_COPY: Record<string, PaywallCopy> = {
     description: 'PDV com catálogo de produtos e serviços, integração com estoque e emissão de NFS-e.',
     feature:     'PDV Completo',
   },
+  '/dashboard/internal-chat': {
+    title:       'Chat Interno',
+    description: 'Mensagens em tempo real entre a equipe, salas automáticas por consulta/internação/cirurgia, anexos e sininho consolidado.',
+    feature:     'Chat Interno',
+  },
   '/dashboard/registry': {
     title:       'Cadastros Avançados',
     description: 'Cadastros de tutores, animais, fornecedores, funcionários e tabelas de preços personalizadas.',

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { Plus, Trash2, Pencil, Check, X, Loader2, Pin, PawPrint } from 'lucide-react'
+import { Plus, Trash2, Pencil, Check, X, Loader2, Pin, PawPrint, Lock } from 'lucide-react'
 import {
   upsertPatientCustomPrice,
   deletePatientCustomPrice,
@@ -9,6 +9,7 @@ import {
   type PatientCustomPrice,
   type CatalogService,
 } from '@/lib/actions/patient-custom-prices'
+import { useUpgradeModal } from '@/components/upgrade/UpgradeProvider'
 
 interface Props {
   patientId:    string
@@ -39,6 +40,8 @@ function toInput(n: number | null | undefined): string {
 }
 
 export default function CustomPricesEditor({ patientId, providerId, providerName, prices, onChange }: Props) {
+  const { planName, open: openUpgrade } = useUpgradeModal()
+  const isFree = planName === 'free'
   const [services, setServices] = useState<CatalogService[]>([])
   const [loadingServices, setLoadingServices] = useState(false)
   const [adding, setAdding] = useState<DraftPrice | null>(null)
@@ -164,6 +167,37 @@ export default function CustomPricesEditor({ patientId, providerId, providerName
     setDeletingId(null)
     if ('error' in res) { setError(res.error); return }
     onChange()
+  }
+
+  if (isFree) {
+    return (
+      <div className="bg-purple-50/60 rounded-2xl border border-purple-200 overflow-hidden">
+        <header className="px-5 py-3 border-b border-purple-200">
+          <h3 className="text-xs font-black text-purple-900 uppercase tracking-wider flex items-center gap-2">
+            <PawPrint className="h-4 w-4" />
+            Preços do Convênio fixados neste pet
+          </h3>
+        </header>
+        <div className="px-5 py-6 flex flex-col items-center gap-3 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-purple-100 text-purple-700">
+            <Lock className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-sm font-bold text-purple-900">Disponível no Plano Pro</p>
+            <p className="text-xs text-purple-600 mt-1 max-w-sm">
+              Vincule serviços a convênios, trave preços por pet e tenha split coparticipação/repasse automático no checkout.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => openUpgrade('insurance_pricing')}
+            className="rounded-lg bg-purple-600 hover:bg-purple-700 px-4 py-2 text-xs font-bold text-white transition-colors"
+          >
+            Conhecer o Plano Pro
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (

@@ -50,6 +50,16 @@ const FEATURE_TO_MODULE: Record<UpgradeFeatureKey, string | null> = {
   whatsapp_intelligent: 'whatsapp_intelligent',
   reports_export:       'reports',
   continuous_flow:      null,  // não é módulo — feature flag em clinics.continuous_flow
+  internal_chat:        'internal_chat',
+  triage:               'triage',
+  exams:                'exams',
+  financial:            'financial',
+  pharmacy:             'pharmacy',
+  purchases:            'purchases',
+  sales:                'sales',
+  surgery:              'centro_cirurgico',
+  insurance_pricing:    null,  // sub-feature gated by plan != free
+  stock_kits:           null,  // sub-feature de pharmacy
   pro_module:           null,
 }
 

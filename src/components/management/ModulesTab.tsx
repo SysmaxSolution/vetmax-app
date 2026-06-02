@@ -4,7 +4,7 @@ import { useState, useRef } from 'react'
 import {
   ToggleLeft, ToggleRight, Loader2, Save, Shield, AlertTriangle, Eye, EyeOff,
   Lock, CheckCircle2,
-  Hotel, Syringe, FlaskConical, Scissors, ShoppingBag, Stethoscope, ClipboardList, MessageCircle, Sparkles, Bot, ShoppingCart, Truck,
+  Hotel, Syringe, FlaskConical, Scissors, ShoppingBag, Stethoscope, ClipboardList, MessageCircle, MessageSquare, Sparkles, Bot, ShoppingCart, Truck,
   PawPrint, Banknote, FolderKanban, DollarSign, FileBarChart2,
 } from 'lucide-react'
 import { updateClinicConfig, type ClinicConfig, type FlowConfig } from '@/lib/actions/clinic-settings'
@@ -17,9 +17,18 @@ import type { UpgradeFeatureKey } from '@/components/upgrade/UpgradeModal'
 // componente cai no genérico 'pro_module' com override de title/pitch
 // vindos do MODULES[i].label/desc.
 const MODULE_TO_FEATURE: Record<string, UpgradeFeatureKey> = {
-  hospitalization:      'hospitalization',
-  whatsapp_intelligent: 'whatsapp_intelligent',
-  reports:              'reports_export',
+  hospitalization:        'hospitalization',
+  internacao_completa:    'hospitalization',
+  centro_cirurgico:       'surgery',
+  whatsapp_intelligent:   'whatsapp_intelligent',
+  reports:                'reports_export',
+  internal_chat:          'internal_chat',
+  triage:                 'triage',
+  exams:                  'exams',
+  financial:              'financial',
+  pharmacy:               'pharmacy',
+  purchases:              'purchases',
+  sales:                  'sales',
 }
 
 // ─── Module definitions ───────────────────────────────────────────────────────
@@ -56,6 +65,7 @@ const MODULES: ModuleDef[] = [
   { key: 'reports',              label: 'Relatórios',                 desc: 'DRE, Curva ABC, produtividade e relatórios operacionais',                   icon: <FileBarChart2  className="h-5 w-5" />, color: 'text-violet-600 bg-violet-50'  },
   { key: 'whatsapp',             label: 'WhatsApp',                   desc: 'Notificações e mensagens via WhatsApp',                                     icon: <MessageCircle  className="h-5 w-5" />, color: 'text-green-600 bg-green-50'    },
   { key: 'whatsapp_intelligent', label: 'WhatsApp Inteligente (Bot)', desc: 'Bot IA responde, agenda consultas e faz campanhas de reativação',          icon: <Bot            className="h-5 w-5" />, color: 'text-emerald-600 bg-emerald-50' },
+  { key: 'internal_chat',        label: 'Chat Interno',               desc: 'Mensagens em tempo real entre a equipe, com salas por consulta/internação/cirurgia e anexos',                                icon: <MessageSquare className="h-5 w-5" />, color: 'text-violet-600 bg-violet-50'  },
   { key: 'mentor',               label: 'Mentor IA',                  desc: 'Assistente flutuante com tours guiados e respostas visuais',                icon: <Sparkles       className="h-5 w-5" />, color: 'text-blue-600 bg-blue-50'      },
 ]
 
