@@ -34,11 +34,13 @@ export type AgendaColumn = {
 }
 
 const KANBAN_COLUMNS: { key: ConsultationStatus; label: string }[] = [
-  { key: 'scheduled',   label: 'Agendados' },
-  { key: 'reception',   label: 'Aguardando' },
-  { key: 'triage',      label: 'Em Triagem' },
-  { key: 'in_progress', label: 'Em Consulta' },
-  { key: 'completed',   label: 'Finalizado' },
+  { key: 'scheduled',    label: 'Agendados' },
+  { key: 'reception',    label: 'Aguardando' },
+  { key: 'triage',       label: 'Em Triagem' },
+  { key: 'in_progress',  label: 'Em Consulta' },
+  { key: 'waiting_exam', label: 'Aguardando Exame' },
+  { key: 'medication',   label: 'Em Medicação' },
+  { key: 'completed',    label: 'Finalizado' },
 ]
 
 export async function getAgendaBoard(date?: string): Promise<AgendaColumn[] | { error: string }> {
@@ -103,11 +105,12 @@ export async function getAgendaBoard(date?: string): Promise<AgendaColumn[] | { 
 }
 
 const VALID_TRANSITIONS: Record<string, ConsultationStatus[]> = {
-  scheduled:   ['reception', 'cancelled'],
-  reception:   ['triage', 'cancelled'],
-  triage:      ['in_progress'],
-  in_progress: ['waiting_exam', 'completed'],
-  waiting_exam: ['in_progress', 'completed'],
+  scheduled:    ['reception', 'cancelled'],
+  reception:    ['triage', 'in_progress', 'cancelled'],
+  triage:       ['in_progress'],
+  in_progress:  ['waiting_exam', 'medication', 'completed'],
+  waiting_exam: ['in_progress', 'medication', 'completed'],
+  medication:   ['in_progress', 'completed'],
 }
 
 export async function moveAgendaCard(
