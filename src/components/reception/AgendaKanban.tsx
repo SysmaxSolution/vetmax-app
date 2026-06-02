@@ -17,12 +17,13 @@ const COLUMN_STYLES: Record<string, { bg: string; border: string; badge: string;
 }
 
 const VISIT_REASON_LABELS: Record<string, string> = {
-  consultation: 'Consulta',
-  follow_up:    'Retorno',
-  emergency:    'Emergência',
-  vaccination:  'Vacinação',
-  exam:         'Exame',
-  surgery:      'Cirurgia',
+  consultation:  'Consulta',
+  follow_up:     'Retorno',
+  emergency:     'Emergência',
+  vaccination:   'Vacinação',
+  exam:          'Exame',
+  surgery:       'Cirurgia',
+  microchipping: 'Microchipagem',
 }
 
 // ─── Props ───────────────────────────────────────────────────────────────────

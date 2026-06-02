@@ -176,6 +176,7 @@ export type VetConsultationDetail = {
     medical_history: string | null
     photo_url: string | null
     behavior_tags: string[]
+    microchip_id: string | null
   }
   tutor: {
     id: string
@@ -216,7 +217,7 @@ export async function getVetConsultation(
         id, name, species, breed, gender, color, neutered, birth_date,
         allergies, chronic_diseases, past_surgeries, notes,
         coat_color, reproductive_status, medical_history,
-        photo_url, behavior_tags,
+        photo_url, behavior_tags, microchip_id,
         tutors ( id, name, phone, cpf )
       )
     `)
@@ -282,6 +283,7 @@ export async function getVetConsultation(
       medical_history: c.patients?.medical_history ?? null,
       photo_url: c.patients?.photo_url ?? null,
       behavior_tags: Array.isArray(c.patients?.behavior_tags) ? c.patients.behavior_tags : [],
+      microchip_id: c.patients?.microchip_id ?? null,
     },
     tutor: {
       id: c.patients?.tutors?.id ?? '',

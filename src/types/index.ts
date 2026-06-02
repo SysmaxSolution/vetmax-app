@@ -70,7 +70,7 @@ export type ConsultationStatus =
   | 'completed'
   | 'cancelled'
 
-export type VisitReason = 'consultation' | 'follow_up' | 'emergency' | 'vaccination' | 'exam' | 'surgery'
+export type VisitReason = 'consultation' | 'follow_up' | 'emergency' | 'vaccination' | 'exam' | 'surgery' | 'microchipping'
 export type PaymentMethod = 'cash' | 'card' | 'pix' | 'insurance' | 'other'
 export type PaymentStatus = 'pending' | 'paid' | 'courtesy'
 export type MucousColor = 'pink' | 'pale' | 'icteric' | 'cyanotic'

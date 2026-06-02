@@ -33,6 +33,7 @@ import AttachmentsSection from '@/components/ui/AttachmentsSection'
 import MergedTriageSection, { type TriageVitals } from '@/components/vet/MergedTriageSection'
 import AdmitPetModal from '@/components/hospitalization/AdmitPetModal'
 import ExamRequestModal from '@/components/exams/ExamRequestModal'
+import MicrochipPanel from '@/components/vet/MicrochipPanel'
 import EuthanasiaModal from '@/components/vet/EuthanasiaModal'
 import WhatsAppNotificationModal from '@/components/whatsapp/WhatsAppNotificationModal'
 import { RemoveFromQueueModal } from '@/components/ui/RemoveFromQueueModal'
@@ -774,6 +775,19 @@ export default function ConsultationDetail({
     </div>,
     document.body
   ) : null
+
+  // ─── Render condicional: microchipagem (Item 4, 2026-06-02) ────────────────
+  // Quando visit_reason='microchipping', renderiza apenas o MicrochipPanel —
+  // sem anamnese, triagem, prescrição, documentos ou outras seções clínicas.
+  // O painel encapsula o pipeline completo (chip → caixa → fechamento).
+  if (consultation.visit_reason === 'microchipping') {
+    return (
+      <MicrochipPanel
+        consultation={consultation}
+        insuranceCard={insuranceCard}
+      />
+    )
+  }
 
   // ─── Render Normal ──────────────────────────────────────────────────────────
   return (

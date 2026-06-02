@@ -15,6 +15,8 @@ const VISIT_REASON_OPTIONS: { value: VisitReason; label: string; emoji: string; 
   { value: 'vaccination', label: 'Vacinação', emoji: '💉', color: 'bg-green-100 text-green-700' },
   { value: 'exam', label: 'Exame', emoji: '🔬', color: 'bg-purple-100 text-purple-700' },
   { value: 'surgery', label: 'Cirurgia', emoji: '🏥', color: 'bg-orange-100 text-orange-700' },
+  // Item 4 (2026-06-02): fluxo simplificado — abre prontuário mínimo no consultório
+  { value: 'microchipping', label: 'Microchipagem', emoji: '🐶', color: 'bg-indigo-100 text-indigo-700' },
 ]
 
 const PAYMENT_STATUS_OPTIONS: { value: PaymentStatus; label: string }[] = [
