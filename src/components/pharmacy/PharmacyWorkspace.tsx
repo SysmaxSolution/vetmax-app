@@ -16,6 +16,7 @@ import {
 import type { GlobalCatalogSuggestion } from '@/lib/actions/catalog'
 import { searchGlobalCatalog } from '@/lib/actions/catalog'
 import { suggestDefaultInsurancePrice } from '@/lib/actions/insurance-pricing'
+import { getInsuranceProviders, getProvidersForStockItem, setProvidersForStockItem, type InsuranceProvider } from '@/lib/actions/insurance-providers'
 import StockCsvImporter from './StockCsvImporter'
 import { EnrichNcmModal } from './EnrichNcmModal'
 import PharmacyCatalogQuickAdd from './PharmacyCatalogQuickAdd'
@@ -960,10 +961,29 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
   const [form, setForm]     = useState<ItemForm>(item ? formFromItem(item) : defaultForm)
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState<string | null>(null)
+  const [providers, setProviders] = useState<InsuranceProvider[]>([])
+  const [acceptedProviderIds, setAcceptedProviderIds] = useState<string[]>([])
 
   const isNew     = mode === 'add'
   const isService = serviceMode || SERVICE_CAT_KEYS.has(form.category)
   const fields    = CAT_FIELDS[form.category] ?? { batch: false, expiry: false, barcode: false, sku: false }
+
+  // Carrega convênios + IDs já vinculados (apenas em modo serviço)
+  useEffect(() => {
+    if (!isService) return
+    getInsuranceProviders().then(res => {
+      if (!('error' in res)) setProviders(res.filter(p => p.is_active))
+    })
+    if (item?.id) {
+      getProvidersForStockItem(item.id).then(res => {
+        if (!('error' in res)) setAcceptedProviderIds(res)
+      })
+    }
+  }, [isService, item?.id])
+
+  function toggleProvider(id: string) {
+    setAcceptedProviderIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
 
   function set(key: keyof ItemForm, val: string | boolean) {
     setForm(prev => ({ ...prev, [key]: val }))
@@ -994,13 +1014,19 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
 
     if (isNew) {
       const res = await addStockItemV2({ ...basePayload, quantity: isService ? 0 : Number(form.quantity) })
+      if ('error' in res) { setSaving(false); setError(res.error); return }
+      if (isService && providers.length > 0) {
+        await setProvidersForStockItem(res.id, acceptedProviderIds)
+      }
       setSaving(false)
-      if ('error' in res) { setError(res.error); return }
       onSaved(res, true)
     } else {
       const res = await updateStockItemV2(item!.id, basePayload)
+      if ('error' in res) { setSaving(false); setError(res.error); return }
+      if (isService && providers.length > 0) {
+        await setProvidersForStockItem(item!.id, acceptedProviderIds)
+      }
       setSaving(false)
-      if ('error' in res) { setError(res.error); return }
       onSaved(res, false)
     }
   }
@@ -1118,6 +1144,39 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
                 value={form.default_insurance_price}
                 onChange={v => set('default_insurance_price', v)}
               />
+
+              {/* Item B (2026-06-02): convênios que aceitam este serviço */}
+              {providers.length > 0 && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">
+                    Convênios que aceitam este serviço
+                  </label>
+                  <div className="flex flex-wrap gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    {providers.map(p => {
+                      const checked = acceptedProviderIds.includes(p.id)
+                      return (
+                        <label
+                          key={p.id}
+                          className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium cursor-pointer transition-colors ${
+                            checked ? 'bg-emerald-600 text-white' : 'bg-white text-slate-600 border border-slate-200 hover:bg-emerald-50 hover:border-emerald-200'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleProvider(p.id)}
+                            className="hidden"
+                          />
+                          {p.name}
+                        </label>
+                      )
+                    })}
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Se nenhum convênio for marcado, o serviço fica disponível em todos. Para restringir a convênios específicos, marque-os acima.
+                  </p>
+                </div>
+              )}
             </>
           )}
 

@@ -191,6 +191,33 @@ export default function ConsultationServicesPanel({
     }))
   }
 
+  // Auto-derivação: ao digitar copay, calcula repass = total - copay (e vice-versa).
+  // Vet pode sobrescrever os 2 valores manualmente (sem amarrar à constraint local —
+  // a coerência final é validada pelo banco e por handleSaveSplit).
+  function handleCopayChange(line: ConsultationServiceLine, raw: string) {
+    const clean = raw.replace(/[^0-9.,]/g, '')
+    const total = line.price_snapshot * line.quantity
+    const c = parseFloat(clean.replace(',', '.'))
+    if (Number.isFinite(c) && c >= 0 && c <= total) {
+      const newRepass = Math.max(0, Number((total - c).toFixed(2)))
+      updateDraft(line.id, { copay: clean, repass: newRepass.toFixed(2).replace('.', ','), error: null })
+    } else {
+      updateDraft(line.id, { copay: clean })
+    }
+  }
+
+  function handleRepassChange(line: ConsultationServiceLine, raw: string) {
+    const clean = raw.replace(/[^0-9.,]/g, '')
+    const total = line.price_snapshot * line.quantity
+    const r = parseFloat(clean.replace(',', '.'))
+    if (Number.isFinite(r) && r >= 0 && r <= total) {
+      const newCopay = Math.max(0, Number((total - r).toFixed(2)))
+      updateDraft(line.id, { repass: clean, copay: newCopay.toFixed(2).replace('.', ','), error: null })
+    } else {
+      updateDraft(line.id, { repass: clean })
+    }
+  }
+
   return (
     <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
       <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/60 flex items-center justify-between">
@@ -296,7 +323,7 @@ export default function ConsultationServicesPanel({
                             type="text"
                             inputMode="decimal"
                             value={draft.copay}
-                            onChange={e => updateDraft(line.id, { copay: e.target.value.replace(/[^0-9.,]/g, '') })}
+                            onChange={e => handleCopayChange(line, e.target.value)}
                             placeholder="0,00"
                             disabled={draft.saving}
                             className="flex-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
@@ -313,7 +340,7 @@ export default function ConsultationServicesPanel({
                             type="text"
                             inputMode="decimal"
                             value={draft.repass}
-                            onChange={e => updateDraft(line.id, { repass: e.target.value.replace(/[^0-9.,]/g, '') })}
+                            onChange={e => handleRepassChange(line, e.target.value)}
                             placeholder="0,00"
                             disabled={draft.saving}
                             className="flex-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
@@ -325,12 +352,22 @@ export default function ConsultationServicesPanel({
                       const c = parseFloat(draft.copay.replace(',', '.')) || 0
                       const r = parseFloat(draft.repass.replace(',', '.')) || 0
                       const totalSplit = c + r
+                      const lineTotal  = line.price_snapshot * line.quantity
+                      const diff       = Math.abs(totalSplit - lineTotal)
+                      const ok         = diff < 0.01
                       return (
-                        <p className="text-[10px] text-slate-500">
-                          Total convênio: <strong className="text-slate-800">{formatBRL(totalSplit)}</strong>
-                          {' = '}
-                          {formatBRL(c)} (tutor) + {formatBRL(r)} (Petlove)
-                        </p>
+                        <>
+                          <p className="text-[10px] text-slate-500">
+                            Total convênio: <strong className={ok ? 'text-emerald-700' : 'text-amber-700'}>{formatBRL(totalSplit)}</strong>
+                            {' = '}
+                            {formatBRL(c)} (tutor) + {formatBRL(r)} (Petlove)
+                            {' · '}
+                            preço da linha: <strong className="text-slate-800">{formatBRL(lineTotal)}</strong>
+                          </p>
+                          <p className="text-[10px] text-indigo-500 italic">
+                            Digite a coparticipação e o repasse será calculado automaticamente (e vice-versa).
+                          </p>
+                        </>
                       )
                     })()}
                     {draft.error && <p className="text-[10px] text-red-600">{draft.error}</p>}

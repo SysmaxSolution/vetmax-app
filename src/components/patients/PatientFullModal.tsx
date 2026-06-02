@@ -16,6 +16,7 @@ import { getInsuranceProviders, type InsuranceProvider } from '@/lib/actions/ins
 import { getPetInsurance, upsertPetInsurance, removePetInsurance, type PetInsurance } from '@/lib/actions/pet-insurance'
 import { getCustomPricesForPatient, getPetlovePatientHistory, type PatientCustomPrice, type PetlovePatientHistoryEvent } from '@/lib/actions/patient-custom-prices'
 import { PawPrint, Pin, History, UserPlus, ArrowRight, DollarSign, Receipt } from 'lucide-react'
+import CustomPricesEditor from './CustomPricesEditor'
 import VaccinationCard from '@/components/vet/VaccinationCard'
 import { ShareButton } from '@/components/ui/ShareButton'
 import { BehaviorTagsSelector } from '@/components/ui/BehaviorTagsBadges'
@@ -1271,35 +1272,21 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                   )}
 
                   {/* ── Preços fixados do convênio para este pet (patient_custom_prices) ── */}
-                  {currentInsurance && customPrices && customPrices.length > 0 && (
-                    <div className="bg-purple-50/60 rounded-2xl border border-purple-200 overflow-hidden">
-                      <header className="px-5 py-3 border-b border-purple-200 flex items-center justify-between">
-                        <h3 className="text-xs font-black text-purple-900 uppercase tracking-wider flex items-center gap-2">
-                          <PawPrint className="h-4 w-4" />
-                          Preços do Convênio fixados neste pet
-                        </h3>
-                        <span className="text-[10px] text-purple-500">{customPrices.length} procedimento{customPrices.length !== 1 ? 's' : ''}</span>
-                      </header>
-                      <div className="divide-y divide-purple-100 max-h-72 overflow-y-auto">
-                        {customPrices.map(p => (
-                          <div key={p.id} className="px-5 py-2.5 flex items-center justify-between gap-3">
-                            <div className="min-w-0 flex items-center gap-2">
-                              <Pin className="h-3 w-3 text-emerald-600 flex-shrink-0" />
-                              <div className="min-w-0">
-                                <p className="text-xs font-bold text-purple-900 truncate">{p.stock_item_name}</p>
-                                <p className="text-[10px] text-purple-500">{p.provider_name ?? 'Convênio'} · {p.observation_count} ocorrência{p.observation_count !== 1 ? 's' : ''}</p>
-                              </div>
-                            </div>
-                            <span className="text-sm font-black text-emerald-700 tabular-nums flex-shrink-0">
-                              {p.custom_price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                      <footer className="px-5 py-2 bg-purple-100/60 text-[10px] text-purple-600">
-                        Valor sugerido automaticamente no próximo atendimento (último realizado pela planilha).
-                      </footer>
-                    </div>
+                  {currentInsurance && (isEdit ? patient.id : createdPatientId) && (
+                    <CustomPricesEditor
+                      patientId={(isEdit ? patient.id : createdPatientId) as string}
+                      providerId={currentInsurance.provider_id}
+                      providerName={(currentInsurance as any).provider?.name ?? null}
+                      prices={customPrices ?? []}
+                      onChange={() => {
+                        const pid = isEdit ? patient.id : createdPatientId
+                        if (pid) {
+                          getCustomPricesForPatient(pid).then(res => {
+                            setCustomPrices(Array.isArray(res) ? res : [])
+                          })
+                        }
+                      }}
+                    />
                   )}
 
                   {/* ── Histórico Petlove (eventos da conciliação) ── */}

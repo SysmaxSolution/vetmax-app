@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -116,5 +117,48 @@ export async function deleteInsuranceProvider(id: string): Promise<{ success: tr
 
   if (error) return { error: error.message }
   revalidatePath('/dashboard/settings/insurance')
+  return { success: true }
+}
+
+// ─── Junção n:n com stock_items (Item B do convênio, 2026-06-02) ─────────────
+
+export async function getProvidersForStockItem(stockItemId: string): Promise<string[] | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+  const { supabase, clinicId } = ctx
+  const { data, error } = await supabase
+    .from('stock_item_insurance_providers')
+    .select('insurance_provider_id')
+    .eq('stock_item_id', stockItemId)
+    .eq('clinic_id', clinicId)
+  if (error) return { error: error.message }
+  return (data ?? []).map((r: any) => r.insurance_provider_id as string)
+}
+
+export async function setProvidersForStockItem(
+  stockItemId: string,
+  providerIds: string[],
+): Promise<{ success: true } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+  const { clinicId } = ctx
+  const admin = createAdminClient()
+  const { error: delErr } = await admin
+    .from('stock_item_insurance_providers')
+    .delete()
+    .eq('stock_item_id', stockItemId)
+    .eq('clinic_id', clinicId)
+  if (delErr) return { error: delErr.message }
+  if (providerIds.length > 0) {
+    const rows = providerIds.map(pid => ({
+      stock_item_id:         stockItemId,
+      insurance_provider_id: pid,
+      clinic_id:             clinicId,
+    }))
+    const { error: insErr } = await admin
+      .from('stock_item_insurance_providers')
+      .insert(rows)
+    if (insErr) return { error: insErr.message }
+  }
   return { success: true }
 }
