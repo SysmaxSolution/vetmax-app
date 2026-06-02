@@ -49,6 +49,7 @@ import type { Attachment } from '@/lib/actions/attachments'
 import type { FlowConfig } from '@/lib/actions/clinic-settings'
 import { getClinicVoiceTriggers, updateClinicVoiceTriggers } from '@/lib/actions/clinic-settings'
 import { useAiTranscriptionMode } from '@/components/providers/ClinicConfigProvider'
+import ContextualChatPanel from '@/components/internal-chat/ContextualChatPanel'
 
 // ─── Labels ──────────────────────────────────────────────────────────────────
 
@@ -2294,6 +2295,18 @@ export default function ConsultationDetail({
             </button>
           </div>
         </div>
+      )}
+
+      {/* Chat contextual do atendimento */}
+      {clinicId && currentUserId && (
+        <ContextualChatPanel
+          entityType="consultation"
+          entityId={consultation.id}
+          clinicId={clinicId}
+          userId={currentUserId}
+          userName="Médico Veterinário"
+          patientName={consultation.patient.name}
+        />
       )}
     </>
   )

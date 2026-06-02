@@ -58,6 +58,8 @@ export default async function ExamDetailPage({ params }: Props) {
       <ExamDetail
         consultation={consultResult}
         clinicName={clinicName}
+        clinicId={profile.clinic_id}
+        currentUserId={user.id}
         templates={templates}
         initialDocuments={initialDocuments}
         initialAttachments={initialAttachments}

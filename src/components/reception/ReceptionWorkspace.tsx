@@ -22,6 +22,7 @@ import type { SearchResult } from '@/lib/actions/tutors'
 import type { VisitReason, PatientSpecies } from '@/types'
 import { getPatientById, type PatientsListItem } from '@/lib/actions/timeline'
 import QuickPetRegisterModal from './QuickPetRegisterModal'
+import ContextualChatPanel from '@/components/internal-chat/ContextualChatPanel'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const SPECIES_LABELS: Record<string, { label: string; emoji: string; color: string }> = {
@@ -84,6 +85,7 @@ interface Props {
   userName: string
   clinicChecklist?: string[]
   clinicId: string
+  userId?: string
   checkinRequiredFields?: string[]
 }
 
@@ -251,13 +253,14 @@ const calcAge = formatPetAge
 
 // ─── Queue Card ───────────────────────────────────────────────────────────────
 function QueueCard({
-  item, onMoveToTriage, triageActive, onOpenPet, loadingPetId,
+  item, onMoveToTriage, triageActive, onOpenPet, loadingPetId, onOpenChat,
 }: {
   item: ReceptionQueueItem
   onMoveToTriage: (id: string) => void
   triageActive: boolean
   onOpenPet: (patientId: string) => void
   loadingPetId: string | null
+  onOpenChat?: (consultationId: string, patientName: string) => void
 }) {
   const hasPendingPayment = item.payment_status === 'pending'
   const age = calcAge(item.patient.birth_date ?? null)
@@ -335,13 +338,23 @@ function QueueCard({
         >
           {triageActive ? 'Chamar Triagem →' : 'Enviar ao Consultório →'}
         </button>
+        {onOpenChat && (
+          <button
+            type="button"
+            title="Abrir chat deste atendimento"
+            onClick={(e) => { e.stopPropagation(); onOpenChat(item.id, item.patient.name) }}
+            className="flex items-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-xs font-medium text-violet-700 hover:bg-violet-100 transition-colors"
+          >
+            💬 Chat
+          </button>
+        )}
       </div>
     </div>
   )
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, userName, clinicChecklist = [], clinicId, checkinRequiredFields }: Props) {
+export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, userName, clinicChecklist = [], clinicId, userId, checkinRequiredFields }: Props) {
   const [queue, setQueue] = useState<ReceptionQueueItem[]>(initialQueue)
   const [history, setHistory] = useState<ReceptionHistoryItem[]>(initialHistory)
 
@@ -351,6 +364,9 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
   const [loadingKanban, setLoadingKanban] = useState(false)
 
   useRealtimeSync({ table: 'consultations', clinicId })
+
+  // Chat contextual da recepção
+  const [activeChat, setActiveChat] = useState<{ consultationId: string; patientName: string } | null>(null)
 
   // Sync props → state when server component refreshes
   useEffect(() => { setQueue(initialQueue) }, [initialQueue])
@@ -837,6 +853,7 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
                   triageActive={triageActive}
                   onOpenPet={handleOpenPet}
                   loadingPetId={loadingPetEditId}
+                  onOpenChat={userId ? (cId, pName) => setActiveChat({ consultationId: cId, patientName: pName }) : undefined}
                 />
               ))}
             </div>
@@ -998,6 +1015,19 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
           checkinRequiredFields={checkinRequiredFields}
           onClose={() => setCheckInModal(null)}
           onSuccess={handleCheckInSuccess}
+        />
+      )}
+
+      {/* Chat contextual do atendimento selecionado */}
+      {activeChat && userId && (
+        <ContextualChatPanel
+          key={activeChat.consultationId}
+          entityType="consultation"
+          entityId={activeChat.consultationId}
+          clinicId={clinicId}
+          userId={userId}
+          userName={userName ?? 'Recepção'}
+          patientName={activeChat.patientName}
         />
       )}
     </div>

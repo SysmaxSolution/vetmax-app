@@ -12,6 +12,7 @@ import { useClinicalVoiceAssistant } from '@/hooks/useClinicalVoiceAssistant'
 import { useNativeKeepAwake } from '@/hooks/useNativeKeepAwake'
 import { getClinicVoiceTriggers, updateClinicVoiceTriggers } from '@/lib/actions/clinic-settings'
 import { useAiTranscriptionMode } from '@/components/providers/ClinicConfigProvider'
+import ContextualChatPanel from '@/components/internal-chat/ContextualChatPanel'
 import { returnToVet, dischargeFromExams } from '@/lib/actions/exams'
 import { formatPetAge } from '@/lib/utils/pet-age'
 import { Toast } from '@/components/ui/toast'
@@ -45,6 +46,8 @@ const MUCOUS_LABELS: Record<string, string> = {
 interface Props {
   consultation:        VetConsultationDetail
   clinicName?:         string
+  clinicId?:           string
+  currentUserId?:      string
   templates?:          DocumentTemplate[]
   initialDocuments?:   PatientDocument[]
   initialAttachments?: Attachment[]
@@ -63,6 +66,8 @@ function calcAge(birthDate: string | null): string {
 export default function ExamDetail({
   consultation,
   clinicName = 'SysVetMax',
+  clinicId,
+  currentUserId,
   templates = [],
   initialDocuments = [],
   initialAttachments = [],
@@ -669,6 +674,18 @@ export default function ExamDetail({
             </button>
           </div>
         </div>
+      )}
+
+      {/* Chat contextual do atendimento — mesmo chat_id da consulta */}
+      {clinicId && currentUserId && (
+        <ContextualChatPanel
+          entityType="consultation"
+          entityId={consultation.id}
+          clinicId={clinicId}
+          userId={currentUserId}
+          userName="Técnico de Exames"
+          patientName={consultation.patient.name}
+        />
       )}
     </>
   )

@@ -4,6 +4,7 @@ import { getClinicSettingsConfig } from '@/lib/actions/clinic-settings'
 import { getPatientVaccines } from '@/lib/actions/vaccines'
 import { getInsuranceCard } from '@/lib/actions/insurance-coverage'
 import TriageForm from '@/components/triage/TriageForm'
+import ContextualChatPanel from '@/components/internal-chat/ContextualChatPanel'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -96,6 +97,14 @@ export default async function TriageScreen({
         triageRequiredFields={triageRequiredFields}
         userRole={profile.role}
         insuranceCard={insuranceCard}
+      />
+      <ContextualChatPanel
+        entityType="consultation"
+        entityId={result.id}
+        clinicId={profile.clinic_id}
+        userId={user.id}
+        userName={profile.full_name ?? 'Auxiliar'}
+        patientName={result.patient.name}
       />
     </div>
   )
