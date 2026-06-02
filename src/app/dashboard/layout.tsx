@@ -16,6 +16,7 @@ import { getLowStockCount } from '@/lib/actions/stock'
 import type { UserClinicInfo } from '@/lib/actions/clinic-switcher'
 import OnboardingWizard from '@/components/onboarding/OnboardingWizard'
 import { UpgradeProvider } from '@/components/upgrade/UpgradeProvider'
+import ChatNotificationsHost from '@/components/layout/ChatNotificationsHost'
 import { FREE_ROUTES } from '@/config/access-matrix'
 import type { PlanName, BusinessType } from '@/types'
 import { ChatContextProvider } from '@/components/providers/ChatContextProvider'
@@ -191,6 +192,34 @@ export default async function DashboardLayout({
       ).count ?? 0)
     : 0
 
+  // Mensagens de chat interno não lidas para o usuário (badge na aba Chat Interno).
+  // Soma sobre todos os chats em que o usuário participa: mensagens criadas
+  // depois do last_read_at e que não foram enviadas por ele mesmo.
+  let chatUnreadCount = 0
+  {
+    const { data: parts } = await admin
+      .from('chat_participants')
+      .select('chat_id, last_read_at')
+      .eq('user_id', user.id)
+      .eq('clinic_id', profile.clinic_id)
+      .is('left_at', null)
+    const partList = parts ?? []
+    if (partList.length > 0) {
+      const counts = await Promise.all(partList.map(async (p: any) => {
+        const since = p.last_read_at ?? new Date(0).toISOString()
+        const { count } = await admin
+          .from('chat_messages')
+          .select('id', { count: 'exact', head: true })
+          .eq('chat_id', p.chat_id)
+          .gt('created_at', since)
+          .neq('sent_by', user.id)
+          .is('deleted_at', null)
+        return count ?? 0
+      }))
+      chatUnreadCount = counts.reduce((s, n) => s + n, 0)
+    }
+  }
+
   return (
     <section className="min-h-screen bg-slate-50">
       <ChatContextProvider clinicId={profile.clinic_id} userId={user.id} userName={profile.full_name ?? ''}>
@@ -203,6 +232,7 @@ export default async function DashboardLayout({
         activeModules={activeModules.length > 0 ? activeModules : null}
         lowStockCount={lowStockCount}
         whatsappHandoffCount={whatsappHandoffCount}
+        chatUnreadCount={chatUnreadCount}
         userClinics={isSysmax ? userClinics : (userClinics.length > 1 ? userClinics : undefined)}
         isSysmax={isSysmax}
         clinicStatus={clinicStatus}
@@ -236,6 +266,7 @@ export default async function DashboardLayout({
         />
       )}
       <MentorGlobalWrapper />
+      <ChatNotificationsHost clinicId={profile.clinic_id} userId={user.id} />
       {/* UnauthorizedBanner removido: por decisão de UX (2026-05-22), URLs
           inacessíveis redirecionam silenciosamente para a home do usuário —
           sem aviso de "Acesso negado". Os links sem permissão já não aparecem

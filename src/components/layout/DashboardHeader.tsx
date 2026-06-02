@@ -79,6 +79,7 @@ interface DashboardHeaderProps {
   activeModules?: string[] | null
   lowStockCount?:        number
   whatsappHandoffCount?: number
+  chatUnreadCount?:      number
   userClinics?:          UserClinicInfo[]
   isSysmax?:             boolean
   clinicStatus?:         string
@@ -101,6 +102,7 @@ export default function DashboardHeader({
   activeModules,
   lowStockCount = 0,
   whatsappHandoffCount = 0,
+  chatUnreadCount = 0,
   userClinics,
   isSysmax = false,
   clinicStatus,
@@ -307,8 +309,9 @@ export default function DashboardHeader({
         <div className="hidden sm:flex mx-auto max-w-4xl px-3 sm:px-6 flex-wrap items-center gap-1">
           {tabs.map((tab) => {
             const badgeCount =
-              tab.href === '/dashboard/pharmacy' ? lowStockCount :
-              tab.href === '/dashboard/whatsapp'  ? whatsappHandoffCount : 0
+              tab.href === '/dashboard/pharmacy'      ? lowStockCount        :
+              tab.href === '/dashboard/whatsapp'      ? whatsappHandoffCount :
+              tab.href === '/dashboard/internal-chat' ? chatUnreadCount      : 0
             const showBadge = badgeCount > 0
             const promotedKey = promotedLockKey(tab)
             const locked    = promotedKey !== null || isLocked(tab.href)
@@ -396,8 +399,9 @@ export default function DashboardHeader({
                 const promotedKey = promotedLockKey(tab)
                 const locked     = promotedKey !== null || isLocked(tab.href)
                 const badgeCount =
-                  tab.href === '/dashboard/pharmacy' ? lowStockCount :
-                  tab.href === '/dashboard/whatsapp'  ? whatsappHandoffCount : 0
+                  tab.href === '/dashboard/pharmacy'      ? lowStockCount        :
+                  tab.href === '/dashboard/whatsapp'      ? whatsappHandoffCount :
+                  tab.href === '/dashboard/internal-chat' ? chatUnreadCount      : 0
 
                 return (
                   <Link
