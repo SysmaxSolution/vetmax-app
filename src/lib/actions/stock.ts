@@ -340,9 +340,11 @@ export type StockItemV2 = {
   cfop:             string | null
   unit_com:         string | null
   supplier_id:      string | null
+  // migration 0215 (Item 5: split convênio Petlove)
+  default_insurance_price: number | null
 }
 
-const STOCK_V2_FIELDS = 'id, clinic_id, name, category, quantity, unit, min_quantity, unit_price, last_restock, created_at, updated_at, is_controlled, brand, sku, barcode, batch_number, expiry_date, supplier, is_service, ncm, ncm_description, cfop, unit_com, supplier_id'
+const STOCK_V2_FIELDS = 'id, clinic_id, name, category, quantity, unit, min_quantity, unit_price, last_restock, created_at, updated_at, is_controlled, brand, sku, barcode, batch_number, expiry_date, supplier, is_service, ncm, ncm_description, cfop, unit_com, supplier_id, default_insurance_price'
 
 export async function getPharmacyStockV2(): Promise<StockItemV2[] | { error: string }> {
   const ctx = await getClinicAndUser()
@@ -391,6 +393,7 @@ export async function addStockItemV2(input: {
   ncm_description?:  string | null
   cfop?:             string | null
   unit_com?:         string | null
+  default_insurance_price?: number | null
 }): Promise<StockItemV2 | { error: string }> {
   const ctx = await getClinicAndUser()
   if (!ctx) return { error: 'Não autenticado.' }
@@ -420,6 +423,7 @@ export async function addStockItemV2(input: {
       ncm_description: input.ncm_description?.trim() || null,
       cfop:            input.cfop?.trim() || null,
       unit_com:        input.unit_com?.trim() || null,
+      default_insurance_price: input.default_insurance_price ?? null,
     })
     .select(STOCK_V2_FIELDS)
     .single()
@@ -473,6 +477,7 @@ export async function updateStockItemV2(
   if ('ncm_description' in input) patch.ncm_description = (input as any).ncm_description?.trim() || null
   if ('cfop'            in input) patch.cfop            = (input as any).cfop?.trim()            || null
   if ('unit_com'        in input) patch.unit_com        = (input as any).unit_com?.trim()        || null
+  if ('default_insurance_price' in input) patch.default_insurance_price = (input as any).default_insurance_price ?? null
 
   const { data, error } = await admin
     .from('stock_items')

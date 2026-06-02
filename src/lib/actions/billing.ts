@@ -96,7 +96,7 @@ export async function generateInvoice(
       .single(),
     admin
       .from('consultation_services')
-      .select('id, stock_item_id, name_snapshot, price_snapshot, quantity, added_at_stage, stock_items ( category )')
+      .select('id, stock_item_id, name_snapshot, price_snapshot, quantity, added_at_stage, insurance_total_snapshot, copay_snapshot, repass_snapshot, stock_items ( category )')
       .eq('clinic_id', profile.clinic_id)
       .eq('consultation_id', consultationId)
       .is('cancelled_at', null)
@@ -134,23 +134,36 @@ export async function generateInvoice(
     return 'other'
   }
 
-  // Itens da fatura: 1 linha por consultation_services ativo.
+  // Itens da fatura: 1 linha por consultation_services ativo. Item 5 (2026-06-02):
+  // quando há split convênio cadastrado (copay_snapshot != null), populamos:
+  //  - insurance_status = 'aguardando_repasse' (será reconciliado quando a remessa chegar)
+  //  - coparticipation_value = copay_snapshot * quantity
+  // Total_price segue sendo o valor cheio (a soma copay+repass) — o caixa lê
+  // copay para "Total a cobrar do tutor" e (total - copay) para o repasse Petlove.
   const items: Array<{
-    item_type:   ItemType
-    description: string
-    quantity:    number
-    unit_price:  number
-    total_price: number
+    item_type:               ItemType
+    description:             string
+    quantity:                number
+    unit_price:              number
+    total_price:             number
+    insurance_status?:       string
+    coparticipation_value?:  number | null
   }> = services.map((s: any) => {
     const cat   = (Array.isArray(s.stock_items) ? s.stock_items[0]?.category : s.stock_items?.category) as string | undefined
     const qty   = Number(s.quantity ?? 1)
     const unit  = Number(s.price_snapshot ?? 0)
+    const copay = s.copay_snapshot === null || s.copay_snapshot === undefined
+      ? null
+      : Number(s.copay_snapshot)
+    const hasSplit = copay !== null
     return {
-      item_type:   categoryToItemType(cat),
-      description: s.name_snapshot as string,
-      quantity:    qty,
-      unit_price:  unit,
-      total_price: unit * qty,
+      item_type:              categoryToItemType(cat),
+      description:            s.name_snapshot as string,
+      quantity:               qty,
+      unit_price:             unit,
+      total_price:            unit * qty,
+      insurance_status:       hasSplit ? 'aguardando_repasse' : 'particular',
+      coparticipation_value:  hasSplit ? Number((copay * qty).toFixed(2)) : null,
     }
   })
 
@@ -185,6 +198,17 @@ export async function generateInvoice(
   const subtotal     = items.reduce((sum, it) => sum + it.total_price, 0)
   const total_amount = subtotal
 
+  // Valor que o tutor efetivamente paga no balcão. Quando há split convênio:
+  // soma das coparticipações; o resto vai virar contas a receber Petlove.
+  // Sem split: tutor_due = total. Esse é o valor que vai para central_cashier
+  // (filinha do caixa) e para o PaymentMethodModal.
+  const tutor_due = items.reduce((sum, it) => {
+    if (it.coparticipation_value !== null && it.coparticipation_value !== undefined) {
+      return sum + it.coparticipation_value
+    }
+    return sum + it.total_price
+  }, 0)
+
   // Criar fatura
   const { data: invoice, error: invErr } = await admin
     .from('invoices')
@@ -208,15 +232,17 @@ export async function generateInvoice(
     .from('invoice_items')
     .insert(items.map(it => ({ ...it, invoice_id: invoice.id })))
 
-  // Cria entrada PENDENTE no Caixa Central (aparece antes do pagamento ser confirmado)
-  if (total_amount > 0) {
+  // Cria entrada PENDENTE no Caixa Central (aparece antes do pagamento ser confirmado).
+  // Usa tutor_due (apenas coparticipações quando há split); o repasse Petlove
+  // vira contas a receber em outro fluxo (não passa pelo caixa do balcão).
+  if (tutor_due > 0) {
     await admin
       .from('central_cashier')
       .insert({
         clinic_id:     profile.clinic_id,
         source_module: 'consultation',
         source_id:     invoice.id,
-        amount:        total_amount,
+        amount:        tutor_due,
         status:        'pending',
         reason:        `Consulta — ${patient.name}`,
         patient_name:  patient.name,

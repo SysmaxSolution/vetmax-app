@@ -99,32 +99,64 @@ export default async function CheckoutInsurancePreview({ consultationId, patient
         </div>
       </div>
 
-      {/* Lista de itens */}
+      {/* Lista de itens — Item 5 (2026-06-02): split visual em 2 linhas por serviço
+          quando há repasse Petlove. Primeira linha = a cobrar do tutor. Segunda
+          linha = repasse informativo (não entra no Total a Pagar). */}
       <ul className="divide-y divide-sky-100">
-        {preview.items.map(it => (
-          <li key={it.invoice_item_id} className="px-5 py-2.5 flex items-center justify-between text-xs">
-            <div className="min-w-0 flex-1 pr-3">
-              <div className="flex items-center gap-2">
-                <span className="text-slate-800 font-medium truncate">{it.description}</span>
-                <span className={`flex-shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded border ${STATUS_BADGE[it.coverage.status]}`}>
-                  {STATUS_LABEL[it.coverage.status]}
+        {preview.items.map(it => {
+          const hasReceivable = it.receivable > 0
+          return (
+            <li key={it.invoice_item_id} className="px-5 py-3">
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="min-w-0 flex-1 pr-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-slate-800 truncate">{it.description}</span>
+                    <span className={`flex-shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded border ${STATUS_BADGE[it.coverage.status]}`}>
+                      {STATUS_LABEL[it.coverage.status]}
+                    </span>
+                    {it.quantity !== 1 && (
+                      <span className="text-[10px] text-slate-500">× {it.quantity}</span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-0.5">{it.coverage.message}</p>
+                </div>
+                <span className="text-[10px] text-slate-400 tabular-nums flex-shrink-0">
+                  Total: {BRL(it.total_price)}
                 </span>
               </div>
-              <p className="text-[10px] text-slate-500 mt-0.5">{it.coverage.message}</p>
-            </div>
-            <div className="flex items-center gap-3 flex-shrink-0">
-              {it.charge_now > 0 && (
-                <span className="text-sky-700">caixa <strong className="tabular-nums">{BRL(it.charge_now)}</strong></span>
-              )}
-              {it.deferred_provider > 0 && (
-                <span className="text-sky-700">cartão <strong className="tabular-nums">{BRL(it.deferred_provider)}</strong></span>
-              )}
-              {it.receivable > 0 && (
-                <span className="text-emerald-700">repasse <strong className="tabular-nums">{BRL(it.receivable)}</strong></span>
-              )}
-            </div>
-          </li>
-        ))}
+
+              {/* Split: 2 linhas — Coparticipação + Repasse Petlove */}
+              <div className="ml-3 border-l-2 border-sky-200 pl-3 space-y-1">
+                {(it.charge_now + it.deferred_provider) > 0 && (
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-600 inline-flex items-center gap-1">
+                      <Wallet className="h-3 w-3 text-emerald-600" />
+                      Coparticipação · cobrar do tutor
+                      {it.deferred_provider > 0 && (
+                        <em className="text-[9px] text-slate-400">(Petlove cobra no cartão)</em>
+                      )}
+                    </span>
+                    <strong className="tabular-nums text-emerald-800">
+                      {BRL(it.charge_now + it.deferred_provider)}
+                    </strong>
+                  </div>
+                )}
+                {hasReceivable && (
+                  <div className="flex items-center justify-between text-xs opacity-90">
+                    <span className="text-slate-600 inline-flex items-center gap-1">
+                      <FileClock className="h-3 w-3 text-indigo-600" />
+                      Repasse Petlove · contas a receber
+                      <em className="text-[9px] text-slate-400">(informativo — não cobrar)</em>
+                    </span>
+                    <strong className="tabular-nums text-indigo-800">
+                      {BRL(it.receivable)}
+                    </strong>
+                  </div>
+                )}
+              </div>
+            </li>
+          )
+        })}
       </ul>
 
       <footer className="px-5 py-2 bg-sky-50/60 border-t border-sky-100 text-[10px] text-sky-700 flex items-center justify-between gap-3">

@@ -15,6 +15,7 @@ import {
 } from '@/lib/actions/stock'
 import type { GlobalCatalogSuggestion } from '@/lib/actions/catalog'
 import { searchGlobalCatalog } from '@/lib/actions/catalog'
+import { suggestDefaultInsurancePrice } from '@/lib/actions/insurance-pricing'
 import StockCsvImporter from './StockCsvImporter'
 import { EnrichNcmModal } from './EnrichNcmModal'
 import PharmacyCatalogQuickAdd from './PharmacyCatalogQuickAdd'
@@ -94,18 +95,22 @@ interface ItemForm {
   min_quantity: string; unit_price: string; is_controlled: boolean
   brand: string; sku: string; barcode: string; batch_number: string
   expiry_date: string; supplier: string
+  /** Preço base do serviço quando o pet tem convênio. Vazio = sem default. */
+  default_insurance_price: string
 }
 
 const EMPTY_PRODUCT_FORM: ItemForm = {
   name: '', category: 'medication', quantity: '0', unit: 'un',
   min_quantity: '0', unit_price: '0', is_controlled: false,
   brand: '', sku: '', barcode: '', batch_number: '', expiry_date: '', supplier: '',
+  default_insurance_price: '',
 }
 
 const EMPTY_SERVICE_FORM: ItemForm = {
   name: '', category: 'service', quantity: '0', unit: 'un',
   min_quantity: '0', unit_price: '0', is_controlled: false,
   brand: '', sku: '', barcode: '', batch_number: '', expiry_date: '', supplier: '',
+  default_insurance_price: '',
 }
 
 function formFromItem(item: StockItemV2): ItemForm {
@@ -116,6 +121,7 @@ function formFromItem(item: StockItemV2): ItemForm {
     is_controlled: item.is_controlled, brand: item.brand ?? '', sku: item.sku ?? '',
     barcode: item.barcode ?? '', batch_number: item.batch_number ?? '',
     expiry_date: item.expiry_date ?? '', supplier: item.supplier ?? '',
+    default_insurance_price: item.default_insurance_price === null ? '' : String(item.default_insurance_price),
   }
 }
 
@@ -981,6 +987,9 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
       batch_number:  form.batch_number || null,
       expiry_date:   form.expiry_date || null,
       supplier:      form.supplier || null,
+      default_insurance_price: form.default_insurance_price.trim() === ''
+        ? null
+        : Number(form.default_insurance_price.replace(',', '.')),
     }
 
     if (isNew) {
@@ -1094,12 +1103,22 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
 
           {/* Preço para serviços */}
           {isService && (
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Preço (R$)</label>
-              <input type="number" min="0" step="0.01" value={form.unit_price} onChange={e => set('unit_price', e.target.value)}
-                placeholder="0.00"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500" />
-            </div>
+            <>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Preço Particular (R$)</label>
+                <input type="number" min="0" step="0.01" value={form.unit_price} onChange={e => set('unit_price', e.target.value)}
+                  placeholder="0.00"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500" />
+                <p className="text-[10px] text-slate-400 mt-1">Valor cheio cobrado quando o pet NÃO tem convênio.</p>
+              </div>
+
+              {/* Item 5 (2026-06-02): preço base de convênio + sugestão IA */}
+              <DefaultInsurancePriceField
+                stockItemId={item?.id ?? null}
+                value={form.default_insurance_price}
+                onChange={v => set('default_insurance_price', v)}
+              />
+            </>
           )}
 
           {/* Fornecedor */}
@@ -1318,6 +1337,68 @@ function AdjustForm({ item, onDone, onError }: {
         className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 transition-colors disabled:opacity-60">
         {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Confirmar Ajuste
       </button>
+    </div>
+  )
+}
+
+// ─── Item 5 (2026-06-02): Campo de preço base de convênio ──────────────────
+function DefaultInsurancePriceField({
+  stockItemId, value, onChange,
+}: {
+  stockItemId: string | null
+  value:       string
+  onChange:    (v: string) => void
+}) {
+  const [loading, setLoading]     = useState(false)
+  const [suggestion, setSuggestion] = useState<{ suggested: number | null; sample_size: number; min: number | null; max: number | null } | null>(null)
+
+  async function handleSuggest() {
+    if (!stockItemId) return
+    setLoading(true)
+    const res = await suggestDefaultInsurancePrice(stockItemId)
+    setLoading(false)
+    if ('error' in res) return
+    setSuggestion(res)
+    if (res.suggested !== null) onChange(String(res.suggested))
+  }
+
+  return (
+    <div className="rounded-lg border border-indigo-200 bg-indigo-50/40 p-3 space-y-2">
+      <label className="flex items-center justify-between text-xs font-semibold text-indigo-800">
+        <span>Preço Base de Convênio (R$)</span>
+        {stockItemId && (
+          <button
+            type="button"
+            onClick={handleSuggest}
+            disabled={loading}
+            className="inline-flex items-center gap-1 rounded-md bg-white border border-indigo-200 px-2 py-0.5 text-[10px] font-bold text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
+            title="Sugere baseado no histórico de patient_custom_prices"
+          >
+            {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : '✨'} Sugerir do histórico
+          </button>
+        )}
+      </label>
+      <input
+        type="number" min="0" step="0.01"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder="Em branco = sem default (operador define no consultório)"
+        className="w-full rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+      />
+      {suggestion && (
+        <p className="text-[10px] text-indigo-700">
+          {suggestion.suggested === null
+            ? `Sem histórico de remessas Petlove para este serviço ainda.`
+            : `Média ponderada de ${suggestion.sample_size} pet${suggestion.sample_size === 1 ? '' : 's'}: R$ ${suggestion.suggested.toFixed(2)}` +
+              (suggestion.min !== null && suggestion.max !== null
+                ? ` · variação R$ ${suggestion.min.toFixed(2)} a R$ ${suggestion.max.toFixed(2)}`
+                : '')
+          }
+        </p>
+      )}
+      <p className="text-[10px] text-slate-500">
+        Total acordado com a Petlove (= coparticipação tutor + repasse plano). Quando preenchido, é usado como base sempre que o pet tem convênio. Sem default, o sistema cobra o particular e pede o split manual no consultório.
+      </p>
     </div>
   )
 }

@@ -35,6 +35,12 @@ export interface ConsultationServiceLine {
   cancelled_by:    string | null
   cancel_reason:   string | null
   created_at:      string
+  // Split convênio (Item 5, 2026-06-02). Preenchidos quando o pet tem
+  // convênio ativo no momento da inclusão OU quando o vet edita inline.
+  // null = serviço particular OU pet sem convênio.
+  insurance_total_snapshot: number | null
+  copay_snapshot:           number | null
+  repass_snapshot:          number | null
 }
 
 // ─── Auth helper ─────────────────────────────────────────────────────────────
@@ -132,21 +138,61 @@ export async function addServiceToConsultation(
     .single()
   if (!item) return { error: 'Item não encontrado na clínica.' }
 
-  const price = payload.price_override !== undefined && payload.price_override !== null
-    ? payload.price_override
-    : Number(item.unit_price ?? 0)
+  // Busca patient_id para resolver pricing com split convênio (Item 5, 2026-06-02).
+  const { data: consult } = await admin
+    .from('consultations')
+    .select('patient_id')
+    .eq('id', payload.consultation_id)
+    .eq('clinic_id', ctx.clinicId)
+    .maybeSingle()
+
+  // Resolve split copay/repass quando pet tem convênio. Sem convênio = particular puro.
+  // Override manual (price_override) tem prioridade absoluta sobre tudo.
+  let price: number
+  let insurance_total_snapshot: number | null = null
+  let copay_snapshot:           number | null = null
+  let repass_snapshot:          number | null = null
+
+  if (payload.price_override !== undefined && payload.price_override !== null) {
+    price = payload.price_override
+  } else if (consult?.patient_id) {
+    const { resolveServicePricing } = await import('@/lib/actions/insurance-pricing')
+    const pricing = await resolveServicePricing(consult.patient_id, payload.stock_item_id)
+    if ('error' in pricing) {
+      price = Number(item.unit_price ?? 0)
+    } else if (pricing.insurance && pricing.insurance.source === 'custom') {
+      // Split completo cadastrado: respeita o total do convênio
+      price = pricing.insurance.total
+      insurance_total_snapshot = pricing.insurance.total
+      copay_snapshot           = pricing.insurance.copay
+      repass_snapshot          = pricing.insurance.repass
+    } else if (pricing.insurance && pricing.insurance.source === 'default') {
+      // Default cadastrado no serviço, mas split não — total já vai com default,
+      // copay/repass ficam null aguardando vet preencher no consultório
+      price = pricing.insurance.total
+      insurance_total_snapshot = pricing.insurance.total
+    } else {
+      // Sem split cadastrado: particular puro (fallback decidido pelo PO)
+      price = pricing.unit_price
+    }
+  } else {
+    price = Number(item.unit_price ?? 0)
+  }
 
   const { data, error } = await admin
     .from('consultation_services')
     .insert({
-      clinic_id:       ctx.clinicId,
-      consultation_id: payload.consultation_id,
-      stock_item_id:   payload.stock_item_id,
-      name_snapshot:   item.name as string,
-      price_snapshot:  price,
-      quantity:        payload.quantity ?? 1,
-      added_at_stage:  payload.added_at_stage ?? 'reception',
-      added_by:        ctx.userId,
+      clinic_id:                ctx.clinicId,
+      consultation_id:          payload.consultation_id,
+      stock_item_id:            payload.stock_item_id,
+      name_snapshot:            item.name as string,
+      price_snapshot:           price,
+      quantity:                 payload.quantity ?? 1,
+      added_at_stage:           payload.added_at_stage ?? 'reception',
+      added_by:                 ctx.userId,
+      insurance_total_snapshot,
+      copay_snapshot,
+      repass_snapshot,
     })
     .select('id')
     .single()
@@ -241,7 +287,7 @@ export async function listConsultationServices(
   const admin = createAdminClient()
   const { data, error } = await admin
     .from('consultation_services')
-    .select('id, consultation_id, stock_item_id, name_snapshot, price_snapshot, quantity, added_at_stage, added_by, cancelled_at, cancelled_by, cancel_reason, created_at')
+    .select('id, consultation_id, stock_item_id, name_snapshot, price_snapshot, quantity, added_at_stage, added_by, cancelled_at, cancelled_by, cancel_reason, created_at, insurance_total_snapshot, copay_snapshot, repass_snapshot')
     .eq('clinic_id', ctx.clinicId)
     .eq('consultation_id', consultationId)
     .order('created_at', { ascending: true })
@@ -260,6 +306,9 @@ export async function listConsultationServices(
     cancelled_by:    (row.cancelled_by as string | null) ?? null,
     cancel_reason:   (row.cancel_reason as string | null) ?? null,
     created_at:      row.created_at as string,
+    insurance_total_snapshot: row.insurance_total_snapshot === null || row.insurance_total_snapshot === undefined ? null : Number(row.insurance_total_snapshot),
+    copay_snapshot:           row.copay_snapshot           === null || row.copay_snapshot           === undefined ? null : Number(row.copay_snapshot),
+    repass_snapshot:          row.repass_snapshot          === null || row.repass_snapshot          === undefined ? null : Number(row.repass_snapshot),
   }))
 }
 

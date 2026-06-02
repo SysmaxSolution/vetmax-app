@@ -1504,10 +1504,11 @@ export default function ConsultationDetail({
           </div>
         )}
 
-        {/* ── Serviços lançados (refator 2026-05-25) ───────────────────── */}
+        {/* ── Serviços lançados (refator 2026-05-25 + split convênio 2026-06-02) ─ */}
         <ConsultationServicesPanel
           consultationId={consultation.id}
           isFinalized={isFinalized}
+          petHasInsurance={insuranceCard?.has_insurance === true}
           onChange={refreshHasService}
         />
 

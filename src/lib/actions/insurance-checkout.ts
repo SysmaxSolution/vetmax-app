@@ -51,7 +51,7 @@ export async function previewConsultationInsurance(
   //    para identificar o procedimento no catálogo de cobertura.
   const { data: items } = await supabase
     .from('invoice_items')
-    .select('id, description, external_procedure_name, quantity, total_price, invoices!inner(consultation_id)')
+    .select('id, description, external_procedure_name, quantity, total_price, coparticipation_value, insurance_status, invoices!inner(consultation_id)')
     .eq('invoices.consultation_id', consultationId)
 
   if (!items || items.length === 0) {
@@ -71,6 +71,34 @@ export async function previewConsultationInsurance(
   let hasInsurance = false
 
   for (const it of items) {
+    // ATALHO — Item 5 (2026-06-02): quando a invoice_items já carrega
+    // coparticipation_value (split decidido no consultório), ela é a fonte da
+    // verdade. Pula a heurística de catálogo: chargeNow = copay, receivable
+    // = total - copay. Não precisa de IA ou observed_repass.
+    const iAny = it as { coparticipation_value?: number | null; insurance_status?: string | null }
+    if (iAny.coparticipation_value !== null && iAny.coparticipation_value !== undefined) {
+      const copay      = Number(iAny.coparticipation_value)
+      const totalPrice = Number(it.total_price)
+      enriched.push({
+        invoice_item_id:   it.id,
+        description:       it.description,
+        quantity:          it.quantity,
+        total_price:       totalPrice,
+        coverage: {
+          status:        'covered',
+          message:       'Split definido no consultório',
+          badge:         'green',
+          copay_amount:  copay,
+          copay_charger: 'clinic',
+        },
+        charge_now:        Number(copay.toFixed(2)),
+        deferred_provider: 0,
+        receivable:        Number(Math.max(0, totalPrice - copay).toFixed(2)),
+      })
+      hasInsurance = true
+      continue
+    }
+
     // Preferimos external_procedure_name (já mapeado pelo conciliador) quando
     // existir — bate mais preciso com o catálogo. Fallback para description.
     const externalName = (it as { external_procedure_name?: string | null }).external_procedure_name
