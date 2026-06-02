@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  ArrowLeft, Loader2, ShieldCheck, AlertCircle, Check, Cpu, Calendar, Factory, Hash, ScrollText,
+  ArrowLeft, Loader2, ShieldCheck, AlertCircle, Check, Cpu, Calendar, Factory, Hash, ScrollText, Stethoscope,
 } from 'lucide-react'
 import {
   saveMicrochipAndFinalize,
@@ -67,8 +67,7 @@ export default function MicrochipPanel({ consultation, insuranceCard }: Props) {
     })()
   }, [])
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
+  function submit(mode: 'finalize' | 'continue') {
     setError(null); setSuccess(null); setWarning(null)
     startTransition(async () => {
       const res = await saveMicrochipAndFinalize({
@@ -78,12 +77,19 @@ export default function MicrochipPanel({ consultation, insuranceCard }: Props) {
         batch_number:    batchNumber.trim() || null,
         expiry_date:     expiryDate || null,
         notes:           notes.trim() || null,
+        mode,
       })
       if ('error' in res) { setError(res.error); return }
       if (res.warning) setWarning(res.warning)
-      setSuccess(`Microchipagem registrada para ${patient.name}. Atendimento concluído.`)
-      // Redireciona pra recepção em 2s — caixa já tem o lançamento pendente
-      setTimeout(() => router.push('/dashboard/reception'), 2000)
+      if (res.mode === 'finalize') {
+        setSuccess(`Microchipagem registrada para ${patient.name}. Atendimento concluído.`)
+        setTimeout(() => router.push('/dashboard/reception'), 2000)
+      } else {
+        setSuccess(`Microchipagem registrada. Abrindo prontuário clínico de ${patient.name}…`)
+        // Recarrega a página: visit_reason mudou para 'consultation', ConsultationDetail
+        // vai renderizar o fluxo completo (anamnese/prescrição/procedimentos).
+        setTimeout(() => router.refresh(), 800)
+      }
     })
   }
 
@@ -134,7 +140,7 @@ export default function MicrochipPanel({ consultation, insuranceCard }: Props) {
       )}
 
       {/* Form principal */}
-      <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <form onSubmit={e => { e.preventDefault(); submit('finalize') }} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="border-b border-slate-100 px-5 py-3 bg-slate-50/60 flex items-center gap-2">
           <ShieldCheck className="h-4 w-4 text-indigo-600" />
           <h2 className="text-sm font-semibold text-slate-800">Dados do Chip Implantado</h2>
@@ -224,15 +230,36 @@ export default function MicrochipPanel({ consultation, insuranceCard }: Props) {
           )}
 
           {!isFinalized && (
-            <button
-              type="submit"
-              disabled={pending || serviceInfo.status !== 'ok' || !!success}
-              className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 py-3 text-sm font-bold text-white disabled:opacity-50 transition-colors shadow-sm"
-            >
-              {pending
-                ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando e finalizando…</>
-                : <><ShieldCheck className="h-4 w-4" /> Salvar e Finalizar Atendimento</>}
-            </button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button
+                type="submit"
+                disabled={pending || serviceInfo.status !== 'ok' || !!success}
+                title="Encerra o atendimento e lança no caixa. Use quando o pet só veio para microchipar."
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 py-3 text-sm font-bold text-white disabled:opacity-50 transition-colors shadow-sm"
+              >
+                {pending
+                  ? <><Loader2 className="h-4 w-4 animate-spin" /> Processando…</>
+                  : <><ShieldCheck className="h-4 w-4" /> Salvar e dar alta</>}
+              </button>
+              <button
+                type="button"
+                onClick={() => submit('continue')}
+                disabled={pending || serviceInfo.status !== 'ok' || !!success}
+                title="Salva o chip + serviço e abre o prontuário clínico completo para você seguir com medicação/procedimento."
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 py-3 text-sm font-bold text-white disabled:opacity-50 transition-colors shadow-sm"
+              >
+                {pending
+                  ? <><Loader2 className="h-4 w-4 animate-spin" /> Processando…</>
+                  : <><Stethoscope className="h-4 w-4" /> Salvar e seguir com consulta</>}
+              </button>
+            </div>
+          )}
+          {!isFinalized && (
+            <p className="text-[11px] text-slate-500 text-center">
+              <strong>Dar alta:</strong> encerra o atendimento, lança no caixa e volta à recepção.
+              {' · '}
+              <strong>Seguir com consulta:</strong> abre o prontuário clínico para medicação/procedimento; fatura sai só ao finalizar a consulta.
+            </p>
           )}
 
           {isFinalized && (

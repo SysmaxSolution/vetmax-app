@@ -73,6 +73,14 @@ export interface SaveMicrochipInput {
   batch_number?:  string | null
   expiry_date?:   string | null   // ISO yyyy-mm-dd
   notes?:         string | null
+  /**
+   * 'finalize' (default): fecha consulta + gera invoice no caixa.
+   * 'continue': salva chip + serviço, muda visit_reason p/ 'consultation' e
+   *             deixa status='in_progress' para o vet seguir o atendimento
+   *             clínico no consultório (medicação, procedimento, etc).
+   *             A fatura será gerada pelo fluxo normal ao finalizar a consulta.
+   */
+  mode?:          'finalize' | 'continue'
 }
 
 /**
@@ -87,7 +95,10 @@ export async function saveMicrochipAndFinalize(
   microchip_id:string
   invoice_id?: string
   warning?:    string
+  /** 'finalize' = consulta encerrada; 'continue' = vet segue no consultório. */
+  mode:        'finalize' | 'continue'
 } | { error: string }> {
+  const mode = input.mode ?? 'finalize'
   const ctx = await getCtx()
   if ('error' in ctx) return ctx
   const { admin, clinic_id, user_id } = ctx
@@ -159,8 +170,11 @@ export async function saveMicrochipAndFinalize(
     return { error: 'Microchip salvo, mas falha ao lançar serviço no caixa: ' + svcRes.error }
   }
 
-  // 6) Encerra a consulta DIRETO via SQL (vet_notes auto, sem passar pelo
-  //    finalizeConsultation que exigiria UI de prontuário CFMV).
+  // 6) Atualiza a consulta. Difere por modo:
+  //    - 'finalize': fecha (status='completed', is_reviewed_by_vet=true) + vet_notes auto
+  //    - 'continue': mantém aberta (status='in_progress'), muda visit_reason='consultation'
+  //                  para o ConsultationDetail renderizar o prontuário completo. vet_notes
+  //                  recebe a nota da microchipagem como rascunho — vet pode editar.
   const autoNote = [
     'Microchipagem realizada via fluxo simplificado.',
     chipNumber                   && `Chip nº ${chipNumber}.`,
@@ -169,39 +183,49 @@ export async function saveMicrochipAndFinalize(
     input.expiry_date            && `Validade: ${input.expiry_date}.`,
   ].filter(Boolean).join(' ')
 
+  const updatePayload: Record<string, unknown> = {
+    vet_notes:  autoNote,
+    vet_id:     user_id,
+    updated_at: new Date().toISOString(),
+  }
+  if (mode === 'finalize') {
+    updatePayload.status             = 'completed'
+    updatePayload.is_reviewed_by_vet = true
+  } else {
+    updatePayload.status        = 'in_progress'
+    updatePayload.visit_reason  = 'consultation'
+  }
+
   const { error: closeErr } = await admin
     .from('consultations')
-    .update({
-      vet_notes:            autoNote,
-      vet_id:               user_id,
-      status:               'completed',
-      is_reviewed_by_vet:   true,
-      updated_at:           new Date().toISOString(),
-    })
+    .update(updatePayload)
     .eq('id', consult.id)
     .eq('clinic_id', clinic_id)
   if (closeErr) {
     return {
       success:      true,
       microchip_id: rec.id as string,
-      warning:      'Microchip e serviço gravados, mas a consulta não fechou automaticamente: ' + closeErr.message,
+      mode,
+      warning:      'Microchip e serviço gravados, mas a consulta não atualizou automaticamente: ' + closeErr.message,
     }
   }
 
-  // 7) Gera fatura + entrada PENDENTE no Caixa Central (split convênio aplicado
-  //    pelo billing/insurance-checkout). Se já existir invoice, generateInvoice
-  //    falha — tratamos como warning (não-bloqueante para o operador).
-  const inv = await generateInvoice(consult.id)
+  // 7) Fatura: só no modo 'finalize'. No 'continue', o vet vai gerar pelo fluxo
+  //    normal ao finalizar a consulta clínica.
   let invoiceId: string | undefined
   let invoiceWarn: string | undefined
-  if ('error' in inv) {
-    invoiceWarn = 'Consulta fechada, mas geração da fatura falhou: ' + inv.error
-  } else {
-    invoiceId = inv.id
+  if (mode === 'finalize') {
+    const inv = await generateInvoice(consult.id)
+    if ('error' in inv) {
+      invoiceWarn = 'Consulta fechada, mas geração da fatura falhou: ' + inv.error
+    } else {
+      invoiceId = inv.id
+    }
   }
 
   revalidatePath('/dashboard/reception')
   revalidatePath('/dashboard/vet')
+  revalidatePath(`/dashboard/vet/${consult.id}`)
   revalidatePath('/dashboard/cashier')
   revalidatePath(`/dashboard/patients/${patient_id}`)
 
@@ -210,6 +234,7 @@ export async function saveMicrochipAndFinalize(
     microchip_id: rec.id as string,
     invoice_id:   invoiceId,
     warning:      invoiceWarn,
+    mode,
   }
 }
 
