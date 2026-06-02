@@ -74,9 +74,17 @@ function ExamCard({
           {item.tutor.phone && (
             <span className="text-xs text-slate-400">{item.tutor.phone}</span>
           )}
-          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
-            {VISIT_REASON_LABELS[item.visit_reason] ?? item.visit_reason}
-          </span>
+          {item.exam_types.length > 0 ? (
+            item.exam_types.map(t => (
+              <span key={t} className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">
+                {t}
+              </span>
+            ))
+          ) : (
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+              {VISIT_REASON_LABELS[item.visit_reason] ?? item.visit_reason}
+            </span>
+          )}
         </div>
         <div className="mt-1 flex items-center gap-1.5">
           <Clock className="h-3.5 w-3.5 text-amber-500" />

@@ -11,6 +11,7 @@ export type ExamQueueItem = {
   status:       string
   visit_reason: string
   created_at:   string
+  exam_types:   string[]
   patient: {
     id:            string
     name:          string
@@ -43,6 +44,7 @@ export async function getExamsQueue(): Promise<ExamQueueItem[] | { error: string
     .from('consultations')
     .select(`
       id, status, visit_reason, created_at,
+      exam_requests ( exam_type ),
       patients ( id, name, species, breed, photo_url, behavior_tags,
         tutors ( name, phone )
       )
@@ -58,6 +60,7 @@ export async function getExamsQueue(): Promise<ExamQueueItem[] | { error: string
     status:       c.status,
     visit_reason: c.visit_reason,
     created_at:   c.created_at,
+    exam_types:   Array.isArray(c.exam_requests) ? c.exam_requests.map((r: any) => r.exam_type).filter(Boolean) : [],
     patient: {
       id:            c.patients?.id      ?? '',
       name:          c.patients?.name      ?? '—',
@@ -255,6 +258,7 @@ export async function getExamRequests(): Promise<ExamRequest[]> {
       `)
       .eq('clinic_id', profile.clinic_id)
       .in('status', ['pending', 'in_progress'])
+      .is('consultation_id', null)
       .order('created_at', { ascending: true })
 
     if (error || !data) return []
