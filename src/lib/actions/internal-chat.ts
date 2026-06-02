@@ -291,6 +291,21 @@ export async function markChatRead(chatId: string): Promise<{ success: true } | 
   return { success: true }
 }
 
+export async function markAllChatsRead(): Promise<{ success: true } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('chat_participants')
+    .update({ last_read_at: new Date().toISOString() })
+    .eq('user_id', ctx.user_id)
+    .eq('clinic_id', ctx.clinic_id)
+    .is('left_at', null)
+  if (error) return { error: error.message }
+  return { success: true }
+}
+
 // ─── Iniciar chat ─────────────────────────────────────────────────────────────
 
 export async function searchUsersForChat(query: string): Promise<ChatUserOption[] | { error: string }> {

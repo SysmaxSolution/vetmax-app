@@ -428,3 +428,59 @@ export async function moveDirectToVet(
   revalidatePath('/dashboard/vet')
   return null
 }
+
+// ─── Reagendar consulta para data futura ──────────────────────────────────────
+export async function rescheduleConsultation(
+  consultationId: string,
+  newScheduledDate: string,
+): Promise<{ error: string } | null> {
+  if (!newScheduledDate) return { error: 'Data de reagendamento obrigatória.' }
+  const parsed = new Date(newScheduledDate)
+  if (Number.isNaN(parsed.getTime())) return { error: 'Data inválida.' }
+  if (parsed.getTime() < Date.now() - 60_000) {
+    return { error: 'A nova data deve ser futura.' }
+  }
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const admin = createAdminClient()
+  const { data: prof } = await admin.from('profiles').select('clinic_id').eq('id', user.id).single()
+  if (!prof?.clinic_id) return { error: 'Perfil sem clínica.' }
+
+  const { data: current } = await admin
+    .from('consultations')
+    .select('status')
+    .eq('id', consultationId)
+    .eq('clinic_id', prof.clinic_id)
+    .single()
+  if (!current) return { error: 'Atendimento não encontrado.' }
+  const allowed = ['reception', 'scheduled', 'scheduled_future']
+  if (!allowed.includes(current.status)) {
+    return { error: `Não é possível reagendar um atendimento em status "${current.status}".` }
+  }
+
+  const { error } = await admin
+    .from('consultations')
+    .update({
+      status:         'scheduled_future',
+      scheduled_date: parsed.toISOString(),
+      updated_at:     new Date().toISOString(),
+    })
+    .eq('id', consultationId)
+    .eq('clinic_id', prof.clinic_id)
+
+  if (error) return { error: 'Erro ao reagendar: ' + error.message }
+
+  await logAudit({
+    action: 'RESCHEDULE_CONSULTATION',
+    entity_type: 'consultations',
+    entity_id: consultationId,
+    details: { new_scheduled_date: parsed.toISOString() },
+  })
+
+  revalidatePath('/dashboard/reception')
+  revalidatePath('/dashboard/reception/calendar')
+  return null
+}

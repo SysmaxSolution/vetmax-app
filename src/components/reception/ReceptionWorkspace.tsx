@@ -23,6 +23,7 @@ import type { VisitReason, PatientSpecies } from '@/types'
 import { getPatientById, type PatientsListItem } from '@/lib/actions/timeline'
 import QuickPetRegisterModal from './QuickPetRegisterModal'
 import ContextualChatPanel from '@/components/internal-chat/ContextualChatPanel'
+import QueueActionModal from './QueueActionModal'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const SPECIES_LABELS: Record<string, { label: string; emoji: string; color: string }> = {
@@ -253,7 +254,7 @@ const calcAge = formatPetAge
 
 // ─── Queue Card ───────────────────────────────────────────────────────────────
 function QueueCard({
-  item, onMoveToTriage, triageActive, onOpenPet, loadingPetId, onOpenChat,
+  item, onMoveToTriage, triageActive, onOpenPet, loadingPetId, onOpenChat, onCancel, onReschedule,
 }: {
   item: ReceptionQueueItem
   onMoveToTriage: (id: string) => void
@@ -261,6 +262,8 @@ function QueueCard({
   onOpenPet: (patientId: string) => void
   loadingPetId: string | null
   onOpenChat?: (consultationId: string, patientName: string) => void
+  onCancel: (item: ReceptionQueueItem) => void
+  onReschedule: (item: ReceptionQueueItem) => void
 }) {
   const hasPendingPayment = item.payment_status === 'pending'
   const age = calcAge(item.patient.birth_date ?? null)
@@ -349,6 +352,24 @@ function QueueCard({
             💬 Chat
           </button>
         )}
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            title="Reagendar para outra data/horário"
+            onClick={(e) => { e.stopPropagation(); onReschedule(item) }}
+            className="flex items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 transition-colors"
+          >
+            📅 Reagendar
+          </button>
+          <button
+            type="button"
+            title="Cancelar este atendimento"
+            onClick={(e) => { e.stopPropagation(); onCancel(item) }}
+            className="flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 transition-colors"
+          >
+            ✕ Cancelar
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -417,6 +438,12 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
   } | null>(null)
   const [newApptPet, setNewApptPet] = useState<{
     id: string; name: string; species: string; tutorId: string; tutorName: string
+  } | null>(null)
+  const [queueAction, setQueueAction] = useState<{
+    mode: 'cancel' | 'reschedule'
+    consultationId: string
+    patientName: string
+    tutorName: string
   } | null>(null)
   const [isPending, startTransition] = useTransition()
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -869,6 +896,18 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
                   onOpenPet={handleOpenPet}
                   loadingPetId={loadingPetEditId}
                   onOpenChat={userId ? (cId, pName) => setActiveChat({ consultationId: cId, patientName: pName }) : undefined}
+                  onCancel={it => setQueueAction({
+                    mode: 'cancel',
+                    consultationId: it.id,
+                    patientName: it.patient.name,
+                    tutorName: it.tutor.name,
+                  })}
+                  onReschedule={it => setQueueAction({
+                    mode: 'reschedule',
+                    consultationId: it.id,
+                    patientName: it.patient.name,
+                    tutorName: it.tutor.name,
+                  })}
                 />
               ))}
             </div>
@@ -1043,6 +1082,31 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
           userId={userId}
           userName={userName ?? 'Recepção'}
           patientName={activeChat.patientName}
+        />
+      )}
+
+      {/* Cancelar ou Reagendar atendimento da fila */}
+      {queueAction && (
+        <QueueActionModal
+          mode={queueAction.mode}
+          consultationId={queueAction.consultationId}
+          patientName={queueAction.patientName}
+          tutorName={queueAction.tutorName}
+          onClose={() => setQueueAction(null)}
+          onSuccess={mode => {
+            const id = queueAction.consultationId
+            setQueueAction(null)
+            setQueue(q => q.filter(c => c.id !== id))
+            showToast(
+              mode === 'cancel'
+                ? 'Atendimento cancelado.'
+                : 'Atendimento reagendado.',
+            )
+            startTransition(async () => {
+              const historyFresh = await getReceptionHistory()
+              if (!('error' in historyFresh)) setHistory(historyFresh)
+            })
+          }}
         />
       )}
     </div>

@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Bell, MessageCircle, MessageSquare, BedDouble, Volume2, VolumeX } from 'lucide-react'
-import { getNotificationCounts, type NotificationCounts } from '@/lib/actions/internal-chat'
+import { Bell, MessageCircle, MessageSquare, BedDouble, Volume2, VolumeX, CheckCheck } from 'lucide-react'
+import { getNotificationCounts, markAllChatsRead, type NotificationCounts } from '@/lib/actions/internal-chat'
 import { createClient } from '@/lib/supabase/client'
 
 // ─── Web Audio chime (dois tons — sem arquivo de áudio) ──────────────────────
@@ -61,6 +61,7 @@ export default function NotificationBell({ clinicId }: { clinicId: string }) {
   const [soundOn, setSoundOn]     = useState(true)
   const [ringing, setRinging]     = useState(false)
   const [notifPerm, setNotifPerm] = useState<NotificationPermission>('default')
+  const [marking, setMarking]     = useState(false)
 
   const wrapperRef       = useRef<HTMLDivElement | null>(null)
   const prevChatUnread   = useRef(-1)   // -1 = primeira carga (não dispara som)
@@ -143,6 +144,18 @@ export default function NotificationBell({ clinicId }: { clinicId: string }) {
     return () => document.removeEventListener('mousedown', onDown)
   }, [open])
 
+  // ── Marcar todas como lidas (apenas chat — WhatsApp/Internação são filas ativas) ─
+  async function handleMarkAllRead() {
+    if (marking) return
+    setMarking(true)
+    const res = await markAllChatsRead()
+    if (!('error' in res)) {
+      prevChatUnread.current = 0
+      setCounts(c => ({ ...c, chat_unread: 0, total: c.whatsapp_unread + c.hospitalization_alerts }))
+    }
+    setMarking(false)
+  }
+
   const hasChatUnread = counts.chat_unread > 0
 
   return (
@@ -190,6 +203,19 @@ export default function NotificationBell({ clinicId }: { clinicId: string }) {
                 <p className="text-xs text-slate-500">{counts.total} pendente{counts.total === 1 ? '' : 's'}</p>
               </div>
               <div className="flex items-center gap-1">
+                {/* Marcar todas as mensagens de chat como lidas */}
+                {hasChatUnread && (
+                  <button
+                    type="button"
+                    title="Marcar mensagens de chat como lidas"
+                    onClick={handleMarkAllRead}
+                    disabled={marking}
+                    className="flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium text-violet-700 hover:bg-violet-50 transition-colors disabled:opacity-50"
+                  >
+                    <CheckCheck className="h-3.5 w-3.5" />
+                    {marking ? 'Marcando...' : 'Marcar como lidas'}
+                  </button>
+                )}
                 {/* Toggle de som */}
                 <button
                   type="button"
