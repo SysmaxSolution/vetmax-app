@@ -49,7 +49,7 @@ import type { Attachment } from '@/lib/actions/attachments'
 import type { FlowConfig } from '@/lib/actions/clinic-settings'
 import { getClinicVoiceTriggers, updateClinicVoiceTriggers } from '@/lib/actions/clinic-settings'
 import { useAiTranscriptionMode } from '@/components/providers/ClinicConfigProvider'
-import ContextualChatPanel from '@/components/internal-chat/ContextualChatPanel'
+import { useSetChatContext } from '@/components/providers/ChatContextProvider'
 
 // ─── Labels ──────────────────────────────────────────────────────────────────
 
@@ -152,6 +152,9 @@ export default function ConsultationDetail({
   const router = useRouter()
   const aiMode = useAiTranscriptionMode()
   const { patient, tutor, vital_signs, past_consultations } = consultation
+
+  // Registra contexto de chat para esta consulta
+  useSetChatContext({ type: 'procedure', entityType: 'consultation', entityId: consultation.id, patientName: consultation.patient.name })
 
   // Estado do prontuário
   const [vetNotes, setVetNotes] = useState(consultation.vet_notes ?? '')
@@ -2297,17 +2300,7 @@ export default function ConsultationDetail({
         </div>
       )}
 
-      {/* Chat contextual do atendimento */}
-      {clinicId && currentUserId && (
-        <ContextualChatPanel
-          entityType="consultation"
-          entityId={consultation.id}
-          clinicId={clinicId}
-          userId={currentUserId}
-          userName="Médico Veterinário"
-          patientName={consultation.patient.name}
-        />
-      )}
+      {/* Chat contextual gerenciado pelo FloatingChatWindow via ChatContextProvider */}
     </>
   )
 }

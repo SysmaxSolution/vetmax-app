@@ -37,6 +37,7 @@ import CoverageChip from '@/components/vet/CoverageChip'
 import { useNativeKeepAwake } from '@/hooks/useNativeKeepAwake'
 import { getClinicVoiceTriggers, updateClinicVoiceTriggers } from '@/lib/actions/clinic-settings'
 import { useAiTranscriptionMode } from '@/components/providers/ClinicConfigProvider'
+import { useSetChatContext } from '@/components/providers/ChatContextProvider'
 import VaccineStatusBadges from '@/components/vet/VaccineStatusBadges'
 import { BehaviorTagsBadges } from '@/components/ui/BehaviorTagsBadges'
 import WhatsAppNotificationModal from '@/components/whatsapp/WhatsAppNotificationModal'
@@ -78,6 +79,10 @@ export default function TriageForm({
 }: TriageFormProps) {
   const router = useRouter()
   const aiMode = useAiTranscriptionMode()
+
+  // Registra contexto de chat para esta triagem
+  useSetChatContext({ type: 'procedure', entityType: 'consultation', entityId: consultation.id, patientName: consultation.patient.name })
+
   const [isLoading, setIsLoading] = useState(false)
   const [showWhatsApp, setShowWhatsApp] = useState(false)
   /** Quando o usuário disser "sim/enviar/pode" por voz após o save, marcamos

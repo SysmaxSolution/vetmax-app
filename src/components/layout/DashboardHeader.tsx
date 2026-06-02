@@ -21,6 +21,7 @@ import { setSurgeryMode } from '@/lib/actions/surgery-mode'
 import { getTabTheme, getModuleFromPath, MODULE_THEME } from '@/lib/module-theme'
 import { useUpgradeModal } from '@/components/upgrade/UpgradeProvider'
 import type { UpgradeFeatureKey } from '@/components/upgrade/UpgradeModal'
+import ChatContextButton from '@/components/internal-chat/ChatContextButton'
 
 /**
  * Módulos que, em vez de simplesmente sumirem do menu para clínicas Free,
@@ -258,6 +259,7 @@ export default function DashboardHeader({
 
           <div className="flex items-center gap-3">
             <OmnisearchTrigger />
+            <ChatContextButton />
             <NotificationBell clinicId={clinicId} />
 
             {isSysmax && (

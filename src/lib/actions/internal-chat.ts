@@ -6,7 +6,7 @@ import { revalidatePath } from 'next/cache'
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
-export type ChatKind = 'direct' | 'group' | 'consultation' | 'hospitalization' | 'surgery'
+export type ChatKind = 'direct' | 'group' | 'consultation' | 'hospitalization' | 'surgery' | 'channel'
 export type ChatEntityType = 'consultation' | 'hospitalization' | 'surgery'
 
 export interface ChatSummary {
@@ -655,6 +655,92 @@ export async function uploadChatAttachment(
   if (attErr) return { error: 'Falha ao anexar: ' + attErr.message }
 
   return { message_id: msg.id as string, chat_id: chatId }
+}
+
+// ─── Canal de módulo global (kind='channel') ──────────────────────────────────
+
+/**
+ * Busca (ou cria) o canal global de um módulo do sistema identificado por
+ * modulo_contexto (ex: 'caixa', 'recepcao'). Adiciona o usuário como
+ * participante automaticamente. Retorna chat_id + msgs + não-lidas.
+ */
+export async function getOrCreateChannelChat(
+  modulo_contexto: string,
+): Promise<EntityChatData | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+
+  if (!modulo_contexto?.trim()) return { error: 'modulo_contexto obrigatório.' }
+
+  const admin = createAdminClient()
+
+  // 1) Busca canal existente
+  let { data: chat } = await admin
+    .from('chats')
+    .select('id')
+    .eq('clinic_id', ctx.clinic_id)
+    .eq('modulo_contexto', modulo_contexto)
+    .is('entity_id', null)
+    .maybeSingle()
+
+  // 2) Cria se não existir
+  if (!chat) {
+    const { data: created, error: createErr } = await admin
+      .from('chats')
+      .insert({
+        clinic_id:        ctx.clinic_id,
+        kind:             'channel',
+        modulo_contexto,
+        title:            `#${modulo_contexto}`,
+        created_by:       ctx.user_id,
+      })
+      .select('id')
+      .single()
+    if (createErr || !created) return { error: 'Falha ao criar canal: ' + (createErr?.message ?? '') }
+
+    // Mensagem de abertura
+    await admin.from('chat_messages').insert({
+      chat_id:   created.id,
+      clinic_id: ctx.clinic_id,
+      sent_by:   null,
+      kind:      'system',
+      body:      `Canal #${modulo_contexto} criado.`,
+      metadata:  { event: 'channel_created' },
+    })
+
+    chat = created
+  }
+
+  const chatId = chat.id as string
+
+  // 3) Garante participação
+  await admin.from('chat_participants').upsert(
+    { chat_id: chatId, clinic_id: ctx.clinic_id, user_id: ctx.user_id, role: 'member' },
+    { onConflict: 'chat_id,user_id', ignoreDuplicates: true },
+  )
+
+  // 4) Não-lidas
+  const { data: part } = await admin
+    .from('chat_participants')
+    .select('last_read_at')
+    .eq('chat_id', chatId)
+    .eq('user_id', ctx.user_id)
+    .maybeSingle()
+
+  const since = (part as any)?.last_read_at ?? new Date(0).toISOString()
+  const { count: unread } = await admin
+    .from('chat_messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('chat_id', chatId)
+    .gt('created_at', since)
+    .neq('sent_by', ctx.user_id)
+    .is('deleted_at', null)
+
+  // 5) Últimas 60 mensagens
+  const msgsResult = await listChatMessages(chatId, { limit: 60 })
+  const messages   = Array.isArray(msgsResult) ? msgsResult : []
+
+  return { chat_id: chatId, unread_count: unread ?? 0, messages }
 }
 
 // ─── Chat contextual por entidade clínica ─────────────────────────────────────

@@ -12,7 +12,7 @@ import { useClinicalVoiceAssistant } from '@/hooks/useClinicalVoiceAssistant'
 import { useNativeKeepAwake } from '@/hooks/useNativeKeepAwake'
 import { getClinicVoiceTriggers, updateClinicVoiceTriggers } from '@/lib/actions/clinic-settings'
 import { useAiTranscriptionMode } from '@/components/providers/ClinicConfigProvider'
-import ContextualChatPanel from '@/components/internal-chat/ContextualChatPanel'
+import { useSetChatContext } from '@/components/providers/ChatContextProvider'
 import { returnToVet, dischargeFromExams } from '@/lib/actions/exams'
 import { formatPetAge } from '@/lib/utils/pet-age'
 import { Toast } from '@/components/ui/toast'
@@ -77,6 +77,9 @@ export default function ExamDetail({
   const router = useRouter()
   const aiMode = useAiTranscriptionMode()
   const { patient, tutor, vital_signs } = consultation
+
+  // Registra contexto de chat para este exame (mesma sala da consulta)
+  useSetChatContext({ type: 'procedure', entityType: 'consultation', entityId: consultation.id, patientName: consultation.patient.name })
 
   // Exam notes for the vet
   const [examNotes,     setExamNotes]     = useState('')
@@ -676,17 +679,7 @@ export default function ExamDetail({
         </div>
       )}
 
-      {/* Chat contextual do atendimento — mesmo chat_id da consulta */}
-      {clinicId && currentUserId && (
-        <ContextualChatPanel
-          entityType="consultation"
-          entityId={consultation.id}
-          clinicId={clinicId}
-          userId={currentUserId}
-          userName="Técnico de Exames"
-          patientName={consultation.patient.name}
-        />
-      )}
+      {/* Chat contextual gerenciado pelo FloatingChatWindow via ChatContextProvider */}
     </>
   )
 }
