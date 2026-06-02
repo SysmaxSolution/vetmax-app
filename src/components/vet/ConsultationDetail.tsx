@@ -2122,16 +2122,18 @@ export default function ConsultationDetail({
         />
       )}
 
-      {/* Modal de Solicitação de Exames (E-01) */}
+      {/* Modal de Solicitação de Exames (E-01) — passa consultationId para que
+          requestExam transicione ESTA consulta (sem duplicar) e vincule o
+          exam_request à mesma. Fix do bug de tela "do zero" em 2026-06-02. */}
       {showExamRequestModal && (
         <ExamRequestModal
           patientId={patient.id}
           patientName={patient.name}
           tutorId={tutor.id}
+          consultationId={consultation.id}
           onClose={() => setShowExamRequestModal(false)}
           onSuccess={() => {
             setShowExamRequestModal(false)
-            handleFinalize('waiting_exam')
           }}
         />
       )}

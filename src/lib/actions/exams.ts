@@ -291,7 +291,17 @@ export async function requestExam(params: {
   tutor_id:   string
   exam_type:  string
   notes?:     string
-}): Promise<{ id: string } | { error: string }> {
+  /**
+   * Quando vier (caller é o Consultório solicitando exame dentro de um atendimento
+   * em andamento), NÃO cria consulta nova — apenas transiciona a existente para
+   * 'waiting_exam' e vincula o exam_request a ela. Isso preserva o histórico do
+   * MV solicitante e permite o "Devolver ao MV" depois.
+   *
+   * Quando NÃO vier (caller é o módulo Exames montando solicitação avulsa),
+   * cria uma consulta nova com visit_reason='exam' como antes.
+   */
+  consultation_id?: string
+}): Promise<{ id: string; consultation_id: string } | { error: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Não autenticado.' }
@@ -305,22 +315,45 @@ export async function requestExam(params: {
 
   const admin = createAdminClient()
 
-  // Cria consulta no fluxo unificado (igual ao Consultório) para que o pet apareça
-  // na fila de exames (getExamsQueue consulta consultations com status waiting_exam)
-  const { data: consultation, error: consultErr } = await admin
-    .from('consultations')
-    .insert({
-      clinic_id:      profile.clinic_id,
-      patient_id:     params.patient_id,
-      visit_reason:   'exam',
-      status:         'waiting_exam',
-      payment_status: 'pending',
-    })
-    .select('id')
-    .single()
+  let consultationId: string
 
-  if (consultErr || !consultation) {
-    return { error: 'Erro ao criar consulta de exame: ' + (consultErr?.message ?? '') }
+  if (params.consultation_id) {
+    // Caminho do Consultório: transiciona a consulta atual para waiting_exam.
+    const { data: existing, error: existErr } = await admin
+      .from('consultations')
+      .select('id, clinic_id, status')
+      .eq('id', params.consultation_id)
+      .eq('clinic_id', profile.clinic_id)
+      .single()
+    if (existErr || !existing) return { error: 'Consulta de origem não encontrada.' }
+
+    // Só transiciona se ainda estiver em status ativo do MV; não pisotear cancelled/completed.
+    if (['in_progress','scheduled','reception','triage','medication'].includes(existing.status)) {
+      const { error: upErr } = await admin
+        .from('consultations')
+        .update({ status: 'waiting_exam' })
+        .eq('id', existing.id)
+      if (upErr) return { error: 'Erro ao transicionar consulta: ' + upErr.message }
+    }
+    consultationId = existing.id
+  } else {
+    // Caminho do módulo Exames: solicitação avulsa cria consulta nova.
+    const { data: consultation, error: consultErr } = await admin
+      .from('consultations')
+      .insert({
+        clinic_id:      profile.clinic_id,
+        patient_id:     params.patient_id,
+        visit_reason:   'exam',
+        status:         'waiting_exam',
+        payment_status: 'pending',
+      })
+      .select('id')
+      .single()
+
+    if (consultErr || !consultation) {
+      return { error: 'Erro ao criar consulta de exame: ' + (consultErr?.message ?? '') }
+    }
+    consultationId = consultation.id
   }
 
   const { data, error } = await admin
@@ -330,7 +363,7 @@ export async function requestExam(params: {
       patient_id:      params.patient_id,
       tutor_id:        params.tutor_id,
       exam_type:       params.exam_type,
-      consultation_id: consultation.id,
+      consultation_id: consultationId,
       notes:           params.notes ?? 'Exame solicitado manualmente no módulo de Exames.',
       status:          'pending',
     })
@@ -339,8 +372,9 @@ export async function requestExam(params: {
 
   if (error) return { error: 'Erro ao solicitar exame: ' + error.message }
   revalidatePath('/dashboard/exams')
+  revalidatePath('/dashboard/vet')
   revalidatePath('/dashboard/reception')
-  return { id: data.id }
+  return { id: data.id, consultation_id: consultationId }
 }
 
 export async function saveExamResult(

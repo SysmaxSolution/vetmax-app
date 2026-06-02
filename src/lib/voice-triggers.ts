@@ -23,10 +23,15 @@ const DEFAULT_WAKE_WORDS = [
   'iniciar anota[çc][ãa]o',
 ]
 
-// Stop words: evitar verbos isolados ("finalizar", "concluir") que aparecem em
-// discurso clínico normal. Exigir intenção explícita ("finalizar registro",
-// "encerrar gravação", "salvar e fechar").
+// Stop words: combinam dois grupos.
+// (a) Intenção explícita sobre gravação/registro (baixíssimo falso positivo).
+// (b) Variações curtas pedidas pelo PO em 2026-06-02 — "finaliza/finalizar/
+//     finalizado", "encerrar/encerrado/encerra", "concluir atendimento". Tradeoff
+//     assumido: pode disparar em "vou encerrar a consulta"; o PO prefere a
+//     conveniência de não ter de lembrar a forma exata. "Concluir" sozinho NÃO
+//     entra (verbo muito comum em discurso clínico — "vou concluir a anamnese").
 const DEFAULT_STOP_WORDS = [
+  // (a) gravação/registro
   'salvar evolu[çc][ãa]o',
   'pode salvar',
   'encerrar grava[çc][ãa]o',
@@ -40,6 +45,11 @@ const DEFAULT_STOP_WORDS = [
   'concluir grava[çc][ãa]o',
   'salvar e fechar',
   'pronto,? +pode salvar',
+  // (b) variações curtas de "encerrar atendimento" (PO 2026-06-02)
+  'finaliza(?:r|do|mos|ndo)?',                // finaliza, finalizar, finalizado, finalizamos, finalizando
+  'encerra(?:r|do|da|mos|ndo)?',              // encerra, encerrar, encerrado, encerrada, encerramos, encerrando
+  'concluir +(?:o +)?atendimento',            // concluir atendimento / concluir o atendimento
+  'atendimento +(?:foi +)?(?:encerrad[oa]|finalizad[oa])',  // "atendimento encerrado" / "atendimento foi finalizado"
 ]
 
 export function buildWakeRe(custom: string[] = []): RegExp {

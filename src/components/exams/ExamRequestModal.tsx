@@ -22,6 +22,12 @@ interface ExamRequestModalProps {
   patientId:    string
   patientName:  string
   tutorId:      string
+  /**
+   * Quando vier, a solicitação NÃO cria consulta nova — transiciona a consulta
+   * atual do MV para waiting_exam e vincula o exam_request. Caller típico:
+   * Consultório, onde o exame faz parte do atendimento em curso.
+   */
+  consultationId?: string
   onClose:      () => void
   onSuccess?:   (examId: string) => void
 }
@@ -30,6 +36,7 @@ export default function ExamRequestModal({
   patientId,
   patientName,
   tutorId,
+  consultationId,
   onClose,
   onSuccess,
 }: ExamRequestModalProps) {
@@ -52,10 +59,11 @@ export default function ExamRequestModal({
     setError(null)
 
     const result = await requestExam({
-      patient_id: patientId,
-      tutor_id:   tutorId,
-      exam_type:  finalExamType,
-      notes:      notes.trim() || undefined,
+      patient_id:      patientId,
+      tutor_id:        tutorId,
+      exam_type:       finalExamType,
+      notes:           notes.trim() || undefined,
+      consultation_id: consultationId,
     })
 
     setSaving(false)

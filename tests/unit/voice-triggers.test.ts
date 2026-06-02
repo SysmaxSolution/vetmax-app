@@ -27,10 +27,12 @@ describe('TC-VOICE-003 → "petmax" ativa wake (variante reconhecida)', () => {
   })
 })
 
-describe('TC-VOICE-004 → "assistente" ativa wake', () => {
-  test('assistente → match', () => {
+describe('TC-VOICE-004 → "ativar assistente" ativa wake', () => {
+  // Endurecido contra falso-positivo clínico: "assistente" sozinho não dispara
+  // (ver src/lib/voice-triggers.ts:14 — exige ativar|olá|ei|hey + assistente).
+  test('ativar assistente → match', () => {
     const re = buildWakeRe()
-    expect(re.test('assistente registre tudo')).toBe(true)
+    expect(re.test('ativar assistente registre tudo')).toBe(true)
   })
 })
 
@@ -116,10 +118,12 @@ describe('TC-VOICE-014 → "pronto, pode salvar" stop', () => {
   })
 })
 
-describe('TC-VOICE-015 → "concluir" stop', () => {
-  test('concluir → match', () => {
+describe('TC-VOICE-015 → "concluir gravação" stop', () => {
+  // Endurecido: "concluir" sozinho aparece em discurso clínico ("vou concluir a consulta").
+  // Exige intenção explícita: "concluir gravação" ou "concluir registro".
+  test('concluir gravação → match', () => {
     const re = buildStopRe()
-    expect(re.test('pode concluir agora')).toBe(true)
+    expect(re.test('pode concluir gravação agora')).toBe(true)
   })
 })
 
@@ -141,6 +145,43 @@ describe('TC-VOICE-018 → Texto sem stop → false', () => {
   test('"continue gravando" → não para', () => {
     const re = buildStopRe()
     expect(re.test('continue gravando')).toBe(false)
+  })
+})
+
+// ─── Variações curtas (PO 2026-06-02) ────────────────────────────────────────
+
+describe('TC-VOICE-018a → variações curtas pedidas pelo PO', () => {
+  const re = buildStopRe()
+  test('"pode finaliza" → match', () => {
+    expect(re.test('doutor, pode finaliza')).toBe(true)
+  })
+  test('"finalizar" sozinho → match', () => {
+    expect(re.test('pode finalizar')).toBe(true)
+  })
+  test('"finalizado" → match', () => {
+    expect(re.test('está finalizado')).toBe(true)
+  })
+  test('"encerrar" sozinho → match', () => {
+    expect(re.test('vamos encerrar agora')).toBe(true)
+  })
+  test('"encerrado" → match', () => {
+    expect(re.test('atendimento encerrado')).toBe(true)
+  })
+  test('"concluir atendimento" → match', () => {
+    expect(re.test('por favor concluir atendimento')).toBe(true)
+  })
+  test('"concluir o atendimento" → match', () => {
+    expect(re.test('pode concluir o atendimento')).toBe(true)
+  })
+})
+
+describe('TC-VOICE-018b → guard de falso positivo das curtas', () => {
+  const re = buildStopRe()
+  test('"concluir" sozinho NÃO dispara (verbo comum em consulta)', () => {
+    expect(re.test('vou concluir a anamnese antes do exame')).toBe(false)
+  })
+  test('"continue" não casa com encerrar', () => {
+    expect(re.test('continue com a consulta')).toBe(false)
   })
 })
 
@@ -190,9 +231,9 @@ describe('TC-VOICE-023 → fuzzyMatchCustom — match exato', () => {
 })
 
 describe('TC-VOICE-024 → fuzzyMatchCustom — typo tolerado', () => {
-  test('typo leve passa pelo threshold 0.35', () => {
-    // 1 caractere errado deve passar
-    expect(fuzzyMatchCustom('inicar gravacao', ['iniciar gravação'])).toBe(true)
+  test('typo leve passa pelo threshold 0.2', () => {
+    // Threshold 0.2 (estrito) — typo de 1 caractere ainda deve passar em trigger longo
+    expect(fuzzyMatchCustom('inicar gravação', ['iniciar gravação'])).toBe(true)
   })
 })
 
@@ -231,8 +272,9 @@ describe('TC-VOICE-029 → fuzzyMatchCustom — múltiplos triggers, qualquer um
     expect(fuzzyMatchCustom('encerrar', ['salvar', 'encerrar', 'finalizar'])).toBe(true)
   })
 
-  test('Match via fuzzy em qualquer trigger da lista', () => {
-    expect(fuzzyMatchCustom('finalisar', ['salvar', 'encerrar', 'finalizar'])).toBe(true)
+  test('Match via fuzzy em qualquer trigger longo da lista', () => {
+    // Triggers de 1 palavra exigem match exato word-boundary; fuzzy só funciona em triggers >=2 palavras.
+    expect(fuzzyMatchCustom('finalisar atendimento', ['salvar dados', 'encerrar consulta', 'finalizar atendimento'])).toBe(true)
   })
 })
 
