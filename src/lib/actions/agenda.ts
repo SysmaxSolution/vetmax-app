@@ -46,60 +46,36 @@ export async function getAgendaBoard(date?: string): Promise<AgendaColumn[] | { 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Não autenticado.' }
 
-  const targetDate = date ?? new Date().toISOString().split('T')[0]
-  const startOfDay = `${targetDate}T00:00:00`
-  const endOfDay   = `${targetDate}T23:59:59`
+  const admin = createAdminClient()
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('clinic_id')
+    .eq('id', user.id)
+    .single()
 
-  const { data, error } = await supabase
+  if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
+
+  const todayStart = new Date()
+  todayStart.setHours(0, 0, 0, 0)
+  const startIso = date ? `${date}T00:00:00` : todayStart.toISOString()
+  const endIso = date ? `${date}T23:59:59` : new Date(todayStart.getTime() + 86_400_000 - 1).toISOString()
+
+  const { data, error } = await admin
     .from('consultations')
     .select(`
-      id, status, visit_reason, created_at, scheduled_date,
-      patients!inner(id, name, species, photo_url),
-      tutors:patients!inner(tutor:tutors(id, name)),
-      vet:profiles(id, full_name)
+      id, status, visit_reason, created_at, scheduled_date, vet_id,
+      patients ( id, name, species, photo_url, tutor_id,
+        tutors ( id, name )
+      ),
+      vet:profiles!vet_id ( id, full_name )
     `)
+    .eq('clinic_id', profile.clinic_id)
     .in('status', KANBAN_COLUMNS.map(c => c.key))
-    .gte('created_at', startOfDay)
-    .lte('created_at', endOfDay)
+    .gte('created_at', startIso)
+    .lte('created_at', endIso)
     .order('created_at', { ascending: true })
 
-  if (error) {
-    // Fallback: query simpler if join fails
-    const { data: fallback, error: err2 } = await supabase
-      .from('consultations')
-      .select(`
-        id, status, visit_reason, created_at, scheduled_date,
-        patients(id, name, species, photo_url, tutor_id, tutors(name)),
-        profiles(id, full_name)
-      `)
-      .in('status', KANBAN_COLUMNS.map(c => c.key))
-      .gte('created_at', startOfDay)
-      .lte('created_at', endOfDay)
-      .order('created_at', { ascending: true })
-
-    if (err2 || !fallback) return { error: err2?.message ?? 'Erro ao buscar agenda.' }
-
-    const cards: AgendaCard[] = fallback.map((c: any) => ({
-      id: c.id,
-      status: c.status,
-      visit_reason: c.visit_reason,
-      created_at: c.created_at,
-      scheduled_date: c.scheduled_date,
-      patient: {
-        id: c.patients?.id ?? '',
-        name: c.patients?.name ?? '—',
-        species: c.patients?.species ?? 'dog',
-        photo_url: c.patients?.photo_url ?? null,
-      },
-      tutor: { id: c.patients?.tutor_id ?? '', name: c.patients?.tutors?.name ?? '—' },
-      vet: c.profiles ? { id: c.profiles.id, full_name: c.profiles.full_name } : null,
-    }))
-
-    return KANBAN_COLUMNS.map(col => ({
-      ...col,
-      cards: cards.filter(c => c.status === col.key),
-    }))
-  }
+  if (error) return { error: 'Erro ao buscar agenda: ' + error.message }
 
   const cards: AgendaCard[] = (data ?? []).map((c: any) => ({
     id: c.id,
@@ -113,7 +89,10 @@ export async function getAgendaBoard(date?: string): Promise<AgendaColumn[] | { 
       species: c.patients?.species ?? 'dog',
       photo_url: c.patients?.photo_url ?? null,
     },
-    tutor: { id: c.tutors?.tutor?.id ?? '', name: c.tutors?.tutor?.name ?? '—' },
+    tutor: {
+      id: c.patients?.tutor_id ?? c.patients?.tutors?.id ?? '',
+      name: c.patients?.tutors?.name ?? '—',
+    },
     vet: c.vet ? { id: c.vet.id, full_name: c.vet.full_name } : null,
   }))
 

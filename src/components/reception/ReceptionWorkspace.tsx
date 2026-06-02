@@ -267,6 +267,7 @@ function QueueCard({
   const isLoading = loadingPetId === item.patient.id
   return (
     <div
+      data-testid="reception-card"
       title={triageActive ? 'Duplo clique para chamar triagem' : 'Duplo clique para enviar ao consultório'}
       onDoubleClick={() => onMoveToTriage(item.id)}
       className={`flex items-center gap-4 rounded-2xl border bg-white px-5 py-4 shadow-sm hover:shadow transition-shadow cursor-pointer select-none ${
@@ -419,6 +420,9 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
   } | null>(null)
   const [isPending, startTransition] = useTransition()
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Guard anti-double-click — TC-R02-05: impede que duplo clique rápido
+  // dispare moveToTriage duas vezes para o mesmo card.
+  const movingIdsRef = useRef<Set<string>>(new Set())
   const activeModules = useModules()
 
   function showToast(
@@ -530,32 +534,39 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
   const triageActive = activeModules.length === 0 || activeModules.includes('triage')
 
   function handleMoveToTriage(consultationId: string) {
+    // Guard anti-double-click: ignora chamadas duplicadas para o mesmo card
+    if (movingIdsRef.current.has(consultationId)) return
+    movingIdsRef.current.add(consultationId)
     startTransition(async () => {
-      const item = queue.find(c => c.id === consultationId)
-      if (!triageActive) {
-        const err = await moveDirectToVet(consultationId)
+      try {
+        const item = queue.find(c => c.id === consultationId)
+        if (!triageActive) {
+          const err = await moveDirectToVet(consultationId)
+          if (err) { showToast(err.error, 'error'); return }
+          setQueue(q => q.filter(c => c.id !== consultationId))
+          showToast('Pet encaminhado direto ao Consultório.', 'success', {
+            label: 'Abrir Consultório',
+            href:  `/dashboard/vet/${consultationId}`,
+          })
+          return
+        }
+        const err = await moveToTriage(consultationId)
         if (err) { showToast(err.error, 'error'); return }
         setQueue(q => q.filter(c => c.id !== consultationId))
-        showToast('Pet encaminhado direto ao Consultório.', 'success', {
-          label: 'Abrir Consultório',
-          href:  `/dashboard/vet/${consultationId}`,
+        showToast('Pet encaminhado para Triagem.', 'success', {
+          label: 'Abrir Triagem',
+          href:  `/dashboard/triage/${consultationId}`,
         })
-        return
-      }
-      const err = await moveToTriage(consultationId)
-      if (err) { showToast(err.error, 'error'); return }
-      setQueue(q => q.filter(c => c.id !== consultationId))
-      showToast('Pet encaminhado para Triagem.', 'success', {
-        label: 'Abrir Triagem',
-        href:  `/dashboard/triage/${consultationId}`,
-      })
-      if (item?.tutor?.phone) {
-        setWhatsappCtx({
-          petName:        item.patient.name,
-          tutorName:      item.tutor.name,
-          tutorPhone:     item.tutor.phone,
-          consultationId: consultationId,
-        })
+        if (item?.tutor?.phone) {
+          setWhatsappCtx({
+            petName:        item.patient.name,
+            tutorName:      item.tutor.name,
+            tutorPhone:     item.tutor.phone,
+            consultationId: consultationId,
+          })
+        }
+      } finally {
+        movingIdsRef.current.delete(consultationId)
       }
     })
   }
@@ -647,7 +658,11 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
               if (kanbanColumns.length === 0) {
                 setLoadingKanban(true)
                 const result = await getAgendaBoard()
-                if (!('error' in result)) setKanbanColumns(result)
+                if ('error' in result) {
+                  showToast(result.error, 'error')
+                } else {
+                  setKanbanColumns(result)
+                }
                 setLoadingKanban(false)
               }
             }}
