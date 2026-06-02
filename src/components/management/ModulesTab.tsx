@@ -110,13 +110,15 @@ export default function ModulesTab({
   const [masterKeyError, setMasterKeyError]         = useState<string | null>(null)
   const [showMasterKey, setShowMasterKey]           = useState(false)
   const masterKeyInputRef = useRef<HTMLInputElement>(null)
-  const { open: openUpgrade } = useUpgradeModal()
+  const { open: openUpgrade, planName } = useUpgradeModal()
+  const isPaidPlan = planName === 'pro' || planName === 'enterprise'
 
   // Click no toggle — dois caminhos:
   //  - SysMax (operação interna): dialog de Master Key (UX antiga, intocada).
   //  - Admin Free / Pro: módulos Free do segmento são read-only; módulos
   //    PRO disparam UpgradeModal (genérico ou específico, conforme catálogo).
   function requestToggle(mod: ModuleDef) {
+    // SysMax: Master Key (operação interna auditada).
     if (isSysmax) {
       const willEnable = mod.flow
         ? !flowFlags[mod.key]
@@ -128,13 +130,26 @@ export default function ModulesTab({
       return
     }
 
-    // Não-SysMax
+    // Pro/Enterprise: toggle direto sem modal — admin da clínica gerencia
+    // livremente os módulos do seu plano.
+    if (isPaidPlan) {
+      if (mod.flow) {
+        setFlowFlags(prev => ({ ...prev, [mod.key]: !prev[mod.key] }))
+      } else {
+        setActiveModules(prev =>
+          prev.includes(mod.key) ? prev.filter(k => k !== mod.key) : [...prev, mod.key]
+        )
+      }
+      return
+    }
+
+    // Free
     if (isModuleFree(mod.key, businessType)) {
       onToast('success', `${mod.label} já está incluído no seu plano.`)
       return
     }
 
-    // Módulo PRO → UpgradeModal
+    // Módulo PRO → UpgradeModal (apenas para Free)
     const featureKey = MODULE_TO_FEATURE[mod.key] ?? 'pro_module'
     if (featureKey === 'pro_module') {
       openUpgrade({
@@ -275,7 +290,9 @@ export default function ModulesTab({
           <p className="text-xs text-slate-500">
             {isSysmax
               ? 'Qualquer alteração requer a Master Key da Sysmax Solutions'
-              : 'Módulos inclusos no seu plano e quais estão disponíveis para upgrade'}
+              : isPaidPlan
+                ? 'Ative ou desative módulos do seu plano. Clique em Salvar para aplicar.'
+                : 'Módulos inclusos no seu plano e quais estão disponíveis para upgrade'}
           </p>
         </div>
 
@@ -287,7 +304,9 @@ export default function ModulesTab({
           {MODULES.map(mod => {
             const active = mod.flow ? !!flowFlags[mod.key] : activeModules.includes(mod.key)
             const isFree = !isSysmax && !mod.flow && isModuleFree(mod.key, businessType)
-            const isPro  = !isSysmax && !isFree
+            // Pro/Enterprise gerenciam livremente — sem Lock, sem UpgradeModal.
+            const canTogglePaid = isPaidPlan && !isFree
+            const isUpsell      = !isSysmax && !isFree && !isPaidPlan
 
             return (
               <div
@@ -309,7 +328,7 @@ export default function ModulesTab({
                         <CheckCircle2 className="h-3 w-3" /> Incluso
                       </span>
                     )}
-                    {isPro && (
+                    {isUpsell && (
                       <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-violet-700 bg-violet-100 px-2 py-0.5 rounded-full">
                         <Lock className="h-3 w-3" /> Pro
                       </span>
@@ -318,7 +337,7 @@ export default function ModulesTab({
                   <p className="text-xs text-slate-500">{mod.desc}</p>
                 </div>
 
-                {isSysmax ? (
+                {isSysmax || canTogglePaid ? (
                   <button
                     id={`module-toggle-${mod.key}`}
                     data-testid={`module-toggle-${mod.key}`}
@@ -339,7 +358,7 @@ export default function ModulesTab({
                     <CheckCircle2 className="h-6 w-6" />
                   </div>
                 ) : (
-                  // Módulo PRO: botão que abre UpgradeModal
+                  // Módulo PRO em plano Free: abre UpgradeModal
                   <button
                     id={`module-toggle-${mod.key}`}
                     data-testid={`module-toggle-${mod.key}`}

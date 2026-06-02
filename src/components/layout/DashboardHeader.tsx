@@ -169,10 +169,10 @@ export default function DashboardHeader({
     // não por active_modules — só aparece quando a clínica o ativou.
     if (tab.href === '/dashboard/surgery') return centroCirurgico
     if (tab.moduleKey && activeModules) {
-      // Módulos "promovidos" passam pelo filtro mesmo sem estarem em
-      // activeModules — aparecerão lockeados e abrirão o UpgradeModal
-      // no clique (gatilho de upsell freemium).
-      if (PROMOTED_LOCKED_FEATURES[tab.moduleKey]) return true
+      // PROMOTED_LOCKED só "promove" itens fora do active_modules no plano FREE
+      // (gatilho de upsell). Clientes Pro/Enterprise/SysMax seguem a regra
+      // clássica: só vêem módulos efetivamente ativados em active_modules.
+      if (planName === 'free' && !isSysmax && PROMOTED_LOCKED_FEATURES[tab.moduleKey]) return true
       return activeModules.includes(tab.moduleKey)
     }
     return true
@@ -188,6 +188,8 @@ export default function DashboardHeader({
    */
   function promotedLockKey(tab: Tab): UpgradeFeatureKey | null {
     if (!tab.moduleKey) return null
+    // Lock visual + UpgradeModal NUNCA aparece para planos pagos ou SysMax.
+    if (planName !== 'free' || isSysmax) return null
     const key = PROMOTED_LOCKED_FEATURES[tab.moduleKey]
     if (!key) return null
     if (activeModules?.includes(tab.moduleKey)) return null
