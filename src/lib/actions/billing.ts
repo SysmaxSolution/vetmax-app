@@ -71,11 +71,14 @@ export async function generateInvoice(
 
   const admin = createAdminClient()
 
-  // Idempotente: se já existe fatura, retorna o ID
+  // Idempotente: se já existe a fatura FINAL desta consulta, retorna o ID.
+  // Faturas parciais (kind='partial') NÃO impedem a geração da final — elas
+  // apenas removem do escopo os serviços já cobrados (billed_in_invoice_id).
   const { data: existing } = await admin
     .from('invoices')
     .select('id')
     .eq('consultation_id', consultationId)
+    .eq('kind', 'final')
     .maybeSingle()
   if (existing) return { id: existing.id }
 
@@ -83,6 +86,7 @@ export async function generateInvoice(
   // (n:n com snapshot de price/name no momento da seleção). clinic_catalog
   // permanece apenas como fallback de medicações que vieram de
   // applied_medications sem vínculo direto com stock_item.
+  // Item 0218: filtra serviços já cobrados em fatura parcial.
   const [consultResult, servicesResult, catalogResult] = await Promise.all([
     admin
       .from('consultations')
@@ -100,6 +104,7 @@ export async function generateInvoice(
       .eq('clinic_id', profile.clinic_id)
       .eq('consultation_id', consultationId)
       .is('cancelled_at', null)
+      .is('billed_in_invoice_id', null)
       .order('created_at', { ascending: true }),
     admin
       .from('clinic_catalog')
@@ -209,7 +214,7 @@ export async function generateInvoice(
     return sum + it.total_price
   }, 0)
 
-  // Criar fatura
+  // Criar fatura final
   const { data: invoice, error: invErr } = await admin
     .from('invoices')
     .insert({
@@ -221,6 +226,7 @@ export async function generateInvoice(
       discount:        0,
       total_amount,
       status:          'pending',
+      kind:            'final',
     })
     .select('id')
     .single()
@@ -231,6 +237,15 @@ export async function generateInvoice(
   await admin
     .from('invoice_items')
     .insert(items.map(it => ({ ...it, invoice_id: invoice.id })))
+
+  // Marca os consultation_services como cobrados nesta fatura final
+  const serviceIds = services.map((s: any) => s.id as string)
+  if (serviceIds.length > 0) {
+    await admin
+      .from('consultation_services')
+      .update({ billed_in_invoice_id: invoice.id })
+      .in('id', serviceIds)
+  }
 
   // Cria entrada PENDENTE no Caixa Central (aparece antes do pagamento ser confirmado).
   // Usa tutor_due (apenas coparticipações quando há split); o repasse Petlove
@@ -1099,4 +1114,130 @@ export async function listInvoiceDuplicatas(
 
   if (error) return { error: error.message }
   return (data ?? []) as InvoiceDuplicata[]
+}
+
+// ─── Fatura Parcial (Item 0218 — cobrar consulta antes dos exames) ───────────
+// Cria uma fatura cobrando os serviços já lançados (billed_in_invoice_id IS NULL)
+// SEM finalizar a consulta. Os serviços novos lançados depois (ex.: exames)
+// ficarão para a próxima fatura — gerada normalmente por generateInvoice ao
+// encerrar o atendimento.
+export async function generatePartialInvoice(
+  consultationId: string,
+): Promise<{ id: string; items_count: number; total: number } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('clinic_id')
+    .eq('id', user.id)
+    .single()
+  if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
+
+  const admin = createAdminClient()
+
+  const { data: consult, error: consultErr } = await admin
+    .from('consultations')
+    .select(`id, status,
+      patients ( id, name, species,
+        tutors ( id, name, phone )
+      )`)
+    .eq('id', consultationId)
+    .eq('clinic_id', profile.clinic_id)
+    .single()
+  if (consultErr || !consult) return { error: 'Consulta não encontrada.' }
+  if (consult.status === 'completed' || consult.status === 'cancelled') {
+    return { error: 'Consulta já encerrada — use a fatura final.' }
+  }
+
+  const patient = consult.patients as any
+  const tutor   = patient?.tutors as any
+  if (!patient?.id || !tutor?.id) return { error: 'Paciente ou tutor não encontrado.' }
+
+  const { data: services } = await admin
+    .from('consultation_services')
+    .select('id, stock_item_id, name_snapshot, price_snapshot, quantity, copay_snapshot, stock_items ( category )')
+    .eq('clinic_id', profile.clinic_id)
+    .eq('consultation_id', consultationId)
+    .is('cancelled_at', null)
+    .is('billed_in_invoice_id', null)
+    .order('created_at', { ascending: true })
+
+  if (!services || services.length === 0) {
+    return { error: 'Nenhum serviço novo para cobrar. Lance ao menos um serviço antes de gerar a fatura parcial.' }
+  }
+
+  function categoryToItemType(category?: string | null): 'consultation' | 'medication' | 'exam' | 'other' {
+    if (category === 'exam') return 'exam'
+    if (category === 'medication' || category === 'controlled_medication') return 'medication'
+    if (category === 'vet_service' || category === 'service') return 'consultation'
+    return 'other'
+  }
+
+  const items = services.map((s: any) => {
+    const cat   = (Array.isArray(s.stock_items) ? s.stock_items[0]?.category : s.stock_items?.category) as string | undefined
+    const qty   = Number(s.quantity ?? 1)
+    const unit  = Number(s.price_snapshot ?? 0)
+    const copay = s.copay_snapshot === null || s.copay_snapshot === undefined ? null : Number(s.copay_snapshot)
+    const hasSplit = copay !== null
+    return {
+      item_type:              categoryToItemType(cat),
+      description:            s.name_snapshot as string,
+      quantity:               qty,
+      unit_price:             unit,
+      total_price:            unit * qty,
+      insurance_status:       hasSplit ? 'aguardando_repasse' : 'particular',
+      coparticipation_value:  hasSplit ? Number((copay * qty).toFixed(2)) : null,
+    }
+  })
+
+  const subtotal     = items.reduce((s, it) => s + it.total_price, 0)
+  const tutor_due    = items.reduce((s, it) => s + (it.coparticipation_value ?? it.total_price), 0)
+
+  const { data: invoice, error: invErr } = await admin
+    .from('invoices')
+    .insert({
+      clinic_id:       profile.clinic_id,
+      consultation_id: consultationId,
+      patient_id:      patient.id,
+      tutor_id:        tutor.id,
+      subtotal,
+      discount:        0,
+      total_amount:    subtotal,
+      status:          'pending',
+      kind:            'partial',
+    })
+    .select('id')
+    .single()
+
+  if (invErr || !invoice) return { error: 'Erro ao criar fatura parcial: ' + (invErr?.message ?? '') }
+
+  await admin
+    .from('invoice_items')
+    .insert(items.map(it => ({ ...it, invoice_id: invoice.id })))
+
+  const serviceIds = services.map((s: any) => s.id as string)
+  await admin
+    .from('consultation_services')
+    .update({ billed_in_invoice_id: invoice.id })
+    .in('id', serviceIds)
+
+  if (tutor_due > 0) {
+    await admin.from('central_cashier').insert({
+      clinic_id:     profile.clinic_id,
+      source_module: 'consultation',
+      source_id:     invoice.id,
+      amount:        tutor_due,
+      status:        'pending',
+      reason:        `Consulta (parcial) — ${patient.name}`,
+      patient_name:  patient.name,
+      tutor_name:    tutor?.name ?? null,
+      recorded_by:   user.id,
+    })
+  }
+
+  revalidatePath('/dashboard/reception/checkout')
+  revalidatePath('/dashboard/cashier')
+  return { id: invoice.id, items_count: items.length, total: subtotal }
 }

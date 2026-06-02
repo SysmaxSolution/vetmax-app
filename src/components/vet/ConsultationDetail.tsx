@@ -8,7 +8,7 @@ import {
   ArrowLeft, AlertCircle, Mic, MicOff, Loader2, Sparkles,
   FlaskConical, Pill, CheckSquare, Square, Calendar, Save,
   Stethoscope, Clock, ChevronRight, Info, Syringe, FileText, X, BedDouble, RotateCcw, Plus, HeartCrack,
-  Settings,
+  Settings, Receipt,
 } from 'lucide-react'
 import { saveVetNotes, finalizeConsultation, reopenConsultation, savePrescription, type VetConsultationDetail } from '@/lib/actions/vet'
 import { hasActiveConsultationService } from '@/lib/actions/services'
@@ -33,6 +33,7 @@ import AttachmentsSection from '@/components/ui/AttachmentsSection'
 import MergedTriageSection, { type TriageVitals } from '@/components/vet/MergedTriageSection'
 import AdmitPetModal from '@/components/hospitalization/AdmitPetModal'
 import ExamRequestModal from '@/components/exams/ExamRequestModal'
+import ChargeBeforeExamsModal from './ChargeBeforeExamsModal'
 import MicrochipPanel from '@/components/vet/MicrochipPanel'
 import EuthanasiaModal from '@/components/vet/EuthanasiaModal'
 import WhatsAppNotificationModal from '@/components/whatsapp/WhatsAppNotificationModal'
@@ -257,6 +258,9 @@ export default function ConsultationDetail({
   // Motivo pré-extraído pela IA para o AdmitPetModal — atualizado pela voz no fluxo do Consultório.
   const [admitInitialReason,   setAdmitInitialReason]   = useState<string>('')
   const [showExamRequestModal, setShowExamRequestModal] = useState(false)
+  // Item 0218: modal que pergunta se cobra a consulta antes de pedir exames
+  const [showChargeBeforeExams, setShowChargeBeforeExams] = useState(false)
+  const [partialChargeNotice,   setPartialChargeNotice]   = useState<{ total: number; items: number } | null>(null)
   // Bloqueia a alta enquanto o PDF está sendo gerado/enviado ao storage
   const [isPdfUploading, setIsPdfUploading] = useState(false)
   // Último PDF gerado para injetar na lista de Anexos em tempo real
@@ -2036,13 +2040,20 @@ export default function ConsultationDetail({
                   <button
                     type="button"
                     data-mentor-step="vet-send-to-exams-btn"
-                    onClick={() => setShowExamRequestModal(true)}
+                    onClick={() => setShowChargeBeforeExams(true)}
                     disabled={isFinalizing}
                     className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-600 text-white font-semibold text-sm hover:bg-blue-700 transition-all disabled:opacity-50"
                   >
                     {isFinalizing ? <Loader2 className="w-5 h-5 animate-spin" /> : <FlaskConical className="w-5 h-5" />}
                     {isFinalizing ? 'Encaminhando...' : 'Encaminhar para Exames'}
                   </button>
+                  {partialChargeNotice && (
+                    <p className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 flex items-center gap-1.5">
+                      <Receipt className="h-3.5 w-3.5" />
+                      Fatura parcial criada ({partialChargeNotice.items} item{partialChargeNotice.items > 1 ? 'ns' : ''} ·
+                      R$ {partialChargeNotice.total.toFixed(2).replace('.', ',')}). Os exames lançados a seguir vão para uma nova fatura ao finalizar.
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -2134,6 +2145,23 @@ export default function ConsultationDetail({
             setLiveRegData(null)
           }}
           onClose={() => setLiveRegData(null)}
+        />
+      )}
+
+      {/* Item 0218: pergunta se cobra a consulta antes de pedir exames */}
+      {showChargeBeforeExams && (
+        <ChargeBeforeExamsModal
+          consultationId={consultation.id}
+          patientName={patient.name}
+          onClose={() => setShowChargeBeforeExams(false)}
+          onProceed={charged => {
+            setShowChargeBeforeExams(false)
+            if (charged) {
+              setPartialChargeNotice({ total: charged.total, items: charged.items })
+              setToast({ type: 'success', message: `Consulta cobrada: ${charged.items} item${charged.items > 1 ? 'ns' : ''} → caixa.` })
+            }
+            setShowExamRequestModal(true)
+          }}
         />
       )}
 
