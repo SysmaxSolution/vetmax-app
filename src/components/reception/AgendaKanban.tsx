@@ -35,11 +35,13 @@ interface Props {
   clinicId: string
   checkinRequiredFields?: string[]
   onScheduledCheckin?: (card: AgendaCard) => void
+  /** Click no avatar/nome do pet abre o cadastro completo. */
+  onOpenPet?: (patientId: string) => void
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export default function AgendaKanban({ initialColumns, clinicId, checkinRequiredFields, onScheduledCheckin }: Props) {
+export default function AgendaKanban({ initialColumns, clinicId, checkinRequiredFields, onScheduledCheckin, onOpenPet }: Props) {
   const [columns, setColumns] = useState<AgendaColumn[]>(initialColumns)
   const [dragOverCol, setDragOverCol] = useState<ConsultationStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -189,14 +191,45 @@ export default function AgendaKanban({ initialColumns, clinicId, checkinRequired
                       } ${checkingInId === card.id ? 'opacity-50 animate-pulse' : ''} ${successId === card.id ? 'border-emerald-400 bg-emerald-50' : ''}`}
                     >
                       <div className="flex items-center gap-2">
-                        <PetAvatar
-                          name={card.patient.name}
-                          species={card.patient.species}
-                          photoUrl={card.patient.photo_url}
-                          size="xs"
-                        />
+                        {onOpenPet ? (
+                          <button
+                            type="button"
+                            onClick={e => { e.stopPropagation(); onOpenPet(card.patient.id) }}
+                            onMouseDown={e => e.stopPropagation()}
+                            draggable={false}
+                            title="Abrir cadastro do pet/tutor"
+                            className="flex-shrink-0 rounded-full hover:ring-2 hover:ring-teal-300 transition-shadow"
+                          >
+                            <PetAvatar
+                              name={card.patient.name}
+                              species={card.patient.species}
+                              photoUrl={card.patient.photo_url}
+                              size="xs"
+                            />
+                          </button>
+                        ) : (
+                          <PetAvatar
+                            name={card.patient.name}
+                            species={card.patient.species}
+                            photoUrl={card.patient.photo_url}
+                            size="xs"
+                          />
+                        )}
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs font-semibold text-slate-900 truncate">{card.patient.name}</p>
+                          {onOpenPet ? (
+                            <button
+                              type="button"
+                              onClick={e => { e.stopPropagation(); onOpenPet(card.patient.id) }}
+                              onMouseDown={e => e.stopPropagation()}
+                              draggable={false}
+                              title="Abrir cadastro do pet/tutor"
+                              className="text-xs font-semibold text-slate-900 truncate text-left hover:text-teal-700 hover:underline"
+                            >
+                              {card.patient.name}
+                            </button>
+                          ) : (
+                            <p className="text-xs font-semibold text-slate-900 truncate">{card.patient.name}</p>
+                          )}
                           <p className="text-[10px] text-slate-500 truncate">{card.tutor.name}</p>
                         </div>
                       </div>

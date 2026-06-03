@@ -702,6 +702,7 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
               initialColumns={kanbanColumns}
               clinicId={clinicId}
               checkinRequiredFields={checkinRequiredFields}
+              onOpenPet={handleOpenPet}
               onScheduledCheckin={card => {
                 startTransition(async () => {
                   const tutorData = await getTutorWithPatients(card.tutor.id)
@@ -929,16 +930,36 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
                 const sp = SPECIES_LABELS[item.patient.species] ?? { emoji: '🐾', color: 'bg-slate-100 text-slate-600' }
                 const visitReasonLabel = VISIT_REASON_OPTIONS.find(v => v.value === item.visit_reason)?.label ?? item.visit_reason
                 const paymentLabel = PAYMENT_STATUS_OPTIONS.find(p => p.value === item.payment_status)?.label ?? item.payment_status
+                const isPetLoading = loadingPetEditId === item.patient.id
                 return (
-                  <button
+                  <div
                     key={item.id}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => handleEditConsultation(item)}
-                    className="w-full flex items-center gap-4 rounded-xl border border-slate-200 bg-white px-4 py-3 hover:border-slate-300 hover:bg-slate-50 transition-colors text-left shadow-sm"
+                    onKeyDown={e => { if (e.key === 'Enter') handleEditConsultation(item) }}
+                    className="w-full flex items-center gap-4 rounded-xl border border-slate-200 bg-white px-4 py-3 hover:border-slate-300 hover:bg-slate-50 transition-colors text-left shadow-sm cursor-pointer"
                   >
-                    <PetAvatar name={item.patient.name} species={item.patient.species} photoUrl={item.patient.photo_url} size="sm" />
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); handleOpenPet(item.patient.id) }}
+                      disabled={isPetLoading}
+                      title="Abrir cadastro do pet/tutor"
+                      className="flex-shrink-0 rounded-full hover:ring-2 hover:ring-teal-300 transition-shadow disabled:opacity-60"
+                    >
+                      <PetAvatar name={item.patient.name} species={item.patient.species} photoUrl={item.patient.photo_url} size="sm" />
+                    </button>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-medium text-slate-900">{item.patient.name}</p>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); handleOpenPet(item.patient.id) }}
+                          disabled={isPetLoading}
+                          className="font-medium text-slate-900 hover:text-teal-700 hover:underline disabled:opacity-60"
+                          title="Abrir cadastro do pet/tutor"
+                        >
+                          {item.patient.name}
+                        </button>
                         <span className={`text-xs font-medium rounded-full px-2 py-0.5 ${sp.color}`}>{item.patient.species}</span>
                       </div>
                       <p className="text-sm text-slate-500 mt-1">
@@ -958,7 +979,7 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
                         item.visit_reason === 'emergency' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'
                       }`}>{visitReasonLabel}</span>
                     </div>
-                  </button>
+                  </div>
                 )
               })}
             </div>
