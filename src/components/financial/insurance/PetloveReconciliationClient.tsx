@@ -86,8 +86,17 @@ export default function PetloveReconciliationClient({
   }
 
   const handleFile = useCallback(async (file: File) => {
-    if (!/\.xlsx$/i.test(file.name)) {
-      setStatus({ kind: 'error', message: 'Apenas arquivos .xlsx da Petlove são aceitos.' })
+    // Aceita .xlsx, .xlsm e .xls (Excel 97-2003 — formato legado ainda usado
+    // por algumas telas do portal Petlove). Se o arquivo veio sem extensão
+    // reconhecida, ainda tentamos no servidor — o parser detecta pelo
+    // conteúdo (magic bytes) e mostra erro útil se não bater.
+    const ext = (file.name.match(/\.([^.]+)$/)?.[1] ?? '').toLowerCase()
+    const accepted = ['xlsx', 'xlsm', 'xls']
+    if (ext && !accepted.includes(ext)) {
+      setStatus({
+        kind: 'error',
+        message: `Arquivo .${ext} não é aceito — a Petlove exporta em .xlsx (moderno) ou .xls (legado). Re-baixe no portal e tente novamente.`,
+      })
       return
     }
     setStatus({ kind: 'uploading', filename: file.name })
@@ -166,7 +175,7 @@ export default function PetloveReconciliationClient({
         <input
           ref={inputRef}
           type="file"
-          accept=".xlsx"
+          accept=".xlsx,.xlsm,.xls"
           onChange={onSelect}
           className="hidden"
         />
@@ -191,7 +200,7 @@ export default function PetloveReconciliationClient({
                 Arraste a planilha da Petlove aqui
               </p>
               <p className="text-sm text-purple-600">
-                ou clique para selecionar um arquivo (.xlsx, até 10 MB)
+                ou clique para selecionar (.xlsx, .xlsm ou .xls — até 10 MB)
               </p>
               <p className="text-[11px] text-purple-500 max-w-md mt-1">
                 Aceita tanto a remessa fechada (Resumo + Extrato) quanto o extrato em aberto (aba única Worksheet) — esta gera uma prévia atualizável.

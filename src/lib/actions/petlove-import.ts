@@ -1,6 +1,7 @@
 'use server'
 
 import ExcelJS from 'exceljs'
+import * as XLSX from 'xlsx'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
@@ -142,14 +143,51 @@ function cellText(v: unknown): string | null {
 // ─── parsePetloveXlsx ─────────────────────────────────────────────────────────
 // Roteador: detecta o formato da planilha (fechada com Resumo+Extrato ou
 // aberta com aba única "Worksheet") e delega para o parser específico.
+//
+// Aceita .xlsx/.xlsm (formato OOXML — ZIP) e .xls antigo (CFB/OLE compound).
+// Para .xls, converte internamente para .xlsx via SheetJS preservando datas e
+// números, depois carrega no ExcelJS para reusar o pipeline existente.
+
+function detectSpreadsheetFormat(buf: ArrayBuffer): 'ooxml' | 'cfb' | 'unknown' {
+  const bytes = new Uint8Array(buf, 0, Math.min(8, buf.byteLength))
+  // PK\x03\x04 → ZIP (xlsx, xlsm)
+  if (bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04) return 'ooxml'
+  // D0 CF 11 E0 A1 B1 1A E1 → CFB/OLE compound (xls)
+  if (bytes[0] === 0xd0 && bytes[1] === 0xcf && bytes[2] === 0x11 && bytes[3] === 0xe0) return 'cfb'
+  return 'unknown'
+}
+
+async function loadWorkbookFromBuffer(buffer: ArrayBuffer): Promise<ExcelJS.Workbook | { error: string }> {
+  const fmt = detectSpreadsheetFormat(buffer)
+  const wb = new ExcelJS.Workbook()
+
+  if (fmt === 'ooxml') {
+    try {
+      await wb.xlsx.load(buffer)
+      return wb
+    } catch {
+      return { error: 'Arquivo .xlsx/.xlsm inválido ou corrompido.' }
+    }
+  }
+
+  if (fmt === 'cfb') {
+    try {
+      const xls = XLSX.read(buffer, { type: 'array', cellDates: true })
+      const xlsxBuf = XLSX.write(xls, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer
+      await wb.xlsx.load(xlsxBuf)
+      return wb
+    } catch (err) {
+      return { error: `Arquivo .xls antigo inválido ou corrompido: ${err instanceof Error ? err.message : 'erro desconhecido'}` }
+    }
+  }
+
+  return { error: 'Formato não reconhecido. Aceito: .xlsx, .xlsm, .xls (Excel 97-2003).' }
+}
 
 export async function parsePetloveXlsx(buffer: ArrayBuffer): Promise<PetloveRemittanceAST | { error: string }> {
-  const wb = new ExcelJS.Workbook()
-  try {
-    await wb.xlsx.load(buffer)
-  } catch (err) {
-    return { error: 'Arquivo .xlsx inválido ou corrompido.' }
-  }
+  const loaded = await loadWorkbookFromBuffer(buffer)
+  if ('error' in loaded) return loaded
+  const wb = loaded
 
   const resumoSheet  = wb.worksheets.find(ws => /resumo/i.test(ws.name))
   const extratoSheet = wb.worksheets.find(ws => /extrato/i.test(ws.name))
@@ -630,12 +668,24 @@ export async function uploadAndStagePetloveRemittance(
 ): Promise<StageRemittanceResult | StageRemittanceError> {
   const file = formData.get('file')
   if (!(file instanceof File)) return { error: 'Nenhum arquivo enviado.' }
-  if (!/\.xlsx$/i.test(file.name)) return { error: 'Apenas arquivos .xlsx são aceitos.' }
   if (file.size > 10 * 1024 * 1024) return { error: 'Arquivo excede 10 MB.' }
+
+  // Aceita .xlsx/.xlsm/.xls. Se a extensão for outra, ainda tentamos parsear
+  // (alguns usuários salvam sem extensão) — o parser detecta pela magic byte.
+  const ext = (file.name.match(/\.([^.]+)$/)?.[1] ?? '').toLowerCase()
+  const recognizedExt = ['xlsx', 'xlsm', 'xls'].includes(ext)
+  if (!recognizedExt && ext) {
+    return { error: `Extensão ".${ext}" não é aceita. A Petlove exporta em .xlsx (moderno) ou .xls (legado). Re-baixe a planilha no portal e tente novamente.` }
+  }
 
   const buffer = await file.arrayBuffer()
   const parsed = await parsePetloveXlsx(buffer)
-  if ('error' in parsed) return parsed
+  if ('error' in parsed) {
+    const hint = ext === 'xls'
+      ? ' Dica: o arquivo .xls antigo deve ter sido baixado direto do portal Petlove — se foi exportado por outra ferramenta, abra no Excel e salve como .xlsx.'
+      : ''
+    return { error: parsed.error + hint }
+  }
 
   const staged = await stageRemittance(parsed)
   if ('error' in staged) return staged
