@@ -97,7 +97,7 @@ export default async function TriageScreen({
         userRole={profile.role}
         insuranceCard={insuranceCard}
       />
-      {/* Chat contextual gerenciado pelo FloatingChatWindow via ChatContextProvider */}
+
     </div>
   )
 }

@@ -2343,7 +2343,7 @@ export default function ConsultationDetail({
         </div>
       )}
 
-      {/* Chat contextual gerenciado pelo FloatingChatWindow via ChatContextProvider */}
+
     </>
   )
 }

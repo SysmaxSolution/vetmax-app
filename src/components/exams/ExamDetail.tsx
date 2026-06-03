@@ -677,7 +677,7 @@ export default function ExamDetail({
         </div>
       )}
 
-      {/* Chat contextual gerenciado pelo FloatingChatWindow via ChatContextProvider */}
+
     </>
   )
 }
