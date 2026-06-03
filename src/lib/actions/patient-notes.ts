@@ -215,7 +215,6 @@ export async function recordPatientDeath(
       deceased_at:          deceasedAt.toISOString(),
       deceased_cause:       input.cause?.trim() || null,
       deceased_recorded_by: user_id,
-      updated_at:           new Date().toISOString(),
     })
     .eq('id', input.patient_id)
     .eq('clinic_id', clinic_id)
