@@ -202,6 +202,28 @@ export async function runMatchEngine(remittanceId: string): Promise<{ updated: n
     }
   }
 
+  // tutor_id → nome (para desambiguar pets de mesmo nome por tutor).
+  // Necessário porque o chip da planilha pode não bater quando o pet já
+  // existe no banco SEM chip cadastrado — neste caso confiamos no par
+  // (pet_name + tutor_name) e depois preenchemos o chip do cadastro.
+  const candidateTutorIds = new Set<string>()
+  for (const list of petsByName.values()) for (const p of list) if (p.tutor_id) candidateTutorIds.add(p.tutor_id)
+  for (const p of petsByChip.values()) if (p.tutor_id) candidateTutorIds.add(p.tutor_id)
+  const tutorNameById = new Map<string, string>()
+  if (candidateTutorIds.size > 0) {
+    const ids = Array.from(candidateTutorIds)
+    const BATCH = 200
+    for (let i = 0; i < ids.length; i += BATCH) {
+      const batch = ids.slice(i, i + BATCH)
+      const { data: tutors } = await supabase
+        .from('tutors')
+        .select('id, name')
+        .eq('clinic_id', clinicId)
+        .in('id', batch)
+      for (const t of tutors ?? []) tutorNameById.set(t.id, t.name)
+    }
+  }
+
   let updates = 0
   const counters = { matched: 0, partial: 0, orphan: 0, missing: 0 }
   const errors: string[] = []
@@ -224,27 +246,81 @@ export async function runMatchEngine(remittanceId: string): Promise<{ updated: n
   for (const line of lines) {
     const chip = normalizeChip(line.microchip_raw)
     const nameKey = normalizeName(line.pet_name_raw)
+    const tutorKey = normalizeName(line.tutor_name_raw)
 
     let patient = chip ? petsByChip.get(chip) ?? null : null
     let confidence = 0
     let note: Record<string, unknown> = {}
+    let chipNeedsFillIn = false
 
-    // Fallback por nome SÓ se a linha NÃO tem chip.
-    // Se tem chip e não bate, o pet é NOVO (não pode ser confundido com
-    // outro pet de mesmo nome de outro tutor — bug visual relatado pela
-    // Vet Teste: contava 8 a cadastrar mas marcava todos como orphan).
+    // 1) Match por (nome do pet + nome do tutor) — cobre o caso em que o
+    //    cadastro existe SEM microchip e a planilha traz o chip. Antes desta
+    //    blindagem, esse caso virava missing_patient_profile → o bulk register
+    //    criava um pet duplicado.
+    if (!patient && nameKey && tutorKey) {
+      const candidates = petsByName.get(nameKey) ?? []
+      const tutorMatched = candidates.filter(c => {
+        const tname = c.tutor_id ? normalizeName(tutorNameById.get(c.tutor_id) ?? '') : ''
+        return tname && tname === tutorKey
+      })
+      if (tutorMatched.length === 1) {
+        patient = tutorMatched[0]
+        confidence = chip ? 75 : 70
+        note.fallback = chip ? 'name_tutor_match_chip_missing_in_db' : 'name_tutor_no_chip'
+        if (chip) chipNeedsFillIn = true
+      } else if (tutorMatched.length > 1) {
+        note.ambiguity = `${tutorMatched.length} pets "${line.pet_name_raw}" do tutor "${line.tutor_name_raw}" — resolva manualmente`
+      }
+    }
+
+    // 2) Fallback por nome único na clínica (sem tutor identificável) — só
+    //    se a linha NÃO tem chip. Mantém o comportamento legado para
+    //    remessas em aberto sem coluna de tutor preenchida.
     if (!patient && !chip && nameKey) {
       const candidates = petsByName.get(nameKey) ?? []
       if (candidates.length === 1) {
         patient = candidates[0]
         confidence = 55
         note.fallback = 'name_only_no_chip'
-      } else if (candidates.length > 1) {
+      } else if (candidates.length > 1 && !note.ambiguity) {
         note.ambiguity = `${candidates.length} pets com nome "${line.pet_name_raw}" — adicione microchip ao cadastro`
       }
-    } else if (!patient && chip) {
-      // Chip presente mas não bate → pet é novo, não tenta fallback
+    }
+
+    // 3) Diagnóstico: chip da planilha não bateu e nenhum match secundário
+    if (!patient && chip) {
       note.reason_chip = `chip ${chip} não encontrado na clínica`
+    }
+
+    // 4) Preenchimento de chip: se casamos por (nome+tutor) e o cadastro
+    //    estava sem chip, grava o chip da planilha no patient e atualiza o
+    //    cache local para que outras linhas da mesma remessa com o mesmo
+    //    chip já batam direto via petsByChip.
+    if (patient && chipNeedsFillIn && chip) {
+      const { data: cur } = await supabase
+        .from('patients')
+        .select('microchip_id, microchip')
+        .eq('id', patient.id)
+        .eq('clinic_id', clinicId)
+        .maybeSingle()
+      const curChip = (cur?.microchip_id ?? cur?.microchip ?? '').replace(/^#/, '').trim()
+      if (!curChip) {
+        const { error: chipErr } = await supabase
+          .from('patients')
+          .update({ microchip_id: chip, microchip: chip })
+          .eq('id', patient.id)
+          .eq('clinic_id', clinicId)
+        if (chipErr) {
+          note.chip_fill_error = chipErr.message
+        } else {
+          note.chip_filled = chip
+          petsByChip.set(chip, patient)
+        }
+      } else if (curChip !== chip) {
+        // O cadastro já tem chip diferente. Não sobrescreve — sinaliza
+        // discrepância para auditoria manual.
+        note.chip_mismatch = { db: curChip, planilha: chip }
+      }
     }
 
     if (!patient) {
