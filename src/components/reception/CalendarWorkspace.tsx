@@ -422,11 +422,13 @@ function EventDetailCard({ event, onClose, onCheckIn, onCancel, onEdit, onOpenPe
 interface Props {
   clinicName: string
   userName?:  string
+  /** Campos exigidos no check-in disparado pela Agenda — mesma config da Recepção. */
+  checkinRequiredFields?: string[]
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 
-export default function CalendarWorkspace({ clinicName }: Props) {
+export default function CalendarWorkspace({ clinicName, checkinRequiredFields = ['address', 'emergency_contact'] }: Props) {
   const router = useRouter()
   const today  = new Date()
 
@@ -763,7 +765,7 @@ export default function CalendarWorkspace({ clinicName }: Props) {
             tutorAddress={scheduledCheckIn.tutorAddress}
             tutorEmergencyContact={scheduledCheckIn.tutorEmergencyContact}
             clinicChecklist={[]}
-            checkinRequiredFields={['address', 'emergency_contact']}
+            checkinRequiredFields={checkinRequiredFields}
             onClose={() => setScheduledCheckIn(null)}
             onSuccess={async ({ patientName }) => {
               // Após o check-in criar a consultation, marca o appointment original
