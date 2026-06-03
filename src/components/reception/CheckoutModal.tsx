@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, Loader2, Receipt, AlertCircle } from 'lucide-react'
+import { X, Loader2, Receipt, AlertCircle, Gift } from 'lucide-react'
 import {
-  getInvoiceWithItems, processSplitPayment, processPayment,
+  getInvoiceWithItems, processSplitPayment, processPayment, markInvoiceAsCourtesy,
   type InvoiceWithDetails,
 } from '@/lib/actions/billing'
 import InsuranceExportPanel from '@/components/reception/InsuranceExportPanel'
@@ -42,6 +42,19 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
   const [discountInput, setDiscountInput] = useState('')
   const [editingPrices, setEditingPrices] = useState<Record<string, string>>({})
   const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [confirmCourtesy, setConfirmCourtesy]   = useState(false)
+  const [submittingCourtesy, setSubmittingCourtesy] = useState(false)
+
+  async function handleConfirmCourtesy() {
+    if (!invoice || submittingCourtesy) return
+    setSubmittingCourtesy(true)
+    setError(null)
+    const res = await markInvoiceAsCourtesy(invoice.id, 'Procedimento sem cobrança (regra de negócio da clínica)')
+    setSubmittingCourtesy(false)
+    if ('error' in res) { setError(res.error); return }
+    setConfirmCourtesy(false)
+    onSuccess(invoice.patient.name, 0)
+  }
   const [insuranceSplit, setInsuranceSplit] = useState<{
     charge_now:        number
     receivable:        number
@@ -399,15 +412,24 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
               >
                 Cancelar
               </button>
-              <button
-                onClick={openPaymentFlow}
-                disabled={totalDue <= 0.005}
-                data-mentor-step="cashier-open-payment-modal-btn"
-                title={totalDue <= 0.005 ? 'Total zerado — sem nada a receber.' : undefined}
-                className="flex-1 rounded-xl bg-teal-600 py-3 text-sm font-semibold text-white hover:bg-teal-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                <Receipt className="h-4 w-4" /> Receber
-              </button>
+              {totalDue <= 0.005 ? (
+                <button
+                  onClick={() => setConfirmCourtesy(true)}
+                  data-mentor-step="cashier-courtesy-btn"
+                  title="Esta fatura está zerada — pode ser baixada como cortesia."
+                  className="flex-1 rounded-xl bg-violet-600 py-3 text-sm font-semibold text-white hover:bg-violet-700 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Gift className="h-4 w-4" /> Baixar como cortesia
+                </button>
+              ) : (
+                <button
+                  onClick={openPaymentFlow}
+                  data-mentor-step="cashier-open-payment-modal-btn"
+                  className="flex-1 rounded-xl bg-teal-600 py-3 text-sm font-semibold text-white hover:bg-teal-700 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Receipt className="h-4 w-4" /> Receber
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -462,6 +484,42 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
           onCancel={() => setShowPaymentModal(false)}
           onConfirm={handlePaymentConfirm}
         />
+      )}
+
+      {confirmCourtesy && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4" onClick={() => !submittingCourtesy && setConfirmCourtesy(false)}>
+          <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl p-5 space-y-3" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-100">
+                <Gift className="h-5 w-5 text-violet-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Confirmar cortesia</h3>
+                <p className="text-xs text-slate-500">Esta fatura está zerada</p>
+              </div>
+            </div>
+            <p className="text-sm text-slate-600">
+              O atendimento de <strong>{invoice.patient.name}</strong> não tem valor a cobrar. Deseja baixar como <strong>cortesia</strong>?
+              A fatura será marcada como liquidada e sai da fila do caixa.
+            </p>
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => setConfirmCourtesy(false)}
+                disabled={submittingCourtesy}
+                className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Voltar
+              </button>
+              <button
+                onClick={handleConfirmCourtesy}
+                disabled={submittingCourtesy}
+                className="flex-1 rounded-xl bg-violet-600 py-2.5 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {submittingCourtesy ? <><Loader2 className="h-4 w-4 animate-spin" /> Confirmando…</> : <>Sim, é cortesia</>}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   )

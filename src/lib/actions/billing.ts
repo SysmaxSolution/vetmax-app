@@ -1241,3 +1241,74 @@ export async function generatePartialInvoice(
   revalidatePath('/dashboard/cashier')
   return { id: invoice.id, items_count: items.length, total: subtotal }
 }
+
+// ─── markInvoiceAsCourtesy ────────────────────────────────────────────────────
+// Baixa uma fatura zerada como cortesia. Usado quando a clínica tem
+// procedimentos que, por regra de negócio, não são cobrados (ex.: retorno,
+// reavaliação cortesia). Não cria entrada em central_cashier porque o tutor
+// não paga nada — apenas marca a fatura como liquidada para sair da fila.
+//
+// Pré-condição: invoice.status='pending' e (total_amount - paid_amount) <= 0.01.
+// Se houver saldo a receber, a função retorna erro (caller deve usar o
+// fluxo normal de pagamento).
+export async function markInvoiceAsCourtesy(
+  invoiceId: string,
+  reason?: string,
+): Promise<{ success: true } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('clinic_id')
+    .eq('id', user.id)
+    .single()
+  if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
+
+  const admin = createAdminClient()
+
+  const { data: invoice, error: fetchErr } = await admin
+    .from('invoices')
+    .select('id, status, total_amount, paid_amount, consultation_id')
+    .eq('id', invoiceId)
+    .eq('clinic_id', profile.clinic_id)
+    .single()
+  if (fetchErr || !invoice) return { error: 'Fatura não encontrada.' }
+  if (invoice.status === 'paid')      return { error: 'Esta fatura já está paga.' }
+  if (invoice.status === 'cancelled') return { error: 'Esta fatura foi cancelada.' }
+
+  const remaining = Number(invoice.total_amount ?? 0) - Number(invoice.paid_amount ?? 0)
+  if (remaining > 0.01) {
+    return { error: 'Fatura ainda tem saldo a receber. Use o fluxo normal de pagamento.' }
+  }
+
+  const { error: updErr } = await admin
+    .from('invoices')
+    .update({
+      status:         'paid',
+      payment_method: 'courtesy',
+      paid_at:        new Date().toISOString(),
+      updated_at:     new Date().toISOString(),
+    })
+    .eq('id', invoiceId)
+    .eq('clinic_id', profile.clinic_id)
+  if (updErr) return { error: 'Erro ao baixar fatura: ' + updErr.message }
+
+  // Audit best-effort
+  try {
+    await admin.from('audit_logs').insert({
+      clinic_id:   profile.clinic_id,
+      user_id:     user.id,
+      action:      'INVOICE_COURTESY',
+      entity_type: 'invoices',
+      entity_id:   invoiceId,
+      details:     { reason: reason ?? null, total_amount: invoice.total_amount },
+    })
+  } catch { /* audit best-effort */ }
+
+  revalidatePath('/dashboard/cashier')
+  revalidatePath('/dashboard/reception/checkout')
+  revalidatePath('/dashboard/financial')
+  return { success: true }
+}

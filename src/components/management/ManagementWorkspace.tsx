@@ -40,6 +40,7 @@ const MODULE_LABELS_PT: Record<string, string> = {
   consultation:          'Consultório',
   exams:                 'Exames',
   hospitalization:       'Internação',
+  surgery:               'Centro Cirúrgico',
   grooming:              'Banho e Tosa',
   pharmacy:              'Farmácia / Estoque',
   sales:                 'Vendas (PDV)',
@@ -52,6 +53,7 @@ const MODULE_LABELS_PT: Record<string, string> = {
   whatsapp_intelligent:  'WhatsApp IA',
   mentor:                'Mentor IA',
   petlove_reconciliation: 'Conciliação Petlove',
+  internal_chat:         'Chat Interno',
 }
 import PremiumPaywall from '@/components/paywall/PremiumPaywall'
 

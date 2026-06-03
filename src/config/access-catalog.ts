@@ -204,6 +204,12 @@ export const ACCESS_CATALOG: AccessModule[] = [
     description: 'Importação de extratos e conciliação financeira do convênio Petlove.',
     actions: ['view', 'create', 'edit', 'export', 'approve'],
   },
+  {
+    key:   'internal_chat',
+    label: 'Chat Interno',
+    description: 'Mensagens entre a equipe, salas automáticas por consulta/internação/cirurgia e anexos.',
+    actions: ['view', 'create', 'edit', 'delete'],
+  },
 ]
 
 // Helper: lista chave de permissão única (module ou module.tab)
