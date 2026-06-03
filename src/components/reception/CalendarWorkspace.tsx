@@ -15,7 +15,7 @@ import {
   CalendarOff, Trash2,
 } from 'lucide-react'
 import {
-  confirmArrival, cancelAppointment,
+  confirmArrival, markAppointmentArrived, cancelAppointment,
   getTodayCountsByProfessional, type ProfessionalCount,
 } from '@/lib/actions/appointments'
 import { cancelGroomingSession } from '@/lib/actions/grooming'
@@ -30,6 +30,9 @@ import PatientLink from '@/components/PatientLink'
 import PatientFullModal from '@/components/patients/PatientFullModal'
 import NewAppointmentModal from './NewAppointmentModal'
 import EditAppointmentModal from './EditAppointmentModal'
+import { CheckInModal } from './CheckInModal'
+import { getTutorWithPatients } from '@/lib/actions/tutors'
+import type { VisitReason, PaymentStatus } from '@/types'
 import ReceptionSubNav from './ReceptionSubNav'
 import UnavailabilityModal from '@/components/appointments/UnavailabilityModal'
 
@@ -47,25 +50,20 @@ const localizer = dateFnsLocalizer({
 
 const UNASSIGNED_ID = '__unassigned__'
 
+import { VISIT_REASON_LABELS } from '@/lib/visit-reasons'
+
 const EVENT_COLORS: Record<string, string> = {
-  consultation: '#2563eb',
-  follow_up:    '#6366f1',
-  vaccination:  '#16a34a',
-  surgery:      '#dc2626',
-  exam:         '#7c3aed',
-  emergency:    '#ea580c',
-  grooming:     '#0d9488',
+  consultation:  '#2563eb',
+  follow_up:     '#6366f1',
+  vaccination:   '#16a34a',
+  surgery:       '#dc2626',
+  exam:          '#7c3aed',
+  emergency:     '#ea580c',
+  grooming:      '#0d9488',
+  microchipping: '#6366f1',
 }
 
-const REASON_LABELS: Record<string, string> = {
-  consultation: 'Consulta',
-  follow_up:    'Retorno',
-  vaccination:  'Vacinação',
-  surgery:      'Cirurgia',
-  exam:         'Exame',
-  emergency:    'Emergência',
-  grooming:     'Banho & Tosa',
-}
+const REASON_LABELS: Record<string, string> = VISIT_REASON_LABELS
 
 const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
   scheduled:      { label: 'Agendado',        cls: 'bg-blue-100 text-blue-700' },
@@ -457,6 +455,18 @@ export default function CalendarWorkspace({ clinicName }: Props) {
   const [sendingSchedule, setSendingSchedule] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
   const [isPending, startTransition] = useTransition()
+  // Modal de check-in disparado pela Agenda (botão "Fazer Check-in" no card de detalhe)
+  const [scheduledCheckIn, setScheduledCheckIn] = useState<{
+    appointmentId: string
+    patientId:     string
+    patientName:   string
+    tutorId:       string
+    tutorName:     string
+    tutorAddress:  string | null
+    tutorEmergencyContact: string | null
+    visitReason:   VisitReason
+    paymentStatus: PaymentStatus
+  } | null>(null)
 
   const allEvents = useMemo<RBCEvent[]>(() => [...events, ...unavailEvents], [events, unavailEvents])
 
@@ -507,15 +517,34 @@ export default function CalendarWorkspace({ clinicName }: Props) {
   }
 
   function handleCheckIn(apptId: string) {
+    // Em vez de criar check-in direto, abre o MESMO CheckInModal usado em
+    // Recepção > Atendimento, pré-populado com os dados do agendamento.
+    // Após o usuário confirmar, criamos a consultation via fluxo padrão
+    // e marcamos o appointment como 'arrived'.
     startTransition(async () => {
-      const res = await confirmArrival(apptId)
-      if ('error' in res) {
-        showToastMsg(res.error, 'error')
-      } else {
-        showToastMsg('Check-in realizado! Pet está na fila de espera.')
-        setSelected(null)
-        fetchRange(date, view)
+      const event = selected
+      if (!event || event.sourceId !== apptId || !event.petId) {
+        showToastMsg('Agendamento sem dados completos para check-in.', 'error')
+        return
       }
+      // Busca tutor_id do pet + dados completos do tutor
+      const petData = await getPatientById(event.petId)
+      if ('error' in petData) {
+        showToastMsg(petData.error, 'error')
+        return
+      }
+      setScheduledCheckIn({
+        appointmentId: apptId,
+        patientId:     event.petId,
+        patientName:   event.petName,
+        tutorId:       petData.tutor.id,
+        tutorName:     petData.tutor.name ?? '',
+        tutorAddress:  petData.tutor.address ?? null,
+        tutorEmergencyContact: petData.tutor.emergency_contact ?? null,
+        visitReason:   (event.reason ?? 'consultation') as VisitReason,
+        paymentStatus: 'pending',
+      })
+      setSelected(null)
     })
   }
 
@@ -720,6 +749,36 @@ export default function CalendarWorkspace({ clinicName }: Props) {
             onOpenPet={handleOpenPet}
             loadingPet={loadingPetId === selected.petId}
             isPending={isPending}
+          />
+        )}
+
+        {/* Check-in scheduled — abre o MESMO modal usado em Recepção > Atendimento */}
+        {scheduledCheckIn && (
+          <CheckInModal
+            mode="new_checkin"
+            patientId={scheduledCheckIn.patientId}
+            patientName={scheduledCheckIn.patientName}
+            tutorId={scheduledCheckIn.tutorId}
+            tutorName={scheduledCheckIn.tutorName}
+            tutorAddress={scheduledCheckIn.tutorAddress}
+            tutorEmergencyContact={scheduledCheckIn.tutorEmergencyContact}
+            clinicChecklist={[]}
+            checkinRequiredFields={['address', 'emergency_contact']}
+            onClose={() => setScheduledCheckIn(null)}
+            onSuccess={async ({ patientName }) => {
+              // Após o check-in criar a consultation, marca o appointment original
+              // como 'arrived' (sem duplicar — confirmArrival cria consultation,
+              // markAppointmentArrived só altera o status).
+              const apptId = scheduledCheckIn.appointmentId
+              setScheduledCheckIn(null)
+              const r = await markAppointmentArrived(apptId)
+              if ('error' in r) {
+                showToastMsg('Check-in OK, mas erro ao atualizar agendamento: ' + r.error, 'error')
+              } else {
+                showToastMsg(`Check-in de ${patientName} realizado.`, 'success')
+              }
+              fetchRange(date, view)
+            }}
           />
         )}
 

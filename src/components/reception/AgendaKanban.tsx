@@ -18,15 +18,9 @@ const COLUMN_STYLES: Record<string, { bg: string; border: string; badge: string;
   completed:    { bg: 'bg-slate-50',  border: 'border-slate-200',  badge: 'bg-slate-100 text-slate-600',   headerColor: 'bg-slate-500',  icon: CheckCircle2 },
 }
 
-const VISIT_REASON_LABELS: Record<string, string> = {
-  consultation:  'Consulta',
-  follow_up:     'Retorno',
-  emergency:     'Emergência',
-  vaccination:   'Vacinação',
-  exam:          'Exame',
-  surgery:       'Cirurgia',
-  microchipping: 'Microchipagem',
-}
+import { VISIT_REASON_LABELS as UNIFIED_REASON_LABELS } from '@/lib/visit-reasons'
+
+const VISIT_REASON_LABELS: Record<string, string> = UNIFIED_REASON_LABELS
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 

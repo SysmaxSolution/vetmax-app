@@ -38,14 +38,11 @@ const SPECIES_LABELS: Record<string, { label: string; emoji: string; color: stri
 
 const GENDER_LABELS: Record<string, string> = { male: 'Macho', female: 'Fêmea', unknown: 'N/I' }
 
-const VISIT_REASON_OPTIONS = [
-  { value: 'consultation' as VisitReason, label: 'Consulta', emoji: '👨‍⚕️' },
-  { value: 'follow_up' as VisitReason, label: 'Retorno', emoji: '📋' },
-  { value: 'emergency' as VisitReason, label: 'Emergência', emoji: '🚨' },
-  { value: 'vaccination' as VisitReason, label: 'Vacinação', emoji: '💉' },
-  { value: 'exam' as VisitReason, label: 'Exame', emoji: '🔬' },
-  { value: 'surgery' as VisitReason, label: 'Cirurgia', emoji: '🏥' },
-]
+import { VISIT_REASON_OPTIONS as ALL_VISIT_REASONS } from '@/lib/visit-reasons'
+
+// Catálogo unificado — filtra grooming porque o histórico de check-ins não cobre
+// banho e tosa (fluxo separado em grooming_sessions).
+const VISIT_REASON_OPTIONS = ALL_VISIT_REASONS.filter(o => o.value !== 'grooming') as { value: VisitReason; label: string; emoji: string }[]
 
 const PAYMENT_STATUS_OPTIONS = [
   { value: 'pending' as const, label: 'Pendente' },

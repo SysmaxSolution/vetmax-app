@@ -9,16 +9,11 @@ import { DateInput } from '@/components/ui/DatePicker'
 import ActivePackagesBanner from './ActivePackagesBanner'
 import ServiceComboBox, { type SelectedService } from './ServiceComboBox'
 
-const VISIT_REASON_OPTIONS: { value: VisitReason; label: string; emoji: string; color: string }[] = [
-  { value: 'consultation', label: 'Consulta', emoji: '👨‍⚕️', color: 'bg-slate-100 text-slate-700' },
-  { value: 'follow_up', label: 'Retorno', emoji: '📋', color: 'bg-slate-100 text-slate-700' },
-  { value: 'emergency', label: 'Emergência', emoji: '🚨', color: 'bg-red-100 text-red-700' },
-  { value: 'vaccination', label: 'Vacinação', emoji: '💉', color: 'bg-green-100 text-green-700' },
-  { value: 'exam', label: 'Exame', emoji: '🔬', color: 'bg-purple-100 text-purple-700' },
-  { value: 'surgery', label: 'Cirurgia', emoji: '🏥', color: 'bg-orange-100 text-orange-700' },
-  // Item 4 (2026-06-02): fluxo simplificado — abre prontuário mínimo no consultório
-  { value: 'microchipping', label: 'Microchipagem', emoji: '🐶', color: 'bg-indigo-100 text-indigo-700' },
-]
+import { VISIT_REASON_OPTIONS as ALL_REASONS } from '@/lib/visit-reasons'
+
+// Check-in direto cria uma consultation — grooming tem fluxo próprio
+// (TutorProfile > Check-in B&T), então é filtrado aqui.
+const VISIT_REASON_OPTIONS = ALL_REASONS.filter(o => o.value !== 'grooming') as { value: VisitReason; label: string; emoji: string; color: string }[]
 
 const PAYMENT_STATUS_OPTIONS: { value: PaymentStatus; label: string }[] = [
   { value: 'pending', label: 'Pendente' },

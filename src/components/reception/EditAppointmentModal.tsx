@@ -16,10 +16,9 @@ const SPECIES_EMOJI: Record<string, string> = {
   rabbit: '🐰', rodent: '🐹', reptile: '🦎', fish: '🐟',
 }
 
-const REASON_LABELS: Record<string, string> = {
-  consultation: 'Consulta', follow_up: 'Retorno', emergency: 'Emergência',
-  vaccination: 'Vacinação', exam: 'Exame', surgery: 'Cirurgia', grooming: 'Banho e Tosa',
-}
+import { VISIT_REASON_LABELS } from '@/lib/visit-reasons'
+
+const REASON_LABELS: Record<string, string> = VISIT_REASON_LABELS
 
 function todayStr() {
   return new Date().toISOString().split('T')[0]

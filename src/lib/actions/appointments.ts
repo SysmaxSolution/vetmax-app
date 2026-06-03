@@ -329,6 +329,37 @@ export async function confirmArrival(
   }
 }
 
+/**
+ * markAppointmentArrived: variante de confirmArrival que APENAS marca o
+ * appointment como 'arrived' — SEM criar consultation. Usado quando o
+ * CheckInModal já criou a consultation pelo fluxo padrão e só falta
+ * atualizar o status do agendamento original.
+ */
+export async function markAppointmentArrived(
+  appointmentId: string,
+): Promise<{ success: true } | { error: string }> {
+  try {
+    const auth = await getUserClinic()
+    if ('error' in auth) return auth
+
+    const supabase = await createClient()
+    const { error } = await supabase
+      .from('appointments')
+      .update({ status: 'arrived' })
+      .eq('id', appointmentId)
+      .eq('clinic_id', auth.clinicId)
+
+    if (error) return { error: 'Erro ao marcar agendamento como atendido: ' + error.message }
+
+    revalidatePath('/dashboard/reception')
+    revalidatePath('/dashboard/reception/calendar')
+    return { success: true }
+  } catch (err) {
+    console.error('[markAppointmentArrived]', err)
+    return { error: 'Erro interno.' }
+  }
+}
+
 // ─── Contagem de atendimentos por profissional (hoje) ─────────────────────────
 
 export interface ProfessionalCount {

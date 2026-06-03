@@ -17,15 +17,15 @@ import type { BookedRange } from '@/lib/actions/appointment-slots'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const VISIT_REASON_OPTIONS = [
-  { value: 'consultation', label: 'Consulta',         moduleKey: 'consultation' },
-  { value: 'follow_up',    label: 'Retorno',          moduleKey: 'consultation' },
-  { value: 'emergency',    label: 'Emergência',       moduleKey: null },
-  { value: 'vaccination',  label: 'Vacinação',        moduleKey: null },
-  { value: 'exam',         label: 'Exame',            moduleKey: 'exams' },
-  { value: 'surgery',      label: 'Cirurgia',         moduleKey: 'consultation' },
-  { value: 'grooming',     label: '✂️ Banho e Tosa', moduleKey: 'grooming' },
-]
+import { VISIT_REASON_OPTIONS as ALL_REASONS } from '@/lib/visit-reasons'
+
+// Catálogo unificado — usa o mesmo conjunto que CheckInModal/AgendaKanban.
+// Cada motivo já vem com moduleKey próprio para gating por clínica.
+const VISIT_REASON_OPTIONS = ALL_REASONS.map(o => ({
+  value:     o.value,
+  label:     o.value === 'grooming' ? '✂️ Banho e Tosa' : o.label,
+  moduleKey: o.moduleKey ?? null,
+}))
 
 const DEFAULT_SERVICES = [
   'Banho Simples', 'Banho Completo', 'Tosa Higiênica', 'Tosa Completa',
