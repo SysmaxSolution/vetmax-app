@@ -98,7 +98,7 @@ export default function NotificationBell({ clinicId }: { clinicId: string }) {
 
       const delta = curr - prev
       showBrowserNotification(
-        `${delta} nova${delta > 1 ? 's' : ''} mensagem${delta > 1 ? 'ns' : ''} não lida${delta > 1 ? 's' : ''}`
+        `${delta} ${delta > 1 ? 'novas mensagens não lidas' : 'nova mensagem não lida'}`
       )
     }
 
@@ -280,7 +280,7 @@ export default function NotificationBell({ clinicId }: { clinicId: string }) {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-slate-900">Chat Interno</p>
                     <p className="text-xs text-slate-500">
-                      {hasChatUnread ? `${counts.chat_unread} mensagem${counts.chat_unread > 1 ? 'ns' : ''} não lida${counts.chat_unread > 1 ? 's' : ''}` : 'Mensagens não lidas da equipe'}
+                      {hasChatUnread ? `${counts.chat_unread} ${counts.chat_unread > 1 ? 'mensagens não lidas' : 'mensagem não lida'}` : 'Mensagens não lidas da equipe'}
                     </p>
                   </div>
                   <span className={`flex-shrink-0 rounded-full text-[10px] font-bold px-2 py-0.5 min-w-[22px] text-center ${

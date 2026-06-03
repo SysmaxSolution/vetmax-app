@@ -518,10 +518,10 @@ export default function ImportTemplateModal({
         const sig = new Uint8Array(head)
         // PKZip magic: 50 4B 03 04
         if (sig[0] !== 0x50 || sig[1] !== 0x4B || sig[2] !== 0x03 || sig[3] !== 0x04) {
-          return 'O arquivo tem extensao .docx mas nao parece ser um documento Word valido.'
+          return 'O arquivo tem extensão .docx mas não parece ser um documento Word válido.'
         }
       } catch {
-        return 'Nao foi possivel ler o arquivo DOCX.'
+        return 'Não foi possível ler o arquivo DOCX.'
       }
       return null
     }
@@ -533,10 +533,10 @@ export default function ImportTemplateModal({
       const head = await file.slice(0, 8).arrayBuffer()
       const sig = new TextDecoder().decode(new Uint8Array(head, 0, 4))
       if (sig !== '%PDF') {
-        return 'O arquivo tem extensao .pdf mas nao e um PDF valido (header %PDF ausente). Verifique se ele nao foi renomeado de outro formato (TXT, DOCX, imagem) ou se o download nao foi corrompido.'
+        return 'O arquivo tem extensão .pdf mas não é um PDF válido (header %PDF ausente). Verifique se ele não foi renomeado de outro formato (TXT, DOCX, imagem) ou se o download não foi corrompido.'
       }
     } catch {
-      return 'Nao foi possivel ler o conteudo do arquivo selecionado.'
+      return 'Não foi possível ler o conteúdo do arquivo selecionado.'
     }
     return null
   }
@@ -1474,7 +1474,7 @@ export default function ImportTemplateModal({
           {step === 'adding_field' && (
             <div className="px-6 py-6 space-y-4">
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Label (Exibido para usuario)</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Label (Exibido para usuário)</label>
                 <input
                   type="text"
                   value={newField.label}

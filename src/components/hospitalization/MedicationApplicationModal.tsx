@@ -166,7 +166,7 @@ export default function MedicationApplicationModal({
             <div>
               <h2 className="text-base font-bold text-slate-900">Medicações · {patientName}</h2>
               <p className="text-[11px] text-slate-500">
-                {sortedPrescriptions.length} prescrição{sortedPrescriptions.length !== 1 ? 'ões' : ''} ·{' '}
+                {sortedPrescriptions.length} {sortedPrescriptions.length !== 1 ? 'prescrições' : 'prescrição'} ·{' '}
                 {scheduler.isAlerting && <span className="text-rose-600 font-semibold">{scheduler.alerts.filter(a => a.isOverdue).length} atrasada(s)</span>}
                 {!scheduler.isAlerting && scheduler.hasImminent && <span className="text-amber-600 font-semibold">{scheduler.alerts.filter(a => a.isImminent).length} chegando</span>}
                 {!scheduler.isAlerting && !scheduler.hasImminent && <span>tudo no horário</span>}

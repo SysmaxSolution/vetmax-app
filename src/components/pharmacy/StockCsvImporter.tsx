@@ -226,7 +226,7 @@ export default function StockCsvImporter({ mode, onDone, onClose }: Props) {
               {isProducts ? <>
                 <li>Colunas: <code className="bg-slate-100 px-1 rounded">nome, categoria, quantidade, unidade, preco, estoque_minimo</code></li>
                 <li>Categorias válidas: <code className="bg-slate-100 px-1 rounded">{PRODUCT_CATEGORIES.join(', ')}</code></li>
-                <li>Colunas opcionais: marca, fornecedor, lote, validade (DD/MM/AAAA), controlado (sim/nao)</li>
+                <li>Colunas opcionais: marca, fornecedor, lote, validade (DD/MM/AAAA), controlado (sim/não)</li>
               </> : <>
                 <li>Colunas: <code className="bg-slate-100 px-1 rounded">nome, categoria, preco</code></li>
                 <li>Categorias válidas: <code className="bg-slate-100 px-1 rounded">{SERVICE_CATEGORIES.join(', ')}</code></li>

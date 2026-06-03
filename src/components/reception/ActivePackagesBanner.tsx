@@ -64,7 +64,7 @@ export default function ActivePackagesBanner({ petId, petName }: Props) {
           <Gift className="h-5 w-5 text-teal-600 shrink-0" />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-bold text-teal-800">
-              Pacotes Ativos — Restam {totalRemaining} sessão{totalRemaining !== 1 ? 'ões' : ''}
+              Pacotes Ativos — Restam {totalRemaining} {totalRemaining !== 1 ? 'sessões' : 'sessão'}
             </p>
             <p className="text-xs text-teal-600 truncate">
               {packages.map(p => p.package?.name ?? '—').join(', ')}

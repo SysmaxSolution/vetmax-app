@@ -525,7 +525,7 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole, activ
           mode={isServiceView ? 'services' : 'products'}
           onDone={inserted => {
             setCsvImportOpen(false)
-            showToast(`${inserted} item${inserted !== 1 ? 's' : ''} importado${inserted !== 1 ? 's' : ''}!`)
+            showToast(`${inserted} ${inserted !== 1 ? 'itens importados' : 'item importado'}!`)
             setTimeout(() => window.location.reload(), 1800)
           }}
           onClose={() => setCsvImportOpen(false)}

@@ -444,7 +444,7 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
                 <div>
                   <h3 className="text-base font-bold text-slate-900">Procedimento em carência</h3>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Esta consulta tem item{waitingItems.length > 1 ? 'ns' : ''} ainda em carência no plano do tutor.
+                    Esta consulta tem {waitingItems.length > 1 ? 'itens' : 'item'} ainda em carência no plano do tutor.
                   </p>
                 </div>
               </div>

@@ -282,11 +282,11 @@ export default function ElementQuickEditPopover({
         <button
           type="button"
           onClick={onRepeatOnAllPages}
-          title="Cria copias deste elemento nas demais paginas, mantendo as coordenadas"
+          title="Cria cópias deste elemento nas demais páginas, mantendo as coordenadas"
           className="mt-2 w-full flex items-center justify-center gap-1.5 px-2 py-1.5 text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded hover:bg-amber-100 transition-colors"
         >
           <CopyPlus className="w-3.5 h-3.5" />
-          Repetir em todas as paginas
+          Repetir em todas as páginas
         </button>
       )}
 

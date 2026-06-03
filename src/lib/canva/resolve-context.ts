@@ -130,7 +130,7 @@ function calculateAge(birthDate: string | null | undefined): string {
   if (years >= 1) return `${years} ano${years > 1 ? 's' : ''}`
   // bebês: meses
   const months = (now.getFullYear() - birth.getFullYear()) * 12 + m
-  return `${Math.max(0, months)} mes${months !== 1 ? 'es' : ''}`
+  return `${Math.max(0, months)} ${months !== 1 ? 'meses' : 'mês'}`
 }
 
 // Usado em buildResolveContext quando o documentDate é a "agora".

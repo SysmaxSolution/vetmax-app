@@ -126,10 +126,10 @@ export default function NewFieldDialog({
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-sm font-semibold text-slate-800">
-              {isRepeatMode ? 'Adicionar posicao extra' : 'Novo campo'}
+              {isRepeatMode ? 'Adicionar posição extra' : 'Novo campo'}
             </h3>
             <p className="text-[11px] text-slate-500 mt-0.5">
-              Pagina {page + 1} &middot; X:{rect.x_pct.toFixed(1)}% Y:{rect.y_pct.toFixed(1)}%
+              Página {page + 1} &middot; X:{rect.x_pct.toFixed(1)}% Y:{rect.y_pct.toFixed(1)}%
               {' '}({rect.w_pct.toFixed(1)}% &times; {rect.h_pct.toFixed(1)}%)
             </p>
           </div>
@@ -144,11 +144,11 @@ export default function NewFieldDialog({
           <div className="flex items-start gap-2 p-3 mb-3 bg-amber-50 border border-amber-200 rounded-lg">
             <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
             <div className="text-[11px] text-amber-800 leading-snug">
-              <p className="font-semibold">Campo ja existe no template.</p>
+              <p className="font-semibold">Campo já existe no template.</p>
               <p className="mt-0.5">
-                Esta posicao sera vinculada a <code className="px-1 bg-amber-100 rounded">{existingMatch.field_name}</code>.
-                Quando o usuario preencher o valor, ele aparecera nesta posicao E em todas as outras
-                posicoes vinculadas (ex: logo/cabecalho/assinatura repetidos por pagina).
+                Esta posição será vinculada a <code className="px-1 bg-amber-100 rounded">{existingMatch.field_name}</code>.
+                Quando o usuário preencher o valor, ele aparecerá nesta posição E em todas as outras
+                posições vinculadas (ex: logo/cabeçalho/assinatura repetidos por página).
               </p>
             </div>
           </div>
@@ -197,17 +197,17 @@ export default function NewFieldDialog({
                   type="text"
                   value={label}
                   onChange={e => setLabel(e.target.value)}
-                  placeholder="ex: Diametro Sistolico"
+                  placeholder="ex: Diâmetro Sistólico"
                   className="mt-1 w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <p className="text-[10px] text-slate-400 mt-1">
-                  Como o campo aparecera no preenchimento. Aparece tambem no PDF gerado se mantido.
+                  Como o campo aparecerá no preenchimento. Aparece também no PDF gerado se mantido.
                 </p>
               </div>
 
               <div>
                 <label className="text-xs font-medium text-slate-700">
-                  Nome tecnico (field_name) <span className="text-red-500">*</span>
+                  Nome técnico (field_name) <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -217,9 +217,9 @@ export default function NewFieldDialog({
                   className="mt-1 w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <p className="text-[10px] text-slate-400 mt-1">
-                  snake_case, usado como variavel no PDF ({'{{'}{fieldName || 'campo'}{'}}'}).
+                  snake_case, usado como variável no PDF ({'{{'}{fieldName || 'campo'}{'}}'}).
                   {' '}<strong>Dica:</strong> digite o nome de um campo existente
-                  para criar uma posicao adicional (ex: cabecalho repetido por pagina).
+                  para criar uma posição adicional (ex: cabeçalho repetido por página).
                 </p>
               </div>
 
@@ -256,7 +256,7 @@ export default function NewFieldDialog({
             <details className="text-[11px] text-slate-500">
               <summary className="cursor-pointer hover:text-slate-700 select-none">
                 <Copy className="w-3 h-3 inline-block -mt-0.5 mr-1" />
-                Ou repita um campo ja existente nesta posicao
+                Ou repita um campo já existente nesta posição
               </summary>
               <div className="mt-2 max-h-32 overflow-y-auto border border-slate-200 rounded-lg p-1 bg-slate-50">
                 {existingFields.map(f => (
@@ -296,7 +296,7 @@ export default function NewFieldDialog({
             }
           >
             {isRepeatMode
-              ? <><Copy className="w-4 h-4" />Adicionar posicao extra</>
+              ? <><Copy className="w-4 h-4" />Adicionar posição extra</>
               : <><Plus className="w-4 h-4" />Adicionar campo</>}
           </button>
         </div>

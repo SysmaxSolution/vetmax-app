@@ -2048,7 +2048,7 @@ export default function ConsultationDetail({
                   {partialChargeNotice && (
                     <p className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 flex items-center gap-1.5">
                       <Receipt className="h-3.5 w-3.5" />
-                      Fatura parcial criada ({partialChargeNotice.items} item{partialChargeNotice.items > 1 ? 'ns' : ''} ·
+                      Fatura parcial criada ({partialChargeNotice.items} {partialChargeNotice.items > 1 ? 'itens' : 'item'} ·
                       R$ {partialChargeNotice.total.toFixed(2).replace('.', ',')}). Os exames lançados a seguir vão para uma nova fatura ao finalizar.
                     </p>
                   )}
@@ -2156,7 +2156,7 @@ export default function ConsultationDetail({
             setShowChargeBeforeExams(false)
             if (charged) {
               setPartialChargeNotice({ total: charged.total, items: charged.items })
-              setToast({ type: 'success', message: `Consulta cobrada: ${charged.items} item${charged.items > 1 ? 'ns' : ''} → caixa.` })
+              setToast({ type: 'success', message: `Consulta cobrada: ${charged.items} ${charged.items > 1 ? 'itens' : 'item'} → caixa.` })
             }
             setShowExamRequestModal(true)
           }}
