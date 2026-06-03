@@ -55,7 +55,6 @@ export default async function ReceptionPage() {
         userName={profile.full_name}
         clinicChecklist={clinicChecklist}
         clinicId={profile.clinic_id}
-        userId={user.id}
         checkinRequiredFields={checkinRequiredFields}
       />
     </div>

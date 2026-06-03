@@ -19,8 +19,6 @@ import { UpgradeProvider } from '@/components/upgrade/UpgradeProvider'
 import ChatNotificationsHost from '@/components/layout/ChatNotificationsHost'
 import { FREE_ROUTES } from '@/config/access-matrix'
 import type { PlanName, BusinessType } from '@/types'
-import { ChatContextProvider } from '@/components/providers/ChatContextProvider'
-import FloatingChatWindow from '@/components/internal-chat/FloatingChatWindow'
 
 export default async function DashboardLayout({
   children,
@@ -222,7 +220,6 @@ export default async function DashboardLayout({
 
   return (
     <section className="min-h-screen bg-slate-50">
-      <ChatContextProvider clinicId={profile.clinic_id} userId={user.id} userName={profile.full_name ?? ''}>
       <DashboardHeader
         userName={profile.full_name}
         clinicName={clinicName}
@@ -272,8 +269,6 @@ export default async function DashboardLayout({
           sem aviso de "Acesso negado". Os links sem permissão já não aparecem
           no menu. Mantemos a Suspense vazia para preservar a estrutura. */}
       <Suspense fallback={null}>{null}</Suspense>
-      <FloatingChatWindow />
-      </ChatContextProvider>
       <SysmaxFooter />
     </section>
   )

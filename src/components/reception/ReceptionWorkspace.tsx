@@ -22,7 +22,6 @@ import type { SearchResult } from '@/lib/actions/tutors'
 import type { VisitReason, PatientSpecies } from '@/types'
 import { getPatientById, type PatientsListItem } from '@/lib/actions/timeline'
 import QuickPetRegisterModal from './QuickPetRegisterModal'
-import ContextualChatPanel from '@/components/internal-chat/ContextualChatPanel'
 import QueueActionModal from './QueueActionModal'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -86,7 +85,6 @@ interface Props {
   userName: string
   clinicChecklist?: string[]
   clinicId: string
-  userId?: string
   checkinRequiredFields?: string[]
 }
 
@@ -254,14 +252,13 @@ const calcAge = formatPetAge
 
 // ─── Queue Card ───────────────────────────────────────────────────────────────
 function QueueCard({
-  item, onMoveToTriage, triageActive, onOpenPet, loadingPetId, onOpenChat, onCancel, onReschedule,
+  item, onMoveToTriage, triageActive, onOpenPet, loadingPetId, onCancel, onReschedule,
 }: {
   item: ReceptionQueueItem
   onMoveToTriage: (id: string) => void
   triageActive: boolean
   onOpenPet: (patientId: string) => void
   loadingPetId: string | null
-  onOpenChat?: (consultationId: string, patientName: string) => void
   onCancel: (item: ReceptionQueueItem) => void
   onReschedule: (item: ReceptionQueueItem) => void
 }) {
@@ -342,16 +339,6 @@ function QueueCard({
         >
           {triageActive ? 'Chamar Triagem →' : 'Enviar ao Consultório →'}
         </button>
-        {onOpenChat && (
-          <button
-            type="button"
-            title="Abrir chat deste atendimento"
-            onClick={(e) => { e.stopPropagation(); onOpenChat(item.id, item.patient.name) }}
-            className="flex items-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-xs font-medium text-violet-700 hover:bg-violet-100 transition-colors"
-          >
-            💬 Chat
-          </button>
-        )}
         <div className="flex items-center gap-1.5">
           <button
             type="button"
@@ -376,7 +363,7 @@ function QueueCard({
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, userName, clinicChecklist = [], clinicId, userId, checkinRequiredFields }: Props) {
+export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, userName, clinicChecklist = [], clinicId, checkinRequiredFields }: Props) {
   const [queue, setQueue] = useState<ReceptionQueueItem[]>(initialQueue)
   const [history, setHistory] = useState<ReceptionHistoryItem[]>(initialHistory)
 
@@ -386,9 +373,6 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
   const [loadingKanban, setLoadingKanban] = useState(false)
 
   useRealtimeSync({ table: 'consultations', clinicId })
-
-  // Chat contextual da recepção
-  const [activeChat, setActiveChat] = useState<{ consultationId: string; patientName: string } | null>(null)
 
   // Sync props → state when server component refreshes
   useEffect(() => { setQueue(initialQueue) }, [initialQueue])
@@ -895,7 +879,6 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
                   triageActive={triageActive}
                   onOpenPet={handleOpenPet}
                   loadingPetId={loadingPetEditId}
-                  onOpenChat={userId ? (cId, pName) => setActiveChat({ consultationId: cId, patientName: pName }) : undefined}
                   onCancel={it => setQueueAction({
                     mode: 'cancel',
                     consultationId: it.id,
@@ -1072,18 +1055,6 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
         />
       )}
 
-      {/* Chat contextual do atendimento selecionado */}
-      {activeChat && userId && (
-        <ContextualChatPanel
-          key={activeChat.consultationId}
-          entityType="consultation"
-          entityId={activeChat.consultationId}
-          clinicId={clinicId}
-          userId={userId}
-          userName={userName ?? 'Recepção'}
-          patientName={activeChat.patientName}
-        />
-      )}
 
       {/* Cancelar ou Reagendar atendimento da fila */}
       {queueAction && (

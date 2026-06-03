@@ -5,7 +5,6 @@ import { getPatientVaccines } from '@/lib/actions/vaccines'
 import { getPetlovePriceHistoryForPet } from '@/lib/actions/petlove-import'
 import { patientHasInsurance, getPetlovePatientHistory } from '@/lib/actions/patient-custom-prices'
 import { getInsuranceCard } from '@/lib/actions/insurance-coverage'
-import { getPatientChatHistory } from '@/lib/actions/internal-chat'
 import PetlovePriceHistory from '@/components/pet/PetlovePriceHistory'
 import PetlovePatientHistory from '@/components/pet/PetlovePatientHistory'
 import InsuranceCard from '@/components/pet/InsuranceCard'
@@ -14,7 +13,7 @@ import Link from 'next/link'
 import {
   ArrowLeft, PawPrint, User, Syringe, Calendar,
   Phone, MapPin, Heart, AlertTriangle, CheckCircle2,
-  Info, MessageSquare, ChevronDown, ChevronRight,
+  Info,
 } from 'lucide-react'
 
 const SPECIES_LABELS: Record<string, string> = {
@@ -32,14 +31,13 @@ export default async function PatientProfilePage({ params }: { params: Promise<{
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const [patientResult, vaccinesResult, petloveResult, insuranceResult, historyResult, insuranceCardResult, chatHistoryResult] = await Promise.all([
+  const [patientResult, vaccinesResult, petloveResult, insuranceResult, historyResult, insuranceCardResult] = await Promise.all([
     getPatientById(id),
     getPatientVaccines(id),
     getPetlovePriceHistoryForPet(id),
     patientHasInsurance(id),
     getPetlovePatientHistory(id),
     getInsuranceCard(id),
-    getPatientChatHistory(id),
   ])
 
   if ('error' in patientResult) notFound()
@@ -50,7 +48,6 @@ export default async function PatientProfilePage({ params }: { params: Promise<{
   const insurance = 'error' in insuranceResult ? null : insuranceResult
   const insuranceCard = 'error' in insuranceCardResult ? null : insuranceCardResult
   const petloveHistory = Array.isArray(historyResult) ? historyResult : []
-  const chatHistory    = Array.isArray(chatHistoryResult) ? chatHistoryResult : []
   const today    = new Date().toISOString().split('T')[0]
 
   const overdue  = vaccines.filter(v => v.next_due_date && v.next_due_date < today)
@@ -243,73 +240,6 @@ export default async function PatientProfilePage({ params }: { params: Promise<{
             </div>
           )}
         </div>
-
-        {/* Histórico de Comunicações por Atendimento */}
-        {chatHistory.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-50">
-                <MessageSquare className="h-4 w-4 text-violet-600" />
-              </div>
-              <div>
-                <h2 className="text-base font-semibold text-slate-900">Comunicações por Atendimento</h2>
-                <p className="text-xs text-slate-500">Mensagens trocadas pela equipe durante os atendimentos</p>
-              </div>
-              <span className="ml-auto rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-semibold text-violet-700">
-                {chatHistory.length} atendimento{chatHistory.length > 1 ? 's' : ''}
-              </span>
-            </div>
-
-            <div className="divide-y divide-slate-50">
-              {chatHistory.map((thread) => {
-                const VISIT_LABELS: Record<string, string> = {
-                  consultation: 'Consulta', follow_up: 'Retorno', emergency: 'Emergência',
-                  vaccination: 'Vacinação', exam: 'Exame', surgery: 'Cirurgia',
-                }
-                return (
-                  <details key={thread.chat_id} className="group">
-                    <summary className="flex items-center gap-3 px-5 py-3 cursor-pointer hover:bg-slate-50 transition-colors list-none">
-                      <ChevronRight className="h-4 w-4 text-slate-400 group-open:rotate-90 transition-transform flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-slate-800">
-                          {VISIT_LABELS[thread.visit_reason] ?? thread.visit_reason}
-                        </p>
-                        <p className="text-xs text-slate-400">
-                          {new Date(thread.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
-                          {' · '}{thread.messages.length} mensagem{thread.messages.length > 1 ? 'ns' : ''}
-                        </p>
-                      </div>
-                      <span className="flex-shrink-0 rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-600">
-                        {thread.messages.length}
-                      </span>
-                    </summary>
-
-                    <div className="px-5 pb-4 space-y-2 bg-slate-50/50">
-                      {thread.messages.map(msg => (
-                        <div key={msg.id} className="flex gap-2.5">
-                          <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-violet-100 text-[10px] font-bold text-violet-700 mt-0.5">
-                            {(msg.sender_name ?? '?').charAt(0).toUpperCase()}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-[11px] font-semibold text-slate-600">
-                              {msg.sender_name ?? 'Sistema'}
-                              <span className="ml-1.5 font-normal text-slate-400">
-                                {new Date(msg.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                              </span>
-                            </p>
-                            <p className="text-sm text-slate-700 whitespace-pre-wrap break-words">
-                              {msg.kind === 'attachment' ? `📎 ${msg.body}` : msg.body}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </details>
-                )
-              })}
-            </div>
-          </div>
-        )}
 
       </main>
     </div>

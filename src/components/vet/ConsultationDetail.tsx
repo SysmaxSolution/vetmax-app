@@ -51,7 +51,6 @@ import type { Attachment } from '@/lib/actions/attachments'
 import type { FlowConfig } from '@/lib/actions/clinic-settings'
 import { getClinicVoiceTriggers, updateClinicVoiceTriggers } from '@/lib/actions/clinic-settings'
 import { useAiTranscriptionMode } from '@/components/providers/ClinicConfigProvider'
-import { useSetChatContext } from '@/components/providers/ChatContextProvider'
 
 // ─── Labels ──────────────────────────────────────────────────────────────────
 
@@ -156,7 +155,6 @@ export default function ConsultationDetail({
   const { patient, tutor, vital_signs, past_consultations } = consultation
 
   // Registra contexto de chat para esta consulta
-  useSetChatContext({ type: 'procedure', entityType: 'consultation', entityId: consultation.id, patientName: consultation.patient.name })
 
   // Estado do prontuário
   const [vetNotes, setVetNotes] = useState(consultation.vet_notes ?? '')

@@ -12,7 +12,6 @@ import { useClinicalVoiceAssistant } from '@/hooks/useClinicalVoiceAssistant'
 import { useNativeKeepAwake } from '@/hooks/useNativeKeepAwake'
 import { getClinicVoiceTriggers, updateClinicVoiceTriggers } from '@/lib/actions/clinic-settings'
 import { useAiTranscriptionMode } from '@/components/providers/ClinicConfigProvider'
-import { useSetChatContext } from '@/components/providers/ChatContextProvider'
 import { returnToVet, dischargeFromExams } from '@/lib/actions/exams'
 import { formatPetAge } from '@/lib/utils/pet-age'
 import { Toast } from '@/components/ui/toast'
@@ -79,7 +78,6 @@ export default function ExamDetail({
   const { patient, tutor, vital_signs } = consultation
 
   // Registra contexto de chat para este exame (mesma sala da consulta)
-  useSetChatContext({ type: 'procedure', entityType: 'consultation', entityId: consultation.id, patientName: consultation.patient.name })
 
   // Exam notes for the vet
   const [examNotes,     setExamNotes]     = useState('')
