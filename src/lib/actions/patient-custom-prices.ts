@@ -263,6 +263,7 @@ export async function listClinicServicesForCustomPricing(): Promise<CatalogServi
     `)
     .eq('clinic_id', clinicId)
     .eq('is_service', true)
+    .is('archived_at', null)
     .order('name', { ascending: true })
 
   if (error) {
@@ -272,6 +273,7 @@ export async function listClinicServicesForCustomPricing(): Promise<CatalogServi
       .select('id, name, unit_price, default_insurance_price')
       .eq('clinic_id', clinicId)
       .eq('is_service', true)
+      .is('archived_at', null)
       .order('name', { ascending: true })
     if (err2 || !fb) return { error: err2?.message ?? error.message }
     return fb.map((r: any) => ({

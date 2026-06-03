@@ -354,6 +354,7 @@ export async function getPharmacyStockV2(): Promise<StockItemV2[] | { error: str
     .from('stock_items')
     .select(STOCK_V2_FIELDS)
     .eq('clinic_id', ctx.clinic_id)
+    .is('archived_at', null)
     .order('name', { ascending: true })
 
   if (error) return { error: 'Erro ao buscar estoque: ' + error.message }
@@ -368,6 +369,7 @@ export async function getLowStockItemsV2(): Promise<StockItemV2[] | { error: str
     .from('stock_items')
     .select(STOCK_V2_FIELDS)
     .eq('clinic_id', ctx.clinic_id)
+    .is('archived_at', null)
     .order('name', { ascending: true })
 
   if (error) return { error: 'Erro ao buscar alertas: ' + error.message }
@@ -609,6 +611,11 @@ export async function adjustStockItemV2(
   return { success: true }
 }
 
+/**
+ * Soft-delete de stock_items. DELETE físico falha por FK em consultation_services,
+ * stock_movements, invoice_items etc. Marca archived_at e remove das listagens
+ * operacionais — preserva histórico e relatórios. Reversível via UPDATE.
+ */
 export async function deleteStockItemV2(itemId: string): Promise<{ success: true } | { error: string }> {
   const ctx = await getClinicAndUser()
   if (!ctx) return { error: 'Não autenticado.' }
@@ -617,9 +624,10 @@ export async function deleteStockItemV2(itemId: string): Promise<{ success: true
 
   const { error } = await admin
     .from('stock_items')
-    .delete()
+    .update({ archived_at: new Date().toISOString(), archived_by: ctx.user.id })
     .eq('id', itemId)
     .eq('clinic_id', ctx.clinic_id)
+    .is('archived_at', null)
 
   if (error) return { error: 'Erro ao remover item: ' + error.message }
 

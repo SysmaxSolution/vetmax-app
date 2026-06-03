@@ -1718,9 +1718,13 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                   patientName={petName}
                   isDeceased={!!(patient as any)?.deceased_at}
                   onDeathRecorded={() => {
-                    // Após registrar óbito, fecha o modal para o router refletir o
-                    // novo estado (avatar cinza + bloqueio de atendimento).
-                    setTimeout(() => onClose(), 1200)
+                    // O cadastro permanece aberto após o óbito — o usuário pode
+                    // anexar documentos, atualizar tutor, registrar notas e
+                    // demais ajustes que continuem necessários. Apenas os fluxos
+                    // de atendimento (check-in/triagem/consultório/etc.) ficam
+                    // bloqueados, conforme regra de negócio.
+                    // (NÃO fechar o modal — só reload da lista de notas, que
+                    // o próprio panel já refresca após onSaved.)
                   }}
                 />
               )}

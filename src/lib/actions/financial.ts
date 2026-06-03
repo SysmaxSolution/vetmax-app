@@ -161,6 +161,9 @@ export interface CreditCard {
   requires_nsu:     boolean
   is_active:        boolean
   created_at:       string
+  /** Juros próprios da clínica para parcelamento — opcionais, exclusivos entre si. */
+  interest_percent: number | null
+  interest_amount:  number | null
 }
 
 export interface CreateCreditCardData {
@@ -172,6 +175,8 @@ export interface CreateCreditCardData {
   fee_percent:      number
   days_to_receive:  number
   requires_nsu?:    boolean
+  interest_percent?: number | null
+  interest_amount?:  number | null
 }
 
 export interface Employee {
@@ -1110,7 +1115,7 @@ export async function listCreditCards(): Promise<CreditCard[] | { error: string 
   const admin = createAdminClient()
   const { data, error } = await admin
     .from('credit_cards')
-    .select('id, clinic_id, name, administrator, brand, type, installments_max, fee_percent, days_to_receive, requires_nsu, is_active, created_at')
+    .select('id, clinic_id, name, administrator, brand, type, installments_max, fee_percent, days_to_receive, requires_nsu, is_active, created_at, interest_percent, interest_amount')
     .eq('clinic_id', clinicId)
     .order('name')
 
@@ -1138,8 +1143,10 @@ export async function createCreditCard(
       fee_percent:      data.fee_percent,
       days_to_receive:  data.days_to_receive,
       requires_nsu:     data.requires_nsu ?? false,
+      interest_percent: data.interest_percent ?? null,
+      interest_amount:  data.interest_amount ?? null,
     })
-    .select('id, clinic_id, name, administrator, brand, type, installments_max, fee_percent, days_to_receive, requires_nsu, is_active, created_at')
+    .select('id, clinic_id, name, administrator, brand, type, installments_max, fee_percent, days_to_receive, requires_nsu, is_active, created_at, interest_percent, interest_amount')
     .single()
 
   if (error) return { error: 'Erro ao criar cartão: ' + error.message }
@@ -1162,6 +1169,8 @@ export async function updateCreditCard(
   if (data.fee_percent      !== undefined) updates.fee_percent      = data.fee_percent
   if (data.days_to_receive  !== undefined) updates.days_to_receive  = data.days_to_receive
   if (data.requires_nsu     !== undefined) updates.requires_nsu     = data.requires_nsu
+  if (data.interest_percent !== undefined) updates.interest_percent = data.interest_percent
+  if (data.interest_amount  !== undefined) updates.interest_amount  = data.interest_amount
 
   const admin = createAdminClient()
   const { error } = await admin

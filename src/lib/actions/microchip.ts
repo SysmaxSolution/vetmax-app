@@ -50,6 +50,7 @@ export async function findMicrochippingService(): Promise<{ id: string; name: st
     .eq('clinic_id', clinic_id)
     .eq('is_service', true)
     .eq('sku', 'MICROCHIPAGEM')
+    .is('archived_at', null)
     .maybeSingle()
   if (bySku) return { id: bySku.id as string, name: bySku.name as string }
 
@@ -58,6 +59,7 @@ export async function findMicrochippingService(): Promise<{ id: string; name: st
     .select('id, name')
     .eq('clinic_id', clinic_id)
     .eq('is_service', true)
+    .is('archived_at', null)
     .ilike('name', '%microchip%')
     .limit(1)
     .maybeSingle()

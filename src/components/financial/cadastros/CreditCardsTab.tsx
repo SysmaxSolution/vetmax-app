@@ -76,6 +76,17 @@ function CardModal({
   const [feePercent,     setFeePercent]     = useState<string>(card ? String(card.fee_percent).replace('.', ',') : '')
   const [daysToReceive,  setDaysToReceive]  = useState<string>(card ? String(card.days_to_receive) : '30')
   const [maxInstallments, setMaxInstallments] = useState<string>(card ? String(card.installments_max) : '1')
+  // Juros próprios da clínica (opcional) — pode ser % ou R$ (mutuamente exclusivos)
+  const [interestMode,   setInterestMode]   = useState<'none' | 'percent' | 'amount'>(
+    card?.interest_percent != null ? 'percent' : card?.interest_amount != null ? 'amount' : 'none'
+  )
+  const [interestValue,  setInterestValue]  = useState<string>(
+    card?.interest_percent != null
+      ? String(card.interest_percent).replace('.', ',')
+      : card?.interest_amount != null
+        ? String(card.interest_amount).replace('.', ',')
+        : ''
+  )
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const [confirmDel, setConfirmDel] = useState(false)
@@ -91,9 +102,24 @@ function CardModal({
     if (!Number.isFinite(instaVal) || instaVal < 1) { setError('Máximo de parcelas deve ser >= 1.'); return }
     if (!Number.isFinite(daysVal) || daysVal < 0) { setError('Prazo (dias) inválido.'); return }
 
+    let interest_percent: number | null = null
+    let interest_amount: number | null = null
+    if (interestMode !== 'none' && interestValue.trim() !== '') {
+      const v = parseFloat(interestValue.replace(',', '.'))
+      if (!Number.isFinite(v) || v < 0) { setError('Juros inválido.'); return }
+      if (interestMode === 'percent') {
+        if (v > 100) { setError('Juros (%) deve ser entre 0 e 100.'); return }
+        interest_percent = v
+      } else {
+        interest_amount = v
+      }
+    }
+
     const payload: CreateCreditCardData = {
       ...form, fee_percent: feeVal, days_to_receive: daysVal, installments_max: instaVal,
       requires_nsu: form.requires_nsu ?? false,
+      interest_percent,
+      interest_amount,
     }
 
     startTransition(async () => {
@@ -201,6 +227,39 @@ function CardModal({
               </span>
             </span>
           </label>
+
+          {/* Juros próprios da clínica (opcional) */}
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <label className={`${labelClass} mb-2`}>Juros que a clínica cobra do tutor (opcional)</label>
+            <div className="grid grid-cols-1 sm:grid-cols-[170px_1fr] gap-2">
+              <select
+                value={interestMode}
+                onChange={e => {
+                  const m = e.target.value as 'none' | 'percent' | 'amount'
+                  setInterestMode(m)
+                  if (m === 'none') setInterestValue('')
+                }}
+                className={fieldClass}
+              >
+                <option value="none">Sem juros</option>
+                <option value="percent">Percentual (%)</option>
+                <option value="amount">Valor fixo (R$)</option>
+              </select>
+              {interestMode !== 'none' && (
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={interestValue}
+                  onChange={e => setInterestValue(e.target.value.replace(/[^0-9.,]/g, ''))}
+                  placeholder={interestMode === 'percent' ? 'Ex: 2,99' : 'Ex: 5,00'}
+                  className={fieldClass}
+                />
+              )}
+            </div>
+            <p className="text-[11px] text-slate-500 mt-1.5">
+              Não confundir com a taxa da operadora acima. Esse juros é o que a clínica acrescenta ao parcelar pelo cartão.
+            </p>
+          </div>
 
           {error && (
             <div className="flex items-start gap-2 rounded-xl bg-red-50 border border-red-200 px-3 py-2">
