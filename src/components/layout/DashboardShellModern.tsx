@@ -1,9 +1,12 @@
 /**
- * Layout Moderno — réplica inicial do layout Clássico.
+ * Layout Moderno — shell com design system próprio.
  *
- * Este componente é uma cópia fiel do DashboardShellClassic e serve como
- * ponto de partida para evoluções visuais do layout sem risco de regressão
- * no layout atual. Altere apenas este arquivo ao desenvolver o layout Moderno.
+ * Toda a diferenciação visual fica em:
+ *   1. data-layout="modern"  → atributo raiz para escopo de CSS
+ *   2. ModernStyles           → estilos injetados, escopo isolado
+ *
+ * O DashboardHeader e providers são OS MESMOS do Classic —
+ * a diferença é puramente visual via CSS. Nunca altere o Classic.
  */
 import { Suspense } from 'react'
 import DashboardHeader from '@/components/layout/DashboardHeader'
@@ -16,6 +19,7 @@ import { SysmaxFooter } from '@/components/ui/SysmaxFooter'
 import OnboardingWizard from '@/components/onboarding/OnboardingWizard'
 import { UpgradeProvider } from '@/components/upgrade/UpgradeProvider'
 import ChatNotificationsHost from '@/components/layout/ChatNotificationsHost'
+import ModernStyles from '@/components/layout/ModernStyles'
 import type { DashboardShellProps } from './DashboardShellClassic'
 
 // ─── Layout Moderno ───────────────────────────────────────────────────────────
@@ -28,7 +32,13 @@ export default function DashboardShellModern({
   hasLogo, hasPets, businessType, userId, children,
 }: DashboardShellProps) {
   return (
-    <section className="min-h-screen bg-slate-50">
+    // data-layout="modern" é a âncora de todos os estilos do ModernStyles.
+    // Remover este atributo desativa o design system Modern imediatamente.
+    <section data-layout="modern" className="min-h-screen bg-slate-50">
+
+      {/* Injeta o design system Modern — não afeta o Classic */}
+      <ModernStyles />
+
       <DashboardHeader
         userName={userName}
         clinicName={clinicName}
@@ -47,6 +57,7 @@ export default function DashboardShellModern({
         allowedRoutes={allowedRoutes}
         centroCirurgico={centroCirurgico}
       />
+
       <ThemeProvider initialPreferences={uiPreferences as any}>
         <ClinicConfigProvider
           aiTranscriptionMode={aiTranscriptionMode as any}
@@ -62,6 +73,7 @@ export default function DashboardShellModern({
           </ModulesProvider>
         </ClinicConfigProvider>
       </ThemeProvider>
+
       {!isSysmax && (
         <OnboardingWizard
           initialHasLogo={hasLogo}
