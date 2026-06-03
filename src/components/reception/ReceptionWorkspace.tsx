@@ -178,12 +178,20 @@ function TutorProfile({
           <div className="space-y-2">
             {data.patients.map(p => {
               const sp = SPECIES_LABELS[p.species] ?? { emoji: '🐾', label: p.species, color: 'bg-slate-100 text-slate-600' }
+              const isDeceased = !!(p as any).deceased_at
               return (
-                <div key={p.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-xl border border-slate-100 px-4 py-3 hover:border-slate-200 hover:bg-slate-50 transition-colors">
+                <div key={p.id} className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-xl border px-4 py-3 transition-colors ${isDeceased ? 'border-violet-200 bg-violet-50/40' : 'border-slate-100 hover:border-slate-200 hover:bg-slate-50'}`}>
                   <div className="flex items-center gap-3 min-w-0">
-                    <PetAvatar name={p.name} species={p.species} photoUrl={p.photo_url} size="sm" />
+                    <PetAvatar name={p.name} species={p.species} photoUrl={p.photo_url} size="sm" deceased={isDeceased} />
                     <div className="min-w-0">
-                      <p className="font-medium text-slate-900 truncate">{p.name}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className={`font-medium truncate ${isDeceased ? 'text-violet-800' : 'text-slate-900'}`}>{p.name}</p>
+                        {isDeceased && (
+                          <span className="text-[10px] font-bold uppercase tracking-wider rounded-full bg-violet-100 text-violet-700 px-2 py-0.5">
+                            🕊️ In memoriam
+                          </span>
+                        )}
+                      </div>
                       <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                         <span className={`text-xs font-medium rounded-full px-2 py-0.5 ${sp.color}`}>{sp.label}</span>
                         {p.breed && <span className="text-xs text-slate-500">{p.breed}</span>}
@@ -198,9 +206,9 @@ function TutorProfile({
                       className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
                       title="Ver histórico do pet"
                     >
-                      Feed
+                      {isDeceased ? 'Ver histórico' : 'Feed'}
                     </button>
-                    {consultationActive && (
+                    {!isDeceased && consultationActive && (
                       <button
                         data-mentor-step="reception-checkin-btn"
                         onClick={() => onSelectPatient(p.id, p.name, data.tutor.id, data.tutor.name ?? '', data.tutor.address || null, data.tutor.emergency_contact || null)}
@@ -209,7 +217,7 @@ function TutorProfile({
                         Check-in
                       </button>
                     )}
-                    {consultationActive && (
+                    {!isDeceased && consultationActive && (
                       <button
                         onClick={() => onScheduleAppointment(p.id, p.name, data.tutor.id, data.tutor.name ?? '', data.tutor.address || null, data.tutor.emergency_contact || null, p.species)}
                         className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
@@ -217,7 +225,7 @@ function TutorProfile({
                         Agendar
                       </button>
                     )}
-                    {groomingActive && onGroomingCheckin && (
+                    {!isDeceased && groomingActive && onGroomingCheckin && (
                       <button
                         onClick={() => onGroomingCheckin(p.id, p.name, data.tutor.id, data.tutor.name ?? '')}
                         className="rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 transition-colors"
@@ -226,7 +234,7 @@ function TutorProfile({
                         ✂️ Check-in B&T
                       </button>
                     )}
-                    {groomingActive && onGroomingSchedule && (
+                    {!isDeceased && groomingActive && onGroomingSchedule && (
                       <button
                         onClick={() => onGroomingSchedule(p.id, p.name, data.tutor.id, data.tutor.name ?? '')}
                         className="rounded-lg border border-teal-300 bg-teal-50 px-3 py-1.5 text-xs font-semibold text-teal-700 hover:bg-teal-100 transition-colors"

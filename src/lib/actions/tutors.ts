@@ -144,7 +144,7 @@ export async function getTutorByCpf(cpf: string): Promise<
 
 // ─── Busca Tutor por ID com todos os seus Pets (para perfil) ─────────────────
 export async function getTutorWithPatients(tutorId: string): Promise<
-  { tutor: { id: string; name: string | null; cpf: string | null; phone: string | null; email: string | null; address: string | null; emergency_contact: string | null }; patients: { id: string; name: string; species: string; breed: string | null; neutered: boolean; gender: string | null; photo_url: string | null }[] } | { error: string }
+  { tutor: { id: string; name: string | null; cpf: string | null; phone: string | null; email: string | null; address: string | null; emergency_contact: string | null }; patients: { id: string; name: string; species: string; breed: string | null; neutered: boolean; gender: string | null; photo_url: string | null; deceased_at: string | null }[] } | { error: string }
 > {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -171,12 +171,12 @@ export async function getTutorWithPatients(tutorId: string): Promise<
 
   const { data: patients } = await admin
     .from('patients')
-    .select('id, name, species, breed, neutered, gender, photo_url')
+    .select('id, name, species, breed, neutered, gender, photo_url, deceased_at')
     .eq('tutor_id', tutorId)
     .eq('clinic_id', profile.clinic_id)
     .order('name')
 
-  return { tutor, patients: patients ?? [] }
+  return { tutor, patients: (patients ?? []) as any[] }
 }
 
 // ─── Cadastro Composto: Tutor + Pet em sequência ──────────────────────────────

@@ -21,6 +21,8 @@ export type TimelineEventType =
   | 'whatsapp_notification'
   | 'petlove_event'
   | 'weight_update'
+  | 'patient_note'
+  | 'memorial'
 
 export interface TimelineEvent {
   id: string
@@ -117,6 +119,24 @@ export interface TimelineEvent {
     source:       string
     description:  string
   }
+  patient_note?: {
+    id:              string
+    note_type:       'observation' | 'clinical' | 'behavior' | 'other'
+    title:           string | null
+    content:         string
+    metadata:        Record<string, unknown>
+    created_by_name: string | null
+  }
+  memorial?: {
+    id:               string
+    patient_name:     string
+    deceased_at:      string
+    cause:            string | null
+    place:            string | null
+    body_destination: string | null
+    weight_at_death:  number | null
+    observations:     string | null
+  }
 }
 
 // Ordem para mesmo timestamp (DESC)
@@ -134,6 +154,8 @@ const SORT_ORDER: Record<TimelineEventType, number> = {
   whatsapp_notification:     8,
   petlove_event:             9,
   weight_update:            10,
+  patient_note:             11,
+  memorial:                -10,   // SEMPRE no topo: evento mais marcante do feed
 }
 
 // ─── Server Action ────────────────────────────────────────────────────────────
@@ -515,8 +537,87 @@ export async function getPetTimeline(
       })
     }
 
-    // 7. Ordena: mais recente primeiro; mesmo timestamp → por tipo
+    // 11. Notas do pet (patient_notes). Notas de óbito viram card MEMORIAL
+    //     (especial — sort_order negativo, sempre no topo do feed).
+    const { data: patientNotes } = await supabase
+      .from('patient_notes')
+      .select(`
+        id, note_type, title, content, metadata, created_at,
+        profiles!patient_notes_created_by_fkey ( full_name )
+      `)
+      .eq('clinic_id', clinicId)
+      .eq('patient_id', petId)
+      .order('created_at', { ascending: false })
+
+    const { data: petInfo } = await supabase
+      .from('patients')
+      .select('name, deceased_at, deceased_cause')
+      .eq('id', petId)
+      .single()
+
+    let memorialAdded = false
+    for (const note of (patientNotes ?? []) as any[]) {
+      const meta = (note.metadata as Record<string, unknown>) ?? {}
+      if (note.note_type === 'death') {
+        if (memorialAdded) continue
+        memorialAdded = true
+        events.push({
+          id:   `memorial-${note.id}`,
+          type: 'memorial',
+          date: (meta.deceased_at as string) ?? note.created_at,
+          memorial: {
+            id:               note.id,
+            patient_name:     petInfo?.name ?? '',
+            deceased_at:      (meta.deceased_at as string) ?? note.created_at,
+            cause:            (meta.cause as string | null) ?? null,
+            place:            (meta.place as string | null) ?? null,
+            body_destination: (meta.body_destination as string | null) ?? null,
+            weight_at_death:  meta.weight_at_death === null || meta.weight_at_death === undefined ? null : Number(meta.weight_at_death),
+            observations:     (meta.observations as string | null) ?? null,
+          },
+        })
+        continue
+      }
+      events.push({
+        id:   `note-${note.id}`,
+        type: 'patient_note',
+        date: note.created_at,
+        patient_note: {
+          id:              note.id,
+          note_type:       note.note_type as 'observation' | 'clinical' | 'behavior' | 'other',
+          title:           note.title,
+          content:         note.content,
+          metadata:        meta,
+          created_by_name: note.profiles?.full_name ?? null,
+        },
+      })
+    }
+
+    // 12. Fallback memorial: se o pet tem deceased_at mas a nota foi apagada,
+    //     ainda mostra o card (referência ao registro em patients).
+    if (!memorialAdded && petInfo?.deceased_at) {
+      events.push({
+        id:   `memorial-fallback-${petId}`,
+        type: 'memorial',
+        date: petInfo.deceased_at,
+        memorial: {
+          id:               petId,
+          patient_name:     petInfo.name ?? '',
+          deceased_at:      petInfo.deceased_at,
+          cause:            petInfo.deceased_cause ?? null,
+          place:            null,
+          body_destination: null,
+          weight_at_death:  null,
+          observations:     null,
+        },
+      })
+    }
+
+    // 7. Ordena: memorial SEMPRE no topo (independente da data); demais por
+    //    data DESC; mesmo timestamp → por tipo.
     events.sort((a, b) => {
+      if (a.type === 'memorial' && b.type !== 'memorial') return -1
+      if (b.type === 'memorial' && a.type !== 'memorial') return 1
       const dt = new Date(b.date).getTime() - new Date(a.date).getTime()
       if (dt !== 0) return dt
       return SORT_ORDER[a.type] - SORT_ORDER[b.type]
@@ -551,6 +652,8 @@ export type PatientsListItem = {
   last_known_weight: number | null
   last_known_weight_at: string | null
   last_known_weight_source: string | null
+  deceased_at:   string | null
+  deceased_cause: string | null
   created_from: string | null
   tutor: {
     id:                string
@@ -587,7 +690,7 @@ export async function getPatientsList(
 
     let patientsQuery = admin
       .from('patients')
-      .select('id, name, species, breed, gender, neutered, birth_date, birth_date_estimated, coat_color, reproductive_status, medical_history, photo_url, behavior_tags, allergies, chronic_diseases, microchip_id, last_known_weight, last_known_weight_at, last_known_weight_source, tutor_id')
+      .select('id, name, species, breed, gender, neutered, birth_date, birth_date_estimated, coat_color, reproductive_status, medical_history, photo_url, behavior_tags, allergies, chronic_diseases, microchip_id, last_known_weight, last_known_weight_at, last_known_weight_source, deceased_at, deceased_cause, tutor_id')
       .eq('clinic_id', clinicId)
       .is('deleted_at', null)
       .order('name')
@@ -631,6 +734,8 @@ export async function getPatientsList(
       last_known_weight:        (p as any).last_known_weight === null || (p as any).last_known_weight === undefined ? null : Number((p as any).last_known_weight),
       last_known_weight_at:     (p as any).last_known_weight_at ?? null,
       last_known_weight_source: (p as any).last_known_weight_source ?? null,
+      deceased_at:         (p as any).deceased_at ?? null,
+      deceased_cause:      (p as any).deceased_cause ?? null,
       tutor:               tutorMap[p.tutor_id] ?? { id: p.tutor_id, name: '—', cpf: '', phone: '' },
       created_from:        null,
       last_visit:          null, // preenchido futuramente com join em consultations
@@ -656,7 +761,7 @@ export async function getPatientById(
 
     const { data: p, error: pErr } = await admin
       .from('patients')
-      .select('id, name, species, breed, gender, neutered, birth_date, birth_date_estimated, coat_color, reproductive_status, medical_history, photo_url, behavior_tags, allergies, chronic_diseases, microchip_id, last_known_weight, last_known_weight_at, last_known_weight_source, created_from, tutor_id')
+      .select('id, name, species, breed, gender, neutered, birth_date, birth_date_estimated, coat_color, reproductive_status, medical_history, photo_url, behavior_tags, allergies, chronic_diseases, microchip_id, last_known_weight, last_known_weight_at, last_known_weight_source, deceased_at, deceased_cause, created_from, tutor_id')
       .eq('id', patientId)
       .eq('clinic_id', profile.clinic_id)
       .is('deleted_at', null)
@@ -690,6 +795,8 @@ export async function getPatientById(
       last_known_weight:        (p as any).last_known_weight === null || (p as any).last_known_weight === undefined ? null : Number((p as any).last_known_weight),
       last_known_weight_at:     (p as any).last_known_weight_at ?? null,
       last_known_weight_source: (p as any).last_known_weight_source ?? null,
+      deceased_at:          (p as any).deceased_at ?? null,
+      deceased_cause:       (p as any).deceased_cause ?? null,
       created_from:         (p as { created_from?: string | null }).created_from ?? null,
       tutor:                tutor ?? { id: p.tutor_id, name: '—', cpf: '', phone: '' },
       last_visit:           null,

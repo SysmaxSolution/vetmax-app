@@ -128,11 +128,62 @@ function EventDot({ type }: { type: TimelineEvent['type'] }) {
     whatsapp_notification:    { bg: 'bg-green-500',   icon: '📱' },
     petlove_event:            { bg: 'bg-purple-500',  icon: '🐾' },
     weight_update:            { bg: 'bg-amber-500',   icon: '⚖️' },
+    patient_note:             { bg: 'bg-slate-500',   icon: '📝' },
+    memorial:                 { bg: 'bg-violet-400',  icon: '🕊️' },
   }[type]
   if (!cfg) return <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-sm shadow-sm ring-2 ring-white bg-slate-400">❓</div>
   return (
     <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-sm shadow-sm ring-2 ring-white ${cfg.bg}`}>
       {cfg.icon}
+    </div>
+  )
+}
+
+function PatientNoteCard({ event }: { event: TimelineEvent }) {
+  const d = event.patient_note!
+  const labels: Record<string, string> = {
+    observation: 'Observação',
+    clinical:    'Anotação clínica',
+    behavior:    'Comportamento',
+    other:       'Nota',
+  }
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+      <div className="flex items-center justify-between mb-1">
+        <p className="text-xs font-bold text-slate-700 uppercase tracking-wide">{labels[d.note_type] ?? 'Nota'}</p>
+        <span className="text-[10px] text-slate-500">{new Date(event.date).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+      </div>
+      {d.title && <p className="text-sm font-semibold text-slate-900 mb-0.5">{d.title}</p>}
+      <p className="text-sm text-slate-700 whitespace-pre-wrap break-words">{d.content}</p>
+      {d.created_by_name && (
+        <p className="text-[10px] text-slate-400 mt-1.5 italic">— {d.created_by_name}</p>
+      )}
+    </div>
+  )
+}
+
+function MemorialCard({ event }: { event: TimelineEvent }) {
+  const d = event.memorial!
+  const fmtDate = new Date(d.deceased_at).toLocaleString('pt-BR', { dateStyle: 'long', timeStyle: 'short' })
+  return (
+    <div className="rounded-2xl border-2 border-violet-200 bg-gradient-to-br from-violet-50 via-white to-purple-50 px-5 py-5">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-2xl" aria-hidden="true">🕊️</span>
+        <p className="text-xs font-bold text-violet-700 uppercase tracking-widest">In memoriam</p>
+      </div>
+      <p className="text-base font-serif italic text-violet-900 leading-relaxed mb-3">
+        Que <strong className="font-bold">{d.patient_name}</strong> descanse em paz entre os anjinhos de patas.
+        <br />
+        <span className="text-sm text-violet-700">Cada minuto de carinho compartilhado deixou marcas que ninguém apaga.</span>
+      </p>
+      <div className="text-xs text-violet-700 space-y-1 border-t border-violet-200 pt-3">
+        <p><strong>Partida:</strong> {fmtDate}</p>
+        {d.cause            && <p><strong>Causa:</strong> {d.cause}</p>}
+        {d.weight_at_death !== null && <p><strong>Peso no óbito:</strong> {d.weight_at_death.toLocaleString('pt-BR', { minimumFractionDigits: 1 })} kg</p>}
+        {d.place            && <p><strong>Local:</strong> {d.place}</p>}
+        {d.body_destination && <p><strong>Destino:</strong> {d.body_destination}</p>}
+        {d.observations     && <p className="italic text-violet-600 mt-1.5 whitespace-pre-wrap break-words">"{d.observations}"</p>}
+      </div>
     </div>
   )
 }
@@ -1008,6 +1059,8 @@ export default function PetTimeline({ events, packageMap = {}, onPrint, onEdit, 
                       {event.type === 'whatsapp_notification'     && <WhatsAppNotificationCard event={event} />}
                       {event.type === 'petlove_event'             && <PetloveEventCard event={event} />}
                       {event.type === 'weight_update'             && <WeightUpdateCard event={event} />}
+                      {event.type === 'patient_note'              && <PatientNoteCard event={event} />}
+                      {event.type === 'memorial'                  && <MemorialCard event={event} />}
                     </div>
                   </div>
                 </div>

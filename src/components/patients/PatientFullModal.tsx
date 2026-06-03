@@ -18,6 +18,8 @@ import { getCustomPricesForPatient, getPetlovePatientHistory, type PatientCustom
 import { updatePatientWeight } from '@/lib/actions/patient-weight'
 import { PawPrint, Pin, History, UserPlus, ArrowRight, DollarSign, Receipt } from 'lucide-react'
 import CustomPricesEditor from './CustomPricesEditor'
+import PatientNotesPanel from './PatientNotesPanel'
+import { FileText as FileTextIcon } from 'lucide-react'
 import VaccinationCard from '@/components/vet/VaccinationCard'
 import { ShareButton } from '@/components/ui/ShareButton'
 import { BehaviorTagsSelector } from '@/components/ui/BehaviorTagsBadges'
@@ -220,7 +222,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
 
   const locked = false // abas sempre acessíveis; Vacinas/Convênio carregam patId assim que disponível
 
-  const [tab, setTab] = useState<'pet' | 'tutor' | 'vacinas' | 'convenio' | 'documentos'>('pet')
+  const [tab, setTab] = useState<'pet' | 'tutor' | 'vacinas' | 'convenio' | 'documentos' | 'notas'>('pet')
   const [saving, setSaving] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -727,6 +729,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
             <TabButton active={tab === 'vacinas'} onClick={() => setTab('vacinas')} icon={<Syringe  className="h-4 w-4" />} label="Vacinas" />
             <TabButton active={tab === 'convenio'} onClick={() => setTab('convenio')} icon={<Shield  className="h-4 w-4" />} label="Convênio" />
             <TabButton active={tab === 'documentos'} onClick={() => setTab('documentos')} icon={<Paperclip className="h-4 w-4" />} label="Documentos" />
+            <TabButton active={tab === 'notas'} onClick={() => setTab('notas')} icon={<FileTextIcon className="h-4 w-4" />} label="Notas" />
           </div>
         </div>
 
@@ -1471,6 +1474,28 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                     </div>
                   )}
                 </>
+              )}
+            </div>
+          )}
+          {/* ── Aba Notas (observação / clínica / comportamento / óbito) ── */}
+          {tab === 'notas' && (
+            <div className="p-4">
+              {!createdPatientId && !isEdit ? (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  <FileTextIcon className="h-10 w-10 text-slate-300 mb-3" />
+                  <p className="text-sm font-bold text-slate-400">Notas disponíveis após criar o cadastro</p>
+                </div>
+              ) : (
+                <PatientNotesPanel
+                  patientId={(isEdit ? patient.id : createdPatientId) as string}
+                  patientName={petName}
+                  isDeceased={!!(patient as any)?.deceased_at}
+                  onDeathRecorded={() => {
+                    // Após registrar óbito, fecha o modal para o router refletir o
+                    // novo estado (avatar cinza + bloqueio de atendimento).
+                    setTimeout(() => onClose(), 1200)
+                  }}
+                />
               )}
             </div>
           )}
