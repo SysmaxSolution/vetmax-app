@@ -544,6 +544,24 @@ export async function updateHospitalizationClinicalData(
     .eq('clinic_id', clinicId)
   if (error) return { error: 'Erro ao salvar dados clínicos: ' + error.message }
 
+  // Propaga weight_at_admission para patients.last_known_weight
+  if (fields.weight_at_admission && fields.weight_at_admission > 0) {
+    const { data: hosp } = await admin
+      .from('hospitalizations')
+      .select('patient_id')
+      .eq('id', hospitalizationId)
+      .eq('clinic_id', clinicId)
+      .maybeSingle()
+    if (hosp?.patient_id) {
+      const { updatePatientWeight } = await import('./patient-weight')
+      updatePatientWeight({
+        patient_id: hosp.patient_id as string,
+        weight_kg:  fields.weight_at_admission,
+        source:     'hospitalization',
+      }).catch(() => {})
+    }
+  }
+
   revalidatePath('/dashboard/hospitalization')
   return { success: true }
 }

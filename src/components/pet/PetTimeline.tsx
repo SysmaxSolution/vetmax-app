@@ -127,11 +127,49 @@ function EventDot({ type }: { type: TimelineEvent['type'] }) {
     grooming_evolution:       { bg: 'bg-teal-500',    icon: '✂️' },
     whatsapp_notification:    { bg: 'bg-green-500',   icon: '📱' },
     petlove_event:            { bg: 'bg-purple-500',  icon: '🐾' },
+    weight_update:            { bg: 'bg-amber-500',   icon: '⚖️' },
   }[type]
   if (!cfg) return <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-sm shadow-sm ring-2 ring-white bg-slate-400">❓</div>
   return (
     <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-sm shadow-sm ring-2 ring-white ${cfg.bg}`}>
       {cfg.icon}
+    </div>
+  )
+}
+
+function WeightUpdateCard({ event }: { event: TimelineEvent }) {
+  const d = event.weight_update!
+  const sourceLabels: Record<string, string> = {
+    manual:          'Cadastro do pet',
+    reception:       'Recepção',
+    triage:          'Triagem',
+    vet:             'Consultório',
+    hospitalization: 'Internação',
+  }
+  const sourceLabel = sourceLabels[d.source] ?? d.source
+  const fmt = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 1 })
+  const delta = d.previous_kg !== null ? d.weight_kg - d.previous_kg : null
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+      <div className="flex items-center justify-between mb-1">
+        <p className="text-xs font-bold text-amber-700 uppercase tracking-wide">Peso atualizado</p>
+        <span className="text-[10px] text-amber-600">{new Date(event.date).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+      </div>
+      <p className="text-sm text-amber-900 flex items-baseline gap-2 flex-wrap">
+        <strong className="text-lg tabular-nums">{fmt(d.weight_kg)} kg</strong>
+        {d.previous_kg !== null && (
+          <span className="text-xs text-amber-700">
+            (antes: {fmt(d.previous_kg)} kg
+            {delta !== null && (
+              <span className={`ml-1 font-semibold ${delta > 0 ? 'text-emerald-700' : delta < 0 ? 'text-rose-700' : 'text-amber-700'}`}>
+                {delta > 0 ? '↑' : delta < 0 ? '↓' : '='} {fmt(Math.abs(delta))} kg
+              </span>
+            )}
+            )
+          </span>
+        )}
+      </p>
+      <p className="text-[11px] text-amber-600 mt-0.5">Origem: {sourceLabel}</p>
     </div>
   )
 }
@@ -969,6 +1007,7 @@ export default function PetTimeline({ events, packageMap = {}, onPrint, onEdit, 
                       {event.type === 'grooming_evolution'        && <GroomingEvolutionCard event={event} />}
                       {event.type === 'whatsapp_notification'     && <WhatsAppNotificationCard event={event} />}
                       {event.type === 'petlove_event'             && <PetloveEventCard event={event} />}
+                      {event.type === 'weight_update'             && <WeightUpdateCard event={event} />}
                     </div>
                   </div>
                 </div>

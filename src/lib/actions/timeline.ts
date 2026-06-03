@@ -20,6 +20,7 @@ export type TimelineEventType =
   | 'grooming_evolution'
   | 'whatsapp_notification'
   | 'petlove_event'
+  | 'weight_update'
 
 export interface TimelineEvent {
   id: string
@@ -109,6 +110,13 @@ export interface TimelineEvent {
     description:     string
     metadata:        Record<string, unknown>
   }
+  weight_update?: {
+    id:           string
+    weight_kg:    number
+    previous_kg:  number | null
+    source:       string
+    description:  string
+  }
 }
 
 // Ordem para mesmo timestamp (DESC)
@@ -125,6 +133,7 @@ const SORT_ORDER: Record<TimelineEventType, number> = {
   grooming_evolution:        7.5,
   whatsapp_notification:     8,
   petlove_event:             9,
+  weight_update:            10,
 }
 
 // ─── Server Action ────────────────────────────────────────────────────────────
@@ -477,6 +486,22 @@ export async function getPetTimeline(
       .order('created_at', { ascending: false })
 
     for (const ev of petloveEvents ?? []) {
+      if (ev.event_type === 'weight_update') {
+        const meta = (ev.metadata as Record<string, unknown>) ?? {}
+        events.push({
+          id:   `weight-${ev.id}`,
+          type: 'weight_update',
+          date: ev.created_at,
+          weight_update: {
+            id:          ev.id,
+            weight_kg:   Number(meta.weight_kg ?? 0),
+            previous_kg: meta.previous_kg === null || meta.previous_kg === undefined ? null : Number(meta.previous_kg),
+            source:      String(meta.source ?? 'manual'),
+            description: ev.description,
+          },
+        })
+        continue
+      }
       events.push({
         id:   `petlove-${ev.id}`,
         type: 'petlove_event',
@@ -523,6 +548,9 @@ export type PatientsListItem = {
   allergies: string | null
   chronic_diseases: string | null
   microchip_id: string | null
+  last_known_weight: number | null
+  last_known_weight_at: string | null
+  last_known_weight_source: string | null
   created_from: string | null
   tutor: {
     id:                string
@@ -559,7 +587,7 @@ export async function getPatientsList(
 
     let patientsQuery = admin
       .from('patients')
-      .select('id, name, species, breed, gender, neutered, birth_date, birth_date_estimated, coat_color, reproductive_status, medical_history, photo_url, behavior_tags, allergies, chronic_diseases, microchip_id, tutor_id')
+      .select('id, name, species, breed, gender, neutered, birth_date, birth_date_estimated, coat_color, reproductive_status, medical_history, photo_url, behavior_tags, allergies, chronic_diseases, microchip_id, last_known_weight, last_known_weight_at, last_known_weight_source, tutor_id')
       .eq('clinic_id', clinicId)
       .is('deleted_at', null)
       .order('name')
@@ -600,6 +628,9 @@ export async function getPatientsList(
       allergies:           p.allergies ?? null,
       chronic_diseases:    p.chronic_diseases ?? null,
       microchip_id:        p.microchip_id ?? null,
+      last_known_weight:        (p as any).last_known_weight === null || (p as any).last_known_weight === undefined ? null : Number((p as any).last_known_weight),
+      last_known_weight_at:     (p as any).last_known_weight_at ?? null,
+      last_known_weight_source: (p as any).last_known_weight_source ?? null,
       tutor:               tutorMap[p.tutor_id] ?? { id: p.tutor_id, name: '—', cpf: '', phone: '' },
       created_from:        null,
       last_visit:          null, // preenchido futuramente com join em consultations
@@ -625,7 +656,7 @@ export async function getPatientById(
 
     const { data: p, error: pErr } = await admin
       .from('patients')
-      .select('id, name, species, breed, gender, neutered, birth_date, birth_date_estimated, coat_color, reproductive_status, medical_history, photo_url, behavior_tags, allergies, chronic_diseases, microchip_id, created_from, tutor_id')
+      .select('id, name, species, breed, gender, neutered, birth_date, birth_date_estimated, coat_color, reproductive_status, medical_history, photo_url, behavior_tags, allergies, chronic_diseases, microchip_id, last_known_weight, last_known_weight_at, last_known_weight_source, created_from, tutor_id')
       .eq('id', patientId)
       .eq('clinic_id', profile.clinic_id)
       .is('deleted_at', null)
@@ -656,6 +687,9 @@ export async function getPatientById(
       allergies:            p.allergies ?? null,
       chronic_diseases:     p.chronic_diseases ?? null,
       microchip_id:         p.microchip_id ?? null,
+      last_known_weight:        (p as any).last_known_weight === null || (p as any).last_known_weight === undefined ? null : Number((p as any).last_known_weight),
+      last_known_weight_at:     (p as any).last_known_weight_at ?? null,
+      last_known_weight_source: (p as any).last_known_weight_source ?? null,
       created_from:         (p as { created_from?: string | null }).created_from ?? null,
       tutor:                tutor ?? { id: p.tutor_id, name: '—', cpf: '', phone: '' },
       last_visit:           null,

@@ -419,6 +419,24 @@ export async function submitTriageAndMoveToDoctor(
     details: { weight: vitalSigns.weight, temperature: vitalSigns.temperature },
   })
 
+  // Propaga peso para patients.last_known_weight (fire-and-forget)
+  if (vitalSigns.weight && vitalSigns.weight > 0) {
+    const { data: cRow } = await admin
+      .from('consultations')
+      .select('patient_id')
+      .eq('id', consultationId)
+      .eq('clinic_id', profile.clinic_id)
+      .maybeSingle()
+    if (cRow?.patient_id) {
+      const { updatePatientWeight } = await import('./patient-weight')
+      updatePatientWeight({
+        patient_id: cRow.patient_id as string,
+        weight_kg:  vitalSigns.weight,
+        source:     'triage',
+      }).catch(() => {})
+    }
+  }
+
   revalidatePath('/dashboard/triage')
   return { success: true }
 }
@@ -817,6 +835,24 @@ export async function updateTriageVitalSigns(
     entity_id: consultationId,
     details: { weight: vitalSigns.weight, temperature: vitalSigns.temperature },
   })
+
+  // Propaga peso para patients.last_known_weight
+  if (vitalSigns.weight && vitalSigns.weight > 0) {
+    const { data: cRow } = await admin
+      .from('consultations')
+      .select('patient_id')
+      .eq('id', consultationId)
+      .eq('clinic_id', profile.clinic_id)
+      .maybeSingle()
+    if (cRow?.patient_id) {
+      const { updatePatientWeight } = await import('./patient-weight')
+      updatePatientWeight({
+        patient_id: cRow.patient_id as string,
+        weight_kg:  vitalSigns.weight,
+        source:     'triage',
+      }).catch(() => {})
+    }
+  }
 
   revalidatePath('/dashboard/triage')
   return { success: true }

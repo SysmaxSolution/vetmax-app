@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import type { CheckInPayload, VisitReason, PaymentStatus } from '@/types'
 import { logAudit } from './audit'
+import { updatePatientWeight } from './patient-weight'
 
 // ─── Check-in Avançado: cria/atualiza consulta com motivo e pagamento ───────
 export async function checkInPatientAdvanced(
@@ -44,6 +45,15 @@ export async function checkInPatientAdvanced(
   if (error || !result) return { error: 'Erro ao fazer check-in: ' + (error?.message ?? '') }
 
   await logAudit({ action: 'CHECK_IN', entity_type: 'consultations', entity_id: result.id, details: { patient_id: data.patient_id, visit_reason: data.visit_reason } })
+
+  // Propaga peso para patients.last_known_weight (fire-and-forget — não bloqueia o check-in)
+  if (data.weight && data.weight > 0) {
+    updatePatientWeight({
+      patient_id: data.patient_id,
+      weight_kg:  data.weight,
+      source:     'reception',
+    }).catch(() => {})
+  }
 
   revalidatePath('/dashboard/reception')
   return { id: result.id }
@@ -122,6 +132,15 @@ export async function checkInPatientWithContacts(
   if (error || !result) return { error: 'Erro ao fazer check-in: ' + (error?.message ?? '') }
 
   await logAudit({ action: 'CHECK_IN_WITH_CONTACTS', entity_type: 'consultations', entity_id: result.id, details: { patient_id: data.patient_id } })
+
+  // Propaga peso para patients.last_known_weight
+  if (data.weight && data.weight > 0) {
+    updatePatientWeight({
+      patient_id: data.patient_id,
+      weight_kg:  data.weight,
+      source:     'reception',
+    }).catch(() => {})
+  }
 
   revalidatePath('/dashboard/reception')
   return { id: result.id }

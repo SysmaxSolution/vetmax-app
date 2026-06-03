@@ -3,6 +3,7 @@
 import { useState, useTransition, useRef, useEffect } from 'react'
 import { checkInPatientWithContacts, updateConsultation } from '@/lib/actions/consultations'
 import { addServiceToConsultation } from '@/lib/actions/services'
+import { getLastWeight } from '@/lib/actions/patient-weight'
 import type { VisitReason, PaymentStatus } from '@/types'
 import { DateInput } from '@/components/ui/DatePicker'
 import ActivePackagesBanner from './ActivePackagesBanner'
@@ -68,6 +69,7 @@ export function CheckInModal({
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>(existingConsultation?.payment_status ?? 'pending')
   const [scheduledDate, setScheduledDate] = useState<string>(existingConsultation?.scheduled_date?.split('T')[0] ?? '')
   const [weight, setWeight] = useState<string>('')
+  const [lastWeightInfo, setLastWeightInfo] = useState<{ kg: number; at: string | null } | null>(null)
   // Bloco Serviços (Refator 2026-05-25) — array de stock_items lançados.
   // Opcional no check-in; guard de obrigatoriedade fica no encerramento.
   const [services, setServices] = useState<SelectedService[]>([])
@@ -94,6 +96,20 @@ export function CheckInModal({
   const canSubmit = isEdit
     ? !isPending
     : (hasAddress && hasEmergencyContact && !isPending)
+
+  // Carrega último peso conhecido do pet — sugere no input quando vazio.
+  useEffect(() => {
+    if (!patientId) return
+    let cancelled = false
+    getLastWeight(patientId).then(res => {
+      if (cancelled || 'error' in res) return
+      if (res.weight_kg !== null && res.weight_kg > 0) {
+        setLastWeightInfo({ kg: res.weight_kg, at: res.measured_at })
+        setWeight(prev => prev === '' ? res.weight_kg!.toString().replace('.', ',') : prev)
+      }
+    })
+    return () => { cancelled = true }
+  }, [patientId])
 
   // Enter → confirmar (quando formulário está válido)
   useEffect(() => {
@@ -291,7 +307,15 @@ export function CheckInModal({
                 placeholder="Ex: 12.5"
                 className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-700 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
               />
-              <p className="text-xs text-slate-500 mt-1">Se preenchido, será registrado no atendimento.</p>
+              <p className="text-xs text-slate-500 mt-1">
+                Se preenchido, será registrado no atendimento.
+                {lastWeightInfo && (
+                  <span className="ml-1 text-slate-400">
+                    · Último peso: <strong>{lastWeightInfo.kg.toLocaleString('pt-BR', { minimumFractionDigits: 1 })} kg</strong>
+                    {lastWeightInfo.at && ` em ${new Date(lastWeightInfo.at).toLocaleDateString('pt-BR')}`}
+                  </span>
+                )}
+              </p>
             </div>
 
             {/* ── Data de Agendamento (se for agendado) ── */}

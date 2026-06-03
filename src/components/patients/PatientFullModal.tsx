@@ -15,6 +15,7 @@ import { getPatientVaccines, type PatientVaccine } from '@/lib/actions/vaccines'
 import { getInsuranceProviders, type InsuranceProvider } from '@/lib/actions/insurance-providers'
 import { getPetInsurance, upsertPetInsurance, removePetInsurance, type PetInsurance } from '@/lib/actions/pet-insurance'
 import { getCustomPricesForPatient, getPetlovePatientHistory, type PatientCustomPrice, type PetlovePatientHistoryEvent } from '@/lib/actions/patient-custom-prices'
+import { updatePatientWeight } from '@/lib/actions/patient-weight'
 import { PawPrint, Pin, History, UserPlus, ArrowRight, DollarSign, Receipt } from 'lucide-react'
 import CustomPricesEditor from './CustomPricesEditor'
 import VaccinationCard from '@/components/vet/VaccinationCard'
@@ -250,6 +251,12 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
   const [allergies,           setAllergies]           = useState(patient?.allergies ?? '')
   const [chronicDiseases,     setChronicDiseases]     = useState(patient?.chronic_diseases ?? '')
   const [microchipId,         setMicrochipId]         = useState(patient?.microchip_id ?? '')
+  // Peso conhecido + auditoria (last_known_weight) — 2026-06-03
+  const [weightKg,            setWeightKg]            = useState<string>(
+    (patient as any)?.last_known_weight != null ? String((patient as any).last_known_weight).replace('.', ',') : ''
+  )
+  const lastWeightAt: string | null = (patient as any)?.last_known_weight_at ?? null
+  const lastWeightSource: string | null = (patient as any)?.last_known_weight_source ?? null
 
   // ── Tutor fields ──
   const [tutorName,           setTutorName]           = useState(patient?.tutor?.name       ?? propTutorName ?? '')
@@ -482,6 +489,15 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
       { name: tutorName, phone: tutorPhone, cpf: tutorCpf, email: tutorEmail, address: tutorAddress, emergency_contact: emergencyContact, cep: tutorCep.replace(/\D/g,'') || null, street: tutorStreet || null, neighborhood: tutorNeighborhood || null, city: tutorCity || null, state: tutorState || null, address_number: tutorAddressNumber || null, address_complement: tutorComplement || null }
     )
     if (res && 'success' in res) {
+      // Atualiza peso (best-effort — não bloqueia o save principal).
+      const parsedWeight = parseFloat(weightKg.replace(',', '.'))
+      if (Number.isFinite(parsedWeight) && parsedWeight > 0) {
+        await updatePatientWeight({
+          patient_id: patient.id,
+          weight_kg:  parsedWeight,
+          source:     'manual',
+        }).catch(() => {})
+      }
       onSuccess({ tutorId: patient.tutor.id, patientId: patient.id, patientName: petName, tutorName })
       onClose()
     } else {
@@ -556,6 +572,17 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
 
       setCreatedPatientId(result.patientId)
       setCreatedTutorId(result.tutorId)
+
+      // Peso inicial: se o usuário preencheu na aba pet, grava no patients +
+      // registra evento weight_update no feed (fire-and-forget).
+      const parsedWeight = parseFloat(weightKg.replace(',', '.'))
+      if (Number.isFinite(parsedWeight) && parsedWeight > 0) {
+        updatePatientWeight({
+          patient_id: result.patientId,
+          weight_kg:  parsedWeight,
+          source:     'manual',
+        }).catch(() => {})
+      }
 
       // Upload da foto pendente (selecionada antes da criação)
       await uploadPendingPhoto(result.patientId)
@@ -820,6 +847,30 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                   )}
                 </div>
                 <FieldInput label="Cor / Pelagem" value={coatColor} onChange={setCoatColor} placeholder="Ex: Caramelo, Tigrado, Tricolor" data-mentor-step="pet-coat-color-input" />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div>
+                  <FieldInput
+                    label="Peso (kg)"
+                    value={weightKg}
+                    onChange={(v: string) => setWeightKg(v.replace(/[^0-9,.]/g, '').replace('.', ','))}
+                    placeholder="Ex: 12,5"
+                    data-mentor-step="pet-weight-input"
+                  />
+                  {lastWeightAt && (
+                    <p className="text-[10px] text-slate-400 mt-1 ml-1">
+                      Última medição: {new Date(lastWeightAt).toLocaleDateString('pt-BR')}
+                      {lastWeightSource ? ` via ${({
+                        manual: 'cadastro',
+                        reception: 'recepção',
+                        triage: 'triagem',
+                        vet: 'consultório',
+                        hospitalization: 'internação',
+                      } as Record<string,string>)[lastWeightSource] ?? lastWeightSource}` : ''}
+                    </p>
+                  )}
+                </div>
+                <div /> {/* spacer para manter o grid 2 cols */}
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <FieldSelect
