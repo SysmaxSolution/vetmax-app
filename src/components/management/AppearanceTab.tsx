@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { Palette, Save, RotateCcw, Loader2, Image as ImageIcon, Upload, Trash2 } from 'lucide-react'
+import { Palette, Save, RotateCcw, Loader2, Image as ImageIcon, Upload, Trash2, Monitor, Layers } from 'lucide-react'
 import { useTheme } from '@/components/providers/ThemeProvider'
 import {
   saveUiPreferences,
@@ -10,6 +10,7 @@ import {
   type UiPreferences,
   type AppearanceMode,
 } from '@/lib/actions/ui-preferences'
+import { updateLayoutVersion, type LayoutVersion } from '@/lib/actions/clinic-settings'
 import { Toast } from '@/components/ui/toast'
 import { BackgroundImageAdjuster } from './BackgroundImageAdjuster'
 
@@ -43,13 +44,20 @@ function inferMode(p: UiPreferences): AppearanceMode {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function AppearanceTab() {
+interface AppearanceTabProps {
+  isSysmax?: boolean
+  initialLayoutVersion?: LayoutVersion
+}
+
+export default function AppearanceTab({ isSysmax = false, initialLayoutVersion = 'classic' }: AppearanceTabProps) {
   const { preferences, setPreferences } = useTheme()
 
-  const [draft,     setDraft]     = useState<UiPreferences>({ ...preferences })
-  const [saving,    setSaving]    = useState(false)
-  const [uploading, setUploading] = useState(false)
-  const [toast,     setToast]     = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [draft,         setDraft]         = useState<UiPreferences>({ ...preferences })
+  const [saving,        setSaving]         = useState(false)
+  const [uploading,     setUploading]      = useState(false)
+  const [toast,         setToast]          = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [layoutVersion, setLayoutVersion]  = useState<LayoutVersion>(initialLayoutVersion)
+  const [savingLayout,  setSavingLayout]   = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
 
   const mode = inferMode(draft)
@@ -109,6 +117,14 @@ export default function AppearanceTab() {
     setToast({ type: 'success', message: 'Imagem removida' })
   }
 
+  async function handleSaveLayout() {
+    setSavingLayout(true)
+    const res = await updateLayoutVersion(layoutVersion)
+    setSavingLayout(false)
+    if ('error' in res) setToast({ type: 'error',   message: res.error })
+    else                setToast({ type: 'success', message: `Layout "${layoutVersion}" aplicado! Recarregue a página para ver.` })
+  }
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200">
       {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
@@ -144,6 +160,66 @@ export default function AppearanceTab() {
       </div>
 
       <div className="p-6 space-y-8">
+
+        {/* ── Seletor de Layout (visível apenas para SysMax) ── */}
+        {isSysmax && (
+          <section className="rounded-xl border-2 border-dashed border-purple-200 bg-purple-50/50 p-5">
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-100">
+                  <Layers className="h-4 w-4 text-purple-700" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">Versão de Layout</h3>
+                  <p className="text-xs text-slate-500">Controla a interface renderizada para todos os usuários desta clínica. Visível apenas para SysMax.</p>
+                </div>
+              </div>
+              <button
+                onClick={handleSaveLayout}
+                disabled={savingLayout}
+                className="flex items-center gap-2 px-4 py-1.5 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors flex-shrink-0"
+              >
+                {savingLayout ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                Aplicar
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {([
+                {
+                  value: 'classic' as LayoutVersion,
+                  label: 'Clássico',
+                  desc:  'Layout atual do sistema — estável e completo.',
+                  icon:  Monitor,
+                },
+                {
+                  value: 'modern' as LayoutVersion,
+                  label: 'Moderno',
+                  desc:  'Nova interface em desenvolvimento — réplica inicial do Clássico.',
+                  icon:  Layers,
+                },
+              ]).map(({ value, label, desc, icon: Icon }) => (
+                <button
+                  key={value}
+                  onClick={() => setLayoutVersion(value)}
+                  className={`flex items-start gap-3 px-4 py-3 rounded-xl border-2 text-left transition-all ${
+                    layoutVersion === value
+                      ? 'border-purple-600 bg-purple-50 shadow-sm'
+                      : 'border-slate-200 bg-white hover:border-slate-300'
+                  }`}
+                >
+                  <Icon className={`h-5 w-5 mt-0.5 flex-shrink-0 ${layoutVersion === value ? 'text-purple-600' : 'text-slate-400'}`} />
+                  <div>
+                    <p className={`text-sm font-semibold ${layoutVersion === value ? 'text-purple-700' : 'text-slate-800'}`}>{label}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">{desc}</p>
+                  </div>
+                  {layoutVersion === value && (
+                    <span className="ml-auto text-[10px] font-bold text-purple-600 bg-purple-100 px-2 py-0.5 rounded-full self-start">ATIVO</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* ── Modo de Fundo ── */}
         <section>

@@ -721,7 +721,10 @@ export default function ManagementWorkspace({
 
       {/* ── Tab: Aparência ── */}
       {activeTab === 'aparencia' && (
-        <AppearanceTab />
+        <AppearanceTab
+          isSysmax={isSysmax}
+          initialLayoutVersion={(clinicData?.layout_version as 'classic' | 'modern' | undefined) ?? 'classic'}
+        />
       )}
 
       {/* ── Tab: Monitoramento de Erros (G-07-D) — restrito a is_sysmax ── */}

@@ -450,6 +450,43 @@ export async function getRegistrationSettings(): Promise<RegistrationSettings> {
   }
 }
 
+// ─── Layout Version (SysMax only) ────────────────────────────────────────────
+
+export type LayoutVersion = 'classic' | 'modern'
+
+/**
+ * Altera a versão de layout da clínica atual.
+ * Restrito a usuários com is_sysmax = true (verificado server-side).
+ */
+export async function updateLayoutVersion(
+  version: LayoutVersion
+): Promise<{ success: true } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const admin = createAdminClient()
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('clinic_id, is_sysmax')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile?.clinic_id)      return { error: 'Clínica não encontrada.' }
+  if (!profile.is_sysmax)       return { error: 'Apenas o usuário SysMax pode alterar o layout.' }
+  if (!['classic', 'modern'].includes(version)) return { error: 'Versão de layout inválida.' }
+
+  const { error } = await admin
+    .from('clinics')
+    .update({ layout_version: version })
+    .eq('id', profile.clinic_id)
+
+  if (error) return { error: 'Falha ao salvar layout: ' + error.message }
+
+  revalidatePath('/dashboard', 'layout')
+  return { success: true }
+}
+
 // ─── Remove Logo ──────────────────────────────────────────────────────────────
 
 export async function removeClinicLogo(): Promise<{ success: true } | { error: string }> {

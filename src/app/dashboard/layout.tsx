@@ -1,24 +1,17 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
-import DashboardHeader from '@/components/layout/DashboardHeader'
-import { WhatsAppGateProvider } from '@/components/providers/WhatsAppGateProvider'
-import { ModulesProvider } from '@/components/providers/ModulesProvider'
-import { ClinicConfigProvider } from '@/components/providers/ClinicConfigProvider'
-import { ThemeProvider } from '@/components/providers/ThemeProvider'
-import { MentorGlobalWrapper } from '@/components/mentor/MentorGlobalWrapper'
 import { headers } from 'next/headers'
-import { Suspense } from 'react'
-import { SysmaxFooter } from '@/components/ui/SysmaxFooter'
 import { getModuleFromPath } from '@/lib/module-theme'
 import { Lock, AlertCircle } from 'lucide-react'
 import { getLowStockCount } from '@/lib/actions/stock'
 import type { UserClinicInfo } from '@/lib/actions/clinic-switcher'
-import OnboardingWizard from '@/components/onboarding/OnboardingWizard'
-import { UpgradeProvider } from '@/components/upgrade/UpgradeProvider'
-import ChatNotificationsHost from '@/components/layout/ChatNotificationsHost'
 import { FREE_ROUTES } from '@/config/access-matrix'
 import type { PlanName, BusinessType } from '@/types'
+import DashboardShellClassic from '@/components/layout/DashboardShellClassic'
+import DashboardShellModern from '@/components/layout/DashboardShellModern'
+import DashboardShellClassic from '@/components/layout/DashboardShellClassic'
+import DashboardShellModern from '@/components/layout/DashboardShellModern'
 
 export default async function DashboardLayout({
   children,
@@ -53,7 +46,7 @@ export default async function DashboardLayout({
   const [{ data: clinicData }, whatsAppRow, clinicsResult, petCountResult, subResult] = await Promise.all([
     admin
       .from('clinics')
-      .select('logo_url, active_modules, status, ai_transcription_mode, business_type, ui_preferences, flow_config')
+      .select('logo_url, active_modules, status, ai_transcription_mode, business_type, ui_preferences, flow_config, layout_version')
       .eq('id', profile.clinic_id)
       .single(),
     supabase
@@ -218,58 +211,40 @@ export default async function DashboardLayout({
     }
   }
 
-  return (
-    <section className="min-h-screen bg-slate-50">
-      <DashboardHeader
-        userName={profile.full_name}
-        clinicName={clinicName}
-        clinicId={profile.clinic_id}
-        userRole={profile.role as any}
-        logoUrl={clinicConfig?.logo_url ?? null}
-        activeModules={activeModules.length > 0 ? activeModules : null}
-        lowStockCount={lowStockCount}
-        whatsappHandoffCount={whatsappHandoffCount}
-        chatUnreadCount={chatUnreadCount}
-        userClinics={isSysmax ? userClinics : (userClinics.length > 1 ? userClinics : undefined)}
-        isSysmax={isSysmax}
-        clinicStatus={clinicStatus}
-        isSurgeryMode={!!(profile as any).is_in_surgery}
-        planName={planName}
-        allowedRoutes={allowedRoutes}
-        centroCirurgico={centroCirurgico}
-      />
-      <ThemeProvider initialPreferences={(clinicData as any)?.ui_preferences ?? null}>
-        <ClinicConfigProvider
-          aiTranscriptionMode={(clinicData as any)?.ai_transcription_mode ?? 'ai_assisted'}
-          internacaoCompleta={internacaoCompleta}
-          centroCirurgico={centroCirurgico}
-        >
-          <ModulesProvider modules={activeModules}>
-            <WhatsAppGateProvider enabled={whatsAppEnabled}>
-              <UpgradeProvider planName={planName} activeModules={activeModules}>
-                {children}
-              </UpgradeProvider>
-            </WhatsAppGateProvider>
-          </ModulesProvider>
-        </ClinicConfigProvider>
-      </ThemeProvider>
-      {!isSysmax && (
-        <OnboardingWizard
-          initialHasLogo={!!(clinicData as any)?.logo_url}
-          initialHasPets={(petCountResult.count ?? 0) > 0}
-          clinicId={profile.clinic_id}
-          userRole={profile.role}
-          businessType={businessType}
-        />
-      )}
-      <MentorGlobalWrapper />
-      <ChatNotificationsHost clinicId={profile.clinic_id} userId={user.id} />
-      {/* UnauthorizedBanner removido: por decisão de UX (2026-05-22), URLs
-          inacessíveis redirecionam silenciosamente para a home do usuário —
-          sem aviso de "Acesso negado". Os links sem permissão já não aparecem
-          no menu. Mantemos a Suspense vazia para preservar a estrutura. */}
-      <Suspense fallback={null}>{null}</Suspense>
-      <SysmaxFooter />
-    </section>
-  )
+  // Props compartilhadas entre os shells de layout
+  const shellProps = {
+    userName:             profile.full_name,
+    clinicName,
+    clinicId:             profile.clinic_id,
+    userRole:             profile.role as any,
+    logoUrl:              clinicConfig?.logo_url ?? null,
+    activeModules:        activeModules.length > 0 ? activeModules : null,
+    lowStockCount,
+    whatsappHandoffCount,
+    chatUnreadCount,
+    userClinics:          isSysmax ? userClinics : (userClinics.length > 1 ? userClinics : undefined),
+    isSysmax,
+    clinicStatus,
+    isSurgeryMode:        !!(profile as any).is_in_surgery,
+    planName,
+    allowedRoutes,
+    centroCirurgico,
+    uiPreferences:        (clinicData as any)?.ui_preferences ?? null,
+    aiTranscriptionMode:  (clinicData as any)?.ai_transcription_mode ?? 'ai_assisted',
+    internacaoCompleta,
+    whatsAppEnabled,
+    hasLogo:              !!(clinicData as any)?.logo_url,
+    hasPets:              (petCountResult.count ?? 0) > 0,
+    businessType,
+    userId:               user.id,
+  }
+
+  // Seleciona o shell com base em clinics.layout_version (default: 'classic')
+  const layoutVersion = (clinicData as any)?.layout_version ?? 'classic'
+
+  if (layoutVersion === 'modern') {
+    return <DashboardShellModern {...shellProps}>{children}</DashboardShellModern>
+  }
+
+  return <DashboardShellClassic {...shellProps}>{children}</DashboardShellClassic>
 }
