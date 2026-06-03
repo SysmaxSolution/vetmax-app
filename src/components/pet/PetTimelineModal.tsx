@@ -8,6 +8,7 @@ import { getPatientVaccines, type PatientVaccine } from '@/lib/actions/vaccines'
 import { getPetPackageSummary, getPackageSessionsMap, type PatientActivePackage, type PackageSessionInfo } from '@/lib/actions/packages'
 import { createClient } from '@/lib/supabase/client'
 import PetTimeline from './PetTimeline'
+import { PetAvatar } from '@/components/ui/PetAvatar'
 import VaccinationCard from '@/components/vet/VaccinationCard'
 import NewAppointmentModal from '@/components/reception/NewAppointmentModal'
 import EditAppointmentModal from '@/components/reception/EditAppointmentModal'
@@ -46,6 +47,7 @@ export default function PetTimelineModal({
   petId, petName, petSpecies, clinicName, tutorName, tutorCpf, tutorId, onClose,
 }: PetTimelineModalProps) {
   const [events, setEvents] = useState<TimelineEvent[]>([])
+  const isDeceased = events.some(e => e.type === 'memorial')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [printData, setPrintData] = useState<PrintState | null>(null)
@@ -271,13 +273,28 @@ export default function PetTimelineModal({
         <div role="dialog" aria-modal="true" aria-label={`Prontuário de ${petName}`} className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
 
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 flex-shrink-0">
+          <div className={`flex items-center justify-between border-b px-6 py-4 flex-shrink-0 ${
+            isDeceased ? 'border-violet-200 bg-violet-50/40' : 'border-slate-100'
+          }`}>
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-xl">
-                {sp.emoji}
-              </div>
+              <PetAvatar
+                name={petName}
+                species={petSpecies}
+                photoUrl={null}
+                size="sm"
+                deceased={isDeceased}
+              />
               <div>
-                <h2 className="text-base font-bold text-slate-900">Feed do {petName}</h2>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className={`text-base font-bold ${isDeceased ? 'text-violet-900' : 'text-slate-900'}`}>
+                    Feed do {petName}
+                  </h2>
+                  {isDeceased && (
+                    <span className="text-[10px] font-bold uppercase tracking-wider rounded-full bg-violet-100 text-violet-700 px-2 py-0.5">
+                      🕊️ In memoriam
+                    </span>
+                  )}
+                </div>
                 <p className="text-xs text-slate-500">
                   {sp.label} · Tutor: {tutorName}
                   {events.length > 0 && ` · ${events.filter(e => e.type === 'checkin').length} visita${events.filter(e => e.type === 'checkin').length !== 1 ? 's' : ''}`}
@@ -285,13 +302,15 @@ export default function PetTimelineModal({
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowSchedule(true)}
-                className="flex items-center gap-1.5 rounded-xl bg-teal-600 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-700 transition-colors"
-              >
-                <Calendar className="h-3.5 w-3.5" />
-                + Marcar Agendamento
-              </button>
+              {!isDeceased && (
+                <button
+                  onClick={() => setShowSchedule(true)}
+                  className="flex items-center gap-1.5 rounded-xl bg-teal-600 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-700 transition-colors"
+                >
+                  <Calendar className="h-3.5 w-3.5" />
+                  + Marcar Agendamento
+                </button>
+              )}
               <button
                 onClick={onClose}
                 className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"

@@ -6,6 +6,7 @@ import { getPatientsList, type PatientsListItem } from '@/lib/actions/timeline'
 import PetTimelineModal from '@/components/pet/PetTimelineModal'
 import PatientFullModal from '@/components/patients/PatientFullModal'
 import { formatPetAge } from '@/lib/utils/pet-age'
+import { PetAvatar } from '@/components/ui/PetAvatar'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -43,21 +44,33 @@ function PatientCard({
 }) {
   const sp = SPECIES_LABELS[patient.species] ?? { label: patient.species, emoji: '🐾', color: 'bg-slate-100 text-slate-600' }
   const age = calcAge(patient.birth_date)
+  const isDeceased = !!patient.deceased_at
 
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 rounded-xl border border-slate-200 bg-white px-4 sm:px-5 py-4 hover:shadow-sm hover:border-slate-300 transition-all">
+    <div className={`flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 rounded-xl border px-4 sm:px-5 py-4 transition-all ${
+      isDeceased
+        ? 'border-violet-200 bg-violet-50/40'
+        : 'border-slate-200 bg-white hover:shadow-sm hover:border-slate-300'
+    }`}>
       <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
         {/* Avatar */}
-        <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full text-2xl overflow-hidden ${sp.color.replace('text-', 'bg-').replace('700', '100')}`}>
-          {patient.photo_url
-            ? <img src={patient.photo_url} alt={patient.name} className="h-full w-full object-cover" />
-            : sp.emoji}
-        </div>
+        <PetAvatar
+          name={patient.name}
+          species={patient.species}
+          photoUrl={patient.photo_url}
+          size="sm"
+          deceased={isDeceased}
+        />
 
         {/* Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <p className="font-semibold text-slate-900">{patient.name}</p>
+            <p className={`font-semibold ${isDeceased ? 'text-violet-800' : 'text-slate-900'}`}>{patient.name}</p>
+            {isDeceased && (
+              <span className="text-[10px] font-bold uppercase tracking-wider rounded-full bg-violet-100 text-violet-700 px-2 py-0.5">
+                🕊️ In memoriam
+              </span>
+            )}
             <span className={`text-xs font-medium rounded-full px-2 py-0.5 ${sp.color}`}>
               {sp.label}
             </span>
@@ -72,6 +85,12 @@ function PatientCard({
             )}
             {age && <span className="text-xs text-slate-400">{age}</span>}
           </div>
+          {isDeceased && patient.deceased_at && (
+            <p className="mt-1 text-xs italic text-violet-700">
+              Partiu em {new Date(patient.deceased_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}.
+              Que descanse em paz. 🕊️
+            </p>
+          )}
           <p className="mt-1 text-xs text-slate-500 truncate">
             Tutor: <span className="font-medium text-slate-700">{patient.tutor.name ?? '—'}</span>
             {patient.tutor.cpf && (
