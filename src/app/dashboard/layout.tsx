@@ -10,8 +10,6 @@ import { FREE_ROUTES } from '@/config/access-matrix'
 import type { PlanName, BusinessType } from '@/types'
 import DashboardShellClassic from '@/components/layout/DashboardShellClassic'
 import DashboardShellModern from '@/components/layout/DashboardShellModern'
-import DashboardShellClassic from '@/components/layout/DashboardShellClassic'
-import DashboardShellModern from '@/components/layout/DashboardShellModern'
 
 export default async function DashboardLayout({
   children,
@@ -213,7 +211,7 @@ export default async function DashboardLayout({
 
   // Props compartilhadas entre os shells de layout
   const shellProps = {
-    userName:             profile.full_name,
+    userName:             profile.full_name ?? '',
     clinicName,
     clinicId:             profile.clinic_id,
     userRole:             profile.role as any,

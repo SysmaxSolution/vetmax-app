@@ -16,7 +16,7 @@ import type { PlanName, BusinessType, UserRole } from '@/types'
 
 export interface DashboardShellProps {
   // Header
-  userName:             string | null
+  userName:             string
   clinicName:           string
   clinicId:             string
   userRole:             UserRole
