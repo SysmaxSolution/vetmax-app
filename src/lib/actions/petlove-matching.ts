@@ -126,20 +126,78 @@ function mapSpecies(raw: string | null | undefined): 'dog' | 'cat' | 'bird' | 'r
   return 'exotic'
 }
 
+// Stopwords curtas — evita que tokens irrelevantes virem critério de match.
+const PT_STOPWORDS = new Set([
+  'de', 'da', 'do', 'das', 'dos', 'a', 'o', 'as', 'os',
+  'e', 'em', 'no', 'na', 'nos', 'nas', 'para', 'pra',
+  'com', 'sem', 'por', 'sob', 'sobre', 'aos', 'às',
+])
+
+function significantTokens(s: string): string[] {
+  return s.split(/\s+/).filter(t => {
+    if (!t) return false
+    if (PT_STOPWORDS.has(t)) return false
+    // Mantém tokens curtos (V8, V10, MV, RX) — siglas e códigos.
+    if (t.length >= 2) return true
+    return false
+  })
+}
+
+function jaccardSimilarity(a: string[], b: string[]): number {
+  if (a.length === 0 || b.length === 0) return 0
+  const setA = new Set(a)
+  const setB = new Set(b)
+  let inter = 0
+  for (const t of setA) if (setB.has(t)) inter++
+  const union = setA.size + setB.size - inter
+  return union === 0 ? 0 : inter / union
+}
+
 function findInvoiceItemByName(items: { id: string; description: string; expected_value: number | null; total_price: number }[], procName: string, repass: number) {
   if (items.length === 0) return null
   const targetName = normalizeName(procName)
-  // Match exato por nome normalizado
-  const exact = items.find(it => normalizeName(it.description) === targetName)
-  if (exact) return exact
-  // Match parcial (contém todos os tokens significativos)
-  const tokens = targetName.split(' ').filter(t => t.length > 3)
-  if (tokens.length === 0) return null
-  const partial = items.find(it => {
-    const desc = normalizeName(it.description)
-    return tokens.every(t => desc.includes(t))
+  const targetTokens = significantTokens(targetName)
+
+  // Score por item — combina match estrutural (nome) com proximidade de valor.
+  // Permite escolher o melhor candidato quando vários itens da mesma consulta
+  // têm nome parecido (ex.: 3 vacinas distintas).
+  type Candidate = { item: typeof items[number]; tier: 0 | 1 | 2 | 3; valueDelta: number; sim: number }
+  const candidates: Candidate[] = []
+
+  for (const it of items) {
+    const descNorm = normalizeName(it.description)
+    const descTokens = significantTokens(descNorm)
+    const expected = it.expected_value ?? it.total_price ?? 0
+    const valueDelta = expected > 0 ? Math.abs(expected - repass) / expected : Math.abs(expected - repass)
+
+    let tier: 0 | 1 | 2 | 3 = 3 // 3 = não bate
+    let sim = 0
+
+    if (descNorm === targetName) {
+      tier = 0  // match exato
+    } else if (targetTokens.length > 0 && targetTokens.every(t => descNorm.includes(t))) {
+      tier = 1  // todos os tokens significativos presentes
+    } else {
+      sim = jaccardSimilarity(targetTokens, descTokens)
+      if (sim >= 0.5) tier = 2  // similaridade Jaccard razoável
+    }
+
+    if (tier < 3) candidates.push({ item: it, tier, valueDelta, sim })
+  }
+
+  if (candidates.length === 0) return null
+
+  // Ordena por: tier (menor é melhor) → valueDelta (menor) → similaridade (maior).
+  // Faz com que, dentro do mesmo tier, o item mais próximo do valor do repasse
+  // ganhe — desambigua "Vacina V8" vs "Vacina V10" quando ambos compartilham
+  // tokens com a planilha.
+  candidates.sort((a, b) => {
+    if (a.tier !== b.tier) return a.tier - b.tier
+    if (a.valueDelta !== b.valueDelta) return a.valueDelta - b.valueDelta
+    return b.sim - a.sim
   })
-  return partial ?? null
+
+  return candidates[0].item
 }
 
 function valueWithinTolerance(expected: number | null, actual: number, ratio = 0.15): boolean {
@@ -334,15 +392,23 @@ export async function runMatchEngine(remittanceId: string): Promise<{ updated: n
 
     if (confidence === 0) confidence = chip ? 90 : 60
 
-    // ─── Pet encontrado: procurar consultations dia ± 1 ──────────────────────
-    const dayBefore = new Date(line.service_date); dayBefore.setUTCDate(dayBefore.getUTCDate() - 1)
-    const dayAfter  = new Date(line.service_date); dayAfter.setUTCDate(dayAfter.getUTCDate() + 1)
+    // ─── Pet encontrado: procurar consultations dia ± 3 ──────────────────────
+    // Range mais largo (3 dias) por dois motivos:
+    //   1) Aborda fronteira UTC/BRT — atendimentos próximos à meia-noite BRT
+    //      podem cair no dia UTC seguinte sem essa folga.
+    //   2) Tolera planilhas que registram "data de fechamento" do atendimento
+    //      em vez da data real (caso comum quando o caixa fecha no dia útil
+    //      seguinte ou quando a Petlove agrupa atendimentos do fim de semana).
+    // O anchor às 12:00 UTC evita drift de timezone na aritmética de datas.
+    const anchor = new Date(line.service_date + 'T12:00:00Z')
+    const dayBefore = new Date(anchor); dayBefore.setUTCDate(dayBefore.getUTCDate() - 3)
+    const dayAfter  = new Date(anchor); dayAfter.setUTCDate(dayAfter.getUTCDate() + 3)
     const dateLow  = dayBefore.toISOString().slice(0, 10)
     const dateHigh = dayAfter.toISOString().slice(0, 10)
 
     const { data: consults } = await supabase
       .from('consultations')
-      .select('id')
+      .select('id, created_at')
       .eq('clinic_id', clinicId)
       .eq('patient_id', patient.id)
       .gte('created_at', `${dateLow}T00:00:00Z`)
