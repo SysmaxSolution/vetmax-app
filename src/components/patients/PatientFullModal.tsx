@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useRef, useTransition } from 'react'
 import Link from 'next/link'
-import { X, Save, Loader2, User, Dog, MapPin, PhoneCall, Syringe, Camera, Shield, Trash2, Plus, AlertTriangle, Cpu, Paperclip, FileText, Upload, ExternalLink, Share2 } from 'lucide-react'
+import { X, Save, Loader2, User, Dog, MapPin, PhoneCall, Syringe, Camera, Shield, Trash2, Plus, AlertTriangle, Cpu, Paperclip, FileText, Upload, ExternalLink, Share2, Pencil, Calendar, StickyNote, Tag } from 'lucide-react'
 import { ImageLightbox } from '@/components/ui/ImageLightbox'
 import { DateInput } from '@/components/ui/DatePicker'
 import { updateFullProfile, uploadPetPhoto, softDeletePatient } from '@/lib/actions/pets'
-import { uploadAttachment, getAttachments, deleteAttachment, type Attachment } from '@/lib/actions/attachments'
+import { uploadAttachment, getAttachments, deleteAttachment, updateAttachmentMetadata, type Attachment, type AttachmentMetadata } from '@/lib/actions/attachments'
 import { registerTutorAndPet, addPatientToTutor, getTutorByCpf, recordConsent } from '@/lib/actions/tutors'
 import { getRegistrationSettings } from '@/lib/actions/clinic-settings'
 import ConsentModal from '@/components/reception/ConsentModal'
@@ -323,6 +323,12 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
   const [loadingDocs,       setLoadingDocs]      = useState(false)
   const [uploadingDoc,      setUploadingDoc]     = useState(false)
   const docInputRef = useRef<HTMLInputElement>(null)
+  // Staging do upload de anexos (título/data/observação são opcionais)
+  const [stagedDoc, setStagedDoc] = useState<{ file: File; title: string; document_date: string; notes: string } | null>(null)
+  // Edição inline de metadados de um anexo já enviado
+  const [editingDocId, setEditingDocId] = useState<string | null>(null)
+  const [editingDocForm, setEditingDocForm] = useState<AttachmentMetadata>({})
+  const [savingDocEdit, setSavingDocEdit] = useState(false)
 
   // ─── CPF Lookup effect (só modo criação de novo tutor) ───────────────────────
   useEffect(() => {
@@ -1393,39 +1399,134 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                 </div>
               ) : (
                 <>
-                  {/* Botão upload */}
+                  {/* Botão upload — opcionalmente seguido de staging com título/data/observação */}
                   <div className="flex items-center justify-between">
                     <p className="text-sm text-slate-500">Arquivos do pet (PDF, imagem, laudo...)</p>
                     <button
                       type="button"
                       onClick={() => docInputRef.current?.click()}
-                      disabled={uploadingDoc}
+                      disabled={uploadingDoc || !!stagedDoc}
                       className="flex items-center gap-1.5 rounded-xl bg-teal-600 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-50 transition-colors"
                     >
-                      {uploadingDoc ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-                      {uploadingDoc ? 'Enviando...' : 'Enviar Arquivo'}
+                      <Upload className="h-3.5 w-3.5" />
+                      Enviar Arquivo
                     </button>
                     <input
                       ref={docInputRef}
                       type="file"
                       className="hidden"
                       accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
-                      onChange={async (e) => {
+                      onChange={(e) => {
                         const file = e.target.files?.[0]
-                        if (!file) return
-                        const patId = isEdit ? patient.id : createdPatientId
-                        if (!patId) return
-                        setUploadingDoc(true)
-                        const fd = new FormData()
-                        fd.append('file', file)
-                        const res = await uploadAttachment(fd, patId)
-                        setUploadingDoc(false)
                         e.target.value = ''
-                        if ('error' in res) return
-                        setAttachments(prev => prev ? [res, ...prev] : [res])
+                        if (!file) return
+                        setStagedDoc({ file, title: '', document_date: '', notes: '' })
                       }}
                     />
                   </div>
+
+                  {/* Staging do anexo selecionado */}
+                  {stagedDoc && (
+                    <div className="rounded-xl border border-teal-200 bg-teal-50/40 p-4 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <FileText className="h-5 w-5 text-teal-600 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-slate-800 truncate">{stagedDoc.file.name}</p>
+                          <p className="text-xs text-slate-500">{(stagedDoc.file.size / 1024).toFixed(0)} KB · pronto para enviar</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setStagedDoc(null)}
+                          disabled={uploadingDoc}
+                          className="flex-shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                          title="Cancelar"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+
+                      <p className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold">Detalhes (opcionais)</p>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <label className="block">
+                          <span className="flex items-center gap-1.5 text-xs font-medium text-slate-600 mb-1">
+                            <Tag className="h-3 w-3" /> Título
+                          </span>
+                          <input
+                            type="text"
+                            value={stagedDoc.title}
+                            onChange={e => setStagedDoc({ ...stagedDoc, title: e.target.value })}
+                            placeholder="ex.: Carteirinha de vacina"
+                            disabled={uploadingDoc}
+                            className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-teal-400 focus:outline-none disabled:bg-slate-50"
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="flex items-center gap-1.5 text-xs font-medium text-slate-600 mb-1">
+                            <Calendar className="h-3 w-3" /> Data do documento
+                          </span>
+                          <input
+                            type="date"
+                            value={stagedDoc.document_date}
+                            onChange={e => setStagedDoc({ ...stagedDoc, document_date: e.target.value })}
+                            disabled={uploadingDoc}
+                            className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-teal-400 focus:outline-none disabled:bg-slate-50"
+                          />
+                        </label>
+                      </div>
+
+                      <label className="block">
+                        <span className="flex items-center gap-1.5 text-xs font-medium text-slate-600 mb-1">
+                          <StickyNote className="h-3 w-3" /> Observação
+                        </span>
+                        <textarea
+                          value={stagedDoc.notes}
+                          onChange={e => setStagedDoc({ ...stagedDoc, notes: e.target.value })}
+                          rows={2}
+                          placeholder="Notas livres sobre o documento..."
+                          disabled={uploadingDoc}
+                          className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-teal-400 focus:outline-none disabled:bg-slate-50 resize-none"
+                        />
+                      </label>
+
+                      <div className="flex items-center justify-end gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setStagedDoc(null)}
+                          disabled={uploadingDoc}
+                          className="rounded-lg px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const patId = isEdit ? patient.id : createdPatientId
+                            if (!patId) return
+                            setUploadingDoc(true)
+                            const fd = new FormData()
+                            fd.append('file', stagedDoc.file)
+                            const res = await uploadAttachment(fd, patId, undefined, {
+                              title:         stagedDoc.title,
+                              document_date: stagedDoc.document_date || null,
+                              notes:         stagedDoc.notes,
+                            })
+                            setUploadingDoc(false)
+                            if ('error' in res) return
+                            setAttachments(prev => prev ? [res, ...prev] : [res])
+                            setStagedDoc(null)
+                          }}
+                          disabled={uploadingDoc}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
+                        >
+                          {uploadingDoc
+                            ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Enviando...</>
+                            : <><Upload className="h-3.5 w-3.5" /> Enviar anexo</>
+                          }
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Lista de anexos */}
                   {loadingDocs ? (
@@ -1439,38 +1540,164 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {attachments.map(att => (
-                        <div key={att.id} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 hover:border-slate-300 transition-colors">
-                          <FileText className="h-4 w-4 text-slate-400 flex-shrink-0" />
-                          <span className="flex-1 text-sm text-slate-700 truncate">{att.file_name}</span>
-                          <span className="text-xs text-slate-400 flex-shrink-0">
-                            {new Date(att.created_at).toLocaleDateString('pt-BR')}
-                          </span>
-                          <a
-                            href={att.signed_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex-shrink-0 text-teal-600 hover:text-teal-700"
-                            title="Abrir"
-                          >
-                            <ExternalLink className="h-4 w-4" />
-                          </a>
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              if (!confirm(`Excluir "${att.file_name}"?`)) return
-                              const res = await deleteAttachment(att.id)
-                              if (!('error' in res)) {
-                                setAttachments(prev => prev ? prev.filter(a => a.id !== att.id) : prev)
-                              }
-                            }}
-                            className="flex-shrink-0 text-red-400 hover:text-red-600"
-                            title="Excluir"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      ))}
+                      {attachments.map(att => {
+                        const isEditingDoc = editingDocId === att.id
+                        const hasMeta = !!(att.title || att.document_date || att.notes)
+                        const headline = att.title?.trim() || att.file_name
+                        const docDate = att.document_date
+                          ? (() => {
+                              const [y, m, d] = att.document_date.split('-').map(Number)
+                              return new Date(y, m - 1, d).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
+                            })()
+                          : null
+                        return (
+                          <div key={att.id} className="rounded-xl border border-slate-200 bg-white px-4 py-3 hover:border-slate-300 transition-colors">
+                            <div className="flex items-start gap-3">
+                              <FileText className="h-4 w-4 text-slate-400 flex-shrink-0 mt-1" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-slate-800 truncate">{headline}</p>
+                                {att.title && att.title.trim() && (
+                                  <p className="text-xs text-slate-400 truncate">{att.file_name}</p>
+                                )}
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5 text-xs">
+                                  {docDate && (
+                                    <span className="inline-flex items-center gap-1 text-slate-500">
+                                      <Calendar className="h-3 w-3" /> {docDate}
+                                    </span>
+                                  )}
+                                  <span className="text-slate-400">
+                                    Enviado em {new Date(att.created_at).toLocaleDateString('pt-BR')}
+                                  </span>
+                                </div>
+                                {att.notes && att.notes.trim() && (
+                                  <p className="text-xs text-slate-600 mt-1 italic">"{att.notes}"</p>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1 flex-shrink-0">
+                                <a
+                                  href={att.signed_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="p-1.5 rounded-lg text-teal-600 hover:bg-teal-50"
+                                  title="Abrir"
+                                >
+                                  <ExternalLink className="h-4 w-4" />
+                                </a>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (isEditingDoc) {
+                                      setEditingDocId(null); setEditingDocForm({})
+                                    } else {
+                                      setEditingDocId(att.id)
+                                      setEditingDocForm({
+                                        title:         att.title ?? '',
+                                        document_date: att.document_date ?? '',
+                                        notes:         att.notes ?? '',
+                                      })
+                                    }
+                                  }}
+                                  className={`p-1.5 rounded-lg ${isEditingDoc
+                                    ? 'text-blue-600 bg-blue-50'
+                                    : `${hasMeta ? 'text-slate-500' : 'text-slate-400'} hover:text-blue-600 hover:bg-blue-50`
+                                  }`}
+                                  title={isEditingDoc ? 'Cancelar edição' : (hasMeta ? 'Editar detalhes' : 'Adicionar detalhes')}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    if (!confirm(`Excluir "${att.file_name}"?`)) return
+                                    const res = await deleteAttachment(att.id)
+                                    if (!('error' in res)) {
+                                      setAttachments(prev => prev ? prev.filter(a => a.id !== att.id) : prev)
+                                    }
+                                  }}
+                                  className="p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50"
+                                  title="Excluir"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </div>
+
+                            {isEditingDoc && (
+                              <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50/40 p-3 space-y-2">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  <label className="block">
+                                    <span className="text-[11px] font-medium text-slate-600">Título</span>
+                                    <input
+                                      type="text"
+                                      value={editingDocForm.title ?? ''}
+                                      onChange={e => setEditingDocForm({ ...editingDocForm, title: e.target.value })}
+                                      disabled={savingDocEdit}
+                                      className="w-full rounded-md border border-slate-200 px-2 py-1 text-sm focus:border-blue-400 focus:outline-none disabled:bg-slate-50"
+                                    />
+                                  </label>
+                                  <label className="block">
+                                    <span className="text-[11px] font-medium text-slate-600">Data do documento</span>
+                                    <input
+                                      type="date"
+                                      value={editingDocForm.document_date ?? ''}
+                                      onChange={e => setEditingDocForm({ ...editingDocForm, document_date: e.target.value })}
+                                      disabled={savingDocEdit}
+                                      className="w-full rounded-md border border-slate-200 px-2 py-1 text-sm focus:border-blue-400 focus:outline-none disabled:bg-slate-50"
+                                    />
+                                  </label>
+                                </div>
+                                <label className="block">
+                                  <span className="text-[11px] font-medium text-slate-600">Observação</span>
+                                  <textarea
+                                    value={editingDocForm.notes ?? ''}
+                                    onChange={e => setEditingDocForm({ ...editingDocForm, notes: e.target.value })}
+                                    rows={2}
+                                    disabled={savingDocEdit}
+                                    className="w-full rounded-md border border-slate-200 px-2 py-1 text-sm focus:border-blue-400 focus:outline-none disabled:bg-slate-50 resize-none"
+                                  />
+                                </label>
+                                <div className="flex items-center justify-end gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => { setEditingDocId(null); setEditingDocForm({}) }}
+                                    disabled={savingDocEdit}
+                                    className="rounded-md px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+                                  >
+                                    Cancelar
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      setSavingDocEdit(true)
+                                      const res = await updateAttachmentMetadata(att.id, {
+                                        title:         editingDocForm.title,
+                                        document_date: editingDocForm.document_date || null,
+                                        notes:         editingDocForm.notes,
+                                      })
+                                      setSavingDocEdit(false)
+                                      if ('error' in res) return
+                                      setAttachments(prev => prev ? prev.map(a => a.id === att.id ? {
+                                        ...a,
+                                        title:         (editingDocForm.title?.trim() || null),
+                                        document_date: (editingDocForm.document_date || null),
+                                        notes:         (editingDocForm.notes?.trim() || null),
+                                      } : a) : prev)
+                                      setEditingDocId(null); setEditingDocForm({})
+                                    }}
+                                    disabled={savingDocEdit}
+                                    className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                                  >
+                                    {savingDocEdit
+                                      ? <><Loader2 className="h-3 w-3 animate-spin" /> Salvando</>
+                                      : <><Save className="h-3 w-3" /> Salvar</>
+                                    }
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
                     </div>
                   )}
                 </>

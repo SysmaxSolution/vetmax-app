@@ -449,10 +449,18 @@ function AppointmentCard({ event, packageInfo }: { event: TimelineEvent; package
 function AttachmentCard({ event }: { event: TimelineEvent }) {
   const a = event.attachment!
   const isImage = a.file_type.startsWith('image/')
+  const headline = a.title?.trim() || a.file_name
+  const docDate = a.document_date
+    ? (() => {
+        const [y, m, d] = a.document_date.split('-').map(Number)
+        if (!y || !m || !d) return null
+        return new Date(y, m - 1, d).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
+      })()
+    : null
   return (
     <div className="rounded-xl border border-rose-100 bg-rose-50 px-4 py-3">
       <p className="text-xs font-semibold uppercase tracking-wide text-rose-600 mb-2">Arquivo Anexado</p>
-      <div className="flex items-center gap-3">
+      <div className="flex items-start gap-3">
         {isImage ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -466,8 +474,17 @@ function AttachmentCard({ event }: { event: TimelineEvent }) {
           </div>
         )}
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-rose-900 truncate">{a.file_name}</p>
+          <p className="text-sm font-semibold text-rose-900 truncate">{headline}</p>
+          {a.title && a.title.trim() && (
+            <p className="text-[11px] text-rose-400 truncate">{a.file_name}</p>
+          )}
+          {docDate && (
+            <p className="text-xs text-rose-600 mt-0.5">📅 Data do documento: {docDate}</p>
+          )}
           <p className="text-xs text-rose-500 mt-0.5">{a.file_type}</p>
+          {a.notes && a.notes.trim() && (
+            <p className="text-xs text-rose-700 italic mt-1">"{a.notes}"</p>
+          )}
         </div>
         {a.signed_url && (
           <a
@@ -792,18 +809,35 @@ function EventDetailModal({ event, onClose }: { event: TimelineEvent; onClose: (
           {event.type === 'attachment' && event.attachment && (() => {
             const a = event.attachment
             const isImage = a.file_type.startsWith('image/')
+            const headline = a.title?.trim() || a.file_name
+            const docDate = a.document_date
+              ? (() => {
+                  const [y, m, d] = a.document_date.split('-').map(Number)
+                  if (!y || !m || !d) return null
+                  return new Date(y, m - 1, d).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
+                })()
+              : null
             return (
               <div className="space-y-3">
-                <div className="flex items-center gap-3">
+                <div className="flex items-start gap-3">
                   {isImage ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={a.signed_url} alt={a.file_name} className="h-20 w-20 rounded-xl object-cover border border-rose-200 flex-shrink-0" />
                   ) : (
                     <div className="h-16 w-16 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-center text-3xl flex-shrink-0">📄</div>
                   )}
-                  <div>
-                    <p className="font-semibold text-rose-900">{a.file_name}</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-rose-900 break-words">{headline}</p>
+                    {a.title && a.title.trim() && (
+                      <p className="text-xs text-rose-400 mt-0.5 break-words">{a.file_name}</p>
+                    )}
+                    {docDate && (
+                      <p className="text-xs text-rose-700 mt-0.5">📅 Data do documento: {docDate}</p>
+                    )}
                     <p className="text-xs text-rose-500 mt-0.5">{a.file_type}</p>
+                    {a.notes && a.notes.trim() && (
+                      <p className="text-sm text-rose-800 italic mt-2">"{a.notes}"</p>
+                    )}
                   </div>
                 </div>
                 {a.signed_url && (

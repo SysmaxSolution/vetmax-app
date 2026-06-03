@@ -8,16 +8,19 @@ import {
   Paperclip, FileText, Image as ImageIcon, File, Upload, ExternalLink,
   Brain, AlertTriangle, CheckCircle, Siren, MessageSquare, Volume2, VolumeX,
   ChevronDown, ChevronUp, MessageCircle, Settings, HeartPulse, Droplets, Receipt, BedDouble, ListChecks,
+  Pencil, Calendar, StickyNote, Tag,
 } from 'lucide-react'
 import {
   addClinicalEvolution,
   getHospitalizationDocuments,
   saveHospitalizationDocument,
   deleteHospitalizationDocument,
+  updateHospitalizationDocumentMetadata,
   type HospitalizationCard,
   type HospitalizationRecord,
   type StructuredMed,
   type HospDocument,
+  type HospDocumentMetadata,
 } from '@/lib/actions/hospitalizations'
 import { createClient } from '@/lib/supabase/client'
 import { extractHospitalizationVoice } from '@/lib/actions/pharmacy'
@@ -134,6 +137,10 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
   const [documents, setDocuments] = useState<HospDocument[]>([])
   const [loadingDocs, setLoadingDocs] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
+  const [stagedDoc, setStagedDoc] = useState<{ file: File; title: string; document_date: string; notes: string } | null>(null)
+  const [editingDocId, setEditingDocId] = useState<string | null>(null)
+  const [editingDocForm, setEditingDocForm] = useState<HospDocumentMetadata>({})
+  const [savingDocEdit, setSavingDocEdit] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -532,8 +539,17 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
   }
 
   // --- Gestão de Documentos ---
-  async function handleFileUpload(file: File) {
+  // Em vez de upload imediato, mostra área de staging para o usuário preencher
+  // título / data / observação (opcionais) antes de confirmar.
+  function stageFileForUpload(file: File) {
+    setStagedDoc({ file, title: '', document_date: '', notes: '' })
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  async function confirmStagedUpload() {
+    if (!stagedDoc) return
     setIsUploading(true)
+    const file = stagedDoc.file
     const supabase = createClient()
     const safeName = file.name.replace(/\s+/g, '_')
     const path = `${card.clinic_id}/${card.id}/${Date.now()}-${safeName}`
@@ -554,6 +570,9 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
       file_name:          file.name,
       file_type:          fileType,
       storage_path:       path,
+      title:              stagedDoc.title,
+      document_date:      stagedDoc.document_date || null,
+      notes:              stagedDoc.notes,
     })
 
     if ('error' in result) {
@@ -561,13 +580,31 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
     } else {
       const docs = await getHospitalizationDocuments(card.id)
       if (!('error' in docs)) setDocuments(docs)
-      // Atualiza timeline (log automático foi criado)
       const { data } = await supabase.from('hospitalization_records').select('*').eq('hospitalization_id', card.id).order('created_at', { ascending: false })
       if (data) setRecords(data as HospitalizationRecord[])
       onSaved?.()
+      setStagedDoc(null)
     }
     setIsUploading(false)
-    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  async function saveDocMetadata(docId: string) {
+    setSavingDocEdit(true)
+    const res = await updateHospitalizationDocumentMetadata(docId, {
+      title:         editingDocForm.title,
+      document_date: editingDocForm.document_date || null,
+      notes:         editingDocForm.notes,
+    })
+    setSavingDocEdit(false)
+    if ('error' in res) { alert('Erro: ' + res.error); return }
+    setDocuments(prev => prev.map(d => d.id === docId ? {
+      ...d,
+      title:         (editingDocForm.title?.trim() || null),
+      document_date: (editingDocForm.document_date || null),
+      notes:         (editingDocForm.notes?.trim() || null),
+    } : d))
+    setEditingDocId(null)
+    setEditingDocForm({})
   }
 
   async function handleDownload(doc: HospDocument) {
@@ -588,7 +625,7 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
   function onDrop(e: React.DragEvent) {
     e.preventDefault(); setIsDragging(false)
     const file = e.dataTransfer.files[0]
-    if (file) handleFileUpload(file)
+    if (file) stageFileForUpload(file)
   }
 
   return (
@@ -1168,40 +1205,119 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
             {/* ─── Aba: Documentos e Exames ─── */}
             {activeRightTab === 'documents' && (
               <div className="flex-1 overflow-y-auto p-5 space-y-4">
-                {/* Dropzone */}
-                <div
-                  onDragOver={onDragOver}
-                  onDragLeave={onDragLeave}
-                  onDrop={onDrop}
-                  onClick={() => fileInputRef.current?.click()}
-                  className={`border-2 border-dashed rounded-2xl p-6 flex flex-col items-center justify-center gap-3 cursor-pointer transition-all ${
-                    isDragging ? 'border-violet-400 bg-violet-50' : 'border-slate-200 hover:border-violet-300 hover:bg-slate-50/80'
-                  }`}
-                >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    className="hidden"
-                    accept=".pdf,image/*"
-                    onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(f) }}
-                  />
-                  {isUploading ? (
-                    <>
-                      <Loader2 className="h-8 w-8 text-violet-400 animate-spin" />
-                      <span className="text-xs font-medium text-slate-500">Enviando...</span>
-                    </>
-                  ) : (
-                    <>
-                      <div className="h-10 w-10 rounded-xl bg-violet-50 flex items-center justify-center">
-                        <Upload className="h-5 w-5 text-violet-400" />
+                {/* Staging — arquivo selecionado, esperando metadata + confirmação */}
+                {stagedDoc && (
+                  <div className="rounded-2xl border border-violet-200 bg-violet-50/40 p-4 space-y-3">
+                    <div className="flex items-center gap-3">
+                      <div className="h-9 w-9 rounded-lg bg-violet-100 flex items-center justify-center">
+                        <Paperclip className="h-4 w-4 text-violet-600" />
                       </div>
-                      <div className="text-center">
-                        <p className="text-xs font-bold text-slate-700">Arraste ou clique para anexar</p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">PDF ou Imagem (máx. 50 MB)</p>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-slate-800 truncate">{stagedDoc.file.name}</p>
+                        <p className="text-[10px] text-slate-500">{(stagedDoc.file.size / 1024).toFixed(0)} KB · pronto para enviar</p>
                       </div>
-                    </>
-                  )}
-                </div>
+                      <button
+                        type="button"
+                        onClick={() => setStagedDoc(null)}
+                        disabled={isUploading}
+                        className="flex-shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                        title="Cancelar"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <p className="text-[10px] uppercase tracking-wide text-slate-500 font-bold">Detalhes (opcionais)</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <label className="block">
+                        <span className="flex items-center gap-1 text-[10px] font-semibold text-slate-600 mb-1">
+                          <Tag className="h-3 w-3" /> Título
+                        </span>
+                        <input
+                          type="text"
+                          value={stagedDoc.title}
+                          onChange={e => setStagedDoc({ ...stagedDoc, title: e.target.value })}
+                          placeholder="ex.: Raio-X tórax"
+                          disabled={isUploading}
+                          className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs focus:border-violet-400 focus:outline-none disabled:bg-slate-50"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="flex items-center gap-1 text-[10px] font-semibold text-slate-600 mb-1">
+                          <Calendar className="h-3 w-3" /> Data do documento
+                        </span>
+                        <input
+                          type="date"
+                          value={stagedDoc.document_date}
+                          onChange={e => setStagedDoc({ ...stagedDoc, document_date: e.target.value })}
+                          disabled={isUploading}
+                          className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs focus:border-violet-400 focus:outline-none disabled:bg-slate-50"
+                        />
+                      </label>
+                    </div>
+                    <label className="block">
+                      <span className="flex items-center gap-1 text-[10px] font-semibold text-slate-600 mb-1">
+                        <StickyNote className="h-3 w-3" /> Observação
+                      </span>
+                      <textarea
+                        value={stagedDoc.notes}
+                        onChange={e => setStagedDoc({ ...stagedDoc, notes: e.target.value })}
+                        rows={2}
+                        placeholder="Notas livres sobre o documento..."
+                        disabled={isUploading}
+                        className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs focus:border-violet-400 focus:outline-none disabled:bg-slate-50 resize-none"
+                      />
+                    </label>
+                    <div className="flex items-center justify-end gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setStagedDoc(null)}
+                        disabled={isUploading}
+                        className="rounded-lg px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={confirmStagedUpload}
+                        disabled={isUploading}
+                        className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-3 py-1 text-xs font-bold text-white hover:bg-violet-700 disabled:opacity-50"
+                      >
+                        {isUploading
+                          ? <><Loader2 className="h-3 w-3 animate-spin" /> Enviando...</>
+                          : <><Upload className="h-3 w-3" /> Enviar anexo</>
+                        }
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Dropzone — escondida durante staging */}
+                {!stagedDoc && (
+                  <div
+                    onDragOver={onDragOver}
+                    onDragLeave={onDragLeave}
+                    onDrop={onDrop}
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded-2xl p-6 flex flex-col items-center justify-center gap-3 cursor-pointer transition-all ${
+                      isDragging ? 'border-violet-400 bg-violet-50' : 'border-slate-200 hover:border-violet-300 hover:bg-slate-50/80'
+                    }`}
+                  >
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      className="hidden"
+                      accept=".pdf,image/*"
+                      onChange={e => { const f = e.target.files?.[0]; if (f) stageFileForUpload(f) }}
+                    />
+                    <div className="h-10 w-10 rounded-xl bg-violet-50 flex items-center justify-center">
+                      <Upload className="h-5 w-5 text-violet-400" />
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xs font-bold text-slate-700">Arraste ou clique para anexar</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">PDF ou Imagem (máx. 50 MB)</p>
+                    </div>
+                  </div>
+                )}
 
                 {/* Lista de Documentos */}
                 {loadingDocs ? (
@@ -1210,39 +1326,143 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
                   <p className="text-center text-xs text-slate-400 py-4">Nenhum documento anexado.</p>
                 ) : (
                   <div className="space-y-2">
-                    {documents.map(doc => (
-                      <div key={doc.id} className="flex items-center gap-3 bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
-                        <div className={`h-9 w-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                          doc.file_type === 'pdf'   ? 'bg-rose-50 text-rose-500' :
-                          doc.file_type === 'image' ? 'bg-sky-50 text-sky-500'  : 'bg-slate-50 text-slate-400'
-                        }`}>
-                          {doc.file_type === 'pdf'   ? <FileText  className="h-4 w-4" /> :
-                           doc.file_type === 'image' ? <ImageIcon className="h-4 w-4" /> : <File className="h-4 w-4" />}
+                    {documents.map(doc => {
+                      const isEditingDoc = editingDocId === doc.id
+                      const hasMeta = !!(doc.title || doc.document_date || doc.notes)
+                      const headline = doc.title?.trim() || doc.file_name
+                      const docDate = doc.document_date
+                        ? (() => {
+                            const [y, m, d] = doc.document_date.split('-').map(Number)
+                            return new Date(y, m - 1, d).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
+                          })()
+                        : null
+                      return (
+                        <div key={doc.id} className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
+                          <div className="flex items-start gap-3">
+                            <div className={`h-9 w-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                              doc.file_type === 'pdf'   ? 'bg-rose-50 text-rose-500' :
+                              doc.file_type === 'image' ? 'bg-sky-50 text-sky-500'  : 'bg-slate-50 text-slate-400'
+                            }`}>
+                              {doc.file_type === 'pdf'   ? <FileText  className="h-4 w-4" /> :
+                               doc.file_type === 'image' ? <ImageIcon className="h-4 w-4" /> : <File className="h-4 w-4" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-bold text-slate-800 truncate">{headline}</p>
+                              {doc.title && doc.title.trim() && (
+                                <p className="text-[10px] text-slate-400 truncate">{doc.file_name}</p>
+                              )}
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-0 text-[10px] text-slate-400">
+                                {docDate && (
+                                  <span className="inline-flex items-center gap-1 text-slate-500">
+                                    <Calendar className="h-2.5 w-2.5" /> {docDate}
+                                  </span>
+                                )}
+                                <span>{doc.user_name} • Enviado em {formatClinicDate(doc.created_at)}</span>
+                              </div>
+                              {doc.notes && doc.notes.trim() && (
+                                <p className="text-[11px] text-slate-600 mt-1 italic">"{doc.notes}"</p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              <button
+                                onClick={() => handleDownload(doc)}
+                                className="p-1.5 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-lg transition-colors"
+                                title="Visualizar / Baixar"
+                              >
+                                <ExternalLink className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (isEditingDoc) {
+                                    setEditingDocId(null); setEditingDocForm({})
+                                  } else {
+                                    setEditingDocId(doc.id)
+                                    setEditingDocForm({
+                                      title:         doc.title ?? '',
+                                      document_date: doc.document_date ?? '',
+                                      notes:         doc.notes ?? '',
+                                    })
+                                  }
+                                }}
+                                className={`p-1.5 rounded-lg transition-colors ${
+                                  isEditingDoc
+                                    ? 'text-blue-600 bg-blue-50'
+                                    : `${hasMeta ? 'text-slate-500' : 'text-slate-400'} hover:text-blue-600 hover:bg-blue-50`
+                                }`}
+                                title={isEditingDoc ? 'Cancelar edição' : (hasMeta ? 'Editar detalhes' : 'Adicionar detalhes')}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteDoc(doc)}
+                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                                title="Remover documento"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {isEditingDoc && (
+                            <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50/40 p-2.5 space-y-2">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <label className="block">
+                                  <span className="text-[10px] font-semibold text-slate-600">Título</span>
+                                  <input
+                                    type="text"
+                                    value={editingDocForm.title ?? ''}
+                                    onChange={e => setEditingDocForm({ ...editingDocForm, title: e.target.value })}
+                                    disabled={savingDocEdit}
+                                    className="w-full rounded-md border border-slate-200 px-2 py-1 text-xs focus:border-blue-400 focus:outline-none disabled:bg-slate-50"
+                                  />
+                                </label>
+                                <label className="block">
+                                  <span className="text-[10px] font-semibold text-slate-600">Data do documento</span>
+                                  <input
+                                    type="date"
+                                    value={editingDocForm.document_date ?? ''}
+                                    onChange={e => setEditingDocForm({ ...editingDocForm, document_date: e.target.value })}
+                                    disabled={savingDocEdit}
+                                    className="w-full rounded-md border border-slate-200 px-2 py-1 text-xs focus:border-blue-400 focus:outline-none disabled:bg-slate-50"
+                                  />
+                                </label>
+                              </div>
+                              <label className="block">
+                                <span className="text-[10px] font-semibold text-slate-600">Observação</span>
+                                <textarea
+                                  value={editingDocForm.notes ?? ''}
+                                  onChange={e => setEditingDocForm({ ...editingDocForm, notes: e.target.value })}
+                                  rows={2}
+                                  disabled={savingDocEdit}
+                                  className="w-full rounded-md border border-slate-200 px-2 py-1 text-xs focus:border-blue-400 focus:outline-none disabled:bg-slate-50 resize-none"
+                                />
+                              </label>
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => { setEditingDocId(null); setEditingDocForm({}) }}
+                                  disabled={savingDocEdit}
+                                  className="rounded-md px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+                                >
+                                  Cancelar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => saveDocMetadata(doc.id)}
+                                  disabled={savingDocEdit}
+                                  className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-2 py-1 text-[11px] font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                                >
+                                  {savingDocEdit
+                                    ? <><Loader2 className="h-2.5 w-2.5 animate-spin" /> Salvando</>
+                                    : <><Save className="h-2.5 w-2.5" /> Salvar</>
+                                  }
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-slate-800 truncate">{doc.file_name}</p>
-                          <p className="text-[10px] text-slate-400">
-                            {doc.user_name} • {formatClinicDate(doc.created_at)}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          <button
-                            onClick={() => handleDownload(doc)}
-                            className="p-1.5 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-lg transition-colors"
-                            title="Visualizar / Baixar"
-                          >
-                            <ExternalLink className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteDoc(doc)}
-                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                            title="Remover documento"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 )}
               </div>

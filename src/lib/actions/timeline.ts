@@ -81,6 +81,9 @@ export interface TimelineEvent {
     file_type:    string
     signed_url:   string
     storage_path: string
+    title?:         string | null
+    document_date?: string | null
+    notes?:         string | null
   }
   hospitalization_evolution?: {
     id:                string
@@ -239,7 +242,7 @@ export async function getPetTimeline(
         .order('created_at', { ascending: false }),
       supabase
         .from('patient_attachments')
-        .select('id, consultation_id, file_name, file_type, file_url, created_at')
+        .select('id, consultation_id, file_name, file_type, file_url, created_at, title, document_date, notes')
         .eq('patient_id', petId)
         .eq('clinic_id', clinicId)
         .order('created_at', { ascending: false }),
@@ -416,11 +419,14 @@ export async function getPetTimeline(
         date:            r.created_at,
         consultation_id: r.consultation_id ?? undefined,
         attachment: {
-          id:           r.id,
-          file_name:    r.file_name,
-          file_type:    r.file_type,
-          signed_url:   signedResults[i].data?.signedUrl ?? '',
-          storage_path: r.file_url,
+          id:            r.id,
+          file_name:     r.file_name,
+          file_type:     r.file_type,
+          signed_url:    signedResults[i].data?.signedUrl ?? '',
+          storage_path:  r.file_url,
+          title:         (r as { title?: string | null }).title ?? null,
+          document_date: (r as { document_date?: string | null }).document_date ?? null,
+          notes:         (r as { notes?: string | null }).notes ?? null,
         },
       })
     }

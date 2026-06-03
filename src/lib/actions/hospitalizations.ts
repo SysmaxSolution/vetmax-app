@@ -576,6 +576,15 @@ export type HospDocument = {
   storage_path:       string
   user_name:          string
   created_at:         string
+  title?:             string | null
+  document_date?:     string | null
+  notes?:             string | null
+}
+
+export type HospDocumentMetadata = {
+  title?:         string | null
+  document_date?: string | null
+  notes?:         string | null
 }
 
 export async function getHospitalizationDocuments(
@@ -587,7 +596,7 @@ export async function getHospitalizationDocuments(
 
   const { data, error } = await supabase
     .from('hospitalization_documents')
-    .select('id, hospitalization_id, file_name, file_type, storage_path, user_name, created_at')
+    .select('id, hospitalization_id, file_name, file_type, storage_path, user_name, created_at, title, document_date, notes')
     .eq('hospitalization_id', hospitalizationId)
     .order('created_at', { ascending: false })
 
@@ -600,6 +609,9 @@ export async function saveHospitalizationDocument(data: {
   file_name:          string
   file_type:          string
   storage_path:       string
+  title?:             string | null
+  document_date?:     string | null
+  notes?:             string | null
 }): Promise<{ id: string } | { error: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -625,25 +637,63 @@ export async function saveHospitalizationDocument(data: {
       storage_path:       data.storage_path,
       user_id:            user.id,
       user_name:          profile.full_name ?? 'Usuário',
+      title:              data.title?.trim() || null,
+      document_date:      data.document_date || null,
+      notes:              data.notes?.trim() || null,
     })
     .select('id')
     .single()
 
   if (error || !doc) return { error: 'Erro ao salvar documento: ' + (error?.message ?? '') }
 
-  // Log automático no feed da Linha do Tempo
+  // Log automático no feed da Linha do Tempo (prioriza título se informado)
+  const displayName = data.title?.trim() || data.file_name
+  const noteSuffix  = data.notes?.trim() ? ` — ${data.notes.trim()}` : ''
   await admin.from('hospitalization_records').insert({
     hospitalization_id: data.hospitalization_id,
     clinic_id:          profile.clinic_id,
     user_id:            user.id,
     user_name:          profile.full_name ?? 'Usuário',
-    notes:              `📎 Documento "${data.file_name}" anexado.`,
+    notes:              `📎 Documento "${displayName}" anexado.${noteSuffix}`,
     medications:        [],
     improvement_level:  'estavel',
   })
 
   revalidatePath('/dashboard/hospitalization')
   return { id: doc.id }
+}
+
+export async function updateHospitalizationDocumentMetadata(
+  docId:    string,
+  metadata: HospDocumentMetadata,
+): Promise<{ success: true } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('clinic_id')
+    .eq('id', user.id)
+    .single()
+  if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
+
+  const admin = createAdminClient()
+
+  const { error } = await admin
+    .from('hospitalization_documents')
+    .update({
+      title:         metadata.title?.trim() || null,
+      document_date: metadata.document_date || null,
+      notes:         metadata.notes?.trim() || null,
+    })
+    .eq('id', docId)
+    .eq('clinic_id', profile.clinic_id)
+
+  if (error) return { error: 'Erro ao atualizar metadados: ' + error.message }
+
+  revalidatePath('/dashboard/hospitalization')
+  return { success: true }
 }
 
 export async function deleteHospitalizationDocument(

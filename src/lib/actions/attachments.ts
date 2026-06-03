@@ -13,6 +13,16 @@ export type Attachment = {
   storage_path: string  // path no bucket: clinic_id/patient_id/timestamp_filename
   signed_url:  string   // URL com validade de 1h para exibição
   created_at:  string
+  /** Metadados opcionais (livres). Exibir apenas quando preenchidos. */
+  title?:         string | null
+  document_date?: string | null  // ISO date (YYYY-MM-DD)
+  notes?:         string | null
+}
+
+export type AttachmentMetadata = {
+  title?:         string | null
+  document_date?: string | null
+  notes?:         string | null
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -33,7 +43,8 @@ const SIGNED_URL_EXPIRY = 3600 // 1 hora
 export async function uploadAttachment(
   formData: FormData,
   patientId: string,
-  consultationId?: string
+  consultationId?: string,
+  metadata?: AttachmentMetadata,
 ): Promise<Attachment | { error: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -78,8 +89,11 @@ export async function uploadAttachment(
       file_type:       file.type,
       file_url:        storagePath,
       uploaded_by:     user.id,
+      title:           metadata?.title?.trim() || null,
+      document_date:   metadata?.document_date || null,
+      notes:           metadata?.notes?.trim() || null,
     })
-    .select('id, file_name, file_type, file_url, created_at')
+    .select('id, file_name, file_type, file_url, created_at, title, document_date, notes')
     .single()
 
   if (dbErr || !record) {
@@ -97,12 +111,15 @@ export async function uploadAttachment(
   revalidatePath(`/dashboard/exams/${consultationId ?? ''}`)
 
   return {
-    id:           record.id,
-    file_name:    record.file_name,
-    file_type:    record.file_type,
-    storage_path: record.file_url,
-    signed_url:   signed?.signedUrl ?? '',
-    created_at:   record.created_at,
+    id:            record.id,
+    file_name:     record.file_name,
+    file_type:     record.file_type,
+    storage_path:  record.file_url,
+    signed_url:    signed?.signedUrl ?? '',
+    created_at:    record.created_at,
+    title:         record.title,
+    document_date: record.document_date,
+    notes:         record.notes,
   }
 }
 
@@ -132,7 +149,7 @@ export async function getAttachments(
   // Ordenação DESC garante que os mais recentes apareçam no topo.
   const { data, error } = await admin
     .from('patient_attachments')
-    .select('id, file_name, file_type, file_url, created_at')
+    .select('id, file_name, file_type, file_url, created_at, title, document_date, notes')
     .eq('patient_id', patientId)
     .eq('clinic_id', profile.clinic_id)
     .order('created_at', { ascending: false })
@@ -148,12 +165,15 @@ export async function getAttachments(
   )
 
   return rows.map((r, i) => ({
-    id:           r.id,
-    file_name:    r.file_name,
-    file_type:    r.file_type,
-    storage_path: r.file_url,
-    signed_url:   signedResults[i].data?.signedUrl ?? '',
-    created_at:   r.created_at,
+    id:            r.id,
+    file_name:     r.file_name,
+    file_type:     r.file_type,
+    storage_path:  r.file_url,
+    signed_url:    signedResults[i].data?.signedUrl ?? '',
+    created_at:    r.created_at,
+    title:         r.title,
+    document_date: r.document_date,
+    notes:         r.notes,
   }))
 }
 
@@ -201,7 +221,7 @@ export async function uploadDocumentPdf(params: {
       file_url:        storagePath,
       uploaded_by:     user.id,
     })
-    .select('id, file_name, file_type, file_url, created_at')
+    .select('id, file_name, file_type, file_url, created_at, title, document_date, notes')
     .single()
 
   if (dbErr || !record) {
@@ -214,13 +234,49 @@ export async function uploadDocumentPdf(params: {
     .createSignedUrl(storagePath, SIGNED_URL_EXPIRY)
 
   return {
-    id:           record.id,
-    file_name:    record.file_name,
-    file_type:    record.file_type,
-    storage_path: record.file_url,
-    signed_url:   signed?.signedUrl ?? '',
-    created_at:   record.created_at,
+    id:            record.id,
+    file_name:     record.file_name,
+    file_type:     record.file_type,
+    storage_path:  record.file_url,
+    signed_url:    signed?.signedUrl ?? '',
+    created_at:    record.created_at,
+    title:         record.title,
+    document_date: record.document_date,
+    notes:         record.notes,
   }
+}
+
+// ─── Atualizar metadados (título/data/observação) ────────────────────────────
+
+export async function updateAttachmentMetadata(
+  id: string,
+  metadata: AttachmentMetadata,
+): Promise<{ success: true } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('clinic_id')
+    .eq('id', user.id)
+    .single()
+  if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
+
+  const admin = createAdminClient()
+
+  const { error } = await admin
+    .from('patient_attachments')
+    .update({
+      title:         metadata.title?.trim() || null,
+      document_date: metadata.document_date || null,
+      notes:         metadata.notes?.trim() || null,
+    })
+    .eq('id', id)
+    .eq('clinic_id', profile.clinic_id)
+
+  if (error) return { error: 'Erro ao atualizar metadados: ' + error.message }
+  return { success: true }
 }
 
 // ─── Deletar Anexo ────────────────────────────────────────────────────────────

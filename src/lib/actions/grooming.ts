@@ -380,6 +380,15 @@ export type GroomingDocument = {
   storage_path: string
   user_name:    string
   created_at:   string
+  title?:         string | null
+  document_date?: string | null
+  notes?:         string | null
+}
+
+export type GroomingDocumentMetadata = {
+  title?:         string | null
+  document_date?: string | null
+  notes?:         string | null
 }
 
 export async function getGroomingDocuments(
@@ -391,7 +400,7 @@ export async function getGroomingDocuments(
 
   const { data, error } = await supabase
     .from('grooming_documents')
-    .select('id, session_id, clinic_id, file_name, file_type, storage_path, user_name, created_at')
+    .select('id, session_id, clinic_id, file_name, file_type, storage_path, user_name, created_at, title, document_date, notes')
     .eq('session_id', sessionId)
     .order('created_at', { ascending: false })
 
@@ -404,6 +413,9 @@ export async function saveGroomingDocument(data: {
   file_name:    string
   file_type:    'image' | 'pdf' | 'other'
   storage_path: string
+  title?:         string | null
+  document_date?: string | null
+  notes?:         string | null
 }): Promise<{ id: string } | { error: string }> {
   const ctx = await getClinicAndUser()
   if ('error' in ctx) return ctx
@@ -419,12 +431,36 @@ export async function saveGroomingDocument(data: {
       storage_path: data.storage_path,
       user_name:    userName,
       created_by:   user.id,
+      title:         data.title?.trim() || null,
+      document_date: data.document_date || null,
+      notes:         data.notes?.trim() || null,
     })
     .select('id')
     .single()
 
   if (error) return { error: 'Erro ao salvar documento: ' + error.message }
   return { id: doc.id }
+}
+
+export async function updateGroomingDocumentMetadata(
+  docId:    string,
+  metadata: GroomingDocumentMetadata,
+): Promise<{ success: true } | { error: string }> {
+  const ctx = await getClinicAndUser()
+  if ('error' in ctx) return ctx
+  const { supabase } = ctx
+
+  const { error } = await supabase
+    .from('grooming_documents')
+    .update({
+      title:         metadata.title?.trim() || null,
+      document_date: metadata.document_date || null,
+      notes:         metadata.notes?.trim() || null,
+    })
+    .eq('id', docId)
+
+  if (error) return { error: 'Erro ao atualizar metadados: ' + error.message }
+  return { success: true }
 }
 
 export async function deleteGroomingDocument(
