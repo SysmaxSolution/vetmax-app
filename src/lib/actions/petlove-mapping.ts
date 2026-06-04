@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
+import { normalizeServiceName, buildNormalizedNameIndex } from '@/lib/service-name-normalize'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -209,6 +210,22 @@ export async function upsertProcedureMappings(
 
   const result: SaveMappingsResult = { saved: 0, created_stock_items: 0, custom_prices_set: 0, errors: [] }
 
+  // Fix B3 (04/06): matching por nome NORMALIZADO (case+acentos+espaços) em
+  // vez de ilike — o ilike não ignora acentos e o auto-create duplicava
+  // serviços ("CONSULTA VETERINARIA" da planilha vs "Consulta Veterinária").
+  // Pré-carrega o catálogo uma vez (created_at ASC → mais antigo é canônico).
+  let catalogIndex: Map<string, string> | null = null
+  if (input.some(it => !it.internal_stock_item_id)) {
+    const { data: catalogRows } = await supabase
+      .from('stock_items')
+      .select('id, name')
+      .eq('clinic_id', clinicId)
+      .order('created_at', { ascending: true })
+    catalogIndex = buildNormalizedNameIndex(
+      (catalogRows ?? []).map(r => ({ id: r.id as string, name: r.name as string })),
+    )
+  }
+
   for (const it of input) {
     const name = it.external_procedure_name.trim()
     if (!name) continue
@@ -219,17 +236,11 @@ export async function upsertProcedureMappings(
 
     // ─── Auto-create stock_item quando o usuário deixou em branco ──────────
     if (!stockItemId) {
-      // 1. Tenta achar stock_item existente com o mesmo nome (proteção contra dupes pela UNIQUE(clinic_id, name))
-      const { data: existing } = await supabase
-        .from('stock_items')
-        .select('id')
-        .eq('clinic_id', clinicId)
-        .ilike('name', name)
-        .limit(1)
-        .maybeSingle()
+      // 1. Tenta achar stock_item existente com o mesmo nome normalizado
+      const existingId = catalogIndex?.get(normalizeServiceName(name)) ?? null
 
-      if (existing?.id) {
-        stockItemId = existing.id
+      if (existingId) {
+        stockItemId = existingId
       } else {
         // Serviços auto-criados da Petlove entram com valor ZERADO no estoque.
         // O preço real fica em patient_custom_prices (por pet × procedimento).
@@ -254,6 +265,9 @@ export async function upsertProcedureMappings(
         }
         stockItemId = created.id
         result.created_stock_items++
+        // Registra no índice — variantes do mesmo nome no MESMO lote não
+        // criam dois itens.
+        catalogIndex?.set(normalizeServiceName(name), created.id)
       }
     }
 
