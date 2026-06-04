@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { runMatchEngine, bulkCreatePatientsFromPetlove } from '@/lib/actions/petlove-matching'
 import { learnCoverageFromRemittance } from '@/lib/actions/insurance-coverage'
+import { normalizeServiceName, buildNormalizedNameIndex } from '@/lib/service-name-normalize'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -351,19 +352,28 @@ export async function applyReconciliation(
 
   // Auto-create para nomes sem mapping
   const unmappedNames = procNames.filter(n => !mappingByName.has(n))
-  for (const name of unmappedNames) {
-    // 1. Achar stock_item existente com mesmo nome (case-insensitive)
-    let stockItemId: string | null = null
-    const { data: existing } = await supabase
+
+  // Fix B3 (04/06): matching por nome NORMALIZADO (case+acentos+espaços) em
+  // vez de ilike(name) — a planilha vem "CONSULTA VETERINARIA" e o catálogo
+  // tem "Consulta Veterinária"; o ilike não ignora acentos e o importador
+  // criava um serviço duplicado. Pré-carrega o catálogo da clínica uma vez
+  // (ordenado por created_at ASC → registro mais antigo vence como canônico).
+  let catalogIndex: Map<string, string> | null = null
+  if (unmappedNames.length > 0) {
+    const { data: catalogRows } = await supabase
       .from('stock_items')
-      .select('id')
+      .select('id, name')
       .eq('clinic_id', clinicId)
-      .ilike('name', name)
-      .limit(1)
-      .maybeSingle()
-    if (existing?.id) {
-      stockItemId = existing.id
-    } else {
+      .order('created_at', { ascending: true })
+    catalogIndex = buildNormalizedNameIndex(
+      (catalogRows ?? []).map(r => ({ id: r.id as string, name: r.name as string })),
+    )
+  }
+
+  for (const name of unmappedNames) {
+    // 1. Achar stock_item existente com mesmo nome normalizado
+    let stockItemId: string | null = catalogIndex?.get(normalizeServiceName(name)) ?? null
+    if (!stockItemId) {
       // 2. Criar stock_item com valor zerado (preço fica em patient_custom_prices)
       const { data: created, error: createErr } = await supabase
         .from('stock_items')
@@ -384,6 +394,9 @@ export async function applyReconciliation(
         continue
       }
       stockItemId = created.id
+      // Registra no índice — variantes do mesmo nome na MESMA remessa
+      // (ex.: "Consulta" e "CONSULTA ") não criam dois itens.
+      catalogIndex?.set(normalizeServiceName(name), created.id)
     }
 
     // 3. Upsert mapping
