@@ -207,6 +207,70 @@ export async function previewConsultationInsurance(
   }
 }
 
+// ─── Taxa adm. sobre coparticipação (Épico A, 04/06/2026) ────────────────────
+
+export interface CopayInterestPreview {
+  /** Σ coparticipação dos itens cobertos (base do juros). */
+  copay_total:   number
+  /** Juros total se a copart inteira for paga no cartão (Q5: round por item). */
+  interest_full: number
+  /** % efetivo para o rótulo da UI (ex.: 10 → "Taxa Adm Cartão (10%)"). */
+  percent:       number
+  /** Por linha — para gravar interest_snapshot na confirmação. */
+  items: Array<{
+    consultation_service_id: string
+    copay:    number
+    percent:  number
+    interest: number
+  }>
+}
+
+/**
+ * Prévia da taxa administrativa sobre a coparticipação da consulta — lida de
+ * consultation_services (copay_snapshot) × stock_items
+ * (insurance_card_interest_percent). Não persiste nada; o caixa usa para
+ * exibir o cálculo quando a forma de pagamento for cartão.
+ */
+export async function getConsultationCopayInterestPreview(
+  consultationId: string,
+): Promise<CopayInterestPreview | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+  const { supabase, clinicId } = ctx
+
+  const { data: lines } = await supabase
+    .from('consultation_services')
+    .select('id, quantity, copay_snapshot, stock_items ( insurance_card_interest_percent )')
+    .eq('clinic_id', clinicId)
+    .eq('consultation_id', consultationId)
+    .is('cancelled_at', null)
+    .not('copay_snapshot', 'is', null)
+
+  const { computeFullCopayInterest, effectiveInterestPercent } = await import('@/lib/copay-interest')
+
+  const items: CopayInterestPreview['items'] = []
+  for (const l of lines ?? []) {
+    const stock   = Array.isArray(l.stock_items) ? l.stock_items[0] : l.stock_items
+    const percent = Number((stock as { insurance_card_interest_percent?: number } | null)?.insurance_card_interest_percent ?? 0)
+    const copay   = Number(l.copay_snapshot) * Number(l.quantity ?? 1)
+    if (copay <= 0 || percent <= 0) continue
+    items.push({
+      consultation_service_id: l.id as string,
+      copay:    Number(copay.toFixed(2)),
+      percent,
+      interest: Number(((copay * percent) / 100).toFixed(2)),
+    })
+  }
+
+  const calcItems = items.map(i => ({ copay: i.copay, percent: i.percent }))
+  return {
+    copay_total:   Number(items.reduce((s, i) => s + i.copay, 0).toFixed(2)),
+    interest_full: computeFullCopayInterest(calcItems),
+    percent:       effectiveInterestPercent(calcItems),
+    items,
+  }
+}
+
 /**
  * Aplica a marcação de cobertura aos invoice_items: define insurance_status,
  * coparticipation_value e expected_value. Opt-in — só é chamado quando o

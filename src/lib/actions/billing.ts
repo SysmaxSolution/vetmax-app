@@ -879,6 +879,17 @@ export async function processSplitPayment(
       procedure_pattern?: string
       due_date?:          string
     }
+    /**
+     * Épico A (04/06): Taxa adm. sobre a coparticipação paga no cartão.
+     * Vira uma linha "Taxa administrativa" (Q6) na fatura — entra no total,
+     * no recibo do tutor e no valor cobrado na maquininha. Nunca contamina
+     * o expected_value do repasse (matching da remessa preservado).
+     */
+    copay_interest?: {
+      total:    number
+      percent?: number
+      items?:   Array<{ consultation_service_id: string; interest: number }>
+    }
   }
 ): Promise<{ success: true; status: string; paid_amount: number; total_amount: number } | { error: string }> {
   const supabase = await createClient()
@@ -921,6 +932,49 @@ export async function processSplitPayment(
       .from('invoices')
       .update({ discount: newDiscount, total_amount: newTotal, updated_at: new Date().toISOString() })
       .eq('id', invoiceId)
+  }
+
+  // ─── Taxa adm. sobre coparticipação (Épico A) — ANTES da RPC ──────────────
+  // Vira linha "Taxa administrativa" na fatura: recibo mostra (A5/Q6), o total
+  // cresce e os splits (já inflados pelo modal) fecham a conta na RPC.
+  if (options?.copay_interest && options.copay_interest.total > 0.005) {
+    const juros = Number(options.copay_interest.total.toFixed(2))
+
+    await admin.from('invoice_items').insert({
+      invoice_id:       invoiceId,
+      clinic_id:        profile.clinic_id,
+      item_type:        'other',
+      description:      'Taxa administrativa',
+      quantity:         1,
+      unit_price:       juros,
+      total_price:      juros,
+      insurance_status: 'particular',
+    })
+
+    const { data: invNow } = await admin
+      .from('invoices')
+      .select('subtotal, total_amount, copay_interest')
+      .eq('id', invoiceId)
+      .single()
+    await admin
+      .from('invoices')
+      .update({
+        subtotal:       Number((invNow as { subtotal?: number })?.subtotal ?? 0) + juros,
+        total_amount:   Number((invNow as { total_amount?: number })?.total_amount ?? 0) + juros,
+        copay_interest: Number((invNow as { copay_interest?: number })?.copay_interest ?? 0) + juros,
+        updated_at:     new Date().toISOString(),
+      })
+      .eq('id', invoiceId)
+
+    // Auditoria por linha da consulta (interest_snapshot) — imutável
+    for (const it of options.copay_interest.items ?? []) {
+      if (!it.consultation_service_id || !(it.interest > 0)) continue
+      await admin
+        .from('consultation_services')
+        .update({ interest_snapshot: Number(it.interest.toFixed(2)), updated_at: new Date().toISOString() })
+        .eq('id', it.consultation_service_id)
+        .eq('clinic_id', profile.clinic_id)
+    }
   }
 
   const { data, error } = await supabase.rpc('rpc_record_split_payment', {
