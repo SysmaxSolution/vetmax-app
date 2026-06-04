@@ -1,9 +1,11 @@
 'use client'
 
 import { useEffect, useRef, useState, useTransition } from 'react'
-import { Search, Plus, X, Tag, Loader2, Check, CircleHelp, PackagePlus } from 'lucide-react'
+import { Search, Plus, X, Tag, Loader2, Check, CircleHelp, PackagePlus, Shield } from 'lucide-react'
 import { searchServices, type ServiceItem } from '@/lib/actions/services'
 import { addStockItemV2 } from '@/lib/actions/stock'
+import { resolveConsultationServicesPricing } from '@/lib/actions/insurance-pricing'
+import type { ResolvedPricing } from '@/lib/insurance-pricing-core'
 
 const CATEGORY_LABEL: Record<string, string> = {
   vet_service:        'Consulta',
@@ -24,6 +26,12 @@ interface PickedService {
 interface Props {
   /** Itens já adicionados à consulta (para destacar e bloquear duplicação). */
   alreadyAddedIds?: string[]
+  /**
+   * Quando informado, o modal resolve o preço efetivo (convênio) dos itens
+   * para o pet desta consulta e exibe o valor correto na listagem (fix B1:
+   * antes mostrava sempre o unit_price particular, mesmo para conveniados).
+   */
+  consultationId?: string
   onCancel:  () => void
   onConfirm: (picked: PickedService[]) => Promise<void> | void
 }
@@ -32,7 +40,7 @@ function fmtBRL(v: number): string {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
-export default function ServiceSelectionModal({ alreadyAddedIds = [], onCancel, onConfirm }: Props) {
+export default function ServiceSelectionModal({ alreadyAddedIds = [], consultationId, onCancel, onConfirm }: Props) {
   const [query,     setQuery]     = useState('')
   const [results,   setResults]   = useState<ServiceItem[]>([])
   const [searching, setSearching] = useState(false)
@@ -42,6 +50,9 @@ export default function ServiceSelectionModal({ alreadyAddedIds = [], onCancel, 
   const [isPending, startTransition] = useTransition()
 
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Preços resolvidos por item (convênio quando o pet é conveniado) — fix B1.
+  const [pricing, setPricing] = useState<Record<string, ResolvedPricing>>({})
 
   // Browse + debounce
   useEffect(() => {
@@ -55,6 +66,27 @@ export default function ServiceSelectionModal({ alreadyAddedIds = [], onCancel, 
     }, 220)
     return () => { if (searchTimer.current) clearTimeout(searchTimer.current) }
   }, [query])
+
+  // Resolve preço efetivo dos resultados visíveis para o pet da consulta.
+  useEffect(() => {
+    if (!consultationId || results.length === 0) return
+    const missing = results.map(r => r.id).filter(id => !(id in pricing))
+    if (missing.length === 0) return
+    let cancelled = false
+    resolveConsultationServicesPricing(consultationId, missing).then(res => {
+      if (cancelled || 'error' in res) return
+      setPricing(prev => ({ ...prev, ...res }))
+    })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [consultationId, results])
+
+  /** Preço efetivo do item: total convênio quando resolvido, senão unit_price. */
+  function effectivePrice(item: ServiceItem): number {
+    const p = pricing[item.id]
+    if (p?.insurance && p.insurance.source !== 'fallback_unit') return p.insurance.total
+    return item.unit_price
+  }
 
   // Form: novo serviço
   const [newName,     setNewName]     = useState('')
@@ -124,7 +156,7 @@ export default function ServiceSelectionModal({ alreadyAddedIds = [], onCancel, 
     })
   }
 
-  const pickedTotal = picked.reduce((s, p) => s + p.item.unit_price * p.quantity, 0)
+  const pickedTotal = picked.reduce((s, p) => s + effectivePrice(p.item) * p.quantity, 0)
 
   return (
     <div
@@ -216,7 +248,23 @@ export default function ServiceSelectionModal({ alreadyAddedIds = [], onCancel, 
                             </div>
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
-                            <span className="text-sm font-bold text-slate-900 tabular-nums">{fmtBRL(item.unit_price)}</span>
+                            {(() => {
+                              const p = pricing[item.id]
+                              const hasInsurancePrice = !!p?.insurance && p.insurance.source !== 'fallback_unit'
+                              if (hasInsurancePrice) {
+                                return (
+                                  <span className="flex flex-col items-end">
+                                    <span className="inline-flex items-center gap-1 text-sm font-bold text-indigo-700 tabular-nums">
+                                      <Shield className="h-3 w-3" /> {fmtBRL(p!.insurance!.total)}
+                                    </span>
+                                    <span className="text-[10px] text-slate-400 line-through tabular-nums">
+                                      {fmtBRL(item.unit_price)}
+                                    </span>
+                                  </span>
+                                )
+                              }
+                              return <span className="text-sm font-bold text-slate-900 tabular-nums">{fmtBRL(item.unit_price)}</span>
+                            })()}
                             {isPicked && <Check className="h-4 w-4 text-blue-600" />}
                           </div>
                         </button>
@@ -253,7 +301,7 @@ export default function ServiceSelectionModal({ alreadyAddedIds = [], onCancel, 
                           className="w-16 rounded border border-slate-200 px-2 py-0.5 text-xs text-right"
                         />
                         <span className="text-xs font-semibold text-slate-700 tabular-nums w-20 text-right">
-                          {fmtBRL(p.item.unit_price * p.quantity)}
+                          {fmtBRL(effectivePrice(p.item) * p.quantity)}
                         </span>
                         <button
                           onClick={() => togglePick(p.item)}
