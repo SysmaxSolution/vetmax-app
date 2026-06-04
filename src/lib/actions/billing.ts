@@ -862,7 +862,24 @@ export interface PaymentSplitInput {
 export async function processSplitPayment(
   invoiceId: string,
   splits:    PaymentSplitInput[],
-  options?:  { effective_date?: string; discount?: number }
+  options?:  {
+    effective_date?: string
+    discount?:       number
+    /**
+     * Split do convênio (mesma semântica do processPayment legado). Quando
+     * presente, o saldo restante pós-baixa vira pending source='petlove_open'
+     * (em vez do pending source='cashier' criado pela RPC), o entry de
+     * Desconto Convênio é registrado e os invoice_items são marcados como
+     * aguardando_repasse para a conciliação da remessa Petlove.
+     */
+    insurance_split?: {
+      receivable_amount:  number
+      receivable_source:  'petlove_open'
+      clinic_discount:    number
+      procedure_pattern?: string
+      due_date?:          string
+    }
+  }
 ): Promise<{ success: true; status: string; paid_amount: number; total_amount: number } | { error: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -880,7 +897,7 @@ export async function processSplitPayment(
   const { data: inv } = await admin
     .from('invoices')
     .select(`
-      id, status, total_amount, paid_amount, discount, consultation_id,
+      id, status, total_amount, paid_amount, discount, consultation_id, tutor_id, patient_id,
       patients ( name ),
       tutors   ( name ),
       consultations ( vet_id, profiles!vet_id ( full_name ) )
@@ -929,6 +946,108 @@ export async function processSplitPayment(
   if (error) return { error: `Erro ao processar pagamento: ${error.message}` }
 
   const result = data as { paid_amount: number; total_amount: number; status: string }
+
+  // ─── Cobertura de convênio (fix B2): saldo restante É o pending Petlove ───
+  // Quando o caixa aplicou cobertura, o saldo pós-baixa (repasse) não pode
+  // ficar como pending source='cashier' (criado pela RPC na baixa parcial) —
+  // vira pending source='petlove_open', baixado depois pela remessa fechada.
+  // Mesma regra do processPayment legado (regra única, sem duplicação).
+  if (options?.insurance_split) {
+    const split        = options.insurance_split
+    const balanceAfter = Math.max(0, Number(result.total_amount) - Number(result.paid_amount))
+    const invIds       = inv as { tutor_id?: string; patient_id?: string }
+
+    // Substitui o pending cashier do saldo (e petlove antigo, se houver)
+    await admin
+      .from('financial_entries')
+      .delete()
+      .eq('clinic_id', profile.clinic_id)
+      .eq('invoice_id', invoiceId)
+      .eq('status', 'pending')
+      .in('source', ['cashier', 'petlove_open'])
+
+    if (balanceAfter > 0.01) {
+      const dueDate = split.due_date ?? (() => {
+        const d = new Date()
+        const nextMonth = d.getMonth() === 11 ? 0 : d.getMonth() + 1
+        const nextYear  = d.getMonth() === 11 ? d.getFullYear() + 1 : d.getFullYear()
+        const lastDay = new Date(nextYear, nextMonth + 1, 0).getDate()
+        const day = Math.min(30, lastDay)
+        return `${nextYear}-${String(nextMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+      })()
+      await admin
+        .from('financial_entries')
+        .insert({
+          clinic_id:          profile.clinic_id,
+          type:               'receivable',
+          description:        `Petlove (em aberto) · ${split.procedure_pattern ?? 'Procedimento'} · ${patientName ?? '?'} (${tutorName ?? '?'})`,
+          amount:             balanceAfter,
+          due_date:           dueDate,
+          payment_date:       null,
+          status:             'pending',
+          source:             'petlove_open',
+          category:           'Convênios · Petlove (em aberto)',
+          tutor_id:           invIds.tutor_id ?? null,
+          patient_id:         invIds.patient_id ?? null,
+          invoice_id:         invoiceId,
+          settlement_bank_id: null,
+          notes:              `Saldo a receber Petlove · invoice ${invoiceId}. Baixado quando a remessa fechada do período chegar.`,
+          created_by:         user.id,
+        })
+    }
+
+    // Desconto Convênio (is_clinic_discount=true) — idempotente, 1 por invoice
+    const { data: existingDiscountEntry } = await admin
+      .from('financial_entries')
+      .select('id, amount')
+      .eq('clinic_id', profile.clinic_id)
+      .eq('invoice_id', invoiceId)
+      .eq('is_clinic_discount', true)
+      .maybeSingle()
+
+    if (split.clinic_discount > 0.01) {
+      if (existingDiscountEntry) {
+        await admin
+          .from('financial_entries')
+          .update({ amount: split.clinic_discount, updated_at: new Date().toISOString() })
+          .eq('id', existingDiscountEntry.id)
+      } else {
+        await admin
+          .from('financial_entries')
+          .insert({
+            clinic_id:          profile.clinic_id,
+            type:               'receivable',
+            description:        `Desconto Convênio · ${split.procedure_pattern ?? 'Procedimento'} · ${patientName ?? '?'}`,
+            amount:             split.clinic_discount,
+            due_date:           new Date().toISOString().slice(0, 10),
+            payment_date:       new Date().toISOString().slice(0, 10),
+            status:             'paid',
+            source:             'manual',
+            category:           'Ajuste · Desconto Convênio',
+            tutor_id:           invIds.tutor_id ?? null,
+            patient_id:         invIds.patient_id ?? null,
+            invoice_id:         invoiceId,
+            is_clinic_discount: true,
+            notes:              `Diferença entre preço particular e total recebido pelo plano (${Number(result.total_amount).toFixed(2)}).`,
+            created_by:         user.id,
+          })
+      }
+    } else if (existingDiscountEntry) {
+      await admin.from('financial_entries').delete().eq('id', existingDiscountEntry.id)
+    }
+
+    // Marca os invoice_items (insurance_status='aguardando_repasse' +
+    // coparticipation_value + expected_value) — usado pelo matching da
+    // remessa Petlove e como fonte da verdade em previews futuros.
+    if (inv.consultation_id) {
+      try {
+        const { applyCheckoutInsuranceMarking } = await import('./insurance-checkout')
+        await applyCheckoutInsuranceMarking(inv.consultation_id)
+      } catch {
+        // não-fatal: pagamento já registrado; marcação pode ser refeita
+      }
+    }
+  }
 
   // Comissão (fire-and-forget)
   const consultations = (inv as any).consultations
