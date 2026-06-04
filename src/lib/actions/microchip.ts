@@ -159,6 +159,27 @@ export async function saveMicrochipAndFinalize(
       .eq('clinic_id', clinic_id)
   }
 
+  // 4b) Épico C (04/06): a adesão Petlove conta da MICROCHIPAGEM. Se o pet
+  //     tem convênio sem enrollment_date manual, grava a data do procedimento
+  //     — as carências passam a contar de hoje (regra Petlove: plano só ativa
+  //     com o chip implantado).
+  {
+    const { data: ins } = await admin
+      .from('pet_insurance')
+      .select('id, enrollment_date')
+      .eq('clinic_id', clinic_id)
+      .eq('patient_id', patient_id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+    const insurance = ins?.[0]
+    if (insurance && !insurance.enrollment_date) {
+      await admin
+        .from('pet_insurance')
+        .update({ enrollment_date: new Date().toISOString().slice(0, 10), updated_at: new Date().toISOString() })
+        .eq('id', insurance.id)
+    }
+  }
+
   // 5) Lança serviço "Microchipagem" na consulta — addServiceToConsultation
   //    chama resolveServicePricing internamente: quando o pet tem convênio,
   //    o split copay/repass do Item 5 entra automaticamente.
