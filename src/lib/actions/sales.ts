@@ -298,6 +298,96 @@ export async function cancelSale(
   return { success: true }
 }
 
+// ─── Solicitar correção de venda (B4, reunião 04/06/2026) ────────────────────
+//
+// Operador (receptionist) não pode cancelar venda fechada — rpc_cancel_sale
+// exige admin/owner/manager. Decisão do PO: em vez de travar sem saída, o
+// operador registra uma SOLICITAÇÃO DE CORREÇÃO que chega ao(s) admin(s) via
+// chat interno (sininho) e fica auditada. O admin cancela/ajusta depois.
+
+export async function requestSaleCorrection(
+  saleId: string,
+  reason: string,
+): Promise<{ success: true; notified_admins: number } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const trimmedReason = (reason ?? '').trim()
+  if (!trimmedReason) return { error: 'Informe o motivo da correção.' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('clinic_id, full_name, role')
+    .eq('id', user.id)
+    .single()
+  if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
+
+  const admin = createAdminClient()
+
+  // Venda da mesma clínica, ainda não cancelada
+  const { data: sale } = await admin
+    .from('sales')
+    .select('id, clinic_id, total_amount, payment_status, created_at, tutors!tutor_id ( name )')
+    .eq('id', saleId)
+    .eq('clinic_id', profile.clinic_id)
+    .maybeSingle()
+  if (!sale) return { error: 'Venda não encontrada.' }
+  if (sale.payment_status === 'cancelled') return { error: 'Esta venda já está cancelada.' }
+
+  // Admins da clínica (quem pode corrigir)
+  const { data: admins } = await admin
+    .from('profiles')
+    .select('id, full_name')
+    .eq('clinic_id', profile.clinic_id)
+    .in('role', ['admin', 'owner', 'manager'])
+    .neq('id', user.id)
+  if (!admins || admins.length === 0) {
+    return { error: 'Nenhum administrador encontrado para notificar.' }
+  }
+
+  const saleTime  = new Date(sale.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+  const tutorName = (sale as { tutors?: { name?: string } | null }).tutors?.name
+  const message =
+    `⚠️ Solicitação de correção de venda\n` +
+    `Venda #${saleId.slice(0, 8)} de ${saleTime}${tutorName ? ` · ${tutorName}` : ''} · R$ ${Number(sale.total_amount).toFixed(2)}\n` +
+    `Motivo: ${trimmedReason}\n` +
+    `Solicitado por: ${profile.full_name ?? 'operador'} (sem permissão para cancelar — corrigir no PDV/Caixa).`
+
+  // Notifica cada admin via chat direto (sininho consolidado do Épico 2)
+  const { openOrCreateDirectChat, sendChatMessage } = await import('./internal-chat')
+  let notified = 0
+  const errors: string[] = []
+  for (const adm of admins) {
+    const chat = await openOrCreateDirectChat(adm.id as string)
+    if ('error' in chat) { errors.push(`${adm.full_name ?? adm.id}: ${chat.error}`); continue }
+    const sent = await sendChatMessage({ chat_id: chat.chat_id, body: message })
+    if ('error' in sent) { errors.push(`${adm.full_name ?? adm.id}: ${sent.error}`); continue }
+    notified++
+  }
+  if (notified === 0) {
+    return { error: `Falha ao notificar administradores: ${errors.join(' · ')}` }
+  }
+
+  // Auditoria (quem pediu, quando, motivo) — exigência do PO
+  const { logAudit } = await import('./audit')
+  await logAudit({
+    action:      'SALE_CORRECTION_REQUESTED',
+    entity_type: 'sales',
+    entity_id:   saleId,
+    details: {
+      reason:          trimmedReason,
+      requested_by:    profile.full_name ?? null,
+      requester_role:  profile.role ?? null,
+      total_amount:    Number(sale.total_amount),
+      notified_admins: notified,
+    },
+  })
+
+  revalidatePath('/dashboard/internal-chat')
+  return { success: true, notified_admins: notified }
+}
+
 // ─── Listar vendas do dia ─────────────────────────────────────────────────────
 
 export async function getDailySales(date?: string): Promise<Sale[] | { error: string }> {

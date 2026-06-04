@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { CheckCircle2, XCircle, Clock, AlertTriangle } from 'lucide-react'
-import { cancelSale, type Sale } from '@/lib/actions/sales'
+import { XCircle, Clock, AlertTriangle, BellRing } from 'lucide-react'
+import { cancelSale, requestSaleCorrection, type Sale } from '@/lib/actions/sales'
 import { PAYMENT_LABELS } from './SalesCart'
 
 interface SalesHistoryTableProps {
@@ -28,6 +28,10 @@ export default function SalesHistoryTable({ sales, clinicId, onSalesUpdate }: Sa
   const [cancelReason, setCancelReason] = useState('')
   const [error,        setError]        = useState('')
   const [isPending, startTransition]    = useTransition()
+  // B4 (reunião 04/06): operador sem permissão de cancelar não fica sem saída —
+  // o modal vira "Solicitar correção" e o admin recebe alerta no chat interno.
+  const [mode,    setMode]    = useState<'cancel' | 'request'>('cancel')
+  const [success, setSuccess] = useState('')
 
   const active    = sales.filter(s => s.payment_status !== 'cancelled')
   const totalDay  = active.reduce((s, v) => s + v.total_amount, 0)
@@ -37,13 +41,37 @@ export default function SalesHistoryTable({ sales, clinicId, onSalesUpdate }: Sa
     setError('')
     startTransition(async () => {
       const result = await cancelSale(cancelTarget, cancelReason.trim())
-      if ('error' in result) { setError(result.error); return }
+      if ('error' in result) {
+        // Sem permissão (rpc_cancel_sale exige admin/owner/manager) →
+        // oferece o caminho de solicitação de correção ao administrador.
+        if (/[Aa]penas admin/.test(result.error)) {
+          setMode('request')
+          setError('')
+          return
+        }
+        setError(result.error)
+        return
+      }
       onSalesUpdate(sales.map(s => s.id === cancelTarget
         ? { ...s, payment_status: 'cancelled', cancelled_at: new Date().toISOString() }
         : s
       ))
       setCancelTarget(null)
       setCancelReason('')
+    })
+  }
+
+  function handleRequestCorrection() {
+    if (!cancelTarget || !cancelReason.trim()) { setError('Informe o motivo.'); return }
+    setError('')
+    startTransition(async () => {
+      const result = await requestSaleCorrection(cancelTarget, cancelReason.trim())
+      if ('error' in result) { setError(result.error); return }
+      setCancelTarget(null)
+      setCancelReason('')
+      setMode('cancel')
+      setSuccess(`Solicitação enviada — ${result.notified_admins} administrador(es) notificado(s) no chat interno.`)
+      setTimeout(() => setSuccess(''), 6000)
     })
   }
 
@@ -58,6 +86,12 @@ export default function SalesHistoryTable({ sales, clinicId, onSalesUpdate }: Sa
 
   return (
     <div className="space-y-4">
+      {success && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-800 flex items-center gap-2">
+          <BellRing className="h-4 w-4 flex-shrink-0" /> {success}
+        </div>
+      )}
+
       {/* KPI */}
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-white rounded-xl border border-slate-200 p-4 text-center">
@@ -130,45 +164,70 @@ export default function SalesHistoryTable({ sales, clinicId, onSalesUpdate }: Sa
         </div>
       </div>
 
-      {/* Modal de cancelamento */}
+      {/* Modal de cancelamento / solicitação de correção (B4) */}
       {cancelTarget && (
         <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4">
             <div className="flex items-center gap-3">
-              <div className="bg-red-100 rounded-full p-2">
-                <AlertTriangle className="h-5 w-5 text-red-600" />
+              <div className={`rounded-full p-2 ${mode === 'request' ? 'bg-amber-100' : 'bg-red-100'}`}>
+                {mode === 'request'
+                  ? <BellRing className="h-5 w-5 text-amber-600" />
+                  : <AlertTriangle className="h-5 w-5 text-red-600" />}
               </div>
-              <h2 className="text-base font-semibold text-slate-900">Cancelar venda</h2>
+              <h2 className="text-base font-semibold text-slate-900">
+                {mode === 'request' ? 'Solicitar correção ao administrador' : 'Cancelar venda'}
+              </h2>
             </div>
-            <p className="text-sm text-slate-600">
-              Esta ação não reverte o estoque automaticamente. Informe o motivo:
-            </p>
+            {mode === 'request' ? (
+              <p className="text-sm text-slate-600">
+                Você não tem permissão para cancelar vendas fechadas. Envie uma
+                solicitação — o administrador recebe o alerta no chat interno e
+                faz a correção. O pedido fica registrado na auditoria.
+              </p>
+            ) : (
+              <p className="text-sm text-slate-600">
+                Esta ação não reverte o estoque automaticamente. Informe o motivo:
+              </p>
+            )}
             <textarea
               value={cancelReason}
               onChange={e => setCancelReason(e.target.value)}
               rows={3}
               placeholder="Motivo obrigatório..."
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
+              className={`w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 resize-none ${
+                mode === 'request' ? 'focus:ring-amber-400' : 'focus:ring-red-400'
+              }`}
               autoFocus
             />
             {error && <p className="text-xs text-red-600">{error}</p>}
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={() => setCancelTarget(null)}
+                onClick={() => { setCancelTarget(null); setMode('cancel') }}
                 disabled={isPending}
                 className="flex-1 border border-slate-200 rounded-lg py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
               >
                 Voltar
               </button>
-              <button
-                type="button"
-                onClick={handleCancel}
-                disabled={isPending || !cancelReason.trim()}
-                className="flex-1 bg-red-600 text-white rounded-lg py-2 text-sm font-bold hover:bg-red-700 disabled:opacity-50"
-              >
-                {isPending ? 'Cancelando...' : 'Confirmar Cancelamento'}
-              </button>
+              {mode === 'request' ? (
+                <button
+                  type="button"
+                  onClick={handleRequestCorrection}
+                  disabled={isPending || !cancelReason.trim()}
+                  className="flex-1 bg-amber-500 text-white rounded-lg py-2 text-sm font-bold hover:bg-amber-600 disabled:opacity-50"
+                >
+                  {isPending ? 'Enviando...' : 'Enviar solicitação'}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleCancel}
+                  disabled={isPending || !cancelReason.trim()}
+                  className="flex-1 bg-red-600 text-white rounded-lg py-2 text-sm font-bold hover:bg-red-700 disabled:opacity-50"
+                >
+                  {isPending ? 'Cancelando...' : 'Confirmar Cancelamento'}
+                </button>
+              )}
             </div>
           </div>
         </div>
