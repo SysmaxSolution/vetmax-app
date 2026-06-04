@@ -16,21 +16,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
+import { decideServicePricing, type ResolvedPricing } from '@/lib/insurance-pricing-core'
 
-export interface ResolvedPricing {
-  unit_price: number
-  /** Preenchido APENAS quando o pet tem convênio ativo. */
-  insurance: null | {
-    total:                number
-    copay:                number | null   // null quando ainda não cadastrado (UI exige preencher)
-    repass:               number | null
-    source:               'custom' | 'default' | 'fallback_unit'
-    /** True quando UI deve forçar o vet a inserir copay/repass antes de salvar. */
-    requires_split_input: boolean
-    /** Nome do provider (para label na UI). */
-    provider_name:        string | null
-  }
-}
+export type { ResolvedPricing }
 
 type Ctx =
   | { admin: ReturnType<typeof createAdminClient>; clinic_id: string; user_id: string }
@@ -76,71 +64,127 @@ export async function resolveServicePricing(
     : Number(item.default_insurance_price)
 
   // 2) Pet tem convênio ativo?
-  const { data: insurance } = await admin
+  //    Fix B1 (04/06): NÃO usar maybeSingle() — com 2+ vínculos (ex.: um
+  //    cancelado + um ativo recriado), maybeSingle retorna erro e data=null,
+  //    e o pet era tratado silenciosamente como particular (valor cheio).
+  const { data: insuranceRows } = await admin
     .from('pet_insurance')
     .select('id, provider_id, insurance_providers(name)')
     .eq('clinic_id', clinic_id)
     .eq('patient_id', patient_id)
     .eq('coverage_status', 'active')
-    .maybeSingle()
+    .order('created_at', { ascending: false })
+    .limit(1)
+  const insurance = insuranceRows?.[0] ?? null
 
-  if (!insurance) {
-    return { unit_price, insurance: null }
+  const provider_name = insurance
+    ? ((insurance.insurance_providers as any)?.name ?? null)
+    : null
+
+  // 3) Lookup em patient_custom_prices (split por pet+item) — só com convênio
+  let custom: { custom_price: number; copay_amount: number | null; repass_amount: number | null } | null = null
+  if (insurance) {
+    const { data } = await admin
+      .from('patient_custom_prices')
+      .select('custom_price, copay_amount, repass_amount')
+      .eq('clinic_id', clinic_id)
+      .eq('patient_id', patient_id)
+      .eq('stock_item_id', stock_item_id)
+      .maybeSingle()
+    custom = data ?? null
   }
 
-  const provider_name = (insurance.insurance_providers as any)?.name ?? null
+  // 4) Decisão da hierarquia — núcleo puro testável (insurance-pricing-core)
+  return decideServicePricing({
+    unit_price,
+    default_insurance_price,
+    has_active_insurance: insurance !== null,
+    provider_name,
+    custom,
+  })
+}
 
-  // 3) Lookup em patient_custom_prices (split por pet+item)
-  const { data: custom } = await admin
-    .from('patient_custom_prices')
-    .select('custom_price, copay_amount, repass_amount')
+// ─── resolveConsultationServicesPricing (batch p/ UI de seleção) ─────────────
+
+/**
+ * Resolve o preço efetivo (convênio ou particular) de vários stock_items de
+ * uma vez para o pet da consulta — usado pelo ServiceSelectionModal para
+ * exibir o preço CORRETO na listagem (fix B1: o modal mostrava sempre o
+ * unit_price particular, mesmo para pets conveniados).
+ *
+ * Retorna um mapa stock_item_id → resultado. Itens sem convênio aplicável
+ * vêm com insurance=null (exibir unit_price normalmente).
+ */
+export async function resolveConsultationServicesPricing(
+  consultation_id: string,
+  stock_item_ids: string[],
+): Promise<Record<string, ResolvedPricing> | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+  const { admin, clinic_id } = ctx
+
+  if (stock_item_ids.length === 0) return {}
+
+  // 1) Pet da consulta
+  const { data: consult } = await admin
+    .from('consultations')
+    .select('patient_id')
+    .eq('id', consultation_id)
+    .eq('clinic_id', clinic_id)
+    .maybeSingle()
+  if (!consult?.patient_id) return { error: 'Consulta não encontrada.' }
+  const patient_id = consult.patient_id as string
+
+  // 2) Itens em lote
+  const { data: items } = await admin
+    .from('stock_items')
+    .select('id, unit_price, default_insurance_price')
+    .eq('clinic_id', clinic_id)
+    .in('id', stock_item_ids)
+
+  // 3) Convênio ativo do pet (mesma regra robusta do resolveServicePricing)
+  const { data: insuranceRows } = await admin
+    .from('pet_insurance')
+    .select('id, insurance_providers(name)')
     .eq('clinic_id', clinic_id)
     .eq('patient_id', patient_id)
-    .eq('stock_item_id', stock_item_id)
-    .maybeSingle()
+    .eq('coverage_status', 'active')
+    .order('created_at', { ascending: false })
+    .limit(1)
+  const insurance = insuranceRows?.[0] ?? null
+  const provider_name = insurance
+    ? ((insurance.insurance_providers as any)?.name ?? null)
+    : null
 
-  if (custom && custom.copay_amount !== null && custom.repass_amount !== null) {
-    return {
-      unit_price,
-      insurance: {
-        total:                Number(custom.custom_price),
-        copay:                Number(custom.copay_amount),
-        repass:               Number(custom.repass_amount),
-        source:               'custom',
-        requires_split_input: false,
-        provider_name,
-      },
+  // 4) Custom prices do pet em lote (só com convênio)
+  const customByItem = new Map<string, { custom_price: number; copay_amount: number | null; repass_amount: number | null }>()
+  if (insurance) {
+    const { data: customs } = await admin
+      .from('patient_custom_prices')
+      .select('stock_item_id, custom_price, copay_amount, repass_amount')
+      .eq('clinic_id', clinic_id)
+      .eq('patient_id', patient_id)
+      .in('stock_item_id', stock_item_ids)
+    for (const c of customs ?? []) {
+      customByItem.set(c.stock_item_id as string, {
+        custom_price:  Number(c.custom_price),
+        copay_amount:  c.copay_amount  === null ? null : Number(c.copay_amount),
+        repass_amount: c.repass_amount === null ? null : Number(c.repass_amount),
+      })
     }
   }
 
-  // 4) Default de convênio do serviço
-  if (default_insurance_price !== null) {
-    return {
-      unit_price,
-      insurance: {
-        total:                default_insurance_price,
-        copay:                null,
-        repass:               null,
-        source:               'default',
-        requires_split_input: true,
-        provider_name,
-      },
-    }
-  }
-
-  // 5) Fallback: cobra particular (unit_price), mas marca para UI mostrar inputs
-  //    de split caso o vet queira registrar o acordo agora.
-  return {
-    unit_price,
-    insurance: {
-      total:                unit_price,
-      copay:                null,
-      repass:               null,
-      source:               'fallback_unit',
-      requires_split_input: true,
+  const out: Record<string, ResolvedPricing> = {}
+  for (const item of items ?? []) {
+    out[item.id as string] = decideServicePricing({
+      unit_price:               Number(item.unit_price ?? 0),
+      default_insurance_price:  item.default_insurance_price === null ? null : Number(item.default_insurance_price),
+      has_active_insurance:     insurance !== null,
       provider_name,
-    },
+      custom:                   customByItem.get(item.id as string) ?? null,
+    })
   }
+  return out
 }
 
 // ─── updateConsultationServicePricingSplit ────────────────────────────────────

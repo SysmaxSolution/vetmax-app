@@ -435,6 +435,7 @@ export default function ConsultationServicesPanel({
       {showModal && (
         <ServiceSelectionModal
           alreadyAddedIds={activeStockIds}
+          consultationId={consultationId}
           onCancel={() => setShowModal(false)}
           onConfirm={handleModalConfirm}
         />
