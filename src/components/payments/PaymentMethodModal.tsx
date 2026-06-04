@@ -2,9 +2,10 @@
 
 import { useState } from 'react'
 import {
-  X, CreditCard, Banknote, Smartphone, Building2, Receipt, Plus, Trash2, Check, Loader2, AlertCircle,
+  X, CreditCard, Banknote, Smartphone, Building2, Receipt, Plus, Trash2, Check, Loader2, AlertCircle, Percent,
 } from 'lucide-react'
 import CardSelectionModal, { type CardPaymentResult } from './CardSelectionModal'
+import { proportionalCardInterest } from '@/lib/copay-interest'
 
 export type PaymentMethodKey = 'pix' | 'credit' | 'debit' | 'cash' | 'voucher' | 'convenio' | 'transfer' | 'other'
 
@@ -49,20 +50,43 @@ interface Props {
   subject?:   string
   /** Bloqueia múltiplos splits (caso queira força um único método). */
   disableSplit?: boolean
+  /**
+   * Épico A (04/06): taxa adm. sobre a coparticipação Petlove quando paga no
+   * cartão. Presente apenas quando a cobertura foi aplicada e há % cadastrado
+   * no serviço. Dinheiro/PIX nunca cobram; split misto é proporcional (Q1).
+   */
+  copayInterest?: {
+    copay_total:   number
+    interest_full: number
+    percent:       number
+  } | null
   onCancel:   () => void
-  onConfirm:  (splits: PaymentSplit[]) => Promise<void> | void
+  onConfirm:  (splits: PaymentSplit[], extras?: { copay_interest: number }) => Promise<void> | void
 }
 
-export default function PaymentMethodModal({ totalDue, subject, disableSplit, onCancel, onConfirm }: Props) {
+export default function PaymentMethodModal({ totalDue, subject, disableSplit, copayInterest, onCancel, onConfirm }: Props) {
   const [splits,        setSplits]        = useState<PaymentSplit[]>([])
   const [pendingMethod, setPendingMethod] = useState<PaymentMethodKey | null>(null)
   const [pendingAmount, setPendingAmount] = useState<string>('')
   const [showCardModal, setShowCardModal] = useState<'credit'|'debit'|null>(null)
   const [error,         setError]         = useState<string | null>(null)
   const [submitting,    setSubmitting]    = useState(false)
+  // Desconto sobre a taxa adm. (pedido explícito ~30:48: "exibir o valor, o
+  // valor de juros e o campo de desconto após informar a forma de pagamento")
+  const [interestDiscount, setInterestDiscount] = useState<string>('')
 
   const totalSplit = splits.reduce((s, p) => s + p.amount, 0)
   const remaining  = Math.max(0, totalDue - totalSplit)
+
+  // ── Taxa adm. sobre coparticipação (só quando há split de CARTÃO) ─────────
+  const hasInterestConfig = !!copayInterest && copayInterest.interest_full > 0
+  const cardSplits   = splits.filter(s => s.payment_method === 'credit' || s.payment_method === 'debit')
+  const cardBase     = cardSplits.reduce((s, p) => s + p.amount, 0)
+  const grossInterest = hasInterestConfig
+    ? proportionalCardInterest(copayInterest!.interest_full, totalDue, cardBase)
+    : 0
+  const interestDiscountValue = Math.min(grossInterest, Math.max(0, parseFloat(interestDiscount.replace(',', '.')) || 0))
+  const netInterest = Math.round((grossInterest - interestDiscountValue) * 100) / 100
 
   function startAddingMethod(method: PaymentMethodKey) {
     setError(null)
@@ -150,9 +174,26 @@ export default function PaymentMethodModal({ totalDue, subject, disableSplit, on
       setError(`Saldo restante de ${fmt(remaining)} — adicione outro pagamento ou ajuste o total.`)
       return
     }
+
+    // Épico A: infla os splits de cartão com a taxa adm. líquida — o valor
+    // cobrado na maquininha é base + taxa. Último cartão absorve arredondamento.
+    let finalSplits = splits
+    if (netInterest > 0 && cardSplits.length > 0 && cardBase > 0) {
+      let allocated = 0
+      const lastCardId = cardSplits[cardSplits.length - 1].id
+      finalSplits = splits.map(s => {
+        if (s.payment_method !== 'credit' && s.payment_method !== 'debit') return s
+        const share = s.id === lastCardId
+          ? Math.round((netInterest - allocated) * 100) / 100
+          : Math.round(netInterest * (s.amount / cardBase) * 100) / 100
+        allocated = Math.round((allocated + share) * 100) / 100
+        return { ...s, amount: Math.round((s.amount + share) * 100) / 100 }
+      })
+    }
+
     setSubmitting(true)
     try {
-      await onConfirm(splits)
+      await onConfirm(finalSplits, netInterest > 0 ? { copay_interest: netInterest } : undefined)
     } catch (e) {
       setSubmitting(false)
       setError(e instanceof Error ? e.message : 'Falha ao processar.')
@@ -277,6 +318,49 @@ export default function PaymentMethodModal({ totalDue, subject, disableSplit, on
                     )
                   })}
                 </div>
+              </div>
+            )}
+
+            {/* Épico A (04/06): taxa adm. sobre coparticipação — cálculo
+                transparente para o operador conferir de cabeça */}
+            {hasInterestConfig && cardSplits.length === 0 && remaining > 0.005 && (
+              <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 px-3 py-2 text-[11px] text-indigo-800 flex items-start gap-2">
+                <Percent className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+                <span>
+                  Pagamento no <strong>cartão</strong> adiciona a Taxa Adm Cartão ({copayInterest!.percent}%)
+                  sobre a coparticipação: até <strong>{fmt(copayInterest!.interest_full)}</strong>.
+                  Dinheiro/PIX não cobram taxa.
+                </span>
+              </div>
+            )}
+
+            {hasInterestConfig && grossInterest > 0 && (
+              <div className="rounded-xl border-2 border-indigo-300 bg-indigo-50/60 px-4 py-3 space-y-2">
+                <p className="text-sm font-semibold text-indigo-900 tabular-nums">
+                  Coparticipação Petlove: {fmt(copayInterest!.copay_total)}
+                  {' '}<span className="text-indigo-700">(+ {fmt(grossInterest)} Taxa Adm Cartão ({copayInterest!.percent}%))</span>
+                </p>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-semibold text-slate-600 flex-shrink-0">Desconto na taxa (R$)</label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={interestDiscount}
+                    onChange={e => setInterestDiscount(e.target.value)}
+                    placeholder="0,00"
+                    className="w-24 rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-semibold tabular-nums focus:outline-none focus:border-indigo-500"
+                  />
+                  {interestDiscountValue > 0 && (
+                    <span className="text-[11px] text-emerald-700 font-semibold">− {fmt(interestDiscountValue)}</span>
+                  )}
+                </div>
+                <div className="flex items-center justify-between border-t border-indigo-200 pt-2">
+                  <span className="text-xs font-bold text-indigo-900 uppercase tracking-wide">Total final (com taxa)</span>
+                  <span className="text-lg font-bold text-indigo-900 tabular-nums">{fmt(totalDue + netInterest)}</span>
+                </div>
+                <p className="text-[10px] text-indigo-600">
+                  A taxa é somada apenas ao valor passado no cartão{cardSplits.length > 1 ? ' (proporcional entre os cartões)' : ''}. O repasse Petlove não muda.
+                </p>
               </div>
             )}
 

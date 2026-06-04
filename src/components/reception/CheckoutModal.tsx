@@ -11,6 +11,7 @@ import CheckoutInsurancePreviewClient from '@/components/financial/CheckoutInsur
 import InvoiceDuplicatasList from '@/components/financial/InvoiceDuplicatasList'
 import PaymentMethodModal, { type PaymentSplit } from '@/components/payments/PaymentMethodModal'
 import { computeCheckoutTotals } from '@/lib/checkout-totals'
+import { getConsultationCopayInterestPreview, type CopayInterestPreview } from '@/lib/actions/insurance-checkout'
 
 const SPECIES_EMOJI: Record<string, string> = {
   dog: '🐶', cat: '🐱', bird: '🐦', exotic: '🦜',
@@ -65,6 +66,9 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
   } | null>(null)
   const [waitingItems, setWaitingItems] = useState<Array<{ description: string; remaining: number }>>([])
   const [waitingAck,   setWaitingAck]   = useState(false)
+  // Épico A (04/06): taxa adm. sobre coparticipação paga no cartão — carregada
+  // quando a cobertura é aplicada; o PaymentMethodModal exibe e aplica.
+  const [copayInterestPreview, setCopayInterestPreview] = useState<CopayInterestPreview | null>(null)
 
   useEffect(() => {
     getInvoiceWithItems(invoiceId).then(res => {
@@ -73,6 +77,19 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
       setInvoice(res)
     })
   }, [invoiceId])
+
+  // Carrega a prévia da taxa quando a cobertura é aplicada (juros incide só
+  // sobre a coparticipação — sem cobertura, não há copart nem taxa).
+  useEffect(() => {
+    if (!insuranceSplit || !invoice?.consultation_id) { setCopayInterestPreview(null); return }
+    let cancelled = false
+    getConsultationCopayInterestPreview(invoice.consultation_id).then(res => {
+      if (cancelled || 'error' in res) return
+      setCopayInterestPreview(res.interest_full > 0 ? res : null)
+    })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [insuranceSplit, invoice?.consultation_id])
 
   if (loading || !invoice) {
     return (
@@ -177,7 +194,7 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
     setShowPaymentModal(true)
   }
 
-  async function handlePaymentConfirm(splits: PaymentSplit[]) {
+  async function handlePaymentConfirm(splits: PaymentSplit[], extras?: { copay_interest: number }) {
     if (!invoice) return
     setError(null)
     const res = await processSplitPayment(
@@ -203,6 +220,17 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
             receivable_source: 'petlove_open' as const,
             clinic_discount:   insuranceSplit.clinic_discount,
             procedure_pattern: insuranceSplit.procedure_pattern,
+          },
+        } : {}),
+        // Épico A: taxa adm. líquida calculada no modal (cartão sobre copart)
+        ...(extras && extras.copay_interest > 0 && copayInterestPreview ? {
+          copay_interest: {
+            total:   extras.copay_interest,
+            percent: copayInterestPreview.percent,
+            items:   copayInterestPreview.items.map(i => ({
+              consultation_service_id: i.consultation_service_id,
+              interest:                i.interest,
+            })),
           },
         } : {}),
       }
@@ -507,6 +535,11 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
         <PaymentMethodModal
           totalDue={totalDue}
           subject={`${invoice.patient.name} · ${invoice.tutor.name}`}
+          copayInterest={insuranceSplit && copayInterestPreview ? {
+            copay_total:   copayInterestPreview.copay_total,
+            interest_full: copayInterestPreview.interest_full,
+            percent:       copayInterestPreview.percent,
+          } : null}
           onCancel={() => setShowPaymentModal(false)}
           onConfirm={handlePaymentConfirm}
         />

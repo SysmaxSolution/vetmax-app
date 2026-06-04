@@ -98,6 +98,8 @@ interface ItemForm {
   expiry_date: string; supplier: string
   /** Preço base do serviço quando o pet tem convênio. Vazio = sem default. */
   default_insurance_price: string
+  /** Épico A (04/06): % de taxa sobre a coparticipação quando paga no cartão. */
+  insurance_card_interest_percent: string
 }
 
 const EMPTY_PRODUCT_FORM: ItemForm = {
@@ -105,6 +107,7 @@ const EMPTY_PRODUCT_FORM: ItemForm = {
   min_quantity: '0', unit_price: '0', is_controlled: false,
   brand: '', sku: '', barcode: '', batch_number: '', expiry_date: '', supplier: '',
   default_insurance_price: '',
+  insurance_card_interest_percent: '',
 }
 
 const EMPTY_SERVICE_FORM: ItemForm = {
@@ -112,6 +115,7 @@ const EMPTY_SERVICE_FORM: ItemForm = {
   min_quantity: '0', unit_price: '0', is_controlled: false,
   brand: '', sku: '', barcode: '', batch_number: '', expiry_date: '', supplier: '',
   default_insurance_price: '',
+  insurance_card_interest_percent: '',
 }
 
 function formFromItem(item: StockItemV2): ItemForm {
@@ -123,6 +127,9 @@ function formFromItem(item: StockItemV2): ItemForm {
     barcode: item.barcode ?? '', batch_number: item.batch_number ?? '',
     expiry_date: item.expiry_date ?? '', supplier: item.supplier ?? '',
     default_insurance_price: item.default_insurance_price === null ? '' : String(item.default_insurance_price),
+    insurance_card_interest_percent: Number(item.insurance_card_interest_percent ?? 0) > 0
+      ? String(item.insurance_card_interest_percent)
+      : '',
   }
 }
 
@@ -1010,6 +1017,9 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
       default_insurance_price: form.default_insurance_price.trim() === ''
         ? null
         : Number(form.default_insurance_price.replace(',', '.')),
+      insurance_card_interest_percent: form.insurance_card_interest_percent.trim() === ''
+        ? 0
+        : Math.min(100, Math.max(0, Number(form.insurance_card_interest_percent.replace(',', '.')) || 0)),
     }
 
     if (isNew) {
@@ -1144,6 +1154,28 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
                 value={form.default_insurance_price}
                 onChange={v => set('default_insurance_price', v)}
               />
+
+              {/* Épico A (04/06): taxa % sobre a coparticipação no cartão */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  % de taxa sobre coparticipação (cartão)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value={form.insurance_card_interest_percent}
+                  onChange={e => set('insurance_card_interest_percent', e.target.value)}
+                  placeholder="Ex: 10"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Aplicada automaticamente quando o tutor pagar a coparticipação do convênio no cartão.
+                  Inclua aqui taxa da maquininha + impostos (ex.: 10% → R$ 3,02 sobre copart de R$ 30,21).
+                  Não afeta dinheiro/PIX nem itens particulares.
+                </p>
+              </div>
 
               {/* Item B (2026-06-02): convênios que aceitam este serviço */}
               {providers.length > 0 && (
