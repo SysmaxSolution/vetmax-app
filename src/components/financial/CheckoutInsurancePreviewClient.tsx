@@ -26,6 +26,7 @@ interface Props {
   onApplyInsurance?: (split: {
     charge_now:        number
     receivable:        number
+    deferred_provider: number
     clinic_discount:   number
     procedure_pattern: string
     has_insurance:     boolean
@@ -267,6 +268,7 @@ export default function CheckoutInsurancePreviewClient(props: Props) {
                     props.onApplyInsurance?.({
                       charge_now:        totals.charge_now,
                       receivable:        totals.receivable,
+                      deferred_provider: totals.deferred_provider,
                       clinic_discount:   totals.clinic_discount,
                       procedure_pattern: preview.items[0]?.coverage.procedure_pattern ?? preview.items[0]?.description ?? '',
                       has_insurance:     true,

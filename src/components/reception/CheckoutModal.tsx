@@ -10,6 +10,7 @@ import InsuranceExportPanel from '@/components/reception/InsuranceExportPanel'
 import CheckoutInsurancePreviewClient from '@/components/financial/CheckoutInsurancePreviewClient'
 import InvoiceDuplicatasList from '@/components/financial/InvoiceDuplicatasList'
 import PaymentMethodModal, { type PaymentSplit } from '@/components/payments/PaymentMethodModal'
+import { computeCheckoutTotals } from '@/lib/checkout-totals'
 
 const SPECIES_EMOJI: Record<string, string> = {
   dog: '🐶', cat: '🐱', bird: '🐦', exotic: '🦜',
@@ -58,6 +59,7 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
   const [insuranceSplit, setInsuranceSplit] = useState<{
     charge_now:        number
     receivable:        number
+    deferred_provider: number
     clinic_discount:   number
     procedure_pattern: string
   } | null>(null)
@@ -120,10 +122,17 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
   const existingPaid     = invoice.paid_amount ?? 0
   const existingDiscount = invoice.discount    ?? 0
   const insuranceAlreadyApplied = existingDiscount > 0.01 && existingPaid > 0
-  const insuranceDiscountThisOp = insuranceSplit?.clinic_discount ?? 0
-
-  const totalAmount = Math.max(0, dynamicSubtotal - existingDiscount - discountValue - insuranceDiscountThisOp)
-  const totalDue    = Math.max(0, totalAmount - existingPaid)
+  // Fix B2: com cobertura aplicada, o caixa cobra apenas a coparticipação
+  // (charge_now). O repasse (A Receber Petlove) e a parcela que a Petlove
+  // cobra no cartão do tutor saem do "Total a Pagar" agora — ficam como
+  // pending petlove_open, baixado pela remessa fechada.
+  const { totalDue } = computeCheckoutTotals({
+    subtotal:         dynamicSubtotal,
+    existingDiscount,
+    existingPaid,
+    manualDiscount:   discountValue,
+    insuranceSplit,
+  })
 
   async function openPaymentFlow() {
     if (!invoice) return
@@ -159,6 +168,10 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
         const refreshed = await getInvoiceWithItems(invoice.id)
         if (!('error' in refreshed)) setInvoice(refreshed)
         setEditingPrices({})
+        // O desconto manual já foi persistido na invoice pelo processPayment
+        // acima (vira existingDiscount no recálculo) — limpa o input para
+        // não subtrair/enviar em dobro.
+        setDiscountInput('')
       }
     }
     setShowPaymentModal(true)
@@ -180,7 +193,19 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
         card_authorization: s.card_authorization,
         transaction_date:   s.transaction_date,
       })),
-      { discount: insuranceSplit?.clinic_discount }
+      {
+        // Desconto manual digitado + desconto contábil do convênio — ambos
+        // reduzem o total da invoice antes da baixa.
+        discount: discountValue + (insuranceSplit?.clinic_discount ?? 0),
+        ...(insuranceSplit ? {
+          insurance_split: {
+            receivable_amount: insuranceSplit.receivable + insuranceSplit.deferred_provider,
+            receivable_source: 'petlove_open' as const,
+            clinic_discount:   insuranceSplit.clinic_discount,
+            procedure_pattern: insuranceSplit.procedure_pattern,
+          },
+        } : {}),
+      }
     )
     if ('error' in res) { setError(res.error); throw new Error(res.error) }
     const totalReceived = splits.reduce((s, p) => s + p.amount, 0)
@@ -338,6 +363,7 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
                     setInsuranceSplit({
                       charge_now:        split.charge_now,
                       receivable:        split.receivable,
+                      deferred_provider: split.deferred_provider,
                       clinic_discount:   split.clinic_discount,
                       procedure_pattern: split.procedure_pattern,
                     })
