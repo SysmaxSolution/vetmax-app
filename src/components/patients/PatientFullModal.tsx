@@ -13,7 +13,7 @@ import ConsentModal from '@/components/reception/ConsentModal'
 import SMSConsentToggle from '@/components/reception/SMSConsentToggle'
 import { getPatientVaccines, type PatientVaccine } from '@/lib/actions/vaccines'
 import { getInsuranceProviders, type InsuranceProvider } from '@/lib/actions/insurance-providers'
-import { getPetInsurance, upsertPetInsurance, removePetInsurance, type PetInsurance } from '@/lib/actions/pet-insurance'
+import { getPetInsurance, upsertPetInsurance, removePetInsurance, getEnrollmentInfo, type PetInsurance, type EnrollmentInfo } from '@/lib/actions/pet-insurance'
 import { getCustomPricesForPatient, getPetlovePatientHistory, type PatientCustomPrice, type PetlovePatientHistoryEvent } from '@/lib/actions/patient-custom-prices'
 import { updatePatientWeight } from '@/lib/actions/patient-weight'
 import { PawPrint, Pin, History, UserPlus, ArrowRight, DollarSign, Receipt } from 'lucide-react'
@@ -312,6 +312,9 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
   const [insPlanType,      setInsPlanType]      = useState('')
   const [insMemberId,      setInsMemberId]      = useState('')
   const [insCoverage,      setInsCoverage]      = useState<'active' | 'suspended' | 'cancelled'>('active')
+  // Épico C (04/06): data de adesão/microchipagem editável — fonte nº 1 das carências
+  const [insEnrollmentDate, setInsEnrollmentDate] = useState('')
+  const [enrollmentInfo,    setEnrollmentInfo]    = useState<EnrollmentInfo | null>(null)
   const selectedProvider = providers.find(p => p.id === insProviderId)
 
   // ── Preços do Convênio + Histórico Petlove (carregados junto com convenio) ──
@@ -443,6 +446,16 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
     }
   }, [tab, patient?.id, createdPatientId, attachments, isEdit])
 
+  // ─── Adesão efetiva (Épico C) — visível também na aba Paciente ───────────────
+  useEffect(() => {
+    const patId = isEdit ? patient?.id : createdPatientId
+    if (!patId || enrollmentInfo) return
+    getEnrollmentInfo(patId).then(res => {
+      if (res && !('error' in res)) setEnrollmentInfo(res)
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEdit, createdPatientId])
+
   // ─── Convênio lazy load ───────────────────────────────────────────────────────
   useEffect(() => {
     const patId = isEdit ? patient.id : createdPatientId
@@ -459,8 +472,12 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
           setInsPlanType(res.plan_type)
           setInsMemberId(res.member_id)
           setInsCoverage(res.coverage_status)
+          setInsEnrollmentDate(res.enrollment_date ?? '')
         }
         setLoadingInsurance(false)
+      })
+      getEnrollmentInfo(patId).then(res => {
+        if (res && !('error' in res)) setEnrollmentInfo(res)
       })
     }
     if (customPrices === null) {
@@ -661,10 +678,12 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
     }
     if (!patId) return
     setSavingInsurance(true)
-    const res = await upsertPetInsurance({ patient_id: patId, tutor_id: tutId, provider_id: insProviderId, plan_type: insPlanType, member_id: insMemberId, coverage_status: insCoverage })
+    const res = await upsertPetInsurance({ patient_id: patId, tutor_id: tutId, provider_id: insProviderId, plan_type: insPlanType, member_id: insMemberId, coverage_status: insCoverage, enrollment_date: insEnrollmentDate || null })
     if ('error' in res) { alert('Erro: ' + res.error) }
     else {
-      setCurrentInsurance({ id: res.id, clinic_id: '', patient_id: patId, tutor_id: tutId ?? null, provider_id: insProviderId, plan_type: insPlanType, member_id: insMemberId, coverage_status: insCoverage, valid_until: null, notes: null, created_at: new Date().toISOString(), provider: selectedProvider ? { name: selectedProvider.name, plan_types: selectedProvider.plan_types } : undefined })
+      setCurrentInsurance({ id: res.id, clinic_id: '', patient_id: patId, tutor_id: tutId ?? null, provider_id: insProviderId, plan_type: insPlanType, member_id: insMemberId, coverage_status: insCoverage, valid_until: null, enrollment_date: insEnrollmentDate || null, notes: null, created_at: new Date().toISOString(), provider: selectedProvider ? { name: selectedProvider.name, plan_types: selectedProvider.plan_types } : undefined })
+      // Recalcula a origem da adesão efetiva (carências mudam na hora)
+      getEnrollmentInfo(patId).then(r => { if (r && !('error' in r)) setEnrollmentInfo(r) })
     }
     setSavingInsurance(false)
   }
@@ -961,6 +980,18 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                     maxLength={20}
                     className="w-full bg-slate-100/50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:border-teal-500 outline-none transition-all"
                   />
+                  {/* Épico C (04/06): adesão visível na tela do paciente (acesso rápido) */}
+                  {enrollmentInfo && (
+                    <p className="text-[10px] text-slate-500 mt-1 ml-1">
+                      Adesão/carência do convênio conta de{' '}
+                      <strong className="text-teal-700">{enrollmentInfo.effective_date.split('-').reverse().join('/')}</strong>
+                      {' '}({enrollmentInfo.source === 'manual' ? 'manual' : enrollmentInfo.source === 'remessa' ? '1ª remessa' : 'cadastro'})
+                      {' · '}
+                      <button type="button" onClick={() => setTab('convenio')} className="text-teal-600 underline hover:text-teal-800">
+                        ajustar na aba Convênio
+                      </button>
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -1308,6 +1339,27 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                       <div>
                         <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5 ml-1 tracking-wider">Número da Carteirinha</label>
                         <input className="w-full bg-slate-100/50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:border-teal-500 outline-none" value={insMemberId} onChange={e => setInsMemberId(e.target.value)} placeholder="Ex: PTLV-123456" />
+                      </div>
+                      {/* Épico C (04/06): data de adesão/microchipagem editável — as carências contam a partir daqui */}
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5 ml-1 tracking-wider">Data de Adesão / Microchipagem</label>
+                        <input
+                          type="date"
+                          max={new Date().toISOString().slice(0, 10)}
+                          className="w-full bg-slate-100/50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:border-teal-500 outline-none"
+                          value={insEnrollmentDate}
+                          onChange={e => setInsEnrollmentDate(e.target.value)}
+                        />
+                        <p className="text-[10px] text-slate-400 mt-1 ml-1">
+                          As carências contam a partir desta data. Confira no portal Petlove e corrija aqui — deixe vazio para o sistema usar a 1ª remessa ou a data do cadastro.
+                        </p>
+                        {enrollmentInfo && (
+                          <p className="text-[10px] mt-0.5 ml-1 font-semibold text-teal-700">
+                            Adesão efetiva em uso: {enrollmentInfo.effective_date.split('-').reverse().join('/')}
+                            {' · origem: '}
+                            {enrollmentInfo.source === 'manual' ? 'definida manualmente' : enrollmentInfo.source === 'remessa' ? '1ª remessa Petlove' : 'data do cadastro'}
+                          </p>
+                        )}
                       </div>
                       <div>
                         <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5 ml-1 tracking-wider">Status da Cobertura</label>
