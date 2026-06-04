@@ -1,11 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { X, Loader2, Receipt, AlertCircle, Gift } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { X, Loader2, Receipt, AlertCircle, Gift, Plus, Search, Trash2 } from 'lucide-react'
 import {
   getInvoiceWithItems, processSplitPayment, processPayment, markInvoiceAsCourtesy,
+  addItemToInvoice, removeItemFromInvoice,
   type InvoiceWithDetails,
 } from '@/lib/actions/billing'
+import { searchSalesProducts, type StockProduct } from '@/lib/actions/sales'
 import InsuranceExportPanel from '@/components/reception/InsuranceExportPanel'
 import CheckoutInsurancePreviewClient from '@/components/financial/CheckoutInsurancePreviewClient'
 import InvoiceDuplicatasList from '@/components/financial/InvoiceDuplicatasList'
@@ -31,11 +33,18 @@ function fmt(value: number) {
 
 interface Props {
   invoiceId: string
+  /**
+   * Épico B — C4 (04/06): visão compacta para o operador — esconde os dados
+   * administrativos do convênio (repasse, desconto da clínica, economia).
+   * O operador vê itens, valor a cobrar e taxa; "Dados do convênio" são da
+   * conferência do admin.
+   */
+  operatorView?: boolean
   onClose:   () => void
   onSuccess: (petName: string, total: number) => void
 }
 
-export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) {
+export default function CheckoutModal({ invoiceId, operatorView = false, onClose, onSuccess }: Props) {
   const [invoice,      setInvoice]      = useState<InvoiceWithDetails | null>(null)
   const [loading,      setLoading]      = useState(true)
   const [error,        setError]        = useState<string | null>(null)
@@ -69,6 +78,56 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
   // Épico A (04/06): taxa adm. sobre coparticipação paga no cartão — carregada
   // quando a cobertura é aplicada; o PaymentMethodModal exibe e aplica.
   const [copayInterestPreview, setCopayInterestPreview] = useState<CopayInterestPreview | null>(null)
+
+  // Épico B — C1 (04/06): itens avulsos adicionados no recebimento.
+  // Rastreia (invoice_item_id → stock_item_id) para devolver estoque na remoção.
+  const [showAddItem,   setShowAddItem]   = useState(false)
+  const [itemQuery,     setItemQuery]     = useState('')
+  const [itemResults,   setItemResults]   = useState<StockProduct[]>([])
+  const [itemSearching, setItemSearching] = useState(false)
+  const [addedItems,    setAddedItems]    = useState<Record<string, string>>({})
+  const [addingItem,    setAddingItem]    = useState(false)
+  const itemSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function handleItemQueryChange(q: string) {
+    setItemQuery(q)
+    if (itemSearchTimer.current) clearTimeout(itemSearchTimer.current)
+    if (q.trim().length < 2) { setItemResults([]); return }
+    itemSearchTimer.current = setTimeout(async () => {
+      setItemSearching(true)
+      const r = await searchSalesProducts(q)
+      setItemSearching(false)
+      setItemResults(r)
+    }, 250)
+  }
+
+  async function handleAddItem(p: StockProduct) {
+    if (!invoice || addingItem) return
+    setAddingItem(true)
+    setError(null)
+    const res = await addItemToInvoice(invoice.id, p.id, 1)
+    setAddingItem(false)
+    if ('error' in res) { setError(res.error); return }
+    setAddedItems(prev => ({ ...prev, [res.invoice_item_id]: p.id }))
+    setItemQuery('')
+    setItemResults([])
+    const refreshed = await getInvoiceWithItems(invoice.id)
+    if (!('error' in refreshed)) setInvoice(refreshed)
+  }
+
+  async function handleRemoveAddedItem(invoiceItemId: string) {
+    if (!invoice) return
+    setError(null)
+    const res = await removeItemFromInvoice(invoiceItemId, addedItems[invoiceItemId] ?? null)
+    if ('error' in res) { setError(res.error); return }
+    setAddedItems(prev => {
+      const next = { ...prev }
+      delete next[invoiceItemId]
+      return next
+    })
+    const refreshed = await getInvoiceWithItems(invoice.id)
+    if (!('error' in refreshed)) setInvoice(refreshed)
+  }
 
   useEffect(() => {
     getInvoiceWithItems(invoiceId).then(res => {
@@ -352,6 +411,16 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
                             {isZero ? 'R$ —' : fmt(item.unit_price)}
                           </button>
                         )}
+                        {/* Épico B — C1: item avulso adicionado nesta sessão pode ser removido */}
+                        {addedItems[item.id] !== undefined && (
+                          <button
+                            onClick={() => handleRemoveAddedItem(item.id)}
+                            className="rounded p-1 text-rose-400 hover:bg-rose-50"
+                            title="Remover item avulso (devolve o estoque)"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   )
@@ -361,6 +430,62 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
                   <span className="text-sm font-semibold text-slate-700">{fmt(dynamicSubtotal)}</span>
                 </div>
               </div>
+
+              {/* Épico B — C1 (04/06): adicionar item avulso ao recebimento
+                  ("o tutor quer levar um petisco na saída"). Sempre particular. */}
+              {(invoice.status === 'pending' || invoice.status === 'paid_partial') && (
+                <div className="mt-2">
+                  {!showAddItem ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowAddItem(true)}
+                      data-mentor-step="cashier-add-item-btn"
+                      className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-teal-300 bg-teal-50/40 hover:bg-teal-50 py-2 text-xs font-semibold text-teal-700"
+                    >
+                      <Plus className="h-3 w-3" /> Adicionar item avulso
+                    </button>
+                  ) : (
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+                      <input
+                        type="text"
+                        autoFocus
+                        value={itemQuery}
+                        onChange={e => handleItemQueryChange(e.target.value)}
+                        placeholder="Buscar produto/serviço para adicionar..."
+                        className="w-full pl-8 pr-8 py-2 rounded-xl border border-teal-300 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => { setShowAddItem(false); setItemQuery(''); setItemResults([]) }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-400 hover:bg-slate-100"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                      {(itemSearching || itemResults.length > 0) && itemQuery.trim().length >= 2 && (
+                        <div className="absolute z-20 mt-1 w-full rounded-xl border border-slate-200 bg-white shadow-lg max-h-48 overflow-y-auto">
+                          {itemSearching ? (
+                            <div className="px-3 py-2.5 text-xs text-slate-400 flex items-center gap-2">
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Buscando...
+                            </div>
+                          ) : itemResults.map(p => (
+                            <button
+                              key={p.id}
+                              type="button"
+                              disabled={addingItem}
+                              onClick={() => handleAddItem(p)}
+                              className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-teal-50 transition-colors disabled:opacity-50"
+                            >
+                              <span className="text-sm text-slate-700 truncate">{p.name}</span>
+                              <span className="text-sm font-semibold text-slate-900 tabular-nums flex-shrink-0 ml-3">{fmt(p.unit_price)}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {(invoice.paid_amount ?? 0) > 0 && (
@@ -384,6 +509,7 @@ export default function CheckoutModal({ invoiceId, onClose, onSuccess }: Props) 
                 consultationId={invoice.consultation_id}
                 patientName={invoice.patient.name}
                 tutorName={invoice.tutor.name}
+                compact={operatorView}
                 alreadyApplied={insuranceAlreadyApplied}
                 onWaitingDetected={items => { setWaitingItems(items); setWaitingAck(false) }}
                 onApplyInsurance={(split) => {

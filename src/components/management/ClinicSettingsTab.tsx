@@ -56,6 +56,10 @@ export default function ClinicSettingsTab({
   const [mergedModules,       setMergedModules]       = useState<Array<'triage'|'exams'>>(
     initialConfig?.flow_config?.vet_merged_modules ?? []
   )
+  // Épico B (04/06, decisão Q4): PDV unificado ao Caixa
+  const [pdvUnified,          setPdvUnified]          = useState(
+    initialConfig?.flow_config?.pdv_unified_with_cashier ?? false
+  )
   const [aiMode,              setAiMode]              = useState<AiTranscriptionMode>(
     initialConfig?.ai_transcription_mode ?? 'ai_assisted'
   )
@@ -78,7 +82,13 @@ export default function ClinicSettingsTab({
     setSavingFlow(true)
     const res = await updateClinicConfig({
       continuous_flow: continuousFlow,
-      flow_config: { vet_merged_modules: continuousFlow ? mergedModules : [] },
+      // Merge com a config existente — antes este save sobrescrevia o JSONB
+      // inteiro e apagava flags como internacao_completa/centro_cirurgico.
+      flow_config: {
+        ...(initialConfig?.flow_config ?? {}),
+        vet_merged_modules:       continuousFlow ? mergedModules : [],
+        pdv_unified_with_cashier: pdvUnified,
+      },
     })
     setSavingFlow(false)
     if ('error' in res) { onToast('error', res.error); return }
@@ -374,6 +384,25 @@ export default function ClinicSettingsTab({
               )}
             </div>
           )}
+
+          {/* Épico B (04/06, Q4): PDV unificado ao Caixa — independente do
+              toggle de fluxo do consultório */}
+          <div className={`mt-4 flex items-center justify-between rounded-xl border px-4 py-3 transition-colors ${pdvUnified ? 'border-teal-200 bg-teal-50' : 'border-slate-100'}`}>
+            <div>
+              <p className="text-sm font-medium text-slate-800">PDV unificado ao Caixa</p>
+              <p className="text-xs text-slate-500">
+                O módulo PDV some do menu e a venda avulsa passa a ser lançada no topo de Caixa → Recebimentos.
+              </p>
+            </div>
+            <button
+              onClick={() => setPdvUnified(v => !v)}
+              className={`transition-colors ${pdvUnified ? 'text-teal-500' : 'text-slate-300'}`}
+            >
+              {pdvUnified
+                ? <ToggleRight className="h-7 w-7" />
+                : <ToggleLeft  className="h-7 w-7" />}
+            </button>
+          </div>
 
           <button
             onClick={saveFlow}

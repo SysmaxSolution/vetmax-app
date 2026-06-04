@@ -1,4 +1,5 @@
 ﻿import { requireModuleAccess } from '@/lib/server/require-module'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { listCashierEntries, getCashierSummary } from '@/lib/actions/core-management'
 import { getCashierDashboard, getCurrentSession, listOutflows } from '@/lib/actions/cashier-sessions'
 import { getPendingInvoices } from '@/lib/actions/billing'
@@ -32,6 +33,15 @@ export default async function CashierPage() {
   const outflows        = 'error' in outflowsResult   ? [] : outflowsResult
   const groomingSessions = 'error' in groomingResult  ? [] : groomingResult
 
+  // Épico B (04/06, Q4): PDV unificado ao Caixa — venda avulsa no Recebimentos
+  const admin = createAdminClient()
+  const { data: clinicRow } = await admin
+    .from('clinics')
+    .select('flow_config')
+    .eq('id', profile.clinic_id)
+    .single()
+  const pdvUnified = (clinicRow?.flow_config as { pdv_unified_with_cashier?: boolean } | null)?.pdv_unified_with_cashier === true
+
   return (
     <CashierPageClient
       initialEntries={entries}
@@ -46,6 +56,7 @@ export default async function CashierPage() {
       clinicName={clinicName}
       today={today}
       firstOfMonth={firstOfMonth}
+      pdvUnified={pdvUnified}
     />
   )
 }

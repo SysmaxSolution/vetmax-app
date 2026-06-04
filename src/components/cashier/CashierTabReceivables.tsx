@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { Receipt, RefreshCw, ShoppingBag, Scissors, Ban } from 'lucide-react'
-import { getPendingInvoices, type InvoiceWithDetails } from '@/lib/actions/billing'
+import { Receipt, RefreshCw, ShoppingBag, Scissors, Ban, Users, AlertTriangle } from 'lucide-react'
+import { getPendingInvoices, processSplitPayment, type InvoiceWithDetails } from '@/lib/actions/billing'
 import {
   getPendingGroomingSessions,
   processGroomingPaymentFromCashier,
@@ -11,6 +11,9 @@ import {
 } from '@/lib/actions/grooming'
 import { useRealtimeSync } from '@/hooks/useRealtimeSync'
 import CheckoutModal from '@/components/reception/CheckoutModal'
+import CashierQuickSale from '@/components/cashier/CashierQuickSale'
+import PaymentMethodModal, { type PaymentSplit } from '@/components/payments/PaymentMethodModal'
+import { allocateSplitsSequentially } from '@/lib/multi-receive-allocation'
 
 const SPECIES_EMOJI: Record<string, string> = {
   dog: '🐶', cat: '🐱', bird: '🐦', exotic: '🦜',
@@ -34,12 +37,26 @@ function fmtTime(iso: string) {
 function InvoiceCard({
   invoice,
   onCheckout,
+  selected,
+  onToggleSelect,
 }: {
   invoice: InvoiceWithDetails
   onCheckout: (id: string) => void
+  /** Épico B — C3 (04/06): seleção para recebimento múltiplo. */
+  selected?: boolean
+  onToggleSelect?: (id: string) => void
 }) {
   return (
-    <div className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white px-5 py-4 hover:shadow-sm hover:border-slate-300 transition-all">
+    <div className={`flex items-center gap-4 rounded-xl border bg-white px-5 py-4 hover:shadow-sm transition-all ${selected ? 'border-teal-400 ring-1 ring-teal-200' : 'border-slate-200 hover:border-slate-300'}`}>
+      {onToggleSelect && (
+        <input
+          type="checkbox"
+          checked={!!selected}
+          onChange={() => onToggleSelect(invoice.id)}
+          className="h-4 w-4 flex-shrink-0 rounded border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer"
+          title="Selecionar para recebimento agrupado"
+        />
+      )}
       <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-amber-50 text-2xl">
         {SPECIES_EMOJI[invoice.patient.species] ?? '🐾'}
       </div>
@@ -256,6 +273,10 @@ interface Props {
   initialInvoices:        InvoiceWithDetails[]
   initialGroomingSessions: PendingGroomingPayment[]
   clinicId:               string
+  /** Épico B (04/06): role do usuário — operador vê o checkout compacto (C4). */
+  userRole?:              string
+  /** Épico B (04/06, Q4): PDV unificado — exibe a venda avulsa no topo (C2). */
+  pdvUnified?:            boolean
   onToast: (msg: string, type: 'success' | 'error') => void
 }
 
@@ -263,6 +284,8 @@ export default function CashierTabReceivables({
   initialInvoices,
   initialGroomingSessions,
   clinicId,
+  userRole = 'receptionist',
+  pdvUnified = false,
   onToast,
 }: Props) {
   const [invoices,          setInvoices]          = useState<InvoiceWithDetails[]>(initialInvoices)
@@ -270,6 +293,78 @@ export default function CashierTabReceivables({
   const [refreshing,        setRefreshing]         = useState(false)
   const [activeInvoiceId,   setActiveInvoiceId]    = useState<string | null>(null)
   const [activeGrooming,    setActiveGrooming]     = useState<PendingGroomingPayment | null>(null)
+
+  // Épico B — C3 (04/06): recebimento múltiplo
+  const [selectedIds,        setSelectedIds]        = useState<Set<string>>(new Set())
+  const [confirmMixedTutors, setConfirmMixedTutors] = useState(false)
+  const [showMultiPayment,   setShowMultiPayment]   = useState(false)
+  const [multiProcessing,    setMultiProcessing]    = useState(false)
+
+  const operatorView = !['admin', 'owner', 'manager'].includes(userRole)
+
+  const selectedInvoices = invoices.filter(i => selectedIds.has(i.id))
+  const selectedTotal    = selectedInvoices.reduce((s, i) => s + Math.max(0, Number(i.total_amount) - Number(i.paid_amount ?? 0)), 0)
+  const distinctTutors   = new Set(selectedInvoices.map(i => i.tutor.name)).size
+
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function startMultiReceive() {
+    if (selectedInvoices.length < 2) return
+    // Q3: tutores diferentes são permitidos COM AVISO de confirmação
+    if (distinctTutors > 1) { setConfirmMixedTutors(true); return }
+    setShowMultiPayment(true)
+  }
+
+  async function handleMultiPaymentConfirm(splits: PaymentSplit[]) {
+    setMultiProcessing(true)
+    // Q3: agrupamento é só do ato de receber — cada fatura é baixada
+    // individualmente (Contas a Receber separado, rastreável por documento).
+    const allocation = allocateSplitsSequentially(
+      selectedInvoices.map(i => ({ id: i.id, due: Math.max(0, Number(i.total_amount) - Number(i.paid_amount ?? 0)) })),
+      splits.map(s => ({ ...s })),
+    )
+    const failures: string[] = []
+    let received = 0
+    for (const inv of selectedInvoices) {
+      const invSplits = allocation.get(inv.id) ?? []
+      if (invSplits.length === 0) continue
+      const res = await processSplitPayment(
+        inv.id,
+        invSplits.map(s => ({
+          amount:             s.amount as number,
+          payment_method:     s.payment_method as PaymentSplit['payment_method'],
+          payment_card_id:    s.payment_card_id as string | null,
+          installments:       s.installments as number,
+          card_acquirer:      s.card_acquirer as string | null,
+          card_brand:         s.card_brand as string | null,
+          card_nsu:           s.card_nsu as string | null,
+          card_authorization: s.card_authorization as string | null,
+          transaction_date:   s.transaction_date as string | null,
+        })),
+      )
+      if ('error' in res) {
+        failures.push(`${inv.patient.name}: ${res.error}`)
+        break // para na primeira falha — faturas restantes seguem pendentes
+      }
+      received += invSplits.reduce((s, p) => s + (p.amount as number), 0)
+    }
+    setMultiProcessing(false)
+    setShowMultiPayment(false)
+    setSelectedIds(new Set())
+    await refresh()
+    if (failures.length > 0) {
+      onToast(`Recebimento parcial — falha em: ${failures.join(' · ')}. As demais faturas seguem pendentes.`, 'error')
+      throw new Error(failures[0])
+    }
+    onToast(`Recebimento agrupado concluído! ${fmt(received)} em ${selectedInvoices.length} faturas.`, 'success')
+  }
 
   const refresh = useCallback(async () => {
     setRefreshing(true)
@@ -315,9 +410,52 @@ export default function CashierTabReceivables({
       {activeInvoiceId && (
         <CheckoutModal
           invoiceId={activeInvoiceId}
+          operatorView={operatorView}
           onClose={() => setActiveInvoiceId(null)}
           onSuccess={handleInvoiceSuccess}
         />
+      )}
+
+      {/* Épico B — C3: pagamento agrupado */}
+      {showMultiPayment && (
+        <PaymentMethodModal
+          totalDue={selectedTotal}
+          subject={`${selectedInvoices.length} faturas selecionadas`}
+          onCancel={() => { if (!multiProcessing) setShowMultiPayment(false) }}
+          onConfirm={handleMultiPaymentConfirm}
+        />
+      )}
+
+      {/* Q3: aviso de tutores diferentes */}
+      {confirmMixedTutors && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100">
+                <AlertTriangle className="h-5 w-5 text-amber-600" />
+              </div>
+              <h3 className="text-base font-bold text-slate-900">Tutores diferentes selecionados</h3>
+            </div>
+            <p className="text-sm text-slate-600">
+              Tutores diferentes selecionados, deseja realizar o recebimento agrupado mesmo assim?
+              No financeiro, cada fatura continua lançada separadamente.
+            </p>
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => setConfirmMixedTutors(false)}
+                className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                Voltar
+              </button>
+              <button
+                onClick={() => { setConfirmMixedTutors(false); setShowMultiPayment(true) }}
+                className="flex-1 rounded-xl bg-amber-500 py-2.5 text-sm font-bold text-white hover:bg-amber-600"
+              >
+                Sim, agrupar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {activeGrooming && (
@@ -326,6 +464,16 @@ export default function CashierTabReceivables({
           onClose={() => setActiveGrooming(null)}
           onSuccess={handleGroomingSuccess}
           onWaived={handleGroomingWaived}
+        />
+      )}
+
+      {/* Épico B — C2 (Q4): venda avulsa no TOPO de Recebimentos quando o
+          PDV está unificado ao Caixa */}
+      {pdvUnified && (
+        <CashierQuickSale
+          clinicId={clinicId}
+          onToast={onToast}
+          onSaleCompleted={refresh}
         />
       )}
 
@@ -348,6 +496,34 @@ export default function CashierTabReceivables({
         </button>
       </div>
 
+      {/* Épico B — C3: barra de recebimento agrupado */}
+      {selectedInvoices.length >= 2 && (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border-2 border-teal-300 bg-teal-50 px-4 py-3">
+          <div className="flex items-center gap-2 text-sm text-teal-900">
+            <Users className="h-4 w-4 flex-shrink-0" />
+            <span>
+              <strong>{selectedInvoices.length} faturas</strong> selecionadas
+              {distinctTutors > 1 && <span className="text-amber-700 font-semibold"> · {distinctTutors} tutores diferentes</span>}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-white"
+            >
+              Limpar
+            </button>
+            <button
+              onClick={startMultiReceive}
+              data-mentor-step="cashier-multi-receive-btn"
+              className="rounded-xl bg-teal-600 hover:bg-teal-700 px-4 py-2 text-sm font-bold text-white"
+            >
+              Receber selecionados · {fmt(selectedTotal)}
+            </button>
+          </div>
+        </div>
+      )}
+
       {totalPending === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center rounded-2xl border border-dashed border-slate-300 bg-white">
           <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-slate-100">
@@ -365,6 +541,8 @@ export default function CashierTabReceivables({
               key={inv.id}
               invoice={inv}
               onCheckout={setActiveInvoiceId}
+              selected={selectedIds.has(inv.id)}
+              onToggleSelect={toggleSelect}
             />
           ))}
           {groomingSessions.map(session => (

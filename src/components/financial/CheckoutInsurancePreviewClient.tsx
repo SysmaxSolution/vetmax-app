@@ -19,6 +19,14 @@ interface Props {
    */
   alreadyApplied?: boolean
   /**
+   * Épico B — C4 (04/06): visão compacta para o operador do caixa — esconde
+   * os dados administrativos (repasse, desconto da clínica, economia do
+   * tutor). Pedido do Levi (~58:58/~59:27): "os itens da venda e o valor
+   * final; o valor de repasse não precisa". Aplicar/remover cobertura
+   * continua disponível (é o operador quem recebe).
+   */
+  compact?: boolean
+  /**
    * Disparado quando o usuário clica "Aplicar Cobertura". O parent (CheckoutModal)
    * deve ajustar o valor a receber para charge_now e enviar o split no payload
    * de processPayment para criar o entry pending de receivable.
@@ -159,34 +167,40 @@ export default function CheckoutInsurancePreviewClient(props: Props) {
           </div>
           <span className="text-sm font-bold text-sky-900 tabular-nums flex-shrink-0">{BRL(totals.charge_now)}</span>
         </div>
-        <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md bg-white border border-sky-100">
-          <div className="flex items-center gap-2 text-xs text-sky-800 min-w-0">
-            <CreditCard className="h-3.5 w-3.5 text-sky-600 flex-shrink-0" />
-            <span className="truncate">Petlove cobra no cartão</span>
-          </div>
-          <span className="text-sm font-bold text-sky-900 tabular-nums flex-shrink-0">{BRL(totals.deferred_provider)}</span>
-        </div>
-        <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md bg-white border border-sky-100">
-          <div className="flex items-center gap-2 text-xs text-sky-800 min-w-0">
-            <FileClock className="h-3.5 w-3.5 text-sky-600 flex-shrink-0" />
-            <span className="truncate">A Receber Petlove (repasse)</span>
-          </div>
-          <span className="text-sm font-bold text-sky-900 tabular-nums flex-shrink-0">{BRL(totals.receivable)}</span>
-        </div>
-        <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md bg-emerald-50 border border-emerald-200">
-          <div className="flex items-center gap-2 text-xs text-emerald-800 min-w-0">
-            <TrendingDown className="h-3.5 w-3.5 text-emerald-600 flex-shrink-0" />
-            <span className="truncate">Tutor economizou</span>
-          </div>
-          <span className="text-sm font-bold text-emerald-900 tabular-nums flex-shrink-0">{BRL(totals.tutor_saved)}</span>
-        </div>
-        <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md bg-rose-50 border border-rose-200">
-          <div className="flex items-center gap-2 text-xs text-rose-800 min-w-0">
-            <Scissors className="h-3.5 w-3.5 text-rose-600 flex-shrink-0" />
-            <span className="truncate">Desconto da clínica</span>
-          </div>
-          <span className="text-sm font-bold text-rose-900 tabular-nums flex-shrink-0">{BRL(totals.clinic_discount)}</span>
-        </div>
+        {/* C4 (04/06): dados administrativos (repasse, economia, desconto da
+            clínica) só na visão completa — o operador vê o que vai cobrar. */}
+        {!props.compact && (
+          <>
+            <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md bg-white border border-sky-100">
+              <div className="flex items-center gap-2 text-xs text-sky-800 min-w-0">
+                <CreditCard className="h-3.5 w-3.5 text-sky-600 flex-shrink-0" />
+                <span className="truncate">Petlove cobra no cartão</span>
+              </div>
+              <span className="text-sm font-bold text-sky-900 tabular-nums flex-shrink-0">{BRL(totals.deferred_provider)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md bg-white border border-sky-100">
+              <div className="flex items-center gap-2 text-xs text-sky-800 min-w-0">
+                <FileClock className="h-3.5 w-3.5 text-sky-600 flex-shrink-0" />
+                <span className="truncate">A Receber Petlove (repasse)</span>
+              </div>
+              <span className="text-sm font-bold text-sky-900 tabular-nums flex-shrink-0">{BRL(totals.receivable)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md bg-emerald-50 border border-emerald-200">
+              <div className="flex items-center gap-2 text-xs text-emerald-800 min-w-0">
+                <TrendingDown className="h-3.5 w-3.5 text-emerald-600 flex-shrink-0" />
+                <span className="truncate">Tutor economizou</span>
+              </div>
+              <span className="text-sm font-bold text-emerald-900 tabular-nums flex-shrink-0">{BRL(totals.tutor_saved)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md bg-rose-50 border border-rose-200">
+              <div className="flex items-center gap-2 text-xs text-rose-800 min-w-0">
+                <Scissors className="h-3.5 w-3.5 text-rose-600 flex-shrink-0" />
+                <span className="truncate">Desconto da clínica</span>
+              </div>
+              <span className="text-sm font-bold text-rose-900 tabular-nums flex-shrink-0">{BRL(totals.clinic_discount)}</span>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Lista de itens */}
@@ -206,10 +220,10 @@ export default function CheckoutInsurancePreviewClient(props: Props) {
               {it.charge_now > 0 && (
                 <span className="text-sky-700">caixa <strong className="tabular-nums">{BRL(it.charge_now)}</strong></span>
               )}
-              {it.deferred_provider > 0 && (
+              {!props.compact && it.deferred_provider > 0 && (
                 <span className="text-sky-700">cartão <strong className="tabular-nums">{BRL(it.deferred_provider)}</strong></span>
               )}
-              {it.receivable > 0 && (
+              {!props.compact && it.receivable > 0 && (
                 <span className="text-emerald-700">repasse <strong className="tabular-nums">{BRL(it.receivable)}</strong></span>
               )}
             </div>
