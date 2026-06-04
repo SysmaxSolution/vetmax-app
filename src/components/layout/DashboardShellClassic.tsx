@@ -32,6 +32,8 @@ export interface DashboardShellProps {
   planName:             PlanName
   allowedRoutes:        string[]
   centroCirurgico:      boolean
+  /** Épico B (04/06, Q4): PDV unificado ao Caixa — esconde a aba PDV do menu. */
+  pdvUnified?:          boolean
   // Providers
   uiPreferences:        Record<string, unknown> | null
   aiTranscriptionMode:  string
@@ -53,6 +55,7 @@ export default function DashboardShellClassic({
   userName, clinicName, clinicId, userRole, logoUrl, activeModules,
   lowStockCount, whatsappHandoffCount, chatUnreadCount, userClinics,
   isSysmax, clinicStatus, isSurgeryMode, planName, allowedRoutes, centroCirurgico,
+  pdvUnified = false,
   uiPreferences, aiTranscriptionMode, internacaoCompleta, whatsAppEnabled,
   hasLogo, hasPets, businessType, userId, children,
 }: DashboardShellProps) {
@@ -75,6 +78,7 @@ export default function DashboardShellClassic({
         planName={planName}
         allowedRoutes={allowedRoutes}
         centroCirurgico={centroCirurgico}
+        pdvUnified={pdvUnified}
       />
       <ThemeProvider initialPreferences={uiPreferences as any}>
         <ClinicConfigProvider

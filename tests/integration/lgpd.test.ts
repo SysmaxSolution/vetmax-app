@@ -298,10 +298,15 @@ describe('[TC-LGP-004] logDataAccess() registra user_id e dados de acesso', () =
   })
 
   test('campos obrigatórios presentes no log: data_type, entity_type, access_type', async () => {
+    // Filtra apenas logs de ACESSO (rpc_log_data_access) — entradas genéricas
+    // do logAudit() (ex.: CONSULTATION_SERVICE_ADD, transições de grooming
+    // criadas por outros testes da suíte) não têm data_type/access_type e
+    // tornavam este teste flaky por ordem de execução (limit sem filtro).
     const { data, error } = await admin
       .from('audit_logs')
       .select('data_type, entity_type, access_type')
       .eq('clinic_id', fixtures.clinics.clinicA.id)
+      .not('data_type', 'is', null)
       .limit(3)
 
     if (error?.message?.includes('does not exist') || error?.message?.includes('Could not find')) {

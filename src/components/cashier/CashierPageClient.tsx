@@ -39,12 +39,15 @@ interface Props {
   clinicName:              string
   today:                   string
   firstOfMonth:            string
+  /** Épico B (04/06, Q4): PDV unificado — venda avulsa no topo de Recebimentos. */
+  pdvUnified?:             boolean
 }
 
 export default function CashierPageClient({
   initialEntries, initialSummary, initialDashboard, initialSession,
   initialInvoices, initialOutflows, initialGroomingSessions,
   userRole, clinicId, clinicName, today, firstOfMonth,
+  pdvUnified = false,
 }: Props) {
   const [activeTab,  setActiveTab]  = useState<Tab>('overview')
   const [entries,    setEntries]    = useState<CentralCashierEntry[]>(initialEntries)
@@ -149,6 +152,8 @@ export default function CashierPageClient({
           initialInvoices={initialInvoices}
           initialGroomingSessions={initialGroomingSessions}
           clinicId={clinicId}
+          userRole={userRole}
+          pdvUnified={pdvUnified}
           onToast={showToast}
         />
       )}

@@ -18,6 +18,12 @@ export type FlowConfig = {
   internacao_completa?:  boolean
   /** Liga o módulo Centro Cirúrgico (/dashboard/surgery) no menu lateral. */
   centro_cirurgico?:     boolean
+  /**
+   * Épico B (04/06): unifica o PDV ao Caixa — o módulo PDV some do menu,
+   * /dashboard/sales redireciona para o Caixa e a venda avulsa passa a ser
+   * lançada no topo de Caixa > Recebimentos. Decisão Q4 do PO.
+   */
+  pdv_unified_with_cashier?: boolean
 }
 
 export type BusinessHourEntry = { open: string; close: string } | null

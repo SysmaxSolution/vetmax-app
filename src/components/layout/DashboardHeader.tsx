@@ -94,6 +94,8 @@ interface DashboardHeaderProps {
   isSurgeryMode?:        boolean
   /** flow_config.centro_cirurgico — exibe o item "Centro Cirúrgico" no menu. */
   centroCirurgico?:      boolean
+  /** flow_config.pdv_unified_with_cashier (Épico B 04/06) — esconde o PDV do menu. */
+  pdvUnified?:           boolean
   // PLG
   planName?:      string
   allowedRoutes?: string[]
@@ -116,6 +118,7 @@ export default function DashboardHeader({
   clinicStatus,
   isSurgeryMode = false,
   centroCirurgico = false,
+  pdvUnified = false,
   planName = 'free',
   allowedRoutes = [],
 }: DashboardHeaderProps) {
@@ -167,6 +170,9 @@ export default function DashboardHeader({
     // Centro Cirúrgico é gated pela feature flag flow_config.centro_cirurgico,
     // não por active_modules — só aparece quando a clínica o ativou.
     if (tab.href === '/dashboard/surgery') return centroCirurgico
+    // Épico B (04/06, Q4): PDV unificado ao Caixa — módulo some do menu;
+    // a venda avulsa vive em Caixa > Recebimentos.
+    if (tab.href === '/dashboard/sales' && pdvUnified) return false
     if (tab.moduleKey && activeModules) {
       // PROMOTED_LOCKED só "promove" itens fora do active_modules no plano FREE
       // (gatilho de upsell). Clientes Pro/Enterprise/SysMax seguem a regra

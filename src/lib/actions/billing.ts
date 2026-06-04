@@ -409,6 +409,160 @@ export async function getInvoiceWithItems(
   } as InvoiceWithDetails
 }
 
+// ─── Itens avulsos no recebimento (Épico B — C1, 04/06/2026) ─────────────────
+//
+// "Quando sai da consulta, o tutor quer levar um petisco" — o caixa adiciona
+// o item à fatura ANTES do pagamento, sem abrir o PDV. Itens avulsos são
+// sempre particulares (sem cobertura/juros). Produto decrementa estoque na
+// inclusão e devolve na remoção (só permitida antes do pagamento).
+
+export async function addItemToInvoice(
+  invoiceId: string,
+  stockItemId: string,
+  quantity: number,
+): Promise<{ invoice_item_id: string; description: string; unit_price: number; total_price: number } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+  const { data: profile } = await supabase
+    .from('profiles').select('clinic_id').eq('id', user.id).single()
+  if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
+
+  const qty = Math.max(1, Math.floor(quantity))
+  const admin = createAdminClient()
+
+  const { data: inv } = await admin
+    .from('invoices')
+    .select('id, status, subtotal, total_amount')
+    .eq('id', invoiceId)
+    .eq('clinic_id', profile.clinic_id)
+    .maybeSingle()
+  if (!inv) return { error: 'Fatura não encontrada.' }
+  if (inv.status !== 'pending' && inv.status !== 'paid_partial') {
+    return { error: 'Fatura já fechada — não é possível adicionar itens.' }
+  }
+
+  const { data: item } = await admin
+    .from('stock_items')
+    .select('id, name, unit_price, is_service, quantity, category')
+    .eq('id', stockItemId)
+    .eq('clinic_id', profile.clinic_id)
+    .is('archived_at', null)
+    .maybeSingle()
+  if (!item) return { error: 'Item não encontrado no catálogo.' }
+
+  // Produto: valida e decrementa estoque na inclusão
+  if (!item.is_service) {
+    if (Number(item.quantity) < qty) {
+      return { error: `Estoque insuficiente de "${item.name}" (disponível: ${item.quantity}).` }
+    }
+    const { error: stockErr } = await admin
+      .from('stock_items')
+      .update({ quantity: Number(item.quantity) - qty })
+      .eq('id', stockItemId)
+      .eq('clinic_id', profile.clinic_id)
+    if (stockErr) return { error: 'Erro ao baixar estoque: ' + stockErr.message }
+  }
+
+  const unit  = Number(item.unit_price ?? 0)
+  const lineTotal = Number((unit * qty).toFixed(2))
+  const itemType: ItemType =
+    item.category === 'exam' ? 'exam'
+    : (item.category === 'medication' || item.category === 'controlled_medication') ? 'medication'
+    : 'other'
+
+  const { data: created, error: insErr } = await admin
+    .from('invoice_items')
+    .insert({
+      invoice_id:       invoiceId,
+      clinic_id:        profile.clinic_id,
+      item_type:        itemType,
+      description:      item.name,
+      quantity:         qty,
+      unit_price:       unit,
+      total_price:      lineTotal,
+      insurance_status: 'particular',
+    })
+    .select('id')
+    .single()
+  if (insErr || !created) {
+    // Estorna o estoque se a linha falhou
+    if (!item.is_service) {
+      await admin.from('stock_items').update({ quantity: Number(item.quantity) }).eq('id', stockItemId)
+    }
+    return { error: 'Erro ao adicionar item: ' + (insErr?.message ?? 'falha') }
+  }
+
+  await admin
+    .from('invoices')
+    .update({
+      subtotal:     Number(inv.subtotal ?? 0) + lineTotal,
+      total_amount: Number(inv.total_amount ?? 0) + lineTotal,
+      updated_at:   new Date().toISOString(),
+    })
+    .eq('id', invoiceId)
+
+  revalidatePath('/dashboard/cashier')
+  return { invoice_item_id: created.id as string, description: item.name as string, unit_price: unit, total_price: lineTotal }
+}
+
+export async function removeItemFromInvoice(
+  invoiceItemId: string,
+  /** Quando informado (item-produto adicionado nesta sessão), devolve o estoque. */
+  restoreStockItemId?: string | null,
+): Promise<{ success: true } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+  const { data: profile } = await supabase
+    .from('profiles').select('clinic_id').eq('id', user.id).single()
+  if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
+
+  const admin = createAdminClient()
+  const { data: line } = await admin
+    .from('invoice_items')
+    .select('id, invoice_id, quantity, total_price, invoices!inner ( status, subtotal, total_amount, clinic_id )')
+    .eq('id', invoiceItemId)
+    .maybeSingle()
+  if (!line) return { error: 'Item não encontrado.' }
+
+  const invData = line.invoices as unknown as { status: string; subtotal: number; total_amount: number; clinic_id: string }
+  if (invData.clinic_id !== profile.clinic_id) return { error: 'Item não pertence à clínica.' }
+  if (invData.status !== 'pending' && invData.status !== 'paid_partial') {
+    return { error: 'Fatura já fechada — não é possível remover itens.' }
+  }
+
+  const { error: delErr } = await admin.from('invoice_items').delete().eq('id', invoiceItemId)
+  if (delErr) return { error: 'Erro ao remover item: ' + delErr.message }
+
+  await admin
+    .from('invoices')
+    .update({
+      subtotal:     Math.max(0, Number(invData.subtotal ?? 0) - Number(line.total_price ?? 0)),
+      total_amount: Math.max(0, Number(invData.total_amount ?? 0) - Number(line.total_price ?? 0)),
+      updated_at:   new Date().toISOString(),
+    })
+    .eq('id', line.invoice_id)
+
+  if (restoreStockItemId) {
+    const { data: stock } = await admin
+      .from('stock_items')
+      .select('quantity, is_service')
+      .eq('id', restoreStockItemId)
+      .eq('clinic_id', profile.clinic_id)
+      .maybeSingle()
+    if (stock && !stock.is_service) {
+      await admin
+        .from('stock_items')
+        .update({ quantity: Number(stock.quantity) + Number(line.quantity ?? 1) })
+        .eq('id', restoreStockItemId)
+    }
+  }
+
+  revalidatePath('/dashboard/cashier')
+  return { success: true }
+}
+
 // ─── Processar Pagamento ──────────────────────────────────────────────────────
 
 export async function processPayment(
