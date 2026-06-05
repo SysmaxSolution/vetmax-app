@@ -7,7 +7,8 @@ import {
   Shield, ShoppingBag, Scissors, Sparkles, FlaskConical, Pill,
   Upload, Stethoscope, Gift, Activity,
 } from 'lucide-react'
-import type { StockItemV2, StockCategory } from '@/lib/actions/stock'
+import type { StockItemV2 } from '@/lib/actions/stock'
+import type { StockCategory } from '@/lib/stock-constants'
 import {
   addStockItemV2, updateStockItemV2,
   restockItemV2, adjustStockItemV2,

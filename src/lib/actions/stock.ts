@@ -310,7 +310,11 @@ export async function deleteStockItem(stockItemId: string): Promise<{ success: t
 // ─── Funções para tabela stock_items ─────────────────────────────────────────
 
 import type { StockCategory } from '@/lib/stock-constants'
-export type { StockCategory } from '@/lib/stock-constants'
+// ATENÇÃO (HF 05/06): NUNCA re-exporte tipos (`export type { X } from ...`)
+// de um arquivo 'use server' — o Turbopack registra todo export como server
+// action em runtime e o re-export vira ReferenceError, derrubando TODAS as
+// actions deste módulo (era a causa do "não salva" em Estoque > Serviços).
+// Consumidores importam StockCategory direto de '@/lib/stock-constants'.
 
 export type StockItemV2 = {
   id:           string

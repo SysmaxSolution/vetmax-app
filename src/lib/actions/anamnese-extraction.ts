@@ -17,7 +17,10 @@ import {
   type ExtractedAnamneseEntities,
 } from '@/lib/ai/anamnese-extractor'
 
-export type { ExtractedAnamneseEntities } from '@/lib/ai/anamnese-extractor'
+// ATENÇÃO (HF 05/06): NUNCA re-exporte tipos de arquivo 'use server' —
+// Turbopack registra todo export como server action e o re-export vira
+// ReferenceError em runtime (500 em TODAS as actions da rota). Importe
+// ExtractedAnamneseEntities direto de '@/lib/ai/anamnese-extractor'.
 
 export async function extractEntitiesFromAnamnese(
   text: string | null | undefined,
