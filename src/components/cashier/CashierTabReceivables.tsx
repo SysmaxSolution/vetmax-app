@@ -283,6 +283,8 @@ interface Props {
    * (itens + valor a cobrar). Configurável por usuário em Direitos de Acesso.
    */
   canViewInsuranceDetails?: boolean
+  /** Módulos ativos da clínica — cadastro rápido do catálogo na venda avulsa. */
+  activeModules?:         string[]
   onToast: (msg: string, type: 'success' | 'error') => void
 }
 
@@ -293,6 +295,7 @@ export default function CashierTabReceivables({
   userRole = 'receptionist',
   pdvUnified = false,
   canViewInsuranceDetails = true,
+  activeModules = [],
   onToast,
 }: Props) {
   const [invoices,          setInvoices]          = useState<InvoiceWithDetails[]>(initialInvoices)
@@ -482,6 +485,7 @@ export default function CashierTabReceivables({
       {pdvUnified && (
         <CashierQuickSale
           clinicId={clinicId}
+          activeModules={activeModules}
           onToast={onToast}
           onSaleCompleted={refresh}
         />

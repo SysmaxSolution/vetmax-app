@@ -7,21 +7,20 @@
  * (decisão Q4 do PO). Tutor é OPCIONAL (Q2): sem tutor, a venda sai como
  * "Consumidor avulso". Persistência inalterada: createSale() → sales/
  * sale_items + central_cashier + estoque — só muda o ponto de entrada da UI.
+ *
+ * HF 05/06: a busca de produtos reutiliza o ProductSearch DO PDV — mesma
+ * funcionalidade completa: estoque + sugestões do catálogo veterinário
+ * (cadastro rápido com 1 clique) + item manual + EAN. O card não usa
+ * overflow-hidden para o dropdown de resultados não ficar cortado.
  */
 
-import { useState, useRef } from 'react'
-import { ShoppingCart, Search, X, Plus, Minus, ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
-import {
-  searchSalesProducts, createSale,
-  type StockProduct, type SaleTutor,
-} from '@/lib/actions/sales'
+import { useState } from 'react'
+import { ShoppingCart, X, Plus, Minus, ChevronDown, ChevronUp } from 'lucide-react'
+import { createSale, type SaleTutor } from '@/lib/actions/sales'
 import TutorSearch from '@/components/sales/TutorSearch'
+import ProductSearch from '@/components/sales/ProductSearch'
+import type { CartItem } from '@/components/sales/SalesCart'
 import PaymentMethodModal, { type PaymentSplit } from '@/components/payments/PaymentMethodModal'
-
-interface CartLine {
-  product:  StockProduct
-  quantity: number
-}
 
 function fmt(v: number) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -29,57 +28,43 @@ function fmt(v: number) {
 
 interface Props {
   clinicId: string
+  /** Módulos ativos da clínica — usados pelo cadastro rápido do catálogo. */
+  activeModules?: string[]
   onToast:  (msg: string, type: 'success' | 'error') => void
   /** Notifica o pai para atualizar listas/totais após a venda. */
   onSaleCompleted?: () => void
 }
 
-export default function CashierQuickSale({ clinicId, onToast, onSaleCompleted }: Props) {
+export default function CashierQuickSale({ clinicId, activeModules = [], onToast, onSaleCompleted }: Props) {
   const [expanded, setExpanded] = useState(false)
   const [tutor,    setTutor]    = useState<SaleTutor | null>(null)
-  const [cart,     setCart]     = useState<CartLine[]>([])
-
-  const [query,     setQuery]     = useState('')
-  const [results,   setResults]   = useState<StockProduct[]>([])
-  const [searching, setSearching] = useState(false)
-  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [cart,     setCart]     = useState<CartItem[]>([])
+  const [refocusTrigger, setRefocusTrigger] = useState(0)
 
   const [showPayment, setShowPayment] = useState(false)
   const [error,       setError]       = useState<string | null>(null)
 
-  const total = cart.reduce((s, l) => s + l.product.unit_price * l.quantity, 0)
+  const total = cart.reduce((s, l) => s + (l.unit_price - l.discount) * l.quantity, 0)
 
-  function handleQueryChange(q: string) {
-    setQuery(q)
-    if (searchTimer.current) clearTimeout(searchTimer.current)
-    if (q.trim().length < 2) { setResults([]); return }
-    searchTimer.current = setTimeout(async () => {
-      setSearching(true)
-      try {
-        const r = await searchSalesProducts(q)
-        setResults(r)
-      } catch {
-        setResults([])
-        setError('Falha ao buscar produtos — tente novamente.')
-      } finally {
-        setSearching(false)
-      }
-    }, 250)
-  }
-
-  function addToCart(p: StockProduct) {
+  /** Mesmo contrato do PDV: itens iguais (mesmo stock_item) somam quantidade. */
+  function addToCart(item: CartItem) {
     setCart(prev => {
-      const existing = prev.find(l => l.product.id === p.id)
-      if (existing) return prev.map(l => l.product.id === p.id ? { ...l, quantity: l.quantity + 1 } : l)
-      return [...prev, { product: p, quantity: 1 }]
+      if (item.stock_item_id) {
+        const existing = prev.find(l => l.stock_item_id === item.stock_item_id)
+        if (existing) {
+          return prev.map(l => l.stock_item_id === item.stock_item_id
+            ? { ...l, quantity: l.quantity + item.quantity }
+            : l)
+        }
+      }
+      return [...prev, item]
     })
-    setQuery('')
-    setResults([])
+    setRefocusTrigger(n => n + 1)
   }
 
-  function setQty(id: string, qty: number) {
-    if (qty <= 0) { setCart(prev => prev.filter(l => l.product.id !== id)); return }
-    setCart(prev => prev.map(l => l.product.id === id ? { ...l, quantity: qty } : l))
+  function setQty(key: string, qty: number) {
+    if (qty <= 0) { setCart(prev => prev.filter(l => l.key !== key)); return }
+    setCart(prev => prev.map(l => l.key === key ? { ...l, quantity: qty } : l))
   }
 
   async function handlePaymentConfirm(splits: PaymentSplit[]) {
@@ -87,11 +72,11 @@ export default function CashierQuickSale({ clinicId, onToast, onSaleCompleted }:
     const res = await createSale({
       clinic_id:      clinicId,
       items: cart.map(l => ({
-        stock_item_id: l.product.id,
-        description:   l.product.name,
+        stock_item_id: l.stock_item_id,
+        description:   l.description,
         quantity:      l.quantity,
-        unit_price:    l.product.unit_price,
-        discount:      0,
+        unit_price:    l.unit_price,
+        discount:      l.discount,
       })),
       // Método principal = primeiro split (o detalhe por split vai em splits[])
       payment_method: (splits[0]?.payment_method ?? 'cash') as 'cash' | 'credit' | 'debit' | 'pix' | 'convenio' | 'other',
@@ -119,11 +104,13 @@ export default function CashierQuickSale({ clinicId, onToast, onSaleCompleted }:
   }
 
   return (
-    <div className="mb-5 rounded-2xl border border-teal-200 bg-teal-50/40 overflow-hidden">
+    // SEM overflow-hidden — o dropdown de resultados da busca é absoluto e
+    // ficava cortado pelo card (bug reportado com print em 05/06).
+    <div className="mb-5 rounded-2xl border border-teal-200 bg-teal-50/40">
       <button
         type="button"
         onClick={() => setExpanded(v => !v)}
-        className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-teal-50 transition-colors"
+        className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-teal-50 transition-colors rounded-2xl"
         data-mentor-step="cashier-quick-sale-toggle"
       >
         <span className="flex items-center gap-2.5 text-sm font-semibold text-teal-800">
@@ -148,61 +135,43 @@ export default function CashierQuickSale({ clinicId, onToast, onSaleCompleted }:
             <TutorSearch selected={tutor} onSelect={setTutor} />
           </div>
 
-          {/* Busca de produto/serviço */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
-            <input
-              type="text"
-              value={query}
-              onChange={e => handleQueryChange(e.target.value)}
-              placeholder="Buscar produto ou serviço (nome ou código de barras)..."
-              className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400"
+          {/* HF 05/06: busca COMPLETA do PDV — estoque + catálogo veterinário
+              (cadastro rápido) + item manual + EAN */}
+          <div>
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1">
+              Produtos e serviços
+            </p>
+            <ProductSearch
+              onAdd={addToCart}
+              refocusTrigger={refocusTrigger}
+              activeModules={activeModules}
             />
-            {(searching || results.length > 0) && query.trim().length >= 2 && (
-              <div className="absolute z-20 mt-1 w-full rounded-xl border border-slate-200 bg-white shadow-lg max-h-56 overflow-y-auto">
-                {searching ? (
-                  <div className="px-4 py-3 text-xs text-slate-400 flex items-center gap-2">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Buscando...
-                  </div>
-                ) : results.map(p => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => addToCart(p)}
-                    className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-teal-50 transition-colors"
-                  >
-                    <span className="text-sm text-slate-700 truncate">{p.name}</span>
-                    <span className="text-sm font-semibold text-slate-900 tabular-nums flex-shrink-0 ml-3">{fmt(p.unit_price)}</span>
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
 
           {/* Carrinho */}
           {cart.length > 0 && (
             <div className="rounded-xl border border-slate-200 bg-white divide-y divide-slate-100">
               {cart.map(l => (
-                <div key={l.product.id} className="flex items-center gap-3 px-4 py-2.5">
-                  <span className="flex-1 min-w-0 text-sm text-slate-700 truncate">{l.product.name}</span>
+                <div key={l.key} className="flex items-center gap-3 px-4 py-2.5">
+                  <span className="flex-1 min-w-0 text-sm text-slate-700 truncate">{l.description}</span>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <button type="button" onClick={() => setQty(l.product.id, l.quantity - 1)} className="rounded p-1 text-slate-400 hover:bg-slate-100">
+                    <button type="button" onClick={() => setQty(l.key, l.quantity - 1)} className="rounded p-1 text-slate-400 hover:bg-slate-100">
                       <Minus className="h-3.5 w-3.5" />
                     </button>
                     <span className="w-7 text-center text-sm font-semibold tabular-nums">{l.quantity}</span>
-                    <button type="button" onClick={() => setQty(l.product.id, l.quantity + 1)} className="rounded p-1 text-slate-400 hover:bg-slate-100">
+                    <button type="button" onClick={() => setQty(l.key, l.quantity + 1)} className="rounded p-1 text-slate-400 hover:bg-slate-100">
                       <Plus className="h-3.5 w-3.5" />
                     </button>
                   </div>
                   <span className="w-20 text-right text-sm font-semibold text-slate-900 tabular-nums flex-shrink-0">
-                    {fmt(l.product.unit_price * l.quantity)}
+                    {fmt((l.unit_price - l.discount) * l.quantity)}
                   </span>
-                  <button type="button" onClick={() => setQty(l.product.id, 0)} className="rounded p-1 text-rose-400 hover:bg-rose-50 flex-shrink-0">
+                  <button type="button" onClick={() => setQty(l.key, 0)} className="rounded p-1 text-rose-400 hover:bg-rose-50 flex-shrink-0">
                     <X className="h-3.5 w-3.5" />
                   </button>
                 </div>
               ))}
-              <div className="flex items-center justify-between px-4 py-3 bg-slate-50">
+              <div className="flex items-center justify-between px-4 py-3 bg-slate-50 rounded-b-xl">
                 <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Total</span>
                 <span className="text-base font-bold text-slate-900 tabular-nums">{fmt(total)}</span>
               </div>
