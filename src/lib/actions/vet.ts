@@ -319,6 +319,33 @@ export async function addPatientDirectToVet(params: {
   if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
 
   const admin = createAdminClient()
+
+  // HF4 (05/06): se o pet JÁ tem consulta aberta (ex.: uma microchipagem
+  // antiga que ficou in_progress), criar outra gerava DUAS consultas na fila
+  // — e o card antigo abria com o motivo antigo ("sempre Microchipagem").
+  // Find-or-update: reutiliza a consulta aberta e aplica o motivo escolhido.
+  const { data: openRows } = await admin
+    .from('consultations')
+    .select('id, visit_reason, status')
+    .eq('clinic_id', profile.clinic_id)
+    .eq('patient_id', params.patient_id)
+    .in('status', ['in_progress', 'waiting_exam', 'medication'])
+    .order('created_at', { ascending: false })
+    .limit(1)
+  const open = openRows?.[0]
+
+  if (open) {
+    if (open.visit_reason !== params.visit_reason) {
+      const { error: updErr } = await admin
+        .from('consultations')
+        .update({ visit_reason: params.visit_reason, updated_at: new Date().toISOString() })
+        .eq('id', open.id)
+      if (updErr) return { error: 'Erro ao atualizar consulta aberta: ' + updErr.message }
+    }
+    revalidatePath('/dashboard/vet')
+    return { id: open.id }
+  }
+
   const { data, error } = await admin
     .from('consultations')
     .insert({

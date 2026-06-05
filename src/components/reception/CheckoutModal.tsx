@@ -130,11 +130,14 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
   }
 
   useEffect(() => {
-    getInvoiceWithItems(invoiceId).then(res => {
-      setLoading(false)
-      if ('error' in res) { setError(res.error); return }
-      setInvoice(res)
-    })
+    getInvoiceWithItems(invoiceId)
+      .then(res => {
+        if ('error' in res) { setError(res.error); return }
+        setInvoice(res)
+      })
+      // HF6 (05/06): rejeição deixava "Carregando fatura..." preso
+      .catch(() => setError('Falha ao carregar a fatura. Feche e tente novamente.'))
+      .finally(() => setLoading(false))
   }, [invoiceId])
 
   // Carrega a prévia da taxa quando a cobertura é aplicada (juros incide só

@@ -146,7 +146,12 @@ export async function upsertPetInsurance(input: {
       .eq('id', existing.id)
 
     if (error) return { error: error.message }
+    // HF2 (05/06): o consultório recebe insuranceCard server-rendered — sem
+    // revalidar /dashboard/vet, a carência continuava com a adesão antiga
+    // até um reload manual.
     revalidatePath('/dashboard/patients')
+    revalidatePath('/dashboard/vet')
+    revalidatePath('/dashboard/reception')
     return { id: existing.id }
   }
 
@@ -163,6 +168,8 @@ export async function upsertPetInsurance(input: {
 
   if (error) return { error: error.message }
   revalidatePath('/dashboard/patients')
+  revalidatePath('/dashboard/vet')
+  revalidatePath('/dashboard/reception')
   return { id: data.id }
 }
 
