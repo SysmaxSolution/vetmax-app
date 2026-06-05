@@ -276,6 +276,267 @@ export async function createSale(
   return { id: saleId, total }
 }
 
+// ─── Venda LANÇADA (pendente) — Caixa unificado (05/06/2026) ─────────────────
+//
+// Cenário do PO: tutor faz a consulta e, no caixa, leva um item — paga TUDO
+// num cartão só. O operador LANÇA a venda (fica pendente nos Recebimentos)
+// e recebe junto com a consulta via recebimento agrupado. Estoque é baixado
+// no lançamento (reserva); cancelar o lançamento devolve.
+
+export interface PendingSale {
+  id:           string
+  tutor_id:     string | null
+  tutor_name:   string | null
+  total_amount: number
+  created_at:   string
+  items_count:  number
+  items_preview: string
+}
+
+export async function launchPendingSale(params: {
+  clinic_id: string
+  items:     SaleItem[]
+  tutor_id?: string | null
+  notes?:    string | null
+}): Promise<{ id: string; total: number } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+  if (params.items.length === 0) return { error: 'Adicione pelo menos um item.' }
+
+  const admin = createAdminClient()
+  const total = Number(params.items
+    .reduce((s, i) => s + (i.unit_price - i.discount) * i.quantity, 0)
+    .toFixed(2))
+
+  // 1) Valida e baixa estoque dos itens-produto (reserva no lançamento)
+  const decremented: Array<{ id: string; qty: number }> = []
+  for (const it of params.items) {
+    if (!it.stock_item_id) continue
+    const { data: stock } = await admin
+      .from('stock_items')
+      .select('id, name, quantity, is_service')
+      .eq('id', it.stock_item_id)
+      .eq('clinic_id', params.clinic_id)
+      .maybeSingle()
+    if (!stock) return { error: `Item não encontrado no estoque.` }
+    if (stock.is_service) continue
+    if (Number(stock.quantity) < it.quantity) {
+      // Estorna o que já baixou antes de abortar
+      for (const d of decremented) {
+        const { data: s2 } = await admin.from('stock_items').select('quantity').eq('id', d.id).single()
+        await admin.from('stock_items').update({ quantity: Number(s2?.quantity ?? 0) + d.qty }).eq('id', d.id)
+      }
+      return { error: `Estoque insuficiente de "${stock.name}" (disponível: ${stock.quantity}).` }
+    }
+    await admin
+      .from('stock_items')
+      .update({ quantity: Number(stock.quantity) - it.quantity })
+      .eq('id', it.stock_item_id)
+    decremented.push({ id: it.stock_item_id, qty: it.quantity })
+  }
+
+  // 2) Venda pendente + itens
+  const { data: sale, error: saleErr } = await admin
+    .from('sales')
+    .insert({
+      clinic_id:       params.clinic_id,
+      seller_id:       user.id,
+      tutor_id:        params.tutor_id ?? null,
+      total_amount:    total,
+      discount_amount: 0,
+      payment_method:  'other',          // definido no recebimento
+      payment_status:  'pending',
+      notes:           params.notes ?? null,
+    })
+    .select('id')
+    .single()
+  if (saleErr || !sale) {
+    for (const d of decremented) {
+      const { data: s2 } = await admin.from('stock_items').select('quantity').eq('id', d.id).single()
+      await admin.from('stock_items').update({ quantity: Number(s2?.quantity ?? 0) + d.qty }).eq('id', d.id)
+    }
+    return { error: 'Erro ao lançar venda: ' + (saleErr?.message ?? 'falha') }
+  }
+
+  const { error: itemsErr } = await admin.from('sale_items').insert(
+    params.items.map(i => ({
+      sale_id:       sale.id,
+      clinic_id:     params.clinic_id,
+      stock_item_id: i.stock_item_id ?? null,
+      description:   i.description,
+      quantity:      i.quantity,
+      unit_price:    i.unit_price,
+      discount:      i.discount,
+    })),
+  )
+  if (itemsErr) return { error: 'Venda lançada, mas falha nos itens: ' + itemsErr.message }
+
+  revalidatePath('/dashboard/cashier')
+  return { id: sale.id as string, total }
+}
+
+export async function listPendingSales(): Promise<PendingSale[] | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Perfil sem clínica.' }
+
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('sales')
+    .select('id, tutor_id, total_amount, notes, created_at, tutors!tutor_id ( name ), sale_items ( description )')
+    .eq('clinic_id', clinicId)
+    .eq('payment_status', 'pending')
+    .order('created_at', { ascending: false })
+    .limit(50)
+  if (error) return { error: error.message }
+
+  return (data ?? []).map((s: any) => {
+    const items: Array<{ description: string }> = s.sale_items ?? []
+    return {
+      id:           s.id,
+      tutor_id:     s.tutor_id ?? null,
+      tutor_name:   s.tutors?.name ?? (s.notes === 'Consumidor avulso' ? 'Consumidor avulso' : null),
+      total_amount: Number(s.total_amount),
+      created_at:   s.created_at,
+      items_count:  items.length,
+      items_preview: items.slice(0, 3).map(i => i.description).join(', '),
+    }
+  })
+}
+
+/**
+ * Baixa uma venda lançada (pendente) com os splits informados — mesma
+ * contabilidade do createSale com splits: central_cashier por split (trigger
+ * 0127 espelha no financeiro) + rpc_record_sale_card_splits para parcelas de
+ * cartão (card_installments + pending source=card_acquirer).
+ */
+export async function settlePendingSale(
+  saleId: string,
+  splits: NonNullable<CreateSaleParams['splits']>,
+): Promise<{ success: true } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+  const { data: profile } = await supabase
+    .from('profiles').select('clinic_id').eq('id', user.id).single()
+  if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
+  if (!splits || splits.length === 0) return { error: 'Informe ao menos um pagamento.' }
+
+  const admin = createAdminClient()
+  const { data: sale } = await admin
+    .from('sales')
+    .select('id, payment_status, total_amount, tutor_id, tutors!tutor_id ( name )')
+    .eq('id', saleId)
+    .eq('clinic_id', profile.clinic_id)
+    .maybeSingle()
+  if (!sale) return { error: 'Venda não encontrada.' }
+  if (sale.payment_status !== 'pending') return { error: 'Esta venda não está pendente.' }
+
+  const tutorName = ((sale as any).tutors?.name as string | undefined) ?? null
+
+  const { error: updErr } = await admin
+    .from('sales')
+    .update({
+      payment_status: 'paid',
+      payment_method: (splits[0]?.payment_method ?? 'other') as string,
+    })
+    .eq('id', saleId)
+  if (updErr) return { error: 'Erro ao baixar venda: ' + updErr.message }
+
+  for (const split of splits) {
+    await admin.from('central_cashier').insert({
+      clinic_id:          profile.clinic_id,
+      source_module:      'sales',
+      source_id:          saleId,
+      amount:             split.amount,
+      status:             'recorded',
+      payment_method:     split.payment_method,
+      recorded_by:        user.id,
+      tutor_name:         tutorName,
+      reason:             `Venda Caixa — ${tutorName ?? 'avulsa'}`,
+      payment_card_id:    split.payment_card_id ?? null,
+      card_nsu:           split.card_nsu ?? null,
+      card_authorization: split.card_authorization ?? null,
+      card_installments:  split.payment_method === 'credit' ? (split.installments ?? 1) : null,
+    })
+  }
+
+  await supabase.rpc('rpc_record_sale_card_splits', {
+    p_clinic_id:    profile.clinic_id,
+    p_sale_id:      saleId,
+    p_recorded_by:  user.id,
+    p_patient_name: null,
+    p_tutor_name:   tutorName,
+    p_splits:       splits.map(s => ({
+      amount:             s.amount,
+      payment_method:     s.payment_method,
+      payment_card_id:    s.payment_card_id ?? null,
+      installments:       s.installments ?? 1,
+      card_acquirer:      s.card_acquirer ?? null,
+      card_brand:         s.card_brand ?? null,
+      card_nsu:           s.card_nsu ?? null,
+      card_authorization: s.card_authorization ?? null,
+      transaction_date:   s.transaction_date ?? null,
+    })),
+  })
+
+  revalidatePath('/dashboard/cashier')
+  revalidatePath('/dashboard/financial')
+  return { success: true }
+}
+
+/**
+ * Cancela um LANÇAMENTO pendente (rascunho — permitido ao operador, conforme
+ * regra B4 do PO) devolvendo o estoque. Vendas pagas seguem no rpc_cancel_sale
+ * (só admin).
+ */
+export async function cancelPendingLaunch(
+  saleId: string,
+): Promise<{ success: true } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+  const { data: profile } = await supabase
+    .from('profiles').select('clinic_id').eq('id', user.id).single()
+  if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
+
+  const admin = createAdminClient()
+  const { data: sale } = await admin
+    .from('sales')
+    .select('id, payment_status, sale_items ( stock_item_id, quantity )')
+    .eq('id', saleId)
+    .eq('clinic_id', profile.clinic_id)
+    .maybeSingle()
+  if (!sale) return { error: 'Venda não encontrada.' }
+  if (sale.payment_status !== 'pending') {
+    return { error: 'Apenas lançamentos pendentes podem ser cancelados aqui. Venda paga: solicite ao administrador.' }
+  }
+
+  // Devolve o estoque dos itens-produto
+  for (const it of ((sale as any).sale_items ?? []) as Array<{ stock_item_id: string | null; quantity: number }>) {
+    if (!it.stock_item_id) continue
+    const { data: stock } = await admin
+      .from('stock_items')
+      .select('quantity, is_service')
+      .eq('id', it.stock_item_id)
+      .maybeSingle()
+    if (stock && !stock.is_service) {
+      await admin
+        .from('stock_items')
+        .update({ quantity: Number(stock.quantity) + Number(it.quantity) })
+        .eq('id', it.stock_item_id)
+    }
+  }
+
+  await admin
+    .from('sales')
+    .update({ payment_status: 'cancelled', cancelled_at: new Date().toISOString(), cancellation_reason: 'Lançamento cancelado no caixa (pendente)' })
+    .eq('id', saleId)
+
+  revalidatePath('/dashboard/cashier')
+  return { success: true }
+}
+
 // ─── Cancelar venda ───────────────────────────────────────────────────────────
 
 export async function cancelSale(
