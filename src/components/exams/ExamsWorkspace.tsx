@@ -57,12 +57,13 @@ function ExamCard({
   onSendToHospitalization: (item: ExamQueueItem) => void
 }) {
   return (
-    <div className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white px-5 py-4 hover:shadow-sm hover:border-blue-200 transition-all">
+    // Mobile (05/06): wrap — as 3 ações descem para linha própria no celular
+    <div className="flex flex-wrap items-center gap-3 sm:gap-4 rounded-xl border border-slate-200 bg-white px-4 sm:px-5 py-4 hover:shadow-sm hover:border-blue-200 transition-all">
       {/* Avatar */}
       <PetAvatar name={item.patient.name} species={item.patient.species} photoUrl={item.patient.photo_url} size="md" />
 
       {/* Info */}
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 basis-48">
         <div className="flex items-center gap-2 flex-wrap">
           <p className="font-semibold text-slate-900">{item.patient.name}</p>
           {item.patient.breed && (
@@ -102,8 +103,8 @@ function ExamCard({
         />
       </div>
 
-      {/* Ações */}
-      <div className="flex flex-col gap-2 flex-shrink-0">
+      {/* Ações — no celular viram linha (wrap); no desktop, coluna à direita */}
+      <div className="flex flex-row flex-wrap sm:flex-col gap-2 w-full sm:w-auto sm:flex-shrink-0">
         <Link
           href={`/dashboard/exams/${item.id}`}
           className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors shadow-sm"

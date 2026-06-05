@@ -247,3 +247,149 @@ export async function recordPatientDeath(
   revalidatePath(`/dashboard/patients/${input.patient_id}`)
   return { success: true, note_id: note.id as string }
 }
+
+// ─── updatePatientDeath (05/06 — pedido do PO) ──────────────────────────────
+// Edita o registro de óbito existente: regenera content/metadata da nota e
+// sincroniza patients.deceased_at/deceased_cause. Tudo auditado.
+
+export async function updatePatientDeath(
+  noteId: string,
+  input: Omit<DeathRecord, 'patient_id'>,
+): Promise<{ success: true } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+  const { admin, clinic_id, user_id } = ctx
+
+  if (!input.deceased_at) return { error: 'Data do óbito é obrigatória.' }
+  const deceasedAt = new Date(input.deceased_at)
+  if (Number.isNaN(deceasedAt.getTime())) return { error: 'Data do óbito inválida.' }
+  if (deceasedAt.getTime() > Date.now() + 60_000) {
+    return { error: 'Data do óbito não pode estar no futuro.' }
+  }
+
+  const { data: note } = await admin
+    .from('patient_notes')
+    .select('id, patient_id, note_type, metadata, patients!patient_id ( name )')
+    .eq('id', noteId)
+    .eq('clinic_id', clinic_id)
+    .maybeSingle()
+  if (!note) return { error: 'Nota não encontrada.' }
+  if (note.note_type !== 'death') return { error: 'Esta nota não é de óbito.' }
+
+  const petName = ((note as any).patients?.name as string | undefined) ?? 'pet'
+
+  const lines: string[] = [
+    `Óbito registrado em ${deceasedAt.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}.`,
+  ]
+  if (input.cause?.trim())            lines.push(`Causa: ${input.cause.trim()}.`)
+  if (input.weight_at_death)          lines.push(`Peso no óbito: ${input.weight_at_death.toLocaleString('pt-BR', { minimumFractionDigits: 1 })} kg.`)
+  if (input.place?.trim())            lines.push(`Local: ${input.place.trim()}.`)
+  if (input.body_destination?.trim()) lines.push(`Destino do corpo: ${input.body_destination.trim()}.`)
+  if (input.necropsy_done === true)   lines.push(`Necropsia realizada.`)
+  if (input.observations?.trim())     lines.push(`Observações: ${input.observations.trim()}`)
+  lines.push(`(Editado em ${new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}.)`)
+
+  const { error: noteErr } = await admin
+    .from('patient_notes')
+    .update({
+      content: lines.join(' '),
+      metadata: {
+        deceased_at:       deceasedAt.toISOString(),
+        cause:             input.cause ?? null,
+        weight_at_death:   input.weight_at_death ?? null,
+        place:             input.place ?? null,
+        attending_vet_id:  input.attending_vet_id ?? null,
+        observations:      input.observations ?? null,
+        necropsy_done:     input.necropsy_done ?? null,
+        body_destination:  input.body_destination ?? null,
+        last_edited_by:    user_id,
+        last_edited_at:    new Date().toISOString(),
+      },
+    })
+    .eq('id', noteId)
+  if (noteErr) return { error: 'Erro ao atualizar a nota: ' + noteErr.message }
+
+  // Sincroniza o cadastro do pet (data/causa)
+  const { error: patErr } = await admin
+    .from('patients')
+    .update({
+      deceased_at:    deceasedAt.toISOString(),
+      deceased_cause: input.cause?.trim() || null,
+    })
+    .eq('id', note.patient_id)
+    .eq('clinic_id', clinic_id)
+  if (patErr) return { error: 'Nota atualizada, mas falha ao sincronizar o cadastro: ' + patErr.message }
+
+  const { logAudit } = await import('./audit')
+  await logAudit({
+    action:      'PATIENT_DEATH_UPDATED',
+    entity_type: 'patient_notes',
+    entity_id:   noteId,
+    details:     { patient_id: note.patient_id, patient_name: petName, deceased_at: deceasedAt.toISOString(), cause: input.cause ?? null },
+  })
+
+  revalidatePath(`/dashboard/patients/${note.patient_id}`)
+  revalidatePath('/dashboard/patients')
+  return { success: true }
+}
+
+// ─── revertPatientDeath (05/06 — pedido do PO) ──────────────────────────────
+// Remove a nota de óbito E reativa o pet (limpa patients.deceased_*).
+// Restrito a admin/owner/manager — registro clínico-legal; a reversão fica
+// integralmente auditada (quem, quando, dados anteriores).
+
+export async function revertPatientDeath(
+  noteId: string,
+): Promise<{ success: true } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+  const { admin, clinic_id, user_id } = ctx
+
+  const { data: me } = await admin
+    .from('profiles').select('role').eq('id', user_id).single()
+  if (!['admin', 'owner', 'manager'].includes((me?.role as string) ?? '')) {
+    return { error: 'Apenas administradores podem reverter um registro de óbito.' }
+  }
+
+  const { data: note } = await admin
+    .from('patient_notes')
+    .select('id, patient_id, note_type, content, metadata, patients!patient_id ( name )')
+    .eq('id', noteId)
+    .eq('clinic_id', clinic_id)
+    .maybeSingle()
+  if (!note) return { error: 'Nota não encontrada.' }
+  if (note.note_type !== 'death') return { error: 'Esta nota não é de óbito.' }
+
+  const petName = ((note as any).patients?.name as string | undefined) ?? 'pet'
+
+  // Auditoria ANTES de apagar — preserva o conteúdo revertido
+  const { logAudit } = await import('./audit')
+  await logAudit({
+    action:      'PATIENT_DEATH_REVERTED',
+    entity_type: 'patients',
+    entity_id:   note.patient_id,
+    details:     { patient_name: petName, reverted_note_id: noteId, previous_content: note.content, previous_metadata: note.metadata },
+  })
+
+  const { error: delErr } = await admin
+    .from('patient_notes')
+    .delete()
+    .eq('id', noteId)
+    .eq('clinic_id', clinic_id)
+  if (delErr) return { error: 'Erro ao remover a nota: ' + delErr.message }
+
+  const { error: patErr } = await admin
+    .from('patients')
+    .update({
+      deceased_at:          null,
+      deceased_cause:       null,
+      deceased_recorded_by: null,
+    })
+    .eq('id', note.patient_id)
+    .eq('clinic_id', clinic_id)
+  if (patErr) return { error: 'Nota removida, mas falha ao reativar o pet: ' + patErr.message }
+
+  revalidatePath(`/dashboard/patients/${note.patient_id}`)
+  revalidatePath('/dashboard/patients')
+  return { success: true }
+}

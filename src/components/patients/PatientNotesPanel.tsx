@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { FileText, Plus, Loader2, AlertTriangle, X, Heart, Skull, Trash2, Stethoscope, Brain } from 'lucide-react'
+import { FileText, Plus, Loader2, AlertTriangle, X, Heart, Skull, Trash2, Stethoscope, Brain, Pencil } from 'lucide-react'
 import { DateTimePicker } from '@/components/ui/DatePicker'
 import {
   createPatientNote, listPatientNotes, recordPatientDeath, deletePatientNote,
+  updatePatientDeath, revertPatientDeath,
   type PatientNote, type NoteType,
 } from '@/lib/actions/patient-notes'
 
@@ -30,6 +31,11 @@ export default function PatientNotesPanel({ patientId, patientName, isDeceased, 
   const [genericModal, setGenericModal] = useState<{ type: Exclude<NoteType, 'death'> } | null>(null)
   const [deathModal, setDeathModal]     = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  // 05/06 (pedido do PO): editar/reverter a nota de óbito no cadastro do pet
+  const [editDeathNote, setEditDeathNote]     = useState<PatientNote | null>(null)
+  const [confirmRevert, setConfirmRevert]     = useState<PatientNote | null>(null)
+  const [reverting, setReverting]             = useState(false)
+  const [panelError, setPanelError]           = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -100,7 +106,7 @@ export default function PatientNotesPanel({ patientId, patientName, isDeceased, 
                       </p>
                     </div>
                   </div>
-                  {!isDeath && (
+                  {!isDeath ? (
                     <button
                       type="button"
                       onClick={() => setConfirmDelete(n.id)}
@@ -109,6 +115,27 @@ export default function PatientNotesPanel({ patientId, patientName, isDeceased, 
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
+                  ) : (
+                    // 05/06: nota de óbito agora pode ser editada (qualquer
+                    // usuário com acesso, auditado) ou revertida (só admin)
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setEditDeathNote(n)}
+                        className="rounded-lg p-1 text-violet-500 hover:bg-violet-100 transition-colors"
+                        title="Editar registro de óbito"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmRevert(n)}
+                        className="rounded-lg p-1 text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                        title="Reverter óbito (remove a nota e reativa o pet — só administradores)"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   )}
                 </div>
               </li>
@@ -153,6 +180,68 @@ export default function PatientNotesPanel({ patientId, patientName, isDeceased, 
             onDeathRecorded?.()
           }}
         />
+      )}
+
+      {/* 05/06: edição do registro de óbito (mesmo modal, modo edição) */}
+      {editDeathNote && (
+        <DeathNoteModal
+          patientId={patientId}
+          patientName={patientName}
+          editNote={editDeathNote}
+          onClose={() => setEditDeathNote(null)}
+          onSaved={() => {
+            setEditDeathNote(null)
+            reload()
+            onDeathRecorded?.()
+          }}
+        />
+      )}
+
+      {/* 05/06: confirmação de REVERSÃO do óbito (só admin; pet volta ativo) */}
+      {confirmRevert && (
+        <div className="fixed inset-0 z-[10060] flex items-center justify-center bg-black/50 p-4" onClick={() => !reverting && setConfirmRevert(null)}>
+          <div className="w-full max-w-sm rounded-xl bg-white shadow-xl p-5 space-y-3" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-100">
+                <AlertTriangle className="h-5 w-5 text-red-600" />
+              </div>
+              <p className="text-sm font-bold text-slate-900">Reverter o registro de óbito?</p>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              A nota será removida e <strong>{patientName} voltará a aparecer como ativo</strong>,
+              podendo ser incluído em novos atendimentos. A reversão fica registrada na auditoria
+              e é permitida apenas a administradores.
+            </p>
+            {panelError && (
+              <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">{panelError}</div>
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setConfirmRevert(null); setPanelError(null) }}
+                disabled={reverting}
+                className="flex-1 rounded-lg border border-slate-200 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Voltar
+              </button>
+              <button
+                onClick={async () => {
+                  setReverting(true)
+                  setPanelError(null)
+                  const res = await revertPatientDeath(confirmRevert.id)
+                  setReverting(false)
+                  if ('error' in res) { setPanelError(res.error); return }
+                  setConfirmRevert(null)
+                  reload()
+                  onDeathRecorded?.()
+                }}
+                disabled={reverting}
+                className="flex-1 rounded-lg bg-red-600 py-2 text-xs font-bold text-white hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                {reverting ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Revertendo…</> : 'Reverter óbito'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Confirmação de delete */}
@@ -315,20 +404,31 @@ function GenericNoteModal({
 }
 
 function DeathNoteModal({
-  patientId, patientName, onClose, onSaved,
+  patientId, patientName, editNote, onClose, onSaved,
 }: {
   patientId: string
   patientName: string
+  /** 05/06: quando presente, o modal edita o registro existente. */
+  editNote?: PatientNote | null
   onClose: () => void
   onSaved: () => void
 }) {
-  const [deceasedAt, setDeceasedAt] = useState<string>('')
-  const [cause, setCause]           = useState('')
-  const [weight, setWeight]         = useState('')
-  const [place, setPlace]           = useState<'clinic' | 'home' | 'other' | ''>('')
-  const [bodyDestination, setBodyDestination] = useState('')
-  const [necropsyDone, setNecropsyDone] = useState(false)
-  const [observations, setObservations] = useState('')
+  const meta = (editNote?.metadata ?? {}) as Record<string, unknown>
+  const isEdit = !!editNote
+
+  const [deceasedAt, setDeceasedAt] = useState<string>(
+    typeof meta.deceased_at === 'string' ? (meta.deceased_at as string).slice(0, 16) : ''
+  )
+  const [cause, setCause]           = useState(typeof meta.cause === 'string' ? meta.cause : '')
+  const [weight, setWeight]         = useState(
+    typeof meta.weight_at_death === 'number' ? String(meta.weight_at_death).replace('.', ',') : ''
+  )
+  const [place, setPlace]           = useState<'clinic' | 'home' | 'other' | ''>(
+    (typeof meta.place === 'string' ? meta.place : '') as 'clinic' | 'home' | 'other' | ''
+  )
+  const [bodyDestination, setBodyDestination] = useState(typeof meta.body_destination === 'string' ? meta.body_destination : '')
+  const [necropsyDone, setNecropsyDone] = useState(meta.necropsy_done === true)
+  const [observations, setObservations] = useState(typeof meta.observations === 'string' ? meta.observations : '')
   const [confirmStep, setConfirmStep] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -336,8 +436,7 @@ function DeathNoteModal({
   async function handleConfirm() {
     if (!deceasedAt) { setError('Data do óbito é obrigatória.'); return }
     setSubmitting(true); setError(null)
-    const res = await recordPatientDeath({
-      patient_id:       patientId,
+    const payload = {
       deceased_at:      deceasedAt,
       cause:            cause.trim() || null,
       weight_at_death:  weight ? parseFloat(weight.replace(',', '.')) : null,
@@ -345,7 +444,10 @@ function DeathNoteModal({
       body_destination: bodyDestination.trim() || null,
       necropsy_done:    necropsyDone || null,
       observations:     observations.trim() || null,
-    })
+    }
+    const res = isEdit
+      ? await updatePatientDeath(editNote!.id, payload)
+      : await recordPatientDeath({ patient_id: patientId, ...payload })
     setSubmitting(false)
     if ('error' in res) { setError(res.error); setConfirmStep(false); return }
     onSaved()
@@ -360,8 +462,12 @@ function DeathNoteModal({
               <Heart className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-slate-900">Registrar óbito — {patientName}</h3>
-              <p className="text-xs text-slate-500">Procedimento sensível. Todos os campos são opcionais, exceto a data.</p>
+              <h3 className="text-sm font-bold text-slate-900">{isEdit ? 'Editar registro de óbito' : 'Registrar óbito'} — {patientName}</h3>
+              <p className="text-xs text-slate-500">
+                {isEdit
+                  ? 'A edição atualiza a nota e o cadastro do pet, e fica registrada na auditoria.'
+                  : 'Procedimento sensível. Todos os campos são opcionais, exceto a data.'}
+              </p>
             </div>
           </div>
           <button onClick={onClose} className="rounded-full p-1 text-slate-400 hover:bg-slate-100">
@@ -479,7 +585,9 @@ function DeathNoteModal({
               disabled={submitting}
               className="rounded-lg bg-violet-700 px-4 py-2 text-sm font-bold text-white hover:bg-violet-800 disabled:opacity-50 flex items-center gap-2"
             >
-              {submitting ? <><Loader2 className="h-4 w-4 animate-spin" /> Registrando…</> : <>Confirmar óbito definitivamente</>}
+              {submitting
+                ? <><Loader2 className="h-4 w-4 animate-spin" /> {isEdit ? 'Salvando…' : 'Registrando…'}</>
+                : <>{isEdit ? 'Salvar alterações' : 'Confirmar óbito definitivamente'}</>}
             </button>
           )}
         </div>
