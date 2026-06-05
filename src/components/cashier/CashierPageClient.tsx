@@ -41,6 +41,12 @@ interface Props {
   firstOfMonth:            string
   /** Épico B (04/06, Q4): PDV unificado — venda avulsa no topo de Recebimentos. */
   pdvUnified?:             boolean
+  /**
+   * HF 05/06: direito de acesso "Caixa Central > Dados Inteligentes do
+   * Convênio > Visualizar" — controla a visão completa (repasse/desconto/
+   * economia) no recebimento. Default liberado; admin desmarca por usuário.
+   */
+  canViewInsuranceDetails?: boolean
 }
 
 export default function CashierPageClient({
@@ -48,6 +54,7 @@ export default function CashierPageClient({
   initialInvoices, initialOutflows, initialGroomingSessions,
   userRole, clinicId, clinicName, today, firstOfMonth,
   pdvUnified = false,
+  canViewInsuranceDetails = true,
 }: Props) {
   const [activeTab,  setActiveTab]  = useState<Tab>('overview')
   const [entries,    setEntries]    = useState<CentralCashierEntry[]>(initialEntries)
@@ -154,6 +161,7 @@ export default function CashierPageClient({
           clinicId={clinicId}
           userRole={userRole}
           pdvUnified={pdvUnified}
+          canViewInsuranceDetails={canViewInsuranceDetails}
           onToast={showToast}
         />
       )}

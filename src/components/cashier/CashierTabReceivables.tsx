@@ -273,10 +273,16 @@ interface Props {
   initialInvoices:        InvoiceWithDetails[]
   initialGroomingSessions: PendingGroomingPayment[]
   clinicId:               string
-  /** Épico B (04/06): role do usuário — operador vê o checkout compacto (C4). */
+  /** Épico B (04/06): role do usuário (mantido para usos futuros). */
   userRole?:              string
   /** Épico B (04/06, Q4): PDV unificado — exibe a venda avulsa no topo (C2). */
   pdvUnified?:            boolean
+  /**
+   * HF 05/06: direito de acesso "Caixa Central > Dados Inteligentes do
+   * Convênio > Visualizar". true = visão completa; false = checkout compacto
+   * (itens + valor a cobrar). Configurável por usuário em Direitos de Acesso.
+   */
+  canViewInsuranceDetails?: boolean
   onToast: (msg: string, type: 'success' | 'error') => void
 }
 
@@ -286,6 +292,7 @@ export default function CashierTabReceivables({
   clinicId,
   userRole = 'receptionist',
   pdvUnified = false,
+  canViewInsuranceDetails = true,
   onToast,
 }: Props) {
   const [invoices,          setInvoices]          = useState<InvoiceWithDetails[]>(initialInvoices)
@@ -300,7 +307,10 @@ export default function CashierTabReceivables({
   const [showMultiPayment,   setShowMultiPayment]   = useState(false)
   const [multiProcessing,    setMultiProcessing]    = useState(false)
 
-  const operatorView = !['admin', 'owner', 'manager'].includes(userRole)
+  // HF 05/06: a visão completa dos dados inteligentes deixou de ser hardcoded
+  // por role — agora é o direito de acesso "cashier.insurance_intelligence:
+  // view" (default liberado; admin desmarca por usuário em Direitos de Acesso).
+  const operatorView = !canViewInsuranceDetails
 
   const selectedInvoices = invoices.filter(i => selectedIds.has(i.id))
   const selectedTotal    = selectedInvoices.reduce((s, i) => s + Math.max(0, Number(i.total_amount) - Number(i.paid_amount ?? 0)), 0)

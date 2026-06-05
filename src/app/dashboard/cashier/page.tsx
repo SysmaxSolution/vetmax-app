@@ -4,6 +4,7 @@ import { listCashierEntries, getCashierSummary } from '@/lib/actions/core-manage
 import { getCashierDashboard, getCurrentSession, listOutflows } from '@/lib/actions/cashier-sessions'
 import { getPendingInvoices } from '@/lib/actions/billing'
 import { getPendingGroomingSessions } from '@/lib/actions/grooming'
+import { hasAccessRight } from '@/lib/actions/access-rights'
 import CashierPageClient from '@/components/cashier/CashierPageClient'
 
 export const metadata = { title: 'Caixa | SysVetMax' }
@@ -42,6 +43,12 @@ export default async function CashierPage() {
     .single()
   const pdvUnified = (clinicRow?.flow_config as { pdv_unified_with_cashier?: boolean } | null)?.pdv_unified_with_cashier === true
 
+  // HF 05/06: visualização completa dos "dados inteligentes" do convênio no
+  // recebimento é um DIREITO DE ACESSO (Gestão > Usuários > Direitos de
+  // Acesso > Caixa Central > Dados Inteligentes do Convênio). Default
+  // liberado; o admin desmarca "Visualizar" para o operador ver a tela limpa.
+  const canViewInsuranceDetails = await hasAccessRight('cashier.insurance_intelligence', 'view')
+
   return (
     <CashierPageClient
       initialEntries={entries}
@@ -57,6 +64,7 @@ export default async function CashierPage() {
       today={today}
       firstOfMonth={firstOfMonth}
       pdvUnified={pdvUnified}
+      canViewInsuranceDetails={canViewInsuranceDetails}
     />
   )
 }

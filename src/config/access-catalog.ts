@@ -127,6 +127,12 @@ export const ACCESS_CATALOG: AccessModule[] = [
       { key: 'sessions',  label: 'Sessões de Caixa', actions: ['view', 'create', 'edit', 'approve'] },
       { key: 'movements', label: 'Movimentações',    actions: ['view', 'create', 'edit', 'delete'] },
       { key: 'reports',   label: 'Relatórios',       actions: ['view', 'export'] },
+      {
+        key: 'insurance_intelligence',
+        label: 'Dados Inteligentes do Convênio',
+        description: 'Repasse Petlove, desconto da clínica e economia do tutor no recebimento. Desmarque "Visualizar" para o operador ver só itens + valor a cobrar (tela limpa).',
+        actions: ['view'],
+      },
     ],
   },
   {
