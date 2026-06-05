@@ -1372,7 +1372,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                       <div className="flex gap-3 pt-2">
                         <button onClick={handleSaveInsurance} disabled={savingInsurance || !insProviderId || !insPlanType || !insMemberId.trim()} className="flex-1 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white py-2.5 rounded-xl text-sm font-black flex items-center justify-center gap-2">
                           {savingInsurance ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shield className="h-4 w-4" />}
-                          {savingInsurance ? 'Salvando...' : 'Vincular Convênio'}
+                          {savingInsurance ? 'Salvando...' : currentInsurance ? 'Salvar Convênio' : 'Vincular Convênio'}
                         </button>
                         {currentInsurance && (
                           <button onClick={handleRemoveInsurance} disabled={savingInsurance} className="px-4 py-2.5 rounded-xl text-sm font-black text-red-400 hover:bg-red-50 border border-red-100 disabled:opacity-50 flex items-center gap-1.5">

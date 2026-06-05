@@ -54,18 +54,30 @@ export default function ServiceSelectionModal({ alreadyAddedIds = [], consultati
   // Preços resolvidos por item (convênio quando o pet é conveniado) — fix B1.
   const [pricing, setPricing] = useState<Record<string, ResolvedPricing>>({})
 
+  // HF5 (05/06): erro de busca visível + retry — promise rejeitada (queda de
+  // rede, deploy invalidando a sessão da aba aberta, etc.) deixava o spinner
+  // "Buscando..." preso para sempre e parava o fluxo do usuário.
+  const [searchError, setSearchError] = useState<string | null>(null)
+  const [searchNonce, setSearchNonce] = useState(0)
+
   // Browse + debounce
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current)
-    searchTimer.current = setTimeout(() => {
+    searchTimer.current = setTimeout(async () => {
       setSearching(true)
-      searchServices(query).then(res => {
-        setSearching(false)
+      setSearchError(null)
+      try {
+        const res = await searchServices(query)
         if (Array.isArray(res)) setResults(res)
-      })
+        else if (res && 'error' in res) setSearchError(res.error)
+      } catch {
+        setSearchError('Falha ao buscar serviços. Verifique a conexão (ou recarregue a página se o sistema acabou de ser atualizado) e tente novamente.')
+      } finally {
+        setSearching(false)
+      }
     }, 220)
     return () => { if (searchTimer.current) clearTimeout(searchTimer.current) }
-  }, [query])
+  }, [query, searchNonce])
 
   // Resolve preço efetivo dos resultados visíveis para o pet da consulta.
   useEffect(() => {
@@ -73,10 +85,13 @@ export default function ServiceSelectionModal({ alreadyAddedIds = [], consultati
     const missing = results.map(r => r.id).filter(id => !(id in pricing))
     if (missing.length === 0) return
     let cancelled = false
-    resolveConsultationServicesPricing(consultationId, missing).then(res => {
-      if (cancelled || 'error' in res) return
-      setPricing(prev => ({ ...prev, ...res }))
-    })
+    resolveConsultationServicesPricing(consultationId, missing)
+      .then(res => {
+        if (cancelled || 'error' in res) return
+        setPricing(prev => ({ ...prev, ...res }))
+      })
+      // HF5: preço convênio é progressivo — falha aqui não pode travar a busca
+      .catch(() => {})
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [consultationId, results])
@@ -204,6 +219,17 @@ export default function ServiceSelectionModal({ alreadyAddedIds = [], consultati
                 {searching ? (
                   <div className="px-4 py-10 flex items-center justify-center text-xs text-slate-400">
                     <Loader2 className="h-4 w-4 animate-spin mr-2" /> Buscando...
+                  </div>
+                ) : searchError ? (
+                  <div className="px-4 py-8 text-center space-y-2">
+                    <p className="text-xs text-red-600">{searchError}</p>
+                    <button
+                      type="button"
+                      onClick={() => setSearchNonce(n => n + 1)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700"
+                    >
+                      Tentar novamente
+                    </button>
                   </div>
                 ) : results.length === 0 ? (
                   <div className="px-4 py-10 text-center">

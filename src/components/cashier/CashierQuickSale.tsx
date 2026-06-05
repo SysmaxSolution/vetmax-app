@@ -55,9 +55,15 @@ export default function CashierQuickSale({ clinicId, onToast, onSaleCompleted }:
     if (q.trim().length < 2) { setResults([]); return }
     searchTimer.current = setTimeout(async () => {
       setSearching(true)
-      const r = await searchSalesProducts(q)
-      setSearching(false)
-      setResults(r)
+      try {
+        const r = await searchSalesProducts(q)
+        setResults(r)
+      } catch {
+        setResults([])
+        setError('Falha ao buscar produtos — tente novamente.')
+      } finally {
+        setSearching(false)
+      }
     }, 250)
   }
 

@@ -10,6 +10,7 @@ import { useRealtimeSync } from '@/hooks/useRealtimeSync'
 import { BehaviorTagsBadges } from '@/components/ui/BehaviorTagsBadges'
 import PatientFullModal from '@/components/patients/PatientFullModal'
 import AttendanceCardMenu from '@/components/shared/AttendanceCardMenu'
+import { VISIT_REASON_OPTIONS as CANONICAL_VISIT_REASONS, VISIT_REASON_LABELS } from '@/lib/visit-reasons'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -23,10 +24,8 @@ const SPECIES_EMOJI: Record<string, string> = {
   rodent: '🐭', reptile: '🦎', fish: '🐠', exotic: '✨',
 }
 
-const VISIT_REASON_LABELS: Record<string, string> = {
-  consultation: 'Consulta', follow_up: 'Retorno', emergency: 'Emergência',
-  vaccination: 'Vacinação', exam: 'Exame', surgery: 'Cirurgia', grooming: 'Banho e Tosa',
-}
+// HF3 (05/06): labels vêm do catálogo único (src/lib/visit-reasons.ts) —
+// a lista local não tinha "Microchipagem".
 
 const STATUS_BADGE: Record<string, string> = {
   in_progress:              'bg-indigo-100 text-indigo-700',
@@ -54,14 +53,12 @@ interface VetWorkspaceProps {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-const VISIT_REASON_OPTIONS = [
-  { value: 'consultation', label: 'Consulta' },
-  { value: 'follow_up',    label: 'Retorno' },
-  { value: 'emergency',    label: 'Emergência' },
-  { value: 'vaccination',  label: 'Vacinação' },
-  { value: 'exam',         label: 'Exame' },
-  { value: 'surgery',      label: 'Cirurgia' },
-]
+// HF3 (05/06): lista paralela local violava o catálogo único de motivos
+// (src/lib/visit-reasons.ts) e deixava "Microchipagem" de fora do Incluir
+// Paciente. 'grooming' não entra — é fluxo separado (grooming_sessions).
+const VISIT_REASON_OPTIONS = CANONICAL_VISIT_REASONS
+  .filter(o => o.value !== 'grooming')
+  .map(o => ({ value: o.value, label: `${o.emoji} ${o.label}` }))
 
 export default function VetWorkspace({ queue, completed, clinicId }: VetWorkspaceProps) {
   useRealtimeSync({ table: 'consultations', clinicId })
@@ -84,8 +81,14 @@ export default function VetWorkspace({ queue, completed, clinicId }: VetWorkspac
     setAddSearch(q)
     setAddSelected(null)
     if (q.trim().length < 2) { setAddResults([]); return }
-    const r = await searchPatientsForTriage(q)
-    setAddResults(Array.isArray(r) ? r : [])
+    try {
+      const r = await searchPatientsForTriage(q)
+      setAddResults(Array.isArray(r) ? r : [])
+    } catch {
+      // HF6 (05/06): rejeição não pode travar a busca de pacientes
+      setAddResults([])
+      setAddError('Falha na busca — tente novamente.')
+    }
   }
 
   async function handleAddSubmit() {
@@ -453,6 +456,19 @@ export default function VetWorkspace({ queue, completed, clinicId }: VetWorkspac
                 <p className="text-sm text-slate-600">
                   Cadastre tutor e pet e inicie a consulta imediatamente.
                 </p>
+                {/* HF4 (05/06): motivo escolhido aqui é respeitado no novo cadastro */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Motivo da Visita</label>
+                  <select
+                    value={addReason}
+                    onChange={e => setAddReason(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {VISIT_REASON_OPTIONS.map(o => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </div>
                 <button
                   type="button"
                   onClick={() => { setShowAddModal(false); setShowNewPatientModal(true) }}
@@ -483,10 +499,12 @@ export default function VetWorkspace({ queue, completed, clinicId }: VetWorkspac
             setShowNewPatientModal(false)
             if (result?.patientId) {
               setAddLoading(true)
+              // HF4 (05/06): respeita o motivo escolhido no modal (antes era
+              // hardcoded 'consultation').
               const res = await addPatientDirectToVet({
                 patient_id:   result.patientId,
                 tutor_id:     result.tutorId ?? '',
-                visit_reason: 'consultation',
+                visit_reason: addReason,
               })
               setAddLoading(false)
               if (!('error' in res)) {
