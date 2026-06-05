@@ -15,8 +15,8 @@
  */
 
 import { useState } from 'react'
-import { ShoppingCart, X, Plus, Minus, ChevronDown, ChevronUp } from 'lucide-react'
-import { createSale, type SaleTutor } from '@/lib/actions/sales'
+import { ShoppingCart, X, Plus, Minus, ChevronDown, ChevronUp, Loader2, ClipboardList } from 'lucide-react'
+import { createSale, launchPendingSale, type SaleTutor } from '@/lib/actions/sales'
 import TutorSearch from '@/components/sales/TutorSearch'
 import ProductSearch from '@/components/sales/ProductSearch'
 import type { CartItem } from '@/components/sales/SalesCart'
@@ -42,6 +42,7 @@ export default function CashierQuickSale({ clinicId, activeModules = [], onToast
   const [refocusTrigger, setRefocusTrigger] = useState(0)
 
   const [showPayment, setShowPayment] = useState(false)
+  const [launching,   setLaunching]   = useState(false)
   const [error,       setError]       = useState<string | null>(null)
 
   const total = cart.reduce((s, l) => s + (l.unit_price - l.discount) * l.quantity, 0)
@@ -65,6 +66,36 @@ export default function CashierQuickSale({ clinicId, activeModules = [], onToast
   function setQty(key: string, qty: number) {
     if (qty <= 0) { setCart(prev => prev.filter(l => l.key !== key)); return }
     setCart(prev => prev.map(l => l.key === key ? { ...l, quantity: qty } : l))
+  }
+
+  /**
+   * LANÇAR (05/06, pedido do PO): a venda fica PENDENTE nos Recebimentos —
+   * para receber junto com a consulta num pagamento só (cartão único).
+   * Estoque é baixado no lançamento (reserva).
+   */
+  async function handleLaunch() {
+    if (cart.length === 0 || launching) return
+    setError(null)
+    setLaunching(true)
+    const res = await launchPendingSale({
+      clinic_id: clinicId,
+      items: cart.map(l => ({
+        stock_item_id: l.stock_item_id,
+        description:   l.description,
+        quantity:      l.quantity,
+        unit_price:    l.unit_price,
+        discount:      l.discount,
+      })),
+      tutor_id: tutor?.id ?? null,
+      notes:    tutor ? null : 'Consumidor avulso',
+    })
+    setLaunching(false)
+    if ('error' in res) { setError(res.error); return }
+    setCart([])
+    setTutor(null)
+    setExpanded(false)
+    onToast(`Venda lançada como pendente (${fmt(res.total)}) — selecione junto com a consulta para receber tudo num pagamento só.`, 'success')
+    onSaleCompleted?.()
   }
 
   async function handlePaymentConfirm(splits: PaymentSplit[]) {
@@ -182,15 +213,33 @@ export default function CashierQuickSale({ clinicId, activeModules = [], onToast
             <div className="rounded-xl bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{error}</div>
           )}
 
-          <button
-            type="button"
-            disabled={cart.length === 0}
-            onClick={() => { setError(null); setShowPayment(true) }}
-            data-mentor-step="cashier-quick-sale-receive-btn"
-            className="w-full rounded-xl bg-teal-600 hover:bg-teal-700 py-2.5 text-sm font-bold text-white disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Receber {total > 0 ? fmt(total) : ''}
-          </button>
+          <div className="flex gap-2">
+            {/* LANÇAR: fica pendente para receber junto com a consulta */}
+            <button
+              type="button"
+              disabled={cart.length === 0 || launching}
+              onClick={handleLaunch}
+              data-mentor-step="cashier-quick-sale-launch-btn"
+              title="A venda fica pendente nos Recebimentos — marque junto com a consulta e receba tudo num pagamento só."
+              className="flex-1 rounded-xl border-2 border-teal-600 bg-white hover:bg-teal-50 py-2.5 text-sm font-bold text-teal-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+            >
+              {launching
+                ? <><Loader2 className="h-4 w-4 animate-spin" /> Lançando...</>
+                : <><ClipboardList className="h-4 w-4" /> Lançar</>}
+            </button>
+            <button
+              type="button"
+              disabled={cart.length === 0 || launching}
+              onClick={() => { setError(null); setShowPayment(true) }}
+              data-mentor-step="cashier-quick-sale-receive-btn"
+              className="flex-[1.4] rounded-xl bg-teal-600 hover:bg-teal-700 py-2.5 text-sm font-bold text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Receber {total > 0 ? fmt(total) : ''}
+            </button>
+          </div>
+          <p className="text-[10px] text-slate-500 -mt-1">
+            <strong>Lançar</strong> deixa a venda pendente para receber junto com a consulta num pagamento só. <strong>Receber</strong> cobra agora.
+          </p>
         </div>
       )}
 

@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useCallback } from 'react'
-import { Receipt, RefreshCw, ShoppingBag, Scissors, Ban, Users, AlertTriangle } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { Receipt, RefreshCw, ShoppingBag, Scissors, Ban, Users, AlertTriangle, ShoppingCart, Trash2, Loader2 } from 'lucide-react'
 import { getPendingInvoices, processSplitPayment, type InvoiceWithDetails } from '@/lib/actions/billing'
 import {
   getPendingGroomingSessions,
@@ -9,6 +9,13 @@ import {
   updateGroomingPaymentStatus,
   type PendingGroomingPayment,
 } from '@/lib/actions/grooming'
+import {
+  listPendingSales, settlePendingSale, cancelPendingLaunch,
+  type PendingSale,
+} from '@/lib/actions/sales'
+import {
+  previewConsultationInsurance, getConsultationCopayInterestPreview,
+} from '@/lib/actions/insurance-checkout'
 import { useRealtimeSync } from '@/hooks/useRealtimeSync'
 import CheckoutModal from '@/components/reception/CheckoutModal'
 import CashierQuickSale from '@/components/cashier/CashierQuickSale'
@@ -300,24 +307,52 @@ export default function CashierTabReceivables({
 }: Props) {
   const [invoices,          setInvoices]          = useState<InvoiceWithDetails[]>(initialInvoices)
   const [groomingSessions,  setGroomingSessions]   = useState<PendingGroomingPayment[]>(initialGroomingSessions)
+  const [pendingSales,      setPendingSales]       = useState<PendingSale[]>([])
   const [refreshing,        setRefreshing]         = useState(false)
   const [activeInvoiceId,   setActiveInvoiceId]    = useState<string | null>(null)
   const [activeGrooming,    setActiveGrooming]     = useState<PendingGroomingPayment | null>(null)
+  const [activeSale,        setActiveSale]         = useState<PendingSale | null>(null)
+  const [cancellingSaleId,  setCancellingSaleId]   = useState<string | null>(null)
 
-  // Épico B — C3 (04/06): recebimento múltiplo
+  // Épico B — C3 (04/06): recebimento múltiplo (consultas + vendas lançadas)
   const [selectedIds,        setSelectedIds]        = useState<Set<string>>(new Set())
+  const [selectedSaleIds,    setSelectedSaleIds]    = useState<Set<string>>(new Set())
   const [confirmMixedTutors, setConfirmMixedTutors] = useState(false)
   const [showMultiPayment,   setShowMultiPayment]   = useState(false)
   const [multiProcessing,    setMultiProcessing]    = useState(false)
+  const [preparingMulti,     setPreparingMulti]     = useState(false)
+  // Plano calculado no clique: cobrança certa por unidade (copart p/ convênio)
+  // + taxa adm. SÓ sobre a parte conveniada (pedido do PO 05/06).
+  const [multiPlan, setMultiPlan] = useState<{
+    units: Array<{
+      kind:           'invoice' | 'sale'
+      id:             string
+      label:          string
+      charge:         number
+      interest_full:  number
+      percent:        number
+      interestItems:  Array<{ consultation_service_id: string; interest: number }>
+      insurance:      null | { receivable_amount: number; clinic_discount: number; procedure_pattern: string }
+    }>
+    totalDue:      number
+    copayInterest: { copay_total: number; interest_full: number; percent: number } | null
+  } | null>(null)
 
   // HF 05/06: a visão completa dos dados inteligentes deixou de ser hardcoded
   // por role — agora é o direito de acesso "cashier.insurance_intelligence:
   // view" (default liberado; admin desmarca por usuário em Direitos de Acesso).
   const operatorView = !canViewInsuranceDetails
 
-  const selectedInvoices = invoices.filter(i => selectedIds.has(i.id))
-  const selectedTotal    = selectedInvoices.reduce((s, i) => s + Math.max(0, Number(i.total_amount) - Number(i.paid_amount ?? 0)), 0)
-  const distinctTutors   = new Set(selectedInvoices.map(i => i.tutor.name)).size
+  const selectedInvoices  = invoices.filter(i => selectedIds.has(i.id))
+  const selectedSales     = pendingSales.filter(s => selectedSaleIds.has(s.id))
+  const selectedCount     = selectedInvoices.length + selectedSales.length
+  const selectedGrossTotal =
+    selectedInvoices.reduce((s, i) => s + Math.max(0, Number(i.total_amount) - Number(i.paid_amount ?? 0)), 0) +
+    selectedSales.reduce((s, v) => s + v.total_amount, 0)
+  const distinctTutors = new Set([
+    ...selectedInvoices.map(i => i.tutor.name),
+    ...selectedSales.map(s => s.tutor_name ?? 'Consumidor avulso'),
+  ]).size
 
   function toggleSelect(id: string) {
     setSelectedIds(prev => {
@@ -328,70 +363,224 @@ export default function CashierTabReceivables({
     })
   }
 
-  function startMultiReceive() {
-    if (selectedInvoices.length < 2) return
-    // Q3: tutores diferentes são permitidos COM AVISO de confirmação
-    if (distinctTutors > 1) { setConfirmMixedTutors(true); return }
+  function toggleSelectSale(id: string) {
+    setSelectedSaleIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  /**
+   * Monta o plano do recebimento agrupado (05/06, pedido do PO): para cada
+   * consulta conveniada cobra a COPARTICIPAÇÃO (cobertura aplicada
+   * automaticamente; repasse vira Aguardando Petlove) e calcula a taxa adm.
+   * SÓ sobre essa parte; vendas lançadas entram pelo valor cheio SEM taxa.
+   * Total = venda avulsa + copart da consulta + taxa sobre a copart.
+   */
+  async function prepareMultiPlan() {
+    setPreparingMulti(true)
+    const units: NonNullable<typeof multiPlan>['units'] = []
+    let copayTotal = 0
+    let interestFullTotal = 0
+    let percentSample = 0
+
+    for (const inv of selectedInvoices) {
+      const paid = Number(inv.paid_amount ?? 0)
+      let charge = Math.max(0, Number(inv.total_amount) - paid)
+      let insurance: NonNullable<typeof multiPlan>['units'][number]['insurance'] = null
+      let interestFull = 0
+      let percent = 0
+      let interestItems: Array<{ consultation_service_id: string; interest: number }> = []
+
+      if (inv.consultation_id) {
+        const preview = await previewConsultationInsurance(inv.consultation_id)
+        if (!('error' in preview) && preview.has_insurance && preview.totals.charge_now < preview.totals.grand_total) {
+          charge = Math.max(0, Number(preview.totals.charge_now.toFixed(2)) - paid)
+          insurance = {
+            receivable_amount: Number((preview.totals.receivable + preview.totals.deferred_provider).toFixed(2)),
+            clinic_discount:   Number(preview.totals.clinic_discount.toFixed(2)),
+            procedure_pattern: preview.items[0]?.coverage?.procedure_pattern ?? preview.items[0]?.description ?? 'Procedimento',
+          }
+          const interestPrev = await getConsultationCopayInterestPreview(inv.consultation_id)
+          if (!('error' in interestPrev) && interestPrev.interest_full > 0) {
+            interestFull  = interestPrev.interest_full
+            percent       = interestPrev.percent
+            interestItems = interestPrev.items.map(i => ({ consultation_service_id: i.consultation_service_id, interest: i.interest }))
+            copayTotal        += interestPrev.copay_total
+            interestFullTotal += interestPrev.interest_full
+            percentSample      = percentSample || interestPrev.percent
+          }
+        }
+      }
+
+      units.push({
+        kind: 'invoice', id: inv.id, label: inv.patient.name,
+        charge: Number(charge.toFixed(2)),
+        interest_full: interestFull, percent, interestItems, insurance,
+      })
+    }
+
+    for (const sale of selectedSales) {
+      units.push({
+        kind: 'sale', id: sale.id, label: sale.tutor_name ?? 'Venda avulsa',
+        charge: sale.total_amount,
+        interest_full: 0, percent: 0, interestItems: [], insurance: null,
+      })
+    }
+
+    const totalDue = Number(units.reduce((s, u) => s + u.charge, 0).toFixed(2))
+    setMultiPlan({
+      units,
+      totalDue,
+      copayInterest: interestFullTotal > 0
+        ? { copay_total: Number(copayTotal.toFixed(2)), interest_full: Number(interestFullTotal.toFixed(2)), percent: percentSample }
+        : null,
+    })
+    setPreparingMulti(false)
     setShowMultiPayment(true)
   }
 
-  async function handleMultiPaymentConfirm(splits: PaymentSplit[]) {
+  function startMultiReceive() {
+    if (selectedCount < 2 || preparingMulti) return
+    // Q3: tutores diferentes são permitidos COM AVISO de confirmação
+    if (distinctTutors > 1) { setConfirmMixedTutors(true); return }
+    void prepareMultiPlan()
+  }
+
+  async function handleMultiPaymentConfirm(splits: PaymentSplit[], extras?: { copay_interest: number }) {
+    if (!multiPlan) return
     setMultiProcessing(true)
-    // Q3: agrupamento é só do ato de receber — cada fatura é baixada
-    // individualmente (Contas a Receber separado, rastreável por documento).
-    const allocation = allocateSplitsSequentially(
-      selectedInvoices.map(i => ({ id: i.id, due: Math.max(0, Number(i.total_amount) - Number(i.paid_amount ?? 0)) })),
-      splits.map(s => ({ ...s })),
-    )
+
+    // Distribui a taxa líquida (após desconto no modal) entre as unidades
+    // proporcionalmente à taxa bruta de cada uma (última absorve centavos).
+    const netTotal = extras?.copay_interest ?? 0
+    const grossTotal = multiPlan.units.reduce((s, u) => s + u.interest_full, 0)
+    let allocated = 0
+    const withInterest = multiPlan.units.filter(u => u.interest_full > 0)
+    const netByUnit = new Map<string, number>()
+    withInterest.forEach((u, idx) => {
+      const share = idx === withInterest.length - 1
+        ? Math.round((netTotal - allocated) * 100) / 100
+        : Math.round(netTotal * (u.interest_full / grossTotal) * 100) / 100
+      allocated = Math.round((allocated + share) * 100) / 100
+      netByUnit.set(u.id, Math.max(0, share))
+    })
+
+    // Alvos COBRADOS por unidade (base + taxa própria) — Q3: cada documento
+    // é baixado individualmente no financeiro.
+    const targets = multiPlan.units.map(u => ({
+      id:  `${u.kind}:${u.id}`,
+      due: Math.round((u.charge + (netByUnit.get(u.id) ?? 0)) * 100) / 100,
+    }))
+    const allocation = allocateSplitsSequentially(targets, splits.map(s => ({ ...s })))
+
     const failures: string[] = []
     let received = 0
-    for (const inv of selectedInvoices) {
-      const invSplits = allocation.get(inv.id) ?? []
-      if (invSplits.length === 0) continue
-      const res = await processSplitPayment(
-        inv.id,
-        invSplits.map(s => ({
-          amount:             s.amount as number,
-          payment_method:     s.payment_method as PaymentSplit['payment_method'],
-          payment_card_id:    s.payment_card_id as string | null,
-          installments:       s.installments as number,
-          card_acquirer:      s.card_acquirer as string | null,
-          card_brand:         s.card_brand as string | null,
-          card_nsu:           s.card_nsu as string | null,
-          card_authorization: s.card_authorization as string | null,
-          transaction_date:   s.transaction_date as string | null,
-        })),
-      )
+    for (const unit of multiPlan.units) {
+      const unitSplits = (allocation.get(`${unit.kind}:${unit.id}`) ?? []).map(s => ({
+        amount:             s.amount as number,
+        payment_method:     s.payment_method as PaymentSplit['payment_method'],
+        payment_card_id:    s.payment_card_id as string | null,
+        installments:       s.installments as number,
+        card_acquirer:      s.card_acquirer as string | null,
+        card_brand:         s.card_brand as string | null,
+        card_nsu:           s.card_nsu as string | null,
+        card_authorization: s.card_authorization as string | null,
+        transaction_date:   s.transaction_date as string | null,
+      }))
+      if (unitSplits.length === 0) continue
+
+      const unitInterest = netByUnit.get(unit.id) ?? 0
+      const res = unit.kind === 'invoice'
+        ? await processSplitPayment(unit.id, unitSplits, {
+            discount: unit.insurance?.clinic_discount ?? 0,
+            ...(unit.insurance ? {
+              insurance_split: {
+                receivable_amount: unit.insurance.receivable_amount,
+                receivable_source: 'petlove_open' as const,
+                clinic_discount:   unit.insurance.clinic_discount,
+                procedure_pattern: unit.insurance.procedure_pattern,
+              },
+            } : {}),
+            ...(unitInterest > 0 ? {
+              copay_interest: { total: unitInterest, percent: unit.percent, items: unit.interestItems },
+            } : {}),
+          })
+        : await settlePendingSale(unit.id, unitSplits)
+
       if ('error' in res) {
-        failures.push(`${inv.patient.name}: ${res.error}`)
-        break // para na primeira falha — faturas restantes seguem pendentes
+        failures.push(`${unit.label}: ${res.error}`)
+        break // para na primeira falha — unidades restantes seguem pendentes
       }
-      received += invSplits.reduce((s, p) => s + (p.amount as number), 0)
+      received += unitSplits.reduce((s, p) => s + p.amount, 0)
     }
+
     setMultiProcessing(false)
     setShowMultiPayment(false)
+    setMultiPlan(null)
     setSelectedIds(new Set())
+    setSelectedSaleIds(new Set())
     await refresh()
     if (failures.length > 0) {
-      onToast(`Recebimento parcial — falha em: ${failures.join(' · ')}. As demais faturas seguem pendentes.`, 'error')
+      onToast(`Recebimento parcial — falha em: ${failures.join(' · ')}. Itens restantes seguem pendentes.`, 'error')
       throw new Error(failures[0])
     }
-    onToast(`Recebimento agrupado concluído! ${fmt(received)} em ${selectedInvoices.length} faturas.`, 'success')
+    onToast(`Recebimento agrupado concluído! ${fmt(received)} em ${multiPlan.units.length} documentos.`, 'success')
   }
 
   const refresh = useCallback(async () => {
     setRefreshing(true)
-    const [invRes, grRes] = await Promise.all([
+    const [invRes, grRes, salesRes] = await Promise.all([
       getPendingInvoices(),
       getPendingGroomingSessions(),
+      listPendingSales(),
     ])
     setRefreshing(false)
     if (!('error' in invRes)) setInvoices(invRes)
     if (!('error' in grRes)) setGroomingSessions(grRes)
+    if (Array.isArray(salesRes)) setPendingSales(salesRes)
+  }, [])
+
+  // Vendas lançadas não vêm do server component — carrega no mount
+  useEffect(() => {
+    listPendingSales().then(res => { if (Array.isArray(res)) setPendingSales(res) })
   }, [])
 
   useRealtimeSync({ table: 'invoices',          clinicId, onEvent: refresh })
   useRealtimeSync({ table: 'grooming_sessions', clinicId, onEvent: refresh })
+  useRealtimeSync({ table: 'sales',             clinicId, onEvent: refresh })
+
+  async function handleCancelLaunch(sale: PendingSale) {
+    if (!confirm(`Cancelar o lançamento de ${fmt(sale.total_amount)}? O estoque será devolvido.`)) return
+    setCancellingSaleId(sale.id)
+    const res = await cancelPendingLaunch(sale.id)
+    setCancellingSaleId(null)
+    if ('error' in res) { onToast(res.error, 'error'); return }
+    setPendingSales(prev => prev.filter(s => s.id !== sale.id))
+    onToast('Lançamento cancelado — estoque devolvido.', 'success')
+  }
+
+  async function handleSettleSale(splits: PaymentSplit[]) {
+    if (!activeSale) return
+    const res = await settlePendingSale(activeSale.id, splits.map(s => ({
+      amount:             s.amount,
+      payment_method:     s.payment_method,
+      payment_card_id:    s.payment_card_id,
+      installments:       s.installments,
+      card_acquirer:      s.card_acquirer,
+      card_brand:         s.card_brand,
+      card_nsu:           s.card_nsu,
+      card_authorization: s.card_authorization,
+      transaction_date:   s.transaction_date,
+    })))
+    if ('error' in res) { onToast(res.error, 'error'); throw new Error(res.error) }
+    const total = activeSale.total_amount
+    setActiveSale(null)
+    setPendingSales(prev => prev.filter(s => s.id !== activeSale.id))
+    onToast(`Venda recebida! ${fmt(total)}`, 'success')
+  }
 
   function handleInvoiceSuccess(petName: string, total: number) {
     setActiveInvoiceId(null)
@@ -416,7 +605,7 @@ export default function CashierTabReceivables({
     onToast(`Serviço de ${petName} marcado como cortesia.`, 'success')
   }
 
-  const totalPending = invoices.length + groomingSessions.length
+  const totalPending = invoices.length + groomingSessions.length + pendingSales.length
 
   return (
     <>
@@ -429,12 +618,25 @@ export default function CashierTabReceivables({
         />
       )}
 
-      {/* Épico B — C3: pagamento agrupado */}
-      {showMultiPayment && (
+      {/* Recebimento individual de venda lançada */}
+      {activeSale && (
         <PaymentMethodModal
-          totalDue={selectedTotal}
-          subject={`${selectedInvoices.length} faturas selecionadas`}
-          onCancel={() => { if (!multiProcessing) setShowMultiPayment(false) }}
+          totalDue={activeSale.total_amount}
+          subject={activeSale.tutor_name ?? 'Venda avulsa'}
+          onCancel={() => setActiveSale(null)}
+          onConfirm={handleSettleSale}
+        />
+      )}
+
+      {/* Épico B — C3: pagamento agrupado (consultas + vendas lançadas).
+          totalDue e taxa vêm do PLANO: copart das consultas conveniadas +
+          valor cheio das vendas; taxa adm. SÓ sobre a parte conveniada. */}
+      {showMultiPayment && multiPlan && (
+        <PaymentMethodModal
+          totalDue={multiPlan.totalDue}
+          subject={`${multiPlan.units.length} documentos selecionados`}
+          copayInterest={multiPlan.copayInterest}
+          onCancel={() => { if (!multiProcessing) { setShowMultiPayment(false); setMultiPlan(null) } }}
           onConfirm={handleMultiPaymentConfirm}
         />
       )}
@@ -461,7 +663,7 @@ export default function CashierTabReceivables({
                 Voltar
               </button>
               <button
-                onClick={() => { setConfirmMixedTutors(false); setShowMultiPayment(true) }}
+                onClick={() => { setConfirmMixedTutors(false); void prepareMultiPlan() }}
                 className="flex-1 rounded-xl bg-amber-500 py-2.5 text-sm font-bold text-white hover:bg-amber-600"
               >
                 Sim, agrupar
@@ -510,29 +712,33 @@ export default function CashierTabReceivables({
         </button>
       </div>
 
-      {/* Épico B — C3: barra de recebimento agrupado */}
-      {selectedInvoices.length >= 2 && (
+      {/* Épico B — C3: barra de recebimento agrupado (consultas + vendas) */}
+      {selectedCount >= 2 && (
         <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border-2 border-teal-300 bg-teal-50 px-4 py-3">
           <div className="flex items-center gap-2 text-sm text-teal-900">
             <Users className="h-4 w-4 flex-shrink-0" />
             <span>
-              <strong>{selectedInvoices.length} faturas</strong> selecionadas
+              <strong>{selectedCount} documentos</strong> selecionados
+              {selectedSales.length > 0 && <span className="text-teal-700"> ({selectedInvoices.length} consulta{selectedInvoices.length !== 1 ? 's' : ''} + {selectedSales.length} venda{selectedSales.length !== 1 ? 's' : ''})</span>}
               {distinctTutors > 1 && <span className="text-amber-700 font-semibold"> · {distinctTutors} tutores diferentes</span>}
             </span>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             <button
-              onClick={() => setSelectedIds(new Set())}
+              onClick={() => { setSelectedIds(new Set()); setSelectedSaleIds(new Set()) }}
               className="rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-white"
             >
               Limpar
             </button>
             <button
               onClick={startMultiReceive}
+              disabled={preparingMulti}
               data-mentor-step="cashier-multi-receive-btn"
-              className="rounded-xl bg-teal-600 hover:bg-teal-700 px-4 py-2 text-sm font-bold text-white"
+              className="rounded-xl bg-teal-600 hover:bg-teal-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-60 flex items-center gap-2"
             >
-              Receber selecionados · {fmt(selectedTotal)}
+              {preparingMulti
+                ? <><Loader2 className="h-4 w-4 animate-spin" /> Calculando convênio...</>
+                : <>Receber selecionados · até {fmt(selectedGrossTotal)}</>}
             </button>
           </div>
         </div>
@@ -558,6 +764,56 @@ export default function CashierTabReceivables({
               selected={selectedIds.has(inv.id)}
               onToggleSelect={toggleSelect}
             />
+          ))}
+          {/* Vendas lançadas (pendentes) — botão LANÇAR da venda avulsa */}
+          {pendingSales.map(sale => (
+            <div
+              key={sale.id}
+              className={`flex items-center gap-4 rounded-xl border bg-white px-5 py-4 hover:shadow-sm transition-all ${selectedSaleIds.has(sale.id) ? 'border-teal-400 ring-1 ring-teal-200' : 'border-emerald-100 hover:border-emerald-200'}`}
+            >
+              <input
+                type="checkbox"
+                checked={selectedSaleIds.has(sale.id)}
+                onChange={() => toggleSelectSale(sale.id)}
+                className="h-4 w-4 flex-shrink-0 rounded border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer"
+                title="Selecionar para recebimento agrupado"
+              />
+              <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-emerald-50">
+                <ShoppingCart className="h-5 w-5 text-emerald-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="font-semibold text-slate-900 truncate">{sale.tutor_name ?? 'Consumidor avulso'}</p>
+                  <span className="rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium px-2 py-0.5 flex-shrink-0">Venda</span>
+                </div>
+                <p className="mt-0.5 text-xs text-slate-400 truncate">
+                  Lançada às {fmtTime(sale.created_at)} · {sale.items_count} item{sale.items_count !== 1 ? 's' : ''}
+                  {sale.items_preview ? ` · ${sale.items_preview}` : ''}
+                </p>
+              </div>
+              <div className="flex items-center gap-3 flex-shrink-0">
+                <div className="text-right">
+                  <p className="text-xs text-slate-400">Total</p>
+                  <p className="text-lg font-bold text-slate-900">{fmt(sale.total_amount)}</p>
+                </div>
+                <button
+                  onClick={() => handleCancelLaunch(sale)}
+                  disabled={cancellingSaleId === sale.id}
+                  title="Cancelar lançamento (devolve o estoque)"
+                  className="rounded-lg p-2 text-rose-400 hover:bg-rose-50 disabled:opacity-50"
+                >
+                  {cancellingSaleId === sale.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                </button>
+                <button
+                  onClick={() => setActiveSale(sale)}
+                  data-mentor-step="cashier-receive-sale-btn"
+                  className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors shadow-sm"
+                >
+                  <Receipt className="h-4 w-4" />
+                  Receber
+                </button>
+              </div>
+            </div>
           ))}
           {groomingSessions.map(session => (
             <GroomingPaymentCard
