@@ -7,7 +7,8 @@ import {
 } from 'lucide-react'
 import type { GlobalCatalogSuggestion } from '@/lib/actions/catalog'
 import { addStockItemV2 } from '@/lib/actions/stock'
-import type { StockItemV2, StockCategory } from '@/lib/actions/stock'
+import type { StockItemV2 } from '@/lib/actions/stock'
+import type { StockCategory } from '@/lib/stock-constants'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 

@@ -4,9 +4,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   getPetCoverageContext,
   type PetCoverageContext,
-  type CoverageCategory,
 } from '@/lib/actions/coverage-llm'
-import type { LlmCoverageResponse } from '@/lib/ai/coverage-extractor'
+import type { LlmCoverageResponse, CoverageCategory } from '@/lib/ai/coverage-extractor'
 
 /**
  * Semáforo Petlove via voz — orquestra debounce + AbortController + cache LRU

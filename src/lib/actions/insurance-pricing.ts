@@ -18,7 +18,12 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { decideServicePricing, type ResolvedPricing } from '@/lib/insurance-pricing-core'
 
-export type { ResolvedPricing }
+// ATENÇÃO (HF 05/06): NUNCA re-exporte tipos (`export type { X }`) de um
+// arquivo 'use server'. O Turbopack registra TODO export como referência de
+// server action em runtime — o re-export de tipo vira um identificador
+// inexistente ("ReferenceError: ResolvedPricing is not defined") e derruba o
+// módulo de actions da rota inteira (todas as actions da página retornam 500).
+// Importe o tipo diretamente de '@/lib/insurance-pricing-core'.
 
 type Ctx =
   | { admin: ReturnType<typeof createAdminClient>; clinic_id: string; user_id: string }
