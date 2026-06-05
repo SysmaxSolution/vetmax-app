@@ -14,9 +14,9 @@
  * overflow-hidden para o dropdown de resultados não ficar cortado.
  */
 
-import { useState } from 'react'
-import { ShoppingCart, X, Plus, Minus, ChevronDown, ChevronUp, Loader2, ClipboardList } from 'lucide-react'
-import { createSale, launchPendingSale, type SaleTutor } from '@/lib/actions/sales'
+import { useState, useEffect } from 'react'
+import { ShoppingCart, X, Plus, Minus, ChevronDown, ChevronUp, Loader2, ClipboardList, PawPrint } from 'lucide-react'
+import { createSale, launchPendingSale, listTutorPets, type SaleTutor } from '@/lib/actions/sales'
 import TutorSearch from '@/components/sales/TutorSearch'
 import ProductSearch from '@/components/sales/ProductSearch'
 import type { CartItem } from '@/components/sales/SalesCart'
@@ -40,6 +40,24 @@ export default function CashierQuickSale({ clinicId, activeModules = [], onToast
   const [tutor,    setTutor]    = useState<SaleTutor | null>(null)
   const [cart,     setCart]     = useState<CartItem[]>([])
   const [refocusTrigger, setRefocusTrigger] = useState(0)
+
+  // Pet do tutor (opcional) — para o card da venda lançada exibir o pet,
+  // igual aos cards de consulta (pedido do PO 05/06).
+  const [tutorPets,  setTutorPets]  = useState<Array<{ id: string; name: string; species: string }>>([])
+  const [petId,      setPetId]      = useState<string>('')
+
+  useEffect(() => {
+    setPetId('')
+    if (!tutor) { setTutorPets([]); return }
+    let cancelled = false
+    listTutorPets(tutor.id).then(res => {
+      if (cancelled || !Array.isArray(res)) return
+      setTutorPets(res)
+      // Tutor com um único pet → pré-seleciona (zero-click)
+      if (res.length === 1) setPetId(res[0].id)
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [tutor])
 
   const [showPayment, setShowPayment] = useState(false)
   const [launching,   setLaunching]   = useState(false)
@@ -86,8 +104,9 @@ export default function CashierQuickSale({ clinicId, activeModules = [], onToast
         unit_price:    l.unit_price,
         discount:      l.discount,
       })),
-      tutor_id: tutor?.id ?? null,
-      notes:    tutor ? null : 'Consumidor avulso',
+      tutor_id:   tutor?.id ?? null,
+      patient_id: petId || null,
+      notes:      tutor ? null : 'Consumidor avulso',
     })
     setLaunching(false)
     if ('error' in res) { setError(res.error); return }
@@ -112,6 +131,7 @@ export default function CashierQuickSale({ clinicId, activeModules = [], onToast
       // Método principal = primeiro split (o detalhe por split vai em splits[])
       payment_method: (splits[0]?.payment_method ?? 'cash') as 'cash' | 'credit' | 'debit' | 'pix' | 'convenio' | 'other',
       tutor_id:       tutor?.id ?? null,
+      patient_id:     petId || null,
       notes:          tutor ? null : 'Consumidor avulso',
       splits: splits.map(s => ({
         amount:             s.amount,
@@ -165,6 +185,25 @@ export default function CashierQuickSale({ clinicId, activeModules = [], onToast
             </p>
             <TutorSearch selected={tutor} onSelect={setTutor} />
           </div>
+
+          {/* Pet do tutor (opcional) — exibido no card da venda lançada */}
+          {tutor && tutorPets.length > 0 && (
+            <div>
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1 flex items-center gap-1">
+                <PawPrint className="h-3 w-3" /> Pet <span className="font-normal normal-case">(opcional)</span>
+              </p>
+              <select
+                value={petId}
+                onChange={e => setPetId(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400"
+              >
+                <option value="">— Sem pet vinculado —</option>
+                {tutorPets.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* HF 05/06: busca COMPLETA do PDV — estoque + catálogo veterinário
               (cadastro rápido) + item manual + EAN */}
