@@ -47,6 +47,8 @@ interface Props {
    * economia) no recebimento. Default liberado; admin desmarca por usuário.
    */
   canViewInsuranceDetails?: boolean
+  /** Módulos ativos da clínica — cadastro rápido do catálogo na venda avulsa. */
+  activeModules?:          string[]
 }
 
 export default function CashierPageClient({
@@ -55,6 +57,7 @@ export default function CashierPageClient({
   userRole, clinicId, clinicName, today, firstOfMonth,
   pdvUnified = false,
   canViewInsuranceDetails = true,
+  activeModules = [],
 }: Props) {
   const [activeTab,  setActiveTab]  = useState<Tab>('overview')
   const [entries,    setEntries]    = useState<CentralCashierEntry[]>(initialEntries)
@@ -162,6 +165,7 @@ export default function CashierPageClient({
           userRole={userRole}
           pdvUnified={pdvUnified}
           canViewInsuranceDetails={canViewInsuranceDetails}
+          activeModules={activeModules}
           onToast={showToast}
         />
       )}

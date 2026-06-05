@@ -38,10 +38,11 @@ export default async function CashierPage() {
   const admin = createAdminClient()
   const { data: clinicRow } = await admin
     .from('clinics')
-    .select('flow_config')
+    .select('flow_config, active_modules')
     .eq('id', profile.clinic_id)
     .single()
   const pdvUnified = (clinicRow?.flow_config as { pdv_unified_with_cashier?: boolean } | null)?.pdv_unified_with_cashier === true
+  const activeModules = (clinicRow?.active_modules as string[] | null) ?? []
 
   // HF 05/06: visualização completa dos "dados inteligentes" do convênio no
   // recebimento é um DIREITO DE ACESSO (Gestão > Usuários > Direitos de
@@ -65,6 +66,7 @@ export default async function CashierPage() {
       firstOfMonth={firstOfMonth}
       pdvUnified={pdvUnified}
       canViewInsuranceDetails={canViewInsuranceDetails}
+      activeModules={activeModules}
     />
   )
 }
