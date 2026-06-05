@@ -424,7 +424,7 @@ export default function CashierTabReceivables({
 
     for (const sale of selectedSales) {
       units.push({
-        kind: 'sale', id: sale.id, label: sale.tutor_name ?? 'Venda avulsa',
+        kind: 'sale', id: sale.id, label: sale.patient_name ?? sale.tutor_name ?? 'Venda avulsa',
         charge: sale.total_amount,
         interest_full: 0, percent: 0, interestItems: [], insurance: null,
       })
@@ -765,7 +765,8 @@ export default function CashierTabReceivables({
               onToggleSelect={toggleSelect}
             />
           ))}
-          {/* Vendas lançadas (pendentes) — botão LANÇAR da venda avulsa */}
+          {/* Vendas lançadas (pendentes) — paridade visual com os cards de
+              consulta: pet/tutor + telefone + data/hora + itens + total */}
           {pendingSales.map(sale => (
             <div
               key={sale.id}
@@ -778,18 +779,42 @@ export default function CashierTabReceivables({
                 className="h-4 w-4 flex-shrink-0 rounded border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer"
                 title="Selecionar para recebimento agrupado"
               />
-              <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-emerald-50">
-                <ShoppingCart className="h-5 w-5 text-emerald-600" />
+              <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-emerald-50 text-2xl">
+                {sale.patient_species
+                  ? (SPECIES_EMOJI[sale.patient_species] ?? '🐾')
+                  : <ShoppingCart className="h-5 w-5 text-emerald-600" />}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <p className="font-semibold text-slate-900 truncate">{sale.tutor_name ?? 'Consumidor avulso'}</p>
+                  <p className="font-semibold text-slate-900 truncate">
+                    {sale.patient_name ?? sale.tutor_name ?? 'Consumidor avulso'}
+                  </p>
+                  {sale.patient_name && sale.tutor_name && (
+                    <>
+                      <span className="text-xs text-slate-400">·</span>
+                      <span className="text-xs text-slate-500 truncate">{sale.tutor_name}</span>
+                    </>
+                  )}
                   <span className="rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium px-2 py-0.5 flex-shrink-0">Venda</span>
                 </div>
-                <p className="mt-0.5 text-xs text-slate-400 truncate">
-                  Lançada às {fmtTime(sale.created_at)} · {sale.items_count} item{sale.items_count !== 1 ? 's' : ''}
-                  {sale.items_preview ? ` · ${sale.items_preview}` : ''}
-                </p>
+                <div className="mt-0.5 flex items-center gap-3 flex-wrap">
+                  <span className="text-xs text-slate-400">
+                    Lançada às {fmtTime(sale.created_at)} · {new Date(sale.created_at).toLocaleDateString('pt-BR')}
+                  </span>
+                  {sale.tutor_phone && (
+                    <span className="text-xs text-slate-400">{sale.tutor_phone}</span>
+                  )}
+                </div>
+                {sale.items_preview && (
+                  <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                    {sale.items_preview.split(', ').map(item => (
+                      <span key={item} className="text-xs text-slate-400 bg-slate-50 rounded px-1.5 py-0.5">{item}</span>
+                    ))}
+                    {sale.items_count > 3 && (
+                      <span className="text-xs text-slate-400">+{sale.items_count - 3}</span>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-3 flex-shrink-0">
                 <div className="text-right">

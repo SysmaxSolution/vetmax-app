@@ -284,20 +284,43 @@ export async function createSale(
 // no lançamento (reserva); cancelar o lançamento devolve.
 
 export interface PendingSale {
-  id:           string
-  tutor_id:     string | null
-  tutor_name:   string | null
-  total_amount: number
-  created_at:   string
-  items_count:  number
-  items_preview: string
+  id:              string
+  tutor_id:        string | null
+  tutor_name:      string | null
+  tutor_phone:     string | null
+  patient_id:      string | null
+  patient_name:    string | null
+  patient_species: string | null
+  total_amount:    number
+  created_at:      string
+  items_count:     number
+  items_preview:   string
+}
+
+/** Pets do tutor — para vincular a venda lançada a um pet (opcional). */
+export async function listTutorPets(
+  tutorId: string,
+): Promise<Array<{ id: string; name: string; species: string }> | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Perfil sem clínica.' }
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('patients')
+    .select('id, name, species')
+    .eq('clinic_id', clinicId)
+    .eq('tutor_id', tutorId)
+    .order('name')
+    .limit(30)
+  if (error) return { error: error.message }
+  return (data ?? []).map(p => ({ id: p.id as string, name: p.name as string, species: (p.species as string) ?? '' }))
 }
 
 export async function launchPendingSale(params: {
-  clinic_id: string
-  items:     SaleItem[]
-  tutor_id?: string | null
-  notes?:    string | null
+  clinic_id:  string
+  items:      SaleItem[]
+  tutor_id?:  string | null
+  patient_id?: string | null
+  notes?:     string | null
 }): Promise<{ id: string; total: number } | { error: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -343,6 +366,7 @@ export async function launchPendingSale(params: {
       clinic_id:       params.clinic_id,
       seller_id:       user.id,
       tutor_id:        params.tutor_id ?? null,
+      patient_id:      params.patient_id ?? null,
       total_amount:    total,
       discount_amount: 0,
       payment_method:  'other',          // definido no recebimento
@@ -383,7 +407,7 @@ export async function listPendingSales(): Promise<PendingSale[] | { error: strin
   const admin = createAdminClient()
   const { data, error } = await admin
     .from('sales')
-    .select('id, tutor_id, total_amount, notes, created_at, tutors!tutor_id ( name ), sale_items ( description )')
+    .select('id, tutor_id, patient_id, total_amount, notes, created_at, tutors!tutor_id ( name, phone ), patients!patient_id ( name, species ), sale_items ( description )')
     .eq('clinic_id', clinicId)
     .eq('payment_status', 'pending')
     .order('created_at', { ascending: false })
@@ -393,13 +417,17 @@ export async function listPendingSales(): Promise<PendingSale[] | { error: strin
   return (data ?? []).map((s: any) => {
     const items: Array<{ description: string }> = s.sale_items ?? []
     return {
-      id:           s.id,
-      tutor_id:     s.tutor_id ?? null,
-      tutor_name:   s.tutors?.name ?? (s.notes === 'Consumidor avulso' ? 'Consumidor avulso' : null),
-      total_amount: Number(s.total_amount),
-      created_at:   s.created_at,
-      items_count:  items.length,
-      items_preview: items.slice(0, 3).map(i => i.description).join(', '),
+      id:              s.id,
+      tutor_id:        s.tutor_id ?? null,
+      tutor_name:      s.tutors?.name ?? (s.notes === 'Consumidor avulso' ? 'Consumidor avulso' : null),
+      tutor_phone:     s.tutors?.phone ?? null,
+      patient_id:      s.patient_id ?? null,
+      patient_name:    s.patients?.name ?? null,
+      patient_species: s.patients?.species ?? null,
+      total_amount:    Number(s.total_amount),
+      created_at:      s.created_at,
+      items_count:     items.length,
+      items_preview:   items.slice(0, 3).map(i => i.description).join(', '),
     }
   })
 }
