@@ -11,6 +11,7 @@ export type PaymentMethodKey = 'pix' | 'credit' | 'debit' | 'cash' | 'voucher' |
 
 export interface PaymentSplit {
   id:                  string
+  /** Valor COBRADO nesta forma (cartão: já inclui a taxa adm., se houver). */
   amount:              number
   payment_method:      PaymentMethodKey
   payment_card_id:     string | null
@@ -21,6 +22,12 @@ export interface PaymentSplit {
   card_authorization:  string | null
   transaction_date:    string | null
   label:               string
+  /**
+   * Taxa adm. sobre coparticipação embutida no amount (Épico A). 0 para
+   * formas sem taxa. Uso interno do modal — o parent recebe o total via
+   * extras.copay_interest.
+   */
+  interest_included?:  number
 }
 
 interface MethodOption {
@@ -71,22 +78,29 @@ export default function PaymentMethodModal({ totalDue, subject, disableSplit, co
   const [showCardModal, setShowCardModal] = useState<'credit'|'debit'|null>(null)
   const [error,         setError]         = useState<string | null>(null)
   const [submitting,    setSubmitting]    = useState(false)
-  // Desconto sobre a taxa adm. (pedido explícito ~30:48: "exibir o valor, o
-  // valor de juros e o campo de desconto após informar a forma de pagamento")
+  // Desconto sobre a taxa adm. — informado ANTES de passar o cartão (~30:48)
   const [interestDiscount, setInterestDiscount] = useState<string>('')
 
-  const totalSplit = splits.reduce((s, p) => s + p.amount, 0)
-  const remaining  = Math.max(0, totalDue - totalSplit)
+  // Cada split de cartão guarda a taxa embutida; o saldo é controlado pela
+  // BASE (amount − taxa), nunca pelo valor cobrado.
+  const baseOf      = (s: PaymentSplit) => s.amount - (s.interest_included ?? 0)
+  const totalBase   = splits.reduce((s, p) => s + baseOf(p), 0)
+  const remaining   = Math.max(0, Math.round((totalDue - totalBase) * 100) / 100)
+  const totalInterest = Math.round(splits.reduce((s, p) => s + (p.interest_included ?? 0), 0) * 100) / 100
+  const totalCharged  = Math.round(splits.reduce((s, p) => s + p.amount, 0) * 100) / 100
 
-  // ── Taxa adm. sobre coparticipação (só quando há split de CARTÃO) ─────────
   const hasInterestConfig = !!copayInterest && copayInterest.interest_full > 0
-  const cardSplits   = splits.filter(s => s.payment_method === 'credit' || s.payment_method === 'debit')
-  const cardBase     = cardSplits.reduce((s, p) => s + p.amount, 0)
-  const grossInterest = hasInterestConfig
-    ? proportionalCardInterest(copayInterest!.interest_full, totalDue, cardBase)
+
+  // ── Plano do cartão (HF 05/06): a taxa aparece AO SELECIONAR o cartão,
+  //    ANTES de passar na maquininha — o operador já cobra o valor certo. ──
+  const planGross = hasInterestConfig
+    ? proportionalCardInterest(copayInterest!.interest_full, totalDue, remaining)
     : 0
-  const interestDiscountValue = Math.min(grossInterest, Math.max(0, parseFloat(interestDiscount.replace(',', '.')) || 0))
-  const netInterest = Math.round((grossInterest - interestDiscountValue) * 100) / 100
+  const planDiscount = Math.min(planGross, Math.max(0, parseFloat(interestDiscount.replace(',', '.')) || 0))
+  const planNet      = Math.round((planGross - planDiscount) * 100) / 100
+  const planCharge   = Math.round((remaining + planNet) * 100) / 100
+  /** Pré-painel de taxa visível (método cartão escolhido + taxa configurada). */
+  const showCardPlan = (pendingMethod === 'credit' || pendingMethod === 'debit') && hasInterestConfig && !showCardModal
 
   function startAddingMethod(method: PaymentMethodKey) {
     setError(null)
@@ -96,9 +110,13 @@ export default function PaymentMethodModal({ totalDue, subject, disableSplit, co
     }
     setPendingMethod(method)
     setPendingAmount(remaining.toFixed(2).replace('.', ','))
-    // Para cartão crédito/débito, o próprio CardSelectionModal coleta valor,
-    // NSU, liberação, data e parcelas — abrimos direto.
     if (method === 'credit' || method === 'debit') {
+      // Com taxa configurada, mostra o plano (taxa + desconto + total a
+      // passar) ANTES de abrir o cartão. Sem taxa, abre direto.
+      if (hasInterestConfig) {
+        setInterestDiscount('')
+        return
+      }
       setShowCardModal(method)
     }
   }
@@ -135,17 +153,35 @@ export default function PaymentMethodModal({ totalDue, subject, disableSplit, co
 
   function handleCardConfirm(result: CardPaymentResult) {
     if (!showCardModal) return
-    const amountToCharge = Math.min(result.amount, remaining)
-    if (amountToCharge <= 0) {
+
+    // Com taxa: o valor cobrado na maquininha = base + taxa. Se o operador
+    // alterou o valor no modal do cartão (pagamento parcial), a taxa é
+    // recalculada proporcionalmente (Q1).
+    let amountCharged: number
+    let interestIncluded = 0
+    if (hasInterestConfig && planCharge > 0) {
+      amountCharged = Math.min(result.amount, planCharge)
+      if (Math.abs(amountCharged - planCharge) < 0.01) {
+        interestIncluded = planNet
+      } else {
+        const ratio = amountCharged / planCharge
+        const base  = Math.round(remaining * ratio * 100) / 100
+        interestIncluded = Math.round((amountCharged - base) * 100) / 100
+      }
+    } else {
+      amountCharged = Math.min(result.amount, remaining)
+    }
+    if (amountCharged <= 0) {
       setShowCardModal(null)
       setPendingMethod(null)
       setError('Sem saldo restante.')
       return
     }
+
     const label = `${METHOD_OPTIONS.find(o => o.key === showCardModal)?.label} · ${result.card.label}${result.installments > 1 ? ` · ${result.installments}x` : ''}`
     const split: PaymentSplit = {
       id:                 crypto.randomUUID(),
-      amount:             amountToCharge,
+      amount:             amountCharged,
       payment_method:     showCardModal,
       payment_card_id:    result.card.id,
       installments:       result.installments,
@@ -155,11 +191,13 @@ export default function PaymentMethodModal({ totalDue, subject, disableSplit, co
       card_authorization: result.card_authorization,
       transaction_date:   result.transaction_date,
       label,
+      interest_included:  interestIncluded,
     }
     setSplits(prev => [...prev, split])
     setShowCardModal(null)
     setPendingMethod(null)
     setPendingAmount('')
+    setInterestDiscount('')
     setError(null)
   }
 
@@ -170,30 +208,17 @@ export default function PaymentMethodModal({ totalDue, subject, disableSplit, co
   async function handleConfirm() {
     setError(null)
     if (splits.length === 0) { setError('Adicione ao menos um pagamento.'); return }
-    if (totalSplit < totalDue - 0.005) {
+    if (totalBase < totalDue - 0.005) {
       setError(`Saldo restante de ${fmt(remaining)} — adicione outro pagamento ou ajuste o total.`)
       return
     }
 
-    // Épico A: infla os splits de cartão com a taxa adm. líquida — o valor
-    // cobrado na maquininha é base + taxa. Último cartão absorve arredondamento.
-    let finalSplits = splits
-    if (netInterest > 0 && cardSplits.length > 0 && cardBase > 0) {
-      let allocated = 0
-      const lastCardId = cardSplits[cardSplits.length - 1].id
-      finalSplits = splits.map(s => {
-        if (s.payment_method !== 'credit' && s.payment_method !== 'debit') return s
-        const share = s.id === lastCardId
-          ? Math.round((netInterest - allocated) * 100) / 100
-          : Math.round(netInterest * (s.amount / cardBase) * 100) / 100
-        allocated = Math.round((allocated + share) * 100) / 100
-        return { ...s, amount: Math.round((s.amount + share) * 100) / 100 }
-      })
-    }
-
+    // HF 05/06: a taxa já foi embutida no valor do cartão NO MOMENTO da
+    // seleção (o operador passou o valor certo na maquininha) — nada a
+    // inflar aqui; só repassamos o total da taxa para o servidor.
     setSubmitting(true)
     try {
-      await onConfirm(finalSplits, netInterest > 0 ? { copay_interest: netInterest } : undefined)
+      await onConfirm(splits, totalInterest > 0 ? { copay_interest: totalInterest } : undefined)
     } catch (e) {
       setSubmitting(false)
       setError(e instanceof Error ? e.message : 'Falha ao processar.')
@@ -253,7 +278,12 @@ export default function PaymentMethodModal({ totalDue, subject, disableSplit, co
                         <p className="text-[10px] text-slate-400 font-mono truncate">NSU {s.card_nsu}{s.card_authorization ? ` · Lib ${s.card_authorization}` : ''}</p>
                       )}
                     </div>
-                    <p className="text-sm font-bold text-slate-900 tabular-nums">{fmt(s.amount)}</p>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-sm font-bold text-slate-900 tabular-nums">{fmt(s.amount)}</p>
+                      {(s.interest_included ?? 0) > 0 && (
+                        <p className="text-[10px] text-indigo-600 tabular-nums">inclui {fmt(s.interest_included!)} de taxa</p>
+                      )}
+                    </div>
                     <button
                       type="button"
                       onClick={() => removeSplit(s.id)}
@@ -297,6 +327,60 @@ export default function PaymentMethodModal({ totalDue, subject, disableSplit, co
               </div>
             )}
 
+            {/* HF 05/06: plano da Taxa Adm Cartão — aparece AO SELECIONAR o
+                cartão, ANTES de passar na maquininha. O operador vê o valor
+                exato a cobrar (base + taxa − desconto) e só então escolhe o
+                cartão. */}
+            {showCardPlan && (
+              <div className="rounded-xl border-2 border-indigo-400 bg-indigo-50/60 px-4 py-3 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-bold text-indigo-900">
+                    {METHOD_OPTIONS.find(m => m.key === pendingMethod)?.label} — confira antes de passar
+                  </p>
+                  <button
+                    onClick={() => { setPendingMethod(null); setInterestDiscount('') }}
+                    className="text-xs text-slate-500 hover:underline"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+                <p className="text-sm font-semibold text-indigo-900 tabular-nums">
+                  Coparticipação Petlove: {fmt(remaining)}
+                  {' '}<span className="text-indigo-700">(+ {fmt(planGross)} Taxa Adm Cartão ({copayInterest!.percent}%))</span>
+                </p>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-semibold text-slate-600 flex-shrink-0">Desconto na taxa (R$)</label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    autoFocus
+                    value={interestDiscount}
+                    onChange={e => setInterestDiscount(e.target.value)}
+                    placeholder="0,00"
+                    className="w-24 rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-semibold tabular-nums focus:outline-none focus:border-indigo-500"
+                  />
+                  {planDiscount > 0 && (
+                    <span className="text-[11px] text-emerald-700 font-semibold">− {fmt(planDiscount)}</span>
+                  )}
+                </div>
+                <div className="flex items-center justify-between rounded-lg bg-indigo-600 px-3 py-2.5">
+                  <span className="text-xs font-bold text-white uppercase tracking-wide">Passar na maquininha</span>
+                  <span className="text-xl font-bold text-white tabular-nums">{fmt(planCharge)}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowCardModal(pendingMethod as 'credit' | 'debit')}
+                  data-mentor-step="payment-card-plan-continue-btn"
+                  className="w-full rounded-xl bg-indigo-600 hover:bg-indigo-700 py-2.5 text-sm font-bold text-white flex items-center justify-center gap-2"
+                >
+                  <CreditCard className="h-4 w-4" /> Selecionar cartão e cobrar {fmt(planCharge)}
+                </button>
+                <p className="text-[10px] text-indigo-600">
+                  A taxa incide só sobre a coparticipação paga no cartão. O repasse Petlove não muda.
+                </p>
+              </div>
+            )}
+
             {allowAddMore && remaining > 0.005 && !pendingMethod && (
               <div>
                 <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">
@@ -321,9 +405,8 @@ export default function PaymentMethodModal({ totalDue, subject, disableSplit, co
               </div>
             )}
 
-            {/* Épico A (04/06): taxa adm. sobre coparticipação — cálculo
-                transparente para o operador conferir de cabeça */}
-            {hasInterestConfig && cardSplits.length === 0 && remaining > 0.005 && (
+            {/* Aviso antecipado: existe taxa configurada e nenhum cartão usado */}
+            {hasInterestConfig && totalInterest === 0 && remaining > 0.005 && !showCardPlan && (
               <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 px-3 py-2 text-[11px] text-indigo-800 flex items-start gap-2">
                 <Percent className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
                 <span>
@@ -334,33 +417,17 @@ export default function PaymentMethodModal({ totalDue, subject, disableSplit, co
               </div>
             )}
 
-            {hasInterestConfig && grossInterest > 0 && (
-              <div className="rounded-xl border-2 border-indigo-300 bg-indigo-50/60 px-4 py-3 space-y-2">
-                <p className="text-sm font-semibold text-indigo-900 tabular-nums">
-                  Coparticipação Petlove: {fmt(copayInterest!.copay_total)}
-                  {' '}<span className="text-indigo-700">(+ {fmt(grossInterest)} Taxa Adm Cartão ({copayInterest!.percent}%))</span>
-                </p>
-                <div className="flex items-center gap-2">
-                  <label className="text-xs font-semibold text-slate-600 flex-shrink-0">Desconto na taxa (R$)</label>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={interestDiscount}
-                    onChange={e => setInterestDiscount(e.target.value)}
-                    placeholder="0,00"
-                    className="w-24 rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-semibold tabular-nums focus:outline-none focus:border-indigo-500"
-                  />
-                  {interestDiscountValue > 0 && (
-                    <span className="text-[11px] text-emerald-700 font-semibold">− {fmt(interestDiscountValue)}</span>
-                  )}
+            {/* Resumo informativo após o cartão lançado (taxa já embutida) */}
+            {totalInterest > 0 && (
+              <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 px-4 py-2.5 space-y-1">
+                <div className="flex items-center justify-between text-xs text-indigo-800">
+                  <span>Taxa Adm Cartão incluída nos pagamentos</span>
+                  <span className="font-bold tabular-nums">{fmt(totalInterest)}</span>
                 </div>
-                <div className="flex items-center justify-between border-t border-indigo-200 pt-2">
-                  <span className="text-xs font-bold text-indigo-900 uppercase tracking-wide">Total final (com taxa)</span>
-                  <span className="text-lg font-bold text-indigo-900 tabular-nums">{fmt(totalDue + netInterest)}</span>
+                <div className="flex items-center justify-between border-t border-indigo-200 pt-1.5">
+                  <span className="text-xs font-bold text-indigo-900 uppercase tracking-wide">Total final cobrado</span>
+                  <span className="text-lg font-bold text-indigo-900 tabular-nums">{fmt(totalCharged)}</span>
                 </div>
-                <p className="text-[10px] text-indigo-600">
-                  A taxa é somada apenas ao valor passado no cartão{cardSplits.length > 1 ? ' (proporcional entre os cartões)' : ''}. O repasse Petlove não muda.
-                </p>
               </div>
             )}
 
@@ -398,8 +465,12 @@ export default function PaymentMethodModal({ totalDue, subject, disableSplit, co
       {showCardModal && (
         <CardSelectionModal
           paymentMethod={showCardModal}
-          maxAmount={remaining}
-          suggestedAmount={Math.min(parseFloat(pendingAmount.replace(',', '.')) || remaining, remaining)}
+          // HF 05/06: com taxa configurada, o valor sugerido/máximo é o TOTAL
+          // a passar na maquininha (base + taxa − desconto) definido no plano.
+          maxAmount={hasInterestConfig ? planCharge : remaining}
+          suggestedAmount={hasInterestConfig
+            ? planCharge
+            : Math.min(parseFloat(pendingAmount.replace(',', '.')) || remaining, remaining)}
           onCancel={() => { setShowCardModal(null); setPendingMethod(null) }}
           onConfirm={handleCardConfirm}
         />
