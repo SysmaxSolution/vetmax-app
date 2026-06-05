@@ -203,9 +203,10 @@ export default function VetWorkspace({ queue, completed, clinicId }: VetWorkspac
                     href={`/dashboard/vet/${item.id}`}
                     className="block p-5 hover:bg-slate-50 transition-colors"
                   >
-                    <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start justify-between gap-3 sm:gap-4">
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
+                        {/* Mobile (05/06): badges quebram linha em telas estreitas */}
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1">
                           <h3 className="font-semibold text-slate-900">{item.patient.name}</h3>
                           <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
                             {SPECIES_EMOJI[item.patient.species] ?? '🐾'} {SPECIES_LABELS[item.patient.species] ?? item.patient.species}

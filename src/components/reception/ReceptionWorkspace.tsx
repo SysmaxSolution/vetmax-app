@@ -275,7 +275,7 @@ function QueueCard({
       data-testid="reception-card"
       title={triageActive ? 'Duplo clique para chamar triagem' : 'Duplo clique para enviar ao consultório'}
       onDoubleClick={() => onMoveToTriage(item.id)}
-      className={`flex items-center gap-4 rounded-2xl border bg-white px-5 py-4 shadow-sm hover:shadow transition-shadow cursor-pointer select-none ${
+      className={`flex flex-wrap items-center gap-3 sm:gap-4 rounded-2xl border bg-white px-4 sm:px-5 py-4 shadow-sm hover:shadow transition-shadow cursor-pointer select-none ${
         hasPendingPayment ? 'border-red-300' : 'border-slate-200'
       }`}
     >
@@ -288,7 +288,7 @@ function QueueCard({
       >
         <PetAvatar name={item.patient.name} species={item.patient.species} photoUrl={item.patient.photo_url} size="md" />
       </button>
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 basis-48">
         <div className="flex items-center gap-2 flex-wrap">
           <button
             type="button"
@@ -320,7 +320,7 @@ function QueueCard({
         </p>
         <div className="flex items-center gap-3 mt-0.5 flex-wrap">
           {item.tutor.address && (
-            <span className="text-xs text-slate-400 truncate max-w-[180px]" title={item.tutor.address}>📍 {item.tutor.address}</span>
+            <span className="text-xs text-slate-400 truncate max-w-[140px] sm:max-w-[180px]" title={item.tutor.address}>📍 {item.tutor.address}</span>
           )}
           {item.patient.last_visit && (
             <span className="text-xs text-slate-400">
@@ -335,7 +335,9 @@ function QueueCard({
           </span>
         )}
       </div>
-      <div className="flex flex-col items-end gap-2 flex-shrink-0">
+      {/* Mobile (05/06): ações descem para linha própria (w-full) — antes
+          ficavam espremidas/sobrepostas ao lado do texto. */}
+      <div className="flex flex-row flex-wrap items-center sm:flex-col sm:items-end gap-2 w-full sm:w-auto sm:flex-shrink-0">
         <span className="text-xs text-slate-400">{formatTime(item.created_at)}</span>
         <button
           data-mentor-step="reception-call-triage-btn"
@@ -344,7 +346,7 @@ function QueueCard({
         >
           {triageActive ? 'Chamar Triagem →' : 'Enviar ao Consultório →'}
         </button>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <button
             type="button"
             title="Reagendar para outra data/horário"
@@ -935,7 +937,7 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
                     tabIndex={0}
                     onClick={() => handleEditConsultation(item)}
                     onKeyDown={e => { if (e.key === 'Enter') handleEditConsultation(item) }}
-                    className="w-full flex items-center gap-4 rounded-xl border border-slate-200 bg-white px-4 py-3 hover:border-slate-300 hover:bg-slate-50 transition-colors text-left shadow-sm cursor-pointer"
+                    className="w-full flex flex-wrap items-center gap-3 sm:gap-4 rounded-xl border border-slate-200 bg-white px-4 py-3 hover:border-slate-300 hover:bg-slate-50 transition-colors text-left shadow-sm cursor-pointer"
                   >
                     <button
                       type="button"
@@ -965,7 +967,7 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
                         <span className="text-xs">{formatTime(item.created_at)}</span>
                       </p>
                     </div>
-                    <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                    <div className="flex flex-row flex-wrap sm:flex-col items-start sm:items-end gap-1.5 w-full sm:w-auto sm:flex-shrink-0">
                       {/* Status do fluxo clínico */}
                       {STATUS_BADGES[item.status] && (
                         <span className={`text-xs font-semibold rounded-full px-2.5 py-1 ${STATUS_BADGES[item.status].className}`}>

@@ -54,7 +54,9 @@ function InvoiceCard({
   onToggleSelect?: (id: string) => void
 }) {
   return (
-    <div className={`flex items-center gap-4 rounded-xl border bg-white px-5 py-4 hover:shadow-sm transition-all ${selected ? 'border-teal-400 ring-1 ring-teal-200' : 'border-slate-200 hover:border-slate-300'}`}>
+    // Mobile (05/06): no celular o bloco Total+Receber desce para a linha de
+    // baixo (w-full) — antes ficava espremido/sobreposto ao lado do texto.
+    <div className={`flex flex-wrap items-center gap-3 sm:gap-4 rounded-xl border bg-white px-4 sm:px-5 py-4 hover:shadow-sm transition-all ${selected ? 'border-teal-400 ring-1 ring-teal-200' : 'border-slate-200 hover:border-slate-300'}`}>
       {onToggleSelect && (
         <input
           type="checkbox"
@@ -67,29 +69,29 @@ function InvoiceCard({
       <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-amber-50 text-2xl">
         {SPECIES_EMOJI[invoice.patient.species] ?? '🐾'}
       </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <p className="font-semibold text-slate-900">{invoice.patient.name}</p>
-          <span className="text-xs text-slate-400">·</span>
-          <span className="text-xs text-slate-500">{invoice.tutor.name}</span>
-          <span className="rounded-full bg-blue-50 text-blue-700 text-xs font-medium px-2 py-0.5">Consulta</span>
+      <div className="flex-1 min-w-0 basis-40">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+          <p className="font-semibold text-slate-900 truncate max-w-full">{invoice.patient.name}</p>
+          <span className="text-xs text-slate-400 hidden sm:inline">·</span>
+          <span className="text-xs text-slate-500 truncate max-w-full">{invoice.tutor.name}</span>
+          <span className="rounded-full bg-blue-50 text-blue-700 text-xs font-medium px-2 py-0.5 flex-shrink-0">Consulta</span>
         </div>
-        <div className="mt-0.5 flex items-center gap-3">
-          <span className="text-xs text-slate-400">Alta às {fmtTime(invoice.created_at)}</span>
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+          <span className="text-xs text-slate-400 whitespace-nowrap">Alta às {fmtTime(invoice.created_at)}</span>
           {invoice.tutor.phone && (
-            <span className="text-xs text-slate-400">{invoice.tutor.phone}</span>
+            <span className="text-xs text-slate-400 whitespace-nowrap">{invoice.tutor.phone}</span>
           )}
         </div>
       </div>
-      <div className="flex items-center gap-4 flex-shrink-0">
-        <div className="text-right">
+      <div className="flex items-center justify-between gap-4 w-full sm:w-auto sm:flex-shrink-0 sm:justify-end">
+        <div className="text-left sm:text-right">
           <p className="text-xs text-slate-400">Total</p>
-          <p className="text-lg font-bold text-slate-900">{fmt(invoice.total_amount)}</p>
+          <p className="text-lg font-bold text-slate-900 whitespace-nowrap">{fmt(invoice.total_amount)}</p>
         </div>
         <button
           onClick={() => onCheckout(invoice.id)}
           data-mentor-step="cashier-receive-invoice-btn"
-          className="flex items-center gap-1.5 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 transition-colors shadow-sm"
+          className="flex items-center gap-1.5 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 transition-colors shadow-sm flex-shrink-0"
         >
           <Receipt className="h-4 w-4" />
           Receber
@@ -109,16 +111,16 @@ function GroomingPaymentCard({
   onReceive: (session: PendingGroomingPayment) => void
 }) {
   return (
-    <div className="flex items-center gap-4 rounded-xl border border-violet-100 bg-white px-5 py-4 hover:shadow-sm hover:border-violet-200 transition-all">
+    <div className="flex flex-wrap items-center gap-3 sm:gap-4 rounded-xl border border-violet-100 bg-white px-4 sm:px-5 py-4 hover:shadow-sm hover:border-violet-200 transition-all">
       <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-violet-50 text-2xl">
         {SPECIES_EMOJI[session.patient_species] ?? '🐾'}
       </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <p className="font-semibold text-slate-900">{session.patient_name}</p>
-          <span className="text-xs text-slate-400">·</span>
-          <span className="text-xs text-slate-500">{session.tutor_name}</span>
-          <span className="rounded-full bg-violet-50 text-violet-700 text-xs font-medium px-2 py-0.5 flex items-center gap-1">
+      <div className="flex-1 min-w-0 basis-40">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+          <p className="font-semibold text-slate-900 truncate max-w-full">{session.patient_name}</p>
+          <span className="text-xs text-slate-400 hidden sm:inline">·</span>
+          <span className="text-xs text-slate-500 truncate max-w-full">{session.tutor_name}</span>
+          <span className="rounded-full bg-violet-50 text-violet-700 text-xs font-medium px-2 py-0.5 flex items-center gap-1 flex-shrink-0">
             <Scissors className="h-3 w-3" />
             Banho e Tosa
           </span>
@@ -135,15 +137,15 @@ function GroomingPaymentCard({
           )}
         </div>
       </div>
-      <div className="flex items-center gap-4 flex-shrink-0">
-        <div className="text-right">
+      <div className="flex items-center justify-between gap-4 w-full sm:w-auto sm:flex-shrink-0 sm:justify-end">
+        <div className="text-left sm:text-right">
           <p className="text-xs text-slate-400">Total</p>
-          <p className="text-lg font-bold text-slate-900">{fmt(session.price_total)}</p>
+          <p className="text-lg font-bold text-slate-900 whitespace-nowrap">{fmt(session.price_total)}</p>
         </div>
         <button
           onClick={() => onReceive(session)}
           data-mentor-step="cashier-receive-grooming-btn"
-          className="flex items-center gap-1.5 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-700 transition-colors shadow-sm"
+          className="flex items-center gap-1.5 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-700 transition-colors shadow-sm flex-shrink-0"
         >
           <Receipt className="h-4 w-4" />
           Receber
@@ -714,7 +716,7 @@ export default function CashierTabReceivables({
 
       {/* Épico B — C3: barra de recebimento agrupado (consultas + vendas) */}
       {selectedCount >= 2 && (
-        <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border-2 border-teal-300 bg-teal-50 px-4 py-3">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-teal-300 bg-teal-50 px-4 py-3">
           <div className="flex items-center gap-2 text-sm text-teal-900">
             <Users className="h-4 w-4 flex-shrink-0" />
             <span>
@@ -770,7 +772,7 @@ export default function CashierTabReceivables({
           {pendingSales.map(sale => (
             <div
               key={sale.id}
-              className={`flex items-center gap-4 rounded-xl border bg-white px-5 py-4 hover:shadow-sm transition-all ${selectedSaleIds.has(sale.id) ? 'border-teal-400 ring-1 ring-teal-200' : 'border-emerald-100 hover:border-emerald-200'}`}
+              className={`flex flex-wrap items-center gap-3 sm:gap-4 rounded-xl border bg-white px-4 sm:px-5 py-4 hover:shadow-sm transition-all ${selectedSaleIds.has(sale.id) ? 'border-teal-400 ring-1 ring-teal-200' : 'border-emerald-100 hover:border-emerald-200'}`}
             >
               <input
                 type="checkbox"
@@ -784,15 +786,15 @@ export default function CashierTabReceivables({
                   ? (SPECIES_EMOJI[sale.patient_species] ?? '🐾')
                   : <ShoppingCart className="h-5 w-5 text-emerald-600" />}
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="font-semibold text-slate-900 truncate">
+              <div className="flex-1 min-w-0 basis-40">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  <p className="font-semibold text-slate-900 truncate max-w-full">
                     {sale.patient_name ?? sale.tutor_name ?? 'Consumidor avulso'}
                   </p>
                   {sale.patient_name && sale.tutor_name && (
                     <>
-                      <span className="text-xs text-slate-400">·</span>
-                      <span className="text-xs text-slate-500 truncate">{sale.tutor_name}</span>
+                      <span className="text-xs text-slate-400 hidden sm:inline">·</span>
+                      <span className="text-xs text-slate-500 truncate max-w-full">{sale.tutor_name}</span>
                     </>
                   )}
                   <span className="rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium px-2 py-0.5 flex-shrink-0">Venda</span>
@@ -816,27 +818,29 @@ export default function CashierTabReceivables({
                   </div>
                 )}
               </div>
-              <div className="flex items-center gap-3 flex-shrink-0">
-                <div className="text-right">
+              <div className="flex items-center justify-between gap-3 w-full sm:w-auto sm:flex-shrink-0 sm:justify-end">
+                <div className="text-left sm:text-right">
                   <p className="text-xs text-slate-400">Total</p>
-                  <p className="text-lg font-bold text-slate-900">{fmt(sale.total_amount)}</p>
+                  <p className="text-lg font-bold text-slate-900 whitespace-nowrap">{fmt(sale.total_amount)}</p>
                 </div>
-                <button
-                  onClick={() => handleCancelLaunch(sale)}
-                  disabled={cancellingSaleId === sale.id}
-                  title="Cancelar lançamento (devolve o estoque)"
-                  className="rounded-lg p-2 text-rose-400 hover:bg-rose-50 disabled:opacity-50"
-                >
-                  {cancellingSaleId === sale.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                </button>
-                <button
-                  onClick={() => setActiveSale(sale)}
-                  data-mentor-step="cashier-receive-sale-btn"
-                  className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors shadow-sm"
-                >
-                  <Receipt className="h-4 w-4" />
-                  Receber
-                </button>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <button
+                    onClick={() => handleCancelLaunch(sale)}
+                    disabled={cancellingSaleId === sale.id}
+                    title="Cancelar lançamento (devolve o estoque)"
+                    className="rounded-lg p-2 text-rose-400 hover:bg-rose-50 disabled:opacity-50"
+                  >
+                    {cancellingSaleId === sale.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                  </button>
+                  <button
+                    onClick={() => setActiveSale(sale)}
+                    data-mentor-step="cashier-receive-sale-btn"
+                    className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors shadow-sm"
+                  >
+                    <Receipt className="h-4 w-4" />
+                    Receber
+                  </button>
+                </div>
               </div>
             </div>
           ))}
