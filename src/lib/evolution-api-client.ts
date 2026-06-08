@@ -176,6 +176,27 @@ export async function evolutionSetWebhook(params: {
 
 // ─── Message Sending ──────────────────────────────────────────────────────────
 
+// Baixa a mídia da URL (server-side) e devolve base64 cru, sem prefixo data URI.
+// Motivo: quando passamos a URL para o Evolution, é ELE (a VPS/Baileys) que
+// precisa baixar o arquivo — e isso falha de forma intermitente com
+// "Connection Closed" (o socket do WhatsApp cai durante o download). O servidor
+// Next alcança o Supabase com confiabilidade, então buscamos os bytes aqui e
+// mandamos base64, que o Evolution repassa direto ao WhatsApp sem baixar nada.
+async function fetchAsBase64(mediaUrl: string): Promise<string | null> {
+  try {
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), 15000)
+    const res = await fetch(mediaUrl, { signal: ctrl.signal })
+    clearTimeout(timer)
+    if (!res.ok) return null
+    const buf = Buffer.from(await res.arrayBuffer())
+    if (buf.length === 0) return null
+    return buf.toString('base64')
+  } catch {
+    return null
+  }
+}
+
 export async function evolutionSendMedia(
   creds: EvolutionCreds,
   phone: string,
@@ -192,12 +213,18 @@ export async function evolutionSendMedia(
     'document'
 
   const url = `${creds.apiUrl}/message/sendMedia/${creds.instanceId}`
+
+  // Preferencial: enviar o arquivo em base64 (evita o download flaky no Evolution).
+  // Fallback: se o download server-side falhar, manda a URL (comportamento antigo).
+  const base64 = await fetchAsBase64(params.mediaUrl)
+  const media  = base64 ?? params.mediaUrl
+
   const body = JSON.stringify({
     number:    formatPhone(phone),
     mediatype,
     mimetype:  params.mimeType,
     caption:   params.caption ?? '',
-    media:     params.mediaUrl,
+    media,
     fileName:  params.fileName,
   })
 
