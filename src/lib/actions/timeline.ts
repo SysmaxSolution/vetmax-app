@@ -23,6 +23,7 @@ export type TimelineEventType =
   | 'weight_update'
   | 'patient_note'
   | 'memorial'
+  | 'billing_document'
 
 export interface TimelineEvent {
   id: string
@@ -56,6 +57,13 @@ export interface TimelineEvent {
     dosage: string | null
     route: string | null
     notes: string | null
+  }
+  billing_document?: {
+    id: string
+    doc_type: 'orcamento' | 'nfse'
+    doc_number: string
+    status: string
+    total_amount: number
   }
   document?: {
     id: string
@@ -158,6 +166,7 @@ const SORT_ORDER: Record<TimelineEventType, number> = {
   petlove_event:             9,
   weight_update:            10,
   patient_note:             11,
+  billing_document:         8.5,  // entre whatsapp e petlove
   memorial:                -10,   // SEMPRE no topo: evento mais marcante do feed
 }
 
@@ -598,6 +607,27 @@ export async function getPetTimeline(
         },
       })
     }
+
+    // 11.5 Documentos de Faturamento (Orçamento/NFS-e) vinculados ao pet.
+    //      Reutiliza a server action do módulo (respeita RLS por clínica).
+    try {
+      const { getPetBillingDocuments } = await import('@/lib/actions/billing-documents')
+      const billingDocs = await getPetBillingDocuments(petId)
+      for (const bd of billingDocs) {
+        events.push({
+          id:   `billing-${bd.id}`,
+          type: 'billing_document',
+          date: bd.issue_date,
+          billing_document: {
+            id:           bd.id,
+            doc_type:     bd.doc_type,
+            doc_number:   bd.doc_number,
+            status:       bd.status,
+            total_amount: bd.total_amount,
+          },
+        })
+      }
+    } catch { /* módulo opcional — não quebra o feed se indisponível */ }
 
     // 12. Fallback memorial: se o pet tem deceased_at mas a nota foi apagada,
     //     ainda mostra o card (referência ao registro em patients).

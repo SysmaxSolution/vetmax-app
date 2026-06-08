@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import {
   LogOut, Home, Stethoscope, TestTubes, Users, BarChart3, PawPrint,
   BedDouble, Package, Scissors, Banknote, FolderKanban, MessageCircle, MessageSquare,
-  ShoppingCart, Activity, ClipboardList, DollarSign, FileBarChart2,
+  ShoppingCart, Activity, ClipboardList, DollarSign, FileBarChart2, FileText,
   Menu, X, Lock, Syringe,
 } from 'lucide-react'
 import type { UserRole } from '@/types'
@@ -70,6 +70,7 @@ const ALL_TABS: Tab[] = [
   { label: 'Estoque',      href: '/dashboard/pharmacy',        icon: Package,       roles: ['admin'],                                  moduleKey: 'pharmacy'        },
   { label: 'Vendas',       href: '/dashboard/sales',           icon: ShoppingCart,  roles: ['receptionist','admin','assistant'],       moduleKey: 'sales'           },
   { label: 'Financeiro',   href: '/dashboard/financial',       icon: DollarSign,    roles: ['admin'],                                  moduleKey: 'financial'       },
+  { label: 'Faturamento',  href: '/dashboard/billing',         icon: FileText,      roles: ['admin','receptionist','vet','assistant'], moduleKey: 'billing'         },
   { label: 'Relatórios',   href: '/dashboard/reports',         icon: FileBarChart2, roles: ['admin'],                                  moduleKey: 'reports'         },
   { label: 'Gestão',       href: '/dashboard/management',      icon: BarChart3,     roles: ['admin']                                                                },
   { label: 'WhatsApp',     href: '/dashboard/whatsapp',        icon: MessageCircle, roles: ['receptionist','admin','vet','assistant'], moduleKey: 'whatsapp_intelligent' },

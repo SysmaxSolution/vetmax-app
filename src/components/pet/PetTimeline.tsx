@@ -129,6 +129,7 @@ function EventDot({ type }: { type: TimelineEvent['type'] }) {
     petlove_event:            { bg: 'bg-purple-500',  icon: '🐾' },
     weight_update:            { bg: 'bg-amber-500',   icon: '⚖️' },
     patient_note:             { bg: 'bg-slate-500',   icon: '📝' },
+    billing_document:         { bg: 'bg-green-600',   icon: '🧾' },
     memorial:                 { bg: 'bg-violet-400',  icon: '🕊️' },
   }[type]
   if (!cfg) return <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-sm shadow-sm ring-2 ring-white bg-slate-400">❓</div>
@@ -158,6 +159,55 @@ function PatientNoteCard({ event }: { event: TimelineEvent }) {
       {d.created_by_name && (
         <p className="text-[10px] text-slate-400 mt-1.5 italic">— {d.created_by_name}</p>
       )}
+    </div>
+  )
+}
+
+function BillingDocumentCard({ event, onOpenBilling }: { event: TimelineEvent; onOpenBilling?: (id: string) => void }) {
+  const d = event.billing_document!
+  const [busy, setBusy] = useState<'open' | 'wa' | null>(null)
+  const isQuote = d.doc_type === 'orcamento'
+  const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+
+  async function openPdf() {
+    setBusy('open')
+    const { getBillingDocumentSignedUrl } = await import('@/lib/actions/billing-documents')
+    const res = await getBillingDocumentSignedUrl(d.id)
+    setBusy(null)
+    if (!('error' in res) && res.signed_url) window.open(res.signed_url, '_blank')
+  }
+  async function sendWa() {
+    setBusy('wa')
+    const { sendBillingDocumentWhatsApp } = await import('@/lib/actions/billing-documents')
+    await sendBillingDocumentWhatsApp(d.id)
+    setBusy(null)
+  }
+
+  return (
+    <div className="rounded-xl border border-green-200 bg-green-50/50 px-4 py-3">
+      <div className="flex items-center justify-between mb-1">
+        <p className="text-xs font-bold text-green-700 uppercase tracking-wide">
+          {isQuote ? 'Orçamento de Serviços' : 'Nota Fiscal de Serviço'}
+        </p>
+        <span className="text-[10px] text-slate-500">{new Date(event.date).toLocaleDateString('pt-BR')}</span>
+      </div>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-slate-900 font-mono">{d.doc_number}</p>
+        <p className="text-sm font-bold text-slate-900">{fmt(d.total_amount)}</p>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <button onClick={openPdf} disabled={!!busy} className="inline-flex items-center gap-1 rounded-lg bg-slate-900 px-2.5 py-1 text-xs font-semibold text-white hover:bg-slate-700 disabled:opacity-50">
+          {busy === 'open' ? '...' : 'Abrir / Baixar'}
+        </button>
+        <button onClick={sendWa} disabled={!!busy} className="inline-flex items-center gap-1 rounded-lg bg-green-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50">
+          {busy === 'wa' ? '...' : 'WhatsApp'}
+        </button>
+        {onOpenBilling && (
+          <button onClick={() => onOpenBilling(d.id)} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-white">
+            Detalhes
+          </button>
+        )}
+      </div>
     </div>
   )
 }
@@ -1094,6 +1144,7 @@ export default function PetTimeline({ events, packageMap = {}, onPrint, onEdit, 
                       {event.type === 'petlove_event'             && <PetloveEventCard event={event} />}
                       {event.type === 'weight_update'             && <WeightUpdateCard event={event} />}
                       {event.type === 'patient_note'              && <PatientNoteCard event={event} />}
+                      {event.type === 'billing_document'          && <BillingDocumentCard event={event} />}
                       {event.type === 'memorial'                  && <MemorialCard event={event} />}
                     </div>
                   </div>
