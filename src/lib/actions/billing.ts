@@ -474,8 +474,10 @@ export async function addItemToInvoice(
   const { data: created, error: insErr } = await admin
     .from('invoice_items')
     .insert({
+      // invoice_items NÃO tem clinic_id — o isolamento é pelo invoice_id (a
+      // invoice é que carrega o clinic_id). Incluir clinic_id aqui quebra com
+      // "Could not find the 'clinic_id' column of 'invoice_items'".
       invoice_id:       invoiceId,
-      clinic_id:        profile.clinic_id,
       item_type:        itemType,
       description:      item.name,
       quantity:         qty,
@@ -1095,8 +1097,8 @@ export async function processSplitPayment(
     const juros = Number(options.copay_interest.total.toFixed(2))
 
     await admin.from('invoice_items').insert({
+      // invoice_items isola por invoice_id (sem coluna clinic_id própria).
       invoice_id:       invoiceId,
-      clinic_id:        profile.clinic_id,
       item_type:        'other',
       description:      'Taxa administrativa',
       quantity:         1,
