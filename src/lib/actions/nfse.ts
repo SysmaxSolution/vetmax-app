@@ -32,6 +32,8 @@ export interface FiscalConfig {
   cnpj:                string | null
   inscricao_municipal: string | null
   razao_social:        string | null
+  regime_tributario:   string | null
+  optante_simples:     boolean
   codigo_municipio:    string | null
   cnae:                string | null
   item_lista_servico:  string | null
@@ -41,6 +43,33 @@ export interface FiscalConfig {
   rps_serie:           string | null
   rps_proximo_numero:  number
   rps_lote:            number
+  // Flags de presença do token (nunca expõe o valor ao client).
+  has_token_sandbox:    boolean
+  has_token_production: boolean
+}
+
+/** Payload de gravação da config fiscal. Tokens opcionais (só grava se vier). */
+export interface FiscalConfigInput {
+  emits_nfse?:          boolean
+  is_active?:           boolean
+  environment?:         'sandbox' | 'production'
+  cnpj?:                string | null
+  inscricao_municipal?: string | null
+  razao_social?:        string | null
+  regime_tributario?:   string | null
+  optante_simples?:     boolean
+  codigo_municipio?:    string | null
+  cnae?:                string | null
+  item_lista_servico?:  string | null
+  codigo_tributario_municipio?: string | null
+  iss_aliquota?:        number | null
+  iss_retido?:          boolean
+  rps_serie?:           string | null
+  rps_proximo_numero?:  number
+  rps_lote?:            number
+  /** Quando presente (string não-vazia), atualiza o token do ambiente. */
+  focus_token_sandbox?:    string
+  focus_token_production?: string
 }
 
 /** Payload NFS-e no formato Focus NFe (subset essencial p/ serviços vet). */
@@ -105,7 +134,7 @@ export async function getFiscalConfig(): Promise<FiscalConfig | null | { error: 
   const { admin, clinic_id } = ctx
   const { data, error } = await admin
     .from('clinic_fiscal_config')
-    .select('emits_nfse, is_active, environment, provider, cnpj, inscricao_municipal, razao_social, codigo_municipio, cnae, item_lista_servico, codigo_tributario_municipio, iss_aliquota, iss_retido, rps_serie, rps_proximo_numero, rps_lote')
+    .select('emits_nfse, is_active, environment, provider, cnpj, inscricao_municipal, razao_social, regime_tributario, optante_simples, codigo_municipio, cnae, item_lista_servico, codigo_tributario_municipio, iss_aliquota, iss_retido, rps_serie, rps_proximo_numero, rps_lote, focus_token_sandbox, focus_token_production')
     .eq('clinic_id', clinic_id)
     .maybeSingle()
   if (error) {
@@ -113,10 +142,53 @@ export async function getFiscalConfig(): Promise<FiscalConfig | null | { error: 
     return null
   }
   if (!data) return null
+  const { focus_token_sandbox, focus_token_production, ...rest } = data as any
   return {
-    ...data,
-    iss_aliquota: data.iss_aliquota === null ? null : Number(data.iss_aliquota),
+    ...rest,
+    iss_aliquota: rest.iss_aliquota === null ? null : Number(rest.iss_aliquota),
+    has_token_sandbox:    Boolean(focus_token_sandbox && String(focus_token_sandbox).trim()),
+    has_token_production: Boolean(focus_token_production && String(focus_token_production).trim()),
   } as FiscalConfig
+}
+
+// ─── upsertFiscalConfig ───────────────────────────────────────────────────────
+// Grava (cria ou atualiza) a config fiscal do tenant. Tokens só são gravados
+// quando vierem preenchidos (string não-vazia) — assim a UI nunca precisa
+// reenviar o token a cada salvar. NUNCA retorna o token.
+
+export async function upsertFiscalConfig(
+  input: FiscalConfigInput,
+): Promise<{ success: true } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+  const { admin, clinic_id } = ctx
+
+  // Apenas chaves presentes entram no patch (undefined = não mexe).
+  const patch: Record<string, unknown> = { clinic_id }
+  const assign = (k: keyof FiscalConfigInput) => {
+    if (input[k] !== undefined) patch[k] = input[k]
+  }
+  ;([
+    'emits_nfse', 'is_active', 'environment', 'cnpj', 'inscricao_municipal',
+    'razao_social', 'regime_tributario', 'optante_simples', 'codigo_municipio',
+    'cnae', 'item_lista_servico', 'codigo_tributario_municipio', 'iss_aliquota',
+    'iss_retido', 'rps_serie', 'rps_proximo_numero', 'rps_lote',
+  ] as Array<keyof FiscalConfigInput>).forEach(assign)
+
+  // Tokens: só grava se string não-vazia (mantém o existente caso contrário).
+  if (input.focus_token_sandbox && input.focus_token_sandbox.trim()) {
+    patch.focus_token_sandbox = input.focus_token_sandbox.trim()
+  }
+  if (input.focus_token_production && input.focus_token_production.trim()) {
+    patch.focus_token_production = input.focus_token_production.trim()
+  }
+
+  const { error } = await admin
+    .from('clinic_fiscal_config')
+    .upsert(patch, { onConflict: 'clinic_id' })
+  if (error) return { error: 'Erro ao salvar configuração fiscal: ' + error.message }
+
+  return { success: true }
 }
 
 // ─── validateForNfse (prestador + tomador) ────────────────────────────────────
@@ -232,15 +304,44 @@ export async function buildNfsePayload(
   return { payload, ref }
 }
 
-// ─── emitNfse (STUB — Fase 3) ─────────────────────────────────────────────────
-// Emissão real. Hoje monta o payload e VALIDA, mas a chamada HTTP fica atrás de
-// uma guarda: sem token configurado em clinic_fiscal_config, retorna erro
-// instrutivo em vez de tentar a rede. Quando o PO liberar a Fase 3 e o token
-// estiver salvo, troca-se a guarda pela chamada fetch (Basic auth com o token).
+// ─── Mapeamento de status Focus NFe → status interno do documento ─────────────
+// Focus NFe devolve: processando_autorizacao | autorizado | cancelado |
+// erro_autorizacao. Mapeamos para o BillingStatus de nfse (processing/authorized/
+// rejected). 'cancelado' tratamos como rejected p/ a UI (fora de escopo cancelar).
+function mapFocusStatus(focusStatus: string | undefined): 'processing' | 'authorized' | 'rejected' {
+  switch (focusStatus) {
+    case 'autorizado':              return 'authorized'
+    case 'erro_autorizacao':
+    case 'cancelado':               return 'rejected'
+    case 'processando_autorizacao':
+    default:                        return 'processing'
+  }
+}
+
+/** Grava os campos fiscais retornados pelo provedor no billing_document. */
+async function persistNfseResult(
+  admin: Ctx['admin'], clinic_id: string, billingDocumentId: string,
+  ref: string, body: any,
+): Promise<void> {
+  const status = mapFocusStatus(body?.status)
+  await admin.from('billing_documents').update({
+    status,
+    nfse_ref:                ref,
+    nfse_numero:             body?.numero ?? body?.numero_rps ?? null,
+    nfse_codigo_verificacao: body?.codigo_verificacao ?? null,
+    nfse_provider_status:    body?.status ?? null,
+    nfse_url:                body?.url ?? body?.caminho_xml_nota_fiscal ?? null,
+  }).eq('id', billingDocumentId).eq('clinic_id', clinic_id)
+}
+
+// ─── emitNfse — emissão real (Focus NFe) ──────────────────────────────────────
+// POST /v2/nfse?ref= com Basic auth (usuário=token, senha vazia). Focus responde
+// 202 (em processamento) — a confirmação chega depois via consultNfse (polling)
+// ou webhook. Persiste ref+status no documento para acompanhamento.
 
 export async function emitNfse(
   billingDocumentId: string,
-): Promise<{ ref: string; status: 'queued' } | { error: string; payload?: FocusNfsePayload }> {
+): Promise<{ ref: string; status: string } | { error: string; payload?: FocusNfsePayload }> {
   const ctx = await getCtx()
   if ('error' in ctx) return ctx
   const { admin, clinic_id } = ctx
@@ -258,40 +359,102 @@ export async function emitNfse(
   if (!cfg || !cfg.emits_nfse || !cfg.is_active) {
     return { error: 'Emissão de NFS-e não está ativa para esta clínica.', payload }
   }
-  const token = cfg.environment === 'production' ? cfg.focus_token_production : cfg.focus_token_sandbox
+  const env   = (cfg.environment === 'production' ? 'production' : 'sandbox') as 'sandbox' | 'production'
+  const token = env === 'production' ? cfg.focus_token_production : cfg.focus_token_sandbox
   if (!token) {
     return { error: 'Token do Focus NFe não configurado para o ambiente selecionado.', payload }
   }
 
-  // URL-alvo do provedor já resolvida (endpoint + recurso por ref idempotente).
-  const targetUrl = `${FOCUS_NFE_ENDPOINTS[cfg.environment as 'sandbox' | 'production']}${focusNfsePath(ref)}`
+  const targetUrl = `${FOCUS_NFE_ENDPOINTS[env]}${focusNfsePath(ref)}`
+  const authHeader = 'Basic ' + Buffer.from(`${token}:`).toString('base64')
 
-  // ── Guarda da Fase 3 ──────────────────────────────────────────────────────
-  // A chamada HTTP real será habilitada quando o PO liberar a emissão. Mantida
-  // como referência (Basic auth: usuário=token, senha vazia):
-  //
-  //   const res = await fetch(targetUrl, {
-  //     method: 'POST',
-  //     headers: {
-  //       'Content-Type': 'application/json',
-  //       Authorization: 'Basic ' + Buffer.from(`${token}:`).toString('base64'),
-  //     },
-  //     body: JSON.stringify(payload),
-  //   })
-  //   ... tratar 202 (em processamento) / 422 (erro) e gravar nfse_ref/status ...
-  //
-  void targetUrl // referenciado para a Fase 3 (evita import órfão)
-  return { error: 'Emissão real desabilitada (Fase 3 não liberada). Payload validado e pronto.', payload }
+  let res: Response
+  try {
+    res = await fetch(targetUrl, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: authHeader },
+      body:    JSON.stringify(payload),
+      cache:   'no-store',
+    })
+  } catch (e) {
+    return { error: 'Falha de rede ao contatar o provedor de NFS-e: ' + (e instanceof Error ? e.message : 'erro'), payload }
+  }
+
+  let body: any = null
+  try { body = await res.json() } catch { /* corpo vazio em alguns 202 */ }
+
+  // 422 = erro de validação do provedor (campos fiscais). 4xx demais idem.
+  if (res.status >= 400) {
+    const msg = body?.mensagem || body?.erros?.[0]?.mensagem || body?.codigo || `HTTP ${res.status}`
+    await admin.from('billing_documents').update({
+      status: 'rejected', nfse_ref: ref, nfse_provider_status: body?.status ?? `erro_${res.status}`,
+    }).eq('id', billingDocumentId).eq('clinic_id', clinic_id)
+    return { error: 'Provedor rejeitou a NFS-e: ' + msg, payload }
+  }
+
+  // 202 (processando) ou 200 (já autorizado em sandbox) — persiste e devolve.
+  await persistNfseResult(admin, clinic_id, billingDocumentId, ref, body)
+  return { ref, status: body?.status ?? 'processando_autorizacao' }
 }
 
-// ─── consultNfse (STUB — Fase 3) ──────────────────────────────────────────────
-// Consulta o status de uma emissão pelo ref (GET /v2/nfse?ref=). Mesma guarda.
+// ─── consultNfse — consulta de status (Focus NFe) ─────────────────────────────
+// GET /v2/nfse?ref= com Basic auth. Atualiza o documento (por ref) com o status
+// mais recente. Usada para polling pós-emissão.
 
 export async function consultNfse(
   ref: string,
-): Promise<{ status: string } | { error: string }> {
+): Promise<{ status: string; numero?: string | null; url?: string | null } | { error: string }> {
   const ctx = await getCtx()
   if ('error' in ctx) return ctx
+  const { admin, clinic_id } = ctx
   if (!ref) return { error: 'ref obrigatório.' }
-  return { error: 'Consulta real desabilitada (Fase 3 não liberada).' }
+
+  const { data: doc } = await admin
+    .from('billing_documents')
+    .select('id')
+    .eq('clinic_id', clinic_id).eq('nfse_ref', ref).maybeSingle()
+  if (!doc) return { error: 'Documento da NFS-e não encontrado para este ref.' }
+
+  const { data: cfg } = await admin
+    .from('clinic_fiscal_config')
+    .select('environment, focus_token_sandbox, focus_token_production')
+    .eq('clinic_id', clinic_id).maybeSingle()
+  if (!cfg) return { error: 'Configuração fiscal ausente.' }
+  const env   = (cfg.environment === 'production' ? 'production' : 'sandbox') as 'sandbox' | 'production'
+  const token = env === 'production' ? cfg.focus_token_production : cfg.focus_token_sandbox
+  if (!token) return { error: 'Token do Focus NFe não configurado.' }
+
+  const targetUrl = `${FOCUS_NFE_ENDPOINTS[env]}${focusNfsePath(ref)}`
+  const authHeader = 'Basic ' + Buffer.from(`${token}:`).toString('base64')
+
+  let res: Response
+  try {
+    res = await fetch(targetUrl, { method: 'GET', headers: { Authorization: authHeader }, cache: 'no-store' })
+  } catch (e) {
+    return { error: 'Falha de rede ao consultar a NFS-e: ' + (e instanceof Error ? e.message : 'erro') }
+  }
+  let body: any = null
+  try { body = await res.json() } catch { /* */ }
+  if (res.status >= 400) {
+    return { error: 'Erro ao consultar NFS-e: ' + (body?.mensagem || `HTTP ${res.status}`) }
+  }
+
+  await persistNfseResult(admin, clinic_id, doc.id as string, ref, body)
+  return { status: body?.status ?? 'processando_autorizacao', numero: body?.numero ?? null, url: body?.url ?? null }
+}
+
+// ─── emitNfseForConsultation — orquestrador do Caixa ──────────────────────────
+// Cria o documento NFS-e a partir dos serviços da consulta e dispara a emissão
+// no provedor. É o ponto que o CheckoutModal chama ao confirmar "Emitir NFS-e?".
+
+export async function emitNfseForConsultation(
+  consultationId: string,
+): Promise<{ ref: string; status: string; doc_number: string } | { error: string }> {
+  const { createNfseDocumentForConsultation } = await import('./billing-documents')
+  const created = await createNfseDocumentForConsultation(consultationId)
+  if ('error' in created) return created
+
+  const emitted = await emitNfse(created.id)
+  if ('error' in emitted) return { error: emitted.error }
+  return { ref: emitted.ref, status: emitted.status, doc_number: created.doc_number }
 }

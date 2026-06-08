@@ -12,6 +12,7 @@ import ModulesTab from '../ModulesTab'
 import ClinicSettingsTab from '../ClinicSettingsTab'
 import CsvImporter from '../CsvImporter'
 import WhatsappIntelligentSetup from './WhatsappIntelligentSetup'
+import FiscalConfigForm from './FiscalConfigForm'
 import { useUpgradeModal } from '@/components/upgrade/UpgradeProvider'
 import type { UpgradeFeatureKey } from '@/components/upgrade/UpgradeModal'
 import { Lock, ArrowUpRight } from 'lucide-react'
@@ -322,24 +323,8 @@ function AccountingSettings({ initialConfig, onToast }: {
         </div>
       </div>
 
-      {/* Dados Fiscais — informativo */}
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-        <div className="border-b border-slate-100 px-6 py-4 flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50">
-            <BarChart3 className="h-4 w-4 text-blue-600" />
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-slate-900">Dados Fiscais e NFS-e</h3>
-            <p className="text-xs text-slate-500">Configuração de regime tributário e emissão de NFS-e</p>
-          </div>
-        </div>
-        <div className="px-6 py-4">
-          <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-xs text-amber-700">
-            <span className="font-semibold">Em breve:</span> configurações de dados fiscais e emissão de NFS-e
-            serão disponibilizadas aqui. O CNPJ da clínica está disponível na aba "Clínica".
-          </div>
-        </div>
-      </div>
+      {/* Dados Fiscais e NFS-e (Faturamento Fase 3 — Focus NFe) */}
+      <FiscalConfigForm onToast={onToast} />
 
       <button
         onClick={handleSave}

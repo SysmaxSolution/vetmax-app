@@ -15,6 +15,8 @@ import PaymentMethodModal, { type PaymentSplit } from '@/components/payments/Pay
 import { computeCheckoutTotals } from '@/lib/checkout-totals'
 import { getConsultationCopayInterestPreview, type CopayInterestPreview } from '@/lib/actions/insurance-checkout'
 import NfseTutorGate from '@/components/billing/NfseTutorGate'
+import { clinicEmitsNfse } from '@/lib/actions/billing-documents'
+import { emitNfseForConsultation } from '@/lib/actions/nfse'
 
 const SPECIES_EMOJI: Record<string, string> = {
   dog: '🐶', cat: '🐱', bird: '🐦', exotic: '🦜',
@@ -56,6 +58,11 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [confirmCourtesy, setConfirmCourtesy]   = useState(false)
   const [submittingCourtesy, setSubmittingCourtesy] = useState(false)
+  // Pergunta de NFS-e pós-pagamento (Faturamento Fase 3) — só quando a clínica
+  // emite nota e a fatura tem consulta vinculada.
+  const [nfsePrompt, setNfsePrompt] = useState<{ consultationId: string; petName: string; total: number } | null>(null)
+  const [emittingNfse, setEmittingNfse] = useState(false)
+  const [nfseResult, setNfseResult] = useState<string | null>(null)
 
   async function handleConfirmCourtesy() {
     if (!invoice || submittingCourtesy) return
@@ -301,7 +308,35 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
     if ('error' in res) { setError(res.error); throw new Error(res.error) }
     const totalReceived = splits.reduce((s, p) => s + p.amount, 0)
     setShowPaymentModal(false)
+
+    // Pergunta de NFS-e: só quando a clínica emite nota e há consulta vinculada.
+    if (invoice.consultation_id) {
+      const emits = await clinicEmitsNfse()
+      if (emits.emits) {
+        setNfsePrompt({ consultationId: invoice.consultation_id, petName: invoice.patient.name, total: totalReceived })
+        return // finaliza após a decisão do operador
+      }
+    }
     onSuccess(invoice.patient.name, totalReceived)
+  }
+
+  async function handleEmitNfse() {
+    if (!nfsePrompt) return
+    setEmittingNfse(true)
+    setNfseResult(null)
+    const res = await emitNfseForConsultation(nfsePrompt.consultationId)
+    setEmittingNfse(false)
+    if ('error' in res) { setNfseResult('Erro: ' + res.error); return }
+    const { petName, total } = nfsePrompt
+    setNfsePrompt(null)
+    onSuccess(petName, total)
+  }
+
+  function handleSkipNfse() {
+    if (!nfsePrompt) return
+    const { petName, total } = nfsePrompt
+    setNfsePrompt(null)
+    onSuccess(petName, total)
   }
 
   return (
@@ -707,6 +742,46 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
                 className="flex-1 rounded-xl bg-violet-600 py-2.5 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {submittingCourtesy ? <><Loader2 className="h-4 w-4 animate-spin" /> Confirmando…</> : <>Sim, é cortesia</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pergunta de NFS-e pós-pagamento (Faturamento Fase 3) */}
+      {nfsePrompt && (
+        <div className="fixed inset-0 z-[85] flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl p-5 space-y-3" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100">
+                <Receipt className="h-5 w-5 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Emitir Nota Fiscal de Serviço?</h3>
+                <p className="text-xs text-slate-500">Pagamento de {invoice.patient.name} recebido</p>
+              </div>
+            </div>
+            <p className="text-sm text-slate-600">
+              Deseja emitir a <strong>NFS-e</strong> deste atendimento agora? A nota será gerada com base nos
+              serviços cobrados e enviada ao provedor (Focus NFe).
+            </p>
+            {nfseResult && (
+              <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-600">{nfseResult}</div>
+            )}
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={handleSkipNfse}
+                disabled={emittingNfse}
+                className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Agora não
+              </button>
+              <button
+                onClick={handleEmitNfse}
+                disabled={emittingNfse}
+                className="flex-1 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {emittingNfse ? <><Loader2 className="h-4 w-4 animate-spin" /> Emitindo…</> : <>Emitir NFS-e</>}
               </button>
             </div>
           </div>

@@ -966,3 +966,100 @@ export async function clinicEmitsNfse(): Promise<{ emits: boolean }> {
     return { emits: false }
   }
 }
+
+/**
+ * Cria um documento NFS-e (doc_type='nfse') a partir dos serviços ATIVOS de uma
+ * consulta — fonte da verdade do que foi cobrado no caixa. Idempotente por
+ * consulta: se já existe uma NFS-e não-cancelada para a consulta, devolve-a.
+ * A emissão real (provedor) é feita em seguida por emitNfse (módulo nfse.ts).
+ */
+export async function createNfseDocumentForConsultation(
+  consultationId: string,
+): Promise<{ id: string; doc_number: string } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+  const { admin, clinic_id, user_id } = ctx
+  if (!consultationId) return { error: 'consultation_id obrigatório.' }
+
+  // Já existe NFS-e para a consulta? Reaproveita (não duplica nota).
+  const { data: existing } = await admin
+    .from('billing_documents')
+    .select('id, doc_number')
+    .eq('clinic_id', clinic_id)
+    .eq('consultation_id', consultationId)
+    .eq('doc_type', 'nfse')
+    .neq('status', 'cancelled')
+    .maybeSingle()
+  if (existing) return { id: existing.id as string, doc_number: existing.doc_number as string }
+
+  // Dados da consulta (tutor/pet/profissional) + serviços ativos
+  const { data: consult } = await admin
+    .from('consultations')
+    .select('id, patient_id, tutor_id, vet_id')
+    .eq('id', consultationId).eq('clinic_id', clinic_id).maybeSingle()
+  if (!consult) return { error: 'Consulta não encontrada.' }
+
+  const { data: services } = await admin
+    .from('consultation_services')
+    .select('stock_item_id, name_snapshot, price_snapshot, quantity')
+    .eq('clinic_id', clinic_id)
+    .eq('consultation_id', consultationId)
+    .is('cancelled_at', null)
+    .order('created_at', { ascending: true })
+  const items = (services ?? []).map((s: any) => ({
+    stock_item_id: (s.stock_item_id as string) ?? null,
+    description:   String(s.name_snapshot ?? 'Serviço'),
+    quantity:      Number(s.quantity ?? 1),
+    unit_price:    Number(s.price_snapshot ?? 0),
+  }))
+  if (items.length === 0) return { error: 'Consulta sem serviços para emitir NFS-e.' }
+
+  const total = computeBillingTotal(items)
+
+  // Numeração atômica NFSE-AAAA-NNNN
+  const supabase = await createClient()
+  const { data: numberData, error: numErr } = await supabase.rpc('rpc_next_billing_number', {
+    p_clinic_id: clinic_id, p_doc_type: 'nfse',
+  })
+  if (numErr || !numberData) return { error: 'Erro ao gerar número da NFS-e: ' + (numErr?.message ?? '') }
+  const docNumber = numberData as string
+
+  const tutorName   = await nameOf(admin, 'tutors', consult.tutor_id)
+  const patientName = await nameOf(admin, 'patients', consult.patient_id, 'name')
+  const profName    = await nameOf(admin, 'profiles', consult.vet_id, 'full_name')
+
+  const { data: doc, error: docErr } = await admin
+    .from('billing_documents')
+    .insert({
+      clinic_id,
+      doc_type:        'nfse',
+      doc_number:      docNumber,
+      status:          'processing',
+      is_billed:       true,
+      issue_date:      new Date().toISOString(),
+      tutor_id:        consult.tutor_id,
+      patient_id:      consult.patient_id,
+      professional_id: consult.vet_id,
+      consultation_id: consultationId,
+      total_amount:    total,
+      payload: { snapshot: { tutor_name: tutorName, patient_name: patientName, professional_name: profName } },
+      created_by: user_id,
+    })
+    .select('id, doc_number')
+    .single()
+  if (docErr || !doc) return { error: 'Erro ao criar NFS-e: ' + (docErr?.message ?? '') }
+
+  const itemRows = items.map((it, idx) => ({
+    clinic_id, document_id: doc.id, stock_item_id: it.stock_item_id,
+    description: it.description, quantity: it.quantity, unit_price: it.unit_price,
+    total_price: Math.round(it.quantity * it.unit_price * 100) / 100, sort_order: idx,
+  }))
+  const { error: itemsErr } = await admin.from('billing_document_items').insert(itemRows)
+  if (itemsErr) {
+    await admin.from('billing_documents').delete().eq('id', doc.id)
+    return { error: 'Erro ao gravar itens da NFS-e: ' + itemsErr.message }
+  }
+
+  revalidatePath('/dashboard/billing')
+  return { id: doc.id as string, doc_number: doc.doc_number as string }
+}
