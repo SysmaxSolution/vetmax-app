@@ -30,8 +30,6 @@ type FormState = {
   optante_simples:     boolean
   codigo_municipio:    string
   cnae:                string
-  item_lista_servico:  string
-  codigo_tributario_municipio: string
   iss_aliquota_pct:    string  // exibido em %, convertido p/ fração ao salvar
   iss_retido:          boolean
   rps_serie:           string
@@ -44,8 +42,8 @@ type FormState = {
 const EMPTY: FormState = {
   emits_nfse: false, is_active: false, environment: 'sandbox',
   cnpj: '', inscricao_municipal: '', razao_social: '', regime_tributario: 'simples_nacional',
-  optante_simples: true, codigo_municipio: '', cnae: '', item_lista_servico: '',
-  codigo_tributario_municipio: '', iss_aliquota_pct: '', iss_retido: false,
+  optante_simples: true, codigo_municipio: '', cnae: '',
+  iss_aliquota_pct: '', iss_retido: false,
   rps_serie: '1', rps_proximo_numero: '1', rps_lote: '1',
   token_sandbox: '', token_production: '',
 }
@@ -56,8 +54,7 @@ function fromConfig(c: FiscalConfig): FormState {
     cnpj: c.cnpj ?? '', inscricao_municipal: c.inscricao_municipal ?? '',
     razao_social: c.razao_social ?? '', regime_tributario: c.regime_tributario ?? 'simples_nacional',
     optante_simples: c.optante_simples, codigo_municipio: c.codigo_municipio ?? '',
-    cnae: c.cnae ?? '', item_lista_servico: c.item_lista_servico ?? '',
-    codigo_tributario_municipio: c.codigo_tributario_municipio ?? '',
+    cnae: c.cnae ?? '',
     iss_aliquota_pct: c.iss_aliquota === null ? '' : String(Math.round(c.iss_aliquota * 10000) / 100),
     iss_retido: c.iss_retido, rps_serie: c.rps_serie ?? '1',
     rps_proximo_numero: String(c.rps_proximo_numero ?? 1), rps_lote: String(c.rps_lote ?? 1),
@@ -97,7 +94,6 @@ export default function FiscalConfigForm({ onToast }: Props) {
       if (!form.cnpj.trim())                missing.push('CNPJ')
       if (!form.inscricao_municipal.trim()) missing.push('Inscrição municipal')
       if (!form.codigo_municipio.trim())    missing.push('Código do município')
-      if (!form.item_lista_servico.trim())  missing.push('Item da lista de serviço')
       if (!form.iss_aliquota_pct.trim())    missing.push('Alíquota ISS')
       if (missing.length) { onToast('error', 'Para emitir NFS-e, preencha: ' + missing.join(', ')); return }
     }
@@ -111,8 +107,7 @@ export default function FiscalConfigForm({ onToast }: Props) {
       cnpj: form.cnpj.trim() || null, inscricao_municipal: form.inscricao_municipal.trim() || null,
       razao_social: form.razao_social.trim() || null, regime_tributario: form.regime_tributario || null,
       optante_simples: form.optante_simples, codigo_municipio: form.codigo_municipio.trim() || null,
-      cnae: form.cnae.trim() || null, item_lista_servico: form.item_lista_servico.trim() || null,
-      codigo_tributario_municipio: form.codigo_tributario_municipio.trim() || null,
+      cnae: form.cnae.trim() || null,
       iss_aliquota: issFraction, iss_retido: form.iss_retido,
       rps_serie: form.rps_serie.trim() || '1',
       rps_proximo_numero: Math.max(1, parseInt(form.rps_proximo_numero || '1', 10) || 1),
@@ -189,10 +184,8 @@ export default function FiscalConfigForm({ onToast }: Props) {
         </Section>
 
         {/* Tributação */}
-        <Section title="Tributação do Serviço">
+        <Section title="Tributação">
           <div className="grid sm:grid-cols-2 gap-3">
-            <Field label="Item da Lista de Serviço (LC 116)" value={form.item_lista_servico} onChange={v => set('item_lista_servico', v)} placeholder="ex.: 5.07" />
-            <Field label="Código Tributário do Município" value={form.codigo_tributario_municipio} onChange={v => set('codigo_tributario_municipio', v)} />
             <Field label="Alíquota ISS (%)" value={form.iss_aliquota_pct} onChange={v => set('iss_aliquota_pct', v)} placeholder="ex.: 2" />
             <div className="flex items-end">
               <Toggle label="ISS retido" desc="" value={form.iss_retido} onChange={v => set('iss_retido', v)} />
@@ -210,6 +203,10 @@ export default function FiscalConfigForm({ onToast }: Props) {
               <Toggle label="Optante do Simples" desc="" value={form.optante_simples} onChange={v => set('optante_simples', v)} />
             </div>
           </div>
+          <p className="mt-3 text-[11px] text-slate-500">
+            O <strong>item da lista de serviço (LC 116)</strong> e o <strong>código tributário do município</strong> são
+            definidos por serviço, no cadastro de cada serviço (Farmácia/Estoque &gt; Serviços).
+          </p>
         </Section>
 
         {/* RPS */}

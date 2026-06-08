@@ -5,7 +5,7 @@ import {
   Package, Plus, AlertTriangle, RefreshCw, Trash2, Pencil,
   ArrowDownToLine, Search, X, Loader2, Check, Calendar,
   Shield, ShoppingBag, Scissors, Sparkles, FlaskConical, Pill,
-  Upload, Stethoscope, Gift, Activity,
+  Upload, Stethoscope, Gift, Activity, FileText,
 } from 'lucide-react'
 import type { StockItemV2 } from '@/lib/actions/stock'
 import type { StockCategory } from '@/lib/stock-constants'
@@ -18,6 +18,7 @@ import type { GlobalCatalogSuggestion } from '@/lib/actions/catalog'
 import { searchGlobalCatalog } from '@/lib/actions/catalog'
 import { suggestDefaultInsurancePrice } from '@/lib/actions/insurance-pricing'
 import { getInsuranceProviders, getProvidersForStockItem, setProvidersForStockItem, type InsuranceProvider } from '@/lib/actions/insurance-providers'
+import { clinicEmitsNfse } from '@/lib/actions/billing-documents'
 import StockCsvImporter from './StockCsvImporter'
 import { EnrichNcmModal } from './EnrichNcmModal'
 import PharmacyCatalogQuickAdd from './PharmacyCatalogQuickAdd'
@@ -101,6 +102,9 @@ interface ItemForm {
   default_insurance_price: string
   /** Épico A (04/06): % de taxa sobre a coparticipação quando paga no cartão. */
   insurance_card_interest_percent: string
+  /** NFS-e (Fase 3): item da lista de serviço LC116 + código tributário municipal. */
+  nfse_item_lista_servico: string
+  nfse_codigo_tributario_municipio: string
 }
 
 const EMPTY_PRODUCT_FORM: ItemForm = {
@@ -109,6 +113,7 @@ const EMPTY_PRODUCT_FORM: ItemForm = {
   brand: '', sku: '', barcode: '', batch_number: '', expiry_date: '', supplier: '',
   default_insurance_price: '',
   insurance_card_interest_percent: '',
+  nfse_item_lista_servico: '', nfse_codigo_tributario_municipio: '',
 }
 
 const EMPTY_SERVICE_FORM: ItemForm = {
@@ -117,6 +122,7 @@ const EMPTY_SERVICE_FORM: ItemForm = {
   brand: '', sku: '', barcode: '', batch_number: '', expiry_date: '', supplier: '',
   default_insurance_price: '',
   insurance_card_interest_percent: '',
+  nfse_item_lista_servico: '', nfse_codigo_tributario_municipio: '',
 }
 
 function formFromItem(item: StockItemV2): ItemForm {
@@ -131,6 +137,8 @@ function formFromItem(item: StockItemV2): ItemForm {
     insurance_card_interest_percent: Number(item.insurance_card_interest_percent ?? 0) > 0
       ? String(item.insurance_card_interest_percent)
       : '',
+    nfse_item_lista_servico: item.nfse_item_lista_servico ?? '',
+    nfse_codigo_tributario_municipio: item.nfse_codigo_tributario_municipio ?? '',
   }
 }
 
@@ -971,6 +979,8 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
   const [error, setError]   = useState<string | null>(null)
   const [providers, setProviders] = useState<InsuranceProvider[]>([])
   const [acceptedProviderIds, setAcceptedProviderIds] = useState<string[]>([])
+  // Campos fiscais de serviço só aparecem quando a clínica emite NFS-e (Fase 3).
+  const [emitsNfse, setEmitsNfse] = useState(false)
 
   const isNew     = mode === 'add'
   const isService = serviceMode || SERVICE_CAT_KEYS.has(form.category)
@@ -988,6 +998,12 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
       })
     }
   }, [isService, item?.id])
+
+  // Descobre se a clínica emite NFS-e (revela os campos fiscais do serviço).
+  useEffect(() => {
+    if (!isService) return
+    clinicEmitsNfse().then(res => setEmitsNfse(res.emits))
+  }, [isService])
 
   function toggleProvider(id: string) {
     setAcceptedProviderIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
@@ -1021,6 +1037,9 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
       insurance_card_interest_percent: form.insurance_card_interest_percent.trim() === ''
         ? 0
         : Math.min(100, Math.max(0, Number(form.insurance_card_interest_percent.replace(',', '.')) || 0)),
+      // NFS-e (Fase 3): só faz sentido para serviços.
+      nfse_item_lista_servico:          isService ? (form.nfse_item_lista_servico.trim() || null) : null,
+      nfse_codigo_tributario_municipio: isService ? (form.nfse_codigo_tributario_municipio.trim() || null) : null,
     }
 
     if (isNew) {
@@ -1177,6 +1196,34 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
                   Não afeta dinheiro/PIX nem itens particulares.
                 </p>
               </div>
+
+              {/* NFS-e (Fase 3): códigos fiscais do serviço — só quando a clínica emite nota */}
+              {emitsNfse && (
+                <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-4 space-y-3">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-blue-500 flex items-center gap-1.5">
+                    <FileText className="h-3.5 w-3.5" /> Dados fiscais (NFS-e)
+                  </p>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Item da Lista de Serviço (LC 116)</label>
+                      <input type="text" value={form.nfse_item_lista_servico}
+                        onChange={e => set('nfse_item_lista_servico', e.target.value)}
+                        placeholder="ex.: 5.07"
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Código Tributário do Município</label>
+                      <input type="text" value={form.nfse_codigo_tributario_municipio}
+                        onChange={e => set('nfse_codigo_tributario_municipio', e.target.value)}
+                        placeholder="código do serviço no município"
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-slate-400">
+                    Usados na emissão da NFS-e deste serviço. A alíquota de ISS é definida em Configurações &gt; Contábil.
+                  </p>
+                </div>
+              )}
 
               {/* Item B (2026-06-02): convênios que aceitam este serviço */}
               {providers.length > 0 && (

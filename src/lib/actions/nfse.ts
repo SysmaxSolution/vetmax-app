@@ -207,8 +207,8 @@ export async function validateForNfse(tutorId: string): Promise<NfseValidation |
       if (!cfg.cnpj)                blocks.push('CNPJ do prestador')
       if (!cfg.inscricao_municipal) blocks.push('Inscrição municipal')
       if (!cfg.codigo_municipio)    blocks.push('Código do município (IBGE)')
-      if (!cfg.item_lista_servico)  blocks.push('Item da lista de serviço (LC 116)')
       if (cfg.iss_aliquota === null) blocks.push('Alíquota de ISS')
+      // Item LC116 agora é por serviço (cadastro do serviço), não da config.
     }
   } else {
     blocks.push('Configuração fiscal não preenchida')
@@ -245,8 +245,10 @@ export async function buildNfsePayload(
 
   const cfg = await getFiscalConfig()
   if (!cfg || 'error' in cfg) return { error: 'Configuração fiscal ausente.' }
-  if (!cfg.cnpj || !cfg.inscricao_municipal || !cfg.codigo_municipio || !cfg.item_lista_servico || cfg.iss_aliquota === null) {
-    return { error: 'Configuração fiscal incompleta.' }
+  // Alíquota ISS e dados do prestador vêm da config. O item LC116 e o código
+  // tributário do município vêm do CADASTRO DO SERVIÇO (resolvidos abaixo).
+  if (!cfg.cnpj || !cfg.inscricao_municipal || !cfg.codigo_municipio || cfg.iss_aliquota === null) {
+    return { error: 'Configuração fiscal incompleta (CNPJ, inscrição municipal, código do município e alíquota ISS).' }
   }
 
   const { data: tutor } = await admin
@@ -257,13 +259,51 @@ export async function buildNfsePayload(
 
   const { data: items } = await admin
     .from('billing_document_items')
-    .select('description, quantity, unit_price')
+    .select('stock_item_id, description, quantity, unit_price')
     .eq('document_id', billingDocumentId)
     .order('sort_order', { ascending: true })
 
   const discriminacao = (items ?? [])
     .map((it: any) => `${Number(it.quantity)}x ${it.description} (${Number(it.unit_price).toFixed(2)})`)
     .join(' | ') || 'Serviços veterinários'
+
+  // Resolve o item LC116 + código tributário a partir dos serviços (stock_items).
+  // A NFS-e v2 do provedor carrega UM bloco de serviço; quando os itens têm
+  // códigos distintos, vence o de maior valor (predominante). Limitação conhecida:
+  // serviços com LC116 divergentes idealmente seriam notas separadas (melhoria futura).
+  const stockIds = Array.from(new Set((items ?? []).map((it: any) => it.stock_item_id).filter(Boolean)))
+  const codeByStock = new Map<string, { item: string | null; cod: string | null }>()
+  if (stockIds.length > 0) {
+    const { data: stocks } = await admin
+      .from('stock_items')
+      .select('id, nfse_item_lista_servico, nfse_codigo_tributario_municipio')
+      .eq('clinic_id', clinic_id)
+      .in('id', stockIds)
+    for (const s of stocks ?? []) {
+      codeByStock.set((s as any).id, {
+        item: (s as any).nfse_item_lista_servico ?? null,
+        cod:  (s as any).nfse_codigo_tributario_municipio ?? null,
+      })
+    }
+  }
+  const valueByItemCode = new Map<string, number>()
+  const codMunByItemCode = new Map<string, string | null>()
+  for (const it of items ?? []) {
+    const code = codeByStock.get((it as any).stock_item_id)?.item
+    if (!code) continue
+    const val = Number((it as any).quantity ?? 1) * Number((it as any).unit_price ?? 0)
+    valueByItemCode.set(code, (valueByItemCode.get(code) ?? 0) + val)
+    if (!codMunByItemCode.has(code)) codMunByItemCode.set(code, codeByStock.get((it as any).stock_item_id)?.cod ?? null)
+  }
+  let itemListaServico: string | null = null
+  let codigoTributarioMunicipio: string | null = null
+  let topValue = -1
+  for (const [code, val] of valueByItemCode) {
+    if (val > topValue) { topValue = val; itemListaServico = code; codigoTributarioMunicipio = codMunByItemCode.get(code) ?? null }
+  }
+  if (!itemListaServico) {
+    return { error: 'Nenhum serviço desta nota tem o "Item da Lista de Serviço (LC 116)" preenchido. Defina-o no cadastro do serviço.' }
+  }
 
   const onlyDigits = (s: string | null | undefined) => String(s ?? '').replace(/\D/g, '')
   const cpfDigits = onlyDigits(tutor.cpf)
@@ -293,8 +333,8 @@ export async function buildNfsePayload(
       aliquota:           cfg.iss_aliquota,
       discriminacao,
       iss_retido:         cfg.iss_retido,
-      item_lista_servico: cfg.item_lista_servico,
-      codigo_tributario_municipio: cfg.codigo_tributario_municipio || undefined,
+      item_lista_servico: itemListaServico,
+      codigo_tributario_municipio: codigoTributarioMunicipio || undefined,
       valor_servicos:     Number(doc.total_amount),
     },
   }
