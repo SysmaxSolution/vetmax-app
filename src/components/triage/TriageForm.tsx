@@ -38,6 +38,7 @@ import { useNativeKeepAwake } from '@/hooks/useNativeKeepAwake'
 import { getClinicVoiceTriggers, updateClinicVoiceTriggers } from '@/lib/actions/clinic-settings'
 import { useAiTranscriptionMode } from '@/components/providers/ClinicConfigProvider'
 import VaccineStatusBadges from '@/components/vet/VaccineStatusBadges'
+import ConsultationQuotationBadge from '@/components/billing/ConsultationQuotationBadge'
 import { BehaviorTagsBadges } from '@/components/ui/BehaviorTagsBadges'
 import WhatsAppNotificationModal from '@/components/whatsapp/WhatsAppNotificationModal'
 import { RemoveFromQueueModal } from '@/components/ui/RemoveFromQueueModal'
@@ -536,10 +537,11 @@ export default function TriageForm({
                 )}
               </div>
               <div>
-                <div className="flex items-center gap-3 mb-1">
+                <div className="flex items-center gap-3 mb-1 flex-wrap">
                   <h2 className="text-2xl font-bold text-slate-900">
                     {consultation.patient.name}
                   </h2>
+                  <ConsultationQuotationBadge consultationId={consultation.id} />
                   <span className="text-sm bg-slate-100 text-slate-700 px-2 py-1 rounded font-medium">
                     {consultation.patient.species === 'dog' && '🐕 '}
                     {consultation.patient.species === 'cat' && '🐱 '}

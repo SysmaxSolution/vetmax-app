@@ -593,3 +593,376 @@ export async function getBillingDocumentSignedUrl(
   const { data: signed } = await admin.storage.from('clinic-attachments').createSignedUrl(path, 3600)
   return { signed_url: signed?.signedUrl ?? '', doc_number: d.doc_number as string }
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// FASE 2 — Amarração no fluxo clínico (08/06/2026)
+// Recepção (badge) → Check-in (pré-carga de serviços) → cabeçalho clínico →
+// Caixa (baixa automática + decremento seletivo de estoque) + gate NFS-e.
+// ════════════════════════════════════════════════════════════════════════════
+
+export interface OpenQuotation {
+  id:             string
+  doc_number:     string
+  status:         BillingStatus
+  total_amount:   number
+  issue_date:     string
+  valid_until:    string | null
+  patient_id:     string | null
+  patient_name:   string | null
+  item_count:     number
+  consultation_id: string | null
+  is_linked:      boolean
+}
+
+/** Mapeia linhas cruas de billing_documents → OpenQuotation (com contagem de itens). */
+function toOpenQuotation(d: any, itemCount: number): OpenQuotation {
+  return {
+    id:              d.id,
+    doc_number:      d.doc_number,
+    status:          d.status,
+    total_amount:    Number(d.total_amount),
+    issue_date:      d.issue_date,
+    valid_until:     d.valid_until,
+    patient_id:      d.patient_id,
+    patient_name:    d.patients?.name ?? null,
+    item_count:      itemCount,
+    consultation_id: d.consultation_id,
+    is_linked:       Boolean(d.consultation_id),
+  }
+}
+
+/**
+ * Orçamentos em aberto de um tutor (badge + lista na Recepção).
+ * Em aberto = orçamento (draft|sent), não faturado, não cancelado.
+ * Inclui os já vinculados a uma consulta (is_linked) para a UI distinguir.
+ */
+export async function getOpenQuotationsForTutor(
+  tutorId: string,
+): Promise<OpenQuotation[] | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+  const { admin, clinic_id } = ctx
+  if (!tutorId) return []
+
+  const { data, error } = await admin
+    .from('billing_documents')
+    .select('id, doc_number, status, total_amount, issue_date, valid_until, patient_id, consultation_id, patients:patient_id ( name )')
+    .eq('clinic_id', clinic_id)
+    .eq('tutor_id', tutorId)
+    .eq('doc_type', 'orcamento')
+    .eq('is_billed', false)
+    .in('status', ['draft', 'sent'])
+    .order('issue_date', { ascending: false })
+  if (error) return { error: error.message }
+
+  const ids = (data ?? []).map((d: any) => d.id)
+  const counts = await countItemsByDocument(admin, ids)
+  return (data ?? []).map((d: any) => toOpenQuotation(d, counts.get(d.id) ?? 0))
+}
+
+/**
+ * Orçamentos disponíveis para puxar no Check-in: em aberto, AINDA NÃO
+ * vinculados a uma consulta, opcionalmente filtrados pelo pet.
+ */
+export async function getOpenQuotationsForCheckin(
+  tutorId: string,
+  patientId?: string | null,
+): Promise<OpenQuotation[] | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+  const { admin, clinic_id } = ctx
+  if (!tutorId) return []
+
+  let qb = admin
+    .from('billing_documents')
+    .select('id, doc_number, status, total_amount, issue_date, valid_until, patient_id, consultation_id, patients:patient_id ( name )')
+    .eq('clinic_id', clinic_id)
+    .eq('tutor_id', tutorId)
+    .eq('doc_type', 'orcamento')
+    .eq('is_billed', false)
+    .is('consultation_id', null)
+    .in('status', ['draft', 'sent'])
+    .order('issue_date', { ascending: false })
+  if (patientId) qb = qb.or(`patient_id.eq.${patientId},patient_id.is.null`)
+
+  const { data, error } = await qb
+  if (error) return { error: error.message }
+  const ids = (data ?? []).map((d: any) => d.id)
+  const counts = await countItemsByDocument(admin, ids)
+  return (data ?? []).map((d: any) => toOpenQuotation(d, counts.get(d.id) ?? 0))
+}
+
+/** Conta itens por documento numa única query (evita N+1). */
+async function countItemsByDocument(
+  admin: Ctx['admin'], documentIds: string[],
+): Promise<Map<string, number>> {
+  const map = new Map<string, number>()
+  if (documentIds.length === 0) return map
+  const { data } = await admin
+    .from('billing_document_items')
+    .select('document_id')
+    .in('document_id', documentIds)
+  for (const row of data ?? []) {
+    const id = (row as any).document_id as string
+    map.set(id, (map.get(id) ?? 0) + 1)
+  }
+  return map
+}
+
+/**
+ * Vincula orçamentos a uma consulta no Check-in e pré-carrega os serviços.
+ *
+ * Para cada item do orçamento:
+ *  - com stock_item_id → addServiceToConsultation honrando o preço orçado
+ *    (price_override = preço da linha, compromisso comercial do orçamento);
+ *  - manual (sem stock_item_id) → find-or-create de um stock_item de serviço
+ *    pelo nome normalizado e então lança na consulta com o preço orçado.
+ *
+ * Marca billing_documents.consultation_id. NÃO fatura ainda (a baixa acontece
+ * no Caixa via settleQuotationsForConsultation). Idempotente por documento:
+ * orçamento já vinculado a outra consulta é ignorado.
+ */
+export async function linkQuotationsToConsultation(
+  consultationId: string,
+  documentIds: string[],
+): Promise<{ linked: number; services_added: number } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+  const { admin, clinic_id } = ctx
+  if (!consultationId) return { error: 'consultation_id obrigatório.' }
+  if (!documentIds?.length) return { linked: 0, services_added: 0 }
+
+  // Consulta precisa pertencer à clínica
+  const { data: consult } = await admin
+    .from('consultations').select('id').eq('id', consultationId).eq('clinic_id', clinic_id).maybeSingle()
+  if (!consult) return { error: 'Consulta não encontrada na clínica.' }
+
+  const { normalizeServiceName } = await import('@/lib/service-name-normalize')
+  const { addServiceToConsultation } = await import('@/lib/actions/services')
+
+  // Índice do catálogo de serviços (para find-or-create de itens manuais)
+  const { data: catalog } = await admin
+    .from('stock_items')
+    .select('id, name')
+    .eq('clinic_id', clinic_id)
+    .eq('is_service', true)
+    .order('created_at', { ascending: true })
+  const catalogIndex = new Map<string, string>()
+  for (const r of catalog ?? []) {
+    const key = normalizeServiceName((r as any).name ?? '')
+    if (key && !catalogIndex.has(key)) catalogIndex.set(key, (r as any).id)
+  }
+
+  let linked = 0
+  let servicesAdded = 0
+
+  for (const docId of documentIds) {
+    // Carrega o documento e seus itens; só vincula orçamento em aberto e livre
+    const { data: doc } = await admin
+      .from('billing_documents')
+      .select('id, doc_type, status, is_billed, consultation_id')
+      .eq('id', docId).eq('clinic_id', clinic_id).maybeSingle()
+    if (!doc) continue
+    if (doc.doc_type !== 'orcamento') continue
+    if (doc.is_billed || doc.status === 'cancelled') continue
+    if (doc.consultation_id && doc.consultation_id !== consultationId) continue // já preso a outra consulta
+
+    const { data: items } = await admin
+      .from('billing_document_items')
+      .select('stock_item_id, description, quantity, unit_price')
+      .eq('document_id', docId)
+      .order('sort_order', { ascending: true })
+
+    for (const it of items ?? []) {
+      let stockItemId = (it as any).stock_item_id as string | null
+      const desc = String((it as any).description ?? '').trim()
+      const qty  = Number((it as any).quantity ?? 1)
+      const price = Number((it as any).unit_price ?? 0)
+
+      // Item manual → find-or-create stock_item de serviço pelo nome normalizado
+      if (!stockItemId) {
+        if (!desc) continue
+        const key = normalizeServiceName(desc)
+        stockItemId = catalogIndex.get(key) ?? null
+        if (!stockItemId) {
+          const { data: created } = await admin
+            .from('stock_items')
+            .insert({
+              clinic_id, name: desc, category: 'vet_service', unit: 'un',
+              unit_price: price, quantity: 0, min_quantity: 0,
+              is_service: true, is_controlled: false,
+            })
+            .select('id').single()
+          if (!created) continue
+          stockItemId = created.id as string
+          catalogIndex.set(key, stockItemId)
+        }
+      }
+
+      const res = await addServiceToConsultation({
+        consultation_id: consultationId,
+        stock_item_id:   stockItemId,
+        quantity:        qty > 0 ? qty : 1,
+        added_at_stage:  'reception',
+        price_override:  price, // honra o valor orçado (compromisso comercial)
+      })
+      if (!('error' in res)) servicesAdded++
+    }
+
+    // Prende o orçamento à consulta (sem faturar)
+    await admin
+      .from('billing_documents')
+      .update({ consultation_id: consultationId })
+      .eq('id', docId).eq('clinic_id', clinic_id)
+    linked++
+  }
+
+  revalidatePath('/dashboard/reception')
+  revalidatePath('/dashboard/billing')
+  return { linked, services_added: servicesAdded }
+}
+
+/**
+ * Orçamentos vinculados a uma consulta — cabeçalho dos módulos clínicos
+ * (Triagem/Consultório/Cirurgia/Internação) e baixa no Caixa.
+ */
+export async function getConsultationQuotations(
+  consultationId: string,
+): Promise<Array<{ id: string; doc_number: string; status: BillingStatus; is_billed: boolean; total_amount: number }> | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+  const { admin, clinic_id } = ctx
+  if (!consultationId) return []
+  const { data, error } = await admin
+    .from('billing_documents')
+    .select('id, doc_number, status, is_billed, total_amount')
+    .eq('clinic_id', clinic_id)
+    .eq('consultation_id', consultationId)
+    .eq('doc_type', 'orcamento')
+    .neq('status', 'cancelled')
+    .order('issue_date', { ascending: true })
+  if (error) return { error: error.message }
+  return (data ?? []).map((d: any) => ({
+    id: d.id, doc_number: d.doc_number, status: d.status,
+    is_billed: d.is_billed, total_amount: Number(d.total_amount),
+  }))
+}
+
+/**
+ * Baixa (faturamento) dos orçamentos de uma consulta — chamada no Caixa quando
+ * o pagamento é concluído. Marca is_billed=true/status='billed'/billed_date e
+ * decrementa estoque APENAS de itens físicos (stock_items.is_service=false).
+ *
+ * Sem duplo-débito: o fluxo consulta→caixa NÃO decrementa consultation_services
+ * (confirmado: único trigger em consultation_services é o updated_at). Este é o
+ * ponto único de baixa de estoque dos produtos vendidos via orçamento.
+ *
+ * Idempotente: orçamento já faturado é ignorado (não re-decrementa).
+ */
+export async function settleQuotationsForConsultation(
+  consultationId: string,
+): Promise<{ settled: number; stock_decremented: number } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+  const { admin, clinic_id } = ctx
+  if (!consultationId) return { settled: 0, stock_decremented: 0 }
+
+  const { data: docs } = await admin
+    .from('billing_documents')
+    .select('id')
+    .eq('clinic_id', clinic_id)
+    .eq('consultation_id', consultationId)
+    .eq('doc_type', 'orcamento')
+    .eq('is_billed', false)
+    .in('status', ['draft', 'sent'])
+  if (!docs?.length) return { settled: 0, stock_decremented: 0 }
+
+  let settled = 0
+  let stockDecremented = 0
+  const nowIso = new Date().toISOString()
+
+  for (const doc of docs) {
+    // Itens com stock_item vinculado → candidatos a decremento (só físicos)
+    const { data: items } = await admin
+      .from('billing_document_items')
+      .select('stock_item_id, quantity')
+      .eq('document_id', doc.id)
+      .not('stock_item_id', 'is', null)
+
+    for (const it of items ?? []) {
+      const stockItemId = (it as any).stock_item_id as string
+      const qty = Number((it as any).quantity ?? 0)
+      if (!stockItemId || qty <= 0) continue
+      const { data: si } = await admin
+        .from('stock_items')
+        .select('id, is_service, quantity')
+        .eq('id', stockItemId).eq('clinic_id', clinic_id).maybeSingle()
+      if (!si || si.is_service) continue // só produto físico decrementa
+      const newQty = Math.max(0, Number(si.quantity ?? 0) - qty)
+      await admin.from('stock_items').update({ quantity: newQty }).eq('id', stockItemId).eq('clinic_id', clinic_id)
+      stockDecremented++
+    }
+
+    await admin
+      .from('billing_documents')
+      .update({ is_billed: true, status: 'billed', billed_date: nowIso })
+      .eq('id', doc.id).eq('clinic_id', clinic_id)
+    settled++
+  }
+
+  revalidatePath('/dashboard/billing')
+  return { settled, stock_decremented: stockDecremented }
+}
+
+/**
+ * Gate de cadastro do tutor para emissão de NFS-e. Retorna os campos
+ * obrigatórios ausentes (CPF/CNPJ, endereço completo). Usado no Check-in e no
+ * Caixa quando a clínica emite nota — não bloqueia o orçamento (apenas a nota).
+ */
+export async function validateTutorForNfse(
+  tutorId: string,
+): Promise<{ valid: boolean; missing: string[]; tutor_name: string | null } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+  const { admin, clinic_id } = ctx
+  if (!tutorId) return { valid: false, missing: ['Tutor'], tutor_name: null }
+
+  const { data: t } = await admin
+    .from('tutors')
+    .select('name, cpf, cep, street, address, address_number, city, state')
+    .eq('id', tutorId).eq('clinic_id', clinic_id).maybeSingle()
+  if (!t) return { error: 'Tutor não encontrado.' }
+
+  const missing: string[] = []
+  if (!String(t.cpf ?? '').trim())   missing.push('CPF/CNPJ')
+  if (!String(t.cep ?? '').trim())   missing.push('CEP')
+  // street é o campo estruturado; address é o legado de linha única
+  if (!String(t.street ?? '').trim() && !String(t.address ?? '').trim()) missing.push('Logradouro')
+  if (!String(t.address_number ?? '').trim()) missing.push('Número')
+  if (!String(t.city ?? '').trim())  missing.push('Cidade')
+  if (!String(t.state ?? '').trim()) missing.push('UF')
+
+  return { valid: missing.length === 0, missing, tutor_name: (t.name as string) ?? null }
+}
+
+/**
+ * Indica se a clínica emite NFS-e (config fiscal ativa). A tabela
+ * clinic_fiscal_config é criada na Fase 3 — enquanto não existir, retorna
+ * false (sem quebrar). Usado para revelar o gate de NFS-e no Caixa/Check-in.
+ */
+export async function clinicEmitsNfse(): Promise<{ emits: boolean }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return { emits: false }
+  const { admin, clinic_id } = ctx
+  try {
+    const { data, error } = await admin
+      .from('clinic_fiscal_config')
+      .select('emits_nfse, is_active')
+      .eq('clinic_id', clinic_id)
+      .maybeSingle()
+    if (error) return { emits: false } // tabela ausente (Fase 3 pendente) ou sem config
+    return { emits: Boolean(data?.emits_nfse && data?.is_active) }
+  } catch {
+    return { emits: false }
+  }
+}

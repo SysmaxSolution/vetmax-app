@@ -3,6 +3,7 @@
 import { useState, useTransition, useRef, useEffect } from 'react'
 import { checkInPatientWithContacts, updateConsultation } from '@/lib/actions/consultations'
 import { addServiceToConsultation } from '@/lib/actions/services'
+import { getOpenQuotationsForCheckin, linkQuotationsToConsultation, type OpenQuotation } from '@/lib/actions/billing-documents'
 import { getLastWeight } from '@/lib/actions/patient-weight'
 import type { VisitReason, PaymentStatus } from '@/types'
 import { DateInput } from '@/components/ui/DatePicker'
@@ -69,6 +70,10 @@ export function CheckInModal({
   // Opcional no check-in; guard de obrigatoriedade fica no encerramento.
   const [services, setServices] = useState<SelectedService[]>([])
 
+  // Orçamentos em aberto do tutor (Faturamento Fase 2) — pré-carrega serviços.
+  const [openQuotes, setOpenQuotes] = useState<OpenQuotation[]>([])
+  const [selectedQuoteIds, setSelectedQuoteIds] = useState<Set<string>>(new Set())
+
   // Contatos obrigatórios
   const [address, setAddress] = useState<string>(tutorAddress ?? '')
   const [emergencyContact, setEmergencyContact] = useState<string>(tutorEmergencyContact ?? '')
@@ -105,6 +110,26 @@ export function CheckInModal({
     })
     return () => { cancelled = true }
   }, [patientId])
+
+  // Carrega orçamentos em aberto do tutor (só em check-in novo/agendado).
+  useEffect(() => {
+    if (isEdit || !tutorId) return
+    let cancelled = false
+    getOpenQuotationsForCheckin(tutorId, patientId ?? null).then(res => {
+      if (cancelled || 'error' in res) return
+      setOpenQuotes(res)
+    })
+    return () => { cancelled = true }
+  }, [tutorId, patientId, isEdit])
+
+  function toggleQuote(id: string) {
+    setSelectedQuoteIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   // Enter → confirmar (quando formulário está válido)
   useEffect(() => {
@@ -198,6 +223,16 @@ export function CheckInModal({
           }
         }
 
+        // Vincula orçamentos selecionados → pré-carrega os serviços orçados na
+        // consulta e prende o documento (baixa só ocorre no Caixa). Não-fatal.
+        if (selectedQuoteIds.size > 0) {
+          const link = await linkQuotationsToConsultation(consultationId, [...selectedQuoteIds])
+          if ('error' in link) {
+            setError(`Check-in OK, mas os orçamentos não foram vinculados: ${link.error}`)
+            return
+          }
+        }
+
         onSuccess({
           consultationId,
           patientName,
@@ -266,6 +301,41 @@ export function CheckInModal({
                 ))}
               </div>
             </div>
+
+            {/* ── Orçamentos em aberto do tutor (Faturamento Fase 2) ── */}
+            {!isEdit && openQuotes.length > 0 && (
+              <div className="rounded-xl border border-green-200 bg-green-50 p-4">
+                <div className="mb-2 flex items-center gap-2">
+                  <svg className="h-5 w-5 text-green-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2Z" />
+                  </svg>
+                  <p className="text-sm font-semibold text-green-700">Orçamentos em aberto</p>
+                </div>
+                <p className="text-[11px] text-green-600/80 mb-2 -mt-1">Selecione para já lançar os serviços orçados nesta consulta.</p>
+                <div className="space-y-2">
+                  {openQuotes.map(q => (
+                    <label key={q.id} className="flex items-center gap-3 rounded-lg bg-white p-2.5 hover:bg-green-100/40 transition-colors cursor-pointer border border-green-100">
+                      <input
+                        type="checkbox"
+                        checked={selectedQuoteIds.has(q.id)}
+                        onChange={() => toggleQuote(q.id)}
+                        className="h-4 w-4 rounded border-slate-300 text-green-600 focus:ring-green-500"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-slate-800 truncate">
+                          {q.doc_number}
+                          {q.patient_name ? <span className="text-slate-400 font-normal"> · {q.patient_name}</span> : null}
+                        </p>
+                        <p className="text-xs text-slate-500">{q.item_count} {q.item_count === 1 ? 'item' : 'itens'}</p>
+                      </div>
+                      <span className="text-sm font-semibold text-green-700 tabular-nums">
+                        {q.total_amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* ── Serviços Lançados (catálogo dinâmico do estoque) ── */}
             {!isEdit && (

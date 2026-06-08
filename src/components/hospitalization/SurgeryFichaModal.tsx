@@ -9,6 +9,7 @@ import { useClinicalVoiceAssistant } from '@/hooks/useClinicalVoiceAssistant'
 import { useUnifiedVoiceDraft } from '@/hooks/useUnifiedClinicalVoice'
 import VoiceReviewPanel from './VoiceReviewPanel'
 import SurgeryStageFeed from './SurgeryStageFeed'
+import ConsultationQuotationBadge from '@/components/billing/ConsultationQuotationBadge'
 import { formatClinicTime } from '@/lib/time'
 import {
   getSurgery, updateSurgeryChecklist, updateSurgeryReport,
@@ -177,7 +178,10 @@ export default function SurgeryFichaModal({ surgeryId, onClose, onChanged }: Pro
           <div className="flex items-center gap-3 min-w-0">
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-red-600 flex-shrink-0"><FileText className="h-5 w-5 text-white" /></div>
             <div className="min-w-0">
-              <h2 className="text-base font-bold text-slate-900 truncate">Ficha Cirúrgica{surgery ? ` · ${surgery.patient.name}` : ''}</h2>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base font-bold text-slate-900 truncate">Ficha Cirúrgica{surgery ? ` · ${surgery.patient.name}` : ''}</h2>
+                {surgery?.consultation_id && <ConsultationQuotationBadge consultationId={surgery.consultation_id} />}
+              </div>
               <p className="text-[11px] text-slate-500 truncate">{surgery?.procedure_name ?? '—'}{surgery?.asa_risk ? ` · ASA ${surgery.asa_risk}` : ''}</p>
             </div>
           </div>

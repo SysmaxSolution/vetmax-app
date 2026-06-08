@@ -1275,9 +1275,23 @@ export async function processSplitPayment(
     })
   }
 
+  // Faturamento Fase 2 — baixa automática dos orçamentos vinculados à consulta
+  // quando o pagamento fecha (status 'paid'). Marca is_billed/billed e decrementa
+  // estoque APENAS de itens físicos (is_service=false). Não-fatal: o pagamento
+  // já está registrado; falha aqui não deve travar o caixa.
+  if (inv.consultation_id && result.status === 'paid') {
+    try {
+      const { settleQuotationsForConsultation } = await import('./billing-documents')
+      await settleQuotationsForConsultation(inv.consultation_id)
+    } catch {
+      // orçamento pode ser baixado manualmente depois
+    }
+  }
+
   revalidatePath('/dashboard/cashier')
   revalidatePath('/dashboard/reception/checkout')
   revalidatePath('/dashboard/financial')
+  revalidatePath('/dashboard/billing')
   return {
     success:      true,
     status:       result.status,

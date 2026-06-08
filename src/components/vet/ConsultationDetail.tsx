@@ -13,6 +13,7 @@ import {
 import { saveVetNotes, finalizeConsultation, reopenConsultation, savePrescription, type VetConsultationDetail } from '@/lib/actions/vet'
 import { hasActiveConsultationService } from '@/lib/actions/services'
 import ConsultationServicesPanel from '@/components/vet/ConsultationServicesPanel'
+import ConsultationQuotationBadge from '@/components/billing/ConsultationQuotationBadge'
 import InsuranceAuditBanner from '@/components/consultation/InsuranceAuditBanner'
 import type { AuditResult } from '@/lib/actions/insurance-audit'
 import { updatePatientFromLiveReg } from '@/lib/actions/pets'
@@ -1127,7 +1128,10 @@ export default function ConsultationDetail({
               {/* Foto ou avatar */}
               <PetAvatar name={patient.name} species={patient.species} photoUrl={patient.photo_url} size="sm" className="border border-slate-200" />
               <div>
-                <h2 className="text-base font-semibold text-slate-900">{patient.name}</h2>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-base font-semibold text-slate-900">{patient.name}</h2>
+                  <ConsultationQuotationBadge consultationId={consultation.id} />
+                </div>
                 <p className="text-xs text-slate-500">
                   {SPECIES_LABELS[patient.species] ?? patient.species}
                   {patient.breed ? ` — ${patient.breed}` : ''}

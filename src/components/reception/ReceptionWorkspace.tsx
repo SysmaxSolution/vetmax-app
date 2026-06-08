@@ -21,6 +21,7 @@ import type { ReceptionQueueItem, ReceptionHistoryItem } from '@/lib/actions/con
 import type { SearchResult } from '@/lib/actions/tutors'
 import type { VisitReason, PatientSpecies } from '@/types'
 import { getPatientById, type PatientsListItem } from '@/lib/actions/timeline'
+import { getOpenQuotationsForTutor, type OpenQuotation } from '@/lib/actions/billing-documents'
 import QuickPetRegisterModal from './QuickPetRegisterModal'
 import QueueActionModal from './QueueActionModal'
 
@@ -110,9 +111,15 @@ function TutorProfile({
   const consultationActive = activeModules.length === 0 ||
     ['consultation', 'triage', 'exams', 'hospitalization'].some(m => activeModules.includes(m))
   const [data, setData] = useState<Awaited<ReturnType<typeof getTutorWithPatients>> | null>(null)
+  // Orçamentos em aberto do tutor (Faturamento Fase 2) — badge no cabeçalho.
+  const [openQuotes, setOpenQuotes] = useState<OpenQuotation[]>([])
+  const [showQuotes, setShowQuotes] = useState(false)
 
   useEffect(() => {
     getTutorWithPatients(tutorId).then(setData)
+    getOpenQuotationsForTutor(tutorId).then(res => {
+      if (!('error' in res)) setOpenQuotes(res)
+    })
   }, [tutorId])
 
   if (!data) return (
@@ -138,7 +145,19 @@ function TutorProfile({
             {(data.tutor.name ?? '?').charAt(0).toUpperCase()}
           </div>
           <div>
-            <p className="font-semibold text-slate-900">{data.tutor.name ?? '—'}</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="font-semibold text-slate-900">{data.tutor.name ?? '—'}</p>
+              {openQuotes.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowQuotes(v => !v)}
+                  className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-[11px] font-bold text-green-700 hover:bg-green-200 transition-colors"
+                  title="Orçamentos em aberto deste tutor"
+                >
+                  🧾 {openQuotes.length} {openQuotes.length === 1 ? 'orçamento aberto' : 'orçamentos abertos'}
+                </button>
+              )}
+            </div>
             <p className="text-xs text-slate-500">
               {data.tutor.phone ?? ''}
               {data.tutor.cpf ? ` · CPF: ${data.tutor.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')}` : ''}
@@ -151,6 +170,31 @@ function TutorProfile({
           </svg>
         </button>
       </div>
+
+      {/* Orçamentos em aberto (expansível pelo badge) */}
+      {showQuotes && openQuotes.length > 0 && (
+        <div className="border-b border-green-100 bg-green-50/60 px-5 py-3">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-green-700">Orçamentos em aberto</p>
+          <div className="space-y-1.5">
+            {openQuotes.map(q => (
+              <div key={q.id} className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 border border-green-100">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-slate-800 truncate">
+                    {q.doc_number}
+                    {q.patient_name ? <span className="text-slate-400 font-normal"> · {q.patient_name}</span> : null}
+                    {q.is_linked ? <span className="ml-1.5 text-[10px] font-bold uppercase rounded-full bg-blue-100 text-blue-600 px-1.5 py-0.5">em atendimento</span> : null}
+                  </p>
+                  <p className="text-xs text-slate-500">{q.item_count} {q.item_count === 1 ? 'item' : 'itens'} · {new Date(q.issue_date).toLocaleDateString('pt-BR')}</p>
+                </div>
+                <span className="text-sm font-semibold text-green-700 tabular-nums">
+                  {q.total_amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-[11px] text-green-600/70">No Check-in do pet você pode puxar estes orçamentos e já lançar os serviços.</p>
+        </div>
+      )}
 
       {/* Pets list */}
       <div className="px-5 py-4">

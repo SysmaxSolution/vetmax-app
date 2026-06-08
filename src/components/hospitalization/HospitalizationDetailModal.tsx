@@ -29,6 +29,7 @@ import { useUnifiedVoiceDraft } from '@/hooks/useUnifiedClinicalVoice'
 import VoiceReviewPanel from './VoiceReviewPanel'
 import { formatClinicTime, formatClinicDate } from '@/lib/time'
 import { generatePrescriptionPdf, type PrescriptionData } from '@/lib/actions/reports'
+import ConsultationQuotationBadge from '@/components/billing/ConsultationQuotationBadge'
 import PrescriptionModal from './PrescriptionModal'
 import WhatsAppNotificationModal from '@/components/whatsapp/WhatsAppNotificationModal'
 import InsuranceCard from '@/components/pet/InsuranceCard'
@@ -648,7 +649,10 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
               <Activity className="h-6 h-6" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-slate-900 leading-tight">Evolução: <span className="text-violet-600">{card.patient.name}</span></h2>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-xl font-bold text-slate-900 leading-tight">Evolução: <span className="text-violet-600">{card.patient.name}</span></h2>
+                {card.consultation_id && <ConsultationQuotationBadge consultationId={card.consultation_id} />}
+              </div>
               <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">{card.patient.species} • {card.patient.breed || 'SRD'}</p>
             </div>
           </div>

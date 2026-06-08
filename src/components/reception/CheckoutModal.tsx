@@ -14,6 +14,7 @@ import InvoiceDuplicatasList from '@/components/financial/InvoiceDuplicatasList'
 import PaymentMethodModal, { type PaymentSplit } from '@/components/payments/PaymentMethodModal'
 import { computeCheckoutTotals } from '@/lib/checkout-totals'
 import { getConsultationCopayInterestPreview, type CopayInterestPreview } from '@/lib/actions/insurance-checkout'
+import NfseTutorGate from '@/components/billing/NfseTutorGate'
 
 const SPECIES_EMOJI: Record<string, string> = {
   dog: '🐶', cat: '🐱', bird: '🐦', exotic: '🦜',
@@ -580,6 +581,8 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
                 Cobertura Petlove pronta para aplicar · desconto contábil de <strong>{fmt(insuranceSplit.clinic_discount)}</strong> · repasse de <strong>{fmt(insuranceSplit.receivable)}</strong> ficará como A Receber.
               </div>
             )}
+
+            <NfseTutorGate tutorId={invoice.tutor_id} />
 
             {error && (
               <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-2.5 text-sm text-red-600 flex items-start gap-2">
