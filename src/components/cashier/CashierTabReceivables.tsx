@@ -757,7 +757,9 @@ export default function CashierTabReceivables({
           </p>
         </div>
       ) : (
-        <div className="space-y-2">
+        // pb-24: respiro p/ o botão flutuante do Mentor não cobrir o "Receber"
+        // do último card no mobile.
+        <div className="space-y-2 pb-24">
           {invoices.map(inv => (
             <InvoiceCard
               key={inv.id}

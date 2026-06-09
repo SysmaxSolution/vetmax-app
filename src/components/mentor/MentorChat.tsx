@@ -414,7 +414,7 @@ export function MentorChat({ idleEnabled = true, idleSeconds = 30, isFreePlan = 
 
       {/* ── Idle Bubble ── */}
       {idleBubble && !open && (
-        <div className="fixed bottom-24 right-4 sm:right-6 z-[9999] w-64 origin-bottom-right animate-fade-in">
+        <div className="fixed bottom-24 right-4 sm:right-6 z-40 w-64 origin-bottom-right animate-fade-in">
           <div className="relative rounded-2xl bg-blue-600 px-4 py-3 text-xs text-white shadow-2xl">
             <p className="leading-relaxed pr-5 font-medium">Precisa de ajuda? Estou aqui para orientar!</p>
             <button
@@ -438,7 +438,7 @@ export function MentorChat({ idleEnabled = true, idleSeconds = 30, isFreePlan = 
       {/* ── Floating Button ── */}
       <button
         onClick={() => { setOpen(v => !v); setIdleBubble(false) }}
-        className={`fixed bottom-6 right-6 z-[9999] flex h-14 w-14 items-center justify-center rounded-full shadow-2xl transition-all duration-200 ${
+        className={`fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full shadow-2xl transition-all duration-200 ${
           open
             ? 'bg-slate-800 text-white scale-95'
             : 'bg-gradient-to-br from-blue-500 to-blue-700 text-white hover:scale-110 hover:shadow-blue-500/40'
@@ -460,7 +460,7 @@ export function MentorChat({ idleEnabled = true, idleSeconds = 30, isFreePlan = 
       {/* ── Chat Panel ── */}
       {open && (
         <div
-          className="fixed bottom-24 right-4 sm:right-6 z-[9998] flex flex-col rounded-3xl border border-slate-100 bg-white"
+          className="fixed bottom-24 right-4 sm:right-6 z-40 flex flex-col rounded-3xl border border-slate-100 bg-white"
           style={{
             width: 'min(340px, calc(100vw - 32px))',
             maxHeight: 'min(560px, calc(100vh - 140px))',
