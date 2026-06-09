@@ -110,7 +110,12 @@ export async function listCashierEntries(filters?: {
     .eq('clinic_id', ctx.clinic_id)
 
   if (filters?.source_module) query = query.eq('source_module', filters.source_module)
+  // Arquivados são lançamentos supersedidos (ex.: o "lump" da venda PDV que foi
+  // substituído pelos splits). Só aparecem se o usuário filtrar explicitamente
+  // por status='archived'; caso contrário ficam ocultos da lista ativa para não
+  // duplicar o valor (um Recebido + um Arquivado).
   if (filters?.status) query = query.eq('status', filters.status)
+  else query = query.neq('status', 'archived')
   if (filters?.from_date) query = query.gte('created_at', filters.from_date)
   // Append end-of-day to include all records created during to_date (timestamp vs date comparison)
   if (filters?.to_date) query = query.lte('created_at', filters.to_date + 'T23:59:59.999Z')
@@ -141,6 +146,7 @@ export async function getCashierSummary(period: {
     .from('central_cashier')
     .select('amount, status')
     .eq('clinic_id', ctx.clinic_id)
+    .neq('status', 'archived')   // arquivados não entram no resumo (nem no entry_count)
     .gte('created_at', period.from_date)
     // Append end-of-day to include all records created during to_date (timestamp vs date comparison)
     .lte('created_at', period.to_date + 'T23:59:59.999Z')

@@ -150,7 +150,10 @@ export async function closeCashierSession(
       .select('amount, status, source_module, payment_method')
       .eq('clinic_id', ctx.clinic_id)
       .eq('session_id', sessionId)
-      .neq('status', 'reversed'),
+      .neq('status', 'reversed')
+      // Arquivados (lump da venda substituído pelos splits) não entram no total
+      // do fechamento — senão o mesmo valor conta em dobro no closing_balance.
+      .neq('status', 'archived'),
 
     supabase
       .from('cashier_outflows')
@@ -250,6 +253,9 @@ export async function linkOrphanSalesToSession(sessionId: string): Promise<void>
     .update({ session_id: sessionId })
     .eq('clinic_id', ctx.clinic_id)
     .is('session_id', null)
+    // Não puxa lançamentos arquivados (supersedidos) para a sessão — eles não
+    // devem entrar na reconciliação/fechamento.
+    .neq('status', 'archived')
     .gte('created_at', `${today}T00:00:00.000Z`)
     .lte('created_at', `${today}T23:59:59.999Z`)
 }
