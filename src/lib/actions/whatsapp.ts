@@ -3,7 +3,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { evolutionSendText, evolutionSendMedia } from '@/lib/evolution-api-client'
+import { evolutionSendText, evolutionSendMedia, evolutionGetConnectionState } from '@/lib/evolution-api-client'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -548,6 +548,17 @@ export async function sendWhatsAppMessage(params: {
     apiUrl:     creds.apiUrl,
     instanceId: creds.instanceId,
     apiKey:     creds.apiKey,
+  }
+
+  // Pré-checagem de conexão: enviar para uma instância desconectada devolve o
+  // erro críptico "Connection Closed" do Baileys. Antes de tentar, confirmamos
+  // que a sessão está 'open' e, se não, devolvemos uma mensagem acionável.
+  const connState = await evolutionGetConnectionState(evolutionCreds)
+  if (connState !== 'open') {
+    const motivo = connState === 'connecting'
+      ? 'O WhatsApp está reconectando. Aguarde alguns segundos e tente novamente.'
+      : 'O WhatsApp desta clínica está desconectado. Releia o QR Code em Gestão → Configurações → WhatsApp para reconectar.'
+    return { error: motivo }
   }
 
   try {
