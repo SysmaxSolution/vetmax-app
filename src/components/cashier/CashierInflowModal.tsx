@@ -91,7 +91,7 @@ export default function CashierInflowModal({ onClose, onSuccess, onToast }: Prop
             </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-semibold text-slate-600 block mb-1.5">Valor (R$)</label>
               <input
@@ -119,7 +119,7 @@ export default function CashierInflowModal({ onClose, onSuccess, onToast }: Prop
 
           <div>
             <label className="text-xs font-semibold text-slate-600 block mb-1.5">Forma</label>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {PAYMENT_METHODS.map(m => (
                 <button
                   key={m.value}

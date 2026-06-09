@@ -774,7 +774,7 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
                   <div className="space-y-3">
                     {meds.map((med, index) => (
                       <div key={index} className="flex gap-3 items-start bg-slate-50 p-3 rounded-xl border border-slate-200">
-                        <div className="grid grid-cols-2 gap-3 flex-1">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 flex-1">
                           {/* Campo: Medicamento */}
                           <div className="col-span-2">
                             <label className="text-[9px] font-bold text-slate-400 uppercase ml-1">Medicamento</label>

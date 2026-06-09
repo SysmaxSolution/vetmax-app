@@ -133,7 +133,7 @@ export default function QuickPetRegisterModal({ onClose, onSuccess, showSchedule
 
           <div>
             <label className="block text-xs font-semibold text-slate-600 mb-1.5">Espécie</label>
-            <div className="grid grid-cols-4 gap-1.5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
               {SPECIES_OPTIONS.map(s => (
                 <button
                   key={s.value}

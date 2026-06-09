@@ -1089,7 +1089,7 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
             <label className="block text-xs font-semibold text-slate-600 mb-2">
               {isService ? 'Tipo' : 'Categoria'} <span className="text-red-500">*</span>
             </label>
-            <div className={`grid gap-2 ${isService ? 'grid-cols-3' : 'grid-cols-3'}`}>
+            <div className="grid gap-2 grid-cols-2 sm:grid-cols-3">
               {(isService ? SERVICE_CATS.filter(c => c.key !== 'all') : PRODUCT_CATS.filter(c => c.key !== 'all')).map(cat => (
                 <button key={cat.key} type="button"
                   onClick={() => {
@@ -1129,7 +1129,7 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
 
           {/* Campos de estoque (apenas produtos) */}
           {!isService && (
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {isNew && (
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1">Qtd. inicial</label>

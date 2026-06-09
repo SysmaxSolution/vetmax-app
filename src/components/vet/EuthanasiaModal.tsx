@@ -244,7 +244,7 @@ export default function EuthanasiaModal({
           </div>
 
           {/* Testemunha */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">Testemunha (nome)</label>
               <input
