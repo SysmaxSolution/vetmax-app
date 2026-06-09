@@ -504,19 +504,23 @@ export async function sendBillingDocumentWhatsApp(
 
   const { data: doc } = await admin
     .from('billing_documents')
-    .select('id, doc_type, doc_number, total_amount, tutor_id, tutors:tutor_id ( name, phone )')
+    .select('id, doc_type, doc_number, total_amount, tutor_id, tutors:tutor_id ( name, phone ), patients:patient_id ( name )')
     .eq('id', id).eq('clinic_id', clinic_id).maybeSingle()
   if (!doc) return { error: 'Documento não encontrado.' }
   if (!doc.tutor_id) return { error: 'Documento sem tutor vinculado — não é possível enviar.' }
   const tutor = (doc as any).tutors as { name?: string; phone?: string } | null
   if (!tutor?.phone) return { error: 'Tutor sem telefone cadastrado.' }
+  const petName = ((doc as any).patients as { name?: string } | null)?.name ?? null
 
   const pdf = await getBillingDocumentSignedUrl(id)
   if ('error' in pdf) return pdf
 
   const tipoLabel = doc.doc_type === 'nfse' ? 'Nota Fiscal de Serviço' : 'Orçamento de Serviços'
   const valor = Number(doc.total_amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-  const message = `Olá${tutor.name ? `, ${tutor.name}` : ''}! Segue em anexo o seu ${tipoLabel} ${doc.doc_number} no valor de ${valor}. Qualquer dúvida, estamos à disposição. 🐾`
+  // Mensagem padrão: nº do documento + tutor + pet (+ valor).
+  const saudacao = tutor.name ? `Olá, ${tutor.name}!` : 'Olá!'
+  const refPet   = petName ? ` referente ao paciente ${petName}` : ''
+  const message = `${saudacao} Segue em anexo o seu ${tipoLabel} ${doc.doc_number}${refPet}, no valor de ${valor}. Qualquer dúvida, estamos à disposição. 🐾`
 
   const { sendWhatsAppMessage } = await import('./whatsapp')
   const res = await sendWhatsAppMessage({
