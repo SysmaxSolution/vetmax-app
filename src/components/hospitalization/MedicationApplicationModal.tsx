@@ -5,7 +5,7 @@ import {
   Pill, X, Loader2, Check, Pause, CircleStop, AlertTriangle, Plus, Clock, ClockAlert, FileStack,
 } from 'lucide-react'
 import ProtocolPicker from './ProtocolPicker'
-import { formatClinicTime, nowLocalInputValue } from '@/lib/time'
+import { formatClinicTime, nowLocalInputValue, echoLocalInput } from '@/lib/time'
 import {
   applyHospitalizationDose,
   createHospitalizationPrescription,
@@ -357,11 +357,13 @@ export default function MedicationApplicationModal({
                           onClick={() => handleApplyAt(p, alert?.nextDoseAt)}
                           className="flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
                         >
-                          <Check className="h-3 w-3" /> Confirmar
+                          <Check className="h-3 w-3" /> Confirmar {customTime.slice(11, 16)}
                         </button>
                       </div>
                       <p className="text-[10px] text-slate-500">
-                        Use quando a medicação já foi administrada e o registro está sendo feito depois.
+                        {echoLocalInput(customTime)
+                          ? <>A dose será registrada como aplicada às <b className="text-emerald-700">{echoLocalInput(customTime)}</b>. Confira também os minutos.</>
+                          : 'Use quando a medicação já foi administrada e o registro está sendo feito depois.'}
                       </p>
                     </div>
                   )}
@@ -578,7 +580,9 @@ function NewPrescriptionForm({
           className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none"
         />
         <p className="text-[10px] text-slate-400 mt-1">
-          A próxima dose é calculada a partir deste horário. Use um horário passado se o pet já está medicado.
+          {echoLocalInput(startAt)
+            ? <>Início selecionado: <b className="text-violet-700">{echoLocalInput(startAt)}</b> — confira também os minutos. A próxima dose é calculada a partir dele.</>
+            : 'A próxima dose é calculada a partir deste horário. Use um horário passado se o pet já está medicado.'}
         </p>
       </div>
 

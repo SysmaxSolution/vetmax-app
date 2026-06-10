@@ -55,3 +55,13 @@ export function nowLocalInputValue(): string {
   d.setMinutes(d.getMinutes() - d.getTimezoneOffset())
   return d.toISOString().slice(0, 16)
 }
+
+/**
+ * "12:00 de 10/06" a partir do valor cru de um <input type="datetime-local">.
+ * Eco do horário escolhido na UI — evita confirmar minutos herdados do default
+ * sem perceber (picker mobile preserva os minutos de "agora").
+ */
+export function echoLocalInput(v: string): string | null {
+  if (!v || v.length < 16) return null
+  return `${v.slice(11, 16)} de ${v.slice(8, 10)}/${v.slice(5, 7)}`
+}
