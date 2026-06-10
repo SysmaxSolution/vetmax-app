@@ -1,12 +1,14 @@
 // Gatekeeper centralizado de plano/módulos (Monetização SaaS Fase 1).
 // Server-only por construção: usa createAdminClient (SUPABASE_SERVICE_ROLE_KEY).
 //
-// Regra de acesso (sem bypass por plano — o backfill 0365 garante paridade):
+// Regra de acesso (Fase 1.5 — 4 tiers):
 //   1. moduleKey ∈ FREE_MODULES[businessType]  → liberado (core sempre grátis)
-//   2. módulo contratado ativo cobre a key     → liberado
-//      (linha do catálogo expande via included_module_keys; linha sem entrada
-//       no catálogo é tratada como key técnica direta — compat backfill/legado)
-//   3. status da assinatura ∉ {active, trialing} → só free tier
+//   2. bundle do plano cobre a key: premium concede linhas included_in_plan=
+//      'premium'; enterprise concede 'premium' + 'enterprise'
+//   3. módulo contratado ativo cobre a key     → liberado (addons do premium,
+//      grants manuais do specialized; linha sem entrada no catálogo é tratada
+//      como key técnica direta — compat backfill/legado)
+//   4. status da assinatura ∉ {active, trialing} → só free tier
 //
 // A camada por usuário (user_module_access) continua composta em AND pelo
 // proxy/layout — este gatekeeper decide apenas o que a CLÍNICA pode usar.
@@ -54,7 +56,7 @@ export const getClinicSubscriptionState = cache(
         .eq('is_active', true),
       admin
         .from('subscription_module_catalog')
-        .select('module_key, included_module_keys'),
+        .select('module_key, included_module_keys, included_in_plan'),
     ])
 
     const planName = (subResult.data?.plan_name ?? 'free') as PlanName
@@ -68,6 +70,17 @@ export const getClinicSubscriptionState = cache(
     const subscriptionUsable = status === 'active' || status === 'trialing'
 
     if (subscriptionUsable) {
+      // Bundles por plano (re-grade Fase 1.5)
+      for (const row of catalogResult.data ?? []) {
+        const tier = row.included_in_plan as string | null
+        const grantedByPlan =
+          (tier === 'premium' && (planName === 'premium' || planName === 'enterprise')) ||
+          (tier === 'enterprise' && planName === 'enterprise')
+        if (grantedByPlan) {
+          ;((row.included_module_keys as string[]) ?? []).forEach(k => allowedTechnicalKeys.add(k))
+        }
+      }
+
       const catalogByKey = new Map(
         (catalogResult.data ?? []).map(r => [r.module_key as string, r.included_module_keys as string[]])
       )

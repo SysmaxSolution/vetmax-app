@@ -90,8 +90,30 @@ export async function saveTemplate(
     }
   }
 
-  // 5. Inserir via admin client (bypass RLS)
+  // 5. Quota de documentos personalizados por plano (SaaS Fase 1.5).
+  // Documentos são ESTOQUE (não fluxo mensal): contagem direta vs limit_amount,
+  // nunca check_quota (que incrementa/reseta). Edição/exclusão livres.
   const admin = createAdminClient()
+  const [{ count: templateCount }, quotaResult] = await Promise.all([
+    admin
+      .from('document_templates')
+      .select('id', { count: 'exact', head: true })
+      .eq('clinic_id', profile.clinic_id),
+    admin
+      .from('tenant_quotas')
+      .select('limit_amount')
+      .eq('clinic_id', profile.clinic_id)
+      .eq('resource_name', 'custom_documents')
+      .maybeSingle(),
+  ])
+  const docLimit = quotaResult.data?.limit_amount ?? 3 // default free se sem linha
+  if ((templateCount ?? 0) >= docLimit) {
+    return {
+      error: `Limite de ${docLimit} documentos personalizados do seu plano atingido. Faça upgrade em Gestão > Assinatura.`,
+    }
+  }
+
+  // 6. Inserir via admin client (bypass RLS)
   const { data, error } = await admin
     .from('document_templates')
     .insert({

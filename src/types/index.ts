@@ -6,7 +6,7 @@ export type UserRole = 'admin' | 'vet' | 'assistant' | 'receptionist' | 'pharmac
 // ── PLG — Planos, Feature Flags e Cotas ─────────────────────────────────────
 
 export type BusinessType = 'vet_clinic' | 'pet_aesthetics'
-export type PlanName = 'free' | 'premium' | 'specialized'
+export type PlanName = 'free' | 'premium' | 'enterprise' | 'specialized'
 export type SubscriptionStatus = 'active' | 'trialing' | 'past_due' | 'cancelled'
 export type BillingCycle = 'monthly' | 'yearly'
 
@@ -38,6 +38,8 @@ export interface SubscriptionModuleCatalogRow {
   sort_order: number
   included_module_keys: string[]
   flow_flags: string[]
+  /** Bundle que inclui o módulo: premium | enterprise | null (só avulso/legado). */
+  included_in_plan: 'premium' | 'enterprise' | null
 }
 
 export interface ClinicContractedModule {
@@ -49,6 +51,7 @@ export interface ClinicContractedModule {
 
 export interface SubscriptionPlanConfig {
   premium_base_price: number
+  enterprise_base_price: number
   annual_discount_percent: number
 }
 
