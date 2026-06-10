@@ -170,7 +170,7 @@ export function getPaywallCopy(pathname: string): PaywallCopy {
     ? PAYWALL_COPY[key]
     : {
         title:       'Módulo Premium',
-        description: 'Este módulo está disponível a partir do plano PRO.',
+        description: 'Este módulo está disponível a partir do plano Premium.',
         feature:     'Módulo Premium',
       }
 }

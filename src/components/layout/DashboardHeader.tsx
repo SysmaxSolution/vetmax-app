@@ -352,7 +352,7 @@ export default function DashboardHeader({
                 href={tab.href}
                 id={tab.id}
                 data-testid={tab.id}
-                title={locked ? `${tab.label} — disponível no Plano PRO` : undefined}
+                title={locked ? `${tab.label} — disponível no Plano Premium` : undefined}
                 onClick={promotedKey ? (e => { e.preventDefault(); openUpgrade(promotedKey) }) : undefined}
                 className={`relative flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                   locked

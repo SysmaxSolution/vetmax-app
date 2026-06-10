@@ -57,7 +57,7 @@ export default function ManagementNav({ showMonitoramento = false, planName = 's
           <Link
             key={tab.href}
             href={tab.href}
-            title={locked ? 'Disponível no Plano PRO — clique para saber mais' : tab.label}
+            title={locked ? 'Disponível no Plano Premium — clique para saber mais' : tab.label}
             className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
               active ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
             } ${tab.kanban ? 'text-violet-700 bg-violet-50 hover:bg-violet-100' : ''} ${tab.kanban && active ? 'bg-slate-900 text-white' : ''} ${

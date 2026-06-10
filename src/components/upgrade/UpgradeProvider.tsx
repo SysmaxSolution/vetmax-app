@@ -66,12 +66,15 @@ const FEATURE_TO_MODULE: Record<UpgradeFeatureKey, string | null> = {
 interface ProviderProps {
   planName?:      string
   activeModules?: string[]
+  /** SaaS Fase 1 (rollout Vet Teste): habilita o CTA "Ver planos" no modal. */
+  subscriptionUiEnabled?: boolean
   children:       ReactNode
 }
 
 export function UpgradeProvider({
   planName      = 'free',
   activeModules = [],
+  subscriptionUiEnabled = false,
   children,
 }: ProviderProps) {
   const [openState, setOpenState] = useState<{ feature: UpgradeFeatureKey; override?: UpgradeOverride } | null>(null)
@@ -107,6 +110,7 @@ export function UpgradeProvider({
           featureKey={openState.feature}
           override={openState.override}
           onClose={close}
+          showPlansCta={subscriptionUiEnabled}
         />
       )}
     </UpgradeContext.Provider>

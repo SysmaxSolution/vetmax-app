@@ -91,7 +91,7 @@ export default function DashboardShellClassic({
         >
           <ModulesProvider modules={activeModules ?? []}>
             <WhatsAppGateProvider enabled={whatsAppEnabled}>
-              <UpgradeProvider planName={planName} activeModules={activeModules ?? []}>
+              <UpgradeProvider planName={planName} activeModules={activeModules ?? []} subscriptionUiEnabled={subscriptionUiEnabled}>
                 {children}
               </UpgradeProvider>
             </WhatsAppGateProvider>

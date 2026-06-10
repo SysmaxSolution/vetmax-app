@@ -69,7 +69,7 @@ const UPGRADE_FEATURES: Record<UpgradeFeatureKey, FeatureMeta> = {
   hospitalization: {
     icon:       BedDouble,
     title:      'Internação',
-    targetPlan: 'Plano Pro',
+    targetPlan: 'Plano Premium',
     pitch:      'Gerencie pacientes internados, controle de baias, plantão e medicação prescrita em um só lugar.',
     benefits: [
       'Painel de baias com status visual (livre, ocupada, isolamento)',
@@ -82,7 +82,7 @@ const UPGRADE_FEATURES: Record<UpgradeFeatureKey, FeatureMeta> = {
   whatsapp_intelligent: {
     icon:       MessageSquareText,
     title:      'WhatsApp Bot Inteligente',
-    targetPlan: 'Plano Pro',
+    targetPlan: 'Plano Premium',
     pitch:      'Atendimento 24/7 com IA: agendamentos, confirmações e dúvidas frequentes respondidos automaticamente.',
     benefits: [
       'Confirmação automática de agendamentos no dia anterior',
@@ -95,7 +95,7 @@ const UPGRADE_FEATURES: Record<UpgradeFeatureKey, FeatureMeta> = {
   reports_export: {
     icon:       FileBarChart2,
     title:      'Relatórios Avançados em PDF',
-    targetPlan: 'Plano Pro',
+    targetPlan: 'Plano Premium',
     pitch:      'Exporte relatórios financeiros, operacionais e gerenciais em PDF, com sua logomarca e prontos para apresentação.',
     benefits: [
       'DRE consolidada com comparativo mês a mês',
@@ -108,7 +108,7 @@ const UPGRADE_FEATURES: Record<UpgradeFeatureKey, FeatureMeta> = {
   continuous_flow: {
     icon:       Cpu,
     title:      'Fluxo Contínuo no Consultório',
-    targetPlan: 'Plano Pro',
+    targetPlan: 'Plano Premium',
     pitch:      'Una Triagem, Consultório e Exames em uma única tela e deixe o MV ditar tudo num só áudio — a IA preenche cada módulo automaticamente.',
     benefits: [
       'Triagem incorporada ao Consultório (sinais vitais no mesmo fluxo)',
@@ -121,7 +121,7 @@ const UPGRADE_FEATURES: Record<UpgradeFeatureKey, FeatureMeta> = {
   internal_chat: {
     icon:       MessageSquare,
     title:      'Chat Interno',
-    targetPlan: 'Plano Pro',
+    targetPlan: 'Plano Premium',
     pitch:      'Tire a equipe do WhatsApp pessoal. Mensagens com contexto, salas automáticas por consulta/internação/cirurgia, anexos e leitura em tempo real.',
     benefits: [
       'Salas criadas automaticamente para cada atendimento ativo',
@@ -134,7 +134,7 @@ const UPGRADE_FEATURES: Record<UpgradeFeatureKey, FeatureMeta> = {
   triage: {
     icon:       Stethoscope,
     title:      'Triagem Clínica',
-    targetPlan: 'Plano Pro',
+    targetPlan: 'Plano Premium',
     pitch:      'Fila de triagem com sinais vitais por voz, anamnese guiada e integração direta com o consultório.',
     benefits: [
       'Sinais vitais (peso, temperatura, FC, FR, mucosas) por voz',
@@ -147,7 +147,7 @@ const UPGRADE_FEATURES: Record<UpgradeFeatureKey, FeatureMeta> = {
   exams: {
     icon:       FlaskConical,
     title:      'Módulo de Exames',
-    targetPlan: 'Plano Pro',
+    targetPlan: 'Plano Premium',
     pitch:      'Solicitação digital, laudo com assinatura eletrônica e PDF entregue ao tutor em segundos.',
     benefits: [
       'Pedido de exame direto da consulta, em 2 cliques',
@@ -160,7 +160,7 @@ const UPGRADE_FEATURES: Record<UpgradeFeatureKey, FeatureMeta> = {
   financial: {
     icon:       DollarSign,
     title:      'Financeiro',
-    targetPlan: 'Plano Pro',
+    targetPlan: 'Plano Premium',
     pitch:      'Descubra para onde vai o seu dinheiro. DRE, fluxo de caixa, contas a pagar/receber e conciliação bancária.',
     benefits: [
       'DRE mensal e fluxo de caixa atualizados em tempo real',
@@ -173,7 +173,7 @@ const UPGRADE_FEATURES: Record<UpgradeFeatureKey, FeatureMeta> = {
   pharmacy: {
     icon:       ShoppingBag,
     title:      'Estoque Avançado',
-    targetPlan: 'Plano Pro',
+    targetPlan: 'Plano Premium',
     pitch:      'Controle total: alertas de validade, ponto de reposição, rastreabilidade por lote e baixa automática do consultório.',
     benefits: [
       'Validade e ponto de reposição com alerta visual',
@@ -186,7 +186,7 @@ const UPGRADE_FEATURES: Record<UpgradeFeatureKey, FeatureMeta> = {
   purchases: {
     icon:       Truck,
     title:      'Compras + NF-e',
-    targetPlan: 'Plano Pro',
+    targetPlan: 'Plano Premium',
     pitch:      'Importe a NF-e XML do fornecedor e o estoque atualiza sozinho. Sem digitação, sem erro.',
     benefits: [
       'Importação NF-e XML com matching automático por NCM/EAN',
@@ -199,7 +199,7 @@ const UPGRADE_FEATURES: Record<UpgradeFeatureKey, FeatureMeta> = {
   sales: {
     icon:       ShoppingCart,
     title:      'Vendas (PDV Completo)',
-    targetPlan: 'Plano Pro',
+    targetPlan: 'Plano Premium',
     pitch:      'PDV completo com catálogo, carrinho, recibo e integração com estoque e emissão de NFS-e.',
     benefits: [
       'Catálogo completo de produtos e serviços',
@@ -212,7 +212,7 @@ const UPGRADE_FEATURES: Record<UpgradeFeatureKey, FeatureMeta> = {
   surgery: {
     icon:       Syringe,
     title:      'Centro Cirúrgico',
-    targetPlan: 'Plano Pro',
+    targetPlan: 'Plano Premium',
     pitch:      'Bloco cirúrgico completo: Kanban Preparo→Sala→RPA, ficha cirúrgica e ficha anestésica, kits com baixa automática.',
     benefits: [
       'Kanban Preparo → Sala → Recuperação Pós-Anestésica',
@@ -225,7 +225,7 @@ const UPGRADE_FEATURES: Record<UpgradeFeatureKey, FeatureMeta> = {
   insurance_pricing: {
     icon:       Shield,
     title:      'Vínculo de serviços com convênios',
-    targetPlan: 'Plano Pro',
+    targetPlan: 'Plano Premium',
     pitch:      'Defina preço de convênio por serviço, split coparticipação/repasse e tabela travada por pet.',
     benefits: [
       'Preço base de convênio por serviço, editável por operadora',
@@ -238,7 +238,7 @@ const UPGRADE_FEATURES: Record<UpgradeFeatureKey, FeatureMeta> = {
   stock_kits: {
     icon:       Boxes,
     title:      'Estoque — Kits e Pacotes',
-    targetPlan: 'Plano Pro',
+    targetPlan: 'Plano Premium',
     pitch:      'Monte kits de medicamentos + insumos + serviços e lance tudo de uma vez. Baixa automática no estoque.',
     benefits: [
       'Kit cirúrgico, vacinal, castração — montagem livre',
@@ -251,13 +251,13 @@ const UPGRADE_FEATURES: Record<UpgradeFeatureKey, FeatureMeta> = {
   pro_module: {
     icon:       Lock,
     title:      'Módulo PRO',
-    targetPlan: 'Plano Pro',
-    pitch:      'Este módulo está disponível no Plano Pro. Fale com a Sysmax Solutions para fazer upgrade e desbloquear funcionalidades avançadas para sua clínica.',
+    targetPlan: 'Plano Premium',
+    pitch:      'Este módulo está disponível no Plano Premium. Fale com a Sysmax Solutions para fazer upgrade e desbloquear funcionalidades avançadas para sua clínica.',
     benefits: [
       'Funcionalidades avançadas específicas do módulo',
       'Integração total com o restante do sistema',
       'Suporte prioritário da equipe Sysmax',
-      'Sem limite de usuários no plano Pro',
+      'Sem limite de usuários no plano Premium',
     ],
     tourUrl: null,
   },
@@ -273,12 +273,15 @@ interface Props {
   featureKey: UpgradeFeatureKey
   override?:  UpgradeOverride
   onClose:    () => void
+  /** SaaS Fase 1 (rollout Vet Teste): exibe CTA para a tela de Planos
+   *  (auto-atendimento) acima dos CTAs de contato comercial. */
+  showPlansCta?: boolean
 }
 
-const SALES_WHATSAPP = '5516997023340'  // WhatsApp comercial Sysmax Solutions
+const SALES_WHATSAPP = process.env.NEXT_PUBLIC_SALES_WHATSAPP ?? '5516997023340'  // WhatsApp comercial Sysmax Solutions
 const SALES_EMAIL    = 'comercial@sysmaxsolutions.com'
 
-export default function UpgradeModal({ featureKey, override, onClose }: Props) {
+export default function UpgradeModal({ featureKey, override, onClose, showPlansCta = false }: Props) {
   const base = UPGRADE_FEATURES[featureKey]
   // tourUrl: override pode passar null explícito para FORÇAR ocultar — por
   // isso usamos `'tourUrl' in (override ?? {})` em vez de `??`. Sem o key
@@ -376,6 +379,16 @@ export default function UpgradeModal({ featureKey, override, onClose }: Props) {
 
           {/* Footer CTAs */}
           <div className="bg-slate-50 border-t border-slate-100 px-6 py-4 space-y-2">
+            {showPlansCta && (
+              <a
+                href="/dashboard/management?tab=assinatura"
+                onClick={onClose}
+                className="flex items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 py-3 text-sm font-bold text-white transition-colors shadow-md shadow-indigo-100"
+              >
+                <Sparkles className="h-4 w-4" />
+                Ver planos e assinar agora
+              </a>
+            )}
             <a
               href={`https://wa.me/${SALES_WHATSAPP}?text=${whatsappMsg}`}
               target="_blank"

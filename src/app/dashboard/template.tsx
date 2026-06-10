@@ -1,12 +1,17 @@
 import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { isRouteAllowed } from '@/config/access-matrix'
+import { checkModuleAccess } from '@/lib/subscription/gatekeeper'
+import { moduleKeyFromPath } from '@/config/path-modules'
 import PremiumPaywall from '@/components/paywall/PremiumPaywall'
-import type { PlanName, BusinessType } from '@/types'
 
 // template.tsx re-executa em CADA navegação dentro de /dashboard (diferente de layout.tsx).
 // É o lugar correto para enforcement de plano sem flash-of-content.
+//
+// SaaS Fase 1: o gate por rota (isRouteAllowed/FREE_ROUTES) foi substituído
+// pelo gatekeeper centralizado (clinic_contracted_modules + catálogo +
+// FREE_MODULES). O backfill 0365 garante que nenhuma clínica existente perde
+// acesso. NÃO mover esta checagem para o proxy (edge) — custo por request.
 export default async function DashboardTemplate({
   children,
 }: {
@@ -15,16 +20,21 @@ export default async function DashboardTemplate({
   const headersList = await headers()
   const pathname = headersList.get('x-pathname') ?? '/dashboard'
 
-  // Rotas sempre liberadas — sem checagem de plano
+  // Rotas sempre liberadas — sem checagem de plano. /dashboard/management
+  // permanece acessível (o lock granular é por aba, dentro da Gestão).
   if (
     pathname === '/dashboard' ||
     pathname.startsWith('/dashboard/profile') ||
-    pathname.startsWith('/dashboard/settings')
+    pathname.startsWith('/dashboard/settings') ||
+    pathname.startsWith('/dashboard/management')
   ) {
     return <>{children}</>
   }
 
-  // Busca plano e tipo de negócio da clínica atual
+  // Rota sem module key mapeada (ex.: telas utilitárias) — não bloqueia.
+  const moduleKey = moduleKeyFromPath(pathname)
+  if (!moduleKey) return <>{children}</>
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return <>{children}</>
@@ -41,23 +51,8 @@ export default async function DashboardTemplate({
   // SysMax Support nunca tem restrição de plano
   if (profile.is_sysmax === true) return <>{children}</>
 
-  const [subResult, clinicResult] = await Promise.all([
-    admin
-      .from('tenant_subscriptions')
-      .select('plan_name')
-      .eq('clinic_id', profile.clinic_id)
-      .single(),
-    admin
-      .from('clinics')
-      .select('business_type')
-      .eq('id', profile.clinic_id)
-      .single(),
-  ])
-
-  const plan         = (subResult.data?.plan_name    ?? 'free')       as PlanName
-  const businessType = (clinicResult.data?.business_type ?? 'vet_clinic') as BusinessType
-
-  if (!isRouteAllowed(pathname, plan, businessType)) {
+  const allowed = await checkModuleAccess(profile.clinic_id, moduleKey)
+  if (!allowed) {
     return <PremiumPaywall route={pathname} />
   }
 
