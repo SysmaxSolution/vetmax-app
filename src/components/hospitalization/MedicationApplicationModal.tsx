@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react'
 import {
-  Pill, X, Loader2, Check, Pause, CircleStop, AlertTriangle, Plus, ClockAlert, FileStack,
+  Pill, X, Loader2, Check, Pause, CircleStop, AlertTriangle, Plus, Clock, ClockAlert, FileStack,
 } from 'lucide-react'
 import ProtocolPicker from './ProtocolPicker'
 import { formatClinicTime } from '@/lib/time'
@@ -70,6 +70,13 @@ function formatTime(iso: string): string {
   return formatClinicTime(iso)
 }
 
+/** Agora no formato aceito por <input type="datetime-local"> (timezone do navegador). */
+function nowLocalInput(): string {
+  const d = new Date()
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset())
+  return d.toISOString().slice(0, 16)
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function MedicationApplicationModal({
@@ -82,6 +89,9 @@ export default function MedicationApplicationModal({
   const [showProtocols, setShowProtocols] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [feedback, setFeedback] = useState<{ tone: 'amber' | 'rose' | 'slate'; msg: string } | null>(null)
+  // Lançamento retroativo: id da prescrição com o seletor de horário aberto.
+  const [timePickerFor, setTimePickerFor] = useState<string | null>(null)
+  const [customTime, setCustomTime] = useState('')
 
   // Mapa rápido prescriptionId → alerta (para mostrar urgência por linha).
   const alertByPresc = useMemo(() => {
@@ -107,13 +117,14 @@ export default function MedicationApplicationModal({
     medicationTickStore.forceTick()
   }
 
-  function handleApply(presc: HospPrescription, scheduledFor?: Date) {
+  function handleApply(presc: HospPrescription, scheduledFor?: Date, appliedAt?: Date) {
     if (pendingId) return
     setPendingId({ id: presc.id, action: 'apply' })
     setError(null)
     setFeedback(null)
     startTransition(async () => {
       const res = await applyHospitalizationDose(presc.id, {
+        applied_at:    appliedAt?.toISOString(),
         scheduled_for: scheduledFor?.toISOString(),
       })
       if ('error' in res) { setError(res.error); setPendingId(null); return }
@@ -133,6 +144,15 @@ export default function MedicationApplicationModal({
       await finalizeUpdate()
       setPendingId(null)
     })
+  }
+
+  // Confirma o lançamento retroativo: valida o horário escolhido antes de aplicar.
+  function handleApplyAt(presc: HospPrescription, scheduledFor?: Date) {
+    const dt = customTime ? new Date(customTime) : null
+    if (!dt || Number.isNaN(dt.getTime())) { setError('Informe um horário válido.'); return }
+    if (dt.getTime() > Date.now() + 60_000) { setError('O horário de aplicação não pode estar no futuro.'); return }
+    setTimePickerFor(null)
+    handleApply(presc, scheduledFor, dt)
   }
 
   function handleStatusChange(presc: HospPrescription, status: PrescriptionStatus) {
@@ -269,6 +289,24 @@ export default function MedicationApplicationModal({
                         : <><Check className="h-3 w-3" /> {isSOS ? 'Aplicar SOS' : 'Aplicar agora'}</>}
                     </button>
 
+                    <button
+                      type="button"
+                      disabled={isAnyPending || isPaused}
+                      onClick={() => {
+                        if (timePickerFor === p.id) { setTimePickerFor(null); return }
+                        setCustomTime(nowLocalInput())
+                        setTimePickerFor(p.id)
+                      }}
+                      className={`flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-semibold disabled:opacity-50 transition-colors ${
+                        timePickerFor === p.id
+                          ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                      title="Registrar dose já aplicada informando o horário"
+                    >
+                      <Clock className="h-3 w-3" /> Outro horário
+                    </button>
+
                     {!isPaused && (
                       <button
                         type="button"
@@ -305,6 +343,35 @@ export default function MedicationApplicationModal({
                       Finalizar
                     </button>
                   </div>
+
+                  {/* Lançamento retroativo: a equipe medica primeiro e registra depois */}
+                  {timePickerFor === p.id && !isPaused && (
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 px-3 py-2 space-y-1.5">
+                      <label className="block text-[10px] font-bold text-emerald-700 uppercase">
+                        Horário em que a dose foi aplicada
+                      </label>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <input
+                          type="datetime-local"
+                          value={customTime}
+                          max={nowLocalInput()}
+                          onChange={(e) => setCustomTime(e.target.value)}
+                          className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs focus:border-emerald-500 focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          disabled={isAnyPending}
+                          onClick={() => handleApplyAt(p, alert?.nextDoseAt)}
+                          className="flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                        >
+                          <Check className="h-3 w-3" /> Confirmar
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-slate-500">
+                        Use quando a medicação já foi administrada e o registro está sendo feito depois.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             )

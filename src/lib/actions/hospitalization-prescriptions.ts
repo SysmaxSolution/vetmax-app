@@ -216,6 +216,16 @@ export async function applyHospitalizationDose(
     return { error: 'Prescrição já finalizada — não é possível registrar nova dose.' }
   }
 
+  // Lançamento retroativo: aceita applied_at custom, mas nunca no futuro
+  // (tolerância de 5min para clock skew entre navegador e servidor).
+  if (opts.applied_at) {
+    const t = Date.parse(opts.applied_at)
+    if (Number.isNaN(t)) return { error: 'Horário de aplicação inválido.' }
+    if (t > Date.now() + 5 * 60_000) {
+      return { error: 'O horário de aplicação não pode estar no futuro.' }
+    }
+  }
+
   const { data, error } = await admin
     .from('hospitalization_dose_administrations')
     .insert({
@@ -285,7 +295,7 @@ export async function applyHospitalizationDose(
       clinic_id:          ctx.clinicId,
       user_id:            ctx.userId,
       user_name:          userName,
-      notes:              `💉 Dose administrada às ${hora} por ${userName}.`,
+      notes:              `💉 Dose administrada às ${hora} por ${userName}.${opts.applied_at ? ' (registro retroativo)' : ''}`,
       medications:        [{ name: medName, dose: doseTxt, route: routeTxt, notes: detalhe }],
       improvement_level:  'estavel',
     })
