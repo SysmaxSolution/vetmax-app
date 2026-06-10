@@ -161,8 +161,9 @@ BEGIN
       (NEW.id, 'whatsapp_messages', 100,   (CURRENT_DATE + INTERVAL '1 month')::date, 'monthly'),
       (NEW.id, 'ai_mentor_tokens',  50000, (CURRENT_DATE + INTERVAL '1 month')::date, 'monthly'),
       (NEW.id, 'ai_mentor_daily',   1,     (CURRENT_DATE + INTERVAL '1 day')::date,   'daily'),
-      -- SaaS Fase 1.5: documentos personalizados são estoque (sem reset)
-      (NEW.id, 'custom_documents',  3,     NULL,                                      NULL)
+      -- SaaS Fase 1.5: documentos personalizados são estoque — reset_date NULL
+      -- nunca dispara reset; reset_interval é NOT NULL (0147), fica 'monthly'.
+      (NEW.id, 'custom_documents',  3,     NULL,                                      'monthly')
     ON CONFLICT (clinic_id, resource_name) DO NOTHING;
 
   -- Free plan: limite de 3 usuários (override do default)
