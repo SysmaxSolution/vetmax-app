@@ -64,10 +64,14 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
   const enterpriseLines = catalog.filter(c => c.included_in_plan === 'enterprise')
   const enterpriseAddonsAvailable = enterpriseLines.filter(c => c.is_available)
 
-  // Crítico: pré-seleciona os addons já contratados (ex.: surgery_advanced da
-  // Vet Teste) para não derrubá-los numa reassinatura.
+  // Pré-seleciona os addons já contratados APENAS para quem já é Premium
+  // (proteção de reassinatura — não derrubar contratos ao atualizar). Para os
+  // demais planos o configurador abre zerado: o card deve mostrar a base, não
+  // um total inflado pelos módulos do grandfathering (specialized/legado).
   const [selectedAddons, setSelectedAddons] = useState<string[]>(
-    contractedKeys.filter(k => enterpriseLines.some(c => c.module_key === k))
+    planName === 'premium'
+      ? contractedKeys.filter(k => enterpriseLines.some(c => c.module_key === k))
+      : []
   )
   const [cycle, setCycle] = useState<BillingCycle>(
     (subscription?.billing_cycle as BillingCycle | null) ?? 'monthly'
@@ -265,17 +269,11 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
             <h3 className="text-sm font-bold text-slate-900">Premium</h3>
           </div>
           <p className="mt-2 text-2xl font-bold text-indigo-700 tabular-nums">
-            {fmt(premiumTotals.monthlyTotal)}<span className="text-sm font-medium text-slate-400">/mês</span>
+            {fmt(config.premium_base_price)}<span className="text-sm font-medium text-slate-400">/mês</span>
           </p>
-          {cycle === 'yearly' ? (
-            <p className="mt-0.5 text-xs text-emerald-700 font-medium">
-              {fmt(premiumTotals.yearlyDiscounted)}/ano no PIX — economize {fmt(premiumTotals.yearlyTotal - premiumTotals.yearlyDiscounted)}
-            </p>
-          ) : (
-            <p className="mt-0.5 text-xs text-slate-500">
-              Base {fmt(config.premium_base_price)} + adicionais escolhidos
-            </p>
-          )}
+          <p className="mt-0.5 text-xs text-slate-500">
+            {selectedAddons.length > 0 ? 'Base do plano — total com adicionais abaixo' : 'Adicione módulos avulsos à sua escolha'}
+          </p>
 
           <div className="mt-4">
             <p className="mb-1.5 text-xs font-semibold text-slate-600 uppercase tracking-wide">
@@ -304,6 +302,29 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
                 businessType={businessType}
                 onToggle={toggleAddon}
               />
+
+              {/* Total da configuração (base + adicionais marcados) */}
+              <div className="mt-3 rounded-lg bg-indigo-50/70 border border-indigo-100 px-3 py-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium text-slate-700">
+                    Total{selectedAddons.length > 0 && ` (${selectedAddons.length} adiciona${selectedAddons.length === 1 ? 'l' : 'is'})`}
+                  </span>
+                  <span className="font-bold text-indigo-700 tabular-nums">{fmt(premiumTotals.monthlyTotal)}/mês</span>
+                </div>
+                {cycle === 'yearly' && (
+                  <p className="mt-0.5 text-[11px] text-emerald-700">
+                    {fmt(premiumTotals.yearlyDiscounted)}/ano no PIX — economize {fmt(premiumTotals.yearlyTotal - premiumTotals.yearlyDiscounted)}
+                  </p>
+                )}
+              </div>
+
+              {/* Upsell: configuração ficou mais cara que o Enterprise inteiro */}
+              {premiumTotals.monthlyTotal >= enterpriseTotals.monthlyTotal && (
+                <p className="mt-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-[11px] text-amber-800">
+                  Com esses adicionais, o <span className="font-semibold">Enterprise ({fmt(enterpriseTotals.monthlyTotal)}/mês)</span> sai
+                  mais em conta e inclui todos os módulos, usuários e documentos ilimitados.
+                </p>
+              )}
             </div>
           )}
 
@@ -315,7 +336,7 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
               className="mt-4 w-full flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <CreditCard className="h-4 w-4" />
-              {isPremium ? 'Atualizar Assinatura' : 'Assinar Premium'}
+              {isPremium ? 'Atualizar Assinatura' : `Assinar Premium — ${fmt(premiumTotals.effectiveTotal)}${cycle === 'yearly' ? '/ano' : '/mês'}`}
             </button>
           )}
         </div>
