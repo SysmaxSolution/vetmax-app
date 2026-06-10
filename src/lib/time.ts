@@ -45,3 +45,13 @@ export function formatClinicShort(input: Input, tz: string = DEFAULT_CLINIC_TZ):
     day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: tz,
   })
 }
+
+/**
+ * "2026-06-10T14:35" — agora no formato aceito por <input type="datetime-local">.
+ * Client-only: usa o timezone do navegador (o mesmo que o input exibe).
+ */
+export function nowLocalInputValue(): string {
+  const d = new Date()
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset())
+  return d.toISOString().slice(0, 16)
+}

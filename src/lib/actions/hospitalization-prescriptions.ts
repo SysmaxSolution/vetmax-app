@@ -151,6 +151,10 @@ export async function createHospitalizationPrescription(
     return { error: 'Quando há item de estoque vinculado, informe a quantidade consumida por dose.' }
   }
 
+  if (payload.started_at && Number.isNaN(Date.parse(payload.started_at))) {
+    return { error: 'Horário de início do tratamento inválido.' }
+  }
+
   const admin = createAdminClient()
   const { data, error } = await admin
     .from('hospitalization_prescriptions')

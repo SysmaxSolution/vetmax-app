@@ -5,7 +5,7 @@ import {
   Pill, X, Loader2, Check, Pause, CircleStop, AlertTriangle, Plus, Clock, ClockAlert, FileStack,
 } from 'lucide-react'
 import ProtocolPicker from './ProtocolPicker'
-import { formatClinicTime } from '@/lib/time'
+import { formatClinicTime, nowLocalInputValue } from '@/lib/time'
 import {
   applyHospitalizationDose,
   createHospitalizationPrescription,
@@ -68,13 +68,6 @@ function formatRelative(ms: number): string {
 
 function formatTime(iso: string): string {
   return formatClinicTime(iso)
-}
-
-/** Agora no formato aceito por <input type="datetime-local"> (timezone do navegador). */
-function nowLocalInput(): string {
-  const d = new Date()
-  d.setMinutes(d.getMinutes() - d.getTimezoneOffset())
-  return d.toISOString().slice(0, 16)
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -294,7 +287,7 @@ export default function MedicationApplicationModal({
                       disabled={isAnyPending || isPaused}
                       onClick={() => {
                         if (timePickerFor === p.id) { setTimePickerFor(null); return }
-                        setCustomTime(nowLocalInput())
+                        setCustomTime(nowLocalInputValue())
                         setTimePickerFor(p.id)
                       }}
                       className={`flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-semibold disabled:opacity-50 transition-colors ${
@@ -354,7 +347,7 @@ export default function MedicationApplicationModal({
                         <input
                           type="datetime-local"
                           value={customTime}
-                          max={nowLocalInput()}
+                          max={nowLocalInputValue()}
                           onChange={(e) => setCustomTime(e.target.value)}
                           className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs focus:border-emerald-500 focus:outline-none"
                         />
@@ -464,6 +457,7 @@ function NewPrescriptionForm({
   const [route,        setRoute]        = useState<string>('IV')
   const [frequency,    setFrequency]    = useState<number | null>(8)
   const [duration,     setDuration]     = useState('')
+  const [startAt,      setStartAt]      = useState(nowLocalInputValue())
   const [notes,        setNotes]        = useState('')
   const [stockItem,    setStockItem]    = useState<StockItemLite | null>(null)
   const [qtyPerDose,   setQtyPerDose]   = useState<string>('1')
@@ -473,6 +467,11 @@ function NewPrescriptionForm({
   async function handleSave() {
     setErr(null)
     if (!medication.trim()) { setErr('Informe o medicamento.'); return }
+    const startDate = startAt ? new Date(startAt) : null
+    if (!startDate || Number.isNaN(startDate.getTime())) {
+      setErr('Informe o horário de início do tratamento.')
+      return
+    }
     const qtyNum = parseFloat(qtyPerDose.replace(',', '.'))
     if (stockItem && !(qtyNum > 0)) {
       setErr('Informe a quantidade consumida por dose (> 0).')
@@ -486,6 +485,7 @@ function NewPrescriptionForm({
       route:              route || null,
       frequency_hours:    frequency,
       duration_hours:     duration ? parseInt(duration, 10) || null : null,
+      started_at:         startDate.toISOString(),
       notes:              notes.trim() || null,
       stock_item_id:      stockItem?.id ?? null,
       quantity_per_dose:  stockItem ? qtyNum : null,
@@ -567,6 +567,19 @@ function NewPrescriptionForm({
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none"
           />
         </div>
+      </div>
+
+      <div>
+        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Início do tratamento (1ª dose) *</label>
+        <input
+          type="datetime-local"
+          value={startAt}
+          onChange={(e) => setStartAt(e.target.value)}
+          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none"
+        />
+        <p className="text-[10px] text-slate-400 mt-1">
+          A próxima dose é calculada a partir deste horário. Use um horário passado se o pet já está medicado.
+        </p>
       </div>
 
       <div>

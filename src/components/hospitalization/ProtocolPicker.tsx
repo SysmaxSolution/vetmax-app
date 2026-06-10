@@ -7,6 +7,7 @@ import {
   applyTemplateToHospitalization,
   type PrescriptionTemplateSummary, type TemplateItem,
 } from '@/lib/actions/prescription-templates'
+import { nowLocalInputValue } from '@/lib/time'
 
 /**
  * ProtocolPicker — protocolos de prescrição reutilizáveis (Fase 2).
@@ -45,6 +46,9 @@ export default function ProtocolPicker({ hospitalizationId, onClose, onApplied }
   const [busyId, setBusyId]   = useState<string | null>(null)
   const [error, setError]     = useState<string | null>(null)
   const [toast, setToast]     = useState<string | null>(null)
+  // Horário de início do ciclo (1ª dose) — todas as medicações do protocolo
+  // são ancoradas nele. Default = agora; aceita retroativo.
+  const [startAt, setStartAt] = useState(nowLocalInputValue())
 
   // create form
   const [name, setName]   = useState('')
@@ -60,8 +64,14 @@ export default function ProtocolPicker({ hospitalizationId, onClose, onApplied }
   useEffect(() => { void reload() }, [])
 
   async function handleApply(id: string) {
-    setBusyId(id); setError(null)
-    const res = await applyTemplateToHospitalization(id, hospitalizationId)
+    setError(null)
+    const startDate = startAt ? new Date(startAt) : null
+    if (!startDate || Number.isNaN(startDate.getTime())) {
+      setError('Informe o horário de início do protocolo.')
+      return
+    }
+    setBusyId(id)
+    const res = await applyTemplateToHospitalization(id, hospitalizationId, startDate.toISOString())
     setBusyId(null)
     if ('error' in res) { setError(res.error); return }
     setToast(`${res.count} medicação(ões) lançada(s) no Mapa de Execução.`)
@@ -132,6 +142,23 @@ export default function ProtocolPicker({ hospitalizationId, onClose, onApplied }
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
           {error && <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-2.5 text-sm text-red-600">{error}</div>}
           {toast && <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-2.5 text-sm text-emerald-700">{toast}</div>}
+
+          {mode === 'list' && !loading && templates.length > 0 && (
+            <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 px-4 py-3">
+              <label className="block text-[10px] font-bold text-indigo-700 uppercase mb-1">
+                Início do ciclo (1ª dose) *
+              </label>
+              <input
+                type="datetime-local"
+                value={startAt}
+                onChange={(e) => setStartAt(e.target.value)}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+              />
+              <p className="text-[10px] text-slate-500 mt-1">
+                Todas as medicações do protocolo são agendadas a partir deste horário. Use um horário passado se o pet já está medicado.
+              </p>
+            </div>
+          )}
 
           {mode === 'list' ? (
             loading ? (

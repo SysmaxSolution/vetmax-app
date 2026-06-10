@@ -186,6 +186,9 @@ export async function applyTemplateToHospitalization(
   const ctx = await getCtx()
   if ('error' in ctx) return ctx
   if (!hospitalizationId) return { error: 'hospitalization_id é obrigatório.' }
+  if (startedAt && Number.isNaN(Date.parse(startedAt))) {
+    return { error: 'Horário de início do protocolo inválido.' }
+  }
 
   const admin = createAdminClient()
 
