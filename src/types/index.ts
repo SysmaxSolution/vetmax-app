@@ -6,8 +6,9 @@ export type UserRole = 'admin' | 'vet' | 'assistant' | 'receptionist' | 'pharmac
 // ── PLG — Planos, Feature Flags e Cotas ─────────────────────────────────────
 
 export type BusinessType = 'vet_clinic' | 'pet_aesthetics'
-export type PlanName = 'free' | 'pro' | 'enterprise'
+export type PlanName = 'free' | 'premium' | 'specialized'
 export type SubscriptionStatus = 'active' | 'trialing' | 'past_due' | 'cancelled'
+export type BillingCycle = 'monthly' | 'yearly'
 
 export interface TenantSubscription {
   id: string
@@ -21,6 +22,34 @@ export interface TenantSubscription {
   started_at: string
   created_at: string
   updated_at: string
+  billing_cycle: BillingCycle | null
+  payment_payload: Record<string, unknown> | null
+}
+
+// Catálogo global de módulos a la carte do plano Premium (migration 0366).
+// included_module_keys/flow_flags expandem a chave comercial para as camadas
+// técnicas (clinics.active_modules / clinics.flow_config).
+export interface SubscriptionModuleCatalogRow {
+  module_key: string
+  label: string
+  description: string
+  monthly_price: number
+  is_available: boolean
+  sort_order: number
+  included_module_keys: string[]
+  flow_flags: string[]
+}
+
+export interface ClinicContractedModule {
+  clinic_id: string
+  module_key: string
+  is_active: boolean
+  contracted_at: string
+}
+
+export interface SubscriptionPlanConfig {
+  premium_base_price: number
+  annual_discount_percent: number
 }
 
 export interface TenantFeatureFlags {

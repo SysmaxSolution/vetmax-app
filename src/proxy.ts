@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { UserRole } from '@/types'
 import { getAppUrl } from '@/lib/app-url'
+import { moduleKeyFromPath } from '@/config/path-modules'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -37,31 +38,8 @@ function isPublicPath(pathname: string): boolean {
   )
 }
 
-// /dashboard/<segmento> → key do módulo (alguns segmentos diferem do moduleKey).
-const PATH_SEGMENT_TO_MODULE: Record<string, string> = {
-  reception:       'reception',
-  patients:        'patients',
-  triage:          'triage',
-  vet:             'consultation',
-  exams:           'exams',
-  hospitalization: 'hospitalization',
-  grooming:        'grooming',
-  pharmacy:        'pharmacy',
-  sales:           'sales',
-  cashier:         'cashier',
-  registry:        'registry',
-  whatsapp:        'whatsapp_intelligent',
-  purchases:       'purchases',
-  financial:       'financial',
-  reports:         'reports',
-  appointments:    'reception',  // sub-tela de recepção
-}
-
-function moduleKeyFromPath(pathname: string): string | null {
-  const seg = pathname.split('/')[2]
-  if (!seg) return null
-  return PATH_SEGMENT_TO_MODULE[seg] ?? null
-}
+// /dashboard/<segmento> → key do módulo: extraído para src/config/path-modules.ts
+// (compartilhado com o enforcement de plano em src/app/dashboard/template.tsx).
 
 // ─── Proxy ────────────────────────────────────────────────────────────────────
 
@@ -81,8 +59,17 @@ export async function proxy(request: NextRequest) {
   requestHeaders.set('x-pathname', pathname)
   requestHeaders.set('x-url',      request.url)
 
+  // Security headers aplicados em todas as respostas (públicas e privadas).
+  // X-Frame-Options previne clickjacking (especialmente em /email-confirmado etc.).
+  const applySecurityHeaders = (res: NextResponse) => {
+    res.headers.set('X-Frame-Options', 'DENY')
+    res.headers.set('X-Content-Type-Options', 'nosniff')
+    res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
+    return res
+  }
+
   if (isPublicPath(pathname)) {
-    return NextResponse.next({ request: { headers: requestHeaders } })
+    return applySecurityHeaders(NextResponse.next({ request: { headers: requestHeaders } }))
   }
 
   if (
@@ -90,10 +77,10 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith('/api/') ||
     pathname.includes('.')
   ) {
-    return NextResponse.next({ request: { headers: requestHeaders } })
+    return applySecurityHeaders(NextResponse.next({ request: { headers: requestHeaders } }))
   }
 
-  let response = NextResponse.next({ request: { headers: requestHeaders } })
+  let response = applySecurityHeaders(NextResponse.next({ request: { headers: requestHeaders } }))
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -104,7 +91,7 @@ export async function proxy(request: NextRequest) {
         setAll: (cookiesToSet) => {
           // Atualiza cookies no request para que Server Components recebam o token renovado
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-          response = NextResponse.next({ request: { headers: requestHeaders } })
+          response = applySecurityHeaders(NextResponse.next({ request: { headers: requestHeaders } }))
           cookiesToSet.forEach(({ name, value, options }) =>
             response.cookies.set(name, value, options)
           )

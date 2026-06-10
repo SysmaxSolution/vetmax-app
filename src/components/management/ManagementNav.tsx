@@ -23,7 +23,7 @@ interface Props {
   planName?:          string
 }
 
-export default function ManagementNav({ showMonitoramento = false, planName = 'enterprise' }: Props) {
+export default function ManagementNav({ showMonitoramento = false, planName = 'specialized' }: Props) {
   const pathname     = usePathname()
   const searchParams = useSearchParams()
   const currentTab   = searchParams.get('tab')

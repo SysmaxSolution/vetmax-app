@@ -8,7 +8,7 @@ export default async function ManagementLayout({ children }: { children: React.R
   const { data: { user } } = await supabase.auth.getUser()
 
   let isSysmax  = false
-  let planName  = 'enterprise'
+  let planName  = 'specialized'
 
   if (user) {
     const admin = createAdminClient()

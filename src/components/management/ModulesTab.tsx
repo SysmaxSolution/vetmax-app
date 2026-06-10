@@ -112,7 +112,7 @@ export default function ModulesTab({
   const [showMasterKey, setShowMasterKey]           = useState(false)
   const masterKeyInputRef = useRef<HTMLInputElement>(null)
   const { open: openUpgrade, planName } = useUpgradeModal()
-  const isPaidPlan = planName === 'pro' || planName === 'enterprise'
+  const isPaidPlan = planName === 'premium' || planName === 'specialized'
 
   // Click no toggle — dois caminhos:
   //  - SysMax (operação interna): dialog de Master Key (UX antiga, intocada).

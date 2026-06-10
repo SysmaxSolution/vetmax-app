@@ -164,7 +164,7 @@ export default function ManagementWorkspace({
   initialTemplates, clinicData, users, initialInvitations, userLimit, currentUserId, userEmail, userFullName,
   initialClinicConfig, initialSettingsConfig = null, initialRooms = [],
   activeModules = [], isSysmax = false,
-  planName = 'enterprise',
+  planName = 'specialized',
 }: ManagementWorkspaceProps) {
   // PLG: tabs bloqueadas no Free.
   // 'configuracoes' foi LIBERADA no refator Freemium 2026-05-26 — Free
