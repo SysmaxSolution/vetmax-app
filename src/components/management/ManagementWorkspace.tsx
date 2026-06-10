@@ -31,6 +31,8 @@ import type { ClinicUserFull } from '@/lib/actions/user-management'
 import type { Room } from '@/lib/actions/rooms'
 import UserManagementModal from './UserManagementModal'
 import UserAccessRightsModal from './UserAccessRightsModal'
+import SubscriptionTab from './subscription/SubscriptionTab'
+import type { SubscriptionOverview } from '@/lib/subscription/types'
 
 // Mapeamento dos keys de módulos para labels em PT-BR (espelha o catálogo).
 const MODULE_LABELS_PT: Record<string, string> = {
@@ -74,6 +76,10 @@ interface ManagementWorkspaceProps {
   activeModules?:               string[]
   isSysmax?:                    boolean
   planName?:                    string
+  /** SaaS Fase 1 — dados da aba Assinatura (catálogo, config, contrato). */
+  subscriptionOverview?:        SubscriptionOverview | null
+  /** Rollout restrito da UI de Planos (flow_config.subscription_plans_ui). */
+  showAssinatura?:              boolean
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -118,7 +124,7 @@ const INVITE_ROLE_OPTIONS: { value: InvitationRole; label: string }[] = [
   { value: 'pharmacist',   label: 'Técnico' },
 ]
 
-type ActiveTab = 'templates' | 'clinica' | 'usuarios' | 'configuracoes' | 'convenios' | 'salas' | 'aparencia' | 'monitoramento'
+type ActiveTab = 'templates' | 'clinica' | 'usuarios' | 'configuracoes' | 'convenios' | 'salas' | 'aparencia' | 'monitoramento' | 'assinatura'
 
 // ─── Inline Field Helper ─────────────────────────────────────────────────────
 
@@ -165,6 +171,8 @@ export default function ManagementWorkspace({
   initialClinicConfig, initialSettingsConfig = null, initialRooms = [],
   activeModules = [], isSysmax = false,
   planName = 'specialized',
+  subscriptionOverview = null,
+  showAssinatura = false,
 }: ManagementWorkspaceProps) {
   // PLG: tabs bloqueadas no Free.
   // 'configuracoes' foi LIBERADA no refator Freemium 2026-05-26 — Free
@@ -582,6 +590,17 @@ export default function ManagementWorkspace({
       {/* ── Tab: Convênios ── */}
       {activeTab === 'convenios' && (
         <ConveniosTab onToast={(type, message) => setToast({ type, message })} />
+      )}
+
+      {/* ── Tab: Assinatura (SaaS Fase 1 — rollout restrito) ── */}
+      {activeTab === 'assinatura' && (
+        showAssinatura && subscriptionOverview ? (
+          <SubscriptionTab overview={subscriptionOverview} />
+        ) : (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 text-center text-sm text-slate-500">
+            A área de Planos e Assinatura estará disponível em breve para a sua clínica.
+          </div>
+        )
       )}
 
       {/* ── Tab: Configurações (G-15 — categorias reorganizadas) ── */}

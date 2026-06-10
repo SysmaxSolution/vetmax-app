@@ -29,7 +29,7 @@ export default async function ManagementPage() {
 
   const clinicName = (profile.clinics as unknown as { name: string } | null)?.name ?? 'Minha Clínica'
 
-  const [templatesResult, clinicResult, usersResult, invitationsResult, configResult, roomsResult, settingsConfigResult, subResult] = await Promise.all([
+  const [templatesResult, clinicResult, usersResult, invitationsResult, configResult, roomsResult, settingsConfigResult, subResult, contractedResult, catalogResult, planConfigResult] = await Promise.all([
     getTemplates(),
     admin
       .from('clinics')
@@ -48,8 +48,23 @@ export default async function ManagementPage() {
     getClinicSettingsConfig(),
     admin
       .from('tenant_subscriptions')
-      .select('plan_name')
+      .select('*')
       .eq('clinic_id', profile.clinic_id)
+      .maybeSingle(),
+    admin
+      .from('clinic_contracted_modules')
+      .select('module_key')
+      .eq('clinic_id', profile.clinic_id)
+      .eq('is_active', true),
+    admin
+      .from('subscription_module_catalog')
+      .select('*')
+      .eq('is_available', true)
+      .order('sort_order'),
+    admin
+      .from('subscription_plan_config')
+      .select('premium_base_price, annual_discount_percent')
+      .eq('id', 1)
       .single(),
   ])
 
@@ -63,6 +78,23 @@ export default async function ManagementPage() {
   const initialSettingsConfig = 'error' in settingsConfigResult ? null : settingsConfigResult
   const initialRooms = Array.isArray(roomsResult) ? roomsResult : []
   const planName: string = (subResult as any)?.data?.plan_name ?? 'free'
+
+  // SaaS Fase 1 — dados da aba Assinatura + gate de rollout (Vet Teste/SysMax)
+  const flowConfigRaw = ((clinicData?.flow_config ?? {}) as { subscription_plans_ui?: boolean })
+  const showAssinatura = !!profile.is_sysmax || flowConfigRaw.subscription_plans_ui === true
+  const subscriptionOverview = {
+    subscription: (subResult as any)?.data ?? null,
+    contractedKeys: ((contractedResult as any)?.data ?? []).map((r: any) => r.module_key as string),
+    catalog: (((catalogResult as any)?.data ?? []) as any[]).map(r => ({
+      ...r,
+      monthly_price: Number(r.monthly_price),
+    })),
+    config: {
+      premium_base_price: Number((planConfigResult as any)?.data?.premium_base_price ?? 99),
+      annual_discount_percent: Number((planConfigResult as any)?.data?.annual_discount_percent ?? 20),
+    },
+    businessType: ((clinicData?.business_type ?? 'vet_clinic') as 'vet_clinic' | 'pet_aesthetics'),
+  }
 
   return (
     <Suspense>
@@ -81,6 +113,8 @@ export default async function ManagementPage() {
         activeModules={activeModules}
         isSysmax={!!profile.is_sysmax}
         planName={planName}
+        subscriptionOverview={subscriptionOverview}
+        showAssinatura={showAssinatura}
       />
     </Suspense>
   )

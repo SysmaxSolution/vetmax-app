@@ -93,11 +93,13 @@ export default async function DashboardLayout({
   const allowedRoutes  = FREE_ROUTES[businessType] ?? FREE_ROUTES.vet_clinic
 
   // Feature flags da Sprint Internação/Cirurgia (clinics.flow_config).
-  const flowConfig         = ((clinicData as any)?.flow_config ?? {}) as { internacao_completa?: boolean; centro_cirurgico?: boolean; pdv_unified_with_cashier?: boolean }
+  const flowConfig         = ((clinicData as any)?.flow_config ?? {}) as { internacao_completa?: boolean; centro_cirurgico?: boolean; pdv_unified_with_cashier?: boolean; subscription_plans_ui?: boolean }
   const internacaoCompleta = flowConfig.internacao_completa === true
   const centroCirurgico    = flowConfig.centro_cirurgico === true
   // Épico B (04/06, Q4): PDV unificado ao Caixa — esconde o módulo PDV do menu
   const pdvUnified         = flowConfig.pdv_unified_with_cashier === true
+  // Monetização SaaS Fase 1 — rollout restrito da UI de Planos (Vet Teste)
+  const subscriptionUiEnabled = isSysmax || flowConfig.subscription_plans_ui === true
 
   // Bloqueio de clínica em análise (SysMax nunca é bloqueado)
   if (clinicStatus === 'pending' && !isSysmax) {
@@ -230,6 +232,7 @@ export default async function DashboardLayout({
     allowedRoutes,
     centroCirurgico,
     pdvUnified,
+    subscriptionUiEnabled,
     uiPreferences:        (clinicData as any)?.ui_preferences ?? null,
     aiTranscriptionMode:  (clinicData as any)?.ai_transcription_mode ?? 'ai_assisted',
     internacaoCompleta,

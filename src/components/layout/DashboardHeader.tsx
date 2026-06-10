@@ -6,7 +6,7 @@ import {
   LogOut, Home, Stethoscope, TestTubes, Users, BarChart3, PawPrint,
   BedDouble, Package, Scissors, Banknote, FolderKanban, MessageCircle, MessageSquare,
   ShoppingCart, Activity, ClipboardList, DollarSign, FileBarChart2, FileText,
-  Menu, X, Lock, Syringe,
+  Menu, X, Lock, Syringe, CreditCard,
 } from 'lucide-react'
 import type { UserRole } from '@/types'
 import { useState, useEffect } from 'react'
@@ -97,6 +97,8 @@ interface DashboardHeaderProps {
   centroCirurgico?:      boolean
   /** flow_config.pdv_unified_with_cashier (Épico B 04/06) — esconde o PDV do menu. */
   pdvUnified?:           boolean
+  /** SaaS Fase 1 (rollout Vet Teste) — exibe link "Meu Plano" para admin. */
+  subscriptionUiEnabled?: boolean
   // PLG
   planName?:      string
   allowedRoutes?: string[]
@@ -120,6 +122,7 @@ export default function DashboardHeader({
   isSurgeryMode = false,
   centroCirurgico = false,
   pdvUnified = false,
+  subscriptionUiEnabled = false,
   planName = 'free',
   allowedRoutes = [],
 }: DashboardHeaderProps) {
@@ -277,6 +280,18 @@ export default function DashboardHeader({
           </div>
 
           <div className="flex items-center gap-3">
+            {/* SaaS Fase 1 — auto-atendimento PLG: link destacado para a tela
+                de Planos (rollout restrito via flow_config.subscription_plans_ui). */}
+            {subscriptionUiEnabled && userRole === 'admin' && (
+              <Link
+                href="/dashboard/management?tab=assinatura"
+                className="hidden sm:flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors"
+                title="Ver plano e assinatura da clínica"
+              >
+                <CreditCard className="h-3.5 w-3.5" />
+                Meu Plano
+              </Link>
+            )}
             <OmnisearchTrigger />
             <NotificationBell clinicId={clinicId} />
 
@@ -464,6 +479,16 @@ export default function DashboardHeader({
 
             {/* Rodapé: nome do usuário + sair */}
             <div className="border-t border-slate-100 px-4 py-4 space-y-2">
+              {subscriptionUiEnabled && userRole === 'admin' && (
+                <Link
+                  href="/dashboard/management?tab=assinatura"
+                  onClick={closeMobileMenu}
+                  className="flex items-center gap-2 rounded-lg bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700"
+                >
+                  <CreditCard className="h-4 w-4" />
+                  Meu Plano
+                </Link>
+              )}
               <p className="text-xs text-slate-400 truncate">
                 Olá, <span className="font-semibold text-slate-600">{userName}</span>
               </p>

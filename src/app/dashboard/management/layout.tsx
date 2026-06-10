@@ -7,8 +7,9 @@ export default async function ManagementLayout({ children }: { children: React.R
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  let isSysmax  = false
-  let planName  = 'specialized'
+  let isSysmax       = false
+  let planName       = 'specialized'
+  let showAssinatura = false
 
   if (user) {
     const admin = createAdminClient()
@@ -19,13 +20,23 @@ export default async function ManagementLayout({ children }: { children: React.R
       .single()
     isSysmax = !!profile?.is_sysmax
 
-    if (profile?.clinic_id && !isSysmax) {
-      const { data: sub } = await admin
-        .from('tenant_subscriptions')
-        .select('plan_name')
-        .eq('clinic_id', profile.clinic_id)
-        .single()
-      planName = sub?.plan_name ?? 'free'
+    if (profile?.clinic_id) {
+      const [subResult, clinicResult] = await Promise.all([
+        admin
+          .from('tenant_subscriptions')
+          .select('plan_name')
+          .eq('clinic_id', profile.clinic_id)
+          .maybeSingle(),
+        admin
+          .from('clinics')
+          .select('flow_config')
+          .eq('id', profile.clinic_id)
+          .single(),
+      ])
+      if (!isSysmax) planName = subResult.data?.plan_name ?? 'free'
+      // SaaS Fase 1 — rollout restrito (Vet Teste); SysMax sempre vê.
+      const flow = (clinicResult.data?.flow_config ?? {}) as { subscription_plans_ui?: boolean }
+      showAssinatura = isSysmax || flow.subscription_plans_ui === true
     }
   }
 
@@ -36,7 +47,7 @@ export default async function ManagementLayout({ children }: { children: React.R
         <p className="mt-0.5 text-sm text-slate-500">Templates, configurações e usuários</p>
       </div>
       <Suspense>
-        <ManagementNav showMonitoramento={isSysmax} planName={planName} />
+        <ManagementNav showMonitoramento={isSysmax} planName={planName} showAssinatura={showAssinatura} />
       </Suspense>
       {children}
     </div>

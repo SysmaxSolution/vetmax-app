@@ -28,7 +28,7 @@ export default function DashboardShellModern({
   userName, clinicName, clinicId, userRole, logoUrl, activeModules,
   lowStockCount, whatsappHandoffCount, chatUnreadCount, userClinics,
   isSysmax, clinicStatus, isSurgeryMode, planName, allowedRoutes, centroCirurgico,
-  pdvUnified = false,
+  pdvUnified = false, subscriptionUiEnabled = false,
   uiPreferences, aiTranscriptionMode, internacaoCompleta, whatsAppEnabled,
   hasLogo, hasPets, businessType, userId, children,
 }: DashboardShellProps) {
@@ -58,6 +58,7 @@ export default function DashboardShellModern({
         allowedRoutes={allowedRoutes}
         centroCirurgico={centroCirurgico}
         pdvUnified={pdvUnified}
+        subscriptionUiEnabled={subscriptionUiEnabled}
       />
 
       <ThemeProvider initialPreferences={uiPreferences as any}>

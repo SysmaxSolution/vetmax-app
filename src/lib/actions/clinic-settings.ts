@@ -24,6 +24,14 @@ export type FlowConfig = {
    * lançada no topo de Caixa > Recebimentos. Decisão Q4 do PO.
    */
   pdv_unified_with_cashier?: boolean
+  /**
+   * Monetização SaaS Fase 1 (rollout restrito): exibe a UI de Planos —
+   * aba Assinatura em Gestão + link "Meu Plano" no header. Setada via SQL
+   * apenas nas clínicas piloto (Vet Teste); SysMax sempre vê. A liberação
+   * geral é um UPDATE em massa, sem deploy. O enforcement do gatekeeper NÃO
+   * depende desta flag (só a UI de venda).
+   */
+  subscription_plans_ui?: boolean
 }
 
 export type BusinessHourEntry = { open: string; close: string } | null

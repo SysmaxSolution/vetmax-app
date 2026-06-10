@@ -9,11 +9,11 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { FREE_MODULES } from '@/config/access-matrix'
 import { computePremiumPrice, type PriceTotals } from '@/lib/subscription/pricing'
+import type { DummyPaymentPayload, SubscriptionOverview } from '@/lib/subscription/types'
 import type {
   BillingCycle,
   BusinessType,
   SubscriptionModuleCatalogRow,
-  SubscriptionPlanConfig,
   TenantSubscription,
 } from '@/types'
 
@@ -40,14 +40,8 @@ async function getAdminCtx(): Promise<Ctx | { error: string }> {
 }
 
 // ─── Leitura ──────────────────────────────────────────────────────────────────
-
-export interface SubscriptionOverview {
-  subscription: TenantSubscription | null
-  contractedKeys: string[]
-  catalog: SubscriptionModuleCatalogRow[]
-  config: SubscriptionPlanConfig
-  businessType: BusinessType
-}
+// Tipos (SubscriptionOverview, DummyPaymentPayload) vivem em
+// src/lib/subscription/types.ts — NUNCA exportar tipos de arquivo 'use server'.
 
 export async function getSubscriptionOverview(): Promise<SubscriptionOverview | { error: string }> {
   const ctx = await getAdminCtx()
@@ -140,12 +134,6 @@ async function syncClinicModulesFromContract(
 }
 
 // ─── Mutações ─────────────────────────────────────────────────────────────────
-
-export interface DummyPaymentPayload {
-  method: 'card' | 'pix'
-  card?: { holder: string; last4: string; brand: string }
-  terms_accepted: boolean
-}
 
 export async function subscribeToPremium(input: {
   moduleKeys: string[]

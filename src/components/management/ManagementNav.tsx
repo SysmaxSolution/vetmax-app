@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
 import {
-  FileText, Shield, Building2, Users, Settings, LayoutGrid, Palette, Activity, Lock,
+  FileText, Shield, Building2, Users, Settings, LayoutGrid, Palette, Activity, Lock, CreditCard,
 } from 'lucide-react'
 import { MANAGEMENT_TAB_BLOCKED_ON_FREE } from '@/config/access-matrix'
 
@@ -13,6 +13,7 @@ const TABS = [
   { label: 'Clínica',           href: '/dashboard/management?tab=clinica',          icon: Building2,  exact: false, tab: 'clinica' },
   { label: 'Usuários',          href: '/dashboard/management?tab=usuarios',         icon: Users,      exact: false, tab: 'usuarios' },
   { label: 'Configurações',     href: '/dashboard/management?tab=configuracoes',    icon: Settings,   exact: false, tab: 'configuracoes' },
+  { label: 'Assinatura',        href: '/dashboard/management?tab=assinatura',       icon: CreditCard, exact: false, tab: 'assinatura' },
   { label: 'Aparência',         href: '/dashboard/management?tab=aparencia',        icon: Palette,    exact: false, tab: 'aparencia' },
   { label: 'Monitoramento',     href: '/dashboard/management?tab=monitoramento',    icon: Activity,   exact: false, tab: 'monitoramento' },
   { label: 'Painel do Diretor', href: '/dashboard/management/kanban',               icon: LayoutGrid, exact: false, tab: 'kanban', kanban: true },
@@ -21,9 +22,11 @@ const TABS = [
 interface Props {
   showMonitoramento?: boolean
   planName?:          string
+  /** SaaS Fase 1 — rollout restrito (Vet Teste): exibe a aba Assinatura. */
+  showAssinatura?:    boolean
 }
 
-export default function ManagementNav({ showMonitoramento = false, planName = 'specialized' }: Props) {
+export default function ManagementNav({ showMonitoramento = false, planName = 'specialized', showAssinatura = false }: Props) {
   const pathname     = usePathname()
   const searchParams = useSearchParams()
   const currentTab   = searchParams.get('tab')
@@ -39,7 +42,11 @@ export default function ManagementNav({ showMonitoramento = false, planName = 's
     return isFreePlan && MANAGEMENT_TAB_BLOCKED_ON_FREE.includes(tab.tab)
   }
 
-  const visibleTabs = TABS.filter(tab => tab.tab !== 'monitoramento' || showMonitoramento)
+  const visibleTabs = TABS.filter(tab => {
+    if (tab.tab === 'monitoramento') return showMonitoramento
+    if (tab.tab === 'assinatura')    return showAssinatura
+    return true
+  })
 
   return (
     <div className="flex gap-1 bg-white rounded-xl border border-slate-200 p-1 shadow-sm flex-wrap">
