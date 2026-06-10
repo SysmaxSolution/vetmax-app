@@ -100,12 +100,32 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
   const freeLabels = (FREE_MODULES[businessType] ?? FREE_MODULES.vet_clinic)
     .map(k => MODULE_LABELS_PT[k] ?? k)
 
-  const salesWhatsapp = process.env.NEXT_PUBLIC_SALES_WHATSAPP ?? '5516997023340'
-  const whatsappUrl = `https://wa.me/${salesWhatsapp}?text=${encodeURIComponent(
-    'Olá! Tenho interesse no Plano Especializado do SysVetMax e gostaria de falar com um consultor.'
-  )}`
+  // ── Configurador do Especializado ──────────────────────────────────────
+  // O cliente monta a combinação desejada (pré-carregada com o bundle do
+  // Premium) e vê a estimativa em tempo real ANTES de acionar o comercial.
+  // A estimativa é a soma dos preços individuais — o valor final é negociado.
+  const specializedSelectable = catalog.filter(c => c.is_available)
+  const [specializedKeys, setSpecializedKeys] = useState<string[]>(
+    premiumBundle.filter(c => c.is_available).map(c => c.module_key)
+  )
+  const specializedEstimate = specializedSelectable
+    .filter(c => specializedKeys.includes(c.module_key))
+    .reduce((sum, c) => sum + Number(c.monthly_price), 0)
 
-  const addonPrice = enterpriseAddonsAvailable[0]?.monthly_price ?? 79.9
+  function toggleSpecialized(key: string) {
+    setSpecializedKeys(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])
+  }
+
+  const salesWhatsapp = process.env.NEXT_PUBLIC_SALES_WHATSAPP ?? '5516997023340'
+  const specializedModuleLabels = specializedSelectable
+    .filter(c => specializedKeys.includes(c.module_key))
+    .map(c => c.label)
+  const whatsappUrl = `https://wa.me/${salesWhatsapp}?text=${encodeURIComponent(
+    `Olá! Tenho interesse no Plano Especializado do SysVetMax.\n\n` +
+    `Módulos desejados:\n${specializedModuleLabels.map(l => `• ${l}`).join('\n') || '• (a definir)'}\n\n` +
+    `Estimativa pela tabela: ${specializedEstimate.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/mês.\n` +
+    `Gostaria de negociar uma proposta com um consultor.`
+  )}`
 
   function toggleAddon(key: string) {
     setSelectedAddons(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])
@@ -294,7 +314,7 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
           {!isSpecialized && !isEnterprise && (
             <div className="mt-4">
               <p className="mb-1.5 flex items-center gap-1 text-xs font-semibold text-slate-600 uppercase tracking-wide">
-                <Plus className="h-3 w-3" /> Adicionais — {fmt(addonPrice)}/mês cada
+                <Plus className="h-3 w-3" /> Adicionais — preço por módulo
               </p>
               <ModulePicker
                 catalog={enterpriseAddonsAvailable}
@@ -409,14 +429,40 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
               : 'Sob medida'}
           </p>
           <p className="mt-1 text-xs text-slate-500">
-            Módulos, limites e valores definidos em contrato com nosso time comercial.
+            Monte a combinação ideal e negocie o valor final com nosso time comercial.
           </p>
-          <ul className="mt-4 space-y-1.5 text-sm text-slate-600">
-            <li className="flex items-center gap-2"><BadgeCheck className="h-3.5 w-3.5 text-violet-500 shrink-0" /> Combinação livre de módulos</li>
-            <li className="flex items-center gap-2"><BadgeCheck className="h-3.5 w-3.5 text-violet-500 shrink-0" /> Valor negociado em contrato</li>
+          <ul className="mt-3 space-y-1.5 text-sm text-slate-600">
             <li className="flex items-center gap-2"><BadgeCheck className="h-3.5 w-3.5 text-violet-500 shrink-0" /> Onboarding e suporte dedicados</li>
             <li className="flex items-center gap-2"><BadgeCheck className="h-3.5 w-3.5 text-violet-500 shrink-0" /> Multi-unidades e migração de dados</li>
           </ul>
+
+          {/* Configurador: pré-carregado com o bundle do Premium; o cliente
+              ajusta e a estimativa acompanha em tempo real. */}
+          <div className="mt-4">
+            <p className="mb-1.5 text-xs font-semibold text-slate-600 uppercase tracking-wide">
+              Monte seu plano:
+            </p>
+            <div className="max-h-64 overflow-y-auto pr-1">
+              <ModulePicker
+                catalog={specializedSelectable}
+                selectedKeys={specializedKeys}
+                businessType={businessType}
+                onToggle={toggleSpecialized}
+              />
+            </div>
+            <div className="mt-3 rounded-lg bg-violet-50/70 border border-violet-100 px-3 py-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-medium text-slate-700">
+                  Estimativa ({specializedKeys.length} módulo{specializedKeys.length === 1 ? '' : 's'})
+                </span>
+                <span className="font-bold text-violet-700 tabular-nums">{fmt(specializedEstimate)}/mês</span>
+              </div>
+              <p className="mt-0.5 text-[11px] text-slate-500">
+                Referência pela tabela — o valor final é definido em contrato.
+              </p>
+            </div>
+          </div>
+
           <a
             href={whatsappUrl}
             target="_blank"
