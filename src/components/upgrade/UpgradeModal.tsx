@@ -82,7 +82,7 @@ const UPGRADE_FEATURES: Record<UpgradeFeatureKey, FeatureMeta> = {
   whatsapp_intelligent: {
     icon:       MessageSquareText,
     title:      'WhatsApp Bot Inteligente',
-    targetPlan: 'Plano Premium',
+    targetPlan: 'Plano Enterprise',
     pitch:      'Atendimento 24/7 com IA: agendamentos, confirmações e dúvidas frequentes respondidos automaticamente.',
     benefits: [
       'Confirmação automática de agendamentos no dia anterior',
@@ -95,7 +95,7 @@ const UPGRADE_FEATURES: Record<UpgradeFeatureKey, FeatureMeta> = {
   reports_export: {
     icon:       FileBarChart2,
     title:      'Relatórios Avançados em PDF',
-    targetPlan: 'Plano Premium',
+    targetPlan: 'Plano Enterprise',
     pitch:      'Exporte relatórios financeiros, operacionais e gerenciais em PDF, com sua logomarca e prontos para apresentação.',
     benefits: [
       'DRE consolidada com comparativo mês a mês',
@@ -108,7 +108,7 @@ const UPGRADE_FEATURES: Record<UpgradeFeatureKey, FeatureMeta> = {
   continuous_flow: {
     icon:       Cpu,
     title:      'Fluxo Contínuo no Consultório',
-    targetPlan: 'Plano Premium',
+    targetPlan: 'Plano Enterprise',
     pitch:      'Una Triagem, Consultório e Exames em uma única tela e deixe o MV ditar tudo num só áudio — a IA preenche cada módulo automaticamente.',
     benefits: [
       'Triagem incorporada ao Consultório (sinais vitais no mesmo fluxo)',
@@ -121,7 +121,7 @@ const UPGRADE_FEATURES: Record<UpgradeFeatureKey, FeatureMeta> = {
   internal_chat: {
     icon:       MessageSquare,
     title:      'Chat Interno',
-    targetPlan: 'Plano Premium',
+    targetPlan: 'Plano Enterprise',
     pitch:      'Tire a equipe do WhatsApp pessoal. Mensagens com contexto, salas automáticas por consulta/internação/cirurgia, anexos e leitura em tempo real.',
     benefits: [
       'Salas criadas automaticamente para cada atendimento ativo',
@@ -134,7 +134,7 @@ const UPGRADE_FEATURES: Record<UpgradeFeatureKey, FeatureMeta> = {
   triage: {
     icon:       Stethoscope,
     title:      'Triagem Clínica',
-    targetPlan: 'Plano Premium',
+    targetPlan: 'Plano Enterprise',
     pitch:      'Fila de triagem com sinais vitais por voz, anamnese guiada e integração direta com o consultório.',
     benefits: [
       'Sinais vitais (peso, temperatura, FC, FR, mucosas) por voz',
@@ -147,7 +147,7 @@ const UPGRADE_FEATURES: Record<UpgradeFeatureKey, FeatureMeta> = {
   exams: {
     icon:       FlaskConical,
     title:      'Módulo de Exames',
-    targetPlan: 'Plano Premium',
+    targetPlan: 'Plano Enterprise',
     pitch:      'Solicitação digital, laudo com assinatura eletrônica e PDF entregue ao tutor em segundos.',
     benefits: [
       'Pedido de exame direto da consulta, em 2 cliques',
@@ -160,7 +160,7 @@ const UPGRADE_FEATURES: Record<UpgradeFeatureKey, FeatureMeta> = {
   financial: {
     icon:       DollarSign,
     title:      'Financeiro',
-    targetPlan: 'Plano Premium',
+    targetPlan: 'Plano Enterprise',
     pitch:      'Descubra para onde vai o seu dinheiro. DRE, fluxo de caixa, contas a pagar/receber e conciliação bancária.',
     benefits: [
       'DRE mensal e fluxo de caixa atualizados em tempo real',
@@ -186,7 +186,7 @@ const UPGRADE_FEATURES: Record<UpgradeFeatureKey, FeatureMeta> = {
   purchases: {
     icon:       Truck,
     title:      'Compras + NF-e',
-    targetPlan: 'Plano Premium',
+    targetPlan: 'Plano Enterprise',
     pitch:      'Importe a NF-e XML do fornecedor e o estoque atualiza sozinho. Sem digitação, sem erro.',
     benefits: [
       'Importação NF-e XML com matching automático por NCM/EAN',
@@ -212,7 +212,7 @@ const UPGRADE_FEATURES: Record<UpgradeFeatureKey, FeatureMeta> = {
   surgery: {
     icon:       Syringe,
     title:      'Centro Cirúrgico',
-    targetPlan: 'Plano Premium',
+    targetPlan: 'Plano Enterprise',
     pitch:      'Bloco cirúrgico completo: Kanban Preparo→Sala→RPA, ficha cirúrgica e ficha anestésica, kits com baixa automática.',
     benefits: [
       'Kanban Preparo → Sala → Recuperação Pós-Anestésica',
@@ -225,7 +225,7 @@ const UPGRADE_FEATURES: Record<UpgradeFeatureKey, FeatureMeta> = {
   insurance_pricing: {
     icon:       Shield,
     title:      'Vínculo de serviços com convênios',
-    targetPlan: 'Plano Premium',
+    targetPlan: 'Plano Enterprise',
     pitch:      'Defina preço de convênio por serviço, split coparticipação/repasse e tabela travada por pet.',
     benefits: [
       'Preço base de convênio por serviço, editável por operadora',
@@ -257,7 +257,7 @@ const UPGRADE_FEATURES: Record<UpgradeFeatureKey, FeatureMeta> = {
       'Funcionalidades avançadas específicas do módulo',
       'Integração total com o restante do sistema',
       'Suporte prioritário da equipe Sysmax',
-      'Sem limite de usuários no plano Premium',
+      '10 usuários no Premium — ilimitados no Enterprise',
     ],
     tourUrl: null,
   },

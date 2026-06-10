@@ -1,21 +1,27 @@
 'use client'
 
-// Aba Assinatura (Gestão) — Monetização SaaS Fase 1.
-// Cards comparativos Free / Premium (a la carte) / Especializado, com total
-// em tempo real (mesma computePremiumPrice do servidor) e checkout dummy.
+// Aba Assinatura (Gestão) — SaaS Fase 1.5 (4 tiers).
+// Cards Free / Premium R$99 (bundle + addons R$79,90) / Enterprise R$299
+// (tudo incluso, destaque) / Especializado (sob medida). Total em tempo real
+// com a mesma computePlanPrice do servidor. Checkout dummy (Fase sem gateway).
+// Para SysMax, exibe o painel de pricing editável (PricingAdminPanel).
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  BadgeCheck, Check, CreditCard, Crown, Loader2, MessageCircle, Sparkles, AlertTriangle,
+  BadgeCheck, Check, CreditCard, Crown, Loader2, MessageCircle, Sparkles,
+  AlertTriangle, Users, FileText, Plus,
 } from 'lucide-react'
 import { Toast } from '@/components/ui/toast'
 import { FREE_MODULES } from '@/config/access-matrix'
-import { computePremiumPrice } from '@/lib/subscription/pricing'
-import { subscribeToPremium, downgradeToFree } from '@/lib/actions/subscription'
+import { computePlanPrice } from '@/lib/subscription/pricing'
+import { PLAN_LIMITS } from '@/lib/subscription/plan-limits'
+import { subscribeToPlan, downgradeToFree } from '@/lib/actions/subscription'
 import type { SubscriptionOverview, DummyPaymentPayload } from '@/lib/subscription/types'
+import type { BillingCycle } from '@/types'
 import ModulePicker from './ModulePicker'
 import CheckoutDummyModal from './CheckoutDummyModal'
+import PricingAdminPanel from './PricingAdminPanel'
 
 function fmt(v: number) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -29,49 +35,63 @@ const MODULE_LABELS_PT: Record<string, string> = {
 const PLAN_BADGE: Record<string, { label: string; cls: string }> = {
   free:        { label: 'Free',          cls: 'bg-slate-100 text-slate-700' },
   premium:     { label: 'Premium',       cls: 'bg-indigo-100 text-indigo-700' },
+  enterprise:  { label: 'Enterprise',    cls: 'bg-amber-100 text-amber-700' },
   specialized: { label: 'Especializado', cls: 'bg-violet-100 text-violet-700' },
 }
 
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
-  active:    { label: 'Ativa',        cls: 'bg-emerald-100 text-emerald-700' },
-  trialing:  { label: 'Em teste',     cls: 'bg-sky-100 text-sky-700' },
-  past_due:  { label: 'Em atraso',    cls: 'bg-amber-100 text-amber-700' },
-  cancelled: { label: 'Cancelada',    cls: 'bg-red-100 text-red-700' },
+  active:    { label: 'Ativa',     cls: 'bg-emerald-100 text-emerald-700' },
+  trialing:  { label: 'Em teste',  cls: 'bg-sky-100 text-sky-700' },
+  past_due:  { label: 'Em atraso', cls: 'bg-amber-100 text-amber-700' },
+  cancelled: { label: 'Cancelada', cls: 'bg-red-100 text-red-700' },
 }
 
 interface Props {
   overview: SubscriptionOverview
+  isSysmax?: boolean
 }
 
-export default function SubscriptionTab({ overview }: Props) {
+export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
   const router = useRouter()
   const { subscription, contractedKeys, catalog, config, businessType } = overview
 
   const planName = subscription?.plan_name ?? 'free'
   const isPremium = planName === 'premium'
+  const isEnterprise = planName === 'enterprise'
   const isSpecialized = planName === 'specialized'
 
-  const [selectedKeys, setSelectedKeys] = useState<string[]>(
-    contractedKeys.filter(k => catalog.some(c => c.module_key === k))
+  const premiumBundle = catalog.filter(c => c.included_in_plan === 'premium')
+  const enterpriseLines = catalog.filter(c => c.included_in_plan === 'enterprise')
+  const enterpriseAddonsAvailable = enterpriseLines.filter(c => c.is_available)
+
+  // Crítico: pré-seleciona os addons já contratados (ex.: surgery_advanced da
+  // Vet Teste) para não derrubá-los numa reassinatura.
+  const [selectedAddons, setSelectedAddons] = useState<string[]>(
+    contractedKeys.filter(k => enterpriseLines.some(c => c.module_key === k))
   )
-  const [cycle, setCycle] = useState<'monthly' | 'yearly'>(
-    (subscription?.billing_cycle as 'monthly' | 'yearly' | null) ?? 'monthly'
+  const [cycle, setCycle] = useState<BillingCycle>(
+    (subscription?.billing_cycle as BillingCycle | null) ?? 'monthly'
   )
-  const [showCheckout, setShowCheckout]   = useState(false)
+  const [checkoutPlan, setCheckoutPlan]   = useState<'premium' | 'enterprise' | null>(null)
   const [showDowngrade, setShowDowngrade] = useState(false)
   const [downgrading, setDowngrading]     = useState(false)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
-  const totals = useMemo(
-    () => computePremiumPrice({
-      basePrice: config.premium_base_price,
-      annualDiscountPercent: config.annual_discount_percent,
-      catalog,
-      selectedKeys,
-      cycle,
-    }),
-    [config, catalog, selectedKeys, cycle]
+  const pricingInput = {
+    premiumBase: config.premium_base_price,
+    enterpriseBase: config.enterprise_base_price,
+    annualDiscountPercent: config.annual_discount_percent,
+    catalog,
+  }
+  const premiumTotals = useMemo(
+    () => computePlanPrice({ ...pricingInput, plan: 'premium', addonKeys: selectedAddons, cycle }),
+    [config, catalog, selectedAddons, cycle] // eslint-disable-line react-hooks/exhaustive-deps
   )
+  const enterpriseTotals = useMemo(
+    () => computePlanPrice({ ...pricingInput, plan: 'enterprise', addonKeys: [], cycle }),
+    [config, catalog, cycle] // eslint-disable-line react-hooks/exhaustive-deps
+  )
+  const checkoutTotals = checkoutPlan === 'enterprise' ? enterpriseTotals : premiumTotals
 
   const freeLabels = (FREE_MODULES[businessType] ?? FREE_MODULES.vet_clinic)
     .map(k => MODULE_LABELS_PT[k] ?? k)
@@ -81,15 +101,26 @@ export default function SubscriptionTab({ overview }: Props) {
     'Olá! Tenho interesse no Plano Especializado do SysVetMax e gostaria de falar com um consultor.'
   )}`
 
-  function toggleModule(key: string) {
-    setSelectedKeys(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])
+  const addonPrice = enterpriseAddonsAvailable[0]?.monthly_price ?? 79.9
+
+  function toggleAddon(key: string) {
+    setSelectedAddons(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])
   }
 
   async function handleCheckoutConfirm(payment: DummyPaymentPayload) {
-    const result = await subscribeToPremium({ moduleKeys: selectedKeys, cycle, payment })
+    if (!checkoutPlan) return
+    const result = await subscribeToPlan({
+      plan: checkoutPlan,
+      addonKeys: checkoutPlan === 'premium' ? selectedAddons : [],
+      cycle,
+      payment,
+    })
     if ('error' in result) throw new Error(result.error)
-    setShowCheckout(false)
-    setToast({ type: 'success', message: 'Assinatura Premium ativada! Os módulos já estão liberados.' })
+    setCheckoutPlan(null)
+    setToast({
+      type: 'success',
+      message: `Assinatura ${checkoutPlan === 'enterprise' ? 'Enterprise' : 'Premium'} ativada! Os módulos já estão liberados.`,
+    })
     router.refresh()
   }
 
@@ -102,16 +133,30 @@ export default function SubscriptionTab({ overview }: Props) {
       setToast({ type: 'error', message: result.error })
       return
     }
-    setSelectedKeys([])
+    setSelectedAddons([])
     setToast({ type: 'success', message: 'Plano alterado para Free.' })
     router.refresh()
   }
 
+  // Mensalidade corrente (independe da seleção em edição)
+  const currentMonthly = isEnterprise
+    ? config.enterprise_base_price
+    : isPremium
+      ? computePlanPrice({
+          ...pricingInput, plan: 'premium', cycle: 'monthly',
+          addonKeys: contractedKeys.filter(k => enterpriseLines.some(c => c.module_key === k)),
+        }).monthlyTotal
+      : 0
+
   const planBadge   = PLAN_BADGE[planName] ?? PLAN_BADGE.free
   const statusBadge = STATUS_BADGE[subscription?.status ?? 'active'] ?? STATUS_BADGE.active
-  const contractedLabels = catalog
-    .filter(c => contractedKeys.includes(c.module_key))
-    .map(c => c.label)
+
+  function quotaLine(plan: 'free' | 'premium' | 'enterprise') {
+    const l = PLAN_LIMITS[plan]
+    const users = l.users >= 999 ? 'Usuários ilimitados' : `${l.users} usuários`
+    const docs = l.documents >= 999 ? 'documentos ilimitados' : `${l.documents} documentos personalizados`
+    return `${users} · ${docs}`
+  }
 
   return (
     <div className="space-y-5">
@@ -138,10 +183,9 @@ export default function SubscriptionTab({ overview }: Props) {
                 <> — <span className="font-semibold text-slate-800">{fmt(Number(subscription.custom_price))}/mês</span></>
               )}. Gerenciado pelo time SysMax.
             </p>
-          ) : isPremium ? (
+          ) : isPremium || isEnterprise ? (
             <p>
-              Mensalidade de <span className="font-semibold text-slate-800">{fmt(totalsForCurrent(config, catalog, contractedKeys))}</span>
-              {contractedLabels.length > 0 && <> — módulos: {contractedLabels.join(', ')}</>}
+              Mensalidade de <span className="font-semibold text-slate-800">{fmt(currentMonthly)}</span>
               {subscription?.current_period_end && (
                 <> · válida até {new Date(subscription.current_period_end).toLocaleDateString('pt-BR')}</>
               )}
@@ -177,8 +221,8 @@ export default function SubscriptionTab({ overview }: Props) {
         </div>
       )}
 
-      {/* ── Cards comparativos ──────────────────────────────────────────── */}
-      <div className="grid gap-4 md:grid-cols-3 items-start">
+      {/* ── Cards comparativos (4 tiers) ────────────────────────────────── */}
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 items-start">
         {/* Free */}
         <div className={`rounded-2xl border bg-white p-5 shadow-sm ${planName === 'free' ? 'border-slate-400 ring-1 ring-slate-300' : 'border-slate-200'}`}>
           <div className="flex items-center justify-between">
@@ -196,7 +240,10 @@ export default function SubscriptionTab({ overview }: Props) {
               </li>
             ))}
           </ul>
-          {isPremium && (
+          <p className="mt-3 flex items-center gap-1.5 text-[11px] text-slate-500">
+            <Users className="h-3 w-3" /> {quotaLine('free')}
+          </p>
+          {(isPremium || isEnterprise) && (
             <button
               onClick={() => setShowDowngrade(true)}
               className="mt-4 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-500 hover:border-red-200 hover:text-red-600 transition-colors"
@@ -208,51 +255,118 @@ export default function SubscriptionTab({ overview }: Props) {
 
         {/* Premium */}
         <div className={`rounded-2xl border-2 bg-white p-5 shadow-md relative ${isPremium ? 'border-indigo-500' : 'border-indigo-300'}`}>
-          <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 rounded-full bg-indigo-600 px-3 py-0.5 text-[10px] font-bold text-white uppercase tracking-wide">
-            {isPremium ? 'Plano atual' : 'Mais popular'}
-          </span>
+          {isPremium && (
+            <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 rounded-full bg-indigo-600 px-3 py-0.5 text-[10px] font-bold text-white uppercase tracking-wide">
+              Plano atual
+            </span>
+          )}
           <div className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-indigo-500" />
             <h3 className="text-sm font-bold text-slate-900">Premium</h3>
           </div>
           <p className="mt-2 text-2xl font-bold text-indigo-700 tabular-nums">
-            {fmt(totals.monthlyTotal)}<span className="text-sm font-medium text-slate-400">/mês</span>
+            {fmt(premiumTotals.monthlyTotal)}<span className="text-sm font-medium text-slate-400">/mês</span>
           </p>
           {cycle === 'yearly' ? (
             <p className="mt-0.5 text-xs text-emerald-700 font-medium">
-              {fmt(totals.yearlyDiscounted)}/ano no PIX — economize {fmt(totals.yearlyTotal - totals.yearlyDiscounted)}
+              {fmt(premiumTotals.yearlyDiscounted)}/ano no PIX — economize {fmt(premiumTotals.yearlyTotal - premiumTotals.yearlyDiscounted)}
             </p>
           ) : (
             <p className="mt-0.5 text-xs text-slate-500">
-              Base {fmt(config.premium_base_price)} + módulos escolhidos
+              Base {fmt(config.premium_base_price)} + adicionais escolhidos
             </p>
           )}
 
           <div className="mt-4">
             <p className="mb-1.5 text-xs font-semibold text-slate-600 uppercase tracking-wide">
-              Todo o plano Free, mais:
+              Todo o Free, mais:
             </p>
-            {isSpecialized ? (
-              <div className="rounded-lg bg-slate-50 border border-slate-100 p-3 text-xs text-slate-500">
-                Seu plano é gerenciado pelo nosso time comercial — fale com seu consultor para ajustar módulos.
-              </div>
-            ) : (
+            <ul className="space-y-1.5">
+              {premiumBundle.map(mod => (
+                <li key={mod.module_key} className="flex items-center gap-2 text-sm text-slate-600" title={mod.description}>
+                  <Check className="h-3.5 w-3.5 text-indigo-500 shrink-0" /> {mod.label}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 flex items-center gap-1.5 text-[11px] text-slate-500">
+              <FileText className="h-3 w-3" /> {quotaLine('premium')}
+            </p>
+          </div>
+
+          {!isSpecialized && !isEnterprise && (
+            <div className="mt-4">
+              <p className="mb-1.5 flex items-center gap-1 text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                <Plus className="h-3 w-3" /> Adicionais — {fmt(addonPrice)}/mês cada
+              </p>
               <ModulePicker
-                catalog={catalog}
-                selectedKeys={selectedKeys}
+                catalog={enterpriseAddonsAvailable}
+                selectedKeys={selectedAddons}
                 businessType={businessType}
-                onToggle={toggleModule}
+                onToggle={toggleAddon}
               />
-            )}
+            </div>
+          )}
+
+          {!isSpecialized && (
+            <button
+              onClick={() => setCheckoutPlan('premium')}
+              disabled={isEnterprise}
+              title={isEnterprise ? 'Seu plano atual já inclui tudo do Premium' : undefined}
+              className="mt-4 w-full flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <CreditCard className="h-4 w-4" />
+              {isPremium ? 'Atualizar Assinatura' : 'Assinar Premium'}
+            </button>
+          )}
+        </div>
+
+        {/* Enterprise — destaque */}
+        <div className={`rounded-2xl border-2 bg-gradient-to-b from-amber-50/70 to-white p-5 shadow-lg relative ${isEnterprise ? 'border-amber-500' : 'border-amber-300'}`}>
+          <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 rounded-full bg-amber-500 px-3 py-0.5 text-[10px] font-bold text-white uppercase tracking-wide">
+            {isEnterprise ? 'Plano atual' : 'Mais completo'}
+          </span>
+          <div className="flex items-center gap-2">
+            <Crown className="h-4 w-4 text-amber-500" />
+            <h3 className="text-sm font-bold text-slate-900">Enterprise</h3>
+          </div>
+          <p className="mt-2 text-2xl font-bold text-amber-700 tabular-nums">
+            {fmt(enterpriseTotals.monthlyTotal)}<span className="text-sm font-medium text-slate-400">/mês</span>
+          </p>
+          {cycle === 'yearly' ? (
+            <p className="mt-0.5 text-xs text-emerald-700 font-medium">
+              {fmt(enterpriseTotals.yearlyDiscounted)}/ano no PIX — economize {fmt(enterpriseTotals.yearlyTotal - enterpriseTotals.yearlyDiscounted)}
+            </p>
+          ) : (
+            <p className="mt-0.5 text-xs text-slate-500">Todos os módulos inclusos</p>
+          )}
+
+          <div className="mt-4">
+            <p className="mb-1.5 text-xs font-semibold text-slate-600 uppercase tracking-wide">
+              Todo o Premium, mais:
+            </p>
+            <ul className="space-y-1.5">
+              {enterpriseLines.map(mod => (
+                <li key={mod.module_key} className="flex items-center gap-2 text-sm text-slate-600" title={mod.description}>
+                  <Check className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                  {mod.label}
+                  {!mod.is_available && (
+                    <span className="text-[9px] font-semibold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full">em breve</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 flex items-center gap-1.5 text-[11px] text-slate-500">
+              <Users className="h-3 w-3" /> {quotaLine('enterprise')}
+            </p>
           </div>
 
           {!isSpecialized && (
             <button
-              onClick={() => setShowCheckout(true)}
-              className="mt-4 w-full flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors"
+              onClick={() => setCheckoutPlan('enterprise')}
+              className="mt-4 w-full flex items-center justify-center gap-2 rounded-lg bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-600 transition-colors"
             >
-              <CreditCard className="h-4 w-4" />
-              {isPremium ? 'Atualizar Assinatura' : 'Assinar Agora'}
+              <Crown className="h-4 w-4" />
+              {isEnterprise ? 'Atualizar Assinatura' : 'Assinar Enterprise'}
             </button>
           )}
         </div>
@@ -261,7 +375,7 @@ export default function SubscriptionTab({ overview }: Props) {
         <div className={`rounded-2xl border bg-gradient-to-b from-violet-50/60 to-white p-5 shadow-sm ${isSpecialized ? 'border-violet-400 ring-1 ring-violet-300' : 'border-slate-200'}`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Crown className="h-4 w-4 text-violet-500" />
+              <BadgeCheck className="h-4 w-4 text-violet-500" />
               <h3 className="text-sm font-bold text-slate-900">Especializado</h3>
             </div>
             {isSpecialized && (
@@ -294,14 +408,26 @@ export default function SubscriptionTab({ overview }: Props) {
         </div>
       </div>
 
+      {/* ── Painel de pricing (SysMax) ──────────────────────────────────── */}
+      {isSysmax && (
+        <PricingAdminPanel
+          catalog={catalog}
+          config={config}
+          onToast={(type, message) => setToast({ type, message })}
+        />
+      )}
+
       {/* ── Modais ──────────────────────────────────────────────────────── */}
-      {showCheckout && (
+      {checkoutPlan && (
         <CheckoutDummyModal
-          basePrice={config.premium_base_price}
-          selectedModules={catalog.filter(c => selectedKeys.includes(c.module_key))}
+          plan={checkoutPlan}
+          basePrice={checkoutPlan === 'enterprise' ? config.enterprise_base_price : config.premium_base_price}
+          selectedModules={checkoutPlan === 'premium'
+            ? enterpriseLines.filter(c => selectedAddons.includes(c.module_key))
+            : []}
           cycle={cycle}
-          totals={totals}
-          onCancel={() => setShowCheckout(false)}
+          totals={checkoutTotals}
+          onCancel={() => setCheckoutPlan(null)}
           onConfirm={handleCheckoutConfirm}
         />
       )}
@@ -314,8 +440,9 @@ export default function SubscriptionTab({ overview }: Props) {
               <h3 className="text-base font-semibold text-slate-900">Voltar para o Free?</h3>
             </div>
             <p className="mt-2 text-sm text-slate-600">
-              Os módulos contratados serão desativados imediatamente e a equipe perderá acesso a eles.
-              Os dados não são apagados — voltam a ficar disponíveis se você reativar a assinatura.
+              Os módulos do plano serão desativados imediatamente e os limites voltam a
+              3 usuários e 3 documentos. Os dados não são apagados — voltam a ficar
+              disponíveis se você reativar a assinatura.
             </p>
             <div className="mt-4 flex gap-2">
               <button
@@ -323,7 +450,7 @@ export default function SubscriptionTab({ overview }: Props) {
                 disabled={downgrading}
                 className="flex-1 rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
               >
-                Manter Premium
+                Manter plano
               </button>
               <button
                 onClick={handleDowngrade}
@@ -341,16 +468,4 @@ export default function SubscriptionTab({ overview }: Props) {
       {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
     </div>
   )
-}
-
-// Mensalidade corrente de um premium já contratado (independe da seleção em edição).
-function totalsForCurrent(
-  config: { premium_base_price: number },
-  catalog: Array<{ module_key: string; monthly_price: number }>,
-  contractedKeys: string[]
-): number {
-  const sum = catalog
-    .filter(c => contractedKeys.includes(c.module_key))
-    .reduce((s, c) => s + Number(c.monthly_price), 0)
-  return Math.round((Number(config.premium_base_price) + sum) * 100) / 100
 }

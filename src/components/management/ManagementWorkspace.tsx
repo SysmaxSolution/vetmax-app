@@ -595,7 +595,7 @@ export default function ManagementWorkspace({
       {/* ── Tab: Assinatura (SaaS Fase 1 — rollout restrito) ── */}
       {activeTab === 'assinatura' && (
         showAssinatura && subscriptionOverview ? (
-          <SubscriptionTab overview={subscriptionOverview} />
+          <SubscriptionTab overview={subscriptionOverview} isSysmax={isSysmax} />
         ) : (
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 text-center text-sm text-slate-500">
             A área de Planos e Assinatura estará disponível em breve para a sua clínica.

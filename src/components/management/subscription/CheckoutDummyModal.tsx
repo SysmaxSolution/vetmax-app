@@ -16,7 +16,9 @@ function fmt(v: number) {
 }
 
 interface Props {
+  plan:           'premium' | 'enterprise'
   basePrice:      number
+  /** Addons selecionados (sempre vazio no Enterprise — bundle inclui tudo). */
   selectedModules: SubscriptionModuleCatalogRow[]
   cycle:          BillingCycle
   totals:         PriceTotals
@@ -24,7 +26,12 @@ interface Props {
   onConfirm:      (payment: DummyPaymentPayload) => Promise<void>
 }
 
-export default function CheckoutDummyModal({ basePrice, selectedModules, cycle, totals, onCancel, onConfirm }: Props) {
+const PLAN_LABEL: Record<'premium' | 'enterprise', string> = {
+  premium: 'Premium',
+  enterprise: 'Enterprise',
+}
+
+export default function CheckoutDummyModal({ plan, basePrice, selectedModules, cycle, totals, onCancel, onConfirm }: Props) {
   const [method, setMethod]         = useState<'card' | 'pix'>(cycle === 'yearly' ? 'pix' : 'card')
   const [holder, setHolder]         = useState('')
   const [cardNumber, setCardNumber] = useState('')
@@ -70,7 +77,7 @@ export default function CheckoutDummyModal({ basePrice, selectedModules, cycle, 
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <div>
-            <h3 className="text-base font-semibold text-slate-900">Assinar Plano Premium</h3>
+            <h3 className="text-base font-semibold text-slate-900">Assinar Plano {PLAN_LABEL[plan]}</h3>
             <p className="text-xs text-slate-500">
               Ciclo {cycle === 'yearly' ? 'anual (PIX com desconto)' : 'mensal'}
             </p>
@@ -84,7 +91,9 @@ export default function CheckoutDummyModal({ basePrice, selectedModules, cycle, 
           {/* Resumo */}
           <div className="rounded-xl bg-slate-50 border border-slate-100 p-3 space-y-1.5">
             <div className="flex justify-between text-sm">
-              <span className="text-slate-600">Plano base</span>
+              <span className="text-slate-600">
+                Plano base{plan === 'enterprise' && ' — todos os módulos inclusos'}
+              </span>
               <span className="font-medium text-slate-800 tabular-nums">{fmt(basePrice)}/mês</span>
             </div>
             {selectedModules.map(m => (
