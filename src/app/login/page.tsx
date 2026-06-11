@@ -202,18 +202,23 @@ export default function LoginPage() {
           </form>
         </div>
 
-        <div className="text-sm text-slate-500 text-center mt-6 space-y-2">
+        <div className="text-sm text-slate-500 text-center mt-6 space-y-4">
           <p>
             <Link href="/forgot-password" className="text-teal-600 hover:underline">
               Esqueceu sua senha?
             </Link>
           </p>
-          <p>
-            Novo no SysVetMax?{' '}
-            <Link href="/register" className="text-teal-600 font-bold hover:underline">
-              Criar uma conta
-            </Link>
-          </p>
+          <div className="flex items-center gap-3">
+            <span className="h-px flex-1 bg-slate-200" />
+            <span className="text-xs uppercase tracking-wider text-slate-400">Novo no SysVetMax?</span>
+            <span className="h-px flex-1 bg-slate-200" />
+          </div>
+          <Link
+            href="/register"
+            className="block w-full rounded-xl border-2 border-teal-600 bg-white px-4 py-3 text-base font-bold text-teal-700 shadow-sm hover:bg-teal-50 hover:border-teal-700 transition-colors focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2"
+          >
+            Criar uma conta — é grátis
+          </Link>
         </div>
       </div>
 
