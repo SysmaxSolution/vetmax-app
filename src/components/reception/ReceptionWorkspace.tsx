@@ -297,6 +297,7 @@ function TutorProfile({
 
 // ─── Age helper ──────────────────────────────────────────────────────────────
 import { formatPetAge } from '@/lib/utils/pet-age'
+import { speciesLabel } from '@/lib/species'
 const calcAge = formatPetAge
 
 // ─── Queue Card ───────────────────────────────────────────────────────────────
@@ -1003,7 +1004,7 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
                         >
                           {item.patient.name}
                         </button>
-                        <span className={`text-xs font-medium rounded-full px-2 py-0.5 ${sp.color}`}>{item.patient.species}</span>
+                        <span className={`text-xs font-medium rounded-full px-2 py-0.5 ${sp.color}`}>{speciesLabel(item.patient.species)}</span>
                       </div>
                       <p className="text-sm text-slate-500 mt-1">
                         Tutor: <span className="font-medium text-slate-700">{item.tutor.name}</span>

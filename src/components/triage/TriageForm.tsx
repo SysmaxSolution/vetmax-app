@@ -44,6 +44,7 @@ import WhatsAppNotificationModal from '@/components/whatsapp/WhatsAppNotificatio
 import { RemoveFromQueueModal } from '@/components/ui/RemoveFromQueueModal'
 import InsuranceCard from '@/components/pet/InsuranceCard'
 import type { InsuranceCardData } from '@/lib/actions/insurance-coverage'
+import { speciesLabel } from '@/lib/species'
 
 interface TriageFormProps {
   consultation:   TriageConsultationDetail
@@ -551,7 +552,7 @@ export default function TriageForm({
                     {consultation.patient.species === 'reptile' && '🦎 '}
                     {consultation.patient.species === 'fish' && '🐠 '}
                     {consultation.patient.species === 'exotic' && '✨ '}
-                    {consultation.patient.species.charAt(0).toUpperCase() + consultation.patient.species.slice(1)}
+                    {speciesLabel(consultation.patient.species)}
                   </span>
                 </div>
                 <p className="text-slate-600">{consultation.patient.breed || 'Raça desconhecida'}</p>

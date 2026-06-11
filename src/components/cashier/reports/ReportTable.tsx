@@ -23,6 +23,11 @@ const PAYMENT_LABELS: Record<string, string> = {
   nao_informado: '—',
 }
 
+const STATUS_LABELS: Record<string, string> = {
+  recorded: 'Registrado', pending: 'Pendente', verified: 'Verificado',
+  reversed: 'Estornado', archived: 'Arquivado',
+}
+
 function fmt(v: number) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
@@ -105,7 +110,7 @@ export default function ReportTable({ rows }: Props) {
                       r.status === 'archived' ? 'bg-slate-100 text-slate-500' :
                                                 'bg-amber-100 text-amber-700'
                     }`}>
-                      {r.status}
+                      {STATUS_LABELS[r.status] ?? r.status}
                     </span>
                   </td>
                   <td className={`px-3 py-2.5 text-right font-semibold tabular-nums ${

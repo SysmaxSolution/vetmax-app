@@ -371,7 +371,7 @@ function DraggableField({
                 : 'bg-slate-50 text-slate-400 hover:bg-slate-100'
             }`}
           >
-            {field.required ? 'Obrigatorio' : 'Opcional'}
+            {field.required ? 'Obrigatório' : 'Opcional'}
           </button>
         </div>
         <p className="text-xs text-slate-400 truncate">{field.description}</p>
@@ -1415,8 +1415,8 @@ export default function ImportTemplateModal({
                         className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
                       >
                         {allRequired
-                          ? <><Square className="w-3.5 h-3.5" />Desmarcar todos obrigatorios</>
-                          : <><CheckSquare className="w-3.5 h-3.5" />Marcar todos obrigatorios</>}
+                          ? <><Square className="w-3.5 h-3.5" />Desmarcar todos obrigatórios</>
+                          : <><CheckSquare className="w-3.5 h-3.5" />Marcar todos obrigatórios</>}
                       </button>
                     )
                   })()}
@@ -1520,7 +1520,7 @@ export default function ImportTemplateModal({
                   onChange={e => setNewField(prev => ({ ...prev, required: e.target.checked }))}
                   className="rounded"
                 />
-                <span className="text-sm text-slate-700">Obrigatorio</span>
+                <span className="text-sm text-slate-700">Obrigatório</span>
               </label>
               {error && (
                 <div className="p-3 rounded-lg bg-red-50 border border-red-200">
@@ -1702,8 +1702,8 @@ export default function ImportTemplateModal({
                           className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors mb-1"
                         >
                           {allRequired
-                            ? <><Square className="w-3.5 h-3.5" />Desmarcar todos obrigatorios</>
-                            : <><CheckSquare className="w-3.5 h-3.5" />Marcar todos obrigatorios</>}
+                            ? <><Square className="w-3.5 h-3.5" />Desmarcar todos obrigatórios</>
+                            : <><CheckSquare className="w-3.5 h-3.5" />Marcar todos obrigatórios</>}
                         </button>
                       )
                     })()}
@@ -1870,7 +1870,7 @@ export default function ImportTemplateModal({
                 encontrado em mais <strong>{duplicateConfirm.count}</strong> {duplicateConfirm.count === 1 ? 'local' : 'locais'} no documento.
               </p>
               <p className="text-sm text-slate-600 mt-2">
-                Deseja substituir todas as ocorrencias pelo campo <code className="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-xs">{`{{${duplicateConfirm.fieldName}}}`}</code>?
+                Deseja substituir todas as ocorrências pelo campo <code className="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-xs">{`{{${duplicateConfirm.fieldName}}}`}</code>?
               </p>
             </div>
             <div className="px-5 py-3 border-t border-slate-200 flex gap-2 justify-end">

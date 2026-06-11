@@ -25,6 +25,7 @@ function isControlledDrug(name: string): boolean {
 import { createClient } from '@/lib/supabase/client'
 import type { PrescriptionData } from '@/lib/actions/reports'
 import type { HospitalizationCard } from '@/lib/actions/hospitalizations'
+import { speciesLabel } from '@/lib/species'
 
 interface Props {
   data:    PrescriptionData
@@ -113,7 +114,7 @@ export default function PrescriptionModal({ data, card, onClose }: Props) {
     doc.text(`Nome: ${data.patient.name}`, margin + 4, y)
     doc.text(`Nome: ${data.tutor.name}`, margin + halfW + 4, y)
     y += 4
-    doc.text(`Espécie: ${data.patient.species}   Raça: ${data.patient.breed ?? 'SRD'}`, margin + 4, y)
+    doc.text(`Espécie: ${speciesLabel(data.patient.species)}   Raça: ${data.patient.breed ?? 'SRD'}`, margin + 4, y)
     if (data.tutor.phone) {
       doc.text(`Tel: ${data.tutor.phone}`, margin + halfW + 4, y)
     }
@@ -363,7 +364,7 @@ export default function PrescriptionModal({ data, card, onClose }: Props) {
               <span className="text-[10px] font-bold text-indigo-500 uppercase block mb-1">Animal</span>
               <p className="font-medium text-slate-800">{data.patient.name}</p>
               <p className="text-slate-500">
-                {data.patient.species} · {data.patient.breed ?? 'SRD'}
+                {speciesLabel(data.patient.species)} · {data.patient.breed ?? 'SRD'}
                 {data.patient.weight_kg ? ` · ${data.patient.weight_kg} kg` : ''}
               </p>
             </div>

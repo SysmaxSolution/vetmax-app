@@ -215,7 +215,7 @@ export default function ExamDetail({
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 32px', marginBottom: 24, paddingBottom: 20, borderBottom: '1px solid #d1d5db', fontSize: 13 }}>
           <div><strong>Pet: </strong>{patient.name}</div>
           <div><strong>Tutor: </strong>{tutor.name}</div>
-          <div><strong>Espécie: </strong>{patient.species}{patient.breed ? ` — ${patient.breed}` : ''}</div>
+          <div><strong>Espécie: </strong>{SPECIES_LABELS[patient.species] ?? patient.species}{patient.breed ? ` — ${patient.breed}` : ''}</div>
           <div><strong>CPF Tutor: </strong>{tutor.cpf}</div>
         </div>
         <div style={{ marginBottom: 40 }}>

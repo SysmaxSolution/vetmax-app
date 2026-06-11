@@ -37,6 +37,11 @@ const SPECIES_EMOJI: Record<string, string> = {
   rodent: '🐭', reptile: '🦎', fish: '🐠', exotic: '✨',
 }
 
+const SPECIES_LABELS: Record<string, string> = {
+  dog: 'Canino', cat: 'Felino', bird: 'Ave', rabbit: 'Coelho',
+  rodent: 'Roedor', reptile: 'Réptil', fish: 'Peixe', exotic: 'Exótico',
+}
+
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface NurseWorkspaceProps {
@@ -128,7 +133,7 @@ export default function NurseWorkspace({ queue, history, clinicId }: NurseWorksp
               </div>
               <div className="flex items-center gap-2">
                 <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-600">
-                  {queue.length} animal{queue.length !== 1 ? 'is' : ''}
+                  {queue.length} {queue.length === 1 ? 'animal' : 'animais'}
                 </span>
                 <button
                   type="button"
@@ -162,7 +167,7 @@ export default function NurseWorkspace({ queue, history, clinicId }: NurseWorksp
                           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1">
                             <h3 className="font-semibold text-slate-900">{item.patient.name}</h3>
                             <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
-                              {SPECIES_EMOJI[item.patient.species] ?? '🐾'} {item.patient.species}
+                              {SPECIES_EMOJI[item.patient.species] ?? '🐾'} {SPECIES_LABELS[item.patient.species] ?? item.patient.species}
                             </span>
                             {item.visit_reason === 'emergency' && (
                               <span className="text-xs font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">

@@ -57,8 +57,8 @@ export default function ReportExport({ data, periodLabel, clinicName }: Props) {
 
   function handleCsv() {
     const headers = [
-      'Tipo','Data/Hora','Modulo','Pet','Tutor','Fornecedor',
-      'Forma Pgto','Status','Descricao','Valor',
+      'Tipo','Data/Hora','Módulo','Pet','Tutor','Fornecedor',
+      'Forma Pgto','Status','Descrição','Valor',
     ]
     const lines = [headers.join(';')]
     for (const r of data.rows) {

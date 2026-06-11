@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { getPetFrequencyReport, type PetFrequencyRow } from '@/lib/actions/reports-g13'
+import { speciesLabel } from '@/lib/species'
 
 const SPECIES_OPTIONS = [
   { value: '', label: 'Todas as espécies' },
@@ -123,7 +124,7 @@ export default function PetFrequencyReport() {
               ) : rows.map(r => (
                 <tr key={r.pet_id} className="hover:bg-violet-50/40 transition-colors">
                   <td className="px-4 py-2.5 font-medium text-slate-800">{r.pet_name}</td>
-                  <td className="px-4 py-2.5 text-slate-600 capitalize">{r.species}</td>
+                  <td className="px-4 py-2.5 text-slate-600">{speciesLabel(r.species)}</td>
                   <td className="px-4 py-2.5 text-slate-600">{r.breed ?? '—'}</td>
                   <td className="px-4 py-2.5 text-slate-700">{r.tutor_name}</td>
                   <td className="px-4 py-2.5 text-slate-600">{r.tutor_phone ?? '—'}</td>

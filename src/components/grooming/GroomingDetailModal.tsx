@@ -66,6 +66,7 @@ const STATUS_NEXT_BTN: Record<GroomingStatus, string> = {
 import { useGroomingVoiceAssistant } from '@/hooks/useGroomingVoiceAssistant'
 import { useNativeKeepAwake } from '@/hooks/useNativeKeepAwake'
 import WhatsAppNotificationModal from '@/components/whatsapp/WhatsAppNotificationModal'
+import { speciesLabel } from '@/lib/species'
 
 // ─── Serviços e comportamentos ────────────────────────────────────────────────
 
@@ -569,7 +570,7 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
                   <span className="text-slate-400 font-normal text-sm hidden sm:inline"> — Banho e Tosa</span>
                 </h2>
                 <p className="text-[10px] sm:text-xs text-slate-500 font-medium uppercase tracking-wider truncate">
-                  {card.patient.species} • {card.patient.breed || 'SRD'} • {card.tutor.name}
+                  {speciesLabel(card.patient.species)} • {card.patient.breed || 'SRD'} • {card.tutor.name}
                 </p>
               </div>
             </div>

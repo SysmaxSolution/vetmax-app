@@ -36,6 +36,7 @@ import {
 } from '@/lib/actions/hospitalization-prescriptions'
 import { getOpenBalances } from '@/lib/actions/hospitalization-charges'
 import { listHospitalizationTasks, type HospTask } from '@/lib/actions/hospitalization-tasks'
+import { speciesLabel } from '@/lib/species'
 
 const WARD_LABELS: Record<string, string> = {
   observation: 'Observação',
@@ -1043,9 +1044,9 @@ function printDischargePdf(s: DischargeSummary) {
     <h2>Identificação do Animal</h2>
     <div class="grid">
       <div class="f"><label>Animal</label><span>${s.patient.name}</span></div>
-      <div class="f"><label>Espécie / Raça</label><span>${s.patient.species}${s.patient.breed ? ` — ${s.patient.breed}` : ' (SRD)'}</span></div>
+      <div class="f"><label>Espécie / Raça</label><span>${speciesLabel(s.patient.species)}${s.patient.breed ? ` — ${s.patient.breed}` : ' (SRD)'}</span></div>
       <div class="f"><label>Tutor</label><span>${s.tutor.name}</span></div>
-      <div class="f"><label>Contacto</label><span>${s.tutor.phone ?? '—'}</span></div>
+      <div class="f"><label>Contato</label><span>${s.tutor.phone ?? '—'}</span></div>
     </div>
     <h2>Internação</h2>
     <div class="grid">

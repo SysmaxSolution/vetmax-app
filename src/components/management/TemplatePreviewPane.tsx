@@ -209,7 +209,7 @@ function OverlayChip({
 
   // Em modo simulacao com valor: renderiza valor cru, sem bordas/cores
   if (value !== undefined && value !== null && value !== '') {
-    const display = typeof value === 'boolean' ? (value ? 'Sim' : 'Nao') : String(value)
+    const display = typeof value === 'boolean' ? (value ? 'Sim' : 'Não') : String(value)
     return (
       <div style={{ ...style, color: '#000000' }}>
         <span className="truncate w-full">{display}</span>

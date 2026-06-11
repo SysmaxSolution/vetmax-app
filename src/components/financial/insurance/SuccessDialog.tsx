@@ -115,7 +115,7 @@ export default function SuccessDialog({
             <div className="mt-4 space-y-1.5 text-left text-xs bg-slate-50 rounded-xl p-3.5">
               {applied.individual_entries_created > 0 && (
                 <Line icon={<Receipt className="h-3.5 w-3.5 text-emerald-600" />}>
-                  <strong>{applied.individual_entries_created}</strong> lançamento{applied.individual_entries_created !== 1 ? 's' : ''} individual{applied.individual_entries_created !== 1 ? 'is' : ''} por atendimento
+                  <strong>{applied.individual_entries_created}</strong> lançamento{applied.individual_entries_created !== 1 ? 's' : ''} {applied.individual_entries_created !== 1 ? 'individuais' : 'individual'} por atendimento
                 </Line>
               )}
               {applied.drift_adjusted_entries > 0 && (
@@ -154,7 +154,7 @@ export default function SuccessDialog({
               )}
               {applied.errors.length > 0 && (
                 <Line icon={<AlertCircle className="h-3.5 w-3.5 text-rose-600" />}>
-                  <span className="text-rose-700"><strong>{applied.errors.length}</strong> erro{applied.errors.length !== 1 ? 's' : ''} parcial{applied.errors.length !== 1 ? 'is' : ''}: {applied.errors.slice(0, 2).join('; ')}</span>
+                  <span className="text-rose-700"><strong>{applied.errors.length}</strong> erro{applied.errors.length !== 1 ? 's' : ''} {applied.errors.length !== 1 ? 'parciais' : 'parcial'}: {applied.errors.slice(0, 2).join('; ')}</span>
                 </Line>
               )}
             </div>

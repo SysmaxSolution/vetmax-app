@@ -736,7 +736,7 @@ export default function ConsultationDetail({
           <div><strong>Tutor: </strong>{tutor.name}</div>
           <div>
             <strong>Espécie: </strong>
-            {patient.species}
+            {SPECIES_LABELS[patient.species] ?? patient.species}
             {patient.breed ? ` — ${patient.breed}` : ''}
           </div>
           <div><strong>CPF Tutor: </strong>{tutor.cpf}</div>

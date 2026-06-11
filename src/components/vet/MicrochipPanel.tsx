@@ -13,6 +13,7 @@ import {
 } from '@/lib/actions/microchip'
 import type { VetConsultationDetail } from '@/lib/actions/vet'
 import InsuranceCard from '@/components/pet/InsuranceCard'
+import { speciesLabel } from '@/lib/species'
 
 /**
  * MicrochipPanel — UI mínima do fluxo simplificado (Item 4, 2026-06-02).
@@ -111,7 +112,7 @@ export default function MicrochipPanel({ consultation, insuranceCard }: Props) {
           <div>
             <h1 className="text-lg font-semibold text-slate-900">{patient.name}</h1>
             <p className="text-xs text-slate-500">
-              {patient.species}{patient.breed ? ` · ${patient.breed}` : ''} · Tutor: {tutor.name}
+              {speciesLabel(patient.species)}{patient.breed ? ` · ${patient.breed}` : ''} · Tutor: {tutor.name}
             </p>
             {patient.microchip_id && (
               <p className="text-[11px] text-amber-700 bg-amber-50 inline-flex items-center gap-1 px-2 py-0.5 rounded mt-1.5">

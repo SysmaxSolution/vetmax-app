@@ -32,10 +32,10 @@ interface NewFieldDialogProps {
 const TYPE_OPTIONS: { value: FieldType; label: string }[] = [
   { value: 'text',     label: 'Texto curto' },
   { value: 'textarea', label: 'Texto longo' },
-  { value: 'number',   label: 'Numero' },
+  { value: 'number',   label: 'Número' },
   { value: 'date',     label: 'Data' },
-  { value: 'boolean',  label: 'Sim/Nao' },
-  { value: 'select',   label: 'Selecao' },
+  { value: 'boolean',  label: 'Sim/Não' },
+  { value: 'select',   label: 'Seleção' },
 ]
 
 const TYPE_LABEL: Record<FieldType, string> = Object.fromEntries(
@@ -172,9 +172,9 @@ export default function NewFieldDialog({
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-slate-700">Obrigatorio</label>
+                  <label className="text-xs font-medium text-slate-700">Obrigatório</label>
                   <div className="mt-1 px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg text-slate-700">
-                    {existingMatch.required ? 'Sim' : 'Nao'}
+                    {existingMatch.required ? 'Sim' : 'Não'}
                   </div>
                 </div>
               </div>
@@ -244,7 +244,7 @@ export default function NewFieldDialog({
                       onChange={e => setRequired(e.target.checked)}
                       className="w-4 h-4 text-blue-600 rounded"
                     />
-                    <span className="text-xs text-slate-700">Obrigatorio</span>
+                    <span className="text-xs text-slate-700">Obrigatório</span>
                   </label>
                 </div>
               </div>

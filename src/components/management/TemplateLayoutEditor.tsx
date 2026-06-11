@@ -102,8 +102,8 @@ function buildDefaultElements(
   })
   y += 70
   els.push({
-    id: uid(), type: 'text', label: 'Titulo',
-    content: 'DOCUMENTO VETERINARIO', x: 10, y, width: 80, height: 30,
+    id: uid(), type: 'text', label: 'Título',
+    content: 'DOCUMENTO VETERINÁRIO', x: 10, y, width: 80, height: 30,
     fontSize: 18, fontWeight: 'bold', textAlign: 'center',
   })
   y += 40
