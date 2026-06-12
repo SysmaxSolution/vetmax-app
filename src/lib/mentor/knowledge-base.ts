@@ -396,13 +396,41 @@ Centralizar o controle financeiro: registrar pagamentos de consultas e serviços
 2. **Durante o dia** → pagamentos e saídas são lançados automaticamente.
 3. **"Fechar Caixa"** → registra saldo final, gera relatório do dia.
 
-### Four Tabs Overview
+### Five Tabs Overview
 | Tab | Icon | Function |
 |---|---|---|
-| **Visão Geral** | 📊 | Dashboard com métricas do dia (entradas, saídas, saldo) |
-| **Recebimentos** | 💰 | Faturas pendentes + pagamentos de Banho & Tosa |
-| **Saídas** | 📤 | Despesas e saídas manuais de caixa |
-| **Sessão** | 🔑 | Abertura e fechamento do caixa diário |
+| **Visão Geral** | 📊 | Extrato do caixa com totalizadores, filtros e saldo inicial/final |
+| **Recebimentos** | 💰 | Faturas pendentes + vendas lançadas + Banho & Tosa, com totalizador "a receber × recebido hoje" |
+| **Saídas** | 📤 | Sangrias, despesas e pagamentos a fornecedor, com totais por categoria do caixa atual |
+| **Relatórios** | 📈 | Consulta por período com filtros, ordenação por coluna e export CSV/PDF |
+| **Sessão** | 🔑 | Abertura (fundo de troco), fechamento com conferência cega e histórico de divergências |
+
+### Os 4 Totalizadores da Visão Geral (regras exatas)
+| Card | O que soma | O que NÃO entra |
+|---|---|---|
+| **A Receber** | Lançamentos pendentes a pagar pelo TUTOR no balcão | Repasse futuro de convênio/Petlove (fica em Contas a Receber no Financeiro) |
+| **Total Registrado** | Entradas efetivadas (registradas + verificadas) − saídas e sangrias | Pendentes, arquivados |
+| **Total Verificado** | Entradas E saídas que o admin/contador já conferiu (botão ✓) | Movimentos ainda não conferidos |
+| **Lançamentos** | Quantidade de movimentações (entradas não arquivadas + saídas) | Arquivados |
+
+### Saldo Inicial e Saldo Final (Visão Geral)
+- **Saldo inicial**: fundo de troco declarado na abertura do caixa (acima da tabela).
+- **Saldo final** (rodapé da tabela): saldo inicial + entradas recebidas − saídas = quanto o caixa movimentou.
+- **Em espécie**: saldo inicial + entradas em DINHEIRO − saídas = quanto deve haver fisicamente na gaveta. Se não bater, algo não foi lançado.
+
+### Conferência Cega no Fechamento (anti-fraude)
+1. Clicar em **Fechar Caixa** abre a conferência SEM mostrar os totais do sistema.
+2. O operador conta o que tem (dinheiro na gaveta, comprovantes de PIX/cartão) e digita por forma de pagamento.
+3. Só então o sistema revela o esperado e calcula a divergência (sobra/falta).
+4. Divergência exige justificativa obrigatória antes de concluir.
+5. O fechamento gera comprovante imprimível e fica no **Histórico de Fechamentos** com o nome do operador e o resultado da conferência.
+
+### Vocabulário do Caixa (para operadores leigos)
+- **Sangria** = retirada de dinheiro da gaveta (para cofre, banco ou pagamento). Registre em Saídas.
+- **Suprimento / Reforço de troco** = entrada manual de dinheiro para ter troco. Registre em "Lançar Entrada".
+- **Verificar (✓)** = o admin confere o lançamento um a um; entra no Total Verificado.
+- **Estornar** = desfazer um recebimento errado; exige justificativa e o lançamento fica riscado (nunca some).
+- **Arquivar** = esconder lançamento substituído (ex.: venda re-dividida em splits); não soma nos totais.
 
 ### Inter-Module Relationships
 - **Alimentado por:**

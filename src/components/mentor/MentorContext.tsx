@@ -297,6 +297,97 @@ export const TOURS: Record<string, TourMeta> = {
     ],
   },
 
+  caixa: {
+    requiredPath: '/dashboard/cashier',
+    steps: [
+      {
+        target:    'cashier-tabs',
+        title:     'As 5 abas do Caixa',
+        body:      'O Caixa é dividido em: Visão Geral (o extrato do dia), Recebimentos (o que os tutores ainda vão pagar), Saídas (dinheiro que saiu da gaveta), Relatórios (consultas por período) e Sessão (abrir e fechar o caixa do dia).',
+        placement: 'bottom',
+        info:      'Navegação do Caixa — cada aba cuida de uma parte da rotina financeira.',
+      },
+      {
+        target:    'cashier-kpis',
+        title:     'Os 4 totalizadores',
+        body:      'A RECEBER: o que os tutores ainda vão pagar no balcão (repasses de convênio NÃO entram — ficam no Financeiro). TOTAL REGISTRADO: tudo que movimentou o caixa (entradas − saídas). TOTAL VERIFICADO: o que o administrador já conferiu. LANÇAMENTOS: quantas movimentações aconteceram.',
+        placement: 'bottom',
+        info:      'Totalizadores — o resumo do caixa no período filtrado.',
+      },
+      {
+        target:    'cashier-filters',
+        title:     'Filtros do extrato',
+        body:      'Filtre por módulo (Consulta, PDV, Banho e Tosa...), status, modalidade de pagamento (Dinheiro, PIX, cartão...) e período. O padrão é do dia da abertura do caixa até hoje.',
+        placement: 'bottom',
+        info:      'Filtros — refinam a lista de lançamentos abaixo.',
+      },
+      {
+        target:    'cashier-saldo-inicial',
+        title:     'Saldo inicial (fundo de troco)',
+        body:      'É o dinheiro que estava na gaveta quando o caixa foi aberto. Ele é a base da conta: saldo inicial + entradas − saídas = saldo final.',
+        placement: 'bottom',
+        info:      'Fundo de troco declarado na abertura do caixa.',
+      },
+      {
+        target:    'cashier-table',
+        title:     'Extrato de lançamentos',
+        body:      'Cada linha é uma movimentação: data e hora, módulo de origem, pet/tutor, descrição, forma de pagamento, valor e status. Nas Ações você pode verificar (✓), editar a data, arquivar ou estornar (sempre com justificativa).',
+        placement: 'top',
+        info:      'Extrato — todas as movimentações do período, linha a linha.',
+      },
+      {
+        target:    'cashier-saldo-final',
+        title:     'Saldo final — a prova real',
+        body:      'Aqui o sistema fecha a conta: saldo inicial + entradas recebidas − saídas e sangrias = saldo final. A linha "Em espécie" mostra quanto deve haver FISICAMENTE na gaveta — se não bater, algo não foi lançado.',
+        placement: 'top',
+        info:      'Saldo final — deve bater com o dinheiro físico do caixa.',
+      },
+      {
+        target:    'cashier-lancar-entrada',
+        title:     'Lançar Entrada (reforço)',
+        body:      'Use quando ENTRA dinheiro fora de um atendimento: reforço de troco (suprimento), aporte do dono, acerto. Sempre informe o motivo.',
+        placement: 'bottom',
+        info:      'Entrada manual — reforço de troco, aporte ou acerto.',
+      },
+      {
+        target:    'cashier-registrar-saida',
+        title:     'Registrar Saída (sangria)',
+        body:      'Use quando SAI dinheiro da gaveta: sangria (retirada para o cofre/banco), pagamento de despesa ou fornecedor. Sangria é o termo para retirar dinheiro do caixa por segurança.',
+        placement: 'bottom',
+        info:      'Saída manual — sangria, despesa ou pagamento a fornecedor.',
+        ctaLabel:  'Entendido — finalizar tour',
+      },
+    ],
+  },
+
+  'fechar-caixa': {
+    requiredPath: '/dashboard/cashier',
+    steps: [
+      {
+        target:    'cashier-tabs',
+        title:     'Vá para a aba Sessão',
+        body:      'O ciclo do caixa começa e termina na aba Sessão: é lá que você abre o caixa de manhã (informando o fundo de troco) e fecha no fim do dia.',
+        placement: 'bottom',
+        info:      'Abas do caixa — a gestão do dia fica em Sessão.',
+      },
+      {
+        target:    'cashier-session-control',
+        title:     'Abrir e fechar o caixa',
+        body:      'Ao ABRIR: conte o dinheiro da gaveta e informe como Fundo de Troco. Ao FECHAR: o sistema abre a CONFERÊNCIA CEGA — você conta o que tem no caixa SEM ver os totais, digita os valores por forma de pagamento, e só então o sistema revela se bateu ou se há divergência (sobra/falta).',
+        placement: 'bottom',
+        info:      'Controle de sessão — abertura com fundo de troco e fechamento com conferência cega.',
+      },
+      {
+        target:    'cashier-historico',
+        title:     'Histórico de fechamentos',
+        body:      'Cada fechamento fica registrado com o operador, o saldo final e o resultado da conferência (bateu, sobra ou falta). Divergências recorrentes indicam erro de processo — ou problema mais sério.',
+        placement: 'top',
+        info:      'Histórico — auditoria dos fechamentos com divergência por operador.',
+        ctaLabel:  'Entendido — finalizar tour',
+      },
+    ],
+  },
+
   'cadastro-pet': {
     requiredPath: '/dashboard/patients',
     steps: [
@@ -386,6 +477,16 @@ interface IntentMap {
 }
 
 export const INTENT_MAP: IntentMap[] = [
+  {
+    keywords: ['fechar caixa', 'fechamento do caixa', 'fechamento de caixa', 'abrir caixa', 'abrir o caixa', 'conferencia', 'sangria', 'fundo de troco', 'suprimento'],
+    tourId: 'fechar-caixa',
+    response: 'Vou te mostrar o ciclo do caixa: abertura com fundo de troco, conferência cega no fechamento e o histórico de divergências...',
+  },
+  {
+    keywords: ['caixa', 'recebimento', 'receber pagamento', 'pdv', 'totalizador', 'a receber', 'saldo do caixa', 'extrato do caixa'],
+    tourId: 'caixa',
+    response: 'Vou te guiar pelo Caixa: totalizadores, filtros, extrato e o saldo que deve bater com a gaveta...',
+  },
   {
     keywords: ['alta', 'liberar', 'finalizar consulta', 'encerrar'],
     tourId: 'alta',

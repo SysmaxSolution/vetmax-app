@@ -26,11 +26,21 @@ export type CentralCashierEntry = {
 }
 
 export type CashierSummary = {
+  /** A receber do TUTOR no balcão (exclui repasse futuro de convênio/Petlove). */
   total_pending:  number
+  /** Total movimentado registrado: entradas efetivadas (recorded+verified) − saídas. */
   total_recorded: number
+  /** Total já conferido pelo admin: entradas verificadas − saídas verificadas. */
   total_verified: number
+  /** Total de movimentações no período (entradas não arquivadas + saídas). */
   entry_count: number
   period: { from: string; to: string }
+  // ── Detalhamento para os cards e o rodapé de saldo ──
+  inflows_received:  number   // entradas efetivadas (recorded + verified)
+  inflows_cash:      number   // entradas efetivadas em dinheiro (espécie)
+  outflows_total:    number   // saídas do período
+  outflows_verified: number   // saídas já verificadas pelo admin
+  inflows_verified:  number   // entradas verificadas
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -142,24 +152,53 @@ export async function getCashierSummary(period: {
   }
 
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('central_cashier')
-    .select('amount, status')
-    .eq('clinic_id', ctx.clinic_id)
-    .neq('status', 'archived')   // arquivados não entram no resumo (nem no entry_count)
-    .gte('created_at', period.from_date)
-    // Append end-of-day to include all records created during to_date (timestamp vs date comparison)
-    .lte('created_at', period.to_date + 'T23:59:59.999Z')
+  const toEnd = period.to_date + 'T23:59:59.999Z'
+  const [entriesRes, outflowsRes] = await Promise.all([
+    supabase
+      .from('central_cashier')
+      .select('amount, status, payment_method')
+      .eq('clinic_id', ctx.clinic_id)
+      .neq('status', 'archived')   // arquivados não entram no resumo (nem no entry_count)
+      .gte('created_at', period.from_date)
+      // Append end-of-day to include all records created during to_date (timestamp vs date comparison)
+      .lte('created_at', toEnd),
+    supabase
+      .from('cashier_outflows')
+      .select('amount, verified_at')
+      .eq('clinic_id', ctx.clinic_id)
+      .gte('created_at', period.from_date)
+      .lte('created_at', toEnd),
+  ])
 
-  if (error) return { error: `Erro ao buscar: ${error.message}` }
+  if (entriesRes.error) return { error: `Erro ao buscar: ${entriesRes.error.message}` }
+  if (outflowsRes.error) return { error: `Erro ao buscar saídas: ${outflowsRes.error.message}` }
 
-  const entries = data || []
+  const entries  = entriesRes.data || []
+  const outflows = outflowsRes.data || []
+  const sum = (arr: { amount: number }[]) => arr.reduce((s, e) => s + Number(e.amount), 0)
+
+  // A receber do tutor no balcão: pendentes EXCETO modalidade convênio
+  // (repasse futuro Petlove não passa pelo caixa — fica em Contas a Receber).
+  const pendingTutor = entries.filter(e =>
+    e.status === 'pending' && !['insurance', 'convenio'].includes(e.payment_method ?? ''))
+
+  const received         = entries.filter(e => e.status === 'recorded' || e.status === 'verified')
+  const receivedCash     = received.filter(e => e.payment_method === 'cash')
+  const inflowsVerified  = entries.filter(e => e.status === 'verified')
+  const outflowsVerified = outflows.filter(o => o.verified_at != null)
+  const activeEntries    = entries.filter(e => e.status !== 'reversed')
+
   const summary: CashierSummary = {
-    total_pending:  entries.filter((e) => e.status === 'pending').reduce((sum, e) => sum + Number(e.amount), 0),
-    total_recorded: entries.filter((e) => e.status === 'recorded').reduce((sum, e) => sum + Number(e.amount), 0),
-    total_verified: entries.filter((e) => e.status === 'verified').reduce((sum, e) => sum + Number(e.amount), 0),
-    entry_count: entries.length,
-    period: { from: period.from_date, to: period.to_date },
+    total_pending:     sum(pendingTutor),
+    total_recorded:    sum(received) - sum(outflows),
+    total_verified:    sum(inflowsVerified) - sum(outflowsVerified),
+    entry_count:       activeEntries.length + outflows.length,
+    period:            { from: period.from_date, to: period.to_date },
+    inflows_received:  sum(received),
+    inflows_cash:      sum(receivedCash),
+    outflows_total:    sum(outflows),
+    outflows_verified: sum(outflowsVerified),
+    inflows_verified:  sum(inflowsVerified),
   }
 
   return summary

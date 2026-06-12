@@ -394,6 +394,8 @@ export function MentorChat({ idleEnabled = true, idleSeconds = 30, isFreePlan = 
     { id: 'alta',      label: 'Alta',        emoji: '✅' },
     { id: 'internacao',label: 'Internação',  emoji: '🏥' },
     { id: 'grooming',  label: 'Banho e Tosa',emoji: '✂️' },
+    { id: 'caixa',     label: 'Caixa',       emoji: '💰' },
+    { id: 'fechar-caixa', label: 'Fechar Caixa', emoji: '🔒' },
   ]
 
   // ─────────────────────────────────────────────────────────────────────────

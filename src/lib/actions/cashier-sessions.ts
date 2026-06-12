@@ -18,6 +18,13 @@ export interface CashierSession {
   closing_balance?: number
   status: CashierSessionStatus
   notes?: string
+  /** Conferência cega: total contado fisicamente pelo operador no fechamento. */
+  counted_total?: number | null
+  /** Contado por forma de pagamento { cash, pix, credit, debit, ... }. */
+  counted_by_method?: Record<string, number> | null
+  /** contado − esperado (negativo = quebra de caixa). */
+  difference?: number | null
+  closing_notes?: string | null
 }
 
 export interface CashierOutflow {
@@ -30,6 +37,8 @@ export interface CashierOutflow {
   supplier_id?: string | null
   created_by: string
   created_at: string
+  verified_at?: string | null
+  verified_by?: string | null
 }
 
 export interface CashierDashboard {
@@ -118,10 +127,79 @@ export async function openCashierSession(
 }
 
 /**
+ * Totais esperados da sessão para o fechamento com conferência cega.
+ * NÃO retorna os valores quebrados por forma ao operador antes da contagem —
+ * o componente decide quando exibir (após o operador digitar o contado).
+ */
+export async function getSessionExpectedTotals(
+  sessionId: string,
+): Promise<{
+  opening_balance: number
+  by_method: Record<string, number>
+  total_inflows: number
+  total_outflows: number
+  expected_cash: number      // abertura + entradas em dinheiro − saídas (gaveta)
+  expected_total: number     // abertura + todas entradas − saídas
+} | { error: string }> {
+  const ctx = await getClinicContext()
+  if ('error' in ctx) return ctx
+
+  const supabase = await createClient()
+  const { data: session } = await supabase
+    .from('cashier_sessions')
+    .select('opening_balance')
+    .eq('id', sessionId)
+    .eq('clinic_id', ctx.clinic_id)
+    .single()
+  if (!session) return { error: 'Sessão não encontrada' }
+
+  const [entriesRes, outflowsRes] = await Promise.all([
+    supabase
+      .from('central_cashier')
+      .select('amount, payment_method, status')
+      .eq('clinic_id', ctx.clinic_id)
+      .eq('session_id', sessionId)
+      .in('status', ['recorded', 'verified']),
+    supabase
+      .from('cashier_outflows')
+      .select('amount')
+      .eq('clinic_id', ctx.clinic_id)
+      .eq('session_id', sessionId),
+  ])
+  const entries  = entriesRes.data ?? []
+  const outflows = outflowsRes.data ?? []
+
+  const byMethod: Record<string, number> = {}
+  let totalInflows = 0
+  for (const e of entries) {
+    const m = e.payment_method ?? 'nao_informado'
+    byMethod[m] = (byMethod[m] ?? 0) + Number(e.amount)
+    totalInflows += Number(e.amount)
+  }
+  const totalOutflows = outflows.reduce((s, o) => s + Number(o.amount), 0)
+  const opening = Number(session.opening_balance ?? 0)
+
+  return {
+    opening_balance: opening,
+    by_method:       byMethod,
+    total_inflows:   totalInflows,
+    total_outflows:  totalOutflows,
+    expected_cash:   opening + (byMethod['cash'] ?? 0) - totalOutflows,
+    expected_total:  opening + totalInflows - totalOutflows,
+  }
+}
+
+/**
  * Close the current open session and generate closing report.
+ * `conference` (opcional) grava a conferência cega: o que o operador contou,
+ * por forma de pagamento, e a divergência vs esperado.
  */
 export async function closeCashierSession(
   sessionId: string,
+  conference?: {
+    counted_by_method: Record<string, number>
+    closing_notes?: string
+  },
 ): Promise<CashierClosingReport | { error: string }> {
   const ctx = await getClinicContext()
   if ('error' in ctx) return ctx
@@ -188,14 +266,24 @@ export async function closeCashierSession(
     byMethod[method].count  += 1
   }
 
+  // Conferência cega: compara o contado pelo operador com o esperado
+  const countedTotal = conference
+    ? Object.values(conference.counted_by_method).reduce((s, v) => s + Number(v || 0), 0)
+    : null
+  const difference = countedTotal != null ? countedTotal - closingBalance : null
+
   // Close the session
   const { error: closeErr } = await supabase
     .from('cashier_sessions')
     .update({
-      status:          'closed',
-      closed_by:       ctx.user_id,
-      closed_at:       new Date().toISOString(),
-      closing_balance: closingBalance,
+      status:            'closed',
+      closed_by:         ctx.user_id,
+      closed_at:         new Date().toISOString(),
+      closing_balance:   closingBalance,
+      counted_total:     countedTotal,
+      counted_by_method: conference?.counted_by_method ?? null,
+      difference,
+      closing_notes:     conference?.closing_notes ?? null,
     })
     .eq('id', sessionId)
     .eq('clinic_id', ctx.clinic_id)
@@ -205,7 +293,12 @@ export async function closeCashierSession(
   revalidatePath('/dashboard/cashier')
 
   return {
-    session: { ...session, status: 'closed', closing_balance: closingBalance },
+    session: {
+      ...session, status: 'closed', closing_balance: closingBalance,
+      counted_total: countedTotal, difference,
+      counted_by_method: conference?.counted_by_method ?? null,
+      closing_notes: conference?.closing_notes ?? null,
+    },
     total_inflows:       totalInflows,
     total_outflows:      totalOutflows,
     net_balance:         closingBalance,
@@ -214,6 +307,76 @@ export async function closeCashierSession(
     outflows,
     entry_count:         entries.length,
   }
+}
+
+/**
+ * Histórico de fechamentos da clínica (mais recentes primeiro),
+ * com divergência de conferência para auditoria por operador.
+ */
+export async function listClosedSessions(limit = 30): Promise<
+  Array<CashierSession & { opened_by_name?: string; closed_by_name?: string }> | { error: string }
+> {
+  const ctx = await getClinicContext()
+  if ('error' in ctx) return ctx
+
+  if (!['admin', 'owner', 'manager', 'accountant'].includes(ctx.role)) {
+    return { error: 'Acesso negado ao histórico de fechamentos' }
+  }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('cashier_sessions')
+    .select('*')
+    .eq('clinic_id', ctx.clinic_id)
+    .eq('status', 'closed')
+    .order('closed_at', { ascending: false })
+    .limit(limit)
+
+  if (error) return { error: error.message }
+  const sessions = data ?? []
+
+  // Resolve nomes dos operadores (abertura/fechamento)
+  const userIds = [...new Set(sessions.flatMap(s => [s.opened_by, s.closed_by]).filter(Boolean))]
+  const names: Record<string, string> = {}
+  if (userIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, full_name')
+      .in('id', userIds)
+    for (const p of profiles ?? []) names[p.id] = p.full_name
+  }
+
+  return sessions.map(s => ({
+    ...s,
+    opened_by_name: names[s.opened_by],
+    closed_by_name: s.closed_by ? names[s.closed_by] : undefined,
+  }))
+}
+
+/**
+ * Verifica (confere) uma saída de caixa — admin/contador.
+ * Espelho do verifyCashierEntry para o lado das saídas.
+ */
+export async function verifyOutflow(outflowId: string): Promise<{ success: true } | { error: string }> {
+  const ctx = await getClinicContext()
+  if ('error' in ctx) return ctx
+
+  if (!['admin', 'owner', 'accountant'].includes(ctx.role)) {
+    return { error: 'Apenas administradores e contadores podem verificar saídas' }
+  }
+
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('cashier_outflows')
+    .update({ verified_at: new Date().toISOString(), verified_by: ctx.user_id })
+    .eq('id', outflowId)
+    .eq('clinic_id', ctx.clinic_id)
+    .is('verified_at', null)
+
+  if (error) return { error: `Erro ao verificar saída: ${error.message}` }
+
+  revalidatePath('/dashboard/cashier')
+  return { success: true }
 }
 
 /**

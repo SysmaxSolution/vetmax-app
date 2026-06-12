@@ -7,9 +7,11 @@ import {
   Receipt, Calendar, CreditCard, Smartphone, Banknote, Building2, Wallet,
 } from 'lucide-react'
 import {
-  listCashierEntries, verifyCashierEntry, archiveCashierEntry,
+  listCashierEntries, verifyCashierEntry, archiveCashierEntry, getCashierSummary,
   type CentralCashierEntry, type CashierSummary,
 } from '@/lib/actions/core-management'
+import type { CashierSession } from '@/lib/actions/cashier-sessions'
+import { DateInput } from '@/components/ui/DatePicker'
 import CashierReversalModal from './CashierReversalModal'
 import CashierOutflowModal from './CashierOutflowModal'
 import CashierInflowModal from './CashierInflowModal'
@@ -66,18 +68,28 @@ interface Props {
   summary:        CashierSummary | null
   userRole:       string
   sessionId?:     string
+  /** Sessão aberta atual — usada para saldo inicial e período padrão dos filtros. */
+  session?:       CashierSession | null
+  today:          string
   /** Callback opcional para abrir a aba de Recebimentos (botão "Receber Pendentes"). */
   onOpenReceivables?: () => void
 }
 
 export default function CentralCashierWorkspace({
-  initialEntries, summary, userRole, sessionId, onOpenReceivables,
+  initialEntries, summary: initialSummary, userRole, sessionId, session, today, onOpenReceivables,
 }: Props) {
+  // Período padrão: do dia da abertura do caixa até hoje
+  const defaultFrom = session?.opened_at ? session.opened_at.slice(0, 10) : today
+
   const [entries,        setEntries]        = useState<CentralCashierEntry[]>(initialEntries)
+  const [summary,        setSummary]        = useState<CashierSummary | null>(initialSummary)
   const [loading,        setLoading]        = useState(false)
   const [actionId,       setActionId]       = useState<string | null>(null)
   const [filterMod,      setFilterMod]      = useState<string>('all')
   const [filterStat,     setFilterStat]     = useState<string>('all')
+  const [filterPay,      setFilterPay]      = useState<string>('all')
+  const [filterFrom,     setFilterFrom]     = useState<string>(defaultFrom)
+  const [filterTo,       setFilterTo]       = useState<string>(today)
   const [toast,          setToast]          = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
   const [reversalEntry,  setReversalEntry]  = useState<CentralCashierEntry | null>(null)
   const [showOutflow,    setShowOutflow]    = useState(false)
@@ -94,13 +106,24 @@ export default function CentralCashierWorkspace({
     setTimeout(() => setToast(null), 3000)
   }
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (from = filterFrom, to = filterTo) => {
     setLoading(true)
-    const res = await listCashierEntries()
+    const [res, sum] = await Promise.all([
+      listCashierEntries({ from_date: from, to_date: to }),
+      getCashierSummary({ from_date: from, to_date: to }),
+    ])
     setLoading(false)
     if ('error' in res) { showToast(res.error, 'error'); return }
     setEntries(res)
-  }, [])
+    if (!('error' in sum)) setSummary(sum)
+  }, [filterFrom, filterTo])
+
+  // Mudança de período recarrega do servidor
+  const handlePeriodChange = (from: string, to: string) => {
+    setFilterFrom(from)
+    setFilterTo(to)
+    void refresh(from, to)
+  }
 
   const handleVerify = async (id: string) => {
     setActionId(id)
@@ -122,14 +145,20 @@ export default function CentralCashierWorkspace({
   }
 
   const displayed = entries.filter(e => {
-    if (filterMod  !== 'all' && e.source_module !== filterMod)  return false
-    if (filterStat !== 'all' && e.status         !== filterStat) return false
+    if (filterMod  !== 'all' && e.source_module        !== filterMod)  return false
+    if (filterStat !== 'all' && e.status                !== filterStat) return false
+    if (filterPay  !== 'all' && (e.payment_method ?? '') !== filterPay) return false
     return true
   })
 
   const totalDisplayed = displayed.reduce((s, e) => s + Number(e.amount), 0)
   const uniqueModules  = [...new Set(entries.map(e => e.source_module))]
   const pendingCount   = entries.filter(e => e.status === 'pending').length
+
+  // Saldo do caixa no período: abertura + entradas efetivadas − saídas
+  const openingBalance = Number(session?.opening_balance ?? 0)
+  const finalBalance   = summary ? openingBalance + summary.inflows_received - summary.outflows_total : null
+  const cashBalance    = summary ? openingBalance + summary.inflows_cash     - summary.outflows_total : null
 
   return (
     <div className="space-y-6">
@@ -184,6 +213,7 @@ export default function CentralCashierWorkspace({
           {pendingCount > 0 && onOpenReceivables && (
             <button
               onClick={onOpenReceivables}
+              data-mentor-step="cashier-receber-pendentes"
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold shadow-sm"
             >
               <Receipt className="h-4 w-4" />
@@ -197,6 +227,8 @@ export default function CentralCashierWorkspace({
             <>
               <button
                 onClick={() => setShowInflow(true)}
+                data-mentor-step="cashier-lancar-entrada"
+                title="Entrada manual de dinheiro no caixa: reforço de troco (suprimento), aporte, acerto."
                 className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-medium hover:bg-emerald-100 transition-colors"
               >
                 <Plus className="h-4 w-4" />
@@ -204,6 +236,8 @@ export default function CentralCashierWorkspace({
               </button>
               <button
                 onClick={() => setShowOutflow(true)}
+                data-mentor-step="cashier-registrar-saida"
+                title="Saída de dinheiro do caixa: retirada (sangria), despesa, pagamento a fornecedor."
                 className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-medium hover:bg-red-100 transition-colors"
               >
                 <Minus className="h-4 w-4" />
@@ -214,7 +248,7 @@ export default function CentralCashierWorkspace({
           <button
             id="btn-refresh-cashier"
             data-testid="btn-refresh-cashier"
-            onClick={refresh}
+            onClick={() => refresh()}
             disabled={loading}
             className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50 transition-colors disabled:opacity-50"
           >
@@ -229,9 +263,10 @@ export default function CentralCashierWorkspace({
         <div
           id="cashier-summary-cards"
           data-testid="cashier-summary-cards"
+          data-mentor-step="cashier-kpis"
           className="grid grid-cols-2 sm:grid-cols-4 gap-4"
         >
-          <div className="bg-white rounded-xl border border-blue-200 p-5">
+          <div className="bg-white rounded-xl border border-blue-200 p-5" title="O que os tutores ainda vão pagar no balcão. Repasses futuros de convênio (Petlove) NÃO entram aqui — eles ficam em Contas a Receber no Financeiro.">
             <div className="flex items-center gap-3 mb-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50">
                 <Clock className="h-4 w-4 text-blue-600" />
@@ -239,9 +274,10 @@ export default function CentralCashierWorkspace({
               <p className="text-xs font-medium text-blue-600 uppercase tracking-wide">A Receber</p>
             </div>
             <p data-testid="kpi-total-pending" className="text-2xl font-bold text-blue-700">{fmt(summary.total_pending ?? 0)}</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">do tutor · sem repasse de convênio</p>
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <div className="bg-white rounded-xl border border-slate-200 p-5" title="Tudo que movimentou o caixa no período: entradas recebidas (inclui as já verificadas) menos saídas e sangrias.">
             <div className="flex items-center gap-3 mb-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50">
                 <TrendingUp className="h-4 w-4 text-amber-600" />
@@ -249,9 +285,13 @@ export default function CentralCashierWorkspace({
               <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Registrado</p>
             </div>
             <p data-testid="kpi-total-recorded" className="text-2xl font-bold text-slate-900">{fmt(summary.total_recorded)}</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              <span className="text-emerald-600">+{fmt(summary.inflows_received)}</span>
+              {' '}<span className="text-red-500">−{fmt(summary.outflows_total)}</span>
+            </p>
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <div className="bg-white rounded-xl border border-slate-200 p-5" title="Movimentações (entradas e saídas) que o administrador/contador já conferiu uma a uma.">
             <div className="flex items-center gap-3 mb-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50">
                 <BadgeCheck className="h-4 w-4 text-emerald-600" />
@@ -259,9 +299,10 @@ export default function CentralCashierWorkspace({
               <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Verificado</p>
             </div>
             <p data-testid="kpi-total-verified" className="text-2xl font-bold text-emerald-700">{fmt(summary.total_verified)}</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">entradas e saídas conferidas pelo admin</p>
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <div className="bg-white rounded-xl border border-slate-200 p-5" title="Quantidade total de movimentações no caixa no período: recebimentos, lançamentos manuais, saídas e sangrias.">
             <div className="flex items-center gap-3 mb-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100">
                 <DollarSign className="h-4 w-4 text-slate-600" />
@@ -269,12 +310,16 @@ export default function CentralCashierWorkspace({
               <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Lançamentos</p>
             </div>
             <p data-testid="kpi-entry-count" className="text-2xl font-bold text-slate-900">{summary.entry_count}</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">movimentações no período</p>
           </div>
         </div>
       )}
 
       {/* Filter bar */}
-      <div className="bg-white rounded-xl border border-slate-200 px-4 py-3 flex items-center gap-3 flex-wrap">
+      <div
+        data-mentor-step="cashier-filters"
+        className="bg-white rounded-xl border border-slate-200 px-4 py-3 flex items-center gap-3 flex-wrap"
+      >
         <Filter className="h-4 w-4 text-slate-400 flex-shrink-0" />
 
         <select
@@ -305,6 +350,37 @@ export default function CentralCashierWorkspace({
           <option value="reversed">Estornado</option>
         </select>
 
+        <select
+          id="filter-payment"
+          data-testid="filter-payment"
+          value={filterPay}
+          onChange={e => setFilterPay(e.target.value)}
+          className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+        >
+          <option value="all">Todas as modalidades</option>
+          <option value="cash">Dinheiro</option>
+          <option value="pix">PIX</option>
+          <option value="credit">Crédito</option>
+          <option value="debit">Débito</option>
+          <option value="convenio">Convênio</option>
+          <option value="transfer">Transferência</option>
+          <option value="other">Outro</option>
+        </select>
+
+        <div className="flex items-center gap-1.5">
+          <DateInput
+            value={filterFrom}
+            onChange={v => handlePeriodChange(v, filterTo)}
+            className="w-32"
+          />
+          <span className="text-xs text-slate-400">até</span>
+          <DateInput
+            value={filterTo}
+            onChange={v => handlePeriodChange(filterFrom, v)}
+            className="w-32"
+          />
+        </div>
+
         <span className="text-xs text-slate-500 ml-auto">
           {displayed.length} lançamento(s) · {fmt(totalDisplayed)}
         </span>
@@ -315,8 +391,30 @@ export default function CentralCashierWorkspace({
         id="cashier-entries-table"
         data-testid="cashier-entries-table"
         data-filtermod={filterMod}
+        data-mentor-step="cashier-table"
         className="bg-white rounded-xl border border-slate-200 overflow-hidden"
       >
+        {/* Saldo inicial do dia da abertura do caixa */}
+        <div
+          data-testid="cashier-opening-balance"
+          data-mentor-step="cashier-saldo-inicial"
+          className={`flex items-center justify-between px-4 py-2.5 border-b text-sm ${
+            session ? 'bg-emerald-50/60 border-emerald-100' : 'bg-slate-50 border-slate-100'
+          }`}
+        >
+          <span className="flex items-center gap-2 font-medium text-slate-700">
+            <Wallet className="h-4 w-4 text-emerald-600" />
+            Saldo inicial (fundo de troco)
+            {session ? (
+              <span className="text-xs text-slate-400 font-normal">
+                · caixa aberto em {fmtDate(session.opened_at)}
+              </span>
+            ) : (
+              <span className="text-xs text-amber-600 font-normal">· caixa fechado — abra o caixa na aba Sessão</span>
+            )}
+          </span>
+          <span className="font-bold text-slate-900 tabular-nums">{fmt(openingBalance)}</span>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -457,6 +555,39 @@ export default function CentralCashierWorkspace({
             </tbody>
           </table>
         </div>
+
+        {/* Saldo final do período — fecha a conta do caixa físico */}
+        {summary && (
+          <div
+            data-testid="cashier-final-balance"
+            data-mentor-step="cashier-saldo-final"
+            className="border-t border-slate-200 bg-slate-50/70 px-4 py-3 space-y-1.5 text-sm"
+          >
+            <div className="flex items-center justify-between text-slate-500">
+              <span>Saldo inicial (abertura)</span>
+              <span className="tabular-nums">{fmt(openingBalance)}</span>
+            </div>
+            <div className="flex items-center justify-between text-emerald-700">
+              <span>+ Entradas recebidas no período</span>
+              <span className="tabular-nums">+{fmt(summary.inflows_received)}</span>
+            </div>
+            <div className="flex items-center justify-between text-red-600">
+              <span>− Saídas e sangrias no período</span>
+              <span className="tabular-nums">−{fmt(summary.outflows_total)}</span>
+            </div>
+            <div className="flex items-center justify-between border-t border-slate-200 pt-2 font-bold text-slate-900">
+              <span>= Saldo final do caixa</span>
+              <span className="tabular-nums text-base">{finalBalance != null ? fmt(finalBalance) : '—'}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs text-slate-500">
+              <span className="flex items-center gap-1.5">
+                <Banknote className="h-3.5 w-3.5 text-emerald-600" />
+                Em espécie (deve bater com o dinheiro físico na gaveta)
+              </span>
+              <span className="tabular-nums font-semibold text-slate-700">{cashBalance != null ? fmt(cashBalance) : '—'}</span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

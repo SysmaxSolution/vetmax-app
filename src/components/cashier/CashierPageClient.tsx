@@ -117,7 +117,7 @@ export default function CashierPageClient({
       {hydrated && <span data-testid="cashier-hydrated" className="sr-only" aria-hidden="true" />}
 
       {/* Tab navigation */}
-      <div className="flex gap-1 border-b border-slate-200 overflow-x-auto pb-px -mb-px">
+      <div data-mentor-step="cashier-tabs" className="flex gap-1 border-b border-slate-200 overflow-x-auto pb-px -mb-px">
         {TABS.map(tab => {
           const Icon = tab.icon
           const active = activeTab === tab.key
@@ -152,6 +152,8 @@ export default function CashierPageClient({
             summary={summary}
             userRole={userRole}
             sessionId={session?.id}
+            session={session}
+            today={today}
             onOpenReceivables={() => setActiveTab('receivables')}
           />
         </div>
@@ -165,6 +167,7 @@ export default function CashierPageClient({
           userRole={userRole}
           pdvUnified={pdvUnified}
           canViewInsuranceDetails={canViewInsuranceDetails}
+          receivedToday={dashboard?.total_inflows ?? 0}
           activeModules={activeModules}
           onToast={showToast}
         />

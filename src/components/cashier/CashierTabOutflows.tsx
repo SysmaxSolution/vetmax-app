@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { ArrowDownCircle, RefreshCw, PlusCircle } from 'lucide-react'
-import { listOutflows, type CashierOutflow } from '@/lib/actions/cashier-sessions'
+import { ArrowDownCircle, RefreshCw, PlusCircle, BadgeCheck, Loader2 } from 'lucide-react'
+import { listOutflows, verifyOutflow, type CashierOutflow } from '@/lib/actions/cashier-sessions'
 import CashierOutflowModal from './CashierOutflowModal'
 
 function fmt(value: number) {
@@ -17,10 +17,11 @@ function fmtDate(iso: string) {
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
-  sangria:              'Sangria',
+  sangria:              'Sangria (retirada)',
   despesa_operacional:  'Despesa Operacional',
   fornecedor:           'Fornecedor',
   estorno:              'Estorno',
+  troco:                'Troco',
   other:                'Outro',
 }
 
@@ -29,6 +30,7 @@ const CATEGORY_COLOR: Record<string, string> = {
   despesa_operacional: 'bg-orange-100 text-orange-700',
   fornecedor:          'bg-amber-100 text-amber-700',
   estorno:             'bg-slate-100 text-slate-600',
+  troco:               'bg-blue-100 text-blue-700',
   other:               'bg-slate-100 text-slate-600',
 }
 
@@ -43,17 +45,37 @@ export default function CashierTabOutflows({ initialOutflows, sessionId, userRol
   const [outflows,    setOutflows]    = useState<CashierOutflow[]>(initialOutflows)
   const [refreshing,  setRefreshing]  = useState(false)
   const [showModal,   setShowModal]   = useState(false)
+  const [verifyingId, setVerifyingId] = useState<string | null>(null)
 
   const canManage = ['admin', 'owner', 'manager'].includes(userRole)
+  const canVerify = ['admin', 'owner', 'accountant'].includes(userRole)
 
   const refresh = useCallback(async () => {
     setRefreshing(true)
-    const res = await listOutflows()
+    // Período corrente do caixa: saídas da sessão aberta; sem sessão, todas as recentes
+    const res = await listOutflows(sessionId ? { session_id: sessionId } : undefined)
     setRefreshing(false)
     if (!('error' in res)) setOutflows(res)
-  }, [])
+  }, [sessionId])
 
-  const totalOutflows = outflows.reduce((sum, o) => sum + o.amount, 0)
+  const handleVerify = async (id: string) => {
+    setVerifyingId(id)
+    const res = await verifyOutflow(id)
+    setVerifyingId(null)
+    if ('error' in res) { onToast(res.error, 'error'); return }
+    setOutflows(prev => prev.map(o => o.id === id ? { ...o, verified_at: new Date().toISOString() } : o))
+    onToast('Saída verificada.', 'success')
+  }
+
+  const totalOutflows = outflows.reduce((sum, o) => sum + Number(o.amount), 0)
+
+  // Totais por categoria para o rodapé do período corrente do caixa
+  const byCategory = outflows.reduce<Record<string, { amount: number; count: number }>>((acc, o) => {
+    acc[o.category] ??= { amount: 0, count: 0 }
+    acc[o.category].amount += Number(o.amount)
+    acc[o.category].count  += 1
+    return acc
+  }, {})
 
   return (
     <>
@@ -73,9 +95,8 @@ export default function CashierTabOutflows({ initialOutflows, sessionId, userRol
         <div>
           <h2 className="text-lg font-semibold text-slate-900">Saídas do Caixa</h2>
           <p className="mt-0.5 text-sm text-slate-500">
-            {outflows.length === 0
-              ? 'Nenhuma saída registrada'
-              : `${outflows.length} saída${outflows.length !== 1 ? 's' : ''} — Total: ${fmt(totalOutflows)}`}
+            {sessionId ? 'Saídas do caixa atual (desde a abertura)' : 'Saídas recentes — nenhum caixa aberto'}
+            {outflows.length > 0 && ` · ${outflows.length} saída${outflows.length !== 1 ? 's' : ''}`}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -105,9 +126,9 @@ export default function CashierTabOutflows({ initialOutflows, sessionId, userRol
           <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-slate-100">
             <ArrowDownCircle className="h-7 w-7 text-slate-400" />
           </div>
-          <p className="text-sm font-medium text-slate-500">Nenhuma saída registrada hoje</p>
+          <p className="text-sm font-medium text-slate-500">Nenhuma saída registrada neste caixa</p>
           <p className="mt-1 text-xs text-slate-400">
-            Sangrias, despesas e estornos aparecem aqui
+            Sangria é quando você tira dinheiro da gaveta para guardar no cofre ou pagar algo.
           </p>
         </div>
       ) : (
@@ -125,18 +146,56 @@ export default function CashierTabOutflows({ initialOutflows, sessionId, userRol
                   <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${CATEGORY_COLOR[outflow.category] ?? 'bg-slate-100 text-slate-600'}`}>
                     {CATEGORY_LABELS[outflow.category] ?? outflow.category}
                   </span>
+                  {outflow.verified_at && (
+                    <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                      <BadgeCheck className="h-3 w-3" /> Verificada
+                    </span>
+                  )}
                 </div>
                 <p className="mt-1 text-sm text-slate-700 truncate">{outflow.description}</p>
                 <p className="text-xs text-slate-400">{fmtDate(outflow.created_at)}</p>
               </div>
-              <div className="flex-shrink-0 text-right">
-                <p className="text-lg font-bold text-red-600">- {fmt(outflow.amount)}</p>
+              <div className="flex-shrink-0 flex items-center gap-3">
+                <p className="text-lg font-bold text-red-600">- {fmt(Number(outflow.amount))}</p>
+                {canVerify && !outflow.verified_at && (
+                  <button
+                    onClick={() => handleVerify(outflow.id)}
+                    disabled={verifyingId === outflow.id}
+                    title="Marcar como conferida pelo admin — entra no Total Verificado"
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium hover:bg-emerald-100 transition-colors disabled:opacity-50"
+                  >
+                    {verifyingId === outflow.id
+                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      : <BadgeCheck className="h-3.5 w-3.5" />}
+                    Verificar
+                  </button>
+                )}
               </div>
             </div>
           ))}
-          <div className="rounded-xl bg-slate-50 border border-slate-200 px-5 py-3 flex items-center justify-between">
-            <span className="text-sm font-semibold text-slate-600">Total de Saídas</span>
-            <span className="text-base font-bold text-red-600">- {fmt(totalOutflows)}</span>
+
+          {/* Totalizadores do período corrente do caixa */}
+          <div
+            data-testid="outflows-totals"
+            data-mentor-step="cashier-outflows-total"
+            className="rounded-xl bg-slate-50 border border-slate-200 px-5 py-4 space-y-2"
+          >
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Totais do caixa atual
+            </p>
+            {Object.entries(byCategory).map(([cat, v]) => (
+              <div key={cat} className="flex items-center justify-between text-sm">
+                <span className="text-slate-600">
+                  {CATEGORY_LABELS[cat] ?? cat}
+                  <span className="text-xs text-slate-400 ml-1">({v.count})</span>
+                </span>
+                <span className="font-semibold text-red-600 tabular-nums">- {fmt(v.amount)}</span>
+              </div>
+            ))}
+            <div className="flex items-center justify-between border-t border-slate-200 pt-2">
+              <span className="text-sm font-bold text-slate-700">Total de Saídas</span>
+              <span data-testid="outflows-grand-total" className="text-base font-bold text-red-600 tabular-nums">- {fmt(totalOutflows)}</span>
+            </div>
           </div>
         </div>
       )}

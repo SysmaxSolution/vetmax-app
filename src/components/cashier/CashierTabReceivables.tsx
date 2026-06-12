@@ -292,6 +292,8 @@ interface Props {
    * (itens + valor a cobrar). Configurável por usuário em Direitos de Acesso.
    */
   canViewInsuranceDetails?: boolean
+  /** Total já recebido hoje (entradas efetivadas) — exibido no totalizador do rodapé. */
+  receivedToday?:         number
   /** Módulos ativos da clínica — cadastro rápido do catálogo na venda avulsa. */
   activeModules?:         string[]
   onToast: (msg: string, type: 'success' | 'error') => void
@@ -304,6 +306,7 @@ export default function CashierTabReceivables({
   userRole = 'receptionist',
   pdvUnified = false,
   canViewInsuranceDetails = true,
+  receivedToday = 0,
   activeModules = [],
   onToast,
 }: Props) {
@@ -355,6 +358,12 @@ export default function CashierTabReceivables({
     ...selectedInvoices.map(i => i.tutor.name),
     ...selectedSales.map(s => s.tutor_name ?? 'Consumidor avulso'),
   ]).size
+
+  // Totalizador do rodapé: tudo que ainda está pendente nesta tela
+  const totalToReceive =
+    invoices.reduce((s, i) => s + Math.max(0, Number(i.total_amount) - Number(i.paid_amount ?? 0)), 0) +
+    pendingSales.reduce((s, v) => s + Number(v.total_amount), 0) +
+    groomingSessions.reduce((s, g) => s + Number(g.price_total), 0)
 
   function toggleSelect(id: string) {
     setSelectedIds(prev => {
@@ -853,6 +862,22 @@ export default function CashierTabReceivables({
               onReceive={setActiveGrooming}
             />
           ))}
+
+          {/* Totalizador: a receber × já recebido hoje */}
+          <div
+            data-testid="receivables-totals"
+            data-mentor-step="cashier-receivables-total"
+            className="rounded-xl bg-slate-50 border border-slate-200 px-5 py-4 grid grid-cols-2 gap-4"
+          >
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">A receber (pendentes nesta tela)</p>
+              <p className="mt-1 text-xl font-bold text-blue-700 tabular-nums">{fmt(totalToReceive)}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Já recebido hoje</p>
+              <p className="mt-1 text-xl font-bold text-emerald-700 tabular-nums">{fmt(receivedToday)}</p>
+            </div>
+          </div>
         </div>
       )}
     </>
