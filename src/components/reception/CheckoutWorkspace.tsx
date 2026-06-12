@@ -100,7 +100,9 @@ export default function CheckoutWorkspace({ initialInvoices, clinicId }: Props) 
     setInvoices(prev => prev.filter(inv => inv.id !== activeInvoiceId))
     setToast({
       type: 'success',
-      message: `Pagamento de ${petName} recebido! ${total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`,
+      message: total <= 0.005
+        ? `Cortesia de ${petName} registrada — sem cobrança.`
+        : `Pagamento de ${petName} recebido! ${total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`,
     })
   }
 

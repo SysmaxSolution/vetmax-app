@@ -296,6 +296,8 @@ interface Props {
   receivedToday?:         number
   /** Módulos ativos da clínica — cadastro rápido do catálogo na venda avulsa. */
   activeModules?:         string[]
+  /** Notifica o pai (KPIs da Visão Geral) que houve baixa — para re-buscar o summary. */
+  onDataChange?: () => void
   onToast: (msg: string, type: 'success' | 'error') => void
 }
 
@@ -307,6 +309,7 @@ export default function CashierTabReceivables({
   pdvUnified = false,
   canViewInsuranceDetails = true,
   receivedToday = 0,
+  onDataChange,
   activeModules = [],
   onToast,
 }: Props) {
@@ -597,9 +600,12 @@ export default function CashierTabReceivables({
     setActiveInvoiceId(null)
     setInvoices(prev => prev.filter(inv => inv.id !== activeInvoiceId))
     onToast(
-      `Pagamento de ${petName} recebido! ${fmt(total)}`,
+      total <= 0.005
+        ? `Cortesia de ${petName} registrada — sem cobrança.`
+        : `Pagamento de ${petName} recebido! ${fmt(total)}`,
       'success'
     )
+    onDataChange?.()
   }
 
   function handleGroomingSuccess(petName: string, total: number) {
@@ -607,6 +613,7 @@ export default function CashierTabReceivables({
     setActiveGrooming(null)
     setGroomingSessions(prev => prev.filter(s => s.id !== id))
     onToast(`Banho e Tosa de ${petName} recebido! ${fmt(total)}`, 'success')
+    onDataChange?.()
   }
 
   function handleGroomingWaived(petName: string) {
@@ -614,6 +621,7 @@ export default function CashierTabReceivables({
     setActiveGrooming(null)
     setGroomingSessions(prev => prev.filter(s => s.id !== id))
     onToast(`Serviço de ${petName} marcado como cortesia.`, 'success')
+    onDataChange?.()
   }
 
   const totalPending = invoices.length + groomingSessions.length + pendingSales.length

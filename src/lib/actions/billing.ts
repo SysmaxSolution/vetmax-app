@@ -1157,6 +1157,30 @@ export async function processSplitPayment(
 
   const result = data as { paid_amount: number; total_amount: number; status: string }
 
+  // ─── Baixa do pending do Caixa Central ────────────────────────────────────
+  // A RPC insere os splits como 'recorded' mas NÃO toca no pending original da
+  // fatura (criado no checkout). Quando a invoice quita, o pending vira duplicata
+  // supersedida — arquiva para não inflar o "A Receber". Em baixa parcial, ajusta
+  // o pending para o saldo restante.
+  const remainingAfter = Math.max(0, Number(result.total_amount) - Number(result.paid_amount))
+  if (result.status === 'paid') {
+    await admin
+      .from('central_cashier')
+      .update({ status: 'archived' })
+      .eq('clinic_id', profile.clinic_id)
+      .eq('source_module', 'consultation')
+      .eq('source_id', invoiceId)
+      .eq('status', 'pending')
+  } else if (remainingAfter > 0.01) {
+    await admin
+      .from('central_cashier')
+      .update({ amount: Number(remainingAfter.toFixed(2)) })
+      .eq('clinic_id', profile.clinic_id)
+      .eq('source_module', 'consultation')
+      .eq('source_id', invoiceId)
+      .eq('status', 'pending')
+  }
+
   // ─── Cobertura de convênio (fix B2): saldo restante É o pending Petlove ───
   // Quando o caixa aplicou cobertura, o saldo pós-baixa (repasse) não pode
   // ficar como pending source='cashier' (criado pela RPC na baixa parcial) —
@@ -1637,6 +1661,25 @@ export async function markInvoiceAsCourtesy(
     .eq('id', invoiceId)
     .eq('clinic_id', profile.clinic_id)
   if (updErr) return { error: 'Erro ao baixar fatura: ' + updErr.message }
+
+  // Baixa o pending do Caixa Central — sem isso o valor original da fatura
+  // (antes do desconto/zeramento) fica inflando o "A Receber" para sempre.
+  await admin
+    .from('central_cashier')
+    .update({ status: 'archived', reason: 'Cortesia — sem cobrança' })
+    .eq('clinic_id', profile.clinic_id)
+    .eq('source_module', 'consultation')
+    .eq('source_id', invoiceId)
+    .eq('status', 'pending')
+
+  // Remove o título a receber espelhado no Financeiro (mesma regra da baixa paga)
+  await admin
+    .from('financial_entries')
+    .delete()
+    .eq('clinic_id', profile.clinic_id)
+    .eq('invoice_id', invoiceId)
+    .eq('status', 'pending')
+    .eq('source', 'cashier')
 
   // Audit best-effort
   try {

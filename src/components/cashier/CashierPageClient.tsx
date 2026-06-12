@@ -168,6 +168,7 @@ export default function CashierPageClient({
           pdvUnified={pdvUnified}
           canViewInsuranceDetails={canViewInsuranceDetails}
           receivedToday={dashboard?.total_inflows ?? 0}
+          onDataChange={refresh}
           activeModules={activeModules}
           onToast={showToast}
         />

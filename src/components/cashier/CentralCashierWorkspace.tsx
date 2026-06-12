@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import {
   DollarSign, CheckCircle2, Archive, RefreshCw, Loader2, Filter,
   TrendingUp, AlertCircle, Clock, BadgeCheck, RotateCcw, Minus, Plus,
@@ -95,6 +95,10 @@ export default function CentralCashierWorkspace({
   const [showOutflow,    setShowOutflow]    = useState(false)
   const [showInflow,     setShowInflow]     = useState(false)
   const [editingDate,    setEditingDate]    = useState<CentralCashierEntry | null>(null)
+
+  // Sincroniza com atualizações vindas do pai (ex.: baixa feita em Recebimentos)
+  useEffect(() => { setEntries(initialEntries) }, [initialEntries])
+  useEffect(() => { setSummary(initialSummary) }, [initialSummary])
 
   const isAccountant = ['admin', 'owner', 'accountant'].includes(userRole)
   const isAdmin      = ['admin', 'owner'].includes(userRole)
