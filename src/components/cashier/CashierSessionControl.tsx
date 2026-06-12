@@ -22,7 +22,7 @@ const MODULE_LABELS: Record<string, string> = {
 
 const PAYMENT_LABELS: Record<string, string> = {
   pix: 'PIX', credit: 'Crédito', debit: 'Débito',
-  cash: 'Dinheiro', convenio: 'Convênio', transfer: 'Transferência', other: 'Outro',
+  cash: 'Dinheiro', convenio: 'Convênio', transfer: 'Transferência', courtesy: 'Cortesia', other: 'Outro',
   nao_informado: 'Não informado',
 }
 

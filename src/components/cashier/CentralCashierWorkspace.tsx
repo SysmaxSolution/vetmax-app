@@ -43,6 +43,7 @@ const PAYMENT_METHOD_LABEL: Record<string, { label: string; icon: React.Componen
   voucher:   { label: 'Vale',        icon: Wallet      },
   convenio:  { label: 'Convênio',    icon: Wallet      },
   transfer:  { label: 'Transf.',     icon: Building2   },
+  courtesy:  { label: 'Cortesia',    icon: Receipt     },
   other:     { label: 'Outro',       icon: Receipt     },
 }
 
@@ -368,6 +369,7 @@ export default function CentralCashierWorkspace({
           <option value="debit">Débito</option>
           <option value="convenio">Convênio</option>
           <option value="transfer">Transferência</option>
+          <option value="courtesy">Cortesia</option>
           <option value="other">Outro</option>
         </select>
 

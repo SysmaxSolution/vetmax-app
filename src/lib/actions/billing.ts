@@ -1621,6 +1621,12 @@ export async function generatePartialInvoice(
 export async function markInvoiceAsCourtesy(
   invoiceId: string,
   reason?: string,
+  /**
+   * Desconto digitado no modal de recebimento que zera a fatura (ex.: consulta
+   * de R$ 2,50 com 100% de desconto → cortesia). É persistido na invoice antes
+   * da validação de saldo — mesmo comportamento do fluxo normal de pagamento.
+   */
+  discount: number = 0,
 ): Promise<{ success: true } | { error: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -1637,7 +1643,7 @@ export async function markInvoiceAsCourtesy(
 
   const { data: invoice, error: fetchErr } = await admin
     .from('invoices')
-    .select('id, status, total_amount, paid_amount, consultation_id')
+    .select('id, status, total_amount, paid_amount, discount, consultation_id, patients ( name ), tutors ( name )')
     .eq('id', invoiceId)
     .eq('clinic_id', profile.clinic_id)
     .single()
@@ -1645,9 +1651,25 @@ export async function markInvoiceAsCourtesy(
   if (invoice.status === 'paid')      return { error: 'Esta fatura já está paga.' }
   if (invoice.status === 'cancelled') return { error: 'Esta fatura foi cancelada.' }
 
-  const remaining = Number(invoice.total_amount ?? 0) - Number(invoice.paid_amount ?? 0)
+  const extraDiscount = Math.max(0, Number(discount) || 0)
+  const remaining = Number(invoice.total_amount ?? 0) - Number(invoice.paid_amount ?? 0) - extraDiscount
   if (remaining > 0.01) {
     return { error: 'Fatura ainda tem saldo a receber. Use o fluxo normal de pagamento.' }
+  }
+
+  // Persiste o desconto que zerou a fatura (mesmo padrão do processSplitPayment)
+  // — sem isso a invoice ficaria com total_amount > 0 e payment 'courtesy'.
+  if (extraDiscount > 0) {
+    const { error: discErr } = await admin
+      .from('invoices')
+      .update({
+        discount:     Number(((invoice as { discount?: number }).discount ?? 0)) + extraDiscount,
+        total_amount: Math.max(0, Number(invoice.total_amount ?? 0) - extraDiscount),
+        updated_at:   new Date().toISOString(),
+      })
+      .eq('id', invoiceId)
+      .eq('clinic_id', profile.clinic_id)
+    if (discErr) return { error: 'Erro ao aplicar desconto: ' + discErr.message }
   }
 
   const { error: updErr } = await admin
@@ -1671,6 +1693,24 @@ export async function markInvoiceAsCourtesy(
     .eq('source_module', 'consultation')
     .eq('source_id', invoiceId)
     .eq('status', 'pending')
+
+  // Registra a cortesia como modalidade no extrato (linha R$ 0,00 rastreável):
+  // o caixa vê que houve atendimento sem cobrança, de quem e quando.
+  const invNames = invoice as unknown as { patients?: { name?: string }; tutors?: { name?: string } }
+  await admin
+    .from('central_cashier')
+    .insert({
+      clinic_id:      profile.clinic_id,
+      source_module:  'consultation',
+      source_id:      invoiceId,
+      amount:         0,
+      status:         'recorded',
+      payment_method: 'courtesy',
+      reason:         `Cortesia — ${invNames.patients?.name ?? 'atendimento sem cobrança'}`,
+      patient_name:   invNames.patients?.name ?? null,
+      tutor_name:     invNames.tutors?.name ?? null,
+      recorded_by:    user.id,
+    })
 
   // Remove o título a receber espelhado no Financeiro (mesma regra da baixa paga)
   await admin

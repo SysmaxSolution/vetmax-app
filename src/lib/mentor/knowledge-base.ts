@@ -429,6 +429,7 @@ Centralizar o controle financeiro: registrar pagamentos de consultas e serviços
 - **Sangria** = retirada de dinheiro da gaveta (para cofre, banco ou pagamento). Registre em Saídas.
 - **Suprimento / Reforço de troco** = entrada manual de dinheiro para ter troco. Registre em "Lançar Entrada".
 - **Verificar (✓)** = o admin confere o lançamento um a um; entra no Total Verificado.
+- **Cortesia** = atendimento sem cobrança (fatura zerada, ex.: retorno). Aparece no extrato como modalidade 'Cortesia' com valor R$ 0,00 — rastreável e filtrável.
 - **Estornar** = desfazer um recebimento errado; exige justificativa e o lançamento fica riscado (nunca some).
 - **Arquivar** = esconder lançamento substituído (ex.: venda re-dividida em splits); não soma nos totais.
 

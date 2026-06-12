@@ -68,7 +68,12 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
     if (!invoice || submittingCourtesy) return
     setSubmittingCourtesy(true)
     setError(null)
-    const res = await markInvoiceAsCourtesy(invoice.id, 'Procedimento sem cobrança (regra de negócio da clínica)')
+    // Desconto digitado no modal (o que zerou o total) é persistido na fatura
+    const res = await markInvoiceAsCourtesy(
+      invoice.id,
+      'Procedimento sem cobrança (regra de negócio da clínica)',
+      discountValue + (insuranceSplit?.clinic_discount ?? 0),
+    )
     setSubmittingCourtesy(false)
     if ('error' in res) { setError(res.error); return }
     setConfirmCourtesy(false)

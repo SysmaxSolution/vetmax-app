@@ -34,6 +34,7 @@ const PAYMENT_OPTIONS = [
   { value: 'debit',    label: 'Débito'          },
   { value: 'cash',     label: 'Dinheiro'        },
   { value: 'convenio', label: 'Convênio'        },
+  { value: 'courtesy', label: 'Cortesia'        },
   { value: 'other',    label: 'Outro'           },
 ]
 
