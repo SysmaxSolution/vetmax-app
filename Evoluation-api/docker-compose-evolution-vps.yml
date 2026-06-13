@@ -1,0 +1,158 @@
+# docker-compose-evolution-vps.yml
+# Evolution API — produção em VPS Linux (Ubuntu 22.04 / 24.04)
+#
+# USO:
+#   1. Copie este arquivo para /opt/evolution/docker-compose.yml na VPS
+#   2. Crie /opt/evolution/.env com as variáveis do bloco abaixo
+#   3. docker compose up -d
+#
+# VARIÁVEIS OBRIGATÓRIAS EM .env (não commitar):
+#   EVOLUTION_API_KEY=<sua-api-key>
+#   POSTGRES_PASSWORD=<senha-forte>
+#   REDIS_PASSWORD=<senha-forte>
+#   SERVER_URL=https://api-wpp.sysmaxsolutions.com
+
+services:
+
+  # ─── PostgreSQL 15 ──────────────────────────────────────────────────────────
+  evolution-postgres:
+    image: postgres:15-alpine
+    container_name: evolution-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: evolution
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - evolution_pgdata:/var/lib/postgresql/data
+    networks:
+      - evolution-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d evolution"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    # Evita paginação excessiva em VPS pequenas (1–2 GB RAM)
+    command: >
+      postgres
+        -c shared_buffers=128MB
+        -c max_connections=50
+        -c log_min_duration_statement=2000
+
+  # ─── Redis 7 ────────────────────────────────────────────────────────────────
+  evolution-redis:
+    image: redis:7-alpine
+    container_name: evolution-redis
+    restart: always
+    command: >
+      redis-server
+        --requirepass ${REDIS_PASSWORD}
+        --maxmemory 128mb
+        --maxmemory-policy allkeys-lru
+        --save 60 1
+    volumes:
+      - evolution_redisdata:/data
+    networks:
+      - evolution-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # ─── Evolution API v2.3.7 ───────────────────────────────────────────────────
+  evolution-api:
+    image: evoapicloud/evolution-api:v2.3.7
+    container_name: evolution-api
+    restart: always
+    # Expõe apenas para localhost — Nginx faz o proxy reverso com TLS
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      evolution-postgres:
+        condition: service_healthy
+      evolution-redis:
+        condition: service_healthy
+    networks:
+      - evolution-net
+
+    # ── Patch de compatibilidade (@lid JIDs — WhatsApp Advanced Privacy) ──────
+    # Necessário na v2.3.7 para clínicas com contas de WhatsApp Business
+    # configuradas com privacidade avançada (número oculto nos grupos).
+    # Não remover sem testar com as instâncias existentes primeiro.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        sed -i '/^DATABASE_CONNECTION_URI=/d' /evolution/.env
+        echo "DATABASE_CONNECTION_URI=postgresql://postgres:${POSTGRES_PASSWORD}@evolution-postgres:5432/evolution?schema=public" >> /evolution/.env
+        MAIN=/evolution/dist/main.js
+        sed -i 's/let t={groups:\[\],broadcast:\[\],users:\[\]}/let t={groups:[],broadcast:[],users:[],lid:[]}/' $$MAIN
+        sed -i 's/g===\"status@broadcast\"?t\.broadcast\.push({number:u,jid:g}):t\.users\.push({number:u,jid:g})/g==="status@broadcast"?t.broadcast.push({number:u,jid:g}):g.includes("@lid")?t.lid.push({number:u,jid:g}):t.users.push({number:u,jid:g})/g' $$MAIN
+        sed -i 's/s\.push(\.\.\.t\.broadcast\.map(({jid:u,number:g})=>new ct(u,!1,g)));/s.push(...t.broadcast.map(({jid:u,number:g})=>new ct(u,!1,g)));s.push(...t.lid.map(({jid:u,number:g})=>new ct(u,!0,g)));/g' $$MAIN
+        sed -i 's/!n\.jid\.includes("@broadcast"))throw new f(n)/\!n.jid.includes("@broadcast")\&\&!n.jid.includes("@lid"))throw new f(n)/g' $$MAIN
+        npm run db:deploy && npm run db:generate && npm run start:prod
+
+    environment:
+      # Identidade do servidor
+      SERVER_URL: ${SERVER_URL}
+
+      # Autenticação
+      AUTHENTICATION_TYPE: apikey
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY}
+
+      # Banco de dados
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://postgres:${POSTGRES_PASSWORD}@evolution-postgres:5432/evolution?schema=public
+
+      # Cache Redis
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: redis://:${REDIS_PASSWORD}@evolution-redis:6379
+      CACHE_REDIS_PREFIX_KEY: evolution
+      CACHE_REDIS_SAVE_INSTANCES: "false"
+      CACHE_LOCAL_ENABLED: "false"
+
+      # CORS — necessário para o VetMax chamar a API
+      CORS_ORIGIN: "*"
+      CORS_METHODS: POST,GET,PUT,DELETE
+      CORS_CREDENTIALS: "true"
+
+      # Log — reduzir verbosidade em produção (mantém ERROR + WARN para monitorar)
+      LOG_LEVEL: ERROR,WARN,LOG,WEBHOOKS
+      LOG_COLOR: "false"
+      LOG_BAILEYS: error
+
+      # Fingerprint do cliente WhatsApp — manter igual ao atual para não desconectar sessões
+      CONFIG_SESSION_PHONE_CLIENT: SysVetMax
+      CONFIG_SESSION_PHONE_NAME: Chrome
+      CONFIG_SESSION_PHONE_VERSION: "6.0.0"
+
+    volumes:
+      # CRÍTICO: bind mount (não named volume) para que as sessões WhatsApp
+      # sobrevivam a "docker compose down" e atualizações de imagem.
+      # Em named volume, "docker compose down -v" apaga tudo.
+      - /opt/evolution/instances:/evolution/instances
+
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/ | grep -q 'Evolution API' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+# ─── Volumes nomeados (banco e cache) ─────────────────────────────────────────
+# As instâncias WhatsApp usam bind mount acima (/opt/evolution/instances)
+# para garantir persistência independente do ciclo de vida dos volumes Docker.
+volumes:
+  evolution_pgdata:
+    driver: local
+  evolution_redisdata:
+    driver: local
+
+# ─── Rede interna isolada ────────────────────────────────────────────────────
+networks:
+  evolution-net:
+    driver: bridge
