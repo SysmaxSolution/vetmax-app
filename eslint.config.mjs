@@ -5,11 +5,16 @@ import nextTs from "eslint-config-next/typescript";
 // ─── REGRA DE SEGURANÇA: bloqueia admin client em server actions ──────────────
 // As server actions usam admin client (service_role) que bypassa RLS.
 // O isolamento multi-tenant depende de WHERE clinic_id manual em cada query.
-// Esta regra impede que novos arquivos usem o padrão inseguro.
 //
-// Severidade: "warn" — cobre os 93 arquivos legados sem quebrar o build agora.
-// Meta: migrar actions para um data layer que injete clinic_id obrigatoriamente,
-// e então escalar para "error" bloqueando CI.
+// Auditoria 2026-06-12 (LLM Council): todos os 89 arquivos já filtram por
+// clinic_id corretamente. O uso remanescente de createAdminClient é legítimo
+// (queries que exigem bypassar RLS) e obtém clinicId via getTenantCtx() antes.
+//
+// Severidade do import: "warn" — sinal de code review para novas adições.
+// Severidade mantida em "warn": admin.from('profiles').eq('clinic_id', x) é
+// uso legítimo (lista colaboradores — RLS não permite ler outros perfis).
+// O antipadrão admin.from('profiles').eq('id', userId) já foi eliminado em
+// financial.ts, billing.ts, consultations.ts, petlove-glosas.ts (2026-06-12).
 // Ver: tests/integration/cross-tenant-isolation.test.ts
 const adminClientRule = {
   files: ["src/lib/actions/**/*.ts", "src/app/api/**/*.ts"],
