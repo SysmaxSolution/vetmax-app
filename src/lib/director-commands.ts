@@ -50,7 +50,10 @@ export async function handleDirectorCommand(
     return false
   }
   const normalizedSender = senderPhone.replace(/[^\d]/g, '')
-  if (!normalizedSender || !normalizedSender.endsWith(authorizedPhone.slice(-10))) {
+  // Compara os últimos 11 dígitos (DDD + 9 dígitos) — protege contra ataques de sufixo curto
+  const tail11Auth   = authorizedPhone.slice(-11)
+  const tail11Sender = normalizedSender.slice(-11)
+  if (!normalizedSender || tail11Auth.length < 11 || tail11Auth !== tail11Sender) {
     console.warn(`[Director Commands] Remetente não autorizado: "${senderPhone}" — comando SIM/NAO ignorado`)
     return false
   }

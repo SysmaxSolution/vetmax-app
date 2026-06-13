@@ -72,7 +72,7 @@ async function ensureClinicCreated(user: User): Promise<void> {
     name:          clinicName,
     business_type: pending?.business_type ?? 'vet_clinic',
   }
-  if (pending?.cnpj) insertData.cnpj = pending.cnpj
+  if (pending?.cnpj && isValidCnpj(pending.cnpj)) insertData.cnpj = pending.cnpj
 
   const { data: clinic, error: clinicErr } = await admin
     .from('clinics')
@@ -215,4 +215,16 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.redirect(`${origin}/login?error=auth_callback_failed`)
+}
+
+function isValidCnpj(raw: string): boolean {
+  const d = raw.replace(/\D/g, '')
+  if (d.length !== 14 || /^(\d)\1+$/.test(d)) return false
+  const calc = (s: string, weights: number[]) =>
+    weights.reduce((sum, w, i) => sum + parseInt(s[i]) * w, 0)
+  const r1 = calc(d, [5,4,3,2,9,8,7,6,5,4,3,2])
+  const v1 = r1 % 11 < 2 ? 0 : 11 - (r1 % 11)
+  const r2 = calc(d, [6,5,4,3,2,9,8,7,6,5,4,3,2])
+  const v2 = r2 % 11 < 2 ? 0 : 11 - (r2 % 11)
+  return parseInt(d[12]) === v1 && parseInt(d[13]) === v2
 }

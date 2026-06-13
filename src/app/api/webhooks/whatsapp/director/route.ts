@@ -23,9 +23,11 @@ export async function POST(request: NextRequest) {
   const jid    = key?.remoteJid as string | undefined
   const sender = jid?.replace('@s.whatsapp.net', '').replace('@c.us', '').replace(/\D/g, '') ?? ''
 
-  // Só aceita mensagens do número do Diretor
+  // Só aceita mensagens do número do Diretor (compara últimos 11 dígitos: DDD + 9 dígitos BR)
   const alertPhone = (process.env.P0_ALERT_PHONE ?? '').replace(/\D/g, '')
-  if (!alertPhone || !sender.endsWith(alertPhone.slice(-10))) {
+  const tail11Auth   = alertPhone.slice(-11)
+  const tail11Sender = sender.slice(-11)
+  if (!alertPhone || tail11Auth.length < 11 || tail11Auth !== tail11Sender) {
     return NextResponse.json({ received: true })
   }
 

@@ -3,10 +3,11 @@ services:
     image: postgres:15-alpine
     container_name: evolution-postgres
     restart: unless-stopped
+    env_file: .env
     environment:
       - POSTGRES_DB=evolution
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=Sysmax2026
+      - POSTGRES_PASSWORD=${EVOLUTION_POSTGRES_PASSWORD}
     volumes:
       - evolution_pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -19,11 +20,13 @@ services:
     image: redis:7-alpine
     container_name: evolution-redis
     restart: unless-stopped
-    command: redis-server --requirepass Sysmax2026
+    env_file: .env
+    command: >
+      sh -c "redis-server --requirepass $$EVOLUTION_REDIS_PASSWORD"
     volumes:
       - evolution_redisdata:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "Sysmax2026", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a $$EVOLUTION_REDIS_PASSWORD ping"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -32,6 +35,7 @@ services:
     image: evoapicloud/evolution-api:v2.3.7
     container_name: evolution-api
     restart: unless-stopped
+    env_file: .env
     ports:
       - "8080:8080"
     depends_on:
@@ -47,7 +51,7 @@ services:
       - -c
       - |
         sed -i '/^DATABASE_CONNECTION_URI=/d' /evolution/.env
-        echo 'DATABASE_CONNECTION_URI=postgresql://postgres:Sysmax2026@evolution-postgres:5432/evolution?schema=public' >> /evolution/.env
+        echo "DATABASE_CONNECTION_URI=postgresql://postgres:${EVOLUTION_POSTGRES_PASSWORD}@evolution-postgres:5432/evolution?schema=public" >> /evolution/.env
         MAIN=/evolution/dist/main.js
         sed -i 's/let t={groups:\[\],broadcast:\[\],users:\[\]}/let t={groups:[],broadcast:[],users:[],lid:[]}/' $$MAIN
         sed -i 's/g===\"status@broadcast\"?t\.broadcast\.push({number:u,jid:g}):t\.users\.push({number:u,jid:g})/g==="status@broadcast"?t.broadcast.push({number:u,jid:g}):g.includes("@lid")?t.lid.push({number:u,jid:g}):t.users.push({number:u,jid:g})/g' $$MAIN
@@ -57,14 +61,14 @@ services:
     environment:
       - SERVER_URL=https://wpp.sysmaxsolutions.com
       - AUTHENTICATION_TYPE=apikey
-      - AUTHENTICATION_API_KEY=Sysmax@2026#
+      - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY}
       # Database
       - DATABASE_ENABLED=true
       - DATABASE_PROVIDER=postgresql
-      - DATABASE_CONNECTION_URI=postgresql://postgres:Sysmax2026@evolution-postgres:5432/evolution?schema=public
+      - DATABASE_CONNECTION_URI=postgresql://postgres:${EVOLUTION_POSTGRES_PASSWORD}@evolution-postgres:5432/evolution?schema=public
       # Cache Redis
       - CACHE_REDIS_ENABLED=true
-      - CACHE_REDIS_URI=redis://:Sysmax2026@evolution-redis:6379
+      - CACHE_REDIS_URI=redis://:${EVOLUTION_REDIS_PASSWORD}@evolution-redis:6379
       - CACHE_REDIS_PREFIX_KEY=evolution
       - CACHE_REDIS_SAVE_INSTANCES=false
       - CACHE_LOCAL_ENABLED=false

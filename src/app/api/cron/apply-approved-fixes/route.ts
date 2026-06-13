@@ -23,7 +23,7 @@ export const maxDuration = 300
 
 async function authorize(request: NextRequest): Promise<boolean> {
   const secret = process.env.CRON_SECRET
-  if (!secret) return true // dev: sem secret configurado
+  if (!secret) return false
   const auth = request.headers.get('authorization')
   return auth === `Bearer ${secret}`
 }

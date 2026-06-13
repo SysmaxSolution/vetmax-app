@@ -10,11 +10,8 @@ import { generateCampaignMessage } from '@/lib/ai/campaign-agent'
 export async function GET(request: NextRequest) {
   // ── Auth ───────────────────────────────────────────────────────────────────
   const secret = process.env.CRON_SECRET
-  if (secret) {
-    const auth = request.headers.get('authorization')
-    if (auth !== `Bearer ${secret}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+  if (!secret || request.headers.get('authorization') !== `Bearer ${secret}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const admin = createAdminClient()
