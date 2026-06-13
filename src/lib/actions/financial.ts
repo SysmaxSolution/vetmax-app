@@ -2,6 +2,7 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
+import { getTenantCtx } from '@/lib/data/context'
 
 // ─── Types base (G-09) ────────────────────────────────────────────────────────
 
@@ -215,17 +216,9 @@ export interface CreateEmployeeData {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 async function getClinicIdAndRole(): Promise<{ clinicId: string; role: string } | null> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
-  const admin = createAdminClient()
-  const { data } = await admin
-    .from('profiles')
-    .select('clinic_id, role')
-    .eq('id', user.id)
-    .single()
-  if (!data?.clinic_id) return null
-  return { clinicId: data.clinic_id, role: data.role }
+  const ctx = await getTenantCtx()
+  if (!ctx) return null
+  return { clinicId: ctx.clinicId, role: ctx.role }
 }
 
 async function getClinicId(): Promise<string | null> {

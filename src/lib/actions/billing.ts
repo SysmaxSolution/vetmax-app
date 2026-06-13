@@ -1468,10 +1468,10 @@ export async function listInvoiceDuplicatas(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Não autenticado.' }
 
-  const admin = createAdminClient()
-  const { data: profile } = await admin.from('profiles').select('clinic_id').eq('id', user.id).single()
+  const { data: profile } = await supabase.from('profiles').select('clinic_id').eq('id', user.id).single()
   if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
 
+  const admin = createAdminClient()
   const { data, error } = await admin
     .from('financial_entries')
     .select('id, amount, status, source, payment_method, payment_date, due_date, description, is_clinic_discount, created_at')

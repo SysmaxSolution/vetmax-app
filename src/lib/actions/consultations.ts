@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache'
 import type { CheckInPayload, VisitReason, PaymentStatus } from '@/types'
 import { logAudit } from './audit'
 import { updatePatientWeight } from './patient-weight'
+import { getTenantCtx } from '@/lib/data/context'
 
 // ─── Check-in Avançado: cria/atualiza consulta com motivo e pagamento ───────
 export async function checkInPatientAdvanced(
@@ -428,18 +429,15 @@ export async function getReceptionHistory(): Promise<ReceptionHistoryItem[] | { 
 export async function moveToTriage(
   consultationId: string
 ): Promise<{ error: string } | null> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Não autenticado.' }
+  const ctx = await getTenantCtx()
+  if (!ctx) return { error: 'Não autenticado.' }
 
   const adminC = createAdminClient()
-  const { data: prof } = await adminC.from('profiles').select('clinic_id').eq('id', user.id).single()
-
   const { error } = await adminC
     .from('consultations')
     .update({ status: 'triage', updated_at: new Date().toISOString() })
     .eq('id', consultationId)
-    .eq('clinic_id', prof?.clinic_id)
+    .eq('clinic_id', ctx.clinicId)
 
   if (error) return { error: 'Erro ao mover para triagem: ' + error.message }
   revalidatePath('/dashboard/reception')
@@ -451,18 +449,15 @@ export async function moveToTriage(
 export async function moveDirectToVet(
   consultationId: string
 ): Promise<{ error: string } | null> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Não autenticado.' }
+  const ctx = await getTenantCtx()
+  if (!ctx) return { error: 'Não autenticado.' }
 
   const adminC = createAdminClient()
-  const { data: prof } = await adminC.from('profiles').select('clinic_id').eq('id', user.id).single()
-
   const { error } = await adminC
     .from('consultations')
     .update({ status: 'in_progress', updated_at: new Date().toISOString() })
     .eq('id', consultationId)
-    .eq('clinic_id', prof?.clinic_id)
+    .eq('clinic_id', ctx.clinicId)
 
   if (error) return { error: 'Erro ao enviar ao consultório: ' + error.message }
   revalidatePath('/dashboard/reception')
@@ -482,19 +477,15 @@ export async function rescheduleConsultation(
     return { error: 'A nova data deve ser futura.' }
   }
 
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Não autenticado.' }
+  const ctx = await getTenantCtx()
+  if (!ctx) return { error: 'Não autenticado.' }
 
   const admin = createAdminClient()
-  const { data: prof } = await admin.from('profiles').select('clinic_id').eq('id', user.id).single()
-  if (!prof?.clinic_id) return { error: 'Perfil sem clínica.' }
-
   const { data: current } = await admin
     .from('consultations')
     .select('status')
     .eq('id', consultationId)
-    .eq('clinic_id', prof.clinic_id)
+    .eq('clinic_id', ctx.clinicId)
     .single()
   if (!current) return { error: 'Atendimento não encontrado.' }
   const allowed = ['reception', 'scheduled', 'scheduled_future']
@@ -510,7 +501,7 @@ export async function rescheduleConsultation(
       updated_at:     new Date().toISOString(),
     })
     .eq('id', consultationId)
-    .eq('clinic_id', prof.clinic_id)
+    .eq('clinic_id', ctx.clinicId)
 
   if (error) return { error: 'Erro ao reagendar: ' + error.message }
 

@@ -43,10 +43,9 @@ async function getCtx(): Promise<Ctx | { error: string }> {
   const sb = await createClient()
   const { data: { user } } = await sb.auth.getUser()
   if (!user) return { error: 'Não autenticado.' }
-  const admin = createAdminClient()
-  const { data: profile } = await admin.from('profiles').select('clinic_id').eq('id', user.id).single()
+  const { data: profile } = await sb.from('profiles').select('clinic_id').eq('id', user.id).single()
   if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
-  return { supabase: admin, clinicId: profile.clinic_id }
+  return { supabase: createAdminClient(), clinicId: profile.clinic_id }
 }
 
 const REASON_LABELS: Record<GlosaReason, string> = {

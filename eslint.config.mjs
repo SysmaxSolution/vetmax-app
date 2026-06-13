@@ -22,8 +22,9 @@ const adminClientRule = {
             group: ["**/supabase/admin", "@/lib/supabase/admin"],
             message:
               "[SECURITY] server actions não devem importar createAdminClient diretamente. " +
-              "Use o data layer com clinic_id injetado (src/lib/data/) ou o createClient() com RLS ativo. " +
-              "TC-CROSS-09 do cross-tenant-isolation.test.ts documenta o risco.",
+              "Para obter o clinic_id do usuário: use requireTenantCtx() de @/lib/data/context (RLS, sem admin). " +
+              "Para queries que precisam bypassar RLS: crie o admin DEPOIS de obter clinicId via getTenantCtx(), " +
+              "sempre incluindo .eq('clinic_id', clinicId). TC-CROSS-09 em tests/integration/cross-tenant-isolation.test.ts.",
           },
         ],
       },
