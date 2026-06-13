@@ -86,16 +86,12 @@ export default function PetloveReconciliationClient({
   }
 
   const handleFile = useCallback(async (file: File) => {
-    // Aceita .xlsx, .xlsm e .xls (Excel 97-2003 — formato legado ainda usado
-    // por algumas telas do portal Petlove). Se o arquivo veio sem extensão
-    // reconhecida, ainda tentamos no servidor — o parser detecta pelo
-    // conteúdo (magic bytes) e mostra erro útil se não bater.
     const ext = (file.name.match(/\.([^.]+)$/)?.[1] ?? '').toLowerCase()
     const accepted = ['xlsx', 'xlsm', 'xls']
     if (ext && !accepted.includes(ext)) {
       setStatus({
         kind: 'error',
-        message: `Arquivo .${ext} não é aceito — a Petlove exporta em .xlsx (moderno) ou .xls (legado). Re-baixe no portal e tente novamente.`,
+        message: `Arquivo .${ext} não é aceito — a Petlove exporta em .xlsx. Re-baixe no portal e tente novamente.`,
       })
       return
     }

@@ -1,7 +1,6 @@
 'use server'
 
 import ExcelJS from 'exceljs'
-import * as XLSX from 'xlsx'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
@@ -144,9 +143,8 @@ function cellText(v: unknown): string | null {
 // Roteador: detecta o formato da planilha (fechada com Resumo+Extrato ou
 // aberta com aba única "Worksheet") e delega para o parser específico.
 //
-// Aceita .xlsx/.xlsm (formato OOXML — ZIP) e .xls antigo (CFB/OLE compound).
-// Para .xls, converte internamente para .xlsx via SheetJS preservando datas e
-// números, depois carrega no ExcelJS para reusar o pipeline existente.
+// Aceita .xlsx/.xlsm (formato OOXML — ZIP). Arquivos .xls retornam erro orientando
+// o usuário a salvar em .xlsx via Excel/Sheets (suporte a CFB removido por CVE).
 
 function detectSpreadsheetFormat(buf: ArrayBuffer): 'ooxml' | 'cfb' | 'unknown' {
   const bytes = new Uint8Array(buf, 0, Math.min(8, buf.byteLength))
@@ -171,17 +169,14 @@ async function loadWorkbookFromBuffer(buffer: ArrayBuffer): Promise<ExcelJS.Work
   }
 
   if (fmt === 'cfb') {
-    try {
-      const xls = XLSX.read(buffer, { type: 'array', cellDates: true })
-      const xlsxBuf = XLSX.write(xls, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer
-      await wb.xlsx.load(xlsxBuf)
-      return wb
-    } catch (err) {
-      return { error: `Arquivo .xls antigo inválido ou corrompido: ${err instanceof Error ? err.message : 'erro desconhecido'}` }
+    return {
+      error:
+        'O formato .xls (Excel 97-2003) não é mais suportado. ' +
+        'Abra o arquivo no Excel, Google Sheets ou LibreOffice e salve como .xlsx, depois tente novamente.',
     }
   }
 
-  return { error: 'Formato não reconhecido. Aceito: .xlsx, .xlsm, .xls (Excel 97-2003).' }
+  return { error: 'Formato não reconhecido. Aceito: .xlsx ou .xlsm (Excel moderno).' }
 }
 
 export async function parsePetloveXlsx(buffer: ArrayBuffer): Promise<PetloveRemittanceAST | { error: string }> {
@@ -670,22 +665,15 @@ export async function uploadAndStagePetloveRemittance(
   if (!(file instanceof File)) return { error: 'Nenhum arquivo enviado.' }
   if (file.size > 10 * 1024 * 1024) return { error: 'Arquivo excede 10 MB.' }
 
-  // Aceita .xlsx/.xlsm/.xls. Se a extensão for outra, ainda tentamos parsear
-  // (alguns usuários salvam sem extensão) — o parser detecta pela magic byte.
   const ext = (file.name.match(/\.([^.]+)$/)?.[1] ?? '').toLowerCase()
   const recognizedExt = ['xlsx', 'xlsm', 'xls'].includes(ext)
   if (!recognizedExt && ext) {
-    return { error: `Extensão ".${ext}" não é aceita. A Petlove exporta em .xlsx (moderno) ou .xls (legado). Re-baixe a planilha no portal e tente novamente.` }
+    return { error: `Extensão ".${ext}" não é aceita. A Petlove exporta em .xlsx — re-baixe a planilha no portal e tente novamente.` }
   }
 
   const buffer = await file.arrayBuffer()
   const parsed = await parsePetloveXlsx(buffer)
-  if ('error' in parsed) {
-    const hint = ext === 'xls'
-      ? ' Dica: o arquivo .xls antigo deve ter sido baixado direto do portal Petlove — se foi exportado por outra ferramenta, abra no Excel e salve como .xlsx.'
-      : ''
-    return { error: parsed.error + hint }
-  }
+  if ('error' in parsed) return { error: parsed.error }
 
   const staged = await stageRemittance(parsed)
   if ('error' in staged) return staged
