@@ -60,7 +60,12 @@ async function openPrescriptionForm(page: Page, consultationId: string): Promise
   await page.goto(`/dashboard/vet/${consultationId}`);
   await page.waitForTimeout(2_000);
 
-  const prescTabBtn = page.locator('button').filter({ hasText: /prescrição/i }).first();
+  // Aba "Prescrição" tem role="tab" (não button). Selecionar via getByRole para
+  // cobrir tanto a marcação correta quanto fallback para qualquer elemento clicável.
+  const prescTabBtn = page.getByRole('tab', { name: /prescrição/i })
+    .or(page.locator('[role="tab"]').filter({ hasText: /prescrição/i }).first())
+    .or(page.locator('button').filter({ hasText: /prescrição/i }).first())
+    .first();
   if (!(await prescTabBtn.isVisible({ timeout: 8_000 }).catch(() => false))) {
     console.log('C01: Aba Prescrição não encontrada');
     return false;

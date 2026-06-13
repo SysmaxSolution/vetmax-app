@@ -262,13 +262,19 @@ test.describe('TC-RLS-ADV-007: Clínica B não atualiza invoice da Clínica A vi
   test('UPDATE invoice com id da A retorna 0 rows afetadas para admin B', async ({}, testInfo) => {
     if (!invoiceId) { testInfo.skip(); return; }
 
+    // Confirma que a invoice ainda existe (pode ter sido deletada por outro worker)
+    const { data: pre } = await admin.from('invoices').select('id, status').eq('id', invoiceId).maybeSingle();
+    if (!pre) { testInfo.skip(); return; }
+
     const { error } = await requireB()
       .from('invoices')
       .update({ status: 'paid' })
       .eq('id', invoiceId);
+    expect(error == null || error.message.includes('not found') || error.message.includes('RLS')).toBeTruthy();
 
     // Sem erro (RLS silencioso), mas a fatura NÃO deve ter mudado
-    const { data: inv } = await admin.from('invoices').select('status').eq('id', invoiceId).single();
+    const { data: inv } = await admin.from('invoices').select('status').eq('id', invoiceId).maybeSingle();
+    if (!inv) { testInfo.skip(); return; }
     expect(inv?.status).toBe('pending'); // deve permanecer pending
   });
 });

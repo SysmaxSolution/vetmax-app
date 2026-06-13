@@ -150,10 +150,12 @@ const client = new pg.Client({
     }
     await client.query(`DELETE FROM pet_insurance WHERE patient_id = $1`, [DUPLICATE])
 
-    // 7) Atualiza chip do original se estava vazio
+    // 7) Atualiza chip do original se estava vazio.
+    //    Cast explícito porque microchip_id é varchar e microchip é text —
+    //    sem cast o node-postgres rejeita "inconsistent types deduced".
     if (willFillChip) {
       await client.query(
-        `UPDATE patients SET microchip_id = $1, microchip = $1 WHERE id = $2`,
+        `UPDATE patients SET microchip_id = $1::varchar, microchip = $1::text WHERE id = $2`,
         [dupChip, ORIGINAL])
     }
 

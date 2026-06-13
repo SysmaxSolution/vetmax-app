@@ -316,12 +316,14 @@ test.describe('TC-AUTH-011: Token de convite inválido exibe tela de erro', () =
     await page.goto('/invite/token-invalido-xyz-000')
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {})
 
-    const errorVisible = await Promise.race([
-      page.getByText(/inválido|expirado|not found|erro|invalid/i).isVisible({ timeout: 8_000 }).catch(() => false),
-      page.getByRole('heading', { name: /erro|inválido|expirado/i }).isVisible({ timeout: 8_000 }).catch(() => false),
-      // 404 page
+    // Promise.race com isVisible() é problemático: a primeira que resolver `false`
+    // vence e ignora as outras. Usar Promise.all + .some() captura corretamente.
+    const candidateChecks = await Promise.all([
+      page.getByText(/inválido|expirado|not found|erro|invalid|indispon[íi]vel|n[ãa]o encontrad/i).first().isVisible({ timeout: 8_000 }).catch(() => false),
+      page.getByRole('heading', { name: /erro|inválido|expirado|indispon[íi]vel|n[ãa]o encontrad/i }).isVisible({ timeout: 8_000 }).catch(() => false),
       page.getByText(/404|página não encontrada/i).isVisible({ timeout: 8_000 }).catch(() => false),
     ])
+    const errorVisible = candidateChecks.some(Boolean)
 
     // A página não deve travar ou exibir stack trace — qualquer erro gracioso é válido
     const isServerError = await page.getByText(/500|internal server error/i).isVisible({ timeout: 2_000 }).catch(() => false)

@@ -148,7 +148,7 @@ async function openHospitalizationEvolutionModal(page: Page): Promise<boolean> {
   }
 
   // Tentar via card
-  const card = page.locator('[data-testid*="hosp-card"], [class*="hospitalization-card"], [class*="patient-card"]').first();
+  const card = page.locator('[data-testid*="hospitalization-card"], [class*="hospitalization-card"], [class*="patient-card"]').first();
   const cardVisible = await card.isVisible({ timeout: 5_000 }).catch(() => false);
   if (cardVisible) {
     await card.click();

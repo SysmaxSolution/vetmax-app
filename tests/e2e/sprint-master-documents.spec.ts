@@ -269,7 +269,7 @@ test.describe('TC-DOC-04: Prescrição pode ser impressa/exportada', () => {
     await page.waitForTimeout(2_000);
 
     // Navegar para aba de prescrição
-    const prescTab = page.locator('button').filter({ hasText: /prescrição/i }).first();
+    const prescTab = page.getByRole('tab', { name: /prescrição/i }).or(page.locator('[role="tab"]').filter({ hasText: /prescrição/i }).first()).or(page.locator('button').filter({ hasText: /prescrição/i }).first()).first();
     const prescTabVisible = await prescTab.isVisible({ timeout: 8_000 }).catch(() => false);
     if (!prescTabVisible) {
       console.log('TC-DOC-04: SKIP — Aba Prescrição não encontrada');

@@ -69,8 +69,8 @@ async function openHospitalizationCard(page: Page, hospId: string): Promise<bool
   await page.goto('/dashboard/hospitalization', { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(2_000);
 
-  const cardLocator = page.locator(`[data-testid="hosp-card-${hospId}"]`)
-    .or(page.locator('[data-testid^="hosp-card"]').filter({ hasText: 'Rex' }).first())
+  const cardLocator = page.locator(`[data-testid="hospitalization-card-${hospId}"]`)
+    .or(page.locator('[data-testid^="hospitalization-card"]').filter({ hasText: 'Rex' }).first())
     .or(page.getByText('Rex').first());
 
   const cardVisible = await cardLocator.isVisible({ timeout: 8_000 }).catch(() => false);

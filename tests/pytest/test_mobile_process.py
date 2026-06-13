@@ -162,19 +162,17 @@ class TestIntentMapRouteIntegrity:
 class TestMentorApiWithAuth:
     """Testa o endpoint /api/mentor-chat com autenticação válida."""
 
-    def test_authenticated_request_returns_200(self, base_url: str, auth_headers: dict):
-        resp = requests.post(
+    def test_authenticated_request_returns_200(self, base_url: str, web_session):
+        resp = web_session.post(
             f"{base_url}/api/mentor-chat",
-            headers=auth_headers,
             json={"question": "como fazer triagem?"},
             timeout=30,
         )
         assert resp.status_code == 200
 
-    def test_authenticated_response_structure(self, base_url: str, auth_headers: dict):
-        resp = requests.post(
+    def test_authenticated_response_structure(self, base_url: str, web_session):
+        resp = web_session.post(
             f"{base_url}/api/mentor-chat",
-            headers=auth_headers,
             json={"question": "como registrar um animal?"},
             timeout=30,
         )
@@ -182,13 +180,12 @@ class TestMentorApiWithAuth:
         data = resp.json()
         assert "answer" in data, f"Campo 'answer' ausente: {data}"
 
-    def test_mobile_ua_with_auth_returns_200(self, base_url: str, auth_headers: dict):
+    def test_mobile_ua_with_auth_returns_200(self, base_url: str, web_session):
         """User-Agent mobile não deve afetar resposta da API autenticada."""
         ua = "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15"
-        headers_with_ua = {**auth_headers, "User-Agent": ua}
-        resp = requests.post(
+        resp = web_session.post(
             f"{base_url}/api/mentor-chat",
-            headers=headers_with_ua,
+            headers={"User-Agent": ua},
             json={"question": "como usar o sistema?"},
             timeout=30,
         )

@@ -178,7 +178,7 @@ test.describe('TC-REG-03: Prescrição legada sem via de administração não qu
     expect(crashed).toBe(false);
 
     // Navegar para aba de prescrição
-    const prescTab = page.locator('button').filter({ hasText: /prescrição/i }).first();
+    const prescTab = page.getByRole('tab', { name: /prescrição/i }).or(page.locator('[role="tab"]').filter({ hasText: /prescrição/i }).first()).or(page.locator('button').filter({ hasText: /prescrição/i }).first()).first();
     const prescTabVisible = await prescTab.isVisible({ timeout: 8_000 }).catch(() => false);
     if (!prescTabVisible) {
       console.log('TC-REG-03: Aba de prescrição não encontrada — verificando que a página não crashou');
@@ -464,7 +464,7 @@ test.describe('TC-REG-10 (Crítico): Prescrição controlada sinaliza Receituár
     await page.goto(`/dashboard/vet/${consultationId}`);
     await page.waitForTimeout(2_000);
 
-    const prescTab = page.locator('button').filter({ hasText: /prescrição/i }).first();
+    const prescTab = page.getByRole('tab', { name: /prescrição/i }).or(page.locator('[role="tab"]').filter({ hasText: /prescrição/i }).first()).or(page.locator('button').filter({ hasText: /prescrição/i }).first()).first();
     const prescTabVisible = await prescTab.isVisible({ timeout: 8_000 }).catch(() => false);
     if (!prescTabVisible) {
       console.log('TC-REG-10: SKIP — Aba de prescrição não encontrada');
@@ -643,7 +643,7 @@ test.describe('TC-REG-13: Prescrição iv + controlado exibe Receituário Azul E
     await page.goto(`/dashboard/vet/${consultationId}`);
     await page.waitForTimeout(2_000);
 
-    const prescTab = page.locator('button').filter({ hasText: /prescrição/i }).first();
+    const prescTab = page.getByRole('tab', { name: /prescrição/i }).or(page.locator('[role="tab"]').filter({ hasText: /prescrição/i }).first()).or(page.locator('button').filter({ hasText: /prescrição/i }).first()).first();
     if (!(await prescTab.isVisible({ timeout: 8_000 }).catch(() => false))) {
       console.log('TC-REG-13: SKIP — Aba de prescrição não encontrada');
       testInfo.skip();

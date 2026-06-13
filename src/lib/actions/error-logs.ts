@@ -6,6 +6,36 @@ import type { ErrorSource, ErrorPriority } from '@/lib/error-logger'
 import { computeFingerprint } from '@/lib/error-logger'
 import { runAutoFixCycle } from '@/lib/fix-planner'
 import { sendP0FixPlanAlert } from '@/lib/p0-alert'
+import { getAppUrl } from '@/lib/app-url'
+
+/**
+ * Dispara aplicação do plano em background (fire-and-forget).
+ *
+ * Chama o endpoint /api/cron/apply-approved-fixes com planId específico,
+ * sem aguardar resposta. Se o disparo falhar, o cron periódico (a cada 15min
+ * via vercel.json) pegará o plano "approved" preso e processará depois.
+ */
+function triggerBackgroundApply(planId: string): void {
+  const url    = `${getAppUrl()}/api/cron/apply-approved-fixes`
+  const secret = process.env.CRON_SECRET
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (secret) headers.Authorization = `Bearer ${secret}`
+
+  // Fire-and-forget — não aguarda response para não bloquear o caller.
+  // Erros de rede são silenciados: o cron periódico recupera o plano.
+  fetch(url, {
+    method:  'POST',
+    headers,
+    body:    JSON.stringify({ planId }),
+    // Use AbortSignal.timeout para impedir que a request fique pendurada > 5s
+    signal:  AbortSignal.timeout(5_000),
+  }).then(() => {
+    console.info(`[error-logs] Background apply disparado para plano ${planId}`)
+  }).catch((e: unknown) => {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.warn(`[error-logs] Disparo background apply falhou (cron periódico recupera): ${msg}`)
+  })
+}
 
 export interface ErrorLogEntry {
   path: string
@@ -248,6 +278,12 @@ export async function approveFixPlan(
       .eq('status', 'pending_approval')
 
     if (error) return { error: 'Erro ao aprovar: ' + error.message }
+
+    // Dispara aplicação em background (fire-and-forget). Se o disparo falhar,
+    // o cron periódico (a cada 15min via vercel.json) pegará planos approved
+    // e os processará.
+    triggerBackgroundApply(planId)
+
     return { success: true }
   } catch {
     return { error: 'Erro inesperado.' }
@@ -370,6 +406,33 @@ export async function resolveAllErrors(): Promise<
     return { resolved: count ?? 0 }
   } catch {
     return { error: 'Erro inesperado.' }
+  }
+}
+
+/**
+ * Action manual para forçar aplicação imediata de um plano aprovado.
+ * Útil quando o fire-and-forget falhou e o usuário não quer esperar o cron.
+ */
+export async function retryApplyApprovedFixPlan(
+  planId: string,
+): Promise<{ success: true } | { error: string }> {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: 'Não autenticado.' }
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    if (!['admin', 'manager'].includes(profile?.role ?? '')) return { error: 'Sem permissão.' }
+
+    triggerBackgroundApply(planId)
+    return { success: true }
+  } catch {
+    return { error: 'Erro ao disparar aplicação.' }
   }
 }
 

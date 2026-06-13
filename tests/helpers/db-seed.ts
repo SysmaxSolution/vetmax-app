@@ -10,6 +10,9 @@ export async function seedClinics(): Promise<void> {
       id: fixtures.clinics.clinicA.id,
       name: fixtures.clinics.clinicA.name,
       status: 'active',
+      // logo_url preenchido para desabilitar OnboardingWizard automático,
+      // que bloqueia interação de E2E com modal "Bem-vindo" + overlay.
+      logo_url: 'https://placehold.co/200x200/png?text=Alfa',
       // Módulos completos para cobrir todos os testes E2E da suite
       active_modules: [
         'reception', 'triage', 'consultation', 'exams',
@@ -20,9 +23,25 @@ export async function seedClinics(): Promise<void> {
       id: fixtures.clinics.clinicB.id,
       name: fixtures.clinics.clinicB.name,
       status: 'active',
+      logo_url: 'https://placehold.co/200x200/png?text=Beta',
       active_modules: ['reception', 'grooming', 'consultation', 'triage'],
     },
   ]);
+
+  // Assinatura ENTERPRISE (= todas as rotas liberadas via access-matrix) para clínicas A e B.
+  // Sem isso, dashboard/template.tsx renderiza <PremiumPaywall> e quebra todos os specs.
+  await admin.from('tenant_subscriptions').upsert([
+    {
+      clinic_id: fixtures.clinics.clinicA.id,
+      plan_name: 'enterprise',
+      status:    'active',
+    },
+    {
+      clinic_id: fixtures.clinics.clinicB.id,
+      plan_name: 'enterprise',
+      status:    'active',
+    },
+  ], { onConflict: 'clinic_id' });
 }
 
 export async function seedUsers(): Promise<Record<string, string>> {

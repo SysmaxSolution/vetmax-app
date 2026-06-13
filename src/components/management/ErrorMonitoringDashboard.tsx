@@ -5,7 +5,7 @@ import {
   Activity, RefreshCw, AlertTriangle, AlertCircle, Info,
   ChevronRight, FileText, CheckCircle2, XCircle, Clock, Bug, Zap, MessageSquare, Trash2,
 } from 'lucide-react'
-import { getUnresolvedErrors, getFixPlans, approveFixPlan, rejectFixPlan, triggerFixPlanGeneration, resendPlanNotification, resolveError, resolveAllErrors } from '@/lib/actions/error-logs'
+import { getUnresolvedErrors, getFixPlans, approveFixPlan, rejectFixPlan, triggerFixPlanGeneration, resendPlanNotification, resolveError, resolveAllErrors, retryApplyApprovedFixPlan } from '@/lib/actions/error-logs'
 import FixPlanSlideOver from './FixPlanSlideOver'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -79,6 +79,7 @@ export default function ErrorMonitoringDashboard() {
   const [resending,     setResending]     = useState<string | null>(null)
   const [resolvingId,   setResolvingId]   = useState<string | null>(null)
   const [resolvingAll,  setResolvingAll]  = useState(false)
+  const [applyingNow,   setApplyingNow]   = useState<string | null>(null)
   const [,             startTransition]   = useTransition()
 
   const showToast = (type: 'ok' | 'err', msg: string) => {
@@ -154,6 +155,19 @@ export default function ErrorMonitoringDashboard() {
       showToast('ok', 'Notificação WhatsApp re-enviada com sucesso.')
     }
     setResending(null)
+  }
+
+  async function handleApplyNow(planId: string) {
+    setApplyingNow(planId)
+    const res = await retryApplyApprovedFixPlan(planId)
+    if ('error' in res) {
+      showToast('err', res.error)
+    } else {
+      showToast('ok', 'Aplicação disparada em background. Acompanhe o status nesta tela.')
+      // Reload em alguns segundos para refletir status atualizado
+      setTimeout(() => { load() }, 4_000)
+    }
+    setApplyingNow(null)
   }
 
   async function handleApprove(planId: string) {
@@ -302,7 +316,14 @@ export default function ErrorMonitoringDashboard() {
                 onResend={handleResend}
               />
             )}
-            {subTab === 'history' && <HistoryTab plans={historyPlans} onView={p => setSelectedPlan(p)} />}
+            {subTab === 'history' && (
+              <HistoryTab
+                plans={historyPlans}
+                onView={p => setSelectedPlan(p)}
+                onApplyNow={handleApplyNow}
+                applyingNow={applyingNow}
+              />
+            )}
           </>
         )}
       </div>
@@ -533,7 +554,12 @@ function PendingPlansTab({
 
 // ─── Sub-tab: Histórico ───────────────────────────────────────────────────────
 
-function HistoryTab({ plans, onView }: { plans: FixPlan[]; onView: (p: FixPlan) => void }) {
+function HistoryTab({ plans, onView, onApplyNow, applyingNow }: {
+  plans: FixPlan[]
+  onView: (p: FixPlan) => void
+  onApplyNow?: (id: string) => void
+  applyingNow?: string | null
+}) {
   if (plans.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-slate-400 gap-3">
@@ -547,7 +573,7 @@ function HistoryTab({ plans, onView }: { plans: FixPlan[]; onView: (p: FixPlan) 
   return (
     <div className="space-y-3">
       {plans.map(plan => (
-        <PlanCard key={plan.id} plan={plan} actionId={null} resending={null} onView={onView} showActions={false} />
+        <PlanCard key={plan.id} plan={plan} actionId={null} resending={null} onView={onView} onApplyNow={onApplyNow} applyingNow={applyingNow} showActions={false} />
       ))}
     </div>
   )
@@ -556,16 +582,18 @@ function HistoryTab({ plans, onView }: { plans: FixPlan[]; onView: (p: FixPlan) 
 // ─── Plan Card ────────────────────────────────────────────────────────────────
 
 function PlanCard({
-  plan, actionId, resending, onView, onApprove, onReject, onResend, showActions,
+  plan, actionId, resending, onView, onApprove, onReject, onResend, onApplyNow, applyingNow, showActions,
 }: {
   plan: FixPlan
-  actionId:   string | null
-  resending?: string | null
-  onView:     (p: FixPlan) => void
-  onApprove?: (id: string) => void
-  onReject?:  (id: string) => void
-  onResend?:  (id: string) => void
-  showActions: boolean
+  actionId:    string | null
+  resending?:  string | null
+  applyingNow?: string | null
+  onView:       (p: FixPlan) => void
+  onApprove?:   (id: string) => void
+  onReject?:    (id: string) => void
+  onResend?:    (id: string) => void
+  onApplyNow?:  (id: string) => void
+  showActions:  boolean
 }) {
   const priority = plan.priority as 'P0' | 'P1' | 'P2'
   const statusCfg = STATUS_CFG[plan.status] ?? { label: plan.status, cls: 'bg-slate-100 text-slate-600' }
@@ -618,13 +646,30 @@ function PlanCard({
         </button>
       </div>
 
-      {/* Approved CTA */}
+      {/* Approved CTA com botão Aplicar agora */}
       {plan.status === 'approved' && (
-        <div className="mt-3 flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2">
-          <Activity className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-          <p className="text-xs text-emerald-700">
-            <span className="font-semibold">Aprovado</span> — a Mozart Routine executará a correção automaticamente na Sprint G-07-E. Um PR será aberto para revisão antes do merge.
-          </p>
+        <div className="mt-3 flex flex-col gap-2 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2">
+          <div className="flex items-center gap-2">
+            <Activity className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+            <p className="text-xs text-emerald-700">
+              <span className="font-semibold">Aprovado</span> — aplicação rodando em background. Você receberá o PR quando estiver pronto.
+            </p>
+          </div>
+          {onApplyNow && (
+            <button
+              type="button"
+              onClick={() => onApplyNow(plan.id)}
+              disabled={applyingNow === plan.id}
+              className="self-start inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 transition-colors"
+              title="Re-disparar aplicação caso o background tenha falhado"
+            >
+              {applyingNow === plan.id
+                ? <RefreshCw className="w-3 h-3 animate-spin" />
+                : <Zap className="w-3 h-3" />
+              }
+              {applyingNow === plan.id ? 'Disparando...' : 'Aplicar agora'}
+            </button>
+          )}
         </div>
       )}
 

@@ -33,6 +33,68 @@ tests/.auth/
 #Ignore vscode AI rules
 .github\instructions\codacy.instructions.md
 
+# ─── Dumps e backups de banco de produção — NUNCA commitar ───────────────────
+Evoluation-api/*.sql
+Evoluation-api/*.bak-*
+Evoluation-api/*.txt
+Evoluation-api/evolution_store/
+
+# QR codes de sessão WhatsApp — exposição de sessão ativa se commitados
+Evoluation-api/*.png
+qr-vetteste.png
+
+# ─── NF-e XML com dados fiscais e CNPJs reais ────────────────────────────────
+NFe*.xml
+*.NFe.xml
+
+# ─── Documentos clínicos e prints gerados — não são código ──────────────────
+/anexos/
+/prints/
+
+# ─── Supabase CLI temp files — mudam a cada run, não têm valor no histórico ──
+supabase/.temp/
+
+# ─── Relatórios gerados pelo Playwright / testes ─────────────────────────────
+playwright-report/
+test-results/
+pw-results.txt
+
+# ─── Projetos aninhados — devem ter repositórios próprios ────────────────────
+/Mozart/
+/Marketing/
+/mobile/
+
+# ─── TypeScript build info (derivado, não fonte de verdade) ──────────────────
+*.tsbuildinfo
+
+# ─── Python cache ─────────────────────────────────────────────────────────────
+**/__pycache__/
+*.pyc
+
+# ─── Arquivos de debug avulsos na raiz — devem ir para Notion/Linear ─────────
+feedbacks_usuarios.txt
+sprint_domingo.md
+pw-results.txt
+
+# SQLs soltos de debug/diagnóstico (não são migrations versionadas)
+DEBUG_APPOINTMENTS_PETCARE.sql
+EXECUTE_THIS_SQL.sql
+FIX_APPOINTMENTS_RLS.sql
+GROOMING_MIGRATIONS.sql
+Schemas.SQL
+Schemas_migration_003.SQL
+
+# Scripts de debug descartáveis na raiz
+fix-all-testskip.js
+fix-grooming.js
+fix-hospitalization.js
+fix-testinfo-signatures.js
+run-purchases-migrations.js
+
+# Binários gerados em /scripts/ — não são código versionável
+scripts/render-real-output.docx
+scripts/uploaded-template.docx
+
 # ─── Capacitor / Empacotamento móvel ─────────────────────────────────────────
 # Artefatos de build do Android Studio
 android/.gradle/

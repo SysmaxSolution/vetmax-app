@@ -2,7 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { evolutionSendText } from '@/lib/evolution-api-client'
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+import { createMessageWithFallback, hasFallbackKey } from './anthropic-client'
 
 // ─── Vet surgery status ───────────────────────────────────────────────────────
 
@@ -530,9 +530,9 @@ Não chame book_appointment neste fluxo — sempre use reschedule_appointment pa
   let currentMessages = [...messages]
 
   for (let iter = 0; iter < 5; iter++) {
-    let response: Awaited<ReturnType<typeof anthropic.messages.create>>
+    let response: Anthropic.Message
     try {
-      response = await anthropic.messages.create({
+      response = await createMessageWithFallback({
         model:      'claude-haiku-4-5-20251001',
         max_tokens: 512,
         system:     systemPrompt,
@@ -542,7 +542,7 @@ Não chame book_appointment neste fluxo — sempre use reschedule_appointment pa
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
       const isCredits = msg.includes('credit balance') || msg.includes('insufficient_quota')
-      console.error('[WPP Agent] Erro Anthropic API:', isCredits ? 'créditos insuficientes' : msg)
+      console.error('[WPP Agent] Erro Anthropic API:', isCredits ? `créditos insuficientes (fallback=${hasFallbackKey()})` : msg)
       return {
         reply:   isCredits
           ? 'No momento estamos com dificuldades técnicas. Um atendente entrará em contato em breve!'

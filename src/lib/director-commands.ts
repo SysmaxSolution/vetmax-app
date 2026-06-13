@@ -1,5 +1,23 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { evolutionSendText } from '@/lib/evolution-api-client'
+import { getAppUrl } from '@/lib/app-url'
+
+function triggerBackgroundApply(planId: string): void {
+  const url    = `${getAppUrl()}/api/cron/apply-approved-fixes`
+  const secret = process.env.CRON_SECRET
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (secret) headers.Authorization = `Bearer ${secret}`
+  fetch(url, {
+    method:  'POST',
+    headers,
+    body:    JSON.stringify({ planId }),
+    signal:  AbortSignal.timeout(5_000),
+  }).then(() => {
+    console.info(`[director] Background apply disparado para ${planId}`)
+  }).catch((e: unknown) => {
+    console.warn(`[director] Background apply falhou (cron periódico recupera): ${e instanceof Error ? e.message : e}`)
+  })
+}
 
 async function replyToDirector(text: string): Promise<void> {
   const alertPhone = process.env.P0_ALERT_PHONE
@@ -90,10 +108,12 @@ export async function handleDirectorCommand(
       await replyToDirector(`❌ Erro ao aprovar plano: ${error.message}`)
     } else {
       const { data: plan } = await admin.from('fix_plans').select('title').eq('id', planId).single()
+      // Dispara aplicação em background. Cron periódico (15min) recupera se falhar.
+      if (planId) triggerBackgroundApply(planId)
       await replyToDirector(
-        `✅ *Plano Aprovado!*\n_${plan?.title}_\n\nA Mozart Routine vai executar a correção em breve e abrir um PR para sua revisão.`
+        `✅ *Plano Aprovado!*\n_${plan?.title}_\n\nA correção foi disparada em background — você receberá o link do PR quando estiver pronto.`
       )
-      console.info(`[Director Command] Plano ${planId} APROVADO via WhatsApp`)
+      console.info(`[Director Command] Plano ${planId} APROVADO via WhatsApp + apply disparado`)
     }
   } else {
     const { error } = await admin

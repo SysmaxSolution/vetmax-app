@@ -43,7 +43,7 @@ export async function injectFreshSession(
   await page.fill('#password', password)
   await page.getByRole('button', { name: /entrar/i }).click()
   // waitUntil:'domcontentloaded' garante que o browser processou os Set-Cookie da resposta antes de retornar
-  await page.waitForURL(/\/(dashboard|onboarding)/, { timeout: 60_000, waitUntil: 'domcontentloaded' })
+  await page.waitForURL(/\/(dashboard\/[a-z]|onboarding)/, { timeout: 90_000, waitUntil: 'domcontentloaded' })
   if (page.url().includes('/onboarding')) {
     throw new Error(
       `[injectFreshSession] Login para ${email} redirecionou para /onboarding — profile.clinic_id está null no DB. Verifique seedUsers().`
@@ -98,6 +98,27 @@ async function loadStorageState(page: Page, email: string): Promise<boolean> {
  * Prioridade: storageState salvo → login via UI (fallback).
  * Usa waitUntil:'domcontentloaded' para evitar hang do evento load em Next.js dev.
  */
+/**
+ * Suprime o OnboardingWizard automático que abre modal full-screen e
+ * intercepta cliques em E2E. Marca todas as clínicas conhecidas como já
+ * "dispensadas" no localStorage.
+ */
+async function suppressOnboardingModal(page: Page): Promise<void> {
+  try {
+    await page.evaluate(() => {
+      const knownClinics = [
+        '11111111-1111-1111-1111-111111111111',
+        '22222222-2222-2222-2222-222222222222',
+      ]
+      for (const id of knownClinics) {
+        localStorage.setItem(`vetmax_onboarding_done_${id}`, '1')
+      }
+    })
+  } catch {
+    /* localStorage indisponível antes da página carregar — ignorar */
+  }
+}
+
 export async function loginViaApi(
   page: Page,
   email: string,
@@ -109,21 +130,26 @@ export async function loginViaApi(
   if (!loaded) {
     // Fallback: login direto na página principal
     await injectFreshSession(page, email, password)
+    await suppressOnboardingModal(page)
     // Após login a página está em /dashboard — navegar ao targetPath se necessário
     if (targetPath !== '/dashboard' && !page.url().includes(targetPath)) {
       await page.goto(`${BASE_URL}${targetPath}`, { waitUntil: 'domcontentloaded', timeout: 45_000 })
+      await suppressOnboardingModal(page)
     }
     return
   }
 
   // Cookies carregados: navegar ao target (45s pois sob carga o dev server pode ser lento)
   await page.goto(`${BASE_URL}${targetPath}`, { waitUntil: 'domcontentloaded', timeout: 45_000 })
+  await suppressOnboardingModal(page)
 
   // Se fomos redirecionados para login, os cookies estavam inválidos — fallback para UI login
   if (!page.url().includes('/dashboard')) {
     await injectFreshSession(page, email, password)
+    await suppressOnboardingModal(page)
     if (targetPath !== '/dashboard' && !page.url().includes(targetPath)) {
       await page.goto(`${BASE_URL}${targetPath}`, { waitUntil: 'domcontentloaded', timeout: 45_000 })
+      await suppressOnboardingModal(page)
     }
   }
 }

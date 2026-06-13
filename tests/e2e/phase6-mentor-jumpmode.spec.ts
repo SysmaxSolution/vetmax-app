@@ -121,12 +121,13 @@ async function focusMentorField(page: Page, mentorStep: string) {
  * Retorna true se o modal abriu e o campo pet-name-input está visível.
  */
 async function openModalAndAdvanceTour(page: Page): Promise<boolean> {
-  // Clica no botão para abrir o modal
+  // Clica no botão para abrir o modal — `force: true` necessário porque o
+  // overlay do MentorTour intercepta pointer events durante guidance.
   const novoPacienteBtn = page.getByTestId('btn-novo-paciente').or(
     page.locator('[data-mentor-step="btn-novo-paciente"]')
   );
   if (await novoPacienteBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
-    await novoPacienteBtn.click();
+    await novoPacienteBtn.click({ force: true });
   }
   // Aguarda pet-name-input aparecer no DOM (modal abriu)
   try {

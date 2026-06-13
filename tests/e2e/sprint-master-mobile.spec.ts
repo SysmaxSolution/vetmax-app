@@ -105,7 +105,7 @@ test.describe('TC-MOB-SM-01: Prescrição — select de via em 375px', () => {
     }
 
     // Navegar para aba Prescrição
-    const prescTab = page.locator('button').filter({ hasText: /prescrição/i }).first();
+    const prescTab = page.getByRole('tab', { name: /prescrição/i }).or(page.locator('[role="tab"]').filter({ hasText: /prescrição/i }).first()).or(page.locator('button').filter({ hasText: /prescrição/i }).first()).first();
     const prescTabVisible = await prescTab.isVisible({ timeout: 5_000 }).catch(() => false);
     if (!prescTabVisible) {
       console.log('TC-MOB-SM-01: SKIP — Aba Prescrição não encontrada no mobile (feature pendente)');
@@ -240,7 +240,7 @@ test.describe('TC-MOB-SM-04: Internação — modal com microfone não transbord
 
     if (!evolVisible) {
       // Tentar clicar em um card de internação primeiro
-      const hospCard = page.locator('[data-testid*="hosp-card"], [class*="hospitalization-card"], [class*="patient-card"]').first();
+      const hospCard = page.locator('[data-testid*="hospitalization-card"], [class*="hospitalization-card"], [class*="patient-card"]').first();
       const hospCardVisible = await hospCard.isVisible({ timeout: 5_000 }).catch(() => false);
       if (hospCardVisible) {
         await hospCard.click();
@@ -524,7 +524,7 @@ test.describe('TC-MOB-SM-09: Internação — push-to-talk acessível por touch'
     const evolVisible = await evolucaoBtn.isVisible({ timeout: 8_000 }).catch(() => false);
 
     if (!evolVisible) {
-      const hospCard = page.locator('[data-testid*="hosp-card"], [class*="hospitalization-card"]').first();
+      const hospCard = page.locator('[data-testid*="hospitalization-card"], [class*="hospitalization-card"]').first();
       const cardVisible = await hospCard.isVisible({ timeout: 5_000 }).catch(() => false);
       if (!cardVisible) {
         console.log('TC-MOB-SM-09: SKIP — Nenhum card de internação encontrado');

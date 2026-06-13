@@ -21,8 +21,27 @@ export async function POST(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 })
 
-    const body = await request.json()
-    const { transcript: rawTranscript } = body
+    // Validação de Content-Type — multipart/form-data ou outros tipos não-JSON
+    // não devem causar 500. Voice transcribe espera apenas JSON.
+    const ct = request.headers.get('content-type') ?? ''
+    if (!ct.includes('application/json')) {
+      return NextResponse.json(
+        { error: 'Content-Type deve ser application/json' },
+        { status: 400 }
+      )
+    }
+
+    let body: unknown
+    try {
+      body = await request.json()
+    } catch {
+      return NextResponse.json(
+        { error: 'Body JSON inválido ou vazio' },
+        { status: 400 }
+      )
+    }
+
+    const rawTranscript = (body as { transcript?: unknown })?.transcript
 
     if (!rawTranscript || typeof rawTranscript !== 'string') {
       return NextResponse.json(

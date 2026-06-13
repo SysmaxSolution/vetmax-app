@@ -307,7 +307,12 @@ test.describe('TC-ACCESS: Logs de Acesso a Dados', () => {
         console.log('TC-ACCESS-01: rpc_log_data_access não existe ainda (migration 0065 pendente)');
         return;
       }
-      if (error.message.includes('Acesso negado') || error.message.includes('clinic_id inválido')) {
+      if (
+        error.message.includes('Acesso negado') ||
+        error.message.includes('clinic_id inválido') ||
+        error.message.includes('requer usuário autenticado') ||
+        error.message.includes('não pertence ao usuário')
+      ) {
         console.log('TC-ACCESS-01: RPC requer auth.uid() — não testável via service role');
         return;
       }

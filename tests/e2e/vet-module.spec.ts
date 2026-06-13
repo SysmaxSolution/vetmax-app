@@ -448,7 +448,7 @@ test.describe('TC-VET-004: Adiciona prescrição de medicamento', () => {
 
     // Clicar na aba Prescrição
     const prescTabBtn = page.getByRole('button', { name: /prescrição/i }).or(
-      page.locator('button').filter({ hasText: /prescrição/i }).first()
+      page.getByRole('tab', { name: /prescrição/i }).or(page.locator('[role="tab"]').filter({ hasText: /prescrição/i }).first()).or(page.locator('button').filter({ hasText: /prescrição/i }).first()).first()
     );
     const prescTabVisible = await prescTabBtn.isVisible({ timeout: 8_000 }).catch(() => false);
     if (!prescTabVisible) {
@@ -665,7 +665,7 @@ test.describe('TC-VET-008: data-mentor-step presentes na ficha médica', () => {
     const saveStep  = await page.locator('[data-mentor-step="vet-save-notes-btn"]').count();
 
     // Clicar na aba Prescrição para ver o botão de salvar prescrição
-    const prescTab = page.locator('button').filter({ hasText: /prescrição/i }).first();
+    const prescTab = page.getByRole('tab', { name: /prescrição/i }).or(page.locator('[role="tab"]').filter({ hasText: /prescrição/i }).first()).or(page.locator('button').filter({ hasText: /prescrição/i }).first()).first();
     if (await prescTab.isVisible({ timeout: 5_000 }).catch(() => false)) {
       await prescTab.click();
       await page.waitForTimeout(500);
