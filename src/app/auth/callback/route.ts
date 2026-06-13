@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import type { User } from '@supabase/supabase-js'
 import { getAppUrl } from '@/lib/app-url'
+import { insertLegalAcceptanceRaw } from '@/lib/actions/legal'
 
 const ROLE_COOKIE = 'vetmax-role'
 const ROLE_COOKIE_OPTIONS = {
@@ -28,7 +29,7 @@ async function ensureClinicCreated(user: User): Promise<void> {
 
   const { data: pending } = await admin
     .from('pending_registrations')
-    .select('full_name, clinic_name, clinic_id, username, phone, cnpj, business_type')
+    .select('full_name, clinic_name, clinic_id, username, phone, cnpj, business_type, terms_accepted_at, terms_ip, terms_user_agent')
     .ilike('email', user.email!)
     .single()
 
@@ -51,6 +52,15 @@ async function ensureClinicCreated(user: User): Promise<void> {
       clinic_id: existingClinicId,
       role:      'receptionist',
     }, { onConflict: 'user_id,clinic_id' })
+    if (pending?.terms_accepted_at) {
+      await insertLegalAcceptanceRaw({
+        clinicId:     existingClinicId,
+        userId:       user.id,
+        documentType: 'terms_privacy_dpa',
+        ip:           (pending as { terms_ip?: string | null }).terms_ip ?? null,
+        userAgent:    (pending as { terms_user_agent?: string | null }).terms_user_agent ?? null,
+      })
+    }
     await admin.from('pending_registrations').delete().eq('email', user.email!)
     return
   }
@@ -85,6 +95,15 @@ async function ensureClinicCreated(user: User): Promise<void> {
     clinic_id: clinic.id,
     role:      'admin',
   }, { onConflict: 'user_id,clinic_id' })
+  if (pending?.terms_accepted_at) {
+    await insertLegalAcceptanceRaw({
+      clinicId:     clinic.id,
+      userId:       user.id,
+      documentType: 'terms_privacy_dpa',
+      ip:           (pending as { terms_ip?: string | null }).terms_ip ?? null,
+      userAgent:    (pending as { terms_user_agent?: string | null }).terms_user_agent ?? null,
+    })
+  }
   await admin.from('pending_registrations').delete().eq('email', user.email!)
 }
 

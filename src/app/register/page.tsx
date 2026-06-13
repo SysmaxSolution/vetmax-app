@@ -78,6 +78,9 @@ export default function RegisterPage() {
   const [password, setPassword] = useState('')
   const [showPass, setShowPass] = useState(false)
 
+  // Termos de uso
+  const [termsAccepted, setTermsAccepted] = useState(false)
+
   // Estado do form
   const [loading, setLoading]                 = useState(false)
   const [error, setError]                     = useState<string | null>(null)
@@ -148,6 +151,7 @@ export default function RegisterPage() {
     formData.set('email', email)
     formData.set('phone', phone.replace(/\D/g, ''))
     formData.set('password', password)
+    formData.set('terms_accepted', String(termsAccepted))
 
     if (clinicMode === 'existing' && selectedClinic) {
       formData.set('clinic_id', selectedClinic.id)
@@ -513,6 +517,49 @@ export default function RegisterPage() {
             </div>
           </div>
 
+          {/* ── Aceite de Termos ──────────────────────────────────────────── */}
+          <label className="flex items-start gap-2.5 cursor-pointer group">
+            <div className="mt-0.5 flex-shrink-0">
+              <input
+                type="checkbox"
+                checked={termsAccepted}
+                onChange={e => setTermsAccepted(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500/20"
+              />
+            </div>
+            <span className="text-xs text-slate-600 leading-relaxed">
+              Li e aceito os{' '}
+              <a
+                href="/termos-de-uso"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold text-teal-700 underline underline-offset-2 hover:text-teal-800"
+              >
+                Termos de Uso
+              </a>
+              {', '}
+              a{' '}
+              <a
+                href="/privacidade"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold text-teal-700 underline underline-offset-2 hover:text-teal-800"
+              >
+                Política de Privacidade
+              </a>
+              {' '}e o{' '}
+              <a
+                href="/dpa"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold text-teal-700 underline underline-offset-2 hover:text-teal-800"
+              >
+                Acordo de Processamento de Dados (DPA)
+              </a>
+              {' '}da Sysmax Solutions, incluindo as obrigações de proteção de dados previstas na LGPD.
+            </span>
+          </label>
+
           {/* Erro */}
           {error && (
             <div className="bg-red-50 text-red-600 text-sm p-3 rounded-xl border border-red-100 font-medium">
@@ -525,6 +572,7 @@ export default function RegisterPage() {
             type="submit"
             disabled={
               loading ||
+              !termsAccepted ||
               (clinicMode === 'existing' && !selectedClinic) ||
               (clinicMode === 'new' && !businessType)
             }

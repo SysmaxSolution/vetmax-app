@@ -216,6 +216,11 @@ export async function signUpWithClinic(
   const clinicName   = (formData.get('clinic_name')   as string ?? '').trim()   // nova clínica
   const cnpj         = (formData.get('cnpj')          as string ?? '').replace(/\D/g, '')
   const businessType = (formData.get('business_type') as string ?? 'vet_clinic').trim()
+  const termsAccepted = formData.get('terms_accepted') === 'true'
+
+  if (!termsAccepted) {
+    return { error: 'Você precisa aceitar os Termos de Uso e a Política de Privacidade para criar uma conta.' }
+  }
 
   if (!email || !password || !fullName) {
     return { error: 'Preencha os campos obrigatórios.' }
@@ -270,16 +275,27 @@ export async function signUpWithClinic(
     return { error: 'Erro ao criar conta: ' + signUpError.message }
   }
 
+  // Captura IP para evidência legal do aceite (persistido em legal_acceptances no callback)
+  const { headers } = await import('next/headers')
+  const hdrs = await headers()
+  const termsIp = hdrs.get('x-forwarded-for')?.split(',')[0].trim()
+    ?? hdrs.get('x-real-ip')
+    ?? null
+  const termsUserAgent = hdrs.get('user-agent') ?? null
+
   // Persiste dados para o callback recuperar após confirmação de e-mail
   await admin.from('pending_registrations').upsert({
     email,
-    full_name:     fullName,
-    clinic_name:   clinicName     || null,
-    username:      username       || null,
-    phone:         phone          || null,
-    clinic_id:     clinicId       || null,
-    cnpj:          cnpj           || null,
-    business_type: businessType   || 'vet_clinic',
+    full_name:         fullName,
+    clinic_name:       clinicName     || null,
+    username:          username       || null,
+    phone:             phone          || null,
+    clinic_id:         clinicId       || null,
+    cnpj:              cnpj           || null,
+    business_type:     businessType   || 'vet_clinic',
+    terms_accepted_at: new Date().toISOString(),
+    terms_ip:          termsIp,
+    terms_user_agent:  termsUserAgent,
   })
 
   return { email }

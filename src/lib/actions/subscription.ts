@@ -7,6 +7,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { insertLegalAcceptanceRaw, getRequestMeta } from '@/lib/actions/legal'
 import { FREE_MODULES } from '@/config/access-matrix'
 import { computePlanPrice, type PriceTotals } from '@/lib/subscription/pricing'
 import { PLAN_LIMITS, type LimitedPlan } from '@/lib/subscription/plan-limits'
@@ -293,6 +294,16 @@ export async function subscribeToPlan(input: {
 
   const sync = await syncClinicModulesFromContract(admin, ctx.clinicId)
   if (sync.error) return { error: sync.error }
+
+  // Persiste evidência legal do aceite dos termos de assinatura (LGPD Art. 7º)
+  const { ip, userAgent } = await getRequestMeta()
+  await insertLegalAcceptanceRaw({
+    clinicId:     ctx.clinicId,
+    userId:       ctx.userId,
+    documentType: 'subscription_terms',
+    ip,
+    userAgent,
+  })
 
   revalidatePath('/dashboard', 'layout')
   revalidatePath('/dashboard/management')

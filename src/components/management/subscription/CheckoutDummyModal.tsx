@@ -180,7 +180,7 @@ export default function CheckoutDummyModal({ plan, basePrice, selectedModules, c
             </div>
           )}
 
-          {/* Termos */}
+          {/* Termos de Assinatura */}
           <label className="flex items-start gap-2 cursor-pointer">
             <input
               type="checkbox"
@@ -189,8 +189,16 @@ export default function CheckoutDummyModal({ plan, basePrice, selectedModules, c
               className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600"
             />
             <span className="text-xs text-slate-600">
-              Li e aceito os <span className="font-semibold text-indigo-700 underline">Termos de Uso</span> e a
-              Política de Privacidade da assinatura SysVetMax.
+              Li e aceito os{' '}
+              <a
+                href="/termos-assinatura"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold text-indigo-700 underline underline-offset-2 hover:text-indigo-800"
+              >
+                Termos de Assinatura e Pagamento
+              </a>
+              {' '}do SysVetMax, incluindo a política de renovação automática e não-reembolso de período fruído.
             </span>
           </label>
 
