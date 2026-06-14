@@ -3,12 +3,8 @@
 import { Suspense } from 'react'
 import { Toaster } from 'sonner'
 import { useChatRealtimeNotifications } from '@/hooks/useChatRealtimeNotifications'
+import { FloatingChatPopupHost } from '@/components/internal-chat/FloatingChatPopup'
 
-/**
- * Monta o Toaster Sonner + o hook de realtime para mensagens de chat. Fica
- * dentro de Suspense porque useSearchParams (consumido pelo hook) exige
- * boundary no App Router.
- */
 function ChatNotificationsBridge({ clinicId, userId }: { clinicId: string; userId: string }) {
   useChatRealtimeNotifications({ clinicId, userId })
   return null
@@ -21,6 +17,9 @@ export default function ChatNotificationsHost({
     <>
       <Suspense fallback={null}>
         <ChatNotificationsBridge clinicId={clinicId} userId={userId} />
+      </Suspense>
+      <Suspense fallback={null}>
+        <FloatingChatPopupHost clinicId={clinicId} userId={userId} />
       </Suspense>
       <Toaster
         position="bottom-right"

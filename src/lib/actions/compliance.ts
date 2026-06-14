@@ -168,6 +168,14 @@ export async function resolveDeletionRequest(
     return { error: 'Apenas administradores podem resolver solicitações.' }
   }
 
+  // Busca o user_id do titular para poder anonimizar chat
+  const { data: request } = await supabase
+    .from('deletion_requests')
+    .select('user_id')
+    .eq('id', requestId)
+    .eq('clinic_id', profile!.clinic_id)
+    .maybeSingle()
+
   const { error } = await supabase
     .from('deletion_requests')
     .update({
@@ -180,6 +188,16 @@ export async function resolveDeletionRequest(
     .eq('clinic_id', profile!.clinic_id)
 
   if (error) return { error: error.message }
+
+  // E6-S1: anonimiza dados de chat do titular quando solicitação aprovada
+  if (resolution.status === 'completed' && request?.user_id) {
+    const admin = (await import('@/lib/supabase/admin')).createAdminClient()
+    await admin.rpc('anonimize_chat_for_subject', {
+      p_clinic_id: profile!.clinic_id,
+      p_user_id:   request.user_id,
+    })
+  }
+
   return { success: true }
 }
 

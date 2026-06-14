@@ -20,6 +20,7 @@ import OnboardingWizard from '@/components/onboarding/OnboardingWizard'
 import { UpgradeProvider } from '@/components/upgrade/UpgradeProvider'
 import ChatNotificationsHost from '@/components/layout/ChatNotificationsHost'
 import ModernStyles from '@/components/layout/ModernStyles'
+import { NotificationProvider } from '@/context/NotificationContext'
 import type { DashboardShellProps } from './DashboardShellClassic'
 
 // ─── Layout Moderno ───────────────────────────────────────────────────────────
@@ -35,6 +36,7 @@ export default function DashboardShellModern({
   return (
     // data-layout="modern" é a âncora de todos os estilos do ModernStyles.
     // Remover este atributo desativa o design system Modern imediatamente.
+    <NotificationProvider clinicId={clinicId}>
     <section data-layout="modern" className="min-h-screen bg-slate-50">
 
       {/* Injeta o design system Modern — não afeta o Classic */}
@@ -91,5 +93,6 @@ export default function DashboardShellModern({
       <Suspense fallback={null}>{null}</Suspense>
       <SysmaxFooter />
     </section>
+    </NotificationProvider>
   )
 }

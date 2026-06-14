@@ -478,7 +478,7 @@ export async function generateFilledDocument(
   // consultation_id). Fire-and-forget — se falhar, não bloqueia o gerador.
   if (input.consultation_id) {
     try {
-      const { attachDocumentToEntityChat } = await import('@/lib/actions/internal-chat')
+      const { _attachDocumentToEntityChatInternal: attachDocumentToEntityChat } = await import('@/lib/actions/internal-chat')
       const tplType = (template.type ?? '').toLowerCase()
       const sourceEntity: 'prescription' | 'term' | 'exam' | 'laudo' | 'receipt' | 'other' =
           tplType.includes('prescription') || tplType.includes('receit')                       ? 'prescription'

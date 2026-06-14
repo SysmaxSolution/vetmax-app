@@ -185,33 +185,12 @@ export default async function DashboardLayout({
       ).count ?? 0)
     : 0
 
-  // Mensagens de chat interno não lidas para o usuário (badge na aba Chat Interno).
-  // Soma sobre todos os chats em que o usuário participa: mensagens criadas
-  // depois do last_read_at e que não foram enviadas por ele mesmo.
-  let chatUnreadCount = 0
-  {
-    const { data: parts } = await admin
-      .from('chat_participants')
-      .select('chat_id, last_read_at')
-      .eq('user_id', user.id)
-      .eq('clinic_id', profile.clinic_id)
-      .is('left_at', null)
-    const partList = parts ?? []
-    if (partList.length > 0) {
-      const counts = await Promise.all(partList.map(async (p: any) => {
-        const since = p.last_read_at ?? new Date(0).toISOString()
-        const { count } = await admin
-          .from('chat_messages')
-          .select('id', { count: 'exact', head: true })
-          .eq('chat_id', p.chat_id)
-          .gt('created_at', since)
-          .neq('sent_by', user.id)
-          .is('deleted_at', null)
-        return count ?? 0
-      }))
-      chatUnreadCount = counts.reduce((s, n) => s + n, 0)
-    }
-  }
+  // Mensagens de chat interno não lidas — RPC única (substitui N+1)
+  const { data: chatUnreadRpc } = await admin.rpc('fn_chat_unread_count', {
+    p_user_id:   user.id,
+    p_clinic_id: profile.clinic_id,
+  })
+  const chatUnreadCount = (chatUnreadRpc as number) ?? 0
 
   // Props compartilhadas entre os shells de layout
   const shellProps = {

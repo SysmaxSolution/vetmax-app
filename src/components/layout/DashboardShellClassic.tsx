@@ -9,6 +9,7 @@ import { SysmaxFooter } from '@/components/ui/SysmaxFooter'
 import OnboardingWizard from '@/components/onboarding/OnboardingWizard'
 import { UpgradeProvider } from '@/components/upgrade/UpgradeProvider'
 import ChatNotificationsHost from '@/components/layout/ChatNotificationsHost'
+import { NotificationProvider } from '@/context/NotificationContext'
 import type { UserClinicInfo } from '@/lib/actions/clinic-switcher'
 import type { PlanName, BusinessType, UserRole } from '@/types'
 
@@ -62,6 +63,7 @@ export default function DashboardShellClassic({
   hasLogo, hasPets, businessType, userId, children,
 }: DashboardShellProps) {
   return (
+    <NotificationProvider clinicId={clinicId}>
     <section className="min-h-screen bg-slate-50">
       <DashboardHeader
         userName={userName}
@@ -112,5 +114,6 @@ export default function DashboardShellClassic({
       <Suspense fallback={null}>{null}</Suspense>
       <SysmaxFooter />
     </section>
+    </NotificationProvider>
   )
 }

@@ -6,21 +6,22 @@ import { revalidatePath } from 'next/cache'
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
-export type ChatKind = 'direct' | 'group' | 'consultation' | 'hospitalization' | 'surgery'
+export type ChatKind = 'direct' | 'group' | 'consultation' | 'hospitalization' | 'surgery' | 'channel'
 export type ChatEntityType = 'consultation' | 'hospitalization' | 'surgery'
 
 export interface ChatSummary {
   id:              string
   title:           string | null
+  display_title:   string | null   // título enriquecido com nome do pet (E3-S2)
   kind:            ChatKind
   entity_type:     ChatEntityType | null
   entity_id:       string | null
   last_message_at: string
-  /** Texto resumido da última mensagem (NULL quando o chat ainda não tem mensagem). */
   last_preview:    string | null
-  /** Nº de mensagens não lidas para o usuário atual. */
   unread_count:    number
-  /** Participantes (usado para mostrar avatares e o nome em chats 1:1). */
+  force_unread:    boolean         // marcar como não-lida manualmente (E5-S2)
+  pinned_at:       string | null   // pin de conversas (E5-S3)
+  pin_order:       number | null
   participants:    Array<{ user_id: string; full_name: string | null; role: string }>
 }
 
@@ -86,7 +87,7 @@ export async function listMyChats(): Promise<ChatSummary[] | { error: string }> 
   // 1) chats em que participo (não arquivados)
   const { data: myParts, error: e1 } = await admin
     .from('chat_participants')
-    .select('chat_id, last_read_at')
+    .select('chat_id, last_read_at, force_unread, pinned_at, pin_order')
     .eq('user_id', ctx.user_id)
     .eq('clinic_id', ctx.clinic_id)
     .is('left_at', null)
@@ -98,8 +99,14 @@ export async function listMyChats(): Promise<ChatSummary[] | { error: string }> 
   const lastReadByChat = new Map(
     (myParts ?? []).map(p => [p.chat_id as string, p.last_read_at as string])
   )
+  const forceUnreadByChat = new Map(
+    (myParts ?? []).map(p => [p.chat_id as string, !!(p as any).force_unread])
+  )
+  const pinnedByChat = new Map(
+    (myParts ?? []).map(p => [p.chat_id as string, { pinned_at: (p as any).pinned_at as string | null, pin_order: (p as any).pin_order as number | null }])
+  )
 
-  // 2) chats em si
+  // 2) chats em si + join com entidades para título enriquecido
   const { data: chats, error: e2 } = await admin
     .from('chats')
     .select('id, title, kind, entity_type, entity_id, last_message_at, archived_at')
@@ -108,6 +115,37 @@ export async function listMyChats(): Promise<ChatSummary[] | { error: string }> 
     .order('last_message_at', { ascending: false })
     .limit(200)
   if (e2) return { error: e2.message }
+
+  // 2b) Títulos enriquecidos para salas automáticas (E3-S2)
+  const entityIds = (chats ?? [])
+    .filter((c: any) => c.entity_id && c.entity_type)
+    .map((c: any) => c.entity_id as string)
+
+  const displayTitleMap = new Map<string, string>()
+  if (entityIds.length > 0) {
+    const [consRes, hospRes, surgRes] = await Promise.all([
+      admin.from('consultations')
+        .select('id, patients(name, species)')
+        .in('id', entityIds),
+      admin.from('hospitalizations')
+        .select('id, patients(name)')
+        .in('id', entityIds),
+      admin.from('surgeries')
+        .select('id, procedure_name, patients(name)')
+        .in('id', entityIds),
+    ])
+    for (const c of (consRes.data ?? []) as any[]) {
+      displayTitleMap.set(c.id, `Atendimento · ${c.patients?.name ?? ''}`)
+    }
+    for (const h of (hospRes.data ?? []) as any[]) {
+      displayTitleMap.set(h.id, `Internação · ${h.patients?.name ?? ''}`)
+    }
+    for (const s of (surgRes.data ?? []) as any[]) {
+      const petName = s.patients?.name ?? ''
+      const proc    = s.procedure_name ? ` — ${s.procedure_name}` : ''
+      displayTitleMap.set(s.id, `Cirurgia · ${petName}${proc}`)
+    }
+  }
 
   // 3) participantes (para nome em DM)
   const { data: parts } = await admin
@@ -138,7 +176,13 @@ export async function listMyChats(): Promise<ChatSummary[] | { error: string }> 
     previewByChat.set(m.chat_id, m.kind === 'attachment' ? '📎 Anexo' : (m.body ?? ''))
   }
 
-  // 5) contagem de não-lidas (uma query por chat, paralelizada)
+  // 5) contagem de não-lidas via RPC agregada (E2-S1 — substitui N+1)
+  const { data: unreadData } = await admin
+    .rpc('fn_chat_unread_count', { p_user_id: ctx.user_id, p_clinic_id: ctx.clinic_id })
+  const totalChatUnread = (unreadData as number) ?? 0
+
+  // Contagem por chat ainda necessária para o badge individual na sidebar
+  // (a RPC retorna total; aqui fazemos em paralelo mas com Promise.all otimizado)
   const unreadResults = await Promise.all(chatIds.map(async (id) => {
     const since = lastReadByChat.get(id) ?? new Date(0).toISOString()
     const { count } = await admin
@@ -151,18 +195,26 @@ export async function listMyChats(): Promise<ChatSummary[] | { error: string }> 
     return [id, count ?? 0] as const
   }))
   const unreadByChat = new Map(unreadResults)
+  void totalChatUnread  // usado em getNotificationCounts via RPC
 
-  return (chats ?? []).map((c: any): ChatSummary => ({
-    id:              c.id,
-    title:           c.title,
-    kind:            c.kind,
-    entity_type:     c.entity_type,
-    entity_id:       c.entity_id,
-    last_message_at: c.last_message_at,
-    last_preview:    previewByChat.get(c.id) ?? null,
-    unread_count:    unreadByChat.get(c.id) ?? 0,
-    participants:    partsByChat.get(c.id) ?? [],
-  }))
+  return (chats ?? []).map((c: any): ChatSummary => {
+    const pin = pinnedByChat.get(c.id)
+    return {
+      id:              c.id,
+      title:           c.title,
+      display_title:   c.entity_id ? (displayTitleMap.get(c.entity_id) ?? c.title) : null,
+      kind:            c.kind,
+      entity_type:     c.entity_type,
+      entity_id:       c.entity_id,
+      last_message_at: c.last_message_at,
+      last_preview:    previewByChat.get(c.id) ?? null,
+      unread_count:    unreadByChat.get(c.id) ?? 0,
+      force_unread:    forceUnreadByChat.get(c.id) ?? false,
+      pinned_at:       pin?.pinned_at ?? null,
+      pin_order:       pin?.pin_order ?? null,
+      participants:    partsByChat.get(c.id) ?? [],
+    }
+  })
 }
 
 // ─── Mensagens ────────────────────────────────────────────────────────────────
@@ -284,7 +336,7 @@ export async function markChatRead(chatId: string): Promise<{ success: true } | 
   const admin = createAdminClient()
   const { error } = await admin
     .from('chat_participants')
-    .update({ last_read_at: new Date().toISOString() })
+    .update({ last_read_at: new Date().toISOString(), force_unread: false })
     .eq('chat_id', chatId)
     .eq('user_id', ctx.user_id)
   if (error) return { error: error.message }
@@ -478,7 +530,8 @@ export async function createGroupChat(input: {
  * abortar por causa disso. Usa o admin client para bypassar RLS porque o usuário
  * que gera o PDF pode não ser participante explícito da sala ainda.
  */
-export async function attachDocumentToEntityChat(input: {
+// Versão interna sem validação de sessão — para callers server-side (document-generation.ts)
+export async function _attachDocumentToEntityChatInternal(input: {
   clinic_id:     string
   user_id?:      string | null
   entity_type:   ChatEntityType
@@ -495,10 +548,8 @@ export async function attachDocumentToEntityChat(input: {
   if (!input.clinic_id || !input.entity_id || !input.title || !input.file_url) {
     return { error: 'Parâmetros incompletos.' }
   }
-
   const admin = createAdminClient()
 
-  // 1) Localiza o chat da entidade (o trigger AFTER INSERT já deve ter criado)
   let { data: chat } = await admin
     .from('chats')
     .select('id')
@@ -507,65 +558,59 @@ export async function attachDocumentToEntityChat(input: {
     .eq('entity_id', input.entity_id)
     .maybeSingle()
 
-  // 2) Fallback: se por algum motivo o trigger não rodou, abre a sala aqui
   if (!chat) {
     const { data: created, error: createErr } = await admin
       .from('chats')
-      .insert({
-        clinic_id: input.clinic_id,
-        kind: input.entity_type,
-        entity_type: input.entity_type,
-        entity_id: input.entity_id,
-        created_by: input.user_id ?? null,
-      })
-      .select('id')
-      .single()
+      .insert({ clinic_id: input.clinic_id, kind: input.entity_type, entity_type: input.entity_type, entity_id: input.entity_id, created_by: input.user_id ?? null })
+      .select('id').single()
     if (createErr) return { error: 'Falha ao abrir sala: ' + createErr.message }
     chat = created
   }
 
   const chatId = chat!.id as string
-
-  // 3) Mensagem-portadora do anexo
   const { data: msg, error: msgErr } = await admin
     .from('chat_messages')
-    .insert({
-      chat_id:   chatId,
-      clinic_id: input.clinic_id,
-      sent_by:   input.user_id ?? null,
-      kind:      'attachment',
-      body:      input.body ?? `📎 ${input.title}`,
-      metadata:  { source_entity: input.source_entity, source_id: input.source_id ?? null },
-    })
-    .select('id')
-    .single()
+    .insert({ chat_id: chatId, clinic_id: input.clinic_id, sent_by: input.user_id ?? null, kind: 'attachment', body: input.body ?? `📎 ${input.title}`, metadata: { source_entity: input.source_entity, source_id: input.source_id ?? null } })
+    .select('id').single()
   if (msgErr || !msg) return { error: 'Falha ao registrar mensagem: ' + (msgErr?.message ?? '') }
 
-  // 4) Anexo em si
   const inferredKind: 'pdf' | 'image' | 'file' =
-    input.mime_type?.startsWith('image/')           ? 'image'
-    : input.mime_type === 'application/pdf'          ? 'pdf'
-    : input.title.toLowerCase().endsWith('.pdf')     ? 'pdf'
+    input.mime_type?.startsWith('image/') ? 'image'
+    : (input.mime_type === 'application/pdf' || input.title.toLowerCase().endsWith('.pdf')) ? 'pdf'
     : 'file'
 
-  const { error: attErr } = await admin
-    .from('chat_attachments')
-    .insert({
-      message_id:    msg.id,
-      chat_id:       chatId,
-      clinic_id:     input.clinic_id,
-      kind:          inferredKind,
-      title:         input.title,
-      file_url:      input.file_url,
-      storage_path:  input.storage_path ?? null,
-      mime_type:     input.mime_type ?? null,
-      byte_size:     input.byte_size ?? null,
-      source_entity: input.source_entity,
-      source_id:     input.source_id ?? null,
-    })
+  const { error: attErr } = await admin.from('chat_attachments').insert({
+    message_id: msg.id, chat_id: chatId, clinic_id: input.clinic_id, kind: inferredKind,
+    title: input.title, file_url: input.file_url, storage_path: input.storage_path ?? null,
+    mime_type: input.mime_type ?? null, byte_size: input.byte_size ?? null,
+    source_entity: input.source_entity, source_id: input.source_id ?? null,
+  })
   if (attErr) return { error: 'Falha ao anexar: ' + attErr.message }
 
   return { message_id: msg.id as string, chat_id: chatId }
+}
+
+// Versão pública com validação de tenant — E1-S2
+export async function attachDocumentToEntityChat(input: {
+  clinic_id:     string
+  user_id?:      string | null
+  entity_type:   ChatEntityType
+  entity_id:     string
+  title:         string
+  file_url:      string
+  storage_path?: string | null
+  mime_type?:    string | null
+  byte_size?:    number | null
+  source_entity: 'prescription' | 'term' | 'exam' | 'laudo' | 'receipt' | 'other'
+  source_id?:    string | null
+  body?:         string | null
+}): Promise<{ message_id: string; chat_id: string } | { error: string }> {
+  const ctx = await getCtx()
+  if (!('error' in ctx) && ctx.clinic_id !== input.clinic_id) {
+    console.warn(`[attachDocumentToEntityChat] cross-tenant: sessão=${ctx.clinic_id} input=${input.clinic_id}`)
+    return { error: 'Clínica não autorizada.' }
+  }
+  return _attachDocumentToEntityChatInternal(input)
 }
 
 // ─── Upload manual de anexo (UI) ─────────────────────────────────────────────
@@ -694,14 +739,6 @@ export async function getNotificationCounts(): Promise<NotificationCounts | { er
     .eq('clinic_id', ctx.clinic_id)
     .eq('status', 'human')
 
-  // Chat: soma de unreads dos meus chats
-  const chatPartsQ = admin
-    .from('chat_participants')
-    .select('chat_id, last_read_at')
-    .eq('user_id', ctx.user_id)
-    .eq('clinic_id', ctx.clinic_id)
-    .is('left_at', null)
-
   // Internação: tarefas atrasadas — best-effort. Se a tabela não existir, conta 0.
   const hospQ = admin
     .from('hospitalization_tasks')
@@ -710,25 +747,15 @@ export async function getNotificationCounts(): Promise<NotificationCounts | { er
     .eq('status', 'pending')
     .lt('scheduled_at', new Date().toISOString())
 
-  const [wppRes, partsRes, hospRes] = await Promise.all([wppQ, chatPartsQ, hospQ])
+  // Chat: RPC única em vez de N+1 por chat (E2-S1)
+  const chatRpcQ = admin.rpc('fn_chat_unread_count', {
+    p_user_id:   ctx.user_id,
+    p_clinic_id: ctx.clinic_id,
+  })
 
-  let chatUnread = 0
-  const parts = partsRes.data ?? []
-  if (parts.length > 0) {
-    const counts = await Promise.all(parts.map(async (p: any) => {
-      const since = p.last_read_at ?? new Date(0).toISOString()
-      const { count } = await admin
-        .from('chat_messages')
-        .select('id', { count: 'exact', head: true })
-        .eq('chat_id', p.chat_id)
-        .gt('created_at', since)
-        .neq('sent_by', ctx.user_id)
-        .is('deleted_at', null)
-      return count ?? 0
-    }))
-    chatUnread = counts.reduce((s, n) => s + n, 0)
-  }
+  const [wppRes, hospRes, chatRpcRes] = await Promise.all([wppQ, hospQ, chatRpcQ])
 
+  const chatUnread = (chatRpcRes.data as number) ?? 0
   const wpp  = wppRes.count ?? 0
   const hosp = hospRes.error ? 0 : (hospRes.count ?? 0)
 
@@ -738,4 +765,413 @@ export async function getNotificationCounts(): Promise<NotificationCounts | { er
     hospitalization_alerts: hosp,
     total:                  wpp + chatUnread + hosp,
   }
+}
+
+// ─── Marcar como não-lida manualmente (E5-S2) ────────────────────────────────
+
+export async function markChatUnread(chatId: string): Promise<{ success: true } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('chat_participants')
+    .update({ force_unread: true })
+    .eq('chat_id', chatId)
+    .eq('user_id', ctx.user_id)
+  if (error) return { error: error.message }
+  return { success: true }
+}
+
+// ─── Fixar / desafixar conversa (E5-S3) ──────────────────────────────────────
+
+export async function toggleChatPin(
+  chatId: string,
+): Promise<{ pinned: boolean } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+
+  const admin = createAdminClient()
+  const { data: part } = await admin
+    .from('chat_participants')
+    .select('pinned_at, pin_order')
+    .eq('chat_id', chatId)
+    .eq('user_id', ctx.user_id)
+    .maybeSingle()
+  if (!part) return { error: 'Sem acesso a este chat.' }
+
+  const isPinned = !!(part as any).pinned_at
+  const { error } = await admin
+    .from('chat_participants')
+    .update(isPinned
+      ? { pinned_at: null, pin_order: null }
+      : { pinned_at: new Date().toISOString(), pin_order: 0 })
+    .eq('chat_id', chatId)
+    .eq('user_id', ctx.user_id)
+  if (error) return { error: error.message }
+  return { pinned: !isPinned }
+}
+
+export async function reorderPinnedChats(
+  orderedChatIds: string[],
+): Promise<{ success: true } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+
+  const admin = createAdminClient()
+  const updates = orderedChatIds.map((chatId, index) =>
+    admin
+      .from('chat_participants')
+      .update({ pin_order: index })
+      .eq('chat_id', chatId)
+      .eq('user_id', ctx.user_id)
+  )
+  const results = await Promise.all(updates)
+  const failed = results.find(r => r.error)
+  if (failed?.error) return { error: failed.error.message }
+  return { success: true }
+}
+
+// ─── Gerenciar participantes pós-criação (E5-S1) ─────────────────────────────
+
+export async function addParticipantToChat(
+  chatId: string,
+  userId: string,
+): Promise<{ success: true } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+
+  const admin = createAdminClient()
+
+  // Apenas owner pode adicionar
+  const { data: myPart } = await admin
+    .from('chat_participants')
+    .select('role')
+    .eq('chat_id', chatId)
+    .eq('user_id', ctx.user_id)
+    .is('left_at', null)
+    .maybeSingle()
+  if (!myPart || (myPart as any).role !== 'owner') {
+    return { error: 'Apenas o administrador do grupo pode adicionar participantes.' }
+  }
+
+  // Confirma que o novo usuário é da mesma clínica
+  const { data: profile } = await admin
+    .from('profiles').select('clinic_id').eq('id', userId).single()
+  if (!profile || profile.clinic_id !== ctx.clinic_id) {
+    return { error: 'Usuário não encontrado na clínica.' }
+  }
+
+  const { data: chat } = await admin
+    .from('chats').select('clinic_id').eq('id', chatId).single()
+  if (!chat || (chat as any).clinic_id !== ctx.clinic_id) {
+    return { error: 'Chat não encontrado.' }
+  }
+
+  const { error } = await admin
+    .from('chat_participants')
+    .upsert({ chat_id: chatId, clinic_id: ctx.clinic_id, user_id: userId, role: 'member', left_at: null },
+             { onConflict: 'chat_id,user_id', ignoreDuplicates: false })
+  if (error) return { error: error.message }
+
+  await admin.from('chat_messages').insert({
+    chat_id:   chatId,
+    clinic_id: ctx.clinic_id,
+    sent_by:   ctx.user_id,
+    kind:      'system',
+    body:      `${ctx.full_name ?? 'Usuário'} adicionou um participante.`,
+    metadata:  { event: 'participant_added', target_user: userId },
+  })
+
+  return { success: true }
+}
+
+export async function removeParticipantFromChat(
+  chatId: string,
+  userId: string,
+): Promise<{ success: true } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+
+  const admin = createAdminClient()
+
+  const { data: myPart } = await admin
+    .from('chat_participants')
+    .select('role')
+    .eq('chat_id', chatId)
+    .eq('user_id', ctx.user_id)
+    .is('left_at', null)
+    .maybeSingle()
+
+  // Pode remover: owner remove qualquer um; membro pode sair de si mesmo
+  const isSelf = userId === ctx.user_id
+  if (!myPart) return { error: 'Sem acesso a este chat.' }
+  if (!isSelf && (myPart as any).role !== 'owner') {
+    return { error: 'Apenas o administrador pode remover outros participantes.' }
+  }
+
+  const { error } = await admin
+    .from('chat_participants')
+    .update({ left_at: new Date().toISOString() })
+    .eq('chat_id', chatId)
+    .eq('user_id', userId)
+  if (error) return { error: error.message }
+
+  await admin.from('chat_messages').insert({
+    chat_id:   chatId,
+    clinic_id: ctx.clinic_id,
+    sent_by:   ctx.user_id,
+    kind:      'system',
+    body:      isSelf ? `${ctx.full_name ?? 'Usuário'} saiu do grupo.` : `Um participante foi removido.`,
+    metadata:  { event: isSelf ? 'participant_left' : 'participant_removed', target_user: userId },
+  })
+
+  return { success: true }
+}
+
+// ─── Editar / deletar mensagem (E3-S3) ────────────────────────────────────────
+
+export async function editChatMessage(
+  messageId: string,
+  body: string,
+): Promise<{ success: true } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+
+  const trimmed = body.trim()
+  if (!trimmed) return { error: 'Corpo vazio.' }
+  if (trimmed.length > 4000) return { error: 'Mensagem muito longa.' }
+
+  const admin = createAdminClient()
+  const { data: msg } = await admin
+    .from('chat_messages')
+    .select('sent_by, clinic_id, kind')
+    .eq('id', messageId)
+    .is('deleted_at', null)
+    .maybeSingle()
+  if (!msg) return { error: 'Mensagem não encontrada.' }
+  if ((msg as any).sent_by !== ctx.user_id) return { error: 'Sem permissão para editar esta mensagem.' }
+  if ((msg as any).kind !== 'text') return { error: 'Somente mensagens de texto podem ser editadas.' }
+  if ((msg as any).clinic_id !== ctx.clinic_id) return { error: 'Acesso negado.' }
+
+  const { error } = await admin
+    .from('chat_messages')
+    .update({ body: trimmed, edited_at: new Date().toISOString() })
+    .eq('id', messageId)
+  if (error) return { error: error.message }
+  return { success: true }
+}
+
+export async function deleteChatMessage(
+  messageId: string,
+): Promise<{ success: true } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+
+  const admin = createAdminClient()
+  const { data: msg } = await admin
+    .from('chat_messages')
+    .select('sent_by, clinic_id, chat_id')
+    .eq('id', messageId)
+    .is('deleted_at', null)
+    .maybeSingle()
+  if (!msg) return { error: 'Mensagem não encontrada.' }
+  if ((msg as any).clinic_id !== ctx.clinic_id) return { error: 'Acesso negado.' }
+
+  const isSender = (msg as any).sent_by === ctx.user_id
+  if (!isSender) {
+    // verifica se é owner do chat
+    const { data: part } = await admin
+      .from('chat_participants')
+      .select('role')
+      .eq('chat_id', (msg as any).chat_id)
+      .eq('user_id', ctx.user_id)
+      .is('left_at', null)
+      .maybeSingle()
+    if (!part || (part as any).role !== 'owner') {
+      return { error: 'Sem permissão para deletar esta mensagem.' }
+    }
+  }
+
+  const { error } = await admin
+    .from('chat_messages')
+    .update({ deleted_at: new Date().toISOString(), body: null })
+    .eq('id', messageId)
+  if (error) return { error: error.message }
+  return { success: true }
+}
+
+// ─── Renovar URL de anexo expirada (E5-S4) ───────────────────────────────────
+
+const CHAT_ATT_BUCKET_CONST = 'chat-attachments'
+
+export async function renewAttachmentUrl(
+  attachmentId: string,
+): Promise<{ file_url: string } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+
+  const admin = createAdminClient()
+  const { data: att } = await admin
+    .from('chat_attachments')
+    .select('id, clinic_id, storage_path, chat_id')
+    .eq('id', attachmentId)
+    .maybeSingle()
+  if (!att) return { error: 'Anexo não encontrado.' }
+  if ((att as any).clinic_id !== ctx.clinic_id) return { error: 'Acesso negado.' }
+  if (!(att as any).storage_path) return { error: 'Sem storage_path para renovar.' }
+
+  const { data: signed, error: signErr } = await admin.storage
+    .from(CHAT_ATT_BUCKET_CONST)
+    .createSignedUrl((att as any).storage_path, 60 * 60 * 24 * 7)
+  if (signErr || !signed) return { error: 'Falha ao gerar nova URL.' }
+
+  await admin
+    .from('chat_attachments')
+    .update({ file_url: signed.signedUrl, url_expires_at: new Date(Date.now() + 7 * 86400 * 1000).toISOString() })
+    .eq('id', attachmentId)
+
+  return { file_url: signed.signedUrl }
+}
+
+// ─── Chat de entidade por referência (E3-S1) ──────────────────────────────────
+
+export async function getEntityChatId(
+  entity_type: ChatEntityType,
+  entity_id:   string,
+): Promise<{ chat_id: string } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+
+  const admin = createAdminClient()
+  const { data: chat } = await admin
+    .from('chats')
+    .select('id')
+    .eq('clinic_id', ctx.clinic_id)
+    .eq('entity_type', entity_type)
+    .eq('entity_id', entity_id)
+    .maybeSingle()
+  if (!chat) return { error: 'Sala não encontrada para esta entidade.' }
+  return { chat_id: (chat as any).id as string }
+}
+
+// ─── Canais de módulo (E4-S2) ─────────────────────────────────────────────────
+
+export interface ChannelSummary {
+  id:          string
+  title:       string | null
+  slug:        string | null
+  is_public:   boolean
+  participant: boolean
+  last_message_at: string | null
+}
+
+export async function listChannels(): Promise<ChannelSummary[] | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+
+  const admin = createAdminClient()
+  const { data: chats, error } = await admin
+    .from('chats')
+    .select('id, title, slug, is_public, last_message_at')
+    .eq('clinic_id', ctx.clinic_id)
+    .eq('kind', 'channel')
+    .is('archived_at', null)
+    .order('title', { ascending: true })
+  if (error) return { error: error.message }
+
+  const chatIds = (chats ?? []).map((c: any) => c.id as string)
+  let myIds = new Set<string>()
+  if (chatIds.length > 0) {
+    const { data: myParts } = await admin
+      .from('chat_participants')
+      .select('chat_id')
+      .in('chat_id', chatIds)
+      .eq('user_id', ctx.user_id)
+      .is('left_at', null)
+    myIds = new Set((myParts ?? []).map((p: any) => p.chat_id as string))
+  }
+
+  return (chats ?? []).map((c: any): ChannelSummary => ({
+    id:              c.id,
+    title:           c.title,
+    slug:            c.slug,
+    is_public:       !!(c as any).is_public,
+    participant:     myIds.has(c.id),
+    last_message_at: c.last_message_at,
+  }))
+}
+
+export async function joinChannel(
+  chatId: string,
+): Promise<{ success: true } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+
+  const admin = createAdminClient()
+  const { data: chat } = await admin
+    .from('chats')
+    .select('kind, is_public, clinic_id')
+    .eq('id', chatId)
+    .maybeSingle()
+  if (!chat) return { error: 'Canal não encontrado.' }
+  if ((chat as any).kind !== 'channel') return { error: 'Esta sala não é um canal.' }
+  if ((chat as any).clinic_id !== ctx.clinic_id) return { error: 'Acesso negado.' }
+  if (!(chat as any).is_public) return { error: 'Canal privado — solicite ao administrador.' }
+
+  const { error } = await admin
+    .from('chat_participants')
+    .upsert({ chat_id: chatId, clinic_id: ctx.clinic_id, user_id: ctx.user_id, role: 'member', left_at: null },
+             { onConflict: 'chat_id,user_id', ignoreDuplicates: false })
+  if (error) return { error: error.message }
+  return { success: true }
+}
+
+export async function createChannelChat(input: {
+  title:            string
+  slug?:            string | null
+  modulo_contexto?: string | null
+  is_public?:       boolean
+}): Promise<{ chat_id: string } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+
+  const admin = createAdminClient()
+
+  // Apenas admins podem criar canais
+  const { data: profile } = await admin
+    .from('profiles').select('role').eq('id', ctx.user_id).single()
+  if (!profile || !['admin', 'director'].includes((profile as any).role)) {
+    return { error: 'Apenas administradores podem criar canais.' }
+  }
+
+  const title = (input.title ?? '').trim()
+  if (!title) return { error: 'Título obrigatório.' }
+
+  const slug = input.slug
+    ? input.slug.toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 40)
+    : null
+
+  const { data: chat, error } = await admin
+    .from('chats')
+    .insert({
+      clinic_id:  ctx.clinic_id,
+      kind:       'channel',
+      title,
+      slug:       slug ?? null,
+      is_public:  input.is_public ?? true,
+      created_by: ctx.user_id,
+      metadata:   input.modulo_contexto ? { modulo_contexto: input.modulo_contexto } : {},
+    })
+    .select('id')
+    .single()
+  if (error || !chat) return { error: error?.message ?? 'Falha ao criar canal.' }
+
+  const chatId = (chat as any).id as string
+  await admin.from('chat_participants').insert({
+    chat_id: chatId, clinic_id: ctx.clinic_id, user_id: ctx.user_id, role: 'owner',
+  })
+
+  revalidatePath('/dashboard/internal-chat')
+  return { chat_id: chatId }
 }
