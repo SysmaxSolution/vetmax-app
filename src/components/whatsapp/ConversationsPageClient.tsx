@@ -15,6 +15,8 @@ import {
   returnConversationsToBotBulk,
   markWppRead,
   markWppUnread,
+  markWppReadBulk,
+  markWppUnreadBulk,
   toggleWppPin,
   type WppConversation,
   type WppMessage,
@@ -275,6 +277,30 @@ export default function ConversationsPageClient({
     })
   }
 
+  function handleBulkMarkRead() {
+    const ids = Array.from(bulkSelected)
+    if (ids.length === 0 || isPending) return
+    startTransition(async () => {
+      const res = await markWppReadBulk(ids)
+      if ('error' in res) { showToast(res.error, 'error'); return }
+      setConversations(prev => prev.map(c => ids.includes(c.id) ? { ...c, unread_count: 0 } : c))
+      showToast(`${res.updated} conversa${res.updated !== 1 ? 's' : ''} marcada${res.updated !== 1 ? 's' : ''} como lida${res.updated !== 1 ? 's' : ''}.`)
+      exitBulkMode()
+    })
+  }
+
+  function handleBulkMarkUnread() {
+    const ids = Array.from(bulkSelected)
+    if (ids.length === 0 || isPending) return
+    startTransition(async () => {
+      const res = await markWppUnreadBulk(ids)
+      if ('error' in res) { showToast(res.error, 'error'); return }
+      setConversations(prev => prev.map(c => ids.includes(c.id) ? { ...c, unread_count: 1 } : c))
+      showToast(`${res.updated} conversa${res.updated !== 1 ? 's' : ''} marcada${res.updated !== 1 ? 's' : ''} como não lida${res.updated !== 1 ? 's' : ''}.`)
+      exitBulkMode()
+    })
+  }
+
   // ─── Context menu (botão direito) ────────────────────────────────────────
   function handleConvRightClick(e: React.MouseEvent, conv: WppConversation) {
     e.preventDefault()
@@ -420,6 +446,22 @@ export default function ConversationsPageClient({
                   title="Devolver selecionadas ao atendimento automático"
                 >
                   <Bot className="h-3 w-3" /> Bot
+                </button>
+                <button
+                  onClick={handleBulkMarkRead}
+                  disabled={bulkSelected.size === 0 || isPending}
+                  className="flex items-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-40"
+                  title="Marcar selecionadas como lidas"
+                >
+                  <CheckCheck className="h-3 w-3" /> Lidas
+                </button>
+                <button
+                  onClick={handleBulkMarkUnread}
+                  disabled={bulkSelected.size === 0 || isPending}
+                  className="flex items-center gap-1 rounded-lg bg-slate-600 hover:bg-slate-700 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-40"
+                  title="Marcar selecionadas como não lidas"
+                >
+                  <CheckCheck className="h-3 w-3 opacity-40" /> Não lidas
                 </button>
               </div>
             )}

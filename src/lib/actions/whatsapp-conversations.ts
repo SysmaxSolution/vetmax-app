@@ -319,6 +319,40 @@ export async function markAllWppRead(): Promise<{ success: true } | { error: str
   return { success: true }
 }
 
+export async function markWppReadBulk(
+  conversationIds: string[],
+): Promise<{ updated: number } | { error: string }> {
+  if (!conversationIds.length) return { error: 'Nenhuma conversa selecionada.' }
+  const auth = await getClinicId()
+  if ('error' in auth) return auth
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('whatsapp_conversations')
+    .update({ unread_count: 0 })
+    .eq('clinic_id', auth.clinicId)
+    .in('id', conversationIds)
+    .select('id')
+  if (error) return { error: error.message }
+  return { updated: (data ?? []).length }
+}
+
+export async function markWppUnreadBulk(
+  conversationIds: string[],
+): Promise<{ updated: number } | { error: string }> {
+  if (!conversationIds.length) return { error: 'Nenhuma conversa selecionada.' }
+  const auth = await getClinicId()
+  if ('error' in auth) return auth
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('whatsapp_conversations')
+    .update({ unread_count: 1 })
+    .eq('clinic_id', auth.clinicId)
+    .in('id', conversationIds)
+    .select('id')
+  if (error) return { error: error.message }
+  return { updated: (data ?? []).length }
+}
+
 // ─── Pin / unpin ──────────────────────────────────────────────────────────────
 
 export async function toggleWppPin(
