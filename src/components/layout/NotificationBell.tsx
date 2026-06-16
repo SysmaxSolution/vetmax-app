@@ -58,6 +58,8 @@ export default function NotificationBell({ clinicId }: { clinicId: string }) {
   })
   const [ringing, setRinging] = useState(false)
   const [marking, setMarking] = useState(false)
+  const [ddTop,   setDdTop]   = useState(0)
+  const [ddRight, setDdRight] = useState(8)
 
   const wrapperRef     = useRef<HTMLDivElement | null>(null)
   const prevChat       = useRef(-1)   // -1 = primeira carga, não dispara efeitos
@@ -153,6 +155,21 @@ export default function NotificationBell({ clinicId }: { clinicId: string }) {
     return () => document.removeEventListener('keydown', onKey)
   }, [open])
 
+  // Posicionar dropdown com fixed+getBoundingClientRect para escapar de
+  // stacking-context e overflow-hidden do header sticky.
+  useEffect(() => {
+    if (!open || !wrapperRef.current) return
+    function measure() {
+      if (!wrapperRef.current) return
+      const rect = wrapperRef.current.getBoundingClientRect()
+      setDdTop(rect.bottom + 8)
+      setDdRight(Math.max(8, window.innerWidth - rect.right))
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [open])
+
   async function handleMarkAllRead() {
     if (marking || !hasChatUnread) return
     setMarking(true)
@@ -207,7 +224,8 @@ export default function NotificationBell({ clinicId }: { clinicId: string }) {
           <div
             role="dialog"
             aria-label="Painel de notificações"
-            className="fixed sm:absolute right-2 sm:right-0 top-[68px] sm:top-full sm:mt-2 z-[10050] w-[calc(100vw-1rem)] sm:w-80 max-w-[22rem] rounded-xl border border-slate-200 bg-white shadow-2xl overflow-hidden"
+            style={{ top: ddTop, right: ddRight }}
+            className="fixed z-[10050] w-[calc(100vw-1rem)] sm:w-80 max-w-[22rem] rounded-xl border border-slate-200 bg-white shadow-2xl overflow-hidden"
           >
             {/* Cabeçalho */}
             <div className="border-b border-slate-100 px-4 py-2.5 flex items-center justify-between gap-2">
