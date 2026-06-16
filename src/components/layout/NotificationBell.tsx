@@ -207,7 +207,7 @@ export default function NotificationBell({ clinicId }: { clinicId: string }) {
           <div
             role="dialog"
             aria-label="Painel de notificações"
-            className="absolute right-0 top-full mt-2 z-[10050] w-80 max-w-[calc(100vw-1rem)] rounded-xl border border-slate-200 bg-white shadow-2xl overflow-hidden"
+            className="fixed sm:absolute right-2 sm:right-0 top-[68px] sm:top-full sm:mt-2 z-[10050] w-[calc(100vw-1rem)] sm:w-80 max-w-[22rem] rounded-xl border border-slate-200 bg-white shadow-2xl overflow-hidden"
           >
             {/* Cabeçalho */}
             <div className="border-b border-slate-100 px-4 py-2.5 flex items-center justify-between gap-2">
