@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useTransition } from 'react'
-import { MessageCircle, Send, Bot, User, X, ArrowLeft, RotateCcw, Check, CheckSquare, Square } from 'lucide-react'
+import { MessageCircle, Send, Bot, User, X, ArrowLeft, RotateCcw, Check, CheckSquare, Square, Pin, CheckCheck } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import {
   getWhatsappConversations,
@@ -13,6 +13,9 @@ import {
   reopenConversation,
   takeOverConversationsBulk,
   returnConversationsToBotBulk,
+  markWppRead,
+  markWppUnread,
+  toggleWppPin,
   type WppConversation,
   type WppMessage,
 } from '@/lib/actions/whatsapp-conversations'
@@ -68,6 +71,7 @@ export default function ConversationsPageClient({
   const [toast,         setToast]         = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
   const [isPending,     startTransition]  = useTransition()
   const [mobileView,    setMobileView]    = useState<'list' | 'chat'>('list')
+  const [ctxMenu,       setCtxMenu]       = useState<{ x: number; y: number; conv: WppConversation } | null>(null)
   const endRef        = useRef<HTMLDivElement>(null)
   const selectedIdRef = useRef<string | null>(null)
 
@@ -147,6 +151,9 @@ export default function ConversationsPageClient({
     const res = await getConversationMessages(id)
     setLoadingMsgs(false)
     if (Array.isArray(res)) setMessages(res)
+    // Zera não-lidos otimisticamente ao abrir a conversa
+    setConversations(prev => prev.map(c => c.id === id ? { ...c, unread_count: 0 } : c))
+    void markWppRead(id)
   }
 
   async function refreshAll() {
@@ -268,7 +275,45 @@ export default function ConversationsPageClient({
     })
   }
 
-  const filtered = conversations.filter(c =>
+  // ─── Context menu (botão direito) ────────────────────────────────────────
+  function handleConvRightClick(e: React.MouseEvent, conv: WppConversation) {
+    e.preventDefault()
+    setCtxMenu({ x: e.clientX, y: e.clientY, conv })
+  }
+
+  async function handleCtxTogglePin() {
+    if (!ctxMenu) return
+    const { conv } = ctxMenu
+    setCtxMenu(null)
+    await toggleWppPin(conv.id)
+    await refreshAll()
+  }
+
+  async function handleCtxToggleRead() {
+    if (!ctxMenu) return
+    const { conv } = ctxMenu
+    setCtxMenu(null)
+    if (conv.unread_count > 0) {
+      setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, unread_count: 0 } : c))
+      void markWppRead(conv.id)
+    } else {
+      setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, unread_count: 1 } : c))
+      void markWppUnread(conv.id)
+    }
+  }
+
+  // Pinned first (by pin_order), then by last_message_at desc
+  const sorted = [...conversations].sort((a, b) => {
+    const aPinned = a.pinned_at !== null
+    const bPinned = b.pinned_at !== null
+    if (aPinned !== bPinned) return aPinned ? -1 : 1
+    if (aPinned && bPinned) return (a.pin_order ?? 0) - (b.pin_order ?? 0)
+    const aTime = a.last_message_at ? new Date(a.last_message_at).getTime() : 0
+    const bTime = b.last_message_at ? new Date(b.last_message_at).getTime() : 0
+    return bTime - aTime
+  })
+
+  const filtered = sorted.filter(c =>
     filter === 'all' ? c.status !== 'closed' : c.status === filter
   )
 
@@ -391,6 +436,7 @@ export default function ConversationsPageClient({
                   return (
                     <div
                       key={conv.id}
+                      onContextMenu={(e) => !bulkMode && handleConvRightClick(e, conv)}
                       className={`flex items-center gap-2 px-2 py-3 hover:bg-slate-50 transition-colors ${
                         selectedId === conv.id && !bulkMode ? 'bg-slate-100 border-l-2 border-teal-500' : ''
                       } ${isChecked ? 'bg-teal-50/50' : ''}`}
@@ -429,12 +475,24 @@ export default function ConversationsPageClient({
                             </div>
                           </div>
                           <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                            <span className={`text-[10px] font-bold rounded-full px-1.5 py-0.5 ${STATUS_CFG[conv.status].color}`}>
-                              {STATUS_CFG[conv.status].label}
-                            </span>
-                            {conv.last_message_at && (
-                              <span className="text-[10px] text-slate-400">{timeLabel(conv.last_message_at)}</span>
-                            )}
+                            <div className="flex items-center gap-1">
+                              {conv.pinned_at && (
+                                <Pin className="h-3 w-3 text-amber-500" />
+                              )}
+                              <span className={`text-[10px] font-bold rounded-full px-1.5 py-0.5 ${STATUS_CFG[conv.status].color}`}>
+                                {STATUS_CFG[conv.status].label}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              {conv.last_message_at && (
+                                <span className="text-[10px] text-slate-400">{timeLabel(conv.last_message_at)}</span>
+                              )}
+                              {conv.unread_count > 0 && (
+                                <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-emerald-500 px-1 text-[9px] font-bold text-white">
+                                  {conv.unread_count > 99 ? '99+' : conv.unread_count}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </button>
@@ -589,6 +647,36 @@ export default function ConversationsPageClient({
           </div>
         </div>
       </div>
+
+      {/* Context menu — botão direito sobre conversa */}
+      {ctxMenu && (
+        <>
+          <div
+            className="fixed inset-0 z-[10080]"
+            onClick={() => setCtxMenu(null)}
+            onContextMenu={(e) => { e.preventDefault(); setCtxMenu(null) }}
+          />
+          <div
+            className="fixed z-[10090] min-w-[190px] rounded-xl border border-slate-200 bg-white py-1 shadow-2xl"
+            style={{ top: ctxMenu.y, left: Math.min(ctxMenu.x, window.innerWidth - 200) }}
+          >
+            <button
+              className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+              onClick={handleCtxTogglePin}
+            >
+              <Pin className="h-3.5 w-3.5 text-amber-500" />
+              {ctxMenu.conv.pinned_at ? 'Desafixar conversa' : 'Fixar conversa'}
+            </button>
+            <button
+              className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+              onClick={handleCtxToggleRead}
+            >
+              <CheckCheck className="h-3.5 w-3.5 text-emerald-500" />
+              {ctxMenu.conv.unread_count > 0 ? 'Marcar como lida' : 'Marcar como não lida'}
+            </button>
+          </div>
+        </>
+      )}
     </>
   )
 }

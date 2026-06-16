@@ -732,12 +732,12 @@ export async function getNotificationCounts(): Promise<NotificationCounts | { er
 
   const admin = createAdminClient()
 
-  // WhatsApp: conversas em status human (handoff pendente)
+  // WhatsApp: conversas com mensagens não lidas
   const wppQ = admin
     .from('whatsapp_conversations')
     .select('id', { count: 'exact', head: true })
     .eq('clinic_id', ctx.clinic_id)
-    .eq('status', 'human')
+    .gt('unread_count', 0)
 
   // Internação: tarefas atrasadas — best-effort. Se a tabela não existir, conta 0.
   const hospQ = admin

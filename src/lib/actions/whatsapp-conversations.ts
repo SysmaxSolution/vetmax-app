@@ -13,6 +13,9 @@ export interface WppConversation {
   status:          'bot' | 'human' | 'closed'
   last_message_at: string | null
   created_at:      string
+  unread_count:    number
+  pinned_at:       string | null
+  pin_order:       number | null
 }
 
 export interface WppMessage {
@@ -49,7 +52,7 @@ export async function getWhatsappConversations(
   const admin = createAdminClient()
   let query = admin
     .from('whatsapp_conversations')
-    .select('id, tutor_phone, tutor_name, status, last_message_at, created_at')
+    .select('id, tutor_phone, tutor_name, status, last_message_at, created_at, unread_count, pinned_at, pin_order')
     .eq('clinic_id', auth.clinicId)
     .order('last_message_at', { ascending: false, nullsFirst: false })
     .limit(50)
@@ -268,5 +271,95 @@ export async function reopenConversation(
     .eq('clinic_id', auth.clinicId)
 
   if (error) return { error: error.message }
+  return { success: true }
+}
+
+// ─── Unread / read ────────────────────────────────────────────────────────────
+
+export async function markWppRead(
+  conversationId: string,
+): Promise<{ success: true } | { error: string }> {
+  const auth = await getClinicId()
+  if ('error' in auth) return auth
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('whatsapp_conversations')
+    .update({ unread_count: 0 })
+    .eq('id', conversationId)
+    .eq('clinic_id', auth.clinicId)
+  if (error) return { error: error.message }
+  return { success: true }
+}
+
+export async function markWppUnread(
+  conversationId: string,
+): Promise<{ success: true } | { error: string }> {
+  const auth = await getClinicId()
+  if ('error' in auth) return auth
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('whatsapp_conversations')
+    .update({ unread_count: 1 })
+    .eq('id', conversationId)
+    .eq('clinic_id', auth.clinicId)
+  if (error) return { error: error.message }
+  return { success: true }
+}
+
+export async function markAllWppRead(): Promise<{ success: true } | { error: string }> {
+  const auth = await getClinicId()
+  if ('error' in auth) return auth
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('whatsapp_conversations')
+    .update({ unread_count: 0 })
+    .eq('clinic_id', auth.clinicId)
+    .gt('unread_count', 0)
+  if (error) return { error: error.message }
+  return { success: true }
+}
+
+// ─── Pin / unpin ──────────────────────────────────────────────────────────────
+
+export async function toggleWppPin(
+  conversationId: string,
+): Promise<{ success: true } | { error: string }> {
+  const auth = await getClinicId()
+  if ('error' in auth) return auth
+  const admin = createAdminClient()
+
+  const { data: conv } = await admin
+    .from('whatsapp_conversations')
+    .select('pinned_at, pin_order')
+    .eq('id', conversationId)
+    .eq('clinic_id', auth.clinicId)
+    .maybeSingle()
+  if (!conv) return { error: 'Conversa não encontrada.' }
+
+  if (conv.pinned_at !== null) {
+    const { error } = await admin
+      .from('whatsapp_conversations')
+      .update({ pinned_at: null, pin_order: null })
+      .eq('id', conversationId)
+      .eq('clinic_id', auth.clinicId)
+    if (error) return { error: error.message }
+  } else {
+    const { data: maxRow } = await admin
+      .from('whatsapp_conversations')
+      .select('pin_order')
+      .eq('clinic_id', auth.clinicId)
+      .not('pin_order', 'is', null)
+      .order('pin_order', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    const nextOrder = ((maxRow?.pin_order as number | null) ?? 0) + 1
+    const { error } = await admin
+      .from('whatsapp_conversations')
+      .update({ pinned_at: new Date().toISOString(), pin_order: nextOrder })
+      .eq('id', conversationId)
+      .eq('clinic_id', auth.clinicId)
+    if (error) return { error: error.message }
+  }
+
   return { success: true }
 }

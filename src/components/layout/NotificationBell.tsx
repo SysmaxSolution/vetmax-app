@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Bell, MessageCircle, MessageSquare, BedDouble, Volume2, VolumeX, CheckCheck, X, CheckCircle2 } from 'lucide-react'
 import { getNotificationCounts, markAllChatsRead, type NotificationCounts } from '@/lib/actions/internal-chat'
+import { markAllWppRead } from '@/lib/actions/whatsapp-conversations'
 import { createClient } from '@/lib/supabase/client'
 
 // ─── Web Audio chime (dois tons, sem arquivo) ─────────────────────────────────
@@ -171,18 +172,22 @@ export default function NotificationBell({ clinicId }: { clinicId: string }) {
   }, [open])
 
   async function handleMarkAllRead() {
-    if (marking || !hasChatUnread) return
+    const hasMessages = counts.chat_unread > 0 || counts.whatsapp_unread > 0
+    if (marking || !hasMessages) return
     setMarking(true)
-    const res = await markAllChatsRead()
-    if (!('error' in res)) {
-      prevChat.current = 0
-      setCounts(c => ({ ...c, chat_unread: 0, total: c.whatsapp_unread + c.hospitalization_alerts }))
-    }
+    await Promise.all([
+      counts.chat_unread    > 0 ? markAllChatsRead() : Promise.resolve(),
+      counts.whatsapp_unread > 0 ? markAllWppRead()  : Promise.resolve(),
+    ])
+    prevChat.current = 0
+    prevWa.current   = 0
+    setCounts(c => ({ ...c, chat_unread: 0, whatsapp_unread: 0, total: c.hospitalization_alerts }))
     setMarking(false)
   }
 
-  const hasChatUnread = counts.chat_unread > 0
-  const hasAny        = counts.total > 0
+  const hasUnreadMessages = counts.chat_unread > 0 || counts.whatsapp_unread > 0
+  const hasChatUnread     = counts.chat_unread > 0
+  const hasAny            = counts.total > 0
 
   return (
     <>
@@ -240,11 +245,11 @@ export default function NotificationBell({ clinicId }: { clinicId: string }) {
                 {/* Marcar chat como lido — sempre visível, desabilitado quando não há não-lidas */}
                 <button
                   type="button"
-                  title={hasChatUnread ? 'Marcar mensagens de chat como lidas' : 'Nenhuma mensagem não lida no chat'}
+                  title={hasUnreadMessages ? 'Marcar todas as mensagens como lidas' : 'Nenhuma mensagem não lida'}
                   onClick={handleMarkAllRead}
-                  disabled={!hasChatUnread || marking}
+                  disabled={!hasUnreadMessages || marking}
                   className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                    hasChatUnread && !marking
+                    hasUnreadMessages && !marking
                       ? 'text-violet-700 hover:bg-violet-50 cursor-pointer'
                       : 'text-slate-300 cursor-not-allowed'
                   }`}
@@ -295,8 +300,8 @@ export default function NotificationBell({ clinicId }: { clinicId: string }) {
                     <p className="text-sm font-semibold text-slate-900">WhatsApp</p>
                     <p className="text-xs text-slate-500 truncate">
                       {counts.whatsapp_unread > 0
-                        ? `${counts.whatsapp_unread} conversa${counts.whatsapp_unread > 1 ? 's' : ''} aguardando atendimento`
-                        : 'Nenhuma conversa pendente'}
+                        ? `${counts.whatsapp_unread} mensagem${counts.whatsapp_unread > 1 ? 'ns' : ''} não lida${counts.whatsapp_unread > 1 ? 's' : ''}`
+                        : 'Nenhuma mensagem não lida'}
                     </p>
                   </div>
                   {counts.whatsapp_unread > 0 ? (

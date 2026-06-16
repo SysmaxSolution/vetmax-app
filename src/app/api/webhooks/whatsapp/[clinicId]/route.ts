@@ -275,6 +275,8 @@ async function processInboundMessage(params: {
     .update({ last_message_at: new Date().toISOString() })
     .eq('id', conversation.id)
 
+  void admin.rpc('fn_wpp_increment_unread', { p_conv_id: conversation.id })
+
   // 4. Bot inativo: mensagem salva, clínica responde manualmente — sem IA
   if (!botConfig.is_active) {
     console.info(`[WPP Bot] clinicId=${clinicId} — bot inativo, mensagem salva para atendimento manual`)
