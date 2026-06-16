@@ -10,16 +10,19 @@ export default async function WhatsappPage() {
 
   const [conversations, profileRes] = await Promise.all([
     getWhatsappConversations(),
-    supabase.from('profiles').select('clinic_id').eq('id', user.id).single(),
+    supabase.from('profiles').select('clinic_id, full_name').eq('id', user.id).single(),
   ])
 
-  const clinicId = profileRes.data?.clinic_id ?? ''
+  const clinicId       = profileRes.data?.clinic_id ?? ''
+  const currentUserName = profileRes.data?.full_name ?? null
 
   return (
     <div className="mx-auto max-w-4xl px-3 sm:px-6 py-6">
       <ConversationsPageClient
         initialConversations={Array.isArray(conversations) ? conversations : []}
         clinicId={clinicId}
+        currentUserId={user.id}
+        currentUserName={currentUserName}
       />
     </div>
   )

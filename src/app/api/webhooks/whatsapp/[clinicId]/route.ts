@@ -277,6 +277,80 @@ async function processInboundMessage(params: {
 
   void admin.rpc('fn_wpp_increment_unread', { p_conv_id: conversation.id })
 
+  // Feature 6: Urgência por palavra-chave
+  void (async () => {
+    try {
+      const { data: settings } = await admin
+        .from('clinic_settings')
+        .select('wpp_urgency_keywords')
+        .eq('clinic_id', clinicId)
+        .maybeSingle()
+      const keywords: string[] = (settings?.wpp_urgency_keywords as string[] | null) ?? [
+        'convulsão','convulsao','sangramento','atropelado',
+        'não respira','nao respira','envenenado','inconsciente',
+        'dificuldade respiratoria','dificuldade respiratória',
+        'desmaio','paralisia','urgente','emergência','emergencia',
+        'socorro','engasgou','engasgado',
+      ]
+      const lower = messageText.toLowerCase()
+      if (keywords.some(kw => lower.includes(kw.toLowerCase()))) {
+        await admin.from('whatsapp_conversations').update({ is_urgent: true }).eq('id', conversation!.id)
+        console.info(`[WPP] Urgência detectada: conv=${conversation!.id}`)
+      }
+    } catch (e) {
+      console.error('[WPP] urgency detection error:', e)
+    }
+  })()
+
+  // Feature 7: LGPD — aceitação passiva no primeiro contato
+  void (async () => {
+    try {
+      const { data: convData } = await admin
+        .from('whatsapp_conversations')
+        .select('lgpd_accepted_at')
+        .eq('id', conversation!.id)
+        .maybeSingle()
+      if (convData && !convData.lgpd_accepted_at) {
+        await admin.from('whatsapp_conversations')
+          .update({ lgpd_accepted_at: new Date().toISOString() })
+          .eq('id', conversation!.id)
+      }
+    } catch (e) {
+      console.error('[WPP] LGPD tracking error:', e)
+    }
+  })()
+
+  // Feature 4: Parsing resposta de confirmação de consulta (1=confirmar, 2=cancelar)
+  const confirmTrimmed = messageText.trim()
+  if (confirmTrimmed === '1' || confirmTrimmed === '2') {
+    void (async () => {
+      try {
+        const newStatus = confirmTrimmed === '1' ? 'confirmed' : 'cancelled'
+        const cleanPhone = phone.replace(/\D/g, '').slice(-8)
+        const { data: tutor } = await admin
+          .from('tutors').select('id').eq('clinic_id', clinicId)
+          .ilike('phone', `%${cleanPhone}%`).limit(1).maybeSingle()
+        if (tutor) {
+          const { data: pets } = await admin
+            .from('patients').select('id').eq('clinic_id', clinicId).eq('tutor_id', tutor.id)
+          const petIds = (pets ?? []).map((p: { id: string }) => p.id)
+          if (petIds.length) {
+            const { data: updated } = await admin
+              .from('consultations')
+              .update({ wpp_confirmation_status: newStatus })
+              .eq('clinic_id', clinicId).eq('wpp_confirmation_status', 'pending')
+              .in('patient_id', petIds).select('id')
+            if (updated?.length) {
+              console.info(`[WPP] Confirmação ${newStatus}: ${updated.length} consulta(s)`)
+            }
+          }
+        }
+      } catch (e) {
+        console.error('[WPP] confirmation parse error:', e)
+      }
+    })()
+  }
+
   // 4. Bot inativo: mensagem salva, clínica responde manualmente — sem IA
   if (!botConfig.is_active) {
     console.info(`[WPP Bot] clinicId=${clinicId} — bot inativo, mensagem salva para atendimento manual`)
