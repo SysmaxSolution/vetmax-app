@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Info, History, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import CashierSessionControl from './CashierSessionControl'
 import LiveReconciliationPanel from './LiveReconciliationPanel'
+import OperatorCashierStats from './OperatorCashierStats'
 import { listClosedSessions, type CashierSession } from '@/lib/actions/cashier-sessions'
 
 function fmt(v: number) {
@@ -86,6 +87,9 @@ export default function CashierTabSession({ session, userRole, onRefresh, onToas
           </div>
         </div>
       )}
+
+      {/* Quebra de caixa por operador (responsabilização) */}
+      {canHistory && <OperatorCashierStats />}
 
       {/* Histórico de fechamentos com divergência (auditoria por operador) */}
       {canHistory && history.length > 0 && (

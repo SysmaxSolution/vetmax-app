@@ -487,6 +487,102 @@ export async function listClosedSessions(limit = 30): Promise<
   }))
 }
 
+// ─── Quebra de caixa por operador (roadmap P2/council item 7) ───────────────
+
+export interface OperatorCashierStat {
+  operator_id:        string
+  operator_name:      string
+  closings:           number   // fechamentos com conferência cega
+  exact:              number   // bateu (|dif| < 0,01)
+  over:               number   // sobras (dif > 0)
+  short:              number   // faltas (dif < 0)
+  total_difference:   number   // soma assinada das diferenças
+  avg_abs_difference: number   // média do |diferença|
+  worst_difference:   number   // maior |diferença| (assinada)
+}
+
+/**
+ * Estatística de quebra de caixa por operador (responsabilização).
+ * Considera apenas sessões FECHADAS com conferência cega (difference != null),
+ * pois só elas comparam o contado físico com o esperado. Read-only.
+ */
+export async function getOperatorCashierStats(
+  sinceDays = 90,
+): Promise<OperatorCashierStat[] | { error: string }> {
+  const ctx = await getClinicContext()
+  if ('error' in ctx) return ctx
+
+  if (!['admin', 'owner', 'manager', 'accountant'].includes(ctx.role)) {
+    return { error: 'Acesso negado às estatísticas de fechamento' }
+  }
+
+  const cutoff = new Date(Date.now() - sinceDays * 86_400_000).toISOString()
+  const supabase = await createClient()
+  const [sessionsRes, affectedRes] = await Promise.all([
+    supabase
+      .from('cashier_sessions')
+      .select('id, closed_by, opened_by, difference, closed_at')
+      .eq('clinic_id', ctx.clinic_id)
+      .eq('status', 'closed')
+      .gte('closed_at', cutoff)
+      .not('difference', 'is', null),
+    // Sessões cuja divergência foi distorcida pelo bug do session_id
+    // (tiveram órfãos religados na remediação). A diferença gravada NÃO é
+    // culpa do operador — excluímos da responsabilização.
+    supabase
+      .from('cashier_orphan_backfill_log')
+      .select('new_session_id')
+      .eq('clinic_id', ctx.clinic_id),
+  ])
+
+  if (sessionsRes.error) return { error: sessionsRes.error.message }
+  const affected = new Set((affectedRes.data ?? []).map(r => r.new_session_id as string))
+  const sessions = (sessionsRes.data ?? []).filter(s => !affected.has(s.id as string))
+
+  const agg: Record<string, {
+    closings: number; exact: number; over: number; short: number
+    total: number; absSum: number; worst: number
+  }> = {}
+
+  for (const s of sessions) {
+    const op = (s.closed_by ?? s.opened_by ?? 'desconhecido') as string
+    const diff = Number(s.difference)
+    const a = agg[op] ?? (agg[op] = { closings: 0, exact: 0, over: 0, short: 0, total: 0, absSum: 0, worst: 0 })
+    a.closings += 1
+    a.total    += diff
+    a.absSum   += Math.abs(diff)
+    if (Math.abs(diff) < 0.01) a.exact += 1
+    else if (diff > 0)         a.over  += 1
+    else                       a.short += 1
+    if (Math.abs(diff) > Math.abs(a.worst)) a.worst = diff
+  }
+
+  // Resolve nomes
+  const ids = Object.keys(agg).filter(id => id !== 'desconhecido')
+  const names: Record<string, string> = {}
+  if (ids.length > 0) {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, full_name')
+      .in('id', ids)
+    for (const p of profiles ?? []) names[p.id] = p.full_name
+  }
+
+  return Object.entries(agg)
+    .map(([id, a]) => ({
+      operator_id:        id,
+      operator_name:      names[id] ?? 'Operador',
+      closings:           a.closings,
+      exact:              a.exact,
+      over:               a.over,
+      short:              a.short,
+      total_difference:   a.total,
+      avg_abs_difference: a.closings ? a.absSum / a.closings : 0,
+      worst_difference:   a.worst,
+    }))
+    .sort((x, y) => y.avg_abs_difference - x.avg_abs_difference)
+}
+
 /**
  * Verifica (confere) uma saída de caixa — admin/contador.
  * Espelho do verifyCashierEntry para o lado das saídas.
