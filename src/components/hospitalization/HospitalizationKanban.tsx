@@ -37,6 +37,7 @@ import {
 import { getOpenBalances } from '@/lib/actions/hospitalization-charges'
 import { listHospitalizationTasks, type HospTask } from '@/lib/actions/hospitalization-tasks'
 import { speciesLabel } from '@/lib/species'
+import AttendanceCardMenu from '@/components/shared/AttendanceCardMenu'
 
 const WARD_LABELS: Record<string, string> = {
   observation: 'Observação',
@@ -675,6 +676,7 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
                       onOpenMedAlert={() => setMedModalCard(card)}
                       onDischarge={handleDischargeRequest}
                       onOpen={() => { setDetailInitialTab(undefined); setSelectedCard(card) }}
+                      onCancelled={() => removeCardFromBoard(card.id)}
                     />
                   ))
                 )}
@@ -854,9 +856,10 @@ interface CardProps {
   onDischarge:   (card: HospitalizationCard) => void
   onOpen:        () => void
   onOpenMedAlert?: (card: HospitalizationCard) => void
+  onCancelled?:  () => void
 }
 
-function KanbanCard({ card, prescriptions, internacaoCompleta, openBalance, onDragStart, onDragEnd, onDischarge, onOpen, onOpenMedAlert }: CardProps) {
+function KanbanCard({ card, prescriptions, internacaoCompleta, openBalance, onDragStart, onDragEnd, onDischarge, onOpen, onOpenMedAlert, onCancelled }: CardProps) {
   const hours = Math.floor((Date.now() - new Date(card.created_at).getTime()) / (1000 * 60 * 60))
   const scheduler = useMedicationScheduler(prescriptions)
 
@@ -896,13 +899,21 @@ function KanbanCard({ card, prescriptions, internacaoCompleta, openBalance, onDr
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-1">
             <h4 className="font-bold text-slate-900 text-sm truncate">{card.patient.name}</h4>
-            {/* Badge sempre visível; a animação de pulso (med-icon-pulse) e o
-                alarme sonoro são exclusivos da Internação Completa. */}
-            <MedicationAlertBadge
-              scheduler={scheduler}
-              animate={internacaoCompleta}
-              onClick={() => onOpenMedAlert?.(card)}
-            />
+            <div className="flex items-center gap-0.5" onClick={e => { e.preventDefault(); e.stopPropagation() }}>
+              {/* Badge sempre visível; a animação de pulso (med-icon-pulse) e o
+                  alarme sonoro são exclusivos da Internação Completa. */}
+              <MedicationAlertBadge
+                scheduler={scheduler}
+                animate={internacaoCompleta}
+                onClick={() => onOpenMedAlert?.(card)}
+              />
+              <AttendanceCardMenu
+                entity="hospitalization"
+                id={card.id}
+                patientName={card.patient.name}
+                onCancelled={onCancelled}
+              />
+            </div>
             {card.status === 'ready_for_discharge' && (
               internacaoCompleta ? (
                 // Regra 4 — Alta Administrativa: habilitada só com a conta zerada.

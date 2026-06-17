@@ -4,18 +4,31 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
-export type AttendanceEntity = 'triage' | 'consultation' | 'exam'
+export type AttendanceEntity = 'triage' | 'consultation' | 'exam' | 'hospitalization' | 'surgery'
 
 const TABLE_BY_ENTITY: Record<AttendanceEntity, string> = {
-  triage:       'triage_records',
-  consultation: 'consultations',
-  exam:         'exam_requests',
+  triage:          'triage_records',
+  consultation:    'consultations',
+  exam:            'exam_requests',
+  hospitalization: 'hospitalizations',
+  surgery:         'surgeries',
+}
+
+// surgery usa grafia US 'canceled' (já existia no CHECK de surgeries)
+const STATUS_BY_ENTITY: Record<AttendanceEntity, string> = {
+  triage:          'cancelled',
+  consultation:    'cancelled',
+  exam:            'cancelled',
+  hospitalization: 'cancelled',
+  surgery:         'canceled',
 }
 
 const REVALIDATE_BY_ENTITY: Record<AttendanceEntity, string[]> = {
-  triage:       ['/dashboard/triage'],
-  consultation: ['/dashboard/vet', '/dashboard/reception'],
-  exam:         ['/dashboard/exams'],
+  triage:          ['/dashboard/triage'],
+  consultation:    ['/dashboard/vet', '/dashboard/reception'],
+  exam:            ['/dashboard/exams'],
+  hospitalization: ['/dashboard/hospitalization'],
+  surgery:         ['/dashboard/surgery'],
 }
 
 /**
@@ -44,18 +57,20 @@ export async function cancelAttendance(input: {
   if (!table) return { error: 'Entidade inválida.' }
 
   const admin = createAdminClient()
-  const { error } = await admin
+  const { data: updated, error } = await admin
     .from(table)
     .update({
-      status:              'cancelled',
+      status:              STATUS_BY_ENTITY[input.entity],
       cancellation_reason: reason,
       cancelled_at:        new Date().toISOString(),
       cancelled_by:        user.id,
     })
     .eq('id', input.id)
     .eq('clinic_id', profile.clinic_id)
+    .select('id')
 
   if (error) return { error: error.message }
+  if (!updated || updated.length === 0) return { error: 'Atendimento não encontrado ou você não tem permissão para cancelá-lo.' }
 
   for (const path of REVALIDATE_BY_ENTITY[input.entity]) {
     revalidatePath(path)

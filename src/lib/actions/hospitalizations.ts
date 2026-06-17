@@ -13,6 +13,7 @@ export type HospitalizationStatus =
   | 'icu'
   | 'ready_for_discharge'
   | 'discharged'
+  | 'cancelled'
 
 export type HospitalizationCard = {
   id:              string
@@ -81,7 +82,7 @@ export async function getHospitalizationsBoard(): Promise<HospitalizationBoard |
       patients ( id, name, species, breed, birth_date, gender, neutered, coat_color, photo_url, behavior_tags, tutors ( name, phone ) )
     `)
     .eq('clinic_id', clinicId)
-    .neq('status', 'discharged')
+    .not('status', 'in', '("discharged","cancelled")')
     .order('created_at', { ascending: true })
 
   if (error) return { error: 'Erro ao buscar internações: ' + error.message }

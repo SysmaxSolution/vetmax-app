@@ -55,6 +55,11 @@ interface NurseWorkspaceProps {
 export default function NurseWorkspace({ queue, history, clinicId }: NurseWorkspaceProps) {
   useRealtimeSync({ table: 'consultations', clinicId })
 
+  const [localQueue, setLocalQueue] = useState<TriageQueueItem[]>(queue)
+
+  // Sincroniza quando o servidor re-renderiza (ex: realtime refresh)
+  useEffect(() => { setLocalQueue(queue) }, [queue])
+
   const [tab, setTab] = useState<'fila' | 'historico'>('fila')
   const [showAddModal, setShowAddModal] = useState(false)
   const [addLoading, setAddLoading] = useState(false)
@@ -89,11 +94,11 @@ export default function NurseWorkspace({ queue, history, clinicId }: NurseWorksp
           >
             <Stethoscope className="h-4 w-4" />
             Fila de Espera
-            {queue.length > 0 && (
+            {localQueue.length > 0 && (
               <span className={`ml-1 rounded-full px-2 py-0.5 text-xs font-bold ${
                 tab === 'fila' ? 'bg-blue-100 text-blue-700' : 'bg-slate-200 text-slate-600'
               }`}>
-                {queue.length}
+                {localQueue.length}
               </span>
             )}
           </button>
@@ -133,7 +138,7 @@ export default function NurseWorkspace({ queue, history, clinicId }: NurseWorksp
               </div>
               <div className="flex items-center gap-2">
                 <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-600">
-                  {queue.length} {queue.length === 1 ? 'animal' : 'animais'}
+                  {localQueue.length} {localQueue.length === 1 ? 'animal' : 'animais'}
                 </span>
                 <button
                   type="button"
@@ -148,14 +153,14 @@ export default function NurseWorkspace({ queue, history, clinicId }: NurseWorksp
             </div>
 
             <div data-mentor-step="nurse-queue" className="divide-y divide-slate-100 max-h-[60vh] overflow-y-auto">
-              {queue.length === 0 ? (
+              {localQueue.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-center">
                   <CheckCircle2 className="w-12 h-12 text-green-400 mx-auto mb-3" />
                   <p className="text-sm font-medium text-slate-600">Fila vazia!</p>
                   <p className="text-xs text-slate-400 mt-1">Nenhum animal aguardando triagem</p>
                 </div>
               ) : (
-                queue.map((item) => (
+                localQueue.map((item) => (
                   <div key={item.id} className="relative">
                     <Link
                       href={`/dashboard/triage/${item.id}`}
@@ -207,6 +212,7 @@ export default function NurseWorkspace({ queue, history, clinicId }: NurseWorksp
                             entity={item.source === 'triage_record' ? 'triage' : 'consultation'}
                             id={item.id}
                             patientName={item.patient.name}
+                            onCancelled={() => setLocalQueue(q => q.filter(i => i.id !== item.id))}
                           />
                           <ChevronRight className="w-5 h-5 text-slate-400 mt-1" />
                         </div>

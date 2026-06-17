@@ -11,6 +11,7 @@ import {
   type SurgeryBoard, type SurgeryCard, type SurgeryStatus,
 } from '@/lib/actions/surgeries'
 import SurgeryFichaModal from './SurgeryFichaModal'
+import AttendanceCardMenu from '@/components/shared/AttendanceCardMenu'
 
 const COLUMNS: { status: keyof SurgeryBoard; label: string; emoji: string; bg: string; border: string; header: string }[] = [
   { status: 'preparo', label: 'Preparo',          emoji: '🧼', bg: 'bg-amber-50',   border: 'border-amber-200',   header: 'bg-amber-500' },
@@ -154,7 +155,23 @@ export default function SurgeryKanban({ initialBoard, clinicId }: Props) {
                     <div className="flex items-start gap-3">
                       <PetAvatar name={card.patient.name} species={card.patient.species} photoUrl={card.patient.photo_url} size="sm" className="rounded-xl border border-slate-200" />
                       <div className="flex-1 min-w-0">
-                        <h4 className="font-bold text-slate-900 text-sm truncate">{card.patient.name}</h4>
+                        <div className="flex items-center justify-between gap-1">
+                          <h4 className="font-bold text-slate-900 text-sm truncate">{card.patient.name}</h4>
+                          <div onClick={e => { e.preventDefault(); e.stopPropagation() }}>
+                            <AttendanceCardMenu
+                              entity="surgery"
+                              id={card.id}
+                              patientName={card.patient.name}
+                              onCancelled={() => setBoard(prev => {
+                                const next = { ...prev }
+                                ;(Object.keys(next) as (keyof SurgeryBoard)[]).forEach(col => {
+                                  next[col] = prev[col].filter(c => c.id !== card.id)
+                                })
+                                return next
+                              })}
+                            />
+                          </div>
+                        </div>
                         {card.tutor?.name && <p className="text-[11px] text-slate-400 truncate">Tutor: {card.tutor.name}</p>}
                         <p className="text-[11px] text-slate-500 truncate">{card.procedure_name}</p>
                         <div className="mt-1 flex items-center gap-1.5">
@@ -162,7 +179,7 @@ export default function SurgeryKanban({ initialBoard, clinicId }: Props) {
                           <span className="text-[10px] text-slate-400 uppercase">{card.patient.species}{card.patient.breed ? ` • ${card.patient.breed}` : ''}</span>
                         </div>
                       </div>
-                      <Activity className="h-3.5 w-3.5 text-slate-300 group-hover:text-red-400" />
+                      <Activity className="h-3.5 w-3.5 text-slate-300 group-hover:text-red-400 flex-shrink-0" />
                     </div>
                   </div>
                 ))}

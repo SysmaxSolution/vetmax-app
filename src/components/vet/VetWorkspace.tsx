@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import Link from 'next/link'
 import { Clock, CheckCircle2, ArrowRight, Stethoscope, AlertCircle, Weight, Thermometer, History, Pencil, Plus, X, Search, UserPlus } from 'lucide-react'
 import type { VetQueueItem, VetCompletedItem } from '@/lib/actions/vet'
@@ -62,6 +62,9 @@ const VISIT_REASON_OPTIONS = CANONICAL_VISIT_REASONS
 
 export default function VetWorkspace({ queue, completed, clinicId }: VetWorkspaceProps) {
   useRealtimeSync({ table: 'consultations', clinicId })
+
+  const [localQueue, setLocalQueue] = useState<VetQueueItem[]>(queue)
+  useEffect(() => { setLocalQueue(queue) }, [queue])
 
   const [tab, setTab] = useState<'fila' | 'historico'>('fila')
   const [showAddModal, setShowAddModal]       = useState(false)
@@ -142,11 +145,11 @@ export default function VetWorkspace({ queue, completed, clinicId }: VetWorkspac
           >
             <Stethoscope className="h-4 w-4" />
             Fila de Espera
-            {queue.length > 0 && (
+            {localQueue.length > 0 && (
               <span className={`ml-1 rounded-full px-2 py-0.5 text-xs font-bold ${
                 tab === 'fila' ? 'bg-blue-100 text-blue-700' : 'bg-slate-200 text-slate-600'
               }`}>
-                {queue.length}
+                {localQueue.length}
               </span>
             )}
           </button>
@@ -185,19 +188,19 @@ export default function VetWorkspace({ queue, completed, clinicId }: VetWorkspac
                 </div>
               </div>
               <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-600">
-                {queue.length} consulta{queue.length !== 1 ? 's' : ''}
+                {localQueue.length} consulta{localQueue.length !== 1 ? 's' : ''}
               </span>
             </div>
 
             <div className="divide-y divide-slate-100 max-h-[60vh] overflow-y-auto">
-              {queue.length === 0 ? (
+              {localQueue.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-center">
                   <CheckCircle2 className="w-12 h-12 text-green-400 mx-auto mb-3" />
                   <p className="text-sm font-medium text-slate-600">Fila vazia!</p>
                   <p className="text-xs text-slate-400 mt-1">Nenhum animal aguardando atendimento</p>
                 </div>
               ) : (
-                queue.map((item) => (
+                localQueue.map((item) => (
                   <Link
                     key={item.id}
                     href={`/dashboard/vet/${item.id}`}
@@ -268,6 +271,7 @@ export default function VetWorkspace({ queue, completed, clinicId }: VetWorkspac
                           entity="consultation"
                           id={item.id}
                           patientName={item.patient.name}
+                          onCancelled={() => setLocalQueue(q => q.filter(i => i.id !== item.id))}
                         />
                         <ArrowRight className="w-5 h-5 text-slate-400 mt-1" />
                       </div>

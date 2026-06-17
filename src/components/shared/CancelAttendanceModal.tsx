@@ -35,8 +35,8 @@ export default function CancelAttendanceModal({ entity, id, patientName, onClose
         return
       }
       onCancelled?.()
-      router.refresh()
       onClose()
+      router.refresh()
     })
   }
 

@@ -6,9 +6,10 @@ import CancelAttendanceModal from './CancelAttendanceModal'
 import type { AttendanceEntity } from '@/lib/actions/attendance-cancel'
 
 interface Props {
-  entity:       AttendanceEntity
-  id:           string
-  patientName?: string | null
+  entity:        AttendanceEntity
+  id:            string
+  patientName?:  string | null
+  onCancelled?:  () => void
 }
 
 /**
@@ -16,7 +17,7 @@ interface Props {
  * no canto superior direito do card. Usa stopPropagation para não disparar o
  * <Link> do card e evita render server-side mismatch usando portal-free modal.
  */
-export default function AttendanceCardMenu({ entity, id, patientName }: Props) {
+export default function AttendanceCardMenu({ entity, id, patientName, onCancelled }: Props) {
   const [open, setOpen]     = useState(false)
   const [modal, setModal]   = useState(false)
   const wrapperRef          = useRef<HTMLDivElement | null>(null)
@@ -84,6 +85,7 @@ export default function AttendanceCardMenu({ entity, id, patientName }: Props) {
           id={id}
           patientName={patientName ?? null}
           onClose={() => setModal(false)}
+          onCancelled={onCancelled}
         />
       )}
     </>
