@@ -102,7 +102,7 @@ export async function deleteQuickReply(id: string): Promise<{ success: true } | 
   return { success: true }
 }
 
-export function getDefaultQuickReplies(): QuickReply[] {
+export async function getDefaultQuickReplies(): Promise<QuickReply[]> {
   const now = new Date().toISOString()
   const make = (
     idx: number,
