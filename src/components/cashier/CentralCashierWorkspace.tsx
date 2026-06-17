@@ -7,7 +7,7 @@ import {
   Receipt, Calendar, CreditCard, Smartphone, Banknote, Building2, Wallet,
 } from 'lucide-react'
 import {
-  listCashierEntries, verifyCashierEntry, archiveCashierEntry, getCashierSummary,
+  listCashierEntries, verifyCashierEntry, archiveCashierEntry, receiveCashierEntry, getCashierSummary,
   type CentralCashierEntry, type CashierSummary,
 } from '@/lib/actions/core-management'
 import type { CashierSession } from '@/lib/actions/cashier-sessions'
@@ -18,13 +18,15 @@ import CashierInflowModal from './CashierInflowModal'
 import CashierEditDateModal from './CashierEditDateModal'
 
 const MODULE_LABELS: Record<string, string> = {
-  grooming:     'Banho e Tosa',
-  pharmacy:     'Farmácia',
-  consultation: 'Consulta',
-  exam:         'Exame',
-  manual:       'Manual',
-  adjustment:   'Ajuste',
-  sales:        'PDV',
+  grooming:        'Banho e Tosa',
+  pharmacy:        'Farmácia',
+  consultation:    'Consulta',
+  exam:            'Exame',
+  manual:          'Manual',
+  adjustment:      'Ajuste',
+  sales:           'PDV',
+  hospitalization: 'Internação',
+  surgery:         'Cirurgia',
 }
 
 const STATUS_CONFIG = {
@@ -96,6 +98,7 @@ export default function CentralCashierWorkspace({
   const [showOutflow,    setShowOutflow]    = useState(false)
   const [showInflow,     setShowInflow]     = useState(false)
   const [editingDate,    setEditingDate]    = useState<CentralCashierEntry | null>(null)
+  const [receivingEntry, setReceivingEntry] = useState<CentralCashierEntry | null>(null)
 
   // Sincroniza com atualizações vindas do pai (ex.: baixa feita em Recebimentos)
   useEffect(() => { setEntries(initialEntries) }, [initialEntries])
@@ -137,6 +140,17 @@ export default function CentralCashierWorkspace({
     if ('error' in res) { showToast(res.error, 'error'); return }
     setEntries(prev => prev.map(e => e.id === id ? { ...e, status: 'verified' } : e))
     showToast('Entrada verificada.', 'success')
+  }
+
+  const handleReceive = async (id: string, paymentMethod: string) => {
+    setActionId(id)
+    const res = await receiveCashierEntry(id, paymentMethod)
+    setActionId(null)
+    setReceivingEntry(null)
+    if ('error' in res) { showToast(res.error, 'error'); return }
+    setEntries(prev => prev.map(e => e.id === id ? { ...e, status: 'recorded', payment_method: paymentMethod } : e))
+    showToast('Pagamento registrado.', 'success')
+    void refresh()
   }
 
   const handleArchive = async (id: string) => {
@@ -206,6 +220,51 @@ export default function CentralCashierWorkspace({
           onSuccess={refresh}
           onToast={showToast}
         />
+      )}
+
+      {/* Modal inline: receber pagamento de entrada pendente */}
+      {receivingEntry && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6 space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-base font-bold text-slate-900">Registrar recebimento</h2>
+                <p className="text-sm text-slate-500 mt-0.5">
+                  {receivingEntry.patient_name ?? receivingEntry.reason ?? 'Lançamento pendente'} —{' '}
+                  <span className="font-semibold text-slate-700">{fmt(Number(receivingEntry.amount))}</span>
+                </p>
+              </div>
+              <button onClick={() => setReceivingEntry(null)} className="text-slate-400 hover:text-slate-600 p-1">
+                <Receipt className="h-4 w-4" />
+              </button>
+            </div>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Forma de pagamento</p>
+            <div className="grid grid-cols-2 gap-2">
+              {(['pix', 'cash', 'credit', 'debit', 'convenio', 'other'] as const).map(pm => {
+                const cfg = PAYMENT_METHOD_LABEL[pm]
+                const Icon = cfg?.icon ?? Receipt
+                return (
+                  <button
+                    key={pm}
+                    type="button"
+                    disabled={actionId === receivingEntry.id}
+                    onClick={() => handleReceive(receivingEntry.id, pm)}
+                    className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-emerald-50 hover:border-emerald-300 text-sm font-medium text-slate-700 hover:text-emerald-800 transition-colors disabled:opacity-50"
+                  >
+                    <Icon className="h-4 w-4 flex-shrink-0" />
+                    {cfg?.label ?? pm}
+                  </button>
+                )
+              })}
+            </div>
+            <button
+              onClick={() => setReceivingEntry(null)}
+              className="w-full py-2 rounded-xl border border-slate-200 text-sm font-medium text-slate-500 hover:bg-slate-50"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Header */}
@@ -507,6 +566,19 @@ export default function CentralCashierWorkspace({
                       </td>
                       <td className="px-4 py-3 text-center">
                         <div className="flex items-center justify-center gap-1">
+                          {entry.status === 'pending' && (
+                            <button
+                              data-testid={`btn-receive-${entry.id}`}
+                              onClick={() => setReceivingEntry(entry)}
+                              disabled={actionId === entry.id}
+                              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium hover:bg-emerald-100 transition-colors disabled:opacity-50"
+                              title="Registrar recebimento"
+                            >
+                              {actionId === entry.id
+                                ? <Loader2 className="h-3 w-3 animate-spin" />
+                                : <DollarSign className="h-3 w-3" />}
+                            </button>
+                          )}
                           {canEditDate && entry.status !== 'archived' && entry.status !== 'reversed' && (
                             <button
                               data-testid={`btn-edit-date-${entry.id}`}

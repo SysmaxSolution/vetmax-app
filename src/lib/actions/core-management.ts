@@ -8,7 +8,7 @@ import { revalidatePath } from 'next/cache'
 export type CentralCashierEntry = {
   id: string
   clinic_id: string
-  source_module: 'grooming' | 'pharmacy' | 'consultation' | 'exam' | 'manual' | 'adjustment' | 'sales'
+  source_module: 'grooming' | 'pharmacy' | 'consultation' | 'exam' | 'manual' | 'adjustment' | 'sales' | 'hospitalization' | 'surgery'
   source_id?: string
   amount: number
   status: 'pending' | 'recorded' | 'verified' | 'archived' | 'reversed'
@@ -223,6 +223,41 @@ export async function verifyCashierEntry(entryId: string): Promise<{ success: tr
     .eq('clinic_id', ctx.clinic_id)
 
   if (error) return { error: `Erro ao verificar: ${error.message}` }
+
+  revalidatePath('/dashboard/cashier')
+  return { success: true }
+}
+
+/**
+ * Recebe um lançamento pendente: muda status→recorded e registra forma de pagamento.
+ * Usado pelo caixa para dar baixa em entradas de internação/cirurgia e similares.
+ */
+export async function receiveCashierEntry(
+  entryId:       string,
+  paymentMethod: string,
+): Promise<{ success: true } | { error: string }> {
+  const ctx = await getClinicContext()
+  if ('error' in ctx) return ctx
+
+  if (!['admin', 'owner', 'manager', 'receptionist', 'accountant'].includes(ctx.role)) {
+    return { error: 'Acesso negado.' }
+  }
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  const { error } = await supabase
+    .from('central_cashier')
+    .update({
+      status:         'recorded',
+      payment_method: paymentMethod,
+      recorded_by:    user?.id ?? null,
+    })
+    .eq('id', entryId)
+    .eq('clinic_id', ctx.clinic_id)
+    .eq('status', 'pending')
+
+  if (error) return { error: `Erro ao receber: ${error.message}` }
 
   revalidatePath('/dashboard/cashier')
   return { success: true }
