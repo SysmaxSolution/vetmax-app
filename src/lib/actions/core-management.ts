@@ -264,6 +264,31 @@ export async function receiveCashierEntry(
 }
 
 /**
+ * Lista entradas pendentes de internação/cirurgia no caixa central.
+ * Usado na aba Recebimentos para que a recepção dê baixa com a forma de pagamento.
+ */
+export async function listPendingHospCashier(): Promise<CentralCashierEntry[] | { error: string }> {
+  const ctx = await getClinicContext()
+  if ('error' in ctx) return ctx
+
+  if (!['admin', 'owner', 'accountant', 'manager', 'receptionist'].includes(ctx.role)) {
+    return { error: 'Acesso negado ao cashier' }
+  }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('central_cashier')
+    .select('*')
+    .eq('clinic_id', ctx.clinic_id)
+    .eq('status', 'pending')
+    .in('source_module', ['hospitalization', 'surgery'])
+    .order('created_at', { ascending: false })
+
+  if (error) return { error: `Erro ao listar: ${error.message}` }
+  return data || []
+}
+
+/**
  * Archive (hide from active list) a cashier entry.
  */
 export async function archiveCashierEntry(entryId: string): Promise<{ success: true } | { error: string }> {

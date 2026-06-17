@@ -16,6 +16,11 @@ import {
 import {
   previewConsultationInsurance, getConsultationCopayInterestPreview,
 } from '@/lib/actions/insurance-checkout'
+import {
+  listPendingHospCashier,
+  receiveCashierEntry,
+  type CentralCashierEntry,
+} from '@/lib/actions/core-management'
 import { useRealtimeSync } from '@/hooks/useRealtimeSync'
 import CheckoutModal from '@/components/reception/CheckoutModal'
 import CashierQuickSale from '@/components/cashier/CashierQuickSale'
@@ -276,6 +281,157 @@ function GroomingPaymentModal({
   )
 }
 
+// ─── Hospitalization / Surgery pending card ───────────────────────────────────
+
+function HospPendingCard({
+  entry,
+  onReceive,
+}: {
+  entry: CentralCashierEntry
+  onReceive: (entry: CentralCashierEntry) => void
+}) {
+  const isHosp = entry.source_module === 'hospitalization'
+  return (
+    <div className="flex flex-wrap items-center gap-3 sm:gap-4 rounded-xl border border-rose-100 bg-white px-4 sm:px-5 py-4 hover:shadow-sm hover:border-rose-200 transition-all">
+      <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-rose-50 text-2xl">
+        🏥
+      </div>
+      <div className="flex-1 min-w-0 basis-40">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+          <p className="font-semibold text-slate-900 truncate max-w-full">{entry.patient_name ?? '—'}</p>
+          {entry.tutor_name && (
+            <>
+              <span className="text-xs text-slate-400 hidden sm:inline">·</span>
+              <span className="text-xs text-slate-500 truncate max-w-full">{entry.tutor_name}</span>
+            </>
+          )}
+          <span className="rounded-full bg-rose-50 text-rose-700 text-xs font-medium px-2 py-0.5 flex-shrink-0">
+            {isHosp ? 'Internação' : 'Cirurgia'}
+          </span>
+        </div>
+        {entry.reason && (
+          <div className="mt-0.5">
+            <span className="text-xs text-slate-400">{entry.reason}</span>
+          </div>
+        )}
+      </div>
+      <div className="flex items-center justify-between gap-4 w-full sm:w-auto sm:flex-shrink-0 sm:justify-end">
+        <div className="text-left sm:text-right">
+          <p className="text-xs text-slate-400">Total</p>
+          <p className="text-lg font-bold text-slate-900 whitespace-nowrap">{fmt(entry.amount)}</p>
+        </div>
+        <button
+          onClick={() => onReceive(entry)}
+          className="flex items-center gap-1.5 rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-rose-700 transition-colors shadow-sm flex-shrink-0"
+        >
+          <Receipt className="h-4 w-4" />
+          Receber
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ─── Hospitalization receive modal ────────────────────────────────────────────
+
+function HospReceiveModal({
+  entry,
+  onClose,
+  onConfirm,
+}: {
+  entry: CentralCashierEntry
+  onClose: () => void
+  onConfirm: (method: string) => Promise<void>
+}) {
+  const [method,  setMethod]  = useState<string>('pix')
+  const [loading, setLoading] = useState(false)
+  const [error,   setError]   = useState<string | null>(null)
+
+  const isHosp = entry.source_module === 'hospitalization'
+
+  async function handleConfirm() {
+    setLoading(true)
+    setError(null)
+    try {
+      await onConfirm(method)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Erro ao registrar pagamento')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-rose-100 text-xl">
+            🏥
+          </div>
+          <div>
+            <h3 className="font-semibold text-slate-900">Receber — {isHosp ? 'Internação' : 'Cirurgia'}</h3>
+            <p className="text-sm text-slate-500">
+              {entry.patient_name ?? '—'}{entry.tutor_name ? ` · ${entry.tutor_name}` : ''}
+            </p>
+          </div>
+        </div>
+
+        {entry.reason && (
+          <div className="mb-4 rounded-lg bg-slate-50 px-3 py-2">
+            <p className="text-xs text-slate-500 font-medium mb-1">Descrição</p>
+            <p className="text-sm text-slate-700">{entry.reason}</p>
+          </div>
+        )}
+
+        <div className="mb-4 flex items-center justify-between rounded-lg bg-rose-50 px-4 py-3">
+          <span className="text-sm font-medium text-slate-700">Total a receber</span>
+          <span className="text-xl font-bold text-rose-700">{fmt(entry.amount)}</span>
+        </div>
+
+        <div className="mb-5">
+          <p className="text-sm font-medium text-slate-700 mb-2">Forma de pagamento</p>
+          <div className="grid grid-cols-2 gap-2">
+            {PAYMENT_METHODS.map(pm => (
+              <button
+                key={pm.key}
+                onClick={() => setMethod(pm.key)}
+                className={`rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors ${
+                  method === pm.key
+                    ? 'border-rose-500 bg-rose-50 text-rose-700'
+                    : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                {pm.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {error && (
+          <div className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</div>
+        )}
+
+        <div className="flex gap-2">
+          <button
+            onClick={onClose}
+            disabled={loading}
+            className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={loading}
+            className="flex-1 rounded-xl bg-rose-600 py-2.5 text-sm font-semibold text-white hover:bg-rose-700 transition-colors disabled:opacity-50"
+          >
+            {loading ? 'Processando...' : `Confirmar ${PAYMENT_LABEL[method] ?? method}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 interface Props {
@@ -316,6 +472,8 @@ export default function CashierTabReceivables({
   const [invoices,          setInvoices]          = useState<InvoiceWithDetails[]>(initialInvoices)
   const [groomingSessions,  setGroomingSessions]   = useState<PendingGroomingPayment[]>(initialGroomingSessions)
   const [pendingSales,      setPendingSales]       = useState<PendingSale[]>([])
+  const [pendingHospEntries, setPendingHospEntries] = useState<CentralCashierEntry[]>([])
+  const [activeHospEntry,   setActiveHospEntry]    = useState<CentralCashierEntry | null>(null)
   const [refreshing,        setRefreshing]         = useState(false)
   const [activeInvoiceId,   setActiveInvoiceId]    = useState<string | null>(null)
   const [activeGrooming,    setActiveGrooming]     = useState<PendingGroomingPayment | null>(null)
@@ -366,7 +524,8 @@ export default function CashierTabReceivables({
   const totalToReceive =
     invoices.reduce((s, i) => s + Math.max(0, Number(i.total_amount) - Number(i.paid_amount ?? 0)), 0) +
     pendingSales.reduce((s, v) => s + Number(v.total_amount), 0) +
-    groomingSessions.reduce((s, g) => s + Number(g.price_total), 0)
+    groomingSessions.reduce((s, g) => s + Number(g.price_total), 0) +
+    pendingHospEntries.reduce((s, h) => s + Number(h.amount), 0)
 
   function toggleSelect(id: string) {
     setSelectedIds(prev => {
@@ -546,25 +705,41 @@ export default function CashierTabReceivables({
 
   const refresh = useCallback(async () => {
     setRefreshing(true)
-    const [invRes, grRes, salesRes] = await Promise.all([
+    const [invRes, grRes, salesRes, hospRes] = await Promise.all([
       getPendingInvoices(),
       getPendingGroomingSessions(),
       listPendingSales(),
+      listPendingHospCashier(),
     ])
     setRefreshing(false)
     if (!('error' in invRes)) setInvoices(invRes)
     if (!('error' in grRes)) setGroomingSessions(grRes)
     if (Array.isArray(salesRes)) setPendingSales(salesRes)
+    if (!('error' in hospRes)) setPendingHospEntries(hospRes)
   }, [])
 
-  // Vendas lançadas não vêm do server component — carrega no mount
+  // Vendas lançadas e internações pendentes não vêm do server component — carrega no mount
   useEffect(() => {
     listPendingSales().then(res => { if (Array.isArray(res)) setPendingSales(res) })
+    listPendingHospCashier().then(res => { if (!('error' in res)) setPendingHospEntries(res) })
   }, [])
 
   useRealtimeSync({ table: 'invoices',          clinicId, onEvent: refresh })
   useRealtimeSync({ table: 'grooming_sessions', clinicId, onEvent: refresh })
   useRealtimeSync({ table: 'sales',             clinicId, onEvent: refresh })
+  useRealtimeSync({ table: 'central_cashier',   clinicId, onEvent: refresh })
+
+  async function handleHospReceive(method: string) {
+    if (!activeHospEntry) return
+    const res = await receiveCashierEntry(activeHospEntry.id, method)
+    if ('error' in res) throw new Error(res.error)
+    const petName = activeHospEntry.patient_name ?? 'Paciente'
+    const amount  = activeHospEntry.amount
+    setPendingHospEntries(prev => prev.filter(e => e.id !== activeHospEntry.id))
+    setActiveHospEntry(null)
+    onToast(`Internação de ${petName} recebida! ${fmt(amount)}`, 'success')
+    onDataChange?.()
+  }
 
   async function handleCancelLaunch(sale: PendingSale) {
     if (!confirm(`Cancelar o lançamento de ${fmt(sale.total_amount)}? O estoque será devolvido.`)) return
@@ -624,7 +799,7 @@ export default function CashierTabReceivables({
     onDataChange?.()
   }
 
-  const totalPending = invoices.length + groomingSessions.length + pendingSales.length
+  const totalPending = invoices.length + groomingSessions.length + pendingSales.length + pendingHospEntries.length
 
   return (
     <>
@@ -698,6 +873,14 @@ export default function CashierTabReceivables({
           onClose={() => setActiveGrooming(null)}
           onSuccess={handleGroomingSuccess}
           onWaived={handleGroomingWaived}
+        />
+      )}
+
+      {activeHospEntry && (
+        <HospReceiveModal
+          entry={activeHospEntry}
+          onClose={() => setActiveHospEntry(null)}
+          onConfirm={handleHospReceive}
         />
       )}
 
@@ -868,6 +1051,13 @@ export default function CashierTabReceivables({
               key={session.id}
               session={session}
               onReceive={setActiveGrooming}
+            />
+          ))}
+          {pendingHospEntries.map(entry => (
+            <HospPendingCard
+              key={entry.id}
+              entry={entry}
+              onReceive={setActiveHospEntry}
             />
           ))}
 
