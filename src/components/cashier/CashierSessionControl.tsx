@@ -99,6 +99,11 @@ export default function CashierSessionControl({ session, userRole, onRefresh, on
     : 0
   const difference = countedTotal - expectedConferenceTotal
   const hasDivergence = Math.abs(difference) >= 0.01
+  // Um esperado fisicamente impossível (dinheiro/total negativo) indica
+  // inconsistência interna de dados — NÃO erro na contagem do operador.
+  // Sinalizamos isso para não responsabilizar quem está fechando o caixa.
+  const suspiciousExpected = !!expected &&
+    (expected.expected_cash < -0.01 || expectedConferenceTotal < -0.01)
 
   // Passo 2: revela o esperado e a divergência
   function reveal() { setRevealed(true) }
@@ -178,6 +183,23 @@ export default function CashierSessionControl({ session, userRole, onRefresh, on
             })}
           </div>
 
+          {revealed && suspiciousExpected && (
+            <div className="rounded-xl border border-orange-300 bg-orange-50 p-4">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-orange-600" />
+                <p className="text-sm font-semibold text-orange-800">
+                  Valor esperado inconsistente — provável problema no sistema
+                </p>
+              </div>
+              <p className="text-xs text-orange-700 mt-1.5">
+                O sistema esperava um valor impossível (dinheiro/total negativo). Isso
+                normalmente indica vendas não vinculadas a esta sessão — <strong>não</strong> um
+                erro na sua contagem. Você pode fechar mesmo assim com uma observação e
+                avisar o suporte para conferência.
+              </p>
+            </div>
+          )}
+
           {revealed && (
             <div className={`rounded-xl border p-4 ${hasDivergence ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-200'}`}>
               <div className="flex items-center gap-2">
@@ -195,13 +217,21 @@ export default function CashierSessionControl({ session, userRole, onRefresh, on
                 {' '}(fundo de troco {fmt(expected.opening_balance)} já incluso no dinheiro).
               </p>
               {hasDivergence && (
-                <textarea
-                  value={closingNotes}
-                  onChange={e => setClosingNotes(e.target.value)}
-                  placeholder="Explique a divergência (obrigatório): ex. troco dado errado, comprovante de cartão não lançado..."
-                  rows={2}
-                  className="mt-3 w-full rounded-lg border border-amber-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400/30"
-                />
+                <>
+                  <p className="text-xs text-slate-600 mt-2">
+                    {difference > 0
+                      ? 'Sobrou dinheiro: confira se algum recebimento não foi lançado ou se o troco foi dado a menor.'
+                      : 'Faltou dinheiro: confira troco dado a maior, sangria não registrada ou comprovante de cartão não lançado.'}
+                    {' '}Confira por forma de pagamento acima para localizar onde está a diferença.
+                  </p>
+                  <textarea
+                    value={closingNotes}
+                    onChange={e => setClosingNotes(e.target.value)}
+                    placeholder="Explique a divergência (obrigatório): ex. troco dado errado, comprovante de cartão não lançado..."
+                    rows={2}
+                    className="mt-3 w-full rounded-lg border border-amber-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400/30"
+                  />
+                </>
               )}
             </div>
           )}
