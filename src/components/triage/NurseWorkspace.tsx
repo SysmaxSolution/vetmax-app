@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { AlertCircle, Clock, CheckCircle2, ChevronRight, Stethoscope, History, Pencil, Plus, ArrowRight } from 'lucide-react'
 import type { TriageQueueItem, TriageHistoryItem } from '@/lib/actions/triage'
