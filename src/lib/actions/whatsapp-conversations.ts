@@ -751,7 +751,7 @@ export async function getConversationParticipants(
   const participants: WppParticipant[] = []
 
   for (const row of (explicit ?? [])) {
-    const p = row.profiles as { full_name: string | null; photo_url: string | null } | null
+    const p = row.profiles as unknown as { full_name: string | null; photo_url: string | null } | null
     if (!seen.has(row.profile_id)) {
       seen.add(row.profile_id)
       participants.push({ profile_id: row.profile_id, full_name: p?.full_name ?? null, photo_url: p?.photo_url ?? null, added_at: row.added_at })
