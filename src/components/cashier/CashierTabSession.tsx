@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Info, History, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import CashierSessionControl from './CashierSessionControl'
+import LiveReconciliationPanel from './LiveReconciliationPanel'
 import { listClosedSessions, type CashierSession } from '@/lib/actions/cashier-sessions'
 
 function fmt(v: number) {
@@ -43,6 +44,10 @@ export default function CashierTabSession({ session, userRole, onRefresh, onToas
         onRefresh={onRefresh}
         onToast={onToast}
       />
+
+      {session && canHistory && (
+        <LiveReconciliationPanel sessionId={session.id} onToast={onToast} />
+      )}
 
       {!canManage && (
         <div className="flex items-start gap-3 rounded-xl bg-slate-50 border border-slate-200 p-4">

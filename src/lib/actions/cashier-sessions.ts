@@ -194,6 +194,129 @@ export async function getSessionExpectedTotals(
   }
 }
 
+// ─── Reconciliação ao vivo (P2) ─────────────────────────────────────────────
+
+export interface SessionReconciliation {
+  opening_balance: number
+  /** Esperado agora por forma (apenas recorded+verified). */
+  by_method: Record<string, number>
+  total_inflows: number
+  total_outflows: number
+  /** abertura + entradas em dinheiro − saídas (esperado na gaveta agora). */
+  expected_cash: number
+  /** abertura + todas entradas − saídas. */
+  expected_total: number
+  /** Movimentação por operador (quem registrou entradas / lançou saídas). */
+  by_operator: Array<{ id: string; name: string; inflows: number; outflows: number }>
+  /** Quanto ainda está pendente de recebimento (status pending) na sessão. */
+  pending_amount: number
+  /** Consistência: lançamentos órfãos (sem session_id) durante a sessão. 0 = OK. */
+  orphan_count: number
+}
+
+/**
+ * Posição atual do caixa a qualquer momento — sem fechar a sessão.
+ * Permite ao gerente reconciliar em tempo real e detectar divergência ANTES
+ * do fechamento, além de auditar a movimentação por operador.
+ */
+export async function getSessionReconciliation(
+  sessionId: string,
+): Promise<SessionReconciliation | { error: string }> {
+  const ctx = await getClinicContext()
+  if ('error' in ctx) return ctx
+
+  if (!['admin', 'owner', 'manager', 'accountant'].includes(ctx.role)) {
+    return { error: 'Acesso negado à reconciliação do caixa' }
+  }
+
+  const supabase = await createClient()
+  const { data: session } = await supabase
+    .from('cashier_sessions')
+    .select('opening_balance')
+    .eq('id', sessionId)
+    .eq('clinic_id', ctx.clinic_id)
+    .single()
+  if (!session) return { error: 'Sessão não encontrada' }
+
+  // Consolida órfãos na sessão (atômico) antes de medir.
+  const { error: linkErr } = await supabase.rpc('rpc_link_session_orphans', { p_session_id: sessionId })
+  if (linkErr) return { error: `Erro ao consolidar lançamentos: ${linkErr.message}` }
+
+  const [entriesRes, outflowsRes, orphanRes] = await Promise.all([
+    supabase
+      .from('central_cashier')
+      .select('amount, payment_method, status, recorded_by')
+      .eq('clinic_id', ctx.clinic_id)
+      .eq('session_id', sessionId)
+      .neq('status', 'reversed')
+      .neq('status', 'archived'),
+    supabase
+      .from('cashier_outflows')
+      .select('amount, created_by')
+      .eq('clinic_id', ctx.clinic_id)
+      .eq('session_id', sessionId),
+    supabase
+      .from('v_cashier_orphan_entries')
+      .select('id', { count: 'exact', head: true })
+      .eq('clinic_id', ctx.clinic_id),
+  ])
+
+  const entries  = entriesRes.data ?? []
+  const outflows = outflowsRes.data ?? []
+
+  const byMethod: Record<string, number> = {}
+  const opAgg: Record<string, { inflows: number; outflows: number }> = {}
+  let totalInflows = 0
+  let pendingAmount = 0
+
+  for (const e of entries) {
+    const amt = Number(e.amount)
+    if (e.status === 'pending') { pendingAmount += amt; continue }
+    // recorded/verified entram no esperado
+    const m = e.payment_method ?? 'nao_informado'
+    byMethod[m] = (byMethod[m] ?? 0) + amt
+    totalInflows += amt
+    const op = e.recorded_by ?? 'desconhecido'
+    opAgg[op] = opAgg[op] ?? { inflows: 0, outflows: 0 }
+    opAgg[op].inflows += amt
+  }
+
+  let totalOutflows = 0
+  for (const o of outflows) {
+    const amt = Number(o.amount)
+    totalOutflows += amt
+    const op = o.created_by ?? 'desconhecido'
+    opAgg[op] = opAgg[op] ?? { inflows: 0, outflows: 0 }
+    opAgg[op].outflows += amt
+  }
+
+  // Resolve nomes dos operadores
+  const opIds = Object.keys(opAgg).filter(id => id !== 'desconhecido')
+  const names: Record<string, string> = {}
+  if (opIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, full_name')
+      .in('id', opIds)
+    for (const p of profiles ?? []) names[p.id] = p.full_name
+  }
+
+  const opening = Number(session.opening_balance ?? 0)
+  return {
+    opening_balance: opening,
+    by_method:       byMethod,
+    total_inflows:   totalInflows,
+    total_outflows:  totalOutflows,
+    expected_cash:   opening + (byMethod['cash'] ?? 0) - totalOutflows,
+    expected_total:  opening + totalInflows - totalOutflows,
+    by_operator: Object.entries(opAgg)
+      .map(([id, v]) => ({ id, name: names[id] ?? 'Operador', inflows: v.inflows, outflows: v.outflows }))
+      .sort((a, b) => (b.inflows + b.outflows) - (a.inflows + a.outflows)),
+    pending_amount:  pendingAmount,
+    orphan_count:    orphanRes.count ?? 0,
+  }
+}
+
 /**
  * Close the current open session and generate closing report.
  * `conference` (opcional) grava a conferência cega: o que o operador contou,
