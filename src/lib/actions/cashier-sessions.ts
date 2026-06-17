@@ -147,21 +147,23 @@ export async function getSessionExpectedTotals(
   const supabase = await createClient()
   const { data: session } = await supabase
     .from('cashier_sessions')
-    .select('opening_balance, opened_at')
+    .select('opening_balance')
     .eq('id', sessionId)
     .eq('clinic_id', ctx.clinic_id)
     .single()
   if (!session) return { error: 'Sessão não encontrada' }
+
+  // Vincula órfãos à sessão de forma atômica (advisory lock) antes de calcular,
+  // para que a query por session_id seja correta por construção (migration 0392).
+  const { error: linkErr } = await supabase.rpc('rpc_link_session_orphans', { p_session_id: sessionId })
+  if (linkErr) return { error: `Erro ao consolidar lançamentos da sessão: ${linkErr.message}` }
 
   const [entriesRes, outflowsRes] = await Promise.all([
     supabase
       .from('central_cashier')
       .select('amount, payment_method, status')
       .eq('clinic_id', ctx.clinic_id)
-      // Lançamentos da sessão OU órfãos (session_id nulo) criados após a
-      // abertura — cinto de segurança caso algum insert escape do trigger
-      // de auto-vínculo (trg_central_cashier_attach_session, migration 0391).
-      .or(`session_id.eq.${sessionId},and(session_id.is.null,created_at.gte.${session.opened_at})`)
+      .eq('session_id', sessionId)
       .in('status', ['recorded', 'verified']),
     supabase
       .from('cashier_outflows')
@@ -224,16 +226,18 @@ export async function closeCashierSession(
   if (sesErr || !session) return { error: 'Sessão não encontrada' }
   if (session.status === 'closed') return { error: 'Sessão já está fechada' }
 
+  // Vincula órfãos à sessão (advisory lock) antes de somar, para que o
+  // comprovante salvo bata com a conferência exibida ao operador (migration 0392).
+  const { error: linkErr } = await supabase.rpc('rpc_link_session_orphans', { p_session_id: sessionId })
+  if (linkErr) return { error: `Erro ao consolidar lançamentos da sessão: ${linkErr.message}` }
+
   // Fetch all entries for this session
   const [entriesRes, outflowsRes] = await Promise.all([
     supabase
       .from('central_cashier')
       .select('amount, status, source_module, payment_method')
       .eq('clinic_id', ctx.clinic_id)
-      // Lançamentos da sessão OU órfãos (session_id nulo) criados após a
-      // abertura — mesmo critério de getSessionExpectedTotals, para que o
-      // comprovante salvo bata com a conferência exibida ao operador.
-      .or(`session_id.eq.${sessionId},and(session_id.is.null,created_at.gte.${session.opened_at})`)
+      .eq('session_id', sessionId)
       .neq('status', 'reversed')
       // Arquivados (lump da venda substituído pelos splits) não entram no total
       // do fechamento — senão o mesmo valor conta em dobro no closing_balance.
