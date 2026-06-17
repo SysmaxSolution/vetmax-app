@@ -361,10 +361,11 @@ export async function closeCashierSession(
       .select('amount, status, source_module, payment_method')
       .eq('clinic_id', ctx.clinic_id)
       .eq('session_id', sessionId)
-      .neq('status', 'reversed')
-      // Arquivados (lump da venda substituído pelos splits) não entram no total
-      // do fechamento — senão o mesmo valor conta em dobro no closing_balance.
-      .neq('status', 'archived'),
+      // Apenas recebidos (recorded/verified) entram no closing_balance — mesmo
+      // critério da conferência cega (getSessionExpectedTotals). 'pending' é a
+      // receber (não está na gaveta) e geraria "falta" sistemática; 'archived'
+      // (lump substituído por splits) contaria em dobro; 'reversed' é estorno.
+      .in('status', ['recorded', 'verified']),
 
     supabase
       .from('cashier_outflows')
