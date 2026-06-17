@@ -5,12 +5,83 @@ import { evolutionSendText, evolutionFetchContactByLid } from '@/lib/evolution-a
 import { handleDirectorCommand } from '@/lib/director-commands'
 
 // POST /api/webhooks/whatsapp/[clinicId]
-// Recebe eventos da Evolution API v1.8.4.
-// Normaliza nomes de eventos (uppercase/lowercase) para compatibilidade.
+// Normaliza nomes de eventos (uppercase/lowercase) para compatibilidade com v1.8.4 e v2.x.
 
-// v1.8.x pode enviar "messages.upsert" ou "MESSAGES_UPSERT"
 function normalizeEvent(event: string | undefined): string {
   return (event ?? '').toUpperCase().replace(/\./g, '_')
+}
+
+// ── Detecção de mídia inbound ──────────────────────────────────────────────────
+
+type MediaDetect = {
+  mediaType: string | null
+  mimeType:  string | null
+  fileName:  string | null
+  url:       string | null
+}
+
+function detectInboundMedia(msgObj: Record<string, unknown>): MediaDetect {
+  if (msgObj.imageMessage) {
+    const m = msgObj.imageMessage as Record<string, unknown>
+    return { mediaType: 'image', mimeType: (m.mimetype as string) ?? 'image/jpeg', fileName: null, url: (m.url as string) ?? null }
+  }
+  if (msgObj.audioMessage) {
+    const m = msgObj.audioMessage as Record<string, unknown>
+    return { mediaType: 'audio', mimeType: (m.mimetype as string) ?? 'audio/ogg', fileName: null, url: (m.url as string) ?? null }
+  }
+  if (msgObj.videoMessage) {
+    const m = msgObj.videoMessage as Record<string, unknown>
+    return { mediaType: 'video', mimeType: (m.mimetype as string) ?? 'video/mp4', fileName: null, url: (m.url as string) ?? null }
+  }
+  if (msgObj.documentMessage) {
+    const m = msgObj.documentMessage as Record<string, unknown>
+    return { mediaType: 'document', mimeType: (m.mimetype as string) ?? 'application/octet-stream', fileName: (m.fileName as string) ?? 'documento', url: (m.url as string) ?? null }
+  }
+  if (msgObj.stickerMessage) {
+    const m = msgObj.stickerMessage as Record<string, unknown>
+    return { mediaType: 'sticker', mimeType: (m.mimetype as string) ?? 'image/webp', fileName: null, url: (m.url as string) ?? null }
+  }
+  return { mediaType: null, mimeType: null, fileName: null, url: null }
+}
+
+// ── Lookup de tutor por phone ──────────────────────────────────────────────────
+
+async function findTutorByPhone(
+  phone: string,
+  clinicId: string,
+  admin: ReturnType<typeof createAdminClient>,
+): Promise<{ tutorId: string; tutorName: string | null; photoUrl: string | null; petNamesCache: string | null } | null> {
+  const cleanPhone = phone.replace('@s.whatsapp.net', '').replace(/\D/g, '').slice(-8)
+  if (!cleanPhone) return null
+
+  const { data: tutor } = await admin
+    .from('tutors')
+    .select('id, name, photo_url')
+    .eq('clinic_id', clinicId)
+    .ilike('phone', `%${cleanPhone}%`)
+    .limit(1)
+    .maybeSingle()
+
+  if (!tutor) return null
+
+  const { data: pets } = await admin
+    .from('patients')
+    .select('name')
+    .eq('clinic_id', clinicId)
+    .eq('tutor_id', tutor.id)
+    .order('name')
+    .limit(5)
+
+  const petNamesCache = pets?.length
+    ? pets.map((p: { name: string }) => p.name).join(', ')
+    : null
+
+  return {
+    tutorId:       tutor.id,
+    tutorName:     tutor.name ?? null,
+    photoUrl:      tutor.photo_url ?? null,
+    petNamesCache,
+  }
 }
 
 export async function POST(
@@ -28,7 +99,6 @@ export async function POST(
 
   console.info(`[WPP Webhook] clinicId=${clinicId} event="${rawEvent}" normalized="${event}"`)
 
-  // ── Valida clínica ─────────────────────────────────────────────────────────
   const admin = createAdminClient()
   const { data: clinic } = await admin
     .from('clinics')
@@ -37,11 +107,10 @@ export async function POST(
     .maybeSingle()
   if (!clinic) return NextResponse.json({ error: 'Clínica não encontrada.' }, { status: 404 })
 
-  // ── CONNECTION_UPDATE ──────────────────────────────────────────────────────
+  // ── CONNECTION_UPDATE ───────────────────────────────────────────────────────
   if (event === 'CONNECTION_UPDATE') {
     const state = (body?.data as Record<string, unknown>)?.state as string | undefined
-    console.info(`[WPP Webhook] clinicId=${clinicId} CONNECTION_UPDATE state=${state}`)
-    // Quando conectado, limpa o QR salvo (já não é mais necessário)
+    console.info(`[WPP Webhook] CONNECTION_UPDATE state=${state}`)
     if (state === 'open') {
       await admin.from('clinic_whatsapp_settings')
         .update({ qr_code: null })
@@ -50,12 +119,11 @@ export async function POST(
     return NextResponse.json({ received: true })
   }
 
-  // ── QRCODE_UPDATED ─────────────────────────────────────────────────────────
+  // ── QRCODE_UPDATED ──────────────────────────────────────────────────────────
   if (event === 'QRCODE_UPDATED') {
-    const data    = body?.data as Record<string, unknown> | undefined
-    const qrObj   = data?.qrcode as Record<string, unknown> | undefined
-    const base64  = (qrObj?.base64 ?? data?.base64) as string | undefined
-    console.info(`[WPP Webhook] clinicId=${clinicId} QRCODE_UPDATED base64=${base64 ? 'sim' : 'não'} dataKeys=${Object.keys(data ?? {}).join(',')}`)
+    const data   = body?.data as Record<string, unknown> | undefined
+    const qrObj  = data?.qrcode as Record<string, unknown> | undefined
+    const base64 = (qrObj?.base64 ?? data?.base64) as string | undefined
     if (base64) {
       await admin.from('clinic_whatsapp_settings')
         .update({ qr_code: base64 })
@@ -64,9 +132,29 @@ export async function POST(
     return NextResponse.json({ received: true })
   }
 
-  // ── MESSAGES_UPSERT ────────────────────────────────────────────────────────
+  // ── MESSAGES_UPDATE (check azul / ACK) ─────────────────────────────────────
+  if (event === 'MESSAGES_UPDATE') {
+    const updates = Array.isArray(body?.data)
+      ? (body.data as Record<string, unknown>[])
+      : []
+
+    for (const upd of updates) {
+      const key    = upd.key as Record<string, unknown> | undefined
+      const msgId  = key?.id as string | undefined
+      const status = (upd.update as Record<string, unknown>)?.status as number | undefined
+      if (msgId && typeof status === 'number') {
+        await admin
+          .from('whatsapp_messages')
+          .update({ ack: status })
+          .eq('evolution_message_id', msgId)
+          .eq('clinic_id', clinicId)
+      }
+    }
+    return NextResponse.json({ received: true })
+  }
+
+  // ── MESSAGES_UPSERT ─────────────────────────────────────────────────────────
   if (event === 'MESSAGES_UPSERT') {
-    // data pode ser array (baileys) ou objeto único
     const rawData = body?.data
     const msgData: Record<string, unknown> = Array.isArray(rawData) ? rawData[0] : (rawData as Record<string, unknown>)
     if (!msgData) return NextResponse.json({ received: true })
@@ -75,15 +163,11 @@ export async function POST(
     const fromMe = key?.fromMe as boolean | undefined
     const jid    = key?.remoteJid as string | undefined
 
-    console.info(`[WPP Webhook] MESSAGES_UPSERT jid=${jid} fromMe=${fromMe}`)
-
     if (!jid || jid.endsWith('@g.us')) return NextResponse.json({ received: true })
 
-    // body.sender = número da clínica (instância), não do remetente — não usar para phone
-    let phone = jid.replace('@s.whatsapp.net', '')   // @lid permanece como @lid por ora
+    let phone = jid.replace('@s.whatsapp.net', '')
 
     if (jid.includes('@lid')) {
-      console.info(`[WPP Webhook] @lid detectado: ${jid} — tentando resolver via Evolution API`)
       const apiUrl = process.env.EVOLUTION_API_URL
       const apiKey = process.env.EVOLUTION_API_KEY
       if (apiUrl && apiKey) {
@@ -97,12 +181,7 @@ export async function POST(
             { apiUrl, instanceId: wppSettings.evolution_instance_name, apiKey },
             jid,
           )
-          if (resolved) {
-            phone = resolved
-            console.info(`[WPP Webhook] @lid resolvido: ${jid} → ${phone}`)
-          } else {
-            console.warn(`[WPP Webhook] @lid não resolvido: ${jid} — conversa será criada em modo human`)
-          }
+          if (resolved) phone = resolved
         }
       }
     }
@@ -110,23 +189,16 @@ export async function POST(
     const pushName = msgData.pushName as string | null ?? null
     const msgObj   = msgData.message as Record<string, unknown> | undefined
 
-    // Extrai texto da mensagem (suporta conversation, extendedTextMessage e imageMessage com caption)
     const messageText =
       (msgObj?.conversation as string | undefined) ??
       ((msgObj?.extendedTextMessage as Record<string, unknown> | undefined)?.text as string | undefined) ??
       ((msgObj?.imageMessage as Record<string, unknown> | undefined)?.caption as string | undefined) ??
+      ((msgObj?.videoMessage as Record<string, unknown> | undefined)?.caption as string | undefined) ??
       null
 
-    // ── HANDOFF AUTOMÁTICO (Sprint 2026-05-30) ──────────────────────────────
-    // fromMe=true significa que a mensagem partiu da própria instância. Pode
-    // ser: (a) eco do que o bot acabou de mandar, (b) eco do que a recepção
-    // mandou pela UI web, ou (c) a clínica respondeu pelo APARELHO físico.
-    // Os dois primeiros já gravamos em whatsapp_messages como outbound antes
-    // do echo voltar; o terceiro NÃO. Por isso o dedup por conteúdo recente:
-    // se o texto bate com um outbound dos últimos 60s, é eco — descarta. Se
-    // não bate (ou veio sem texto: áudio/sticker/imagem sem caption), é a
-    // clínica falando direto do celular → marca a conversa como 'human' e o
-    // bot pausa até que a sessão seja fechada manualmente pela UI.
+    const media = msgObj ? detectInboundMedia(msgObj) : { mediaType: null, mimeType: null, fileName: null, url: null }
+
+    // ── HANDOFF AUTOMÁTICO (fromMe) ─────────────────────────────────────────
     if (fromMe) {
       const { data: conv } = await admin
         .from('whatsapp_conversations')
@@ -138,38 +210,26 @@ export async function POST(
         .limit(1)
         .maybeSingle()
 
-      if (!conv) {
-        // Sem conversa ativa: clínica iniciou contato novo pelo aparelho.
-        // Não criamos conversa aqui — quando o tutor responder, o fluxo
-        // inbound cria normalmente. Apenas registra e segue.
-        console.info(`[WPP Webhook] fromMe sem conversa ativa para ${phone}, ignorando`)
-        return NextResponse.json({ received: true })
-      }
+      if (!conv) return NextResponse.json({ received: true })
 
-      // Dedup: confere se é eco do bot/recepção web (texto idêntico nos últimos 60s)
       if (messageText?.trim()) {
         const since = new Date(Date.now() - 60_000).toISOString()
         const { data: echo } = await admin
           .from('whatsapp_messages')
-          .select('id, sent_by')
+          .select('id')
           .eq('conversation_id', conv.id)
           .eq('direction', 'outbound')
           .eq('content', messageText)
           .gte('created_at', since)
           .limit(1)
           .maybeSingle()
-        if (echo) {
-          console.info(`[WPP Webhook] fromMe eco de sent_by=${echo.sent_by}, ignorando`)
-          return NextResponse.json({ received: true })
-        }
+        if (echo) return NextResponse.json({ received: true })
       }
 
-      // Handoff real: clínica respondeu pelo aparelho próprio
       const updates: Record<string, unknown> = { last_message_at: new Date().toISOString() }
       if (conv.status !== 'human') updates.status = 'human'
       await admin.from('whatsapp_conversations').update(updates).eq('id', conv.id)
 
-      // Persiste a mensagem manual no histórico (sent_by='human')
       if (messageText?.trim()) {
         await admin.from('whatsapp_messages').insert({
           conversation_id: conv.id,
@@ -179,24 +239,20 @@ export async function POST(
           sent_by:         'human',
         })
       }
-
-      console.info(`[WPP Webhook] HANDOFF fromMe=true conv=${conv.id} → status=human`)
       return NextResponse.json({ received: true })
     }
 
-    console.info(`[WPP Webhook] phone=${phone} pushName=${pushName} messageText="${messageText?.substring(0, 50)}"`)
+    // Descarta se não tem conteúdo nem mídia
+    if (!messageText?.trim() && !media.mediaType) return NextResponse.json({ received: true })
 
-    if (!messageText?.trim()) return NextResponse.json({ received: true })
-
-    // Comandos do Diretor (SIM/NAO) — handleDirectorCommand valida P0_ALERT_PHONE internamente
     const alertPhone = (process.env.P0_ALERT_PHONE ?? '').replace(/\D/g, '')
     if (alertPhone && phone.replace(/\D/g, '').endsWith(alertPhone.slice(-10))) {
-      await handleDirectorCommand(messageText, phone, admin)
+      await handleDirectorCommand(messageText ?? '', phone, admin)
       return NextResponse.json({ received: true })
     }
 
     try {
-      await processInboundMessage({ clinicId, phone, tutorName: pushName, messageText, admin })
+      await processInboundMessage({ clinicId, phone, tutorName: pushName, messageText, media, admin })
     } catch (err) {
       console.error('[WPP Webhook] Erro ao processar mensagem:', err)
     }
@@ -204,8 +260,7 @@ export async function POST(
     return NextResponse.json({ received: true })
   }
 
-  // Evento não reconhecido — loga para diagnóstico
-  console.info(`[WPP Webhook] clinicId=${clinicId} evento ignorado: "${rawEvent}"`)
+  console.info(`[WPP Webhook] evento ignorado: "${rawEvent}"`)
   return NextResponse.json({ received: true })
 }
 
@@ -215,30 +270,23 @@ async function processInboundMessage(params: {
   clinicId:    string
   phone:       string
   tutorName:   string | null
-  messageText: string
+  messageText: string | null
+  media:       MediaDetect
   admin:       ReturnType<typeof createAdminClient>
 }) {
-  const { clinicId, phone, tutorName, messageText, admin } = params
+  const { clinicId, phone, tutorName, messageText, media, admin } = params
 
-  // 1. Busca config do bot
   const { data: botConfig } = await admin
     .from('whatsapp_bot_config')
     .select('personality_prompt, can_book, can_inform_prices, working_hours_start, working_hours_end, is_active')
     .eq('clinic_id', clinicId)
     .maybeSingle()
 
-  console.info(`[WPP Bot] clinicId=${clinicId} is_active=${botConfig?.is_active ?? 'sem config'}`)
+  if (!botConfig) return
 
-  // Sem config salva → bot ainda não foi configurado, não responde
-  if (!botConfig) {
-    console.info(`[WPP Bot] clinicId=${clinicId} — configuração não encontrada, ignorando`)
-    return
-  }
-
-  // 2. Busca ou cria conversa — quando bot inativo cria como 'human' para atendimento manual
   let { data: conversation } = await admin
     .from('whatsapp_conversations')
-    .select('id, status, tutor_name, pending_appointment_id')
+    .select('id, status, tutor_name, pending_appointment_id, tutor_id')
     .eq('clinic_id', clinicId)
     .eq('tutor_phone', phone)
     .neq('status', 'closed')
@@ -246,29 +294,57 @@ async function processInboundMessage(params: {
     .limit(1)
     .maybeSingle()
 
-  // @lid com Evolution API patchada → pode enviar normalmente; bot ativo = modo bot
   const initialStatus = botConfig.is_active ? 'bot' : 'human'
 
   if (!conversation) {
+    // Busca tutor no cadastro para enriquecer a conversa
+    const tutorData = await findTutorByPhone(phone, clinicId, admin)
+
     const { data: newConv } = await admin
       .from('whatsapp_conversations')
-      .insert({ clinic_id: clinicId, tutor_phone: phone, tutor_name: tutorName, status: initialStatus })
-      .select('id, status, tutor_name, pending_appointment_id')
+      .insert({
+        clinic_id:         clinicId,
+        tutor_phone:       phone,
+        tutor_name:        tutorData?.tutorName ?? tutorName,
+        tutor_id:          tutorData?.tutorId ?? null,
+        pet_names_cache:   tutorData?.petNamesCache ?? null,
+        tutor_photo_cache: tutorData?.photoUrl ?? null,
+        status:            initialStatus,
+      })
+      .select('id, status, tutor_name, pending_appointment_id, tutor_id')
       .single()
     conversation = newConv
-  } else if (!conversation.tutor_name && tutorName) {
-    await admin.from('whatsapp_conversations').update({ tutor_name: tutorName }).eq('id', conversation.id)
+  } else {
+    const updates: Record<string, unknown> = {}
+    if (!conversation.tutor_name && tutorName) updates.tutor_name = tutorName
+    // Tenta enriquecer com tutor_id se ainda não tiver
+    if (!conversation.tutor_id) {
+      const tutorData = await findTutorByPhone(phone, clinicId, admin)
+      if (tutorData) {
+        updates.tutor_id          = tutorData.tutorId
+        updates.pet_names_cache   = tutorData.petNamesCache
+        updates.tutor_photo_cache = tutorData.photoUrl
+        if (!conversation.tutor_name) updates.tutor_name = tutorData.tutorName
+      }
+    }
+    if (Object.keys(updates).length > 0) {
+      await admin.from('whatsapp_conversations').update(updates).eq('id', conversation.id)
+    }
   }
 
   if (!conversation) { console.error('[WPP Bot] Falha ao criar conversa'); return }
 
-  // 3. Salva mensagem inbound
+  // Salva mensagem inbound
   await admin.from('whatsapp_messages').insert({
     conversation_id: conversation.id,
     clinic_id:       clinicId,
     direction:       'inbound',
-    content:         messageText,
+    content:         messageText?.trim() ?? '',
     sent_by:         'client',
+    media_type:      media.mediaType,
+    media_mime_type: media.mimeType,
+    media_filename:  media.fileName,
+    media_url:       media.url,
   })
 
   await admin.from('whatsapp_conversations')
@@ -277,30 +353,29 @@ async function processInboundMessage(params: {
 
   void admin.rpc('fn_wpp_increment_unread', { p_conv_id: conversation.id })
 
-  // Feature 6: Urgência por palavra-chave
-  void (async () => {
-    try {
-      const { data: settings } = await admin
-        .from('clinic_settings')
-        .select('wpp_urgency_keywords')
-        .eq('clinic_id', clinicId)
-        .maybeSingle()
-      const keywords: string[] = (settings?.wpp_urgency_keywords as string[] | null) ?? [
-        'convulsão','convulsao','sangramento','atropelado',
-        'não respira','nao respira','envenenado','inconsciente',
-        'dificuldade respiratoria','dificuldade respiratória',
-        'desmaio','paralisia','urgente','emergência','emergencia',
-        'socorro','engasgou','engasgado',
-      ]
-      const lower = messageText.toLowerCase()
-      if (keywords.some(kw => lower.includes(kw.toLowerCase()))) {
-        await admin.from('whatsapp_conversations').update({ is_urgent: true }).eq('id', conversation!.id)
-        console.info(`[WPP] Urgência detectada: conv=${conversation!.id}`)
-      }
-    } catch (e) {
-      console.error('[WPP] urgency detection error:', e)
-    }
-  })()
+  // Feature 6: Urgência por palavra-chave (apenas para texto)
+  if (messageText?.trim()) {
+    void (async () => {
+      try {
+        const { data: settings } = await admin
+          .from('clinic_settings')
+          .select('wpp_urgency_keywords')
+          .eq('clinic_id', clinicId)
+          .maybeSingle()
+        const keywords: string[] = (settings?.wpp_urgency_keywords as string[] | null) ?? [
+          'convulsão','convulsao','sangramento','atropelado',
+          'não respira','nao respira','envenenado','inconsciente',
+          'dificuldade respiratoria','dificuldade respiratória',
+          'desmaio','paralisia','urgente','emergência','emergencia',
+          'socorro','engasgou','engasgado',
+        ]
+        const lower = messageText.toLowerCase()
+        if (keywords.some(kw => lower.includes(kw.toLowerCase()))) {
+          await admin.from('whatsapp_conversations').update({ is_urgent: true }).eq('id', conversation!.id)
+        }
+      } catch (e) { console.error('[WPP] urgency error:', e) }
+    })()
+  }
 
   // Feature 7: LGPD — aceitação passiva no primeiro contato
   void (async () => {
@@ -315,13 +390,11 @@ async function processInboundMessage(params: {
           .update({ lgpd_accepted_at: new Date().toISOString() })
           .eq('id', conversation!.id)
       }
-    } catch (e) {
-      console.error('[WPP] LGPD tracking error:', e)
-    }
+    } catch (e) { console.error('[WPP] LGPD error:', e) }
   })()
 
-  // Feature 4: Parsing resposta de confirmação de consulta (1=confirmar, 2=cancelar)
-  const confirmTrimmed = messageText.trim()
+  // Feature 4: Parsing resposta de confirmação (1=confirmar, 2=cancelar)
+  const confirmTrimmed = (messageText ?? '').trim()
   if (confirmTrimmed === '1' || confirmTrimmed === '2') {
     void (async () => {
       try {
@@ -335,52 +408,37 @@ async function processInboundMessage(params: {
             .from('patients').select('id').eq('clinic_id', clinicId).eq('tutor_id', tutor.id)
           const petIds = (pets ?? []).map((p: { id: string }) => p.id)
           if (petIds.length) {
-            const { data: updated } = await admin
-              .from('consultations')
+            await admin.from('consultations')
               .update({ wpp_confirmation_status: newStatus })
               .eq('clinic_id', clinicId).eq('wpp_confirmation_status', 'pending')
-              .in('patient_id', petIds).select('id')
-            if (updated?.length) {
-              console.info(`[WPP] Confirmação ${newStatus}: ${updated.length} consulta(s)`)
-            }
+              .in('patient_id', petIds)
           }
         }
-      } catch (e) {
-        console.error('[WPP] confirmation parse error:', e)
-      }
+      } catch (e) { console.error('[WPP] confirmation error:', e) }
     })()
   }
 
-  // 4. Bot inativo: mensagem salva, clínica responde manualmente — sem IA
-  if (!botConfig.is_active) {
-    console.info(`[WPP Bot] clinicId=${clinicId} — bot inativo, mensagem salva para atendimento manual`)
-    return
-  }
+  if (!botConfig.is_active) return
 
-  // 6. Verifica horário de funcionamento (UTC — Vercel roda em UTC)
   if (botConfig.working_hours_start && botConfig.working_hours_end) {
-    const now        = new Date()
+    const now = new Date()
     const [hStart, mStart] = botConfig.working_hours_start.split(':').map(Number)
     const [hEnd,   mEnd  ] = botConfig.working_hours_end.split(':').map(Number)
-    const nowMins    = now.getUTCHours() * 60 + now.getUTCMinutes()
-    const startMins  = hStart * 60 + mStart
-    const endMins    = hEnd   * 60 + mEnd
-
-    console.info(`[WPP Bot] horário UTC=${now.getUTCHours()}:${String(now.getUTCMinutes()).padStart(2,'0')} janela=${botConfig.working_hours_start}-${botConfig.working_hours_end}`)
-
+    const nowMins   = now.getUTCHours() * 60 + now.getUTCMinutes()
+    const startMins = hStart * 60 + mStart
+    const endMins   = hEnd   * 60 + mEnd
     if (nowMins < startMins || nowMins > endMins) {
-      await sendBotReply(clinicId, phone, `Nosso horário de atendimento é das ${botConfig.working_hours_start} às ${botConfig.working_hours_end}. Assim que abrirmos, responderei sua mensagem!`, admin)
+      const reply = `Nosso horário de atendimento é das ${botConfig.working_hours_start} às ${botConfig.working_hours_end}. Assim que abrirmos, responderei sua mensagem!`
+      await sendBotReply(clinicId, phone, reply, admin, conversation.id)
       return
     }
   }
 
-  // 7. Se conversa em modo 'human', não chama o bot
-  if (conversation.status === 'human') {
-    console.info(`[WPP Bot] clinicId=${clinicId} — conversa em modo human, ignorando bot`)
-    return
-  }
+  if (conversation.status === 'human') return
 
-  // 8. Se houver appointment pendente de confirmação, carrega o datetime para contexto
+  // Não chama bot para mensagens de mídia sem texto
+  if (!messageText?.trim()) return
+
   let pendingAppointmentAt: string | null = null
   if (conversation.pending_appointment_id) {
     const { data: pending } = await admin
@@ -388,7 +446,6 @@ async function processInboundMessage(params: {
       .select('appointment_datetime, status')
       .eq('id', conversation.pending_appointment_id)
       .maybeSingle()
-    // Se o agendamento já não está mais agendável (cancelado/completed), ignora o vínculo
     if (pending && pending.status === 'scheduled') {
       pendingAppointmentAt = pending.appointment_datetime as string
     } else {
@@ -399,8 +456,6 @@ async function processInboundMessage(params: {
     }
   }
 
-  // 9. Chama o agente IA
-  console.info(`[WPP Bot] clinicId=${clinicId} — chamando agente IA pending=${conversation.pending_appointment_id ?? 'nenhum'}`)
   const result = await runWhatsappAgent({
     clinicId,
     conversationId:        conversation.id,
@@ -414,48 +469,49 @@ async function processInboundMessage(params: {
     pendingAppointmentAt,
   })
 
-  console.info(`[WPP Bot] resposta="${result.reply.substring(0, 80)}" handoff=${result.handoff} resolved=${result.confirmationResolved ?? '—'}`)
-
-  // Se o bot resolveu o agendamento (confirm/reschedule/cancel), libera o vínculo
   if (result.confirmationResolved && conversation.pending_appointment_id) {
     await admin.from('whatsapp_conversations')
       .update({ pending_appointment_id: null })
       .eq('id', conversation.id)
   }
 
-  // 9. Salva resposta no banco
-  await admin.from('whatsapp_messages').insert({
+  // Salva resposta do bot
+  const { data: botMsg } = await admin.from('whatsapp_messages').insert({
     conversation_id: conversation.id,
     clinic_id:       clinicId,
     direction:       'outbound',
     content:         result.reply,
     sent_by:         'bot',
-  })
+  }).select('id').single()
 
-  // 10. Se handoff, atualiza status da conversa
   if (result.handoff) {
     await admin.from('whatsapp_conversations').update({ status: 'human' }).eq('id', conversation.id)
   }
 
-  // 11. Envia resposta via Evolution API — @lid suportado pelo patch no container
-  const sent = await sendBotReply(clinicId, phone, result.reply, admin)
-  if (!sent) {
+  const evolutionMsgId = await sendBotReply(clinicId, phone, result.reply, admin, conversation.id)
+  if (!evolutionMsgId) {
     await admin.from('whatsapp_conversations').update({ status: 'human' }).eq('id', conversation.id)
-    console.warn(`[WPP Bot] Falha ao enviar para ${phone} — conversa movida para atendimento humano`)
+    console.warn(`[WPP Bot] Falha ao enviar para ${phone} — movida para atendimento humano`)
+  } else if (botMsg) {
+    // Atualiza evolution_message_id para rastrear ACK
+    await admin.from('whatsapp_messages')
+      .update({ evolution_message_id: evolutionMsgId })
+      .eq('id', botMsg.id)
   }
 }
 
 // ─── Envio via Evolution API ──────────────────────────────────────────────────
 
 async function sendBotReply(
-  clinicId: string,
-  phone:    string,
-  text:     string,
-  admin:    ReturnType<typeof createAdminClient>,
-): Promise<boolean> {
+  clinicId:       string,
+  phone:          string,
+  text:           string,
+  admin:          ReturnType<typeof createAdminClient>,
+  conversationId: string,
+): Promise<string | null> {
   const apiUrl = process.env.EVOLUTION_API_URL
   const apiKey = process.env.EVOLUTION_API_KEY
-  if (!apiUrl || !apiKey) { console.warn('[WPP Bot] EVOLUTION_API_URL não configurado'); return false }
+  if (!apiUrl || !apiKey) return null
 
   const { data: settings } = await admin
     .from('clinic_whatsapp_settings')
@@ -464,14 +520,18 @@ async function sendBotReply(
     .maybeSingle()
 
   const instanceName = settings?.evolution_instance_name
-  if (!instanceName) { console.warn('[WPP Bot] Instância não encontrada para clínica', clinicId); return false }
+  if (!instanceName) return null
 
   try {
-    await evolutionSendText({ apiUrl, instanceId: instanceName, apiKey }, phone, text)
-    console.info(`[WPP Bot] mensagem enviada para ${phone}`)
-    return true
+    const msgId = await evolutionSendText(
+      { apiUrl, instanceId: instanceName, apiKey },
+      phone,
+      text,
+    )
+    console.info(`[WPP Bot] mensagem enviada para ${phone}, msgId=${msgId}`)
+    return msgId
   } catch (err) {
     console.error('[WPP Bot] Erro ao enviar mensagem:', err)
-    return false
+    return null
   }
 }

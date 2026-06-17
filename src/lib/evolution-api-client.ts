@@ -1,4 +1,4 @@
-﻿// Evolution API v2.2.3 client — self-hosted WhatsApp gateway
+// Evolution API v2.2.3 client — self-hosted WhatsApp gateway
 
 export type EvolutionCreds = {
   apiUrl:     string   // e.g. http://localhost:8080
@@ -16,14 +16,12 @@ function buildHeaders(apiKey: string): Record<string, string> {
 }
 
 function formatPhone(raw: string): string {
-  // @lid não é um número de telefone — retorna como está para falhar explicitamente no caller
   if (raw.includes('@')) return raw
   const digits = raw.replace(/\D/g, '')
   return digits.startsWith('55') && digits.length >= 12 ? digits : '55' + digits
 }
 
 // Tenta resolver um JID @lid para o JID real @s.whatsapp.net via cache de contatos da instância.
-// Retorna null se não encontrado — o caller decide o fallback.
 export async function evolutionFetchContactByLid(
   creds: EvolutionCreds,
   lidJid: string,
@@ -38,7 +36,6 @@ export async function evolutionFetchContactByLid(
     if (!res.ok) return null
     const data = await res.json()
     const contacts: Record<string, unknown>[] = Array.isArray(data) ? data : []
-    // Procura um JID real (não @lid) para o mesmo contato
     for (const c of contacts) {
       const id = c.id as string | undefined
       if (id && id.endsWith('@s.whatsapp.net')) return id
@@ -52,12 +49,8 @@ export async function evolutionFetchContactByLid(
 }
 
 /**
- * Converte markdown estilo CommonMark (gerado pela IA do bot) para o dialeto
- * de formatação suportado pelo WhatsApp:
- *   **bold**   → *bold*
- *   __italic__ → _italic_
- *   ~~strike~~ → ~strike~
- * `*` e `_` simples já no padrão WhatsApp são preservados.
+ * Converte markdown CommonMark para o dialeto de formatação do WhatsApp.
+ *   **bold** → *bold*  |  __italic__ → _italic_  |  ~~strike~~ → ~strike~
  */
 function normalizeWhatsAppMarkdown(text: string): string {
   return text
@@ -66,20 +59,21 @@ function normalizeWhatsAppMarkdown(text: string): string {
     .replace(/~~([^~\n]+?)~~/g,     '~$1~')
 }
 
+/**
+ * Envia texto simples. Retorna o evolution_message_id ou null se não conseguir parsear.
+ */
 export async function evolutionSendText(
   creds: EvolutionCreds,
   phone: string,
   message: string,
-): Promise<void> {
+): Promise<string | null> {
   const number = formatPhone(phone)
   const url    = `${creds.apiUrl}/message/sendText/${creds.instanceId}`
-  const normalizedMessage = normalizeWhatsAppMarkdown(message)
-  // v2.x: campo "text" direto (v1.x usava textMessage: { text })
-  const body   = JSON.stringify({ number, text: normalizedMessage })
+  const body   = JSON.stringify({ number, text: normalizeWhatsAppMarkdown(message) })
 
   console.info(`[Evolution] sendText → number="${number}" | ${url}`)
 
-  const res          = await fetch(url, { method: 'POST', headers: buildHeaders(creds.apiKey), body })
+  const res = await fetch(url, { method: 'POST', headers: buildHeaders(creds.apiKey), body })
   const responseText = await res.text()
 
   if (!res.ok) {
@@ -88,6 +82,13 @@ export async function evolutionSendText(
   }
 
   console.info(`[Evolution] sendText OK ${res.status}: ${responseText.substring(0, 200)}`)
+
+  try {
+    const data = JSON.parse(responseText)
+    return (data?.key?.id as string | undefined) ?? null
+  } catch {
+    return null
+  }
 }
 
 // ─── Instance Management ──────────────────────────────────────────────────────
@@ -95,7 +96,6 @@ export async function evolutionSendText(
 export async function evolutionGetQrCode(
   creds: EvolutionCreds,
 ): Promise<{ base64: string } | null> {
-  // v1.8.4: GET /instance/connect/{name} retorna QR base64 quando desconectado
   const url = `${creds.apiUrl}/instance/connect/${creds.instanceId}`
   try {
     const res = await fetch(url, { headers: buildHeaders(creds.apiKey) })
@@ -129,7 +129,6 @@ export async function evolutionCreateInstance(params: {
   instanceName: string
   webhookUrl?:  string
 }): Promise<{ ok: true } | { ok: false; status: number; body: string }> {
-  // v2.x: integration obrigatório; webhook configurado separadamente via /webhook/set
   const body: Record<string, unknown> = {
     instanceName: params.instanceName,
     integration:  'WHATSAPP-BAILEYS',
@@ -154,7 +153,6 @@ export async function evolutionSetWebhook(params: {
   webhookUrl: string
 }): Promise<boolean> {
   try {
-    // v2.x: corpo deve ser { webhook: { ... } }
     const res = await fetch(`${params.creds.apiUrl}/webhook/set/${params.creds.instanceId}`, {
       method:  'POST',
       headers: buildHeaders(params.creds.apiKey),
@@ -162,7 +160,8 @@ export async function evolutionSetWebhook(params: {
         webhook: {
           enabled: true,
           url:     params.webhookUrl,
-          events:  ['QRCODE_UPDATED', 'CONNECTION_UPDATE', 'MESSAGES_UPSERT'],
+          // MESSAGES_UPDATE incluído para receber ACK (check azul/cinza)
+          events:  ['QRCODE_UPDATED', 'CONNECTION_UPDATE', 'MESSAGES_UPSERT', 'MESSAGES_UPDATE'],
           webhookByEvents: false,
           webhookBase64:   false,
         },
@@ -177,11 +176,6 @@ export async function evolutionSetWebhook(params: {
 // ─── Message Sending ──────────────────────────────────────────────────────────
 
 // Baixa a mídia da URL (server-side) e devolve base64 cru, sem prefixo data URI.
-// Motivo: quando passamos a URL para o Evolution, é ELE (a VPS/Baileys) que
-// precisa baixar o arquivo — e isso falha de forma intermitente com
-// "Connection Closed" (o socket do WhatsApp cai durante o download). O servidor
-// Next alcança o Supabase com confiabilidade, então buscamos os bytes aqui e
-// mandamos base64, que o Evolution repassa direto ao WhatsApp sem baixar nada.
 async function fetchAsBase64(mediaUrl: string): Promise<string | null> {
   try {
     const ctrl = new AbortController()
@@ -197,6 +191,9 @@ async function fetchAsBase64(mediaUrl: string): Promise<string | null> {
   }
 }
 
+/**
+ * Envia mídia (imagem, vídeo, documento, áudio). Retorna evolution_message_id ou null.
+ */
 export async function evolutionSendMedia(
   creds: EvolutionCreds,
   phone: string,
@@ -206,16 +203,15 @@ export async function evolutionSendMedia(
     mimeType:  string
     caption?:  string
   },
-): Promise<void> {
+): Promise<string | null> {
   const mediatype =
     params.mimeType.startsWith('image/') ? 'image' :
     params.mimeType.startsWith('video/') ? 'video' :
+    params.mimeType.startsWith('audio/') ? 'audio' :
     'document'
 
   const url = `${creds.apiUrl}/message/sendMedia/${creds.instanceId}`
 
-  // Preferencial: enviar o arquivo em base64 (evita o download flaky no Evolution).
-  // Fallback: se o download server-side falhar, manda a URL (comportamento antigo).
   const base64 = await fetchAsBase64(params.mediaUrl)
   const media  = base64 ?? params.mediaUrl
 
@@ -232,5 +228,43 @@ export async function evolutionSendMedia(
   if (!res.ok) {
     const text = await res.text()
     throw new Error(`Evolution API [sendMedia/${mediatype}] ${res.status}: ${text}`)
+  }
+
+  try {
+    const data = await res.json()
+    return (data?.key?.id as string | undefined) ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Envia áudio PTT (push-to-talk). Retorna evolution_message_id ou null.
+ */
+export async function evolutionSendAudio(
+  creds: EvolutionCreds,
+  phone: string,
+  audioUrl: string,
+): Promise<string | null> {
+  const url   = `${creds.apiUrl}/message/sendWhatsAppAudio/${creds.instanceId}`
+  const base64 = await fetchAsBase64(audioUrl)
+
+  const body = JSON.stringify({
+    number: formatPhone(phone),
+    audio:  base64 ?? audioUrl,
+    encoding: true,
+  })
+
+  const res = await fetch(url, { method: 'POST', headers: buildHeaders(creds.apiKey), body })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Evolution API [sendAudio] ${res.status}: ${text}`)
+  }
+
+  try {
+    const data = await res.json()
+    return (data?.key?.id as string | undefined) ?? null
+  } catch {
+    return null
   }
 }

@@ -5,7 +5,8 @@ import {
   MessageCircle, Send, Bot, User, X, ArrowLeft, RotateCcw,
   CheckSquare, Square, Pin, CheckCheck, AlertTriangle, Shield,
   Calendar, Users, ChevronDown, MessageSquare, Brain, FileText,
-  ExternalLink,
+  ExternalLink, Paperclip, Check, Image as ImageIcon, Volume2,
+  Video as VideoIcon, UserPlus, Clock,
 } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -13,6 +14,7 @@ import {
   getWhatsappConversations,
   getConversationMessages,
   sendHumanMessage,
+  sendMediaMessage,
   takeOverConversation,
   returnToBot,
   closeConversation,
@@ -30,9 +32,13 @@ import {
   markWppUrgent,
   linkWppMessage,
   getConversationConsultations,
+  getConversationParticipants,
+  addConversationParticipant,
+  removeConversationParticipant,
   type WppConversation,
   type WppMessage,
   type StaffMember,
+  type WppParticipant,
 } from '@/lib/actions/whatsapp-conversations'
 import ClinicalContextPanel from './ClinicalContextPanel'
 import QuickRepliesPanel from './QuickRepliesPanel'
@@ -75,6 +81,128 @@ function fmtDateShort(iso: string | null): string {
   return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })
 }
 
+function initials(name: string | null, phone: string): string {
+  if (name?.trim()) {
+    const parts = name.trim().split(/\s+/)
+    return parts.length >= 2
+      ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+      : parts[0].slice(0, 2).toUpperCase()
+  }
+  return phone.replace(/\D/g, '').slice(-2) || '?'
+}
+
+// ─── Avatar ───────────────────────────────────────────────────────────────────
+
+function Avatar({
+  photoUrl, name, phone, size = 'sm', status,
+}: {
+  photoUrl:  string | null
+  name:      string | null
+  phone:     string
+  size?:     'sm' | 'md'
+  status?:   'bot' | 'human' | 'closed'
+}) {
+  const sizeClass  = size === 'sm' ? 'h-9 w-9 text-sm' : 'h-11 w-11 text-base'
+  const colorClass =
+    status === 'human' ? 'bg-amber-100 text-amber-700' :
+    status === 'bot'   ? 'bg-blue-100 text-blue-700'   :
+    'bg-slate-100 text-slate-500'
+
+  if (photoUrl) {
+    return (
+      <img
+        src={photoUrl}
+        alt={name ?? 'Tutor'}
+        className={`${sizeClass} rounded-full object-cover flex-shrink-0`}
+        onError={(e) => { (e.currentTarget as HTMLImageElement).src = '' ; (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+      />
+    )
+  }
+  return (
+    <div className={`${sizeClass} rounded-full flex items-center justify-center font-bold flex-shrink-0 ${colorClass}`}>
+      {initials(name, phone)}
+    </div>
+  )
+}
+
+// ─── ACK check marks ──────────────────────────────────────────────────────────
+
+function AckIcon({ ack }: { ack: number }) {
+  // 0=pending/clock, 1=sent(1 tick), 2/3=delivered(2 ticks grey), 4=read(2 ticks blue)
+  if (ack <= 0) return <Clock className="h-2.5 w-2.5 opacity-60" />
+  if (ack === 1) return <Check className="h-2.5 w-2.5 opacity-60" />
+  if (ack <= 3) return <CheckCheck className="h-2.5 w-2.5 opacity-60" />
+  return <CheckCheck className="h-2.5 w-2.5 text-sky-300" />
+}
+
+// ─── Media content ────────────────────────────────────────────────────────────
+
+function MediaBubble({ msg, isOutbound }: { msg: WppMessage; isOutbound: boolean }) {
+  const muted = isOutbound ? 'text-white/70' : 'text-slate-500'
+
+  if (msg.media_type === 'image') {
+    if (msg.media_url) {
+      return (
+        <div className="space-y-1">
+          <a href={msg.media_url} target="_blank" rel="noopener noreferrer">
+            <img
+              src={msg.media_url}
+              alt="Imagem"
+              className="max-w-full rounded-lg max-h-52 object-cover"
+              loading="lazy"
+            />
+          </a>
+          {msg.content && <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>}
+        </div>
+      )
+    }
+    return <div className={`flex items-center gap-2 ${muted}`}><ImageIcon className="h-4 w-4" /><span className="text-sm">Imagem</span></div>
+  }
+
+  if (msg.media_type === 'audio') {
+    if (msg.media_url) {
+      return (
+        <audio controls src={msg.media_url} className="max-w-full" style={{ height: 40, minWidth: 200 }} />
+      )
+    }
+    return <div className={`flex items-center gap-2 ${muted}`}><Volume2 className="h-4 w-4" /><span className="text-sm">Áudio</span></div>
+  }
+
+  if (msg.media_type === 'video') {
+    if (msg.media_url) {
+      return (
+        <div className="space-y-1">
+          <video controls src={msg.media_url} className="max-w-full rounded-lg max-h-52" />
+          {msg.content && <p className="text-sm whitespace-pre-wrap">{msg.content}</p>}
+        </div>
+      )
+    }
+    return <div className={`flex items-center gap-2 ${muted}`}><VideoIcon className="h-4 w-4" /><span className="text-sm">Vídeo</span></div>
+  }
+
+  if (msg.media_type === 'document') {
+    return (
+      <div className={`flex items-center gap-2 ${muted}`}>
+        <FileText className="h-4 w-4 flex-shrink-0" />
+        {msg.media_url
+          ? <a href={msg.media_url} download={msg.media_filename ?? 'arquivo'} target="_blank" rel="noopener noreferrer" className={`text-sm underline truncate max-w-[200px] ${isOutbound ? 'text-white' : 'text-teal-700'}`}>
+              {msg.media_filename ?? 'Documento'}
+            </a>
+          : <span className="text-sm truncate max-w-[200px]">{msg.media_filename ?? 'Documento'}</span>
+        }
+      </div>
+    )
+  }
+
+  if (msg.media_type === 'sticker') {
+    if (msg.media_url) return <img src={msg.media_url} alt="Figurinha" className="max-w-[120px] max-h-[120px]" />
+    return <span className="text-2xl">🎭</span>
+  }
+
+  // Texto padrão
+  return <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content || <span className="opacity-50 text-xs italic">…</span>}</p>
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ConversationsPageClient({
@@ -103,8 +231,8 @@ export default function ConversationsPageClient({
   const [ctxMenu,       setCtxMenu]       = useState<{ x: number; y: number; conv: WppConversation } | null>(null)
 
   // ── Feature 1: Transfer / assigned_to ──────────────────────────────────────
-  const [staff,           setStaff]           = useState<StaffMember[]>([])
-  const [showTransfer,    setShowTransfer]    = useState(false)
+  const [staff,        setStaff]       = useState<StaffMember[]>([])
+  const [showTransfer, setShowTransfer] = useState(false)
   const transferRef = useRef<HTMLDivElement>(null)
 
   // ── Feature 2: Quick replies ────────────────────────────────────────────────
@@ -116,9 +244,19 @@ export default function ConversationsPageClient({
   const [loadingCtx,      setLoadingCtx]      = useState(false)
 
   // ── Feature 8: Message → prontuário link ────────────────────────────────────
-  const [msgCtxMenu,       setMsgCtxMenu]       = useState<{ x: number; y: number; msg: WppMessage } | null>(null)
+  const [msgCtxMenu,        setMsgCtxMenu]        = useState<{ x: number; y: number; msg: WppMessage } | null>(null)
   const [linkConsultations, setLinkConsultations] = useState<WppConsultationLink[]>([])
   const [linkLoading,       setLinkLoading]       = useState(false)
+
+  // ── Mídia outbound ─────────────────────────────────────────────────────────
+  const [uploadingFile, setUploadingFile] = useState(false)
+  const fileInputRef    = useRef<HTMLInputElement>(null)
+
+  // ── Participantes ─────────────────────────────────────────────────────────
+  const [participants,     setParticipants]     = useState<WppParticipant[]>([])
+  const [showParticipants, setShowParticipants] = useState(false)
+  const [showAddStaff,     setShowAddStaff]     = useState(false)
+  const participantsRef = useRef<HTMLDivElement>(null)
 
   const endRef        = useRef<HTMLDivElement>(null)
   const selectedIdRef = useRef<string | null>(null)
@@ -135,35 +273,41 @@ export default function ConversationsPageClient({
     getClinicStaff().then(res => { if (Array.isArray(res)) setStaff(res) })
   }, [])
 
-  // Scroll to bottom when messages change
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
   // Close transfer dropdown on outside click
   useEffect(() => {
     function onOutside(e: MouseEvent) {
-      if (transferRef.current && !transferRef.current.contains(e.target as Node)) {
-        setShowTransfer(false)
-      }
+      if (transferRef.current && !transferRef.current.contains(e.target as Node)) setShowTransfer(false)
     }
     if (showTransfer) document.addEventListener('mousedown', onOutside)
     return () => document.removeEventListener('mousedown', onOutside)
   }, [showTransfer])
+
+  // Close participants panel on outside click
+  useEffect(() => {
+    function onOutside(e: MouseEvent) {
+      if (participantsRef.current && !participantsRef.current.contains(e.target as Node)) {
+        setShowParticipants(false)
+        setShowAddStaff(false)
+      }
+    }
+    if (showParticipants) document.addEventListener('mousedown', onOutside)
+    return () => document.removeEventListener('mousedown', onOutside)
+  }, [showParticipants])
 
   // Supabase Realtime
   useEffect(() => {
     if (!clinicId) return
     const supabase = createClient()
     const channel = supabase.channel(`wpp-${clinicId}`)
-      .on(
-        'postgres_changes',
+      .on('postgres_changes',
         { event: '*', schema: 'public', table: 'whatsapp_conversations', filter: `clinic_id=eq.${clinicId}` },
         async () => {
           const res = await getWhatsappConversations()
           if (Array.isArray(res)) setConversations(res)
-        },
-      )
-      .on(
-        'postgres_changes',
+        })
+      .on('postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'whatsapp_messages', filter: `clinic_id=eq.${clinicId}` },
         async (payload) => {
           const newMsg = payload.new as Record<string, unknown>
@@ -174,13 +318,21 @@ export default function ConversationsPageClient({
           }
           const convRes = await getWhatsappConversations()
           if (Array.isArray(convRes)) setConversations(convRes)
-        },
-      )
+        })
+      .on('postgres_changes',
+        // ACK updates — atualiza check azul sem recarregar tudo
+        { event: 'UPDATE', schema: 'public', table: 'whatsapp_messages', filter: `clinic_id=eq.${clinicId}` },
+        (payload) => {
+          const updated = payload.new as { id: string; ack: number; conversation_id: string }
+          if (updated.conversation_id === selectedIdRef.current) {
+            setMessages(prev => prev.map(m => m.id === updated.id ? { ...m, ack: updated.ack } : m))
+          }
+        })
       .subscribe()
     return () => { void supabase.removeChannel(channel) }
   }, [clinicId])
 
-  // Polling fallback
+  // Polling fallback (conversas)
   useEffect(() => {
     const id = setInterval(async () => {
       const res = await getWhatsappConversations()
@@ -188,15 +340,6 @@ export default function ConversationsPageClient({
     }, 60000)
     return () => clearInterval(id)
   }, [])
-
-  useEffect(() => {
-    if (!selectedId) return
-    const id = setInterval(async () => {
-      const res = await getConversationMessages(selectedId)
-      if (Array.isArray(res)) setMessages(res)
-    }, 60000)
-    return () => clearInterval(id)
-  }, [selectedId])
 
   // ── Utils ──────────────────────────────────────────────────────────────────
   function showToast(msg: string, type: 'success' | 'error' = 'success') {
@@ -219,14 +362,22 @@ export default function ConversationsPageClient({
     setShowClinicalCtx(false)
     setClinicalCtx(null)
     setShowQuickReplies(false)
-    const res = await getConversationMessages(id)
+    setShowParticipants(false)
+    setParticipants([])
+
+    const [msgRes, partsRes] = await Promise.all([
+      getConversationMessages(id),
+      getConversationParticipants(id),
+    ])
     setLoadingMsgs(false)
-    if (Array.isArray(res)) setMessages(res)
+    if (Array.isArray(msgRes)) setMessages(msgRes)
+    if (Array.isArray(partsRes)) setParticipants(partsRes)
+
     setConversations(prev => prev.map(c => c.id === id ? { ...c, unread_count: 0 } : c))
     void markWppRead(id)
   }
 
-  // ── Send message ───────────────────────────────────────────────────────────
+  // ── Send text ──────────────────────────────────────────────────────────────
   function handleSend() {
     if (!selectedId || !replyText.trim() || isPending) return
     const text = replyText.trim()
@@ -243,16 +394,44 @@ export default function ConversationsPageClient({
     })
   }
 
+  // ── Upload de mídia ────────────────────────────────────────────────────────
+  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file || !selectedId) return
+    setUploadingFile(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('conversationId', selectedId)
+
+      const uploadRes = await fetch('/api/whatsapp/media', { method: 'POST', body: formData })
+      if (!uploadRes.ok) {
+        const data = await uploadRes.json().catch(() => ({}))
+        showToast((data.error as string) ?? 'Erro no upload', 'error')
+        return
+      }
+      const { url, mimeType, fileName } = await uploadRes.json() as { url: string; mimeType: string; fileName: string }
+
+      const sendRes = await sendMediaMessage(selectedId, { mediaUrl: url, mimeType, fileName })
+      if ('error' in sendRes) { showToast(sendRes.error, 'error'); return }
+
+      const msgs = await getConversationMessages(selectedId)
+      if (Array.isArray(msgs)) setMessages(msgs)
+    } finally {
+      setUploadingFile(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
   // ── Conversation actions ───────────────────────────────────────────────────
   function handleTakeOver() {
     if (!selectedId || isPending) return
     startTransition(async () => {
       const res = await takeOverConversation(selectedId)
       if ('error' in res) { showToast(res.error, 'error'); return }
-      // Auto-assign to current user
       await assignWppConversation(selectedId, currentUserId)
       showToast('Atendimento assumido.')
-      await Promise.all([refreshAll(), getConversationMessages(selectedId).then(r => { if (Array.isArray(r)) setMessages(r) })])
+      await refreshAll()
     })
   }
 
@@ -262,7 +441,7 @@ export default function ConversationsPageClient({
       const res = await returnToBot(selectedId)
       if ('error' in res) { showToast(res.error, 'error'); return }
       showToast('Conversa devolvida ao bot.')
-      await Promise.all([refreshAll(), getConversationMessages(selectedId).then(r => { if (Array.isArray(r)) setMessages(r) })])
+      await refreshAll()
     })
   }
 
@@ -283,7 +462,7 @@ export default function ConversationsPageClient({
       const res = await reopenConversation(selectedId)
       if ('error' in res) { showToast(res.error, 'error'); return }
       showToast('Conversa reaberta.')
-      await Promise.all([refreshAll(), getConversationMessages(selectedId).then(r => { if (Array.isArray(r)) setMessages(r) })])
+      await refreshAll()
     })
   }
 
@@ -294,8 +473,7 @@ export default function ConversationsPageClient({
     startTransition(async () => {
       const res = await assignWppConversation(selectedId, userId)
       if ('error' in res) { showToast(res.error, 'error'); return }
-      const label = userId ? (name ?? 'Usuário') : 'Ninguém'
-      showToast(`Conversa atribuída a ${label}.`)
+      showToast(`Conversa atribuída a ${userId ? (name ?? 'Usuário') : 'Ninguém'}.`)
       await refreshAll()
     })
   }
@@ -314,27 +492,44 @@ export default function ConversationsPageClient({
   // ── Feature 6: Urgency ────────────────────────────────────────────────────
   async function handleCtxToggleUrgent() {
     if (!ctxMenu) return
-    const { conv } = ctxMenu
-    setCtxMenu(null)
+    const { conv } = ctxMenu; setCtxMenu(null)
     const newVal = !conv.is_urgent
     setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, is_urgent: newVal } : c))
     await markWppUrgent(conv.id, newVal)
     showToast(newVal ? 'Conversa marcada como urgente.' : 'Urgência removida.')
   }
 
-  // ── Bulk actions ───────────────────────────────────────────────────────────
-  function toggleBulk(id: string) {
-    setBulkSelected(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id); else next.add(id)
-      return next
-    })
+  // ── Participantes ─────────────────────────────────────────────────────────
+  function handleToggleParticipants() {
+    if (showParticipants) { setShowParticipants(false); setShowAddStaff(false); return }
+    setShowParticipants(true)
   }
 
-  function exitBulkMode() {
-    setBulkMode(false)
-    setBulkSelected(new Set())
+  async function handleAddParticipant(profileId: string) {
+    if (!selectedId) return
+    setShowAddStaff(false)
+    const res = await addConversationParticipant(selectedId, profileId)
+    if ('error' in res) { showToast(res.error, 'error'); return }
+    showToast('Participante adicionado.')
+    const parts = await getConversationParticipants(selectedId)
+    if (Array.isArray(parts)) setParticipants(parts)
   }
+
+  async function handleRemoveParticipant(profileId: string) {
+    if (!selectedId) return
+    const res = await removeConversationParticipant(selectedId, profileId)
+    if ('error' in res) { showToast(res.error, 'error'); return }
+    showToast('Participante removido.')
+    const parts = await getConversationParticipants(selectedId)
+    if (Array.isArray(parts)) setParticipants(parts)
+  }
+
+  // ── Bulk actions ───────────────────────────────────────────────────────────
+  function toggleBulk(id: string) {
+    setBulkSelected(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  }
+
+  function exitBulkMode() { setBulkMode(false); setBulkSelected(new Set()) }
 
   function selectAllVisible() {
     const ids = filtered.map(c => c.id)
@@ -371,7 +566,7 @@ export default function ConversationsPageClient({
       const res = await markWppReadBulk(ids)
       if ('error' in res) { showToast(res.error, 'error'); return }
       setConversations(prev => prev.map(c => ids.includes(c.id) ? { ...c, unread_count: 0 } : c))
-      showToast(`${res.updated} conversa${res.updated !== 1 ? 's' : ''} marcada${res.updated !== 1 ? 's' : ''} como lida${res.updated !== 1 ? 's' : ''}.`)
+      showToast(`${res.updated} conversa${res.updated !== 1 ? 's' : ''} lida${res.updated !== 1 ? 's' : ''}.`)
       exitBulkMode()
     })
   }
@@ -383,12 +578,12 @@ export default function ConversationsPageClient({
       const res = await markWppUnreadBulk(ids)
       if ('error' in res) { showToast(res.error, 'error'); return }
       setConversations(prev => prev.map(c => ids.includes(c.id) ? { ...c, unread_count: 1 } : c))
-      showToast(`${res.updated} conversa${res.updated !== 1 ? 's' : ''} marcada${res.updated !== 1 ? 's' : ''} como não lida${res.updated !== 1 ? 's' : ''}.`)
+      showToast(`${res.updated} conversa${res.updated !== 1 ? 's' : ''} não lida${res.updated !== 1 ? 's' : ''}.`)
       exitBulkMode()
     })
   }
 
-  // ── Context menu (right-click on conversation) ─────────────────────────────
+  // ── Context menu (right-click conversation) ────────────────────────────────
   function handleConvRightClick(e: React.MouseEvent, conv: WppConversation) {
     e.preventDefault()
     setCtxMenu({ x: e.clientX, y: e.clientY, conv })
@@ -412,7 +607,7 @@ export default function ConversationsPageClient({
     }
   }
 
-  // ── Feature 8: Message right-click → link to prontuário ───────────────────
+  // ── Feature 8: Message right-click → link prontuário ──────────────────────
   async function handleMsgRightClick(e: React.MouseEvent, msg: WppMessage) {
     e.preventDefault()
     setMsgCtxMenu({ x: e.clientX, y: e.clientY, msg })
@@ -435,26 +630,28 @@ export default function ConversationsPageClient({
     })
   }
 
-  // ── Sort: urgent first → pinned → last_message_at ─────────────────────────
+  // ── Sort: urgent → pinned → last_message_at ────────────────────────────────
   const sorted = [...conversations].sort((a, b) => {
     if (a.is_urgent !== b.is_urgent) return a.is_urgent ? -1 : 1
     const aPinned = a.pinned_at !== null
     const bPinned = b.pinned_at !== null
     if (aPinned !== bPinned) return aPinned ? -1 : 1
     if (aPinned && bPinned) return (a.pin_order ?? 0) - (b.pin_order ?? 0)
-    const aTime = a.last_message_at ? new Date(a.last_message_at).getTime() : 0
-    const bTime = b.last_message_at ? new Date(b.last_message_at).getTime() : 0
-    return bTime - aTime
+    return (b.last_message_at ? new Date(b.last_message_at).getTime() : 0)
+         - (a.last_message_at ? new Date(a.last_message_at).getTime() : 0)
   })
 
   const filtered = sorted.filter(c =>
     filter === 'all' ? c.status !== 'closed' : c.status === filter
   )
 
-  // ── Phone → reception schedule link (Feature 3) ───────────────────────────
   const scheduleHref = selectedConv
     ? `/dashboard/reception?phone=${encodeURIComponent(selectedConv.tutor_phone.replace('@s.whatsapp.net', '').replace(/\D/g, ''))}`
     : '/dashboard/reception'
+
+  // Nomes únicos de senders para detectar se há múltiplos participantes
+  const uniqueSenders = new Set(messages.filter(m => m.direction === 'outbound' && m.sent_by === 'human' && m.sender_name).map(m => m.sender_name))
+  const multiSender = uniqueSenders.size > 1
 
   return (
     <>
@@ -467,6 +664,15 @@ export default function ConversationsPageClient({
         </div>
       )}
 
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="hidden"
+        accept="image/*,audio/*,video/*,.pdf,.doc,.docx,.txt"
+        onChange={handleFileSelect}
+      />
+
       <div className="space-y-4">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -478,7 +684,7 @@ export default function ConversationsPageClient({
                 : 'Sem conversas aguardando atendimento humano'}
             </p>
           </div>
-          <span className="flex items-center gap-2 text-xs font-medium text-emerald-700" title="Conversas atualizam em tempo real">
+          <span className="flex items-center gap-2 text-xs font-medium text-emerald-700">
             <span className="relative flex h-2 w-2">
               <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
               <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
@@ -535,9 +741,7 @@ export default function ConversationsPageClient({
                     ? <><CheckSquare className="h-3.5 w-3.5" /> Desmarcar todas</>
                     : <><Square className="h-3.5 w-3.5" /> Marcar todas ({filtered.length})</>}
                 </button>
-                <span className="text-xs font-bold text-teal-700 ml-auto">
-                  {bulkSelected.size} selecionada{bulkSelected.size !== 1 ? 's' : ''}
-                </span>
+                <span className="text-xs font-bold text-teal-700 ml-auto">{bulkSelected.size} selecionada{bulkSelected.size !== 1 ? 's' : ''}</span>
                 <button onClick={handleBulkTakeOver} disabled={bulkSelected.size === 0 || isPending}
                   className="flex items-center gap-1 rounded-lg bg-amber-500 hover:bg-amber-600 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-40">
                   <User className="h-3 w-3" /> Assumir
@@ -564,8 +768,8 @@ export default function ConversationsPageClient({
                   {filter === 'all' ? 'Nenhuma conversa aberta' : `Nenhuma conversa "${filter}"`}
                 </div>
               ) : filtered.map(conv => {
-                const isChecked    = bulkSelected.has(conv.id)
-                const asgName      = assignedName(conv)
+                const isChecked = bulkSelected.has(conv.id)
+                const asgName   = assignedName(conv)
                 return (
                   <div
                     key={conv.id}
@@ -582,17 +786,19 @@ export default function ConversationsPageClient({
                     )}
                     <button
                       onClick={() => bulkMode ? toggleBulk(conv.id) : selectConversation(conv.id)}
-                      className="flex-1 text-left px-2 py-0"
+                      className="flex-1 text-left px-1 py-0"
                     >
-                      <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2.5 min-w-0">
-                          {/* Avatar */}
-                          <div className={`relative flex-shrink-0 h-9 w-9 rounded-full flex items-center justify-center text-sm font-bold ${
-                            conv.status === 'human'  ? 'bg-amber-100 text-amber-700' :
-                            conv.status === 'bot'    ? 'bg-blue-100 text-blue-700'   :
-                            'bg-slate-100 text-slate-400'
-                          }`}>
-                            {(conv.tutor_name || displayPhone(conv.tutor_phone)).charAt(0).toUpperCase()}
+                          {/* Avatar com foto do tutor ou iniciais */}
+                          <div className="relative flex-shrink-0">
+                            <Avatar
+                              photoUrl={conv.tutor_photo_cache ?? null}
+                              name={conv.tutor_name}
+                              phone={conv.tutor_phone}
+                              size="sm"
+                              status={conv.status}
+                            />
                             {conv.is_urgent && (
                               <span className="absolute -top-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-red-500 flex items-center justify-center">
                                 <AlertTriangle className="h-2 w-2 text-white" />
@@ -605,20 +811,20 @@ export default function ConversationsPageClient({
                             </p>
                             <div className="flex items-center gap-1 flex-wrap">
                               {conv.tutor_name && (
-                                <p className="text-[11px] text-slate-400">{displayPhone(conv.tutor_phone)}</p>
+                                <p className="text-[11px] text-slate-400 truncate">{displayPhone(conv.tutor_phone)}</p>
                               )}
-                              {asgName && (
-                                <span className="text-[10px] text-teal-600 font-medium truncate">· {asgName}</span>
-                              )}
+                              {asgName && <span className="text-[10px] text-teal-600 font-medium">· {asgName}</span>}
                             </div>
+                            {/* Pet names cache */}
+                            {conv.pet_names_cache && (
+                              <p className="text-[10px] text-slate-400 truncate max-w-[160px]">🐾 {conv.pet_names_cache}</p>
+                            )}
                           </div>
                         </div>
                         <div className="flex flex-col items-end gap-1 flex-shrink-0">
                           <div className="flex items-center gap-1">
                             {conv.lgpd_accepted_at && (
-                              <span title="LGPD aceita">
-                                <Shield className="h-3 w-3 text-slate-300" />
-                              </span>
+                              <span title="LGPD aceita"><Shield className="h-3 w-3 text-slate-300" /></span>
                             )}
                             {conv.pinned_at && <Pin className="h-3 w-3 text-amber-500" />}
                             <span className={`text-[10px] font-bold rounded-full px-1.5 py-0.5 ${STATUS_CFG[conv.status].color}`}>
@@ -656,13 +862,19 @@ export default function ConversationsPageClient({
               <>
                 {/* Conversation header */}
                 <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between gap-2 flex-wrap relative">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <button
-                      onClick={() => setMobileView('list')}
-                      className="flex lg:hidden items-center gap-1 text-slate-500 hover:text-slate-900 text-sm font-medium flex-shrink-0"
-                    >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <button onClick={() => setMobileView('list')}
+                      className="flex lg:hidden items-center gap-1 text-slate-500 hover:text-slate-900 text-sm font-medium flex-shrink-0">
                       <ArrowLeft className="h-4 w-4" />
                     </button>
+                    {/* Tutor avatar no header */}
+                    <Avatar
+                      photoUrl={selectedConv.tutor_photo_cache ?? null}
+                      name={selectedConv.tutor_name}
+                      phone={selectedConv.tutor_phone}
+                      size="md"
+                      status={selectedConv.status}
+                    />
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
                         <p className="font-semibold text-slate-900 truncate">
@@ -675,6 +887,9 @@ export default function ConversationsPageClient({
                         )}
                       </div>
                       <p className="text-xs text-slate-400">{displayPhone(selectedConv.tutor_phone)}</p>
+                      {selectedConv.pet_names_cache && (
+                        <p className="text-[10px] text-slate-400 truncate">🐾 {selectedConv.pet_names_cache}</p>
+                      )}
                     </div>
                   </div>
 
@@ -685,64 +900,113 @@ export default function ConversationsPageClient({
                     </span>
 
                     {/* Feature 3: Agendar */}
-                    <Link
-                      href={scheduleHref}
-                      target="_blank"
+                    <Link href={scheduleHref} target="_blank"
                       className="flex items-center gap-1 text-xs font-semibold text-slate-600 bg-slate-50 hover:bg-slate-100 px-2 py-1.5 rounded-lg transition-colors"
-                      title="Abrir Check-in/Agendamento"
-                    >
+                      title="Abrir Check-in/Agendamento">
                       <Calendar className="h-3.5 w-3.5" />
                       <span className="hidden sm:inline">Agendar</span>
                     </Link>
 
                     {/* Feature 5: Contexto Clínico */}
-                    <button
-                      onClick={handleToggleClinicalCtx}
+                    <button onClick={handleToggleClinicalCtx}
                       className={`flex items-center gap-1 text-xs font-semibold px-2 py-1.5 rounded-lg transition-colors ${
                         showClinicalCtx ? 'bg-teal-600 text-white' : 'text-teal-700 bg-teal-50 hover:bg-teal-100'
                       }`}
-                      title="Contexto Clínico do Tutor"
-                    >
+                      title="Contexto Clínico do Tutor">
                       <Brain className="h-3.5 w-3.5" />
                       <span className="hidden sm:inline">Contexto</span>
                     </button>
 
+                    {/* Participantes */}
+                    {selectedConv.status === 'human' && (
+                      <div ref={participantsRef} className="relative">
+                        <button
+                          onClick={handleToggleParticipants}
+                          className={`flex items-center gap-1 text-xs font-semibold px-2 py-1.5 rounded-lg transition-colors ${
+                            showParticipants ? 'bg-violet-600 text-white' : 'text-violet-700 bg-violet-50 hover:bg-violet-100'
+                          }`}
+                          title="Participantes da conversa"
+                        >
+                          <UserPlus className="h-3.5 w-3.5" />
+                          {participants.length > 0 && (
+                            <span className="text-[10px] font-bold">{participants.length}</span>
+                          )}
+                        </button>
+
+                        {showParticipants && (
+                          <div className="absolute right-0 top-full mt-1 z-20 min-w-[220px] rounded-xl border border-slate-200 bg-white shadow-xl py-2">
+                            <p className="px-3 pb-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wide">Participantes</p>
+                            {participants.length === 0 ? (
+                              <p className="px-3 py-2 text-xs text-slate-400">Nenhum participante ainda.</p>
+                            ) : participants.map(p => (
+                              <div key={p.profile_id} className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50">
+                                <div className="h-6 w-6 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center text-[10px] font-bold flex-shrink-0">
+                                  {initials(p.full_name, '')}
+                                </div>
+                                <span className="text-sm text-slate-700 flex-1 truncate">{p.full_name ?? 'Sem nome'}</span>
+                                {p.profile_id !== currentUserId && (
+                                  <button onClick={() => handleRemoveParticipant(p.profile_id)}
+                                    className="text-slate-300 hover:text-red-500 flex-shrink-0">
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                            <div className="border-t border-slate-100 mt-1 pt-1">
+                              <button
+                                onClick={() => setShowAddStaff(v => !v)}
+                                className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-violet-600 hover:bg-violet-50"
+                              >
+                                <UserPlus className="h-3.5 w-3.5" />
+                                Adicionar participante
+                              </button>
+                              {showAddStaff && (
+                                <div className="border-t border-slate-100 pt-1">
+                                  {staff
+                                    .filter(s => !participants.some(p => p.profile_id === s.id))
+                                    .map(s => (
+                                      <button key={s.id} onClick={() => handleAddParticipant(s.id)}
+                                        className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-slate-700 hover:bg-violet-50">
+                                        <User className="h-3.5 w-3.5 text-slate-400" />
+                                        {s.full_name ?? 'Sem nome'}
+                                      </button>
+                                    ))
+                                  }
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {/* Feature 1: Transfer dropdown */}
                     {selectedConv.status === 'human' && (
                       <div ref={transferRef} className="relative">
-                        <button
-                          onClick={() => setShowTransfer(v => !v)}
+                        <button onClick={() => setShowTransfer(v => !v)}
                           className="flex items-center gap-1 text-xs font-semibold text-slate-600 bg-slate-50 hover:bg-slate-100 px-2 py-1.5 rounded-lg transition-colors"
-                          title="Transferir conversa"
-                        >
+                          title="Transferir conversa">
                           <Users className="h-3.5 w-3.5" />
                           <ChevronDown className={`h-3 w-3 transition-transform ${showTransfer ? 'rotate-180' : ''}`} />
                         </button>
                         {showTransfer && (
                           <div className="absolute right-0 top-full mt-1 z-20 min-w-[180px] rounded-xl border border-slate-200 bg-white shadow-xl py-1">
                             <p className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wide">Atribuir a</p>
-                            <button
-                              onClick={() => handleAssign(currentUserId, currentUserName)}
-                              className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-slate-700 hover:bg-teal-50 hover:text-teal-700"
-                            >
+                            <button onClick={() => handleAssign(currentUserId, currentUserName)}
+                              className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-slate-700 hover:bg-teal-50 hover:text-teal-700">
                               <User className="h-3.5 w-3.5" /> Eu ({currentUserName ?? 'Minha conta'})
                             </button>
                             {staff.filter(s => s.id !== currentUserId).map(s => (
-                              <button
-                                key={s.id}
-                                onClick={() => handleAssign(s.id, s.full_name)}
-                                className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
-                              >
+                              <button key={s.id} onClick={() => handleAssign(s.id, s.full_name)}
+                                className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">
                                 <User className="h-3.5 w-3.5 text-slate-400" /> {s.full_name ?? 'Sem nome'}
                               </button>
                             ))}
                             {selectedConv.assigned_to && (
                               <>
                                 <div className="border-t border-slate-100 my-1" />
-                                <button
-                                  onClick={() => handleAssign(null, null)}
-                                  className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-slate-400 hover:bg-slate-50"
-                                >
+                                <button onClick={() => handleAssign(null, null)}
+                                  className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-slate-400 hover:bg-slate-50">
                                   <X className="h-3.5 w-3.5" /> Remover atribuição
                                 </button>
                               </>
@@ -752,7 +1016,6 @@ export default function ConversationsPageClient({
                       </div>
                     )}
 
-                    {/* Assumir / Devolver ao bot */}
                     {selectedConv.status === 'bot' && (
                       <button onClick={handleTakeOver} disabled={isPending}
                         className="flex items-center gap-1 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 px-2 py-1.5 rounded-lg transition-colors disabled:opacity-50">
@@ -793,7 +1056,7 @@ export default function ConversationsPageClient({
                 </div>
 
                 {/* Messages */}
-                <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2.5" style={{ maxHeight: '380px' }}>
+                <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2" style={{ maxHeight: '380px' }}>
                   {loadingMsgs ? (
                     <div className="flex items-center justify-center py-10">
                       <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600" />
@@ -804,31 +1067,44 @@ export default function ConversationsPageClient({
                     const out     = msg.direction === 'outbound'
                     const isHuman = msg.sent_by === 'human'
                     const isBot   = msg.sent_by === 'bot'
+
                     return (
-                      <div
-                        key={msg.id}
-                        className={`flex ${out ? 'justify-end' : 'justify-start'} group`}
-                        onContextMenu={(e) => selectedConv.status === 'human' && handleMsgRightClick(e, msg)}
-                      >
-                        <div className={`max-w-[78%] rounded-2xl px-3.5 py-2.5 ${
-                          out
-                            ? isHuman ? 'bg-emerald-600 text-white' : 'bg-blue-600 text-white'
-                            : 'bg-slate-100 text-slate-900'
-                        }`}>
-                          <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
-                          <div className={`flex items-center gap-1 mt-1 ${out ? 'text-white/60' : 'text-slate-400'} justify-end`}>
-                            {isHuman && <User className="h-2.5 w-2.5" />}
-                            {isBot   && <Bot  className="h-2.5 w-2.5" />}
-                            <span className="text-[10px]">{timeLabel(msg.created_at)}</span>
-                            {selectedConv.status === 'human' && (
-                              <button
-                                onClick={(e) => { e.stopPropagation(); handleMsgRightClick(e, msg) }}
-                                className="opacity-0 group-hover:opacity-100 transition-opacity"
-                                title="Vincular ao prontuário"
-                              >
-                                <FileText className="h-2.5 w-2.5" />
-                              </button>
-                            )}
+                      <div key={msg.id}>
+                        {/* Nome do remetente (multisender ou sempre para rastreabilidade) */}
+                        {out && isHuman && msg.sender_name && (
+                          <p className={`text-[10px] mb-0.5 px-0.5 ${multiSender ? 'text-violet-500 font-semibold text-right' : 'text-slate-400 text-right'}`}>
+                            {msg.sender_name}
+                          </p>
+                        )}
+                        <div
+                          className={`flex ${out ? 'justify-end' : 'justify-start'} group`}
+                          onContextMenu={(e) => selectedConv.status === 'human' && handleMsgRightClick(e, msg)}
+                        >
+                          <div className={`max-w-[78%] rounded-2xl px-3.5 py-2.5 ${
+                            out
+                              ? isHuman ? 'bg-emerald-600 text-white' : 'bg-blue-600 text-white'
+                              : 'bg-slate-100 text-slate-900'
+                          }`}>
+                            {/* Conteúdo: texto ou mídia */}
+                            <MediaBubble msg={msg} isOutbound={out} />
+
+                            {/* Footer: tempo, remetente icon, ACK, link */}
+                            <div className={`flex items-center gap-1 mt-1 ${out ? 'text-white/60' : 'text-slate-400'} justify-end`}>
+                              {isHuman && !msg.sender_name && <User className="h-2.5 w-2.5" />}
+                              {isBot   && <Bot  className="h-2.5 w-2.5" />}
+                              <span className="text-[10px]">{timeLabel(msg.created_at)}</span>
+                              {/* Check azul / cinza para mensagens enviadas por nós */}
+                              {out && <AckIcon ack={msg.ack} />}
+                              {selectedConv.status === 'human' && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleMsgRightClick(e, msg) }}
+                                  className="opacity-0 group-hover:opacity-100 transition-opacity"
+                                  title="Vincular ao prontuário"
+                                >
+                                  <FileText className="h-2.5 w-2.5" />
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -843,10 +1119,7 @@ export default function ConversationsPageClient({
                     <QuickRepliesPanel
                       clinicId={clinicId}
                       isOpen={showQuickReplies}
-                      onSelect={(body) => {
-                        setReplyText(body)
-                        setShowQuickReplies(false)
-                      }}
+                      onSelect={(body) => { setReplyText(body); setShowQuickReplies(false) }}
                       onClose={() => setShowQuickReplies(false)}
                     />
                   )}
@@ -855,7 +1128,7 @@ export default function ConversationsPageClient({
                 {/* Reply box */}
                 {selectedConv.status === 'human' ? (
                   <div className="border-t border-slate-100 p-3 flex items-end gap-2">
-                    {/* Feature 2: Quick replies trigger */}
+                    {/* Respostas Rápidas */}
                     <button
                       onClick={() => setShowQuickReplies(v => !v)}
                       title="Respostas Rápidas"
@@ -865,6 +1138,24 @@ export default function ConversationsPageClient({
                     >
                       <MessageSquare className="h-4 w-4" />
                     </button>
+
+                    {/* Upload de mídia */}
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingFile}
+                      title="Enviar arquivo (imagem, vídeo, áudio, PDF…)"
+                      className={`flex-shrink-0 h-10 w-10 rounded-xl flex items-center justify-center transition-colors ${
+                        uploadingFile
+                          ? 'bg-slate-100 text-slate-300 cursor-wait'
+                          : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                      }`}
+                    >
+                      {uploadingFile
+                        ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-500" />
+                        : <Paperclip className="h-4 w-4" />
+                      }
+                    </button>
+
                     <textarea
                       value={replyText}
                       onChange={e => setReplyText(e.target.value)}
@@ -898,7 +1189,7 @@ export default function ConversationsPageClient({
         </div>
       </div>
 
-      {/* Context menu — right-click on conversation */}
+      {/* Context menu — right-click conversation */}
       {ctxMenu && (
         <>
           <div className="fixed inset-0 z-[10080]" onClick={() => setCtxMenu(null)}
@@ -947,10 +1238,8 @@ export default function ConversationsPageClient({
               <ul className="py-1 max-h-52 overflow-y-auto">
                 {linkConsultations.map((c) => (
                   <li key={c.id}>
-                    <button
-                      onClick={() => handleLinkToConsultation(c.id)}
-                      className="flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-teal-50 transition-colors"
-                    >
+                    <button onClick={() => handleLinkToConsultation(c.id)}
+                      className="flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-teal-50 transition-colors">
                       <ExternalLink className="h-3 w-3 text-teal-500 mt-0.5 shrink-0" />
                       <div>
                         <p className="text-xs font-medium text-slate-800">
