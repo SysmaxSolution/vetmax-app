@@ -88,6 +88,13 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ clinicId: string }> }
 ) {
+  // Valida que a requisição vem do servidor Evolution API (envia apikey no header)
+  const incomingKey = request.headers.get('apikey')
+  const expectedKey = process.env.EVOLUTION_API_KEY
+  if (expectedKey && incomingKey !== expectedKey) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   const { clinicId } = await params
 
   let body: Record<string, unknown>

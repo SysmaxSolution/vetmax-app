@@ -758,11 +758,26 @@ export async function getConversationParticipants(
     }
   }
 
+  // Busca perfis de todos os senders implícitos em uma única query (evita N+1)
+  const implicitIds = [...new Set(
+    (senders ?? [])
+      .map(s => s.sender_profile_id)
+      .filter((id): id is string => !!id && !seen.has(id))
+  )]
+
+  const profileMap = new Map<string, { full_name: string | null; photo_url: string | null }>()
+  if (implicitIds.length > 0) {
+    const { data: profs } = await admin
+      .from('profiles')
+      .select('id, full_name, photo_url')
+      .in('id', implicitIds)
+    for (const p of (profs ?? [])) profileMap.set(p.id, p)
+  }
+
   for (const s of (senders ?? [])) {
     if (s.sender_profile_id && !seen.has(s.sender_profile_id)) {
       seen.add(s.sender_profile_id)
-      // Busca dados do perfil
-      const { data: prof } = await admin.from('profiles').select('full_name, photo_url').eq('id', s.sender_profile_id).maybeSingle()
+      const prof = profileMap.get(s.sender_profile_id)
       participants.push({
         profile_id: s.sender_profile_id,
         full_name:  prof?.full_name ?? s.sender_name ?? null,
