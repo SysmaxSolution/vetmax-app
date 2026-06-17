@@ -159,7 +159,7 @@ export async function createHospitalization(data: {
       .from('hospitalizations')
       .select('id')
       .eq('consultation_id', data.consultation_id)
-      .neq('status', 'discharged')
+      .not('status', 'in', '("discharged","cancelled")')
       .maybeSingle()
     if (active) return { error: 'Este paciente já possui uma internação ativa.' }
 
@@ -453,9 +453,54 @@ export async function confirmDischarge(
       .eq('clinic_id', clinicId)
   }
 
+  // Garante entrada no caixa: soma TODOS os charges não-void desta internação.
+  // Segurança caso settle tenha ocorrido antes do fix ou não tenha sido chamado.
+  const { data: charges } = await admin
+    .from('hospitalization_charges')
+    .select('amount')
+    .eq('clinic_id', clinicId)
+    .eq('hospitalization_id', hospitalizationId)
+    .neq('status', 'void')
+
+  const totalAmount = (charges ?? []).reduce((s, r) => s + Number(r.amount ?? 0), 0)
+
+  if (totalAmount > 0) {
+    const { data: existing } = await admin
+      .from('central_cashier')
+      .select('id')
+      .eq('clinic_id', clinicId)
+      .eq('source_module', 'hospitalization')
+      .eq('source_id', hospitalizationId)
+      .maybeSingle()
+
+    if (!existing) {
+      const { data: hosp } = await admin
+        .from('hospitalizations')
+        .select('patients ( name, tutors ( name ) )')
+        .eq('id', hospitalizationId)
+        .eq('clinic_id', clinicId)
+        .single()
+      const patientName = (hosp?.patients as any)?.name ?? null
+      const tutorName   = (hosp?.patients as any)?.tutors?.name ?? null
+
+      await admin.from('central_cashier').insert({
+        clinic_id:    clinicId,
+        source_module: 'hospitalization',
+        source_id:    hospitalizationId,
+        amount:       totalAmount,
+        status:       'pending',
+        reason:       `Internação — ${patientName ?? 'Paciente'}`,
+        patient_name: patientName,
+        tutor_name:   tutorName,
+        recorded_by:  user.id,
+      })
+    }
+  }
+
   await logAudit({ action: 'DISCHARGE', entity_type: 'hospitalizations', entity_id: hospitalizationId, details: { consultation_id: consultationId } })
 
   revalidatePath('/dashboard/hospitalization')
+  revalidatePath('/dashboard/cashier')
   revalidatePath('/dashboard/vet')
   return { success: true }
 }
