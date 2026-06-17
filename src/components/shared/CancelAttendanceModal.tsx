@@ -6,9 +6,11 @@ import { X, AlertTriangle } from 'lucide-react'
 import { cancelAttendance, type AttendanceEntity } from '@/lib/actions/attendance-cancel'
 
 const ENTITY_LABEL: Record<AttendanceEntity, string> = {
-  triage:       'triagem',
-  consultation: 'atendimento',
-  exam:         'requisição de exame',
+  triage:          'triagem',
+  consultation:    'atendimento',
+  exam:            'requisição de exame',
+  hospitalization: 'internação',
+  surgery:         'cirurgia',
 }
 
 interface Props {
