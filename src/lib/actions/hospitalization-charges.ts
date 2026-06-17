@@ -173,6 +173,10 @@ export async function voidCharge(id: string): Promise<{ success: true } | { erro
  * Zera o saldo em aberto: marca as linhas 'open' como 'transferred' (lançadas
  * no PDV/caixa principal) ou 'paid' (liquidadas direto). Habilita a Alta
  * Administrativa.
+ *
+ * Cria entrada em central_cashier para que o valor apareça no caixa:
+ *   pdv  → status='pending'  (recepção recebe o pagamento no balcão)
+ *   paid → status='recorded' (já pago na beira do leito, só registra)
  */
 export async function settleHospitalizationAccount(
   hospitalizationId: string,
@@ -182,18 +186,62 @@ export async function settleHospitalizationAccount(
   if ('error' in ctx) return ctx
 
   const admin = createAdminClient()
+
+  // 1. Marca as linhas abertas e captura os valores para somar
   const { data, error } = await admin
     .from('hospitalization_charges')
     .update({ status: method === 'pdv' ? 'transferred' : 'paid' })
     .eq('clinic_id', ctx.clinicId)
     .eq('hospitalization_id', hospitalizationId)
     .eq('status', 'open')
-    .select('id')
+    .select('id, amount')
 
   if (error) return { error: 'Erro ao liquidar conta: ' + error.message }
-  await logAudit({ action: 'HOSP_SETTLE_ACCOUNT', entity_type: 'hospitalizations', entity_id: hospitalizationId, details: { method, count: (data ?? []).length } })
+
+  const settled = data ?? []
+  const totalAmount = settled.reduce((sum, r) => sum + Number(r.amount ?? 0), 0)
+
+  // 2. Cria entrada no caixa central apenas se há valor e ainda não existe
+  //    entrada para esta internação (idempotência)
+  if (totalAmount > 0) {
+    const { data: existing } = await admin
+      .from('central_cashier')
+      .select('id')
+      .eq('clinic_id', ctx.clinicId)
+      .eq('source_module', 'hospitalization')
+      .eq('source_id', hospitalizationId)
+      .maybeSingle()
+
+    if (!existing) {
+      // Busca nome do pet e tutor para exibição no caixa
+      const { data: hosp } = await admin
+        .from('hospitalizations')
+        .select('patients ( name, tutors ( name ) )')
+        .eq('id', hospitalizationId)
+        .eq('clinic_id', ctx.clinicId)
+        .single()
+
+      const patientName = (hosp?.patients as any)?.name ?? null
+      const tutorName   = (hosp?.patients as any)?.tutors?.name ?? null
+
+      await admin.from('central_cashier').insert({
+        clinic_id:    ctx.clinicId,
+        source_module: 'hospitalization',
+        source_id:    hospitalizationId,
+        amount:       totalAmount,
+        status:       method === 'pdv' ? 'pending' : 'recorded',
+        reason:       `Internação — ${patientName ?? 'Paciente'}`,
+        patient_name: patientName,
+        tutor_name:   tutorName,
+        recorded_by:  ctx.userId,
+      })
+    }
+  }
+
+  await logAudit({ action: 'HOSP_SETTLE_ACCOUNT', entity_type: 'hospitalizations', entity_id: hospitalizationId, details: { method, count: settled.length, amount: totalAmount } })
   revalidatePath('/dashboard/hospitalization')
-  return { success: true, settled_count: (data ?? []).length }
+  revalidatePath('/dashboard/cashier')
+  return { success: true, settled_count: settled.length }
 }
 
 // ─── Alta Médica (status → ready_for_discharge) ──────────────────────────────
