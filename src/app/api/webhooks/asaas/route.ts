@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getAsaasWebhookToken } from '@/lib/billing/asaas'
+import { activatePaidSubscription } from '@/lib/billing/provision'
 
 // POST /api/webhooks/asaas
 // Recebe eventos de cobrança do Asaas (Monetização SaaS — Fase 2).
@@ -92,14 +93,26 @@ export async function POST(request: NextRequest) {
     patch.status = 'active'
   } else if (OVERDUE_EVENTS.has(event)) {
     patch.status = 'past_due'
-    // TODO(Fase 2): suspender módulos pagos via syncClinicModulesFromContract
-    // após carência (ex.: 7 dias). Por ora só marca o status.
+    // R6: marca o estado; a suspensão de módulos após carência (7d) + carência
+    // clínica D3 é feita pelo cron de dunning (Item 7), não aqui no evento.
+    patch.lifecycle_state = 'past_due'
   }
 
   await admin
     .from('tenant_subscriptions')
     .update(patch)
     .eq('clinic_id', sub.clinic_id)
+
+  // R6: pagamento confirmado → ativa módulos (mesma lógica do checkout) e marca
+  // lifecycle_state='active'. Idempotente: reentrega do webhook não duplica nada.
+  if (PAID_EVENTS.has(event)) {
+    const activated = await activatePaidSubscription(admin, sub.clinic_id)
+    if (activated.error) {
+      // Não falha o webhook (evita reentrega infinita); a cobrança já foi
+      // registrada e o status atualizado. Loga p/ investigação.
+      console.error('[asaas-webhook] ativação pós-pagamento falhou:', activated.error)
+    }
+  }
 
   return NextResponse.json({ received: true, matched: true })
 }

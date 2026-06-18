@@ -22,6 +22,8 @@ import type { BillingCycle } from '@/types'
 import ModulePicker from './ModulePicker'
 import CheckoutDummyModal from './CheckoutDummyModal'
 import PricingAdminPanel from './PricingAdminPanel'
+import SpecializedQuoteModal from './SpecializedQuoteModal'
+import SubscriptionLeadsPanel from './SubscriptionLeadsPanel'
 
 function fmt(v: number) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -44,6 +46,17 @@ const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   trialing:  { label: 'Em teste',  cls: 'bg-sky-100 text-sky-700' },
   past_due:  { label: 'Em atraso', cls: 'bg-amber-100 text-amber-700' },
   cancelled: { label: 'Cancelada', cls: 'bg-red-100 text-red-700' },
+}
+
+// Estado de cobrança da Fase 2 (lifecycle_state) — tem prioridade sobre o
+// status legado quando exige atenção (pending/atraso/suspensão/renovação).
+const LIFECYCLE_BADGE: Record<string, { label: string; cls: string }> = {
+  pending:   { label: 'Aguardando pagamento', cls: 'bg-amber-100 text-amber-700' },
+  past_due:  { label: 'Em atraso',            cls: 'bg-amber-100 text-amber-700' },
+  grace:     { label: 'Em carência',          cls: 'bg-amber-100 text-amber-700' },
+  suspended: { label: 'Suspensa',             cls: 'bg-red-100 text-red-700' },
+  expiring:  { label: 'Renovação próxima',    cls: 'bg-sky-100 text-sky-700' },
+  expired:   { label: 'Expirada',             cls: 'bg-red-100 text-red-700' },
 }
 
 interface Props {
@@ -77,6 +90,7 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
     (subscription?.billing_cycle as BillingCycle | null) ?? 'monthly'
   )
   const [checkoutPlan, setCheckoutPlan]   = useState<'premium' | 'enterprise' | null>(null)
+  const [showQuote, setShowQuote]         = useState(false)
   const [showDowngrade, setShowDowngrade] = useState(false)
   const [downgrading, setDowngrading]     = useState(false)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
@@ -116,16 +130,9 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
     setSpecializedKeys(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])
   }
 
-  const salesWhatsapp = process.env.NEXT_PUBLIC_SALES_WHATSAPP ?? '5516997023340'
   const specializedModuleLabels = specializedSelectable
     .filter(c => specializedKeys.includes(c.module_key))
     .map(c => c.label)
-  const whatsappUrl = `https://wa.me/${salesWhatsapp}?text=${encodeURIComponent(
-    `Olá! Tenho interesse no Plano Especializado do SysVetMax.\n\n` +
-    `Módulos desejados:\n${specializedModuleLabels.map(l => `• ${l}`).join('\n') || '• (a definir)'}\n\n` +
-    `Estimativa pela tabela: ${specializedEstimate.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/mês.\n` +
-    `Gostaria de negociar uma proposta com um consultor.`
-  )}`
 
   function toggleAddon(key: string) {
     setSelectedAddons(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])
@@ -183,7 +190,10 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
       : 0
 
   const planBadge   = PLAN_BADGE[planName] ?? PLAN_BADGE.free
-  const statusBadge = STATUS_BADGE[subscription?.status ?? 'active'] ?? STATUS_BADGE.active
+  const lifecycle   = subscription?.lifecycle_state ?? null
+  const statusBadge = (lifecycle && lifecycle !== 'active' && LIFECYCLE_BADGE[lifecycle])
+    ? LIFECYCLE_BADGE[lifecycle]
+    : STATUS_BADGE[subscription?.status ?? 'active'] ?? STATUS_BADGE.active
 
   function quotaLine(plan: 'free' | 'premium' | 'enterprise') {
     const l = PLAN_LIMITS[plan]
@@ -339,11 +349,15 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
                   <span className="font-medium text-slate-700">
                     Total{selectedAddons.length > 0 && ` (${selectedAddons.length} adiciona${selectedAddons.length === 1 ? 'l' : 'is'})`}
                   </span>
-                  <span className="font-bold text-indigo-700 tabular-nums">{fmt(premiumTotals.monthlyTotal)}/mês</span>
+                  <span className="font-bold text-indigo-700 tabular-nums">
+                    {cycle === 'yearly'
+                      ? `${fmt(premiumTotals.yearlyDiscounted)}/ano no PIX`
+                      : `${fmt(premiumTotals.monthlyTotal)}/mês`}
+                  </span>
                 </div>
                 {cycle === 'yearly' && (
                   <p className="mt-0.5 text-[11px] text-emerald-700">
-                    {fmt(premiumTotals.yearlyDiscounted)}/ano no PIX — economize {fmt(premiumTotals.yearlyTotal - premiumTotals.yearlyDiscounted)}
+                    equivale a {fmt(premiumTotals.yearlyDiscounted / 12)}/mês · economize {fmt(premiumTotals.yearlyTotal - premiumTotals.yearlyDiscounted)}
                   </p>
                 )}
               </div>
@@ -366,7 +380,7 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
               className="mt-4 w-full flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <CreditCard className="h-4 w-4" />
-              {isPremium ? 'Atualizar Assinatura' : `Assinar Premium — ${fmt(premiumTotals.effectiveTotal)}${cycle === 'yearly' ? '/ano' : '/mês'}`}
+              {isPremium ? 'Atualizar Assinatura' : `Assinar Premium — ${fmt(premiumTotals.effectiveTotal)}${cycle === 'yearly' ? '/ano no PIX' : '/mês'}`}
             </button>
           )}
         </div>
@@ -380,15 +394,22 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
             <Crown className="h-4 w-4 text-amber-500" />
             <h3 className="text-sm font-bold text-slate-900">Enterprise</h3>
           </div>
-          <p className="mt-2 text-2xl font-bold text-amber-700 tabular-nums">
-            {fmt(enterpriseTotals.monthlyTotal)}<span className="text-sm font-medium text-slate-400">/mês</span>
-          </p>
           {cycle === 'yearly' ? (
-            <p className="mt-0.5 text-xs text-emerald-700 font-medium">
-              {fmt(enterpriseTotals.yearlyDiscounted)}/ano no PIX — economize {fmt(enterpriseTotals.yearlyTotal - enterpriseTotals.yearlyDiscounted)}
-            </p>
+            <>
+              <p className="mt-2 text-2xl font-bold text-amber-700 tabular-nums">
+                {fmt(enterpriseTotals.yearlyDiscounted)}<span className="text-sm font-medium text-slate-400">/ano no PIX</span>
+              </p>
+              <p className="mt-0.5 text-xs text-emerald-700 font-medium">
+                equivale a {fmt(enterpriseTotals.yearlyDiscounted / 12)}/mês · economize {fmt(enterpriseTotals.yearlyTotal - enterpriseTotals.yearlyDiscounted)}
+              </p>
+            </>
           ) : (
-            <p className="mt-0.5 text-xs text-slate-500">Todos os módulos inclusos</p>
+            <>
+              <p className="mt-2 text-2xl font-bold text-amber-700 tabular-nums">
+                {fmt(enterpriseTotals.monthlyTotal)}<span className="text-sm font-medium text-slate-400">/mês</span>
+              </p>
+              <p className="mt-0.5 text-xs text-slate-500">Todos os módulos inclusos</p>
+            </>
           )}
 
           <div className="mt-4">
@@ -473,25 +494,26 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
             </div>
           </div>
 
-          <a
-            href={whatsappUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-4 w-full flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors"
+          <button
+            onClick={() => setShowQuote(true)}
+            className="mt-4 w-full flex items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-700 transition-colors"
           >
             <MessageCircle className="h-4 w-4" />
-            Falar com Especialista
-          </a>
+            Sob consulta — falar com vendas
+          </button>
         </div>
       </div>
 
-      {/* ── Painel de pricing (SysMax) ──────────────────────────────────── */}
+      {/* ── Painel de pricing + leads (SysMax) ──────────────────────────── */}
       {isSysmax && (
-        <PricingAdminPanel
-          catalog={catalog}
-          config={config}
-          onToast={(type, message) => setToast({ type, message })}
-        />
+        <>
+          <PricingAdminPanel
+            catalog={catalog}
+            config={config}
+            onToast={(type, message) => setToast({ type, message })}
+          />
+          <SubscriptionLeadsPanel onToast={(type, message) => setToast({ type, message })} />
+        </>
       )}
 
       {/* ── Modais ──────────────────────────────────────────────────────── */}
@@ -506,6 +528,20 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
           totals={checkoutTotals}
           onCancel={() => setCheckoutPlan(null)}
           onConfirm={handleCheckoutConfirm}
+        />
+      )}
+
+      {showQuote && (
+        <SpecializedQuoteModal
+          moduleLabels={specializedModuleLabels}
+          moduleKeys={specializedKeys}
+          estimate={specializedEstimate}
+          onCancel={() => setShowQuote(false)}
+          onSubmitted={() => {
+            setShowQuote(false)
+            setToast({ type: 'success', message: 'Solicitação enviada! Nosso time comercial entra em contato em breve.' })
+          }}
+          onError={(message) => setToast({ type: 'error', message })}
         />
       )}
 

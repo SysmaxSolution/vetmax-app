@@ -32,3 +32,18 @@ export interface SubscriptionOverview {
   config: SubscriptionPlanConfig
   businessType: BusinessType
 }
+
+/** Lead do plano Especializado (R5/D4) — funil comercial da Sysmax. */
+export interface SubscriptionLead {
+  id: string
+  clinic_id: string
+  clinic_name?: string | null
+  contact_name: string | null
+  contact_email: string | null
+  contact_phone: string | null
+  desired_module_keys: string[]
+  estimate_monthly: number | null
+  message: string | null
+  status: 'new' | 'contacted' | 'won' | 'lost'
+  created_at: string
+}

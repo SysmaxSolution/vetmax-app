@@ -8,9 +8,11 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { insertLegalAcceptanceRaw, getRequestMeta } from '@/lib/actions/legal'
-import { FREE_MODULES } from '@/config/access-matrix'
 import { computePlanPrice, type PriceTotals } from '@/lib/subscription/pricing'
-import { PLAN_LIMITS, type LimitedPlan } from '@/lib/subscription/plan-limits'
+import {
+  syncClinicModulesFromContract,
+  applyPlanContracts,
+} from '@/lib/billing/provision'
 import {
   getAsaasConfig,
   createAsaasCustomer,
@@ -20,7 +22,7 @@ import {
   getAsaasPixQrCode,
   asaasCycle,
 } from '@/lib/billing/asaas'
-import type { DummyPaymentPayload, SubscriptionOverview, AsaasCheckout } from '@/lib/subscription/types'
+import type { DummyPaymentPayload, SubscriptionOverview, AsaasCheckout, SubscriptionLead } from '@/lib/subscription/types'
 import type {
   BillingCycle,
   BusinessType,
@@ -179,95 +181,6 @@ export async function getSubscriptionOverview(): Promise<SubscriptionOverview | 
   }
 }
 
-// ─── Sync das camadas legadas + quotas ────────────────────────────────────────
-
-// Recalcula clinics.active_modules e flow_config a partir do PLANO (bundles)
-// + módulos contratados (addons/grants), e ajusta user_limit + quota de
-// documentos por plano. Preserva keys/flags NÃO geridas pelo catálogo
-// (mentor, registry, pdv_unified_with_cashier, liberações manuais).
-// Specialized: módulos via contratados; user_limit/quotas NÃO são tocados
-// (sob medida — runbook).
-async function syncClinicModulesFromContract(
-  admin: ReturnType<typeof createAdminClient>,
-  clinicId: string
-): Promise<{ error?: string }> {
-  const [clinicResult, subResult, contractedResult, catalogResult] = await Promise.all([
-    admin.from('clinics').select('business_type, active_modules, flow_config').eq('id', clinicId).single(),
-    admin.from('tenant_subscriptions').select('plan_name, status').eq('clinic_id', clinicId).maybeSingle(),
-    admin.from('clinic_contracted_modules').select('module_key').eq('clinic_id', clinicId).eq('is_active', true),
-    admin.from('subscription_module_catalog').select('module_key, included_module_keys, flow_flags, included_in_plan'),
-  ])
-  if (!clinicResult.data) return { error: 'Clínica não encontrada para sincronização.' }
-
-  const businessType = (clinicResult.data.business_type ?? 'vet_clinic') as BusinessType
-  const planName = (subResult.data?.plan_name ?? 'free') as string
-  const currentModules = (clinicResult.data.active_modules as string[]) ?? []
-  const currentFlow = (clinicResult.data.flow_config as Record<string, unknown>) ?? {}
-
-  const catalog = catalogResult.data ?? []
-  const contracted = new Set((contractedResult.data ?? []).map(r => r.module_key as string))
-
-  // Universo gerido pelo catálogo (keys técnicas + flags)
-  const managedKeys = new Set<string>()
-  const managedFlags = new Set<string>()
-  for (const row of catalog) {
-    ;((row.included_module_keys as string[]) ?? []).forEach(k => managedKeys.add(k))
-    ;((row.flow_flags as string[]) ?? []).forEach(f => managedFlags.add(f))
-  }
-
-  // Coberto por bundle do plano + contratos
-  const grantedKeys = new Set<string>(FREE_MODULES[businessType] ?? FREE_MODULES.vet_clinic)
-  const grantedFlags = new Set<string>()
-  for (const row of catalog) {
-    const tier = row.included_in_plan as string | null
-    const byPlan =
-      (tier === 'premium' && (planName === 'premium' || planName === 'enterprise')) ||
-      (tier === 'enterprise' && planName === 'enterprise')
-    if (!byPlan && !contracted.has(row.module_key as string)) continue
-    ;((row.included_module_keys as string[]) ?? []).forEach(k => grantedKeys.add(k))
-    ;((row.flow_flags as string[]) ?? []).forEach(f => grantedFlags.add(f))
-  }
-  // Keys técnicas legadas contratadas sem entrada no catálogo (backfill)
-  const catalogKeys = new Set(catalog.map(r => r.module_key as string))
-  for (const key of contracted) {
-    if (!catalogKeys.has(key)) grantedKeys.add(key)
-  }
-
-  // active_modules: concedidas + atuais não geridas (preserva liberações manuais)
-  const nextModules = Array.from(
-    new Set([...grantedKeys, ...currentModules.filter(k => !managedKeys.has(k))])
-  )
-
-  // flow_config: só mexe nas flags geridas
-  const nextFlow: Record<string, unknown> = { ...currentFlow }
-  for (const flag of managedFlags) nextFlow[flag] = grantedFlags.has(flag)
-
-  const { error } = await admin
-    .from('clinics')
-    .update({ active_modules: nextModules, flow_config: nextFlow })
-    .eq('id', clinicId)
-  if (error) return { error: 'Erro ao sincronizar módulos: ' + error.message }
-
-  // Quotas por plano (specialized é sob medida — não tocar)
-  if (planName !== 'specialized') {
-    const limits = PLAN_LIMITS[(planName in PLAN_LIMITS ? planName : 'free') as LimitedPlan]
-    const { error: limitError } = await admin
-      .from('clinics')
-      .update({ user_limit: limits.users })
-      .eq('id', clinicId)
-    if (limitError) return { error: 'Erro ao ajustar limite de usuários: ' + limitError.message }
-
-    const { error: quotaError } = await admin
-      .from('tenant_quotas')
-      .upsert(
-        { clinic_id: clinicId, resource_name: 'custom_documents', limit_amount: limits.documents, reset_date: null },
-        { onConflict: 'clinic_id,resource_name' }
-      )
-    if (quotaError) return { error: 'Erro ao ajustar quota de documentos: ' + quotaError.message }
-  }
-  return {}
-}
-
 // ─── Mutações ─────────────────────────────────────────────────────────────────
 
 export async function subscribeToPlan(input: {
@@ -366,6 +279,11 @@ export async function subscribeToPlan(input: {
         clinic_id: ctx.clinicId,
         plan_name: input.plan,
         status: 'active',
+        // R6/D5: PIX (gateway real) nasce 'pending' → módulos só no PAYMENT_CONFIRMED.
+        // Cartão (dummy/pré-lançamento) ativa direto (sem webhook). Opt-in encerra
+        // o grandfathering: a partir daqui a clínica é regida pela máquina de estados.
+        lifecycle_state: isPix ? 'pending' : 'active',
+        is_grandfathered: false,
         billing_cycle: input.cycle,
         custom_price: null,
         cancelled_at: null,
@@ -393,38 +311,18 @@ export async function subscribeToPlan(input: {
     )
   if (subError) return { error: 'Erro ao registrar assinatura: ' + subError.message }
 
-  // Contratos: só linhas 'enterprise' viram addon. Premium-bundle nunca vira
-  // contrato (bundle vem do plano); keys técnicas legadas ficam intactas.
-  // Enterprise: desativa todos os addons (bundle cobre tudo, preserva histórico).
-  const enterpriseLines = catalog
-    .filter(r => r.included_in_plan === 'enterprise')
-    .map(r => r.module_key as string)
-  const keysToDeactivate = enterpriseLines.filter(k => !addonKeys.includes(k))
-  if (keysToDeactivate.length > 0) {
-    const { error: deactivateError } = await admin
-      .from('clinic_contracted_modules')
-      .update({ is_active: false })
-      .eq('clinic_id', ctx.clinicId)
-      .in('module_key', keysToDeactivate)
-    if (deactivateError) return { error: 'Erro ao atualizar módulos: ' + deactivateError.message }
+  // Ativação de módulos (R6):
+  //  - Cartão (dummy/pré-lançamento): ativa na hora — não há webhook.
+  //  - PIX (gateway real): NÃO ativa agora. Os módulos liberam só no
+  //    PAYMENT_CONFIRMED (activatePaidSubscription no webhook). O intento
+  //    (plano + addon_keys) fica em payment_payload. Não revoga o que a clínica
+  //    já possui — preserva o acesso de quem faz opt-in/upgrade durante o pending.
+  if (!isPix) {
+    const applied = await applyPlanContracts(admin, ctx.clinicId, input.plan === 'enterprise' ? [] : addonKeys)
+    if (applied.error) return { error: applied.error }
+    const sync = await syncClinicModulesFromContract(admin, ctx.clinicId)
+    if (sync.error) return { error: sync.error }
   }
-  if (addonKeys.length > 0) {
-    const { error: upsertError } = await admin
-      .from('clinic_contracted_modules')
-      .upsert(
-        addonKeys.map(key => ({
-          clinic_id: ctx.clinicId,
-          module_key: key,
-          is_active: true,
-          contracted_at: new Date().toISOString(),
-        })),
-        { onConflict: 'clinic_id,module_key' }
-      )
-    if (upsertError) return { error: 'Erro ao contratar módulos: ' + upsertError.message }
-  }
-
-  const sync = await syncClinicModulesFromContract(admin, ctx.clinicId)
-  if (sync.error) return { error: sync.error }
 
   // Persiste evidência legal do aceite dos termos de assinatura (LGPD Art. 7º)
   const { ip, userAgent } = await getRequestMeta()
@@ -454,6 +352,8 @@ export async function downgradeToFree(): Promise<{ ok: true } | { error: string 
         clinic_id: ctx.clinicId,
         plan_name: 'free',
         status: 'active',
+        lifecycle_state: 'active',
+        is_grandfathered: false,
         billing_cycle: null,
         custom_price: null,
         current_period_end: null,
@@ -504,10 +404,13 @@ export async function updateSubscriptionPricing(input: {
   }
 
   const admin = createAdminClient()
-  const { data: existing } = await admin
-    .from('subscription_module_catalog')
-    .select('module_key')
-  const validKeys = new Set((existing ?? []).map(r => r.module_key as string))
+  const [{ data: existing }, { data: oldConfig }] = await Promise.all([
+    admin.from('subscription_module_catalog').select('module_key, monthly_price'),
+    admin.from('subscription_plan_config')
+      .select('premium_base_price, enterprise_base_price, annual_discount_percent').eq('id', 1).single(),
+  ])
+  const oldPrice = new Map((existing ?? []).map(r => [r.module_key as string, Number(r.monthly_price)]))
+  const validKeys = new Set(oldPrice.keys())
 
   for (const mod of input.modules ?? []) {
     if (!validKeys.has(mod.module_key)) return { error: `Módulo desconhecido: ${mod.module_key}` }
@@ -516,12 +419,18 @@ export async function updateSubscriptionPricing(input: {
     }
   }
 
+  // Trilha de auditoria (D4): registra cada preço que de fato mudou.
+  const auditRows: PriceAuditRow[] = []
   for (const mod of input.modules ?? []) {
     const { error } = await admin
       .from('subscription_module_catalog')
       .update({ monthly_price: mod.monthly_price, is_available: mod.is_available })
       .eq('module_key', mod.module_key)
     if (error) return { error: `Erro ao salvar ${mod.module_key}: ` + error.message }
+    const prev = oldPrice.get(mod.module_key)
+    if (prev != null && Number(prev) !== Number(mod.monthly_price)) {
+      auditRows.push({ scope: 'catalog_module', target_key: mod.module_key, old_value: prev, new_value: mod.monthly_price })
+    }
   }
 
   const { error: cfgError } = await admin
@@ -529,6 +438,181 @@ export async function updateSubscriptionPricing(input: {
     .update({ premium_base_price, enterprise_base_price, annual_discount_percent })
     .eq('id', 1)
   if (cfgError) return { error: 'Erro ao salvar configuração de preços: ' + cfgError.message }
+
+  for (const [key, oldV, newV] of [
+    ['premium_base', Number(oldConfig?.premium_base_price), premium_base_price],
+    ['enterprise_base', Number(oldConfig?.enterprise_base_price), enterprise_base_price],
+    ['annual_discount', Number(oldConfig?.annual_discount_percent), annual_discount_percent],
+  ] as const) {
+    if (Number.isFinite(oldV) && oldV !== newV) {
+      auditRows.push({ scope: 'plan_config', target_key: key, old_value: oldV, new_value: newV })
+    }
+  }
+  await writePriceAudit(admin, ctx, auditRows)
+
+  revalidatePath('/dashboard/management')
+  return { ok: true }
+}
+
+// ─── Especializado: lead + preço sob medida com auditoria (R5/D4) ──────────────
+
+type PriceAuditRow = {
+  scope: 'specialized_clinic' | 'catalog_module' | 'plan_config'
+  clinic_id?: string | null
+  target_key?: string | null
+  old_value?: number | null
+  new_value: number | null
+}
+
+// Insere linhas de auditoria de preço (append-only). Falha de auditoria nunca
+// derruba a operação de negócio — apenas loga (o preço já foi gravado).
+async function writePriceAudit(
+  admin: ReturnType<typeof createAdminClient>,
+  ctx: { userId: string; email: string | null },
+  rows: PriceAuditRow[]
+): Promise<void> {
+  if (rows.length === 0) return
+  const { error } = await admin.from('subscription_price_audit').insert(
+    rows.map(r => ({
+      scope: r.scope,
+      clinic_id: r.clinic_id ?? null,
+      target_key: r.target_key ?? null,
+      old_value: r.old_value ?? null,
+      new_value: r.new_value,
+      changed_by: ctx.userId,
+      changed_by_email: ctx.email,
+    }))
+  )
+  if (error) console.error('[price-audit] falha ao gravar trilha:', error.message)
+}
+
+// Clínica solicita proposta do Especializado a partir do configurador.
+export async function requestSpecializedQuote(input: {
+  contactName?: string
+  contactEmail?: string
+  contactPhone?: string
+  desiredModuleKeys: string[]
+  estimateMonthly?: number
+  message?: string
+}): Promise<{ ok: true } | { error: string }> {
+  const ctx = await getAdminCtx()
+  if ('error' in ctx) return ctx
+
+  const moduleKeys = Array.from(new Set(input.desiredModuleKeys ?? [])).filter(Boolean).slice(0, 100)
+  const estimate = Number(input.estimateMonthly)
+
+  const admin = createAdminClient()
+  const { error } = await admin.from('subscription_leads').insert({
+    clinic_id: ctx.clinicId,
+    requested_by: ctx.userId,
+    contact_name: input.contactName?.trim().slice(0, 160) || null,
+    contact_email: input.contactEmail?.trim().slice(0, 160) || null,
+    contact_phone: input.contactPhone?.replace(/\D/g, '').slice(0, 20) || null,
+    desired_module_keys: moduleKeys,
+    estimate_monthly: Number.isFinite(estimate) && estimate >= 0 ? estimate : null,
+    message: input.message?.trim().slice(0, 2000) || null,
+    status: 'new',
+  })
+  if (error) return { error: 'Não foi possível registrar a solicitação: ' + error.message }
+  return { ok: true }
+}
+
+// Lista os leads do Especializado para o time Sysmax (funil comercial).
+export async function listSubscriptionLeads(): Promise<{ leads: SubscriptionLead[] } | { error: string }> {
+  const ctx = await getAdminCtx()
+  if ('error' in ctx) return ctx
+  if (!ctx.isSysmax) return { error: 'Apenas o time SysMax pode ver os leads.' }
+
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('subscription_leads')
+    .select('id, clinic_id, contact_name, contact_email, contact_phone, desired_module_keys, estimate_monthly, message, status, created_at, clinics(name)')
+    .order('created_at', { ascending: false })
+    .limit(200)
+  if (error) return { error: 'Erro ao carregar leads: ' + error.message }
+
+  const leads = (data ?? []).map((r: Record<string, unknown>) => ({
+    id: r.id as string,
+    clinic_id: r.clinic_id as string,
+    clinic_name: (r.clinics as { name?: string } | null)?.name ?? null,
+    contact_name: (r.contact_name as string) ?? null,
+    contact_email: (r.contact_email as string) ?? null,
+    contact_phone: (r.contact_phone as string) ?? null,
+    desired_module_keys: (r.desired_module_keys as string[]) ?? [],
+    estimate_monthly: r.estimate_monthly != null ? Number(r.estimate_monthly) : null,
+    message: (r.message as string) ?? null,
+    status: (r.status as SubscriptionLead['status']) ?? 'new',
+    created_at: r.created_at as string,
+  }))
+  return { leads }
+}
+
+// Time Sysmax avança o lead no funil (new → contacted → won/lost).
+export async function updateLeadStatus(input: {
+  leadId: string
+  status: 'new' | 'contacted' | 'won' | 'lost'
+}): Promise<{ ok: true } | { error: string }> {
+  const ctx = await getAdminCtx()
+  if ('error' in ctx) return ctx
+  if (!ctx.isSysmax) return { error: 'Apenas o time SysMax pode gerenciar leads.' }
+  if (!['new', 'contacted', 'won', 'lost'].includes(input.status)) return { error: 'Status inválido.' }
+
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('subscription_leads')
+    .update({ status: input.status, handled_by: ctx.userId })
+    .eq('id', input.leadId)
+  if (error) return { error: 'Erro ao atualizar lead: ' + error.message }
+  revalidatePath('/dashboard/management')
+  return { ok: true }
+}
+
+// Time Sysmax define o preço sob medida do Especializado de uma clínica, com
+// trilha de auditoria (quem/quando/valor anterior→novo). NUNCA preço em branco.
+export async function setSpecializedPrice(input: {
+  clinicId: string
+  monthlyPrice: number
+  note?: string
+}): Promise<{ ok: true } | { error: string }> {
+  const ctx = await getAdminCtx()
+  if ('error' in ctx) return ctx
+  if (!ctx.isSysmax) return { error: 'Apenas o time SysMax pode definir o preço do Especializado.' }
+
+  const price = Number(input.monthlyPrice)
+  if (!Number.isFinite(price) || price <= 0) return { error: 'Informe um valor mensal válido (> 0).' }
+  if (!input.clinicId) return { error: 'Clínica não informada.' }
+
+  const admin = createAdminClient()
+  const { data: current } = await admin
+    .from('tenant_subscriptions')
+    .select('custom_price')
+    .eq('clinic_id', input.clinicId)
+    .maybeSingle()
+  const oldPrice = current?.custom_price != null ? Number(current.custom_price) : null
+
+  const { error } = await admin
+    .from('tenant_subscriptions')
+    .upsert(
+      {
+        clinic_id: input.clinicId,
+        plan_name: 'specialized',
+        status: 'active',
+        lifecycle_state: 'active',
+        billing_cycle: null,
+        custom_price: price,
+        cancelled_at: null,
+      },
+      { onConflict: 'clinic_id' }
+    )
+  if (error) return { error: 'Erro ao definir preço: ' + error.message }
+
+  await writePriceAudit(admin, ctx, [{
+    scope: 'specialized_clinic',
+    clinic_id: input.clinicId,
+    target_key: 'custom_price',
+    old_value: oldPrice,
+    new_value: price,
+  }])
 
   revalidatePath('/dashboard/management')
   return { ok: true }

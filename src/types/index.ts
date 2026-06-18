@@ -8,6 +8,9 @@ export type UserRole = 'admin' | 'vet' | 'assistant' | 'receptionist' | 'pharmac
 export type BusinessType = 'vet_clinic' | 'pet_aesthetics'
 export type PlanName = 'free' | 'premium' | 'enterprise' | 'specialized'
 export type SubscriptionStatus = 'active' | 'trialing' | 'past_due' | 'cancelled'
+// Estado autoritativo de cobrança da Fase 2 (migration 0396). NULL = legado.
+export type SubscriptionLifecycleState =
+  | 'pending' | 'active' | 'past_due' | 'grace' | 'suspended' | 'expiring' | 'expired'
 export type BillingCycle = 'monthly' | 'yearly'
 
 export interface TenantSubscription {
@@ -24,6 +27,8 @@ export interface TenantSubscription {
   updated_at: string
   billing_cycle: BillingCycle | null
   payment_payload: Record<string, unknown> | null
+  lifecycle_state: SubscriptionLifecycleState | null
+  is_grandfathered: boolean
 }
 
 // Catálogo global de módulos a la carte do plano Premium (migration 0366).

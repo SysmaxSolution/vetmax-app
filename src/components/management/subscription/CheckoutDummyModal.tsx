@@ -32,7 +32,9 @@ const PLAN_LABEL: Record<'premium' | 'enterprise', string> = {
 }
 
 export default function CheckoutDummyModal({ plan, basePrice, selectedModules, cycle, totals, onCancel, onConfirm }: Props) {
-  const [method, setMethod]         = useState<'card' | 'pix'>(cycle === 'yearly' ? 'pix' : 'card')
+  // PIX é o destaque (manchete): default em qualquer ciclo. Cartão é a opção
+  // secundária — sem enquadrar como "multa por cartão".
+  const [method, setMethod]         = useState<'card' | 'pix'>('pix')
   const [holder, setHolder]         = useState('')
   const [cardNumber, setCardNumber] = useState('')
   const [expiry, setExpiry]         = useState('')
@@ -115,24 +117,30 @@ export default function CheckoutDummyModal({ plan, basePrice, selectedModules, c
             )}
           </div>
 
-          {/* Método */}
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={() => setMethod('card')}
-              className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
-                method === 'card' ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'
-              }`}
-            >
-              <CreditCard className="h-4 w-4" /> Cartão
-            </button>
-            <button
-              onClick={() => setMethod('pix')}
-              className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
-                method === 'pix' ? 'border-emerald-400 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'
-              }`}
-            >
-              <Smartphone className="h-4 w-4" /> PIX
-            </button>
+          {/* Método — PIX em destaque (manchete), cartão como alternativa */}
+          <div>
+            <p className="mb-1.5 text-xs font-medium text-slate-500">Como você prefere pagar?</p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setMethod('pix')}
+                className={`relative flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-semibold transition-colors ${
+                  method === 'pix' ? 'border-emerald-400 bg-emerald-50 text-emerald-700 ring-1 ring-emerald-300' : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                }`}
+              >
+                <Smartphone className="h-4 w-4" /> PIX
+                <span className="absolute -top-2 right-2 rounded-full bg-emerald-500 px-1.5 py-0.5 text-[9px] font-bold text-white uppercase tracking-wide">
+                  {cycle === 'yearly' ? 'Melhor preço' : 'Recomendado'}
+                </span>
+              </button>
+              <button
+                onClick={() => setMethod('card')}
+                className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${
+                  method === 'card' ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-500 hover:border-slate-300'
+                }`}
+              >
+                <CreditCard className="h-4 w-4" /> Cartão
+              </button>
+            </div>
           </div>
 
           {method === 'card' ? (
