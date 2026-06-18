@@ -523,7 +523,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
           source:     'manual',
         }).catch(() => {})
       }
-      onSuccess({ tutorId: patient.tutor.id, patientId: patient.id, patientName: petName, tutorName })
+      onSuccess({ tutorId: res.tutorId ?? patient.tutor.id, patientId: patient.id, patientName: petName, tutorName })
       onClose()
     } else {
       alert('Erro ao salvar: ' + (res && 'error' in res ? res.error : 'Verifique a conexão'))

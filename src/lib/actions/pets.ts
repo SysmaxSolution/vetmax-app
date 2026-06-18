@@ -401,7 +401,9 @@ export async function updateFullProfile(
   tutorId: string,
   petData: Partial<UpdatePetData>,
   tutorData: Partial<UpdateTutorData>
-): Promise<{ success: true } | { error: string }> {
+): Promise<{ success: true; tutorId: string } | { error: string }> {
+  // tutorId efetivo após o save (muda quando houve unificação por CPF duplicado)
+  let effectiveTutorId = tutorId
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -424,19 +426,64 @@ export async function updateFullProfile(
 
     if (pErr) throw new Error(`Erro Pet: ${pErr.message}`)
 
-    // 2. Atualiza o Tutor com filtro clinic_id
+    // 2. Atualiza o Tutor com filtro clinic_id.
+    // Normaliza o CPF para dígitos (consistência com o cadastro novo e com
+    // getTutorByCpf, que consultam só dígitos).
+    const rawCpf = (tutorData as { cpf?: string | null }).cpf
+    const cpfDigits = rawCpf ? String(rawCpf).replace(/\D/g, '') : null
+    const tutorPayload = { ...tutorData, ...(rawCpf !== undefined ? { cpf: cpfDigits || null } : {}) }
+
     const { error: tErr } = await supabase
       .from('tutors')
-      .update(tutorData)
+      .update(tutorPayload)
       .eq('id', tutorId)
       .eq('clinic_id', profile.clinic_id)
 
-    if (tErr) throw new Error(`Erro Tutor: ${tErr.message}`)
+    if (tErr) {
+      // CPF duplicado: já existe OUTRO tutor na clínica com este CPF (típico de
+      // cadastros duplicados da importação Petlove). Em vez de estourar o erro
+      // cru, unifica no tutor canônico: aplica os dados editados nele e funde o
+      // tutor atual (e todos os seus pets/consultas/financeiro) via RPC atômico.
+      const isDupCpf = tErr.code === '23505' || /duplicate key/i.test(tErr.message)
+      if (!isDupCpf || !cpfDigits) throw new Error(`Erro Tutor: ${tErr.message}`)
 
-    await logAudit({ action: 'UPDATE_FULL_PROFILE', entity_type: 'patients', entity_id: petId, details: { petData, tutorId } })
+      const { data: canonical } = await supabase
+        .from('tutors')
+        .select('id, name')
+        .eq('clinic_id', profile.clinic_id)
+        .eq('cpf', cpfDigits)
+        .neq('id', tutorId)
+        .maybeSingle()
+
+      if (!canonical?.id) throw new Error(`Erro Tutor: ${tErr.message}`)
+
+      // Aplica a edição no tutor canônico (mesmo CPF → sem conflito).
+      const { error: cErr } = await supabase
+        .from('tutors')
+        .update(tutorPayload)
+        .eq('id', canonical.id)
+        .eq('clinic_id', profile.clinic_id)
+      if (cErr) throw new Error(`Erro Tutor: ${cErr.message}`)
+
+      // Funde o tutor duplicado no canônico (reaponta todas as FKs + remove).
+      const { error: mErr } = await supabase.rpc('rpc_merge_tutor', {
+        p_clinic_id: profile.clinic_id,
+        p_from:      tutorId,
+        p_into:      canonical.id,
+      })
+      if (mErr) throw new Error(`Erro ao unificar tutores: ${mErr.message}`)
+
+      effectiveTutorId = canonical.id
+      await logAudit({
+        action: 'MERGE_TUTOR', entity_type: 'tutors', entity_id: canonical.id,
+        details: { merged_from: tutorId, into: canonical.id, cpf: cpfDigits, pet: petId },
+      })
+    }
+
+    await logAudit({ action: 'UPDATE_FULL_PROFILE', entity_type: 'patients', entity_id: petId, details: { petData, tutorId: effectiveTutorId } })
 
     revalidatePath('/dashboard/patients')
-    return { success: true }
+    return { success: true, tutorId: effectiveTutorId }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Erro inesperado'
     console.error('Falha na atualização:', message)

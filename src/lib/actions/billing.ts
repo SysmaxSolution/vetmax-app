@@ -1162,8 +1162,17 @@ export async function processSplitPayment(
   // fatura (criado no checkout). Quando a invoice quita, o pending vira duplicata
   // supersedida — arquiva para não inflar o "A Receber". Em baixa parcial, ajusta
   // o pending para o saldo restante.
+  //
+  // Convênio (correção 18/06): o saldo "em aberto" da invoice é o repasse Petlove,
+  // que NÃO é cobrado no balcão (vira contas a receber petlove_open). Logo o que o
+  // tutor ainda deve no caixa = saldo total MENOS o repasse. Quando o tutor quita a
+  // coparticipação, o título sai do caixa (pending arquivado) mesmo com a invoice
+  // ainda contabilmente "paid_partial" pelo repasse pendente.
+  const hasInsurance   = !!options?.insurance_split
+  const receivable     = Number(options?.insurance_split?.receivable_amount ?? 0)
   const remainingAfter = Math.max(0, Number(result.total_amount) - Number(result.paid_amount))
-  if (result.status === 'paid') {
+  const tutorRemaining = hasInsurance ? Math.max(0, remainingAfter - receivable) : remainingAfter
+  if (result.status === 'paid' || tutorRemaining <= 0.01) {
     await admin
       .from('central_cashier')
       .update({ status: 'archived' })
@@ -1171,14 +1180,27 @@ export async function processSplitPayment(
       .eq('source_module', 'consultation')
       .eq('source_id', invoiceId)
       .eq('status', 'pending')
-  } else if (remainingAfter > 0.01) {
+  } else {
     await admin
       .from('central_cashier')
-      .update({ amount: Number(remainingAfter.toFixed(2)) })
+      .update({ amount: Number(tutorRemaining.toFixed(2)) })
       .eq('clinic_id', profile.clinic_id)
       .eq('source_module', 'consultation')
       .eq('source_id', invoiceId)
       .eq('status', 'pending')
+  }
+
+  // Tutor quitou a parte dele e só sobrou repasse: a invoice está liquidada do
+  // ponto de vista do caixa → marca 'paid' para SAIR da aba Recebimentos
+  // (getPendingInvoices só lista pending/paid_partial). A baixa da coparticipação
+  // e o pending source='petlove_open' (criado abaixo) permanecem intactos.
+  if (hasInsurance && result.status !== 'paid' && tutorRemaining <= 0.01) {
+    await admin
+      .from('invoices')
+      .update({ status: 'paid', paid_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq('id', invoiceId)
+      .eq('clinic_id', profile.clinic_id)
+    result.status = 'paid'
   }
 
   // ─── Cobertura de convênio (fix B2): saldo restante É o pending Petlove ───
