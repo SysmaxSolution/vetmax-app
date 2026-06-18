@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getAsaasWebhookToken } from '@/lib/billing/asaas'
 
 // POST /api/webhooks/asaas
 // Recebe eventos de cobrança do Asaas (Monetização SaaS — Fase 2).
-// Autenticação: header `asaas-access-token` == ASAAS_WEBHOOK_TOKEN.
+// Autenticação: header `asaas-access-token` == token do ambiente ativo
+//   (sandbox: SANDBOX_ASAAS_WEBHOOK_TOKEN | produção: ASAAS_WEBHOOK_TOKEN),
+//   resolvido por getAsaasWebhookToken() conforme ASAAS_ENV.
 // Idempotente: usa asaas_payment_id (UNIQUE) em subscription_invoices.
 //
 // Cadastrar no painel do Asaas: Configurações > Webhooks
 //   URL:   https://<app>/api/webhooks/asaas
-//   Token: o MESMO valor de ASAAS_WEBHOOK_TOKEN
+//   Token: o MESMO valor da variável de webhook do ambiente
 
 interface AsaasPayment {
   id: string
@@ -30,7 +33,7 @@ const OVERDUE_EVENTS = new Set(['PAYMENT_OVERDUE'])
 export async function POST(request: NextRequest) {
   // 1. Autenticação do webhook
   const token = request.headers.get('asaas-access-token') ?? ''
-  const expected = process.env.ASAAS_WEBHOOK_TOKEN ?? ''
+  const expected = getAsaasWebhookToken()
   if (!expected || token !== expected) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }

@@ -28,14 +28,30 @@ export interface AsaasConfig {
 /**
  * Lê a config do ambiente. Lança se a API Key não estiver configurada —
  * o checkout real deve tratar isso e cair no aviso "gateway não configurado".
+ *
+ * Seleção por ASAAS_ENV: `production` usa `ASAAS_API_KEY`; qualquer outro
+ * valor (default) usa o conjunto `SANDBOX_*`. Assim alterna-se sandbox↔prod
+ * trocando apenas ASAAS_ENV, sem reescrever as chaves.
  */
 export function getAsaasConfig(): AsaasConfig {
-  const env: AsaasEnv = process.env.ASAAS_ENV === 'production' ? 'production' : 'sandbox'
-  const apiKey = process.env.ASAAS_API_KEY ?? ''
+  const isProd = process.env.ASAAS_ENV === 'production'
+  const env: AsaasEnv = isProd ? 'production' : 'sandbox'
+  const apiKey = (isProd ? process.env.ASAAS_API_KEY : process.env.SANDBOX_ASAAS_API_KEY) ?? ''
   if (!apiKey) {
-    throw new Error('ASAAS_API_KEY não configurada. Cadastre a chave de API do Asaas no ambiente.')
+    throw new Error(`ASAAS_API_KEY (${env}) não configurada. Cadastre a chave de API do Asaas no ambiente.`)
   }
+  // baseUrl sempre derivado do host por ambiente (ASAAS_ENDPOINTS); os paths já
+  // incluem /v3. NÃO usar ASAAS_BASE_URL do .env (contém /v3 → duplicaria).
   return { env, baseUrl: ASAAS_ENDPOINTS[env], apiKey }
+}
+
+/**
+ * Token esperado no header `asaas-access-token` do webhook, do ambiente ativo.
+ * Sandbox usa `SANDBOX_ASAAS_WEBHOOK_TOKEN`; produção usa `ASAAS_WEBHOOK_TOKEN`.
+ */
+export function getAsaasWebhookToken(): string {
+  const isProd = process.env.ASAAS_ENV === 'production'
+  return (isProd ? process.env.ASAAS_WEBHOOK_TOKEN : process.env.SANDBOX_ASAAS_WEBHOOK_TOKEN) ?? ''
 }
 
 /** Mapeia ciclo interno (billing_cycle) → cycle do Asaas. */
