@@ -22,14 +22,19 @@ export async function syncClinicModulesFromContract(
 ): Promise<{ error?: string }> {
   const [clinicResult, subResult, contractedResult, catalogResult] = await Promise.all([
     admin.from('clinics').select('business_type, active_modules, flow_config').eq('id', clinicId).single(),
-    admin.from('tenant_subscriptions').select('plan_name, status').eq('clinic_id', clinicId).maybeSingle(),
+    admin.from('tenant_subscriptions').select('plan_name, status, lifecycle_state').eq('clinic_id', clinicId).maybeSingle(),
     admin.from('clinic_contracted_modules').select('module_key').eq('clinic_id', clinicId).eq('is_active', true),
     admin.from('subscription_module_catalog').select('module_key, included_module_keys, flow_flags, included_in_plan'),
   ])
   if (!clinicResult.data) return { error: 'Clínica não encontrada para sincronização.' }
 
   const businessType = (clinicResult.data.business_type ?? 'vet_clinic') as BusinessType
-  const planName = (subResult.data?.plan_name ?? 'free') as string
+  // R7: assinatura suspensa/expirada rebaixa o acesso ao núcleo Free (módulos
+  // pagos OFF) — sem mexer nos contratos, para que o pagamento (reactivate)
+  // restaure tudo. Demais estados usam o plano real.
+  const lifecycle = (subResult.data?.lifecycle_state ?? null) as string | null
+  const suspendedView = lifecycle === 'suspended' || lifecycle === 'expired'
+  const planName = (suspendedView ? 'free' : (subResult.data?.plan_name ?? 'free')) as string
   const currentModules = (clinicResult.data.active_modules as string[]) ?? []
   const currentFlow = (clinicResult.data.flow_config as Record<string, unknown>) ?? {}
 
@@ -44,22 +49,25 @@ export async function syncClinicModulesFromContract(
     ;((row.flow_flags as string[]) ?? []).forEach(f => managedFlags.add(f))
   }
 
-  // Coberto por bundle do plano + contratos
+  // Coberto por bundle do plano + contratos. Suspenso/expirado: SÓ Free
+  // (ignora bundle e contratos — os módulos pagos ficam OFF).
   const grantedKeys = new Set<string>(FREE_MODULES[businessType] ?? FREE_MODULES.vet_clinic)
   const grantedFlags = new Set<string>()
-  for (const row of catalog) {
-    const tier = row.included_in_plan as string | null
-    const byPlan =
-      (tier === 'premium' && (planName === 'premium' || planName === 'enterprise')) ||
-      (tier === 'enterprise' && planName === 'enterprise')
-    if (!byPlan && !contracted.has(row.module_key as string)) continue
-    ;((row.included_module_keys as string[]) ?? []).forEach(k => grantedKeys.add(k))
-    ;((row.flow_flags as string[]) ?? []).forEach(f => grantedFlags.add(f))
-  }
-  // Keys técnicas legadas contratadas sem entrada no catálogo (backfill)
-  const catalogKeys = new Set(catalog.map(r => r.module_key as string))
-  for (const key of contracted) {
-    if (!catalogKeys.has(key)) grantedKeys.add(key)
+  if (!suspendedView) {
+    for (const row of catalog) {
+      const tier = row.included_in_plan as string | null
+      const byPlan =
+        (tier === 'premium' && (planName === 'premium' || planName === 'enterprise')) ||
+        (tier === 'enterprise' && planName === 'enterprise')
+      if (!byPlan && !contracted.has(row.module_key as string)) continue
+      ;((row.included_module_keys as string[]) ?? []).forEach(k => grantedKeys.add(k))
+      ;((row.flow_flags as string[]) ?? []).forEach(f => grantedFlags.add(f))
+    }
+    // Keys técnicas legadas contratadas sem entrada no catálogo (backfill)
+    const catalogKeys = new Set(catalog.map(r => r.module_key as string))
+    for (const key of contracted) {
+      if (!catalogKeys.has(key)) grantedKeys.add(key)
+    }
   }
 
   // active_modules: concedidas + atuais não geridas (preserva liberações manuais)
@@ -153,6 +161,16 @@ export async function activatePaidSubscription(
     .maybeSingle()
   if (!sub) return { error: 'Assinatura não encontrada para ativação.' }
 
+  // Marca ativa ANTES de sincronizar: o sync olha lifecycle_state e, se ainda
+  // estivesse suspended/expired, rebaixaria os módulos para Free. Pagamento
+  // confirmado encerra qualquer proteção de grandfathering e limpa o relógio de
+  // inadimplência (past_due_since).
+  const { error } = await admin
+    .from('tenant_subscriptions')
+    .update({ lifecycle_state: 'active', status: 'active', is_grandfathered: false, past_due_since: null })
+    .eq('clinic_id', clinicId)
+  if (error) return { error: 'Erro ao ativar assinatura: ' + error.message }
+
   const plan = sub.plan_name as string
   if (plan === 'premium' || plan === 'enterprise') {
     const payload = (sub.payment_payload as Record<string, unknown> | null) ?? {}
@@ -162,13 +180,95 @@ export async function activatePaidSubscription(
     const synced = await syncClinicModulesFromContract(admin, clinicId)
     if (synced.error) return synced
   }
+  return {}
+}
 
-  // Pagamento confirmado encerra qualquer proteção de grandfathering: a partir
-  // daqui a assinatura é regida normalmente pela máquina de estados.
+// ─── Dunning / inadimplência (R7) ──────────────────────────────────────────
+
+export const DUNNING_DAY_MS = 24 * 60 * 60 * 1000
+export const DUNNING_GRACE_DAYS = 7
+
+// Lógica TEMPORAL PURA do dunning (testável sem banco). Dado o estado da
+// assinatura e o instante atual, decide a transição: marcar 'expiring' (anual
+// perto de vencer) ou TENTAR suspender ('suspended' mensal / 'expired' anual).
+// A carência clínica D3 NÃO entra aqui — é decidida no momento da suspensão
+// (attemptSuspendSubscription). Retorna null se nada a fazer.
+export function planDunningTransition(
+  sub: {
+    lifecycle_state: string | null
+    billing_cycle: string | null
+    past_due_since: string | null
+    current_period_end: string | null
+  },
+  nowMs: number
+): { setState?: 'expiring'; trySuspend?: 'suspended' | 'expired' } | null {
+  const state = sub.lifecycle_state
+  const isYearly = sub.billing_cycle === 'yearly'
+  const periodEnd = sub.current_period_end ? new Date(sub.current_period_end).getTime() : null
+  const pastDueSince = sub.past_due_since ? new Date(sub.past_due_since).getTime() : null
+  const graceMs = DUNNING_GRACE_DAYS * DUNNING_DAY_MS
+
+  // Anual: aviso de renovação (−7d) e expiração.
+  if (isYearly && periodEnd && (state === 'active' || state === 'expiring')) {
+    if (periodEnd <= nowMs) return { trySuspend: 'expired' }
+    if (state === 'active' && periodEnd <= nowMs + graceMs) return { setState: 'expiring' }
+    return null
+  }
+  // Mensal: atraso há ≥7d → tenta suspender.
+  if (!isYearly && state === 'past_due' && pastDueSince && nowMs - pastDueSince >= graceMs) {
+    return { trySuspend: 'suspended' }
+  }
+  // Carência (D3 adiou): retenta diariamente até os registros clínicos fecharem.
+  if (state === 'grace') {
+    return { trySuspend: isYearly ? 'expired' : 'suspended' }
+  }
+  return null
+}
+
+// D3 (CFMV) — a clínica tem registro clínico ABERTO? Internação ativa
+// (observation/ward/icu) OU consulta/prontuário não finalizado. Enquanto
+// houver, a suspensão por inadimplência é adiada (proteção do paciente).
+export async function hasOpenClinicalRecords(
+  admin: Admin,
+  clinicId: string
+): Promise<boolean> {
+  const [hosp, cons] = await Promise.all([
+    admin
+      .from('hospitalizations')
+      .select('id', { count: 'exact', head: true })
+      .eq('clinic_id', clinicId)
+      .in('status', ['observation', 'ward', 'icu']),
+    // "Prontuário aberto" = atendimento INICIADO e não finalizado. Agendamentos
+    // futuros (scheduled/scheduled_future) não contam — senão a agenda viraria
+    // uma brecha contra a suspensão.
+    admin
+      .from('consultations')
+      .select('id', { count: 'exact', head: true })
+      .eq('clinic_id', clinicId)
+      .in('status', ['reception', 'triage', 'in_progress', 'waiting_exam', 'medication']),
+  ])
+  return (hosp.count ?? 0) > 0 || (cons.count ?? 0) > 0
+}
+
+// Tenta suspender (mensal → 'suspended'; anual → 'expired'). Respeita D3: se há
+// registro clínico aberto, NÃO desliga módulos — devolve { deferred: true } e o
+// chamador decide manter em carência. Caso contrário, marca o estado e rebaixa
+// os módulos ao Free (contratos preservados → pagamento reativa).
+export async function attemptSuspendSubscription(
+  admin: Admin,
+  clinicId: string,
+  targetState: 'suspended' | 'expired'
+): Promise<{ deferred?: boolean; error?: string }> {
+  if (await hasOpenClinicalRecords(admin, clinicId)) {
+    return { deferred: true }
+  }
   const { error } = await admin
     .from('tenant_subscriptions')
-    .update({ lifecycle_state: 'active', status: 'active', is_grandfathered: false })
+    .update({ lifecycle_state: targetState })
     .eq('clinic_id', clinicId)
-  if (error) return { error: 'Erro ao ativar assinatura: ' + error.message }
+  if (error) return { error: 'Erro ao suspender assinatura: ' + error.message }
+  // sync agora vê suspended/expired → desliga módulos pagos (mantém contratos).
+  const synced = await syncClinicModulesFromContract(admin, clinicId)
+  if (synced.error) return synced
   return {}
 }

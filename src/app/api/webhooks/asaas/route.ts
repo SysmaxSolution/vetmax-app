@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getAsaasWebhookToken } from '@/lib/billing/asaas'
-import { activatePaidSubscription } from '@/lib/billing/provision'
+import { activatePaidSubscription, attemptSuspendSubscription } from '@/lib/billing/provision'
 
 // POST /api/webhooks/asaas
 // Recebe eventos de cobrança do Asaas (Monetização SaaS — Fase 2).
@@ -28,8 +28,10 @@ interface AsaasPayment {
 
 // Eventos que confirmam recebimento (libera/mantém a clínica ativa).
 const PAID_EVENTS = new Set(['PAYMENT_CONFIRMED', 'PAYMENT_RECEIVED'])
-// Eventos de inadimplência (deve suspender módulos pagos).
+// Eventos de inadimplência (marca atraso; suspensão é decidida pelo cron).
 const OVERDUE_EVENTS = new Set(['PAYMENT_OVERDUE'])
+// Estorno / chargeback — vai direto para suspensão (respeitando a carência D3).
+const REVERSAL_EVENTS = new Set(['PAYMENT_CHARGEBACK', 'PAYMENT_REFUNDED'])
 
 export async function POST(request: NextRequest) {
   // 1. Autenticação do webhook
@@ -52,7 +54,7 @@ export async function POST(request: NextRequest) {
   // 2. Localiza a clínica pelo customer/subscription
   const { data: sub } = await admin
     .from('tenant_subscriptions')
-    .select('clinic_id, plan_name')
+    .select('clinic_id, plan_name, lifecycle_state, billing_cycle')
     .or(
       [
         payment.subscription ? `asaas_subscription_id.eq.${payment.subscription}` : null,
@@ -93,9 +95,13 @@ export async function POST(request: NextRequest) {
     patch.status = 'active'
   } else if (OVERDUE_EVENTS.has(event)) {
     patch.status = 'past_due'
-    // R6: marca o estado; a suspensão de módulos após carência (7d) + carência
-    // clínica D3 é feita pelo cron de dunning (Item 7), não aqui no evento.
+    // R6/R7: marca o estado e ancora o relógio dos 7 dias (past_due_since) só na
+    // ENTRADA em atraso. A suspensão após carência (7d) + carência clínica D3 é
+    // feita pelo cron de dunning, não aqui no evento.
     patch.lifecycle_state = 'past_due'
+    if (sub.lifecycle_state !== 'past_due' && sub.lifecycle_state !== 'grace') {
+      patch.past_due_since = new Date().toISOString()
+    }
   }
 
   await admin
@@ -112,6 +118,23 @@ export async function POST(request: NextRequest) {
       // registrada e o status atualizado. Loga p/ investigação.
       console.error('[asaas-webhook] ativação pós-pagamento falhou:', activated.error)
     }
+  }
+
+  // R7: estorno/chargeback → suspende já (anual → expired). Respeita a carência
+  // clínica D3: se há internação/prontuário aberto, não corta módulos — entra
+  // em 'grace' e o cron reavalia quando os registros fecharem.
+  if (REVERSAL_EVENTS.has(event)) {
+    const target = sub.billing_cycle === 'yearly' ? 'expired' : 'suspended'
+    const result = await attemptSuspendSubscription(admin, sub.clinic_id, target)
+    if (result.deferred) {
+      await admin
+        .from('tenant_subscriptions')
+        .update({ lifecycle_state: 'grace', past_due_since: new Date().toISOString() })
+        .eq('clinic_id', sub.clinic_id)
+    } else if (result.error) {
+      console.error('[asaas-webhook] suspensão por estorno falhou:', result.error)
+    }
+    // TODO Item 7: cancelar a NFS-e correspondente ao estorno.
   }
 
   return NextResponse.json({ received: true, matched: true })

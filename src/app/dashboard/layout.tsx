@@ -7,7 +7,9 @@ import { Lock, AlertCircle } from 'lucide-react'
 import { getLowStockCount } from '@/lib/actions/stock'
 import type { UserClinicInfo } from '@/lib/actions/clinic-switcher'
 import { FREE_ROUTES } from '@/config/access-matrix'
-import type { PlanName, BusinessType } from '@/types'
+import type { PlanName, BusinessType, SubscriptionLifecycleState, BillingCycle } from '@/types'
+import { hasOpenClinicalRecords } from '@/lib/billing/provision'
+import SubscriptionDunningBanner from '@/components/management/subscription/SubscriptionDunningBanner'
 import DashboardShellClassic from '@/components/layout/DashboardShellClassic'
 import DashboardShellModern from '@/components/layout/DashboardShellModern'
 
@@ -60,7 +62,7 @@ export default async function DashboardLayout({
       .eq('clinic_id', profile.clinic_id),
     admin
       .from('tenant_subscriptions')
-      .select('plan_name')
+      .select('plan_name, lifecycle_state, is_grandfathered, billing_cycle, current_period_end, past_due_since')
       .eq('clinic_id', profile.clinic_id)
       .single(),
   ])
@@ -192,6 +194,31 @@ export default async function DashboardLayout({
   })
   const chatUnreadCount = (chatUnreadRpc as number) ?? 0
 
+  // Banner de cobrança (R7) — só para o admin da clínica (SysMax não é cobrado).
+  // D5: assinatura grandfathered nunca exibe dunning. Estados 'active'/free → nada.
+  const subData = (subResult as any)?.data
+  const subLifecycle = (subData?.lifecycle_state ?? null) as SubscriptionLifecycleState | null
+  const subGrandfathered = subData?.is_grandfathered === true
+  const DUNNING_STATES = ['pending', 'past_due', 'grace', 'expiring', 'suspended', 'expired']
+  const showDunning =
+    profile.role === 'admin' && !isSysmax && !subGrandfathered &&
+    !!subLifecycle && DUNNING_STATES.includes(subLifecycle)
+  // D3 só importa nos estados cuja redação depende de registro clínico aberto.
+  const clinicalOpen = showDunning && ['grace', 'suspended', 'expired'].includes(subLifecycle!)
+    ? await hasOpenClinicalRecords(admin, profile.clinic_id)
+    : false
+  const dunningBanner = showDunning ? (
+    <div className="px-4 pt-4 md:px-6">
+      <SubscriptionDunningBanner
+        lifecycleState={subLifecycle!}
+        billingCycle={(subData?.billing_cycle ?? null) as BillingCycle | null}
+        currentPeriodEnd={subData?.current_period_end ?? null}
+        pastDueSince={subData?.past_due_since ?? null}
+        clinicalOpen={clinicalOpen}
+      />
+    </div>
+  ) : null
+
   // Props compartilhadas entre os shells de layout
   const shellProps = {
     userName:             profile.full_name ?? '',
@@ -226,8 +253,8 @@ export default async function DashboardLayout({
   const layoutVersion = (clinicData as any)?.layout_version ?? 'classic'
 
   if (layoutVersion === 'modern') {
-    return <DashboardShellModern {...shellProps}>{children}</DashboardShellModern>
+    return <DashboardShellModern {...shellProps}>{dunningBanner}{children}</DashboardShellModern>
   }
 
-  return <DashboardShellClassic {...shellProps}>{children}</DashboardShellClassic>
+  return <DashboardShellClassic {...shellProps}>{dunningBanner}{children}</DashboardShellClassic>
 }

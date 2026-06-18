@@ -29,6 +29,7 @@ export interface TenantSubscription {
   payment_payload: Record<string, unknown> | null
   lifecycle_state: SubscriptionLifecycleState | null
   is_grandfathered: boolean
+  past_due_since: string | null
 }
 
 // Catálogo global de módulos a la carte do plano Premium (migration 0366).
