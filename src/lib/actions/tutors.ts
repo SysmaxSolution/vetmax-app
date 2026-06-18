@@ -61,6 +61,7 @@ export async function searchTutorsAndPatients(
       .from('patients')
       .select('tutor_id')
       .eq('clinic_id', clinicId)
+      .is('deleted_at', null)
       .ilike('name', `%${q}%`)
       .limit(10)
 
@@ -98,6 +99,7 @@ export async function searchTutorsAndPatients(
     .select('id, name, species, breed, tutor_id')
     .eq('clinic_id', clinicId)
     .in('tutor_id', tutorIds)
+    .is('deleted_at', null)
     .order('name')
 
   const patientsByTutor = new Map<string, { id: string; name: string; species: string; breed: string | null }[]>()
@@ -174,6 +176,7 @@ export async function getTutorWithPatients(tutorId: string): Promise<
     .select('id, name, species, breed, neutered, gender, photo_url, deceased_at')
     .eq('tutor_id', tutorId)
     .eq('clinic_id', profile.clinic_id)
+    .is('deleted_at', null)
     .order('name')
 
   return { tutor, patients: (patients ?? []) as any[] }

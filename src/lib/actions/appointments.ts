@@ -106,7 +106,7 @@ export async function getAppointmentsForDate(
     const tutorIds = [...new Set(data.map(a => a.tutor_id))]
 
     const [petsRes, tutorsRes] = await Promise.all([
-      supabase.from('patients').select('id, name, species, breed').eq('clinic_id', auth.clinicId).in('id', petIds),
+      supabase.from('patients').select('id, name, species, breed').eq('clinic_id', auth.clinicId).in('id', petIds).is('deleted_at', null),
       supabase.from('tutors').select('id, name, phone').eq('clinic_id', auth.clinicId).in('id', tutorIds),
     ])
 

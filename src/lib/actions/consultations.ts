@@ -28,15 +28,18 @@ export async function checkInPatientAdvanced(
   // Determinar status baseado no tipo de visita
   const status = data.scheduled_date ? 'scheduled_future' : 'reception'
 
-  // Bloqueia atendimento de pet com óbito registrado.
+  // Bloqueia atendimento de pet com óbito registrado ou arquivado.
   const { data: petCheck } = await admin
     .from('patients')
-    .select('deceased_at, name')
+    .select('deceased_at, deleted_at, name')
     .eq('id', data.patient_id)
     .eq('clinic_id', profile.clinic_id)
     .maybeSingle()
   if (petCheck?.deceased_at) {
     return { error: `${petCheck.name ?? 'Este pet'} tem óbito registrado — não é possível criar novo atendimento.` }
+  }
+  if (petCheck?.deleted_at) {
+    return { error: `${petCheck.name ?? 'Este pet'} está arquivado — reative o cadastro antes de atender.` }
   }
 
   const { data: result, error } = await admin
@@ -123,15 +126,18 @@ export async function checkInPatientWithContacts(
 
   if (tutorErr) return { error: 'Erro ao atualizar dados do tutor: ' + tutorErr.message }
 
-  // Bloqueia atendimento de pet com óbito registrado.
+  // Bloqueia atendimento de pet com óbito registrado ou arquivado.
   const { data: petCheck } = await admin
     .from('patients')
-    .select('deceased_at, name')
+    .select('deceased_at, deleted_at, name')
     .eq('id', data.patient_id)
     .eq('clinic_id', profile.clinic_id)
     .maybeSingle()
   if (petCheck?.deceased_at) {
     return { error: `${petCheck.name ?? 'Este pet'} tem óbito registrado — não é possível criar novo atendimento.` }
+  }
+  if (petCheck?.deleted_at) {
+    return { error: `${petCheck.name ?? 'Este pet'} está arquivado — reative o cadastro antes de atender.` }
   }
 
   // 2. Criar consulta com dados do check-in

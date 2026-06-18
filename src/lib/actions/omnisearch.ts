@@ -68,7 +68,7 @@ export async function omnisearch(query: string): Promise<OmnisearchResult | { er
   ] = await Promise.all([
     admin.from('patients')
       .select('id, name, species, breed, tutors(name)')
-      .eq('clinic_id', clinicId).ilike('name', pat)
+      .eq('clinic_id', clinicId).is('deleted_at', null).ilike('name', pat)
       .order('name').limit(PER_GROUP_LIMIT),
 
     admin.from('tutors')
