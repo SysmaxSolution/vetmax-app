@@ -140,11 +140,21 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
       payment,
     })
     if ('error' in result) throw new Error(result.error)
+    const planLabel = checkoutPlan === 'enterprise' ? 'Enterprise' : 'Premium'
     setCheckoutPlan(null)
-    setToast({
-      type: 'success',
-      message: `Assinatura ${checkoutPlan === 'enterprise' ? 'Enterprise' : 'Premium'} ativada! Os módulos já estão liberados.`,
-    })
+    if (result.checkout?.invoiceUrl) {
+      // PIX real: abre a fatura do Asaas (QR + copia-e-cola) para o pagamento.
+      window.open(result.checkout.invoiceUrl, '_blank', 'noopener,noreferrer')
+      setToast({
+        type: 'success',
+        message: `Cobrança PIX do plano ${planLabel} gerada! Finalize o pagamento na aba aberta — a confirmação chega automaticamente.`,
+      })
+    } else {
+      setToast({
+        type: 'success',
+        message: `Assinatura ${planLabel} ativada! Os módulos já estão liberados.`,
+      })
+    }
     router.refresh()
   }
 

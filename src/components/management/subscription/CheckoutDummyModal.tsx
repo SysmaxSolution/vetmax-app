@@ -175,7 +175,8 @@ export default function CheckoutDummyModal({ plan, basePrice, selectedModules, c
               <Smartphone className="mx-auto h-6 w-6 text-emerald-500" />
               <p className="mt-1 text-sm font-medium text-emerald-800">Pagamento via PIX</p>
               <p className="text-xs text-emerald-700">
-                O QR Code de pagamento será disponibilizado em breve — nenhuma cobrança será efetuada agora.
+                Ao confirmar, geramos a cobrança e abrimos a fatura com o QR Code para
+                você pagar. A confirmação do pagamento é automática.
               </p>
             </div>
           )}

@@ -11,7 +11,16 @@ import { insertLegalAcceptanceRaw, getRequestMeta } from '@/lib/actions/legal'
 import { FREE_MODULES } from '@/config/access-matrix'
 import { computePlanPrice, type PriceTotals } from '@/lib/subscription/pricing'
 import { PLAN_LIMITS, type LimitedPlan } from '@/lib/subscription/plan-limits'
-import type { DummyPaymentPayload, SubscriptionOverview } from '@/lib/subscription/types'
+import {
+  getAsaasConfig,
+  createAsaasCustomer,
+  createAsaasSubscription,
+  cancelAsaasSubscription,
+  getAsaasSubscriptionPayments,
+  getAsaasPixQrCode,
+  asaasCycle,
+} from '@/lib/billing/asaas'
+import type { DummyPaymentPayload, SubscriptionOverview, AsaasCheckout } from '@/lib/subscription/types'
 import type {
   BillingCycle,
   BusinessType,
@@ -21,7 +30,7 @@ import type {
 
 // ─── Context ──────────────────────────────────────────────────────────────────
 
-type Ctx = { clinicId: string; userId: string; isSysmax: boolean }
+type Ctx = { clinicId: string; userId: string; isSysmax: boolean; email: string | null }
 
 async function getAdminCtx(): Promise<Ctx | { error: string }> {
   const supabase = await createClient()
@@ -38,7 +47,103 @@ async function getAdminCtx(): Promise<Ctx | { error: string }> {
   if (profile.role !== 'admin' && !profile.is_sysmax) {
     return { error: 'Apenas administradores podem gerenciar a assinatura.' }
   }
-  return { clinicId: profile.clinic_id, userId: user.id, isSysmax: !!profile.is_sysmax }
+  return { clinicId: profile.clinic_id, userId: user.id, isSysmax: !!profile.is_sysmax, email: user.email ?? null }
+}
+
+// Data de hoje em YYYY-MM-DD (fuso local do servidor) para nextDueDate do Asaas.
+function ymdToday(): string {
+  const d = new Date()
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${mm}-${dd}`
+}
+
+// Provisiona customer + subscription PIX no Asaas e devolve a fatura/QR da
+// primeira cobrança. Reusa o customer se a clínica já tiver um. Não persiste
+// nada — quem grava os IDs é o subscribeToPlan (no mesmo upsert da assinatura).
+async function provisionAsaasPix(args: {
+  admin: ReturnType<typeof createAdminClient>
+  clinicId: string
+  userEmail: string | null
+  plan: 'premium' | 'enterprise'
+  cycle: BillingCycle
+  value: number
+}): Promise<
+  | { checkout: AsaasCheckout; ids: { asaas_customer_id: string; asaas_subscription_id: string } }
+  | { error: string }
+> {
+  try { getAsaasConfig() } catch { return { error: 'Gateway de pagamento não configurado. Contate o suporte.' } }
+
+  const [clinicRes, fiscalRes, existingRes] = await Promise.all([
+    args.admin.from('clinics').select('name, cnpj, phone').eq('id', args.clinicId).single(),
+    args.admin.from('clinic_fiscal_config').select('cnpj, razao_social').eq('clinic_id', args.clinicId).maybeSingle(),
+    args.admin.from('tenant_subscriptions').select('asaas_customer_id, asaas_subscription_id').eq('clinic_id', args.clinicId).maybeSingle(),
+  ])
+
+  const cnpj = String(clinicRes.data?.cnpj ?? fiscalRes.data?.cnpj ?? '').replace(/\D/g, '')
+  if (cnpj.length !== 14) {
+    return { error: 'Cadastre o CNPJ da clínica (Gestão → Contábil) antes de assinar via PIX.' }
+  }
+  const name = String(clinicRes.data?.name ?? fiscalRes.data?.razao_social ?? 'Clínica').trim()
+  const phone = String(clinicRes.data?.phone ?? '').replace(/\D/g, '') || undefined
+
+  // 1. Customer (reusa o existente p/ não duplicar na conta da Sysmax)
+  let customerId = existingRes.data?.asaas_customer_id ?? ''
+  if (!customerId) {
+    try {
+      const customer = await createAsaasCustomer({
+        name,
+        cpfCnpj: cnpj,
+        email: args.userEmail ?? undefined,
+        mobilePhone: phone,
+        externalReference: args.clinicId,
+      })
+      customerId = customer.id
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : 'Falha ao criar cliente no gateway.' }
+    }
+  }
+
+  // Cancela a subscription anterior (re-assinatura / mudança de plano-ciclo)
+  // para não acumular cobranças recorrentes duplicadas na conta do cliente.
+  const previousSubId = existingRes.data?.asaas_subscription_id
+  if (previousSubId) {
+    try { await cancelAsaasSubscription(previousSubId) } catch { /* já cancelada/inexistente — segue */ }
+  }
+
+  // 2. Subscription recorrente PIX (valor já vem com desconto anual aplicado)
+  let subscriptionId = ''
+  try {
+    const sub = await createAsaasSubscription({
+      customer: customerId,
+      billingType: 'PIX',
+      value: args.value,
+      nextDueDate: ymdToday(),
+      cycle: asaasCycle(args.cycle === 'yearly' ? 'yearly' : 'monthly'),
+      description: `SysVetMax — Plano ${args.plan === 'enterprise' ? 'Enterprise' : 'Premium'} (${args.cycle === 'yearly' ? 'anual' : 'mensal'})`,
+      externalReference: args.clinicId,
+    })
+    subscriptionId = sub.id
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Falha ao criar assinatura no gateway.' }
+  }
+
+  // 3. Primeira cobrança → fatura + QR PIX (não-fatal se ainda não disponível)
+  const checkout: AsaasCheckout = {}
+  try {
+    const payments = await getAsaasSubscriptionPayments(subscriptionId)
+    const first = payments.data?.[0]
+    if (first?.id) {
+      checkout.invoiceUrl = first.invoiceUrl
+      try {
+        const qr = await getAsaasPixQrCode(first.id)
+        checkout.pixPayload = qr.payload
+        checkout.pixImage = qr.encodedImage
+      } catch { /* QR opcional — invoiceUrl já permite pagar */ }
+    }
+  } catch { /* fatura pode ser consultada depois; assinatura já existe */ }
+
+  return { checkout, ids: { asaas_customer_id: customerId, asaas_subscription_id: subscriptionId } }
 }
 
 // ─── Leitura ──────────────────────────────────────────────────────────────────
@@ -170,7 +275,7 @@ export async function subscribeToPlan(input: {
   addonKeys: string[]
   cycle: BillingCycle
   payment: DummyPaymentPayload
-}): Promise<{ ok: true; totals: PriceTotals } | { error: string }> {
+}): Promise<{ ok: true; totals: PriceTotals; checkout?: AsaasCheckout } | { error: string }> {
   const ctx = await getAdminCtx()
   if ('error' in ctx) return ctx
 
@@ -222,6 +327,25 @@ export async function subscribeToPlan(input: {
     cycle: input.cycle,
   })
 
+  // Gateway real (PIX): cria customer + subscription no Asaas e obtém a fatura.
+  // Cartão segue no fluxo dummy até a tokenização (Fase 2.1).
+  const isPix = input.payment.method === 'pix'
+  let checkout: AsaasCheckout | undefined
+  let asaasIds: { asaas_customer_id: string; asaas_subscription_id: string } | undefined
+  if (isPix) {
+    const pix = await provisionAsaasPix({
+      admin,
+      clinicId: ctx.clinicId,
+      userEmail: ctx.email,
+      plan: input.plan,
+      cycle: input.cycle,
+      value: totals.effectiveTotal,
+    })
+    if ('error' in pix) return pix
+    checkout = pix.checkout
+    asaasIds = pix.ids
+  }
+
   // Payload dummy — truncamento defensivo: nunca persistir número completo
   const card = input.payment.card
     ? {
@@ -246,8 +370,15 @@ export async function subscribeToPlan(input: {
         custom_price: null,
         cancelled_at: null,
         current_period_end: periodEnd.toISOString(),
+        ...(asaasIds
+          ? {
+              asaas_customer_id: asaasIds.asaas_customer_id,
+              asaas_subscription_id: asaasIds.asaas_subscription_id,
+              last_payment_status: 'PENDING',
+            }
+          : {}),
         payment_payload: {
-          gateway: 'dummy_phase1',
+          gateway: isPix ? 'asaas' : 'dummy_phase1',
           plan: input.plan,
           method: input.payment.method,
           card,
@@ -307,7 +438,7 @@ export async function subscribeToPlan(input: {
 
   revalidatePath('/dashboard', 'layout')
   revalidatePath('/dashboard/management')
-  return { ok: true, totals }
+  return { ok: true, totals, ...(checkout ? { checkout } : {}) }
 }
 
 export async function downgradeToFree(): Promise<{ ok: true } | { error: string }> {

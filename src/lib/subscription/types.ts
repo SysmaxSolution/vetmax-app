@@ -15,6 +15,16 @@ export interface DummyPaymentPayload {
   terms_accepted: boolean
 }
 
+/** Dados de pagamento devolvidos quando a cobrança é gerada no gateway (PIX). */
+export interface AsaasCheckout {
+  /** Página de fatura do Asaas (QR + copia-e-cola) — onde o cliente paga. */
+  invoiceUrl?: string
+  /** Copia-e-cola PIX. */
+  pixPayload?: string
+  /** QR Code PIX em base64 (PNG, sem prefixo data:). */
+  pixImage?: string
+}
+
 export interface SubscriptionOverview {
   subscription: TenantSubscription | null
   contractedKeys: string[]

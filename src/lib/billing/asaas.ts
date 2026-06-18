@@ -180,3 +180,53 @@ export function cancelAsaasSubscription(id: string, config?: AsaasConfig): Promi
     config,
   })
 }
+
+// ─── Cobranças / PIX ─────────────────────────────────────────────────────────
+
+export interface AsaasPayment {
+  id: string
+  customer?: string
+  subscription?: string
+  status?: string
+  value?: number
+  dueDate?: string
+  /** Página de fatura do Asaas (mostra QR PIX + copia-e-cola). */
+  invoiceUrl?: string
+  billingType?: string
+}
+
+export interface AsaasList<T> {
+  data: T[]
+  totalCount?: number
+  hasMore?: boolean
+}
+
+/** Cobranças geradas por uma subscription (a 1ª é a fatura inicial). */
+export function getAsaasSubscriptionPayments(
+  subscriptionId: string,
+  config?: AsaasConfig
+): Promise<AsaasList<AsaasPayment>> {
+  return asaasFetch<AsaasList<AsaasPayment>>(
+    `/v3/subscriptions/${encodeURIComponent(subscriptionId)}/payments`,
+    { config }
+  )
+}
+
+export interface AsaasPixQrCode {
+  /** PNG em base64 (sem o prefixo data:image/png;base64,). */
+  encodedImage?: string
+  /** Copia-e-cola PIX. */
+  payload?: string
+  expirationDate?: string
+}
+
+/** QR Code PIX (copia-e-cola + imagem) de uma cobrança específica. */
+export function getAsaasPixQrCode(
+  paymentId: string,
+  config?: AsaasConfig
+): Promise<AsaasPixQrCode> {
+  return asaasFetch<AsaasPixQrCode>(
+    `/v3/payments/${encodeURIComponent(paymentId)}/pixQrCode`,
+    { config }
+  )
+}
