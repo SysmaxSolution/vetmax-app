@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Search, Users, Pencil, Plus } from 'lucide-react'
+import { Search, Users, Pencil, Plus, Archive, ArchiveRestore } from 'lucide-react'
 import { getPatientsList, type PatientsListItem } from '@/lib/actions/timeline'
+import { reactivatePatient } from '@/lib/actions/pets'
 import PetTimelineModal from '@/components/pet/PetTimelineModal'
 import PatientFullModal from '@/components/patients/PatientFullModal'
 import { formatPetAge } from '@/lib/utils/pet-age'
@@ -37,10 +38,16 @@ function PatientCard({
   patient,
   onViewFeed,
   onEdit,
+  archived = false,
+  onReactivate,
+  reactivating = false,
 }: {
   patient: PatientsListItem
   onViewFeed: (p: PatientsListItem) => void
   onEdit: (p: PatientsListItem) => void
+  archived?: boolean
+  onReactivate?: (p: PatientsListItem) => void
+  reactivating?: boolean
 }) {
   const sp = SPECIES_LABELS[patient.species] ?? { label: patient.species, emoji: '🐾', color: 'bg-slate-100 text-slate-600' }
   const age = calcAge(patient.birth_date)
@@ -48,7 +55,9 @@ function PatientCard({
 
   return (
     <div className={`flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 rounded-xl border px-4 sm:px-5 py-4 transition-all ${
-      isDeceased
+      archived
+        ? 'border-amber-200 bg-amber-50/40'
+        : isDeceased
         ? 'border-violet-200 bg-violet-50/40'
         : 'border-slate-200 bg-white hover:shadow-sm hover:border-slate-300'
     }`}>
@@ -69,6 +78,11 @@ function PatientCard({
             {isDeceased && (
               <span className="text-[10px] font-bold uppercase tracking-wider rounded-full bg-violet-100 text-violet-700 px-2 py-0.5">
                 🕊️ In memoriam
+              </span>
+            )}
+            {archived && (
+              <span className="text-[10px] font-bold uppercase tracking-wider rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 flex items-center gap-1">
+                <Archive className="h-3 w-3" /> Arquivado
               </span>
             )}
             <span className={`text-xs font-medium rounded-full px-2 py-0.5 ${sp.color}`}>
@@ -100,32 +114,55 @@ function PatientCard({
               <span className="ml-1.5 text-slate-400">· {patient.tutor.phone}</span>
             )}
           </p>
+          {archived && (
+            <p className="mt-1 text-xs text-amber-700">
+              {patient.delete_reason ? <>Motivo: <span className="font-medium">{patient.delete_reason}</span></> : 'Arquivado'}
+              {patient.deleted_at && (
+                <span className="ml-1.5 text-amber-600/70">· em {new Date(patient.deleted_at).toLocaleDateString('pt-BR')}</span>
+              )}
+            </p>
+          )}
         </div>
       </div>
 
       {/* Ações */}
       <div className="flex-shrink-0 flex items-center gap-2 pl-14 sm:pl-0">
-        <button
-          type="button"
-          onClick={() => onEdit(patient)}
-          className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-colors"
-          title="Editar cadastro"
-        >
-          <Pencil className="h-3.5 w-3.5" />
-          <span className="hidden xs:inline">Editar Cadastro</span>
-          <span className="xs:hidden">Editar</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => onViewFeed(patient)}
-          className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-700 transition-colors"
-        >
-          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-          </svg>
-          <span className="hidden xs:inline">Ver Histórico</span>
-          <span className="xs:hidden">Histórico</span>
-        </button>
+        {archived ? (
+          <button
+            type="button"
+            onClick={() => onReactivate?.(patient)}
+            disabled={reactivating}
+            className="flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50 transition-colors"
+            title="Reativar pet"
+          >
+            <ArchiveRestore className="h-3.5 w-3.5" />
+            {reactivating ? 'Reativando...' : 'Reativar'}
+          </button>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={() => onEdit(patient)}
+              className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-colors"
+              title="Editar cadastro"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              <span className="hidden xs:inline">Editar Cadastro</span>
+              <span className="xs:hidden">Editar</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onViewFeed(patient)}
+              className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-700 transition-colors"
+            >
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+              </svg>
+              <span className="hidden xs:inline">Ver Histórico</span>
+              <span className="xs:hidden">Histórico</span>
+            </button>
+          </>
+        )}
       </div>
     </div>
   )
@@ -139,20 +176,38 @@ interface Props {
 }
 
 export default function PatientsWorkspace({ initialPatients, clinicName }: Props) {
+  const [tab, setTab] = useState<'active' | 'archived'>('active')
   const [patients, setPatients] = useState<PatientsListItem[]>(initialPatients)
+  const [archived, setArchived] = useState<PatientsListItem[]>([])
+  const [archivedLoaded, setArchivedLoaded] = useState(false)
   const [query, setQuery] = useState('')
   const [searching, setSearching] = useState(false)
   const [feedPet, setFeedPet] = useState<PatientsListItem | null>(null)
   const [editPet, setEditPet] = useState<PatientsListItem | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
+  const [reactivatingId, setReactivatingId] = useState<string | null>(null)
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Busca debounced
+  // Carrega a lista de arquivados sob demanda na primeira vez que a aba abre.
+  useEffect(() => {
+    if (tab !== 'archived' || archivedLoaded) return
+    getPatientsList('', { archived: true }).then(result => {
+      if (!('error' in result)) setArchived(result)
+      setArchivedLoaded(true)
+    })
+  }, [tab, archivedLoaded])
+
+  // Busca debounced (respeita a aba ativa)
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current)
+    const isArchived = tab === 'archived'
 
     if (query.trim().length === 0) {
-      setPatients(initialPatients)
+      // Arquivados: recarrega a lista cheia só quando já foi carregada uma vez
+      // (no 1º acesso quem popula é o effect de lazy-load — evita fetch duplo).
+      if (isArchived) {
+        if (archivedLoaded) getPatientsList('', { archived: true }).then(r => { if (!('error' in r)) setArchived(r) })
+      } else setPatients(initialPatients)
       return
     }
 
@@ -160,13 +215,30 @@ export default function PatientsWorkspace({ initialPatients, clinicName }: Props
 
     setSearching(true)
     searchTimer.current = setTimeout(async () => {
-      const result = await getPatientsList(query.trim())
+      const result = await getPatientsList(query.trim(), isArchived ? { archived: true } : undefined)
       setSearching(false)
-      if (!('error' in result)) setPatients(result)
+      if (!('error' in result)) {
+        if (isArchived) setArchived(result)
+        else setPatients(result)
+      }
     }, 350)
 
     return () => { if (searchTimer.current) clearTimeout(searchTimer.current) }
-  }, [query, initialPatients])
+  }, [query, initialPatients, tab, archivedLoaded])
+
+  // Reativa um pet arquivado: remove da lista de arquivados e limpa a busca.
+  const handleReactivate = async (p: PatientsListItem) => {
+    setReactivatingId(p.id)
+    const res = await reactivatePatient(p.id)
+    setReactivatingId(null)
+    if ('success' in res) {
+      setArchived(prev => prev.filter(x => x.id !== p.id))
+    } else {
+      alert('Erro ao reativar: ' + res.error)
+    }
+  }
+
+  const list = tab === 'archived' ? archived : patients
 
   return (
     <>
@@ -231,6 +303,35 @@ export default function PatientsWorkspace({ initialPatients, clinicName }: Props
         </button>
       </div>
 
+      {/* Abas: Ativos / Arquivados */}
+      <div className="mb-5 flex items-center gap-2 border-b border-slate-200">
+        <button
+          type="button"
+          onClick={() => { setTab('active'); setQuery('') }}
+          className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${
+            tab === 'active'
+              ? 'border-teal-600 text-teal-700'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <Users className="h-4 w-4" /> Ativos
+        </button>
+        <button
+          type="button"
+          onClick={() => { setTab('archived'); setQuery('') }}
+          className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${
+            tab === 'archived'
+              ? 'border-amber-600 text-amber-700'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <Archive className="h-4 w-4" /> Arquivados
+          {archivedLoaded && archived.length > 0 && (
+            <span className="ml-1 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold px-1.5 py-0.5">{archived.length}</span>
+          )}
+        </button>
+      </div>
+
       {/* Busca Inteligente */}
       <div className="relative mb-6">
         <div className="pointer-events-none absolute inset-y-0 left-4 flex items-center">
@@ -263,29 +364,36 @@ export default function PatientsWorkspace({ initialPatients, clinicName }: Props
       </div>
 
       {/* Lista de Pacientes */}
-      {patients.length === 0 ? (
+      {list.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center rounded-2xl border border-dashed border-slate-300 bg-white">
           <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-slate-100">
-            <Users className="h-7 w-7 text-slate-400" />
+            {tab === 'archived' ? <Archive className="h-7 w-7 text-slate-400" /> : <Users className="h-7 w-7 text-slate-400" />}
           </div>
           <p className="text-sm font-medium text-slate-500">
-            {query ? `Nenhum paciente encontrado para "${query}"` : 'Nenhum paciente cadastrado'}
+            {query
+              ? `Nenhum paciente encontrado para "${query}"`
+              : tab === 'archived' ? 'Nenhum pet arquivado' : 'Nenhum paciente cadastrado'}
           </p>
           <p className="mt-1 text-xs text-slate-400">
-            {query ? 'Tente um nome diferente' : 'Os pacientes aparecem aqui após o primeiro check-in'}
+            {query
+              ? 'Tente um nome diferente'
+              : tab === 'archived' ? 'Pets arquivados aparecem aqui e podem ser reativados' : 'Os pacientes aparecem aqui após o primeiro check-in'}
           </p>
         </div>
       ) : (
         <div className="space-y-2">
-          {patients.map(p => (
+          {list.map(p => (
             <PatientCard
               key={p.id}
               patient={p}
               onViewFeed={setFeedPet}
               onEdit={setEditPet}
+              archived={tab === 'archived'}
+              onReactivate={handleReactivate}
+              reactivating={reactivatingId === p.id}
             />
           ))}
-          {patients.length === 100 && (
+          {list.length === 100 && (
             <p className="text-center text-xs text-slate-400 pt-2">
               Mostrando os primeiros 100 resultados. Use a busca para refinar.
             </p>

@@ -396,6 +396,44 @@ export async function softDeletePatient(
   return { success: true }
 }
 
+// ─── Reativar (desarquivar) pet ───────────────────────────────────────────────
+// Zera deleted_at/delete_reason, devolvendo o pet a todas as buscas e rotinas.
+export async function reactivatePatient(
+  patientId: string
+): Promise<{ success: true } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('clinic_id')
+    .eq('id', user.id)
+    .single()
+  if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
+
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('patients')
+    .update({ deleted_at: null, delete_reason: null })
+    .eq('id', patientId)
+    .eq('clinic_id', profile.clinic_id)
+    .not('deleted_at', 'is', null)
+
+  if (error) return { error: 'Erro ao reativar pet: ' + error.message }
+
+  await logAudit({
+    action:      'REACTIVATE_PATIENT',
+    entity_type: 'patients',
+    entity_id:   patientId,
+    details:     {},
+  })
+
+  revalidatePath('/dashboard/patients')
+  revalidatePath('/dashboard/reception')
+  return { success: true }
+}
+
 export async function updateFullProfile(
   petId: string,
   tutorId: string,

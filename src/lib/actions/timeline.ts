@@ -690,6 +690,8 @@ export type PatientsListItem = {
   last_known_weight_source: string | null
   deceased_at:   string | null
   deceased_cause: string | null
+  deleted_at?:    string | null
+  delete_reason?: string | null
   created_from: string | null
   tutor: {
     id:                string
@@ -705,7 +707,8 @@ export type PatientsListItem = {
 }
 
 export async function getPatientsList(
-  query?: string
+  query?: string,
+  opts?: { archived?: boolean }
 ): Promise<PatientsListItem[] | { error: string }> {
   try {
     const supabase = await createClient()
@@ -726,10 +729,14 @@ export async function getPatientsList(
 
     let patientsQuery = admin
       .from('patients')
-      .select('id, name, species, breed, gender, neutered, birth_date, birth_date_estimated, coat_color, reproductive_status, medical_history, photo_url, behavior_tags, allergies, chronic_diseases, microchip_id, last_known_weight, last_known_weight_at, last_known_weight_source, deceased_at, deceased_cause, tutor_id')
+      .select('id, name, species, breed, gender, neutered, birth_date, birth_date_estimated, coat_color, reproductive_status, medical_history, photo_url, behavior_tags, allergies, chronic_diseases, microchip_id, last_known_weight, last_known_weight_at, last_known_weight_source, deceased_at, deceased_cause, deleted_at, delete_reason, tutor_id')
       .eq('clinic_id', clinicId)
-      .is('deleted_at', null)
       .order('name')
+
+    // Aba "Arquivados" lista só os soft-deletados; o padrão lista só os ativos.
+    patientsQuery = opts?.archived
+      ? patientsQuery.not('deleted_at', 'is', null)
+      : patientsQuery.is('deleted_at', null)
 
     if (query && query.trim().length >= 2) {
       patientsQuery = patientsQuery.ilike('name', `%${query.trim()}%`)
@@ -772,6 +779,8 @@ export async function getPatientsList(
       last_known_weight_source: (p as any).last_known_weight_source ?? null,
       deceased_at:         (p as any).deceased_at ?? null,
       deceased_cause:      (p as any).deceased_cause ?? null,
+      deleted_at:          (p as any).deleted_at ?? null,
+      delete_reason:       (p as any).delete_reason ?? null,
       tutor:               tutorMap[p.tutor_id] ?? { id: p.tutor_id, name: '—', cpf: '', phone: '' },
       created_from:        null,
       last_visit:          null, // preenchido futuramente com join em consultations
