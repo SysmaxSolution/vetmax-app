@@ -8,11 +8,8 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { insertLegalAcceptanceRaw, getRequestMeta } from '@/lib/actions/legal'
-import { computePlanPrice, type PriceTotals } from '@/lib/subscription/pricing'
-import {
-  syncClinicModulesFromContract,
-  applyPlanContracts,
-} from '@/lib/billing/provision'
+import { computePlanPrice, chargeValueFor, type PriceTotals } from '@/lib/subscription/pricing'
+import { syncClinicModulesFromContract } from '@/lib/billing/provision'
 import {
   getAsaasConfig,
   createAsaasCustomer,
@@ -60,15 +57,21 @@ function ymdToday(): string {
   return `${d.getFullYear()}-${mm}-${dd}`
 }
 
-// Provisiona customer + subscription PIX no Asaas e devolve a fatura/QR da
+// Provisiona customer + subscription no Asaas e devolve a fatura (hospedada) da
 // primeira cobrança. Reusa o customer se a clínica já tiver um. Não persiste
 // nada — quem grava os IDs é o subscribeToPlan (no mesmo upsert da assinatura).
-async function provisionAsaasPix(args: {
+//
+// CARTÃO = fatura HOSPEDADA do Asaas (PCI-safe, D5/LGPD): NÃO enviamos o PAN
+// pelo servidor. Criamos a subscription CREDIT_CARD sem dados de cartão; o
+// cliente preenche o cartão na página segura do Asaas, que tokeniza e auto-cobra
+// os ciclos seguintes. Mesma mecânica de invoiceUrl do PIX.
+async function provisionAsaasCheckout(args: {
   admin: ReturnType<typeof createAdminClient>
   clinicId: string
   userEmail: string | null
   plan: 'premium' | 'enterprise'
   cycle: BillingCycle
+  method: 'pix' | 'card'
   value: number
 }): Promise<
   | { checkout: AsaasCheckout; ids: { asaas_customer_id: string; asaas_subscription_id: string } }
@@ -84,7 +87,7 @@ async function provisionAsaasPix(args: {
 
   const cnpj = String(clinicRes.data?.cnpj ?? fiscalRes.data?.cnpj ?? '').replace(/\D/g, '')
   if (cnpj.length !== 14) {
-    return { error: 'Cadastre o CNPJ da clínica (Gestão → Contábil) antes de assinar via PIX.' }
+    return { error: 'Cadastre o CNPJ da clínica (Gestão → Contábil) antes de assinar.' }
   }
   const name = String(clinicRes.data?.name ?? fiscalRes.data?.razao_social ?? 'Clínica').trim()
   const phone = String(clinicRes.data?.phone ?? '').replace(/\D/g, '') || undefined
@@ -113,12 +116,14 @@ async function provisionAsaasPix(args: {
     try { await cancelAsaasSubscription(previousSubId) } catch { /* já cancelada/inexistente — segue */ }
   }
 
-  // 2. Subscription recorrente PIX (valor já vem com desconto anual aplicado)
+  // 2. Subscription recorrente (valor já vem com o desconto do método aplicado).
+  //    Cartão = CREDIT_CARD sem dados de cartão → fatura hospedada (PCI-safe).
+  const billingType = args.method === 'card' ? 'CREDIT_CARD' : 'PIX'
   let subscriptionId = ''
   try {
     const sub = await createAsaasSubscription({
       customer: customerId,
-      billingType: 'PIX',
+      billingType,
       value: args.value,
       nextDueDate: ymdToday(),
       cycle: asaasCycle(args.cycle === 'yearly' ? 'yearly' : 'monthly'),
@@ -130,18 +135,22 @@ async function provisionAsaasPix(args: {
     return { error: e instanceof Error ? e.message : 'Falha ao criar assinatura no gateway.' }
   }
 
-  // 3. Primeira cobrança → fatura + QR PIX (não-fatal se ainda não disponível)
+  // 3. Primeira cobrança → fatura hospedada (não-fatal se ainda não disponível).
+  //    PIX também busca o QR copia-e-cola; cartão só usa a invoiceUrl (o cliente
+  //    digita o cartão na página segura do Asaas).
   const checkout: AsaasCheckout = {}
   try {
     const payments = await getAsaasSubscriptionPayments(subscriptionId)
     const first = payments.data?.[0]
     if (first?.id) {
       checkout.invoiceUrl = first.invoiceUrl
-      try {
-        const qr = await getAsaasPixQrCode(first.id)
-        checkout.pixPayload = qr.payload
-        checkout.pixImage = qr.encodedImage
-      } catch { /* QR opcional — invoiceUrl já permite pagar */ }
+      if (args.method === 'pix') {
+        try {
+          const qr = await getAsaasPixQrCode(first.id)
+          checkout.pixPayload = qr.payload
+          checkout.pixImage = qr.encodedImage
+        } catch { /* QR opcional — invoiceUrl já permite pagar */ }
+      }
     }
   } catch { /* fatura pode ser consultada depois; assinatura já existe */ }
 
@@ -201,6 +210,10 @@ export async function subscribeToPlan(input: {
   if (input.cycle !== 'monthly' && input.cycle !== 'yearly') {
     return { error: 'Ciclo de cobrança inválido.' }
   }
+  const method = input.payment.method
+  if (method !== 'pix' && method !== 'card') {
+    return { error: 'Método de pagamento inválido.' }
+  }
 
   const addonKeys = Array.from(new Set(input.addonKeys ?? []))
   if (input.plan === 'enterprise' && addonKeys.length > 0) {
@@ -240,33 +253,23 @@ export async function subscribeToPlan(input: {
     cycle: input.cycle,
   })
 
-  // Gateway real (PIX): cria customer + subscription no Asaas e obtém a fatura.
-  // Cartão segue no fluxo dummy até a tokenização (Fase 2.1).
-  const isPix = input.payment.method === 'pix'
-  let checkout: AsaasCheckout | undefined
-  let asaasIds: { asaas_customer_id: string; asaas_subscription_id: string } | undefined
-  if (isPix) {
-    const pix = await provisionAsaasPix({
-      admin,
-      clinicId: ctx.clinicId,
-      userEmail: ctx.email,
-      plan: input.plan,
-      cycle: input.cycle,
-      value: totals.effectiveTotal,
-    })
-    if ('error' in pix) return pix
-    checkout = pix.checkout
-    asaasIds = pix.ids
-  }
-
-  // Payload dummy — truncamento defensivo: nunca persistir número completo
-  const card = input.payment.card
-    ? {
-        holder: String(input.payment.card.holder ?? '').slice(0, 120),
-        last4: String(input.payment.card.last4 ?? '').replace(/\D/g, '').slice(-4),
-        brand: String(input.payment.card.brand ?? '').slice(0, 40),
-      }
-    : undefined
+  // Gateway real (PIX e CARTÃO): cria customer + subscription no Asaas e obtém
+  // a fatura hospedada. O valor a cobrar depende do método (anual cartão = 10%,
+  // anual PIX = 20%, mensal = igual). Cartão nunca trafega o PAN aqui — fatura
+  // hospedada (PCI-safe). Ambos nascem 'pending' → módulos só no PAYMENT_CONFIRMED.
+  const chargeValue = chargeValueFor(totals, input.cycle, method)
+  const provisioned = await provisionAsaasCheckout({
+    admin,
+    clinicId: ctx.clinicId,
+    userEmail: ctx.email,
+    plan: input.plan,
+    cycle: input.cycle,
+    method,
+    value: chargeValue,
+  })
+  if ('error' in provisioned) return provisioned
+  const checkout: AsaasCheckout | undefined = provisioned.checkout
+  const asaasIds = provisioned.ids
 
   const periodEnd = new Date()
   if (input.cycle === 'yearly') periodEnd.setFullYear(periodEnd.getFullYear() + 1)
@@ -279,27 +282,24 @@ export async function subscribeToPlan(input: {
         clinic_id: ctx.clinicId,
         plan_name: input.plan,
         status: 'active',
-        // R6/D5: PIX (gateway real) nasce 'pending' → módulos só no PAYMENT_CONFIRMED.
-        // Cartão (dummy/pré-lançamento) ativa direto (sem webhook). Opt-in encerra
+        // R6/D5: PIX e CARTÃO (gateway real) nascem 'pending' → módulos só no
+        // PAYMENT_CONFIRMED (activatePaidSubscription no webhook). O opt-in encerra
         // o grandfathering: a partir daqui a clínica é regida pela máquina de estados.
-        lifecycle_state: isPix ? 'pending' : 'active',
+        lifecycle_state: 'pending',
         is_grandfathered: false,
         billing_cycle: input.cycle,
         custom_price: null,
         cancelled_at: null,
         current_period_end: periodEnd.toISOString(),
-        ...(asaasIds
-          ? {
-              asaas_customer_id: asaasIds.asaas_customer_id,
-              asaas_subscription_id: asaasIds.asaas_subscription_id,
-              last_payment_status: 'PENDING',
-            }
-          : {}),
+        asaas_customer_id: asaasIds.asaas_customer_id,
+        asaas_subscription_id: asaasIds.asaas_subscription_id,
+        last_payment_status: 'PENDING',
         payment_payload: {
-          gateway: isPix ? 'asaas' : 'dummy_phase1',
+          gateway: 'asaas',
           plan: input.plan,
-          method: input.payment.method,
-          card,
+          method,
+          billing_type: method === 'card' ? 'CREDIT_CARD' : 'PIX',
+          charge_value: chargeValue,
           terms_accepted: true,
           accepted_at: new Date().toISOString(),
           accepted_by: ctx.userId,
@@ -311,18 +311,10 @@ export async function subscribeToPlan(input: {
     )
   if (subError) return { error: 'Erro ao registrar assinatura: ' + subError.message }
 
-  // Ativação de módulos (R6):
-  //  - Cartão (dummy/pré-lançamento): ativa na hora — não há webhook.
-  //  - PIX (gateway real): NÃO ativa agora. Os módulos liberam só no
-  //    PAYMENT_CONFIRMED (activatePaidSubscription no webhook). O intento
-  //    (plano + addon_keys) fica em payment_payload. Não revoga o que a clínica
-  //    já possui — preserva o acesso de quem faz opt-in/upgrade durante o pending.
-  if (!isPix) {
-    const applied = await applyPlanContracts(admin, ctx.clinicId, input.plan === 'enterprise' ? [] : addonKeys)
-    if (applied.error) return { error: applied.error }
-    const sync = await syncClinicModulesFromContract(admin, ctx.clinicId)
-    if (sync.error) return { error: sync.error }
-  }
+  // Ativação de módulos (R6): NÃO ativa agora — nem PIX nem cartão. Os módulos
+  // liberam só no PAYMENT_CONFIRMED (activatePaidSubscription no webhook). O
+  // intento (plano + addon_keys) fica em payment_payload. Não revoga o que a
+  // clínica já possui — preserva o acesso de quem faz opt-in/upgrade no pending.
 
   // Persiste evidência legal do aceite dos termos de assinatura (LGPD Art. 7º)
   const { ip, userAgent } = await getRequestMeta()

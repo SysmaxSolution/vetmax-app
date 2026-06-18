@@ -148,18 +148,20 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
     })
     if ('error' in result) throw new Error(result.error)
     const planLabel = checkoutPlan === 'enterprise' ? 'Enterprise' : 'Premium'
+    const methodLabel = payment.method === 'card' ? 'no cartão' : 'via PIX'
     setCheckoutPlan(null)
     if (result.checkout?.invoiceUrl) {
-      // PIX real: abre a fatura do Asaas (QR + copia-e-cola) para o pagamento.
+      // PIX/cartão: abre a fatura hospedada do Asaas para o pagamento. Os
+      // módulos liberam só na confirmação (webhook PAYMENT_CONFIRMED).
       window.open(result.checkout.invoiceUrl, '_blank', 'noopener,noreferrer')
       setToast({
         type: 'success',
-        message: `Cobrança PIX do plano ${planLabel} gerada! Finalize o pagamento na aba aberta — a confirmação chega automaticamente.`,
+        message: `Cobrança ${methodLabel} do plano ${planLabel} gerada! Finalize o pagamento na aba aberta — a liberação dos módulos é automática após a confirmação.`,
       })
     } else {
       setToast({
         type: 'success',
-        message: `Assinatura ${planLabel} ativada! Os módulos já estão liberados.`,
+        message: `Assinatura ${planLabel} registrada! Aguardando a confirmação do pagamento ${methodLabel} para liberar os módulos.`,
       })
     }
     router.refresh()

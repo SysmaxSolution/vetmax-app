@@ -1,7 +1,7 @@
 // Testes da precificação dos planos pagos (SaaS Fase 1.5 — 4 tiers).
 // computePlanPrice é a autoridade de preço no servidor — o client usa a
 // mesma função apenas para display.
-import { computePlanPrice } from '@/lib/subscription/pricing'
+import { computePlanPrice, chargeValueFor, CARD_ANNUAL_DISCOUNT_PERCENT } from '@/lib/subscription/pricing'
 
 const CATALOG = [
   { module_key: 'sales_pdv',        monthly_price: 0,     included_in_plan: 'premium' as const },
@@ -61,6 +61,24 @@ describe('computePlanPrice', () => {
     const e = computePlanPrice({ ...BASE, plan: 'enterprise', addonKeys: [], cycle: 'yearly' })
     expect(e.yearlyTotal).toBe(3588)
     expect(e.yearlyDiscounted).toBe(2870.4)
+  })
+
+  it('anual cartão usa 10% (D1), distinto do anual PIX (20%)', () => {
+    const e = computePlanPrice({ ...BASE, plan: 'enterprise', addonKeys: [], cycle: 'yearly' })
+    expect(e.yearlyTotal).toBe(3588)
+    expect(e.yearlyDiscounted).toBe(2870.4)      // PIX 20%
+    expect(e.yearlyDiscountedCard).toBe(3229.2)  // cartão 10% = 3588 × 0,90
+    expect(CARD_ANNUAL_DISCOUNT_PERCENT).toBe(10)
+  })
+
+  it('chargeValueFor seleciona o valor por método + ciclo', () => {
+    const e = computePlanPrice({ ...BASE, plan: 'enterprise', addonKeys: [], cycle: 'yearly' })
+    expect(chargeValueFor(e, 'yearly', 'pix')).toBe(2870.4)
+    expect(chargeValueFor(e, 'yearly', 'card')).toBe(3229.2)
+    // mensal: PIX e cartão cobram igual (sem desconto no mês)
+    const m = computePlanPrice({ ...BASE, plan: 'enterprise', addonKeys: [], cycle: 'monthly' })
+    expect(chargeValueFor(m, 'monthly', 'pix')).toBe(299)
+    expect(chargeValueFor(m, 'monthly', 'card')).toBe(299)
   })
 
   it('arredonda centavos corretamente (2 casas)', () => {

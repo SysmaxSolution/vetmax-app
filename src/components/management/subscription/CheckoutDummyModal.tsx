@@ -1,9 +1,11 @@
 'use client'
 
-// Checkout estrutural da Fase 1 (SEM gateway — aguardando CNPJ/conta).
-// Os inputs simulam o fluxo real; ao confirmar, envia payload dummy
-// (apenas last4/brand do cartão + aceite dos termos). O total exibido é
-// recalculado no servidor — este modal é só display + coleta de aceite.
+// Checkout da assinatura (Fase 2 — gateway Asaas real).
+// PIX e CARTÃO usam a FATURA HOSPEDADA do Asaas: ao confirmar, o servidor cria
+// a cobrança e devolve a invoiceUrl, que abrimos em nova aba. O cliente paga
+// (QR PIX ou cartão) na página segura do Asaas — o PAN nunca toca nosso app
+// (PCI-safe / LGPD). O total exibido é recalculado no servidor; este modal é
+// só display + escolha do método + aceite dos termos.
 
 import { useState } from 'react'
 import { X, CreditCard, Smartphone, Loader2, ShieldCheck } from 'lucide-react'
@@ -35,13 +37,16 @@ export default function CheckoutDummyModal({ plan, basePrice, selectedModules, c
   // PIX é o destaque (manchete): default em qualquer ciclo. Cartão é a opção
   // secundária — sem enquadrar como "multa por cartão".
   const [method, setMethod]         = useState<'card' | 'pix'>('pix')
-  const [holder, setHolder]         = useState('')
-  const [cardNumber, setCardNumber] = useState('')
-  const [expiry, setExpiry]         = useState('')
-  const [cvv, setCvv]               = useState('')
   const [termsAccepted, setTermsAccepted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError]           = useState<string | null>(null)
+
+  // Total a cobrar conforme método + ciclo: mensal igual; anual PIX 20% off,
+  // anual cartão 10% off (D1). Espelha chargeValueFor do servidor.
+  const shownTotal = cycle === 'yearly'
+    ? (method === 'card' ? totals.yearlyDiscountedCard : totals.yearlyDiscounted)
+    : totals.monthlyTotal
+  const shownSaving = cycle === 'yearly' ? totals.yearlyTotal - shownTotal : 0
 
   async function handleConfirm() {
     setError(null)
@@ -49,24 +54,11 @@ export default function CheckoutDummyModal({ plan, basePrice, selectedModules, c
       setError('Você precisa aceitar os Termos de Uso para continuar.')
       return
     }
-    if (method === 'card') {
-      const digits = cardNumber.replace(/\D/g, '')
-      if (!holder.trim() || digits.length < 13) {
-        setError('Preencha o nome impresso e o número do cartão.')
-        return
-      }
-    }
     setSubmitting(true)
     try {
-      const digits = cardNumber.replace(/\D/g, '')
-      await onConfirm({
-        method,
-        // NUNCA enviar o número completo — apenas last4 (LGPD / Fase 1 dummy)
-        card: method === 'card'
-          ? { holder: holder.trim(), last4: digits.slice(-4), brand: 'simulado' }
-          : undefined,
-        terms_accepted: true,
-      })
+      // Nenhum dado de cartão sai do navegador: o cliente paga na fatura
+      // hospedada do Asaas (PCI-safe). Enviamos só o método + aceite.
+      await onConfirm({ method, terms_accepted: true })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Falha ao processar a assinatura.')
       setSubmitting(false)
@@ -81,7 +73,7 @@ export default function CheckoutDummyModal({ plan, basePrice, selectedModules, c
           <div>
             <h3 className="text-base font-semibold text-slate-900">Assinar Plano {PLAN_LABEL[plan]}</h3>
             <p className="text-xs text-slate-500">
-              Ciclo {cycle === 'yearly' ? 'anual (PIX com desconto)' : 'mensal'}
+              Ciclo {cycle === 'yearly' ? 'anual' : 'mensal'}
             </p>
           </div>
           <button onClick={onCancel} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
@@ -106,13 +98,16 @@ export default function CheckoutDummyModal({ plan, basePrice, selectedModules, c
             ))}
             <div className="border-t border-slate-200 pt-1.5 flex justify-between text-sm font-semibold">
               <span className="text-slate-800">
-                {cycle === 'yearly' ? 'Total anual (com desconto)' : 'Total mensal'}
+                {cycle === 'yearly'
+                  ? `Total anual no ${method === 'card' ? 'cartão' : 'PIX'} (com desconto)`
+                  : 'Total mensal'}
               </span>
-              <span className="text-indigo-700 tabular-nums">{fmt(totals.effectiveTotal)}</span>
+              <span className="text-indigo-700 tabular-nums">{fmt(shownTotal)}</span>
             </div>
             {cycle === 'yearly' && (
               <p className="text-[11px] text-emerald-700">
-                Economia de {fmt(totals.yearlyTotal - totals.yearlyDiscounted)} em relação ao mensal.
+                Economia de {fmt(shownSaving)} em relação ao mensal
+                {method === 'card' && ' · pague no PIX para economizar ainda mais'}.
               </p>
             )}
           </div>
@@ -144,38 +139,17 @@ export default function CheckoutDummyModal({ plan, basePrice, selectedModules, c
           </div>
 
           {method === 'card' ? (
-            <div className="space-y-2">
-              <input
-                value={holder}
-                onChange={e => setHolder(e.target.value)}
-                placeholder="Nome impresso no cartão"
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400"
-              />
-              <input
-                value={cardNumber}
-                onChange={e => setCardNumber(e.target.value.replace(/[^\d ]/g, '').slice(0, 19))}
-                placeholder="Número do cartão"
-                inputMode="numeric"
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400 tabular-nums"
-              />
-              <div className="grid grid-cols-2 gap-2">
-                <input
-                  value={expiry}
-                  onChange={e => setExpiry(e.target.value.replace(/[^\d/]/g, '').slice(0, 5))}
-                  placeholder="MM/AA"
-                  inputMode="numeric"
-                  className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400 tabular-nums"
-                />
-                <input
-                  value={cvv}
-                  onChange={e => setCvv(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                  placeholder="CVV"
-                  inputMode="numeric"
-                  className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400 tabular-nums"
-                />
-              </div>
-              <p className="text-[11px] text-slate-400">
-                Ambiente de pré-lançamento: nenhuma cobrança será efetuada e os dados do cartão não são armazenados.
+            <div className="rounded-xl border border-dashed border-indigo-300 bg-indigo-50/50 p-4 text-center">
+              <CreditCard className="mx-auto h-6 w-6 text-indigo-500" />
+              <p className="mt-1 text-sm font-medium text-indigo-800">Pagamento no cartão</p>
+              <p className="text-xs text-indigo-700">
+                Ao confirmar, abrimos a fatura segura do Asaas para você inserir os dados
+                do cartão. {cycle === 'yearly'
+                  ? 'É uma cobrança única que dá direito a 12 meses; renova automaticamente no próximo ano.'
+                  : 'A mensalidade é cobrada automaticamente todo mês no mesmo cartão.'}
+              </p>
+              <p className="mt-1.5 text-[11px] text-indigo-500">
+                Os dados do cartão são processados pelo Asaas — nunca passam pelo SysVetMax.
               </p>
             </div>
           ) : (
