@@ -125,6 +125,8 @@ export default function TriageForm({
       respiratory_rate: 0,
       mucous_color: 'pink',
       crt: '2s',
+      systolic_bp: 0,
+      glucose: 0,
       chief_complaint: '',
     }
   )
@@ -886,6 +888,46 @@ export default function TriageForm({
                   }}
                   className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none ${aiHighlight('respiratory_rate') || 'border-slate-300'}`}
                   placeholder="Ex: 25"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  PAS — Pressão Arterial Sistólica (mmHg)
+                  {aiFilledFields.has('systolic_bp') && (
+                    <CheckCircle2 className="inline w-3.5 h-3.5 text-green-600 ml-1.5" />
+                  )}
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={vitalSigns.systolic_bp || ''}
+                  onChange={(e) => {
+                    setVitalSigns((prev) => ({ ...prev, systolic_bp: parseInt(e.target.value) || 0 }))
+                    setAiFilledFields((prev) => { const n = new Set(prev); n.delete('systolic_bp'); return n })
+                  }}
+                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none ${aiHighlight('systolic_bp') || 'border-slate-300'}`}
+                  placeholder="Ex: 120"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Glicemia (mg/dL)
+                  {aiFilledFields.has('glucose') && (
+                    <CheckCircle2 className="inline w-3.5 h-3.5 text-green-600 ml-1.5" />
+                  )}
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={vitalSigns.glucose || ''}
+                  onChange={(e) => {
+                    setVitalSigns((prev) => ({ ...prev, glucose: parseInt(e.target.value) || 0 }))
+                    setAiFilledFields((prev) => { const n = new Set(prev); n.delete('glucose'); return n })
+                  }}
+                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none ${aiHighlight('glucose') || 'border-slate-300'}`}
+                  placeholder="Ex: 90"
                 />
               </div>
             </div>

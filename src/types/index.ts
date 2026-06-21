@@ -123,6 +123,8 @@ export interface VitalSigns {
   respiratory_rate: number   // movimentos/min
   mucous_color: MucousColor  // pink | pale | icteric | cyanotic
   crt: CRT                   // 2s | 3s | 4s
+  systolic_bp?: number       // PAS — Pressão Arterial Sistólica (mmHg)
+  glucose?: number           // Glicemia (mg/dL)
   chief_complaint: string    // Queixa principal (transcrição ou digitação)
 }
 

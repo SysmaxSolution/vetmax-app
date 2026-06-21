@@ -1201,6 +1201,12 @@ export default function ConsultationDetail({
                   {vital_signs.crt && (
                     <VitalRow label="TRC" value={CRT_LABELS[vital_signs.crt] ?? vital_signs.crt} />
                   )}
+                  {!!vital_signs.systolic_bp && vital_signs.systolic_bp > 0 && (
+                    <VitalRow label="PAS" value={`${vital_signs.systolic_bp} mmHg`} />
+                  )}
+                  {!!vital_signs.glucose && vital_signs.glucose > 0 && (
+                    <VitalRow label="Glicemia" value={`${vital_signs.glucose} mg/dL`} />
+                  )}
                 </>
               ) : (
                 <p className="text-sm text-slate-400 italic">Triagem não realizada</p>
