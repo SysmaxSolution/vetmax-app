@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { logAudit } from '@/lib/actions/audit'
+import { hasAccessRight } from '@/lib/actions/access-rights'
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -272,6 +273,71 @@ export async function cancelConsultationService(
 
   revalidatePath('/dashboard/reception')
   revalidatePath('/dashboard/vet')
+  return { success: true }
+}
+
+// ─── M11: alterar preço de serviço lançado (com permissão) ────────────────────
+
+/** O usuário atual pode alterar preço de serviços? (permissão consultation.pricing:edit) */
+export async function canEditServicePrice(): Promise<boolean> {
+  return hasAccessRight('consultation.pricing', 'edit')
+}
+
+/**
+ * Altera o price_snapshot de um serviço lançado na consulta (override manual).
+ * Gateado por permissão e auditado. Só permitido enquanto a linha não foi
+ * faturada (billed_in_invoice_id IS NULL) — preserva integridade do histórico.
+ */
+export async function updateConsultationServicePrice(input: {
+  service_line_id: string
+  new_price:       number
+  reason?:         string
+}): Promise<{ success: true } | { error: string }> {
+  const ctx = await getClinicCtx()
+  if ('error' in ctx) return ctx
+
+  if (!(await hasAccessRight('consultation.pricing', 'edit'))) {
+    return { error: 'Permissão negada: você não pode alterar preços.' }
+  }
+  if (!Number.isFinite(input.new_price) || input.new_price < 0) {
+    return { error: 'Preço inválido.' }
+  }
+
+  const admin = createAdminClient()
+  const { data: line } = await admin
+    .from('consultation_services')
+    .select('id, consultation_id, stock_item_id, name_snapshot, price_snapshot, billed_in_invoice_id, cancelled_at')
+    .eq('id', input.service_line_id)
+    .eq('clinic_id', ctx.clinicId)
+    .single()
+  if (!line)                       return { error: 'Serviço não encontrado.' }
+  if (line.cancelled_at)           return { error: 'Serviço cancelado — não é possível alterar o preço.' }
+  if (line.billed_in_invoice_id)   return { error: 'Serviço já faturado — não é possível alterar o preço.' }
+
+  const { error } = await admin
+    .from('consultation_services')
+    .update({ price_snapshot: input.new_price, updated_at: new Date().toISOString() })
+    .eq('id', input.service_line_id)
+    .eq('clinic_id', ctx.clinicId)
+  if (error) return { error: error.message }
+
+  await logAudit({
+    action:      'CONSULTATION_SERVICE_PRICE_UPDATE',
+    entity_type: 'consultations',
+    entity_id:   line.consultation_id as string,
+    details: {
+      service_line_id: input.service_line_id,
+      stock_item_id:   line.stock_item_id,
+      name:            line.name_snapshot,
+      old_price:       Number(line.price_snapshot ?? 0),
+      new_price:       input.new_price,
+      reason:          input.reason?.trim() || null,
+    },
+  })
+
+  revalidatePath('/dashboard/reception')
+  revalidatePath('/dashboard/vet')
+  revalidatePath('/dashboard/cashier')
   return { success: true }
 }
 

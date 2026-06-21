@@ -68,6 +68,7 @@ export const ACCESS_CATALOG: AccessModule[] = [
       { key: 'attendance', label: 'Atendimento Clínico', actions: ['view', 'create', 'edit'] },
       { key: 'prescription', label: 'Prescrições e Receitas', actions: ['view', 'create', 'edit', 'delete'] },
       { key: 'documents', label: 'Documentos do Pet',    actions: ['view', 'create', 'edit', 'delete'] },
+      { key: 'pricing', label: 'Alterar Preço de Serviços', actions: ['edit'], description: 'Permite alterar o preço de itens/serviços lançados no atendimento (recepção, consultório, exames, internação, cirurgia, faturamento).' },
     ],
   },
   {
