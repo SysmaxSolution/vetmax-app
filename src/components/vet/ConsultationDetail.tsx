@@ -36,6 +36,7 @@ import AdmitPetModal from '@/components/hospitalization/AdmitPetModal'
 import ExamRequestModal from '@/components/exams/ExamRequestModal'
 import ChargeBeforeExamsModal from './ChargeBeforeExamsModal'
 import MicrochipPanel from '@/components/vet/MicrochipPanel'
+import FollowUpPanel from '@/components/vet/FollowUpPanel'
 import EuthanasiaModal from '@/components/vet/EuthanasiaModal'
 import WhatsAppNotificationModal from '@/components/whatsapp/WhatsAppNotificationModal'
 import { RemoveFromQueueModal } from '@/components/ui/RemoveFromQueueModal'
@@ -791,6 +792,12 @@ export default function ConsultationDetail({
         insuranceCard={insuranceCard}
       />
     )
+  }
+
+  // Fluxo express "Acompanhamento": prontuário por voz + sinais vitais, finaliza
+  // com alta (sem caixa) ou conversão em consulta normal.
+  if (consultation.visit_reason === 'acompanhamento') {
+    return <FollowUpPanel consultation={consultation} />
   }
 
   // ─── Render Normal ──────────────────────────────────────────────────────────

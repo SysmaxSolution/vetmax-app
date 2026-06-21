@@ -41,6 +41,7 @@ export const VISIT_REASON_OPTIONS: VisitReasonOption[] = [
   { value: 'surgery',       label: 'Cirurgia',       emoji: '🏥',    color: 'bg-orange-100 text-orange-700', moduleKey: 'centro_cirurgico' },
   { value: 'grooming',      label: 'Banho e Tosa',   emoji: '✂️',    color: 'bg-teal-100 text-teal-700',     moduleKey: 'grooming' },
   { value: 'microchipping', label: 'Microchipagem',  emoji: '🐶',    color: 'bg-indigo-100 text-indigo-700'  },
+  { value: 'acompanhamento', label: 'Acompanhamento', emoji: '📋',   color: 'bg-cyan-100 text-cyan-700'      },
 ]
 
 /** Lookup rápido label por value. */
