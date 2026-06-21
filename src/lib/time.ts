@@ -46,6 +46,36 @@ export function formatClinicShort(input: Input, tz: string = DEFAULT_CLINIC_TZ):
   })
 }
 
+/** Minutos desde a meia-noite (0–1439) no fuso da clínica. */
+export function clinicMinutesOfDay(input: Input = new Date(), tz: string = DEFAULT_CLINIC_TZ): number {
+  const s = toDate(input).toLocaleTimeString('en-GB', {
+    hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz,
+  })
+  const [h, m] = s.split(':').map(Number)
+  return (h % 24) * 60 + (m || 0)
+}
+
+/**
+ * true se `now` está dentro da janela [start, end] (strings "HH:MM" ou "HH:MM:SS"),
+ * avaliada no fuso da clínica. Trata janelas que cruzam a meia-noite (start > end),
+ * ex.: bot noturno "18:00"→"07:59".
+ */
+export function isWithinWindow(
+  startHHMM: string,
+  endHHMM: string,
+  now: Input = new Date(),
+  tz: string = DEFAULT_CLINIC_TZ,
+): boolean {
+  const toMins = (s: string) => {
+    const [h, m] = s.split(':').map(Number)
+    return (h || 0) * 60 + (m || 0)
+  }
+  const start = toMins(startHHMM)
+  const end = toMins(endHHMM)
+  const cur = clinicMinutesOfDay(now, tz)
+  return start <= end ? cur >= start && cur <= end : cur >= start || cur <= end
+}
+
 /**
  * "2026-06-10T14:35" — agora no formato aceito por <input type="datetime-local">.
  * Client-only: usa o timezone do navegador (o mesmo que o input exibe).

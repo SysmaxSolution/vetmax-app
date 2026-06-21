@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { runWhatsappAgent } from '@/lib/ai/whatsapp-agent'
 import { evolutionSendText, evolutionFetchContactByLid } from '@/lib/evolution-api-client'
 import { handleDirectorCommand } from '@/lib/director-commands'
+import { isWithinWindow } from '@/lib/time'
 
 // POST /api/webhooks/whatsapp/[clinicId]
 // Normaliza nomes de eventos (uppercase/lowercase) para compatibilidade com v1.8.4 e v2.x.
@@ -427,15 +428,11 @@ async function processInboundMessage(params: {
 
   if (!botConfig.is_active) return
 
+  // Janela de atendimento no fuso da clínica; trata virada de meia-noite (ex.: bot noturno 18:00→07:59).
   if (botConfig.working_hours_start && botConfig.working_hours_end) {
-    const now = new Date()
-    const [hStart, mStart] = botConfig.working_hours_start.split(':').map(Number)
-    const [hEnd,   mEnd  ] = botConfig.working_hours_end.split(':').map(Number)
-    const nowMins   = now.getUTCHours() * 60 + now.getUTCMinutes()
-    const startMins = hStart * 60 + mStart
-    const endMins   = hEnd   * 60 + mEnd
-    if (nowMins < startMins || nowMins > endMins) {
-      const reply = `Nosso horário de atendimento é das ${botConfig.working_hours_start} às ${botConfig.working_hours_end}. Assim que abrirmos, responderei sua mensagem!`
+    if (!isWithinWindow(botConfig.working_hours_start, botConfig.working_hours_end)) {
+      const fmt = (t: string) => t.slice(0, 5)
+      const reply = `Nosso horário de atendimento é das ${fmt(botConfig.working_hours_start)} às ${fmt(botConfig.working_hours_end)}. Assim que abrirmos, responderei sua mensagem!`
       await sendBotReply(clinicId, phone, reply, admin, conversation.id)
       return
     }
