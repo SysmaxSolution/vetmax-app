@@ -12,6 +12,7 @@ export interface BotConfig {
   can_inform_prices:    boolean
   working_hours_start:  string | null   // 'HH:MM'
   working_hours_end:    string | null   // 'HH:MM'
+  use_clinic_hours:     boolean         // segue clinics.business_hours por dia
   is_active:            boolean
 }
 
@@ -39,7 +40,7 @@ export async function getBotConfig(): Promise<BotConfig | null> {
   const admin = createAdminClient()
   const { data } = await admin
     .from('whatsapp_bot_config')
-    .select('id, personality_prompt, can_book, can_inform_prices, working_hours_start, working_hours_end, is_active')
+    .select('id, personality_prompt, can_book, can_inform_prices, working_hours_start, working_hours_end, use_clinic_hours, is_active')
     .eq('clinic_id', auth.clinicId)
     .maybeSingle()
 
@@ -64,6 +65,7 @@ export async function saveBotConfig(
       can_inform_prices:    config.can_inform_prices,
       working_hours_start:  config.working_hours_start || null,
       working_hours_end:    config.working_hours_end   || null,
+      use_clinic_hours:     config.use_clinic_hours,
       is_active:            config.is_active,
       updated_at:           new Date().toISOString(),
     }, { onConflict: 'clinic_id' })

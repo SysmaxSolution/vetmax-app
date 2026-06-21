@@ -325,6 +325,7 @@ function BotPersonalityForm({ onToast }: { onToast: (type: 'success' | 'error', 
     can_inform_prices:   true,
     working_hours_start: null,
     working_hours_end:   null,
+    use_clinic_hours:    false,
     is_active:           false,
   })
   const [loading, setLoading] = useState(true)
@@ -408,29 +409,39 @@ function BotPersonalityForm({ onToast }: { onToast: (type: 'success' | 'error', 
       {/* Horário de atendimento */}
       <div>
         <p className="text-xs font-semibold text-slate-500 mb-2">Horário de atendimento do bot</p>
-        <div className="flex items-center gap-3">
-          <div className="flex-1">
-            <label className="block text-xs text-slate-400 mb-1">Início</label>
-            <input
-              type="time"
-              value={config.working_hours_start ?? ''}
-              onChange={e => setConfig(c => ({ ...c, working_hours_start: e.target.value || null }))}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
-            />
-          </div>
-          <div className="flex-1">
-            <label className="block text-xs text-slate-400 mb-1">Fim</label>
-            <input
-              type="time"
-              value={config.working_hours_end ?? ''}
-              onChange={e => setConfig(c => ({ ...c, working_hours_end: e.target.value || null }))}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
-            />
-          </div>
-        </div>
-        <p className="text-xs text-slate-400 mt-1">
-          Fora deste horário o bot envia uma mensagem automática de "fora do horário". Deixe em branco para responder sempre.
-        </p>
+        <ToggleRow
+          label="Usar o horário de funcionamento da clínica"
+          desc="O bot responde apenas dentro do horário comercial por dia da semana definido em Gestão → Horários. Desligado: usa a janela única abaixo."
+          value={config.use_clinic_hours}
+          onChange={v => setConfig(c => ({ ...c, use_clinic_hours: v }))}
+        />
+        {!config.use_clinic_hours && (
+          <>
+            <div className="flex items-center gap-3 mt-2">
+              <div className="flex-1">
+                <label className="block text-xs text-slate-400 mb-1">Início</label>
+                <input
+                  type="time"
+                  value={config.working_hours_start ?? ''}
+                  onChange={e => setConfig(c => ({ ...c, working_hours_start: e.target.value || null }))}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+              <div className="flex-1">
+                <label className="block text-xs text-slate-400 mb-1">Fim</label>
+                <input
+                  type="time"
+                  value={config.working_hours_end ?? ''}
+                  onChange={e => setConfig(c => ({ ...c, working_hours_end: e.target.value || null }))}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+            </div>
+            <p className="text-xs text-slate-400 mt-1">
+              Fora deste horário o bot envia uma mensagem automática de "fora do horário". Deixe em branco para responder sempre.
+            </p>
+          </>
+        )}
       </div>
 
       {/* Salvar */}

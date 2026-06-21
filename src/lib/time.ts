@@ -76,6 +76,34 @@ export function isWithinWindow(
   return start <= end ? cur >= start && cur <= end : cur >= start || cur <= end
 }
 
+// ─── Horário de funcionamento por dia da semana (bot espelha a clínica) ───────
+
+type BusinessHourEntry = { open: string; close: string } | null
+export type WeeklyBusinessHours = Record<string, BusinessHourEntry>
+
+/** Dia da semana (em inglês, minúsculo: 'monday'…'sunday') no fuso da clínica. */
+export function clinicWeekday(input: Input = new Date(), tz: string = DEFAULT_CLINIC_TZ): string {
+  return toDate(input)
+    .toLocaleDateString('en-US', { weekday: 'long', timeZone: tz })
+    .toLowerCase()
+}
+
+/**
+ * true se `now` está dentro do horário de funcionamento da clínica para o dia da
+ * semana corrente. Dia sem entrada (null/sem open-close) = fechado → false.
+ * Sem config de horários (null) → considera sempre aberto.
+ */
+export function isWithinBusinessHours(
+  hours: WeeklyBusinessHours | null | undefined,
+  now: Input = new Date(),
+  tz: string = DEFAULT_CLINIC_TZ,
+): boolean {
+  if (!hours) return true
+  const entry = hours[clinicWeekday(now, tz)]
+  if (!entry || !entry.open || !entry.close) return false
+  return isWithinWindow(entry.open, entry.close, now, tz)
+}
+
 /**
  * "2026-06-10T14:35" — agora no formato aceito por <input type="datetime-local">.
  * Client-only: usa o timezone do navegador (o mesmo que o input exibe).

@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { runWhatsappAgent } from '@/lib/ai/whatsapp-agent'
 import { evolutionSendText, evolutionFetchContactByLid } from '@/lib/evolution-api-client'
 import { handleDirectorCommand } from '@/lib/director-commands'
-import { isWithinWindow } from '@/lib/time'
+import { isWithinWindow, isWithinBusinessHours, type WeeklyBusinessHours } from '@/lib/time'
 
 // POST /api/webhooks/whatsapp/[clinicId]
 // Normaliza nomes de eventos (uppercase/lowercase) para compatibilidade com v1.8.4 e v2.x.
@@ -289,7 +289,7 @@ async function processInboundMessage(params: {
 
   const { data: botConfig } = await admin
     .from('whatsapp_bot_config')
-    .select('personality_prompt, can_book, can_inform_prices, working_hours_start, working_hours_end, is_active')
+    .select('personality_prompt, can_book, can_inform_prices, working_hours_start, working_hours_end, is_active, use_clinic_hours')
     .eq('clinic_id', clinicId)
     .maybeSingle()
 
@@ -432,7 +432,19 @@ async function processInboundMessage(params: {
   if (!botConfig.is_active) return
 
   // Janela de atendimento no fuso da clínica; trata virada de meia-noite (ex.: bot noturno 18:00→07:59).
-  if (botConfig.working_hours_start && botConfig.working_hours_end) {
+  if ((botConfig as { use_clinic_hours?: boolean }).use_clinic_hours) {
+    // Espelha o horário de funcionamento da clínica POR DIA DA SEMANA (item 08:44).
+    const { data: clinicRow } = await admin
+      .from('clinics')
+      .select('business_hours')
+      .eq('id', clinicId)
+      .maybeSingle()
+    const hours = (clinicRow?.business_hours ?? null) as WeeklyBusinessHours | null
+    if (hours && !isWithinBusinessHours(hours)) {
+      await sendBotReply(clinicId, phone, 'No momento estamos fora do horário de atendimento. Assim que abrirmos, responderei sua mensagem!', admin, conversation.id)
+      return
+    }
+  } else if (botConfig.working_hours_start && botConfig.working_hours_end) {
     if (!isWithinWindow(botConfig.working_hours_start, botConfig.working_hours_end)) {
       const fmt = (t: string) => t.slice(0, 5)
       const reply = `Nosso horário de atendimento é das ${fmt(botConfig.working_hours_start)} às ${fmt(botConfig.working_hours_end)}. Assim que abrirmos, responderei sua mensagem!`
