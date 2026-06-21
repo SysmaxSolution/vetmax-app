@@ -76,6 +76,22 @@ export async function GET(request: NextRequest) {
         toSend = eligible.filter(t => !sentIds.has(t.tutorId)).slice(0, 50)
       }
 
+      // LGPD opt-in: só dispara para tutores que consentiram explicitamente
+      // (whatsapp_consent = true). Filtro centralizado — cobre TODAS as campanhas
+      // independentemente de como cada query de elegibilidade monta a lista.
+      if (toSend.length) {
+        const ids = [...new Set(toSend.map(t => t.tutorId))]
+        const { data: consents } = await admin
+          .from('tutors')
+          .select('id, whatsapp_consent')
+          .in('id', ids)
+        const consented = new Set(
+          (consents ?? []).filter(c => c.whatsapp_consent === true).map(c => c.id)
+        )
+        toSend = toSend.filter(t => consented.has(t.tutorId))
+      }
+      if (!toSend.length) continue
+
       for (const target of toSend) {
         try {
           const message = target.appointmentId

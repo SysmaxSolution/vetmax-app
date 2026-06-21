@@ -700,6 +700,14 @@ export type PatientsListItem = {
     phone:             string | null
     email?:            string | null
     address?:          string | null
+    cep?:              string | null
+    street?:           string | null
+    neighborhood?:     string | null
+    city?:             string | null
+    state?:            string | null
+    address_number?:   string | null
+    address_complement?: string | null
+    whatsapp_consent?: boolean | null
     emergency_contact?: string | null
     created_from?:     string | null
   }
@@ -749,7 +757,7 @@ export async function getPatientsList(
     const tutorIds = [...new Set(patients.map(p => p.tutor_id).filter(Boolean))] as string[]
     const { data: tutors } = await admin
       .from('tutors')
-      .select('id, name, cpf, phone, email, address, emergency_contact')
+      .select('id, name, cpf, phone, email, address, cep, street, neighborhood, city, state, address_number, address_complement, whatsapp_consent, emergency_contact')
       .in('id', tutorIds)
 
     const tutorMap: Record<string, any> = {}
@@ -816,7 +824,7 @@ export async function getPatientById(
 
     const { data: tutor } = await admin
       .from('tutors')
-      .select('id, name, cpf, phone, email, address, emergency_contact, created_from')
+      .select('id, name, cpf, phone, email, address, cep, street, neighborhood, city, state, address_number, address_complement, whatsapp_consent, emergency_contact, created_from')
       .eq('id', p.tutor_id)
       .single()
 

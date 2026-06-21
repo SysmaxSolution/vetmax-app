@@ -42,6 +42,16 @@ export async function checkInPatientAdvanced(
     return { error: `${petCheck.name ?? 'Este pet'} está arquivado — reative o cadastro antes de atender.` }
   }
 
+  // Trava de unicidade: impede novo atendimento IMEDIATO se o pet já está em fluxo.
+  // Agendamento futuro (scheduled_future) é permitido e não bloqueia.
+  if (status === 'reception') {
+    const { data: active } = await admin
+      .rpc('pet_active_attendance', { p_clinic_id: profile.clinic_id, p_patient_id: data.patient_id })
+    if (active?.has_active) {
+      return { error: `${petCheck?.name ?? 'Este pet'} já está em atendimento na ${active.module} (com ${active.professional}). Finalize o atendimento atual antes de iniciar outro.` }
+    }
+  }
+
   const { data: result, error } = await admin
     .from('consultations')
     .insert({
@@ -142,6 +152,15 @@ export async function checkInPatientWithContacts(
 
   // 2. Criar consulta com dados do check-in
   const status = data.scheduled_date ? 'scheduled_future' : 'reception'
+
+  // Trava de unicidade: impede novo atendimento IMEDIATO se o pet já está em fluxo.
+  if (status === 'reception') {
+    const { data: active } = await admin
+      .rpc('pet_active_attendance', { p_clinic_id: profile.clinic_id, p_patient_id: data.patient_id })
+    if (active?.has_active) {
+      return { error: `${petCheck?.name ?? 'Este pet'} já está em atendimento na ${active.module} (com ${active.professional}). Finalize o atendimento atual antes de iniciar outro.` }
+    }
+  }
 
   const { data: result, error } = await admin
     .from('consultations')

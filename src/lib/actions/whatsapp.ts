@@ -194,6 +194,12 @@ export type WhatsAppContext = {
   examsSummary?:                string
   hospitalizationSummary?:      string
   postConsultRecommendations?:  string
+  /**
+   * Motivo da visita (consultation.visit_reason). Usado para a IA adequar o tom da
+   * mensagem ao que realmente foi feito — ex.: vacina/microchip/retorno não devem
+   * receber texto de pós-operatório ou diagnóstico inventado.
+   */
+  visitReason?:                 string
 }
 
 // ─── WhatsApp Settings ────────────────────────────────────────────────────────
@@ -406,28 +412,37 @@ Gere uma mensagem de agradecimento pela visita, elogiando o pet pelo comportamen
     const petIdentity = `Nome: ${ctx.petName}. Espécie: ${speciesLabel}${breedLabel ? ` ${breedLabel}` : ''}. Sexo: ${isMale ? 'macho' : isFemale ? 'fêmea' : 'não informado'}.`
 
     // ── Dados clínicos ─────────────────────────────────────────────────────────
+    const motivo    = ctx.visitReason ? `Motivo da visita: ${ctx.visitReason}.` : ''
     const diagnosis = ctx.diagnosisSummary ? `Diagnóstico/achados: ${ctx.diagnosisSummary}.` : ''
     const exams     = ctx.examsSummary     ? `Procedimentos e medicações realizados: ${ctx.examsSummary}.` : ''
     const hosp      = ctx.hospitalizationSummary ? `Internação: ${ctx.hospitalizationSummary}.` : ''
     const rec       = ctx.postConsultRecommendations ? `Cuidados em casa / orientações: ${ctx.postConsultRecommendations}.` : ''
     const vet       = ctx.vetName ? `MV responsável: ${ctx.vetName}.` : ''
 
-    return `DADOS DO PACIENTE (use OBRIGATORIAMENTE para personalizar a mensagem):
+    // Sinaliza atendimento simples (sem dados clínicos relevantes) — ex.: vacina,
+    // microchip, retorno rápido. Nesses casos a mensagem deve ser curta e NÃO pode
+    // inventar diagnóstico, exames, pomadas, curativos ou pós-operatório.
+    const semDadosClinicos = !ctx.diagnosisSummary && !ctx.examsSummary && !ctx.hospitalizationSummary && !ctx.postConsultRecommendations
+
+    return `DADOS DO ATENDIMENTO (baseie-se SOMENTE nestes dados — não invente nada):
 ${petIdentity}
+${motivo}
 ${vet}
 ${diagnosis}
 ${exams}
 ${hosp}
 ${rec}
 
-INSTRUÇÃO CRÍTICA: O paciente é um(a) ${speciesLabel}${breedLabel ? ` ${breedLabel}` : ''}, ${isMale ? 'macho' : isFemale ? 'fêmea' : ''}. NUNCA chame ${ctx.petName} de "gatinho" se for cachorro, nem de "cachorrinho" se for gato. Use ${termCarinhoso} ao se referir ao pet de forma carinhosa.
+INSTRUÇÃO CRÍTICA DE ESPÉCIE: O paciente é um(a) ${speciesLabel}${breedLabel ? ` ${breedLabel}` : ''}, ${isMale ? 'macho' : isFemale ? 'fêmea' : ''}. NUNCA chame ${ctx.petName} de "gatinho" se for cachorro, nem de "cachorrinho" se for gato. Use ${termCarinhoso} ao se referir ao pet de forma carinhosa.
 
-Gere uma mensagem de alta calorosa para o tutor ${ctx.tutorName} contendo:
-(a) o que foi detectado ou tratado — cite procedimentos específicos (pomadas, medicações, curativos) se informados;
+REGRA ANTI-ALUCINAÇÃO (OBRIGATÓRIA): A mensagem deve refletir APENAS o que consta nos dados acima. É PROIBIDO inventar diagnósticos, exames, medicações, pomadas, curativos, internação ou orientações de pós-operatório que não tenham sido informados.${semDadosClinicos ? ` Este foi um atendimento simples${ctx.visitReason ? ` (${ctx.visitReason})` : ''} sem diagnóstico/procedimento clínico registrado — gere uma mensagem CURTA (1 parágrafo) apenas confirmando que o atendimento foi realizado, agradecendo a visita e colocando-se à disposição. NÃO mencione tratamento, recuperação, medicação ou cuidados em casa.` : ''}
+
+Gere uma mensagem calorosa para o tutor ${ctx.tutorName} contendo, conforme os dados disponíveis:
+(a) o que foi detectado ou tratado — cite procedimentos específicos (pomadas, medicações, curativos) APENAS se informados;
 (b) resumo dos exames realizados, se houver;
 (c) se passou por internação, mencione brevemente;
-(d) as orientações de cuidado em casa de forma clara e prática.
-Tom: acolhedor, positivo, levemente comemorativo. Máx. 3 parágrafos.`
+(d) as orientações de cuidado em casa, SOMENTE se houver orientações informadas.
+Tom: acolhedor e positivo. Máx. 3 parágrafos.`
   },
 
   appointment_scheduled: (ctx) =>
@@ -527,13 +542,13 @@ export async function sendWhatsAppMessage(params: {
       .eq('id', params.tutorId)
       .single()
 
-    if (tutor && tutor.whatsapp_consent === false) {
-      // Tutor revogou consentimento — não enviar
-      console.info(`[WhatsApp LGPD] Envio bloqueado: tutor ${params.tutorId} sem consentimento WhatsApp`)
+    // Opt-in (LGPD): só envia para tutores que consentiram EXPLICITAMENTE
+    // (whatsapp_consent = true). Qualquer outro valor (false ou null) bloqueia —
+    // a notificação só deve sair para quem tem a flag ativa no cadastro.
+    if (!tutor || tutor.whatsapp_consent !== true) {
+      console.info(`[WhatsApp LGPD] Envio bloqueado: tutor ${params.tutorId} sem consentimento WhatsApp ativo`)
       return { error: 'LGPD: tutor não consentiu com notificações via WhatsApp. Habilite em Recepção → Dados do Tutor.' }
     }
-    // tutor.whatsapp_consent === null (coluna não existe ainda) → permite envio
-    // (retrocompatibilidade: tutores antigos não têm o campo, não devem ser bloqueados)
   }
 
   const creds = await getActiveCredentials()

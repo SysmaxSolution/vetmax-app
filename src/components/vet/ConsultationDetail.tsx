@@ -443,17 +443,18 @@ export default function ConsultationDetail({
     )) {
       setProfileUpdates(result.pet_profile_updates)
     }
-    // 9. Roteamento por Voz (Auto-Ação) + pré-selecionar aba de desfecho
+    // 9. Roteamento por Voz: apenas PRÉ-SELECIONA a aba de desfecho como sugestão.
+    // NÃO abre modais de alta/internação automaticamente — fazê-lo no meio da
+    // gravação fechava a consulta sozinha (o onClose do modal de WhatsApp/alta
+    // dispara router.push). O vet decide e clica explicitamente para finalizar.
     if (result.suggested_routing === 'discharge') {
       setOutcomeTab('alta')
-      setTimeout(() => setShowDischargeModal(true), 2000)
     } else if (result.suggested_routing === 'hospitalization') {
       // Pré-preenche o motivo com as notas clínicas (SOAP gerado) ou, como
       // fallback, com o transcript bruto da fala — assim o vet só confirma.
       const motivo = result.notas_clinicas?.trim() || transcript.trim()
       setAdmitInitialReason(motivo)
       setOutcomeTab('internacao')
-      setTimeout(() => setShowAdmitModal(true), 2000)
     } else if (result.suggested_routing === 'waiting_exam') {
       setOutcomeTab('exames')
     }
@@ -486,12 +487,12 @@ export default function ConsultationDetail({
     }
   }, [aiMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // IMPORTANTE: NÃO passar onSendWA. O gatilho de WhatsApp deve abrir SOMENTE na
+  // finalização do atendimento (alta/transferência via executeFinalize), nunca
+  // após um auto-save de voz. Com onSendWA omitido, o hook volta a IDLE depois de
+  // salvar e segue ouvindo a wake word ("Assistente") para retomar a gravação.
   const voiceAssistant = useClinicalVoiceAssistant({
     onAutoSave: handleVoiceAutoSave,
-    onSendWA: () => {
-      setVoiceConfirmedWA(true)
-      setShowWhatsAppDischarge(true)
-    },
     startTriggers,
     stopTriggers,
   })
@@ -848,6 +849,7 @@ export default function ConsultationDetail({
             species:        patient.species  || undefined,
             breed:          patient.breed    || undefined,
             gender:         patient.gender   || undefined,
+            visitReason:    VISIT_REASON_LABELS[consultation.visit_reason ?? ''] ?? consultation.visit_reason ?? undefined,
             documentTitles: attachDocsOnDischarge ? savedDocTitles : undefined,
             vetNotes:       vetNotes || undefined,
             diagnosisSummary: diagnosisJson

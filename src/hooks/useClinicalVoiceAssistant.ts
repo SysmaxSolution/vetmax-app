@@ -6,6 +6,13 @@ import { voiceLock, VOICE_PRIORITY, generateVoiceOwnerId } from '@/lib/voice/loc
 
 export type ClinicalVoiceState = 'IDLE' | 'RECORDING' | 'CONFIRM_WA'
 
+/**
+ * Janela de silêncio até o auto-save. Em consultório o vet faz pausas longas
+ * (examinar o pet, pensar) — 15s era curto demais e "parava sozinho". 30s reduz
+ * cortes prematuros; ainda assim a gravação retoma por wake word ou botão.
+ */
+const SILENCE_MS = 30_000
+
 interface Opts {
   /** Chamado quando há texto para salvar (silêncio de 15s ou comando de parada) */
   onAutoSave:     (transcript: string) => void
@@ -120,7 +127,7 @@ export function useClinicalVoiceAssistant({ onAutoSave, onSendWA, onSkipWA, star
   function pauseSilenceTimer() {
     if (!silenceTimerRef.current) return
     const elapsed = Date.now() - silenceTimerStartedAtRef.current
-    const remaining = Math.max(0, 15_000 - elapsed)
+    const remaining = Math.max(0, SILENCE_MS - elapsed)
     clearTimeout(silenceTimerRef.current)
     silenceTimerRef.current = null
     silenceTimerRemainingRef.current = remaining
@@ -339,7 +346,7 @@ export function useClinicalVoiceAssistant({ onAutoSave, onSendWA, onSkipWA, star
         }
 
         setTranscript(fullText)
-        if (hadNewFinals) armSilenceTimer(15_000)
+        if (hadNewFinals) armSilenceTimer(SILENCE_MS)
         return
       }
 
@@ -416,14 +423,27 @@ export function useClinicalVoiceAssistant({ onAutoSave, onSendWA, onSkipWA, star
    * RECORDING → salva imediatamente com o texto acumulado
    */
   const manualToggle = useCallback(() => {
-    if (stateRef.current === 'IDLE') {
-      recordingStartRef.current  = lastResultLenRef.current
-      finalTranscriptRef.current = ''
+    if (stateRef.current === 'RECORDING') {
+      triggerSave(finalTranscriptRef.current)
+      return
+    }
+    // IDLE (ou CONFIRM_WA) → inicia/retoma gravação.
+    finalTranscriptRef.current = ''
+    // Se o motor morreu (onend/onerror sem retomar — ex.: limite nativo do Chrome
+    // ou perda de foco), reanima-o aqui. Sem isto, o clique em "Gravar" só mudava
+    // o estado sem nenhum engine produzindo resultados, exigindo recarregar a página.
+    if (!recognitionRef.current && isActivatedRef.current && !isSuspendedRef.current) {
+      recordingStartRef.current = 0
+      stateRef.current = 'RECORDING'
       setState('RECORDING')
       setTranscript('')
       playBeep()
-    } else if (stateRef.current === 'RECORDING') {
-      triggerSave(finalTranscriptRef.current)
+      startRec()
+    } else {
+      recordingStartRef.current = lastResultLenRef.current
+      setState('RECORDING')
+      setTranscript('')
+      playBeep()
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
