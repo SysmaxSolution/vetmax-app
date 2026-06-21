@@ -14,6 +14,37 @@ export type PatientVaccine = {
   next_due_date:     string | null
   notes:             string | null
   created_at:        string
+  // M7 — campos estruturados (todos opcionais)
+  vaccine_type:      string | null
+  dose_number:       number | null
+  dose_total:        number | null
+  manufacturer:      string | null
+  lot_number:        string | null
+  validity_date:     string | null
+}
+
+// Campos estruturados que entram no insert/update de vacina (M7).
+const VACCINE_SELECT =
+  'id, patient_id, vaccine_name, date_administered, next_due_date, notes, created_at, vaccine_type, dose_number, dose_total, manufacturer, lot_number, validity_date'
+
+export interface VaccineExtra {
+  vaccine_type?:  string | null
+  dose_number?:   number | null
+  dose_total?:    number | null
+  manufacturer?:  string | null
+  lot_number?:    string | null
+  validity_date?: string | null
+}
+
+function vaccineExtraPayload(d: VaccineExtra) {
+  return {
+    vaccine_type:  d.vaccine_type  ?? null,
+    dose_number:   d.dose_number   ?? null,
+    dose_total:    d.dose_total    ?? null,
+    manufacturer:  d.manufacturer  ?? null,
+    lot_number:    d.lot_number    ?? null,
+    validity_date: d.validity_date ?? null,
+  }
 }
 
 // ─── Read ─────────────────────────────────────────────────────────────────────
@@ -35,7 +66,7 @@ export async function getPatientVaccines(
 
   const { data, error } = await supabase
     .from('patient_vaccines')
-    .select('id, patient_id, vaccine_name, date_administered, next_due_date, notes, created_at')
+    .select(VACCINE_SELECT)
     .eq('patient_id', patientId)
     .eq('clinic_id', profile.clinic_id)
     .order('date_administered', { ascending: false })
@@ -53,7 +84,7 @@ export async function addVaccine(data: {
   date_administered?: string
   next_due_date?:    string
   notes?:            string
-}): Promise<PatientVaccine | { error: string }> {
+} & VaccineExtra): Promise<PatientVaccine | { error: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Não autenticado.' }
@@ -78,8 +109,9 @@ export async function addVaccine(data: {
       next_due_date:     data.next_due_date ?? null,
       administered_by:   user.id,
       notes:             data.notes ?? null,
+      ...vaccineExtraPayload(data),
     })
-    .select('id, patient_id, vaccine_name, date_administered, next_due_date, notes, created_at, administered_by')
+    .select(VACCINE_SELECT)
     .single()
 
   if (error || !result) return { error: 'Erro ao registrar vacina: ' + (error?.message ?? '') }
@@ -96,7 +128,7 @@ export async function addVaccineStandalone(data: {
   date_administered?: string
   next_due_date?:     string
   notes?:             string
-}): Promise<PatientVaccine | { error: string }> {
+} & VaccineExtra): Promise<PatientVaccine | { error: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Não autenticado.' }
@@ -121,8 +153,9 @@ export async function addVaccineStandalone(data: {
       next_due_date:     data.next_due_date ?? null,
       administered_by:   user.id,
       notes:             data.notes ?? null,
+      ...vaccineExtraPayload(data),
     })
-    .select('id, patient_id, vaccine_name, date_administered, next_due_date, notes, created_at')
+    .select(VACCINE_SELECT)
     .single()
 
   if (error || !result) return { error: 'Erro ao registrar vacina: ' + (error?.message ?? '') }
@@ -135,7 +168,7 @@ export async function addVaccineStandalone(data: {
 export async function updateVaccine(
   id: string,
   consultationId: string,
-  data: { vaccine_name: string; date_administered?: string; next_due_date?: string; notes?: string }
+  data: { vaccine_name: string; date_administered?: string; next_due_date?: string; notes?: string } & VaccineExtra
 ): Promise<PatientVaccine | { error: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -156,10 +189,11 @@ export async function updateVaccine(
       date_administered: data.date_administered,
       next_due_date:     data.next_due_date ?? null,
       notes:             data.notes ?? null,
+      ...vaccineExtraPayload(data),
     })
     .eq('id', id)
     .eq('clinic_id', profile.clinic_id)
-    .select('id, patient_id, vaccine_name, date_administered, next_due_date, notes, created_at')
+    .select(VACCINE_SELECT)
     .single()
 
   if (error || !result) return { error: 'Erro ao atualizar vacina: ' + (error?.message ?? '') }
