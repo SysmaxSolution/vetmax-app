@@ -55,9 +55,12 @@ async function findTutorByPhone(
   const cleanPhone = phone.replace('@s.whatsapp.net', '').replace(/\D/g, '').slice(-8)
   if (!cleanPhone) return null
 
+  // OBS: a tabela `tutors` NÃO tem coluna photo_url — selecioná-la fazia o
+  // PostgREST retornar 400 e o enriquecimento do tutor (nome/pets) nunca
+  // funcionava. Foto fica como null.
   const { data: tutor } = await admin
     .from('tutors')
-    .select('id, name, photo_url')
+    .select('id, name')
     .eq('clinic_id', clinicId)
     .ilike('phone', `%${cleanPhone}%`)
     .limit(1)
@@ -80,7 +83,7 @@ async function findTutorByPhone(
   return {
     tutorId:       tutor.id,
     tutorName:     tutor.name ?? null,
-    photoUrl:      tutor.photo_url ?? null,
+    photoUrl:      null,
     petNamesCache,
   }
 }
