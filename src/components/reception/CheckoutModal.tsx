@@ -8,6 +8,7 @@ import {
   type InvoiceWithDetails,
 } from '@/lib/actions/billing'
 import { searchSalesProducts, type StockProduct } from '@/lib/actions/sales'
+import { canEditServicePrice } from '@/lib/actions/services'
 import InsuranceExportPanel from '@/components/reception/InsuranceExportPanel'
 import CheckoutInsurancePreviewClient from '@/components/financial/CheckoutInsurancePreviewClient'
 import InvoiceDuplicatasList from '@/components/financial/InvoiceDuplicatasList'
@@ -55,6 +56,8 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
   const [discountType,  setDiscountType]  = useState<'amount' | 'percent'>('amount')
   const [discountInput, setDiscountInput] = useState('')
   const [editingPrices, setEditingPrices] = useState<Record<string, string>>({})
+  const [canEditPrice, setCanEditPrice]   = useState(false)  // M11: permissão p/ alterar preço
+  useEffect(() => { canEditServicePrice().then(setCanEditPrice) }, [])
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [confirmCourtesy, setConfirmCourtesy]   = useState(false)
   const [submittingCourtesy, setSubmittingCourtesy] = useState(false)
@@ -441,7 +444,8 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
                           />
                         ) : (
                           <button
-                            onClick={() => setEditingPrices(prev => ({
+                            disabled={!canEditPrice}
+                            onClick={() => canEditPrice && setEditingPrices(prev => ({
                               ...prev,
                               [item.id]: String(item.unit_price),
                             }))}
@@ -449,8 +453,8 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
                               isZero
                                 ? 'text-amber-700 bg-amber-100 hover:bg-amber-200'
                                 : 'text-slate-800 hover:bg-slate-100'
-                            }`}
-                            title="Clique para editar"
+                            } disabled:cursor-default disabled:hover:bg-transparent`}
+                            title={canEditPrice ? 'Clique para editar' : 'Você não tem permissão para alterar preços'}
                           >
                             {isZero ? 'R$ —' : fmt(item.unit_price)}
                           </button>

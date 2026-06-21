@@ -12,7 +12,7 @@ import {
   X, Search, Plus, Minus, Trash2, Loader2, UserCircle, PawPrint, FileText,
 } from 'lucide-react'
 import { searchTutorsAndPatients, type SearchResult } from '@/lib/actions/tutors'
-import { searchServices, type ServiceItem } from '@/lib/actions/services'
+import { searchServices, canEditServicePrice, type ServiceItem } from '@/lib/actions/services'
 import { createQuotation } from '@/lib/actions/billing-documents'
 
 interface Props {
@@ -61,6 +61,10 @@ export default function NewQuotationModal({ clinicId, currentUserId, professiona
     document.addEventListener('mousedown', onDown)
     return () => document.removeEventListener('mousedown', onDown)
   }, [])
+
+  // M11 — só quem tem permissão pode alterar preço de itens/serviços.
+  const [canEditPrice, setCanEditPrice] = useState(false)
+  useEffect(() => { canEditServicePrice().then(setCanEditPrice) }, [])
 
   const [lines, setLines] = useState<Line[]>([])
   const [professionalId, setProfessionalId] = useState(currentUserId)
@@ -245,7 +249,11 @@ export default function NewQuotationModal({ clinicId, currentUserId, professiona
                   </div>
                   <div className="flex items-center gap-1">
                     <span className="text-xs text-slate-400">R$</span>
-                    <input type="number" min="0" step="0.01" value={l.unit_price === 0 ? '' : l.unit_price} placeholder="0,00" onChange={e => updateLine(l.key, { unit_price: parseFloat(e.target.value) || 0 })} className="w-20 text-right rounded-lg border border-slate-200 px-2 py-1 text-sm tabular-nums" />
+                    <input type="number" min="0" step="0.01" value={l.unit_price === 0 ? '' : l.unit_price} placeholder="0,00"
+                      disabled={!canEditPrice}
+                      title={canEditPrice ? undefined : 'Você não tem permissão para alterar preços'}
+                      onChange={e => updateLine(l.key, { unit_price: parseFloat(e.target.value) || 0 })}
+                      className="w-20 text-right rounded-lg border border-slate-200 px-2 py-1 text-sm tabular-nums disabled:bg-slate-100 disabled:text-slate-400" />
                   </div>
                   <span className="w-20 text-right text-sm font-semibold text-slate-900 tabular-nums">{fmt(l.quantity * l.unit_price)}</span>
                   <button onClick={() => removeLine(l.key)} className="rounded p-1 text-rose-400 hover:bg-rose-50"><Trash2 className="h-3.5 w-3.5" /></button>
