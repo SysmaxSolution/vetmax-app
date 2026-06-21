@@ -153,6 +153,7 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
   // 1 fetch único; cada card usa useMedicationScheduler com seu slice.
   const [prescriptionsByHosp, setPrescriptionsByHosp] = useState<Map<string, HospPrescription[]>>(new Map())
   const [medModalCard, setMedModalCard] = useState<HospitalizationCard | null>(null)
+  const [medHighlightId, setMedHighlightId] = useState<string | null>(null)
 
   const refreshPrescriptions = useCallback(async () => {
     if (isFreePlan) return   // plano free não persiste internação
@@ -597,8 +598,8 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
           cards={allCards}
           prescriptionsByHosp={prescriptionsByHosp}
           tasksByHosp={tasksByHosp}
-          onLineClick={(card, type) => {
-            if (type === 'med') { setMedModalCard(card) }
+          onLineClick={(card, type, lineId) => {
+            if (type === 'med') { setMedHighlightId(lineId ?? null); setMedModalCard(card) }
             else { setDetailInitialTab('tarefas'); setSelectedCard(card) }
           }}
         />
@@ -673,7 +674,7 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
                       openBalance={openBalances[card.id] ?? 0}
                       onDragStart={handleDragStart}
                       onDragEnd={handleDragEnd}
-                      onOpenMedAlert={() => setMedModalCard(card)}
+                      onOpenMedAlert={() => { setMedHighlightId(null); setMedModalCard(card) }}
                       onDischarge={handleDischargeRequest}
                       onOpen={() => { setDetailInitialTab(undefined); setSelectedCard(card) }}
                       onCancelled={() => removeCardFromBoard(card.id)}
@@ -745,7 +746,8 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
           hospitalizationId={medModalCard.id}
           patientName={medModalCard.patient.name}
           prescriptions={prescriptionsByHosp.get(medModalCard.id) ?? EMPTY_PRESCRIPTIONS}
-          onClose={() => setMedModalCard(null)}
+          highlightPrescriptionId={medHighlightId}
+          onClose={() => { setMedModalCard(null); setMedHighlightId(null) }}
           onUpdate={refreshPrescriptions}
         />
       )}

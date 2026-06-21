@@ -309,6 +309,7 @@ export async function listTutorPets(
     .select('id, name, species')
     .eq('clinic_id', clinicId)
     .eq('tutor_id', tutorId)
+    .is('deleted_at', null)   // PDV não deve listar pets arquivados (B11)
     .order('name')
     .limit(30)
   if (error) return { error: error.message }

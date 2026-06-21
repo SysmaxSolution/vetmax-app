@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useMemo, useState, useTransition, useEffect } from 'react'
 import {
   Pill, X, Loader2, Check, Pause, CircleStop, AlertTriangle, Plus, Clock, ClockAlert, FileStack,
 } from 'lucide-react'
@@ -38,6 +38,8 @@ interface Props {
   hospitalizationId: string
   patientName:       string
   prescriptions:     HospPrescription[]
+  /** Prescrição a destacar/rolar até (clique numa linha do Mapa de Execução — B9). */
+  highlightPrescriptionId?: string | null
   onClose:           () => void
   onUpdate?:         () => void | Promise<void>
 }
@@ -73,9 +75,17 @@ function formatTime(iso: string): string {
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function MedicationApplicationModal({
-  hospitalizationId, patientName, prescriptions, onClose, onUpdate,
+  hospitalizationId, patientName, prescriptions, highlightPrescriptionId, onClose, onUpdate,
 }: Props) {
   const scheduler = useMedicationScheduler(prescriptions)
+
+  // B9: ao abrir vindo do clique numa linha do Mapa de Execução, rola até a
+  // prescrição clicada e a destaca momentaneamente.
+  useEffect(() => {
+    if (!highlightPrescriptionId) return
+    const el = document.getElementById(`presc-row-${highlightPrescriptionId}`)
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [highlightPrescriptionId])
   const [pendingId, setPendingId] = useState<{ id: string; action: 'apply' | 'pause' | 'finish' } | null>(null)
   const [error, setError]         = useState<string | null>(null)
   const [showCreate, setShowCreate] = useState(false)
@@ -219,10 +229,15 @@ export default function MedicationApplicationModal({
                   ? 'border-l-amber-500'
                   : 'border-l-emerald-500'
 
+            const isHighlighted = highlightPrescriptionId === p.id
+
             return (
               <div
                 key={p.id}
-                className={`rounded-xl border border-slate-200 bg-white border-l-4 ${borderClass} ${isPaused ? 'opacity-60' : ''}`}
+                id={`presc-row-${p.id}`}
+                className={`rounded-xl border bg-white border-l-4 ${borderClass} ${isPaused ? 'opacity-60' : ''} ${
+                  isHighlighted ? 'border-violet-400 ring-2 ring-violet-300' : 'border-slate-200'
+                }`}
               >
                 <div className="px-4 py-3 space-y-2">
                   <div className="flex items-start justify-between gap-3">

@@ -7,7 +7,7 @@
  * total ao vivo. Pergunta de NFS-e fica oculta na Fase 1 (até a Fase 3).
  */
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import {
   X, Search, Plus, Minus, Trash2, Loader2, UserCircle, PawPrint, FileText,
 } from 'lucide-react'
@@ -47,6 +47,20 @@ export default function NewQuotationModal({ clinicId, currentUserId, professiona
   const [svcResults, setSvcResults] = useState<ServiceItem[]>([])
   const [svcSearching, setSvcSearching] = useState(false)
   const svcTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const svcWrapRef = useRef<HTMLDivElement>(null)
+  const tutorWrapRef = useRef<HTMLDivElement>(null)
+
+  // Fecha os dropdowns ao clicar fora — antes a lista de serviços ficava aberta
+  // cobrindo a tela e impedindo a inclusão manual (B12).
+  useEffect(() => {
+    function onDown(e: MouseEvent) {
+      const t = e.target as Node
+      if (svcWrapRef.current && !svcWrapRef.current.contains(t)) setSvcResults([])
+      if (tutorWrapRef.current && !tutorWrapRef.current.contains(t)) setTutorResults([])
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [])
 
   const [lines, setLines] = useState<Line[]>([])
   const [professionalId, setProfessionalId] = useState(currentUserId)
@@ -145,7 +159,7 @@ export default function NewQuotationModal({ clinicId, currentUserId, professiona
         <div className="px-5 py-4 space-y-4 overflow-y-auto flex-1">
           {/* Tutor + Pet */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="relative">
+            <div className="relative" ref={tutorWrapRef}>
               <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1 flex items-center gap-1"><UserCircle className="h-3 w-3" /> Tutor (opcional)</span>
               {tutor ? (
                 <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl px-3 py-2">
@@ -195,7 +209,7 @@ export default function NewQuotationModal({ clinicId, currentUserId, professiona
           </div>
 
           {/* Busca de serviço */}
-          <div className="relative">
+          <div className="relative" ref={svcWrapRef}>
             <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1">Serviços / Itens</span>
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
@@ -231,7 +245,7 @@ export default function NewQuotationModal({ clinicId, currentUserId, professiona
                   </div>
                   <div className="flex items-center gap-1">
                     <span className="text-xs text-slate-400">R$</span>
-                    <input type="number" min="0" step="0.01" value={l.unit_price} onChange={e => updateLine(l.key, { unit_price: parseFloat(e.target.value) || 0 })} className="w-20 text-right rounded-lg border border-slate-200 px-2 py-1 text-sm tabular-nums" />
+                    <input type="number" min="0" step="0.01" value={l.unit_price === 0 ? '' : l.unit_price} placeholder="0,00" onChange={e => updateLine(l.key, { unit_price: parseFloat(e.target.value) || 0 })} className="w-20 text-right rounded-lg border border-slate-200 px-2 py-1 text-sm tabular-nums" />
                   </div>
                   <span className="w-20 text-right text-sm font-semibold text-slate-900 tabular-nums">{fmt(l.quantity * l.unit_price)}</span>
                   <button onClick={() => removeLine(l.key)} className="rounded p-1 text-rose-400 hover:bg-rose-50"><Trash2 className="h-3.5 w-3.5" /></button>

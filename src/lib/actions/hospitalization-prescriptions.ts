@@ -98,7 +98,21 @@ export async function listHospitalizationPrescriptions(
     .neq('status', 'finished')
     .order('created_at', { ascending: false })
 
-  if (hospitalizationId) query = query.eq('hospitalization_id', hospitalizationId)
+  if (hospitalizationId) {
+    query = query.eq('hospitalization_id', hospitalizationId)
+  } else {
+    // Lista global (alimenta o agendador/alertas do Kanban): exclui prescrições de
+    // internações já encerradas (alta/cancelamento). Sem isto, os alertas de
+    // medicação persistiam mesmo após o pet receber alta.
+    const { data: activeHosps } = await admin
+      .from('hospitalizations')
+      .select('id')
+      .eq('clinic_id', ctx.clinicId)
+      .not('status', 'in', '("discharged","cancelled")')
+    const ids = (activeHosps ?? []).map(h => h.id as string)
+    if (ids.length === 0) return []
+    query = query.in('hospitalization_id', ids)
+  }
 
   const { data, error } = await query
   if (error) return { error: error.message }

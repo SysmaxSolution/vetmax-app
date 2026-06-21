@@ -1,7 +1,7 @@
 'use client'
 
-import { useMemo, useSyncExternalStore } from 'react'
-import { Printer, Pill, Biohazard, Clock, FlaskConical, Stethoscope, Utensils, ClipboardList } from 'lucide-react'
+import { useMemo, useState, useSyncExternalStore } from 'react'
+import { Printer, Pill, Biohazard, Clock, FlaskConical, Stethoscope, Utensils, ClipboardList, ChevronDown, ChevronRight } from 'lucide-react'
 import { medicationTickStore } from '@/lib/medication-tick'
 import { formatClinicTime, formatClinicDate } from '@/lib/time'
 import type { HospitalizationCard } from '@/lib/actions/hospitalizations'
@@ -139,8 +139,9 @@ interface Props {
   cards:               HospitalizationCard[]
   prescriptionsByHosp: Map<string, HospPrescription[]>
   tasksByHosp?:        Map<string, HospTask[]>
-  /** Clique numa linha: 'med' abre a tela de medicações; 'task' abre a aba Tarefas do card. */
-  onLineClick?:        (card: HospitalizationCard, type: LineType) => void
+  /** Clique numa linha: 'med' abre a tela de medicações; 'task' abre a aba Tarefas do card.
+   *  lineId = id da prescrição/tarefa clicada (para destacar no modal — B9). */
+  onLineClick?:        (card: HospitalizationCard, type: LineType, lineId?: string) => void
 }
 
 export default function ExecutionMapView({ cards, prescriptionsByHosp, tasksByHosp, onLineClick }: Props) {
@@ -152,6 +153,14 @@ export default function ExecutionMapView({ cards, prescriptionsByHosp, tasksByHo
   )
 
   const now = Date.now()
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  function toggleCollapse(cardId: string) {
+    setCollapsed(prev => {
+      const next = new Set(prev)
+      if (next.has(cardId)) next.delete(cardId); else next.add(cardId)
+      return next
+    })
+  }
 
   const rows = useMemo(() => {
     return cards
@@ -202,25 +211,37 @@ export default function ExecutionMapView({ cards, prescriptionsByHosp, tasksByHo
               card.isolation_required ? 'border-rose-400 ring-2 ring-rose-200' : 'border-slate-200'
             }`}
           >
-            <div className={`px-4 py-2.5 flex items-center justify-between ${card.isolation_required ? 'bg-rose-50' : 'bg-slate-50'}`}>
+            <button
+              type="button"
+              onClick={() => toggleCollapse(card.id)}
+              className={`w-full px-4 py-2.5 flex items-center justify-between text-left ${card.isolation_required ? 'bg-rose-50' : 'bg-slate-50'} hover:brightness-95 transition`}
+              title={collapsed.has(card.id) ? 'Expandir medicações' : 'Minimizar medicações'}
+            >
               <div className="flex items-center gap-2">
+                {collapsed.has(card.id)
+                  ? <ChevronRight className="h-4 w-4 text-slate-400" />
+                  : <ChevronDown className="h-4 w-4 text-slate-400" />}
                 <span className="font-bold text-slate-900 text-sm">{card.patient.name}</span>
                 <span className="text-[11px] text-slate-500 uppercase">{card.patient.species} • {card.patient.breed || 'SRD'}</span>
+                {collapsed.has(card.id) && (
+                  <span className="text-[10px] font-semibold text-slate-400">({lines.length} {lines.length === 1 ? 'item' : 'itens'})</span>
+                )}
               </div>
               {card.isolation_required && (
                 <span className="flex items-center gap-1 text-[10px] font-bold uppercase text-rose-700 bg-rose-100 border border-rose-300 px-2 py-0.5 rounded-full">
                   <Biohazard className="h-3 w-3" /> Isolamento — EPI
                 </span>
               )}
-            </div>
+            </button>
+            {!collapsed.has(card.id) && (
             <div className="divide-y divide-slate-50">
               {lines.map(line => (
                 <div
                   key={`${line.type}-${line.id}`}
-                  onClick={onLineClick ? () => onLineClick(card, line.type) : undefined}
+                  onClick={onLineClick ? () => onLineClick(card, line.type, line.id) : undefined}
                   className={`px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-2 ${onLineClick ? 'cursor-pointer hover:bg-violet-50/50 transition-colors' : ''}`}
                   data-testid={line.type === 'task' ? `map-task-${line.id}` : `map-med-${line.id}`}
-                  title={onLineClick ? (line.type === 'med' ? 'Abrir medicações' : 'Abrir tarefas') : undefined}
+                  title={onLineClick ? (line.type === 'med' ? 'Abrir medicação' : 'Abrir tarefas') : undefined}
                 >
                   <div className="sm:w-56 flex-shrink-0">
                     <p className="text-sm font-semibold text-slate-800 flex items-center gap-1.5">
@@ -244,6 +265,7 @@ export default function ExecutionMapView({ cards, prescriptionsByHosp, tasksByHo
                 </div>
               ))}
             </div>
+            )}
           </div>
         ))}
       </div>
