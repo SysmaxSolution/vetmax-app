@@ -2,21 +2,22 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutList, CalendarDays } from 'lucide-react'
+import { LayoutList, CalendarDays, CalendarClock } from 'lucide-react'
 
 export default function ReceptionSubNav() {
   const pathname = usePathname()
 
   const tabs = [
-    { label: 'Atendimento', href: '/dashboard/reception',          icon: LayoutList   },
-    { label: 'Agenda',      href: '/dashboard/reception/calendar', icon: CalendarDays },
+    { label: 'Atendimento',  href: '/dashboard/reception',              icon: LayoutList    },
+    { label: 'Agenda',       href: '/dashboard/reception/calendar',     icon: CalendarDays  },
+    { label: 'Programações', href: '/dashboard/reception/programacoes', icon: CalendarClock },
   ]
 
   return (
     <div className="flex gap-1 mb-6">
       {tabs.map(tab => {
         const active = tab.href === '/dashboard/reception'
-          ? !pathname.startsWith('/dashboard/reception/calendar')
+          ? !pathname.startsWith('/dashboard/reception/calendar') && !pathname.startsWith('/dashboard/reception/programacoes')
           : pathname.startsWith(tab.href)
         return (
           <Link
