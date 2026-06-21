@@ -163,7 +163,7 @@ export default function VetWorkspace({ queue, completed, clinicId }: VetWorkspac
             }`}
           >
             <History className="h-4 w-4" />
-            Histórico de Hoje
+            Histórico (7 dias)
             {completed.length > 0 && (
               <span className={`ml-1 rounded-full px-2 py-0.5 text-xs font-bold ${
                 tab === 'historico' ? 'bg-teal-100 text-teal-700' : 'bg-slate-200 text-slate-600'
@@ -292,8 +292,8 @@ export default function VetWorkspace({ queue, completed, clinicId }: VetWorkspac
                   <History className="h-4 w-4 text-teal-600" />
                 </div>
                 <div>
-                  <h2 className="text-base font-semibold text-slate-900">Atendimentos Realizados Hoje</h2>
-                  <p className="text-xs text-slate-500">Clique em "Editar" para reabrir o prontuário</p>
+                  <h2 className="text-base font-semibold text-slate-900">Atendimentos dos últimos 7 dias</h2>
+                  <p className="text-xs text-slate-500">Clique em "Editar" para reabrir e ajustar o prontuário</p>
                 </div>
               </div>
               <span className="rounded-full bg-teal-50 px-3 py-1 text-sm font-semibold text-teal-700">

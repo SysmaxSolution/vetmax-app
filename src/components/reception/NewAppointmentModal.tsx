@@ -57,6 +57,7 @@ interface Props {
   onSuccess?:            (petName: string) => void
   defaultPet?:           DefaultPet
   defaultDate?:          string
+  defaultTime?:          string
   defaultReason?:        string
   defaultProfessionalId?: string
 }
@@ -73,7 +74,7 @@ function mapMotivoToReason(motivo: string): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, defaultDate, defaultReason, defaultProfessionalId }: Props) {
+export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, defaultDate, defaultTime, defaultReason, defaultProfessionalId }: Props) {
   const activeModules = useModules()
   const [step, setStep]               = useState<'search' | 'form'>(defaultPet ? 'form' : 'search')
   const [selectedPet, setSelectedPet] = useState<PatientsListItem | null>(null)
@@ -82,7 +83,7 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
   const [searching, setSearching]     = useState(false)
 
   const [date,       setDate]       = useState(defaultDate ?? '')
-  const [time,       setTime]       = useState('09:00')
+  const [time,       setTime]       = useState(defaultTime ?? '09:00')
   const [reason,     setReason]     = useState(defaultReason ? mapMotivoToReason(defaultReason) : 'consultation')
   const [notes,      setNotes]      = useState('')
   const [submitting, setSubmitting]             = useState(false)
@@ -94,6 +95,7 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
   const [bookedTimes, setBookedTimes]           = useState<string[]>([])
   const [bookedRanges, setBookedRanges]         = useState<BookedRange[]>([])
   const [intervalMinutes, setIntervalMinutes]   = useState(60)
+  const [durationMinutes, setDurationMinutes]   = useState<string>('')  // M4: '' = usa o intervalo do profissional
   const [wheelTime, setWheelTime]               = useState<string | null>(null)
   const [loadingSlots, setLoadingSlots]         = useState(false)
   const [scheduleMode,         setScheduleMode]         = useState<'regular' | 'package'>('regular')
@@ -236,6 +238,7 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
         reason,
         notes:                notes.trim() || undefined,
         professional_id:      professionalId || undefined,
+        duration_minutes:     durationMinutes ? parseInt(durationMinutes) : undefined,
       })
       if ('error' in apptResult) { setSubmitting(false); setError(apptResult.error); return }
 
@@ -303,6 +306,7 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
       reason,
       notes:                notes.trim() || undefined,
       professional_id:      professionalId || undefined,
+      duration_minutes:     durationMinutes ? parseInt(durationMinutes) : undefined,
     })
 
     setSubmitting(false)
@@ -714,6 +718,24 @@ export default function NewAppointmentModal({ onClose, onSuccess, defaultPet, de
                     required
                     placeholder="DD/MM/AAAA"
                   />
+                </div>
+
+                {/* M4 — duração do atendimento (default = bloco do profissional) */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Duração</label>
+                  <select
+                    value={durationMinutes}
+                    onChange={e => setDurationMinutes(e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                  >
+                    <option value="">Padrão do profissional ({intervalMinutes}min)</option>
+                    <option value="15">15 minutos</option>
+                    <option value="30">30 minutos</option>
+                    <option value="45">45 minutos</option>
+                    <option value="60">1 hora</option>
+                    <option value="90">1h30</option>
+                    <option value="120">2 horas</option>
+                  </select>
                 </div>
 
                 {/* Horário — grid de slots se profissional selecionado, TimePicker livre caso contrário */}

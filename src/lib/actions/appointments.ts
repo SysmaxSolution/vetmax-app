@@ -28,6 +28,7 @@ export interface CreateAppointmentPayload {
   reason:               string
   notes?:               string
   professional_id?:     string
+  duration_minutes?:    number   // M4 — NULL usa o intervalo do profissional
 }
 
 export interface UpcomingAppointment {
@@ -70,6 +71,7 @@ export async function createAppointment(
     reason:               payload.reason,
     notes:                payload.notes ?? null,
     professional_id:      payload.professional_id ?? null,
+    duration_minutes:     payload.duration_minutes ?? null,
     status:               'scheduled',
     created_by:           auth.userId,
   }).select('id').single()
@@ -174,6 +176,7 @@ export interface AppointmentFull {
   reason:               string
   status:               string
   notes:                string | null
+  duration_minutes:     number | null
   patient:              { id: string; name: string; species: string }
   tutor:                { id: string; name: string; phone: string }
   professional:         { id: string; full_name: string } | null
@@ -190,7 +193,7 @@ export async function getAppointmentById(
     .from('appointments')
     .select(`
       id, pet_id, tutor_id, professional_id, appointment_datetime,
-      reason, status, notes,
+      reason, status, notes, duration_minutes,
       patient:patients!appointments_pet_id_fkey ( id, name, species ),
       tutor:tutors!appointments_tutor_id_fkey ( id, name, phone ),
       professional:profiles!appointments_professional_id_fkey ( id, full_name )
@@ -214,6 +217,7 @@ export async function getAppointmentById(
     reason:               data.reason,
     status:               data.status,
     notes:                data.notes,
+    duration_minutes:     (data as { duration_minutes?: number | null }).duration_minutes ?? null,
     patient:  patient  ?? { id: data.pet_id,   name: '—', species: 'dog' },
     tutor:    tutor    ?? { id: data.tutor_id,  name: '—', phone: '' },
     professional: professional ?? null,
@@ -226,6 +230,7 @@ export interface UpdateAppointmentPayload {
   appointment_datetime?: string
   professional_id?:      string | null
   notes?:                string | null
+  duration_minutes?:     number | null
 }
 
 export async function updateAppointment(
@@ -240,6 +245,7 @@ export async function updateAppointment(
   if (payload.appointment_datetime !== undefined) patch.appointment_datetime = payload.appointment_datetime
   if ('professional_id' in payload)               patch.professional_id      = payload.professional_id
   if ('notes' in payload)                         patch.notes                = payload.notes
+  if ('duration_minutes' in payload)              patch.duration_minutes     = payload.duration_minutes
 
   const { error } = await supabase
     .from('appointments')

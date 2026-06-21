@@ -68,7 +68,7 @@ export async function getUnifiedCalendarEvents(
     supabase
       .from('appointments')
       .select(`
-        id, appointment_datetime, reason, status, notes, source, professional_id, bot_confirmation_status,
+        id, appointment_datetime, reason, status, notes, source, professional_id, duration_minutes, bot_confirmation_status,
         patients:pet_id ( id, name, species ),
         tutors:tutor_id ( id, name ),
         professional:profiles!professional_id ( full_name, appointment_interval_minutes )
@@ -121,7 +121,7 @@ export async function getUnifiedCalendarEvents(
       source:           (a as any).source ?? 'manual',
       professionalId:   (a as any).professional_id ?? null,
       professionalName: prof?.full_name ?? null,
-      durationMinutes:  prof?.appointment_interval_minutes ?? 60,
+      durationMinutes:  (a as any).duration_minutes ?? prof?.appointment_interval_minutes ?? 60,
       botConfirmationStatus: ((a as any).bot_confirmation_status ?? null) as UnifiedCalendarEvent['botConfirmationStatus'],
     })
   }
@@ -173,7 +173,7 @@ export async function getUnifiedEventsForRange(
   const [apptRes, groomRes] = await Promise.all([
     supabase
       .from('appointments')
-      .select(`id, appointment_datetime, reason, status, source, professional_id, bot_confirmation_status,
+      .select(`id, appointment_datetime, reason, status, source, professional_id, duration_minutes, bot_confirmation_status,
                patients:pet_id ( id, name, species ),
                tutors:tutor_id ( id, name ),
                professional:profiles!professional_id ( full_name, appointment_interval_minutes )`)
@@ -220,7 +220,7 @@ export async function getUnifiedEventsForRange(
       source:           (a as any).source ?? 'manual',
       professionalId:   (a as any).professional_id ?? null,
       professionalName: prof?.full_name ?? null,
-      durationMinutes:  prof?.appointment_interval_minutes ?? 60,
+      durationMinutes:  (a as any).duration_minutes ?? prof?.appointment_interval_minutes ?? 60,
       botConfirmationStatus: ((a as any).bot_confirmation_status ?? null) as UnifiedCalendarEvent['botConfirmationStatus'],
     })
   }

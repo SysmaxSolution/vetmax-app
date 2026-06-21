@@ -120,8 +120,11 @@ export async function getVetCompleted(): Promise<VetCompletedItem[] | { error: s
 
   if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
 
-  const todayStart = new Date()
-  todayStart.setHours(0, 0, 0, 0)
+  // M10: janela de 7 dias (não só hoje) para o MV revisar/editar atendimentos
+  // recentes. A edição usa reopenConsultation (já existente).
+  const since = new Date()
+  since.setHours(0, 0, 0, 0)
+  since.setDate(since.getDate() - 7)
 
   const { data, error } = await supabase
     .from('consultations')
@@ -133,7 +136,7 @@ export async function getVetCompleted(): Promise<VetCompletedItem[] | { error: s
     `)
     .eq('clinic_id', profile.clinic_id)
     .in('status', ['completed', 'waiting_exam', 'medication'])
-    .gte('updated_at', todayStart.toISOString())
+    .gte('updated_at', since.toISOString())
     .order('updated_at', { ascending: false })
 
   if (error) return { error: 'Erro ao buscar finalizadas: ' + error.message }

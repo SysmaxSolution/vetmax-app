@@ -442,6 +442,8 @@ export default function CalendarWorkspace({ clinicName, checkinRequiredFields = 
   const [selected,      setSelected]      = useState<UnifiedCalendarEvent | null>(null)
   const [selectedUnavail, setSelectedUnavail] = useState<UnavailabilityOccurrence | null>(null)
   const [showNewAppt,   setShowNewAppt]   = useState(false)
+  // M1 — defaults vindos do clique direto numa célula da agenda
+  const [slotDefaults, setSlotDefaults] = useState<{ date?: string; time?: string; professionalId?: string }>({})
   const [showNewEvent,  setShowNewEvent]  = useState(false)
   const [editPatient,   setEditPatient]   = useState<PatientsListItem | null>(null)
   const [loadingPetId,  setLoadingPetId]  = useState<string | null>(null)
@@ -600,9 +602,13 @@ export default function CalendarWorkspace({ clinicName, checkinRequiredFields = 
 
       {showNewAppt && (
         <NewAppointmentModal
-          onClose={() => setShowNewAppt(false)}
+          defaultDate={slotDefaults.date}
+          defaultTime={slotDefaults.time}
+          defaultProfessionalId={slotDefaults.professionalId}
+          onClose={() => { setShowNewAppt(false); setSlotDefaults({}) }}
           onSuccess={petName => {
             setShowNewAppt(false)
+            setSlotDefaults({})
             showToastMsg(`Agendamento criado para ${petName}!`)
             fetchRange(date, view)
           }}
@@ -687,6 +693,21 @@ export default function CalendarWorkspace({ clinicName, checkinRequiredFields = 
               if (evt.kind === 'unavailability') { setSelectedUnavail(evt.resource); setSelected(null) }
               else { setSelected(evt.resource); setSelectedUnavail(null) }
             }}
+            selectable
+            onSelectSlot={(slot: { start: Date; resourceId?: string | number }) => {
+              // M1 — clicar numa célula vazia já abre o Novo Agendamento com
+              // data/hora (e profissional, na visão por recurso) pré-preenchidos.
+              const pad = (n: number) => String(n).padStart(2, '0')
+              const d = slot.start
+              const dateStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+              const timeStr = `${pad(d.getHours())}:${pad(d.getMinutes())}`
+              setSlotDefaults({
+                date: dateStr,
+                time: timeStr === '00:00' ? undefined : timeStr,
+                professionalId: slot.resourceId ? String(slot.resourceId) : undefined,
+              })
+              setShowNewAppt(true)
+            }}
             eventPropGetter={(evt: RBCEvent) => ({
               style: {
                 backgroundColor: evt.kind === 'unavailability' ? '#9ca3af' : eventColor(evt.resource),
@@ -729,7 +750,7 @@ export default function CalendarWorkspace({ clinicName, checkinRequiredFields = 
                   onNavigate={props.onNavigate}
                   onView={props.onView}
                   loading={loading}
-                  onNewAppt={() => setShowNewAppt(true)}
+                  onNewAppt={() => { setSlotDefaults({}); setShowNewAppt(true) }}
                   onNewEvent={() => setShowNewEvent(true)}
                   onSendSchedule={handleSendSchedule}
                   sendingSchedule={sendingSchedule}
