@@ -400,13 +400,19 @@ export async function confirmPurchaseReceipt(
     // Atualizar preço e quantidade do item no estoque
     const { data: stock } = await admin
       .from('stock_items')
-      .select('quantity, unit_price')
+      .select('quantity, unit_price, units_per_package')
       .eq('id', item.stock_item_id)
       .single()
 
     if (!stock) continue
 
     const qtyBefore = Number(stock.quantity ?? 0)
+
+    // M13(b) — converte embalagem → itens-base. Ex.: 2 caixas × 30 = 60 comprimidos.
+    // upp=1 (default) mantém o comportamento atual.
+    const upp = Number((stock as { units_per_package?: number }).units_per_package ?? 1) || 1
+    const creditQty   = Number(item.quantity) * upp
+    const perUnitPrice = upp > 1 ? Number(item.unit_price ?? 0) / upp : Number(item.unit_price ?? 0)
 
     // ── Retroalimentação FIFO: TODA entrada de NF-e cria um lote em
     //    stock_batches (sem furo de FIFO na entrada de notas). Lote-base do
@@ -424,7 +430,7 @@ export async function confirmPurchaseReceipt(
       stock_item_id: item.stock_item_id,
       batch_number:  (item as { batch_number?: string | null }).batch_number ?? null,
       expiry_date:   (item as { expiry_date?: string | null }).expiry_date ?? null,
-      quantity:      item.quantity,
+      quantity:      creditQty,
       received_at:   new Date().toISOString(),
       supplier:      null,
     })
@@ -434,19 +440,21 @@ export async function confirmPurchaseReceipt(
 
     await admin.from('stock_items').update({
       quantity:     newQty,
-      unit_price:   item.unit_price,
+      unit_price:   perUnitPrice,
       last_restock: new Date().toISOString(),
       ncm:          item.ncm  || undefined,
       updated_at:   new Date().toISOString(),
     }).eq('id', item.stock_item_id)
 
-    // Registrar movimento de estoque
+    // Registrar movimento de estoque (em itens-base)
     await admin.from('stock_movements').insert({
       clinic_id:     ctx.clinic_id,
       stock_item_id: item.stock_item_id,
       type:          'CREDIT',
-      quantity:      item.quantity,
-      reason:        `Recebimento NF-e — Ordem #${orderId.substring(0, 8)}`,
+      quantity:      creditQty,
+      reason:        upp > 1
+        ? `Recebimento NF-e — Ordem #${orderId.substring(0, 8)} (${item.quantity}×${upp} = ${creditQty})`
+        : `Recebimento NF-e — Ordem #${orderId.substring(0, 8)}`,
       created_by:    ctx.user_id,
     })
   }
@@ -480,11 +488,67 @@ export async function matchItemToStock(
   return { success: true }
 }
 
+// ─── M13(a): sugestão inteligente de vínculo ──────────────────────────────────
+
+export interface StockMatchSuggestion {
+  id:         string
+  name:       string
+  category:   string
+  unit_price: number
+  score:      number
+  reason:     string
+}
+
+/**
+ * Sugere itens do estoque que podem corresponder a um item da nota, rankeados:
+ * EAN (100) > NCM (70) > nome parecido (50). Usado pelo "Vincular" para já
+ * mostrar candidatos sem o usuário ter que buscar manualmente.
+ */
+export async function searchStockMatchesForPurchaseItem(input: {
+  ean?:         string | null
+  ncm?:         string | null
+  description:  string
+}): Promise<StockMatchSuggestion[] | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return { error: ctx.error as string }
+
+  const admin = createAdminClient()
+  const byId = new Map<string, StockMatchSuggestion>()
+  const add = (rows: Array<{ id: string; name: string; category: string; unit_price: number }> | null, score: number, reason: string) => {
+    for (const r of rows ?? []) {
+      if (!byId.has(r.id)) byId.set(r.id, { id: r.id, name: r.name, category: r.category, unit_price: Number(r.unit_price ?? 0), score, reason })
+    }
+  }
+
+  if (input.ean) {
+    const { data } = await admin.from('stock_items')
+      .select('id, name, category, unit_price')
+      .eq('clinic_id', ctx.clinic_id).eq('barcode', input.ean).limit(5)
+    add(data, 100, 'Mesmo código de barras (EAN)')
+  }
+  if (input.ncm) {
+    const { data } = await admin.from('stock_items')
+      .select('id, name, category, unit_price')
+      .eq('clinic_id', ctx.clinic_id).eq('ncm', input.ncm).limit(8)
+    add(data, 70, 'Mesma NCM')
+  }
+  // Nome: usa as 2-3 primeiras palavras significativas da descrição.
+  const term = input.description.trim().split(/\s+/).slice(0, 3).join(' ').substring(0, 30)
+  if (term.length >= 2) {
+    const { data } = await admin.from('stock_items')
+      .select('id, name, category, unit_price')
+      .eq('clinic_id', ctx.clinic_id).ilike('name', `%${term}%`).limit(8)
+    add(data, 50, 'Nome parecido')
+  }
+
+  return [...byId.values()].sort((a, b) => b.score - a.score).slice(0, 6)
+}
+
 // ─── Auto-create stock from item ──────────────────────────────────────────────
 
 export async function autoCreateStockFromItem(
   itemId: string,
-  overrides?: { name?: string; category?: string },
+  overrides?: { name?: string; category?: string; units_per_package?: number; unit?: string },
 ): Promise<{ stock_item_id: string } | { error: string }> {
   const ctx = await getCtx()
   if ('error' in ctx) return { error: ctx.error as string }
@@ -505,16 +569,17 @@ export async function autoCreateStockFromItem(
   const { data: created, error } = await admin
     .from('stock_items')
     .insert({
-      clinic_id:       ctx.clinic_id,
+      clinic_id:         ctx.clinic_id,
       name,
       category,
-      quantity:        0,
-      unit:            item.unit ?? 'un',
-      min_quantity:    1,
-      unit_price:      item.unit_price,
-      barcode:         item.ean  ?? null,
-      ncm:             item.ncm  ?? null,
-      cfop:            item.cfop ?? null,
+      quantity:          0,
+      unit:              overrides?.unit ?? item.unit ?? 'un',
+      min_quantity:      1,
+      unit_price:        item.unit_price,
+      barcode:           item.ean  ?? null,
+      ncm:               item.ncm  ?? null,
+      cfop:              item.cfop ?? null,
+      units_per_package: overrides?.units_per_package && overrides.units_per_package > 1 ? overrides.units_per_package : 1,
     })
     .select('id')
     .single()

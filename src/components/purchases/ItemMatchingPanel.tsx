@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useTransition, useCallback } from 'react'
-import { X, Search, Plus, Link2, Loader2, AlertCircle } from 'lucide-react'
-import type { PurchaseOrderItem } from '@/lib/actions/purchases'
-import { matchItemToStock, autoCreateStockFromItem, enrichProductFromNCM, searchProductByEAN } from '@/lib/actions/purchases'
+import { useState, useTransition, useCallback, useEffect } from 'react'
+import { X, Search, Plus, Link2, Loader2, AlertCircle, Sparkles } from 'lucide-react'
+import type { PurchaseOrderItem, StockMatchSuggestion } from '@/lib/actions/purchases'
+import { matchItemToStock, autoCreateStockFromItem, enrichProductFromNCM, searchProductByEAN, searchStockMatchesForPurchaseItem } from '@/lib/actions/purchases'
 import { createClient } from '@/lib/supabase/client'
 
 interface Props {
@@ -26,9 +26,21 @@ export function ItemMatchingPanel({ item, onClose, onMatched }: Props) {
   const [ncmData, setNcmData]       = useState<string | null>(null)
   const [createName, setCreateName] = useState(item.description)
   const [createCat, setCreateCat]   = useState('supply')
+  const [unitsPerPackage, setUnitsPerPackage] = useState('')   // M13(b)
+  const [baseUnit, setBaseUnit]     = useState('')
   const [tab, setTab]               = useState<'search' | 'create'>('search')
   const [isPending, startTransition] = useTransition()
   const [errorMsg, setErrorMsg]     = useState<string | null>(null)
+  const [suggestions, setSuggestions] = useState<StockMatchSuggestion[]>([])
+  const [loadingSug, setLoadingSug]   = useState(true)
+
+  // M13(a) — sugere candidatos do estoque (EAN > NCM > nome) ao abrir.
+  useEffect(() => {
+    searchStockMatchesForPurchaseItem({ ean: item.ean, ncm: item.ncm, description: item.description }).then(res => {
+      setLoadingSug(false)
+      if (Array.isArray(res)) setSuggestions(res)
+    })
+  }, [item.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function doSearch() {
     setSearching(true)
@@ -54,7 +66,13 @@ export function ItemMatchingPanel({ item, onClose, onMatched }: Props) {
   function handleCreate() {
     startTransition(async () => {
       setErrorMsg(null)
-      const res = await autoCreateStockFromItem(item.id, { name: createName, category: createCat })
+      const upp = unitsPerPackage ? parseInt(unitsPerPackage) : undefined
+      const res = await autoCreateStockFromItem(item.id, {
+        name: createName,
+        category: createCat,
+        units_per_package: upp,
+        unit: upp && upp > 1 && baseUnit.trim() ? baseUnit.trim() : undefined,
+      })
       if ('error' in res) { setErrorMsg(res.error); return }
       onMatched()
     })
@@ -121,6 +139,35 @@ export function ItemMatchingPanel({ item, onClose, onMatched }: Props) {
 
           {tab === 'search' && (
             <div>
+              {/* Sugestões automáticas (M13a) */}
+              {(loadingSug || suggestions.length > 0) && (
+                <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50/50 p-2.5">
+                  <p className="flex items-center gap-1.5 text-[11px] font-bold text-amber-800 mb-1.5">
+                    <Sparkles className="h-3.5 w-3.5" /> Sugestões do estoque
+                  </p>
+                  {loadingSug ? (
+                    <p className="text-xs text-amber-600 flex items-center gap-1.5"><Loader2 className="h-3 w-3 animate-spin" /> Buscando correspondências…</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {suggestions.map(s => (
+                        <div key={s.id} className="flex items-center justify-between rounded-lg border border-amber-100 bg-white px-3 py-1.5">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-slate-700 truncate">{s.name}</p>
+                            <p className="text-[10px] text-amber-600">{s.reason} · R$ {s.unit_price.toFixed(2)}</p>
+                          </div>
+                          <button onClick={() => handleLink(s.id)} disabled={isPending}
+                            className="flex items-center gap-1 rounded-lg bg-amber-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-amber-700 disabled:opacity-50">
+                            <Link2 className="h-3 w-3" /> Vincular
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {!loadingSug && suggestions.length === 0 && (
+                    <p className="text-xs text-amber-600">Nenhuma correspondência — busque manualmente ou cadastre como novo.</p>
+                  )}
+                </div>
+              )}
               <div className="flex gap-2 mb-3">
                 <input
                   value={query}
@@ -186,9 +233,31 @@ export function ItemMatchingPanel({ item, onClose, onMatched }: Props) {
                   <option value="other">Outro</option>
                 </select>
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Itens por embalagem</label>
+                  <input
+                    type="number" min="1" value={unitsPerPackage}
+                    onChange={e => setUnitsPerPackage(e.target.value)}
+                    placeholder="Ex: 30 (comprimidos/caixa)"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-purple-400 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Unidade-base</label>
+                  <input
+                    type="text" value={baseUnit}
+                    onChange={e => setBaseUnit(e.target.value)}
+                    placeholder="Ex: comprimido"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-purple-400 focus:outline-none"
+                  />
+                </div>
+              </div>
               <p className="text-xs text-slate-400">
-                Será criado com preço unitário de {item.unit_price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} e quantidade zero.
-                O recebimento irá creditar {item.quantity} {item.unit}.
+                Preço unitário {item.unit_price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}, quantidade zero.
+                {unitsPerPackage && parseInt(unitsPerPackage) > 1
+                  ? ` O recebimento creditará ${item.quantity} × ${parseInt(unitsPerPackage)} = ${item.quantity * parseInt(unitsPerPackage)} ${baseUnit.trim() || 'itens'} (baixa dá-se na unidade-base).`
+                  : ` O recebimento irá creditar ${item.quantity} ${item.unit}.`}
               </p>
               <button
                 onClick={handleCreate}
