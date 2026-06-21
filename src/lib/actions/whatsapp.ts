@@ -3,7 +3,9 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { revalidatePath } from 'next/cache'
 import { evolutionSendText, evolutionSendMedia, evolutionGetConnectionState } from '@/lib/evolution-api-client'
+import { TRIGGER_MODULE, TRIGGER_MODULE_LABELS } from '@/lib/whatsapp-triggers'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -523,6 +525,65 @@ async function getActiveCredentials(): Promise<{
   return { instanceId, apiKey, apiUrl }
 }
 
+// ─── M8: gatilhos por módulo ──────────────────────────────────────────────────
+
+/** Lê os módulos com gatilho desligado da clínica do usuário atual. */
+async function getDisabledTriggerModules(): Promise<string[]> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+  const { data: profile } = await supabase
+    .from('profiles').select('clinic_id').eq('id', user.id).single()
+  if (!profile?.clinic_id) return []
+  const { data } = await supabase
+    .from('clinic_whatsapp_settings')
+    .select('disabled_trigger_modules')
+    .eq('clinic_id', profile.clinic_id)
+    .maybeSingle()
+  return (data?.disabled_trigger_modules as string[] | null) ?? []
+}
+
+/** Config para a UI: módulos com gatilho desligado. */
+export async function getTriggerModulesConfig(): Promise<string[] | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+  const { data: profile } = await supabase
+    .from('profiles').select('clinic_id').eq('id', user.id).single()
+  if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
+  const { data } = await supabase
+    .from('clinic_whatsapp_settings')
+    .select('disabled_trigger_modules')
+    .eq('clinic_id', profile.clinic_id)
+    .maybeSingle()
+  return (data?.disabled_trigger_modules as string[] | null) ?? []
+}
+
+/** Salva a lista de módulos com gatilho desligado. */
+export async function setTriggerModulesConfig(
+  disabledModules: string[],
+): Promise<{ success: true } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+  const { data: profile } = await supabase
+    .from('profiles').select('clinic_id').eq('id', user.id).single()
+  if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
+
+  const valid = new Set(TRIGGER_MODULE_LABELS.map(m => m.key))
+  const clean = [...new Set(disabledModules.filter(m => valid.has(m)))]
+
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('clinic_whatsapp_settings')
+    .update({ disabled_trigger_modules: clean, updated_at: new Date().toISOString() })
+    .eq('clinic_id', profile.clinic_id)
+  if (error) return { error: 'Erro ao salvar gatilhos: ' + error.message }
+
+  revalidatePath('/dashboard/management')
+  return { success: true }
+}
+
 export async function sendWhatsAppMessage(params: {
   phone:              string
   message:            string
@@ -533,6 +594,13 @@ export async function sendWhatsAppMessage(params: {
   hospitalizationId?: string
   attachments?:       Array<{ name: string; signedUrl: string; mimeType: string }>
 }): Promise<{ success: true; failedAttachments?: string[] } | { error: string }> {
+  // ── M8: gatilho do módulo desligado nas configurações? não envia. ───────────
+  const moduleKey = TRIGGER_MODULE[params.trigger]
+  if (moduleKey && (await getDisabledTriggerModules()).includes(moduleKey)) {
+    console.info(`[WhatsApp] Gatilho do módulo "${moduleKey}" desligado — envio ignorado.`)
+    return { error: 'Gatilho de WhatsApp deste módulo está desativado nas configurações.' }
+  }
+
   // ── LGPD Art. 7, I: verificar consentimento WhatsApp antes de enviar ────────
   if (params.tutorId) {
     const supabase = await createClient()

@@ -12,6 +12,7 @@ import ModulesTab from '../ModulesTab'
 import ClinicSettingsTab from '../ClinicSettingsTab'
 import CsvImporter from '../CsvImporter'
 import WhatsappIntelligentSetup from './WhatsappIntelligentSetup'
+import WhatsappTriggerModules from './WhatsappTriggerModules'
 import FiscalConfigForm from './FiscalConfigForm'
 import { useUpgradeModal } from '@/components/upgrade/UpgradeProvider'
 import type { UpgradeFeatureKey } from '@/components/upgrade/UpgradeModal'
@@ -146,7 +147,7 @@ export default function SettingsWorkspace({
           <div className="space-y-6">
             <SectionHeader icon={<MessageCircle className="h-5 w-5 text-slate-600" />} title="WhatsApp" description="Leia o QR Code para conectar a instância da clínica — atende bot e disparos automáticos" />
             {whatsappUnlocked
-              ? <WhatsappIntelligentSetup onToast={onToast} />
+              ? <><WhatsappIntelligentSetup onToast={onToast} /><WhatsappTriggerModules onToast={onToast} /></>
               : (
                 <UpsellCard
                   feature="whatsapp_intelligent"
