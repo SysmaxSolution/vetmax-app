@@ -50,7 +50,7 @@ export default function AppointmentValidationModal({
         if (!rejectMsg.trim()) { setErr('Informe o motivo da recusa.'); return }
         res = await rejectAppointmentRequest(request.id, rejectMsg)
       }
-      if ('error' in res) { setErr(res.error); return }
+      if ('error' in res) { setErr(res.error ?? null); return }
       onDone()
     })
   }
