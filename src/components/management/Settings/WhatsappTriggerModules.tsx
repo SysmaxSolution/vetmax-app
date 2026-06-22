@@ -9,7 +9,7 @@ import { TRIGGER_MODULE_LABELS } from '@/lib/whatsapp-triggers'
  * M8 — liga/desliga os gatilhos automáticos de WhatsApp POR MÓDULO.
  * Ex.: a clínica quer enviar na internação mas não no consultório.
  */
-export default function WhatsappTriggerModules({ onToast }: { onToast?: (m: string, t: 'success' | 'error') => void }) {
+export default function WhatsappTriggerModules({ onToast }: { onToast?: (type: 'success' | 'error', msg: string) => void }) {
   const [disabled, setDisabled] = useState<string[]>([])
   const [loading, setLoading]   = useState(true)
   const [saving, setSaving]     = useState(false)
@@ -31,8 +31,8 @@ export default function WhatsappTriggerModules({ onToast }: { onToast?: (m: stri
     setSaving(true)
     const res = await setTriggerModulesConfig(disabled)
     setSaving(false)
-    if ('error' in res) onToast?.(res.error, 'error')
-    else onToast?.('Gatilhos por módulo salvos.', 'success')
+    if ('error' in res) onToast?.('error', res.error)
+    else onToast?.('success', 'Gatilhos por módulo salvos.')
   }
 
   if (loading) {
