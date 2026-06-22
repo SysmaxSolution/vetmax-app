@@ -79,22 +79,6 @@ const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
-    name: 'request_appointment_booking',
-    description: 'Registra uma SOLICITAÇÃO de agendamento que será validada pela recepção antes de criar o horário definitivo. Use quando o tutor quiser agendar uma consulta. Colete nome do pet, data e hora de preferência antes de chamar.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        pet_name:       { type: 'string', description: 'Nome do pet/animal' },
-        preferred_date: { type: 'string', description: 'Data preferida no formato YYYY-MM-DD' },
-        preferred_time: { type: 'string', description: 'Horário preferido no formato HH:MM' },
-        alt_date:       { type: 'string', description: 'Data alternativa (opcional) no formato YYYY-MM-DD' },
-        alt_time:       { type: 'string', description: 'Horário alternativo (opcional) no formato HH:MM' },
-        visit_reason:   { type: 'string', description: 'Motivo: consultation, follow_up, vaccination, exam, surgery' },
-      },
-      required: ['pet_name', 'preferred_date', 'preferred_time'],
-    },
-  },
-  {
     name: 'request_human_handoff',
     description: 'Transfere a conversa para um atendente humano. Use quando: frustração do tutor, pergunta fora do escopo ou pedido explícito. Para urgências médicas com veterinário em cirurgia, use escalate_urgency_to_reception.',
     input_schema: {
@@ -132,6 +116,24 @@ const CONFIRMATION_TOOLS: Anthropic.Tool[] = [
     },
   },
 ]
+
+// Tool M9 — agendamento com validação pela recepção (ativo quando can_book=false)
+const REQUEST_BOOKING_TOOL: Anthropic.Tool = {
+  name: 'request_appointment_booking',
+  description: 'Registra uma SOLICITAÇÃO de agendamento que será validada pela recepção antes de criar o horário definitivo. Use quando o tutor quiser agendar uma consulta. Colete nome do pet, data e hora de preferência antes de chamar.',
+  input_schema: {
+    type: 'object' as const,
+    properties: {
+      pet_name:       { type: 'string', description: 'Nome do pet/animal' },
+      preferred_date: { type: 'string', description: 'Data preferida no formato YYYY-MM-DD' },
+      preferred_time: { type: 'string', description: 'Horário preferido no formato HH:MM' },
+      alt_date:       { type: 'string', description: 'Data alternativa (opcional) no formato YYYY-MM-DD' },
+      alt_time:       { type: 'string', description: 'Horário alternativo (opcional) no formato HH:MM' },
+      visit_reason:   { type: 'string', description: 'Motivo: consultation, follow_up, vaccination, exam, surgery' },
+    },
+    required: ['pet_name', 'preferred_date', 'preferred_time'],
+  },
+}
 
 const SURGERY_TOOL: Anthropic.Tool = {
   name: 'escalate_urgency_to_reception',
@@ -555,7 +557,7 @@ Para emergências ou pedidos fora do escopo, transfira para um atendente humano.
     : ''
 
   const bookingRestriction = !canBook
-    ? 'RESTRIÇÃO: Você NÃO pode confirmar agendamentos diretamente. Quando o tutor quiser agendar, use get_availability para informar os dias e horários disponíveis e, em seguida, use request_human_handoff (reason: "agendamento_pendente_confirmacao") para transferir ao atendente que fará a confirmação.'
+    ? 'MODO AGENDAMENTO PENDENTE: Você NÃO cria agendamentos diretamente. Quando o tutor quiser agendar, use get_availability para mostrar horários disponíveis, colete o nome do pet e hora preferida, depois chame request_appointment_booking. Informe ao tutor que a equipe irá confirmar em breve.'
     : ''
 
   // Contexto de confirmação de agendamento — ativado quando a conversa tem um
@@ -584,12 +586,15 @@ Não chame book_appointment neste fluxo — sempre use reschedule_appointment pa
   ].filter(Boolean).join('\n')
 
   // Filtra tools de acordo com as capacidades habilitadas
+  // can_book=true  → book_appointment (direto)
+  // can_book=false → request_appointment_booking (validação pela recepção, M9)
   const baseTools = TOOLS.filter(t => {
     if (t.name === 'get_price'        && !canInformPrices) return false
     if (t.name === 'book_appointment' && !canBook)         return false
     return true
   })
-  let activeTools = vetInfo.isInSurgery ? [...baseTools, SURGERY_TOOL] : baseTools
+  const withBookingMode = !canBook ? [...baseTools, REQUEST_BOOKING_TOOL] : baseTools
+  let activeTools = vetInfo.isInSurgery ? [...withBookingMode, SURGERY_TOOL] : withBookingMode
   if (params.pendingAppointmentId) {
     activeTools = [...activeTools, ...CONFIRMATION_TOOLS]
   }
