@@ -406,6 +406,44 @@ export interface Invitation {
   created_at: string
 }
 
+// ── M9 — Solicitação de agendamento via WhatsApp ─────────────────────────────
+
+export type AppointmentRequestStatus =
+  | 'pending_reception_validation'
+  | 'approved'
+  | 'proposed_alternative'
+  | 'rejected'
+  | 'expired'
+
+export interface AppointmentRequest {
+  id:                     string
+  clinic_id:              string
+  conversation_id:        string
+  tutor_id:               string
+  pet_id:                 string | null
+  preferred_date:         string
+  preferred_time:         string
+  preferred_date_alt:     string | null
+  preferred_time_alt:     string | null
+  status:                 AppointmentRequestStatus
+  validated_by_id:        string | null
+  validated_at:           string | null
+  validation_notes:       string | null
+  proposed_date:          string | null
+  proposed_time:          string | null
+  created_appointment_id: string | null
+  visit_reason:           string | null
+  vet_id:                 string | null
+  pet_name_free:          string | null
+  created_at:             string
+  expires_at:             string
+  updated_at:             string
+  // joins opcionais
+  tutor_name?:            string | null
+  tutor_phone?:           string | null
+  pet_name?:              string | null
+}
+
 export interface SaveTemplatePayload {
   name: string
   type: TemplateType

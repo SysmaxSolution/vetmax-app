@@ -79,6 +79,22 @@ const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'request_appointment_booking',
+    description: 'Registra uma SOLICITAÇÃO de agendamento que será validada pela recepção antes de criar o horário definitivo. Use quando o tutor quiser agendar uma consulta. Colete nome do pet, data e hora de preferência antes de chamar.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        pet_name:       { type: 'string', description: 'Nome do pet/animal' },
+        preferred_date: { type: 'string', description: 'Data preferida no formato YYYY-MM-DD' },
+        preferred_time: { type: 'string', description: 'Horário preferido no formato HH:MM' },
+        alt_date:       { type: 'string', description: 'Data alternativa (opcional) no formato YYYY-MM-DD' },
+        alt_time:       { type: 'string', description: 'Horário alternativo (opcional) no formato HH:MM' },
+        visit_reason:   { type: 'string', description: 'Motivo: consultation, follow_up, vaccination, exam, surgery' },
+      },
+      required: ['pet_name', 'preferred_date', 'preferred_time'],
+    },
+  },
+  {
     name: 'request_human_handoff',
     description: 'Transfere a conversa para um atendente humano. Use quando: frustração do tutor, pergunta fora do escopo ou pedido explícito. Para urgências médicas com veterinário em cirurgia, use escalate_urgency_to_reception.',
     input_schema: {
@@ -345,6 +361,61 @@ async function execBookAppointment(params: {
   return `Agendamento confirmado! ${petName} está marcado para ${dateLabel} às ${time}. Até lá!`
 }
 
+// ─── M9: Solicita agendamento (validação pela recepção) ───────────────────────
+
+async function execRequestAppointmentBooking(params: {
+  clinicId:       string
+  conversationId: string
+  tutorPhone:     string
+  petNameFree:    string
+  preferredDate:  string
+  preferredTime:  string
+  altDate:        string | null
+  altTime:        string | null
+  visitReason:    string | null
+}): Promise<string> {
+  const admin = createAdminClient()
+
+  // Resolve tutor_id pelo telefone
+  const { data: tutor } = await admin
+    .from('tutors')
+    .select('id')
+    .eq('clinic_id', params.clinicId)
+    .eq('phone', params.tutorPhone)
+    .maybeSingle()
+
+  if (!tutor) return 'Tutor não encontrado. Peça ao tutor para entrar em contato pelo telefone da clínica para agendar.'
+
+  // Tenta achar pet pelo nome + tutor
+  const { data: pet } = await admin
+    .from('patients')
+    .select('id')
+    .eq('clinic_id', params.clinicId)
+    .eq('tutor_id', tutor.id)
+    .ilike('name', params.petNameFree)
+    .maybeSingle()
+
+  const { error } = await admin
+    .from('appointment_requests')
+    .insert({
+      clinic_id:          params.clinicId,
+      conversation_id:    params.conversationId,
+      tutor_id:           tutor.id,
+      pet_id:             pet?.id ?? null,
+      pet_name_free:      params.petNameFree,
+      preferred_date:     params.preferredDate,
+      preferred_time:     params.preferredTime,
+      preferred_date_alt: params.altDate,
+      preferred_time_alt: params.altTime,
+      visit_reason:       params.visitReason,
+    })
+
+  if (error) return `Erro ao registrar solicitação: ${error.message}`
+
+  const dateLabel = new Date(`${params.preferredDate}T12:00:00`).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' })
+  return `Solicitacao registrada para ${params.petNameFree} em ${dateLabel} as ${params.preferredTime}. A recepção irá validar e confirmar em breve.`
+}
+
 // ─── Executores de confirmação de agendamento ─────────────────────────────────
 
 async function execConfirmAppointment(appointmentId: string): Promise<string> {
@@ -577,7 +648,7 @@ Não chame book_appointment neste fluxo — sempre use reschedule_appointment pa
         const input = block.input as Record<string, string>
         let result = ''
 
-        if (block.name === 'get_clinic_info')  result = await execGetClinicInfo(params.clinicId, canInformPrices)
+        if (block.name === 'get_clinic_info')   result = await execGetClinicInfo(params.clinicId, canInformPrices)
         if (block.name === 'get_price')         result = await execGetPrice(params.clinicId, input.service)
         if (block.name === 'get_availability')  result = await execGetAvailability(params.clinicId, input.date)
         if (block.name === 'escalate_urgency_to_reception') result = await execEscalateUrgency({
@@ -602,6 +673,17 @@ Não chame book_appointment neste fluxo — sempre use reschedule_appointment pa
           notes:      input.notes ?? '',
         })
 
+        if (block.name === 'request_appointment_booking') result = await execRequestAppointmentBooking({
+          clinicId:       params.clinicId,
+          conversationId: params.conversationId,
+          tutorPhone:     params.tutorPhone,
+          petNameFree:    input.pet_name,
+          preferredDate:  input.preferred_date,
+          preferredTime:  input.preferred_time,
+          altDate:        input.alt_date    ?? null,
+          altTime:        input.alt_time    ?? null,
+          visitReason:    input.visit_reason ?? null,
+        })
         if (block.name === 'confirm_appointment' && params.pendingAppointmentId) {
           result = await execConfirmAppointment(params.pendingAppointmentId)
           confirmationResolved = 'confirmed'
