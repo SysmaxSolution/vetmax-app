@@ -1,5 +1,6 @@
 ﻿import type { Metadata, Viewport } from 'next'
 import './globals.css'
+import { Analytics } from '@vercel/analytics/next'
 import { SplashOverlay } from '@/components/ui/SplashOverlay'
 
 export const metadata: Metadata = {
@@ -39,6 +40,7 @@ export default function RootLayout({
       <body>
         <SplashOverlay />
         {children}
+        <Analytics />
       </body>
     </html>
   )
