@@ -5,7 +5,7 @@
 export const PLAN_LIMITS = {
   free:       { users: 2,   documents: 3 },
   starter:    { users: 5,   documents: 5 },
-  premium:    { users: 999, documents: 999999 },
+  premium:    { users: 20,  documents: 999999 },
   enterprise: { users: 999, documents: 999999 },
 } as const
 

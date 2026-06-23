@@ -4,11 +4,11 @@ import type { PlanName, BusinessType } from '@/types'
 // Default-Deny: qualquer rota fora desta lista, no plano Free, renderiza o Paywall.
 
 export const FREE_ROUTES: Record<BusinessType, string[]> = {
+  // Free SEM caixa (0408): caixa é a cunha de upgrade para o Starter.
   vet_clinic: [
     '/dashboard',
     '/dashboard/patients',    // Pacientes
-    '/dashboard/reception',   // Recepção
-    '/dashboard/cashier',     // Caixa
+    '/dashboard/reception',   // Recepção (simples, sem agendamento automatizado)
     '/dashboard/vet',         // Consultório
     '/dashboard/management',  // Gestão (com tabs restritas — ver MANAGEMENT_TAB_BLOCKED_ON_FREE)
   ],
@@ -16,7 +16,6 @@ export const FREE_ROUTES: Record<BusinessType, string[]> = {
     '/dashboard',
     '/dashboard/patients',    // Pacientes
     '/dashboard/reception',   // Recepção
-    '/dashboard/cashier',     // Caixa
     '/dashboard/grooming',    // Banho e Tosa
     '/dashboard/management',  // Gestão (com tabs restritas)
   ],
@@ -44,8 +43,8 @@ export const MANAGEMENT_TAB_BLOCKED_ON_FREE: string[] = [
 // para marcar quais toggles são "Incluso" vs "PRO". Edite os dois juntos
 // quando precisar reabrir a lista do Free.
 export const FREE_MODULES: Record<BusinessType, string[]> = {
-  vet_clinic:     ['cashier', 'reception', 'patients', 'consultation', 'management'],
-  pet_aesthetics: ['cashier', 'reception', 'patients', 'grooming',     'management'],
+  vet_clinic:     ['reception', 'patients', 'consultation', 'management'],
+  pet_aesthetics: ['reception', 'patients', 'grooming',     'management'],
 }
 
 export function isModuleFree(moduleKey: string, businessType: BusinessType): boolean {
@@ -139,6 +138,11 @@ export const PAYWALL_COPY: Record<string, PaywallCopy> = {
     title:       'Vendas (PDV Completo)',
     description: 'PDV com catálogo de produtos e serviços, integração com estoque e emissão de NFS-e.',
     feature:     'PDV Completo',
+  },
+  '/dashboard/cashier': {
+    title:       'Caixa e PDV',
+    description: 'Abra e feche o caixa, registre vendas e pagamentos, controle o fluxo do dia e gere recibos. Disponível a partir do plano Starter.',
+    feature:     'Caixa',
   },
   '/dashboard/internal-chat': {
     title:       'Chat Interno',
