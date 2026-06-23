@@ -56,6 +56,7 @@ export interface ClinicContractedModule {
 }
 
 export interface SubscriptionPlanConfig {
+  starter_base_price: number
   premium_base_price: number
   enterprise_base_price: number
   annual_discount_percent: number

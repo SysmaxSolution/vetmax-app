@@ -36,6 +36,7 @@ const MODULE_LABELS_PT: Record<string, string> = {
 
 const PLAN_BADGE: Record<string, { label: string; cls: string }> = {
   free:        { label: 'Free',          cls: 'bg-slate-100 text-slate-700' },
+  starter:     { label: 'Starter',       cls: 'bg-teal-100 text-teal-700' },
   premium:     { label: 'Premium',       cls: 'bg-indigo-100 text-indigo-700' },
   enterprise:  { label: 'Enterprise',    cls: 'bg-amber-100 text-amber-700' },
   specialized: { label: 'Especializado', cls: 'bg-violet-100 text-violet-700' },
@@ -69,11 +70,13 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
   const { subscription, contractedKeys, catalog, config, businessType } = overview
 
   const planName = subscription?.plan_name ?? 'free'
-  const isPremium = planName === 'premium'
+  const isStarter   = planName === 'starter'
+  const isPremium   = planName === 'premium'
   const isEnterprise = planName === 'enterprise'
   const isSpecialized = planName === 'specialized'
 
-  const premiumBundle = catalog.filter(c => c.included_in_plan === 'premium')
+  const starterBundle  = catalog.filter(c => c.included_in_plan === 'starter')
+  const premiumBundle  = catalog.filter(c => c.included_in_plan === 'premium')
   const enterpriseLines = catalog.filter(c => c.included_in_plan === 'enterprise')
   const enterpriseAddonsAvailable = enterpriseLines.filter(c => c.is_available)
 
@@ -89,18 +92,23 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
   const [cycle, setCycle] = useState<BillingCycle>(
     (subscription?.billing_cycle as BillingCycle | null) ?? 'monthly'
   )
-  const [checkoutPlan, setCheckoutPlan]   = useState<'premium' | 'enterprise' | null>(null)
+  const [checkoutPlan, setCheckoutPlan]   = useState<'starter' | 'premium' | 'enterprise' | null>(null)
   const [showQuote, setShowQuote]         = useState(false)
   const [showDowngrade, setShowDowngrade] = useState(false)
   const [downgrading, setDowngrading]     = useState(false)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
   const pricingInput = {
+    starterBase: config.starter_base_price,
     premiumBase: config.premium_base_price,
     enterpriseBase: config.enterprise_base_price,
     annualDiscountPercent: config.annual_discount_percent,
     catalog,
   }
+  const starterTotals = useMemo(
+    () => computePlanPrice({ ...pricingInput, plan: 'starter', addonKeys: [], cycle }),
+    [config, catalog, cycle] // eslint-disable-line react-hooks/exhaustive-deps
+  )
   const premiumTotals = useMemo(
     () => computePlanPrice({ ...pricingInput, plan: 'premium', addonKeys: selectedAddons, cycle }),
     [config, catalog, selectedAddons, cycle] // eslint-disable-line react-hooks/exhaustive-deps
@@ -109,7 +117,11 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
     () => computePlanPrice({ ...pricingInput, plan: 'enterprise', addonKeys: [], cycle }),
     [config, catalog, cycle] // eslint-disable-line react-hooks/exhaustive-deps
   )
-  const checkoutTotals = checkoutPlan === 'enterprise' ? enterpriseTotals : premiumTotals
+  const checkoutTotals = checkoutPlan === 'enterprise'
+    ? enterpriseTotals
+    : checkoutPlan === 'starter'
+      ? starterTotals
+      : premiumTotals
 
   const freeLabels = (FREE_MODULES[businessType] ?? FREE_MODULES.vet_clinic)
     .map(k => MODULE_LABELS_PT[k] ?? k)
@@ -189,7 +201,9 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
           ...pricingInput, plan: 'premium', cycle: 'monthly',
           addonKeys: contractedKeys.filter(k => enterpriseLines.some(c => c.module_key === k)),
         }).monthlyTotal
-      : 0
+      : isStarter
+        ? config.starter_base_price
+        : 0
 
   const planBadge   = PLAN_BADGE[planName] ?? PLAN_BADGE.free
   const lifecycle   = subscription?.lifecycle_state ?? null
@@ -197,7 +211,7 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
     ? LIFECYCLE_BADGE[lifecycle]
     : STATUS_BADGE[subscription?.status ?? 'active'] ?? STATUS_BADGE.active
 
-  function quotaLine(plan: 'free' | 'premium' | 'enterprise') {
+  function quotaLine(plan: 'free' | 'starter' | 'premium' | 'enterprise') {
     const l = PLAN_LIMITS[plan]
     const users = l.users >= 999 ? 'Usuários ilimitados' : `${l.users} usuários`
     const docs = l.documents >= 999 ? 'documentos ilimitados' : `${l.documents} documentos personalizados`
@@ -267,8 +281,8 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
         </div>
       )}
 
-      {/* ── Cards comparativos (4 tiers) ────────────────────────────────── */}
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 items-start">
+      {/* ── Cards comparativos (5 tiers) ────────────────────────────────── */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 items-start">
         {/* Free */}
         <div className={`rounded-2xl border bg-white p-5 shadow-sm ${planName === 'free' ? 'border-slate-400 ring-1 ring-slate-300' : 'border-slate-200'}`}>
           <div className="flex items-center justify-between">
@@ -289,12 +303,73 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
           <p className="mt-3 flex items-center gap-1.5 text-[11px] text-slate-500">
             <Users className="h-3 w-3" /> {quotaLine('free')}
           </p>
-          {(isPremium || isEnterprise) && (
+          {(isStarter || isPremium || isEnterprise) && (
             <button
               onClick={() => setShowDowngrade(true)}
               className="mt-4 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-500 hover:border-red-200 hover:text-red-600 transition-colors"
             >
               Voltar para o Free
+            </button>
+          )}
+        </div>
+
+        {/* Starter */}
+        <div className={`rounded-2xl border-2 bg-white p-5 shadow-sm relative ${isStarter ? 'border-teal-500' : 'border-teal-200'}`}>
+          {isStarter && (
+            <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 rounded-full bg-teal-600 px-3 py-0.5 text-[10px] font-bold text-white uppercase tracking-wide">
+              Plano atual
+            </span>
+          )}
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-teal-500" />
+            <h3 className="text-sm font-bold text-slate-900">Starter</h3>
+          </div>
+          {cycle === 'yearly' ? (
+            <>
+              <p className="mt-2 text-2xl font-bold text-teal-700 tabular-nums">
+                {fmt(starterTotals.yearlyDiscounted)}<span className="text-sm font-medium text-slate-400">/ano no PIX</span>
+              </p>
+              <p className="mt-0.5 text-xs text-emerald-700 font-medium">
+                equivale a {fmt(starterTotals.yearlyDiscounted / 12)}/mês · economize {fmt(starterTotals.yearlyTotal - starterTotals.yearlyDiscounted)}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="mt-2 text-2xl font-bold text-teal-700 tabular-nums">
+                {fmt(starterTotals.monthlyTotal)}<span className="text-sm font-medium text-slate-400">/mês</span>
+              </p>
+              <p className="mt-0.5 text-xs text-slate-500">Prontuário por voz IA + núcleo completo</p>
+            </>
+          )}
+
+          <div className="mt-4">
+            <p className="mb-1.5 text-xs font-semibold text-slate-600 uppercase tracking-wide">
+              Todo o Free, mais:
+            </p>
+            <ul className="space-y-1.5">
+              {starterBundle.map(mod => (
+                <li key={mod.module_key} className="flex items-center gap-2 text-sm text-slate-600" title={mod.description}>
+                  <Check className="h-3.5 w-3.5 text-teal-500 shrink-0" /> {mod.label}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 flex items-center gap-1.5 text-[11px] text-slate-500">
+              <Users className="h-3 w-3" /> {quotaLine('starter')}
+            </p>
+            <p className="mt-1.5 text-[11px] text-slate-500">
+              NFS-e disponível como add-on: +R$ 49/mês (até 30 notas)
+            </p>
+          </div>
+
+          {!isSpecialized && (
+            <button
+              onClick={() => setCheckoutPlan('starter')}
+              disabled={isPremium || isEnterprise}
+              title={isPremium || isEnterprise ? 'Seu plano atual já inclui tudo do Starter' : undefined}
+              className="mt-4 w-full flex items-center justify-center gap-2 rounded-lg bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <CreditCard className="h-4 w-4" />
+              {isStarter ? 'Atualizar Assinatura' : `Assinar Starter — ${fmt(starterTotals.effectiveTotal)}${cycle === 'yearly' ? '/ano no PIX' : '/mês'}`}
             </button>
           )}
         </div>
@@ -522,7 +597,11 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
       {checkoutPlan && (
         <CheckoutDummyModal
           plan={checkoutPlan}
-          basePrice={checkoutPlan === 'enterprise' ? config.enterprise_base_price : config.premium_base_price}
+          basePrice={
+            checkoutPlan === 'enterprise' ? config.enterprise_base_price
+            : checkoutPlan === 'starter'  ? config.starter_base_price
+            : config.premium_base_price
+          }
           selectedModules={checkoutPlan === 'premium'
             ? enterpriseLines.filter(c => selectedAddons.includes(c.module_key))
             : []}
@@ -556,7 +635,7 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
             </div>
             <p className="mt-2 text-sm text-slate-600">
               Os módulos do plano serão desativados imediatamente e os limites voltam a
-              3 usuários e 3 documentos. Os dados não são apagados — voltam a ficar
+              2 usuários e 3 documentos. Os dados não são apagados — voltam a ficar
               disponíveis se você reativar a assinatura.
             </p>
             <div className="mt-4 flex gap-2">

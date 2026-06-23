@@ -3,8 +3,9 @@
 // geridos pelo runbook scripts/set-specialized-plan.mjs).
 
 export const PLAN_LIMITS = {
-  free:       { users: 3,   documents: 3 },
-  premium:    { users: 10,  documents: 10 },
+  free:       { users: 2,   documents: 3 },
+  starter:    { users: 5,   documents: 5 },
+  premium:    { users: 999, documents: 999999 },
   enterprise: { users: 999, documents: 999999 },
 } as const
 

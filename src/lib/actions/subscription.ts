@@ -69,7 +69,7 @@ async function provisionAsaasCheckout(args: {
   admin: ReturnType<typeof createAdminClient>
   clinicId: string
   userEmail: string | null
-  plan: 'premium' | 'enterprise'
+  plan: 'starter' | 'premium' | 'enterprise'
   cycle: BillingCycle
   method: 'pix' | 'card'
   value: number
@@ -127,7 +127,7 @@ async function provisionAsaasCheckout(args: {
       value: args.value,
       nextDueDate: ymdToday(),
       cycle: asaasCycle(args.cycle === 'yearly' ? 'yearly' : 'monthly'),
-      description: `SysVetMax — Plano ${args.plan === 'enterprise' ? 'Enterprise' : 'Premium'} (${args.cycle === 'yearly' ? 'anual' : 'mensal'})`,
+      description: `SysVetMax — Plano ${args.plan === 'enterprise' ? 'Enterprise' : args.plan === 'starter' ? 'Starter' : 'Premium'} (${args.cycle === 'yearly' ? 'anual' : 'mensal'})`,
       externalReference: args.clinicId,
     })
     subscriptionId = sub.id
@@ -171,7 +171,7 @@ export async function getSubscriptionOverview(): Promise<SubscriptionOverview | 
     admin.from('clinics').select('business_type').eq('id', ctx.clinicId).single(),
     admin.from('clinic_contracted_modules').select('module_key').eq('clinic_id', ctx.clinicId).eq('is_active', true),
     admin.from('subscription_module_catalog').select('*').order('sort_order'),
-    admin.from('subscription_plan_config').select('premium_base_price, enterprise_base_price, annual_discount_percent').eq('id', 1).single(),
+    admin.from('subscription_plan_config').select('starter_base_price, premium_base_price, enterprise_base_price, annual_discount_percent').eq('id', 1).single(),
   ])
 
   return {
@@ -182,8 +182,9 @@ export async function getSubscriptionOverview(): Promise<SubscriptionOverview | 
       monthly_price: Number(r.monthly_price),
     })) as SubscriptionModuleCatalogRow[],
     config: {
-      premium_base_price: Number(configResult.data?.premium_base_price ?? 99),
-      enterprise_base_price: Number(configResult.data?.enterprise_base_price ?? 299),
+      starter_base_price: Number(configResult.data?.starter_base_price ?? 189),
+      premium_base_price: Number(configResult.data?.premium_base_price ?? 359.9),
+      enterprise_base_price: Number(configResult.data?.enterprise_base_price ?? 1299),
       annual_discount_percent: Number(configResult.data?.annual_discount_percent ?? 20),
     },
     businessType: (clinicResult.data?.business_type ?? 'vet_clinic') as BusinessType,
@@ -193,7 +194,7 @@ export async function getSubscriptionOverview(): Promise<SubscriptionOverview | 
 // ─── Mutações ─────────────────────────────────────────────────────────────────
 
 export async function subscribeToPlan(input: {
-  plan: 'premium' | 'enterprise'
+  plan: 'starter' | 'premium' | 'enterprise'
   addonKeys: string[]
   cycle: BillingCycle
   payment: DummyPaymentPayload
@@ -201,7 +202,7 @@ export async function subscribeToPlan(input: {
   const ctx = await getAdminCtx()
   if ('error' in ctx) return ctx
 
-  if (input.plan !== 'premium' && input.plan !== 'enterprise') {
+  if (input.plan !== 'starter' && input.plan !== 'premium' && input.plan !== 'enterprise') {
     return { error: 'Plano inválido.' }
   }
   if (input.payment?.terms_accepted !== true) {
@@ -216,14 +217,14 @@ export async function subscribeToPlan(input: {
   }
 
   const addonKeys = Array.from(new Set(input.addonKeys ?? []))
-  if (input.plan === 'enterprise' && addonKeys.length > 0) {
-    return { error: 'O plano Enterprise já inclui todos os módulos — não há adicionais.' }
+  if ((input.plan === 'enterprise' || input.plan === 'starter') && addonKeys.length > 0) {
+    return { error: `O plano ${input.plan === 'enterprise' ? 'Enterprise' : 'Starter'} não suporta adicionais avulsos.` }
   }
 
   const admin = createAdminClient()
   const [catalogResult, configResult] = await Promise.all([
     admin.from('subscription_module_catalog').select('module_key, monthly_price, is_available, included_in_plan'),
-    admin.from('subscription_plan_config').select('premium_base_price, enterprise_base_price, annual_discount_percent').eq('id', 1).single(),
+    admin.from('subscription_plan_config').select('starter_base_price, premium_base_price, enterprise_base_price, annual_discount_percent').eq('id', 1).single(),
   ])
   const catalog = catalogResult.data ?? []
 
@@ -241,13 +242,14 @@ export async function subscribeToPlan(input: {
   // Autoridade de preço: SEMPRE o servidor (o total do client é só display)
   const totals = computePlanPrice({
     plan: input.plan,
-    premiumBase: Number(configResult.data?.premium_base_price ?? 99),
-    enterpriseBase: Number(configResult.data?.enterprise_base_price ?? 299),
+    starterBase: Number(configResult.data?.starter_base_price ?? 189),
+    premiumBase: Number(configResult.data?.premium_base_price ?? 359.9),
+    enterpriseBase: Number(configResult.data?.enterprise_base_price ?? 1299),
     annualDiscountPercent: Number(configResult.data?.annual_discount_percent ?? 20),
     catalog: catalog.map(r => ({
       module_key: r.module_key as string,
       monthly_price: Number(r.monthly_price),
-      included_in_plan: (r.included_in_plan ?? null) as 'premium' | 'enterprise' | null,
+      included_in_plan: (r.included_in_plan ?? null) as 'starter' | 'premium' | 'enterprise' | null,
     })),
     addonKeys,
     cycle: input.cycle,

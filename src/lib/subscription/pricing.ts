@@ -22,7 +22,8 @@ export interface PricingCatalogItem {
 }
 
 export interface PlanPricingInput {
-  plan: 'premium' | 'enterprise'
+  plan: 'starter' | 'premium' | 'enterprise'
+  starterBase: number
   premiumBase: number
   enterpriseBase: number
   annualDiscountPercent: number
@@ -68,7 +69,9 @@ function round2(v: number): number {
 export function computePlanPrice(input: PlanPricingInput): PriceTotals {
   const base = input.plan === 'enterprise'
     ? Number(input.enterpriseBase)
-    : Number(input.premiumBase)
+    : input.plan === 'starter'
+      ? Number(input.starterBase)
+      : Number(input.premiumBase)
 
   let addonsSum = 0
   if (input.plan === 'premium') {
