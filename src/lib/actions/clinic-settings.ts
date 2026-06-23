@@ -32,6 +32,18 @@ export type FlowConfig = {
    * depende desta flag (só a UI de venda).
    */
   subscription_plans_ui?: boolean
+  // ── Sub-features por tier (re-packaging 0408) ───────────────────────────────
+  // Derivadas do plano (premium/enterprise) por padrão; estas flags são
+  // OVERRIDES explícitos usados em clínicas specialized (à la carte).
+  /** Caixa Completo (vs PDV simples do Starter): sangria/suprimento, múltiplas
+   *  formas, recebíveis de cartão, conferência cega. Premium+. */
+  cashier_complete?:        boolean
+  /** Estoque Completo (vs básico do Starter): kits/pacotes, alertas de item
+   *  crítico/ponto de reposição, lote/validade. Premium+. */
+  stock_complete?:          boolean
+  /** Agenda Automatizada na Recepção (vs recepção simples do Free): agendamento
+   *  automatizado e confirmações. Premium+. */
+  reception_auto_schedule?: boolean
 }
 
 export type BusinessHourEntry = { open: string; close: string } | null
@@ -193,6 +205,60 @@ export async function isInternacaoCompleta(): Promise<boolean> {
 /** TRUE quando a clínica ativou o módulo Centro Cirúrgico. */
 export async function isCentroCirurgico(): Promise<boolean> {
   return getFlowFlag('centro_cirurgico')
+}
+
+// ─── Sub-features por tier (re-packaging 0408) ───────────────────────────────
+// Derivadas do plano: premium/enterprise concedem por padrão. Override
+// explícito via flow_config[flag]=true para clínicas specialized (à la carte).
+
+const TIER_FEATURE_PLANS = new Set<string>(['premium', 'enterprise'])
+
+async function hasTierFeature(flag: keyof FlowConfig): Promise<boolean> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return false
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('clinic_id')
+    .eq('id', user.id)
+    .single()
+  if (!profile?.clinic_id) return false
+
+  const admin = createAdminClient()
+  const [{ data: clinic }, { data: sub }] = await Promise.all([
+    admin.from('clinics').select('flow_config').eq('id', profile.clinic_id).single(),
+    admin
+      .from('tenant_subscriptions')
+      .select('plan_name, status')
+      .eq('clinic_id', profile.clinic_id)
+      .maybeSingle(),
+  ])
+
+  // Override explícito (specialized à la carte) tem precedência.
+  const flow = (clinic?.flow_config ?? {}) as FlowConfig
+  if (flow[flag] === true) return true
+
+  // Caso contrário, deriva do plano ativo.
+  const planName = sub?.plan_name ?? 'free'
+  const status = sub?.status ?? 'active'
+  const usable = status === 'active' || status === 'trialing'
+  return usable && TIER_FEATURE_PLANS.has(planName)
+}
+
+/** TRUE para Caixa Completo (Premium+); Starter usa PDV simples. */
+export async function hasCashierComplete(): Promise<boolean> {
+  return hasTierFeature('cashier_complete')
+}
+
+/** TRUE para Estoque Completo — kits/pacotes e alertas críticos (Premium+). */
+export async function hasStockComplete(): Promise<boolean> {
+  return hasTierFeature('stock_complete')
+}
+
+/** TRUE para Agenda Automatizada na Recepção (Premium+); Free/Starter manual. */
+export async function hasReceptionAutoSchedule(): Promise<boolean> {
+  return hasTierFeature('reception_auto_schedule')
 }
 
 // ─── Upload Logo ──────────────────────────────────────────────────────────────

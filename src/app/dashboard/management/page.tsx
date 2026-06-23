@@ -62,7 +62,7 @@ export default async function ManagementPage() {
       .order('sort_order'),
     admin
       .from('subscription_plan_config')
-      .select('premium_base_price, enterprise_base_price, annual_discount_percent')
+      .select('starter_base_price, premium_base_price, enterprise_base_price, annual_discount_percent')
       .eq('id', 1)
       .single(),
   ])
@@ -89,8 +89,9 @@ export default async function ManagementPage() {
       monthly_price: Number(r.monthly_price),
     })),
     config: {
-      premium_base_price: Number((planConfigResult as any)?.data?.premium_base_price ?? 99),
-      enterprise_base_price: Number((planConfigResult as any)?.data?.enterprise_base_price ?? 299),
+      starter_base_price: Number((planConfigResult as any)?.data?.starter_base_price ?? 189),
+      premium_base_price: Number((planConfigResult as any)?.data?.premium_base_price ?? 359.9),
+      enterprise_base_price: Number((planConfigResult as any)?.data?.enterprise_base_price ?? 1299),
       annual_discount_percent: Number((planConfigResult as any)?.data?.annual_discount_percent ?? 20),
     },
     businessType: ((clinicData?.business_type ?? 'vet_clinic') as 'vet_clinic' | 'pet_aesthetics'),

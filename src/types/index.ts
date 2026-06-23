@@ -6,7 +6,7 @@ export type UserRole = 'admin' | 'vet' | 'assistant' | 'receptionist' | 'pharmac
 // ── PLG — Planos, Feature Flags e Cotas ─────────────────────────────────────
 
 export type BusinessType = 'vet_clinic' | 'pet_aesthetics'
-export type PlanName = 'free' | 'premium' | 'enterprise' | 'specialized'
+export type PlanName = 'free' | 'starter' | 'premium' | 'enterprise' | 'specialized'
 export type SubscriptionStatus = 'active' | 'trialing' | 'past_due' | 'cancelled'
 // Estado autoritativo de cobrança da Fase 2 (migration 0396). NULL = legado.
 export type SubscriptionLifecycleState =
@@ -45,7 +45,7 @@ export interface SubscriptionModuleCatalogRow {
   included_module_keys: string[]
   flow_flags: string[]
   /** Bundle que inclui o módulo: premium | enterprise | null (só avulso/legado). */
-  included_in_plan: 'premium' | 'enterprise' | null
+  included_in_plan: 'starter' | 'premium' | 'enterprise' | null
 }
 
 export interface ClinicContractedModule {

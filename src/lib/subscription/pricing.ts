@@ -15,10 +15,15 @@ import type { BillingCycle } from '@/types'
 // 20%) porque o MDR do cartão consome a margem. Constante de negócio fixa.
 export const CARD_ANNUAL_DISCOUNT_PERCENT = 10
 
+// Add-ons que o STARTER pode contratar avulso (re-packaging 0408). Hoje só a
+// NFS-e/Faturamento (R$49) — protege o deal de quem precisa de nota mas não
+// quer subir para o Premium. Os demais módulos premium/enterprise NÃO entram.
+export const STARTER_ADDON_KEYS = new Set<string>(['billing_nfse'])
+
 export interface PricingCatalogItem {
   module_key: string
   monthly_price: number
-  included_in_plan: 'premium' | 'enterprise' | null
+  included_in_plan: 'starter' | 'premium' | 'enterprise' | null
 }
 
 export interface PlanPricingInput {
@@ -78,6 +83,14 @@ export function computePlanPrice(input: PlanPricingInput): PriceTotals {
     const byKey = new Map(
       input.catalog
         .filter(m => m.included_in_plan === 'enterprise')
+        .map(m => [m.module_key, Number(m.monthly_price)])
+    )
+    addonsSum = input.addonKeys.reduce((sum, key) => sum + (byKey.get(key) ?? 0), 0)
+  } else if (input.plan === 'starter') {
+    // Starter só pode somar os add-ons da whitelist (hoje: NFS-e R$49).
+    const byKey = new Map(
+      input.catalog
+        .filter(m => STARTER_ADDON_KEYS.has(m.module_key))
         .map(m => [m.module_key, Number(m.monthly_price)])
     )
     addonsSum = input.addonKeys.reduce((sum, key) => sum + (byKey.get(key) ?? 0), 0)

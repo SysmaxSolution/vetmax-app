@@ -8,7 +8,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { insertLegalAcceptanceRaw, getRequestMeta } from '@/lib/actions/legal'
-import { computePlanPrice, chargeValueFor, type PriceTotals } from '@/lib/subscription/pricing'
+import { computePlanPrice, chargeValueFor, STARTER_ADDON_KEYS, type PriceTotals } from '@/lib/subscription/pricing'
 import { syncClinicModulesFromContract } from '@/lib/billing/provision'
 import {
   getAsaasConfig,
@@ -217,8 +217,12 @@ export async function subscribeToPlan(input: {
   }
 
   const addonKeys = Array.from(new Set(input.addonKeys ?? []))
-  if ((input.plan === 'enterprise' || input.plan === 'starter') && addonKeys.length > 0) {
-    return { error: `O plano ${input.plan === 'enterprise' ? 'Enterprise' : 'Starter'} não suporta adicionais avulsos.` }
+  // Enterprise: bundle fechado, sem avulsos. Starter: só a whitelist (NFS-e).
+  if (input.plan === 'enterprise' && addonKeys.length > 0) {
+    return { error: 'O plano Enterprise não suporta adicionais avulsos.' }
+  }
+  if (input.plan === 'starter' && addonKeys.some(k => !STARTER_ADDON_KEYS.has(k))) {
+    return { error: 'O plano Starter só aceita a NFS-e como adicional.' }
   }
 
   const admin = createAdminClient()
