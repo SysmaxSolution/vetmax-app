@@ -89,6 +89,12 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
       ? contractedKeys.filter(k => enterpriseLines.some(c => c.module_key === k))
       : []
   )
+  // Add-on NFS-e do Starter (re-packaging 0408): único avulso do Starter.
+  const billingAddon = catalog.find(c => c.module_key === 'billing_nfse')
+  const [starterNfse, setStarterNfse] = useState<boolean>(
+    planName === 'starter' && contractedKeys.includes('billing_nfse')
+  )
+  const starterAddonKeys = starterNfse && billingAddon ? ['billing_nfse'] : []
   const [cycle, setCycle] = useState<BillingCycle>(
     (subscription?.billing_cycle as BillingCycle | null) ?? 'monthly'
   )
@@ -106,8 +112,8 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
     catalog,
   }
   const starterTotals = useMemo(
-    () => computePlanPrice({ ...pricingInput, plan: 'starter', addonKeys: [], cycle }),
-    [config, catalog, cycle] // eslint-disable-line react-hooks/exhaustive-deps
+    () => computePlanPrice({ ...pricingInput, plan: 'starter', addonKeys: starterAddonKeys, cycle }),
+    [config, catalog, starterNfse, cycle] // eslint-disable-line react-hooks/exhaustive-deps
   )
   const premiumTotals = useMemo(
     () => computePlanPrice({ ...pricingInput, plan: 'premium', addonKeys: selectedAddons, cycle }),
@@ -154,7 +160,11 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
     if (!checkoutPlan) return
     const result = await subscribeToPlan({
       plan: checkoutPlan,
-      addonKeys: checkoutPlan === 'premium' ? selectedAddons : [],
+      addonKeys: checkoutPlan === 'premium'
+        ? selectedAddons
+        : checkoutPlan === 'starter'
+          ? starterAddonKeys
+          : [],
       cycle,
       payment,
     })
@@ -356,10 +366,23 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
             <p className="mt-2 flex items-center gap-1.5 text-[11px] text-slate-500">
               <Users className="h-3 w-3" /> {quotaLine('starter')}
             </p>
-            <p className="mt-1.5 text-[11px] text-slate-500">
-              NFS-e disponível como add-on: +R$ 49/mês (até 30 notas)
-            </p>
           </div>
+
+          {/* Add-on NFS-e: opcional, +R$49/mês — oculto p/ premium/enterprise (já incluso lá) */}
+          {!isPremium && !isEnterprise && !isSpecialized && billingAddon && (
+            <label className="mt-3 flex cursor-pointer items-start gap-2 rounded-lg border border-teal-100 bg-teal-50/40 p-2.5">
+              <input
+                type="checkbox"
+                checked={starterNfse}
+                onChange={e => setStarterNfse(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-teal-600"
+              />
+              <span className="text-[11px] leading-snug text-slate-600">
+                <b className="text-slate-800">+ NFS-e (Faturamento)</b> — emissão automática de nota fiscal.
+                <span className="font-semibold text-teal-700"> +{fmt(Number(billingAddon.monthly_price))}/mês</span>
+              </span>
+            </label>
+          )}
 
           {!isSpecialized && (
             <button
@@ -604,7 +627,9 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
           }
           selectedModules={checkoutPlan === 'premium'
             ? enterpriseLines.filter(c => selectedAddons.includes(c.module_key))
-            : []}
+            : checkoutPlan === 'starter' && billingAddon
+              ? catalog.filter(c => starterAddonKeys.includes(c.module_key))
+              : []}
           cycle={cycle}
           totals={checkoutTotals}
           onCancel={() => setCheckoutPlan(null)}
