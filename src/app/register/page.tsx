@@ -8,6 +8,7 @@ import {
   Stethoscope, Scissors,
 } from 'lucide-react'
 import { signUpWithClinic, searchClinics } from '@/lib/actions/auth'
+import { recordAttribution } from '@/lib/actions/attribution'
 import type { BusinessType } from '@/types'
 
 // ─── Formatadores ─────────────────────────────────────────────────────────────
@@ -173,6 +174,19 @@ export default function RegisterPage() {
       setLoading(false)
     } else {
       setConfirmedEmail(res.email)
+      // F2 — registra atribuição de campanha (best-effort, não bloqueia)
+      try {
+        const q = new URLSearchParams(window.location.search)
+        void recordAttribution({
+          email: res.email,
+          utm_source: q.get('utm_source') ?? undefined,
+          utm_medium: q.get('utm_medium') ?? undefined,
+          utm_campaign: q.get('utm_campaign') ?? undefined,
+          utm_content: q.get('utm_content') ?? undefined,
+          creative_id: q.get('creative_id') ?? q.get('utm_content') ?? undefined,
+          landing_path: window.location.pathname,
+        })
+      } catch {}
     }
   }
 
