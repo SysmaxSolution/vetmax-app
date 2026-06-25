@@ -9,6 +9,134 @@ import { mineCorrections } from '@/lib/voice/correction-mining'
 // automaticamente (suggested → active). Trava anti-veneno do dicionário local.
 const PROMOTE_AT = 3
 
+export type ClinicCorrection = {
+  id: string
+  wrong_term: string
+  right_term: string
+  hits: number
+  status: 'active' | 'suggested' | 'rejected'
+  source: 'manual' | 'learned' | 'global'
+  created_at: string
+}
+
+// Resolve a clínica do usuário autenticado (NULL se não autenticado/sem clínica).
+async function resolveClinicId(): Promise<string | null> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+  const admin = createAdminClient()
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('clinic_id')
+    .eq('id', user.id)
+    .single()
+  return profile?.clinic_id ?? null
+}
+
+// Lista o dicionário da própria clínica (não inclui as regras globais).
+export async function listClinicCorrections(): Promise<ClinicCorrection[]> {
+  const clinicId = await resolveClinicId()
+  if (!clinicId) return []
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from('voice_correction_terms')
+    .select('id, wrong_term, right_term, hits, status, source, created_at')
+    .eq('clinic_id', clinicId)
+    .order('updated_at', { ascending: false })
+  return (data ?? []) as ClinicCorrection[]
+}
+
+// Aprova (active) ou rejeita (rejected) uma regra do dicionário da clínica.
+export async function setCorrectionStatus(
+  id: string,
+  status: 'active' | 'rejected'
+): Promise<{ success: true } | { error: string }> {
+  const clinicId = await resolveClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('voice_correction_terms')
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('clinic_id', clinicId)
+  return error ? { error: error.message } : { success: true }
+}
+
+// Edita os termos de uma regra (e a reativa).
+export async function updateCorrectionTerms(
+  id: string,
+  wrongTerm: string,
+  rightTerm: string
+): Promise<{ success: true } | { error: string }> {
+  if (!wrongTerm.trim() || !rightTerm.trim()) return { error: 'Termos não podem ser vazios.' }
+  const clinicId = await resolveClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('voice_correction_terms')
+    .update({
+      wrong_term: wrongTerm.trim().toLowerCase(),
+      right_term: rightTerm.trim(),
+      status: 'active',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .eq('clinic_id', clinicId)
+  return error ? { error: error.message } : { success: true }
+}
+
+// Adiciona uma regra manual (já ativa).
+export async function addManualCorrection(
+  wrongTerm: string,
+  rightTerm: string
+): Promise<{ success: true } | { error: string }> {
+  if (!wrongTerm.trim() || !rightTerm.trim()) return { error: 'Preencha os dois termos.' }
+  const clinicId = await resolveClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  const admin = createAdminClient()
+  const wrong = wrongTerm.trim().toLowerCase()
+
+  const { data: existing } = await admin
+    .from('voice_correction_terms')
+    .select('id')
+    .eq('clinic_id', clinicId)
+    .ilike('wrong_term', wrong)
+    .maybeSingle()
+
+  if (existing) {
+    const { error } = await admin
+      .from('voice_correction_terms')
+      .update({ right_term: rightTerm.trim(), status: 'active', source: 'manual', updated_at: new Date().toISOString() })
+      .eq('id', existing.id)
+    return error ? { error: error.message } : { success: true }
+  }
+
+  const { error } = await admin
+    .from('voice_correction_terms')
+    .insert({
+      clinic_id: clinicId,
+      wrong_term: wrong,
+      right_term: rightTerm.trim(),
+      hits: PROMOTE_AT,
+      status: 'active',
+      source: 'manual',
+    })
+  return error ? { error: error.message } : { success: true }
+}
+
+// Remove uma regra do dicionário da clínica.
+export async function deleteCorrection(id: string): Promise<{ success: true } | { error: string }> {
+  const clinicId = await resolveClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('voice_correction_terms')
+    .delete()
+    .eq('id', id)
+    .eq('clinic_id', clinicId)
+  return error ? { error: error.message } : { success: true }
+}
+
 // Regras ativas aplicáveis a uma clínica: as próprias + as globais (clinic_id NULL).
 export async function getActiveCorrectionsForClinic(clinicId: string): Promise<CorrectionRule[]> {
   const admin = createAdminClient()

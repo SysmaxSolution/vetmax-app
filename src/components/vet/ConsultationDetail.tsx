@@ -22,6 +22,7 @@ import { addVaccine, type PatientVaccine } from '@/lib/actions/vaccines'
 import { isConsentStale } from '@/lib/consent-version'
 import { wrapAiBlock, stripAiBlocks, hasUnreviewedAiText } from '@/lib/voice/ai-provenance'
 import { recordVoiceCorrectionEvent } from '@/lib/actions/voice-corrections'
+import VoiceDictionaryModal from '@/components/vet/VoiceDictionaryModal'
 import { generateInvoice } from '@/lib/actions/billing'
 import { Toast } from '@/components/ui/toast'
 import { PetAvatar } from '@/components/ui/PetAvatar'
@@ -202,6 +203,7 @@ export default function ConsultationDetail({
   const [startTriggers,  setStartTriggers]  = useState<string[]>([])
   const [stopTriggers,   setStopTriggers]   = useState<string[]>([])
   const [voiceConfigOpen, setVoiceConfigOpen] = useState(false)
+  const [dictionaryOpen, setDictionaryOpen] = useState(false)
   const [configSaving,   setConfigSaving]   = useState(false)
   const [newStartInput,  setNewStartInput]  = useState('')
   const [newStopInput,   setNewStopInput]   = useState('')
@@ -2615,6 +2617,11 @@ export default function ConsultationDetail({
               </div>
             </div>
 
+            <button type="button" onClick={() => { setVoiceConfigOpen(false); setDictionaryOpen(true) }}
+              className="w-full border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold py-2 rounded-xl text-sm transition-all flex items-center justify-center gap-2">
+              <Sparkles className="h-4 w-4 text-teal-600" /> Dicionário de correção de voz
+            </button>
+
             <button type="button" onClick={saveVoiceConfig} disabled={configSaving}
               className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 rounded-xl text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50">
               {configSaving ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando…</> : <><Save className="h-4 w-4" /> Salvar Configurações</>}
@@ -2623,6 +2630,7 @@ export default function ConsultationDetail({
         </div>
       )}
 
+      {dictionaryOpen && <VoiceDictionaryModal onClose={() => setDictionaryOpen(false)} />}
 
     </>
   )
