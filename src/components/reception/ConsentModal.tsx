@@ -2,14 +2,13 @@
 
 import { useState } from 'react'
 import { Shield, X, FileText, CheckCircle, ExternalLink } from 'lucide-react'
+import { CONSENT_VERSION } from '@/lib/consent-version'
 
 interface Props {
   tutorName: string
   onAccept: () => void
   onDecline: () => void
 }
-
-const CONSENT_VERSION = '1.0'
 
 const CONSENT_TEXT = `
 TERMOS DE CONSENTIMENTO E POLÍTICA DE PRIVACIDADE — SysVetMax
@@ -21,7 +20,9 @@ e à Resolução CFMV nº 1.138/2016, informamos:
 
 1. DADOS COLETADOS
    Coletamos: nome completo, CPF, telefone, e-mail, endereço e dados do animal
-   (nome, espécie, raça, histórico clínico, vacinas, medicamentos).
+   (nome, espécie, raça, histórico clínico, vacinas, medicamentos). Durante o
+   atendimento, a evolução clínica pode ser registrada por voz e convertida em
+   texto (ver item 3).
 
 2. FINALIDADE
    Os dados são utilizados exclusivamente para:
@@ -29,21 +30,30 @@ e à Resolução CFMV nº 1.138/2016, informamos:
    • Elaboração e arquivamento de prontuários (obrigatório por lei)
    • Comunicações sobre saúde do animal
 
-3. RETENÇÃO
+3. REGISTRO POR VOZ E INTELIGÊNCIA ARTIFICIAL
+   Durante o atendimento, o(a) Médico(a) Veterinário(a) poderá registrar a
+   evolução clínica por voz. A fala captada pode conter trechos da sua voz e é
+   convertida em texto e organizada com auxílio de ferramentas de inteligência
+   artificial, com a finalidade exclusiva de preencher o prontuário do animal.
+   O conteúdo é tratado de forma confidencial e utilizado apenas para a
+   prestação do serviço veterinário. Você pode solicitar que o atendimento NÃO
+   seja registrado por voz a qualquer momento, sem prejuízo ao atendimento.
+
+4. RETENÇÃO
    Prontuários médicos são mantidos por no mínimo 7 (sete) anos, conforme
    exige a Resolução CFMV nº 1.138/2016. Dados pessoais acompanham este prazo.
 
-4. SEUS DIREITOS (LGPD Art. 18)
+5. SEUS DIREITOS (LGPD Art. 18)
    Você tem direito a: confirmar existência de tratamento, acessar seus dados,
    corrigir dados incompletos, solicitar anonimização, portabilidade e eliminação
    (exceto dados de prontuário, cuja retenção é obrigatória por lei).
 
-5. COMPARTILHAMENTO
+6. COMPARTILHAMENTO
    Seus dados NÃO são vendidos. Podem ser compartilhados apenas com:
    • Órgãos reguladores (CFMV, MAPA) quando exigido por lei
    • Convênios veterinários, mediante sua autorização expressa
 
-6. CONTATO DO DPO
+7. CONTATO DO DPO
    Para exercer seus direitos: privacidade@vetmax.com.br
 
 Ao clicar em "Li e Concordo", você confirma que leu, compreendeu e aceita

@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { CONSENT_VERSION } from '@/lib/consent-version'
 import type { CreateTutorPayload, CreatePatientPayload } from '@/types'
 
 // ─── Busca inteligente: CPF do Tutor, Nome do Tutor ou Nome do Pet ────────────
@@ -344,7 +345,7 @@ export async function recordConsent(
     p_tutor_id:        tutorId,
     p_clinic_id:       profile.clinic_id,
     p_action:          action,
-    p_consent_version: '1.0',
+    p_consent_version: CONSENT_VERSION,
   })
 
   if (error) return { error: 'Erro ao registrar consentimento: ' + error.message }
