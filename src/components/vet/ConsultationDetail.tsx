@@ -248,6 +248,14 @@ export default function ConsultationDetail({
   const [pendingMedSuggestions, setPendingMedSuggestions] = useState<VoiceExtractionResult['medicacoes_aplicadas']>([])
   const [pendingVaccineSuggestions, setPendingVaccineSuggestions] = useState<NonNullable<VoiceExtractionResult['vaccines_applied']>>([])
 
+  // Frente 1 (council): marcadores de proveniência. Delimitam no prontuário o
+  // texto INFERIDO pela IA (SOAP parafraseado) — distinto do texto ditado
+  // literalmente. Removidos quando o MV revisa (acceptAiText); a finalização
+  // (completed) trava enquanto existirem.
+  const AI_BLOCK_OPEN = '⟦ IA · revisar ⟧'
+  const AI_BLOCK_CLOSE = '⟦ fim IA ⟧'
+  const hasUnreviewedAiText = vetNotes.includes(AI_BLOCK_OPEN)
+
   // NOVO: Estado do Cadastro Vivo (voz IA)
   const [profileUpdates, setProfileUpdates] = useState<any | null>(null)
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false)
@@ -376,11 +384,17 @@ export default function ConsultationDetail({
       return
     }
 
-    // 1. Texto do prontuário → respeita o modo
-    const notesForRecord = aiMode === 'transcribe_only'
+    // 1. Texto do prontuário → respeita o modo. No modo ai_assisted o SOAP é
+    //    INFERIDO pela IA: delimitamos com marcadores para o MV revisar/validar
+    //    antes de finalizar (Frente 1 / council). Texto ditado literal não marca.
+    const isInferred = aiMode !== 'transcribe_only' && !!result.notas_clinicas?.trim()
+    const recordText = aiMode === 'transcribe_only'
       ? transcript                              // literal — exatamente como falado
       : (result.notas_clinicas?.trim() || transcript)  // SOAP IA, ou fallback ao bruto
-    if (notesForRecord.trim()) {
+    const notesForRecord = isInferred
+      ? `${AI_BLOCK_OPEN}\n${recordText}\n${AI_BLOCK_CLOSE}`
+      : recordText
+    if (recordText.trim()) {
       const newNotes = vetNotesRef.current ? `${vetNotesRef.current}\n\n${notesForRecord}` : notesForRecord
       setVetNotes(newNotes)
       autoSave(newNotes)
@@ -555,6 +569,19 @@ export default function ConsultationDetail({
     setPendingVaccineSuggestions(prev => prev.filter((_, i) => i !== index))
   }, [])
 
+  // MV revisou os trechos inferidos pela IA: remove os marcadores de proveniência
+  // (o texto vira prontuário validado) e persiste.
+  const acceptAiText = useCallback(() => {
+    const cleaned = vetNotes
+      .split(AI_BLOCK_OPEN).join('')
+      .split(AI_BLOCK_CLOSE).join('')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim()
+    setVetNotes(cleaned)
+    autoSave(cleaned)
+    setToast({ type: 'success', message: 'Trechos da IA marcados como revisados.' })
+  }, [vetNotes]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // IMPORTANTE: NÃO passar onSendWA. O gatilho de WhatsApp deve abrir SOMENTE na
   // finalização do atendimento (alta/transferência via executeFinalize), nunca
   // após um auto-save de voz. Com onSendWA omitido, o hook volta a IDLE depois de
@@ -715,6 +742,15 @@ export default function ConsultationDetail({
       setToast({
         type: 'error',
         message: 'Há medicações/vacinas sugeridas pela IA aguardando revisão. Confirme ou dispense cada uma antes de encerrar.',
+      })
+      return
+    }
+    // Frente 1: não fecha o prontuário com trechos inferidos pela IA ainda não
+    // revisados pelo MV (delimitados por ⟦ IA · revisar ⟧).
+    if (nextStatus === 'completed' && hasUnreviewedAiText) {
+      setToast({
+        type: 'error',
+        message: 'Revise os trechos do prontuário gerados pela IA (marcados ⟦ IA · revisar ⟧) e clique em "Revisei os trechos da IA" antes de encerrar.',
       })
       return
     }
@@ -1445,6 +1481,27 @@ export default function ConsultationDetail({
                   de cards adjacentes em layouts densos. */}
               <CoverageChip state={coverageSemaforo} className="z-20" />
             </div>
+
+            {/* Frente 1: trechos inferidos pela IA aguardando revisão do MV */}
+            {hasUnreviewedAiText && !isFinalized && (
+              <div className="flex items-start gap-3 bg-violet-50 border border-violet-200 rounded-xl px-4 py-3">
+                <Sparkles className="w-4 h-4 text-violet-600 flex-shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-violet-900">Trechos gerados pela IA aguardando sua revisão</p>
+                  <p className="text-xs text-violet-600 mt-0.5">
+                    O texto entre <code className="font-mono text-[11px]">⟦ IA · revisar ⟧</code> e <code className="font-mono text-[11px]">⟦ fim IA ⟧</code> foi <strong>inferido pela IA</strong> (não ditado por você). Confira e valide para poder finalizar.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={acceptAiText}
+                  className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-700 transition-colors flex-shrink-0"
+                >
+                  <CheckSquare className="h-3.5 w-3.5" />
+                  Revisei os trechos da IA
+                </button>
+              </div>
+            )}
 
             {/* Live transcript */}
             {(isRecording || liveTranscript) && (
