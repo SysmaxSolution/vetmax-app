@@ -21,6 +21,7 @@ import { addAppliedMedication, deleteAppliedMedication, updateAppliedMedication,
 import { addVaccine, type PatientVaccine } from '@/lib/actions/vaccines'
 import { isConsentStale } from '@/lib/consent-version'
 import { wrapAiBlock, stripAiBlocks, hasUnreviewedAiText } from '@/lib/voice/ai-provenance'
+import { recordVoiceCorrectionEvent } from '@/lib/actions/voice-corrections'
 import { generateInvoice } from '@/lib/actions/billing'
 import { Toast } from '@/components/ui/toast'
 import { PetAvatar } from '@/components/ui/PetAvatar'
@@ -342,6 +343,10 @@ export default function ConsultationDetail({
   const vetNotesRef = useRef(vetNotes)
   useEffect(() => { vetNotesRef.current = vetNotes }, [vetNotes])
 
+  // Frente 2: última transcrição BRUTA da Web Speech (antes do dicionário). Ao
+  // finalizar, comparamos com o prontuário que o MV deixou para aprender correções.
+  const lastRawTranscriptRef = useRef('')
+
   const handleVoiceAutoSave = useCallback(async (transcript: string) => {
     console.log('[VOICE→IA] handleVoiceAutoSave', {
       aiMode, transcriptLen: transcript.length, preview: transcript.slice(0, 120),
@@ -351,6 +356,7 @@ export default function ConsultationDetail({
       setToast({ type: 'error', message: 'Gravação vazia — nada a processar.' })
       return
     }
+    lastRawTranscriptRef.current = transcript  // Frente 2: guarda o bruto p/ aprendizado
 
     // O modo só afeta O TEXTO que vai para o campo "Prontuário":
     //   - transcribe_only → texto literal do que o vet falou
@@ -784,6 +790,16 @@ export default function ConsultationDetail({
         // Gerar fatura automaticamente ao dar alta
         if (nextStatus === 'completed') {
           generateInvoice(consultation.id).catch(() => {})
+        }
+
+        // Frente 2: aprende com as correções do MV (transcrição bruta vs.
+        // prontuário final, sem marcadores de IA). Fire-and-forget.
+        if (lastRawTranscriptRef.current.trim()) {
+          recordVoiceCorrectionEvent(
+            consultation.id,
+            lastRawTranscriptRef.current,
+            stripAiBlocks(vetNotes),
+          ).catch(() => {})
         }
         const label = nextStatus === 'completed'
           ? 'Consulta concluída! Fatura gerada para o caixa.'
