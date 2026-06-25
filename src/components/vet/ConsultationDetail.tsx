@@ -388,10 +388,12 @@ export default function ConsultationDetail({
     // 1. Texto do prontuário → respeita o modo. No modo ai_assisted o SOAP é
     //    INFERIDO pela IA: delimitamos com marcadores para o MV revisar/validar
     //    antes de finalizar (Frente 1 / council). Texto ditado literal não marca.
+    // Frente 2: usa a transcrição já corrigida pelo dicionário (servidor).
+    const correctedTranscript = result.transcript_corrected ?? transcript
     const isInferred = aiMode !== 'transcribe_only' && !!result.notas_clinicas?.trim()
     const recordText = aiMode === 'transcribe_only'
-      ? transcript                              // literal — exatamente como falado
-      : (result.notas_clinicas?.trim() || transcript)  // SOAP IA, ou fallback ao bruto
+      ? correctedTranscript                     // literal corrigido pelo dicionário
+      : (result.notas_clinicas?.trim() || correctedTranscript)  // SOAP IA, ou fallback
     const notesForRecord = isInferred ? wrapAiBlock(recordText) : recordText
     if (recordText.trim()) {
       const newNotes = vetNotesRef.current ? `${vetNotesRef.current}\n\n${notesForRecord}` : notesForRecord

@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { logAudit } from './audit'
 import { deductStockForMedication } from './stock'
+import { correctTranscript } from './voice-corrections'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -311,6 +312,7 @@ export async function deleteReferral(
 
 export type VoiceExtractionResult = {
   notas_clinicas: string
+  transcript_corrected?: string  // Frente 2: transcrição após o dicionário de correção
   medicacoes_aplicadas: Array<{
     medication_name: string
     dosage: string | null
@@ -369,6 +371,11 @@ export async function extractFullVoice(
   flowConfig?: FlowConfigInput
 ): Promise<VoiceExtractionResult | { error: string }> {
   if (!transcript.trim()) return { error: 'Transcrição vazia.' }
+
+  // Frente 2: corrige termos veterinários/fármacos que o STT erra ANTES do Haiku
+  // (e antes de virar prontuário no modo transcribe_only). Falha segura: na dúvida
+  // devolve o texto original.
+  transcript = await correctTranscript(transcript)
 
   const today = new Date()
   // Usa o timezone da clínica para `todayIso`/`todayFormatted` — Node em UTC no
@@ -494,6 +501,7 @@ REGRAS ABSOLUTAS:
       vaccines_applied:       Array.isArray(parsed.vaccines_applied)       ? parsed.vaccines_applied        : [],
       pet_profile_updates:    parsed.pet_profile_updates ?? null,
       suggested_routing:      parsed.suggested_routing ?? null, // <--- ADICIONE AQUI
+      transcript_corrected:   transcript,  // Frente 2: já passou pelo dicionário
     }
 
     if (triageMerged && parsed.sinais_vitais && typeof parsed.sinais_vitais === 'object') {
