@@ -20,6 +20,7 @@ import { updatePatientFromLiveReg } from '@/lib/actions/pets'
 import { addAppliedMedication, deleteAppliedMedication, updateAppliedMedication, extractFullVoice, type AppliedMedication, type VoiceExtractionResult } from '@/lib/actions/pharmacy'
 import { addVaccine, type PatientVaccine } from '@/lib/actions/vaccines'
 import { isConsentStale } from '@/lib/consent-version'
+import { wrapAiBlock, stripAiBlocks, hasUnreviewedAiText } from '@/lib/voice/ai-provenance'
 import { generateInvoice } from '@/lib/actions/billing'
 import { Toast } from '@/components/ui/toast'
 import { PetAvatar } from '@/components/ui/PetAvatar'
@@ -252,13 +253,9 @@ export default function ConsultationDetail({
   const [pendingMedSuggestions, setPendingMedSuggestions] = useState<VoiceExtractionResult['medicacoes_aplicadas']>([])
   const [pendingVaccineSuggestions, setPendingVaccineSuggestions] = useState<NonNullable<VoiceExtractionResult['vaccines_applied']>>([])
 
-  // Frente 1 (council): marcadores de proveniência. Delimitam no prontuário o
-  // texto INFERIDO pela IA (SOAP parafraseado) — distinto do texto ditado
-  // literalmente. Removidos quando o MV revisa (acceptAiText); a finalização
-  // (completed) trava enquanto existirem.
-  const AI_BLOCK_OPEN = '⟦ IA · revisar ⟧'
-  const AI_BLOCK_CLOSE = '⟦ fim IA ⟧'
-  const hasUnreviewedAiText = vetNotes.includes(AI_BLOCK_OPEN)
+  // Frente 1 (council): há trechos inferidos pela IA aguardando revisão do MV?
+  // Marcadores e helpers em @/lib/voice/ai-provenance.
+  const aiTextPending = hasUnreviewedAiText(vetNotes)
 
   // NOVO: Estado do Cadastro Vivo (voz IA)
   const [profileUpdates, setProfileUpdates] = useState<any | null>(null)
@@ -395,9 +392,7 @@ export default function ConsultationDetail({
     const recordText = aiMode === 'transcribe_only'
       ? transcript                              // literal — exatamente como falado
       : (result.notas_clinicas?.trim() || transcript)  // SOAP IA, ou fallback ao bruto
-    const notesForRecord = isInferred
-      ? `${AI_BLOCK_OPEN}\n${recordText}\n${AI_BLOCK_CLOSE}`
-      : recordText
+    const notesForRecord = isInferred ? wrapAiBlock(recordText) : recordText
     if (recordText.trim()) {
       const newNotes = vetNotesRef.current ? `${vetNotesRef.current}\n\n${notesForRecord}` : notesForRecord
       setVetNotes(newNotes)
@@ -576,11 +571,7 @@ export default function ConsultationDetail({
   // MV revisou os trechos inferidos pela IA: remove os marcadores de proveniência
   // (o texto vira prontuário validado) e persiste.
   const acceptAiText = useCallback(() => {
-    const cleaned = vetNotes
-      .split(AI_BLOCK_OPEN).join('')
-      .split(AI_BLOCK_CLOSE).join('')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim()
+    const cleaned = stripAiBlocks(vetNotes)
     setVetNotes(cleaned)
     autoSave(cleaned)
     setToast({ type: 'success', message: 'Trechos da IA marcados como revisados.' })
@@ -751,7 +742,7 @@ export default function ConsultationDetail({
     }
     // Frente 1: não fecha o prontuário com trechos inferidos pela IA ainda não
     // revisados pelo MV (delimitados por ⟦ IA · revisar ⟧).
-    if (nextStatus === 'completed' && hasUnreviewedAiText) {
+    if (nextStatus === 'completed' && aiTextPending) {
       setToast({
         type: 'error',
         message: 'Revise os trechos do prontuário gerados pela IA (marcados ⟦ IA · revisar ⟧) e clique em "Revisei os trechos da IA" antes de encerrar.',
@@ -1499,7 +1490,7 @@ export default function ConsultationDetail({
             </div>
 
             {/* Frente 1: trechos inferidos pela IA aguardando revisão do MV */}
-            {hasUnreviewedAiText && !isFinalized && (
+            {aiTextPending && !isFinalized && (
               <div className="flex items-start gap-3 bg-violet-50 border border-violet-200 rounded-xl px-4 py-3">
                 <Sparkles className="w-4 h-4 text-violet-600 flex-shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0">
