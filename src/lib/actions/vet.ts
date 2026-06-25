@@ -186,6 +186,8 @@ export type VetConsultationDetail = {
     name: string
     phone: string
     cpf: string
+    consent_given: boolean
+    consent_version: string | null
   }
   vital_signs: VitalSigns | null
   past_consultations: {
@@ -221,7 +223,7 @@ export async function getVetConsultation(
         allergies, chronic_diseases, past_surgeries, notes,
         coat_color, reproductive_status, medical_history,
         photo_url, behavior_tags, microchip_id,
-        tutors ( id, name, phone, cpf )
+        tutors ( id, name, phone, cpf, consent_given, consent_version )
       )
     `)
     .eq('id', consultationId)
@@ -293,6 +295,8 @@ export async function getVetConsultation(
       name: c.patients?.tutors?.name ?? '—',
       phone: c.patients?.tutors?.phone ?? '',
       cpf: c.patients?.tutors?.cpf ?? '',
+      consent_given: c.patients?.tutors?.consent_given ?? false,
+      consent_version: c.patients?.tutors?.consent_version ?? null,
     },
     vital_signs: reconstructedVitals,
     past_consultations: (past ?? []).map((pc: any) => ({

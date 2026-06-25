@@ -19,6 +19,7 @@ import type { AuditResult } from '@/lib/actions/insurance-audit'
 import { updatePatientFromLiveReg } from '@/lib/actions/pets'
 import { addAppliedMedication, deleteAppliedMedication, updateAppliedMedication, extractFullVoice, type AppliedMedication, type VoiceExtractionResult } from '@/lib/actions/pharmacy'
 import { addVaccine, type PatientVaccine } from '@/lib/actions/vaccines'
+import { isConsentStale } from '@/lib/consent-version'
 import { generateInvoice } from '@/lib/actions/billing'
 import { Toast } from '@/components/ui/toast'
 import { PetAvatar } from '@/components/ui/PetAvatar'
@@ -155,6 +156,9 @@ export default function ConsultationDetail({
   const router = useRouter()
   const aiMode = useAiTranscriptionMode()
   const { patient, tutor, vital_signs, past_consultations } = consultation
+  // LGPD: tutor sem consentimento vigente para registro por voz/IA. Apenas avisa
+  // o MV (não bloqueia o atendimento); a recepção força o re-aceite no check-in.
+  const consentStale = isConsentStale(tutor.consent_given, tutor.consent_version)
 
   // Registra contexto de chat para esta consulta
 
@@ -1454,6 +1458,18 @@ export default function ConsultationDetail({
           </div>
 
           <div className="p-6 space-y-4">
+            {consentStale && !isFinalized && (
+              <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                <span className="text-base leading-none mt-0.5">⚠️</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-amber-900">Consentimento de voz/IA não confirmado</p>
+                  <p className="text-xs text-amber-700 mt-0.5">
+                    O tutor ainda não aceitou o termo vigente que cobre o registro por voz e o uso de IA. Você pode atender normalmente — a recepção solicita o re-aceite no próximo check-in.
+                  </p>
+                </div>
+              </div>
+            )}
+
             <label htmlFor="vet-notes-textarea" className="block text-sm font-semibold text-slate-700 mb-2">
               Anamnese / Notas Clínicas *
             </label>

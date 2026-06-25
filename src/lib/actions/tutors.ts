@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { CONSENT_VERSION } from '@/lib/consent-version'
+import { CONSENT_VERSION, isConsentStale } from '@/lib/consent-version'
 import type { CreateTutorPayload, CreatePatientPayload } from '@/types'
 
 // ─── Busca inteligente: CPF do Tutor, Nome do Tutor ou Nome do Pet ────────────
@@ -350,4 +350,38 @@ export async function recordConsent(
 
   if (error) return { error: 'Erro ao registrar consentimento: ' + error.message }
   return { success: true, historyId: data?.history_id ?? '' }
+}
+
+// Status de consentimento do tutor — usado para forçar re-aceite na próxima
+// visita (check-in) quando o termo evoluiu (ex.: 1.0 → 1.1, cláusula de voz/IA).
+export async function getTutorConsentStatus(
+  tutorId: string
+): Promise<{ stale: boolean; consentGiven: boolean; consentVersion: string | null } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const admin = createAdminClient()
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('clinic_id')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile?.clinic_id) return { error: 'Perfil sem clínica vinculada.' }
+
+  const { data, error } = await admin
+    .from('tutors')
+    .select('consent_given, consent_version')
+    .eq('id', tutorId)
+    .eq('clinic_id', profile.clinic_id)
+    .single()
+
+  if (error || !data) return { error: 'Tutor não encontrado.' }
+
+  return {
+    stale: isConsentStale(data.consent_given, data.consent_version),
+    consentGiven: !!data.consent_given,
+    consentVersion: data.consent_version ?? null,
+  }
 }

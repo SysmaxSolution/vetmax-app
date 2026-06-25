@@ -2,6 +2,8 @@
 
 import { useState, useTransition, useRef, useEffect } from 'react'
 import { checkInPatientWithContacts, updateConsultation } from '@/lib/actions/consultations'
+import { getTutorConsentStatus, recordConsent } from '@/lib/actions/tutors'
+import ConsentModal from '@/components/reception/ConsentModal'
 import { addServiceToConsultation } from '@/lib/actions/services'
 import { getOpenQuotationsForCheckin, linkQuotationsToConsultation, type OpenQuotation } from '@/lib/actions/billing-documents'
 import { getLastWeight } from '@/lib/actions/patient-weight'
@@ -81,6 +83,12 @@ export function CheckInModal({
   // Checklist procedimento
   const [checkedItems, setCheckedItems] = useState<Set<number>>(new Set())
 
+  // LGPD: consentimento do tutor desatualizado (ex.: aceitou termo 1.0 antes da
+  // cláusula de voz/IA). Força re-aceite na próxima visita, aqui no check-in.
+  const [consentStale, setConsentStale] = useState(false)
+  const [showConsent, setShowConsent] = useState(false)
+  const [consentReaccepted, setConsentReaccepted] = useState(false)
+
   const isEdit = mode === 'edit_existing'
   const isScheduled = mode === 'scheduled_checkin'
   const isNewCheckIn = mode === 'new_checkin'
@@ -110,6 +118,17 @@ export function CheckInModal({
     })
     return () => { cancelled = true }
   }, [patientId])
+
+  // Verifica se o consentimento LGPD do tutor está desatualizado (re-aceite).
+  useEffect(() => {
+    if (!tutorId) return
+    let cancelled = false
+    getTutorConsentStatus(tutorId).then(res => {
+      if (cancelled || 'error' in res) return
+      setConsentStale(res.stale)
+    })
+    return () => { cancelled = true }
+  }, [tutorId])
 
   // Carrega orçamentos em aberto do tutor (só em check-in novo/agendado).
   useEffect(() => {
@@ -154,10 +173,32 @@ export function CheckInModal({
     })
   }
 
+  function handleConsentAccept() {
+    if (tutorId) recordConsent(tutorId, 'granted').catch(() => {})
+    setConsentReaccepted(true)
+    setConsentStale(false)
+    setShowConsent(false)
+    // Prossegue o check-in agora que o consentimento foi renovado — chama a
+    // lógica direto (sem depender do re-render do estado consentReaccepted).
+    doCheckIn()
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
 
+    // LGPD: se o termo evoluiu e o tutor ainda não re-aceitou nesta visita,
+    // abre o re-consentimento antes de concluir o check-in.
+    if (consentStale && !consentReaccepted) {
+      setShowConsent(true)
+      return
+    }
+
+    doCheckIn()
+  }
+
+  function doCheckIn() {
+    setError(null)
     // Validações — condicionais conforme configuração da clínica
     if (addressRequired && !address.trim()) {
       setError('Endereço completo é obrigatório.')
@@ -246,6 +287,7 @@ export function CheckInModal({
   const isEmergency = visitReason === 'emergency'
 
   return (
+    <>
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
 
@@ -273,6 +315,16 @@ export function CheckInModal({
         {/* Body — SCROLL INTERNO */}
         <div className="flex-1 overflow-y-auto">
           <form ref={formRef} onSubmit={handleSubmit} className="px-4 sm:px-6 pt-5 pb-6 space-y-5">
+
+            {/* ── LGPD: re-consentimento pendente (termo evoluiu) ── */}
+            {consentStale && !consentReaccepted && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                <p className="text-sm font-semibold text-amber-800">Termo de privacidade atualizado</p>
+                <p className="text-xs text-amber-700 mt-0.5">
+                  O termo agora cobre o registro por voz e o uso de IA no atendimento. Ao confirmar o check-in, o tutor revisa e re-aceita o termo.
+                </p>
+              </div>
+            )}
 
             {/* ── Banner de Pacotes Ativos ── */}
             {patientId && (
@@ -500,5 +552,14 @@ export function CheckInModal({
         </div>
       </div>
     </div>
+
+    {showConsent && tutorId && (
+      <ConsentModal
+        tutorName={tutorName}
+        onAccept={handleConsentAccept}
+        onDecline={() => setShowConsent(false)}
+      />
+    )}
+    </>
   )
 }
