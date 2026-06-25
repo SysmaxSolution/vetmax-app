@@ -17,7 +17,7 @@ import ConsultationQuotationBadge from '@/components/billing/ConsultationQuotati
 import InsuranceAuditBanner from '@/components/consultation/InsuranceAuditBanner'
 import type { AuditResult } from '@/lib/actions/insurance-audit'
 import { updatePatientFromLiveReg } from '@/lib/actions/pets'
-import { addAppliedMedication, deleteAppliedMedication, updateAppliedMedication, extractFullVoice, type AppliedMedication } from '@/lib/actions/pharmacy'
+import { addAppliedMedication, deleteAppliedMedication, updateAppliedMedication, extractFullVoice, type AppliedMedication, type VoiceExtractionResult } from '@/lib/actions/pharmacy'
 import { addVaccine, type PatientVaccine } from '@/lib/actions/vaccines'
 import { generateInvoice } from '@/lib/actions/billing'
 import { Toast } from '@/components/ui/toast'
@@ -242,6 +242,12 @@ export default function ConsultationDetail({
   >([])
   const [apptModalData, setApptModalData] = useState<{ date: string; reason: string } | null>(null)
 
+  // Frente 1 (council 2026-06-24): medicações e vacinas inferidas pela voz NÃO
+  // entram no prontuário sem o MV revisar. A IA pode errar fármaco/dose
+  // ("tramado 15mg") e controlados exigem confirmação explícita (Receituário Azul).
+  const [pendingMedSuggestions, setPendingMedSuggestions] = useState<VoiceExtractionResult['medicacoes_aplicadas']>([])
+  const [pendingVaccineSuggestions, setPendingVaccineSuggestions] = useState<NonNullable<VoiceExtractionResult['vaccines_applied']>>([])
+
   // NOVO: Estado do Cadastro Vivo (voz IA)
   const [profileUpdates, setProfileUpdates] = useState<any | null>(null)
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false)
@@ -380,19 +386,13 @@ export default function ConsultationDetail({
       autoSave(newNotes)
     }
 
-    // 2. Medicações → salvar no DB e atualizar estado
-    const newMeds: AppliedMedication[] = []
-    for (const m of result.medicacoes_aplicadas) {
-      const res = await addAppliedMedication({
-        consultation_id: consultation.id,
-        medication_name: m.medication_name,
-        dosage: m.dosage ?? undefined,
-        route:  m.route  ?? undefined,
-        notes:  m.notes  ?? undefined,
-      })
-      if (!('error' in res)) newMeds.push(res)
+    // 2. Medicações → NÃO grava direto (Frente 1 / council). Vira sugestão
+    //    pendente que o MV confirma antes de virar prontuário assinado: a IA
+    //    pode errar fármaco/dose e controlados exigem confirmação explícita.
+    const suggestedMedCount = result.medicacoes_aplicadas.length
+    if (suggestedMedCount > 0) {
+      setPendingMedSuggestions(prev => [...prev, ...result.medicacoes_aplicadas])
     }
-    if (newMeds.length > 0) setClinicalMeds(prev => [...prev, ...newMeds])
 
     // 3. Documentos → enfileirar sugestões para DocumentsSection
     if (result.documentos_sugeridos.length > 0) {
@@ -421,19 +421,11 @@ export default function ConsultationDetail({
       setMergedExamNotes(prev => prev ? `${prev}\n\n${result.laudo_exame}` : result.laudo_exame!)
     }
 
-    // 7. Vacinas aplicadas → salvar no DB
-    let savedVaccineCount = 0
+    // 7. Vacinas → NÃO grava direto (Frente 1 / council). Vira sugestão pendente
+    //    que o MV confirma antes de finalizar.
+    const suggestedVaccineCount = result.vaccines_applied?.length ?? 0
     if (result.vaccines_applied && result.vaccines_applied.length > 0) {
-      for (const v of result.vaccines_applied) {
-        const res = await addVaccine({
-          patient_id:      consultation.patient.id,
-          consultation_id: consultation.id,
-          vaccine_name:    v.vaccine_name,
-          next_due_date:   v.next_due_date ?? undefined,
-          notes:           v.notes ?? undefined,
-        })
-        if (!('error' in res)) savedVaccineCount++
-      }
+      setPendingVaccineSuggestions(prev => [...prev, ...result.vaccines_applied!])
     }
     // 8. Cadastro Vivo (Live Registration)
     if (result.pet_profile_updates && (
@@ -463,10 +455,10 @@ export default function ConsultationDetail({
     // Toast resumo
     const parts: string[] = []
     if (result.notas_clinicas.trim())                                          parts.push('prontuário preenchido')
-    if (newMeds.length > 0)                                                    parts.push(`${newMeds.length} med(s) registrada(s)`)
+    if (suggestedMedCount > 0)                                                 parts.push(`${suggestedMedCount} med(s) a revisar`)
     if (result.documentos_sugeridos.length > 0)                               parts.push(`${result.documentos_sugeridos.length} doc(s) sugerido(s)`)
     if (result.agendamentos_sugeridos.length > 0)                             parts.push(`${result.agendamentos_sugeridos.length} agendamento(s)`)
-    if (savedVaccineCount > 0)                                                parts.push(`${savedVaccineCount} vacina(s) registrada(s)`)
+    if (suggestedVaccineCount > 0)                                            parts.push(`${suggestedVaccineCount} vacina(s) a revisar`)
     if (result.sinais_vitais && Object.values(result.sinais_vitais).some(v => v != null && v !== 0 && v !== '')) parts.push('sinais vitais extraídos')
     if (result.laudo_exame?.trim())                                           parts.push('laudo preenchido')
     if (result.suggested_routing === 'discharge')                              parts.push('alta detectada')
@@ -487,6 +479,81 @@ export default function ConsultationDetail({
       }
     }
   }, [aiMode]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ─── Frente 1: gate de revisão das sugestões da IA ─────────────────────────
+  // Medicações/vacinas inferidas pela voz só viram registro após o MV confirmar.
+  // Controlados exigem confirmação individual (ficam de fora do "confirmar todas").
+  const confirmPendingMed = useCallback(async (index: number) => {
+    const m = pendingMedSuggestions[index]
+    if (!m) return
+    const res = await addAppliedMedication({
+      consultation_id: consultation.id,
+      medication_name: m.medication_name,
+      dosage: m.dosage ?? undefined,
+      route:  m.route  ?? undefined,
+      notes:  m.notes  ?? undefined,
+      is_controlled: m.is_controlled ?? false,
+    })
+    if ('error' in res) {
+      setToast({ type: 'error', message: res.error })
+      return
+    }
+    setClinicalMeds(prev => [...prev, res])
+    setPendingMedSuggestions(prev => prev.filter((_, i) => i !== index))
+  }, [pendingMedSuggestions, consultation.id])
+
+  const dismissPendingMed = useCallback((index: number) => {
+    setPendingMedSuggestions(prev => prev.filter((_, i) => i !== index))
+  }, [])
+
+  const confirmAllNonControlledMeds = useCallback(async () => {
+    const toSave = pendingMedSuggestions.filter(m => !m.is_controlled)
+    if (toSave.length === 0) return
+    const saved: AppliedMedication[] = []
+    for (const m of toSave) {
+      const res = await addAppliedMedication({
+        consultation_id: consultation.id,
+        medication_name: m.medication_name,
+        dosage: m.dosage ?? undefined,
+        route:  m.route  ?? undefined,
+        notes:  m.notes  ?? undefined,
+        is_controlled: false,
+      })
+      if (!('error' in res)) saved.push(res)
+    }
+    if (saved.length > 0) setClinicalMeds(prev => [...prev, ...saved])
+    // Mantém apenas os controlados — confirmação individual obrigatória.
+    setPendingMedSuggestions(prev => prev.filter(m => m.is_controlled))
+    const remainingControlled = pendingMedSuggestions.filter(m => m.is_controlled).length
+    setToast({
+      type: 'success',
+      message: remainingControlled > 0
+        ? `${saved.length} medicação(ões) confirmada(s). ${remainingControlled} controlado(s) exigem confirmação individual.`
+        : `${saved.length} medicação(ões) confirmada(s).`,
+    })
+  }, [pendingMedSuggestions, consultation.id])
+
+  const confirmPendingVaccine = useCallback(async (index: number) => {
+    const v = pendingVaccineSuggestions[index]
+    if (!v) return
+    const res = await addVaccine({
+      patient_id:      consultation.patient.id,
+      consultation_id: consultation.id,
+      vaccine_name:    v.vaccine_name,
+      next_due_date:   v.next_due_date ?? undefined,
+      notes:           v.notes ?? undefined,
+    })
+    if (res && typeof res === 'object' && 'error' in res) {
+      setToast({ type: 'error', message: (res as { error: string }).error })
+      return
+    }
+    setPendingVaccineSuggestions(prev => prev.filter((_, i) => i !== index))
+    setToast({ type: 'success', message: `Vacina "${v.vaccine_name}" registrada.` })
+  }, [pendingVaccineSuggestions, consultation.id, consultation.patient.id])
+
+  const dismissPendingVaccine = useCallback((index: number) => {
+    setPendingVaccineSuggestions(prev => prev.filter((_, i) => i !== index))
+  }, [])
 
   // IMPORTANTE: NÃO passar onSendWA. O gatilho de WhatsApp deve abrir SOMENTE na
   // finalização do atendimento (alta/transferência via executeFinalize), nunca
@@ -640,6 +707,15 @@ export default function ConsultationDetail({
     // Notes are optional for status transition; UI validation is advisory only
     if (nextStatus === 'completed' && !isReviewedByVet) {
       setToast({ type: 'error', message: 'Confirme a revisão do prontuário (CFMV) para finalizar.' })
+      return
+    }
+    // Frente 1: não fecha o prontuário com sugestões da IA pendentes de revisão.
+    // Amarra o gate de confirmação humana ao fechamento legal (is_reviewed_by_vet).
+    if (nextStatus === 'completed' && (pendingMedSuggestions.length > 0 || pendingVaccineSuggestions.length > 0)) {
+      setToast({
+        type: 'error',
+        message: 'Há medicações/vacinas sugeridas pela IA aguardando revisão. Confirme ou dispense cada uma antes de encerrar.',
+      })
       return
     }
     // Guard de Serviços — alta exige ao menos um serviço lançado.
@@ -1625,6 +1701,109 @@ export default function ConsultationDetail({
           initialAttachments={initialAttachments}
           newAttachment={lastPdfAttachment}
         />
+
+        {/* ── Frente 1: Medicações Sugeridas pela IA (revisão obrigatória) ── */}
+        {pendingMedSuggestions.length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm border border-red-200">
+            <div className="border-b border-red-100 px-6 py-4 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-50 text-lg">💊</div>
+                <div>
+                  <h2 className="text-base font-semibold text-slate-900">Medicações Sugeridas — revise antes de confirmar</h2>
+                  <p className="text-xs text-slate-500">A IA pode errar fármaco ou dose. Nada é registrado no prontuário sem sua confirmação.</p>
+                </div>
+              </div>
+              {pendingMedSuggestions.some(m => !m.is_controlled) && (
+                <button
+                  onClick={confirmAllNonControlledMeds}
+                  className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 transition-colors flex-shrink-0"
+                >
+                  <CheckSquare className="h-3.5 w-3.5" />
+                  Confirmar não-controladas
+                </button>
+              )}
+            </div>
+            <div className="p-5 space-y-3">
+              {pendingMedSuggestions.map((m, i) => (
+                <div
+                  key={i}
+                  className={`flex items-center justify-between gap-4 rounded-xl px-4 py-3 border ${m.is_controlled ? 'bg-blue-50 border-blue-300' : 'bg-red-50 border-red-100'}`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-semibold text-slate-900 truncate">{m.medication_name}</p>
+                      {m.is_controlled && (
+                        <span className="inline-flex items-center rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                          Controlado · Receituário Azul
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {[m.dosage, m.route, m.notes].filter(Boolean).join(' · ') || 'Sem dose/via especificada — confira'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={() => confirmPendingMed(i)}
+                      className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 transition-colors"
+                    >
+                      <CheckSquare className="h-3.5 w-3.5" />
+                      Confirmar
+                    </button>
+                    <button
+                      onClick={() => dismissPendingMed(i)}
+                      className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 transition-colors"
+                      title="Dispensar sugestão"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Frente 1: Vacinas Sugeridas pela IA (revisão obrigatória) ── */}
+        {pendingVaccineSuggestions.length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm border border-amber-200">
+            <div className="border-b border-amber-100 px-6 py-4 flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-lg">💉</div>
+              <div>
+                <h2 className="text-base font-semibold text-slate-900">Vacinas Sugeridas — revise antes de confirmar</h2>
+                <p className="text-xs text-slate-500">Detectadas pela IA durante a gravação. Confirme cada uma para registrar.</p>
+              </div>
+            </div>
+            <div className="p-5 space-y-3">
+              {pendingVaccineSuggestions.map((v, i) => (
+                <div key={i} className="flex items-center justify-between gap-4 bg-amber-50 border border-amber-100 rounded-xl px-4 py-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-slate-900 truncate">{v.vaccine_name}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {[v.next_due_date ? `Próxima dose: ${v.next_due_date.split('-').reverse().join('/')}` : null, v.notes].filter(Boolean).join(' · ') || 'Sem data de reforço'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={() => confirmPendingVaccine(i)}
+                      className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 transition-colors"
+                    >
+                      <CheckSquare className="h-3.5 w-3.5" />
+                      Confirmar
+                    </button>
+                    <button
+                      onClick={() => dismissPendingVaccine(i)}
+                      className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 transition-colors"
+                      title="Dispensar sugestão"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* ── Agendamentos Sugeridos pela IA ───────────────────────────── */}
         {pendingApptSuggestions.length > 0 && (
