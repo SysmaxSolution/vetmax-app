@@ -105,6 +105,7 @@ export default function VaccinationCard({
   const [manufacturer, setManufacturer] = useState('')
   const [lot,          setLot]          = useState('')
   const [validity,     setValidity]     = useState('')
+  const [route,        setRoute]        = useState('')
 
   // Autocomplete do catálogo de vacinas
   const [suggestions, setSuggestions] = useState<Array<{ name: string; manufacturer: string; type: string }>>([])
@@ -150,6 +151,7 @@ export default function VaccinationCard({
   const [editManufacturer, setEditManufacturer] = useState('')
   const [editLot,          setEditLot]          = useState('')
   const [editValidity,     setEditValidity]     = useState('')
+  const [editRoute,        setEditRoute]        = useState('')
   const [isUpdating,     setIsUpdating]     = useState(false)
 
   function startEditVaccine(v: PatientVaccine) {
@@ -164,6 +166,7 @@ export default function VaccinationCard({
     setEditManufacturer(v.manufacturer ?? '')
     setEditLot(v.lot_number ?? '')
     setEditValidity(v.validity_date ?? '')
+    setEditRoute(v.administration_route ?? '')
   }
 
   function applyEditBooster(opts: { days?: number; months?: number }) {
@@ -186,6 +189,7 @@ export default function VaccinationCard({
         manufacturer:      editManufacturer.trim() || undefined,
         lot_number:        editLot.trim() || undefined,
         validity_date:     editValidity || undefined,
+        administration_route: editRoute.trim() || undefined,
       })
       if ('error' in res) {
         setToast({ type: 'error', message: `Erro ao atualizar: ${res.error}` })
@@ -239,6 +243,7 @@ export default function VaccinationCard({
         manufacturer:      manufacturer.trim() || undefined,
         lot_number:        lot.trim() || undefined,
         validity_date:     validity || undefined,
+        administration_route: route.trim() || undefined,
       })
 
       if ('error' in res) {
@@ -249,7 +254,7 @@ export default function VaccinationCard({
       setVaccines(prev => [res, ...prev])
       setName(''); setDate(new Date().toISOString().split('T')[0])
       setNextDue(''); setNotes(''); setShowForm(false)
-      setVType(''); setDoseNum(''); setDoseTotal(''); setManufacturer(''); setLot(''); setValidity('')
+      setVType(''); setDoseNum(''); setDoseTotal(''); setManufacturer(''); setLot(''); setValidity(''); setRoute('')
       setToast({ type: 'success', message: `Vacina "${res.vaccine_name}" registrada com sucesso!` })
       onVaccineSaved?.()
     } catch {
@@ -388,6 +393,19 @@ export default function VaccinationCard({
               <DateInput value={validity} onChange={setValidity} />
             </div>
             <div>
+              <label className="text-xs font-medium text-slate-600 mb-1 block">Via de administração</label>
+              <input type="text" value={route} onChange={e => setRoute(e.target.value)} onKeyDown={e => blockEnter(e, handleAdd)}
+                placeholder="SC, IM, ID, oral..." list="vac-route-options"
+                className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20" />
+              <datalist id="vac-route-options">
+                <option value="SC (subcutânea)" />
+                <option value="IM (intramuscular)" />
+                <option value="ID (intradérmica)" />
+                <option value="Oral" />
+                <option value="Intranasal" />
+              </datalist>
+            </div>
+            <div>
               <label className="text-xs font-medium text-slate-600 mb-1 block">Data de Aplicação</label>
               <DateInput value={date} onChange={setDate} />
             </div>
@@ -489,6 +507,12 @@ export default function VaccinationCard({
                       <div>
                         <label className="text-xs font-medium text-slate-600 mb-1 block">Validade</label>
                         <DateInput value={editValidity} onChange={setEditValidity} />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-slate-600 mb-1 block">Via de administração</label>
+                        <input type="text" value={editRoute} onChange={e => setEditRoute(e.target.value)}
+                          placeholder="SC, IM, ID, oral..." list="vac-route-options"
+                          className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20" />
                       </div>
                       <div>
                         <label className="text-xs font-medium text-slate-600 mb-1 block">Data de Aplicação</label>

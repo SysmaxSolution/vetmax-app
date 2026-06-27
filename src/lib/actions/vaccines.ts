@@ -21,11 +21,12 @@ export type PatientVaccine = {
   manufacturer:      string | null
   lot_number:        string | null
   validity_date:     string | null
+  administration_route: string | null  // via de administração (CFMV)
 }
 
-// Campos estruturados que entram no insert/update de vacina (M7).
+// Campos estruturados que entram no insert/update de vacina (M7 + via CFMV 0412).
 const VACCINE_SELECT =
-  'id, patient_id, vaccine_name, date_administered, next_due_date, notes, created_at, vaccine_type, dose_number, dose_total, manufacturer, lot_number, validity_date'
+  'id, patient_id, vaccine_name, date_administered, next_due_date, notes, created_at, vaccine_type, dose_number, dose_total, manufacturer, lot_number, validity_date, administration_route'
 
 export interface VaccineExtra {
   vaccine_type?:  string | null
@@ -34,6 +35,7 @@ export interface VaccineExtra {
   manufacturer?:  string | null
   lot_number?:    string | null
   validity_date?: string | null
+  administration_route?: string | null
 }
 
 function vaccineExtraPayload(d: VaccineExtra) {
@@ -44,6 +46,7 @@ function vaccineExtraPayload(d: VaccineExtra) {
     manufacturer:  d.manufacturer  ?? null,
     lot_number:    d.lot_number    ?? null,
     validity_date: d.validity_date ?? null,
+    administration_route: d.administration_route ?? null,
   }
 }
 
