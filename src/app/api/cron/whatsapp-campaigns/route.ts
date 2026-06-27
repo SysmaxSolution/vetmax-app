@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { evolutionSendText } from '@/lib/evolution-api-client'
 import { generateCampaignMessage } from '@/lib/ai/campaign-agent'
+import { getAppUrl } from '@/lib/app-url'
 
 // GET /api/cron/whatsapp-campaigns
 // Invocado pelo Vercel Cron diariamente às 09:00 UTC.
@@ -94,7 +95,7 @@ export async function GET(request: NextRequest) {
 
       for (const target of toSend) {
         try {
-          const message = target.appointmentId
+          let message = target.appointmentId
             ? buildConfirmationMessage(target)
             : await generateCampaignMessage({
                 clinicName: clinic.name,
@@ -102,6 +103,10 @@ export async function GET(request: NextRequest) {
                 petName:    target.petName,
                 context:    target.context,
               })
+
+          // Anexo determinístico (link da carteira etc.) — fora do texto gerado
+          // pela IA para evitar que a URL seja alterada/abreviada.
+          if (target.appendText) message += `\n\n${target.appendText}`
 
           await evolutionSendText(
             { apiUrl, instanceId: instanceName, apiKey },
@@ -174,6 +179,8 @@ interface EligibleTarget {
   phone:          string
   petName:        string
   context:        string
+  // Texto fixo anexado ao final da mensagem (ex.: link da carteira de vacinação).
+  appendText?:    string
   // Preenchido apenas para o trigger appointment_confirmation:
   appointmentId?: string
   appointmentAt?: string   // ISO datetime
@@ -251,21 +258,23 @@ async function queryNoVisit(
     }))
 }
 
-// Tutores com vacina vencendo em até N dias
+// Tutores com vacina vencendo EXATAMENTE em N dias (boundary day) — lembrete único.
+// Match exato no dia-limite evita o reenvio diário durante toda a janela (o dedup
+// de 23h não impede reenvio em dias consecutivos). Tradeoff: se a cron falhar no
+// dia-limite, o lembrete daquela vacina é perdido — aceitável vs. spam diário.
 async function queryVaccineDue(
   admin: ReturnType<typeof createAdminClient>,
   clinicId: string,
   days: number,
 ): Promise<EligibleTarget[]> {
-  const today    = new Date().toISOString().split('T')[0]
-  const deadline = new Date(Date.now() + days * 86_400_000).toISOString().split('T')[0]
+  const target = new Date(Date.now() + days * 86_400_000).toISOString().split('T')[0]
+  const appUrl = getAppUrl()
 
   const { data } = await admin
     .from('patient_vaccines')
-    .select('vaccine_name, next_due_date, patients:patient_id ( name, tutor_id, tutors:tutor_id ( id, name, phone ) )')
+    .select('vaccine_name, next_due_date, patient_id, patients:patient_id ( name, tutor_id, tutors:tutor_id ( id, name, phone ) )')
     .eq('clinic_id', clinicId)
-    .gte('next_due_date', today)
-    .lte('next_due_date', deadline)
+    .eq('next_due_date', target)
 
   const seen = new Set<string>()
   const results: EligibleTarget[] = []
@@ -276,13 +285,14 @@ async function queryVaccineDue(
     if (!tutor?.id || !tutor?.phone || seen.has(tutor.id)) continue
     seen.add(tutor.id)
 
-    const daysUntil = Math.max(0, Math.ceil((new Date(v.next_due_date).getTime() - Date.now()) / 86_400_000))
+    const petName = patient?.name ?? 'seu pet'
     results.push({
-      tutorId:   tutor.id,
-      tutorName: tutor.name,
-      phone:     tutor.phone,
-      petName:   patient?.name ?? 'seu pet',
-      context:   `tem a vacina ${v.vaccine_name} vencendo em ${daysUntil} dia${daysUntil !== 1 ? 's' : ''}`,
+      tutorId:    tutor.id,
+      tutorName:  tutor.name,
+      phone:      tutor.phone,
+      petName,
+      context:    `tem a vacina ${v.vaccine_name} vencendo em ${days} dia${days !== 1 ? 's' : ''}`,
+      appendText: `📋 Carteira de vacinação do ${petName}: ${appUrl}/public/vaccines/${v.patient_id}`,
     })
   }
   return results
