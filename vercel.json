@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/subscription-dunning",
       "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/cron/voice-retention-purge",
+      "schedule": "45 3 * * *"
     }
   ]
 }
