@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import type { VitalSigns } from '@/types'
 import { logAudit } from './audit'
+import { logDataAccess } from './compliance'
 import { runInsuranceAudit, type AuditResult } from './insurance-audit'
 
 // ─── Fila do Médico Veterinário (in_progress) ─────────────────────────────────
@@ -121,7 +122,7 @@ export async function getVetCompleted(): Promise<VetCompletedItem[] | { error: s
   if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
 
   // M10: janela de 7 dias (não só hoje) para o MV revisar/editar atendimentos
-  // recentes. A edição usa reopenConsultation (já existente).
+  // recentes. Prontuário finalizado é imutável (0411) — correção via adendo.
   const since = new Date()
   since.setHours(0, 0, 0, 0)
   since.setDate(since.getDate() - 7)
@@ -233,6 +234,19 @@ export async function getVetConsultation(
   if (error || !data) return { error: 'Consulta não encontrada.' }
 
   const c = data as any
+
+  // LGPD Art. 37: trilha de acesso ao prontuário (titular = tutor). Fire-and-forget.
+  if (c.patients?.tutors?.id) {
+    void logDataAccess({
+      clinicId:      profile.clinic_id,
+      dataSubjectId: c.patients.tutors.id,
+      dataType:      'prontuario',
+      entityType:    'consultation',
+      entityId:      consultationId,
+      accessType:    'read',
+      purpose:       'atendimento_clinico',
+    })
+  }
 
   // Reconstrói VitalSigns das colunas antigas (migration 0006 não aplicada)
   let reconstructedVitals: VitalSigns | null = null
@@ -374,10 +388,80 @@ export async function addPatientDirectToVet(params: {
   return { id: data.id }
 }
 
-// ─── Reabrir Consulta Concluída ───────────────────────────────────────────────
-export async function reopenConsultation(
-  consultationId: string
+// ─── Adendo ao Prontuário Finalizado (CFMV Res. 1321/2020) ───────────────────
+// Prontuário fechado é IMUTÁVEL (trigger trg_consultation_immutability na 0411).
+// Correções pós-alta só por ADENDO append-only, com autor + CRMV + motivo.
+export type ConsultationAddendum = {
+  id: string
+  author_id: string | null
+  author_name: string | null
+  author_crmv: string | null
+  reason: string
+  addendum_text: string
+  created_at: string
+}
+
+export async function addConsultationAddendum(
+  consultationId: string,
+  reason: string,
+  addendumText: string
 ): Promise<{ success: boolean } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  if (!reason.trim() || !addendumText.trim()) {
+    return { error: 'Informe o motivo e o conteúdo do adendo.' }
+  }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('clinic_id, full_name, crmv')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
+
+  const admin = createAdminClient()
+
+  // Garante que a consulta pertence à clínica antes de anexar o adendo.
+  const { data: consult } = await admin
+    .from('consultations')
+    .select('id')
+    .eq('id', consultationId)
+    .eq('clinic_id', profile.clinic_id)
+    .single()
+
+  if (!consult) return { error: 'Consulta não encontrada.' }
+
+  const { error } = await admin
+    .from('consultation_addenda')
+    .insert({
+      clinic_id:       profile.clinic_id,
+      consultation_id: consultationId,
+      author_id:       user.id,
+      author_crmv:     profile.crmv ?? null,
+      reason:          reason.trim(),
+      addendum_text:   addendumText.trim(),
+    })
+
+  if (error) return { error: 'Erro ao registrar adendo: ' + error.message }
+
+  await logAudit({
+    action: 'ADD_CONSULTATION_ADDENDUM',
+    entity_type: 'consultation',
+    entity_id: consultationId,
+    details: { reason: reason.trim() },
+  })
+
+  revalidatePath('/dashboard/vet')
+  revalidatePath(`/dashboard/vet/${consultationId}`)
+  return { success: true }
+}
+
+export async function listConsultationAddenda(
+  consultationId: string
+): Promise<ConsultationAddendum[] | { error: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Não autenticado.' }
@@ -390,23 +474,24 @@ export async function reopenConsultation(
 
   if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
 
-  const admin = createAdminClient()
-  const { error } = await admin
-    .from('consultations')
-    .update({
-      status: 'in_progress',
-      is_reviewed_by_vet: false,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', consultationId)
+  const { data, error } = await supabase
+    .from('consultation_addenda')
+    .select('id, author_id, author_crmv, reason, addendum_text, created_at, profiles(full_name)')
+    .eq('consultation_id', consultationId)
     .eq('clinic_id', profile.clinic_id)
-    .eq('status', 'completed')
+    .order('created_at', { ascending: true })
 
-  if (error) return { error: 'Erro ao reabrir consulta: ' + error.message }
+  if (error) return { error: 'Erro ao carregar adendos: ' + error.message }
 
-  revalidatePath('/dashboard/vet')
-  revalidatePath(`/dashboard/vet/${consultationId}`)
-  return { success: true }
+  return (data ?? []).map((a: any) => ({
+    id: a.id,
+    author_id: a.author_id,
+    author_name: a.profiles?.full_name ?? null,
+    author_crmv: a.author_crmv,
+    reason: a.reason,
+    addendum_text: a.addendum_text,
+    created_at: a.created_at,
+  }))
 }
 
 // ─── Salvar Notas do MV (rascunho + auditoria de convênio) ───────────────────

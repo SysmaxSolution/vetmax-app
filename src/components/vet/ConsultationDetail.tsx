@@ -7,10 +7,10 @@ import { useRealtimeRow } from '@/hooks/useRealtimeSync'
 import {
   ArrowLeft, AlertCircle, Mic, MicOff, Loader2, Sparkles,
   FlaskConical, Pill, CheckSquare, Square, Calendar, Save,
-  Stethoscope, Clock, ChevronRight, Info, Syringe, FileText, X, BedDouble, RotateCcw, Plus, HeartCrack,
+  Stethoscope, Clock, ChevronRight, Info, Syringe, FileText, X, BedDouble, Plus, HeartCrack,
   Settings, Receipt,
 } from 'lucide-react'
-import { saveVetNotes, finalizeConsultation, reopenConsultation, savePrescription, type VetConsultationDetail } from '@/lib/actions/vet'
+import { saveVetNotes, finalizeConsultation, addConsultationAddendum, listConsultationAddenda, savePrescription, type VetConsultationDetail, type ConsultationAddendum } from '@/lib/actions/vet'
 import { hasActiveConsultationService } from '@/lib/actions/services'
 import ConsultationServicesPanel from '@/components/vet/ConsultationServicesPanel'
 import ConsultationQuotationBadge from '@/components/billing/ConsultationQuotationBadge'
@@ -207,8 +207,19 @@ export default function ConsultationDetail({
   const [configSaving,   setConfigSaving]   = useState(false)
   const [newStartInput,  setNewStartInput]  = useState('')
   const [newStopInput,   setNewStopInput]   = useState('')
-  const [isReopening, setIsReopening] = useState(false)
   const isFinalized = consultation.status === 'completed' || consultation.status === 'hospitalized'
+
+  // Adendo ao prontuário finalizado (CFMV: imutável → correção só por adendo)
+  const [addenda, setAddenda] = useState<ConsultationAddendum[]>([])
+  const [addendumModalOpen, setAddendumModalOpen] = useState(false)
+  const [addendumReason, setAddendumReason] = useState('')
+  const [addendumText, setAddendumText] = useState('')
+  const [addendumSaving, setAddendumSaving] = useState(false)
+  async function loadAddenda() {
+    const r = await listConsultationAddenda(consultation.id)
+    if (!('error' in r)) setAddenda(r)
+  }
+  useEffect(() => { if (isFinalized) void loadAddenda() }, [consultation.id, isFinalized])
 
   // Refator de Serviços (2026-05-25): guard de finalização. Vet só pode dar
   // alta quando há ao menos uma linha ativa em consultation_services.
@@ -219,14 +230,22 @@ export default function ConsultationDetail({
   }
   useEffect(() => { void refreshHasService() }, [consultation.id])
 
-  const handleReopen = async () => {
-    setIsReopening(true)
-    const result = await reopenConsultation(consultation.id)
-    setIsReopening(false)
+  const handleAddAddendum = async () => {
+    if (!addendumReason.trim() || !addendumText.trim()) {
+      setToast({ type: 'error', message: 'Informe o motivo e o conteúdo do adendo.' })
+      return
+    }
+    setAddendumSaving(true)
+    const result = await addConsultationAddendum(consultation.id, addendumReason, addendumText)
+    setAddendumSaving(false)
     if ('error' in result) {
       setToast({ type: 'error', message: result.error })
     } else {
-      router.refresh()
+      setAddendumModalOpen(false)
+      setAddendumReason('')
+      setAddendumText('')
+      setToast({ type: 'success', message: 'Adendo registrado no prontuário.' })
+      void loadAddenda()
     }
   }
 
@@ -2394,14 +2413,110 @@ export default function ConsultationDetail({
             {consultation.status === 'completed' && (
               <button
                 type="button"
-                onClick={handleReopen}
-                disabled={isReopening}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-amber-300 bg-amber-50 text-amber-700 font-semibold text-sm hover:bg-amber-100 transition-colors disabled:opacity-50"
+                onClick={() => setAddendumModalOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-amber-300 bg-amber-50 text-amber-700 font-semibold text-sm hover:bg-amber-100 transition-colors"
               >
-                {isReopening ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
-                {isReopening ? 'Reabrindo...' : 'Reabrir Prontuário'}
+                <Plus className="w-4 h-4" />
+                Adicionar Adendo
               </button>
             )}
+          </div>
+        )}
+
+        {/* Adendos ao prontuário finalizado (CFMV Res. 1321/2020 — append-only) */}
+        {isFinalized && addenda.length > 0 && (
+          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
+            <div className="flex items-center gap-2">
+              <FileText className="w-4 h-4 text-slate-500" />
+              <h3 className="text-sm font-semibold text-slate-800">Adendos do prontuário</h3>
+              <span className="text-xs text-slate-400">({addenda.length})</span>
+            </div>
+            <ul className="space-y-3">
+              {addenda.map((a) => (
+                <li key={a.id} className="border-l-2 border-amber-300 pl-3">
+                  <div className="flex flex-wrap items-center gap-x-2 text-xs text-slate-500">
+                    <span className="font-medium text-slate-700">{a.reason}</span>
+                    <span>•</span>
+                    <span>{new Date(a.created_at).toLocaleString('pt-BR')}</span>
+                    {a.author_name && (
+                      <>
+                        <span>•</span>
+                        <span>{a.author_name}{a.author_crmv ? ` (CRMV ${a.author_crmv})` : ''}</span>
+                      </>
+                    )}
+                  </div>
+                  <p className="text-sm text-slate-700 whitespace-pre-wrap mt-1">{a.addendum_text}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Modal de Adendo ao prontuário finalizado */}
+        {addendumModalOpen && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+            onClick={() => !addendumSaving && setAddendumModalOpen(false)}
+          >
+            <div
+              className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 space-y-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-semibold text-slate-900">Adendo ao prontuário</h3>
+                <button
+                  type="button"
+                  onClick={() => setAddendumModalOpen(false)}
+                  disabled={addendumSaving}
+                  className="text-slate-400 hover:text-slate-600 disabled:opacity-50"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <p className="text-xs text-slate-500">
+                O prontuário finalizado é imutável (CFMV Res. 1321/2020). Correções e complementos
+                são registrados como adendo, preservando o registro original.
+              </p>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Motivo da retificação</label>
+                <input
+                  type="text"
+                  value={addendumReason}
+                  onChange={(e) => setAddendumReason(e.target.value)}
+                  placeholder="Ex.: correção de dose, complemento de evolução"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-teal-400"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Conteúdo do adendo</label>
+                <textarea
+                  value={addendumText}
+                  onChange={(e) => setAddendumText(e.target.value)}
+                  rows={5}
+                  placeholder="Descreva a correção ou complemento..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-teal-400 resize-none"
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAddendumModalOpen(false)}
+                  disabled={addendumSaving}
+                  className="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddAddendum}
+                  disabled={addendumSaving}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 disabled:opacity-50"
+                >
+                  {addendumSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  Registrar adendo
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
