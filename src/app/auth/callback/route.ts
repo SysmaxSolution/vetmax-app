@@ -5,6 +5,7 @@ import { cookies } from 'next/headers'
 import type { User } from '@supabase/supabase-js'
 import { getAppUrl } from '@/lib/app-url'
 import { insertLegalAcceptanceRaw } from '@/lib/actions/legal'
+import { sendFreeSignupAlert } from '@/lib/signup-alert'
 
 const ROLE_COOKIE = 'vetmax-role'
 const ROLE_COOKIE_OPTIONS = {
@@ -95,6 +96,16 @@ async function ensureClinicCreated(user: User): Promise<void> {
     clinic_id: clinic.id,
     role:      'admin',
   }, { onConflict: 'user_id,clinic_id' })
+
+  // Notifica o time comercial no WhatsApp (clínica nova nasce no Free). Não
+  // bloqueia nem quebra o cadastro — falha em silêncio.
+  void sendFreeSignupAlert({
+    clinicName: clinicName,
+    adminName:  fullName,
+    phone:      pending?.phone ?? null,
+    cnpj:       (insertData.cnpj as string | undefined) ?? null,
+  })
+
   if (pending?.terms_accepted_at) {
     await insertLegalAcceptanceRaw({
       clinicId:     clinic.id,
