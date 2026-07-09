@@ -83,7 +83,7 @@ export default async function DashboardLayout({
   }
 
   const lowStockCount = profile.role === 'admin'
-    ? await getLowStockCount(profile.clinic_id)
+    ? await getLowStockCount()
     : 0
 
   const whatsAppEnabled = !!whatsAppRow.data

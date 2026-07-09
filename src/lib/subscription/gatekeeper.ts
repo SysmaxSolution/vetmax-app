@@ -45,7 +45,7 @@ export const getClinicSubscriptionState = cache(
     const [subResult, clinicResult, contractedResult, catalogResult] = await Promise.all([
       admin
         .from('tenant_subscriptions')
-        .select('plan_name, status, billing_cycle, custom_price, current_period_end')
+        .select('plan_name, status, lifecycle_state, billing_cycle, custom_price, current_period_end')
         .eq('clinic_id', clinicId)
         .maybeSingle(),
       admin.from('clinics').select('business_type').eq('id', clinicId).single(),
@@ -67,7 +67,16 @@ export const getClinicSubscriptionState = cache(
     const allowedTechnicalKeys = new Set<string>(freeKeys)
 
     const contractedKeys = (contractedResult.data ?? []).map(r => r.module_key as string)
-    const subscriptionUsable = status === 'active' || status === 'trialing'
+
+    // Gate de pagamento (0396): lifecycle_state é o estado AUTORITATIVO de cobrança.
+    // `status` sozinho não basta — subscribeToPlan grava status='active' ANTES do
+    // pagamento (lifecycle_state='pending'), então liberar por status permitiria
+    // rodar plano pago sem pagar. Bloqueia estados sem direito de acesso; NULL =
+    // legado pré-Fase 2 (backfill 0396 marcou todos como 'active'/grandfathered).
+    const lifecycleState = subResult.data?.lifecycle_state as string | null | undefined
+    const BLOCKED_LIFECYCLE = new Set(['pending', 'suspended', 'expired'])
+    const lifecycleOk = !lifecycleState || !BLOCKED_LIFECYCLE.has(lifecycleState)
+    const subscriptionUsable = (status === 'active' || status === 'trialing') && lifecycleOk
 
     if (subscriptionUsable) {
       // Bundles por plano (re-grade Fase 1.5)

@@ -122,7 +122,7 @@ export default async function DirectorPanelPage() {
 
   const activeModulesRaw: string[] = (clinicResult.data?.active_modules as string[] | null) ?? []
   const wppStats = activeModulesRaw.includes('whatsapp_intelligent')
-    ? await getWhatsappDirectorStats(profile.clinic_id)
+    ? await getWhatsappDirectorStats()
     : null
 
   const metrics        = 'error' in metricsResult   ? null : metricsResult

@@ -317,7 +317,6 @@ export async function listTutorPets(
 }
 
 export async function launchPendingSale(params: {
-  clinic_id:  string
   items:      SaleItem[]
   tutor_id?:  string | null
   patient_id?: string | null
@@ -327,6 +326,12 @@ export async function launchPendingSale(params: {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Não autenticado.' }
   if (params.items.length === 0) return { error: 'Adicione pelo menos um item.' }
+
+  // clinic_id SEMPRE derivado da sessão — nunca aceito do cliente (isolamento multi-tenant).
+  const { data: profile } = await supabase
+    .from('profiles').select('clinic_id').eq('id', user.id).single()
+  if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
+  const clinicId = profile.clinic_id
 
   const admin = createAdminClient()
   const total = Number(params.items
@@ -341,7 +346,7 @@ export async function launchPendingSale(params: {
       .from('stock_items')
       .select('id, name, quantity, is_service')
       .eq('id', it.stock_item_id)
-      .eq('clinic_id', params.clinic_id)
+      .eq('clinic_id', clinicId)
       .maybeSingle()
     if (!stock) return { error: `Item não encontrado no estoque.` }
     if (stock.is_service) continue
@@ -357,6 +362,7 @@ export async function launchPendingSale(params: {
       .from('stock_items')
       .update({ quantity: Number(stock.quantity) - it.quantity })
       .eq('id', it.stock_item_id)
+      .eq('clinic_id', clinicId)
     decremented.push({ id: it.stock_item_id, qty: it.quantity })
   }
 
@@ -364,7 +370,7 @@ export async function launchPendingSale(params: {
   const { data: sale, error: saleErr } = await admin
     .from('sales')
     .insert({
-      clinic_id:       params.clinic_id,
+      clinic_id:       clinicId,
       seller_id:       user.id,
       tutor_id:        params.tutor_id ?? null,
       patient_id:      params.patient_id ?? null,
@@ -387,7 +393,7 @@ export async function launchPendingSale(params: {
   const { error: itemsErr } = await admin.from('sale_items').insert(
     params.items.map(i => ({
       sale_id:       sale.id,
-      clinic_id:     params.clinic_id,
+      clinic_id:     clinicId,
       stock_item_id: i.stock_item_id ?? null,
       description:   i.description,
       quantity:      i.quantity,

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { safeSecretEqual } from '@/lib/webhook-auth'
 import { runWhatsappAgent } from '@/lib/ai/whatsapp-agent'
 import { evolutionSendText, evolutionFetchContactByLid } from '@/lib/evolution-api-client'
 import { handleDirectorCommand } from '@/lib/director-commands'
@@ -92,10 +93,9 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ clinicId: string }> }
 ) {
-  // Valida que a requisição vem do servidor Evolution API (envia apikey no header)
-  const incomingKey = request.headers.get('apikey')
-  const expectedKey = process.env.EVOLUTION_API_KEY
-  if (expectedKey && incomingKey !== expectedKey) {
+  // Valida que a requisição vem do servidor Evolution API (envia apikey no header).
+  // FAIL-CLOSED: rejeita também quando EVOLUTION_API_KEY não está configurada.
+  if (!safeSecretEqual(request.headers.get('apikey'), process.env.EVOLUTION_API_KEY)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

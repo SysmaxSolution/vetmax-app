@@ -96,7 +96,6 @@ export default function CashierQuickSale({ clinicId, activeModules = [], onToast
     setError(null)
     setLaunching(true)
     const res = await launchPendingSale({
-      clinic_id: clinicId,
       items: cart.map(l => ({
         stock_item_id: l.stock_item_id,
         description:   l.description,

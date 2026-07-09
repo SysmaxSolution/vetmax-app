@@ -7,6 +7,10 @@ node_modules/
 *.env
 dist/
 
+# Scripts de debug/scratch locais — podem conter credenciais, nunca versionar
+debug-*.js
+debug-*.mjs
+
 # Apps / clones aninhados — não fazem parte deste repositório
 /vetmax-app/
 /healthmax-app/
@@ -125,3 +129,6 @@ ios/.gitignore_local
 *.cer
 android/keystore.properties
 android/app/sysvetmax-release.keystore
+
+# Projeto ORION — repositório git próprio, isolado do VetMax
+/Orion/

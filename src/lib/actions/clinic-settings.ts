@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
+import { getClinicSubscriptionState } from '@/lib/subscription/gatekeeper'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -131,6 +132,18 @@ export async function updateClinicConfig(payload: {
 
   if (!profile?.clinic_id) return { error: 'Clínica não encontrada.' }
   if (profile.role !== 'admin') return { error: 'Apenas administradores podem alterar configurações.' }
+
+  // Entitlement server-side: um admin não pode habilitar módulos PAGOS via
+  // active_modules além do que o plano concede. A "Master Key" do ModulesTab é
+  // só client-side (UX) — a fonte da verdade é o gatekeeper (mesmo conjunto que
+  // o gate de rotas usa: free ∪ bundle do plano ∪ módulos contratados).
+  if (payload.active_modules) {
+    const state = await getClinicSubscriptionState(profile.clinic_id)
+    payload = {
+      ...payload,
+      active_modules: payload.active_modules.filter(k => state.allowedTechnicalKeys.has(k)),
+    }
+  }
 
   const admin = createAdminClient()
   const { error } = await admin

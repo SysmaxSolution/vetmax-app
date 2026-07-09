@@ -155,10 +155,13 @@ export async function createHospitalization(data: {
   // Impede duplicatas: se já existe internação ativa, bloqueia.
   // Se existe uma internação encerrada (saiu para revisão e voltou), REATIVA-a.
   if (data.consultation_id) {
+    // clinic_id amarrado em toda query — sem ele, um consultation_id de outra
+    // clínica reabria (IDOR) a internação alheia e retomava as diárias.
     const { data: active } = await admin
       .from('hospitalizations')
       .select('id')
       .eq('consultation_id', data.consultation_id)
+      .eq('clinic_id', clinicId)
       .not('status', 'in', '("discharged","cancelled")')
       .maybeSingle()
     if (active) return { error: 'Este paciente já possui uma internação ativa.' }
@@ -167,6 +170,7 @@ export async function createHospitalization(data: {
       .from('hospitalizations')
       .select('id')
       .eq('consultation_id', data.consultation_id)
+      .eq('clinic_id', clinicId)
       .eq('status', 'discharged')
       .order('created_at', { ascending: false })
       .limit(1)
@@ -178,6 +182,7 @@ export async function createHospitalization(data: {
         .from('hospitalizations')
         .update({ status: data.status, discharged_at: null, updated_at: new Date().toISOString() })
         .eq('id', previous.id)
+        .eq('clinic_id', clinicId)
       revalidatePath('/dashboard/hospitalization')
       revalidatePath('/dashboard/vet')
       return { id: previous.id }

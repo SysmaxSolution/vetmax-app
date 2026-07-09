@@ -137,8 +137,10 @@ export async function deleteCorrection(id: string): Promise<{ success: true } | 
   return error ? { error: error.message } : { success: true }
 }
 
-// Regras ativas aplicáveis a uma clínica: as próprias + as globais (clinic_id NULL).
-export async function getActiveCorrectionsForClinic(clinicId: string): Promise<CorrectionRule[]> {
+// Helper INTERNO (não é server action): recebe um clinic_id JÁ validado da sessão.
+// clinicId é sempre um UUID confiável derivado de profiles — interpolar no filtro
+// é seguro aqui (nunca vem de input do cliente).
+async function activeCorrectionsForClinicId(clinicId: string): Promise<CorrectionRule[]> {
   const admin = createAdminClient()
   const { data } = await admin
     .from('voice_correction_terms')
@@ -147,6 +149,19 @@ export async function getActiveCorrectionsForClinic(clinicId: string): Promise<C
     .or(`clinic_id.eq.${clinicId},clinic_id.is.null`)
 
   return (data ?? []).map(r => ({ wrong: r.wrong_term as string, right: r.right_term as string }))
+}
+
+// Regras ativas da clínica do usuário logado (as próprias + as globais).
+// clinic_id SEMPRE derivado da sessão — nunca aceito do cliente (era server action
+// sem auth com clinicId do chamador → vazamento cross-tenant + injeção de filtro).
+export async function getActiveCorrectionsForClinic(): Promise<CorrectionRule[]> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+  const { data: profile } = await supabase
+    .from('profiles').select('clinic_id').eq('id', user.id).single()
+  if (!profile?.clinic_id) return []
+  return activeCorrectionsForClinicId(profile.clinic_id)
 }
 
 // Aplica o dicionário de correção a uma transcrição, resolvendo a clínica do
@@ -167,7 +182,7 @@ export async function correctTranscript(transcript: string): Promise<string> {
 
   if (!profile?.clinic_id) return transcript
 
-  const rules = await getActiveCorrectionsForClinic(profile.clinic_id)
+  const rules = await activeCorrectionsForClinicId(profile.clinic_id)
   return applyCorrections(transcript, rules)
 }
 
