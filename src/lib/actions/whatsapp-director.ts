@@ -1,5 +1,6 @@
 'use server'
 
+import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -21,9 +22,22 @@ export interface WhatsappDirectorStats {
 
 // ─── Action ───────────────────────────────────────────────────────────────────
 
-export async function getWhatsappDirectorStats(
-  clinicId: string,
-): Promise<WhatsappDirectorStats> {
+export async function getWhatsappDirectorStats(): Promise<WhatsappDirectorStats> {
+  const empty: WhatsappDirectorStats = {
+    open_bot: 0, awaiting_human: 0, total_open: 0,
+    campaigns_week: 0, response_rate: 0, recent: [],
+  }
+
+  // clinic_id SEMPRE derivado da sessão — nunca aceito do cliente (isolamento
+  // multi-tenant: a action expunha telefone/nome de tutores de qualquer clínica).
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return empty
+  const { data: profile } = await supabase
+    .from('profiles').select('clinic_id').eq('id', user.id).single()
+  if (!profile?.clinic_id) return empty
+  const clinicId = profile.clinic_id
+
   const admin = createAdminClient()
   const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString()
   const monthAgo = new Date(Date.now() - 30 * 86_400_000).toISOString()

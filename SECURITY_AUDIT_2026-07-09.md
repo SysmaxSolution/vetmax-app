@@ -109,6 +109,8 @@
 
 ---
 
+> **Atualização (fix/security-p0 → PR #15):** os itens **C1, C2, C3, C4, A1** e o lote **P1 — A3, A5, A6, A7, M1, M2** foram corrigidos nesta branch. Pendências manuais de C1 (rotação de senha + purga de histórico) e itens ainda em aberto (**A2, A4** e os MÉDIO/BAIXO restantes) seguem no plano abaixo.
+
 ## Plano de remediação priorizado
 
 **P0 — hoje (blast radius máximo, correção rápida):**

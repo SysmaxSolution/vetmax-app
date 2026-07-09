@@ -82,12 +82,17 @@ export async function getLowStockItems(): Promise<StockItem[] | { error: string 
   return ((data ?? []) as StockItem[]).filter(item => Number(item.quantity) < Number(item.min_stock_level))
 }
 
-export async function getLowStockCount(clinicId: string): Promise<number> {
+export async function getLowStockCount(): Promise<number> {
+  // clinic_id SEMPRE derivado da sessão — nunca aceito do cliente (IDOR: vazava
+  // contagem de estoque baixo de qualquer clínica).
+  const ctx = await getClinicAndUser()
+  if (!ctx) return 0
+
   const admin = createAdminClient()
   const { data } = await admin
     .from('pharmacy_stock')
     .select('id, quantity, min_stock_level')
-    .eq('clinic_id', clinicId)
+    .eq('clinic_id', ctx.clinic_id)
 
   if (!data) return 0
   return data.filter(item => item.quantity < item.min_stock_level).length

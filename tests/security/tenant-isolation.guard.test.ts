@@ -22,12 +22,9 @@ import { basename } from 'path'
  * cliente). Devem sair do baseline conforme forem corrigidas. NÃO adicionar aqui —
  * é lista de dívida a zerar.
  */
-const MUST_FIX = new Set<string>([
-  // sales.ts::launchPendingSale — CORRIGIDO (C2): passou a derivar clinic_id da sessão.
-  'whatsapp-director.ts::getWhatsappDirectorStats', // A3 ALTO — pendente (P1)
-  'voice-corrections.ts::getActiveCorrectionsForClinic', // M1 MÉDIO — pendente (P1)
-  'stock.ts::getLowStockCount', // M2 MÉDIO — pendente (P1)
-])
+// Vazio: todos os confirmados exploráveis foram corrigidos (C2/A3/M1/M2) —
+// passaram a derivar clinic_id da sessão em fix/security-p0 + P1.
+const MUST_FIX = new Set<string>([])
 
 /**
  * Baseline: TODAS as actions (arquivo::função) que hoje recebem clinic_id/clinicId
@@ -48,13 +45,13 @@ const BASELINE = new Set<string>([
   'internal-chat.ts::_attachDocumentToEntityChatInternal',
   'internal-chat.ts::attachDocumentToEntityChat',
   'legal.ts::insertLegalAcceptanceRaw',
-  // 'sales.ts::launchPendingSale' — removido: corrigido em fix/security-p0 (C2)
+  // Removidos: corrigidos (derivam clinic_id da sessão) —
+  //   sales.ts::launchPendingSale (C2), stock.ts::getLowStockCount (M2),
+  //   voice-corrections.ts::getActiveCorrectionsForClinic (M1),
+  //   whatsapp-director.ts::getWhatsappDirectorStats (A3)
   'stock.ts::deductStockForMedication',
-  'stock.ts::getLowStockCount',
   'stock.ts::updateStockItemV2',
   'subscription.ts::setSpecializedPrice',
-  'voice-corrections.ts::getActiveCorrectionsForClinic',
-  'whatsapp-director.ts::getWhatsappDirectorStats',
 ])
 
 function scanActionsTakingClinicId(): Set<string> {
