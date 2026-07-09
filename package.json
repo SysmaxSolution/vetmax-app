@@ -19,6 +19,7 @@
     "test:race": "jest --testPathPattern='concurrency-race-condition' --runInBand",
     "test:csv": "jest --testPathPattern='csv-import-sanity' --runInBand",
     "test:rls": "jest --testPathPattern='rls-roles' --runInBand",
+    "test:security": "jest --config jest.security.config.ts",
     "cap:add:android": "cap add android",
     "cap:add:ios": "cap add ios",
     "cap:sync": "cap sync",

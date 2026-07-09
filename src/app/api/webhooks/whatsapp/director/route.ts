@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { safeSecretEqual } from '@/lib/webhook-auth'
 import { handleDirectorCommand } from '@/lib/director-commands'
 
 // POST /api/webhooks/whatsapp/director
@@ -8,6 +9,14 @@ import { handleDirectorCommand } from '@/lib/director-commands'
 // Usado quando P0_ALERT_INSTANCE é uma instância dedicada (não vinculada a nenhuma clínica).
 
 export async function POST(request: NextRequest) {
+  // Valida que a requisição vem do servidor Evolution API (apikey no header).
+  // FAIL-CLOSED: telefone (remoteJid) é controlável pelo atacante e NÃO é credencial —
+  // sem esta barreira, um POST forjado aprovava fix_plans e disparava a aplicação
+  // autônoma de código (apply-approved-fixes).
+  if (!safeSecretEqual(request.headers.get('apikey'), process.env.EVOLUTION_API_KEY)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   let body: Record<string, unknown>
   try { body = await request.json() }
   catch { return NextResponse.json({ error: 'Payload inválido.' }, { status: 400 }) }
