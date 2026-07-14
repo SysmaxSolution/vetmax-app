@@ -221,7 +221,37 @@ export async function POST(
         .limit(1)
         .maybeSingle()
 
-      if (!conv) return NextResponse.json({ received: true })
+      if (!conv) {
+        // Conversa INICIADA pelo próprio número da clínica (ex.: conversa
+        // pessoal do dono do aparelho). Registra já em modo humano — quando o
+        // contato responder, a conversa existirá como 'human' e o bot não
+        // interage. Sem esse registro, a resposta do contato criaria a
+        // conversa em modo 'bot'.
+        const tutorData = await findTutorByPhone(phone, clinicId, admin)
+        const { data: newConv } = await admin
+          .from('whatsapp_conversations')
+          .insert({
+            clinic_id:       clinicId,
+            tutor_phone:     phone,
+            tutor_name:      tutorData?.tutorName ?? null,
+            tutor_id:        tutorData?.tutorId ?? null,
+            pet_names_cache: tutorData?.petNamesCache ?? null,
+            status:          'human',
+            last_message_at: new Date().toISOString(),
+          })
+          .select('id')
+          .single()
+        if (newConv && messageText?.trim()) {
+          await admin.from('whatsapp_messages').insert({
+            conversation_id: newConv.id,
+            clinic_id:       clinicId,
+            direction:       'outbound',
+            content:         messageText,
+            sent_by:         'human',
+          })
+        }
+        return NextResponse.json({ received: true })
+      }
 
       if (messageText?.trim()) {
         const since = new Date(Date.now() - 60_000).toISOString()
@@ -446,6 +476,16 @@ async function processInboundMessage(params: {
     }
   } else if (botConfig.working_hours_start && botConfig.working_hours_end) {
     if (!isWithinWindow(botConfig.working_hours_start, botConfig.working_hours_end)) {
+      const toMins = (t: string) => {
+        const [h, m] = t.split(':').map(Number)
+        return (h || 0) * 60 + (m || 0)
+      }
+      // Janela que cruza a meia-noite = bot NOTURNO (ex.: 18:01→07:59). Fora
+      // da janela é o expediente da equipe humana — silêncio. O auto-reply de
+      // "fora do horário" só faz sentido para bot diurno (fora da janela =
+      // clínica fechada), senão o cliente recebe o horário do BOT como se
+      // fosse o horário da clínica.
+      if (toMins(botConfig.working_hours_start) > toMins(botConfig.working_hours_end)) return
       const fmt = (t: string) => t.slice(0, 5)
       const reply = `Nosso horário de atendimento é das ${fmt(botConfig.working_hours_start)} às ${fmt(botConfig.working_hours_end)}. Assim que abrirmos, responderei sua mensagem!`
       await sendBotReply(clinicId, phone, reply, admin, conversation.id)
