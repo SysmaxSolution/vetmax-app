@@ -22,7 +22,7 @@ import { getAllPages } from '@/lib/canva/canvas-state'
 import type { CanvasElement, RepeaterElement } from '@/lib/canva/elements'
 import CanvaA4Preview from './CanvaA4Preview'
 import CanvasStage from './editor/CanvasStage'
-import { readRepeaterSource } from './editor/ElementRenderers'
+import { readRepeaterItems } from './editor/ElementRenderers'
 import type { ResolveContext } from '@/lib/canva/dynamic-tags'
 
 /** Página real ou virtual (gerada por overflow do repeater). */
@@ -55,7 +55,7 @@ function expandPagesForRepeaterOverflow(
       out.push({ page: p.page, elements: p.elements })
       continue
     }
-    const items = readRepeaterSource(paged.source, resolveContext)
+    const items = readRepeaterItems(paged, resolveContext)
     const effectiveTotal = Math.min(items.length, paged.maxLines ?? items.length)
     const max = paged.maxItemsPerPage!
     const slices = Math.max(1, Math.ceil(effectiveTotal / max))
@@ -232,6 +232,7 @@ export default function LaudoPrintable({
                 state={{ version: 1, page: p.page, elements: p.elements }}
                 mode="print"
                 resolveContext={resolveContext}
+                fillableValues={content.fillable_fields}
                 repeaterSlices={p.repeaterSlices}
               />
             </div>

@@ -207,6 +207,11 @@ export interface RepeaterElement extends ElementCommon {
   highlightColor?: string
   /** Rótulo prefixado nas linhas destacadas (ex: "[CONTROLADO]"). */
   highlightBadge?: string
+
+  /** Filtro de itens da fonte. Ex.: Receita de Controle Especial mostra
+   *  apenas {field:'is_controlled', equals:true}; Receituário simples usa
+   *  negate:true para excluir controlados (Port. SVS/MS 344/98). */
+  filter?: { field: string; equals: string | number | boolean; negate?: boolean }
 }
 
 export type RepeaterSource = 'prescriptions' | 'exam_items' | 'vaccines' | 'dynamic_fields'

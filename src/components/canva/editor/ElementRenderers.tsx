@@ -435,7 +435,7 @@ function RepeaterRenderer({
   isPrint?: boolean
   itemSlice?: { start: number; end: number }
 }) {
-  const items = readRepeaterSource(e.source, ctx)
+  const items = readRepeaterItems(e, ctx)
   const beforeMax = items.slice(0, e.maxLines ?? items.length)
   // Aplica slice de auto-paginação (vem do LaudoPrintable em páginas extras)
   const lines = itemSlice
@@ -572,8 +572,16 @@ function RepeaterItemLines({
         // Hide-if-empty: se nenhum {{field}} resolveu nada e a linha é
         // marcada como hideIfEmpty, suprime ela inteira.
         if (line.hideIfEmpty) {
-          const stripped = applyItemTemplate(line.template.replace(/\{\{LEADER\}\}/g, ''), item).trim()
-          if (!stripped) return null
+          // Emptiness = nenhum {{field}} do template resolveu valor. Testar a
+          // string final não funciona: prefixos estáticos ("OBS: ") a deixam
+          // sempre não-vazia e a linha nunca é escondida.
+          const keys = [...line.template.matchAll(/\{\{(\w+)\}\}/g)]
+            .map(m => m[1]).filter(k => k !== 'LEADER')
+          const hasValue = keys.some(k => {
+            const v = item[k]
+            return v !== null && v !== undefined && String(v).trim() !== ''
+          })
+          if (!hasValue) return null
         }
 
         const mergedStyle: CSSProperties = {
@@ -686,6 +694,16 @@ export function readRepeaterSource(source: RepeaterElement['source'], ctx?: Reso
   return Array.isArray(list) ? (list as Record<string, unknown>[]) : []
 }
 
+/** Fonte + filtro do elemento. DEVE ser usado tanto pelo RepeaterRenderer
+ *  quanto pela paginação (expandPagesForRepeaterOverflow) — senão os slices
+ *  de página são calculados sobre uma lista diferente da renderizada. */
+export function readRepeaterItems(e: RepeaterElement, ctx?: ResolveContext): Record<string, unknown>[] {
+  const items = readRepeaterSource(e.source, ctx)
+  if (!e.filter?.field) return items
+  const { field, equals, negate } = e.filter
+  return items.filter(item => (item[field] === equals) !== Boolean(negate))
+}
+
 function applyItemTemplate(template: string, item: Record<string, unknown>): string {
   // 1. Substitui {{key}} pelo valor (string vazia se ausente).
   const raw = template.replace(/\{\{(\w+)\}\}/g, (_, key) => {
@@ -707,8 +725,9 @@ function applyItemTemplate(template: string, item: Record<string, unknown>): str
     .replace(/\s*[—–|·•]\s*$/g, '')
     // separador logo no começo
     .replace(/^\s*[—–|·•]\s*/g, '')
-    // sequência de palavras-unidade sem valor: " dias" no final
-    .replace(/(?:^|\s)(dias?|vezes?|horas?)\s*$/i, '')
+    // sequência de palavras-unidade sem valor: " dias" no final — só quando
+    // NÃO precedida de dígito ("durante dias" sim; "de 8 horas" não)
+    .replace(/(?<!\d)\s+(dias?|vezes?|horas?)\s*$/i, '')
     // colapsa espaços múltiplos
     .replace(/\s{2,}/g, ' ')
     .trim()

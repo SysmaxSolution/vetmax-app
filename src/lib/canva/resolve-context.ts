@@ -218,6 +218,21 @@ const ROUTE_DB_TO_CANON: Record<string, string> = {
   inalacao:   'inalação',
   outro:      'outras vias',
 }
+// Códigos do select de ExamRequestModal → rótulo humano no documento impresso.
+// exam_type "outro" grava texto livre, que passa direto pelo fallback.
+const EXAM_TYPE_LABELS: Record<string, string> = {
+  hemograma:           'Hemograma Completo',
+  bioquimico:          'Perfil Bioquímico',
+  urinanalise:         'Urinálise',
+  coproparasitologico: 'Coproparasitológico',
+  ultrassom:           'Ultrassom',
+  raio_x:              'Raio-X',
+  eletrocardiograma:   'Eletrocardiograma (ECG)',
+  citologia:           'Citologia',
+  cultura:             'Cultura e Antibiograma',
+  teste_rapido:        'Teste Rápido (FIV/FeLV/4DX)',
+}
+
 const PRESC_TYPE_DB_TO_CANON: Record<string, string> = {
   standard:       'common',
   blue_receipt:   'controlled',
@@ -313,7 +328,7 @@ export async function buildResolveContext(
   // O macro de exames agrupa por `urgency` — preserva o status como agrupador
   // (pending/in_progress/completed) e expõe `name` para o itemTemplate "{{name}}".
   const examItems = (examRequestsRaw ?? []).map(e => ({
-    name:    e.exam_type,
+    name:    EXAM_TYPE_LABELS[e.exam_type as string] ?? e.exam_type,
     urgency: e.status ?? 'rotina',
     notes:   e.notes ?? '',
   }))
