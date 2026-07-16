@@ -19,8 +19,13 @@
  * Idempotente: por (clinic_id, name, type) — UPDATE do canvas_state se já
  * existir, INSERT caso contrário.
  *
+ * Além das clínicas, SEMPRE atualiza a biblioteca canônica
+ * `default_document_templates` — fonte do trigger clinics_seed_default_templates
+ * (migration 0414) que copia os layouts para toda clínica recém-cadastrada.
+ *
  * Uso:
- *   node scripts/seed-default-canva-templates.mjs           # aplica
+ *   node scripts/seed-default-canva-templates.mjs           # clínicas Free
+ *   node scripts/seed-default-canva-templates.mjs --all     # TODAS exceto Almavet
  *   node scripts/seed-default-canva-templates.mjs --dry     # só lista alvos
  *   node scripts/seed-default-canva-templates.mjs --clinic <uuid>  # 1 clínica
  */
@@ -40,6 +45,7 @@ const conn = env.DATABASE_URL ?? env.POSTGRES_URL
 if (!conn) { console.error('FATAL: DATABASE_URL ausente no .env.local'); process.exit(1) }
 
 const DRY = process.argv.includes('--dry')
+const ALL = process.argv.includes('--all')
 const clinicArgIdx = process.argv.indexOf('--clinic')
 const ONLY_CLINIC = clinicArgIdx > -1 ? process.argv[clinicArgIdx + 1] : null
 
@@ -532,8 +538,35 @@ console.log('→ Conectando ao Supabase…')
 await client.connect()
 
 try {
+  // ── Biblioteca canônica (fonte do trigger da migration 0414) ─────────────
+  // Atualizada SEMPRE (inclusive em --dry não: só quando grava de verdade).
+  if (!DRY) {
+    let libUpserts = 0
+    for (const tpl of TEMPLATES) {
+      const canvasState = tpl.build()
+      const extractedFields = deriveExtractedFields(canvasState)
+      await client.query(
+        `INSERT INTO default_document_templates (name, type, engine, extracted_fields, canvas_state, updated_at)
+         VALUES ($1, $2, 'canva-native', $3::jsonb, $4::jsonb, now())
+         ON CONFLICT (name, type) DO UPDATE
+            SET canvas_state = EXCLUDED.canvas_state,
+                extracted_fields = EXCLUDED.extracted_fields,
+                engine = EXCLUDED.engine,
+                updated_at = now()`,
+        [tpl.name, tpl.type, JSON.stringify(extractedFields), JSON.stringify(canvasState)],
+      ).then(() => libUpserts++)
+        .catch(e => {
+          if (/relation .* does not exist/i.test(e.message)) {
+            console.warn('  (aviso: default_document_templates ainda não existe — aplique a migration 0414)')
+          } else throw e
+        })
+    }
+    if (libUpserts) console.log(`→ Biblioteca canônica: ${libUpserts} layouts atualizados (default_document_templates)`)
+  }
+
   const params = []
   let where = `COALESCE(ts.plan_name, 'free') = 'free' AND c.name NOT ILIKE '%almavet%'`
+  if (ALL) where = `c.name NOT ILIKE '%almavet%'`
   if (ONLY_CLINIC) { params.push(ONLY_CLINIC); where = `c.id = $1` }
 
   const { rows: clinics } = await client.query(
@@ -545,7 +578,7 @@ try {
     params,
   )
 
-  console.log(`→ ${clinics.length} clínica(s) alvo (plano Free, exceto Almavet):`)
+  console.log(`→ ${clinics.length} clínica(s) alvo (${ALL ? 'TODAS exceto Almavet' : 'plano Free, exceto Almavet'}):`)
   clinics.forEach(c => console.log(`    • ${c.name} [${c.plan}] — ${c.id}`))
 
   if (DRY) { console.log('\n(--dry) Nada foi gravado.'); process.exit(0) }
