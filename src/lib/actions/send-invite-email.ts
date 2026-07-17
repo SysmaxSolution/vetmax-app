@@ -15,6 +15,7 @@ interface SendInviteParams {
 }
 
 const ROLE_LABELS: Record<string, string> = {
+  admin:        'Administrador(a)',
   vet:          'Médico Veterinário',
   assistant:    'Auxiliar Veterinário',
   receptionist: 'Recepcionista',

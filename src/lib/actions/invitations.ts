@@ -34,7 +34,7 @@ export async function createInvitation(
   }
 
   if (!email) return { error: 'Informe o e-mail do convidado.' }
-  if (!['vet', 'assistant', 'receptionist', 'pharmacist'].includes(role)) {
+  if (!['admin', 'vet', 'assistant', 'receptionist', 'pharmacist'].includes(role)) {
     return { error: 'Role inválida.' }
   }
 

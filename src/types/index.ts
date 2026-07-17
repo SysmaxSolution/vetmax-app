@@ -393,7 +393,7 @@ export interface DocumentTemplate {
 
 // ── Invitations ──────────────────────────────────────────────────────────────
 
-export type InvitationRole = 'vet' | 'assistant' | 'receptionist' | 'pharmacist'
+export type InvitationRole = 'admin' | 'vet' | 'assistant' | 'receptionist' | 'pharmacist'
 
 export interface Invitation {
   id: string

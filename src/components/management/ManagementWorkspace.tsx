@@ -122,6 +122,7 @@ const INVITE_ROLE_OPTIONS: { value: InvitationRole; label: string }[] = [
   { value: 'assistant',    label: 'Auxiliar Veterinário' },
   { value: 'receptionist', label: 'Recepcionista' },
   { value: 'pharmacist',   label: 'Técnico' },
+  { value: 'admin',        label: 'Administrador' },
 ]
 
 type ActiveTab = 'templates' | 'clinica' | 'usuarios' | 'configuracoes' | 'convenios' | 'salas' | 'aparencia' | 'monitoramento' | 'assinatura'
