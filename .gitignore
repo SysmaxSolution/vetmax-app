@@ -125,3 +125,4 @@ ios/.gitignore_local
 *.cer
 android/keystore.properties
 android/app/sysvetmax-release.keystore
+.migration/
