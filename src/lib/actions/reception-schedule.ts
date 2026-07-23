@@ -43,7 +43,7 @@ export async function getVaccinationSchedule(): Promise<VaccinationSchedule | { 
     .select(`
       id, vaccine_name, next_due_date,
       patient:patients!inner ( id, name, species, deleted_at,
-        tutor:tutors ( id, name, phone, deleted_at ) )
+        tutor:tutors ( id, name, phone ) )
     `)
     .eq('clinic_id', profile.clinic_id)
     .not('next_due_date', 'is', null)
@@ -61,8 +61,9 @@ export async function getVaccinationSchedule(): Promise<VaccinationSchedule | { 
   for (const row of (data ?? []) as Array<Record<string, unknown>>) {
     const patient = one(row.patient)
     if (!patient || patient.deleted_at) continue            // pet arquivado some
-    const tutorRaw = one(patient.tutor)
-    const tutorActive = tutorRaw && !tutorRaw.deleted_at ? tutorRaw : null
+    // tutors não tem soft-delete (deleted_at) — pedir a coluna derrubava a
+    // query inteira (42703) e a aba ficava vazia para TODAS as clínicas.
+    const tutorActive = one(patient.tutor)
 
     const nextDue = row.next_due_date as string
     const item: VaccinationScheduleItem = {
