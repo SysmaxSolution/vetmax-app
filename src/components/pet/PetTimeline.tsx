@@ -128,6 +128,7 @@ function EventDot({ type }: { type: TimelineEvent['type'] }) {
     whatsapp_notification:    { bg: 'bg-green-500',   icon: '📱' },
     petlove_event:            { bg: 'bg-purple-500',  icon: '🐾' },
     weight_update:            { bg: 'bg-amber-500',   icon: '⚖️' },
+    vaccine:                  { bg: 'bg-cyan-600',    icon: '💉' },
     patient_note:             { bg: 'bg-slate-500',   icon: '📝' },
     billing_document:         { bg: 'bg-green-600',   icon: '🧾' },
     memorial:                 { bg: 'bg-violet-400',  icon: '🕊️' },
@@ -241,11 +242,12 @@ function MemorialCard({ event }: { event: TimelineEvent }) {
 function WeightUpdateCard({ event }: { event: TimelineEvent }) {
   const d = event.weight_update!
   const sourceLabels: Record<string, string> = {
-    manual:          'Cadastro do pet',
-    reception:       'Recepção',
-    triage:          'Triagem',
-    vet:             'Consultório',
-    hospitalization: 'Internação',
+    manual:              'Cadastro do pet',
+    reception:           'Recepção',
+    triage:              'Triagem',
+    vet:                 'Consultório',
+    hospitalization:     'Internação',
+    migracao_simplesvet: 'Migração SimplesVet',
   }
   const sourceLabel = sourceLabels[d.source] ?? d.source
   const fmt = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 1 })
@@ -357,21 +359,53 @@ function ConsultationCard({ event }: { event: TimelineEvent }) {
           </p>
         )}
       </div>
+      {c.anamnesis && (
+        <div>
+          <p className="text-xs font-medium text-blue-700">Anamnese</p>
+          <p className="text-xs text-blue-800 mt-0.5 leading-relaxed line-clamp-6 whitespace-pre-wrap">{c.anamnesis}</p>
+        </div>
+      )}
       {c.suggested_diagnosis && (() => {
         const diagText = formatDiagnosis(c.suggested_diagnosis)
         return diagText ? (
-          <div>
+          <div className={c.anamnesis ? 'border-t border-blue-200 pt-2' : ''}>
             <p className="text-xs font-medium text-blue-700">Diagnóstico Sugerido</p>
             <p className="text-xs text-blue-800 mt-0.5 leading-relaxed line-clamp-3">{diagText}</p>
           </div>
         ) : null
       })()}
       {c.vet_notes && (
-        <div className={c.suggested_diagnosis ? 'border-t border-blue-200 pt-2' : ''}>
+        <div className={(c.anamnesis || c.suggested_diagnosis) ? 'border-t border-blue-200 pt-2' : ''}>
           <p className="text-xs font-medium text-blue-700">Notas Clínicas</p>
           <p className="text-xs text-blue-800 mt-0.5 leading-relaxed line-clamp-4">{c.vet_notes}</p>
         </div>
       )}
+    </div>
+  )
+}
+
+function VaccineCard({ event }: { event: TimelineEvent }) {
+  const v = event.vaccine!
+  const dose = v.dose_number ? `Dose ${v.dose_number}${v.dose_total ? `/${v.dose_total}` : ''}` : null
+  return (
+    <div className="rounded-xl border border-cyan-100 bg-cyan-50 px-4 py-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-cyan-700 mb-1.5">Vacina Aplicada</p>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-sm font-semibold text-cyan-900">{v.vaccine_name}</p>
+        {dose && (
+          <span className="flex-shrink-0 rounded-full bg-cyan-200 px-2 py-0.5 text-xs font-semibold text-cyan-800">{dose}</span>
+        )}
+      </div>
+      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-cyan-700">
+        {v.manufacturer && <span>Fabricante: {v.manufacturer}</span>}
+        {v.lot_number && <span>Lote: {v.lot_number}</span>}
+        {v.next_due_date && (
+          <span className="font-semibold">
+            Próxima dose: {new Date(`${v.next_due_date}T12:00:00`).toLocaleDateString('pt-BR')}
+          </span>
+        )}
+      </div>
+      {v.notes && <p className="mt-1 text-xs text-cyan-600 italic">{v.notes}</p>}
     </div>
   )
 }
@@ -691,6 +725,7 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
   checkin: 'Check-in', triage: 'Triagem', consultation: 'Consulta', medication: 'Medicação',
   document: 'Documento', completed: 'Concluída', appointment: 'Agendamento', attachment: 'Anexo',
   hospitalization_evolution: 'Internação', whatsapp_notification: 'WhatsApp',
+  vaccine: 'Vacina', weight_update: 'Peso', patient_note: 'Nota',
 }
 
 // ─── Event Detail Modal ───────────────────────────────────────────────────────
@@ -774,6 +809,12 @@ function EventDetailModal({ event, onClose }: { event: TimelineEvent; onClose: (
                   <p className="text-xs text-blue-600 font-medium">
                     MV {event.vet_name}{event.vet_crmv ? ` · CRMV ${event.vet_crmv}` : ''}
                   </p>
+                )}
+                {c.anamnesis && (
+                  <div>
+                    <p className="text-xs font-semibold text-blue-700 mb-1">Anamnese</p>
+                    <p className="text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">{c.anamnesis}</p>
+                  </div>
                 )}
                 {c.suggested_diagnosis && (() => {
                   const diagText = formatDiagnosis(c.suggested_diagnosis)
@@ -1143,6 +1184,7 @@ export default function PetTimeline({ events, packageMap = {}, onPrint, onEdit, 
                       {event.type === 'whatsapp_notification'     && <WhatsAppNotificationCard event={event} />}
                       {event.type === 'petlove_event'             && <PetloveEventCard event={event} />}
                       {event.type === 'weight_update'             && <WeightUpdateCard event={event} />}
+                      {event.type === 'vaccine'                   && <VaccineCard event={event} />}
                       {event.type === 'patient_note'              && <PatientNoteCard event={event} />}
                       {event.type === 'billing_document'          && <BillingDocumentCard event={event} />}
                       {event.type === 'memorial'                  && <MemorialCard event={event} />}

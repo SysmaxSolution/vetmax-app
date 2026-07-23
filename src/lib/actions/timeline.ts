@@ -24,6 +24,7 @@ export type TimelineEventType =
   | 'patient_note'
   | 'memorial'
   | 'billing_document'
+  | 'vaccine'
 
 export interface TimelineEvent {
   id: string
@@ -49,8 +50,20 @@ export interface TimelineEvent {
     chief_complaint: string
   }
   consultation?: {
+    anamnesis: string | null
     vet_notes: string | null
     suggested_diagnosis: string | null
+  }
+  vaccine?: {
+    id:             string
+    vaccine_name:   string
+    vaccine_type:   string | null
+    dose_number:    number | null
+    dose_total:     number | null
+    next_due_date:  string | null
+    manufacturer:   string | null
+    lot_number:     string | null
+    notes:          string | null
   }
   medication?: {
     medication_name: string
@@ -158,6 +171,7 @@ const SORT_ORDER: Record<TimelineEventType, number> = {
   document:                  2,
   attachment:                3,
   medication:                4,
+  vaccine:                   4.5,
   triage:                    5,
   checkin:                   6,
   hospitalization_evolution: 7,
@@ -195,7 +209,7 @@ export async function getPetTimeline(
     const { data: consultations, error: cError } = await supabase
       .from('consultations')
       .select(
-        'id, status, visit_reason, reason, payment_status, weight, temperature, triage_notes, vet_notes, suggested_diagnosis, is_reviewed_by_vet, vet_id, created_at, updated_at'
+        'id, status, visit_reason, reason, payment_status, weight, temperature, triage_notes, anamnesis, vet_notes, suggested_diagnosis, is_reviewed_by_vet, vet_id, created_at, updated_at'
       )
       .eq('patient_id', petId)
       .eq('clinic_id', clinicId)
@@ -347,8 +361,12 @@ export async function getPetTimeline(
         })
       }
 
-      // Prontuário clínico (somente se tiver notas ou diagnóstico)
-      if (c.vet_notes || c.suggested_diagnosis) {
+      // Prontuário clínico (somente se tiver anamnese, notas ou diagnóstico).
+      // Anamnese entra no gate: consultas migradas de sistemas legados têm o
+      // texto clínico só nessa coluna (vet_notes vazio) e sumiam do feed.
+      const anamnesis = (c as any).anamnesis as string | null
+      const showAnamnesis = anamnesis && anamnesis !== c.vet_notes ? anamnesis : null
+      if (showAnamnesis || c.vet_notes || c.suggested_diagnosis) {
         events.push({
           id:              `consultation-${c.id}`,
           type:            'consultation',
@@ -358,6 +376,7 @@ export async function getPetTimeline(
           vet_name:        vet?.full_name ?? null,
           vet_crmv:        vet?.crmv ?? null,
           consultation: {
+            anamnesis:           showAnamnesis,
             vet_notes:           c.vet_notes,
             suggested_diagnosis: c.suggested_diagnosis,
           },
@@ -548,6 +567,64 @@ export async function getPetTimeline(
           event_type:  ev.event_type as 'patient_created' | 'plan_updated' | 'price_updated' | 'entry_created',
           description: ev.description,
           metadata:    (ev.metadata as Record<string, unknown>) ?? {},
+        },
+      })
+    }
+
+    // 10.1 Histórico de peso (patient_weights — hoje populada só por migração
+    //      de sistema legado; eventos de peso do app vivem em
+    //      patient_petlove_history, então não há duplicidade entre as fontes).
+    const { data: weightRows } = await supabase
+      .from('patient_weights')
+      .select('id, weight_kg, body_score, measured_at, source, notes')
+      .eq('patient_id', petId)
+      .eq('clinic_id', clinicId)
+      .order('measured_at', { ascending: true })
+
+    let prevKg: number | null = null
+    for (const w of weightRows ?? []) {
+      const kg = Number(w.weight_kg)
+      const parts = [w.body_score != null ? `Escore corporal ${w.body_score}/9` : null, w.notes].filter(Boolean)
+      events.push({
+        id:   `pweight-${w.id}`,
+        type: 'weight_update',
+        date: w.measured_at,
+        weight_update: {
+          id:          w.id,
+          weight_kg:   kg,
+          previous_kg: prevKg,
+          source:      w.source ?? 'migracao',
+          description: parts.join(' · ') || 'Pesagem registrada',
+        },
+      })
+      prevKg = kg
+    }
+
+    // 10.2 Vacinas aplicadas (patient_vaccines) — cada aplicação vira um evento
+    //      na linha do tempo, complementando a Carteira de Vacinação.
+    const { data: vaccineRows } = await supabase
+      .from('patient_vaccines')
+      .select('id, vaccine_name, vaccine_type, date_administered, dose_number, dose_total, next_due_date, manufacturer, lot_number, notes, created_at')
+      .eq('patient_id', petId)
+      .eq('clinic_id', clinicId)
+      .order('date_administered', { ascending: false })
+
+    for (const v of vaccineRows ?? []) {
+      events.push({
+        id:   `vac-${v.id}`,
+        type: 'vaccine',
+        // date_administered é DATE — fixa meio-dia para agrupar no dia certo
+        date: v.date_administered ? `${v.date_administered}T12:00:00` : v.created_at,
+        vaccine: {
+          id:            v.id,
+          vaccine_name:  v.vaccine_name,
+          vaccine_type:  v.vaccine_type,
+          dose_number:   v.dose_number,
+          dose_total:    v.dose_total,
+          next_due_date: v.next_due_date,
+          manufacturer:  v.manufacturer,
+          lot_number:    v.lot_number,
+          notes:         v.notes,
         },
       })
     }
