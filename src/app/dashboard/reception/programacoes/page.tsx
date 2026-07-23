@@ -25,7 +25,7 @@ export default async function ProgramacoesPage() {
     getAppointmentRequests('pending_reception_validation'),
   ])
 
-  const schedule     = 'error' in scheduleResult ? { overdue: [], upcoming: [] } : scheduleResult
+  const schedule     = 'error' in scheduleResult ? { overdue: [], upcoming: [], dismissed: [] } : scheduleResult
   const appointments = Array.isArray(requestsResult) ? requestsResult : []
 
   return (
