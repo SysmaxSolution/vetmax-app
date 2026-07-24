@@ -152,17 +152,22 @@ export async function createHospitalization(data: {
 
   const admin = createAdminClient()
 
-  // Impede duplicatas: se já existe internação ativa, bloqueia.
+  // Trava dura POR PACIENTE — vale para admissão direta E via consulta.
+  // (Incidente Almavet 24/07: a checagem antiga era por consultation_id, então
+  // a admissão direta não verificava nada e o mesmo pet foi internado 3×.
+  // Defesa em profundidade no banco: índice único parcial + triggers — 0418.)
+  const { data: activeForPatient } = await admin
+    .from('hospitalizations')
+    .select('id')
+    .eq('patient_id', data.patient_id)
+    .not('status', 'in', '("discharged","cancelled")')
+    .maybeSingle()
+  if (activeForPatient) {
+    return { error: 'Este paciente JÁ possui uma internação ativa — ele deve aparecer no mapa de internação.' }
+  }
+
   // Se existe uma internação encerrada (saiu para revisão e voltou), REATIVA-a.
   if (data.consultation_id) {
-    const { data: active } = await admin
-      .from('hospitalizations')
-      .select('id')
-      .eq('consultation_id', data.consultation_id)
-      .not('status', 'in', '("discharged","cancelled")')
-      .maybeSingle()
-    if (active) return { error: 'Este paciente já possui uma internação ativa.' }
-
     const { data: previous } = await admin
       .from('hospitalizations')
       .select('id')
@@ -198,7 +203,16 @@ export async function createHospitalization(data: {
     .select('id')
     .single()
 
-  if (error || !result) return { error: 'Erro ao internar paciente: ' + (error?.message ?? '') }
+  if (error || !result) {
+    // Mensagens das travas do banco (0418) já são amigáveis — repassa direto.
+    const msg = error?.message ?? ''
+    if (msg.includes('pet') || msg.includes('INTERNADO') || msg.includes('internação ativa') || msg.includes('uniq_hospitalization_active')) {
+      return { error: msg.includes('uniq_hospitalization_active')
+        ? 'Este paciente JÁ possui uma internação ativa — ele deve aparecer no mapa de internação.'
+        : msg }
+    }
+    return { error: 'Erro ao internar paciente: ' + msg }
+  }
 
   // Remove o paciente do Kanban de Consultório atualizando o status da consulta
   if (data.consultation_id) {
