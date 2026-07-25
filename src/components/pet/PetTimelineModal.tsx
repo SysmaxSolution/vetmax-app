@@ -350,6 +350,7 @@ export default function PetTimelineModal({
                 packageMap={packageMap}
                 onPrint={handlePrint}
                 onEditAppointment={id => setEditApptId(id)}
+                patientId={petId}
               />
             )}
           </div>

@@ -384,12 +384,25 @@ function ConsultationCard({ event }: { event: TimelineEvent }) {
   )
 }
 
-function VaccineCard({ event }: { event: TimelineEvent }) {
+function VaccineCard({ event, patientId }: { event: TimelineEvent; patientId?: string }) {
   const v = event.vaccine!
   const dose = v.dose_number ? `Dose ${v.dose_number}${v.dose_total ? `/${v.dose_total}` : ''}` : null
   return (
     <div className="rounded-xl border border-cyan-100 bg-cyan-50 px-4 py-3">
-      <p className="text-xs font-semibold uppercase tracking-wide text-cyan-700 mb-1.5">Vacina Aplicada</p>
+      <div className="flex items-center justify-between mb-1.5">
+        <p className="text-xs font-semibold uppercase tracking-wide text-cyan-700">Vacina Aplicada</p>
+        {patientId && (
+          <a
+            href={`/public/vaccines/${patientId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={e => e.stopPropagation()}
+            className="flex-shrink-0 rounded-lg bg-cyan-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-cyan-700 transition-colors"
+          >
+            🖨 Carteira de Vacinação
+          </a>
+        )}
+      </div>
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm font-semibold text-cyan-900">{v.vaccine_name}</p>
         {dose && (
@@ -578,7 +591,7 @@ function AttachmentCard({ event }: { event: TimelineEvent }) {
             onClick={e => e.stopPropagation()}
             className="flex-shrink-0 rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700 transition-colors"
           >
-            Abrir
+            Abrir / Imprimir
           </a>
         )}
       </div>
@@ -709,6 +722,8 @@ function VitalItem({ label, value }: { label: string; value: string }) {
 
 interface Props {
   events: TimelineEvent[]
+  /** Habilita ações que dependem do pet (ex.: imprimir carteira de vacinação). */
+  patientId?: string
   packageMap?: Record<string, PackageSessionInfo>
   onPrint?: (data: PrintState) => void
   onEdit?: (consultationId: string) => void
@@ -730,7 +745,7 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
 
 // ─── Event Detail Modal ───────────────────────────────────────────────────────
 
-function EventDetailModal({ event, onClose }: { event: TimelineEvent; onClose: () => void }) {
+function EventDetailModal({ event, onClose, patientId }: { event: TimelineEvent; onClose: () => void; patientId?: string }) {
   const typeLabel = EVENT_TYPE_LABELS[event.type] ?? event.type
 
   return (
@@ -1034,7 +1049,7 @@ function EventDetailModal({ event, onClose }: { event: TimelineEvent; onClose: (
               o modal abria VAZIO para peso, vacina, nota etc. (bug Almavet 24/07,
               muito visível nos dados migrados da SimplesVet). */}
           {event.type === 'weight_update'   && event.weight_update   && <WeightUpdateCard event={event} />}
-          {event.type === 'vaccine'         && event.vaccine         && <VaccineCard event={event} />}
+          {event.type === 'vaccine'         && event.vaccine         && <VaccineCard event={event} patientId={patientId} />}
           {event.type === 'patient_note'    && event.patient_note    && <PatientNoteCard event={event} />}
           {event.type === 'billing_document' && event.billing_document && <BillingDocumentCard event={event} />}
           {event.type === 'memorial'        && event.memorial        && <MemorialCard event={event} />}
@@ -1046,7 +1061,7 @@ function EventDetailModal({ event, onClose }: { event: TimelineEvent; onClose: (
   )
 }
 
-export default function PetTimeline({ events, packageMap = {}, onPrint, onEdit, onEditAppointment }: Props) {
+export default function PetTimeline({ events, packageMap = {}, onPrint, onEdit, onEditAppointment, patientId }: Props) {
   const [filterType, setFilterType] = useState<TimelineEventType | 'all'>('all')
   const [filterDate, setFilterDate] = useState('')
   const [showFilters, setShowFilters] = useState(false)
@@ -1075,7 +1090,7 @@ export default function PetTimeline({ events, packageMap = {}, onPrint, onEdit, 
   return (
     <div className="space-y-6">
       {expandedEvent && (
-        <EventDetailModal event={expandedEvent} onClose={() => setExpandedEvent(null)} />
+        <EventDetailModal event={expandedEvent} onClose={() => setExpandedEvent(null)} patientId={patientId} />
       )}
       {/* Filtros */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -1194,7 +1209,7 @@ export default function PetTimeline({ events, packageMap = {}, onPrint, onEdit, 
                       {event.type === 'whatsapp_notification'     && <WhatsAppNotificationCard event={event} />}
                       {event.type === 'petlove_event'             && <PetloveEventCard event={event} />}
                       {event.type === 'weight_update'             && <WeightUpdateCard event={event} />}
-                      {event.type === 'vaccine'                   && <VaccineCard event={event} />}
+                      {event.type === 'vaccine'                   && <VaccineCard event={event} patientId={patientId} />}
                       {event.type === 'patient_note'              && <PatientNoteCard event={event} />}
                       {event.type === 'billing_document'          && <BillingDocumentCard event={event} />}
                       {event.type === 'memorial'                  && <MemorialCard event={event} />}
