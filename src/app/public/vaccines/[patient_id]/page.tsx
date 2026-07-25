@@ -4,7 +4,7 @@ import { Syringe, Phone, CheckCircle2, AlertTriangle, Clock, ShieldCheck, MapPin
 
 export const dynamic = 'force-dynamic'
 
-export async function generateMetadata({ params }: { params: { patient_id: string } }) {
+export async function generateMetadata() {
   return {
     title: 'Carteira de Vacinação',
     description: 'Carteira de vacinação digital — modelo CFMV',
@@ -52,8 +52,11 @@ function ResenhaRow({ label, value }: { label: string; value: string | null | un
   )
 }
 
-export default async function PublicVaccinesPage({ params }: { params: { patient_id: string } }) {
-  const result = await getPublicPatientVaccines(params.patient_id)
+export default async function PublicVaccinesPage({ params }: { params: Promise<{ patient_id: string }> }) {
+  // Next 15+: params é Promise — a assinatura síncrona antiga fazia
+  // patient_id chegar undefined e a página cair em notFound() (404).
+  const { patient_id } = await params
+  const result = await getPublicPatientVaccines(patient_id)
 
   if ('error' in result) notFound()
 
