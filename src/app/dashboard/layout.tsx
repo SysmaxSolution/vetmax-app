@@ -12,6 +12,7 @@ import { hasOpenClinicalRecords } from '@/lib/billing/provision'
 import SubscriptionDunningBanner from '@/components/management/subscription/SubscriptionDunningBanner'
 import DashboardShellClassic from '@/components/layout/DashboardShellClassic'
 import DashboardShellModern from '@/components/layout/DashboardShellModern'
+import DeploySkewGuard from '@/components/system/DeploySkewGuard'
 
 export default async function DashboardLayout({
   children,
@@ -253,8 +254,8 @@ export default async function DashboardLayout({
   const layoutVersion = (clinicData as any)?.layout_version ?? 'classic'
 
   if (layoutVersion === 'modern') {
-    return <DashboardShellModern {...shellProps}>{dunningBanner}{children}</DashboardShellModern>
+    return <DashboardShellModern {...shellProps}><DeploySkewGuard />{dunningBanner}{children}</DashboardShellModern>
   }
 
-  return <DashboardShellClassic {...shellProps}>{dunningBanner}{children}</DashboardShellClassic>
+  return <DashboardShellClassic {...shellProps}><DeploySkewGuard />{dunningBanner}{children}</DashboardShellClassic>
 }

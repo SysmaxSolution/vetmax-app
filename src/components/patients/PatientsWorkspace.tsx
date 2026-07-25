@@ -182,11 +182,15 @@ export default function PatientsWorkspace({ initialPatients, clinicName }: Props
   const [archivedLoaded, setArchivedLoaded] = useState(false)
   const [query, setQuery] = useState('')
   const [searching, setSearching] = useState(false)
+  const [searchError, setSearchError] = useState(false)
   const [feedPet, setFeedPet] = useState<PatientsListItem | null>(null)
   const [editPet, setEditPet] = useState<PatientsListItem | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
   const [reactivatingId, setReactivatingId] = useState<string | null>(null)
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Nº de sequência da busca: respostas de buscas antigas (fora de ordem ou
+  // que chegam depois do usuário limpar o campo) são descartadas.
+  const searchSeq = useRef(0)
 
   // Carrega a lista de arquivados sob demanda na primeira vez que a aba abre.
   useEffect(() => {
@@ -205,8 +209,11 @@ export default function PatientsWorkspace({ initialPatients, clinicName }: Props
     if (query.trim().length === 0) {
       // Arquivados: recarrega a lista cheia só quando já foi carregada uma vez
       // (no 1º acesso quem popula é o effect de lazy-load — evita fetch duplo).
+      searchSeq.current++
+      setSearching(false)
+      setSearchError(false)
       if (isArchived) {
-        if (archivedLoaded) getPatientsList('', { archived: true }).then(r => { if (!('error' in r)) setArchived(r) })
+        if (archivedLoaded) getPatientsList('', { archived: true }).then(r => { if (!('error' in r)) setArchived(r) }).catch(() => {})
       } else setPatients(initialPatients)
       return
     }
@@ -214,12 +221,23 @@ export default function PatientsWorkspace({ initialPatients, clinicName }: Props
     if (query.trim().length < 2) return
 
     setSearching(true)
+    setSearchError(false)
+    const seq = ++searchSeq.current
     searchTimer.current = setTimeout(async () => {
-      const result = await getPatientsList(query.trim(), isArchived ? { archived: true } : undefined)
-      setSearching(false)
-      if (!('error' in result)) {
-        if (isArchived) setArchived(result)
+      // try/finally obrigatório: se a action rejeitar (deploy novo com a aba
+      // antiga, queda de rede, 5xx), sem isso o spinner ficava eterno e a
+      // action pendente travava a navegação inteira (incidente 24/07).
+      try {
+        const result = await getPatientsList(query.trim(), isArchived ? { archived: true } : undefined)
+        if (seq !== searchSeq.current) return // resposta obsoleta
+        if ('error' in result) {
+          setSearchError(true)
+        } else if (isArchived) setArchived(result)
         else setPatients(result)
+      } catch {
+        if (seq === searchSeq.current) setSearchError(true)
+      } finally {
+        if (seq === searchSeq.current) setSearching(false)
       }
     }, 350)
 
@@ -360,6 +378,14 @@ export default function PatientsWorkspace({ initialPatients, clinicName }: Props
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
             </svg>
           </button>
+        )}
+        {searchError && (
+          <p className="mt-2 text-xs font-medium text-rose-600">
+            Não foi possível completar a busca. Verifique sua conexão ou{' '}
+            <button type="button" onClick={() => window.location.reload()} className="underline font-semibold">
+              recarregue a página
+            </button>.
+          </p>
         )}
       </div>
 
