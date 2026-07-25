@@ -1030,6 +1030,16 @@ function EventDetailModal({ event, onClose }: { event: TimelineEvent; onClose: (
             </div>
           )}
 
+          {/* Tipos sem detalhamento próprio reutilizam o card inline — sem isto
+              o modal abria VAZIO para peso, vacina, nota etc. (bug Almavet 24/07,
+              muito visível nos dados migrados da SimplesVet). */}
+          {event.type === 'weight_update'   && event.weight_update   && <WeightUpdateCard event={event} />}
+          {event.type === 'vaccine'         && event.vaccine         && <VaccineCard event={event} />}
+          {event.type === 'patient_note'    && event.patient_note    && <PatientNoteCard event={event} />}
+          {event.type === 'billing_document' && event.billing_document && <BillingDocumentCard event={event} />}
+          {event.type === 'memorial'        && event.memorial        && <MemorialCard event={event} />}
+          {event.type === 'petlove_event'   && event.petlove_event   && <PetloveEventCard event={event} />}
+
         </div>
       </div>
     </div>

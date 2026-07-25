@@ -17,6 +17,17 @@ const PUBLIC_PATHS = [
   '/auth',
   '/invite',
   '/onboarding',
+  // Rotas públicas de conteúdo — carteira de vacinação compartilhada com o
+  // tutor (links enviados pelo recall de WhatsApp!), termos e recuperação de
+  // senha. Incidente Almavet 24/07: /public/* fora desta lista redirecionava
+  // a carteira para /login.
+  '/public',
+  '/forgot-password',
+  '/reset-password',
+  '/privacidade',
+  '/termos-de-uso',
+  '/termos-assinatura',
+  '/dpa',
   '/',
 ]
 

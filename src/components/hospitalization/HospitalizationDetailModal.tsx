@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import {
   addClinicalEvolution,
+  cancelHospitalization,
   getHospitalizationDocuments,
   saveHospitalizationDocument,
   deleteHospitalizationDocument,
@@ -68,6 +69,10 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
   const admissionWeight = (card as { weight_at_admission?: number | null }).weight_at_admission ?? null
   // Aprazamento de prescrições direto do card (popula o Mapa de Execução).
   const [showMedModal, setShowMedModal] = useState(false)
+  const [showCancelHosp, setShowCancelHosp] = useState(false)
+  const [cancelHospReason, setCancelHospReason] = useState('')
+  const [cancellingHosp, setCancellingHosp] = useState(false)
+  const [cancelHospError, setCancelHospError] = useState<string | null>(null)
   const [prescriptions, setPrescriptions] = useState<HospPrescription[]>([])
   const reloadPrescriptions = useCallback(async () => {
     const res = await listHospitalizationPrescriptions(card.id)
@@ -684,11 +689,62 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
                 Enviar Relatório de Alta
               </button>
             )}
+            <button
+              type="button"
+              onClick={() => { setShowCancelHosp(true); setCancelHospError(null) }}
+              className="flex items-center gap-1.5 border border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-bold px-3 py-1.5 rounded-full transition-colors"
+              title="Cancelar internação criada por engano"
+            >
+              Cancelar internação
+            </button>
             <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-400">
               <X className="h-6 w-6" />
             </button>
           </div>
         </div>
+
+        {/* Confirmação de cancelamento da internação */}
+        {showCancelHosp && (
+          <div className="mx-6 mt-4 rounded-2xl border border-rose-200 bg-rose-50 p-4 space-y-3">
+            <p className="text-sm font-bold text-rose-800">Cancelar esta internação?</p>
+            <p className="text-xs text-rose-700">
+              Use apenas para admissões criadas por engano (ex.: duplicata). O registro sai do mapa e fica no histórico como cancelado.
+              Para encerramento normal, utilize o fluxo de Alta.
+            </p>
+            <textarea
+              value={cancelHospReason}
+              onChange={e => setCancelHospReason(e.target.value)}
+              placeholder="Motivo do cancelamento (obrigatório)"
+              rows={2}
+              className="w-full rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-rose-300"
+            />
+            {cancelHospError && <p className="text-xs font-semibold text-rose-700">{cancelHospError}</p>}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={cancellingHosp || !cancelHospReason.trim()}
+                onClick={async () => {
+                  setCancellingHosp(true); setCancelHospError(null)
+                  const res = await cancelHospitalization(card.id, cancelHospReason)
+                  setCancellingHosp(false)
+                  if ('error' in res) { setCancelHospError(res.error); return }
+                  onSaved?.()
+                  onClose()
+                }}
+                className="rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-700 disabled:opacity-50"
+              >
+                {cancellingHosp ? 'Cancelando…' : 'Confirmar cancelamento'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowCancelHosp(false)}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                Voltar
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 lg:grid-cols-2 gap-8">
           

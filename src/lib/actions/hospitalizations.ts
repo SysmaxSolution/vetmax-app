@@ -877,3 +877,54 @@ export async function sendToVetReview(
   revalidatePath('/dashboard/vet')
   return { success: true }
 }
+// ─── Cancelar Internação ──────────────────────────────────────────────────────
+// Admissões criadas por engano (ex.: duplicata) não devem virar "alta" — são
+// canceladas com motivo e autor. Colunas cancellation_reason/cancelled_at/
+// cancelled_by já existiam no schema; faltavam a action e a UI.
+
+export async function cancelHospitalization(
+  hospitalizationId: string,
+  reason: string,
+): Promise<{ ok: true } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const clinicId = await getClinicId(supabase, user.id)
+  if (!clinicId) return { error: 'Perfil sem clínica.' }
+
+  if (!reason.trim()) return { error: 'Informe o motivo do cancelamento.' }
+
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('hospitalizations')
+    .update({
+      status:              'cancelled',
+      cancellation_reason: reason.trim(),
+      cancelled_at:        new Date().toISOString(),
+      cancelled_by:        user.id,
+      updated_at:          new Date().toISOString(),
+    })
+    .eq('id', hospitalizationId)
+    .eq('clinic_id', clinicId)
+    .not('status', 'in', '("discharged","cancelled")')
+    .select('id, consultation_id')
+    .maybeSingle()
+
+  if (error) return { error: 'Erro ao cancelar internação: ' + error.message }
+  if (!data) return { error: 'Internação não encontrada ou já encerrada.' }
+
+  // Se veio de uma consulta marcada como "hospitalized", devolve ao consultório
+  if (data.consultation_id) {
+    await admin
+      .from('consultations')
+      .update({ status: 'in_progress' })
+      .eq('id', data.consultation_id)
+      .eq('clinic_id', clinicId)
+      .eq('status', 'hospitalized')
+  }
+
+  revalidatePath('/dashboard/hospitalization')
+  revalidatePath('/dashboard/vet')
+  return { ok: true }
+}
