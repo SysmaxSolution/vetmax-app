@@ -31,7 +31,9 @@ const PAID_EVENTS = new Set(['PAYMENT_CONFIRMED', 'PAYMENT_RECEIVED'])
 // Eventos de inadimplência (marca atraso; suspensão é decidida pelo cron).
 const OVERDUE_EVENTS = new Set(['PAYMENT_OVERDUE'])
 // Estorno / chargeback — vai direto para suspensão (respeitando a carência D3).
-const REVERSAL_EVENTS = new Set(['PAYMENT_CHARGEBACK', 'PAYMENT_REFUNDED'])
+// Nome real do evento no Asaas é PAYMENT_CHARGEBACK_REQUESTED (não existe
+// PAYMENT_CHARGEBACK — a API rejeita esse nome no cadastro do webhook).
+const REVERSAL_EVENTS = new Set(['PAYMENT_CHARGEBACK_REQUESTED', 'PAYMENT_REFUNDED'])
 
 export async function POST(request: NextRequest) {
   // 1. Autenticação do webhook
