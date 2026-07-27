@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { X, AlertTriangle } from 'lucide-react'
 import { cancelAttendance, type AttendanceEntity } from '@/lib/actions/attendance-cancel'
@@ -26,6 +27,9 @@ export default function CancelAttendanceModal({ entity, id, patientName, onClose
   const [reason, setReason] = useState('')
   const [error, setError]   = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
+  // Portal exige DOM — evita mismatch de hidratação no primeiro render.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -42,13 +46,19 @@ export default function CancelAttendanceModal({ entity, id, patientName, onClose
     })
   }
 
-  return (
+  if (!mounted) return null
+
+  // Portal no <body>: o modal era renderizado DENTRO do <Link> do card da
+  // fila — re-renders do realtime remontavam o card e engoliam os cliques
+  // (incidente Almavet 27/07: "cancela mas a tela pisca; a Mel não vai"),
+  // e o clique no backdrop borbulhava para o Link, navegando para o pet.
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
       aria-label={`Cancelar ${ENTITY_LABEL[entity]}`}
       className="fixed inset-0 z-[9970] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
-      onClick={onClose}
+      onClick={e => { e.stopPropagation(); onClose() }}
     >
       <div
         onClick={e => e.stopPropagation()}
@@ -127,6 +137,7 @@ export default function CancelAttendanceModal({ entity, id, patientName, onClose
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

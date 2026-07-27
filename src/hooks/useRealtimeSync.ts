@@ -54,6 +54,19 @@ export function useRealtimeSync({
     // Filtro por clinic_id garante isolamento multi-tenant
     const filter = `clinic_id=eq.${clinicId}`
 
+    // Coalescer refreshes: em clínica movimentada cada escrita gera um evento
+    // e um router.refresh() imediato — a tela re-renderiza em rajada ("pisca")
+    // e modais abertos perdem cliques (incidente Almavet 27/07). Uma janela de
+    // 800ms agrupa a rajada num único refresh sem perder atualização nenhuma.
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null
+    const scheduleRefresh = () => {
+      if (refreshTimer) return
+      refreshTimer = setTimeout(() => {
+        refreshTimer = null
+        router.refresh()
+      }, 800)
+    }
+
     const channel = supabase
       .channel(`vetmax:${table}:${clinicId}`)
       .on(
@@ -73,13 +86,14 @@ export function useRealtimeSync({
               old:       payload.old ?? {},
             })
           } else {
-            router.refresh()
+            scheduleRefresh()
           }
         }
       )
       .subscribe()
 
     return () => {
+      if (refreshTimer) clearTimeout(refreshTimer)
       supabase.removeChannel(channel)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
