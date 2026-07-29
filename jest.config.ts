@@ -8,7 +8,7 @@ dotenv.config({ path: path.resolve(__dirname, '.env.local') });
 const config: Config = {
   testEnvironment: 'node',
   testMatch: ['**/tests/unit/**/*.test.ts', '**/tests/integration/**/*.test.ts'],
-  testPathIgnorePatterns: ['/node_modules/', '/.claude/worktrees/', '/.next/'],
+  testPathIgnorePatterns: ['/node_modules/', '/.claude/worktrees/', '/.next/', '/healthmax-app/', '/Marketing/', '/Orion/'],
   transform: { 
     '^.+\\.tsx?$': ['ts-jest', { tsconfig: './tsconfig.test.json' }] 
   },
