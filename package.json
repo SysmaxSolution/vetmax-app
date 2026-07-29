@@ -94,7 +94,7 @@
     "eslint-config-next": "16.2.2",
     "jest": "^29",
     "pg": "^8.20.0",
-    "sharp": "^0.34.5",
+    "sharp": "^0.35.3",
     "tailwindcss": "^4",
     "ts-jest": "^29",
     "ts-node": "^10.9.2",
@@ -102,6 +102,7 @@
   },
   "overrides": {
     "postcss": "^8.5.10",
+    "sharp": "$sharp",
     "tmp": "^0.2.7",
     "ws": "^8.21.0",
     "minimatch": ">=3.1.5",
