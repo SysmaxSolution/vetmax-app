@@ -2,8 +2,8 @@
 
 import { useState, useTransition, useEffect } from 'react'
 import Link from 'next/link'
-import { Clock, CheckCircle2, ArrowRight, Stethoscope, AlertCircle, Weight, Thermometer, History, Pencil, Plus, X, Search, UserPlus } from 'lucide-react'
-import type { VetQueueItem, VetCompletedItem } from '@/lib/actions/vet'
+import { Clock, CheckCircle2, ArrowRight, Stethoscope, AlertCircle, Weight, Thermometer, History, Pencil, Plus, X, Search, UserPlus, Receipt, AlertTriangle } from 'lucide-react'
+import type { VetQueueItem, VetCompletedItem, AwaitingReviewItem } from '@/lib/actions/vet'
 import { addPatientDirectToVet } from '@/lib/actions/vet'
 import { searchPatientsForTriage, type TriagePatientSearchResult } from '@/lib/actions/triage'
 import { useRealtimeSync } from '@/hooks/useRealtimeSync'
@@ -46,9 +46,20 @@ const STATUS_LABEL: Record<string, string> = {
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface VetWorkspaceProps {
-  queue:     VetQueueItem[]
-  completed: VetCompletedItem[]
-  clinicId:  string
+  queue:          VetQueueItem[]
+  completed:      VetCompletedItem[]
+  awaitingReview: AwaitingReviewItem[]
+  clinicId:       string
+}
+
+const BRL = (v: number) => `R$ ${v.toFixed(2).replace('.', ',')}`
+
+// Idade legível para a rede de segurança anti-cemitério.
+function ageLabel(hours: number): string {
+  if (hours < 1) return 'há minutos'
+  if (hours < 24) return `há ${hours}h`
+  const days = Math.floor(hours / 24)
+  return `há ${days}d`
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -60,7 +71,7 @@ const VISIT_REASON_OPTIONS = CANONICAL_VISIT_REASONS
   .filter(o => o.value !== 'grooming')
   .map(o => ({ value: o.value, label: `${o.emoji} ${o.label}` }))
 
-export default function VetWorkspace({ queue, completed, clinicId }: VetWorkspaceProps) {
+export default function VetWorkspace({ queue, completed, awaitingReview, clinicId }: VetWorkspaceProps) {
   useRealtimeSync({ table: 'consultations', clinicId })
 
   const [localQueue, setLocalQueue] = useState<VetQueueItem[]>(queue)
@@ -131,6 +142,58 @@ export default function VetWorkspace({ queue, completed, clinicId }: VetWorkspac
             Incluir Paciente
           </button>
         </div>
+
+        {/* ── Anti-cemitério: prontuários no caixa aguardando finalização ──── */}
+        {awaitingReview.length > 0 && (() => {
+          const anyUrgent = awaitingReview.some(a => a.paid || a.age_hours >= 24)
+          const accent = anyUrgent
+            ? { card: 'border-red-300 bg-red-50', icon: 'text-red-600', title: 'text-red-800', sub: 'text-red-700' }
+            : { card: 'border-amber-300 bg-amber-50', icon: 'text-amber-600', title: 'text-amber-800', sub: 'text-amber-700' }
+          return (
+            <div className={`rounded-xl border p-4 sm:p-5 ${accent.card}`}>
+              <div className="flex items-start gap-3">
+                <AlertTriangle className={`h-5 w-5 flex-shrink-0 mt-0.5 ${accent.icon}`} />
+                <div className="flex-1 min-w-0">
+                  <h2 className={`text-sm font-bold ${accent.title}`}>
+                    {awaitingReview.length} prontuário{awaitingReview.length !== 1 ? 's' : ''} no caixa aguardando sua finalização
+                  </h2>
+                  <p className={`text-xs mt-0.5 ${accent.sub}`}>
+                    Foram cobrados mas ainda não assinados. Abra, revise e finalize (&quot;Dar Alta&quot;) — a NFS-e só é emitida após a finalização (CFMV).
+                  </p>
+                  <div className="mt-3 space-y-1.5">
+                    {awaitingReview.slice(0, 6).map(a => {
+                      const urgent = a.paid || a.age_hours >= 24
+                      return (
+                        <Link
+                          key={a.id}
+                          href={`/dashboard/vet/${a.id}`}
+                          className="flex items-center justify-between gap-3 rounded-lg bg-white/70 hover:bg-white border border-white px-3 py-2 transition-colors"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Receipt className={`h-4 w-4 flex-shrink-0 ${urgent ? 'text-red-500' : 'text-amber-500'}`} />
+                            <span className="font-semibold text-slate-800 text-sm truncate">{a.patient_name}</span>
+                            <span className="text-xs text-slate-500 truncate">· {a.tutor_name}</span>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {a.paid && (
+                              <span className="text-[10px] font-bold uppercase text-green-700 bg-green-100 px-1.5 py-0.5 rounded">Pago</span>
+                            )}
+                            <span className="text-xs font-semibold text-slate-600">{BRL(a.total)}</span>
+                            <span className={`text-[11px] font-medium ${urgent ? 'text-red-600' : 'text-slate-400'}`}>{ageLabel(a.age_hours)}</span>
+                            <ArrowRight className="h-4 w-4 text-slate-400" />
+                          </div>
+                        </Link>
+                      )
+                    })}
+                    {awaitingReview.length > 6 && (
+                      <p className="text-xs text-slate-500 pt-1">e mais {awaitingReview.length - 6}…</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
 
         {/* Tab Switcher */}
         <div className="flex gap-1 rounded-xl bg-slate-100 p-1 w-fit">

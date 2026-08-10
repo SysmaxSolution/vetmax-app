@@ -2,7 +2,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import VetWorkspace from '@/components/vet/VetWorkspace'
-import { getVetQueue, getVetCompleted } from '@/lib/actions/vet'
+import { getVetQueue, getVetCompleted, listAwaitingReview } from '@/lib/actions/vet'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,15 +30,17 @@ export default async function VetPage() {
 
   const clinicName = (profile.clinics as unknown as { name: string } | null)?.name ?? 'Minha Clínica'
 
-  const [queueResult, completedResult] = await Promise.all([
+  const [queueResult, completedResult, awaitingResult] = await Promise.all([
     getVetQueue(),
     getVetCompleted(),
+    listAwaitingReview(),
   ])
 
   const queue = 'error' in queueResult ? [] : queueResult
   const completed = 'error' in completedResult ? [] : completedResult
+  const awaitingReview = Array.isArray(awaitingResult) ? awaitingResult : []
 
   return (
-    <VetWorkspace queue={queue} completed={completed} clinicId={profile.clinic_id} />
+    <VetWorkspace queue={queue} completed={completed} awaitingReview={awaitingReview} clinicId={profile.clinic_id} />
   )
 }

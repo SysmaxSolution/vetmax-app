@@ -152,6 +152,88 @@ export async function getVetCompleted(): Promise<VetCompletedItem[] | { error: s
   }))
 }
 
+// ─── Anti-cemitério: prontuários enviados ao caixa aguardando finalização ─────
+// Opção A / Fase 2 (council 2026-08-10): consultas COBRADAS (têm fatura) porém
+// NÃO ASSINADAS (status != completed/cancelled). Rede de segurança médico-legal
+// para o MV solo — nenhum prontuário pago pode ficar sem assinatura. Derivado
+// (sem migration): junta invoices → consultations não-finalizadas.
+export type AwaitingReviewItem = {
+  id:           string   // consultation_id
+  patient_name: string
+  tutor_name:   string
+  status:       string
+  total:        number   // soma das faturas da consulta
+  paid:         boolean  // alguma fatura já foi (parcial/total) paga?
+  billed_at:    string   // created_at da fatura mais antiga
+  age_hours:    number
+}
+
+export async function listAwaitingReview(): Promise<AwaitingReviewItem[] | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('clinic_id')
+    .eq('id', user.id)
+    .single()
+  if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
+
+  const admin = createAdminClient()
+  const { data: invoices, error: invErr } = await admin
+    .from('invoices')
+    .select('consultation_id, total_amount, paid_amount, status, created_at')
+    .eq('clinic_id', profile.clinic_id)
+    .not('consultation_id', 'is', null)
+    .order('created_at', { ascending: true })
+  if (invErr) return { error: 'Erro ao buscar faturas: ' + invErr.message }
+
+  type Agg = { total: number; paid: boolean; billed_at: string }
+  const byConsult = new Map<string, Agg>()
+  for (const inv of invoices ?? []) {
+    const cid = inv.consultation_id as string
+    const paidThis = inv.status === 'paid' || inv.status === 'paid_partial' || Number(inv.paid_amount ?? 0) > 0.01
+    const prev = byConsult.get(cid)
+    if (prev) {
+      prev.total += Number(inv.total_amount ?? 0)
+      prev.paid   = prev.paid || paidThis
+    } else {
+      byConsult.set(cid, { total: Number(inv.total_amount ?? 0), paid: paidThis, billed_at: inv.created_at as string })
+    }
+  }
+
+  const ids = [...byConsult.keys()]
+  if (ids.length === 0) return []
+
+  const { data: consults, error: cErr } = await admin
+    .from('consultations')
+    .select('id, status, patients ( name, tutors ( name ) )')
+    .eq('clinic_id', profile.clinic_id)
+    .in('id', ids)
+    .not('status', 'in', '(completed,cancelled)')
+  if (cErr) return { error: 'Erro ao buscar consultas: ' + cErr.message }
+
+  const now = Date.now()
+  const items: AwaitingReviewItem[] = (consults ?? []).map((c: any) => {
+    const agg   = byConsult.get(c.id as string)!
+    const ageMs = now - new Date(agg.billed_at).getTime()
+    return {
+      id:           c.id as string,
+      patient_name: c.patients?.name ?? '—',
+      tutor_name:   c.patients?.tutors?.name ?? '—',
+      status:       c.status as string,
+      total:        Number(agg.total.toFixed(2)),
+      paid:         agg.paid,
+      billed_at:    agg.billed_at,
+      age_hours:    Math.max(0, Math.floor(ageMs / 3_600_000)),
+    }
+  })
+  // Pagos primeiro, depois mais antigos (maior risco médico-legal no topo).
+  items.sort((a, b) => (Number(b.paid) - Number(a.paid)) || (b.age_hours - a.age_hours))
+  return items
+}
+
 // ─── Detalhe Completo da Consulta para o MV ───────────────────────────────────
 export type VetConsultationDetail = {
   id: string
