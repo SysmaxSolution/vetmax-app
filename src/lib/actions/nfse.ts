@@ -490,6 +490,23 @@ export async function consultNfse(
 export async function emitNfseForConsultation(
   consultationId: string,
 ): Promise<{ ref: string; status: string; doc_number: string } | { error: string }> {
+  // Trava CFMV/fiscal (council 2026-08-10): a NFS-e é documento fiscal e precisa
+  // de lastro clínico IMUTÁVEL. Cobrar o tutor no caixa pode ocorrer antes da
+  // assinatura (fluxo "Enviar ao caixa sem finalizar"), mas emitir a NOTA exige
+  // o prontuário assinado — senão a nota referenciaria um registro ainda editável.
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+  const { data: consult } = await ctx.admin
+    .from('consultations')
+    .select('is_reviewed_by_vet')
+    .eq('id', consultationId)
+    .eq('clinic_id', ctx.clinic_id)
+    .maybeSingle()
+  if (!consult) return { error: 'Consulta não encontrada.' }
+  if (!consult.is_reviewed_by_vet) {
+    return { error: 'NFS-e só pode ser emitida após a finalização e assinatura do prontuário (CFMV). Finalize a consulta ("Dar Alta") antes de emitir a nota fiscal.' }
+  }
+
   const { createNfseDocumentForConsultation } = await import('./billing-documents')
   const created = await createNfseDocumentForConsultation(consultationId)
   if ('error' in created) return created

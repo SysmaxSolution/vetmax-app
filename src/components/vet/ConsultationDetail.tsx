@@ -10,7 +10,7 @@ import {
   Stethoscope, Clock, ChevronRight, Info, Syringe, FileText, X, BedDouble, Plus, HeartCrack,
   Settings, Receipt,
 } from 'lucide-react'
-import { saveVetNotes, finalizeConsultation, addConsultationAddendum, listConsultationAddenda, savePrescription, type VetConsultationDetail, type ConsultationAddendum } from '@/lib/actions/vet'
+import { saveVetNotes, finalizeConsultation, sendToCashier, addConsultationAddendum, listConsultationAddenda, savePrescription, type VetConsultationDetail, type ConsultationAddendum } from '@/lib/actions/vet'
 import { hasActiveConsultationService } from '@/lib/actions/services'
 import ConsultationServicesPanel from '@/components/vet/ConsultationServicesPanel'
 import ConsultationQuotationBadge from '@/components/billing/ConsultationQuotationBadge'
@@ -298,6 +298,8 @@ export default function ConsultationDetail({
   // Item 0218: modal que pergunta se cobra a consulta antes de pedir exames
   const [showChargeBeforeExams, setShowChargeBeforeExams] = useState(false)
   const [partialChargeNotice,   setPartialChargeNotice]   = useState<{ total: number; items: number } | null>(null)
+  // Opção A (council 2026-08-10): enviar ao caixa sem finalizar/travar o prontuário
+  const [isSendingToCashier, setIsSendingToCashier] = useState(false)
   // Bloqueia a alta enquanto o PDF está sendo gerado/enviado ao storage
   const [isPdfUploading, setIsPdfUploading] = useState(false)
   // Último PDF gerado para injetar na lista de Anexos em tempo real
@@ -838,6 +840,32 @@ export default function ConsultationDetail({
       }
     } finally {
       setIsFinalizing(false)
+    }
+  }
+
+  // ─── Enviar ao caixa sem finalizar (Opção A) ────────────────────────────────
+  // Libera o tutor para pagamento e mantém o prontuário editável. A MV assina
+  // depois em "Dar Alta". Exige ao menos um serviço lançado (fatura não-zerada).
+  const handleSendToCashier = async () => {
+    await refreshHasService()
+    if (!hasService) {
+      setToast({ type: 'error', message: 'Lance ao menos um serviço antes de enviar ao caixa.' })
+      return
+    }
+    setIsSendingToCashier(true)
+    try {
+      const res = await sendToCashier(consultation.id)
+      if ('error' in res) {
+        setToast({ type: 'error', message: res.error })
+        return
+      }
+      setToast({
+        type: 'success',
+        message: `Enviado ao caixa (R$ ${res.total.toFixed(2).replace('.', ',')}). Prontuário segue editável — finalize quando puder.`,
+      })
+      setTimeout(() => router.push('/dashboard/vet'), 1600)
+    } finally {
+      setIsSendingToCashier(false)
     }
   }
 
@@ -2284,6 +2312,30 @@ export default function ConsultationDetail({
 
               {outcomeTab === 'alta' && (
                 <div className="space-y-5">
+                  {/* Opção A: enviar ao caixa sem finalizar (mantém o prontuário editável) */}
+                  <div className="rounded-xl border border-teal-200 bg-teal-50 p-4">
+                    <p className="text-sm font-semibold text-teal-800">Enviar ao caixa sem finalizar</p>
+                    <p className="text-xs text-teal-700 mt-0.5 mb-3">
+                      Libera o tutor para pagamento no caixa e <strong>mantém o prontuário editável</strong>. Você refina as anotações e assina depois, em &quot;Dar Alta&quot;. A NFS-e só é emitida após a finalização.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleSendToCashier}
+                      disabled={isSendingToCashier || isFinalizing}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-teal-600 text-white font-semibold text-sm hover:bg-teal-700 transition-all disabled:opacity-60"
+                    >
+                      {isSendingToCashier
+                        ? <><Loader2 className="w-4 h-4 animate-spin" />Enviando ao caixa...</>
+                        : <><Receipt className="w-4 h-4" />Enviar ao caixa (manter aberto)</>}
+                    </button>
+                  </div>
+
+                  <div className="relative flex items-center gap-3 py-1">
+                    <div className="flex-1 h-px bg-slate-200" />
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">ou finalize e assine</span>
+                    <div className="flex-1 h-px bg-slate-200" />
+                  </div>
+
                   <button
                     type="button"
                     onClick={() => setIsReviewedByVet((v) => !v)}

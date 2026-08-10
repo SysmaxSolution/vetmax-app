@@ -620,6 +620,35 @@ export async function finalizeConsultation(
   return { success: true }
 }
 
+// ─── Enviar ao Caixa sem Finalizar (Opção A — council 2026-08-10) ────────────
+// Libera o tutor para pagamento no caixa SEM assinar/travar o prontuário.
+// Reusa a fatura parcial (generatePartialInvoice): cobra os serviços já lançados
+// (billed_in_invoice_id IS NULL), cria o pending no Caixa Central e mantém a
+// consulta editável (não seta status='completed' nem is_reviewed_by_vet=true —
+// logo a trava de imutabilidade 0411 NÃO morde). A MV volta depois, refina o
+// prontuário e assina em "Dar Alta". Serviços lançados após o envio ficam para
+// a fatura final (sweep automático do generateInvoice ao dar alta).
+// Regra CFMV/fiscal: a NFS-e só é emitida na assinatura (ver emitNfseForConsultation).
+export async function sendToCashier(
+  consultationId: string,
+): Promise<{ id: string; items_count: number; total: number } | { error: string }> {
+  const { generatePartialInvoice } = await import('./billing')
+  const res = await generatePartialInvoice(consultationId)
+  if ('error' in res) return res
+
+  await logAudit({
+    action: 'SEND_TO_CASHIER',
+    entity_type: 'consultations',
+    entity_id: consultationId,
+    details: { invoice_id: res.id, items: res.items_count, total: res.total },
+  })
+
+  revalidatePath('/dashboard/vet')
+  revalidatePath(`/dashboard/vet/${consultationId}`)
+  revalidatePath('/dashboard/reception/checkout')
+  return res
+}
+
 // ─── Prescrição ───────────────────────────────────────────────────────────────
 
 export async function savePrescription(params: {
