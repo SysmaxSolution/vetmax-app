@@ -713,44 +713,65 @@ export async function finalizeConsultation(
 // Regra CFMV/fiscal: a NFS-e só é emitida na assinatura (ver emitNfseForConsultation).
 export async function sendToCashier(
   consultationId: string,
-): Promise<{ id: string; items_count: number; total: number } | { error: string }> {
-  const { generatePartialInvoice } = await import('./billing')
-  const res = await generatePartialInvoice(consultationId)
-  if ('error' in res) return res
-
-  // Marca a consulta como "aguardando finalização" (cobrada, não assinada).
-  // Estado editável — a trava 0411 só morde em completed+reviewed. O .in() só
-  // permite a transição a partir de estados editáveis (nunca completed/cancelled).
+): Promise<{ id: string; total: number } | { error: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (user) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('clinic_id')
-      .eq('id', user.id)
-      .single()
-    if (profile?.clinic_id) {
-      const admin = createAdminClient()
-      await admin
-        .from('consultations')
-        .update({ status: 'awaiting_review', updated_at: new Date().toISOString() })
-        .eq('id', consultationId)
-        .eq('clinic_id', profile.clinic_id)
-        .in('status', ['in_progress', 'waiting_exam', 'medication', 'revisao_pos_internacao'])
-    }
+  if (!user) return { error: 'Não autenticado.' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('clinic_id')
+    .eq('id', user.id)
+    .single()
+  if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
+
+  const admin = createAdminClient()
+
+  // 1. Fase 2.3 (D2): tenta AGRUPAR os serviços não faturados na fatura aberta
+  //    não-paga → um único recebimento. Atômico (RPC com FOR UPDATE). Retorna
+  //    vazio se não há fatura absorvível OU se o pagamento já está em curso —
+  //    aí cai na fatura complementar (nunca altera o que já foi pago).
+  let invoiceId: string | null = null
+  let total = 0
+  const { data: absorbed, error: absorbErr } = await admin.rpc(
+    'rpc_absorb_services_into_open_invoice',
+    { p_clinic_id: profile.clinic_id, p_consultation_id: consultationId },
+  )
+  if (!absorbErr && Array.isArray(absorbed) && absorbed.length > 0 && absorbed[0]?.out_invoice_id) {
+    invoiceId = absorbed[0].out_invoice_id as string
+    total     = Number(absorbed[0].out_tutor_due ?? 0)
+  } else {
+    // 2. Sem fatura absorvível → fatura (parcial/complementar) normal.
+    const { generatePartialInvoice } = await import('./billing')
+    const res = await generatePartialInvoice(consultationId)
+    if ('error' in res) return res
+    invoiceId = res.id
+    total     = res.total
   }
+
+  // 3. Marca a consulta como "aguardando finalização" (cobrada, não assinada).
+  //    Estado editável — a trava 0411 só morde em completed+reviewed. O .in()
+  //    só permite a transição a partir de estados editáveis (idempotente se já
+  //    estava awaiting_review, no caso de reenvio com absorção).
+  await admin
+    .from('consultations')
+    .update({ status: 'awaiting_review', updated_at: new Date().toISOString() })
+    .eq('id', consultationId)
+    .eq('clinic_id', profile.clinic_id)
+    .in('status', ['in_progress', 'waiting_exam', 'medication', 'revisao_pos_internacao'])
 
   await logAudit({
     action: 'SEND_TO_CASHIER',
     entity_type: 'consultations',
     entity_id: consultationId,
-    details: { invoice_id: res.id, items: res.items_count, total: res.total },
+    details: { invoice_id: invoiceId, total },
   })
 
   revalidatePath('/dashboard/vet')
   revalidatePath(`/dashboard/vet/${consultationId}`)
   revalidatePath('/dashboard/reception/checkout')
-  return res
+  revalidatePath('/dashboard/cashier')
+  return { id: invoiceId as string, total }
 }
 
 // ─── Prescrição ───────────────────────────────────────────────────────────────
