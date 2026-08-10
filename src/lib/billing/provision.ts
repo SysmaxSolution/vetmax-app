@@ -245,7 +245,7 @@ export async function hasOpenClinicalRecords(
       .from('consultations')
       .select('id', { count: 'exact', head: true })
       .eq('clinic_id', clinicId)
-      .in('status', ['reception', 'triage', 'in_progress', 'waiting_exam', 'medication']),
+      .in('status', ['reception', 'triage', 'in_progress', 'waiting_exam', 'medication', 'awaiting_review']),
   ])
   return (hosp.count ?? 0) > 0 || (cons.count ?? 0) > 0
 }

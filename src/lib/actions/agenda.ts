@@ -40,6 +40,7 @@ const KANBAN_COLUMNS: { key: ConsultationStatus; label: string }[] = [
   { key: 'in_progress',  label: 'Em Consulta' },
   { key: 'waiting_exam', label: 'Aguardando Exame' },
   { key: 'medication',   label: 'Em Medicação' },
+  { key: 'awaiting_review', label: 'Ag. Finalização' },
   { key: 'completed',    label: 'Finalizado' },
 ]
 
@@ -111,6 +112,11 @@ const VALID_TRANSITIONS: Record<string, ConsultationStatus[]> = {
   in_progress:  ['waiting_exam', 'medication', 'completed'],
   waiting_exam: ['in_progress', 'medication', 'completed'],
   medication:   ['in_progress', 'completed'],
+  // awaiting_review = cobrado, aguardando assinatura. A finalização SÓ pode
+  // ocorrer pelo fluxo "Dar Alta" do MV (que exige is_reviewed_by_vet + sweep
+  // + gate de IA). Array vazio (truthy) bloqueia QUALQUER saída por drag —
+  // impede arrastar para 'completed' pulando a assinatura (CFMV).
+  awaiting_review: [],
 }
 
 export async function moveAgendaCard(

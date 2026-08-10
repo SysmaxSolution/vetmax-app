@@ -106,8 +106,11 @@ export type ConsultationStatus =
   | 'in_progress'
   | 'waiting_exam'
   | 'medication'
+  | 'awaiting_review'
   | 'completed'
   | 'cancelled'
+  | 'hospitalized'
+  | 'revisao_pos_internacao'
 
 export type VisitReason = 'consultation' | 'follow_up' | 'emergency' | 'vaccination' | 'exam' | 'surgery' | 'microchipping' | 'acompanhamento'
 export type PaymentMethod = 'cash' | 'card' | 'pix' | 'insurance' | 'other'

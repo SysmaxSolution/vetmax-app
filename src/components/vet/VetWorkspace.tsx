@@ -31,6 +31,7 @@ const STATUS_BADGE: Record<string, string> = {
   in_progress:              'bg-indigo-100 text-indigo-700',
   waiting_exam:             'bg-orange-100 text-orange-700',
   medication:               'bg-pink-100 text-pink-700',
+  awaiting_review:          'bg-amber-100 text-amber-700',
   completed:                'bg-green-100 text-green-700',
   revisao_pos_internacao:   'bg-violet-100 text-violet-700',
 }
@@ -39,6 +40,7 @@ const STATUS_LABEL: Record<string, string> = {
   in_progress:              'Em Consulta',
   waiting_exam:             'Ag. Exame',
   medication:               'Em Medicação',
+  awaiting_review:          'Ag. Finalização',
   completed:                'Concluída',
   revisao_pos_internacao:   'Análise Pós-Internação',
 }

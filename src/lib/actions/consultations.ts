@@ -422,7 +422,7 @@ export async function getReceptionHistory(): Promise<ReceptionHistoryItem[] | { 
       )
     `)
     .eq('clinic_id', profile.clinic_id)
-    .in('status', ['reception', 'scheduled', 'triage', 'in_progress', 'waiting_exam', 'medication', 'completed'])
+    .in('status', ['reception', 'scheduled', 'triage', 'in_progress', 'waiting_exam', 'medication', 'awaiting_review', 'completed'])
     .gte('created_at', todayStart.toISOString())
     .order('updated_at', { ascending: false })
 

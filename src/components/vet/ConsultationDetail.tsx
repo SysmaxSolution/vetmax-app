@@ -93,6 +93,7 @@ const STATUS_LABELS: Record<string, string> = {
   in_progress:            'Em Atendimento', completed: 'Concluída',
   waiting_exam:           'Ag. Exame', medication: 'Medicação', cancelled: 'Cancelada',
   hospitalized:           'Internado',
+  awaiting_review:        'Ag. Finalização',
   revisao_pos_internacao: 'Análise Pós-Internação',
 }
 
@@ -2313,22 +2314,31 @@ export default function ConsultationDetail({
               {outcomeTab === 'alta' && (
                 <div className="space-y-5">
                   {/* Opção A: enviar ao caixa sem finalizar (mantém o prontuário editável) */}
-                  <div className="rounded-xl border border-teal-200 bg-teal-50 p-4">
-                    <p className="text-sm font-semibold text-teal-800">Enviar ao caixa sem finalizar</p>
-                    <p className="text-xs text-teal-700 mt-0.5 mb-3">
-                      Libera o tutor para pagamento no caixa e <strong>mantém o prontuário editável</strong>. Você refina as anotações e assina depois, em &quot;Dar Alta&quot;. A NFS-e só é emitida após a finalização.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={handleSendToCashier}
-                      disabled={isSendingToCashier || isFinalizing}
-                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-teal-600 text-white font-semibold text-sm hover:bg-teal-700 transition-all disabled:opacity-60"
-                    >
-                      {isSendingToCashier
-                        ? <><Loader2 className="w-4 h-4 animate-spin" />Enviando ao caixa...</>
-                        : <><Receipt className="w-4 h-4" />Enviar ao caixa (manter aberto)</>}
-                    </button>
-                  </div>
+                  {consultation.status === 'awaiting_review' ? (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-start gap-2">
+                      <Receipt className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                      <p className="text-xs text-amber-800">
+                        <strong>Já enviado ao caixa</strong> — o tutor pode pagar. Refine as anotações e, quando puder, finalize abaixo. Serviços lançados agora entram na fatura final ao dar alta. A NFS-e só é emitida após a finalização.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-teal-200 bg-teal-50 p-4">
+                      <p className="text-sm font-semibold text-teal-800">Enviar ao caixa sem finalizar</p>
+                      <p className="text-xs text-teal-700 mt-0.5 mb-3">
+                        Libera o tutor para pagamento no caixa e <strong>mantém o prontuário editável</strong>. Você refina as anotações e assina depois, em &quot;Dar Alta&quot;. A NFS-e só é emitida após a finalização.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={handleSendToCashier}
+                        disabled={isSendingToCashier || isFinalizing}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-teal-600 text-white font-semibold text-sm hover:bg-teal-700 transition-all disabled:opacity-60"
+                      >
+                        {isSendingToCashier
+                          ? <><Loader2 className="w-4 h-4 animate-spin" />Enviando ao caixa...</>
+                          : <><Receipt className="w-4 h-4" />Enviar ao caixa (manter aberto)</>}
+                      </button>
+                    </div>
+                  )}
 
                   <div className="relative flex items-center gap-3 py-1">
                     <div className="flex-1 h-px bg-slate-200" />

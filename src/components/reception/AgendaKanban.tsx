@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Clock, CheckCircle2, Stethoscope, Users, Calendar, AlertCircle, TestTubes, Pill } from 'lucide-react'
+import { Clock, CheckCircle2, Stethoscope, Users, Calendar, AlertCircle, TestTubes, Pill, Receipt } from 'lucide-react'
 import { PetAvatar } from '@/components/ui/PetAvatar'
 import { moveAgendaCard, type AgendaColumn, type AgendaCard } from '@/lib/actions/agenda'
 import type { ConsultationStatus } from '@/types'
@@ -15,6 +15,7 @@ const COLUMN_STYLES: Record<string, { bg: string; border: string; badge: string;
   in_progress:  { bg: 'bg-green-50',  border: 'border-green-200',  badge: 'bg-green-100 text-green-700',   headerColor: 'bg-green-500',  icon: Stethoscope },
   waiting_exam: { bg: 'bg-cyan-50',   border: 'border-cyan-200',   badge: 'bg-cyan-100 text-cyan-700',     headerColor: 'bg-cyan-500',   icon: TestTubes },
   medication:   { bg: 'bg-pink-50',   border: 'border-pink-200',   badge: 'bg-pink-100 text-pink-700',     headerColor: 'bg-pink-500',   icon: Pill },
+  awaiting_review: { bg: 'bg-amber-50', border: 'border-amber-300', badge: 'bg-amber-100 text-amber-800', headerColor: 'bg-amber-600', icon: Receipt },
   completed:    { bg: 'bg-slate-50',  border: 'border-slate-200',  badge: 'bg-slate-100 text-slate-600',   headerColor: 'bg-slate-500',  icon: CheckCircle2 },
 }
 

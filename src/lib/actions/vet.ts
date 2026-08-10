@@ -718,6 +718,28 @@ export async function sendToCashier(
   const res = await generatePartialInvoice(consultationId)
   if ('error' in res) return res
 
+  // Marca a consulta como "aguardando finalização" (cobrada, não assinada).
+  // Estado editável — a trava 0411 só morde em completed+reviewed. O .in() só
+  // permite a transição a partir de estados editáveis (nunca completed/cancelled).
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (user) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('clinic_id')
+      .eq('id', user.id)
+      .single()
+    if (profile?.clinic_id) {
+      const admin = createAdminClient()
+      await admin
+        .from('consultations')
+        .update({ status: 'awaiting_review', updated_at: new Date().toISOString() })
+        .eq('id', consultationId)
+        .eq('clinic_id', profile.clinic_id)
+        .in('status', ['in_progress', 'waiting_exam', 'medication', 'revisao_pos_internacao'])
+    }
+  }
+
   await logAudit({
     action: 'SEND_TO_CASHIER',
     entity_type: 'consultations',

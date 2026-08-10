@@ -33,6 +33,7 @@ const STATUS_TO_COLUMN: Record<string, KanbanColumn> = {
   waiting_exam:           'consultation',
   medication:             'consultation',
   revisao_pos_internacao: 'consultation',
+  awaiting_review:        'billing',
   completed:              'billing',
 }
 
@@ -78,7 +79,7 @@ export async function getKanbanData(): Promise<KanbanItem[] | { error: string }>
       invoices ( status, total_amount )
     `)
     .eq('clinic_id', profile.clinic_id)
-    .in('status', ['reception', 'scheduled', 'triage', 'in_progress', 'waiting_exam', 'medication', 'completed', 'revisao_pos_internacao'])
+    .in('status', ['reception', 'scheduled', 'triage', 'in_progress', 'waiting_exam', 'medication', 'awaiting_review', 'completed', 'revisao_pos_internacao'])
     .gte('created_at', todayStart.toISOString())
     .order('created_at', { ascending: true })
 
