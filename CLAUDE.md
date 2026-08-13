@@ -46,12 +46,20 @@ src/lib/actions/            ← Server Actions
 src/types/                  ← TypeScript interfaces
 ```
 
+## Fluxo de Trabalho — Issues + PRs (obrigatório para qualquer agente/modelo)
+Todo desenvolvimento segue este padrão, independente do agente ou modelo de IA utilizado:
+1. **Toda tarefa nasce como Issue** no GitHub (`SysmaxSolution/vetmax-app`), classificada com label: `correcao` (bug), `melhoria` (funcionalidade existente) ou `nova-funcao` (funcionalidade nova).
+2. **Todo deploy é gerenciado por PR** — a descrição do PR DEVE mencionar a Issue correspondente (`Closes #N` ou `Refs #N`).
+3. **Ciclo de ambientes:**
+   - Branch de trabalho a partir de `dev` → PR para `dev` → merge → deploy manual no ambiente de testes (`npx.cmd vercel --prod` de `C:\sysvetmax-dev`, projeto Vercel `sysvetmax-dev`).
+   - Validação do Diretor no dev → PR `dev` → `main` → merge → push no remote `vetmax` → deploy em produção.
+4. **Banco de testes**: o ambiente dev usa o Supabase `claqxwckiihknclhmzvf` (credenciais em `.env.dev.local`); NUNCA aponte testes para o banco de produção.
+
 ## Protocolo de Erro
 - Cole apenas as 10 linhas relevantes do Stack Trace.
 - Antes de corrigir, verifique se a falha é de permissão de RLS (Row Level Security) no Supabase.
 
 ## ☁️ Diretrizes para Rotinas Autônomas na Nuvem (Routines)
 1. **Obrigatório PLAN Mode**: Ao atuar de forma autônoma via Routine, você DEVE gerar um plano de execução primeiro e cruzar com as regras de Integridade Clínica acima.
-2. **Camada de Contingência**: NUNCA commite direto na main. Toda correção autônoma deve ser feita em uma branch `fix/` ou `feature/` e um PR deve ser aberto para o Diretor aprovar.
-   - **Exceção vigente (autorizada pelo Diretor/PO em 2026-05-28):** a Sprint **Internação Completa + Centro Cirúrgico** opera com **commit direto na `main` + deploy contínuo** (push em `vetmax` e `origin`). Essa exceção vale apenas para esta sprint; os demais trabalhos seguem a regra de branch + PR acima.
+2. **Camada de Contingência**: NUNCA commite direto na main. Siga o "Fluxo de Trabalho — Issues + PRs" acima: branch a partir de `dev` + PR mencionando a Issue, para o Diretor aprovar. (A exceção da Sprint Internação+Cirúrgico de 2026-05-28 está encerrada.)
 3. **Escalabilidade**: Em rotinas de Pentest ou QA, limite os testes simulados para não onerar o banco de dados de produção do Supabase.
