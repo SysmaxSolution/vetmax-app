@@ -46,7 +46,7 @@ export function ClinicSwitcher({ currentClinicId, clinicName, clinics, logoUrl }
       {logoUrl ? (
         <img src={logoUrl} alt={clinicName} className="h-8 w-auto max-w-[120px] object-contain rounded" />
       ) : (
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-600">
           <span className="text-sm font-bold text-white">V</span>
         </div>
       )}
@@ -63,7 +63,7 @@ export function ClinicSwitcher({ currentClinicId, clinicName, clinics, logoUrl }
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full mt-1 w-64 rounded-xl border border-slate-200 bg-white py-1 shadow-lg z-[60]">
+        <div className="absolute left-0 top-full mt-1 w-64 rounded-xl border border-slate-200 bg-white py-1 shadow-lg z-[60] animate-scale-in origin-top-left">
           <p className="px-3 py-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Suas Clínicas</p>
           {switchError && (
             <div className="mx-3 mb-1 flex items-center gap-1.5 rounded-lg bg-red-50 px-2.5 py-1.5 text-xs text-red-700">

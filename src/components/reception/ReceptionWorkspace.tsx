@@ -24,6 +24,7 @@ import { getPatientById, type PatientsListItem } from '@/lib/actions/timeline'
 import { getOpenQuotationsForTutor, type OpenQuotation } from '@/lib/actions/billing-documents'
 import QuickPetRegisterModal from './QuickPetRegisterModal'
 import QueueActionModal from './QueueActionModal'
+import { Spinner } from '@/components/ui/Spinner'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const SPECIES_LABELS: Record<string, { label: string; emoji: string; color: string }> = {
@@ -52,14 +53,14 @@ const PAYMENT_STATUS_OPTIONS = [
 ]
 
 const STATUS_BADGES: Record<string, { label: string; className: string }> = {
-  reception:      { label: 'Recepção',     className: 'bg-slate-100 text-slate-600' },
+  reception:      { label: 'Recepção',     className: 'bg-slate-100 text-slate-700' },
   scheduled:      { label: 'Agendado',     className: 'bg-purple-100 text-purple-700' },
-  triage:         { label: 'Em Triagem',   className: 'bg-yellow-100 text-yellow-700' },
+  triage:         { label: 'Em Triagem',   className: 'bg-amber-100 text-amber-700' },
   in_progress:    { label: 'No Consultório', className: 'bg-blue-100 text-blue-700' },
   waiting_exam:   { label: 'Ag. Exame',   className: 'bg-indigo-100 text-indigo-700' },
   medication:     { label: 'Medicação',    className: 'bg-amber-100 text-amber-700' },
-  completed:      { label: 'Concluído',    className: 'bg-green-100 text-green-700' },
-  cancelled:      { label: 'Cancelado',    className: 'bg-red-100 text-red-600' },
+  completed:      { label: 'Concluído',    className: 'bg-emerald-100 text-emerald-700' },
+  cancelled:      { label: 'Cancelado',    className: 'bg-red-100 text-red-700' },
 }
 
 function SpeciesBadge({ species }: { species: string }) {
@@ -123,11 +124,8 @@ function TutorProfile({
   }, [tutorId])
 
   if (!data) return (
-    <div className="flex items-center justify-center py-12 text-sm text-slate-400">
-      <svg className="mr-2 h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-      </svg>
+    <div className="flex items-center justify-center gap-2 py-12 text-sm text-slate-400">
+      <Spinner size="md" />
       Carregando...
     </div>
   )
@@ -158,7 +156,7 @@ function TutorProfile({
                 </button>
               )}
             </div>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-slate-500 font-mono tabular-nums">
               {data.tutor.phone ?? ''}
               {data.tutor.cpf ? ` · CPF: ${data.tutor.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')}` : ''}
             </p>
@@ -186,7 +184,7 @@ function TutorProfile({
                   </p>
                   <p className="text-xs text-slate-500">{q.item_count} {q.item_count === 1 ? 'item' : 'itens'} · {new Date(q.issue_date).toLocaleDateString('pt-BR')}</p>
                 </div>
-                <span className="text-sm font-semibold text-green-700 tabular-nums">
+                <span className="text-sm font-semibold text-emerald-700 font-mono tabular-nums">
                   {q.total_amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                 </span>
               </div>
@@ -204,7 +202,7 @@ function TutorProfile({
           </p>
           <button
             onClick={() => onAddPet(data.tutor.id, data.tutor.name ?? '')}
-            className="flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-600 hover:bg-blue-100 transition-colors"
+            className="flex items-center gap-1.5 rounded-lg bg-teal-50 px-3 py-1.5 text-xs font-semibold text-teal-700 hover:bg-teal-100 transition-colors"
           >
             <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -320,7 +318,7 @@ function QueueCard({
       data-testid="reception-card"
       title={triageActive ? 'Duplo clique para chamar triagem' : 'Duplo clique para enviar ao consultório'}
       onDoubleClick={() => onMoveToTriage(item.id)}
-      className={`flex flex-wrap items-center gap-3 sm:gap-4 rounded-2xl border bg-white px-4 sm:px-5 py-4 shadow-sm hover:shadow transition-shadow cursor-pointer select-none ${
+      className={`flex flex-wrap items-center gap-3 sm:gap-4 rounded-xl border bg-white px-4 sm:px-5 py-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer select-none ${
         hasPendingPayment ? 'border-red-300' : 'border-slate-200'
       }`}
     >
@@ -383,11 +381,11 @@ function QueueCard({
       {/* Mobile (05/06): ações descem para linha própria (w-full) — antes
           ficavam espremidas/sobrepostas ao lado do texto. */}
       <div className="flex flex-row flex-wrap items-center sm:flex-col sm:items-end gap-2 w-full sm:w-auto sm:flex-shrink-0">
-        <span className="text-xs text-slate-400">{formatTime(item.created_at)}</span>
+        <span className="text-xs text-slate-400 font-mono tabular-nums">{formatTime(item.created_at)}</span>
         <button
           data-mentor-step="reception-call-triage-btn"
           onClick={() => onMoveToTriage(item.id)}
-          className={`rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-colors ${triageActive ? 'bg-blue-600 hover:bg-blue-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+          className="rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-teal-700 transition-colors"
         >
           {triageActive ? 'Chamar Triagem →' : 'Enviar ao Consultório →'}
         </button>
@@ -681,7 +679,7 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
 
       {/* Toast */}
       {toast && (
-        <div className={`fixed top-4 right-4 z-50 flex items-center gap-3 rounded-xl px-5 py-3 text-sm font-medium shadow-lg transition-all ${
+        <div className={`fixed top-4 right-4 z-50 flex items-center gap-3 rounded-xl px-5 py-3 text-sm font-medium shadow-lg animate-enter-fast ${
           toast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
         }`}>
           {toast.type === 'success'
@@ -779,7 +777,7 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
               <button
                 onClick={() => setShowQuickRegister(true)}
                 title="Cadastro mínimo (4 campos) — para agendar agora e completar depois"
-                className="flex items-center gap-1.5 rounded-xl bg-amber-500 px-3 py-2.5 text-sm font-semibold text-white hover:bg-amber-600 transition-colors hover:shadow-md"
+                className="flex items-center gap-1.5 rounded-lg bg-amber-500 px-3 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-600 transition-colors"
               >
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
@@ -791,20 +789,20 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
                 data-mentor-step="reception-new-btn"
                 onClick={() => setModal({ type: 'new_tutor_and_pet' })}
                 title="Cadastro completo (todas as abas) · Alt+N"
-                className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition-colors hover:shadow-md"
+                className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 transition-colors"
               >
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                 </svg>
                 Novo Cadastro
-                <kbd className="hidden sm:inline-flex items-center rounded bg-blue-500 px-1.5 py-0.5 text-[10px] font-medium text-blue-100">Alt+N</kbd>
+                <kbd className="hidden sm:inline-flex items-center rounded bg-teal-500 px-1.5 py-0.5 font-mono text-[10px] font-medium text-teal-50">Alt+N</kbd>
               </button>
             </div>
           </div>
           <div className="relative">
             <div className="pointer-events-none absolute inset-y-0 left-4 flex items-center">
               {searching
-                ? <svg className="h-4 w-4 animate-spin text-blue-600" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                ? <Spinner size="md" className="text-teal-600" label="Buscando…" />
                 : <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" /></svg>
               }
             </div>
@@ -813,7 +811,7 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
               value={query}
               onChange={e => setQuery(e.target.value)}
               placeholder="CPF, nome do tutor ou nome do pet..."
-              className="w-full rounded-xl border border-slate-200 bg-white py-3.5 pl-11 pr-4 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              className="w-full rounded-lg border border-slate-200 bg-white py-3.5 pl-11 pr-4 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
             />
             {query && (
               <button onClick={() => { setQuery(''); setSearchResults([]); setSelectedTutorId(null) }}
@@ -827,7 +825,7 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
 
           {/* Resultados da busca */}
           {searchResults.length > 0 && !selectedTutorId && (
-            <div className="mt-2 rounded-xl border border-slate-200 bg-white shadow-lg overflow-hidden">
+            <div className="mt-2 rounded-xl border border-slate-200 bg-white shadow-lg overflow-hidden animate-scale-in origin-top">
               {searchResults.map(result => (
                 <button
                   key={result.tutor.id}
@@ -893,7 +891,7 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
               </div>
               <button
                 onClick={() => setModal({ type: 'new_tutor_and_pet' })}
-                className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
+                className="flex items-center gap-2 rounded-lg bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 transition-colors"
               >
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -911,7 +909,7 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
               <h2 className="text-base font-semibold text-slate-900">Fila de Espera</h2>
               <p className="text-sm text-slate-500">Pets aguardando atendimento hoje</p>
             </div>
-            <span className="flex h-7 min-w-7 items-center justify-center rounded-full bg-blue-600 px-2 text-xs font-bold text-white">
+            <span className="flex h-7 min-w-7 items-center justify-center rounded-full bg-slate-900 px-2 text-xs font-bold font-mono tabular-nums text-white">
               {queue.length}
             </span>
           </div>
@@ -957,7 +955,7 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
               <h2 className="text-base font-semibold text-slate-900">Atendidos Hoje</h2>
               <p className="text-sm text-slate-500">Todos os pacientes em fluxo clínico hoje</p>
             </div>
-            <span className="flex h-7 min-w-7 items-center justify-center rounded-full bg-slate-200 px-2 text-xs font-bold text-slate-600">
+            <span className="flex h-7 min-w-7 items-center justify-center rounded-full bg-slate-100 px-2 text-xs font-bold font-mono tabular-nums text-slate-700">
               {history.length}
             </span>
           </div>
@@ -1009,7 +1007,7 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
                       <p className="text-sm text-slate-500 mt-1">
                         Tutor: <span className="font-medium text-slate-700">{item.tutor.name}</span>
                         <span className="mx-1.5 text-slate-300">·</span>
-                        <span className="text-xs">{formatTime(item.created_at)}</span>
+                        <span className="text-xs font-mono tabular-nums">{formatTime(item.created_at)}</span>
                       </p>
                     </div>
                     <div className="flex flex-row flex-wrap sm:flex-col items-start sm:items-end gap-1.5 w-full sm:w-auto sm:flex-shrink-0">

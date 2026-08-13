@@ -23,7 +23,7 @@ export default function ReceptionSubNav() {
           <Link
             key={tab.href}
             href={tab.href}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-150 ease-swift ${
               active
                 ? 'bg-slate-900 text-white shadow-sm'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'

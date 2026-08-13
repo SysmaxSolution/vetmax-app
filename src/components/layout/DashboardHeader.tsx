@@ -237,7 +237,10 @@ export default function DashboardHeader({
 
   return (
     <>
-      <div className="bg-white border-b border-slate-200 sticky top-0 z-50 print:hidden">
+      {/* Glass: o blur vive num pseudo-elemento — backdrop-filter no próprio
+          container viraria containing block e prenderia os overlays fixed
+          renderizados aqui dentro (OmnisearchPalette, ImageLightbox). */}
+      <div className="relative bg-white/90 shadow-sm sticky top-0 z-50 print:hidden before:absolute before:inset-0 before:-z-10 before:backdrop-blur before:pointer-events-none">
         {/* Brand + Clínica + Usuário */}
         <div className="mx-auto max-w-4xl px-3 sm:px-6 py-3 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
@@ -245,8 +248,8 @@ export default function DashboardHeader({
             <button
               onClick={openMobileMenu}
               aria-label="Abrir menu de navegação"
-              className={`sm:hidden flex items-center justify-center h-9 w-9 rounded-lg transition-all duration-200 text-slate-600 hover:bg-slate-100 ${
-                showNudge ? 'animate-pulse ring-2 ring-blue-400 ring-offset-1 text-blue-600' : ''
+              className={`sm:hidden flex items-center justify-center h-9 w-9 rounded-lg transition-colors duration-150 ease-swift text-slate-600 hover:bg-slate-100 ${
+                showNudge ? 'animate-pulse ring-2 ring-teal-400 ring-offset-1 text-teal-600' : ''
               }`}
             >
               <Menu className="h-5 w-5" />
@@ -265,7 +268,7 @@ export default function DashboardHeader({
                   <ImageLightbox src={logoUrl} alt={clinicName} className="h-8 w-auto max-w-[120px] object-contain rounded" />
                 ) : (
                   <>
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-600">
                       <span className="text-sm font-bold text-white">V</span>
                     </div>
                     <div>
@@ -354,11 +357,11 @@ export default function DashboardHeader({
                 data-testid={tab.id}
                 title={locked ? `${tab.label} — disponível no Plano Premium` : undefined}
                 onClick={promotedKey ? (e => { e.preventDefault(); openUpgrade(promotedKey) }) : undefined}
-                className={`relative flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                className={`relative flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-[background-color,color] duration-150 ease-swift ${
                   locked
                     ? 'text-slate-400 hover:bg-slate-100/60 opacity-70'
                     : isActive(tab.href)
-                      ? `${getTabTheme(tab.href).active} text-white shadow-sm`
+                      ? `${getTabTheme(tab.href).bg} ${getTabTheme(tab.href).text} ring-1 ring-inset ${getTabTheme(tab.href).ring}`
                       : `text-slate-600 ${getTabTheme(tab.href).hover}`
                 }`}
               >
@@ -383,7 +386,7 @@ export default function DashboardHeader({
               try { await fetch('/auth/logout', { method: 'POST' }) } catch {}
               window.location.href = '/login'
             }}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg text-slate-600 hover:text-slate-900 text-sm font-medium transition-all"
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 text-sm font-medium transition-colors duration-150 ease-swift"
             title="Sair"
           >
             <LogOut className="w-4 h-4" />
@@ -391,8 +394,11 @@ export default function DashboardHeader({
           </button>
         </div>
 
-        {/* Indicador de módulo ativo */}
-        <div className={`h-[3px] w-full transition-colors duration-300 ${activeModuleTheme?.active ?? 'bg-slate-200'}`} />
+        {/* Indicador de módulo ativo — 2px com fade lateral (mask compositor-safe,
+            funciona com qualquer cor de módulo sem gerar classes dinâmicas) */}
+        <div
+          className={`h-[2px] w-full transition-colors duration-300 ${activeModuleTheme?.active ?? 'bg-slate-200'} [mask-image:linear-gradient(to_right,transparent,black_8%,black_92%,transparent)]`}
+        />
       </div>
 
       {/* ── Mobile Slide-over ──────────────────────────────────────────── */}
@@ -400,23 +406,23 @@ export default function DashboardHeader({
         <>
           {/* Overlay */}
           <div
-            className="fixed inset-0 z-[60] bg-black/40 sm:hidden"
+            className="fixed inset-0 z-[60] bg-black/40 sm:hidden animate-fade"
             onClick={closeMobileMenu}
           />
 
           {/* Painel lateral */}
-          <div className="fixed inset-y-0 left-0 z-[70] w-[280px] bg-white shadow-2xl flex flex-col sm:hidden">
+          <div className="fixed inset-y-0 left-0 z-[70] w-[280px] bg-white shadow-2xl flex flex-col sm:hidden animate-scale-in origin-left">
             {/* Header do painel */}
             <div className="flex items-center justify-between px-4 py-4 border-b border-slate-100">
               <div className="flex items-center gap-2">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-600">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-teal-600">
                   <span className="text-xs font-bold text-white">V</span>
                 </div>
                 <span className="text-sm font-bold text-slate-800">Navegação</span>
               </div>
               <button
                 onClick={closeMobileMenu}
-                className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500 transition-colors"
+                className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500 transition-colors duration-150 ease-swift"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -443,22 +449,20 @@ export default function DashboardHeader({
                       ? (e => { e.preventDefault(); closeMobileMenu(); openUpgrade(promotedKey) })
                       : closeMobileMenu
                     }
-                    className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors ${
+                    className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors duration-150 ease-swift ${
                       locked
                         ? 'text-slate-400 opacity-70 hover:bg-slate-50/60 font-medium'
                         : active
-                          ? `${theme.active} text-white shadow-sm font-semibold`
+                          ? `${theme.bg} ${theme.text} ring-1 ring-inset ${theme.ring} font-semibold`
                           : 'text-slate-600 hover:bg-slate-50 font-medium'
                     }`}
                   >
                     <div className={`flex h-7 w-7 items-center justify-center rounded-lg shrink-0 ${
-                      locked ? 'bg-slate-100' : active ? 'bg-white/20' : theme.bg
+                      locked ? 'bg-slate-100' : active ? theme.bgIntense : theme.bg
                     }`}>
                       {locked
                         ? <Lock className="h-3.5 w-3.5 text-slate-400" />
-                        : <tab.icon className={`h-4 w-4 ${
-                            active ? 'text-white' : theme.active.replace('bg-', 'text-')
-                          }`} />
+                        : <tab.icon className={`h-4 w-4 ${theme.text}`} />
                       }
                     </div>
                     <span className="flex-1">{tab.label}</span>
