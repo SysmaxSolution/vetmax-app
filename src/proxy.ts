@@ -60,7 +60,9 @@ export async function proxy(request: NextRequest) {
   // Acessos por subdomínios obsoletos da Vercel são redirecionados para o
   // domínio canônico, preservando path e query (?code=… do email Supabase etc).
   const host = request.headers.get('host') ?? ''
-  if (host.endsWith('.vercel.app')) {
+  // Ambiente de testes (sysvetmax-dev) roda em *.vercel.app de propósito —
+  // NEXT_PUBLIC_ALLOW_VERCEL_HOST=1 (setado SÓ lá) desliga o redirect canônico.
+  if (host.endsWith('.vercel.app') && process.env.NEXT_PUBLIC_ALLOW_VERCEL_HOST !== '1') {
     return NextResponse.redirect(`${getAppUrl()}${pathname}${search}`, 308)
   }
 
