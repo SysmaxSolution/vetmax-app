@@ -19,6 +19,7 @@ Leia sempre `vetmax-docs.md` e `.clauderules`.
 3.  **Legal (CFMV)**: Prontuário exige `is_reviewed_by_vet` para fechamento. Medicamentos controlados exigem sinalização de "Receituário Azul".
 4.  **Database**: Migrations apenas aditivas com `IF NOT EXISTS`. Proibido `SELECT *` em tabelas operacionais.
 5.  **UI/UX**: Padrão "Zero-Click". Atalhos de teclado e preenchimento por voz são prioridade.
+6.  **Design System**: Toda UI segue `DESIGN_SYSTEM.md` (tokens em `globals.css` + `Skeleton`/`Spinner` compartilhados). Ação primária = teal; cor de módulo só para navegação; loading sempre com skeleton; motion 120–240ms com reduced-motion.
 
 ## Terminologia Técnica (CFMV)
 - Pet/Animal (não usar "Paciente" na interface)

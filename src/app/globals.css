@@ -1,6 +1,142 @@
 @import "tailwindcss";
 @import "../styles/canva-print.css";
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   DESIGN SYSTEM 2026 v7 "Clínico Moderno" — tokens Tailwind v4 (@theme)
+   Fonte da verdade visual de TODAS as telas. Redefine as escalas que os
+   utilitários existentes já consomem (bg-slate-*, rounded-xl, shadow-sm...),
+   propagando o redesign sem tocar tela por tela.
+   Regras:
+   - Ação primária = teal (petrol). Cor de módulo (module-theme.ts) é só
+     wayfinding de navegação, nunca botão primário.
+   - Dinheiro/IDs/horários: `font-mono tabular-nums`.
+   - Motion: 120–240ms, só transform/opacity, sempre com reduced-motion.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@theme {
+  /* ── Tipografia ────────────────────────────────────────────────────────── */
+  --font-sans: var(--font-hanken), ui-sans-serif, system-ui, -apple-system,
+    'Segoe UI', sans-serif;
+  --font-mono: var(--font-spline-mono), ui-monospace, 'Cascadia Mono',
+    'Segoe UI Mono', monospace;
+
+  /* ── Primário petrol (remapeia a escala teal usada pelo UI kit/auth) ───── */
+  --color-teal-50:  #f0faf8;
+  --color-teal-100: #dcf3ef;
+  --color-teal-200: #bce6e0;
+  --color-teal-300: #8fd3cb;
+  --color-teal-400: #58b8ae;
+  --color-teal-500: #2e9c92;
+  --color-teal-600: #17847b;
+  --color-teal-700: #116a64;
+  --color-teal-800: #10554f;
+  --color-teal-900: #0f4642;
+  --color-teal-950: #072e2b;
+
+  /* ── gray → slate (mata os 2 arquivos dissidentes sem tocá-los) ────────── */
+  --color-gray-50:  var(--color-slate-50);
+  --color-gray-100: var(--color-slate-100);
+  --color-gray-200: var(--color-slate-200);
+  --color-gray-300: var(--color-slate-300);
+  --color-gray-400: var(--color-slate-400);
+  --color-gray-500: var(--color-slate-500);
+  --color-gray-600: var(--color-slate-600);
+  --color-gray-700: var(--color-slate-700);
+  --color-gray-800: var(--color-slate-800);
+  --color-gray-900: var(--color-slate-900);
+  --color-gray-950: var(--color-slate-950);
+
+  /* ── Raios — cantos mais generosos e consistentes ──────────────────────── */
+  --radius-lg:  0.625rem;  /* 10px — botões, inputs, chips        */
+  --radius-xl:  0.875rem;  /* 14px — cards (padrão de superfície) */
+  --radius-2xl: 1.25rem;   /* 20px — cartões de destaque, modais  */
+
+  /* ── Sombras — em camadas, suaves, com tom slate (nunca preto puro) ────── */
+  --shadow-xs: 0 1px 2px rgb(15 23 42 / 0.05);
+  --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.04), 0 2px 8px rgb(15 23 42 / 0.05);
+  --shadow-md: 0 2px 4px rgb(15 23 42 / 0.04), 0 4px 16px rgb(15 23 42 / 0.07);
+  --shadow-lg: 0 4px 8px rgb(15 23 42 / 0.05), 0 12px 32px rgb(15 23 42 / 0.11);
+  --shadow-xl: 0 8px 16px rgb(15 23 42 / 0.06), 0 24px 56px rgb(15 23 42 / 0.14);
+
+  /* ── Motion — easing e durações oficiais ───────────────────────────────── */
+  --ease-swift: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-soft-spring: cubic-bezier(0.34, 1.3, 0.64, 1);
+
+  /* Entrada padrão de conteúdo (cards, seções, itens de lista) */
+  --animate-enter: ds-enter 180ms var(--ease-swift) both;
+  /* Entrada para elementos frequentes — quase instantânea */
+  --animate-enter-fast: ds-enter 120ms var(--ease-swift) both;
+  /* Overlays/backdrops */
+  --animate-fade: ds-fade 160ms ease-out both;
+  /* Popovers, dropdowns, modais */
+  --animate-scale-in: ds-scale-in 160ms var(--ease-swift) both;
+
+  @keyframes ds-enter {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes ds-fade {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  @keyframes ds-scale-in {
+    from { opacity: 0; transform: scale(0.97); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+  @keyframes ds-shimmer {
+    from { transform: translateX(-100%); }
+    to   { transform: translateX(100%); }
+  }
+}
+
+/* ── Base do design system ─────────────────────────────────────────────────── */
+@layer base {
+  body {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  ::selection {
+    background-color: var(--color-teal-200);
+    color: var(--color-teal-950);
+  }
+}
+
+/* ── Skeleton (componente src/components/ui/Skeleton.tsx) ──────────────────
+   Shimmer compositor-only (transform em pseudo-elemento). Com
+   prefers-reduced-motion vira placeholder estático. */
+.ds-skeleton {
+  position: relative;
+  overflow: hidden;
+  background-color: var(--color-slate-200);
+  border-radius: var(--radius-lg);
+}
+.ds-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(255 255 255 / 0.55),
+    transparent
+  );
+  animation: ds-shimmer 1.6s var(--ease-swift) infinite;
+  will-change: transform;
+}
+
+/* ── Acessibilidade: reduced motion desliga todo motion decorativo ─────────── */
+@media (prefers-reduced-motion: reduce) {
+  .ds-skeleton::after { animation: none; }
+  .animate-enter,
+  .animate-enter-fast,
+  .animate-fade,
+  .animate-scale-in { animation-duration: 0.01ms !important; }
+  .med-card-overdue::after,
+  .med-card-imminent::after,
+  .med-icon-pulse,
+  .mentor-highlight-pulse { animation: none !important; }
+}
+
 /* Variável injetada pelo ThemeProvider para cor de fundo personalizada pelo usuário (Fase 4) */
 :root {
   --vetmax-user-bg: transparent;
