@@ -46,7 +46,7 @@ export default async function ReceptionPage() {
   const checkinRequiredFields = 'error' in settingsResult ? ['address', 'emergency_contact'] : settingsResult.checkin_required_fields
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-8">
+    <div className="max-w-4xl mx-auto px-6 py-8 animate-enter">
       <UrgencyAlert clinicId={profile.clinic_id} />
       <ReceptionWorkspace
         initialQueue={initialQueue}

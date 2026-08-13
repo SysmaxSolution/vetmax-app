@@ -71,9 +71,12 @@
   /* Popovers, dropdowns, modais */
   --animate-scale-in: ds-scale-in 160ms var(--ease-swift) both;
 
+  /* `to { transform: none }` é intencional: com fill-mode both, um transform
+     residual (translateY(0)/scale(1)) viraria containing block permanente e
+     quebraria position:fixed de modais/toasts dentro do container animado. */
   @keyframes ds-enter {
     from { opacity: 0; transform: translateY(4px); }
-    to   { opacity: 1; transform: translateY(0); }
+    to   { opacity: 1; transform: none; }
   }
   @keyframes ds-fade {
     from { opacity: 0; }
@@ -81,7 +84,7 @@
   }
   @keyframes ds-scale-in {
     from { opacity: 0; transform: scale(0.97); }
-    to   { opacity: 1; transform: scale(1); }
+    to   { opacity: 1; transform: none; }
   }
   @keyframes ds-shimmer {
     from { transform: translateX(-100%); }

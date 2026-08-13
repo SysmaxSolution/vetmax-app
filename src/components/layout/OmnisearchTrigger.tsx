@@ -28,7 +28,7 @@ export default function OmnisearchTrigger() {
         type="button"
         onClick={() => setOpen(true)}
         title="Busca universal (Ctrl/Cmd+K)"
-        className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-500 hover:border-slate-300 hover:bg-slate-50 transition-colors"
+        className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-500 hover:border-slate-300 hover:bg-slate-50 transition-colors duration-150 ease-swift"
       >
         <Search className="h-3.5 w-3.5" />
         <span className="hidden md:inline">Buscar</span>
