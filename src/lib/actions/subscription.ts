@@ -69,7 +69,7 @@ async function provisionAsaasCheckout(args: {
   admin: ReturnType<typeof createAdminClient>
   clinicId: string
   userEmail: string | null
-  plan: 'starter' | 'premium' | 'enterprise'
+  plan: 'starter' | 'premium' | 'enterprise' | 'specialized'
   cycle: BillingCycle
   method: 'pix' | 'card'
   value: number
@@ -194,7 +194,7 @@ export async function getSubscriptionOverview(): Promise<SubscriptionOverview | 
 // ─── Mutações ─────────────────────────────────────────────────────────────────
 
 export async function subscribeToPlan(input: {
-  plan: 'starter' | 'premium' | 'enterprise'
+  plan: 'starter' | 'premium' | 'enterprise' | 'specialized'
   addonKeys: string[]
   cycle: BillingCycle
   payment: DummyPaymentPayload
@@ -202,7 +202,10 @@ export async function subscribeToPlan(input: {
   const ctx = await getAdminCtx()
   if ('error' in ctx) return ctx
 
-  if (input.plan !== 'starter' && input.plan !== 'premium' && input.plan !== 'enterprise') {
+  if (
+    input.plan !== 'starter' && input.plan !== 'premium' &&
+    input.plan !== 'enterprise' && input.plan !== 'specialized'
+  ) {
     return { error: 'Plano inválido.' }
   }
   if (input.payment?.terms_accepted !== true) {
@@ -243,9 +246,36 @@ export async function subscribeToPlan(input: {
     }
   }
 
+  // Contrato sob medida (specialized): o valor é o custom_price definido pela
+  // Sysmax — cobrado mensalmente, sem addons avulsos. Preserva payload.restore,
+  // que o webhook usa para devolver a clínica ao estado contratado no pagamento.
+  let specializedRestore: unknown = null
+  let totals: PriceTotals
+  if (input.plan === 'specialized') {
+    if (input.cycle !== 'monthly') return { error: 'O contrato sob medida é cobrado mensalmente.' }
+    if (addonKeys.length > 0) return { error: 'O contrato sob medida não usa adicionais avulsos.' }
+    const { data: currentSub } = await admin
+      .from('tenant_subscriptions')
+      .select('plan_name, custom_price, payment_payload')
+      .eq('clinic_id', ctx.clinicId)
+      .maybeSingle()
+    const cp = currentSub?.custom_price != null ? Number(currentSub.custom_price) : 0
+    if (currentSub?.plan_name !== 'specialized' || !(cp > 0)) {
+      return { error: 'Contrato sob medida sem valor definido — fale com nosso time comercial.' }
+    }
+    specializedRestore =
+      ((currentSub.payment_payload as Record<string, unknown> | null) ?? {}).restore ?? null
+    totals = {
+      monthlyTotal: cp,
+      yearlyTotal: cp * 12,
+      yearlyDiscounted: cp * 12,
+      yearlyDiscountedCard: cp * 12,
+      effectiveTotal: cp,
+    }
+  } else {
   // Autoridade de preço: SEMPRE o servidor (o total do client é só display)
-  const totals = computePlanPrice({
-    plan: input.plan,
+  totals = computePlanPrice({
+    plan: input.plan as 'starter' | 'premium' | 'enterprise',
     starterBase: Number(configResult.data?.starter_base_price ?? 189),
     premiumBase: Number(configResult.data?.premium_base_price ?? 359.9),
     enterpriseBase: Number(configResult.data?.enterprise_base_price ?? 1299),
@@ -258,12 +288,13 @@ export async function subscribeToPlan(input: {
     addonKeys,
     cycle: input.cycle,
   })
+  }
 
   // Gateway real (PIX e CARTÃO): cria customer + subscription no Asaas e obtém
   // a fatura hospedada. O valor a cobrar depende do método (anual cartão = 10%,
   // anual PIX = 20%, mensal = igual). Cartão nunca trafega o PAN aqui — fatura
   // hospedada (PCI-safe). Ambos nascem 'pending' → módulos só no PAYMENT_CONFIRMED.
-  const chargeValue = chargeValueFor(totals, input.cycle, method)
+  const chargeValue = input.plan === 'specialized' ? totals.monthlyTotal : chargeValueFor(totals, input.cycle, method)
   const provisioned = await provisionAsaasCheckout({
     admin,
     clinicId: ctx.clinicId,
@@ -294,7 +325,7 @@ export async function subscribeToPlan(input: {
         lifecycle_state: 'pending',
         is_grandfathered: false,
         billing_cycle: input.cycle,
-        custom_price: null,
+        custom_price: input.plan === 'specialized' ? totals.monthlyTotal : null,
         cancelled_at: null,
         current_period_end: periodEnd.toISOString(),
         asaas_customer_id: asaasIds.asaas_customer_id,
@@ -311,6 +342,7 @@ export async function subscribeToPlan(input: {
           accepted_by: ctx.userId,
           totals,
           addon_keys: addonKeys,
+          ...(specializedRestore ? { restore: specializedRestore } : {}),
         },
       },
       { onConflict: 'clinic_id' }

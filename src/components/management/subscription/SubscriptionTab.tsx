@@ -98,7 +98,7 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
   const [cycle, setCycle] = useState<BillingCycle>(
     (subscription?.billing_cycle as BillingCycle | null) ?? 'monthly'
   )
-  const [checkoutPlan, setCheckoutPlan]   = useState<'starter' | 'premium' | 'enterprise' | null>(null)
+  const [checkoutPlan, setCheckoutPlan]   = useState<'starter' | 'premium' | 'enterprise' | 'specialized' | null>(null)
   const [showQuote, setShowQuote]         = useState(false)
   const [showDowngrade, setShowDowngrade] = useState(false)
   const [downgrading, setDowngrading]     = useState(false)
@@ -123,11 +123,24 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
     () => computePlanPrice({ ...pricingInput, plan: 'enterprise', addonKeys: [], cycle }),
     [config, catalog, cycle] // eslint-disable-line react-hooks/exhaustive-deps
   )
-  const checkoutTotals = checkoutPlan === 'enterprise'
-    ? enterpriseTotals
-    : checkoutPlan === 'starter'
-      ? starterTotals
-      : premiumTotals
+  // Contrato sob medida: totais derivados do custom_price definido pela Sysmax.
+  const specializedPrice = subscription?.custom_price != null ? Number(subscription.custom_price) : null
+  const specializedTotals = specializedPrice != null
+    ? {
+        monthlyTotal: specializedPrice,
+        yearlyTotal: specializedPrice * 12,
+        yearlyDiscounted: specializedPrice * 12,
+        yearlyDiscountedCard: specializedPrice * 12,
+        effectiveTotal: specializedPrice,
+      }
+    : null
+  const checkoutTotals = checkoutPlan === 'specialized' && specializedTotals
+    ? specializedTotals
+    : checkoutPlan === 'enterprise'
+      ? enterpriseTotals
+      : checkoutPlan === 'starter'
+        ? starterTotals
+        : premiumTotals
 
   const freeLabels = (FREE_MODULES[businessType] ?? FREE_MODULES.vet_clinic)
     .map(k => MODULE_LABELS_PT[k] ?? k)
@@ -165,11 +178,11 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
         : checkoutPlan === 'starter'
           ? starterAddonKeys
           : [],
-      cycle,
+      cycle: checkoutPlan === 'specialized' ? 'monthly' : cycle,
       payment,
     })
     if ('error' in result) throw new Error(result.error)
-    const planLabel = checkoutPlan === 'enterprise' ? 'Enterprise' : 'Premium'
+    const planLabel = checkoutPlan === 'specialized' ? 'Especializado' : checkoutPlan === 'enterprise' ? 'Enterprise' : 'Premium'
     const methodLabel = payment.method === 'card' ? 'no cartão' : 'via PIX'
     setCheckoutPlan(null)
     if (result.checkout?.invoiceUrl) {
@@ -567,6 +580,28 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
             <li className="flex items-center gap-2"><BadgeCheck className="h-3.5 w-3.5 text-violet-500 shrink-0" /> Multi-unidades e migração de dados</li>
           </ul>
 
+          {isSpecialized && specializedPrice != null ? (
+            <div className="mt-4">
+              <div className="rounded-lg bg-violet-50/70 border border-violet-100 px-3 py-3 text-sm text-slate-700">
+                Contrato sob medida da sua clínica — mensalidade de{' '}
+                <span className="font-bold text-violet-700">{fmt(specializedPrice)}</span>.
+              </div>
+              {subscription?.lifecycle_state === 'active' ? (
+                <div className="mt-3 flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-2.5 text-sm font-medium text-emerald-700">
+                  <Check className="h-4 w-4" /> Assinatura em dia — obrigado pela parceria!
+                </div>
+              ) : (
+                <button
+                  onClick={() => setCheckoutPlan('specialized')}
+                  className="mt-3 w-full flex items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-700 transition-colors"
+                >
+                  <CreditCard className="h-4 w-4" />
+                  Informar dados de pagamento — {fmt(specializedPrice)}/mês
+                </button>
+              )}
+            </div>
+          ) : (
+          <>
           {/* Configurador: pré-carregado com o bundle do Premium; o cliente
               ajusta e a estimativa acompanha em tempo real. */}
           <div className="mt-4">
@@ -601,6 +636,8 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
             <MessageCircle className="h-4 w-4" />
             Sob consulta — falar com vendas
           </button>
+          </>
+          )}
         </div>
       </div>
 
@@ -621,7 +658,8 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
         <CheckoutDummyModal
           plan={checkoutPlan}
           basePrice={
-            checkoutPlan === 'enterprise' ? config.enterprise_base_price
+            checkoutPlan === 'specialized' ? (specializedPrice ?? 0)
+            : checkoutPlan === 'enterprise' ? config.enterprise_base_price
             : checkoutPlan === 'starter'  ? config.starter_base_price
             : config.premium_base_price
           }

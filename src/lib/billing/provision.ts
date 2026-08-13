@@ -179,6 +179,42 @@ export async function activatePaidSubscription(
     if (applied.error) return applied
     const synced = await syncClinicModulesFromContract(admin, clinicId)
     if (synced.error) return synced
+  } else if (plan === 'specialized') {
+    // Contrato sob medida: payment_payload.restore devolve a clínica EXATAMENTE
+    // ao estado contratado (contratos + active_modules + flow_config verbatim).
+    const payload = (sub.payment_payload as Record<string, unknown> | null) ?? {}
+    const restore = (payload.restore ?? null) as {
+      contract_keys?: string[]
+      active_modules?: string[]
+      flow_config?: Record<string, unknown>
+    } | null
+    if (restore?.contract_keys?.length) {
+      const { error: contractError } = await admin
+        .from('clinic_contracted_modules')
+        .upsert(
+          restore.contract_keys.map(key => ({
+            clinic_id: clinicId,
+            module_key: key,
+            is_active: true,
+            contracted_at: new Date().toISOString(),
+          })),
+          { onConflict: 'clinic_id,module_key' }
+        )
+      if (contractError) return { error: 'Erro ao restaurar módulos contratados: ' + contractError.message }
+    }
+    if (restore?.active_modules?.length) {
+      const { error: clinicError } = await admin
+        .from('clinics')
+        .update({
+          active_modules: restore.active_modules,
+          ...(restore.flow_config ? { flow_config: restore.flow_config } : {}),
+        })
+        .eq('id', clinicId)
+      if (clinicError) return { error: 'Erro ao restaurar configuração da clínica: ' + clinicError.message }
+    } else if (restore?.contract_keys?.length) {
+      const synced = await syncClinicModulesFromContract(admin, clinicId)
+      if (synced.error) return synced
+    }
   }
   return {}
 }
