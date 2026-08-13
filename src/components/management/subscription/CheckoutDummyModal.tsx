@@ -18,7 +18,7 @@ function fmt(v: number) {
 }
 
 interface Props {
-  plan:           'starter' | 'premium' | 'enterprise'
+  plan:           'starter' | 'premium' | 'enterprise' | 'specialized'
   basePrice:      number
   /** Addons selecionados (sempre vazio no Enterprise/Starter — bundle inclui tudo). */
   selectedModules: SubscriptionModuleCatalogRow[]
@@ -28,10 +28,11 @@ interface Props {
   onConfirm:      (payment: DummyPaymentPayload) => Promise<void>
 }
 
-const PLAN_LABEL: Record<'starter' | 'premium' | 'enterprise', string> = {
+const PLAN_LABEL: Record<'starter' | 'premium' | 'enterprise' | 'specialized', string> = {
   starter: 'Starter',
   premium: 'Premium',
   enterprise: 'Enterprise',
+  specialized: 'Especializado',
 }
 
 export default function CheckoutDummyModal({ plan, basePrice, selectedModules, cycle, totals, onCancel, onConfirm }: Props) {
