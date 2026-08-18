@@ -51,13 +51,13 @@ const MUCOUS_LABELS: Record<string, string> = {
 }
 
 const APPOINTMENT_STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  scheduled: { label: 'Agendado',  color: 'bg-blue-100 text-blue-700' },
-  confirmed: { label: 'Confirmado', color: 'bg-green-100 text-green-700' },
+  scheduled: { label: 'Agendado',  color: 'bg-sky-100 text-sky-700' },
+  confirmed: { label: 'Confirmado', color: 'bg-emerald-100 text-emerald-700' },
 }
 
 const IMPROVEMENT_LABELS: Record<string, { label: string; color: string }> = {
-  melhorou: { label: 'Melhorou',      color: 'bg-green-100 text-green-700' },
-  estavel:  { label: 'Estável',       color: 'bg-yellow-100 text-yellow-700' },
+  melhorou: { label: 'Melhorou',      color: 'bg-emerald-100 text-emerald-700' },
+  estavel:  { label: 'Estável',       color: 'bg-amber-100 text-amber-700' },
   piorou:   { label: 'Piorou',        color: 'bg-red-100 text-red-700' },
 }
 
@@ -153,7 +153,7 @@ function PatientNoteCard({ event }: { event: TimelineEvent }) {
     <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
       <div className="flex items-center justify-between mb-1">
         <p className="text-xs font-bold text-slate-700 uppercase tracking-wide">{labels[d.note_type] ?? 'Nota'}</p>
-        <span className="text-[10px] text-slate-500">{new Date(event.date).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+        <span className="text-[10px] text-slate-500 font-mono tabular-nums">{new Date(event.date).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
       </div>
       {d.title && <p className="text-sm font-semibold text-slate-900 mb-0.5">{d.title}</p>}
       <p className="text-sm text-slate-700 whitespace-pre-wrap break-words">{d.content}</p>
@@ -190,11 +190,11 @@ function BillingDocumentCard({ event, onOpenBilling }: { event: TimelineEvent; o
         <p className="text-xs font-bold text-green-700 uppercase tracking-wide">
           {isQuote ? 'Orçamento de Serviços' : 'Nota Fiscal de Serviço'}
         </p>
-        <span className="text-[10px] text-slate-500">{new Date(event.date).toLocaleDateString('pt-BR')}</span>
+        <span className="text-[10px] text-slate-500 font-mono tabular-nums">{new Date(event.date).toLocaleDateString('pt-BR')}</span>
       </div>
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-semibold text-slate-900 font-mono">{d.doc_number}</p>
-        <p className="text-sm font-bold text-slate-900">{fmt(d.total_amount)}</p>
+        <p className="text-sm font-semibold text-slate-900 font-mono tabular-nums">{d.doc_number}</p>
+        <p className="text-sm font-bold text-slate-900 font-mono tabular-nums">{fmt(d.total_amount)}</p>
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <button onClick={openPdf} disabled={!!busy} className="inline-flex items-center gap-1 rounded-lg bg-slate-900 px-2.5 py-1 text-xs font-semibold text-white hover:bg-slate-700 disabled:opacity-50">
@@ -256,10 +256,10 @@ function WeightUpdateCard({ event }: { event: TimelineEvent }) {
     <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
       <div className="flex items-center justify-between mb-1">
         <p className="text-xs font-bold text-amber-700 uppercase tracking-wide">Peso atualizado</p>
-        <span className="text-[10px] text-amber-600">{new Date(event.date).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+        <span className="text-[10px] text-amber-600 font-mono tabular-nums">{new Date(event.date).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
       </div>
       <p className="text-sm text-amber-900 flex items-baseline gap-2 flex-wrap">
-        <strong className="text-lg tabular-nums">{fmt(d.weight_kg)} kg</strong>
+        <strong className="text-lg font-mono tabular-nums">{fmt(d.weight_kg)} kg</strong>
         {d.previous_kg !== null && (
           <span className="text-xs text-amber-700">
             (antes: {fmt(d.previous_kg)} kg
@@ -289,7 +289,7 @@ function PetloveEventCard({ event }: { event: TimelineEvent }) {
     <div className="rounded-xl border border-purple-200 bg-purple-50 px-4 py-3">
       <div className="flex items-center justify-between mb-1">
         <p className="text-xs font-bold text-purple-700 uppercase tracking-wide">{labels[d.event_type] ?? 'Convênio'}</p>
-        <span className="text-[10px] text-purple-500">{new Date(event.date).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+        <span className="text-[10px] text-purple-500 font-mono tabular-nums">{new Date(event.date).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
       </div>
       <p className="text-sm text-purple-900 break-words">{d.description}</p>
     </div>
@@ -313,9 +313,9 @@ function CheckInCard({ event }: { event: TimelineEvent }) {
           )}
         </div>
         <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-          d.payment_status === 'paid' ? 'bg-green-100 text-green-700' :
+          d.payment_status === 'paid' ? 'bg-emerald-100 text-emerald-700' :
           d.payment_status === 'courtesy' ? 'bg-purple-100 text-purple-700' :
-          'bg-yellow-100 text-yellow-700'
+          'bg-amber-100 text-amber-700'
         }`}>
           {PAYMENT_STATUS_LABELS[d.payment_status] ?? d.payment_status}
         </span>
@@ -788,7 +788,7 @@ function EventDetailModal({ event, onClose, patientId }: { event: TimelineEvent;
               <p className="text-sm text-slate-700">
                 Pagamento:{' '}
                 <span className={`font-semibold ${
-                  event.checkin.payment_status === 'paid' ? 'text-green-700' :
+                  event.checkin.payment_status === 'paid' ? 'text-emerald-700' :
                   event.checkin.payment_status === 'courtesy' ? 'text-purple-700' : 'text-amber-700'
                 }`}>
                   {PAYMENT_STATUS_LABELS[event.checkin.payment_status] ?? event.checkin.payment_status}
@@ -1157,7 +1157,7 @@ export default function PetTimeline({ events, packageMap = {}, onPrint, onEdit, 
                     {/* Timestamp + performed_by + Edit button */}
                     <div className="flex items-center justify-between mb-1.5">
                       <p className="text-xs text-slate-400">
-                        {formatTime(event.date)}
+                        <span className="font-mono tabular-nums">{formatTime(event.date)}</span>
                         {(event.performed_by || event.vet_name) && (
                           <span className="ml-2 text-slate-500 font-medium">
                             por {event.performed_by ?? event.vet_name}
@@ -1168,7 +1168,7 @@ export default function PetTimeline({ events, packageMap = {}, onPrint, onEdit, 
                         (event.type === 'checkin' || event.type === 'triage' || event.type === 'consultation' || event.type === 'completed') && (
                         <button
                           onClick={() => onEdit(event.consultation_id!)}
-                          className="text-xs font-medium text-blue-600 hover:text-blue-800 underline underline-offset-2"
+                          className="text-xs font-medium text-teal-600 hover:text-teal-800 underline underline-offset-2"
                         >
                           Editar
                         </button>

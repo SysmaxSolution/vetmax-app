@@ -56,7 +56,7 @@ export default async function PatientProfilePage({ params }: { params: Promise<{
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <main className="mx-auto max-w-3xl px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+      <main className="mx-auto max-w-3xl px-4 sm:px-6 py-6 sm:py-8 space-y-6 animate-enter">
 
         {/* Voltar */}
         <Link
@@ -69,7 +69,7 @@ export default async function PatientProfilePage({ params }: { params: Promise<{
 
         {/* Banner Cadastro Rápido (criado via importação Petlove) */}
         {patient.created_from === 'petlove_import' && (
-          <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 flex items-start gap-3">
+          <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 flex items-start gap-3">
             <Info className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
               <p className="font-semibold text-amber-900">Cadastro rápido via Petlove</p>
@@ -90,7 +90,7 @@ export default async function PatientProfilePage({ params }: { params: Promise<{
         )}
 
         {/* Header do Paciente */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex items-start gap-5">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex items-start gap-5">
           {patient.photo_url ? (
             <img
               src={patient.photo_url}
@@ -98,13 +98,13 @@ export default async function PatientProfilePage({ params }: { params: Promise<{
               className="w-20 h-20 rounded-2xl object-cover border-2 border-slate-200 flex-shrink-0"
             />
           ) : (
-            <div className="w-20 h-20 rounded-2xl bg-blue-50 border-2 border-blue-100 flex items-center justify-center flex-shrink-0">
-              <PawPrint className="h-10 w-10 text-blue-300" />
+            <div className="w-20 h-20 rounded-2xl bg-teal-50 border-2 border-teal-100 flex items-center justify-center flex-shrink-0">
+              <PawPrint className="h-10 w-10 text-teal-300" />
             </div>
           )}
 
           <div className="flex-1 min-w-0">
-            <h1 className="text-2xl font-bold text-slate-900">{patient.name}</h1>
+            <h1 className="text-xl font-bold tracking-tight text-slate-900">{patient.name}</h1>
             <p className="text-slate-500 mt-0.5">
               {SPECIES_LABELS[patient.species] ?? patient.species}
               {patient.breed && ` · ${patient.breed}`}
@@ -136,14 +136,14 @@ export default async function PatientProfilePage({ params }: { params: Promise<{
         <div className="grid gap-4 md:grid-cols-2">
 
           {/* Tutor */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-3">
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-3">
             <h2 className="font-semibold text-slate-800 flex items-center gap-2">
               <User className="h-4 w-4 text-slate-400" />
               Tutor
             </h2>
             <p className="font-medium text-slate-900">{patient.tutor?.name ?? '—'}</p>
             {patient.tutor?.phone && (
-              <p className="flex items-center gap-1.5 text-sm text-slate-500">
+              <p className="flex items-center gap-1.5 text-sm text-slate-500 font-mono tabular-nums">
                 <Phone className="h-3.5 w-3.5" /> {patient.tutor.phone}
               </p>
             )}
@@ -156,13 +156,13 @@ export default async function PatientProfilePage({ params }: { params: Promise<{
 
           {/* Próxima Vacina */}
           {upcoming.length > 0 ? (
-            <div className="bg-green-50 rounded-2xl border border-green-200 p-5 space-y-2">
-              <h2 className="font-semibold text-green-800 flex items-center gap-2">
+            <div className="bg-emerald-50 rounded-xl border border-emerald-200 p-5 space-y-2">
+              <h2 className="font-semibold text-emerald-800 flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4" />
                 Próxima Dose
               </h2>
-              <p className="font-bold text-green-900 text-lg">{upcoming[0].vaccine_name}</p>
-              <p className="text-sm text-green-700">
+              <p className="font-bold text-emerald-900 text-lg">{upcoming[0].vaccine_name}</p>
+              <p className="text-sm text-emerald-700">
                 {new Date(upcoming[0].next_due_date! + 'T12:00:00').toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' })}
               </p>
               {overdue.length > 0 && (
@@ -172,7 +172,7 @@ export default async function PatientProfilePage({ params }: { params: Promise<{
               )}
             </div>
           ) : (
-            <div className="bg-slate-50 rounded-2xl border border-dashed border-slate-200 p-5 flex items-center justify-center text-center">
+            <div className="bg-slate-50 rounded-xl border border-dashed border-slate-200 p-5 flex items-center justify-center text-center">
               <div>
                 <Syringe className="h-8 w-8 text-slate-300 mx-auto mb-2" />
                 <p className="text-sm text-slate-400">Sem doses agendadas</p>
@@ -198,13 +198,13 @@ export default async function PatientProfilePage({ params }: { params: Promise<{
         <PetlovePatientHistory events={petloveHistory} />
 
         {/* Histórico de Vacinas */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
             <h2 className="font-semibold text-slate-800 flex items-center gap-2">
               <Syringe className="h-4 w-4 text-slate-400" />
               Histórico de Vacinação
             </h2>
-            <span className="text-xs text-slate-400">{vaccines.length} registro{vaccines.length !== 1 ? 's' : ''}</span>
+            <span className="text-xs text-slate-400 font-mono tabular-nums">{vaccines.length} registro{vaccines.length !== 1 ? 's' : ''}</span>
           </div>
 
           {vaccines.length === 0 ? (
@@ -220,16 +220,16 @@ export default async function PatientProfilePage({ params }: { params: Promise<{
                   <div key={v.id} className="px-5 py-3 flex items-start justify-between gap-4">
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-slate-800">{v.vaccine_name}</p>
-                      <p className="text-xs text-slate-400 mt-0.5">
+                      <p className="text-xs text-slate-400 mt-0.5 font-mono tabular-nums">
                         Aplicada em: {new Date(v.date_administered + 'T12:00:00').toLocaleDateString('pt-BR')}
                       </p>
                     </div>
                     {v.next_due_date && (
                       <div className="text-right flex-shrink-0">
-                        <p className={`text-xs font-medium ${isOverdue ? 'text-red-600' : 'text-green-600'}`}>
+                        <p className={`text-xs font-medium ${isOverdue ? 'text-red-600' : 'text-emerald-600'}`}>
                           {isOverdue ? '⚠ Atrasado' : 'Próxima dose'}
                         </p>
-                        <p className="text-xs text-slate-500">
+                        <p className="text-xs text-slate-500 font-mono tabular-nums">
                           {new Date(v.next_due_date + 'T12:00:00').toLocaleDateString('pt-BR')}
                         </p>
                       </div>

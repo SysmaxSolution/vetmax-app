@@ -89,13 +89,13 @@ export default function CashierPageClient({
   }, [today, firstOfMonth])
 
   return (
-    <div className="max-w-6xl mx-auto px-3 sm:px-6 py-6 sm:py-8 space-y-6">
+    <div className="max-w-6xl mx-auto px-3 sm:px-6 py-6 sm:py-8 space-y-6 animate-enter">
       {/* Toast */}
       {toast && (
-        <div className={`fixed top-4 right-4 z-50 flex items-center gap-2 rounded-xl px-4 py-3 shadow-lg text-sm font-medium ${
+        <div className={`fixed top-4 right-4 z-50 flex items-center gap-2 rounded-xl px-4 py-3 shadow-lg text-sm font-medium animate-enter-fast ${
           toast.type === 'success'
-            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-            : 'bg-red-50 text-red-700 border border-red-200'
+            ? 'bg-emerald-600 text-white'
+            : 'bg-red-600 text-white'
         }`}>
           {toast.type === 'success'
             ? <CheckCircle2 className="h-4 w-4" />
@@ -106,8 +106,8 @@ export default function CashierPageClient({
 
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Caixa</h1>
-        <p className="mt-0.5 text-sm text-slate-500">Central de recebimentos, saídas e gestão de sessão</p>
+        <h1 className="text-xl font-bold tracking-tight text-slate-900">Caixa</h1>
+        <p className="mt-0.5 text-sm text-slate-600">Central de recebimentos, saídas e gestão de sessão</p>
       </div>
 
       {/* Alerta de caixa do dia anterior em aberto */}

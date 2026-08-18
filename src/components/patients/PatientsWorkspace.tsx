@@ -8,6 +8,7 @@ import PetTimelineModal from '@/components/pet/PetTimelineModal'
 import PatientFullModal from '@/components/patients/PatientFullModal'
 import { formatPetAge } from '@/lib/utils/pet-age'
 import { PetAvatar } from '@/components/ui/PetAvatar'
+import { Spinner } from '@/components/ui/Spinner'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -108,17 +109,17 @@ function PatientCard({
           <p className="mt-1 text-xs text-slate-500 truncate">
             Tutor: <span className="font-medium text-slate-700">{patient.tutor.name ?? '—'}</span>
             {patient.tutor.cpf && (
-              <span className="ml-1.5 text-slate-400">· CPF {formatCpf(patient.tutor.cpf)}</span>
+              <span className="ml-1.5 text-slate-400 font-mono tabular-nums">· CPF {formatCpf(patient.tutor.cpf)}</span>
             )}
             {patient.tutor.phone && (
-              <span className="ml-1.5 text-slate-400">· {patient.tutor.phone}</span>
+              <span className="ml-1.5 text-slate-400 font-mono tabular-nums">· {patient.tutor.phone}</span>
             )}
           </p>
           {archived && (
             <p className="mt-1 text-xs text-amber-700">
               {patient.delete_reason ? <>Motivo: <span className="font-medium">{patient.delete_reason}</span></> : 'Arquivado'}
               {patient.deleted_at && (
-                <span className="ml-1.5 text-amber-600/70">· em {new Date(patient.deleted_at).toLocaleDateString('pt-BR')}</span>
+                <span className="ml-1.5 text-amber-600/70 font-mono tabular-nums">· em {new Date(patient.deleted_at).toLocaleDateString('pt-BR')}</span>
               )}
             </p>
           )}
@@ -305,7 +306,7 @@ export default function PatientsWorkspace({ initialPatients, clinicName }: Props
       {/* Page Header */}
       <div className="mb-6 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Pacientes</h1>
+          <h1 className="text-xl font-bold tracking-tight text-slate-900">Pacientes</h1>
           <p className="mt-0.5 text-sm text-slate-500">
             Diretório clínico — {initialPatients.length} paciente{initialPatients.length !== 1 ? 's' : ''} cadastrado{initialPatients.length !== 1 ? 's' : ''}
           </p>
@@ -314,7 +315,7 @@ export default function PatientsWorkspace({ initialPatients, clinicName }: Props
           type="button"
           data-mentor-step="btn-novo-paciente"
           onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 transition-colors shadow-sm flex-shrink-0"
+          className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 transition-colors shadow-sm flex-shrink-0"
         >
           <Plus className="h-4 w-4" />
           Novo Paciente
@@ -354,10 +355,7 @@ export default function PatientsWorkspace({ initialPatients, clinicName }: Props
       <div className="relative mb-6">
         <div className="pointer-events-none absolute inset-y-0 left-4 flex items-center">
           {searching ? (
-            <svg className="h-4 w-4 animate-spin text-slate-400" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
+            <Spinner size="md" className="text-slate-400" label="Buscando…" />
           ) : (
             <Search className="h-4 w-4 text-slate-400" />
           )}
@@ -367,7 +365,7 @@ export default function PatientsWorkspace({ initialPatients, clinicName }: Props
           value={query}
           onChange={e => setQuery(e.target.value)}
           placeholder="Buscar por nome do animal..."
-          className="w-full rounded-xl border border-slate-300 bg-white py-3 pl-11 pr-4 text-sm placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 shadow-sm"
+          className="w-full rounded-lg border border-slate-200 bg-white py-3 pl-11 pr-4 text-sm placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 shadow-sm"
         />
         {query && (
           <button
@@ -380,7 +378,7 @@ export default function PatientsWorkspace({ initialPatients, clinicName }: Props
           </button>
         )}
         {searchError && (
-          <p className="mt-2 text-xs font-medium text-rose-600">
+          <p className="mt-2 text-xs font-medium text-red-600">
             Não foi possível completar a busca. Verifique sua conexão ou{' '}
             <button type="button" onClick={() => window.location.reload()} className="underline font-semibold">
               recarregue a página

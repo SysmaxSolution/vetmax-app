@@ -48,9 +48,9 @@ export default function CashierDashboardCards({ dashboard }: Props) {
     {
       label:   'Saldo Líquido',
       value:   fmt(net_balance),
-      icon:    <DollarSign className="h-4 w-4 text-blue-600" />,
-      bg:      'bg-blue-50',
-      val_cls: net_balance >= 0 ? 'text-blue-700' : 'text-red-600',
+      icon:    <DollarSign className="h-4 w-4 text-sky-600" />,
+      bg:      'bg-sky-50',
+      val_cls: net_balance >= 0 ? 'text-sky-700' : 'text-red-600',
       suffix:  'do dia',
     },
     {
@@ -68,14 +68,14 @@ export default function CashierDashboardCards({ dashboard }: Props) {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {cards.map(c => (
-          <div key={c.label} className="bg-white rounded-xl border border-slate-200 p-4">
+          <div key={c.label} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
             <div className="flex items-center gap-2 mb-2">
               <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${c.bg}`}>
                 {c.icon}
               </div>
               <p className="text-xs font-medium text-slate-500">{c.label}</p>
             </div>
-            <p className={`text-xl font-bold tabular-nums ${c.val_cls}`}>{c.value}</p>
+            <p className={`text-xl font-bold font-mono tabular-nums ${c.val_cls}`}>{c.value}</p>
             {c.suffix && <p className="text-xs text-slate-400 mt-0.5">{c.suffix}</p>}
           </div>
         ))}
@@ -83,7 +83,7 @@ export default function CashierDashboardCards({ dashboard }: Props) {
 
       {/* Payment method breakdown */}
       {Object.keys(by_payment_method).length > 0 && (
-        <div className="bg-white rounded-xl border border-slate-200 p-4">
+        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">
             Entradas por Forma de Pagamento
           </p>
@@ -91,8 +91,8 @@ export default function CashierDashboardCards({ dashboard }: Props) {
             {Object.entries(by_payment_method).map(([method, data]) => (
               <div key={method} className="text-center rounded-lg bg-slate-50 px-3 py-2.5">
                 <p className="text-xs text-slate-500 mb-1">{PAYMENT_LABELS[method] ?? method}</p>
-                <p className="text-sm font-bold text-slate-900 tabular-nums">{fmt(data.amount)}</p>
-                <p className="text-[10px] text-slate-400">{data.count} lanç.</p>
+                <p className="text-sm font-bold text-slate-900 font-mono tabular-nums">{fmt(data.amount)}</p>
+                <p className="text-[10px] text-slate-400 font-mono tabular-nums">{data.count} lanç.</p>
               </div>
             ))}
           </div>

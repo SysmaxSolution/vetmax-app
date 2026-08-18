@@ -63,15 +63,15 @@ export default function InsuranceCard({ data }: { data: InsuranceCardData }) {
       <div className="px-5 py-3 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
         <div className="flex items-center gap-2 text-sky-800">
           <CalendarDays className="h-3.5 w-3.5 text-sky-500" />
-          <span>Adesão: <strong>{formatBR(data.enrollment_date)}</strong></span>
+          <span>Adesão: <strong className="font-mono tabular-nums">{formatBR(data.enrollment_date)}</strong></span>
         </div>
         <div className="flex items-center gap-2 text-sky-800">
           <IdCard className="h-3.5 w-3.5 text-sky-500" />
-          <span>Carteirinha: <strong>{data.member_id || '—'}</strong></span>
+          <span>Carteirinha: <strong className="font-mono tabular-nums">{data.member_id || '—'}</strong></span>
         </div>
         <div className="flex items-center gap-2 text-sky-800">
           <Clock className="h-3.5 w-3.5 text-sky-500" />
-          <span>Validade: <strong>{formatBR(data.valid_until) || 'indefinida'}</strong></span>
+          <span>Validade: <strong className="font-mono tabular-nums">{formatBR(data.valid_until) || 'indefinida'}</strong></span>
         </div>
       </div>
 
@@ -86,11 +86,11 @@ export default function InsuranceCard({ data }: { data: InsuranceCardData }) {
               <div
                 key={cat}
                 className={`flex items-center justify-between px-2 py-1 rounded-md ${
-                  days === 0 ? 'text-emerald-700' : days > 60 ? 'text-rose-700 bg-rose-50' : 'text-amber-700 bg-amber-50'
+                  days === 0 ? 'text-emerald-700' : days > 60 ? 'text-red-700 bg-red-50' : 'text-amber-700 bg-amber-50'
                 }`}
               >
                 <span>{CATEGORY_LABELS[cat] ?? cat}</span>
-                <span className="font-semibold tabular-nums">{days === 0 ? '✓' : `${days}d`}</span>
+                <span className="font-semibold font-mono tabular-nums">{days === 0 ? '✓' : `${days}d`}</span>
               </div>
             ))}
           </div>

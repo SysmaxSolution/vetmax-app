@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Receipt, RefreshCw, ShoppingBag, Scissors, Ban, Users, AlertTriangle, ShoppingCart, Trash2, Loader2 } from 'lucide-react'
+import { Receipt, RefreshCw, ShoppingBag, Scissors, Ban, Users, AlertTriangle, ShoppingCart, Trash2 } from 'lucide-react'
+import { Spinner } from '@/components/ui/Spinner'
 import { getPendingInvoices, processSplitPayment, type InvoiceWithDetails } from '@/lib/actions/billing'
 import {
   getPendingGroomingSessions,
@@ -61,7 +62,7 @@ function InvoiceCard({
   return (
     // Mobile (05/06): no celular o bloco Total+Receber desce para a linha de
     // baixo (w-full) — antes ficava espremido/sobreposto ao lado do texto.
-    <div className={`flex flex-wrap items-center gap-3 sm:gap-4 rounded-xl border bg-white px-4 sm:px-5 py-4 hover:shadow-sm transition-all ${selected ? 'border-teal-400 ring-1 ring-teal-200' : 'border-slate-200 hover:border-slate-300'}`}>
+    <div className={`flex flex-wrap items-center gap-3 sm:gap-4 rounded-xl border bg-white px-4 sm:px-5 py-4 shadow-sm hover:shadow-md transition-shadow ${selected ? 'border-teal-400 ring-1 ring-teal-200' : 'border-slate-200 hover:border-slate-300'}`}>
       {onToggleSelect && (
         <input
           type="checkbox"
@@ -79,24 +80,24 @@ function InvoiceCard({
           <p className="font-semibold text-slate-900 truncate max-w-full">{invoice.patient.name}</p>
           <span className="text-xs text-slate-400 hidden sm:inline">·</span>
           <span className="text-xs text-slate-500 truncate max-w-full">{invoice.tutor.name}</span>
-          <span className="rounded-full bg-blue-50 text-blue-700 text-xs font-medium px-2 py-0.5 flex-shrink-0">Consulta</span>
+          <span className="rounded-full bg-sky-100 text-sky-700 text-xs font-medium px-2 py-0.5 flex-shrink-0">Consulta</span>
         </div>
         <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
-          <span className="text-xs text-slate-400 whitespace-nowrap">Alta às {fmtTime(invoice.created_at)}</span>
+          <span className="text-xs text-slate-400 whitespace-nowrap">Alta às <span className="font-mono tabular-nums">{fmtTime(invoice.created_at)}</span></span>
           {invoice.tutor.phone && (
-            <span className="text-xs text-slate-400 whitespace-nowrap">{invoice.tutor.phone}</span>
+            <span className="text-xs text-slate-400 whitespace-nowrap font-mono tabular-nums">{invoice.tutor.phone}</span>
           )}
         </div>
       </div>
       <div className="flex items-center justify-between gap-4 w-full sm:w-auto sm:flex-shrink-0 sm:justify-end">
         <div className="text-left sm:text-right">
           <p className="text-xs text-slate-400">Total</p>
-          <p className="text-lg font-bold text-slate-900 whitespace-nowrap">{fmt(invoice.total_amount)}</p>
+          <p className="text-lg font-bold text-slate-900 whitespace-nowrap font-mono tabular-nums">{fmt(invoice.total_amount)}</p>
         </div>
         <button
           onClick={() => onCheckout(invoice.id)}
           data-mentor-step="cashier-receive-invoice-btn"
-          className="flex items-center gap-1.5 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 transition-colors shadow-sm flex-shrink-0"
+          className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 transition-colors shadow-sm flex-shrink-0"
         >
           <Receipt className="h-4 w-4" />
           Receber
@@ -116,7 +117,7 @@ function GroomingPaymentCard({
   onReceive: (session: PendingGroomingPayment) => void
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-3 sm:gap-4 rounded-xl border border-violet-100 bg-white px-4 sm:px-5 py-4 hover:shadow-sm hover:border-violet-200 transition-all">
+    <div className="flex flex-wrap items-center gap-3 sm:gap-4 rounded-xl border border-violet-100 bg-white px-4 sm:px-5 py-4 shadow-sm hover:shadow-md hover:border-violet-200 transition-shadow">
       <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-violet-50 text-2xl">
         {SPECIES_EMOJI[session.patient_species] ?? '🐾'}
       </div>
@@ -138,19 +139,19 @@ function GroomingPaymentCard({
             <span className="text-xs text-slate-400">+{session.services_requested.length - 3}</span>
           )}
           {session.discount_percent > 0 && (
-            <span className="text-xs text-emerald-600 font-medium">{session.discount_percent}% desc.</span>
+            <span className="text-xs text-emerald-600 font-medium font-mono tabular-nums">{session.discount_percent}% desc.</span>
           )}
         </div>
       </div>
       <div className="flex items-center justify-between gap-4 w-full sm:w-auto sm:flex-shrink-0 sm:justify-end">
         <div className="text-left sm:text-right">
           <p className="text-xs text-slate-400">Total</p>
-          <p className="text-lg font-bold text-slate-900 whitespace-nowrap">{fmt(session.price_total)}</p>
+          <p className="text-lg font-bold text-slate-900 whitespace-nowrap font-mono tabular-nums">{fmt(session.price_total)}</p>
         </div>
         <button
           onClick={() => onReceive(session)}
           data-mentor-step="cashier-receive-grooming-btn"
-          className="flex items-center gap-1.5 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-700 transition-colors shadow-sm flex-shrink-0"
+          className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 transition-colors shadow-sm flex-shrink-0"
         >
           <Receipt className="h-4 w-4" />
           Receber
@@ -204,7 +205,7 @@ function GroomingPaymentModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl animate-scale-in">
         <div className="flex items-center gap-3 mb-4">
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-100">
             <Scissors className="h-5 w-5 text-violet-600" />
@@ -224,7 +225,7 @@ function GroomingPaymentModal({
 
         <div className="mb-4 flex items-center justify-between rounded-lg bg-violet-50 px-4 py-3">
           <span className="text-sm font-medium text-slate-700">Total a receber</span>
-          <span className="text-xl font-bold text-violet-700">{fmt(session.price_total)}</span>
+          <span className="text-xl font-bold text-violet-700 font-mono tabular-nums">{fmt(session.price_total)}</span>
         </div>
 
         <div className="mb-5">
@@ -234,7 +235,7 @@ function GroomingPaymentModal({
               <button
                 key={pm.key}
                 onClick={() => setMethod(pm.key)}
-                className={`rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors ${
+                className={`rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${
                   method === pm.key
                     ? 'border-violet-500 bg-violet-50 text-violet-700'
                     : 'border-slate-200 text-slate-600 hover:bg-slate-50'
@@ -254,14 +255,14 @@ function GroomingPaymentModal({
           <button
             onClick={onClose}
             disabled={loading}
-            className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
+            className="flex-1 rounded-lg border border-slate-200 bg-white py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
           >
             Cancelar
           </button>
           <button
             onClick={handleWaive}
             disabled={loading}
-            className="flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-700 hover:bg-amber-100 transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-700 hover:bg-amber-100 transition-colors disabled:opacity-50"
             title="Marcar como cortesia — sem cobrança"
           >
             <Ban className="h-4 w-4" />
@@ -271,7 +272,7 @@ function GroomingPaymentModal({
             onClick={handleConfirm}
             disabled={loading}
             data-mentor-step="cashier-grooming-confirm-btn"
-            className="flex-1 rounded-xl bg-violet-600 py-2.5 text-sm font-semibold text-white hover:bg-violet-700 transition-colors disabled:opacity-50"
+            className="flex-1 rounded-lg bg-teal-600 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 transition-colors disabled:opacity-60"
           >
             {loading ? 'Processando...' : `Confirmar ${PAYMENT_LABEL[method]}`}
           </button>
@@ -292,7 +293,7 @@ function HospPendingCard({
 }) {
   const isHosp = entry.source_module === 'hospitalization'
   return (
-    <div className="flex flex-wrap items-center gap-3 sm:gap-4 rounded-xl border border-rose-100 bg-white px-4 sm:px-5 py-4 hover:shadow-sm hover:border-rose-200 transition-all">
+    <div className="flex flex-wrap items-center gap-3 sm:gap-4 rounded-xl border border-rose-100 bg-white px-4 sm:px-5 py-4 shadow-sm hover:shadow-md hover:border-rose-200 transition-shadow">
       <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-rose-50 text-2xl">
         🏥
       </div>
@@ -318,11 +319,11 @@ function HospPendingCard({
       <div className="flex items-center justify-between gap-4 w-full sm:w-auto sm:flex-shrink-0 sm:justify-end">
         <div className="text-left sm:text-right">
           <p className="text-xs text-slate-400">Total</p>
-          <p className="text-lg font-bold text-slate-900 whitespace-nowrap">{fmt(entry.amount)}</p>
+          <p className="text-lg font-bold text-slate-900 whitespace-nowrap font-mono tabular-nums">{fmt(entry.amount)}</p>
         </div>
         <button
           onClick={() => onReceive(entry)}
-          className="flex items-center gap-1.5 rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-rose-700 transition-colors shadow-sm flex-shrink-0"
+          className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 transition-colors shadow-sm flex-shrink-0"
         >
           <Receipt className="h-4 w-4" />
           Receber
@@ -363,7 +364,7 @@ function HospReceiveModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl animate-scale-in">
         <div className="flex items-center gap-3 mb-4">
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-rose-100 text-xl">
             🏥
@@ -385,7 +386,7 @@ function HospReceiveModal({
 
         <div className="mb-4 flex items-center justify-between rounded-lg bg-rose-50 px-4 py-3">
           <span className="text-sm font-medium text-slate-700">Total a receber</span>
-          <span className="text-xl font-bold text-rose-700">{fmt(entry.amount)}</span>
+          <span className="text-xl font-bold text-rose-700 font-mono tabular-nums">{fmt(entry.amount)}</span>
         </div>
 
         <div className="mb-5">
@@ -395,7 +396,7 @@ function HospReceiveModal({
               <button
                 key={pm.key}
                 onClick={() => setMethod(pm.key)}
-                className={`rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors ${
+                className={`rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${
                   method === pm.key
                     ? 'border-rose-500 bg-rose-50 text-rose-700'
                     : 'border-slate-200 text-slate-600 hover:bg-slate-50'
@@ -415,14 +416,14 @@ function HospReceiveModal({
           <button
             onClick={onClose}
             disabled={loading}
-            className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
+            className="flex-1 rounded-lg border border-slate-200 bg-white py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
           >
             Cancelar
           </button>
           <button
             onClick={handleConfirm}
             disabled={loading}
-            className="flex-1 rounded-xl bg-rose-600 py-2.5 text-sm font-semibold text-white hover:bg-rose-700 transition-colors disabled:opacity-50"
+            className="flex-1 rounded-lg bg-teal-600 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 transition-colors disabled:opacity-60"
           >
             {loading ? 'Processando...' : `Confirmar ${PAYMENT_LABEL[method] ?? method}`}
           </button>
@@ -838,9 +839,9 @@ export default function CashierTabReceivables({
       {/* Q3: aviso de tutores diferentes */}
       {confirmMixedTutors && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl space-y-3">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl space-y-3 animate-scale-in">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100">
                 <AlertTriangle className="h-5 w-5 text-amber-600" />
               </div>
               <h3 className="text-base font-bold text-slate-900">Tutores diferentes selecionados</h3>
@@ -852,13 +853,13 @@ export default function CashierTabReceivables({
             <div className="flex gap-2 pt-1">
               <button
                 onClick={() => setConfirmMixedTutors(false)}
-                className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+                className="flex-1 rounded-lg border border-slate-200 bg-white py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
               >
                 Voltar
               </button>
               <button
                 onClick={() => { setConfirmMixedTutors(false); void prepareMultiPlan() }}
-                className="flex-1 rounded-xl bg-amber-500 py-2.5 text-sm font-bold text-white hover:bg-amber-600"
+                className="flex-1 rounded-lg bg-amber-500 py-2.5 text-sm font-bold text-white hover:bg-amber-600"
               >
                 Sim, agrupar
               </button>
@@ -907,7 +908,7 @@ export default function CashierTabReceivables({
         <button
           onClick={refresh}
           disabled={refreshing}
-          className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
+          className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
         >
           <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
           Atualizar
@@ -936,11 +937,11 @@ export default function CashierTabReceivables({
               onClick={startMultiReceive}
               disabled={preparingMulti}
               data-mentor-step="cashier-multi-receive-btn"
-              className="rounded-xl bg-teal-600 hover:bg-teal-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-60 flex items-center gap-2"
+              className="rounded-lg bg-teal-600 hover:bg-teal-700 px-4 py-2 text-sm font-bold text-white shadow-sm disabled:opacity-60 flex items-center gap-2"
             >
               {preparingMulti
-                ? <><Loader2 className="h-4 w-4 animate-spin" /> Calculando convênio...</>
-                : <>Receber selecionados · até {fmt(selectedGrossTotal)}</>}
+                ? <><Spinner /> Calculando convênio...</>
+                : <>Receber selecionados · até <span className="font-mono tabular-nums">{fmt(selectedGrossTotal)}</span></>}
             </button>
           </div>
         </div>
@@ -974,7 +975,7 @@ export default function CashierTabReceivables({
           {pendingSales.map(sale => (
             <div
               key={sale.id}
-              className={`flex flex-wrap items-center gap-3 sm:gap-4 rounded-xl border bg-white px-4 sm:px-5 py-4 hover:shadow-sm transition-all ${selectedSaleIds.has(sale.id) ? 'border-teal-400 ring-1 ring-teal-200' : 'border-emerald-100 hover:border-emerald-200'}`}
+              className={`flex flex-wrap items-center gap-3 sm:gap-4 rounded-xl border bg-white px-4 sm:px-5 py-4 shadow-sm hover:shadow-md transition-shadow ${selectedSaleIds.has(sale.id) ? 'border-teal-400 ring-1 ring-teal-200' : 'border-emerald-100 hover:border-emerald-200'}`}
             >
               <input
                 type="checkbox"
@@ -1003,10 +1004,10 @@ export default function CashierTabReceivables({
                 </div>
                 <div className="mt-0.5 flex items-center gap-3 flex-wrap">
                   <span className="text-xs text-slate-400">
-                    Lançada às {fmtTime(sale.created_at)} · {new Date(sale.created_at).toLocaleDateString('pt-BR')}
+                    Lançada às <span className="font-mono tabular-nums">{fmtTime(sale.created_at)} · {new Date(sale.created_at).toLocaleDateString('pt-BR')}</span>
                   </span>
                   {sale.tutor_phone && (
-                    <span className="text-xs text-slate-400">{sale.tutor_phone}</span>
+                    <span className="text-xs text-slate-400 font-mono tabular-nums">{sale.tutor_phone}</span>
                   )}
                 </div>
                 {sale.items_preview && (
@@ -1023,21 +1024,21 @@ export default function CashierTabReceivables({
               <div className="flex items-center justify-between gap-3 w-full sm:w-auto sm:flex-shrink-0 sm:justify-end">
                 <div className="text-left sm:text-right">
                   <p className="text-xs text-slate-400">Total</p>
-                  <p className="text-lg font-bold text-slate-900 whitespace-nowrap">{fmt(sale.total_amount)}</p>
+                  <p className="text-lg font-bold text-slate-900 whitespace-nowrap font-mono tabular-nums">{fmt(sale.total_amount)}</p>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <button
                     onClick={() => handleCancelLaunch(sale)}
                     disabled={cancellingSaleId === sale.id}
                     title="Cancelar lançamento (devolve o estoque)"
-                    className="rounded-lg p-2 text-rose-400 hover:bg-rose-50 disabled:opacity-50"
+                    className="rounded-lg p-2 text-red-400 hover:bg-red-50 disabled:opacity-50"
                   >
-                    {cancellingSaleId === sale.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                    {cancellingSaleId === sale.id ? <Spinner /> : <Trash2 className="h-4 w-4" />}
                   </button>
                   <button
                     onClick={() => setActiveSale(sale)}
                     data-mentor-step="cashier-receive-sale-btn"
-                    className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors shadow-sm"
+                    className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 transition-colors shadow-sm"
                   >
                     <Receipt className="h-4 w-4" />
                     Receber
@@ -1069,11 +1070,11 @@ export default function CashierTabReceivables({
           >
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">A receber (pendentes nesta tela)</p>
-              <p className="mt-1 text-xl font-bold text-blue-700 tabular-nums">{fmt(totalToReceive)}</p>
+              <p className="mt-1 text-xl font-bold text-sky-700 font-mono tabular-nums">{fmt(totalToReceive)}</p>
             </div>
             <div className="text-right">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Já recebido hoje</p>
-              <p className="mt-1 text-xl font-bold text-emerald-700 tabular-nums">{fmt(receivedToday)}</p>
+              <p className="mt-1 text-xl font-bold text-emerald-700 font-mono tabular-nums">{fmt(receivedToday)}</p>
             </div>
           </div>
         </div>

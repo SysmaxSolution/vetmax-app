@@ -129,7 +129,7 @@ export default function TutorRightsClient({
             <div className="flex-1 min-w-0">
               <h1 className="text-lg font-bold text-slate-900">{tutor.name}</h1>
               <p className="text-xs text-slate-500">
-                Direitos LGPD (Art. 18) · Cadastrado em {new Date(tutor.created_at).toLocaleDateString('pt-BR')}
+                Direitos LGPD (Art. 18) · Cadastrado em <span className="font-mono tabular-nums">{new Date(tutor.created_at).toLocaleDateString('pt-BR')}</span>
               </p>
               <div className="flex flex-wrap gap-2 mt-1.5">
                 {pets.map(p => (
@@ -175,13 +175,13 @@ export default function TutorRightsClient({
       </div>
 
       {/* Content */}
-      <div className="max-w-4xl mx-auto px-6 py-6">
+      <div className="max-w-4xl mx-auto px-6 py-6 animate-enter">
 
         {/* ── Visão Geral ── */}
         {activeTab === 'overview' && (
           <div className="space-y-5">
             {/* Info pessoal */}
-            <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
               <h2 className="text-sm font-bold text-slate-900 mb-4">Dados Pessoais</h2>
               <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
                 <div>
@@ -190,7 +190,7 @@ export default function TutorRightsClient({
                 </div>
                 <div>
                   <dt className="text-xs text-slate-500">CPF</dt>
-                  <dd className="font-medium text-slate-900">{tutor.cpf ?? '—'}</dd>
+                  <dd className="font-medium text-slate-900 font-mono tabular-nums">{tutor.cpf ?? '—'}</dd>
                 </div>
                 <div>
                   <dt className="text-xs text-slate-500">E-mail</dt>
@@ -198,13 +198,13 @@ export default function TutorRightsClient({
                 </div>
                 <div>
                   <dt className="text-xs text-slate-500">Telefone</dt>
-                  <dd className="font-medium text-slate-900">{tutor.phone ?? '—'}</dd>
+                  <dd className="font-medium text-slate-900 font-mono tabular-nums">{tutor.phone ?? '—'}</dd>
                 </div>
               </dl>
             </div>
 
             {/* Resumo direitos LGPD */}
-            <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
               <h2 className="text-sm font-bold text-slate-900 mb-4">Direitos LGPD Disponíveis (Art. 18)</h2>
               <div className="grid grid-cols-2 gap-3">
                 {[
@@ -236,7 +236,7 @@ export default function TutorRightsClient({
 
         {/* ── Logs de Acesso ── */}
         {activeTab === 'access' && (
-          <div className="bg-white rounded-xl border border-slate-200">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
             <div className="px-5 py-4 border-b border-slate-100">
               <h2 className="text-sm font-bold text-slate-900">Histórico de Acessos aos Dados</h2>
               <p className="text-xs text-slate-500 mt-0.5">LGPD Art. 18, I e II — confirmação e acesso</p>
@@ -268,7 +268,7 @@ export default function TutorRightsClient({
                         <p className="text-[10px] text-slate-500 mt-0.5">{entry.purpose}</p>
                       )}
                     </div>
-                    <time className="text-[10px] text-slate-400 flex-shrink-0 mt-0.5">
+                    <time className="text-[10px] text-slate-400 flex-shrink-0 mt-0.5 font-mono tabular-nums">
                       {new Date(entry.created_at).toLocaleDateString('pt-BR')}
                     </time>
                   </div>
@@ -280,7 +280,7 @@ export default function TutorRightsClient({
 
         {/* ── Políticas de Retenção ── */}
         {activeTab === 'retention' && (
-          <div className="bg-white rounded-xl border border-slate-200">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
             <div className="px-5 py-4 border-b border-slate-100">
               <h2 className="text-sm font-bold text-slate-900">Políticas de Retenção de Dados</h2>
               <p className="text-xs text-slate-500 mt-0.5">LGPD Art. 18, V — transparência sobre prazo de retenção</p>
@@ -303,11 +303,11 @@ export default function TutorRightsClient({
                     </div>
                     <div className="flex items-center gap-3 flex-shrink-0">
                       <div className="text-center">
-                        <p className="text-lg font-bold text-teal-700">{p.retention_years}</p>
+                        <p className="text-lg font-bold text-teal-700 font-mono tabular-nums">{p.retention_years}</p>
                         <p className="text-[10px] text-slate-500">anos</p>
                       </div>
                       {p.auto_anonymize && (
-                        <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-full">
+                        <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">
                           Auto-anonimização
                         </span>
                       )}
@@ -321,7 +321,7 @@ export default function TutorRightsClient({
 
         {/* ── Solicitação de Exclusão ── */}
         {activeTab === 'delete' && (
-          <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
             <div className="flex items-start gap-3 mb-5">
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-100 flex-shrink-0">
                 <Trash2 className="h-5 w-5 text-red-600" />
@@ -333,10 +333,10 @@ export default function TutorRightsClient({
             </div>
 
             {delSubmitted ? (
-              <div className="rounded-xl bg-green-50 border border-green-200 px-5 py-6 text-center">
-                <CheckCircle2 className="h-8 w-8 text-green-500 mx-auto mb-2" />
-                <p className="text-sm font-semibold text-green-800">Solicitação registrada com sucesso.</p>
-                <p className="text-xs text-green-600 mt-1">
+              <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-5 py-6 text-center">
+                <CheckCircle2 className="h-8 w-8 text-emerald-500 mx-auto mb-2" />
+                <p className="text-sm font-semibold text-emerald-800">Solicitação registrada com sucesso.</p>
+                <p className="text-xs text-emerald-600 mt-1">
                   A clínica tem 15 dias para responder conforme LGPD Art. 18.
                 </p>
               </div>
@@ -364,7 +364,7 @@ export default function TutorRightsClient({
                     value={delNotes}
                     onChange={e => setDelNotes(e.target.value)}
                     placeholder="Motivo da solicitação de exclusão (opcional)..."
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-500"
                   />
                 </div>
 
@@ -373,7 +373,7 @@ export default function TutorRightsClient({
                   disabled={submittingDel}
                   onClick={handleDeletionRequest}
                   data-testid="tutor-delete-request-btn"
-                  className="w-full flex items-center justify-center gap-2 rounded-lg border-2 border-red-600 px-4 py-3 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors"
+                  className="w-full flex items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-red-700 disabled:opacity-50 transition-colors"
                 >
                   <Trash2 className="h-4 w-4" />
                   Registrar Solicitação de Exclusão

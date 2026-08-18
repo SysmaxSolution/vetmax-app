@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef, useTransition } from 'react'
 import Link from 'next/link'
-import { X, Save, Loader2, User, Dog, MapPin, PhoneCall, Syringe, Camera, Shield, Trash2, Plus, AlertTriangle, Cpu, Paperclip, FileText, Upload, ExternalLink, Share2, Pencil, Calendar, StickyNote, Tag } from 'lucide-react'
+import { X, Save, User, Dog, MapPin, PhoneCall, Syringe, Camera, Shield, Trash2, Plus, AlertTriangle, Cpu, Paperclip, FileText, Upload, ExternalLink, Share2, Pencil, Calendar, StickyNote, Tag } from 'lucide-react'
+import { Spinner } from '@/components/ui/Spinner'
 import { ImageLightbox } from '@/components/ui/ImageLightbox'
 import { DateInput } from '@/components/ui/DatePicker'
 import { updateFullProfile, uploadPetPhoto, softDeletePatient } from '@/lib/actions/pets'
@@ -184,7 +185,7 @@ function FieldInput({ label, value, onChange, icon, ...props }: any) {
       <div className="relative group">
         {icon && <div className="absolute left-4 top-1/2 -translate-y-1/2">{icon}</div>}
         <input
-          className={`w-full bg-slate-100/50 border border-slate-200 rounded-xl ${icon ? 'pl-11' : 'px-4'} py-3 text-sm font-medium focus:border-teal-500 outline-none transition-all`}
+          className={`w-full bg-slate-100/50 border border-slate-200 rounded-lg ${icon ? 'pl-11' : 'px-4'} py-3 text-sm font-medium focus:border-teal-500 outline-none transition-all`}
           value={value}
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)}
           {...props}
@@ -199,7 +200,7 @@ function FieldSelect({ label, value, options, onChange, ...props }: { label: str
     <div>
       <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5 ml-1 tracking-wider">{label}</label>
       <select
-        className="w-full bg-slate-100/50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:border-teal-500 outline-none cursor-pointer"
+        className="w-full bg-slate-100/50 border border-slate-200 rounded-lg px-4 py-3 text-sm font-medium focus:border-teal-500 outline-none cursor-pointer"
         value={value}
         onChange={e => onChange(e.target.value)}
         {...(props as React.SelectHTMLAttributes<HTMLSelectElement>)}
@@ -728,7 +729,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
       />
     )}
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
 
         {/* ── Header ── */}
         <div className="px-6 pt-6 border-b border-slate-100 bg-slate-50/50">
@@ -777,7 +778,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                   )}
                   {uploadingPhoto && (
                     <div className="absolute inset-0 flex items-center justify-center bg-white/70">
-                      <Loader2 className="h-5 w-5 animate-spin text-teal-600" />
+                      <Spinner size="md" className="text-teal-600" />
                     </div>
                   )}
                 </div>
@@ -787,7 +788,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={uploadingPhoto}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-50"
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
                   >
                     <Camera className="h-3.5 w-3.5" />
                     {(photoUrl || pendingPhotoPreview) ? 'Alterar Foto' : 'Enviar Foto'}
@@ -804,7 +805,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
 
               {/* Banner pós-criação */}
               {!isEdit && createdPatientId && (
-                <div className="rounded-xl bg-green-50 border border-green-200 px-4 py-3 text-sm font-medium text-green-800">
+                <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm font-medium text-emerald-800">
                   Pet cadastrado com sucesso! Complete as abas Vacinas e Convênio ou clique em Concluir.
                 </div>
               )}
@@ -856,12 +857,12 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                           }
                         }}
                         placeholder="Ex: 3"
-                        className="flex-1 rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-900 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                        className="flex-1 rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-900 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
                       />
                       <select
                         value={ageUnit}
                         onChange={e => setAgeUnit(e.target.value as 'A' | 'M')}
-                        className="rounded-xl border border-slate-300 px-2 py-2.5 text-sm text-slate-700 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                        className="rounded-lg border border-slate-200 px-2 py-2.5 text-sm text-slate-700 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
                       >
                         <option value="A">Anos</option>
                         <option value="M">Meses</option>
@@ -945,7 +946,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                     onChange={e => setAllergies(e.target.value)}
                     placeholder="Ex: Amoxicilina, picada de abelha, látex..."
                     rows={2}
-                    className="w-full bg-red-50/50 border border-red-200 rounded-xl px-4 py-3 text-sm font-medium focus:border-red-400 outline-none transition-all resize-none placeholder:text-slate-400"
+                    className="w-full bg-red-50/50 border border-red-200 rounded-lg px-4 py-3 text-sm font-medium focus:border-red-400 outline-none transition-all resize-none placeholder:text-slate-400"
                   />
                 </div>
 
@@ -961,7 +962,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                     onChange={e => setChronicDiseases(e.target.value)}
                     placeholder="Ex: Diabetes mellitus, Leishmaniose, Hipotireoidismo..."
                     rows={2}
-                    className="w-full bg-amber-50/50 border border-amber-200 rounded-xl px-4 py-3 text-sm font-medium focus:border-amber-400 outline-none transition-all resize-none placeholder:text-slate-400"
+                    className="w-full bg-amber-50/50 border border-amber-200 rounded-lg px-4 py-3 text-sm font-medium focus:border-amber-400 outline-none transition-all resize-none placeholder:text-slate-400"
                   />
                 </div>
 
@@ -978,7 +979,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                     onChange={e => setMicrochipId(e.target.value)}
                     placeholder="Ex: 985112345678901 (15 dígitos ISO)"
                     maxLength={20}
-                    className="w-full bg-slate-100/50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:border-teal-500 outline-none transition-all"
+                    className="w-full bg-slate-100/50 border border-slate-200 rounded-lg px-4 py-3 text-sm font-medium focus:border-teal-500 outline-none transition-all"
                   />
                   {/* Épico C (04/06): adesão visível na tela do paciente (acesso rápido) */}
                   {enrollmentInfo && (
@@ -1026,9 +1027,9 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                       placeholder="000.000.000-00 ou CNPJ"
                       inputMode="numeric"
                       maxLength={18}
-                      className={`w-full bg-slate-100/50 border rounded-xl px-4 py-3 pr-10 text-sm font-medium outline-none transition-all ${
+                      className={`w-full bg-slate-100/50 border rounded-lg px-4 py-3 pr-10 text-sm font-medium outline-none transition-all ${
                         cpfLookupStatus === 'found' || cpfCnpjStatus === 'valid' || cpfCnpjStatus === 'found_cnpj'
-                          ? 'border-green-400 bg-green-50 focus:border-green-500'
+                          ? 'border-emerald-400 bg-emerald-50 focus:border-emerald-500'
                           : cpfCnpjStatus === 'invalid'
                           ? 'border-red-400 bg-red-50 focus:border-red-500'
                           : 'border-slate-200 focus:border-teal-500'
@@ -1036,11 +1037,11 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                     />
                     {(cpfLookupStatus === 'searching' || cpfCnpjStatus === 'searching_cnpj') && (
                       <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                        <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+                        <Spinner size="md" className="text-slate-400" />
                       </div>
                     )}
                     {(cpfLookupStatus === 'found' || cpfCnpjStatus === 'valid' || cpfCnpjStatus === 'found_cnpj') && cpfLookupStatus !== 'searching' && cpfCnpjStatus !== 'searching_cnpj' && (
-                      <div className="absolute right-3 top-1/2 -translate-y-1/2 text-green-500">
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500">
                         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
                         </svg>
@@ -1055,7 +1056,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                     )}
                   </div>
                   {cpfLookupStatus === 'found' && (
-                    <p className="mt-1.5 rounded-lg bg-green-50 border border-green-200 px-3 py-2 text-xs text-green-700 font-medium">
+                    <p className="mt-1.5 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-700 font-medium">
                       Tutor encontrado — dados preenchidos automaticamente.
                     </p>
                   )}
@@ -1068,7 +1069,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                     </p>
                   )}
                   {regSettings.verify_cpf_cnpj && cpfCnpjStatus === 'found_cnpj' && (
-                    <p className="mt-1.5 rounded-lg bg-green-50 border border-green-200 px-3 py-2 text-xs text-green-700 font-medium">
+                    <p className="mt-1.5 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-700 font-medium">
                       CNPJ verificado — razão social preenchida automaticamente.
                     </p>
                   )}
@@ -1092,9 +1093,9 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                         placeholder="000.000.000-00 ou CNPJ"
                         inputMode="numeric"
                         maxLength={18}
-                        className={`w-full bg-slate-100/50 border rounded-xl px-4 py-3 pr-10 text-sm font-medium outline-none transition-all ${
+                        className={`w-full bg-slate-100/50 border rounded-lg px-4 py-3 pr-10 text-sm font-medium outline-none transition-all ${
                           cpfCnpjStatus === 'valid' || cpfCnpjStatus === 'found_cnpj'
-                            ? 'border-green-400 bg-green-50 focus:border-green-500'
+                            ? 'border-emerald-400 bg-emerald-50 focus:border-emerald-500'
                             : cpfCnpjStatus === 'invalid'
                             ? 'border-red-400 bg-red-50 focus:border-red-500'
                             : 'border-slate-200 focus:border-teal-500'
@@ -1102,11 +1103,11 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                       />
                       {cpfCnpjStatus === 'searching_cnpj' && (
                         <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                          <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+                          <Spinner size="md" className="text-slate-400" />
                         </div>
                       )}
                       {(cpfCnpjStatus === 'valid' || cpfCnpjStatus === 'found_cnpj') && (
-                        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-green-500">
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500">
                           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
                           </svg>
@@ -1146,9 +1147,9 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                       placeholder="00000-000"
                       inputMode="numeric"
                       maxLength={9}
-                      className={`w-full bg-slate-100/50 border rounded-xl px-4 py-3 pr-10 text-sm font-medium outline-none transition-all ${
+                      className={`w-full bg-slate-100/50 border rounded-lg px-4 py-3 pr-10 text-sm font-medium outline-none transition-all ${
                         cepStatus === 'found'
-                          ? 'border-green-400 bg-green-50 focus:border-green-500'
+                          ? 'border-emerald-400 bg-emerald-50 focus:border-emerald-500'
                           : cepStatus === 'not_found'
                           ? 'border-red-300 bg-red-50 focus:border-red-400'
                           : cepStatus === 'error'
@@ -1158,11 +1159,11 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                     />
                     {cepStatus === 'searching' && (
                       <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                        <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+                        <Spinner size="md" className="text-slate-400" />
                       </div>
                     )}
                     {cepStatus === 'found' && (
-                      <div className="absolute right-3 top-1/2 -translate-y-1/2 text-green-500">
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500">
                         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
                         </svg>
@@ -1170,7 +1171,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                     )}
                   </div>
                   {cepStatus === 'found' && (
-                    <p className="mt-1 text-xs text-green-600">Endereço preenchido automaticamente.</p>
+                    <p className="mt-1 text-xs text-emerald-600">Endereço preenchido automaticamente.</p>
                   )}
                   {cepStatus === 'not_found' && (
                     <p className="mt-1 text-xs text-red-500">CEP não encontrado — preencha o endereço manualmente.</p>
@@ -1205,7 +1206,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                       onChange={e => setTutorState(e.target.value.toUpperCase().slice(0, 2))}
                       placeholder="SP"
                       maxLength={2}
-                      className="w-full bg-slate-100/50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:border-teal-500 outline-none transition-all text-center tracking-widest"
+                      className="w-full bg-slate-100/50 border border-slate-200 rounded-lg px-4 py-3 text-sm font-medium focus:border-teal-500 outline-none transition-all text-center tracking-widest"
                     />
                   </div>
                   <FieldInput label="Número" value={tutorAddressNumber} onChange={setTutorAddressNumber} placeholder="123" />
@@ -1232,12 +1233,12 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
 
           {/* ══ ABA: VACINAS ══ */}
           {tab === 'vacinas' && (
-            <div className="animate-in slide-in-from-bottom-2 duration-300">
+            <div className="animate-enter">
               {!(isEdit || createdPatientId) ? (
                 <LockedTabPlaceholder icon={<Syringe className="h-8 w-8 text-slate-300" />} message="Crie o cadastro primeiro para registrar vacinas." />
               ) : loadingVaccines ? (
                 <div className="flex flex-col items-center justify-center py-20">
-                  <Loader2 className="h-8 w-8 animate-spin text-teal-500 mb-2" />
+                  <Spinner size="lg" className="text-teal-500 mb-2" />
                   <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Carregando...</p>
                 </div>
               ) : (
@@ -1265,7 +1266,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                             const msg = `Olá! Aqui está o histórico de vacinação do ${patient.name} atualizado: ${url}`
                             window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank', 'noopener,noreferrer')
                           }}
-                          className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-green-700 transition-colors active:scale-95"
+                          className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-green-700 transition-colors active:scale-95"
                         >
                           <Share2 className="h-4 w-4" />
                           WhatsApp
@@ -1283,25 +1284,25 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
 
           {/* ══ ABA: CONVÊNIO ══ */}
           {tab === 'convenio' && (
-            <div className="space-y-5 animate-in slide-in-from-bottom-2 duration-300">
+            <div className="space-y-5 animate-enter">
               {!(isEdit || createdPatientId) ? (
                 <LockedTabPlaceholder icon={<Shield className="h-8 w-8 text-slate-300" />} message="Crie o cadastro primeiro para vincular um convênio." />
               ) : loadingInsurance ? (
                 <div className="flex flex-col items-center justify-center py-20">
-                  <Loader2 className="h-8 w-8 animate-spin text-teal-500 mb-2" />
+                  <Spinner size="lg" className="text-teal-500 mb-2" />
                   <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Carregando...</p>
                 </div>
               ) : (
                 <>
                   {currentInsurance && (
-                    <div className="flex items-center gap-3 bg-teal-50 border border-teal-200 rounded-2xl px-5 py-4">
+                    <div className="flex items-center gap-3 bg-teal-50 border border-teal-200 rounded-xl px-5 py-4">
                       <Shield className="h-5 w-5 text-teal-600 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-black text-teal-800">{currentInsurance.provider?.name ?? 'Convênio'}</p>
-                        <p className="text-[11px] text-teal-600 mt-0.5">Plano: {currentInsurance.plan_type} · Carteirinha: {currentInsurance.member_id}</p>
+                        <p className="text-[11px] text-teal-600 mt-0.5">Plano: {currentInsurance.plan_type} · Carteirinha: <span className="font-mono tabular-nums">{currentInsurance.member_id}</span></p>
                       </div>
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        currentInsurance.coverage_status === 'active'    ? 'bg-green-100 text-green-700'  :
+                        currentInsurance.coverage_status === 'active'    ? 'bg-emerald-100 text-emerald-700'  :
                         currentInsurance.coverage_status === 'suspended' ? 'bg-amber-100 text-amber-700' :
                                                                             'bg-red-100 text-red-700'
                       }`}>
@@ -1311,7 +1312,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                   )}
 
                   {providers.length === 0 ? (
-                    <div className="text-center py-8 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                    <div className="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200">
                       <Shield className="h-8 w-8 text-slate-300 mx-auto mb-2" />
                       <p className="text-sm font-bold text-slate-400">Nenhum convênio cadastrado</p>
                       <Link href="/dashboard/management?tab=convenios" className="text-xs text-teal-500 hover:text-teal-700 underline mt-1 block">
@@ -1322,7 +1323,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                     <div className="space-y-4">
                       <div>
                         <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5 ml-1 tracking-wider">Convênio</label>
-                        <select className="w-full bg-slate-100/50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:border-teal-500 outline-none" value={insProviderId} onChange={e => { setInsProviderId(e.target.value); setInsPlanType('') }}>
+                        <select className="w-full bg-slate-100/50 border border-slate-200 rounded-lg px-4 py-3 text-sm font-medium focus:border-teal-500 outline-none" value={insProviderId} onChange={e => { setInsProviderId(e.target.value); setInsPlanType('') }}>
                           <option value="">— Selecionar —</option>
                           {providers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                         </select>
@@ -1330,7 +1331,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                       {insProviderId && selectedProvider && (
                         <div>
                           <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5 ml-1 tracking-wider">Plano</label>
-                          <select className="w-full bg-slate-100/50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:border-teal-500 outline-none" value={insPlanType} onChange={e => setInsPlanType(e.target.value)}>
+                          <select className="w-full bg-slate-100/50 border border-slate-200 rounded-lg px-4 py-3 text-sm font-medium focus:border-teal-500 outline-none" value={insPlanType} onChange={e => setInsPlanType(e.target.value)}>
                             <option value="">— Selecionar —</option>
                             {selectedProvider.plan_types.map(pt => <option key={pt} value={pt}>{pt}</option>)}
                           </select>
@@ -1338,7 +1339,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                       )}
                       <div>
                         <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5 ml-1 tracking-wider">Número da Carteirinha</label>
-                        <input className="w-full bg-slate-100/50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:border-teal-500 outline-none" value={insMemberId} onChange={e => setInsMemberId(e.target.value)} placeholder="Ex: PTLV-123456" />
+                        <input className="w-full bg-slate-100/50 border border-slate-200 rounded-lg px-4 py-3 text-sm font-medium focus:border-teal-500 outline-none" value={insMemberId} onChange={e => setInsMemberId(e.target.value)} placeholder="Ex: PTLV-123456" />
                       </div>
                       {/* Épico C (04/06): data de adesão/microchipagem editável — as carências contam a partir daqui */}
                       <div>
@@ -1346,7 +1347,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                         <input
                           type="date"
                           max={new Date().toISOString().slice(0, 10)}
-                          className="w-full bg-slate-100/50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:border-teal-500 outline-none"
+                          className="w-full bg-slate-100/50 border border-slate-200 rounded-lg px-4 py-3 text-sm font-medium focus:border-teal-500 outline-none"
                           value={insEnrollmentDate}
                           onChange={e => setInsEnrollmentDate(e.target.value)}
                         />
@@ -1363,19 +1364,19 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                       </div>
                       <div>
                         <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5 ml-1 tracking-wider">Status da Cobertura</label>
-                        <select className="w-full bg-slate-100/50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:border-teal-500 outline-none" value={insCoverage} onChange={e => setInsCoverage(e.target.value as 'active' | 'suspended' | 'cancelled')}>
+                        <select className="w-full bg-slate-100/50 border border-slate-200 rounded-lg px-4 py-3 text-sm font-medium focus:border-teal-500 outline-none" value={insCoverage} onChange={e => setInsCoverage(e.target.value as 'active' | 'suspended' | 'cancelled')}>
                           <option value="active">Ativo</option>
                           <option value="suspended">Suspenso</option>
                           <option value="cancelled">Cancelado</option>
                         </select>
                       </div>
                       <div className="flex gap-3 pt-2">
-                        <button onClick={handleSaveInsurance} disabled={savingInsurance || !insProviderId || !insPlanType || !insMemberId.trim()} className="flex-1 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white py-2.5 rounded-xl text-sm font-black flex items-center justify-center gap-2">
-                          {savingInsurance ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shield className="h-4 w-4" />}
+                        <button onClick={handleSaveInsurance} disabled={savingInsurance || !insProviderId || !insPlanType || !insMemberId.trim()} className="flex-1 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white py-2.5 rounded-lg text-sm font-black flex items-center justify-center gap-2">
+                          {savingInsurance ? <Spinner size="md" /> : <Shield className="h-4 w-4" />}
                           {savingInsurance ? 'Salvando...' : currentInsurance ? 'Salvar Convênio' : 'Vincular Convênio'}
                         </button>
                         {currentInsurance && (
-                          <button onClick={handleRemoveInsurance} disabled={savingInsurance} className="px-4 py-2.5 rounded-xl text-sm font-black text-red-400 hover:bg-red-50 border border-red-100 disabled:opacity-50 flex items-center gap-1.5">
+                          <button onClick={handleRemoveInsurance} disabled={savingInsurance} className="px-4 py-2.5 rounded-lg text-sm font-black text-red-600 hover:bg-red-50 border border-red-200 disabled:opacity-50 flex items-center gap-1.5">
                             <Trash2 className="h-4 w-4" /> Remover
                           </button>
                         )}
@@ -1415,7 +1416,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                         {petloveHistory.map(e => {
                           const map = {
                             patient_created: { Icon: UserPlus,    cls: 'bg-purple-100 text-purple-700' },
-                            plan_updated:    { Icon: ArrowRight,  cls: 'bg-blue-100 text-blue-700' },
+                            plan_updated:    { Icon: ArrowRight,  cls: 'bg-sky-100 text-sky-700' },
                             price_updated:   { Icon: DollarSign,  cls: 'bg-amber-100 text-amber-700' },
                             entry_created:   { Icon: Receipt,     cls: 'bg-emerald-100 text-emerald-700' },
                           } as const
@@ -1429,7 +1430,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                               </span>
                               <div className="min-w-0 flex-1">
                                 <p className="text-xs font-medium text-slate-800 break-words">{e.description}</p>
-                                <p className="text-[10px] text-slate-400 mt-0.5">{stamp}</p>
+                                <p className="text-[10px] text-slate-400 mt-0.5 font-mono tabular-nums">{stamp}</p>
                               </div>
                             </div>
                           )
@@ -1458,7 +1459,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                       type="button"
                       onClick={() => docInputRef.current?.click()}
                       disabled={uploadingDoc || !!stagedDoc}
-                      className="flex items-center gap-1.5 rounded-xl bg-teal-600 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-50 transition-colors"
+                      className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-50 transition-colors"
                     >
                       <Upload className="h-3.5 w-3.5" />
                       Enviar Arquivo
@@ -1572,7 +1573,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                           className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
                         >
                           {uploadingDoc
-                            ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Enviando...</>
+                            ? <><Spinner size="sm" /> Enviando...</>
                             : <><Upload className="h-3.5 w-3.5" /> Enviar anexo</>
                           }
                         </button>
@@ -1583,7 +1584,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                   {/* Lista de anexos */}
                   {loadingDocs ? (
                     <div className="flex justify-center py-8">
-                      <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+                      <Spinner size="lg" className="text-slate-400" />
                     </div>
                   ) : !attachments || attachments.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-12 text-center border border-dashed border-slate-200 rounded-xl">
@@ -1617,7 +1618,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                                       <Calendar className="h-3 w-3" /> {docDate}
                                     </span>
                                   )}
-                                  <span className="text-slate-400">
+                                  <span className="text-slate-400 font-mono tabular-nums">
                                     Enviado em {new Date(att.created_at).toLocaleDateString('pt-BR')}
                                   </span>
                                 </div>
@@ -1650,8 +1651,8 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                                     }
                                   }}
                                   className={`p-1.5 rounded-lg ${isEditingDoc
-                                    ? 'text-blue-600 bg-blue-50'
-                                    : `${hasMeta ? 'text-slate-500' : 'text-slate-400'} hover:text-blue-600 hover:bg-blue-50`
+                                    ? 'text-teal-600 bg-teal-50'
+                                    : `${hasMeta ? 'text-slate-500' : 'text-slate-400'} hover:text-teal-600 hover:bg-teal-50`
                                   }`}
                                   title={isEditingDoc ? 'Cancelar edição' : (hasMeta ? 'Editar detalhes' : 'Adicionar detalhes')}
                                 >
@@ -1675,7 +1676,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                             </div>
 
                             {isEditingDoc && (
-                              <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50/40 p-3 space-y-2">
+                              <div className="mt-3 rounded-lg border border-teal-200 bg-teal-50/40 p-3 space-y-2">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                   <label className="block">
                                     <span className="text-[11px] font-medium text-slate-600">Título</span>
@@ -1684,7 +1685,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                                       value={editingDocForm.title ?? ''}
                                       onChange={e => setEditingDocForm({ ...editingDocForm, title: e.target.value })}
                                       disabled={savingDocEdit}
-                                      className="w-full rounded-md border border-slate-200 px-2 py-1 text-sm focus:border-blue-400 focus:outline-none disabled:bg-slate-50"
+                                      className="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm focus:border-teal-400 focus:outline-none disabled:bg-slate-50"
                                     />
                                   </label>
                                   <label className="block">
@@ -1694,7 +1695,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                                       value={editingDocForm.document_date ?? ''}
                                       onChange={e => setEditingDocForm({ ...editingDocForm, document_date: e.target.value })}
                                       disabled={savingDocEdit}
-                                      className="w-full rounded-md border border-slate-200 px-2 py-1 text-sm focus:border-blue-400 focus:outline-none disabled:bg-slate-50"
+                                      className="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm focus:border-teal-400 focus:outline-none disabled:bg-slate-50"
                                     />
                                   </label>
                                 </div>
@@ -1705,7 +1706,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                                     onChange={e => setEditingDocForm({ ...editingDocForm, notes: e.target.value })}
                                     rows={2}
                                     disabled={savingDocEdit}
-                                    className="w-full rounded-md border border-slate-200 px-2 py-1 text-sm focus:border-blue-400 focus:outline-none disabled:bg-slate-50 resize-none"
+                                    className="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm focus:border-teal-400 focus:outline-none disabled:bg-slate-50 resize-none"
                                   />
                                 </label>
                                 <div className="flex items-center justify-end gap-2">
@@ -1713,7 +1714,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                                     type="button"
                                     onClick={() => { setEditingDocId(null); setEditingDocForm({}) }}
                                     disabled={savingDocEdit}
-                                    className="rounded-md px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+                                    className="rounded-lg px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-50"
                                   >
                                     Cancelar
                                   </button>
@@ -1737,10 +1738,10 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
                                       setEditingDocId(null); setEditingDocForm({})
                                     }}
                                     disabled={savingDocEdit}
-                                    className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                                    className="inline-flex items-center gap-1 rounded-lg bg-teal-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
                                   >
                                     {savingDocEdit
-                                      ? <><Loader2 className="h-3 w-3 animate-spin" /> Salvando</>
+                                      ? <><Spinner size="sm" /> Salvando</>
                                       : <><Save className="h-3 w-3" /> Salvar</>
                                     }
                                   </button>
@@ -1806,23 +1807,23 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
 
           {/* Modo edição: salva */}
           {isEdit && (
-            <button onClick={handleSave} disabled={saving} className="bg-teal-600 hover:bg-teal-700 text-white px-8 py-2.5 rounded-xl text-sm font-black flex items-center gap-2 disabled:opacity-50">
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            <button onClick={handleSave} disabled={saving} className="bg-teal-600 hover:bg-teal-700 text-white px-8 py-2.5 rounded-lg text-sm font-black flex items-center gap-2 disabled:opacity-50">
+              {saving ? <Spinner size="md" /> : <Save className="h-4 w-4" />}
               {saving ? 'A GUARDAR...' : 'CONFIRMAR ALTERAÇÕES'}
             </button>
           )}
 
           {/* Modo criação, pet ainda não criado: cria */}
           {!isEdit && !createdPatientId && (
-            <button onClick={handleCreate} disabled={isPending} className="bg-teal-600 hover:bg-teal-700 text-white px-8 py-2.5 rounded-xl text-sm font-black flex items-center gap-2 disabled:opacity-50">
-              {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            <button onClick={handleCreate} disabled={isPending} className="bg-teal-600 hover:bg-teal-700 text-white px-8 py-2.5 rounded-lg text-sm font-black flex items-center gap-2 disabled:opacity-50">
+              {isPending ? <Spinner size="md" /> : <Plus className="h-4 w-4" />}
               {isPending ? 'Criando...' : 'CRIAR CADASTRO'}
             </button>
           )}
 
           {/* Modo criação, pet já criado: conclui */}
           {!isEdit && createdPatientId && (
-            <button onClick={handleFinish} className="bg-teal-600 hover:bg-teal-700 text-white px-8 py-2.5 rounded-xl text-sm font-black flex items-center gap-2">
+            <button onClick={handleFinish} className="bg-teal-600 hover:bg-teal-700 text-white px-8 py-2.5 rounded-lg text-sm font-black flex items-center gap-2">
               <Save className="h-4 w-4" />
               CONCLUIR CADASTRO
             </button>
@@ -1834,7 +1835,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
       {/* Modal: Arquivar Pet */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm mx-4 p-6 space-y-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6 space-y-4">
             <div className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-red-500" />
               <h2 className="text-base font-semibold text-slate-900">Arquivar Pet</h2>
@@ -1845,14 +1846,14 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
             {deleteError && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{deleteError}</p>}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
-                Motivo do Arquivamento <span className="text-rose-500">*</span>
+                Motivo do Arquivamento <span className="text-red-500">*</span>
               </label>
               <textarea
                 value={deleteReason}
                 onChange={e => setDeleteReason(e.target.value)}
                 placeholder="Ex: Óbito, mudança de cidade, tutor solicitou remoção..."
                 rows={3}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
                 autoFocus
               />
             </div>

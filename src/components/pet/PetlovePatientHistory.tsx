@@ -3,7 +3,7 @@ import type { PetlovePatientHistoryEvent } from '@/lib/actions/patient-custom-pr
 
 const EVENT_STYLES: Record<PetlovePatientHistoryEvent['event_type'], { icon: React.ComponentType<{ className?: string }>; tone: string; label: string }> = {
   patient_created: { icon: UserPlus,  tone: 'bg-purple-100 text-purple-700', label: 'Cadastro criado' },
-  plan_updated:    { icon: ArrowRight, tone: 'bg-blue-100 text-blue-700',     label: 'Plano atualizado' },
+  plan_updated:    { icon: ArrowRight, tone: 'bg-sky-100 text-sky-700',       label: 'Plano atualizado' },
   price_updated:   { icon: DollarSign, tone: 'bg-amber-100 text-amber-700',   label: 'Preço atualizado' },
   entry_created:   { icon: Receipt,    tone: 'bg-emerald-100 text-emerald-700', label: 'Título lançado' },
 }
@@ -12,13 +12,13 @@ export default function PetlovePatientHistory({ events }: { events: PetlovePatie
   if (events.length === 0) return null
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
       <header className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
         <h2 className="font-semibold text-slate-800 flex items-center gap-2">
           <History className="h-4 w-4 text-slate-400" />
           Histórico de Conciliação Petlove
         </h2>
-        <span className="text-xs text-slate-400">{events.length} evento{events.length !== 1 ? 's' : ''}</span>
+        <span className="text-xs text-slate-400 font-mono tabular-nums">{events.length} evento{events.length !== 1 ? 's' : ''}</span>
       </header>
       <div className="divide-y divide-slate-100">
         {events.map(e => {
