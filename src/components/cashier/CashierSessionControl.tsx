@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Lock, Unlock, Loader2, Printer, AlertTriangle, CheckCircle2 } from 'lucide-react'
+import { Lock, Unlock, Printer, AlertTriangle, CheckCircle2 } from 'lucide-react'
+import { Spinner } from '@/components/ui/Spinner'
 import {
   openCashierSession,
   closeCashierSession,
@@ -138,7 +139,7 @@ export default function CashierSessionControl({ session, userRole, onRefresh, on
   if (conferenceOpen && expected && session) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-        <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto" data-mentor-step="cashier-conferencia">
+        <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto animate-scale-in" data-mentor-step="cashier-conferencia">
           <div>
             <h2 className="text-lg font-bold text-slate-900">Fechar o Caixa — Conferência</h2>
             <p className="text-sm text-slate-500 mt-0.5">
@@ -166,13 +167,13 @@ export default function CashierSessionControl({ session, userRole, onRefresh, on
                     onChange={e => setCounted(prev => ({ ...prev, [m]: e.target.value }))}
                     disabled={revealed}
                     placeholder="0,00"
-                    className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-teal-500/30 disabled:bg-slate-50"
+                    className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm text-right font-mono tabular-nums focus:outline-none focus:ring-2 focus:ring-teal-500/30 disabled:bg-slate-50"
                   />
                   {revealed && (
                     <div className="w-36 text-right text-sm">
-                      <span className="text-slate-500 tabular-nums">{fmt(exp)}</span>
+                      <span className="text-slate-500 font-mono tabular-nums">{fmt(exp)}</span>
                       {Math.abs(diff) >= 0.01 && (
-                        <span className={`block text-xs font-semibold tabular-nums ${diff > 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                        <span className={`block text-xs font-semibold font-mono tabular-nums ${diff > 0 ? 'text-sky-600' : 'text-red-600'}`}>
                           {diff > 0 ? 'sobra' : 'falta'} {fmt(Math.abs(diff))}
                         </span>
                       )}
@@ -184,14 +185,14 @@ export default function CashierSessionControl({ session, userRole, onRefresh, on
           </div>
 
           {revealed && suspiciousExpected && (
-            <div className="rounded-xl border border-orange-300 bg-orange-50 p-4">
+            <div className="rounded-xl border border-amber-300 bg-amber-50 p-4">
               <div className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-orange-600" />
-                <p className="text-sm font-semibold text-orange-800">
+                <AlertTriangle className="h-5 w-5 text-amber-600" />
+                <p className="text-sm font-semibold text-amber-800">
                   Valor esperado inconsistente — provável problema no sistema
                 </p>
               </div>
-              <p className="text-xs text-orange-700 mt-1.5">
+              <p className="text-xs text-amber-700 mt-1.5">
                 O sistema esperava um valor impossível (dinheiro/total negativo). Isso
                 normalmente indica vendas não vinculadas a esta sessão — <strong>não</strong> um
                 erro na sua contagem. Você pode fechar mesmo assim com uma observação e
@@ -208,13 +209,13 @@ export default function CashierSessionControl({ session, userRole, onRefresh, on
                   : <CheckCircle2 className="h-5 w-5 text-emerald-600" />}
                 <p className="text-sm font-semibold text-slate-800">
                   {hasDivergence
-                    ? `Divergência de ${fmt(Math.abs(difference))} (${difference > 0 ? 'sobrou' : 'faltou'})`
+                    ? <>Divergência de <span className="font-mono tabular-nums">{fmt(Math.abs(difference))}</span> ({difference > 0 ? 'sobrou' : 'faltou'})</>
                     : 'O caixa bateu! Contado = esperado.'}
                 </p>
               </div>
               <p className="text-xs text-slate-500 mt-1.5">
-                Você contou {fmt(countedTotal)} · o sistema esperava {fmt(expectedConferenceTotal)}
-                {' '}(fundo de troco {fmt(expected.opening_balance)} já incluso no dinheiro).
+                Você contou <span className="font-mono tabular-nums">{fmt(countedTotal)}</span> · o sistema esperava <span className="font-mono tabular-nums">{fmt(expectedConferenceTotal)}</span>
+                {' '}(fundo de troco <span className="font-mono tabular-nums">{fmt(expected.opening_balance)}</span> já incluso no dinheiro).
               </p>
               {hasDivergence && (
                 <>
@@ -239,14 +240,14 @@ export default function CashierSessionControl({ session, userRole, onRefresh, on
           <div className="flex items-center justify-end gap-2 pt-1">
             <button
               onClick={() => setConferenceOpen(false)}
-              className="rounded-xl px-4 py-2 text-sm font-medium text-slate-500 hover:text-slate-800"
+              className="rounded-lg px-4 py-2 text-sm font-medium text-slate-500 hover:text-slate-800"
             >
               Cancelar
             </button>
             {!revealed ? (
               <button
                 onClick={reveal}
-                className="rounded-xl bg-teal-600 px-5 py-2 text-sm font-semibold text-white hover:bg-teal-700 transition-colors"
+                className="rounded-lg bg-teal-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 transition-colors"
               >
                 Conferir contagem
               </button>
@@ -254,9 +255,9 @@ export default function CashierSessionControl({ session, userRole, onRefresh, on
               <button
                 onClick={confirmClose}
                 disabled={loading || (hasDivergence && !closingNotes.trim())}
-                className="flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50 transition-colors"
+                className="flex items-center gap-2 rounded-lg bg-teal-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 disabled:opacity-60 transition-colors"
               >
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
+                {loading ? <Spinner /> : <Lock className="h-4 w-4" />}
                 Confirmar fechamento
               </button>
             )}
@@ -272,7 +273,7 @@ export default function CashierSessionControl({ session, userRole, onRefresh, on
     const diff = cr.session.difference
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 print:relative print:bg-white print:p-0">
-        <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto print:shadow-none print:max-h-none print:rounded-none" id="closing-report-print">
+        <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto animate-scale-in print:shadow-none print:max-h-none print:rounded-none" id="closing-report-print">
           <div className="flex items-center justify-between print:hidden">
             <h2 className="text-lg font-bold text-slate-900">Comprovante de Fechamento</h2>
             <button
@@ -290,15 +291,15 @@ export default function CashierSessionControl({ session, userRole, onRefresh, on
           <div className="grid grid-cols-3 gap-3">
             <div className="rounded-xl bg-emerald-50 p-3 text-center">
               <p className="text-xs text-slate-500 mb-1">Entradas</p>
-              <p className="text-base font-bold text-emerald-700">{fmt(cr.total_inflows)}</p>
+              <p className="text-base font-bold text-emerald-700 font-mono tabular-nums">{fmt(cr.total_inflows)}</p>
             </div>
             <div className="rounded-xl bg-red-50 p-3 text-center">
               <p className="text-xs text-slate-500 mb-1">Saídas</p>
-              <p className="text-base font-bold text-red-600">{fmt(cr.total_outflows)}</p>
+              <p className="text-base font-bold text-red-600 font-mono tabular-nums">{fmt(cr.total_outflows)}</p>
             </div>
-            <div className="rounded-xl bg-blue-50 p-3 text-center">
+            <div className="rounded-xl bg-sky-50 p-3 text-center">
               <p className="text-xs text-slate-500 mb-1">Saldo Final</p>
-              <p className="text-base font-bold text-blue-700">{fmt(cr.net_balance)}</p>
+              <p className="text-base font-bold text-sky-700 font-mono tabular-nums">{fmt(cr.net_balance)}</p>
             </div>
           </div>
 
@@ -307,8 +308,8 @@ export default function CashierSessionControl({ session, userRole, onRefresh, on
               Math.abs(diff) >= 0.01 ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-emerald-50 border-emerald-200 text-emerald-800'
             }`}>
               {Math.abs(diff) >= 0.01
-                ? <><AlertTriangle className="h-4 w-4" /> Conferência: {diff > 0 ? 'sobra' : 'falta'} de {fmt(Math.abs(diff))} (contado {fmt(cr.session.counted_total ?? 0)})</>
-                : <><CheckCircle2 className="h-4 w-4" /> Conferência: o caixa bateu ({fmt(cr.session.counted_total ?? 0)} contado)</>}
+                ? <><AlertTriangle className="h-4 w-4" /> Conferência: {diff > 0 ? 'sobra' : 'falta'} de <span className="font-mono tabular-nums">{fmt(Math.abs(diff))}</span> (contado <span className="font-mono tabular-nums">{fmt(cr.session.counted_total ?? 0)}</span>)</>
+                : <><CheckCircle2 className="h-4 w-4" /> Conferência: o caixa bateu (<span className="font-mono tabular-nums">{fmt(cr.session.counted_total ?? 0)}</span> contado)</>}
             </div>
           )}
           {cr.session.closing_notes && (
@@ -321,7 +322,7 @@ export default function CashierSessionControl({ session, userRole, onRefresh, on
               {Object.entries(cr.by_module).map(([mod, data]) => (
                 <div key={mod} className="flex items-center justify-between text-sm">
                   <span className="text-slate-600">{MODULE_LABELS[mod] ?? mod}</span>
-                  <span className="font-semibold text-slate-900">{fmt(data.amount)}</span>
+                  <span className="font-semibold text-slate-900 font-mono tabular-nums">{fmt(data.amount)}</span>
                 </div>
               ))}
             </div>
@@ -334,8 +335,8 @@ export default function CashierSessionControl({ session, userRole, onRefresh, on
                 <div key={method} className="flex items-center justify-between text-sm">
                   <span className="text-slate-600">{PAYMENT_LABELS[method] ?? method}</span>
                   <div className="text-right">
-                    <span className="font-semibold text-slate-900">{fmt(data.amount)}</span>
-                    <span className="text-xs text-slate-400 ml-1">({data.count})</span>
+                    <span className="font-semibold text-slate-900 font-mono tabular-nums">{fmt(data.amount)}</span>
+                    <span className="text-xs text-slate-400 ml-1 font-mono tabular-nums">({data.count})</span>
                   </div>
                 </div>
               ))}
@@ -345,14 +346,14 @@ export default function CashierSessionControl({ session, userRole, onRefresh, on
           <div className="flex gap-2 print:hidden">
             <button
               onClick={printReport}
-              className="flex items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+              className="flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
             >
               <Printer className="h-4 w-4" />
               Imprimir
             </button>
             <button
               onClick={() => { setClosingReport(null); onRefresh() }}
-              className="flex-1 rounded-xl bg-slate-900 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 transition-colors"
+              className="flex-1 rounded-lg bg-teal-600 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 transition-colors"
             >
               Fechar Relatório
             </button>
@@ -367,7 +368,7 @@ export default function CashierSessionControl({ session, userRole, onRefresh, on
   // No session open
   if (!session) {
     return (
-      <div data-mentor-step="cashier-session-control" className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between gap-4">
+      <div data-mentor-step="cashier-session-control" className="bg-amber-50 border border-amber-200 rounded-xl p-4 shadow-sm flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <Lock className="h-5 w-5 text-amber-500 flex-shrink-0" />
           <div>
@@ -379,7 +380,7 @@ export default function CashierSessionControl({ session, userRole, onRefresh, on
           <button
             onClick={() => setShowOpenForm(true)}
             data-mentor-step="cashier-abrir-caixa"
-            className="flex-shrink-0 rounded-xl bg-amber-600 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-700 transition-colors"
+            className="flex-shrink-0 rounded-lg bg-teal-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-teal-700 transition-colors"
           >
             Abrir Caixa
           </button>
@@ -393,16 +394,16 @@ export default function CashierSessionControl({ session, userRole, onRefresh, on
                 step="0.01"
                 value={openBalance}
                 onChange={e => setOpenBalance(e.target.value)}
-                className="w-28 rounded-lg border border-amber-200 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400/30"
+                className="w-28 rounded-lg border border-amber-200 px-2.5 py-1.5 text-sm font-mono tabular-nums focus:outline-none focus:ring-2 focus:ring-amber-400/30"
                 placeholder="0,00"
               />
             </div>
             <button
               onClick={handleOpen}
               disabled={loading}
-              className="rounded-xl bg-amber-600 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50 transition-colors"
+              className="rounded-lg bg-teal-600 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-teal-700 disabled:opacity-60 transition-colors"
             >
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirmar'}
+              {loading ? <Spinner /> : 'Confirmar'}
             </button>
             <button
               onClick={() => setShowOpenForm(false)}
@@ -418,14 +419,14 @@ export default function CashierSessionControl({ session, userRole, onRefresh, on
 
   // Session is open
   return (
-    <div data-mentor-step="cashier-session-control" className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center justify-between gap-4">
+    <div data-mentor-step="cashier-session-control" className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 shadow-sm flex items-center justify-between gap-4">
       <div className="flex items-center gap-3">
         <Unlock className="h-5 w-5 text-emerald-600 flex-shrink-0" />
         <div>
           <p className="text-sm font-semibold text-emerald-800">Caixa Aberto</p>
           <p className="text-xs text-emerald-600">
-            Fundo: {fmt(session.opening_balance)} · Aberto às{' '}
-            {new Date(session.opened_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+            Fundo: <span className="font-mono tabular-nums">{fmt(session.opening_balance)}</span> · Aberto às{' '}
+            <span className="font-mono tabular-nums">{new Date(session.opened_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
           </p>
         </div>
       </div>
@@ -434,9 +435,9 @@ export default function CashierSessionControl({ session, userRole, onRefresh, on
         disabled={loading}
         data-mentor-step="cashier-fechar-caixa"
         title="Abre a conferência: você conta o caixa às cegas e o sistema compara com o esperado."
-        className="flex-shrink-0 flex items-center gap-1.5 rounded-xl bg-slate-700 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-50 transition-colors"
+        className="flex-shrink-0 flex items-center gap-1.5 rounded-lg bg-teal-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-teal-700 disabled:opacity-60 transition-colors"
       >
-        {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Lock className="h-3.5 w-3.5" />}
+        {loading ? <Spinner size="sm" /> : <Lock className="h-3.5 w-3.5" />}
         Fechar Caixa
       </button>
     </div>

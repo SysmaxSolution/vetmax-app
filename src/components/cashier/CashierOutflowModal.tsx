@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Loader2, X } from 'lucide-react'
+import { X } from 'lucide-react'
+import { Spinner } from '@/components/ui/Spinner'
 import { registerOutflow, type CashierOutflow } from '@/lib/actions/cashier-sessions'
 import type { Supplier } from '@/lib/actions/suppliers'
 import SupplierAutocomplete from '@/components/registry/suppliers/SupplierAutocomplete'
@@ -67,7 +68,7 @@ export default function CashierOutflowModal({ sessionId, onClose, onSuccess, onT
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-5">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-5 animate-scale-in">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-bold text-slate-900">Registrar Saída</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
@@ -85,7 +86,7 @@ export default function CashierOutflowModal({ sessionId, onClose, onSuccess, onT
                 setCategory(next)
                 if (next !== 'fornecedor') setSupplier(null)
               }}
-              className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20"
             >
               {CATEGORY_OPTIONS.map(o => (
                 <option key={o.value} value={o.value}>{o.label}</option>
@@ -120,7 +121,7 @@ export default function CashierOutflowModal({ sessionId, onClose, onSuccess, onT
               onChange={e => setAmount(e.target.value)}
               placeholder="0,00"
               required
-              className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20"
             />
           </div>
 
@@ -132,7 +133,7 @@ export default function CashierOutflowModal({ sessionId, onClose, onSuccess, onT
               placeholder="Descreva o motivo da saída..."
               required
               rows={2}
-              className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-none"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 resize-none"
             />
           </div>
 
@@ -140,16 +141,16 @@ export default function CashierOutflowModal({ sessionId, onClose, onSuccess, onT
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+              className="flex-1 rounded-lg border border-slate-200 bg-white py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 rounded-xl bg-red-600 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+              className="flex-1 rounded-lg bg-red-600 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-red-700 disabled:opacity-60 transition-colors flex items-center justify-center gap-2"
             >
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Registrar Saída'}
+              {loading ? <Spinner /> : 'Registrar Saída'}
             </button>
           </div>
         </form>

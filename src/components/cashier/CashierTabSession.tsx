@@ -60,12 +60,12 @@ export default function CashierTabSession({ session, userRole, onRefresh, onToas
       )}
 
       {session && (
-        <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-3">
           <h3 className="text-sm font-semibold text-slate-700">Detalhes da Sessão Atual</h3>
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div>
               <p className="text-xs text-slate-400">Abertura</p>
-              <p className="font-medium text-slate-800">
+              <p className="font-medium text-slate-800 font-mono tabular-nums">
                 {new Date(session.opened_at).toLocaleString('pt-BR', {
                   day: '2-digit', month: '2-digit', year: 'numeric',
                   hour: '2-digit', minute: '2-digit',
@@ -74,7 +74,7 @@ export default function CashierTabSession({ session, userRole, onRefresh, onToas
             </div>
             <div>
               <p className="text-xs text-slate-400">Fundo de Troco</p>
-              <p className="font-medium text-slate-800">
+              <p className="font-medium text-slate-800 font-mono tabular-nums">
                 {session.opening_balance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
               </p>
             </div>
@@ -93,7 +93,7 @@ export default function CashierTabSession({ session, userRole, onRefresh, onToas
 
       {/* Histórico de fechamentos com divergência (auditoria por operador) */}
       {canHistory && history.length > 0 && (
-        <div data-mentor-step="cashier-historico" className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+        <div data-mentor-step="cashier-historico" className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
           <div className="flex items-center gap-2 px-5 py-3.5 border-b border-slate-100">
             <History className="h-4 w-4 text-slate-400" />
             <h3 className="text-sm font-semibold text-slate-700">Histórico de Fechamentos</h3>
@@ -116,14 +116,14 @@ export default function CashierTabSession({ session, userRole, onRefresh, onToas
                   const ok = diff != null && Math.abs(diff) < 0.01
                   return (
                     <tr key={s.id} className="hover:bg-slate-50/60">
-                      <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap">
+                      <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap font-mono tabular-nums">
                         {s.closed_at ? new Date(s.closed_at).toLocaleString('pt-BR', {
                           day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
                         }) : '—'}
                       </td>
                       <td className="px-4 py-2.5 text-slate-700">{s.closed_by_name ?? s.opened_by_name ?? '—'}</td>
-                      <td className="px-4 py-2.5 text-right text-slate-500 tabular-nums">{fmt(Number(s.opening_balance ?? 0))}</td>
-                      <td className="px-4 py-2.5 text-right font-semibold text-slate-900 tabular-nums">
+                      <td className="px-4 py-2.5 text-right text-slate-500 font-mono tabular-nums">{fmt(Number(s.opening_balance ?? 0))}</td>
+                      <td className="px-4 py-2.5 text-right font-semibold text-slate-900 font-mono tabular-nums">
                         {s.closing_balance != null ? fmt(Number(s.closing_balance)) : '—'}
                       </td>
                       <td className="px-4 py-2.5 text-right">
@@ -135,11 +135,11 @@ export default function CashierTabSession({ session, userRole, onRefresh, onToas
                           </span>
                         ) : (
                           <span
-                            className={`inline-flex items-center gap-1 text-xs font-semibold ${diff > 0 ? 'text-blue-600' : 'text-red-600'}`}
+                            className={`inline-flex items-center gap-1 text-xs font-semibold ${diff > 0 ? 'text-sky-600' : 'text-red-600'}`}
                             title={s.closing_notes ?? undefined}
                           >
                             <AlertTriangle className="h-3.5 w-3.5" />
-                            {diff > 0 ? 'sobra' : 'falta'} {fmt(Math.abs(diff))}
+                            {diff > 0 ? 'sobra' : 'falta'} <span className="font-mono tabular-nums">{fmt(Math.abs(diff))}</span>
                           </span>
                         )}
                       </td>

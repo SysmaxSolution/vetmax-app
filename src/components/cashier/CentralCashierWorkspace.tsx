@@ -2,10 +2,11 @@
 
 import { useState, useCallback, useEffect } from 'react'
 import {
-  DollarSign, CheckCircle2, Archive, RefreshCw, Loader2, Filter,
+  DollarSign, CheckCircle2, Archive, RefreshCw, Filter,
   TrendingUp, AlertCircle, Clock, BadgeCheck, RotateCcw, Minus, Plus,
   Receipt, Calendar, CreditCard, Smartphone, Banknote, Building2, Wallet,
 } from 'lucide-react'
+import { Spinner } from '@/components/ui/Spinner'
 import {
   listCashierEntries, verifyCashierEntry, archiveCashierEntry, receiveCashierEntry, getCashierSummary,
   type CentralCashierEntry, type CashierSummary,
@@ -30,7 +31,7 @@ const MODULE_LABELS: Record<string, string> = {
 }
 
 const STATUS_CONFIG = {
-  pending:  { label: 'Pendente',    cls: 'bg-blue-100 text-blue-700',       icon: <Clock        className="h-3 w-3" /> },
+  pending:  { label: 'Pendente',    cls: 'bg-sky-100 text-sky-700',         icon: <Clock        className="h-3 w-3" /> },
   recorded: { label: 'Registrado',  cls: 'bg-amber-100 text-amber-700',     icon: <Clock        className="h-3 w-3" /> },
   verified: { label: 'Verificado',  cls: 'bg-emerald-100 text-emerald-700', icon: <BadgeCheck   className="h-3 w-3" /> },
   archived: { label: 'Arquivado',   cls: 'bg-slate-100 text-slate-500',     icon: <Archive      className="h-3 w-3" /> },
@@ -183,7 +184,7 @@ export default function CentralCashierWorkspace({
     <div className="space-y-6">
       {/* Toast */}
       {toast && (
-        <div className={`fixed top-4 right-4 z-50 flex items-center gap-2 rounded-xl px-4 py-3 shadow-lg text-sm font-medium ${toast.type === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+        <div className={`fixed top-4 right-4 z-50 flex items-center gap-2 rounded-xl px-4 py-3 shadow-lg text-sm font-medium animate-enter-fast ${toast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}>
           {toast.type === 'success' ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
           {toast.msg}
         </div>
@@ -225,13 +226,13 @@ export default function CentralCashierWorkspace({
       {/* Modal inline: receber pagamento de entrada pendente */}
       {receivingEntry && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6 space-y-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4 animate-scale-in">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-base font-bold text-slate-900">Registrar recebimento</h2>
                 <p className="text-sm text-slate-500 mt-0.5">
                   {receivingEntry.patient_name ?? receivingEntry.reason ?? 'Lançamento pendente'} —{' '}
-                  <span className="font-semibold text-slate-700">{fmt(Number(receivingEntry.amount))}</span>
+                  <span className="font-semibold text-slate-700 font-mono tabular-nums">{fmt(Number(receivingEntry.amount))}</span>
                 </p>
               </div>
               <button onClick={() => setReceivingEntry(null)} className="text-slate-400 hover:text-slate-600 p-1">
@@ -249,7 +250,7 @@ export default function CentralCashierWorkspace({
                     type="button"
                     disabled={actionId === receivingEntry.id}
                     onClick={() => handleReceive(receivingEntry.id, pm)}
-                    className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-emerald-50 hover:border-emerald-300 text-sm font-medium text-slate-700 hover:text-emerald-800 transition-colors disabled:opacity-50"
+                    className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-emerald-50 hover:border-emerald-300 text-sm font-medium text-slate-700 hover:text-emerald-800 transition-colors disabled:opacity-50"
                   >
                     <Icon className="h-4 w-4 flex-shrink-0" />
                     {cfg?.label ?? pm}
@@ -259,7 +260,7 @@ export default function CentralCashierWorkspace({
             </div>
             <button
               onClick={() => setReceivingEntry(null)}
-              className="w-full py-2 rounded-xl border border-slate-200 text-sm font-medium text-slate-500 hover:bg-slate-50"
+              className="w-full py-2 rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
               Cancelar
             </button>
@@ -270,7 +271,7 @@ export default function CentralCashierWorkspace({
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Caixa Central</h1>
+          <h1 className="text-lg font-semibold text-slate-900">Caixa Central</h1>
           <p className="text-sm text-slate-500 mt-0.5">Consolidado de todas as receitas da clínica</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -278,11 +279,11 @@ export default function CentralCashierWorkspace({
             <button
               onClick={onOpenReceivables}
               data-mentor-step="cashier-receber-pendentes"
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold shadow-sm"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold shadow-sm"
             >
               <Receipt className="h-4 w-4" />
               Receber Pendentes
-              <span className="rounded-full bg-white/30 text-white text-[10px] font-bold px-1.5 py-0.5 leading-none">
+              <span className="rounded-full bg-white/30 text-white text-[10px] font-bold font-mono tabular-nums px-1.5 py-0.5 leading-none">
                 {pendingCount}
               </span>
             </button>
@@ -293,7 +294,7 @@ export default function CentralCashierWorkspace({
                 onClick={() => setShowInflow(true)}
                 data-mentor-step="cashier-lancar-entrada"
                 title="Entrada manual de dinheiro no caixa: reforço de troco (suprimento), aporte, acerto."
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-medium hover:bg-emerald-100 transition-colors"
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-medium hover:bg-emerald-100 transition-colors"
               >
                 <Plus className="h-4 w-4" />
                 Lançar Entrada
@@ -302,7 +303,7 @@ export default function CentralCashierWorkspace({
                 onClick={() => setShowOutflow(true)}
                 data-mentor-step="cashier-registrar-saida"
                 title="Saída de dinheiro do caixa: retirada (sangria), despesa, pagamento a fornecedor."
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-medium hover:bg-red-100 transition-colors"
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm font-medium hover:bg-red-100 transition-colors"
               >
                 <Minus className="h-4 w-4" />
                 Registrar Saída
@@ -314,7 +315,7 @@ export default function CentralCashierWorkspace({
             data-testid="btn-refresh-cashier"
             onClick={() => refresh()}
             disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50 transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors disabled:opacity-50"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             Atualizar
@@ -330,50 +331,50 @@ export default function CentralCashierWorkspace({
           data-mentor-step="cashier-kpis"
           className="grid grid-cols-2 sm:grid-cols-4 gap-4"
         >
-          <div className="bg-white rounded-xl border border-blue-200 p-5" title="O que os tutores ainda vão pagar no balcão. Repasses futuros de convênio (Petlove) NÃO entram aqui — eles ficam em Contas a Receber no Financeiro.">
+          <div className="bg-white rounded-xl border border-sky-200 p-5 shadow-sm" title="O que os tutores ainda vão pagar no balcão. Repasses futuros de convênio (Petlove) NÃO entram aqui — eles ficam em Contas a Receber no Financeiro.">
             <div className="flex items-center gap-3 mb-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50">
-                <Clock className="h-4 w-4 text-blue-600" />
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-50">
+                <Clock className="h-4 w-4 text-sky-600" />
               </div>
-              <p className="text-xs font-medium text-blue-600 uppercase tracking-wide">A Receber</p>
+              <p className="text-xs font-medium text-sky-600 uppercase tracking-wide">A Receber</p>
             </div>
-            <p data-testid="kpi-total-pending" className="text-2xl font-bold text-blue-700">{fmt(summary.total_pending ?? 0)}</p>
+            <p data-testid="kpi-total-pending" className="text-2xl font-bold text-sky-700 font-mono tabular-nums">{fmt(summary.total_pending ?? 0)}</p>
             <p className="text-[11px] text-slate-400 mt-0.5">do tutor · sem repasse de convênio</p>
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 p-5" title="Tudo que movimentou o caixa no período: entradas recebidas (inclui as já verificadas) menos saídas e sangrias.">
+          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm" title="Tudo que movimentou o caixa no período: entradas recebidas (inclui as já verificadas) menos saídas e sangrias.">
             <div className="flex items-center gap-3 mb-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50">
                 <TrendingUp className="h-4 w-4 text-amber-600" />
               </div>
               <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Registrado</p>
             </div>
-            <p data-testid="kpi-total-recorded" className="text-2xl font-bold text-slate-900">{fmt(summary.total_recorded)}</p>
-            <p className="text-[11px] text-slate-400 mt-0.5">
+            <p data-testid="kpi-total-recorded" className="text-2xl font-bold text-slate-900 font-mono tabular-nums">{fmt(summary.total_recorded)}</p>
+            <p className="text-[11px] text-slate-400 mt-0.5 font-mono tabular-nums">
               <span className="text-emerald-600">+{fmt(summary.inflows_received)}</span>
               {' '}<span className="text-red-500">−{fmt(summary.outflows_total)}</span>
             </p>
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 p-5" title="Movimentações (entradas e saídas) que o administrador/contador já conferiu uma a uma.">
+          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm" title="Movimentações (entradas e saídas) que o administrador/contador já conferiu uma a uma.">
             <div className="flex items-center gap-3 mb-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50">
                 <BadgeCheck className="h-4 w-4 text-emerald-600" />
               </div>
               <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Verificado</p>
             </div>
-            <p data-testid="kpi-total-verified" className="text-2xl font-bold text-emerald-700">{fmt(summary.total_verified)}</p>
+            <p data-testid="kpi-total-verified" className="text-2xl font-bold text-emerald-700 font-mono tabular-nums">{fmt(summary.total_verified)}</p>
             <p className="text-[11px] text-slate-400 mt-0.5">entradas e saídas conferidas pelo admin</p>
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 p-5" title="Quantidade total de movimentações no caixa no período: recebimentos, lançamentos manuais, saídas e sangrias.">
+          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm" title="Quantidade total de movimentações no caixa no período: recebimentos, lançamentos manuais, saídas e sangrias.">
             <div className="flex items-center gap-3 mb-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100">
                 <DollarSign className="h-4 w-4 text-slate-600" />
               </div>
               <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Lançamentos</p>
             </div>
-            <p data-testid="kpi-entry-count" className="text-2xl font-bold text-slate-900">{summary.entry_count}</p>
+            <p data-testid="kpi-entry-count" className="text-2xl font-bold text-slate-900 font-mono tabular-nums">{summary.entry_count}</p>
             <p className="text-[11px] text-slate-400 mt-0.5">movimentações no período</p>
           </div>
         </div>
@@ -382,7 +383,7 @@ export default function CentralCashierWorkspace({
       {/* Filter bar */}
       <div
         data-mentor-step="cashier-filters"
-        className="bg-white rounded-xl border border-slate-200 px-4 py-3 flex items-center gap-3 flex-wrap"
+        className="bg-white rounded-xl border border-slate-200 shadow-sm px-4 py-3 flex items-center gap-3 flex-wrap"
       >
         <Filter className="h-4 w-4 text-slate-400 flex-shrink-0" />
 
@@ -391,7 +392,7 @@ export default function CentralCashierWorkspace({
           data-testid="filter-module"
           value={filterMod}
           onChange={e => setFilterMod(e.target.value)}
-          className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20"
         >
           <option value="all">Todos os módulos</option>
           {uniqueModules.map(m => (
@@ -404,7 +405,7 @@ export default function CentralCashierWorkspace({
           data-testid="filter-status"
           value={filterStat}
           onChange={e => setFilterStat(e.target.value)}
-          className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20"
         >
           <option value="all">Todos os status</option>
           <option value="pending">Pendente</option>
@@ -419,7 +420,7 @@ export default function CentralCashierWorkspace({
           data-testid="filter-payment"
           value={filterPay}
           onChange={e => setFilterPay(e.target.value)}
-          className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20"
         >
           <option value="all">Todas as modalidades</option>
           <option value="cash">Dinheiro</option>
@@ -446,7 +447,7 @@ export default function CentralCashierWorkspace({
           />
         </div>
 
-        <span className="text-xs text-slate-500 ml-auto">
+        <span className="text-xs text-slate-500 ml-auto font-mono tabular-nums">
           {displayed.length} lançamento(s) · {fmt(totalDisplayed)}
         </span>
       </div>
@@ -457,7 +458,7 @@ export default function CentralCashierWorkspace({
         data-testid="cashier-entries-table"
         data-filtermod={filterMod}
         data-mentor-step="cashier-table"
-        className="bg-white rounded-xl border border-slate-200 overflow-hidden"
+        className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden"
       >
         {/* Saldo inicial do dia da abertura do caixa */}
         <div
@@ -471,14 +472,14 @@ export default function CentralCashierWorkspace({
             <Wallet className="h-4 w-4 text-emerald-600" />
             Saldo inicial (fundo de troco)
             {session ? (
-              <span className="text-xs text-slate-400 font-normal">
+              <span className="text-xs text-slate-400 font-normal font-mono tabular-nums">
                 · caixa aberto em {fmtDate(session.opened_at)}
               </span>
             ) : (
               <span className="text-xs text-amber-600 font-normal">· caixa fechado — abra o caixa na aba Sessão</span>
             )}
           </span>
-          <span className="font-bold text-slate-900 tabular-nums">{fmt(openingBalance)}</span>
+          <span className="font-bold text-slate-900 font-mono tabular-nums">{fmt(openingBalance)}</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -513,7 +514,7 @@ export default function CentralCashierWorkspace({
                       data-testid={`cashier-row-${entry.id}`}
                       className="hover:bg-slate-50 transition-colors"
                     >
-                      <td className="px-4 py-3 text-slate-600 text-xs whitespace-nowrap">
+                      <td className="px-4 py-3 text-slate-600 text-xs whitespace-nowrap font-mono tabular-nums">
                         {effDate && effDate !== entry.created_at.slice(0,10) ? (
                           <div className="flex flex-col">
                             <span className="font-semibold text-amber-700 flex items-center gap-1">
@@ -526,7 +527,7 @@ export default function CentralCashierWorkspace({
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs font-medium">
+                        <span className="px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 text-xs font-medium">
                           {MODULE_LABELS[entry.source_module] ?? entry.source_module}
                         </span>
                       </td>
@@ -549,14 +550,14 @@ export default function CentralCashierWorkspace({
                             <PmIcon className="h-3 w-3" />
                             {pm.label}
                             {entry.card_installments && entry.card_installments > 1 && (
-                              <span className="text-[10px] text-slate-500">{entry.card_installments}x</span>
+                              <span className="text-[10px] text-slate-500 font-mono tabular-nums">{entry.card_installments}x</span>
                             )}
                           </span>
                         ) : (
                           <span className="text-xs text-slate-400">—</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-right font-semibold text-slate-900 tabular-nums text-sm">
+                      <td className="px-4 py-3 text-right font-semibold text-slate-900 font-mono tabular-nums text-sm">
                         {fmt(Number(entry.amount))}
                       </td>
                       <td className="px-4 py-3 text-center">
@@ -575,7 +576,7 @@ export default function CentralCashierWorkspace({
                               title="Registrar recebimento"
                             >
                               {actionId === entry.id
-                                ? <Loader2 className="h-3 w-3 animate-spin" />
+                                ? <Spinner size="sm" />
                                 : <DollarSign className="h-3 w-3" />}
                             </button>
                           )}
@@ -598,7 +599,7 @@ export default function CentralCashierWorkspace({
                               title="Verificar"
                             >
                               {actionId === entry.id
-                                ? <Loader2 className="h-3 w-3 animate-spin" />
+                                ? <Spinner size="sm" />
                                 : <BadgeCheck className="h-3 w-3" />}
                             </button>
                           )}
@@ -643,26 +644,26 @@ export default function CentralCashierWorkspace({
           >
             <div className="flex items-center justify-between text-slate-500">
               <span>Saldo inicial (abertura)</span>
-              <span className="tabular-nums">{fmt(openingBalance)}</span>
+              <span className="font-mono tabular-nums">{fmt(openingBalance)}</span>
             </div>
             <div className="flex items-center justify-between text-emerald-700">
               <span>+ Entradas recebidas no período</span>
-              <span className="tabular-nums">+{fmt(summary.inflows_received)}</span>
+              <span className="font-mono tabular-nums">+{fmt(summary.inflows_received)}</span>
             </div>
             <div className="flex items-center justify-between text-red-600">
               <span>− Saídas e sangrias no período</span>
-              <span className="tabular-nums">−{fmt(summary.outflows_total)}</span>
+              <span className="font-mono tabular-nums">−{fmt(summary.outflows_total)}</span>
             </div>
             <div className="flex items-center justify-between border-t border-slate-200 pt-2 font-bold text-slate-900">
               <span>= Saldo final do caixa</span>
-              <span className="tabular-nums text-base">{finalBalance != null ? fmt(finalBalance) : '—'}</span>
+              <span className="font-mono tabular-nums text-base">{finalBalance != null ? fmt(finalBalance) : '—'}</span>
             </div>
             <div className="flex items-center justify-between text-xs text-slate-500">
               <span className="flex items-center gap-1.5">
                 <Banknote className="h-3.5 w-3.5 text-emerald-600" />
                 Em espécie (deve bater com o dinheiro físico na gaveta)
               </span>
-              <span className="tabular-nums font-semibold text-slate-700">{cashBalance != null ? fmt(cashBalance) : '—'}</span>
+              <span className="font-mono tabular-nums font-semibold text-slate-700">{cashBalance != null ? fmt(cashBalance) : '—'}</span>
             </div>
           </div>
         )}

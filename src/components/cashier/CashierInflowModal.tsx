@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Loader2, X, Plus } from 'lucide-react'
+import { X, Plus } from 'lucide-react'
+import { Spinner } from '@/components/ui/Spinner'
 import { recordManualInflow } from '@/lib/actions/cashier-manual'
 
 const REASON_PRESETS: { value: string; label: string }[] = [
@@ -64,7 +65,7 @@ export default function CashierInflowModal({ onClose, onSuccess, onToast }: Prop
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-5">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-5 animate-scale-in">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-100">
@@ -83,7 +84,7 @@ export default function CashierInflowModal({ onClose, onSuccess, onToast }: Prop
             <select
               value={preset}
               onChange={e => setPreset(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20"
             >
               {REASON_PRESETS.map(o => (
                 <option key={o.value} value={o.value}>{o.label}</option>
@@ -102,7 +103,7 @@ export default function CashierInflowModal({ onClose, onSuccess, onToast }: Prop
                 onChange={e => setAmount(e.target.value)}
                 placeholder="0,00"
                 required
-                className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20"
               />
             </div>
             <div>
@@ -112,7 +113,7 @@ export default function CashierInflowModal({ onClose, onSuccess, onToast }: Prop
                 value={date}
                 max={new Date().toISOString().slice(0, 10)}
                 onChange={e => setDate(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20"
               />
             </div>
           </div>
@@ -125,7 +126,7 @@ export default function CashierInflowModal({ onClose, onSuccess, onToast }: Prop
                   key={m.value}
                   type="button"
                   onClick={() => setMethod(m.value)}
-                  className={`rounded-xl border-2 px-2 py-2 text-xs font-semibold transition-all ${
+                  className={`rounded-lg border-2 px-2 py-2 text-xs font-semibold transition-colors ${
                     method === m.value
                       ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
                       : 'border-slate-200 text-slate-600 hover:border-slate-300'
@@ -144,7 +145,7 @@ export default function CashierInflowModal({ onClose, onSuccess, onToast }: Prop
               onChange={e => setDescription(e.target.value)}
               placeholder="Detalhe a entrada (opcional)..."
               rows={2}
-              className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 resize-none"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 resize-none"
             />
           </div>
 
@@ -152,16 +153,16 @@ export default function CashierInflowModal({ onClose, onSuccess, onToast }: Prop
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+              className="flex-1 rounded-lg border border-slate-200 bg-white py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+              className="flex-1 rounded-lg bg-emerald-600 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-60 transition-colors flex items-center justify-center gap-2"
             >
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Plus className="h-4 w-4" /> Lançar Entrada</>}
+              {loading ? <Spinner /> : <><Plus className="h-4 w-4" /> Lançar Entrada</>}
             </button>
           </div>
         </form>

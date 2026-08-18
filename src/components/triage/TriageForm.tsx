@@ -18,7 +18,6 @@ import {
   Save,
   FileText,
   Sparkles,
-  Loader2,
   CheckCircle2,
   Syringe,
   Settings,
@@ -28,6 +27,7 @@ import {
 import type { VitalSigns, MucousColor, CRT, DocumentTemplate, ExtractedField, ReproductiveStatus } from '@/types'
 import { REPRODUCTIVE_STATUS_OPTIONS } from '@/types'
 import { Toast } from '@/components/ui/toast'
+import { Spinner } from '@/components/ui/Spinner'
 import { formatPetAge } from '@/lib/utils/pet-age'
 import { DatePicker } from '@/components/ui/DatePicker'
 import VaccinationCard from '@/components/vet/VaccinationCard'
@@ -392,8 +392,8 @@ export default function TriageForm({
     const wasMapped = mappedFieldNames.has(field.field_name)
 
     const baseClass =
-      'w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none'
-    const borderClass = wasMapped ? 'border-green-400 bg-green-50' : 'border-slate-300'
+      'w-full px-4 py-2 border rounded-lg focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none'
+    const borderClass = wasMapped ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200'
 
     const handleChange = (val: string | number | boolean) => {
       setTemplateFieldValues((prev) => ({ ...prev, [field.field_name]: val }))
@@ -404,7 +404,7 @@ export default function TriageForm({
         <label className="block text-sm font-medium text-slate-700 mb-1.5">
           {field.label}
           {field.required && <span className="text-red-500 ml-1">*</span>}
-          {wasMapped && <CheckCircle2 className="inline w-3.5 h-3.5 text-green-600 ml-1.5" />}
+          {wasMapped && <CheckCircle2 className="inline w-3.5 h-3.5 text-emerald-600 ml-1.5" />}
         </label>
         <p className="text-xs text-slate-400 mb-1.5">{field.description}</p>
 
@@ -449,7 +449,7 @@ export default function TriageForm({
   // ─── AI field highlight helper ────────────────────────────────────────────
   const aiHighlight = (field: string) =>
     aiFilledFields.has(field)
-      ? 'border-green-400 bg-green-50'
+      ? 'border-emerald-400 bg-emerald-50'
       : ''
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -497,7 +497,7 @@ export default function TriageForm({
           <span className={`text-xs font-semibold px-3 py-1 rounded-full ${
             isEditMode
               ? 'bg-amber-100 text-amber-700'
-              : 'bg-blue-100 text-blue-700'
+              : 'bg-sky-100 text-sky-700'
           }`}>
             {isEditMode ? 'Edição de Triagem' : 'Triagem em Andamento'}
           </span>
@@ -513,20 +513,20 @@ export default function TriageForm({
             ? 'Nenhum campo é obrigatório nesta clínica — preencha o que tiver disponível.'
             : `Obrigatório${required.length > 1 ? 's' : ''} nesta clínica: ${required.join(', ')}.`
           return (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg px-5 py-3 flex items-center gap-3">
-              <div className="flex-shrink-0 w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+            <div className="bg-sky-50 border border-sky-200 rounded-xl px-5 py-3 flex items-center gap-3">
+              <div className="flex-shrink-0 w-8 h-8 bg-sky-600 rounded-full flex items-center justify-center">
                 <span className="text-white text-sm font-bold">1</span>
               </div>
               <div>
-                <p className="text-sm font-semibold text-blue-900">Preencha os Sinais Vitais e Queixa Principal</p>
-                <p className="text-xs text-blue-700 mt-0.5">{helper}</p>
+                <p className="text-sm font-semibold text-sky-900">Preencha os Sinais Vitais e Queixa Principal</p>
+                <p className="text-xs text-sky-700 mt-0.5">{helper}</p>
               </div>
             </div>
           )
         })()}
 
         {/* Patient Information Card */}
-        <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-6">
           <div className="flex items-start justify-between">
             <div className="flex items-start gap-4">
               {/* Foto ou avatar */}
@@ -541,11 +541,11 @@ export default function TriageForm({
               </div>
               <div>
                 <div className="flex items-center gap-3 mb-1 flex-wrap">
-                  <h2 className="text-2xl font-bold text-slate-900">
+                  <h2 className="text-2xl font-bold tracking-tight text-slate-900">
                     {consultation.patient.name}
                   </h2>
                   <ConsultationQuotationBadge consultationId={consultation.id} />
-                  <span className="text-sm bg-slate-100 text-slate-700 px-2 py-1 rounded font-medium">
+                  <span className="text-sm bg-slate-100 text-slate-700 px-2 py-1 rounded-full font-medium">
                     {consultation.patient.species === 'dog' && '🐕 '}
                     {consultation.patient.species === 'cat' && '🐱 '}
                     {consultation.patient.species === 'bird' && '🐦 '}
@@ -589,9 +589,9 @@ export default function TriageForm({
                     consultation.visit_reason === 'emergency'
                       ? 'bg-red-100 text-red-700'
                       : consultation.visit_reason === 'follow_up'
-                      ? 'bg-blue-100 text-blue-700'
+                      ? 'bg-sky-100 text-sky-700'
                       : consultation.visit_reason === 'vaccination'
-                      ? 'bg-green-100 text-green-700'
+                      ? 'bg-emerald-100 text-emerald-700'
                       : 'bg-slate-100 text-slate-700'
                   }`}>
                     {consultation.visit_reason === 'consultation' && 'Consulta'}
@@ -616,11 +616,11 @@ export default function TriageForm({
                 </div>
               )}
               {consultation.patient.chronic_diseases && (
-                <div className="flex items-start gap-2 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                  <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className="font-medium text-yellow-700 text-sm">Doenças Crônicas</p>
-                    <p className="text-yellow-600 text-xs mt-1">{consultation.patient.chronic_diseases}</p>
+                    <p className="font-medium text-amber-700 text-sm">Doenças Crônicas</p>
+                    <p className="text-amber-600 text-xs mt-1">{consultation.patient.chronic_diseases}</p>
                   </div>
                 </div>
               )}
@@ -648,11 +648,11 @@ export default function TriageForm({
               </select>
             </div>
             {consultation.patient.medical_history && (
-              <div className="mt-2 flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg p-2.5">
-                <AlertCircle className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+              <div className="mt-2 flex items-start gap-2 bg-sky-50 border border-sky-200 rounded-lg p-2.5">
+                <AlertCircle className="w-4 h-4 text-sky-600 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-medium text-blue-700 text-xs">Histórico Médico/Cirúrgico</p>
-                  <p className="text-blue-600 text-xs mt-0.5">{consultation.patient.medical_history}</p>
+                  <p className="font-medium text-sky-700 text-xs">Histórico Médico/Cirúrgico</p>
+                  <p className="text-sky-600 text-xs mt-0.5">{consultation.patient.medical_history}</p>
                 </div>
               </div>
             )}
@@ -671,9 +671,9 @@ export default function TriageForm({
         </div>
 
         {/* ─── Motor de Voz Inteligente ──────────────────────────────────────── */}
-        <div data-mentor-step="triage-voice-btn" className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg shadow-sm border border-blue-200 p-6">
+        <div data-mentor-step="triage-voice-btn" className="rounded-xl border border-slate-200 bg-white shadow-sm p-6">
           <div className="flex items-center gap-3 mb-5">
-            <div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center">
+            <div className="w-9 h-9 bg-teal-600 rounded-lg flex items-center justify-center">
               <Sparkles className="w-5 h-5 text-white" />
             </div>
             <div className="flex-1">
@@ -684,7 +684,7 @@ export default function TriageForm({
               type="button"
               onClick={() => setVoiceConfigOpen(true)}
               title="Configurações de Voz"
-              className="p-1.5 rounded-full text-slate-400 hover:bg-blue-100 hover:text-blue-600 transition-colors"
+              className="p-1.5 rounded-full text-slate-400 hover:bg-teal-50 hover:text-teal-600 transition-colors"
             >
               <Settings className="h-4 w-4" />
             </button>
@@ -696,10 +696,10 @@ export default function TriageForm({
               type="button"
               onClick={() => assistant.manualToggle()}
               disabled={isExtractingFields}
-              className={`flex items-center gap-2.5 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+              className={`flex items-center gap-2.5 px-5 py-2.5 rounded-lg font-semibold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                 isRecording
-                  ? 'bg-red-500 text-white hover:bg-red-600 shadow-sm shadow-red-200'
-                  : 'bg-green-600 text-white hover:bg-green-700 shadow-sm shadow-green-200'
+                  ? 'bg-red-600 text-white hover:bg-red-700 shadow-sm'
+                  : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm'
               }`}
             >
               {isRecording ? <><Square className="w-4 h-4 fill-current" /> Parar</> : <><Mic className="w-4 h-4" /> Gravar</>}
@@ -716,14 +716,14 @@ export default function TriageForm({
             )}
 
             {isExtractingFields && (
-              <div className="flex items-center gap-2 text-sm text-blue-600">
-                <Loader2 className="w-4 h-4 animate-spin" />
+              <div className="flex items-center gap-2 text-sm text-teal-700">
+                <Spinner size="md" label="IA processando transcrição…" />
                 IA processando transcrição...
               </div>
             )}
 
             {aiFilledFields.size > 0 && !isExtractingFields && (
-              <div className="flex items-center gap-1.5 text-sm text-green-700 font-medium">
+              <div className="flex items-center gap-1.5 text-sm text-emerald-700 font-medium">
                 <CheckCircle2 className="w-4 h-4" />
                 {aiFilledFields.size} campo(s) preenchido(s) pela IA
               </div>
@@ -740,14 +740,14 @@ export default function TriageForm({
               value={displayTranscript}
               placeholder={isRecording ? 'Aguardando fala...' : 'Diga "Assistente" ou clique em "Gravar" e fale os sinais vitais. Ex: "Peso doze vírgula cinco quilos, temperatura trinta e oito vírgula cinco..."'}
               className={`w-full h-24 px-4 py-3 border rounded-lg text-sm text-slate-700 resize-none bg-white/70 ${
-                isRecording ? 'border-blue-400 bg-blue-50/50' : 'border-slate-200'
+                isRecording ? 'border-teal-400 bg-teal-50/50' : 'border-slate-200'
               }`}
             />
           </div>
 
           {/* Template Selector */}
           {templates.length > 0 && (
-            <div className="mt-4 pt-4 border-t border-blue-200">
+            <div className="mt-4 pt-4 border-t border-slate-200">
               <div className="flex items-center gap-2 mb-2">
                 <FileText className="w-4 h-4 text-slate-500" />
                 <label className="text-sm font-medium text-slate-700">
@@ -761,7 +761,7 @@ export default function TriageForm({
                   setTemplateFieldValues({})
                   setMappedFieldNames(new Set())
                 }}
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white text-sm"
+                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none bg-white text-sm"
               >
                 <option value="">Sem template</option>
                 {templates.map((t) => (
@@ -792,7 +792,7 @@ export default function TriageForm({
         {/* Triage Form */}
         <form id="triage-form" onSubmit={handleSubmit} className="space-y-6 pb-24">
           {/* Vital Signs Grid */}
-          <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+          <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-6">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-semibold text-slate-900">Sinais Vitais</h3>
               <span className="text-xs text-slate-400">* Campos obrigatórios</span>
@@ -803,7 +803,7 @@ export default function TriageForm({
                 <label htmlFor="vital-weight" className="block text-sm font-medium text-slate-700 mb-2">
                   Peso (kg){triageRequiredFields.includes('weight') ? ' *' : ''}
                   {aiFilledFields.has('weight') && (
-                    <CheckCircle2 className="inline w-3.5 h-3.5 text-green-600 ml-1.5" />
+                    <CheckCircle2 className="inline w-3.5 h-3.5 text-emerald-600 ml-1.5" />
                   )}
                 </label>
                 <input
@@ -817,8 +817,8 @@ export default function TriageForm({
                     if (fieldErrors.weight) setFieldErrors((prev) => { const n = { ...prev }; delete n.weight; return n })
                     setAiFilledFields((prev) => { const n = new Set(prev); n.delete('weight'); return n })
                   }}
-                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none ${
-                    fieldErrors.weight ? 'border-red-400 bg-red-50' : aiHighlight('weight') || 'border-slate-300'
+                  className={`w-full px-4 py-2 border rounded-lg font-mono tabular-nums focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none ${
+                    fieldErrors.weight ? 'border-red-400 bg-red-50' : aiHighlight('weight') || 'border-slate-200'
                   }`}
                   placeholder="Ex: 12.5"
                 />
@@ -829,7 +829,7 @@ export default function TriageForm({
                 <label htmlFor="vital-temperature" className="block text-sm font-medium text-slate-700 mb-2">
                   Temperatura Retal (°C){triageRequiredFields.includes('temperature') ? ' *' : ''}
                   {aiFilledFields.has('temperature') && (
-                    <CheckCircle2 className="inline w-3.5 h-3.5 text-green-600 ml-1.5" />
+                    <CheckCircle2 className="inline w-3.5 h-3.5 text-emerald-600 ml-1.5" />
                   )}
                 </label>
                 <input
@@ -843,8 +843,8 @@ export default function TriageForm({
                     if (fieldErrors.temperature) setFieldErrors((prev) => { const n = { ...prev }; delete n.temperature; return n })
                     setAiFilledFields((prev) => { const n = new Set(prev); n.delete('temperature'); return n })
                   }}
-                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none ${
-                    fieldErrors.temperature ? 'border-red-400 bg-red-50' : aiHighlight('temperature') || 'border-slate-300'
+                  className={`w-full px-4 py-2 border rounded-lg font-mono tabular-nums focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none ${
+                    fieldErrors.temperature ? 'border-red-400 bg-red-50' : aiHighlight('temperature') || 'border-slate-200'
                   }`}
                   placeholder="Ex: 38.5"
                 />
@@ -855,7 +855,7 @@ export default function TriageForm({
                 <label className="block text-sm font-medium text-slate-700 mb-2">
                   Frequência Cardíaca (bpm)
                   {aiFilledFields.has('heart_rate') && (
-                    <CheckCircle2 className="inline w-3.5 h-3.5 text-green-600 ml-1.5" />
+                    <CheckCircle2 className="inline w-3.5 h-3.5 text-emerald-600 ml-1.5" />
                   )}
                 </label>
                 <input
@@ -866,7 +866,7 @@ export default function TriageForm({
                     setVitalSigns((prev) => ({ ...prev, heart_rate: parseInt(e.target.value) || 0 }))
                     setAiFilledFields((prev) => { const n = new Set(prev); n.delete('heart_rate'); return n })
                   }}
-                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none ${aiHighlight('heart_rate') || 'border-slate-300'}`}
+                  className={`w-full px-4 py-2 border rounded-lg font-mono tabular-nums focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none ${aiHighlight('heart_rate') || 'border-slate-200'}`}
                   placeholder="Ex: 85"
                 />
               </div>
@@ -875,7 +875,7 @@ export default function TriageForm({
                 <label className="block text-sm font-medium text-slate-700 mb-2">
                   Frequência Respiratória (mov/min)
                   {aiFilledFields.has('respiratory_rate') && (
-                    <CheckCircle2 className="inline w-3.5 h-3.5 text-green-600 ml-1.5" />
+                    <CheckCircle2 className="inline w-3.5 h-3.5 text-emerald-600 ml-1.5" />
                   )}
                 </label>
                 <input
@@ -886,7 +886,7 @@ export default function TriageForm({
                     setVitalSigns((prev) => ({ ...prev, respiratory_rate: parseInt(e.target.value) || 0 }))
                     setAiFilledFields((prev) => { const n = new Set(prev); n.delete('respiratory_rate'); return n })
                   }}
-                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none ${aiHighlight('respiratory_rate') || 'border-slate-300'}`}
+                  className={`w-full px-4 py-2 border rounded-lg font-mono tabular-nums focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none ${aiHighlight('respiratory_rate') || 'border-slate-200'}`}
                   placeholder="Ex: 25"
                 />
               </div>
@@ -895,7 +895,7 @@ export default function TriageForm({
                 <label className="block text-sm font-medium text-slate-700 mb-2">
                   PAS — Pressão Arterial Sistólica (mmHg)
                   {aiFilledFields.has('systolic_bp') && (
-                    <CheckCircle2 className="inline w-3.5 h-3.5 text-green-600 ml-1.5" />
+                    <CheckCircle2 className="inline w-3.5 h-3.5 text-emerald-600 ml-1.5" />
                   )}
                 </label>
                 <input
@@ -906,7 +906,7 @@ export default function TriageForm({
                     setVitalSigns((prev) => ({ ...prev, systolic_bp: parseInt(e.target.value) || 0 }))
                     setAiFilledFields((prev) => { const n = new Set(prev); n.delete('systolic_bp'); return n })
                   }}
-                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none ${aiHighlight('systolic_bp') || 'border-slate-300'}`}
+                  className={`w-full px-4 py-2 border rounded-lg font-mono tabular-nums focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none ${aiHighlight('systolic_bp') || 'border-slate-200'}`}
                   placeholder="Ex: 120"
                 />
               </div>
@@ -915,7 +915,7 @@ export default function TriageForm({
                 <label className="block text-sm font-medium text-slate-700 mb-2">
                   Glicemia (mg/dL)
                   {aiFilledFields.has('glucose') && (
-                    <CheckCircle2 className="inline w-3.5 h-3.5 text-green-600 ml-1.5" />
+                    <CheckCircle2 className="inline w-3.5 h-3.5 text-emerald-600 ml-1.5" />
                   )}
                 </label>
                 <input
@@ -926,7 +926,7 @@ export default function TriageForm({
                     setVitalSigns((prev) => ({ ...prev, glucose: parseInt(e.target.value) || 0 }))
                     setAiFilledFields((prev) => { const n = new Set(prev); n.delete('glucose'); return n })
                   }}
-                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none ${aiHighlight('glucose') || 'border-slate-300'}`}
+                  className={`w-full px-4 py-2 border rounded-lg font-mono tabular-nums focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none ${aiHighlight('glucose') || 'border-slate-200'}`}
                   placeholder="Ex: 90"
                 />
               </div>
@@ -937,7 +937,7 @@ export default function TriageForm({
               <label className="block text-sm font-medium text-slate-700 mb-3">
                 Cor de Mucosa
                 {aiFilledFields.has('mucous_color') && (
-                  <CheckCircle2 className="inline w-3.5 h-3.5 text-green-600 ml-1.5" />
+                  <CheckCircle2 className="inline w-3.5 h-3.5 text-emerald-600 ml-1.5" />
                 )}
               </label>
               <div className="grid grid-cols-2 gap-3">
@@ -952,8 +952,8 @@ export default function TriageForm({
                     className={`p-3 rounded-lg border-2 transition-all text-sm font-medium ${
                       vitalSigns.mucous_color === option.value
                         ? aiFilledFields.has('mucous_color')
-                          ? 'border-green-500 bg-green-50'
-                          : 'border-blue-500 bg-slate-50'
+                          ? 'border-emerald-500 bg-emerald-50'
+                          : 'border-teal-500 bg-teal-50'
                         : 'border-slate-200 hover:border-slate-300'
                     }`}
                   >
@@ -969,7 +969,7 @@ export default function TriageForm({
               <label className="block text-sm font-medium text-slate-700 mb-3">
                 TRC (Tempo de Reenchimento Capilar)
                 {aiFilledFields.has('crt') && (
-                  <CheckCircle2 className="inline w-3.5 h-3.5 text-green-600 ml-1.5" />
+                  <CheckCircle2 className="inline w-3.5 h-3.5 text-emerald-600 ml-1.5" />
                 )}
               </label>
               <div className="space-y-2">
@@ -1003,11 +1003,11 @@ export default function TriageForm({
           />
 
           {/* Chief Complaint */}
-          <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+          <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-6">
             <h3 className="text-lg font-semibold text-slate-900 mb-4">
               Queixa Principal{triageRequiredFields.includes('chief_complaint') ? ' *' : ''}
               {aiFilledFields.has('chief_complaint') && (
-                <span className="ml-2 text-xs font-normal text-green-600 inline-flex items-center gap-1">
+                <span className="ml-2 text-xs font-normal text-emerald-600 inline-flex items-center gap-1">
                   <CheckCircle2 className="w-3.5 h-3.5" /> preenchida pela IA
                 </span>
               )}
@@ -1022,8 +1022,8 @@ export default function TriageForm({
                   if (fieldErrors.chief_complaint) setFieldErrors((prev) => { const n = { ...prev }; delete n.chief_complaint; return n })
                   setAiFilledFields((prev) => { const n = new Set(prev); n.delete('chief_complaint'); return n })
                 }}
-                className={`w-full h-32 px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none ${
-                  fieldErrors.chief_complaint ? 'border-red-400 bg-red-50' : aiHighlight('chief_complaint') || 'border-slate-300'
+                className={`w-full h-32 px-4 py-3 border rounded-lg focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none resize-none ${
+                  fieldErrors.chief_complaint ? 'border-red-400 bg-red-50' : aiHighlight('chief_complaint') || 'border-slate-200'
                 }`}
                 placeholder="Use o Motor de Voz acima ou digite aqui a queixa principal do animal..."
               />
@@ -1044,7 +1044,7 @@ export default function TriageForm({
           <button
             type="button"
             onClick={() => router.back()}
-            className="px-5 py-2.5 border border-slate-300 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition-colors text-sm"
+            className="px-5 py-2.5 border border-slate-200 bg-white text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition-colors text-sm"
           >
             Cancelar
           </button>
@@ -1064,11 +1064,11 @@ export default function TriageForm({
             form="triage-form"
             type="submit"
             disabled={isLoading}
-            className="flex-1 flex items-center justify-center gap-2 px-6 py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
+            className="flex-1 flex items-center justify-center gap-2 px-6 py-2.5 bg-teal-600 text-white font-semibold rounded-lg shadow-sm hover:bg-teal-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors text-sm"
           >
             {isLoading ? (
               <>
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Spinner size="md" label="Salvando…" />
                 Salvando...
               </>
             ) : (
@@ -1094,7 +1094,7 @@ export default function TriageForm({
 
       {voiceConfigOpen && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-5 animate-scale-in">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <Settings className="h-4 w-4 text-teal-600" /> Configurações de Voz
@@ -1118,7 +1118,7 @@ export default function TriageForm({
               <div className="flex flex-wrap gap-1.5">
                 {startTriggers.map(t => (
                   <span key={t} className="flex items-center gap-1 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-0.5 text-xs text-emerald-700">
-                    {t}<button type="button" onClick={() => setStartTriggers(prev => prev.filter(x => x !== t))} className="text-emerald-400 hover:text-rose-500"><XIcon className="h-3 w-3" /></button>
+                    {t}<button type="button" onClick={() => setStartTriggers(prev => prev.filter(x => x !== t))} className="text-emerald-400 hover:text-red-500"><XIcon className="h-3 w-3" /></button>
                   </span>
                 ))}
               </div>
@@ -1138,15 +1138,15 @@ export default function TriageForm({
               <div className="flex flex-wrap gap-1.5">
                 {stopTriggers.map(t => (
                   <span key={t} className="flex items-center gap-1 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-0.5 text-xs text-amber-700">
-                    {t}<button type="button" onClick={() => setStopTriggers(prev => prev.filter(x => x !== t))} className="text-amber-400 hover:text-rose-500"><XIcon className="h-3 w-3" /></button>
+                    {t}<button type="button" onClick={() => setStopTriggers(prev => prev.filter(x => x !== t))} className="text-amber-400 hover:text-red-500"><XIcon className="h-3 w-3" /></button>
                   </span>
                 ))}
               </div>
             </div>
 
             <button type="button" onClick={saveVoiceConfig} disabled={configSaving}
-              className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 rounded-xl text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50">
-              {configSaving ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando…</> : <><Save className="h-4 w-4" /> Salvar Configurações</>}
+              className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 rounded-lg text-sm shadow-sm transition-all flex items-center justify-center gap-2 disabled:opacity-60">
+              {configSaving ? <><Spinner size="md" label="Salvando…" /> Salvando…</> : <><Save className="h-4 w-4" /> Salvar Configurações</>}
             </button>
           </div>
         </div>

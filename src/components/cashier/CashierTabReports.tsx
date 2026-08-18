@@ -92,9 +92,9 @@ export default function CashierTabReports({ clinicName, initialFrom, initialTo }
             <KpiCard
               label="Saldo do período"
               value={fmt(data.totals.balance)}
-              icon={<Wallet className="h-4 w-4 text-blue-600" />}
-              bg="bg-blue-50"
-              valCls={data.totals.balance >= 0 ? 'text-blue-700' : 'text-red-600'}
+              icon={<Wallet className="h-4 w-4 text-sky-600" />}
+              bg="bg-sky-50"
+              valCls={data.totals.balance >= 0 ? 'text-sky-700' : 'text-red-600'}
             />
             <KpiCard
               label="Lançamentos"
@@ -106,10 +106,10 @@ export default function CashierTabReports({ clinicName, initialFrom, initialTo }
           </div>
 
           {/* Header com período e botões de export */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white rounded-xl border border-slate-200 px-4 py-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white rounded-xl border border-slate-200 shadow-sm px-4 py-3">
             <p className="text-sm text-slate-600">
-              <span className="font-semibold text-slate-900">{periodLabel}</span>
-              <span className="ml-2 text-slate-400">· {data.totals.count} lançamentos</span>
+              <span className="font-semibold text-slate-900 font-mono tabular-nums">{periodLabel}</span>
+              <span className="ml-2 text-slate-400 font-mono tabular-nums">· {data.totals.count} lançamentos</span>
             </p>
             <ReportExport data={data} periodLabel={periodLabel} clinicName={clinicName} />
           </div>
@@ -139,14 +139,14 @@ function KpiCard({ label, value, icon, bg, valCls }: {
   valCls: string
 }) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-4">
+    <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
       <div className="flex items-center gap-2 mb-2">
         <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${bg}`}>
           {icon}
         </div>
         <p className="text-xs font-medium text-slate-500">{label}</p>
       </div>
-      <p className={`text-xl font-bold tabular-nums ${valCls}`}>{value}</p>
+      <p className={`text-xl font-bold font-mono tabular-nums ${valCls}`}>{value}</p>
     </div>
   )
 }

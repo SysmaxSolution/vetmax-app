@@ -57,18 +57,18 @@ export default async function TriageScreen({
 
   if ('error' in result) {
     return (
-      <div className="max-w-4xl mx-auto px-3 sm:px-6 py-6 sm:py-10">
-        <div className="rounded-xl border-2 border-red-400 bg-red-50 p-8">
-          <h1 className="text-2xl font-bold text-red-900 mb-2">
+      <div className="max-w-4xl mx-auto px-3 sm:px-6 py-6 sm:py-10 animate-enter">
+        <div className="rounded-xl border border-red-200 bg-red-50 p-8">
+          <h1 className="text-xl font-bold tracking-tight text-red-900 mb-2">
             🚨 ERRO AO CARREGAR TRIAGEM
           </h1>
           <p className="text-red-800 font-semibold mb-4">
-            Consulta ID: <code className="bg-red-100 px-2 py-0.5 rounded">{id}</code>
+            Consulta ID: <code className="bg-red-100 px-2 py-0.5 rounded font-mono tabular-nums">{id}</code>
           </p>
           <p className="text-red-700 mb-6 text-lg">
             Mensagem: <strong>{result.error}</strong>
           </p>
-          <pre className="bg-red-100 rounded-lg p-4 text-sm text-red-900 overflow-x-auto">
+          <pre className="bg-red-100 rounded-lg p-4 text-sm text-red-900 overflow-x-auto font-mono">
             {JSON.stringify({ consultationId: id, error: result.error }, null, 2)}
           </pre>
           <p className="mt-4 text-xs text-red-600">
@@ -87,7 +87,7 @@ export default async function TriageScreen({
   const insuranceCard = 'error' in insuranceCardResult ? null : insuranceCardResult
 
   return (
-    <div className="max-w-4xl mx-auto px-3 sm:px-6 py-6 sm:py-8">
+    <div className="max-w-4xl mx-auto px-3 sm:px-6 py-6 sm:py-8 animate-enter">
       <TriageForm
         consultation={result}
         isEditMode={isEditMode}
