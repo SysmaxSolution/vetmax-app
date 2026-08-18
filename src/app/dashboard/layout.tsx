@@ -10,8 +10,7 @@ import { FREE_ROUTES } from '@/config/access-matrix'
 import type { PlanName, BusinessType, SubscriptionLifecycleState, BillingCycle } from '@/types'
 import { hasOpenClinicalRecords } from '@/lib/billing/provision'
 import SubscriptionDunningBanner from '@/components/management/subscription/SubscriptionDunningBanner'
-import DashboardShellClassic from '@/components/layout/DashboardShellClassic'
-import DashboardShellModern from '@/components/layout/DashboardShellModern'
+import DashboardShell from '@/components/layout/DashboardShell'
 import DeploySkewGuard from '@/components/system/DeploySkewGuard'
 
 export default async function DashboardLayout({
@@ -47,6 +46,8 @@ export default async function DashboardLayout({
   const [{ data: clinicData }, whatsAppRow, clinicsResult, petCountResult, subResult] = await Promise.all([
     admin
       .from('clinics')
+      // layout_version continua na query mas NÃO seleciona mais o shell —
+      // reservado para layouts futuros em Configurações > Aparência (Issue #23).
       .select('logo_url, active_modules, status, ai_transcription_mode, business_type, ui_preferences, flow_config, layout_version')
       .eq('id', profile.clinic_id)
       .single(),
@@ -220,7 +221,7 @@ export default async function DashboardLayout({
     </div>
   ) : null
 
-  // Props compartilhadas entre os shells de layout
+  // Props do shell único (Issue #23 — Decisão do Diretor: UM layout só)
   const shellProps = {
     userName:             profile.full_name ?? '',
     clinicName,
@@ -250,12 +251,5 @@ export default async function DashboardLayout({
     userId:               user.id,
   }
 
-  // Seleciona o shell com base em clinics.layout_version (default: 'classic')
-  const layoutVersion = (clinicData as any)?.layout_version ?? 'classic'
-
-  if (layoutVersion === 'modern') {
-    return <DashboardShellModern {...shellProps}><DeploySkewGuard />{dunningBanner}{children}</DashboardShellModern>
-  }
-
-  return <DashboardShellClassic {...shellProps}><DeploySkewGuard />{dunningBanner}{children}</DashboardShellClassic>
+  return <DashboardShell {...shellProps}><DeploySkewGuard />{dunningBanner}{children}</DashboardShell>
 }
