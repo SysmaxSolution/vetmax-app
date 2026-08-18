@@ -10,9 +10,12 @@ interface ClinicSwitcherProps {
   clinicName:      string
   clinics:         UserClinicInfo[]
   logoUrl?:        string | null
+  /** 'dark' = renderizado sobre a sidebar petrol (texto claro). */
+  variant?:        'light' | 'dark'
 }
 
-export function ClinicSwitcher({ currentClinicId, clinicName, clinics, logoUrl }: ClinicSwitcherProps) {
+export function ClinicSwitcher({ currentClinicId, clinicName, clinics, logoUrl, variant = 'light' }: ClinicSwitcherProps) {
+  const dark = variant === 'dark'
   const [open, setOpen] = useState(false)
   const [switching, setSwitching] = useState<string | null>(null)
   const [switchError, setSwitchError] = useState<string | null>(null)
@@ -56,10 +59,10 @@ export function ClinicSwitcher({ currentClinicId, clinicName, clinics, logoUrl }
         className="flex items-center gap-1 text-left group"
       >
         <div>
-          {!logoUrl && <h1 className="text-sm font-semibold text-slate-900">SysVetMax</h1>}
-          <p className="text-xs text-slate-500 group-hover:text-teal-600 transition-colors">{clinicName}</p>
+          {!logoUrl && <h1 className={`text-sm font-semibold ${dark ? 'text-white' : 'text-slate-900'}`}>SysVetMax</h1>}
+          <p className={`text-xs transition-colors ${dark ? 'text-slate-400 group-hover:text-white' : 'text-slate-500 group-hover:text-teal-600'}`}>{clinicName}</p>
         </div>
-        <ChevronDown className={`h-3 w-3 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`h-3 w-3 transition-transform ${dark ? 'text-slate-500' : 'text-slate-400'} ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (

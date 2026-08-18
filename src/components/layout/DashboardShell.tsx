@@ -1,11 +1,25 @@
+/**
+ * DashboardShell — shell ÚNICO do dashboard (Design System 2026 v7).
+ *
+ * Decisão do Diretor (Issue #23): existe UM layout só — sidebar petrol fixa
+ * à esquerda + topbar glass com o contexto da página. Substitui os antigos
+ * DashboardShellClassic/DashboardShellModern (+ModernStyles).
+ *
+ * Server component de composição: preserva a ordem/aninhamento de providers
+ * dos shells antigos e delega o chrome interativo (Sidebar + Topbar + estado
+ * de colapso/drawer) ao ShellChrome (client). Diferença intencional de escopo:
+ * o chrome agora fica DENTRO da cadeia de providers — no shell antigo o
+ * header ficava fora do UpgradeProvider e o clique nos itens promovidos
+ * "PRO" caía no fallback no-op do useUpgradeModal (nunca abria o modal).
+ */
+
 import { Suspense } from 'react'
-import DashboardHeader from '@/components/layout/DashboardHeader'
+import ShellChrome from '@/components/layout/ShellChrome'
 import { WhatsAppGateProvider } from '@/components/providers/WhatsAppGateProvider'
 import { ModulesProvider } from '@/components/providers/ModulesProvider'
 import { ClinicConfigProvider } from '@/components/providers/ClinicConfigProvider'
 import { ThemeProvider } from '@/components/providers/ThemeProvider'
 import { MentorGlobalWrapper } from '@/components/mentor/MentorGlobalWrapper'
-import { SysmaxFooter } from '@/components/ui/SysmaxFooter'
 import OnboardingWizard from '@/components/onboarding/OnboardingWizard'
 import { UpgradeProvider } from '@/components/upgrade/UpgradeProvider'
 import ChatNotificationsHost from '@/components/layout/ChatNotificationsHost'
@@ -16,7 +30,7 @@ import type { PlanName, BusinessType, UserRole } from '@/types'
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 export interface DashboardShellProps {
-  // Header
+  // Chrome (Sidebar + Topbar)
   userName:             string
   clinicName:           string
   clinicId:             string
@@ -33,9 +47,9 @@ export interface DashboardShellProps {
   planName:             PlanName
   allowedRoutes:        string[]
   centroCirurgico:      boolean
-  /** Épico B (04/06, Q4): PDV unificado ao Caixa — esconde a aba PDV do menu. */
+  /** Épico B (04/06, Q4): PDV unificado ao Caixa — esconde o item PDV do menu. */
   pdvUnified?:          boolean
-  /** SaaS Fase 1 — rollout restrito: exibe link "Meu Plano" no header (admin). */
+  /** SaaS Fase 1 — rollout restrito: exibe link "Meu Plano" na topbar (admin). */
   subscriptionUiEnabled?: boolean
   // Providers
   uiPreferences:        Record<string, unknown> | null
@@ -52,9 +66,9 @@ export interface DashboardShellProps {
   children:             React.ReactNode
 }
 
-// ─── Layout Clássico — shell idêntico ao layout original ─────────────────────
+// ─── Shell único ─────────────────────────────────────────────────────────────
 
-export default function DashboardShellClassic({
+export default function DashboardShell({
   userName, clinicName, clinicId, userRole, logoUrl, activeModules,
   lowStockCount, whatsappHandoffCount, chatUnreadCount, userClinics,
   isSysmax, clinicStatus, isSurgeryMode, planName, allowedRoutes, centroCirurgico,
@@ -64,27 +78,6 @@ export default function DashboardShellClassic({
 }: DashboardShellProps) {
   return (
     <NotificationProvider clinicId={clinicId}>
-    <section className="min-h-screen bg-slate-50">
-      <DashboardHeader
-        userName={userName}
-        clinicName={clinicName}
-        clinicId={clinicId}
-        userRole={userRole}
-        logoUrl={logoUrl}
-        activeModules={activeModules}
-        lowStockCount={lowStockCount}
-        whatsappHandoffCount={whatsappHandoffCount}
-        chatUnreadCount={chatUnreadCount}
-        userClinics={userClinics}
-        isSysmax={isSysmax}
-        clinicStatus={clinicStatus}
-        isSurgeryMode={isSurgeryMode}
-        planName={planName}
-        allowedRoutes={allowedRoutes}
-        centroCirurgico={centroCirurgico}
-        pdvUnified={pdvUnified}
-        subscriptionUiEnabled={subscriptionUiEnabled}
-      />
       <ThemeProvider initialPreferences={uiPreferences as any}>
         <ClinicConfigProvider
           aiTranscriptionMode={aiTranscriptionMode as any}
@@ -94,7 +87,28 @@ export default function DashboardShellClassic({
           <ModulesProvider modules={activeModules ?? []}>
             <WhatsAppGateProvider enabled={whatsAppEnabled}>
               <UpgradeProvider planName={planName} activeModules={activeModules ?? []} subscriptionUiEnabled={subscriptionUiEnabled}>
-                {children}
+                <ShellChrome
+                  userName={userName}
+                  clinicName={clinicName}
+                  clinicId={clinicId}
+                  userRole={userRole}
+                  logoUrl={logoUrl}
+                  activeModules={activeModules}
+                  lowStockCount={lowStockCount}
+                  whatsappHandoffCount={whatsappHandoffCount}
+                  chatUnreadCount={chatUnreadCount}
+                  userClinics={userClinics}
+                  isSysmax={isSysmax}
+                  clinicStatus={clinicStatus}
+                  isSurgeryMode={isSurgeryMode}
+                  planName={planName}
+                  allowedRoutes={allowedRoutes}
+                  centroCirurgico={centroCirurgico}
+                  pdvUnified={pdvUnified}
+                  subscriptionUiEnabled={subscriptionUiEnabled}
+                >
+                  {children}
+                </ShellChrome>
               </UpgradeProvider>
             </WhatsAppGateProvider>
           </ModulesProvider>
@@ -112,8 +126,6 @@ export default function DashboardShellClassic({
       <MentorGlobalWrapper />
       <ChatNotificationsHost clinicId={clinicId} userId={userId} />
       <Suspense fallback={null}>{null}</Suspense>
-      <SysmaxFooter />
-    </section>
     </NotificationProvider>
   )
 }
