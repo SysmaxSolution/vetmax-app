@@ -86,7 +86,7 @@ export function ItemMatchingPanel({ item, onClose, onMatched }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
+      <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl animate-scale-in">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <div className="flex items-center gap-2">
@@ -102,7 +102,7 @@ export function ItemMatchingPanel({ item, onClose, onMatched }: Props) {
         <div className="bg-purple-50 px-5 py-3 text-sm">
           <p className="font-semibold text-purple-900 truncate">{item.description}</p>
           <p className="text-purple-600 text-xs mt-0.5">
-            {item.quantity} {item.unit} · NCM {item.ncm || '—'} · EAN {item.ean || '—'}
+            <span className="font-mono tabular-nums">{item.quantity} {item.unit} · NCM {item.ncm || '—'} · EAN {item.ean || '—'}</span>
           </p>
           {item.ncm && !ncmData && (
             <button onClick={loadNCMInfo} className="mt-1 text-xs text-purple-700 underline">
@@ -173,13 +173,13 @@ export function ItemMatchingPanel({ item, onClose, onMatched }: Props) {
                   value={query}
                   onChange={e => setQuery(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && doSearch()}
-                  className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-purple-400 focus:outline-none"
+                  className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
                   placeholder="Nome do produto no estoque..."
                 />
                 <button
                   onClick={doSearch}
                   disabled={searching}
-                  className="flex items-center gap-1 rounded-lg bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-50"
+                  className="flex items-center gap-1 rounded-lg bg-teal-600 px-3 py-2 text-sm font-medium text-white hover:bg-teal-700 disabled:opacity-50"
                 >
                   {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                 </button>
@@ -191,7 +191,7 @@ export function ItemMatchingPanel({ item, onClose, onMatched }: Props) {
                   </p>
                 )}
                 {results.map(r => (
-                  <div key={r.id} className="flex items-center justify-between rounded-lg border border-slate-100 hover:border-purple-200 bg-slate-50 px-3 py-2">
+                  <div key={r.id} className="flex items-center justify-between rounded-lg border border-slate-100 hover:border-teal-200 bg-slate-50 px-3 py-2">
                     <div>
                       <p className="text-sm font-medium text-slate-700">{r.name}</p>
                       <p className="text-xs text-slate-400 capitalize">{r.category} · R$ {r.unit_price.toFixed(2)}</p>
@@ -199,7 +199,7 @@ export function ItemMatchingPanel({ item, onClose, onMatched }: Props) {
                     <button
                       onClick={() => handleLink(r.id)}
                       disabled={isPending}
-                      className="flex items-center gap-1 rounded-lg bg-purple-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-purple-700 disabled:opacity-50"
+                      className="flex items-center gap-1 rounded-lg bg-teal-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-teal-700 disabled:opacity-50"
                     >
                       <Link2 className="h-3 w-3" />
                       Vincular
@@ -217,7 +217,7 @@ export function ItemMatchingPanel({ item, onClose, onMatched }: Props) {
                 <input
                   value={createName}
                   onChange={e => setCreateName(e.target.value)}
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-purple-400 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
                 />
               </div>
               <div>
@@ -225,7 +225,7 @@ export function ItemMatchingPanel({ item, onClose, onMatched }: Props) {
                 <select
                   value={createCat}
                   onChange={e => setCreateCat(e.target.value)}
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-purple-400 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
                 >
                   <option value="supply">Insumo / Produto</option>
                   <option value="medication">Medicamento</option>
@@ -240,7 +240,7 @@ export function ItemMatchingPanel({ item, onClose, onMatched }: Props) {
                     type="number" min="1" value={unitsPerPackage}
                     onChange={e => setUnitsPerPackage(e.target.value)}
                     placeholder="Ex: 30 (comprimidos/caixa)"
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-purple-400 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
                   />
                 </div>
                 <div>
@@ -249,7 +249,7 @@ export function ItemMatchingPanel({ item, onClose, onMatched }: Props) {
                     type="text" value={baseUnit}
                     onChange={e => setBaseUnit(e.target.value)}
                     placeholder="Ex: comprimido"
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-purple-400 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
                   />
                 </div>
               </div>
@@ -262,7 +262,7 @@ export function ItemMatchingPanel({ item, onClose, onMatched }: Props) {
               <button
                 onClick={handleCreate}
                 disabled={isPending || createName.length < 2}
-                className="w-full flex items-center justify-center gap-2 rounded-lg bg-purple-600 py-2.5 text-sm font-bold text-white hover:bg-purple-700 disabled:opacity-50"
+                className="w-full flex items-center justify-center gap-2 rounded-lg bg-teal-600 py-2.5 text-sm font-bold text-white hover:bg-teal-700 disabled:opacity-50"
               >
                 {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                 Criar e Vincular

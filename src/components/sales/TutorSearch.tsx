@@ -39,17 +39,17 @@ export default function TutorSearch({ selected, onSelect, disabled = false }: Tu
 
   if (selected) {
     return (
-      <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl px-3 py-2">
-        <UserCircle className="h-4 w-4 text-blue-500 flex-shrink-0" />
+      <div className="flex items-center gap-2 bg-teal-50 border border-teal-200 rounded-xl px-3 py-2">
+        <UserCircle className="h-4 w-4 text-teal-600 flex-shrink-0" />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-blue-800 truncate">{selected.name}</p>
-          {selected.phone && <p className="text-xs text-blue-500">{selected.phone}</p>}
+          <p className="text-sm font-semibold text-teal-800 truncate">{selected.name}</p>
+          {selected.phone && <p className="text-xs text-teal-600 font-mono tabular-nums">{selected.phone}</p>}
         </div>
         <button
           type="button"
           onClick={() => onSelect(null)}
           disabled={disabled}
-          className="text-blue-400 hover:text-blue-600 transition-colors disabled:opacity-40"
+          className="text-teal-500 hover:text-teal-700 transition-colors disabled:opacity-40"
           aria-label="Remover tutor"
         >
           <X className="h-4 w-4" />
@@ -71,7 +71,7 @@ export default function TutorSearch({ selected, onSelect, disabled = false }: Tu
         onChange={handleChange}
         onFocus={() => results.length > 0 && setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
-        className="w-full border border-slate-200 rounded-xl pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 bg-slate-50"
+        className="w-full border border-slate-200 rounded-lg pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-50 bg-slate-50"
       />
       {open && (
         <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-40 overflow-y-auto">
@@ -80,7 +80,7 @@ export default function TutorSearch({ selected, onSelect, disabled = false }: Tu
               key={t.id}
               type="button"
               onMouseDown={() => pick(t)}
-              className="w-full text-left px-4 py-2.5 hover:bg-blue-50 border-b border-slate-100 last:border-0 transition-colors"
+              className="w-full text-left px-4 py-2.5 hover:bg-teal-50 border-b border-slate-100 last:border-0 transition-colors"
             >
               <p className="text-sm font-medium text-slate-900">{t.name}</p>
               {t.phone && <p className="text-xs text-slate-400">{t.phone}</p>}

@@ -71,12 +71,12 @@ function ResumoCards({ result }: { result: ExtratoResult }) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
       {cards.map(card => (
-        <div key={card.label} className={`rounded-2xl border p-4 ${card.color}`}>
+        <div key={card.label} className={`rounded-xl border p-4 ${card.color}`}>
           <div className="flex items-center gap-2 mb-2">
             <card.icon className={`h-4 w-4 ${card.iconClr}`} />
             <span className="text-xs font-semibold text-slate-600">{card.label}</span>
           </div>
-          <p className={`text-xl font-bold ${card.valClr}`}>{fmt(card.value)}</p>
+          <p className={`text-xl font-bold font-mono tabular-nums ${card.valClr}`}>{fmt(card.value)}</p>
         </div>
       ))}
     </div>
@@ -95,14 +95,14 @@ function LancamentoRow({
   const isCredit = stmt.type === 'credit'
   return (
     <tr className="border-b border-slate-100 hover:bg-teal-50/40 transition-colors">
-      <td className="py-3 px-4 text-sm text-slate-600 whitespace-nowrap">{fmtDate(stmt.date)}</td>
+      <td className="py-3 px-4 text-sm text-slate-600 whitespace-nowrap font-mono tabular-nums">{fmtDate(stmt.date)}</td>
       <td className="py-3 px-4 text-sm text-slate-700 sm:max-w-[300px]">
         <p className="truncate">{stmt.description}</p>
         {stmt.external_id && (
           <p className="text-xs text-slate-400">{stmt.external_id}</p>
         )}
       </td>
-      <td className={`py-3 px-4 text-sm font-semibold text-right whitespace-nowrap ${isCredit ? 'text-emerald-700' : 'text-red-700'}`}>
+      <td className={`py-3 px-4 text-sm font-semibold text-right whitespace-nowrap font-mono tabular-nums ${isCredit ? 'text-emerald-700' : 'text-red-700'}`}>
         {isCredit ? '+' : '-'} {fmt(stmt.amount)}
       </td>
       <td className="py-3 px-4">
@@ -114,7 +114,7 @@ function LancamentoRow({
           {isCredit ? 'Crédito' : 'Débito'}
         </span>
       </td>
-      <td className={`py-3 px-4 text-sm font-bold text-right whitespace-nowrap ${runningBalance >= 0 ? 'text-slate-700' : 'text-orange-700'}`}>
+      <td className={`py-3 px-4 text-sm font-bold text-right whitespace-nowrap font-mono tabular-nums ${runningBalance >= 0 ? 'text-slate-700' : 'text-orange-700'}`}>
         {fmt(runningBalance)}
       </td>
       <td className="py-3 px-4">
@@ -174,14 +174,14 @@ export default function ExtratoTab({ bankAccounts }: Props) {
   return (
     <div className="space-y-4">
       {/* Filtros */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-4">
         <div className="flex flex-wrap items-end gap-3">
           <div className="w-full sm:w-auto sm:min-w-[160px] flex-1">
             <label className="block text-xs font-semibold text-slate-500 mb-1.5">Conta Bancária</label>
             <select
               value={selectedBank}
               onChange={e => setSelectedBank(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+              className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
             >
               <option value="">Selecione uma conta</option>
               {bankAccounts.map(b => (
@@ -201,7 +201,7 @@ export default function ExtratoTab({ bankAccounts }: Props) {
               type="date"
               value={startDate}
               onChange={e => setStartDate(e.target.value)}
-              className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+              className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
             />
           </div>
 
@@ -211,14 +211,14 @@ export default function ExtratoTab({ bankAccounts }: Props) {
               type="date"
               value={endDate}
               onChange={e => setEndDate(e.target.value)}
-              className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+              className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
             />
           </div>
 
           <button
             onClick={load}
             disabled={isPending || !selectedBank}
-            className="flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 transition-colors disabled:opacity-50"
           >
             <RefreshCcw className={`h-4 w-4 ${isPending ? 'animate-spin' : ''}`} />
             {isPending ? 'Carregando...' : 'Carregar Extrato'}
@@ -235,7 +235,7 @@ export default function ExtratoTab({ bankAccounts }: Props) {
 
       {/* Tabela de lançamentos */}
       {result && (
-        <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
           {result.statements.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <Wallet className="h-12 w-12 text-slate-200 mb-3" />
@@ -275,7 +275,7 @@ export default function ExtratoTab({ bankAccounts }: Props) {
                   {result.statements.length} {result.statements.length === 1 ? 'lançamento' : 'lançamentos'}
                 </p>
                 <p className="text-sm font-bold text-slate-700">
-                  Saldo Final: {fmt(result.saldo_final)}
+                  Saldo Final: <span className="font-mono tabular-nums">{fmt(result.saldo_final)}</span>
                 </p>
               </div>
             </div>

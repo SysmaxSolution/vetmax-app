@@ -136,7 +136,7 @@ export default function CheckoutModal({
       )}
       {error && !isPending && (
         <div role="dialog" aria-modal="true" className="fixed inset-0 z-[10010] flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-3">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-3 animate-scale-in">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100">
                 <AlertCircle className="h-5 w-5 text-red-600" />
@@ -147,13 +147,13 @@ export default function CheckoutModal({
             <div className="flex gap-2 pt-1">
               <button
                 onClick={() => { setError(''); setShowPaymentModal(true) }}
-                className="flex-1 rounded-xl bg-teal-600 hover:bg-teal-700 py-2.5 text-sm font-semibold text-white"
+                className="flex-1 rounded-lg bg-teal-600 hover:bg-teal-700 py-2.5 text-sm font-semibold text-white"
               >
                 <Receipt className="h-4 w-4 inline mr-1.5" /> Tentar novamente
               </button>
               <button
                 onClick={onClose}
-                className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+                className="flex-1 rounded-lg border border-slate-200 bg-white py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
               >
                 <X className="h-4 w-4 inline mr-1.5" /> Fechar
               </button>

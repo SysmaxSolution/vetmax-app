@@ -38,7 +38,7 @@ export default function ConsultationQuotationBadge({ consultationId, className }
           key={q.doc_number}
           title={q.is_billed ? 'Orçamento já faturado no caixa' : 'Atendimento vinculado a este orçamento'}
           className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${
-            q.is_billed ? 'bg-slate-100 text-slate-500' : 'bg-green-100 text-green-700'
+            q.is_billed ? 'bg-slate-100 text-slate-500' : 'bg-emerald-100 text-emerald-700'
           }`}
         >
           🧾 {q.doc_number}{q.is_billed ? ' · faturado' : ''}

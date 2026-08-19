@@ -39,7 +39,7 @@ function MatchBadge({ status }: { status: MatchStatus }) {
   }
   if (status === 'divergent') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-semibold text-yellow-700">
+      <span className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
         <AlertTriangle className="h-3 w-3" /> Divergência
       </span>
     )
@@ -89,7 +89,7 @@ function ManualMatchPanel({
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       {/* Coluna: Lançamentos importados */}
-      <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
           <h3 className="text-sm font-bold text-slate-700">Lançamentos Importados</h3>
           <p className="text-xs text-slate-400">{importedStatements.length} registros — clique para selecionar</p>
@@ -116,10 +116,10 @@ function ManualMatchPanel({
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-slate-700 truncate">{stmt.description}</p>
-                    <p className="text-xs text-slate-400">{fmtDate(stmt.date)}</p>
+                    <p className="text-xs text-slate-400 font-mono tabular-nums">{fmtDate(stmt.date)}</p>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className={`text-sm font-bold ${stmt.type === 'credit' ? 'text-emerald-700' : 'text-red-700'}`}>
+                    <p className={`text-sm font-bold font-mono tabular-nums ${stmt.type === 'credit' ? 'text-emerald-700' : 'text-red-700'}`}>
                       {stmt.type === 'credit' ? '+' : '-'}{fmt(stmt.amount)}
                     </p>
                     {isAutoMatched && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 ml-auto mt-1" />}
@@ -132,7 +132,7 @@ function ManualMatchPanel({
       </div>
 
       {/* Coluna: Títulos pendentes */}
-      <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
           <h3 className="text-sm font-bold text-slate-700">Títulos Pendentes</h3>
           <p className="text-xs text-slate-400">{pendingEntries.length} títulos — clique para selecionar</p>
@@ -159,11 +159,11 @@ function ManualMatchPanel({
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-slate-700 truncate">{entry.description}</p>
-                    <p className="text-xs text-slate-400">Venc. {fmtDate(entry.due_date)}</p>
+                    <p className="text-xs text-slate-400 font-mono tabular-nums">Venc. {fmtDate(entry.due_date)}</p>
                     {entry.category && <p className="text-xs text-teal-600">{entry.category}</p>}
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-sm font-bold text-slate-700">{fmt(entry.amount)}</p>
+                    <p className="text-sm font-bold text-slate-700 font-mono tabular-nums">{fmt(entry.amount)}</p>
                     {isAutoMatched && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 ml-auto mt-1" />}
                   </div>
                 </div>
@@ -175,7 +175,7 @@ function ManualMatchPanel({
 
       {/* Ação de conciliar */}
       {(selectedStmt || selectedEntry) && (
-        <div className="col-span-1 sm:col-span-2 flex items-center justify-between rounded-2xl border border-teal-200 bg-teal-50 px-4 py-3">
+        <div className="col-span-1 sm:col-span-2 flex items-center justify-between rounded-xl border border-teal-200 bg-teal-50 px-4 py-3">
           <div className="flex items-center gap-3">
             <Link2 className="h-4 w-4 text-teal-600" />
             <p className="text-sm font-medium text-teal-800">
@@ -187,7 +187,7 @@ function ManualMatchPanel({
           <button
             onClick={handleConfirm}
             disabled={!selectedStmt || !selectedEntry || isSaving}
-            className="flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50 transition-colors"
+            className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 disabled:opacity-50 transition-colors"
           >
             {isSaving ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
             Conciliar
@@ -209,19 +209,19 @@ function ManualMatchPanel({
 function AutoMatchSummary({ result }: { result: AutoMatchResult }) {
   return (
     <div className="grid grid-cols-3 gap-3">
-      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-center">
+      <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center">
         <CheckCircle2 className="h-5 w-5 text-emerald-600 mx-auto mb-1" />
-        <p className="text-2xl font-bold text-emerald-700">{result.matched.length}</p>
+        <p className="text-2xl font-bold font-mono tabular-nums text-emerald-700">{result.matched.length}</p>
         <p className="text-xs font-semibold text-emerald-600">Conciliados (auto)</p>
       </div>
-      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center">
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-center">
         <Circle className="h-5 w-5 text-slate-400 mx-auto mb-1" />
-        <p className="text-2xl font-bold text-slate-600">{result.unmatched_imported.length}</p>
+        <p className="text-2xl font-bold font-mono tabular-nums text-slate-600">{result.unmatched_imported.length}</p>
         <p className="text-xs font-semibold text-slate-500">Importados sem par</p>
       </div>
-      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-center">
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-center">
         <AlertTriangle className="h-5 w-5 text-amber-500 mx-auto mb-1" />
-        <p className="text-2xl font-bold text-amber-700">{result.unmatched_entries.length}</p>
+        <p className="text-2xl font-bold font-mono tabular-nums text-amber-700">{result.unmatched_entries.length}</p>
         <p className="text-xs font-semibold text-amber-600">Títulos sem par</p>
       </div>
     </div>
@@ -380,14 +380,14 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
   return (
     <div className="space-y-4">
       {/* Seleção de conta e upload */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-4">
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-4 space-y-4">
         <div className="flex flex-wrap items-end gap-3">
           <div className="w-full sm:min-w-[200px] flex-1">
             <label className="block text-xs font-semibold text-slate-500 mb-1.5">Conta Bancária</label>
             <select
               value={selectedBank}
               onChange={e => setSelectedBank(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+              className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
             >
               <option value="">Selecione uma conta</option>
               {bankAccounts.map(b => (
@@ -416,7 +416,7 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
               />
               <label
                 htmlFor="bank-statement-upload"
-                className={`flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold cursor-pointer transition-colors w-full sm:w-auto justify-center ${
+                className={`flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold cursor-pointer transition-colors w-full sm:w-auto justify-center ${
                   !selectedBank || isPending
                     ? 'opacity-50 cursor-default bg-slate-50 text-slate-400'
                     : 'bg-white text-slate-700 hover:bg-slate-50'
@@ -432,7 +432,7 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
           <button
             onClick={handleBBImport}
             disabled={!selectedBank || isBBLoading}
-            className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-50 transition-colors"
+            className="flex items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-100 disabled:opacity-50 transition-colors"
           >
             <Building2 className={`h-4 w-4 ${isBBLoading ? 'animate-spin' : ''}`} />
             Importar do Banco (BB)
@@ -441,9 +441,9 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
 
         {/* Avisos de parse */}
         {parseErrors.length > 0 && (
-          <div className="rounded-xl bg-yellow-50 border border-yellow-200 px-4 py-3">
-            <p className="text-sm font-semibold text-yellow-800 mb-1">Avisos de importação:</p>
-            <ul className="text-xs text-yellow-700 space-y-0.5 list-disc list-inside">
+          <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
+            <p className="text-sm font-semibold text-amber-800 mb-1">Avisos de importação:</p>
+            <ul className="text-xs text-amber-700 space-y-0.5 list-disc list-inside">
               {parseErrors.map((e, i) => <li key={i}>{e}</li>)}
             </ul>
           </div>
@@ -484,7 +484,7 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
 
       {/* Estado vazio */}
       {!batch && !isPending && (
-        <div className="flex flex-col items-center justify-center py-16 text-center rounded-2xl border border-slate-200 bg-white">
+        <div className="flex flex-col items-center justify-center py-16 text-center rounded-xl border border-slate-200 bg-white shadow-sm">
           <Upload className="h-12 w-12 text-slate-200 mb-3" />
           <p className="text-sm font-semibold text-slate-400">
             Selecione uma conta e importe um extrato bancário para iniciar a conciliação.

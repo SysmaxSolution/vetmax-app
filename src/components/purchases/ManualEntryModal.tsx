@@ -98,7 +98,7 @@ export default function ManualEntryModal({ suppliers, onClose, onSuccess }: Prop
       className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-900/60 p-3 sm:p-4 overflow-y-auto"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[92vh] animate-scale-in">
 
         {/* Header */}
         <div className="flex-shrink-0 flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-purple-50/50">
@@ -125,7 +125,7 @@ export default function ManualEntryModal({ suppliers, onClose, onSuccess }: Prop
               <select
                 value={supplierId}
                 onChange={e => setSupplierId(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/20 bg-white"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 bg-white"
               >
                 <option value="">— Sem fornecedor —</option>
                 {suppliers.map(s => (
@@ -139,7 +139,7 @@ export default function ManualEntryModal({ suppliers, onClose, onSuccess }: Prop
                 type="date"
                 value={issueDate}
                 onChange={e => setIssueDate(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
               />
             </div>
           </div>
@@ -152,7 +152,7 @@ export default function ManualEntryModal({ suppliers, onClose, onSuccess }: Prop
               </span>
               <button
                 onClick={addItem}
-                className="flex items-center gap-1 rounded-lg bg-purple-600 hover:bg-purple-700 px-2.5 py-1 text-xs font-semibold text-white"
+                className="flex items-center gap-1 rounded-lg bg-teal-600 hover:bg-teal-700 px-2.5 py-1 text-xs font-semibold text-white"
               >
                 <Plus className="h-3 w-3" /> Adicionar
               </button>
@@ -166,7 +166,7 @@ export default function ManualEntryModal({ suppliers, onClose, onSuccess }: Prop
                       value={it.description}
                       onChange={e => patchItem(idx, { description: e.target.value })}
                       placeholder="Descrição do item *"
-                      className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                      className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
                     />
                     <button
                       onClick={() => removeItem(idx)}
@@ -183,7 +183,7 @@ export default function ManualEntryModal({ suppliers, onClose, onSuccess }: Prop
                         value={it.quantity}
                         onChange={e => patchItem(idx, { quantity: e.target.value })}
                         inputMode="decimal"
-                        className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-mono focus:border-purple-500 focus:outline-none"
+                        className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-mono focus:border-teal-500 focus:outline-none"
                       />
                     </div>
                     <div className="col-span-1">
@@ -192,7 +192,7 @@ export default function ManualEntryModal({ suppliers, onClose, onSuccess }: Prop
                         value={it.unit}
                         onChange={e => patchItem(idx, { unit: e.target.value })}
                         placeholder="UN, CX, KG..."
-                        className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm focus:border-purple-500 focus:outline-none"
+                        className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm focus:border-teal-500 focus:outline-none"
                       />
                     </div>
                     <div className="col-span-2">
@@ -201,7 +201,7 @@ export default function ManualEntryModal({ suppliers, onClose, onSuccess }: Prop
                         value={it.unit_price}
                         onChange={e => patchItem(idx, { unit_price: e.target.value })}
                         inputMode="decimal"
-                        className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-mono focus:border-purple-500 focus:outline-none"
+                        className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-mono focus:border-teal-500 focus:outline-none"
                       />
                     </div>
                   </div>
@@ -211,7 +211,7 @@ export default function ManualEntryModal({ suppliers, onClose, onSuccess }: Prop
                       value={it.ean}
                       onChange={e => patchItem(idx, { ean: e.target.value })}
                       placeholder="Para auto-match com estoque"
-                      className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-mono focus:border-purple-500 focus:outline-none"
+                      className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm font-mono focus:border-teal-500 focus:outline-none"
                     />
                   </div>
                 </div>
@@ -220,7 +220,7 @@ export default function ManualEntryModal({ suppliers, onClose, onSuccess }: Prop
 
             <div className="flex items-center justify-between px-3 py-2 border-t border-slate-200 bg-slate-50">
               <span className="text-xs font-semibold text-slate-600">Total estimado</span>
-              <span className="text-base font-bold text-purple-700">
+              <span className="text-base font-bold text-purple-700 font-mono tabular-nums">
                 {total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
               </span>
             </div>
@@ -233,7 +233,7 @@ export default function ManualEntryModal({ suppliers, onClose, onSuccess }: Prop
               onChange={e => setNotes(e.target.value)}
               placeholder="Detalhes da entrada — origem, motivo, número de pedido externo..."
               rows={2}
-              className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm resize-none focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm resize-none focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
             />
           </div>
 
@@ -257,7 +257,7 @@ export default function ManualEntryModal({ suppliers, onClose, onSuccess }: Prop
             type="button"
             disabled={isPending}
             onClick={handleSave}
-            className="flex-1 rounded-xl bg-purple-600 hover:bg-purple-700 py-2.5 text-sm font-semibold text-white disabled:opacity-50 flex items-center justify-center gap-2"
+            className="flex-1 rounded-lg bg-teal-600 hover:bg-teal-700 py-2.5 text-sm font-semibold text-white disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {isPending
               ? <><Loader2 className="h-4 w-4 animate-spin" /> Registrando...</>

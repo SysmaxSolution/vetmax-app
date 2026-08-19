@@ -543,20 +543,20 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
   return (
     <>
       {saveToast && (
-        <div className="fixed top-5 right-5 z-[60] flex items-center gap-3 bg-teal-600 text-white text-sm font-semibold px-4 py-3 rounded-xl shadow-lg">
+        <div className="fixed top-5 right-5 z-[60] flex items-center gap-3 bg-teal-600 text-white text-sm font-semibold px-4 py-3 rounded-xl shadow-lg animate-enter-fast">
           <CheckCircle className="h-4 w-4 flex-shrink-0" />
           {saveToast}
         </div>
       )}
       {errorToast && (
-        <div className="fixed top-5 right-5 z-[60] flex items-center gap-3 bg-rose-600 text-white text-sm font-semibold px-4 py-3 rounded-xl shadow-lg">
+        <div className="fixed top-5 right-5 z-[60] flex items-center gap-3 bg-rose-600 text-white text-sm font-semibold px-4 py-3 rounded-xl shadow-lg animate-enter-fast">
           <X className="h-4 w-4 flex-shrink-0" />
           {errorToast}
         </div>
       )}
 
       <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/60 backdrop-blur-sm">
-        <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-4xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full max-w-4xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col animate-scale-in">
 
           {/* Header */}
           <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
@@ -607,7 +607,7 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
                   type="button"
                   onClick={() => handleStatusAdvance(nextStatus)}
                   disabled={isAdvancingStatus}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-white text-[11px] font-bold transition-all disabled:opacity-50 shadow-sm ${STATUS_NEXT_BTN[currentCardStatus]}`}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-[11px] font-bold transition-all disabled:opacity-50 shadow-sm ${STATUS_NEXT_BTN[currentCardStatus]}`}
                 >
                   {isAdvancingStatus
                     ? <><Loader2 className="h-3 w-3 animate-spin" /> Avançando...</>
@@ -822,7 +822,7 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
                     type="submit"
                     disabled={isSubmitting || (selectedServices.length === 0 && !observations.trim())}
                     data-mentor-step="grooming-save-record-btn"
-                    className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-xl shadow-lg shadow-teal-100 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                    className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-lg shadow-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
                   >
                     {isSubmitting
                       ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando...</>
@@ -945,11 +945,11 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
                                 </div>
                                 <div className="flex items-center gap-2">
                                   <div className="text-right">
-                                    <div className="flex items-center gap-1 text-slate-700 font-bold text-xs justify-end">
+                                    <div className="flex items-center gap-1 text-slate-700 font-bold text-xs justify-end font-mono tabular-nums">
                                       <Clock className="h-3 w-3 text-teal-500" />
                                       {new Date(record.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                                     </div>
-                                    <span className="text-[10px] text-slate-400">
+                                    <span className="text-[10px] text-slate-400 font-mono tabular-nums">
                                       {new Date(record.created_at).toLocaleDateString('pt-BR')}
                                     </span>
                                   </div>
@@ -1007,10 +1007,10 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
                                   />
                                   <div className="flex gap-2">
                                     <button type="button" onClick={() => setEditingRecordId(null)}
-                                      className="flex-1 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                                      className="flex-1 py-2 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:bg-slate-50"
                                     >Cancelar</button>
                                     <button type="button" onClick={saveEdit} disabled={isSavingEdit}
-                                      className="flex-1 py-2 rounded-xl bg-teal-600 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-50 flex items-center justify-center gap-1"
+                                      className="flex-1 py-2 rounded-lg bg-teal-600 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-50 flex items-center justify-center gap-1"
                                     >
                                       {isSavingEdit ? <><Loader2 className="h-3 w-3 animate-spin" />Salvando…</> : <><Save className="h-3 w-3" />Salvar Edição</>}
                                     </button>
@@ -1101,7 +1101,7 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
                               href="/dashboard/cashier"
                               id={`btn-goto-cashier-${card.id}`}
                               data-testid={`btn-goto-cashier-${card.id}`}
-                              className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700 transition-colors"
+                              className="flex items-center gap-1 text-xs font-semibold text-teal-600 hover:text-teal-700 transition-colors"
                               title="Finalizar pagamento no Caixa Central"
                             >
                               <ExternalLink className="h-3 w-3" />
@@ -1219,7 +1219,7 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
                           type="number" min="0" max="100" step="1"
                           value={discountPct || ''}
                           placeholder="0"
-                          className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:border-teal-500 focus:outline-none"
+                          className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:border-teal-500 focus:outline-none"
                           onChange={e => setDiscountPct(Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
                         />
                       </div>
@@ -1229,17 +1229,17 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
                         <div className="bg-teal-50 border border-teal-200 rounded-xl p-4 space-y-1">
                           <div className="flex justify-between text-xs text-slate-600">
                             <span>Subtotal</span>
-                            <span>R$ {subtotal.toFixed(2)}</span>
+                            <span className="font-mono tabular-nums">R$ {subtotal.toFixed(2)}</span>
                           </div>
                           {discountPct > 0 && (
                             <div className="flex justify-between text-xs text-emerald-600">
                               <span>Desconto ({discountPct}%)</span>
-                              <span>- R$ {(subtotal * discountPct / 100).toFixed(2)}</span>
+                              <span className="font-mono tabular-nums">- R$ {(subtotal * discountPct / 100).toFixed(2)}</span>
                             </div>
                           )}
                           <div className="flex justify-between text-sm font-bold border-t border-teal-300 pt-1">
                             <span className="text-teal-800">Total</span>
-                            <span className="text-teal-700">R$ {total.toFixed(2)}</span>
+                            <span className="text-teal-700 font-mono tabular-nums">R$ {total.toFixed(2)}</span>
                           </div>
                         </div>
                       )}
@@ -1247,7 +1247,7 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
                       <button
                         onClick={saveBilling}
                         disabled={isSavingBilling}
-                        className="w-full py-2.5 rounded-xl bg-teal-600 text-sm font-bold text-white hover:bg-teal-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                        className="w-full py-2.5 rounded-lg bg-teal-600 text-sm font-bold text-white hover:bg-teal-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                       >
                         {isSavingBilling
                           ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando...</>
@@ -1302,7 +1302,7 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
                             <div className="flex-1 min-w-0">
                               <p className="text-xs font-semibold text-slate-800 truncate">{doc.file_name}</p>
                               <p className="text-[10px] text-slate-400">
-                                {doc.user_name} · {new Date(doc.created_at).toLocaleDateString('pt-BR')}
+                                {doc.user_name} · <span className="font-mono tabular-nums">{new Date(doc.created_at).toLocaleDateString('pt-BR')}</span>
                               </p>
                             </div>
                             <div className="flex items-center gap-1">
@@ -1357,7 +1357,7 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
       {/* Modal de Cadastro de Produto Não Registrado */}
       {showRegisterProductModal && pendingUnregisteredProducts.length > 0 && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4 animate-scale-in">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <Tag className="h-4 w-4 text-teal-600" /> Produto Não Cadastrado
@@ -1388,7 +1388,7 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
                   type="text"
                   value={registerProductName}
                   onChange={e => setRegisterProductName(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
                 />
               </div>
               <div>
@@ -1400,7 +1400,7 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
                   value={registerProductPrice}
                   onChange={e => setRegisterProductPrice(e.target.value)}
                   placeholder="0,00"
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
                 />
               </div>
             </div>
@@ -1418,7 +1418,7 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
                     setPendingUnregisteredProducts([])
                   }
                 }}
-                className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+                className="flex-1 rounded-lg border border-slate-200 bg-white py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
               >
                 Pular
               </button>
@@ -1456,7 +1456,7 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
                   }
                 }}
                 disabled={registerProductSaving || !registerProductName.trim()}
-                className="flex-1 rounded-xl bg-teal-600 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                className="flex-1 rounded-lg bg-teal-600 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {registerProductSaving
                   ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando...</>
@@ -1470,7 +1470,7 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
       {/* Modal de Configurações de Voz */}
       {voiceConfigOpen && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-5 animate-scale-in">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <Settings className="h-4 w-4 text-teal-600" /> Configurações de Voz
@@ -1570,7 +1570,7 @@ export default function GroomingDetailModal({ card, onClose, onSaved, onStatusCh
               type="button"
               onClick={saveVoiceConfig}
               disabled={configSaving}
-              className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 rounded-xl text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 rounded-lg text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {configSaving ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando…</> : <><Save className="h-4 w-4" /> Salvar Configurações</>}
             </button>

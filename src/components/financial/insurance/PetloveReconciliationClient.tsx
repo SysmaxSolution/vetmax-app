@@ -34,7 +34,7 @@ type DeleteRequest = {
 const STATUS_STYLES: Record<string, string> = {
   open:        'bg-sky-50 text-sky-700 border-sky-200',
   imported:    'bg-amber-50 text-amber-700 border-amber-200',
-  reviewed:    'bg-blue-50 text-blue-700 border-blue-200',
+  reviewed:    'bg-sky-50 text-sky-700 border-sky-200',
   reconciled:  'bg-emerald-50 text-emerald-700 border-emerald-200',
   reversed:    'bg-rose-50 text-rose-700 border-rose-200',
 }
@@ -298,7 +298,7 @@ export default function PetloveReconciliationClient({
       )}
 
       {/* Histórico de remessas */}
-      <section className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+      <section className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <header className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
           <h2 className="font-semibold text-slate-800 flex items-center gap-2">
             <FileSpreadsheet className="h-4 w-4 text-slate-400" />
@@ -327,7 +327,7 @@ export default function PetloveReconciliationClient({
                   </p>
                 </div>
                 <div className="flex items-center gap-3 flex-shrink-0">
-                  <span className="text-sm font-semibold text-slate-900 tabular-nums">
+                  <span className="text-sm font-semibold text-slate-900 font-mono tabular-nums">
                     {r.total_gross_value > 0 ? formatBRL(r.total_gross_value) : '—'}
                   </span>
                   <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${STATUS_STYLES[r.status] ?? STATUS_STYLES.imported}`}>
@@ -344,7 +344,7 @@ export default function PetloveReconciliationClient({
                     onClick={() => requestDelete(r.id, r.remittance_number, r.status === 'reconciled')}
                     disabled={deletingId === r.id}
                     title="Excluir remessa"
-                    className="inline-flex items-center justify-center h-7 w-7 rounded-md text-rose-500 hover:bg-rose-50 hover:text-rose-700 disabled:opacity-50 transition-colors"
+                    className="inline-flex items-center justify-center h-7 w-7 rounded-lg text-rose-500 hover:bg-rose-50 hover:text-rose-700 disabled:opacity-50 transition-colors"
                   >
                     {deletingId === r.id
                       ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -364,7 +364,7 @@ export default function PetloveReconciliationClient({
           onClick={() => !deletingId && setDeleteRequest(null)}
         >
           <div
-            className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md p-6"
+            className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md p-6 animate-scale-in"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start gap-3 mb-4">

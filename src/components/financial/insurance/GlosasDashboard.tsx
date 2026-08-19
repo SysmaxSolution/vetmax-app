@@ -24,7 +24,7 @@ export default async function GlosasDashboard({ remittanceId }: Props) {
 
   if (data.count === 0) {
     return (
-      <section className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4">
+      <section className="rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-4">
         <div className="flex items-center gap-2 text-emerald-800">
           <FileWarning className="h-4 w-4 opacity-60" />
           <span className="text-sm font-medium">Nenhuma glosa identificada no período {fmtBR(data.period_start)} – {fmtBR(data.period_end)}</span>
@@ -34,7 +34,7 @@ export default async function GlosasDashboard({ remittanceId }: Props) {
   }
 
   return (
-    <section className="rounded-2xl border border-rose-200 bg-gradient-to-br from-rose-50 to-orange-50 overflow-hidden">
+    <section className="rounded-xl border border-rose-200 bg-gradient-to-br from-rose-50 to-orange-50 overflow-hidden">
       <header className="px-5 py-4 border-b border-rose-200/70 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-xl bg-rose-100 flex items-center justify-center">
@@ -47,7 +47,7 @@ export default async function GlosasDashboard({ remittanceId }: Props) {
         </div>
         <div className="text-right">
           <p className="text-xs text-rose-700 font-medium uppercase">Perda potencial</p>
-          <p className="text-xl font-bold text-rose-900 tabular-nums">{BRL(data.total_loss)}</p>
+          <p className="text-xl font-bold text-rose-900 font-mono tabular-nums">{BRL(data.total_loss)}</p>
         </div>
       </header>
 
@@ -82,7 +82,7 @@ export default async function GlosasDashboard({ remittanceId }: Props) {
               </p>
             </div>
             <div className="flex-shrink-0 text-right">
-              <p className="text-sm font-bold text-rose-700 tabular-nums">{BRL(g.loss)}</p>
+              <p className="text-sm font-bold text-rose-700 font-mono tabular-nums">{BRL(g.loss)}</p>
               {g.realized_value > 0 ? (
                 <p className="text-[10px] text-slate-500">
                   pagou {BRL(g.realized_value)} de {BRL(g.expected_value)}

@@ -12,7 +12,7 @@ interface SalesHistoryTableProps {
 }
 
 const STATUS_STYLE: Record<string, string> = {
-  paid:      'bg-green-100 text-green-700',
+  paid:      'bg-emerald-100 text-emerald-700',
   pending:   'bg-amber-100 text-amber-700',
   cancelled: 'bg-red-100 text-red-500 line-through',
 }
@@ -95,15 +95,15 @@ export default function SalesHistoryTable({ sales, clinicId, onSalesUpdate }: Sa
       {/* KPI */}
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-white rounded-xl border border-slate-200 p-4 text-center">
-          <p className="text-2xl font-bold text-green-600">R$ {totalDay.toFixed(2)}</p>
+          <p className="text-2xl font-bold text-emerald-600 font-mono tabular-nums">R$ {totalDay.toFixed(2)}</p>
           <p className="text-xs text-slate-400 mt-1">Receita do dia</p>
         </div>
         <div className="bg-white rounded-xl border border-slate-200 p-4 text-center">
-          <p className="text-2xl font-bold text-slate-900">{active.length}</p>
+          <p className="text-2xl font-bold text-slate-900 font-mono tabular-nums">{active.length}</p>
           <p className="text-xs text-slate-400 mt-1">Vendas</p>
         </div>
         <div className="bg-white rounded-xl border border-slate-200 p-4 text-center">
-          <p className="text-2xl font-bold text-red-400">{sales.length - active.length}</p>
+          <p className="text-2xl font-bold text-red-400 font-mono tabular-nums">{sales.length - active.length}</p>
           <p className="text-xs text-slate-400 mt-1">Canceladas</p>
         </div>
       </div>
@@ -130,13 +130,13 @@ export default function SalesHistoryTable({ sales, clinicId, onSalesUpdate }: Sa
 
                 return (
                   <tr key={sale.id} className={`hover:bg-slate-50/50 transition-colors ${cancelled ? 'opacity-60' : ''}`}>
-                    <td className="px-4 py-3 text-slate-600 font-mono text-xs">{time}</td>
+                    <td className="px-4 py-3 text-slate-600 font-mono tabular-nums text-xs">{time}</td>
                     <td className="px-4 py-3 text-slate-700">
                       {itemCount} {itemCount === 1 ? 'item' : 'itens'}
                       {sale.tutor_name && <span className="block text-xs text-slate-400">{sale.tutor_name}</span>}
                     </td>
                     <td className="px-4 py-3 text-slate-600 text-xs">{PAYMENT_LABELS[sale.payment_method] ?? sale.payment_method}</td>
-                    <td className={`px-4 py-3 text-right font-semibold ${cancelled ? 'line-through text-slate-400' : 'text-slate-900'}`}>
+                    <td className={`px-4 py-3 text-right font-semibold font-mono tabular-nums ${cancelled ? 'line-through text-slate-400' : 'text-slate-900'}`}>
                       R$ {sale.total_amount.toFixed(2)}
                     </td>
                     <td className="px-4 py-3 text-center">

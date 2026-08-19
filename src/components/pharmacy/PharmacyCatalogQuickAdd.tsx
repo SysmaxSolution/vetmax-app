@@ -106,7 +106,7 @@ export default function PharmacyCatalogQuickAdd({ suggestion, onClose, onSaved }
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="w-full max-w-lg bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh] animate-scale-in">
 
         {/* Header */}
         <div className="bg-gradient-to-r from-teal-600 to-teal-700 px-5 py-4 flex items-center justify-between flex-shrink-0">
@@ -133,7 +133,7 @@ export default function PharmacyCatalogQuickAdd({ suggestion, onClose, onSaved }
             {brandText && <p className="text-xs text-teal-700">{brandText}</p>}
             <div className="flex flex-wrap gap-2 mt-1">
               {ncmText && (
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-teal-100 text-teal-700 border border-teal-200">
+                <span className="text-[10px] font-semibold font-mono tabular-nums px-2 py-0.5 rounded-full bg-teal-100 text-teal-700 border border-teal-200">
                   NCM {ncmText}
                 </span>
               )}
@@ -263,14 +263,14 @@ export default function PharmacyCatalogQuickAdd({ suggestion, onClose, onSaved }
         <div className="border-t border-slate-200 px-5 py-4 flex gap-3 flex-shrink-0">
           <button
             onClick={onClose}
-            className="flex-1 py-2.5 rounded-xl border border-slate-300 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+            className="flex-1 py-2.5 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
           >
             Cancelar
           </button>
           <button
             onClick={handleConfirm}
             disabled={isPending}
-            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 transition-colors disabled:opacity-60"
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 transition-colors disabled:opacity-60"
           >
             {isPending
               ? <Loader2 className="h-4 w-4 animate-spin" />

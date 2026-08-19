@@ -230,13 +230,13 @@ export default function GroomingKanban({ initialBoard, clinicId }: Props) {
   // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-enter">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+        <h1 className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
           <Scissors className="h-6 w-6 text-teal-600" />
           Banho e Tosa
         </h1>
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-slate-600">
           Acompanhe o fluxo dos pets em tempo real. Arraste para mover, clique no card para registrar evolução.
         </p>
       </div>
@@ -351,7 +351,7 @@ export default function GroomingKanban({ initialBoard, clinicId }: Props) {
       {/* Modal de Confirmação de Cancelamento */}
       {cancelTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6 space-y-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4 animate-scale-in">
             <div className="flex items-start justify-between">
               <div>
                 <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
@@ -378,7 +378,7 @@ export default function GroomingKanban({ initialBoard, clinicId }: Props) {
                   {cancelTarget.patient.breed ?? 'SRD'} · Tutor: {cancelTarget.tutor.name}
                 </p>
                 {cancelTarget.scheduled_at && (
-                  <p className="text-xs text-red-500 font-medium mt-0.5">
+                  <p className="text-xs text-red-500 font-medium mt-0.5 font-mono tabular-nums">
                     {new Date(cancelTarget.scheduled_at).toLocaleString('pt-BR', {
                       day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
                     })}
@@ -396,13 +396,13 @@ export default function GroomingKanban({ initialBoard, clinicId }: Props) {
             <div className="flex gap-3">
               <button
                 onClick={() => setCancelTarget(null)}
-                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+                className="flex-1 py-2.5 rounded-lg border border-slate-200 bg-white text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
               >
                 Manter Agendamento
               </button>
               <button
                 onClick={confirmCancelSession}
-                className="flex-1 py-2.5 rounded-xl bg-red-600 text-sm font-semibold text-white hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
+                className="flex-1 py-2.5 rounded-lg bg-red-600 text-sm font-semibold text-white hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
               >
                 <X className="h-4 w-4" />
                 Cancelar Agendamento
@@ -423,7 +423,7 @@ export default function GroomingKanban({ initialBoard, clinicId }: Props) {
       {/* Modal de Confirmação de Cortesia */}
       {waiveTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6 space-y-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4 animate-scale-in">
             <div className="flex items-start justify-between">
               <div>
                 <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
@@ -445,14 +445,14 @@ export default function GroomingKanban({ initialBoard, clinicId }: Props) {
               <button
                 onClick={() => setWaiveTarget(null)}
                 disabled={isActionLoading}
-                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+                className="flex-1 py-2.5 rounded-lg border border-slate-200 bg-white text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40"
               >
                 Cancelar
               </button>
               <button
                 onClick={confirmWaiveCard}
                 disabled={isActionLoading}
-                className="flex-1 py-2.5 rounded-xl bg-amber-500 text-sm font-semibold text-white hover:bg-amber-600 disabled:opacity-50 flex items-center justify-center gap-2"
+                className="flex-1 py-2.5 rounded-lg bg-amber-500 text-sm font-semibold text-white hover:bg-amber-600 disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {isActionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
                 Confirmar Cortesia
@@ -465,7 +465,7 @@ export default function GroomingKanban({ initialBoard, clinicId }: Props) {
       {/* Modal de Confirmação de Remoção da Fila */}
       {archiveTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6 space-y-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4 animate-scale-in">
             <div className="flex items-start justify-between">
               <div>
                 <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
@@ -487,14 +487,14 @@ export default function GroomingKanban({ initialBoard, clinicId }: Props) {
               <button
                 onClick={() => setArchiveTarget(null)}
                 disabled={isActionLoading}
-                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+                className="flex-1 py-2.5 rounded-lg border border-slate-200 bg-white text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40"
               >
                 Manter na Fila
               </button>
               <button
                 onClick={confirmArchiveCard}
                 disabled={isActionLoading}
-                className="flex-1 py-2.5 rounded-xl bg-red-600 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                className="flex-1 py-2.5 rounded-lg bg-red-600 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {isActionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                 Remover
@@ -507,7 +507,7 @@ export default function GroomingKanban({ initialBoard, clinicId }: Props) {
       {/* Modal de Confirmação de Entrega */}
       {pendingDeliver && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6 space-y-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4 animate-scale-in">
             <div className="flex items-start justify-between">
               <div>
                 <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
@@ -537,7 +537,7 @@ export default function GroomingKanban({ initialBoard, clinicId }: Props) {
             {pendingDeliver.price_total && pendingDeliver.price_total > 0 && (
               <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 text-xs text-amber-700 font-medium">
                 <DollarSign className="h-3.5 w-3.5 flex-shrink-0" />
-                O pagamento de <strong className="mx-1">R$ {pendingDeliver.price_total.toFixed(2)}</strong> deve ser realizado no Caixa Central.
+                O pagamento de <strong className="mx-1 font-mono tabular-nums">R$ {pendingDeliver.price_total.toFixed(2)}</strong> deve ser realizado no Caixa Central.
               </div>
             )}
 
@@ -545,14 +545,14 @@ export default function GroomingKanban({ initialBoard, clinicId }: Props) {
               <button
                 onClick={() => setPendingDeliver(null)}
                 disabled={isDelivering}
-                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+                className="flex-1 py-2.5 rounded-lg border border-slate-200 bg-white text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40"
               >
                 Cancelar
               </button>
               <button
                 onClick={confirmDeliver}
                 disabled={isDelivering}
-                className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                className="flex-1 py-2.5 rounded-lg bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {isDelivering
                   ? <><Loader2 className="h-4 w-4 animate-spin" /> Entregando...</>
@@ -649,7 +649,7 @@ function GroomingKanbanCard({ card, isScheduled, isConfirmingArrival, onDragStar
       {isScheduled && scheduledLabel && (
         <div className="mt-2 flex items-center gap-1 text-indigo-600">
           <Calendar className="h-3 w-3 flex-shrink-0" />
-          <span className="text-[10px] font-bold">{scheduledLabel}</span>
+          <span className="text-[10px] font-bold font-mono tabular-nums">{scheduledLabel}</span>
         </div>
       )}
 
@@ -676,11 +676,11 @@ function GroomingKanbanCard({ card, isScheduled, isConfirmingArrival, onDragStar
         {!isScheduled && (
           <>
             <Clock className="h-3 w-3" />
-            <span className="text-[10px] font-bold">{duration}</span>
+            <span className="text-[10px] font-bold font-mono tabular-nums">{duration}</span>
           </>
         )}
         {paymentBadge && (
-          <span className={`ml-auto flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold ${paymentBadge.cls}`}>
+          <span className={`ml-auto flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold font-mono tabular-nums ${paymentBadge.cls}`}>
             <DollarSign className="h-2.5 w-2.5" />
             {paymentBadge.label}
           </span>

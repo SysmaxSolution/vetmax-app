@@ -71,7 +71,7 @@ export default function SuccessDialog({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-3xl shadow-2xl border border-purple-200 w-full max-w-lg p-8 text-center"
+        className="bg-white rounded-2xl shadow-xl border border-purple-200 w-full max-w-lg p-8 text-center animate-scale-in"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mx-auto w-16 h-16 rounded-full bg-gradient-to-br from-emerald-100 to-purple-100 border-2 border-purple-200 flex items-center justify-center mb-4">
@@ -85,7 +85,7 @@ export default function SuccessDialog({
 
         <p className="text-base text-slate-600 mt-2">
           Você conciliou {' '}
-          <span className="font-bold text-emerald-700 text-xl tabular-nums">
+          <span className="font-bold text-emerald-700 text-xl font-mono tabular-nums">
             {finalAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
           </span>
           {' '} da remessa <strong>#{summary.remittance_number}</strong>.
@@ -124,7 +124,7 @@ export default function SuccessDialog({
                 </Line>
               )}
               {applied.retroactive_entries_created > 0 && (
-                <Line icon={<Users className="h-3.5 w-3.5 text-blue-600" />}>
+                <Line icon={<Users className="h-3.5 w-3.5 text-sky-600" />}>
                   <strong>{applied.retroactive_entries_created}</strong> lançamento{applied.retroactive_entries_created !== 1 ? 's' : ''} retroativo{applied.retroactive_entries_created !== 1 ? 's' : ''} (sem invoice prévio no sistema)
                 </Line>
               )}
@@ -169,7 +169,7 @@ export default function SuccessDialog({
 
         <Link
           href="/dashboard/financial"
-          className="mt-6 inline-flex items-center justify-center gap-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2.5 rounded-xl transition-colors"
+          className="mt-6 inline-flex items-center justify-center gap-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2.5 rounded-lg transition-colors"
         >
           Ver Títulos em A Receber
           <ArrowRight className="h-4 w-4" />
@@ -203,9 +203,9 @@ function HeadlineCard({
     purple:  'bg-purple-200 text-purple-700',
   }[tone]
   return (
-    <div className={`text-left rounded-2xl border p-4 ${styles}`}>
+    <div className={`text-left rounded-xl border p-4 ${styles}`}>
       <div className={`w-9 h-9 rounded-lg flex items-center justify-center mb-2 ${iconWrap}`}>{icon}</div>
-      <p className="text-3xl font-bold tabular-nums">{value}</p>
+      <p className="text-3xl font-bold font-mono tabular-nums">{value}</p>
       <p className="text-xs font-semibold mt-1">{label}</p>
       <p className="text-[10px] opacity-70 mt-0.5">{sublabel}</p>
     </div>
@@ -230,7 +230,7 @@ function Stat({ label, value, tone }: { label: string; value: number; tone: 'eme
   }[tone]
   return (
     <div className={`p-3 rounded-xl border ${styles}`}>
-      <p className="text-2xl font-bold tabular-nums">{value}</p>
+      <p className="text-2xl font-bold font-mono tabular-nums">{value}</p>
       <p className="text-[10px] uppercase tracking-wide opacity-70">{label}</p>
     </div>
   )

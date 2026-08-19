@@ -204,7 +204,7 @@ export default function StockCsvImporter({ mode, onDone, onClose }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh] animate-scale-in">
 
         {/* Header */}
         <div className="bg-gradient-to-r from-slate-700 to-slate-800 px-6 py-4 flex items-center justify-between flex-shrink-0">
@@ -297,10 +297,10 @@ export default function StockCsvImporter({ mode, onDone, onClose }: Props) {
                           {r.is_controlled && <span className="ml-1 text-[9px] bg-red-100 text-red-700 px-1 rounded font-bold">CTRL</span>}
                         </td>
                         <td className="px-3 py-1.5 text-slate-500">{r.category}</td>
-                        <td className="px-3 py-1.5 text-right text-slate-700 tabular-nums">
+                        <td className="px-3 py-1.5 text-right text-slate-700 font-mono tabular-nums">
                           {r.unit_price > 0 ? `R$ ${r.unit_price.toFixed(2)}` : '—'}
                         </td>
-                        {isProducts && <td className="px-3 py-1.5 text-right text-slate-700 tabular-nums">{r.quantity} {r.unit}</td>}
+                        {isProducts && <td className="px-3 py-1.5 text-right text-slate-700 font-mono tabular-nums">{r.quantity} {r.unit}</td>}
                       </tr>
                     ))}
                   </tbody>
@@ -325,12 +325,12 @@ export default function StockCsvImporter({ mode, onDone, onClose }: Props) {
         {/* Footer */}
         <div className="border-t border-slate-200 px-6 py-4 flex gap-3 flex-shrink-0">
           <button onClick={onClose}
-            className="flex-1 py-2.5 rounded-xl border border-slate-300 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
+            className="flex-1 py-2.5 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
             {result ? 'Fechar' : 'Cancelar'}
           </button>
           {!result && preview.length > 0 && (
             <button onClick={handleImport} disabled={saving}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 transition-colors disabled:opacity-60">
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 transition-colors disabled:opacity-60">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
               {saving ? 'Importando...' : `Importar ${preview.length} itens`}
             </button>

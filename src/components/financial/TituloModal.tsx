@@ -251,7 +251,7 @@ export default function TituloModal({
     })
   }
 
-  const fc  = 'w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20'
+  const fc  = 'w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20'
   const lc  = 'block text-xs font-semibold text-slate-500 uppercase mb-1.5'
 
   return (
@@ -259,7 +259,7 @@ export default function TituloModal({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl flex flex-col max-h-[92vh]">
+      <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl flex flex-col max-h-[92vh] animate-scale-in">
 
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 flex-shrink-0">
@@ -448,8 +448,8 @@ export default function TituloModal({
                   )}
                 </div>
                 <div className="flex items-center gap-4 text-xs text-teal-700">
-                  <span>Vencimento: {formatDate(entry.due_date)}</span>
-                  <span>Valor face: {formatCurrency(entry.amount)}</span>
+                  <span>Vencimento: <span className="font-mono tabular-nums">{formatDate(entry.due_date)}</span></span>
+                  <span>Valor face: <span className="font-mono tabular-nums">{formatCurrency(entry.amount)}</span></span>
                 </div>
               </div>
 
@@ -466,7 +466,7 @@ export default function TituloModal({
                         <ul className="mt-1.5 space-y-0.5 text-[11px] text-sky-800">
                           {entryContext.paid_in_cashier.map(p => (
                             <li key={p.id}>
-                              ✓ Tutor pagou <strong>R$ {p.amount.toFixed(2).replace('.', ',')}</strong>
+                              ✓ Tutor pagou <strong className="font-mono tabular-nums">R$ {p.amount.toFixed(2).replace('.', ',')}</strong>
                               {p.payment_method && ` em ${p.payment_method.toUpperCase()}`}
                               {' · '}
                               {p.payment_date.split('-').reverse().join('/')}
@@ -556,7 +556,7 @@ export default function TituloModal({
               {/* Valor líquido calculado */}
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 flex items-center justify-between">
                 <span className="text-sm text-slate-600">Valor {isReceivable ? 'Recebido' : 'Pago'}</span>
-                <span className={`text-lg font-bold ${netAmount < 0 ? 'text-red-600' : 'text-teal-700'}`}>
+                <span className={`text-lg font-bold font-mono tabular-nums ${netAmount < 0 ? 'text-red-600' : 'text-teal-700'}`}>
                   {formatCurrency(netAmount)}
                 </span>
               </div>
@@ -578,7 +578,7 @@ export default function TituloModal({
                       setAmountReceivedStr(raw ? fmtCurrency(raw) : '')
                     }}
                     placeholder={netAmount.toFixed(2).replace('.', ',')}
-                    className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold tabular-nums focus:outline-none focus:ring-2 focus:ring-teal-500/30"
+                    className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold font-mono tabular-nums focus:outline-none focus:ring-2 focus:ring-teal-500/30"
                   />
                 </div>
                 {amountReceivedStr.trim() && parseCurrency(amountReceivedStr) < netAmount - 0.005 && (
@@ -614,11 +614,11 @@ export default function TituloModal({
               </div>
               <div className="flex gap-2">
                 <button onClick={handleReversalOnly} disabled={isPending}
-                  className="flex-1 rounded-xl bg-amber-600 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-60 transition-colors">
+                  className="flex-1 rounded-lg bg-amber-600 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-60 transition-colors">
                   {isPending ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : 'Sim, Estornar'}
                 </button>
                 <button onClick={() => setDeleteStep('none')} disabled={isPending}
-                  className="flex-1 rounded-xl border border-slate-200 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-60 transition-colors">
+                  className="flex-1 rounded-lg border border-slate-200 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-60 transition-colors">
                   Cancelar
                 </button>
               </div>
@@ -641,11 +641,11 @@ export default function TituloModal({
               </div>
               <div className="flex gap-2">
                 <button onClick={handleReversalBeforeDelete} disabled={isPending}
-                  className="flex-1 rounded-xl bg-amber-600 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-60 transition-colors">
+                  className="flex-1 rounded-lg bg-amber-600 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-60 transition-colors">
                   {isPending ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : 'Sim, Estornar e Continuar'}
                 </button>
                 <button onClick={() => setDeleteStep('none')} disabled={isPending}
-                  className="flex-1 rounded-xl border border-slate-200 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-60 transition-colors">
+                  className="flex-1 rounded-lg border border-slate-200 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-60 transition-colors">
                   Cancelar
                 </button>
               </div>
@@ -659,11 +659,11 @@ export default function TituloModal({
               <p className="text-xs text-red-500">Esta ação não pode ser desfeita.</p>
               <div className="flex gap-2">
                 <button onClick={handleDelete} disabled={isPending}
-                  className="flex-1 rounded-xl bg-red-600 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60 transition-colors">
+                  className="flex-1 rounded-lg bg-red-600 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60 transition-colors">
                   {isPending ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : 'Sim, Excluir'}
                 </button>
                 <button onClick={() => { setDeleteStep('none'); onSuccess() }} disabled={isPending}
-                  className="flex-1 rounded-xl border border-slate-200 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-60 transition-colors">
+                  className="flex-1 rounded-lg border border-slate-200 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-60 transition-colors">
                   Não, Manter
                 </button>
               </div>
@@ -679,7 +679,7 @@ export default function TituloModal({
               {innerMode === 'edit' && (
                 <button
                   onClick={handleDeleteClick}
-                  className="flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-100 transition-colors"
+                  className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-100 transition-colors"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   Excluir
@@ -701,7 +701,7 @@ export default function TituloModal({
               {innerMode === 'edit' && entry?.status === 'pending' && (
                 <button
                   onClick={() => { setInnerMode('baixar'); setError(null) }}
-                  className="flex items-center gap-1.5 rounded-xl bg-teal-600 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-700 transition-colors"
+                  className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-700 transition-colors"
                 >
                   <CheckCircle className="h-3.5 w-3.5" />
                   Baixar
@@ -711,7 +711,7 @@ export default function TituloModal({
                 <button
                   onClick={handleEstornarClick}
                   disabled={isPending}
-                  className="flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100 disabled:opacity-60 transition-colors"
+                  className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100 disabled:opacity-60 transition-colors"
                 >
                   <RotateCcw className="h-3.5 w-3.5" />
                   Estornar Título
@@ -720,7 +720,7 @@ export default function TituloModal({
 
               <button
                 onClick={onClose}
-                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
               >
                 Cancelar
               </button>
@@ -729,7 +729,7 @@ export default function TituloModal({
                 <button
                   onClick={handleBaixar}
                   disabled={isPending}
-                  className="flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60 transition-colors"
+                  className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60 transition-colors"
                 >
                   {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
                   {entryContext?.confirm_kind === 'petlove_repass'
@@ -740,7 +740,7 @@ export default function TituloModal({
                 <button
                   onClick={handleSave}
                   disabled={isPending}
-                  className="flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60 transition-colors"
+                  className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60 transition-colors"
                 >
                   {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                   {innerMode === 'create' ? 'Criar Título' : 'Salvar'}

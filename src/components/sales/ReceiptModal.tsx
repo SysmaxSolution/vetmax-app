@@ -25,10 +25,10 @@ export default function ReceiptModal({ sale, clinicName, tutor, onClose }: Recei
 
   return (
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm print:bg-white">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden print:shadow-none print:rounded-none print:max-w-full">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 overflow-hidden animate-scale-in print:shadow-none print:rounded-none print:max-w-full">
         {/* Header — oculto na impressão */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 print:hidden">
-          <div className="flex items-center gap-2 text-green-600">
+          <div className="flex items-center gap-2 text-emerald-600">
             <CheckCircle2 className="h-5 w-5" />
             <h2 className="text-base font-semibold text-slate-900">Venda Registrada!</h2>
           </div>
@@ -53,12 +53,12 @@ export default function ReceiptModal({ sale, clinicName, tutor, onClose }: Recei
               <div key={item.id} className="flex justify-between gap-2 text-sm">
                 <div className="min-w-0 flex-1">
                   <p className="text-slate-800 truncate">{item.description}</p>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-slate-400 font-mono tabular-nums">
                     {item.quantity} × R$ {item.unit_price.toFixed(2)}
                     {item.discount > 0 && ` (−R$ ${item.discount.toFixed(2)})`}
                   </p>
                 </div>
-                <span className="font-semibold text-slate-900 flex-shrink-0">R$ {item.total.toFixed(2)}</span>
+                <span className="font-semibold text-slate-900 flex-shrink-0 font-mono tabular-nums">R$ {item.total.toFixed(2)}</span>
               </div>
             ))}
           </div>
@@ -66,14 +66,14 @@ export default function ReceiptModal({ sale, clinicName, tutor, onClose }: Recei
           {/* Totais */}
           <div className="border-t border-dashed border-slate-300 pt-3 space-y-1">
             {sale.discount_amount > 0 && (
-              <div className="flex justify-between text-sm text-green-600">
+              <div className="flex justify-between text-sm text-emerald-600">
                 <span>Desconto</span>
-                <span>−R$ {sale.discount_amount.toFixed(2)}</span>
+                <span className="font-mono tabular-nums">−R$ {sale.discount_amount.toFixed(2)}</span>
               </div>
             )}
             <div className="flex justify-between font-bold text-base text-slate-900">
               <span>TOTAL</span>
-              <span>R$ {sale.total_amount.toFixed(2)}</span>
+              <span className="font-mono tabular-nums">R$ {sale.total_amount.toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-sm text-slate-500">
               <span>Pagamento</span>
@@ -116,7 +116,7 @@ export default function ReceiptModal({ sale, clinicName, tutor, onClose }: Recei
                     setWaSent(true)
                   })
                 }}
-                className="w-full flex items-center justify-center gap-2 bg-green-500 text-white rounded-xl py-2.5 text-sm font-semibold hover:bg-green-600 disabled:opacity-50 transition-colors"
+                className="w-full flex items-center justify-center gap-2 bg-emerald-500 text-white rounded-lg py-2.5 text-sm font-semibold hover:bg-emerald-600 disabled:opacity-50 transition-colors"
               >
                 {waSent
                   ? <><Check className="h-4 w-4" /> Recibo enviado!</>
@@ -131,7 +131,7 @@ export default function ReceiptModal({ sale, clinicName, tutor, onClose }: Recei
             <button
               type="button"
               onClick={() => window.print()}
-              className="flex-1 flex items-center justify-center gap-2 border border-slate-200 rounded-xl py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+              className="flex-1 flex items-center justify-center gap-2 border border-slate-200 bg-white rounded-lg py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
             >
               <Printer className="h-4 w-4" />
               Imprimir
@@ -139,7 +139,7 @@ export default function ReceiptModal({ sale, clinicName, tutor, onClose }: Recei
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 bg-blue-600 text-white rounded-xl py-2.5 text-sm font-bold hover:bg-blue-700 transition-colors"
+              className="flex-1 bg-teal-600 text-white rounded-lg py-2.5 text-sm font-bold hover:bg-teal-700 transition-colors"
             >
               Nova Venda
             </button>
