@@ -110,7 +110,7 @@ export default function PackagesTab({ userRole }: Props) {
         {canEdit && (
           <button
             onClick={() => setModal({ mode: 'add' })}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-teal-600 text-white text-sm font-semibold shadow-sm hover:bg-teal-700 transition-colors"
           >
             <Plus className="h-4 w-4" /> Novo Pacote
           </button>
@@ -158,8 +158,8 @@ export default function PackagesTab({ userRole }: Props) {
 
       {/* Toast */}
       {toast && (
-        <div className={`fixed bottom-6 right-6 z-[100] flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg text-sm font-medium transition-all ${
-          toast.ok ? 'bg-green-600 text-white' : 'bg-red-500 text-white'
+        <div className={`fixed bottom-6 right-6 z-[100] flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg text-sm font-medium transition-all animate-enter-fast ${
+          toast.ok ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
         }`}>
           {toast.ok ? <Check className="h-4 w-4" /> : <X className="h-4 w-4" />}
           {toast.msg}
@@ -201,7 +201,7 @@ function PackageCard({ pkg, canEdit, onEdit, onToggle, onDelete }: {
 
       {/* Linha 2: preço + visitas + intervalo */}
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="font-bold text-teal-700 text-base">{fmtPrice(pkg.price)}</span>
+        <span className="font-bold text-teal-700 text-base font-mono tabular-nums">{fmtPrice(pkg.price)}</span>
         <span className="inline-flex items-center gap-1 rounded-full bg-teal-100 border border-teal-300 px-2 py-0.5 text-xs font-bold text-teal-800 shrink-0">
           🎁 {pkg.total_sessions ?? '?'} visita{(pkg.total_sessions ?? 0) !== 1 ? 's' : ''}
         </span>
@@ -240,7 +240,7 @@ function PackageCard({ pkg, canEdit, onEdit, onToggle, onDelete }: {
             <button
               onClick={onEdit}
               title="Editar"
-              className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-colors"
+              className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-teal-600 transition-colors"
             >
               <Pencil className="h-4 w-4" />
             </button>
@@ -408,7 +408,7 @@ function PackageFormModal({ mode, pkg, stock, onClose, onSaved }: {
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white w-full max-w-lg rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="relative bg-white w-full max-w-lg rounded-t-2xl sm:rounded-2xl shadow-xl overflow-hidden animate-scale-in flex flex-col max-h-[90vh]">
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
@@ -435,7 +435,7 @@ function PackageFormModal({ mode, pkg, stock, onClose, onSaved }: {
               placeholder="Ex: Pacote Mensal de Banho e Tosa"
               value={form.name}
               onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
 
@@ -449,7 +449,7 @@ function PackageFormModal({ mode, pkg, stock, onClose, onSaved }: {
               placeholder="Descreva o que está incluído..."
               value={form.description}
               onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-              className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
             />
           </div>
 
@@ -466,7 +466,7 @@ function PackageFormModal({ mode, pkg, stock, onClose, onSaved }: {
                   placeholder="0,00"
                   value={form.price}
                   onChange={e => setForm(f => ({ ...f, price: e.target.value }))}
-                  className="w-full border border-slate-300 rounded-xl pl-3 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full border border-slate-300 rounded-lg pl-3 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                 />
                 {suggestedPrice > 0 && !form.price && (
                   <button
@@ -493,7 +493,7 @@ function PackageFormModal({ mode, pkg, stock, onClose, onSaved }: {
                 min={1}
                 value={form.interval_days}
                 onChange={e => setForm(f => ({ ...f, interval_days: e.target.value }))}
-                className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
               />
             </div>
           </div>
@@ -512,7 +512,7 @@ function PackageFormModal({ mode, pkg, stock, onClose, onSaved }: {
                   setTotalOverridden(true)
                   setForm(f => ({ ...f, total_sessions: e.target.value }))
                 }}
-                className="w-28 border-2 border-teal-400 rounded-xl px-3 py-2 text-base font-bold text-teal-900 text-center focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
+                className="w-28 border-2 border-teal-400 rounded-lg px-3 py-2 text-base font-bold text-teal-900 text-center focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
               />
               <div className="flex-1">
                 <p className="text-xs text-teal-700 font-medium">
@@ -544,7 +544,7 @@ function PackageFormModal({ mode, pkg, stock, onClose, onSaved }: {
             <select
               value={form.default_professional_id}
               onChange={e => setForm(f => ({ ...f, default_professional_id: e.target.value }))}
-              className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
             >
               <option value="">Sem preferência</option>
               {professionals.map(p => (
@@ -610,7 +610,7 @@ function PackageFormModal({ mode, pkg, stock, onClose, onSaved }: {
                           : <Package className="h-4 w-4 text-amber-500 shrink-0" />
                         }
                         <span className="flex-1 truncate">{s.name}</span>
-                        <span className="text-xs text-slate-400 shrink-0">{fmtPrice(s.unit_price)}/{s.unit}</span>
+                        <span className="text-xs text-slate-400 shrink-0 font-mono tabular-nums">{fmtPrice(s.unit_price)}/{s.unit}</span>
                       </button>
                     ))
                   )}
@@ -629,7 +629,7 @@ function PackageFormModal({ mode, pkg, stock, onClose, onSaved }: {
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+            className="px-4 py-2.5 rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
           >
             Cancelar
           </button>
@@ -637,7 +637,7 @@ function PackageFormModal({ mode, pkg, stock, onClose, onSaved }: {
             type="button"
             disabled={saving}
             onClick={e => { e.preventDefault(); handleSubmit(e as unknown as React.FormEvent) }}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-teal-600 text-white text-sm font-semibold shadow-sm hover:bg-teal-700 transition-colors disabled:opacity-50"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
             {mode === 'add' ? 'Criar Pacote' : 'Salvar Alterações'}

@@ -242,8 +242,8 @@ export default function OrphanPetsBulkRegister({
                   <td className="px-2 py-3 text-xs text-slate-500 font-mono">
                     {g.microchip ? `#${g.microchip}` : <span className="text-slate-300">sem chip</span>}
                   </td>
-                  <td className="px-2 py-3 text-right text-sm text-slate-600 tabular-nums">{g.line_ids.length}</td>
-                  <td className="px-5 py-3 text-right text-sm font-semibold text-slate-900 tabular-nums">
+                  <td className="px-2 py-3 text-right text-sm text-slate-600 font-mono tabular-nums">{g.line_ids.length}</td>
+                  <td className="px-5 py-3 text-right text-sm font-semibold text-slate-900 font-mono tabular-nums">
                     {g.total_value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                   </td>
                 </tr>

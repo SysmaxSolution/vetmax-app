@@ -296,14 +296,14 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole, activ
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <div className="max-w-7xl mx-auto px-4 py-6 space-y-5">
+      <div className="max-w-7xl mx-auto px-4 py-6 space-y-5 animate-enter">
 
         {/* Header */}
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-2">
             <div>
-              <h1 className="text-xl font-bold text-slate-900">Estoque</h1>
-              <p className="text-sm text-slate-500">
+              <h1 className="text-xl font-bold tracking-tight text-slate-900">Estoque</h1>
+              <p className="text-sm text-slate-600">
                 {products.length} produto{products.length !== 1 ? 's' : ''} · {services.length} serviço{services.length !== 1 ? 's' : ''}
               </p>
             </div>
@@ -312,7 +312,7 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole, activ
               {userRole === 'admin' && view !== 'packages' && (
                 <button
                   onClick={() => setCsvImportOpen(true)}
-                  className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-600 text-xs font-semibold hover:border-slate-300 hover:bg-slate-50 transition-colors"
+                  className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 text-xs font-semibold hover:border-slate-300 hover:bg-slate-50 transition-colors"
                 >
                   <Upload className="h-3.5 w-3.5" /> Importar CSV
                 </button>
@@ -321,7 +321,7 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole, activ
               {userRole === 'admin' && view !== 'packages' && (
                 <button
                   onClick={() => setFormModal({ mode: 'add', serviceMode: isServiceView })}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-teal-600 text-white text-sm font-semibold shadow-sm hover:bg-teal-700 focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 transition-colors"
                 >
                   <Plus className="h-4 w-4" />
                   <span className="hidden xs:inline">{isServiceView ? 'Novo Serviço' : 'Novo Item'}</span>
@@ -332,7 +332,7 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole, activ
 
           {/* Toggle Produtos / Serviços / Pacotes — linha separada, scroll em mobile */}
           <div className="w-full overflow-x-auto pb-0.5 -mb-0.5">
-            <div className="flex rounded-xl overflow-hidden border border-slate-200 bg-white w-full sm:w-auto">
+            <div className="flex rounded-lg overflow-hidden border border-slate-200 bg-white w-full sm:w-auto">
               <button
                 onClick={() => switchView('products')}
                 className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-semibold transition-colors ${
@@ -367,7 +367,7 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole, activ
             {lowCount > 0 && (
               <button
                 onClick={() => setStatusFilter(s => s === 'critical' ? 'all' : 'critical')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium transition-colors ${
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
                   statusFilter === 'critical'
                     ? 'bg-red-600 text-white border-red-600'
                     : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
@@ -388,7 +388,7 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole, activ
 
         {/* Toast */}
         {toast && (
-          <div className={`fixed bottom-5 right-5 z-50 flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg text-sm font-medium ${
+          <div className={`fixed bottom-5 right-5 z-50 flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg text-sm font-medium animate-enter-fast ${
             toast.ok ? 'bg-teal-600 text-white' : 'bg-red-600 text-white'
           }`}>
             {toast.ok ? <Check className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
@@ -427,7 +427,7 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole, activ
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder={isServiceView ? 'Buscar por nome…' : 'Buscar por nome, marca ou código…'}
-              className="w-full pl-9 pr-3 py-2.5 border border-slate-300 rounded-xl text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 bg-white"
+              className="w-full pl-9 pr-3 py-2.5 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 bg-white"
             />
             {search && (
               <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
@@ -438,7 +438,7 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole, activ
           {view === 'products' && (
             <button
               onClick={() => setStatusFilter(s => s === 'ok' ? 'all' : 'ok')}
-              className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-colors ${
+              className={`px-3 py-2 rounded-lg text-xs font-semibold border transition-colors ${
                 statusFilter === 'ok'
                   ? 'bg-emerald-600 text-white border-emerald-600'
                   : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'
@@ -639,7 +639,7 @@ function ProductsTable({ filtered, userRole, searchTerm, catalogLoading, catalog
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <p className="text-sm font-semibold text-slate-900 leading-tight">{s.name}</p>
                             {s.ncm && (
-                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 uppercase tracking-wide">
+                              <span className="text-[9px] font-bold font-mono tabular-nums px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 uppercase tracking-wide">
                                 NCM {s.ncm}
                               </span>
                             )}
@@ -648,7 +648,7 @@ function ProductsTable({ filtered, userRole, searchTerm, catalogLoading, catalog
                           <div className="flex items-center gap-2 mt-0.5">
                             <CatBadge cat={cat} />
                             {s.price_avg != null && (
-                              <span className="text-xs font-semibold text-slate-600">
+                              <span className="text-xs font-semibold text-slate-600 font-mono tabular-nums">
                                 R$ {s.price_avg.toFixed(2)}
                               </span>
                             )}
@@ -740,18 +740,18 @@ function ProductsTable({ filtered, userRole, searchTerm, catalogLoading, catalog
                       {cat?.icon}{cat?.label ?? item.category}
                     </span>
                   </td>
-                  <td className={`px-3 py-3 text-right font-bold tabular-nums ${
+                  <td className={`px-3 py-3 text-right font-bold font-mono tabular-nums ${
                     st === 'critical' ? 'text-red-600' : st === 'warning' ? 'text-amber-600' : 'text-slate-900'
                   }`}>
                     {Number(item.quantity).toLocaleString('pt-BR', { maximumFractionDigits: 3 })}
                   </td>
                   <td className="px-3 py-3 text-center text-slate-500 text-xs">{item.unit}</td>
-                  <td className="px-3 py-3 text-right text-slate-600 tabular-nums text-xs">
+                  <td className="px-3 py-3 text-right text-slate-600 font-mono tabular-nums text-xs">
                     {item.unit_price > 0 ? `R$ ${item.unit_price.toFixed(2)}` : <span className="text-slate-300">—</span>}
                   </td>
                   <td className="px-3 py-3 text-center">
                     {item.expiry_date ? (
-                      <span className={`text-xs font-medium ${
+                      <span className={`text-xs font-medium font-mono tabular-nums ${
                         days !== null && days < 0   ? 'text-red-600 font-bold' :
                         days !== null && days <= 30 ? 'text-amber-600' : 'text-slate-500'
                       }`}>
@@ -818,16 +818,16 @@ function ProductsTable({ filtered, userRole, searchTerm, catalogLoading, catalog
                   <div className="flex flex-wrap items-center gap-1.5">
                     <p className="text-sm font-semibold text-slate-900 leading-tight">{s.name}</p>
                     {s.ncm && (
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-teal-100 text-teal-700 uppercase tracking-wide">NCM {s.ncm}</span>
+                      <span className="text-[9px] font-bold font-mono tabular-nums px-1.5 py-0.5 rounded bg-teal-100 text-teal-700 uppercase tracking-wide">NCM {s.ncm}</span>
                     )}
                     {s.barcode && (
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 uppercase tracking-wide">EAN {s.barcode}</span>
+                      <span className="text-[9px] font-bold font-mono tabular-nums px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 uppercase tracking-wide">EAN {s.barcode}</span>
                     )}
                   </div>
                   <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                     {s.brand && <p className="text-xs text-slate-500">{s.brand}</p>}
                     {s.price_avg != null && (
-                      <span className="text-xs font-bold text-emerald-700">R$ {s.price_avg.toFixed(2)}</span>
+                      <span className="text-xs font-bold text-emerald-700 font-mono tabular-nums">R$ {s.price_avg.toFixed(2)}</span>
                     )}
                     {s.unit && <span className="text-xs text-slate-400">· {s.unit}</span>}
                   </div>
@@ -896,7 +896,7 @@ function ServicesTable({ filtered, userRole, onEdit, onDelete }: {
                       {cat?.icon}{cat?.label ?? item.category}
                     </span>
                   </td>
-                  <td className="px-3 py-3 text-right font-semibold text-slate-900 tabular-nums">
+                  <td className="px-3 py-3 text-right font-semibold text-slate-900 font-mono tabular-nums">
                     {item.unit_price > 0
                       ? `R$ ${item.unit_price.toFixed(2)}`
                       : <span className="text-slate-300 font-normal">—</span>}
@@ -927,7 +927,7 @@ function ActionBtn({ children, title, color, onClick }: {
   onClick: () => void
 }) {
   const colors = {
-    blue:  'text-blue-500 hover:bg-blue-50 hover:text-blue-700',
+    blue:  'text-sky-500 hover:bg-sky-50 hover:text-sky-700',
     green: 'text-emerald-500 hover:bg-emerald-50 hover:text-emerald-700',
     teal:  'text-teal-500 hover:bg-teal-50 hover:text-teal-700',
     amber: 'text-amber-500 hover:bg-amber-50 hover:text-amber-700',
@@ -946,14 +946,14 @@ function SimpleModal({ title, onClose, color, children }: {
   children: React.ReactNode
 }) {
   const headers = {
-    blue:  'from-blue-600 to-blue-700',
+    blue:  'from-teal-600 to-teal-700',
     green: 'from-emerald-600 to-emerald-700',
     amber: 'from-amber-600 to-amber-700',
   }
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden">
+      <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl overflow-hidden animate-scale-in">
         <div className={`bg-gradient-to-r ${headers[color]} px-5 py-4 flex items-center justify-between`}>
           <p className="text-sm font-semibold text-white">{title}</p>
           <button onClick={onClose} className="text-white/80 hover:text-white"><X className="h-4 w-4" /></button>
@@ -1068,7 +1068,7 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh] animate-scale-in">
 
         {/* Header */}
         <div className="bg-gradient-to-r from-teal-600 to-teal-700 px-6 py-4 flex items-center justify-between flex-shrink-0">
@@ -1096,7 +1096,7 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
                     set('category', cat.key)
                     if (cat.key === 'controlled_medication') set('is_controlled', true)
                   }}
-                  className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border-2 text-left text-xs font-semibold transition-all ${
+                  className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border-2 text-left text-xs font-semibold transition-all ${
                     form.category === cat.key
                       ? 'border-teal-500 bg-teal-50 text-teal-700'
                       : 'border-slate-200 text-slate-600 hover:border-slate-300'
@@ -1199,8 +1199,8 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
 
               {/* NFS-e (Fase 3): códigos fiscais do serviço — só quando a clínica emite nota */}
               {emitsNfse && (
-                <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-4 space-y-3">
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-blue-500 flex items-center gap-1.5">
+                <div className="rounded-xl border border-sky-100 bg-sky-50/50 p-4 space-y-3">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-sky-600 flex items-center gap-1.5">
                     <FileText className="h-3.5 w-3.5" /> Dados fiscais (NFS-e)
                   </p>
                   <div className="grid sm:grid-cols-2 gap-3">
@@ -1209,14 +1209,14 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
                       <input type="text" value={form.nfse_item_lista_servico}
                         onChange={e => set('nfse_item_lista_servico', e.target.value)}
                         placeholder="ex.: 5.07"
-                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" />
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500" />
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-600 mb-1">Código Tributário do Município</label>
                       <input type="text" value={form.nfse_codigo_tributario_municipio}
                         onChange={e => set('nfse_codigo_tributario_municipio', e.target.value)}
                         placeholder="código do serviço no município"
-                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" />
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500" />
                     </div>
                   </div>
                   <p className="text-[10px] text-slate-400">
@@ -1346,11 +1346,11 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
         {/* Footer */}
         <div className="border-t border-slate-200 px-6 py-4 flex gap-3 flex-shrink-0">
           <button onClick={onClose}
-            className="flex-1 py-2.5 rounded-xl border border-slate-300 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
+            className="flex-1 py-2.5 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
             Cancelar
           </button>
           <button onClick={handleSubmit} disabled={saving}
-            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 transition-colors disabled:opacity-60">
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 transition-colors disabled:opacity-60">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
             {isNew ? 'Cadastrar' : 'Salvar'}
           </button>
@@ -1384,26 +1384,26 @@ function RestockForm({ item, onDone, onError }: {
   }
   return (
     <div className="space-y-3">
-      <p className="text-xs text-slate-500">Qtd. atual: <strong className="text-slate-800">{item.quantity} {item.unit}</strong></p>
+      <p className="text-xs text-slate-500">Qtd. atual: <strong className="text-slate-800 font-mono tabular-nums">{item.quantity} {item.unit}</strong></p>
       <input type="number" min="0.001" step="0.001" value={qty} onChange={e => setQty(e.target.value)}
         placeholder="Quantidade a adicionar"
-        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" />
+        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500" />
       <div className="grid grid-cols-2 gap-2">
         <label className="block">
           <span className="text-[10px] font-bold text-slate-500 uppercase">Validade do lote</span>
           <input type="date" value={expiry} onChange={e => setExpiry(e.target.value)}
-            className="mt-0.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" />
+            className="mt-0.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500" />
         </label>
         <label className="block">
           <span className="text-[10px] font-bold text-slate-500 uppercase">Nº do lote</span>
           <input value={batch} onChange={e => setBatch(e.target.value)} placeholder="opcional"
-            className="mt-0.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" />
+            className="mt-0.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500" />
         </label>
       </div>
       <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Nota: NF, fornecedor… (opcional)"
-        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" />
+        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500" />
       <button onClick={handle} disabled={saving}
-        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-60">
+        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 transition-colors disabled:opacity-60">
         {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Repor Estoque
       </button>
     </div>
@@ -1426,7 +1426,7 @@ function DispenseForm({ item, onDone, onError }: {
   }
   return (
     <div className="space-y-3">
-      <p className="text-xs text-slate-500">Disponível: <strong className="text-slate-800">{item.quantity} {item.unit}</strong>
+      <p className="text-xs text-slate-500">Disponível: <strong className="text-slate-800 font-mono tabular-nums">{item.quantity} {item.unit}</strong>
         {item.is_controlled && <span className="ml-2 text-[10px] text-red-600 font-bold bg-red-50 px-1.5 py-0.5 rounded">CONTROLADO</span>}
       </p>
       <input type="number" min="0.001" step="0.001" value={qty} onChange={e => setQty(e.target.value)}
@@ -1435,7 +1435,7 @@ function DispenseForm({ item, onDone, onError }: {
       <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Nota: consulta, paciente… (opcional)"
         className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500" />
       <button onClick={handle} disabled={saving}
-        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-60">
+        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-60">
         {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowDownToLine className="h-4 w-4" />} Dispensar
       </button>
     </div>
@@ -1473,7 +1473,7 @@ function AdjustForm({ item, onDone, onError }: {
           className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500" />
       </div>
       <button onClick={handle} disabled={saving}
-        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 transition-colors disabled:opacity-60">
+        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 transition-colors disabled:opacity-60">
         {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Confirmar Ajuste
       </button>
     </div>

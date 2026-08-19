@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useTransition, useMemo } from 'react'
-import { MODULE_THEME } from '@/lib/module-theme'
 import {
   listEntries, getFinancialSummary,
   type FinancialEntry, type EntryType, type FinancialSummary,
@@ -124,12 +123,12 @@ function SummaryCards({ summary, type }: { summary: FinancialSummary; type: Entr
   return (
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
       {cards.map(card => (
-        <div key={card.label} className={`rounded-2xl border p-4 ${card.color}`}>
+        <div key={card.label} className={`rounded-xl border p-4 ${card.color}`}>
           <div className="flex items-center gap-2 mb-2">
             <card.icon className={`h-4 w-4 ${card.iconColor}`} />
             <span className="text-xs font-semibold text-slate-600">{card.label}</span>
           </div>
-          <p className={`text-xl font-bold ${card.valueColor}`}>{fmt(card.value)}</p>
+          <p className={`text-xl font-bold font-mono tabular-nums ${card.valueColor}`}>{fmt(card.value)}</p>
           <p className="text-xs text-slate-400 mt-0.5">{card.count} {card.count === 1 ? 'título' : 'títulos'}</p>
         </div>
       ))}
@@ -179,12 +178,12 @@ function EntryRow({
       </td>
 
       {/* Cadastro */}
-      <td className="py-3 px-4 text-xs text-slate-400 whitespace-nowrap hidden lg:table-cell">
+      <td className="py-3 px-4 text-xs text-slate-400 whitespace-nowrap hidden lg:table-cell font-mono tabular-nums">
         {fmtDate(entry.created_at.split('T')[0])}
       </td>
 
       {/* Vencimento */}
-      <td className="py-3 px-4 text-sm text-slate-600 whitespace-nowrap hidden sm:table-cell">
+      <td className="py-3 px-4 text-sm text-slate-600 whitespace-nowrap hidden sm:table-cell font-mono tabular-nums">
         <span className={isOverdue(entry) ? 'text-red-600 font-semibold' : ''}>
           {fmtDate(entry.due_date)}
         </span>
@@ -192,9 +191,9 @@ function EntryRow({
 
       {/* Valor + Desconto */}
       <td className="py-3 px-4 text-right whitespace-nowrap">
-        <p className="text-sm font-semibold text-slate-800">{fmt(netAmount)}</p>
+        <p className="text-sm font-semibold text-slate-800 font-mono tabular-nums">{fmt(netAmount)}</p>
         {entry.discount > 0 && (
-          <p className="text-xs text-slate-400">-{fmt(entry.discount)}</p>
+          <p className="text-xs text-slate-400 font-mono tabular-nums">-{fmt(entry.discount)}</p>
         )}
       </td>
 
@@ -243,7 +242,6 @@ export default function FinancialWorkspace({
   clinicProfiles,
   currentUserId,
 }: Props) {
-  const theme = MODULE_THEME.financial
 
   const [activeTab,    setActiveTab]    = useState<MainTab>('receivable')
   const [cadastrosTab, setCadastrosTab] = useState<CadastrosSubTab>('bancos')
@@ -353,17 +351,17 @@ export default function FinancialWorkspace({
   ]
 
   return (
-    <div className={`min-h-screen ${theme.bg} pb-10`}>
+    <div className="min-h-screen bg-slate-50 pb-10 animate-enter">
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div className={`${theme.bgIntense} border-b border-teal-200 px-4 py-4`}>
+      <div className="bg-white border-b border-slate-200 px-4 py-4">
         <div className="mx-auto max-w-6xl flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-teal-600">
               <DollarSign className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-teal-900">Financeiro</h1>
+              <h1 className="text-xl font-bold tracking-tight text-slate-900">Financeiro</h1>
               {overdueCount > 0 && (
                 <p className="text-xs text-red-600 font-medium">
                   {overdueCount} título{overdueCount > 1 ? 's' : ''} vencido{overdueCount > 1 ? 's' : ''}
@@ -377,13 +375,13 @@ export default function FinancialWorkspace({
                 <button
                   onClick={refresh}
                   disabled={isPending}
-                  className="flex items-center gap-1.5 rounded-xl border border-teal-200 bg-white px-3 py-2 text-sm font-medium text-teal-700 hover:bg-teal-50 transition-colors disabled:opacity-50"
+                  className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
                 >
                   <RefreshCcw className={`h-4 w-4 ${isPending ? 'animate-spin' : ''}`} />
                 </button>
                 <button
                   onClick={() => setModal({ mode: 'create' })}
-                  className="flex items-center gap-2 rounded-xl bg-teal-600 px-3 sm:px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 transition-colors"
+                  className="flex items-center gap-2 rounded-lg bg-teal-600 px-3 sm:px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 transition-colors"
                 >
                   <Plus className="h-4 w-4" />
                   <span className="hidden sm:inline">Novo Título</span>
@@ -405,7 +403,7 @@ export default function FinancialWorkspace({
                 onClick={() => setActiveTab(t.id)}
                 className={`rounded-lg px-3 sm:px-5 py-2 text-xs sm:text-sm font-semibold transition-all flex items-center gap-1 sm:gap-1.5 whitespace-nowrap flex-1 sm:flex-none justify-center ${
                   activeTab === t.id
-                    ? `${theme.active} text-white shadow-sm`
+                    ? 'bg-teal-600 text-white shadow-sm'
                     : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
                 }`}
               >
@@ -433,7 +431,7 @@ export default function FinancialWorkspace({
 
         {/* ── Títulos: Filtros ───────────────────────────────────────────── */}
         {isTitulos && (
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
+          <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-4 space-y-3">
             {/* Linha 1: busca + botão filtros avançados */}
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
@@ -442,12 +440,12 @@ export default function FinancialWorkspace({
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                   placeholder="Buscar por descrição, tutor ou pet..."
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 py-2 text-sm placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 py-2 text-sm placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
                 />
               </div>
               <button
                 onClick={() => setShowFilters(v => !v)}
-                className="flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-500 hover:bg-slate-50 transition-colors"
+                className="flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-500 hover:bg-slate-50 transition-colors"
               >
                 <Filter className="h-4 w-4" />
                 <span className="hidden sm:inline">Filtros</span>
@@ -468,7 +466,7 @@ export default function FinancialWorkspace({
                   onClick={() => setFilterStatus(opt.v)}
                   className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
                     filterStatus === opt.v
-                      ? `${theme.active} text-white`
+                      ? 'bg-teal-600 text-white'
                       : 'border border-slate-200 text-slate-500 hover:bg-slate-50'
                   }`}
                 >
@@ -482,12 +480,12 @@ export default function FinancialWorkspace({
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 mb-1.5">Vencimento — De</label>
                   <input type="date" value={dueFrom} onChange={e => setDueFrom(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20" />
+                    className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20" />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 mb-1.5">Vencimento — Até</label>
                   <input type="date" value={dueTo} onChange={e => setDueTo(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20" />
+                    className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20" />
                 </div>
               </div>
             )}
@@ -511,7 +509,7 @@ export default function FinancialWorkspace({
                 {!search && filterStatus === 'all' && (
                   <button
                     onClick={() => setModal({ mode: 'create' })}
-                    className="mt-4 flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 transition-colors"
+                    className="mt-4 flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 transition-colors"
                   >
                     <Plus className="h-4 w-4" />
                     Novo Título

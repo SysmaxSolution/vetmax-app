@@ -61,7 +61,7 @@ export function EnrichNcmModal({ item, onClose, onSaved }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
+      <div className="w-full max-w-md rounded-2xl bg-white shadow-xl animate-scale-in">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <div className="flex items-center gap-2">

@@ -79,11 +79,11 @@ export default function InvoiceDuplicatasList({ invoiceId, totalAmount, paidAmou
       <div className="px-4 py-2.5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
         <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wide">Duplicatas da fatura</h4>
         <div className="text-[11px] text-slate-500">
-          Total <strong className="text-slate-800 tabular-nums">{BRL(totalAmount)}</strong>
+          Total <strong className="text-slate-800 font-mono tabular-nums">{BRL(totalAmount)}</strong>
           {' · '}
-          Recebido <strong className="text-emerald-700 tabular-nums">{BRL(paidAmount)}</strong>
+          Recebido <strong className="text-emerald-700 font-mono tabular-nums">{BRL(paidAmount)}</strong>
           {' · '}
-          Saldo <strong className="text-amber-700 tabular-nums">{BRL(balance)}</strong>
+          Saldo <strong className="text-amber-700 font-mono tabular-nums">{BRL(balance)}</strong>
         </div>
       </div>
 
@@ -95,19 +95,19 @@ export default function InvoiceDuplicatasList({ invoiceId, totalAmount, paidAmou
               <div className="min-w-0">
                 <p className="text-slate-800 truncate">{d.description}</p>
                 <p className="text-[10px] text-slate-500">
-                  Baixado em {fmtBR(d.payment_date)}
+                  Baixado em <span className="font-mono tabular-nums">{fmtBR(d.payment_date)}</span>
                   {d.payment_method && ` · ${d.payment_method.toUpperCase()}`}
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
-              <span className="text-sm font-bold text-emerald-700 tabular-nums">{BRL(d.amount)}</span>
+              <span className="text-sm font-bold text-emerald-700 font-mono tabular-nums">{BRL(d.amount)}</span>
               {canReverse && (
                 <button
                   onClick={() => handleReverse(d.id)}
                   disabled={reversingId === d.id}
                   title="Estornar baixa"
-                  className="inline-flex items-center justify-center h-7 w-7 rounded-md text-rose-500 hover:bg-rose-50 hover:text-rose-700 disabled:opacity-50"
+                  className="inline-flex items-center justify-center h-7 w-7 rounded-lg text-rose-500 hover:bg-rose-50 hover:text-rose-700 disabled:opacity-50"
                 >
                   {reversingId === d.id
                     ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -127,11 +127,11 @@ export default function InvoiceDuplicatasList({ invoiceId, totalAmount, paidAmou
                 <p className="text-slate-800 truncate">{d.description}</p>
                 <p className="text-[10px] text-slate-500">
                   {d.source === 'petlove_open' ? 'A Receber Petlove' : 'Saldo a receber'}
-                  {' · vence '}{fmtBR(d.due_date)}
+                  {' · vence '}<span className="font-mono tabular-nums">{fmtBR(d.due_date)}</span>
                 </p>
               </div>
             </div>
-            <span className={`text-sm font-bold tabular-nums ${d.source === 'petlove_open' ? 'text-sky-700' : 'text-amber-700'}`}>{BRL(d.amount)}</span>
+            <span className={`text-sm font-bold font-mono tabular-nums ${d.source === 'petlove_open' ? 'text-sky-700' : 'text-amber-700'}`}>{BRL(d.amount)}</span>
           </li>
         ))}
         {discountEntries.map(d => (

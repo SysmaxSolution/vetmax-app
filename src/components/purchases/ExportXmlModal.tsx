@@ -70,7 +70,7 @@ export function ExportXmlModal({ onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
-      <div className="relative w-full max-w-sm rounded-2xl bg-white shadow-2xl p-6">
+      <div className="relative w-full max-w-sm rounded-2xl bg-white shadow-xl p-6 animate-scale-in">
         {/* Header */}
         <div className="flex items-center justify-between mb-5">
           <div>
@@ -94,7 +94,7 @@ export function ExportXmlModal({ onClose }: Props) {
               value={month}
               onChange={e => setMonth(Number(e.target.value))}
               disabled={isPending}
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-400 disabled:opacity-50"
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-50"
             >
               {MONTHS.map(m => (
                 <option key={m.value} value={m.value}>{m.label}</option>
@@ -108,7 +108,7 @@ export function ExportXmlModal({ onClose }: Props) {
               value={year}
               onChange={e => setYear(Number(e.target.value))}
               disabled={isPending}
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-400 disabled:opacity-50"
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-50"
             >
               {years.map(y => (
                 <option key={y} value={y}>{y}</option>
@@ -137,7 +137,7 @@ export function ExportXmlModal({ onClose }: Props) {
           <button
             onClick={handleExport}
             disabled={isPending}
-            className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-purple-600 px-4 py-2.5 text-sm font-bold text-white shadow hover:bg-purple-700 disabled:opacity-60"
+            className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-teal-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-teal-700 disabled:opacity-60"
           >
             {isPending ? (
               <>

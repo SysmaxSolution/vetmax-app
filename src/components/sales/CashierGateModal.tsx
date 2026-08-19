@@ -42,7 +42,7 @@ export default function CashierGateModal({ onSessionOpened, onClose }: CashierGa
       aria-modal="true"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 overflow-hidden animate-scale-in">
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
@@ -87,7 +87,7 @@ export default function CashierGateModal({ onSessionOpened, onClose }: CashierGa
                     value={balance}
                     onChange={e => setBalance(e.target.value)}
                     autoFocus
-                    className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                   />
                 </div>
                 <p className="text-xs text-slate-400 mt-1">Valor em cédulas no cofre (fundo de troco)</p>
@@ -102,7 +102,7 @@ export default function CashierGateModal({ onSessionOpened, onClose }: CashierGa
                   placeholder="Ex: início do expediente"
                   value={notes}
                   onChange={e => setNotes(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                 />
               </div>
 
@@ -125,7 +125,7 @@ export default function CashierGateModal({ onSessionOpened, onClose }: CashierGa
             type="button"
             onClick={onClose}
             disabled={isPending}
-            className="flex-1 border border-slate-200 rounded-xl py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
+            className="flex-1 border border-slate-200 bg-white rounded-lg py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
           >
             Cancelar
           </button>
@@ -135,7 +135,7 @@ export default function CashierGateModal({ onSessionOpened, onClose }: CashierGa
               type="button"
               onClick={handleOpen}
               disabled={isPending}
-              className="flex-1 bg-green-600 text-white rounded-xl py-2.5 text-sm font-bold hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              className="flex-1 bg-teal-600 text-white rounded-lg py-2.5 text-sm font-bold hover:bg-teal-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
             >
               <Unlock className="h-4 w-4" />
               {isPending ? 'Abrindo...' : 'Abrir Caixa'}
@@ -144,7 +144,7 @@ export default function CashierGateModal({ onSessionOpened, onClose }: CashierGa
             <button
               type="button"
               onClick={() => setShowForm(true)}
-              className="flex-1 bg-blue-600 text-white rounded-xl py-2.5 text-sm font-bold hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+              className="flex-1 bg-teal-600 text-white rounded-lg py-2.5 text-sm font-bold hover:bg-teal-700 transition-colors flex items-center justify-center gap-2"
             >
               <Unlock className="h-4 w-4" />
               Abrir Caixa Agora

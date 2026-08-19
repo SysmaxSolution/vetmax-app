@@ -33,7 +33,7 @@ export default async function InsuranceReconciliationPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <main className="mx-auto max-w-4xl px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+      <main className="mx-auto max-w-4xl px-4 sm:px-6 py-6 sm:py-8 space-y-6 animate-enter">
         <Link
           href="/dashboard/financial"
           className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 transition-colors"
@@ -47,8 +47,8 @@ export default async function InsuranceReconciliationPage() {
             <FileSpreadsheet className="h-6 w-6 text-purple-600" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Conciliação de Convênios</h1>
-            <p className="text-sm text-slate-500 mt-1">
+            <h1 className="text-xl font-bold tracking-tight text-slate-900">Conciliação de Convênios</h1>
+            <p className="text-sm text-slate-600 mt-1">
               Importe a remessa fechada para conciliar repasses ou o extrato em aberto para uma prévia que atualiza cadastros e preços.
             </p>
           </div>

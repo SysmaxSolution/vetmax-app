@@ -138,7 +138,7 @@ export default function GroomingCheckinModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden max-h-[90vh] flex flex-col">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden max-h-[90vh] flex flex-col animate-scale-in">
 
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-teal-50 flex-shrink-0">
@@ -182,7 +182,7 @@ export default function GroomingCheckinModal({
                   >
                     {svc}
                     {price !== null && price > 0 && (
-                      <span className={`text-[9px] font-bold ${selected ? 'text-teal-100' : 'text-teal-600'}`}>
+                      <span className={`text-[9px] font-bold font-mono tabular-nums ${selected ? 'text-teal-100' : 'text-teal-600'}`}>
                         R${price.toFixed(0)}
                       </span>
                     )}
@@ -201,7 +201,7 @@ export default function GroomingCheckinModal({
               <select
                 value={groomerId}
                 onChange={e => setGroomerId(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
               >
                 <option value="">Sem preferência</option>
                 {professionals.map(p => (
@@ -239,7 +239,7 @@ export default function GroomingCheckinModal({
               value={boxNumber}
               onChange={e => setBoxNumber(e.target.value)}
               placeholder="Ex: Box 1, Banheiro A..."
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
             />
           </div>
 
@@ -253,7 +253,7 @@ export default function GroomingCheckinModal({
               onChange={e => setNotes(e.target.value)}
               placeholder="Ex: Pet agressivo, alergia a perfume..."
               rows={2}
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 resize-none"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 resize-none"
             />
           </div>
 
@@ -274,7 +274,7 @@ export default function GroomingCheckinModal({
                   {getServicePrices().map(sp => (
                     <div key={sp.name} className="flex justify-between text-xs">
                       <span className="text-teal-800">{sp.name}</span>
-                      <span className="font-bold text-teal-700">
+                      <span className="font-bold text-teal-700 font-mono tabular-nums">
                         {sp.price > 0 ? `R$ ${sp.price.toFixed(2)}` : '—'}
                       </span>
                     </div>
@@ -283,7 +283,7 @@ export default function GroomingCheckinModal({
                     <span className="text-teal-800 flex items-center gap-1">
                       <DollarSign className="h-3 w-3" /> Total
                     </span>
-                    <span className="text-teal-700">R$ {subtotal.toFixed(2)}</span>
+                    <span className="text-teal-700 font-mono tabular-nums">R$ {subtotal.toFixed(2)}</span>
                   </div>
                 </div>
               ) : (
@@ -301,14 +301,14 @@ export default function GroomingCheckinModal({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+              className="flex-1 py-2.5 rounded-lg border border-slate-200 bg-white text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={isSaving || selectedServices.length === 0}
-              className="flex-1 py-2.5 rounded-xl bg-teal-600 text-sm font-semibold text-white hover:bg-teal-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              className="flex-1 py-2.5 rounded-lg bg-teal-600 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {isSaving
                 ? <><Loader2 className="h-4 w-4 animate-spin" /> Registrando...</>

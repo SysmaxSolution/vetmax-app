@@ -78,13 +78,13 @@ export default function SalesWorkspace({ clinicId, clinicName, dailySales, activ
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <main className="mx-auto max-w-4xl px-3 sm:px-6 py-6 sm:py-8 space-y-6">
+      <main className="mx-auto max-w-4xl px-3 sm:px-6 py-6 sm:py-8 space-y-6 animate-enter">
 
         {/* Header */}
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900">Vendas / PDV</h1>
-            <p className="mt-0.5 text-sm text-slate-500">Registre vendas de produtos e serviços</p>
+            <h1 className="text-xl font-bold tracking-tight text-slate-900">Vendas / PDV</h1>
+            <p className="mt-0.5 text-sm text-slate-600">Registre vendas de produtos e serviços</p>
           </div>
         </div>
 
@@ -104,7 +104,7 @@ export default function SalesWorkspace({ clinicId, clinicName, dailySales, activ
               {t === 'pdv' ? <ShoppingCart className="h-4 w-4" /> : <RotateCcw className="h-4 w-4" />}
               {t === 'pdv' ? 'PDV' : 'Histórico do Dia'}
               {t === 'historico' && sales.length > 0 && (
-                <span className={`ml-1 rounded-full px-2 py-0.5 text-xs font-bold ${tab === 'historico' ? 'bg-blue-100 text-blue-700' : 'bg-slate-200 text-slate-600'}`}>
+                <span className={`ml-1 rounded-full px-2 py-0.5 text-xs font-bold ${tab === 'historico' ? 'bg-teal-100 text-teal-700' : 'bg-slate-200 text-slate-600'}`}>
                   {sales.filter(s => s.payment_status !== 'cancelled').length}
                 </span>
               )}
@@ -119,12 +119,12 @@ export default function SalesWorkspace({ clinicId, clinicName, dailySales, activ
             <div className="lg:col-span-3 space-y-4">
               <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-4">
                 {/* Toggle Item / Pacote */}
-                <div className="flex rounded-xl overflow-hidden border border-slate-200 bg-slate-50 w-fit">
+                <div className="flex rounded-lg overflow-hidden border border-slate-200 bg-slate-50 w-fit">
                   <button
                     type="button"
                     onClick={() => setPdvMode('item')}
                     className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold transition-colors ${
-                      pdvMode === 'item' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                      pdvMode === 'item' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-100'
                     }`}
                   >
                     <Package className="h-3.5 w-3.5" /> Produto / Serviço
@@ -199,7 +199,7 @@ export default function SalesWorkspace({ clinicId, clinicName, dailySales, activ
                       onBlur={applyDiscount}
                       onKeyDown={e => e.key === 'Enter' && applyDiscount()}
                       disabled={!hasItems}
-                      className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-40"
+                      className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-40"
                     />
                   </div>
                 </div>
@@ -208,17 +208,17 @@ export default function SalesWorkspace({ clinicId, clinicName, dailySales, activ
                 <div className="bg-slate-50 rounded-xl p-4 space-y-2">
                   <div className="flex justify-between text-sm text-slate-500">
                     <span>Subtotal</span>
-                    <span>R$ {subtotal.toFixed(2)}</span>
+                    <span className="font-mono tabular-nums">R$ {subtotal.toFixed(2)}</span>
                   </div>
                   {discount > 0 && (
-                    <div className="flex justify-between text-sm text-green-600">
+                    <div className="flex justify-between text-sm text-emerald-600">
                       <span>Desconto</span>
-                      <span>−R$ {discount.toFixed(2)}</span>
+                      <span className="font-mono tabular-nums">−R$ {discount.toFixed(2)}</span>
                     </div>
                   )}
                   <div className="flex justify-between font-bold text-lg text-slate-900 pt-1 border-t border-slate-200">
                     <span>Total</span>
-                    <span>R$ {total.toFixed(2)}</span>
+                    <span className="font-mono tabular-nums">R$ {total.toFixed(2)}</span>
                   </div>
                 </div>
 
@@ -240,7 +240,7 @@ export default function SalesWorkspace({ clinicId, clinicName, dailySales, activ
                   type="button"
                   onClick={handleCheckoutIntent}
                   disabled={!hasItems || (hasPackages && !selectedPet) || isPending}
-                  className="w-full bg-green-600 text-white rounded-xl py-3 text-sm font-bold hover:bg-green-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="w-full bg-teal-600 text-white rounded-lg py-3 text-sm font-bold shadow-sm hover:bg-teal-700 focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {isPending ? 'Verificando caixa...' : 'Finalizar Venda →'}
                 </button>

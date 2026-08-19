@@ -116,10 +116,10 @@ export default function ReviewDashboard({
   return (
     <div className="space-y-6">
       {/* Cabeçalho da remessa */}
-      <header className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 flex items-start justify-between gap-4">
+      <header className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex items-start justify-between gap-4">
         <div>
           <p className="text-xs uppercase tracking-wide text-slate-400 font-semibold">Remessa Petlove</p>
-          <h1 className="text-2xl font-bold text-slate-900 mt-0.5">#{data.remittance.remittance_number}</h1>
+          <h1 className="text-xl font-bold tracking-tight text-slate-900 mt-0.5 font-mono tabular-nums">#{data.remittance.remittance_number}</h1>
           <p className="text-sm text-slate-500 mt-1">
             {formatDate(data.remittance.period_start)} – {formatDate(data.remittance.period_end)}
             {' · '}
@@ -131,13 +131,13 @@ export default function ReviewDashboard({
         </div>
         <div className="text-right">
           <p className="text-xs text-slate-400">Valor Total Bruto</p>
-          <p className="text-2xl font-bold text-slate-900 tabular-nums">{formatBRL(data.remittance.total_gross_value)}</p>
+          <p className="text-2xl font-bold text-slate-900 font-mono tabular-nums">{formatBRL(data.remittance.total_gross_value)}</p>
         </div>
       </header>
 
       {/* CTA: Executar Matching */}
       {needsMatching && (
-        <div className="rounded-2xl border border-amber-300 bg-amber-50 p-5 flex items-center gap-4">
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-5 flex items-center gap-4">
           <Play className="h-8 w-8 text-amber-600 flex-shrink-0" />
           <div className="flex-1">
             <p className="font-semibold text-amber-900">Esta remessa ainda não foi cruzada</p>
@@ -160,7 +160,7 @@ export default function ReviewDashboard({
 
       {/* Painel de Pets — totalizadores POR PET (não por linha) */}
       {/* Aparece SEMPRE: independe de runMatchEngine — calculado direto da remessa vs. patients da clínica */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-5">{/* keepalive */}
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-5">{/* keepalive */}
           <div className="flex items-center gap-2 mb-3">
             <PawPrint className="h-4 w-4 text-slate-400" />
             <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">Pets na remessa</h2>
@@ -257,7 +257,7 @@ export default function ReviewDashboard({
       </div>
 
       {/* Conteúdo da aba */}
-      <section className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+      <section className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         {activeTab === 'matched' && (
           <LineList
             heading="Atendimentos Casados"
@@ -368,7 +368,7 @@ export default function ReviewDashboard({
             <button
               onClick={handleApprove}
               disabled={applying}
-              className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-5 py-2.5 rounded-xl transition-colors shadow-md hover:shadow-lg disabled:opacity-60 disabled:cursor-wait"
+              className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-5 py-2.5 rounded-lg transition-colors shadow-sm disabled:opacity-60 disabled:cursor-wait"
             >
               {applying ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
               {applying ? 'Processando…' : 'Aprovar Conciliação'}
@@ -437,7 +437,7 @@ function PetStatBox({
         {icon}
         {label}
       </div>
-      <p className="text-2xl font-bold tabular-nums mt-1">{count}</p>
+      <p className="text-2xl font-bold font-mono tabular-nums mt-1">{count}</p>
     </div>
   )
 }
@@ -468,8 +468,8 @@ function DiagnosticCard({
         {icon}
         {label}
       </div>
-      <p className="text-3xl font-bold mt-2 tabular-nums">{count}</p>
-      <p className={`text-xs ${s.muted} mt-1 tabular-nums`}>
+      <p className="text-3xl font-bold mt-2 font-mono tabular-nums">{count}</p>
+      <p className={`text-xs ${s.muted} mt-1 font-mono tabular-nums`}>
         {value > 0 ? formatBRL(value) : '—'}
         {sublabel && <span className="ml-1 opacity-70">· {sublabel}</span>}
       </p>
@@ -507,9 +507,9 @@ function LineList({
                 </p>
               </div>
               <div className="text-right flex-shrink-0">
-                <p className="text-sm font-semibold text-slate-900 tabular-nums">{formatBRL(Number(l.repass_value))}</p>
+                <p className="text-sm font-semibold text-slate-900 font-mono tabular-nums">{formatBRL(Number(l.repass_value))}</p>
                 {l.match_confidence != null && (
-                  <p className="text-[10px] text-slate-400 tabular-nums">conf. {l.match_confidence}%</p>
+                  <p className="text-[10px] text-slate-400 font-mono tabular-nums">conf. {l.match_confidence}%</p>
                 )}
               </div>
             </div>

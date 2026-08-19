@@ -23,7 +23,7 @@ const BRAND_OPTIONS = ['Visa', 'Mastercard', 'Elo', 'Amex', 'Hipercard', 'Outro'
 const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
   pending:    { label: 'Pendente',    cls: 'bg-amber-100 text-amber-700'  },
   settled:    { label: 'Liquidado',   cls: 'bg-emerald-100 text-emerald-700' },
-  reconciled: { label: 'Conciliado',  cls: 'bg-blue-100 text-blue-700'   },
+  reconciled: { label: 'Conciliado',  cls: 'bg-sky-100 text-sky-700'   },
   cancelled:  { label: 'Cancelado',   cls: 'bg-red-100 text-red-600'     },
 }
 
@@ -221,10 +221,10 @@ export default function CardReceivablesWorkspace({
   const selectedTotal = selectedRows.reduce((s, i) => s + Number(i.gross_amount), 0)
 
   return (
-    <div className="max-w-7xl mx-auto px-3 sm:px-6 py-6 sm:py-8 space-y-6">
+    <div className="max-w-7xl mx-auto px-3 sm:px-6 py-6 sm:py-8 space-y-6 animate-enter">
 
       {toast && (
-        <div className={`fixed top-4 right-4 z-50 flex items-center gap-2 rounded-xl px-4 py-3 shadow-lg text-sm font-medium ${
+        <div className={`fixed top-4 right-4 z-50 flex items-center gap-2 rounded-xl px-4 py-3 shadow-lg text-sm font-medium animate-enter-fast ${
           toast.type === 'success'
             ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
             : 'bg-red-50 text-red-700 border border-red-200'
@@ -237,7 +237,7 @@ export default function CardReceivablesWorkspace({
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+          <h1 className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
             <CreditCard className="h-6 w-6 text-indigo-600" />
             Cartões
           </h1>
@@ -249,7 +249,7 @@ export default function CardReceivablesWorkspace({
           {canSettle && selected.size > 0 && (
             <button
               onClick={() => setBatchModal(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-sm"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-sm"
             >
               <Check className="h-4 w-4" />
               Liquidar {selected.size} em lote · {fmt(selectedTotal)}
@@ -258,7 +258,7 @@ export default function CardReceivablesWorkspace({
           <button
             onClick={refresh}
             disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50 disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 text-sm font-medium hover:bg-slate-50 disabled:opacity-50"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             Atualizar
@@ -276,7 +276,7 @@ export default function CardReceivablesWorkspace({
               </div>
               <p className="text-xs font-medium text-amber-600 uppercase tracking-wide">A Receber</p>
             </div>
-            <p className="text-2xl font-bold text-amber-700 tabular-nums">{fmt(summary.total_pending_gross)}</p>
+            <p className="text-2xl font-bold text-amber-700 font-mono tabular-nums">{fmt(summary.total_pending_gross)}</p>
             <p className="text-xs text-slate-500 mt-1">{summary.count_pending} parcela(s) · líquido {fmt(summary.total_pending_net)}</p>
           </div>
 
@@ -287,7 +287,7 @@ export default function CardReceivablesWorkspace({
               </div>
               <p className="text-xs font-medium text-emerald-600 uppercase tracking-wide">Liquidado</p>
             </div>
-            <p className="text-2xl font-bold text-emerald-700 tabular-nums">{fmt(summary.total_settled_gross)}</p>
+            <p className="text-2xl font-bold text-emerald-700 font-mono tabular-nums">{fmt(summary.total_settled_gross)}</p>
             <p className="text-xs text-slate-500 mt-1">{summary.count_settled} parcela(s) · líquido {fmt(summary.total_settled_net)}</p>
           </div>
 
@@ -298,7 +298,7 @@ export default function CardReceivablesWorkspace({
               </div>
               <p className="text-xs font-medium text-rose-600 uppercase tracking-wide">Taxas Totais</p>
             </div>
-            <p className="text-2xl font-bold text-rose-700 tabular-nums">{fmt(summary.total_fees)}</p>
+            <p className="text-2xl font-bold text-rose-700 font-mono tabular-nums">{fmt(summary.total_fees)}</p>
             <p className="text-xs text-slate-500 mt-1">desconto da operadora acumulado</p>
           </div>
 
@@ -313,7 +313,7 @@ export default function CardReceivablesWorkspace({
               {summary.by_acquirer.slice(0, 3).map(a => (
                 <div key={a.acquirer} className="flex items-center justify-between text-xs">
                   <span className="text-slate-700 truncate">{a.acquirer}</span>
-                  <span className="font-semibold text-slate-900 tabular-nums">{fmt(a.gross)}</span>
+                  <span className="font-semibold text-slate-900 font-mono tabular-nums">{fmt(a.gross)}</span>
                 </div>
               ))}
               {summary.by_acquirer.length === 0 && (
@@ -331,7 +331,7 @@ export default function CardReceivablesWorkspace({
         <select
           value={statusFilter}
           onChange={e => setStatusFilter(e.target.value as typeof statusFilter)}
-          className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+          className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20"
         >
           <option value="pending">Pendentes</option>
           <option value="settled">Liquidadas</option>
@@ -343,7 +343,7 @@ export default function CardReceivablesWorkspace({
         <select
           value={cardFilter}
           onChange={e => setCardFilter(e.target.value)}
-          className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+          className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20"
         >
           <option value="all">Todos os cartões</option>
           {cards.map(c => (
@@ -354,7 +354,7 @@ export default function CardReceivablesWorkspace({
         <select
           value={methodFilter}
           onChange={e => setMethodFilter(e.target.value as typeof methodFilter)}
-          className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+          className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20"
         >
           <option value="all">Todos os tipos</option>
           <option value="credit">Crédito</option>
@@ -366,21 +366,21 @@ export default function CardReceivablesWorkspace({
           type="date"
           value={fromDate}
           onChange={e => setFromDate(e.target.value)}
-          className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+          className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20"
           placeholder="De"
         />
         <input
           type="date"
           value={toDate}
           onChange={e => setToDate(e.target.value)}
-          className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+          className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20"
           placeholder="Até"
         />
 
         <button
           onClick={refresh}
           disabled={loading}
-          className="rounded-lg bg-indigo-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
+          className="rounded-lg bg-teal-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-teal-700 disabled:opacity-50"
         >
           Aplicar
         </button>
@@ -404,32 +404,32 @@ export default function CardReceivablesWorkspace({
           <label className="flex flex-col gap-1">
             <span className="text-[11px] font-semibold text-slate-500 uppercase">NSU</span>
             <input value={nsuFilter} onChange={e => setNsuFilter(e.target.value)} placeholder="Ex: A1B2C3"
-              className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
+              className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-teal-500/20" />
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-[11px] font-semibold text-slate-500 uppercase">Nº Liberação</span>
             <input value={authFilter} onChange={e => setAuthFilter(e.target.value)} placeholder="Ex: 987654"
-              className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
+              className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-teal-500/20" />
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-[11px] font-semibold text-slate-500 uppercase">Pet / Tutor</span>
             <input value={ptFilter} onChange={e => setPtFilter(e.target.value)} placeholder="Nome do pet ou tutor"
-              className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
+              className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20" />
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-[11px] font-semibold text-slate-500 uppercase">Valor (bruto ou líquido)</span>
             <input value={valueFilter} onChange={e => setValueFilter(e.target.value)} inputMode="decimal" placeholder="Ex: 150,00"
-              className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
+              className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm font-mono tabular-nums focus:outline-none focus:ring-2 focus:ring-teal-500/20" />
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-[11px] font-semibold text-slate-500 uppercase">Administradora</span>
             <input value={acquirerFilter} onChange={e => setAcquirerFilter(e.target.value)} placeholder="Ex: Cielo, Stone"
-              className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
+              className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20" />
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-[11px] font-semibold text-slate-500 uppercase">Bandeira</span>
             <select value={brandFilter} onChange={e => setBrandFilter(e.target.value)}
-              className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20">
+              className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20">
               <option value="">Todas</option>
               {BRAND_OPTIONS.map(b => <option key={b} value={b}>{b}</option>)}
             </select>
@@ -437,16 +437,16 @@ export default function CardReceivablesWorkspace({
           <label className="flex flex-col gap-1">
             <span className="text-[11px] font-semibold text-slate-500 uppercase">Transação de</span>
             <input type="date" value={txnFrom} onChange={e => setTxnFrom(e.target.value)}
-              className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
+              className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20" />
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-[11px] font-semibold text-slate-500 uppercase">Transação até</span>
             <input type="date" value={txnTo} onChange={e => setTxnTo(e.target.value)}
-              className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
+              className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20" />
           </label>
           <div className="sm:col-span-2 lg:col-span-4 flex items-center gap-2">
             <button onClick={refresh} disabled={loading}
-              className="rounded-lg bg-indigo-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">
+              className="rounded-lg bg-teal-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-teal-700 disabled:opacity-50">
               Aplicar filtros
             </button>
             <button
@@ -551,12 +551,12 @@ export default function CardReceivablesWorkspace({
                         {i.card_nsu ?? '—'}
                         {i.card_authorization && <div className="text-[10px] text-slate-400">Lib {i.card_authorization}</div>}
                       </td>
-                      <td className="px-3 py-3 text-right font-semibold text-slate-900 tabular-nums text-xs">{fmt(i.gross_amount)}</td>
-                      <td className="px-3 py-3 text-right text-rose-600 tabular-nums text-xs">
+                      <td className="px-3 py-3 text-right font-semibold text-slate-900 font-mono tabular-nums text-xs">{fmt(i.gross_amount)}</td>
+                      <td className="px-3 py-3 text-right text-rose-600 font-mono tabular-nums text-xs">
                         -{fmt(i.fee_amount)}
                         <div className="text-[9px] text-slate-400">{i.fee_percent}%</div>
                       </td>
-                      <td className="px-3 py-3 text-right font-bold text-emerald-700 tabular-nums text-xs">{fmt(i.net_amount)}</td>
+                      <td className="px-3 py-3 text-right font-bold text-emerald-700 font-mono tabular-nums text-xs">{fmt(i.net_amount)}</td>
                       <td className="px-3 py-3 text-center">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${sc.cls}`}>
                           {sc.label}
@@ -646,7 +646,7 @@ function SettleSingleModal({ installment, onCancel, onConfirm }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-5">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-5 animate-scale-in">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-base font-bold text-slate-900">Liquidar parcela</h2>
@@ -663,15 +663,15 @@ function SettleSingleModal({ installment, onCancel, onConfirm }: {
         <div className="rounded-xl bg-slate-50 px-4 py-3 grid grid-cols-3 gap-3 text-xs">
           <div>
             <p className="text-slate-500">Bruto</p>
-            <p className="font-bold text-slate-900 tabular-nums">{fmt(installment.gross_amount)}</p>
+            <p className="font-bold text-slate-900 font-mono tabular-nums">{fmt(installment.gross_amount)}</p>
           </div>
           <div>
             <p className="text-slate-500">Taxa</p>
-            <p className="font-bold text-rose-700 tabular-nums">-{fmt(installment.fee_amount)}</p>
+            <p className="font-bold text-rose-700 font-mono tabular-nums">-{fmt(installment.fee_amount)}</p>
           </div>
           <div>
             <p className="text-slate-500">Líquido</p>
-            <p className="font-bold text-emerald-700 tabular-nums">{fmt(installment.net_amount)}</p>
+            <p className="font-bold text-emerald-700 font-mono tabular-nums">{fmt(installment.net_amount)}</p>
           </div>
         </div>
 
@@ -685,7 +685,7 @@ function SettleSingleModal({ installment, onCancel, onConfirm }: {
                 onChange={e => setDate(e.target.value)}
                 max={new Date().toISOString().slice(0, 10)}
                 required
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
               />
             </div>
             <div>
@@ -694,7 +694,7 @@ function SettleSingleModal({ installment, onCancel, onConfirm }: {
                 value={bankRef}
                 onChange={e => setBankRef(e.target.value)}
                 placeholder="Nº lote/extrato"
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
               />
             </div>
           </div>
@@ -706,7 +706,7 @@ function SettleSingleModal({ installment, onCancel, onConfirm }: {
                 value={settledAmount}
                 onChange={e => setSettledAmount(e.target.value)}
                 inputMode="decimal"
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
               />
             </div>
             <div>
@@ -715,7 +715,7 @@ function SettleSingleModal({ installment, onCancel, onConfirm }: {
                 value={actualFee}
                 onChange={e => setActualFee(e.target.value)}
                 inputMode="decimal"
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
               />
             </div>
           </div>
@@ -724,14 +724,14 @@ function SettleSingleModal({ installment, onCancel, onConfirm }: {
             <button
               type="button"
               onClick={onCancel}
-              className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+              className="flex-1 rounded-lg border border-slate-200 bg-white py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="flex-1 rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 flex items-center justify-center gap-2"
+              className="flex-1 rounded-lg bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Check className="h-4 w-4" /> Liquidar</>}
             </button>
@@ -763,7 +763,7 @@ function SettleBatchModal({ count, total, onCancel, onConfirm }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-5">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-5 animate-scale-in">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-base font-bold text-slate-900">Liquidar em lote</h2>
@@ -783,7 +783,7 @@ function SettleBatchModal({ count, total, onCancel, onConfirm }: {
               onChange={e => setDate(e.target.value)}
               max={new Date().toISOString().slice(0, 10)}
               required
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
             />
           </div>
 
@@ -793,7 +793,7 @@ function SettleBatchModal({ count, total, onCancel, onConfirm }: {
               value={bankRef}
               onChange={e => setBankRef(e.target.value)}
               placeholder="Ex: Lote Cielo 2026-05-27"
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
             />
           </div>
 
@@ -806,14 +806,14 @@ function SettleBatchModal({ count, total, onCancel, onConfirm }: {
             <button
               type="button"
               onClick={onCancel}
-              className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+              className="flex-1 rounded-lg border border-slate-200 bg-white py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="flex-1 rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 flex items-center justify-center gap-2"
+              className="flex-1 rounded-lg bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Check className="h-4 w-4" /> Liquidar {count}</>}
             </button>
@@ -835,7 +835,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
-const editInputCls = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20'
+const editInputCls = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20'
 
 function InstallmentDetailModal({
   installment, canManage, busy, onClose, onSettle, onCancel, onSave,
@@ -884,7 +884,7 @@ function InstallmentDetailModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={e => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto animate-scale-in">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 sticky top-0 bg-white">
           <div>
             <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
@@ -912,12 +912,12 @@ function InstallmentDetailModal({
                 <Field label="Nº Liberação"><span className="font-mono">{i.card_authorization ?? '—'}</span></Field>
                 <Field label="Data transação">{fmtDate(i.transaction_date)}</Field>
                 <Field label="Previsão repasse">{fmtDate(i.expected_settlement_date)}</Field>
-                <Field label="Liquidado em">{i.settled_at ? new Date(i.settled_at).toLocaleDateString('pt-BR') : '—'}</Field>
+                <Field label="Liquidado em"><span className="font-mono tabular-nums">{i.settled_at ? new Date(i.settled_at).toLocaleDateString('pt-BR') : '—'}</span></Field>
               </div>
               <div className="rounded-xl bg-slate-50 px-4 py-3 grid grid-cols-3 gap-3 text-sm">
-                <div><p className="text-[10px] text-slate-500 uppercase">Bruto</p><p className="font-bold text-slate-900 tabular-nums">{fmt(i.gross_amount)}</p></div>
-                <div><p className="text-[10px] text-slate-500 uppercase">Taxa ({i.fee_percent}%)</p><p className="font-bold text-rose-700 tabular-nums">-{fmt(i.fee_amount)}</p></div>
-                <div><p className="text-[10px] text-slate-500 uppercase">Líquido</p><p className="font-bold text-emerald-700 tabular-nums">{fmt(i.net_amount)}</p></div>
+                <div><p className="text-[10px] text-slate-500 uppercase">Bruto</p><p className="font-bold text-slate-900 font-mono tabular-nums">{fmt(i.gross_amount)}</p></div>
+                <div><p className="text-[10px] text-slate-500 uppercase">Taxa ({i.fee_percent}%)</p><p className="font-bold text-rose-700 font-mono tabular-nums">-{fmt(i.fee_amount)}</p></div>
+                <div><p className="text-[10px] text-slate-500 uppercase">Líquido</p><p className="font-bold text-emerald-700 font-mono tabular-nums">{fmt(i.net_amount)}</p></div>
               </div>
               {i.bank_statement_ref && (
                 <Field label="Extrato"><span className="font-mono inline-flex items-center gap-1"><FileText className="h-3 w-3" /> {i.bank_statement_ref}</span></Field>
@@ -926,13 +926,13 @@ function InstallmentDetailModal({
 
               {canManage && isPending && (
                 <div className="flex flex-wrap gap-2 pt-1">
-                  <button onClick={() => setMode('edit')} className="flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100">
+                  <button onClick={() => setMode('edit')} className="flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100">
                     <Pencil className="h-3.5 w-3.5" /> Editar
                   </button>
-                  <button onClick={onSettle} className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
+                  <button onClick={onSettle} className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
                     <Check className="h-3.5 w-3.5" /> Liquidar
                   </button>
-                  <button onClick={() => setMode('cancel')} className="flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100">
+                  <button onClick={() => setMode('cancel')} className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100">
                     <Ban className="h-3.5 w-3.5" /> Cancelar
                   </button>
                 </div>
@@ -963,18 +963,18 @@ function InstallmentDetailModal({
                 <label className="block"><span className="text-[11px] font-semibold text-slate-500 uppercase">Previsão de repasse</span>
                   <input type="date" value={settleDate} onChange={e => setSettleDate(e.target.value)} className={editInputCls} /></label>
                 <label className="block"><span className="text-[11px] font-semibold text-slate-500 uppercase">Valor bruto (R$)</span>
-                  <input value={gross} onChange={e => setGross(e.target.value)} inputMode="decimal" className={`${editInputCls} tabular-nums`} /></label>
+                  <input value={gross} onChange={e => setGross(e.target.value)} inputMode="decimal" className={`${editInputCls} font-mono tabular-nums`} /></label>
                 <label className="block"><span className="text-[11px] font-semibold text-slate-500 uppercase">Taxa (%)</span>
-                  <input value={feePct} onChange={e => setFeePct(e.target.value.replace(/[^0-9.,]/g, ''))} inputMode="decimal" className={`${editInputCls} tabular-nums`} /></label>
+                  <input value={feePct} onChange={e => setFeePct(e.target.value.replace(/[^0-9.,]/g, ''))} inputMode="decimal" className={`${editInputCls} font-mono tabular-nums`} /></label>
               </div>
               <div className="rounded-xl bg-slate-50 px-4 py-3 grid grid-cols-3 gap-3 text-sm">
-                <div><p className="text-[10px] text-slate-500 uppercase">Bruto</p><p className="font-bold text-slate-900 tabular-nums">{fmt(grossNum)}</p></div>
-                <div><p className="text-[10px] text-slate-500 uppercase">Taxa</p><p className="font-bold text-rose-700 tabular-nums">-{fmt(feePreview)}</p></div>
-                <div><p className="text-[10px] text-slate-500 uppercase">Líquido</p><p className="font-bold text-emerald-700 tabular-nums">{fmt(netPreview)}</p></div>
+                <div><p className="text-[10px] text-slate-500 uppercase">Bruto</p><p className="font-bold text-slate-900 font-mono tabular-nums">{fmt(grossNum)}</p></div>
+                <div><p className="text-[10px] text-slate-500 uppercase">Taxa</p><p className="font-bold text-rose-700 font-mono tabular-nums">-{fmt(feePreview)}</p></div>
+                <div><p className="text-[10px] text-slate-500 uppercase">Líquido</p><p className="font-bold text-emerald-700 font-mono tabular-nums">{fmt(netPreview)}</p></div>
               </div>
               <div className="flex gap-2 pt-1">
-                <button onClick={() => setMode('view')} className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Voltar</button>
-                <button onClick={submitEdit} disabled={busy} className="flex-1 rounded-xl bg-indigo-600 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2">
+                <button onClick={() => setMode('view')} className="flex-1 rounded-lg border border-slate-200 bg-white py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Voltar</button>
+                <button onClick={submitEdit} disabled={busy} className="flex-1 rounded-lg bg-teal-600 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50 flex items-center justify-center gap-2">
                   {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Save className="h-4 w-4" /> Salvar</>}
                 </button>
               </div>
@@ -991,7 +991,7 @@ function InstallmentDetailModal({
               <label className="block"><span className="text-[11px] font-semibold text-slate-500 uppercase">Motivo do cancelamento *</span>
                 <textarea value={reason} onChange={e => setReason(e.target.value)} rows={3} className={editInputCls} placeholder="Ex: estorno na maquininha" /></label>
               <div className="flex gap-2 pt-1">
-                <button onClick={() => setMode('view')} className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Voltar</button>
+                <button onClick={() => setMode('view')} className="flex-1 rounded-lg border border-slate-200 bg-white py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Voltar</button>
                 <button onClick={() => onCancel(reason)} disabled={busy || !reason.trim()} className="flex-1 rounded-xl bg-red-600 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2">
                   {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Ban className="h-4 w-4" /> Confirmar cancelamento</>}
                 </button>

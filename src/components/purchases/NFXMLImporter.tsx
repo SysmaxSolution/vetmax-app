@@ -73,7 +73,7 @@ export function NFXMLImporter({ onClose, onImported }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl flex flex-col max-h-[90vh]">
+      <div className="w-full max-w-2xl rounded-2xl bg-white shadow-xl flex flex-col max-h-[90vh] animate-scale-in">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 shrink-0">
           <div className="flex items-center gap-2">
@@ -125,7 +125,7 @@ export function NFXMLImporter({ onClose, onImported }: Props) {
 
           {step === 'success' && (
             <div className="flex flex-col items-center justify-center py-14 gap-3">
-              <CheckCircle2 className="h-12 w-12 text-green-500" />
+              <CheckCircle2 className="h-12 w-12 text-emerald-500" />
               <p className="font-bold text-slate-800">NF-e importada com sucesso!</p>
               <p className="text-sm text-slate-500">Redirecionando para a ordem de compra...</p>
             </div>
@@ -158,7 +158,7 @@ export function NFXMLImporter({ onClose, onImported }: Props) {
             <button
               onClick={handleImport}
               disabled={isPending}
-              className="flex items-center gap-2 rounded-lg bg-purple-600 px-5 py-2 text-sm font-bold text-white hover:bg-purple-700 disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg bg-teal-600 px-5 py-2 text-sm font-bold text-white shadow-sm hover:bg-teal-700 disabled:opacity-50"
             >
               {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
               Confirmar Importação

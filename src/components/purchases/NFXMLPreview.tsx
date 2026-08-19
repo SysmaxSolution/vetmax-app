@@ -29,13 +29,13 @@ export function NFXMLPreview({ parsed }: Props) {
           </div>
           <div>
             <p className="text-xs text-slate-500">Emissão</p>
-            <p className="font-medium text-slate-800">
+            <p className="font-medium text-slate-800 font-mono tabular-nums">
               {issue_date ? new Date(issue_date + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
             </p>
           </div>
           <div>
             <p className="text-xs text-slate-500">Total</p>
-            <p className="font-bold text-purple-700">
+            <p className="font-bold text-purple-700 font-mono tabular-nums">
               {total_value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
             </p>
           </div>
@@ -98,11 +98,11 @@ export function NFXMLPreview({ parsed }: Props) {
                   </td>
                   <td className="py-2 px-3 text-center text-slate-500 font-mono">{item.ncm || '—'}</td>
                   <td className="py-2 px-3 text-center text-slate-500 font-mono">{item.ean || '—'}</td>
-                  <td className="py-2 px-3 text-right text-slate-700">{item.quantity} {item.unit}</td>
-                  <td className="py-2 px-3 text-right text-slate-700">
+                  <td className="py-2 px-3 text-right text-slate-700 font-mono tabular-nums">{item.quantity} {item.unit}</td>
+                  <td className="py-2 px-3 text-right text-slate-700 font-mono tabular-nums">
                     {item.unit_price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                   </td>
-                  <td className="py-2 px-3 text-right font-semibold text-slate-800">
+                  <td className="py-2 px-3 text-right font-semibold text-slate-800 font-mono tabular-nums">
                     {item.total_price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                   </td>
                 </tr>

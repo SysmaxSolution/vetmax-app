@@ -17,7 +17,7 @@ interface Props {
 
 const STATUS_CONFIG = {
   pending:   { label: 'Pendente',  color: 'bg-amber-100 text-amber-700',  icon: Clock },
-  received:  { label: 'Recebida',  color: 'bg-green-100 text-green-700',  icon: CheckCircle2 },
+  received:  { label: 'Recebida',  color: 'bg-emerald-100 text-emerald-700', icon: CheckCircle2 },
   cancelled: { label: 'Cancelada', color: 'bg-red-100 text-red-700',      icon: XCircle },
 }
 
@@ -73,10 +73,10 @@ export function PurchaseOrderCard({ order, onStatusChange }: Props) {
                 {status.label}
               </span>
               {order.nfe_number && (
-                <span className="text-xs text-slate-500">NF-e nº {order.nfe_number}/{order.nfe_series}</span>
+                <span className="text-xs text-slate-500 font-mono tabular-nums">NF-e nº {order.nfe_number}/{order.nfe_series}</span>
               )}
               {order.issue_date && (
-                <span className="text-xs text-slate-400">
+                <span className="text-xs text-slate-400 font-mono tabular-nums">
                   {new Date(order.issue_date + 'T12:00:00').toLocaleDateString('pt-BR')}
                 </span>
               )}
@@ -85,7 +85,7 @@ export function PurchaseOrderCard({ order, onStatusChange }: Props) {
               {(order.supplier as any)?.name ?? 'Fornecedor não informado'}
             </p>
             {order.total_value != null && (
-              <p className="text-sm text-purple-700 font-bold">
+              <p className="text-sm text-slate-900 font-bold font-mono tabular-nums">
                 {order.total_value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
               </p>
             )}
@@ -98,7 +98,7 @@ export function PurchaseOrderCard({ order, onStatusChange }: Props) {
                 <button
                   onClick={handleConfirm}
                   disabled={isPending}
-                  className="flex items-center gap-1 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-green-700 disabled:opacity-50"
+                  className="flex items-center gap-1 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-teal-700 disabled:opacity-50"
                 >
                   {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
                   Confirmar
@@ -106,7 +106,7 @@ export function PurchaseOrderCard({ order, onStatusChange }: Props) {
                 <button
                   onClick={handleCancel}
                   disabled={isPending}
-                  className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                  className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
                 >
                   Cancelar
                 </button>
@@ -146,7 +146,7 @@ export function PurchaseOrderCard({ order, onStatusChange }: Props) {
                     <div key={item.id} className="flex items-center justify-between gap-3 rounded-lg bg-white border border-slate-100 px-3 py-2 text-sm">
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-slate-700 truncate">{item.description}</p>
-                        <p className="text-xs text-slate-400">
+                        <p className="text-xs text-slate-400 font-mono tabular-nums">
                           {item.quantity} {item.unit} × {item.unit_price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                           {item.ncm ? ` · NCM ${item.ncm}` : ''}
                           {item.ean ? ` · EAN ${item.ean}` : ''}
@@ -154,7 +154,7 @@ export function PurchaseOrderCard({ order, onStatusChange }: Props) {
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         {item.is_matched ? (
-                          <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
+                          <span className="flex items-center gap-1 text-xs text-emerald-600 font-medium">
                             <CheckCircle2 className="h-3.5 w-3.5" />
                             Vinculado
                           </span>
