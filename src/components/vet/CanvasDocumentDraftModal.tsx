@@ -215,7 +215,7 @@ export default function CanvasDocumentDraftModal({
         <header className="flex items-center justify-between border-b border-slate-200 px-5 py-3 flex-shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             {isEdit
-              ? <Pencil className="w-5 h-5 text-blue-600 flex-shrink-0" />
+              ? <Pencil className="w-5 h-5 text-teal-600 flex-shrink-0" />
               : <Sparkles className="w-5 h-5 text-violet-600 flex-shrink-0" />}
             <div className="min-w-0">
               <h2 className="text-base font-semibold text-slate-900 truncate">

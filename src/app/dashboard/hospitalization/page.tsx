@@ -26,7 +26,7 @@ export default async function HospitalizationPage() {
   const isFreePlan = planName === 'free'
 
   return (
-    <main className="max-w-[1400px] mx-auto px-4 py-6 sm:px-6">
+    <main className="max-w-[1400px] mx-auto px-4 py-6 sm:px-6 animate-enter">
       <HospitalizationKanban
         initialBoard={board}
         clinicId={profile.clinic_id}

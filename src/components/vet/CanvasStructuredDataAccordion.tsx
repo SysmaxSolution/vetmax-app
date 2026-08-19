@@ -153,7 +153,7 @@ export default function CanvasStructuredDataAccordion({ ctx, overrides, setOverr
                 {section.fields.map(f => {
                   const value         = readStringField(ctx, overrides, f.path)
                   const isOverridden  = f.path in overrides
-                  const inputClass    = `w-full rounded-md border px-2 py-1.5 text-xs focus:outline-none ${
+                  const inputClass    = `w-full rounded-lg border px-2 py-1.5 text-xs focus:outline-none ${
                     isOverridden
                       ? 'border-violet-400 bg-violet-50/40 focus:border-violet-500'
                       : 'border-slate-200 focus:border-violet-400'

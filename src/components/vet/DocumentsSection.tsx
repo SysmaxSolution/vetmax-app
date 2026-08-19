@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
@@ -32,7 +32,7 @@ const TYPE_LABELS: Record<string, string> = {
 
 const TYPE_BADGE: Record<string, string> = {
   laudo:          'bg-blue-100 text-blue-700',
-  receita:        'bg-green-100 text-green-700',
+  receita:        'bg-emerald-100 text-emerald-700',
   encaminhamento: 'bg-purple-100 text-purple-700',
   termo:          'bg-amber-100 text-amber-700',
   exame:          'bg-indigo-100 text-indigo-700',
@@ -113,8 +113,8 @@ function FieldInput({
   const borderClass = isEmpty
     ? 'border-amber-300 bg-amber-50 focus:ring-amber-400'
     : wasAiFilled
-    ? 'border-green-400 bg-green-50 focus:ring-green-400'
-    : 'border-slate-300 focus:ring-blue-500'
+    ? 'border-emerald-400 bg-emerald-50 focus:ring-emerald-400'
+    : 'border-slate-300 focus:ring-teal-500'
 
   const base = `w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:border-transparent outline-none transition-colors`
 
@@ -123,7 +123,7 @@ function FieldInput({
       <label className="block text-xs font-semibold text-slate-600 mb-1.5">
         {field.label}
         {field.required && <span className="text-red-500 ml-1">*</span>}
-        {!isEmpty && wasAiFilled && <CheckCircle2 className="inline w-3 h-3 text-green-600 ml-1.5" />}
+        {!isEmpty && wasAiFilled && <CheckCircle2 className="inline w-3 h-3 text-emerald-600 ml-1.5" />}
         {isEmpty && (
           <span className="ml-1.5 text-xs font-normal text-amber-600">
             <AlertCircle className="inline w-3 h-3 mr-0.5" />preencha
@@ -568,13 +568,13 @@ export default function DocumentsSection({
             onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 flex-shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
-                  <Sparkles className="w-4 h-4 text-blue-600" />
+                <div className="w-8 h-8 rounded-lg bg-teal-50 flex items-center justify-center">
+                  <Sparkles className="w-4 h-4 text-teal-600" />
                 </div>
                 <div>
                   <h2 className="text-base font-semibold text-slate-900">Gerar Documento com IA</h2>
                   {activeHint && (
-                    <p className="text-xs text-blue-600 mt-0.5 truncate max-w-[280px]">Contexto: &quot;{activeHint.slice(0, 60)}{activeHint.length > 60 ? '…' : ''}&quot;</p>
+                    <p className="text-xs text-teal-600 mt-0.5 truncate max-w-[280px]">Contexto: &quot;{activeHint.slice(0, 60)}{activeHint.length > 60 ? '…' : ''}&quot;</p>
                   )}
                 </div>
               </div>
@@ -593,7 +593,7 @@ export default function DocumentsSection({
                   value={templateSearch}
                   onChange={e => setTemplateSearch(e.target.value)}
                   placeholder="Buscar modelo..."
-                  className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                  className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400"
                 />
               </div>
             </div>
@@ -613,7 +613,7 @@ export default function DocumentsSection({
               ) : !hasFilteredResults ? (
                 <div className="text-center py-6">
                   <p className="text-sm text-slate-500">Nenhum modelo encontrado para &quot;{templateSearch}&quot;</p>
-                  <button onClick={() => setTemplateSearch('')} className="mt-2 text-xs text-blue-600 hover:underline">
+                  <button onClick={() => setTemplateSearch('')} className="mt-2 text-xs text-teal-600 hover:underline">
                     Limpar busca
                   </button>
                 </div>
@@ -648,10 +648,10 @@ export default function DocumentsSection({
                     valores preenchidos + faltantes pro vet completar).
                   • Legado: IA preenche extracted_fields, abre form de revisão. */}
               <button onClick={handleGenerate} disabled={!selectedTemplateId || isGenerating}
-                className={`w-full flex items-center justify-center gap-2 px-5 py-3 font-semibold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-white ${
+                className={`w-full flex items-center justify-center gap-2 px-5 py-3 font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-white ${
                   selectedIsCanvas
                     ? 'bg-violet-600 hover:bg-violet-700'
-                    : 'bg-blue-600 hover:bg-blue-700'
+                    : 'bg-teal-600 hover:bg-teal-700'
                 }`}>
                 {isGenerating ? (
                   <><Loader2 className="w-4 h-4 animate-spin" />IA preenchendo campos...</>
@@ -670,7 +670,7 @@ export default function DocumentsSection({
                     )
                   }}
                   disabled={isGenerating}
-                  className="w-full flex items-center justify-center gap-2 px-5 py-2 border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 text-xs font-medium rounded-xl transition-colors disabled:opacity-50"
+                  className="w-full flex items-center justify-center gap-2 px-5 py-2 border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
                 >
                   Preencher manualmente (sem IA)
                 </button>
@@ -682,11 +682,11 @@ export default function DocumentsSection({
 
       {/* ── Review / Edit Form ── */}
       {draft ? (
-        <div className="bg-white rounded-xl shadow-sm border border-blue-200">
-          <div className="border-b border-blue-100 px-6 py-4 flex items-start justify-between">
+        <div className="bg-white rounded-xl shadow-sm border border-teal-200">
+          <div className="border-b border-teal-100 px-6 py-4 flex items-start justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50">
-                <FileText className="h-4 w-4 text-blue-600" />
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-50">
+                <FileText className="h-4 w-4 text-teal-600" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
@@ -714,7 +714,7 @@ export default function DocumentsSection({
             {!draft.is_saved && (
               <div className="flex flex-wrap items-center gap-4 mb-5 p-3 bg-slate-50 rounded-lg">
                 <span className="flex items-center gap-1.5 text-xs text-slate-600">
-                  <span className="w-3 h-3 rounded border-2 border-green-400 bg-green-50 inline-block flex-shrink-0" />
+                  <span className="w-3 h-3 rounded border-2 border-emerald-400 bg-emerald-50 inline-block flex-shrink-0" />
                   <strong>{aiFilledCount}</strong> campo(s) preenchido(s) pela IA
                 </span>
                 {emptyCount > 0 && (
@@ -733,7 +733,7 @@ export default function DocumentsSection({
             )}
 
             {saveSuccess && (
-              <div className="mb-4 flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg p-3">
+              <div className="mb-4 flex items-center gap-2 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
                 <CheckCircle2 className="w-4 h-4 flex-shrink-0" />Documento atualizado com sucesso.
               </div>
             )}
@@ -756,7 +756,7 @@ export default function DocumentsSection({
               {draft.is_saved ? (
                 <>
                   <button onClick={handleUpdate} disabled={isUpdating || isUploadingPdf}
-                    className="flex items-center gap-2 px-5 py-2.5 border border-blue-600 text-blue-700 text-sm font-semibold rounded-lg hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                    className="flex items-center gap-2 px-5 py-2.5 border border-teal-600 text-teal-700 text-sm font-semibold rounded-lg hover:bg-teal-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                     {isUpdating
                       ? <><Loader2 className="w-4 h-4 animate-spin" />Atualizando...</>
                       : isUploadingPdf
@@ -837,7 +837,7 @@ export default function DocumentsSection({
                       <button
                         onClick={() => handleSuggestionGenerate(s, i)}
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all text-white ${
-                          s.is_controlled ? 'bg-blue-700 hover:bg-blue-800' : 'bg-blue-600 hover:bg-blue-700'
+                          s.is_controlled ? 'bg-blue-700 hover:bg-blue-800' : 'bg-teal-600 hover:bg-teal-700'
                         }`}
                       >
                         <Sparkles className="w-3 h-3" />Gerar
@@ -869,7 +869,7 @@ export default function DocumentsSection({
               </div>
               <button
                 onClick={() => { setShowModal(true); setSelectedTemplateId(''); setModalError(null); setActiveHint(undefined); setTemplateSearch('') }}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white text-sm font-semibold rounded-lg hover:bg-teal-700 transition-colors"
               >
                 <Plus className="w-4 h-4" />Gerar Novo Documento
               </button>
@@ -916,7 +916,7 @@ export default function DocumentsSection({
                           className={`flex items-center gap-3 min-w-0 flex-1 ${canEdit && !isBusy ? 'cursor-pointer' : ''}`}
                           onClick={openHandler}
                         >
-                          <FileCheck className={`w-4 h-4 flex-shrink-0 ${canEdit ? 'text-blue-400 group-hover:text-blue-600' : 'text-slate-400'}`} />
+                          <FileCheck className={`w-4 h-4 flex-shrink-0 ${canEdit ? 'text-teal-400 group-hover:text-teal-600' : 'text-slate-400'}`} />
                           <div className="min-w-0">
                             <p className="text-sm font-medium text-slate-800 truncate">{doc.document_name}</p>
                             <p className="text-xs text-slate-400">
@@ -924,7 +924,7 @@ export default function DocumentsSection({
                                 day: '2-digit', month: '2-digit', year: 'numeric',
                                 hour: '2-digit', minute: '2-digit',
                               })}
-                              {canEdit && <span className="ml-2 text-blue-400 group-hover:text-blue-600">· Clique para editar/imprimir</span>}
+                              {canEdit && <span className="ml-2 text-teal-400 group-hover:text-teal-600">· Clique para editar/imprimir</span>}
                             </p>
                           </div>
                         </div>
@@ -939,7 +939,7 @@ export default function DocumentsSection({
                               onClick={openHandler}
                               disabled={isBusy}
                               title="Editar documento"
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-50"
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-teal-600 hover:bg-teal-50 transition-colors disabled:opacity-50"
                             >
                               {reopenLoadingId === doc.id
                                 ? <Loader2 className="w-4 h-4 animate-spin" />
@@ -1083,7 +1083,7 @@ function TemplateButton({
       onClick={onSelect}
       className={`w-full flex items-center justify-between p-3.5 rounded-xl border-2 transition-all text-left ${
         selected
-          ? (isCanvas ? 'border-violet-500 bg-violet-50' : 'border-blue-500 bg-blue-50')
+          ? (isCanvas ? 'border-violet-500 bg-violet-50' : 'border-teal-500 bg-teal-50')
           : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
       }`}
     >

@@ -119,7 +119,7 @@ export default function VoiceReviewPanel(props: Props) {
                   <label key={k} className="block">
                     <span className="text-[9px] font-bold text-slate-400 uppercase">{VITAL_LABELS[k] ?? k}</span>
                     <input value={String(v)} onChange={e => patchVital(k, e.target.value)}
-                      className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs focus:border-violet-500 focus:outline-none" />
+                      className="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1 text-xs focus:border-violet-500 focus:outline-none" />
                   </label>
                 ))}
               </div>
@@ -133,15 +133,15 @@ export default function VoiceReviewPanel(props: Props) {
                 {draft.fluids.map((f, i) => (
                   <div key={i} className="flex items-center gap-1.5" data-testid={`voice-fluid-${i}`}>
                     <select value={f.direction} onChange={e => patchFluid(i, { direction: e.target.value as 'in' | 'out' })}
-                      className="rounded-md border border-slate-300 bg-white px-1.5 py-1 text-xs">
+                      className="rounded-lg border border-slate-300 bg-white px-1.5 py-1 text-xs">
                       <option value="in">Entrada</option><option value="out">Saída</option>
                     </select>
                     <select value={f.kind} onChange={e => patchFluid(i, { kind: e.target.value as typeof f.kind })}
-                      className="rounded-md border border-slate-300 bg-white px-1.5 py-1 text-xs">
+                      className="rounded-lg border border-slate-300 bg-white px-1.5 py-1 text-xs">
                       {Object.entries(FLUID_KIND_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
                     </select>
                     <input type="number" value={f.volume_ml} onChange={e => patchFluid(i, { volume_ml: Number(e.target.value) || 0 })}
-                      className="w-20 rounded-md border border-slate-300 px-2 py-1 text-xs" /> <span className="text-[10px] text-slate-400">mL</span>
+                      className="w-20 rounded-lg border border-slate-300 px-2 py-1 text-xs" /> <span className="text-[10px] text-slate-400">mL</span>
                     <button onClick={() => removeFluid(i)} className="ml-auto text-slate-300 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>
                   </div>
                 ))}
@@ -155,11 +155,11 @@ export default function VoiceReviewPanel(props: Props) {
               <div className="space-y-1.5">
                 {draft.clinical_data.diet_notes !== null && (
                   <label className="block"><span className="text-[9px] font-bold text-slate-400 uppercase">Dieta</span>
-                    <input value={draft.clinical_data.diet_notes ?? ''} onChange={e => patchClinical('diet_notes', e.target.value)} className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs" /></label>
+                    <input value={draft.clinical_data.diet_notes ?? ''} onChange={e => patchClinical('diet_notes', e.target.value)} className="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1 text-xs" /></label>
                 )}
                 {draft.clinical_data.estimated_discharge !== null && (
                   <label className="block"><span className="text-[9px] font-bold text-slate-400 uppercase">Previsão de alta</span>
-                    <input value={draft.clinical_data.estimated_discharge ?? ''} onChange={e => patchClinical('estimated_discharge', e.target.value)} className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs" /></label>
+                    <input value={draft.clinical_data.estimated_discharge ?? ''} onChange={e => patchClinical('estimated_discharge', e.target.value)} className="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1 text-xs" /></label>
                 )}
                 <div className="flex gap-3">
                   {draft.clinical_data.fasting !== null && <Toggle label="Jejum" on={!!draft.clinical_data.fasting} onClick={() => toggleClinicalBool('fasting')} />}
@@ -175,11 +175,11 @@ export default function VoiceReviewPanel(props: Props) {
               <div className="space-y-1.5">
                 {draft.tasks.map((t, i) => (
                   <div key={i} className="flex items-center gap-1.5" data-testid={`voice-task-${i}`}>
-                    <select value={t.kind} onChange={e => patchTask(i, { kind: e.target.value as typeof t.kind })} className="rounded-md border border-slate-300 bg-white px-1.5 py-1 text-xs">
+                    <select value={t.kind} onChange={e => patchTask(i, { kind: e.target.value as typeof t.kind })} className="rounded-lg border border-slate-300 bg-white px-1.5 py-1 text-xs">
                       {Object.entries(TASK_KIND_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
                     </select>
-                    <input value={t.description} onChange={e => patchTask(i, { description: e.target.value })} className="flex-1 min-w-0 rounded-md border border-slate-300 px-2 py-1 text-xs" />
-                    <select value={t.frequency_hours === null ? 'null' : String(t.frequency_hours)} onChange={e => patchTask(i, { frequency_hours: e.target.value === 'null' ? null : Number(e.target.value) })} className="rounded-md border border-slate-300 bg-white px-1.5 py-1 text-xs">
+                    <input value={t.description} onChange={e => patchTask(i, { description: e.target.value })} className="flex-1 min-w-0 rounded-lg border border-slate-300 px-2 py-1 text-xs" />
+                    <select value={t.frequency_hours === null ? 'null' : String(t.frequency_hours)} onChange={e => patchTask(i, { frequency_hours: e.target.value === 'null' ? null : Number(e.target.value) })} className="rounded-lg border border-slate-300 bg-white px-1.5 py-1 text-xs">
                       {[4, 6, 8, 12, 24].map(h => <option key={h} value={h}>{h}/{h}h</option>)}<option value="null">Única</option>
                     </select>
                     <button onClick={() => removeTask(i)} className="text-slate-300 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>
@@ -197,13 +197,13 @@ export default function VoiceReviewPanel(props: Props) {
                   <div key={i} className={`rounded-lg border px-2 py-1.5 ${m.is_duplicate_suggestion ? 'border-amber-400 bg-amber-100/60' : m.needs_review ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-white'}`} data-testid={`voice-med-${i}`}>
                     {m.is_duplicate_suggestion && <p className="mb-1 text-[10px] font-bold text-amber-800 flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Possível duplicata — mesma medicação/dose já no draft.</p>}
                     <div className="flex items-center gap-1.5">
-                      <input value={m.name} onChange={e => patchMed(i, { name: e.target.value })} placeholder="Medicamento" className="flex-1 min-w-0 rounded-md border border-slate-300 px-2 py-1 text-xs font-semibold" />
+                      <input value={m.name} onChange={e => patchMed(i, { name: e.target.value })} placeholder="Medicamento" className="flex-1 min-w-0 rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold" />
                       <button onClick={() => removeMed(i)} className="text-slate-300 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>
                     </div>
                     <div className="mt-1 grid grid-cols-3 gap-1.5">
-                      <input value={m.dose ?? ''} onChange={e => patchMed(i, { dose: e.target.value || null })} placeholder="Dose" className="rounded-md border border-slate-300 px-2 py-1 text-xs" />
-                      <input value={m.route ?? ''} onChange={e => patchMed(i, { route: e.target.value || null })} placeholder="Via" className="rounded-md border border-slate-300 px-2 py-1 text-xs" />
-                      <select value={m.frequency_hours === null ? 'null' : String(m.frequency_hours)} onChange={e => patchMed(i, { frequency_hours: e.target.value === 'null' ? null : Number(e.target.value) })} className="rounded-md border border-slate-300 bg-white px-1.5 py-1 text-xs">
+                      <input value={m.dose ?? ''} onChange={e => patchMed(i, { dose: e.target.value || null })} placeholder="Dose" className="rounded-lg border border-slate-300 px-2 py-1 text-xs" />
+                      <input value={m.route ?? ''} onChange={e => patchMed(i, { route: e.target.value || null })} placeholder="Via" className="rounded-lg border border-slate-300 px-2 py-1 text-xs" />
+                      <select value={m.frequency_hours === null ? 'null' : String(m.frequency_hours)} onChange={e => patchMed(i, { frequency_hours: e.target.value === 'null' ? null : Number(e.target.value) })} className="rounded-lg border border-slate-300 bg-white px-1.5 py-1 text-xs">
                         {[4, 6, 8, 12, 24].map(h => <option key={h} value={h}>{h}/{h}h</option>)}<option value="null">SOS</option>
                       </select>
                     </div>
@@ -228,7 +228,7 @@ export default function VoiceReviewPanel(props: Props) {
           {/* Relatório/Notas (cirurgia) */}
           {context === 'surgery' && draft.notes.trim() && (
             <Section icon={<ClipboardCheck className="h-3.5 w-3.5 text-violet-500" />} title="Relatório Cirúrgico">
-              <textarea value={draft.notes} onChange={e => setDraft(d => ({ ...d, notes: e.target.value }))} rows={4} className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-xs" />
+              <textarea value={draft.notes} onChange={e => setDraft(d => ({ ...d, notes: e.target.value }))} rows={4} className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-xs" />
             </Section>
           )}
 

@@ -54,7 +54,7 @@ export default async function ExamDetailPage({ params }: Props) {
   const insuranceCard      = 'error' in insuranceCardResult ? null : insuranceCardResult
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-8 print:hidden">
+    <div className="max-w-4xl mx-auto px-6 py-8 print:hidden animate-enter">
       <ExamDetail
         consultation={consultResult}
         clinicName={clinicName}

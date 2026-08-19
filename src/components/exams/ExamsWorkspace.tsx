@@ -27,7 +27,7 @@ const STATUS_BADGE: Record<string, string> = {
   in_progress:  'bg-indigo-100 text-indigo-700',
   waiting_exam: 'bg-orange-100 text-orange-700',
   medication:   'bg-pink-100 text-pink-700',
-  completed:    'bg-green-100 text-green-700',
+  completed:    'bg-emerald-100 text-emerald-700',
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -58,7 +58,7 @@ function ExamCard({
 }) {
   return (
     // Mobile (05/06): wrap — as 3 ações descem para linha própria no celular
-    <div className="flex flex-wrap items-center gap-3 sm:gap-4 rounded-xl border border-slate-200 bg-white px-4 sm:px-5 py-4 hover:shadow-sm hover:border-blue-200 transition-all">
+    <div className="flex flex-wrap items-center gap-3 sm:gap-4 rounded-xl border border-slate-200 bg-white px-4 sm:px-5 py-4 shadow-sm hover:border-slate-300 transition-all">
       {/* Avatar */}
       <PetAvatar name={item.patient.name} species={item.patient.species} photoUrl={item.patient.photo_url} size="md" />
 
@@ -78,7 +78,7 @@ function ExamCard({
           )}
           {item.exam_types.length > 0 ? (
             item.exam_types.map(t => (
-              <span key={t} className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">
+              <span key={t} className="text-xs font-medium px-2 py-0.5 rounded-full bg-violet-50 text-violet-700">
                 {t}
               </span>
             ))
@@ -107,7 +107,7 @@ function ExamCard({
       <div className="flex flex-row flex-wrap sm:flex-col gap-2 w-full sm:w-auto sm:flex-shrink-0">
         <Link
           href={`/dashboard/exams/${item.id}`}
-          className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors shadow-sm"
+          className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 transition-colors shadow-sm"
         >
           <FlaskConical className="h-4 w-4" />
           Iniciar Exame
@@ -116,7 +116,7 @@ function ExamCard({
           type="button"
           onClick={() => onDischarge(item.id, item.patient.name)}
           title="Pet não retorna ao consultório — concluir atendimento"
-          className="flex items-center gap-1.5 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-colors"
+          className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-colors"
         >
           <LogOut className="h-4 w-4" />
           Dar Alta
@@ -125,7 +125,7 @@ function ExamCard({
           type="button"
           onClick={() => onSendToHospitalization(item)}
           title="Encaminhar para internação"
-          className="flex items-center gap-1.5 rounded-xl border border-indigo-200 px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50 transition-colors"
+          className="flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-white px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50 transition-colors"
         >
           <BedDouble className="h-4 w-4" />
           Internar
@@ -222,13 +222,13 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <main className="mx-auto max-w-4xl px-3 sm:px-6 py-6 sm:py-8 space-y-6">
+      <main className="mx-auto max-w-4xl px-3 sm:px-6 py-6 sm:py-8 space-y-6 animate-enter">
 
         {/* Header */}
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900">Laboratório / Exames</h1>
-            <p className="mt-0.5 text-sm text-slate-500">Pacientes aguardando exame e geração de laudos</p>
+            <h1 className="text-xl font-bold tracking-tight text-slate-900">Laboratório / Exames</h1>
+            <p className="mt-0.5 text-sm text-slate-600">Pacientes aguardando exame e geração de laudos</p>
           </div>
           <button
             type="button"
@@ -236,7 +236,7 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
             onClick={() => setShowNewExamModal(true)}
             aria-hidden={showNewExamModal ? 'true' : undefined}
             tabIndex={showNewExamModal ? -1 : undefined}
-            className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition-colors shadow-sm flex-shrink-0"
+            className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 transition-colors flex-shrink-0"
           >
             <Plus className="h-4 w-4" />
             Solicitar Exame
@@ -258,7 +258,7 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
             Fila de Exames
             {queue.length > 0 && (
               <span className={`ml-1 rounded-full px-2 py-0.5 text-xs font-bold ${
-                tab === 'fila' ? 'bg-blue-100 text-blue-700' : 'bg-slate-200 text-slate-600'
+                tab === 'fila' ? 'bg-teal-100 text-teal-700' : 'bg-slate-200 text-slate-600'
               }`}>
                 {queue.length}
               </span>
@@ -290,8 +290,8 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
           <div data-mentor-step="exams-queue" className="bg-white rounded-xl shadow-sm border border-slate-200">
             <div className="border-b border-slate-100 px-6 py-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50">
-                  <FlaskConical className="h-4 w-4 text-blue-600" />
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100">
+                  <FlaskConical className="h-4 w-4 text-slate-600" />
                 </div>
                 <div>
                   <h2 className="text-base font-semibold text-slate-900">Fila de Exames</h2>
@@ -300,7 +300,7 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
               </div>
               <span className={`rounded-full px-3 py-1 text-sm font-semibold ${
                 localQueue.length > 0
-                  ? 'bg-blue-100 text-blue-700'
+                  ? 'bg-teal-100 text-teal-700'
                   : 'bg-slate-100 text-slate-500'
               }`}>
                 {localQueue.length} paciente{localQueue.length !== 1 ? 's' : ''}
@@ -308,14 +308,14 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
             </div>
 
             {examSuccess && (
-              <div className="mx-4 mt-4 rounded-xl bg-green-50 border border-green-200 px-4 py-2.5 text-sm text-green-700 font-medium">
+              <div className="mx-4 mt-4 rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-2.5 text-sm text-emerald-700 font-medium">
                 {examSuccess}
               </div>
             )}
             {localQueue.length === 0 && localExamRequests.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center">
-                <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-green-50">
-                  <CheckCircle2 className="h-7 w-7 text-green-400" />
+                <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-50">
+                  <CheckCircle2 className="h-7 w-7 text-emerald-400" />
                 </div>
                 <p className="text-sm font-medium text-slate-500">Nenhum exame pendente no momento</p>
                 <p className="text-xs text-slate-400 mt-1">
@@ -336,13 +336,13 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
                   <div
                     key={req.id}
                     onClick={() => { setResultModalId(req.id); setResultText('') }}
-                    className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white px-5 py-4 hover:shadow-sm hover:border-blue-200 transition-all cursor-pointer"
+                    className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm hover:border-slate-300 transition-all cursor-pointer"
                   >
                     <PetAvatar name={req.patient.name} species={req.patient.species} photoUrl={req.patient.photo_url} size="md" />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-semibold text-slate-900">{req.patient.name}</p>
-                        <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-medium">{req.exam_type}</span>
+                        <span className="text-xs bg-violet-50 text-violet-700 px-2 py-0.5 rounded-full font-medium">{req.exam_type}</span>
                       </div>
                       <div className="mt-0.5 flex items-center gap-2">
                         <span className="text-xs text-slate-500">Tutor: {req.tutor.name}</span>
@@ -358,7 +358,7 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
                         type="button"
                         aria-label="Preencher exame"
                         onClick={e => { e.stopPropagation(); setResultModalId(req.id); setResultText('') }}
-                        className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition-colors shadow-sm"
+                        className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 transition-colors shadow-sm"
                       >
                         <FlaskConical className="h-4 w-4" />
                         Registrar Resultado
@@ -439,14 +439,14 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
       {/* Modal: Solicitar Exame */}
       {showNewExamModal && (
         <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4 animate-scale-in">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold text-slate-900">Solicitar Novo Exame</h2>
               <button onClick={() => { setShowNewExamModal(false); setExamSuccess(''); setExamError(''); setExamPatientSearch(''); setExamPatientResults([]); setExamPatientSelected(null); setExamNotes('Exame solicitado manualmente no módulo de Exames.') }} className="text-slate-400 hover:text-slate-600">
                 <X className="h-5 w-5" />
               </button>
             </div>
-            {examSuccess && <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">{examSuccess}</p>}
+            {examSuccess && <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">{examSuccess}</p>}
             {examError && <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{examError}</p>}
             <div className="relative">
               <label className="block text-sm font-medium text-slate-700 mb-1">Paciente</label>
@@ -455,7 +455,7 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
                 placeholder="Buscar por pet ou tutor..."
                 value={examPatientSelected ? examPatientSelected.name + ' — ' + examPatientSelected.tutor.name : examPatientSearch}
                 onChange={e => handleExamPatientSearch(e.target.value)}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
               />
               {examPatientResults.length > 0 && !examPatientSelected && (
                 <div className="absolute z-10 top-full left-0 right-0 bg-white border border-slate-200 rounded-lg shadow-lg mt-1 max-h-40 overflow-y-auto">
@@ -479,7 +479,7 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
                 value={examNotes}
                 onChange={e => setExamNotes(e.target.value)}
                 rows={2}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
                 placeholder="Motivo ou observação clínica..."
               />
             </div>
@@ -488,7 +488,7 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
               <select
                 value={examType}
                 onChange={e => setExamType(e.target.value)}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
               >
                 <option value="hemograma">Hemograma Completo</option>
                 <option value="bioquimico">Perfil Bioquímico</option>
@@ -534,7 +534,7 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
                   setExamLoading(false)
                   setTimeout(() => { setShowNewExamModal(false); setExamSuccess(''); setExamPatientSearch(''); setExamPatientResults([]); setExamPatientSelected(null); setExamNotes('Exame solicitado manualmente no módulo de Exames.') }, 1500)
                 }}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50"
+                className="flex-1 px-4 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-50"
               >
                 {examLoading ? 'Solicitando...' : 'Confirmar'}
               </button>
@@ -546,14 +546,14 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
       {/* Modal: Registrar Resultado */}
       {resultModalId && (
         <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4 animate-scale-in">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold text-slate-900">Registrar Resultado do Exame</h2>
               <button onClick={() => setResultModalId(null)} className="text-slate-400 hover:text-slate-600">
                 <X className="h-5 w-5" />
               </button>
             </div>
-            {resultSuccess && <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">{resultSuccess}</p>}
+            {resultSuccess && <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">{resultSuccess}</p>}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Resultado / Laudo</label>
               <textarea
@@ -562,7 +562,7 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
                 onChange={e => setResultText(e.target.value)}
                 placeholder="Descreva o resultado do exame..."
                 rows={4}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
               />
             </div>
             <div className="flex gap-2">
@@ -589,7 +589,7 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
                     setTimeout(() => { setResultModalId(null); setResultSuccess('') }, 1500)
                   }
                 }}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50"
+                className="flex-1 px-4 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-50"
               >
                 {resultLoading ? 'Salvando...' : 'Registrar Resultado'}
               </button>
@@ -601,10 +601,10 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
       {/* Modal: Internar Paciente */}
       {hospItem && (
         <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4 animate-scale-in">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <BedDouble className="h-5 w-5 text-indigo-600" />
+                <BedDouble className="h-5 w-5 text-teal-600" />
                 <h2 className="text-base font-semibold text-slate-900">Encaminhar para Internação</h2>
               </div>
               <button onClick={() => { setHospItem(null); setHospReason(''); setExamError('') }} className="text-slate-400 hover:text-slate-600">
@@ -624,7 +624,7 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
                   type="button"
                   title={hospVoice.isRecording ? 'Parar gravação ou diga "encerrar gravação"' : 'Ditar motivo por voz'}
                   onClick={hospVoice.toggle}
-                  className={`flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium transition-colors ${hospVoice.isRecording ? 'bg-red-100 text-red-700 animate-pulse' : 'bg-slate-100 text-slate-600 hover:bg-indigo-50 hover:text-indigo-700'}`}
+                  className={`flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium transition-colors ${hospVoice.isRecording ? 'bg-red-100 text-red-700 animate-pulse' : 'bg-slate-100 text-slate-600 hover:bg-teal-50 hover:text-teal-700'}`}
                 >
                   {hospVoice.isRecording ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
                   {hospVoice.isRecording ? 'Parar' : 'Voz'}
@@ -635,7 +635,7 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
                 onChange={e => setHospReason(e.target.value)}
                 placeholder="Ex: Necessita de observação pós-exame, hidratação IV..."
                 rows={3}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
                 autoFocus
               />
             </div>
@@ -651,7 +651,7 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
                 type="button"
                 disabled={hospLoading || !hospReason.trim()}
                 onClick={handleHospSubmit}
-                className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
+                className="flex-1 px-4 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
               >
                 <BedDouble className="h-4 w-4" />
                 {hospLoading ? 'Internando...' : 'Confirmar Internação'}

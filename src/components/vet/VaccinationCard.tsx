@@ -49,7 +49,7 @@ function InlineToast({ toast, onClose }: { toast: ToastState; onClose: () => voi
   return (
     <div className={`flex items-center justify-between gap-3 rounded-lg px-4 py-2.5 text-sm font-medium ${
       toast.type === 'success'
-        ? 'bg-green-50 border border-green-200 text-green-800'
+        ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
         : 'bg-red-50 border border-red-200 text-red-800'
     }`}>
       <div className="flex items-center gap-2">
@@ -295,8 +295,8 @@ export default function VaccinationCard({
     <div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
       {/* Header */}
       <div className="border-b border-slate-100 px-6 py-4 flex items-center gap-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-50">
-          <Syringe className="h-4 w-4 text-green-600" />
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50">
+          <Syringe className="h-4 w-4 text-emerald-600" />
         </div>
         <div className="flex-1">
           <h2 className="text-base font-semibold text-slate-900">Carteira de Vacinação</h2>
@@ -312,7 +312,7 @@ export default function VaccinationCard({
           <button
             type="button"
             onClick={() => { setShowForm(v => !v); setToast(null) }}
-            className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 transition-colors"
+            className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 transition-colors"
           >
             <Plus className="h-3.5 w-3.5" />
             Registrar
@@ -329,7 +329,7 @@ export default function VaccinationCard({
 
       {/* Form (inline) */}
       {showForm && !isFinalized && (
-        <div className="px-6 py-4 border-b border-slate-100 bg-green-50/30 space-y-3">
+        <div className="px-6 py-4 border-b border-slate-100 bg-emerald-50/30 space-y-3">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Nova Vacinação</p>
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2 relative">
@@ -342,13 +342,13 @@ export default function VaccinationCard({
                 onBlur={() => setTimeout(() => setShowSug(false), 150)}
                 onKeyDown={e => blockEnter(e, handleAdd)}
                 placeholder="Busque no catálogo: V10, Antirrábica, Giardia..."
-                className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20"
+                className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
               />
               {showSug && suggestions.length > 0 && (
                 <div className="absolute z-30 mt-1 w-full rounded-lg border border-slate-200 bg-white shadow-lg max-h-48 overflow-y-auto">
                   {suggestions.map((s, i) => (
                     <button key={i} type="button" onMouseDown={e => { e.preventDefault(); pickSuggestion(s) }}
-                      className="w-full text-left px-3 py-1.5 hover:bg-green-50 border-b border-slate-50 last:border-0">
+                      className="w-full text-left px-3 py-1.5 hover:bg-emerald-50 border-b border-slate-50 last:border-0">
                       <p className="text-sm text-slate-700">{s.name}</p>
                       {(s.manufacturer || s.type) && (
                         <p className="text-[10px] text-slate-400">{[s.type, s.manufacturer].filter(Boolean).join(' • ')}</p>
@@ -362,31 +362,31 @@ export default function VaccinationCard({
               <label className="text-xs font-medium text-slate-600 mb-1 block">Tipo</label>
               <input type="text" value={vType} onChange={e => setVType(e.target.value)} onKeyDown={e => blockEnter(e, handleAdd)}
                 placeholder="Ex: polivalente, raiva..."
-                className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20" />
+                className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20" />
             </div>
             <div>
               <label className="text-xs font-medium text-slate-600 mb-1 block">Fabricante</label>
               <input type="text" value={manufacturer} onChange={e => setManufacturer(e.target.value)} onKeyDown={e => blockEnter(e, handleAdd)}
                 placeholder="Laboratório"
-                className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20" />
+                className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20" />
             </div>
             <div>
               <label className="text-xs font-medium text-slate-600 mb-1 block">Dose atual</label>
               <input type="number" min="1" value={doseNum} onChange={e => setDoseNum(e.target.value)} onKeyDown={e => blockEnter(e, handleAdd)}
                 placeholder="Ex: 1"
-                className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20" />
+                className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20" />
             </div>
             <div>
               <label className="text-xs font-medium text-slate-600 mb-1 block">Dose total</label>
               <input type="number" min="1" value={doseTotal} onChange={e => setDoseTotal(e.target.value)} onKeyDown={e => blockEnter(e, handleAdd)}
                 placeholder="Ex: 3"
-                className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20" />
+                className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20" />
             </div>
             <div>
               <label className="text-xs font-medium text-slate-600 mb-1 block">Lote</label>
               <input type="text" value={lot} onChange={e => setLot(e.target.value)} onKeyDown={e => blockEnter(e, handleAdd)}
                 placeholder="Nº do lote"
-                className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20" />
+                className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20" />
             </div>
             <div>
               <label className="text-xs font-medium text-slate-600 mb-1 block">Validade</label>
@@ -396,7 +396,7 @@ export default function VaccinationCard({
               <label className="text-xs font-medium text-slate-600 mb-1 block">Via de administração</label>
               <input type="text" value={route} onChange={e => setRoute(e.target.value)} onKeyDown={e => blockEnter(e, handleAdd)}
                 placeholder="SC, IM, ID, oral..." list="vac-route-options"
-                className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20" />
+                className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20" />
               <datalist id="vac-route-options">
                 <option value="SC (subcutânea)" />
                 <option value="IM (intramuscular)" />
@@ -418,7 +418,7 @@ export default function VaccinationCard({
               <div className="flex flex-wrap gap-1.5">
                 {BOOSTER_PRESETS.map(p => (
                   <button key={p.label} type="button" onClick={() => applyBooster(p.opts)}
-                    className="rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-[11px] font-semibold text-green-700 hover:bg-green-100 transition-colors">
+                    className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors">
                     +{p.label}
                   </button>
                 ))}
@@ -432,7 +432,7 @@ export default function VaccinationCard({
                 onChange={e => setNotes(e.target.value)}
                 onKeyDown={e => blockEnter(e, handleAdd)}
                 placeholder="Reações, observações..."
-                className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20"
+                className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
               />
             </div>
           </div>
@@ -441,7 +441,7 @@ export default function VaccinationCard({
               type="button"
               onClick={handleAdd}
               disabled={adding || !name.trim()}
-              className="flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 transition-colors disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors disabled:opacity-50"
             >
               {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
               {adding ? 'Salvando...' : 'Salvar Vacina'}
@@ -470,39 +470,39 @@ export default function VaccinationCard({
             return (
               <div key={v.id}>
                 {editingId === v.id ? (
-                  <div className="px-6 py-4 bg-green-50/40 border-l-2 border-green-400 space-y-3">
+                  <div className="px-6 py-4 bg-emerald-50/40 border-l-2 border-emerald-400 space-y-3">
                     <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Editar Vacina</p>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="col-span-2">
                         <label className="text-xs font-medium text-slate-600 mb-1 block">Vacina *</label>
                         <input type="text" value={editName} onChange={e => setEditName(e.target.value)}
                           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleUpdate() } }}
-                          className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20" />
+                          className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20" />
                       </div>
                       <div>
                         <label className="text-xs font-medium text-slate-600 mb-1 block">Tipo</label>
                         <input type="text" value={editVType} onChange={e => setEditVType(e.target.value)}
-                          className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20" />
+                          className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20" />
                       </div>
                       <div>
                         <label className="text-xs font-medium text-slate-600 mb-1 block">Fabricante</label>
                         <input type="text" value={editManufacturer} onChange={e => setEditManufacturer(e.target.value)}
-                          className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20" />
+                          className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20" />
                       </div>
                       <div>
                         <label className="text-xs font-medium text-slate-600 mb-1 block">Dose atual</label>
                         <input type="number" min="1" value={editDoseNum} onChange={e => setEditDoseNum(e.target.value)}
-                          className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20" />
+                          className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20" />
                       </div>
                       <div>
                         <label className="text-xs font-medium text-slate-600 mb-1 block">Dose total</label>
                         <input type="number" min="1" value={editDoseTotal} onChange={e => setEditDoseTotal(e.target.value)}
-                          className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20" />
+                          className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20" />
                       </div>
                       <div>
                         <label className="text-xs font-medium text-slate-600 mb-1 block">Lote</label>
                         <input type="text" value={editLot} onChange={e => setEditLot(e.target.value)}
-                          className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20" />
+                          className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20" />
                       </div>
                       <div>
                         <label className="text-xs font-medium text-slate-600 mb-1 block">Validade</label>
@@ -512,7 +512,7 @@ export default function VaccinationCard({
                         <label className="text-xs font-medium text-slate-600 mb-1 block">Via de administração</label>
                         <input type="text" value={editRoute} onChange={e => setEditRoute(e.target.value)}
                           placeholder="SC, IM, ID, oral..." list="vac-route-options"
-                          className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20" />
+                          className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20" />
                       </div>
                       <div>
                         <label className="text-xs font-medium text-slate-600 mb-1 block">Data de Aplicação</label>
@@ -526,7 +526,7 @@ export default function VaccinationCard({
                         <div className="flex flex-wrap gap-1.5">
                           {BOOSTER_PRESETS.map(p => (
                             <button key={p.label} type="button" onClick={() => applyEditBooster(p.opts)}
-                              className="rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-[11px] font-semibold text-green-700 hover:bg-green-100 transition-colors">
+                              className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors">
                               +{p.label}
                             </button>
                           ))}
@@ -536,12 +536,12 @@ export default function VaccinationCard({
                         <label className="text-xs font-medium text-slate-600 mb-1 block">Observações</label>
                         <input type="text" value={editNotes} onChange={e => setEditNotes(e.target.value)}
                           placeholder="Reações, observações..."
-                          className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20" />
+                          className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20" />
                       </div>
                     </div>
                     <div className="flex gap-2">
                       <button type="button" onClick={handleUpdate} disabled={isUpdating || !editName.trim()}
-                        className="flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 transition-colors disabled:opacity-50">
+                        className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors disabled:opacity-50">
                         {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                         {isUpdating ? 'Salvando...' : 'Atualizar'}
                       </button>
@@ -554,7 +554,7 @@ export default function VaccinationCard({
                 ) : (
                   <div className={`px-6 py-3 flex items-center justify-between gap-4 ${overdue ? 'bg-red-50/50' : ''}`}>
                     <div className="flex items-start gap-3 flex-1 min-w-0">
-                      <div className={`mt-0.5 flex-shrink-0 ${overdue ? 'text-red-500' : 'text-green-500'}`}>
+                      <div className={`mt-0.5 flex-shrink-0 ${overdue ? 'text-red-500' : 'text-emerald-500'}`}>
                         {overdue ? <AlertTriangle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
                       </div>
                       <div className="min-w-0">
@@ -587,7 +587,7 @@ export default function VaccinationCard({
                     {!isFinalized && (
                       <div className="flex items-center gap-1 flex-shrink-0">
                         <button type="button" onClick={() => startEditVaccine(v)} title="Editar vacina"
-                          className="text-slate-300 hover:text-green-600 transition-colors p-1">
+                          className="text-slate-300 hover:text-emerald-600 transition-colors p-1">
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
                         <button type="button" onClick={() => handleDelete(v.id)} disabled={deleting === v.id}
