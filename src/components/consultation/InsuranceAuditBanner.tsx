@@ -32,7 +32,7 @@ function SuggestionRow({ s, onCopyTemplate }: { s: AuditSuggestion; onCopyTempla
       ? 'bg-red-100 text-red-700 border-red-200'
       : s.severity === 'warning'
       ? 'bg-amber-100 text-amber-700 border-amber-200'
-      : 'bg-blue-100 text-blue-700 border-blue-200'
+      : 'bg-sky-100 text-sky-700 border-sky-200'
 
   const SevIcon = s.severity === 'blocking' ? Ban : s.severity === 'warning' ? AlertTriangle : Shield
 

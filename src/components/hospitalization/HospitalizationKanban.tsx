@@ -490,7 +490,7 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
           </div>
           <a
             href="/dashboard/management?tab=subscription"
-            className="self-center rounded-xl bg-amber-600 hover:bg-amber-700 px-3 py-1.5 text-xs font-semibold text-white shadow-sm"
+            className="self-center rounded-lg bg-amber-600 hover:bg-amber-700 px-3 py-1.5 text-xs font-semibold text-white shadow-sm"
           >
             Fazer upgrade
           </a>
@@ -499,11 +499,11 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
 
       <div className="flex items-start justify-between gap-4">
         <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <BedDouble className="h-6 w-6 text-violet-600" />
+          <h1 className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
+            <BedDouble className="h-5 w-5 text-violet-600" />
             Mapa de Internação
           </h1>
-          <p className="text-sm text-slate-500">Gerencie o fluxo de pacientes críticos e observações em tempo real.</p>
+          <p className="text-sm text-slate-600">Gerencie o fluxo de pacientes críticos e observações em tempo real.</p>
         </div>
         <button
           type="button"
@@ -514,8 +514,8 @@ export default function HospitalizationKanban({ initialBoard, clinicId, isFreePl
           aria-hidden={showAdmitModal ? 'true' : undefined}
           tabIndex={showAdmitModal ? -1 : undefined}
           title={isFreePlan ? 'Recurso bloqueado no plano Free — use para conhecer a tela.' : undefined}
-          className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-sm flex-shrink-0 transition-colors ${
-            isFreePlan ? 'bg-violet-300 cursor-not-allowed' : 'bg-violet-600 hover:bg-violet-700'
+          className={`flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-white shadow-sm flex-shrink-0 transition-colors focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 ${
+            isFreePlan ? 'bg-teal-600/40 cursor-not-allowed' : 'bg-teal-600 hover:bg-teal-700'
           }`}
         >
           <Plus className="h-4 w-4" />

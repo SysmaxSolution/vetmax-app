@@ -180,11 +180,11 @@ export default function ServiceSelectionModal({ alreadyAddedIds = [], consultati
       className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 p-3 overflow-y-auto"
       onClick={e => { if (e.target === e.currentTarget) onCancel() }}
     >
-      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden my-4 flex flex-col max-h-[92vh]">
+      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden my-4 flex flex-col max-h-[92vh] animate-scale-in">
 
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-blue-50/40">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-teal-50/40">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-teal-600">
               <PackagePlus className="h-5 w-5 text-white" />
             </div>
             <div>
@@ -211,7 +211,7 @@ export default function ServiceSelectionModal({ alreadyAddedIds = [], consultati
                   onChange={e => setQuery(e.target.value)}
                   autoFocus
                   placeholder="Buscar por nome, SKU ou código de barras..."
-                  className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                  className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400"
                 />
               </div>
 
@@ -238,7 +238,7 @@ export default function ServiceSelectionModal({ alreadyAddedIds = [], consultati
                     <button
                       type="button"
                       onClick={() => { setNewName(query); setShowCreate(true) }}
-                      className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-blue-300 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 text-xs font-semibold text-blue-700"
+                      className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-teal-300 bg-teal-50 hover:bg-teal-100 px-3 py-1.5 text-xs font-semibold text-teal-700"
                     >
                       <Plus className="h-3 w-3" /> Cadastrar &quot;{query || 'novo serviço'}&quot;
                     </button>
@@ -258,12 +258,12 @@ export default function ServiceSelectionModal({ alreadyAddedIds = [], consultati
                             alreadyAdded
                               ? 'bg-slate-50 opacity-60 cursor-not-allowed'
                               : isPicked
-                                ? 'bg-blue-50'
+                                ? 'bg-teal-50'
                                 : 'hover:bg-slate-50'
                           }`}
                         >
                           <div className="flex items-center gap-2 min-w-0 flex-1">
-                            <Tag className="h-3.5 w-3.5 text-blue-500 flex-shrink-0" />
+                            <Tag className="h-3.5 w-3.5 text-teal-500 flex-shrink-0" />
                             <div className="min-w-0">
                               <p className="text-sm font-semibold text-slate-800 truncate">{item.name}</p>
                               <p className="text-[11px] text-slate-500">
@@ -280,18 +280,18 @@ export default function ServiceSelectionModal({ alreadyAddedIds = [], consultati
                               if (hasInsurancePrice) {
                                 return (
                                   <span className="flex flex-col items-end">
-                                    <span className="inline-flex items-center gap-1 text-sm font-bold text-indigo-700 tabular-nums">
+                                    <span className="inline-flex items-center gap-1 text-sm font-bold text-indigo-700 font-mono tabular-nums">
                                       <Shield className="h-3 w-3" /> {fmtBRL(p!.insurance!.total)}
                                     </span>
-                                    <span className="text-[10px] text-slate-400 line-through tabular-nums">
+                                    <span className="text-[10px] text-slate-400 line-through font-mono tabular-nums">
                                       {fmtBRL(item.unit_price)}
                                     </span>
                                   </span>
                                 )
                               }
-                              return <span className="text-sm font-bold text-slate-900 tabular-nums">{fmtBRL(item.unit_price)}</span>
+                              return <span className="text-sm font-bold text-slate-900 font-mono tabular-nums">{fmtBRL(item.unit_price)}</span>
                             })()}
-                            {isPicked && <Check className="h-4 w-4 text-blue-600" />}
+                            {isPicked && <Check className="h-4 w-4 text-teal-600" />}
                           </div>
                         </button>
                       )
@@ -303,20 +303,20 @@ export default function ServiceSelectionModal({ alreadyAddedIds = [], consultati
               <button
                 type="button"
                 onClick={() => setShowCreate(true)}
-                className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-blue-300 bg-blue-50/40 hover:bg-blue-50 py-2 text-xs font-semibold text-blue-700"
+                className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-teal-300 bg-teal-50/40 hover:bg-teal-50 py-2 text-xs font-semibold text-teal-700"
               >
                 <Plus className="h-3 w-3" /> Cadastrar novo serviço/item
               </button>
 
               {picked.length > 0 && (
-                <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-3 space-y-2">
+                <div className="rounded-xl border border-teal-200 bg-teal-50/40 p-3 space-y-2">
                   <div className="flex items-center justify-between">
-                    <p className="text-xs font-semibold text-blue-900">Selecionados ({picked.length})</p>
-                    <p className="text-sm font-bold text-blue-700">{fmtBRL(pickedTotal)}</p>
+                    <p className="text-xs font-semibold text-teal-900">Selecionados ({picked.length})</p>
+                    <p className="text-sm font-bold text-teal-700 font-mono tabular-nums">{fmtBRL(pickedTotal)}</p>
                   </div>
                   <div className="space-y-1.5">
                     {picked.map(p => (
-                      <div key={p.item.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-white border border-blue-100">
+                      <div key={p.item.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-white border border-teal-100">
                         <span className="text-xs text-slate-700 truncate flex-1">{p.item.name}</span>
                         <input
                           type="number"
@@ -326,7 +326,7 @@ export default function ServiceSelectionModal({ alreadyAddedIds = [], consultati
                           onChange={e => setQty(p.item.id, parseInt(e.target.value) || 1)}
                           className="w-16 rounded border border-slate-200 px-2 py-0.5 text-xs text-right"
                         />
-                        <span className="text-xs font-semibold text-slate-700 tabular-nums w-20 text-right">
+                        <span className="text-xs font-semibold text-slate-700 font-mono tabular-nums w-20 text-right">
                           {fmtBRL(effectivePrice(p.item) * p.quantity)}
                         </span>
                         <button
@@ -348,7 +348,7 @@ export default function ServiceSelectionModal({ alreadyAddedIds = [], consultati
                 <button
                   type="button"
                   onClick={() => setShowCreate(false)}
-                  className="text-xs text-blue-600 hover:underline"
+                  className="text-xs text-teal-600 hover:underline"
                 >
                   ← Voltar para busca
                 </button>
@@ -360,7 +360,7 @@ export default function ServiceSelectionModal({ alreadyAddedIds = [], consultati
                   value={newName}
                   onChange={e => setNewName(e.target.value)}
                   placeholder="Ex.: Consulta clínica geral"
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
                 />
               </div>
 
@@ -370,7 +370,7 @@ export default function ServiceSelectionModal({ alreadyAddedIds = [], consultati
                   <select
                     value={newCategory}
                     onChange={e => setNewCategory(e.target.value as typeof newCategory)}
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
                   >
                     <option value="vet_service">Consulta</option>
                     <option value="exam">Exame</option>
@@ -387,7 +387,7 @@ export default function ServiceSelectionModal({ alreadyAddedIds = [], consultati
                     onChange={e => setNewPrice(e.target.value)}
                     placeholder="0,00"
                     inputMode="decimal"
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
                   />
                 </div>
               </div>
@@ -396,7 +396,7 @@ export default function ServiceSelectionModal({ alreadyAddedIds = [], consultati
                 type="button"
                 onClick={handleCreateNew}
                 disabled={savingNew}
-                className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 py-2.5 text-sm font-semibold text-white disabled:opacity-50 flex items-center justify-center gap-2"
+                className="w-full rounded-lg bg-teal-600 hover:bg-teal-700 py-2.5 text-sm font-semibold text-white disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {savingNew ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                 Cadastrar e selecionar
@@ -415,7 +415,7 @@ export default function ServiceSelectionModal({ alreadyAddedIds = [], consultati
           <button
             type="button"
             onClick={onCancel}
-            className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+            className="flex-1 rounded-lg border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
           >
             Cancelar
           </button>
@@ -424,7 +424,7 @@ export default function ServiceSelectionModal({ alreadyAddedIds = [], consultati
               type="button"
               onClick={handleConfirm}
               disabled={isPending || picked.length === 0}
-              className="flex-[2] rounded-xl bg-blue-600 hover:bg-blue-700 py-2.5 text-sm font-bold text-white disabled:opacity-50 flex items-center justify-center gap-2"
+              className="flex-[2] rounded-lg bg-teal-600 hover:bg-teal-700 py-2.5 text-sm font-bold text-white disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {isPending
                 ? <><Loader2 className="h-4 w-4 animate-spin" /> Adicionando...</>

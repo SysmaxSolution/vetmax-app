@@ -274,21 +274,21 @@ export default function ExamDetail({
       {/* Modal de confirmação */}
       {showConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 animate-scale-in">
             <h2 className="text-base font-bold text-slate-900">Devolver ao Médico?</h2>
             <p className="text-sm text-slate-500">
               {patient.name} voltará para o painel do Médico Veterinário com os documentos gerados.
             </p>
             {examNotes.trim() && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-700">
+              <div className="bg-sky-50 border border-sky-200 rounded-lg p-3 text-xs text-sky-700">
                 <strong>Notas para o MV:</strong> {examNotes}
               </div>
             )}
             <div className="flex gap-2 pt-1">
-              <button onClick={() => setShowConfirm(false)} className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">
+              <button onClick={() => setShowConfirm(false)} className="flex-1 rounded-lg border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">
                 Cancelar
               </button>
-              <button onClick={handleReturn} disabled={isReturning} className="flex-1 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2">
+              <button onClick={handleReturn} disabled={isReturning} className="flex-1 rounded-lg bg-teal-600 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50 flex items-center justify-center gap-2">
                 {isReturning ? <Loader2 className="h-4 w-4 animate-spin" /> : <ChevronRight className="h-4 w-4" />}
                 {isReturning ? 'Devolvendo...' : 'Confirmar'}
               </button>
@@ -315,7 +315,7 @@ export default function ExamDetail({
             )}
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-blue-700 bg-blue-100 px-2.5 py-1 rounded-full flex items-center gap-1">
+            <span className="text-xs font-medium text-violet-700 bg-violet-100 px-2.5 py-1 rounded-full flex items-center gap-1">
               <FlaskConical className="w-3 h-3" />Laboratório / Exames
             </span>
           </div>
@@ -334,11 +334,11 @@ export default function ExamDetail({
               </div>
             )}
             {patient.medical_history && (
-              <div className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-xl p-4">
-                <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+              <div className="flex items-start gap-3 bg-sky-50 border border-sky-200 rounded-xl p-4">
+                <AlertCircle className="w-5 h-5 text-sky-600 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-semibold text-blue-700 text-sm">Histórico Médico/Cirúrgico</p>
-                  <p className="text-blue-600 text-sm mt-0.5">{patient.medical_history}</p>
+                  <p className="font-semibold text-sky-700 text-sm">Histórico Médico/Cirúrgico</p>
+                  <p className="text-sky-600 text-sm mt-0.5">{patient.medical_history}</p>
                 </div>
               </div>
             )}
@@ -378,10 +378,10 @@ export default function ExamDetail({
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Sinais Vitais (Triagem)</p>
               {vital_signs ? (
                 <>
-                  <InfoRow label="Peso" value={`${vital_signs.weight} kg`} />
-                  <InfoRow label="Temperatura" value={`${vital_signs.temperature}°C`} />
+                  <InfoRow label="Peso" value={`${vital_signs.weight} kg`} mono />
+                  <InfoRow label="Temperatura" value={`${vital_signs.temperature}°C`} mono />
                   {vital_signs.heart_rate > 0 && (
-                    <InfoRow label="FC" value={`${vital_signs.heart_rate} bpm`} />
+                    <InfoRow label="FC" value={`${vital_signs.heart_rate} bpm`} mono />
                   )}
                   {vital_signs.mucous_color && (
                     <InfoRow label="Mucosas" value={MUCOUS_LABELS[vital_signs.mucous_color] ?? vital_signs.mucous_color} />
@@ -433,8 +433,8 @@ export default function ExamDetail({
         {/* Motor de Voz — Ditado do Laudo */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200">
           <div className="border-b border-slate-100 px-6 py-4 flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50">
-              <Mic className="h-4 w-4 text-blue-600" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-50">
+              <Mic className="h-4 w-4 text-teal-600" />
             </div>
             <div className="flex-1">
               <h2 className="text-base font-semibold text-slate-900">Ditado do Laudo</h2>
@@ -455,7 +455,7 @@ export default function ExamDetail({
 
             {/* Live transcript */}
             {(isRecording || liveTranscript) && (
-              <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-slate-600 italic min-h-[56px]">
+              <div className="bg-sky-50 border border-sky-200 rounded-xl px-4 py-3 text-sm text-slate-600 italic min-h-[56px]">
                 {liveTranscript || <span className="text-slate-400">Ouvindo... fale normalmente.</span>}
               </div>
             )}
@@ -464,14 +464,14 @@ export default function ExamDetail({
             {examSuggestions.length > 0 && (
               <div className="space-y-2">
                 {examSuggestions.map((s, i) => (
-                  <div key={i} className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
+                  <div key={i} className="flex items-start gap-3 bg-sky-50 border border-sky-200 rounded-xl px-4 py-3">
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-blue-700 mb-0.5">Transcrição capturada</p>
+                      <p className="text-xs font-semibold text-sky-700 mb-0.5">Transcrição capturada</p>
                       <p className="text-sm text-slate-700 leading-relaxed line-clamp-2">{s.motivo}</p>
                     </div>
                     <button
                       onClick={() => setExamSuggestions(prev => prev.filter((_, idx) => idx !== i))}
-                      className="text-blue-400 hover:text-blue-600 p-1 flex-shrink-0"
+                      className="text-sky-400 hover:text-sky-600 p-1 flex-shrink-0"
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>
@@ -489,10 +489,10 @@ export default function ExamDetail({
               <button
                 type="button"
                 onClick={() => voiceAssistant.manualToggle()}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all ${
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-semibold text-sm transition-all ${
                   isRecording
                     ? 'bg-red-100 text-red-700 hover:bg-red-200 animate-pulse'
-                    : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                    : 'bg-teal-100 text-teal-700 hover:bg-teal-200'
                 }`}
               >
                 {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
@@ -548,13 +548,13 @@ export default function ExamDetail({
               onChange={e => setExamNotes(e.target.value)}
               placeholder="Ex: As imagens do Raio-X ficaram um pouco escuras, mas o laudo está anexo. Recomendo repetir em 48h."
               rows={4}
-              className="w-full px-4 py-3 border border-slate-300 rounded-xl outline-none resize-none text-sm text-slate-700 leading-relaxed focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+              className="w-full px-4 py-3 border border-slate-300 rounded-lg outline-none resize-none text-sm text-slate-700 leading-relaxed focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400"
             />
           </div>
         </div>
 
         {/* Botões de Desfecho */}
-        <div className="bg-white rounded-xl shadow-sm border border-blue-200">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200">
           <div className="p-6">
             <h2 className="text-base font-semibold text-slate-900 mb-1">Desfecho dos Exames</h2>
             <p className="text-xs text-slate-500 mb-4">Selecione o próximo passo para {patient.name}</p>
@@ -562,7 +562,7 @@ export default function ExamDetail({
               <button
                 onClick={handleExamDischarge}
                 disabled={isDischargingExam || isReturning}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-green-300 text-green-700 text-sm font-semibold hover:bg-green-50 disabled:opacity-50 transition-colors"
+                className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-emerald-300 text-emerald-700 text-sm font-semibold hover:bg-emerald-50 disabled:opacity-50 transition-colors"
               >
                 {isDischargingExam ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogOut className="w-4 h-4" />}
                 Dar Alta
@@ -578,7 +578,7 @@ export default function ExamDetail({
               <button
                 onClick={() => setShowConfirm(true)}
                 disabled={isReturning || isDischargingExam}
-                className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 shadow-sm transition-colors ml-auto"
+                className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 disabled:opacity-50 shadow-sm transition-colors ml-auto"
               >
                 {isReturning
                   ? <><Loader2 className="w-4 h-4 animate-spin" />Devolvendo...</>
@@ -619,7 +619,7 @@ export default function ExamDetail({
       {/* Modal de Configurações de Voz */}
       {voiceConfigOpen && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5 animate-scale-in">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <Settings className="h-4 w-4 text-teal-600" /> Configurações de Voz
@@ -670,7 +670,7 @@ export default function ExamDetail({
             </div>
 
             <button type="button" onClick={saveVoiceConfig} disabled={configSaving}
-              className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 rounded-xl text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+              className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 rounded-lg text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50">
               {configSaving ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando…</> : <><Save className="h-4 w-4" /> Salvar Configurações</>}
             </button>
           </div>
@@ -684,11 +684,11 @@ export default function ExamDetail({
 
 // ─── Sub-componente ───────────────────────────────────────────────────────────
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+function InfoRow({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="flex items-center justify-between">
       <span className="text-xs text-slate-500">{label}</span>
-      <span className="text-xs font-medium text-slate-700 text-right max-w-[60%] truncate">{value}</span>
+      <span className={`text-xs font-medium text-slate-700 text-right max-w-[60%] truncate ${mono ? 'font-mono tabular-nums' : ''}`}>{value}</span>
     </div>
   )
 }

@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import {
@@ -838,7 +838,7 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
                               placeholder="Ex: Soro Fisiológico" 
                               value={med.name} 
                               onChange={e => updateMed(index, 'name', e.target.value)} 
-                              className="w-full mt-0.5 text-xs p-2 rounded-md border border-slate-300 bg-white focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none" 
+                              className="w-full mt-0.5 text-xs p-2 rounded-lg border border-slate-300 bg-white focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none" 
                             />
                           </div>
                           {/* Campo: Dose */}
@@ -848,7 +848,7 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
                               placeholder="Ex: 2ml" 
                               value={med.dose} 
                               onChange={e => updateMed(index, 'dose', e.target.value)} 
-                              className="w-full mt-0.5 text-xs p-2 rounded-md border border-slate-300 bg-white focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none" 
+                              className="w-full mt-0.5 text-xs p-2 rounded-lg border border-slate-300 bg-white focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none" 
                             />
                           </div>
                           {/* Campo: Via */}
@@ -858,7 +858,7 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
                               placeholder="Ex: IV, SC, Oral" 
                               value={med.route} 
                               onChange={e => updateMed(index, 'route', e.target.value)} 
-                              className="w-full mt-0.5 text-xs p-2 rounded-md border border-slate-300 bg-white focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none" 
+                              className="w-full mt-0.5 text-xs p-2 rounded-lg border border-slate-300 bg-white focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none" 
                             />
                           </div>
                           {/* Campo: Observações */}
@@ -868,7 +868,7 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
                               placeholder="Frequência ou observações..." 
                               value={med.notes} 
                               onChange={e => updateMed(index, 'notes', e.target.value)} 
-                              className="w-full mt-0.5 text-xs p-2 rounded-md border border-slate-300 bg-white focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none" 
+                              className="w-full mt-0.5 text-xs p-2 rounded-lg border border-slate-300 bg-white focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none" 
                             />
                           </div>
                         </div>
@@ -1446,8 +1446,8 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
                                 }}
                                 className={`p-1.5 rounded-lg transition-colors ${
                                   isEditingDoc
-                                    ? 'text-blue-600 bg-blue-50'
-                                    : `${hasMeta ? 'text-slate-500' : 'text-slate-400'} hover:text-blue-600 hover:bg-blue-50`
+                                    ? 'text-teal-600 bg-teal-50'
+                                    : `${hasMeta ? 'text-slate-500' : 'text-slate-400'} hover:text-teal-600 hover:bg-teal-50`
                                 }`}
                                 title={isEditingDoc ? 'Cancelar edição' : (hasMeta ? 'Editar detalhes' : 'Adicionar detalhes')}
                               >
@@ -1464,7 +1464,7 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
                           </div>
 
                           {isEditingDoc && (
-                            <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50/40 p-2.5 space-y-2">
+                            <div className="mt-3 rounded-lg border border-teal-200 bg-teal-50/40 p-2.5 space-y-2">
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                 <label className="block">
                                   <span className="text-[10px] font-semibold text-slate-600">Título</span>
@@ -1473,7 +1473,7 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
                                     value={editingDocForm.title ?? ''}
                                     onChange={e => setEditingDocForm({ ...editingDocForm, title: e.target.value })}
                                     disabled={savingDocEdit}
-                                    className="w-full rounded-md border border-slate-200 px-2 py-1 text-xs focus:border-blue-400 focus:outline-none disabled:bg-slate-50"
+                                    className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs focus:border-teal-400 focus:outline-none disabled:bg-slate-50"
                                   />
                                 </label>
                                 <label className="block">
@@ -1483,7 +1483,7 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
                                     value={editingDocForm.document_date ?? ''}
                                     onChange={e => setEditingDocForm({ ...editingDocForm, document_date: e.target.value })}
                                     disabled={savingDocEdit}
-                                    className="w-full rounded-md border border-slate-200 px-2 py-1 text-xs focus:border-blue-400 focus:outline-none disabled:bg-slate-50"
+                                    className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs focus:border-teal-400 focus:outline-none disabled:bg-slate-50"
                                   />
                                 </label>
                               </div>
@@ -1494,7 +1494,7 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
                                   onChange={e => setEditingDocForm({ ...editingDocForm, notes: e.target.value })}
                                   rows={2}
                                   disabled={savingDocEdit}
-                                  className="w-full rounded-md border border-slate-200 px-2 py-1 text-xs focus:border-blue-400 focus:outline-none disabled:bg-slate-50 resize-none"
+                                  className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs focus:border-teal-400 focus:outline-none disabled:bg-slate-50 resize-none"
                                 />
                               </label>
                               <div className="flex items-center justify-end gap-2">
@@ -1502,7 +1502,7 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
                                   type="button"
                                   onClick={() => { setEditingDocId(null); setEditingDocForm({}) }}
                                   disabled={savingDocEdit}
-                                  className="rounded-md px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+                                  className="rounded-lg px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-100 disabled:opacity-50"
                                 >
                                   Cancelar
                                 </button>
@@ -1510,7 +1510,7 @@ export default function HospitalizationDetailModal({ card, onClose, prefilledSta
                                   type="button"
                                   onClick={() => saveDocMetadata(doc.id)}
                                   disabled={savingDocEdit}
-                                  className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-2 py-1 text-[11px] font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                                  className="inline-flex items-center gap-1 rounded-lg bg-teal-600 px-2 py-1 text-[11px] font-bold text-white hover:bg-teal-700 disabled:opacity-50"
                                 >
                                   {savingDocEdit
                                     ? <><Loader2 className="h-2.5 w-2.5 animate-spin" /> Salvando</>

@@ -32,7 +32,7 @@ const STATUS_BADGE: Record<string, string> = {
   waiting_exam:             'bg-orange-100 text-orange-700',
   medication:               'bg-pink-100 text-pink-700',
   awaiting_review:          'bg-amber-100 text-amber-700',
-  completed:                'bg-green-100 text-green-700',
+  completed:                'bg-emerald-100 text-emerald-700',
   revisao_pos_internacao:   'bg-violet-100 text-violet-700',
 }
 
@@ -127,18 +127,18 @@ export default function VetWorkspace({ queue, completed, awaitingReview, clinicI
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <main className="mx-auto max-w-4xl px-3 sm:px-6 py-6 sm:py-8 space-y-6">
+      <main className="mx-auto max-w-4xl px-3 sm:px-6 py-6 sm:py-8 space-y-6 animate-enter">
 
         {/* Header */}
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900">Consultório Veterinário</h1>
-            <p className="mt-0.5 text-sm text-slate-500">Atendimento clínico e prontuário eletrônico</p>
+            <h1 className="text-xl font-bold tracking-tight text-slate-900">Consultório Veterinário</h1>
+            <p className="mt-0.5 text-sm text-slate-600">Atendimento clínico e prontuário eletrônico</p>
           </div>
           <button
             type="button"
             onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition-colors shadow-sm flex-shrink-0"
+            className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 transition-colors flex-shrink-0"
           >
             <Plus className="h-4 w-4" />
             Incluir Paciente
@@ -178,9 +178,9 @@ export default function VetWorkspace({ queue, completed, awaitingReview, clinicI
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
                             {a.paid && (
-                              <span className="text-[10px] font-bold uppercase text-green-700 bg-green-100 px-1.5 py-0.5 rounded">Pago</span>
+                              <span className="text-[10px] font-bold uppercase text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">Pago</span>
                             )}
-                            <span className="text-xs font-semibold text-slate-600">{BRL(a.total)}</span>
+                            <span className="text-xs font-semibold text-slate-600 font-mono tabular-nums">{BRL(a.total)}</span>
                             <span className={`text-[11px] font-medium ${urgent ? 'text-red-600' : 'text-slate-400'}`}>{ageLabel(a.age_hours)}</span>
                             <ArrowRight className="h-4 w-4 text-slate-400" />
                           </div>
@@ -212,7 +212,7 @@ export default function VetWorkspace({ queue, completed, awaitingReview, clinicI
             Fila de Espera
             {localQueue.length > 0 && (
               <span className={`ml-1 rounded-full px-2 py-0.5 text-xs font-bold ${
-                tab === 'fila' ? 'bg-blue-100 text-blue-700' : 'bg-slate-200 text-slate-600'
+                tab === 'fila' ? 'bg-teal-100 text-teal-700' : 'bg-slate-200 text-slate-600'
               }`}>
                 {localQueue.length}
               </span>
@@ -260,7 +260,7 @@ export default function VetWorkspace({ queue, completed, awaitingReview, clinicI
             <div className="divide-y divide-slate-100 max-h-[60vh] overflow-y-auto">
               {localQueue.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <CheckCircle2 className="w-12 h-12 text-green-400 mx-auto mb-3" />
+                  <CheckCircle2 className="w-12 h-12 text-emerald-400 mx-auto mb-3" />
                   <p className="text-sm font-medium text-slate-600">Fila vazia!</p>
                   <p className="text-xs text-slate-400 mt-1">Nenhum animal aguardando atendimento</p>
                 </div>
@@ -301,19 +301,19 @@ export default function VetWorkspace({ queue, completed, awaitingReview, clinicI
                         </p>
                         <div className="flex flex-wrap items-center gap-2 mt-2">
                           {item.vital_signs?.weight && item.vital_signs.weight > 0 && (
-                            <span className="flex items-center gap-1 text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full">
+                            <span className="flex items-center gap-1 text-xs font-semibold text-sky-700 bg-sky-50 px-2 py-0.5 rounded-full font-mono tabular-nums">
                               <Weight className="w-3 h-3" />
                               {item.vital_signs.weight} kg
                             </span>
                           )}
                           {item.vital_signs?.temperature && item.vital_signs.temperature > 0 && (
-                            <span className="flex items-center gap-1 text-xs font-semibold text-orange-700 bg-orange-50 px-2 py-0.5 rounded-full">
+                            <span className="flex items-center gap-1 text-xs font-semibold text-orange-700 bg-orange-50 px-2 py-0.5 rounded-full font-mono tabular-nums">
                               <Thermometer className="w-3 h-3" />
                               {item.vital_signs.temperature}°C
                             </span>
                           )}
                           {item.vital_signs?.heart_rate && item.vital_signs.heart_rate > 0 && (
-                            <span className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                            <span className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full font-mono tabular-nums">
                               FC: {item.vital_signs.heart_rate} bpm
                             </span>
                           )}
@@ -420,10 +420,10 @@ export default function VetWorkspace({ queue, completed, awaitingReview, clinicI
       {/* Modal: Incluir Paciente Diretamente */}
       {showAddModal && (
         <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4 animate-scale-in">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Plus className="h-5 w-5 text-blue-600" />
+                <Plus className="h-5 w-5 text-teal-600" />
                 <h2 className="text-base font-semibold text-slate-900">Incluir Paciente no Consultório</h2>
               </div>
               <button onClick={() => { setShowAddModal(false); setAddTab('buscar'); setAddSearch(''); setAddResults([]); setAddSelected(null); setAddError('') }} className="text-slate-400 hover:text-slate-600">
@@ -432,24 +432,24 @@ export default function VetWorkspace({ queue, completed, awaitingReview, clinicI
             </div>
 
             {/* Abas */}
-            <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
+            <div className="flex gap-1 rounded-xl bg-slate-100 p-1">
               <button
                 type="button"
                 onClick={() => { setAddTab('buscar'); setAddError('') }}
-                className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${addTab === 'buscar' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${addTab === 'buscar' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
               >
                 <Search className="h-3.5 w-3.5" /> Buscar Existente
               </button>
               <button
                 type="button"
                 onClick={() => { setAddTab('novo'); setAddError('') }}
-                className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${addTab === 'novo' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${addTab === 'novo' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
               >
                 <UserPlus className="h-3.5 w-3.5" /> Novo Cadastro
               </button>
             </div>
 
-            {addSuccess && <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">{addSuccess}</p>}
+            {addSuccess && <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">{addSuccess}</p>}
             {addError && <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{addError}</p>}
 
             {addTab === 'buscar' && (
@@ -465,7 +465,7 @@ export default function VetWorkspace({ queue, completed, awaitingReview, clinicI
                       placeholder="Nome do pet ou tutor..."
                       value={addSelected ? `${addSelected.name} — ${addSelected.tutor.name}` : addSearch}
                       onChange={e => handleAddSearch(e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg pl-10 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full border border-slate-300 rounded-lg pl-10 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                       autoFocus
                     />
                   </div>
@@ -490,7 +490,7 @@ export default function VetWorkspace({ queue, completed, awaitingReview, clinicI
                   <select
                     value={addReason}
                     onChange={e => setAddReason(e.target.value)}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                   >
                     {VISIT_REASON_OPTIONS.map(o => (
                       <option key={o.value} value={o.value}>{o.label}</option>
@@ -512,7 +512,7 @@ export default function VetWorkspace({ queue, completed, awaitingReview, clinicI
                     type="button"
                     disabled={addLoading || !addSelected}
                     onClick={handleAddSubmit}
-                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
+                    className="flex-1 px-4 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
                   >
                     <Plus className="h-4 w-4" />
                     {addLoading ? 'Incluindo...' : 'Incluir na Fila'}
@@ -532,7 +532,7 @@ export default function VetWorkspace({ queue, completed, awaitingReview, clinicI
                   <select
                     value={addReason}
                     onChange={e => setAddReason(e.target.value)}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                   >
                     {VISIT_REASON_OPTIONS.map(o => (
                       <option key={o.value} value={o.value}>{o.label}</option>
@@ -542,7 +542,7 @@ export default function VetWorkspace({ queue, completed, awaitingReview, clinicI
                 <button
                   type="button"
                   onClick={() => { setShowAddModal(false); setShowNewPatientModal(true) }}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 transition-colors"
                 >
                   <UserPlus className="h-4 w-4" />
                   Abrir Formulário de Cadastro

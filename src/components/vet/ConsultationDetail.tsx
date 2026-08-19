@@ -107,7 +107,7 @@ const PROBABILITY_BADGE: Record<string, string> = {
   alta: 'bg-red-100 text-red-700 border-red-200',
   média: 'bg-yellow-100 text-yellow-700 border-yellow-200',
   media: 'bg-yellow-100 text-yellow-700 border-yellow-200',
-  baixa: 'bg-blue-100 text-blue-700 border-blue-200',
+  baixa: 'bg-sky-100 text-sky-700 border-sky-200',
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -1142,7 +1142,7 @@ export default function ConsultationDetail({
               {pendingDocSuggestions.length > 0 && (
                 <div>
                   <div className="flex items-center gap-2 mb-2">
-                    <FileText className="w-4 h-4 text-blue-600" />
+                    <FileText className="w-4 h-4 text-teal-600" />
                     <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
                       Documentos Sugeridos pela IA ({pendingDocSuggestions.length})
                     </p>
@@ -1160,7 +1160,7 @@ export default function ConsultationDetail({
                             setShowDischargeModal(false)
                             setAutoTriggerDoc({ suggestion: s, index: i })
                           }}
-                          className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex-shrink-0 transition-colors"
+                          className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-teal-600 text-white rounded-lg hover:bg-teal-700 flex-shrink-0 transition-colors"
                         >
                           <Sparkles className="w-3 h-3" />Gerar
                         </button>
@@ -1178,7 +1178,7 @@ export default function ConsultationDetail({
                   className="flex items-start gap-3 w-full text-left"
                 >
                   {attachDocsOnDischarge
-                    ? <CheckSquare className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                    ? <CheckSquare className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
                     : <Square className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" />
                   }
                   <div>
@@ -1193,9 +1193,9 @@ export default function ConsultationDetail({
               )}
 
               {/* CFMV */}
-              <div className="flex items-start gap-3 bg-green-50 border border-green-200 rounded-xl p-4">
-                <CheckSquare className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-green-800 font-medium">
+              <div className="flex items-start gap-3 bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+                <CheckSquare className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-emerald-800 font-medium">
                   Prontuário revisado e assinado eletronicamente — CFMV Res. 1138/2016
                 </p>
               </div>
@@ -1206,7 +1206,7 @@ export default function ConsultationDetail({
               <button
                 onClick={() => executeFinalize('completed')}
                 disabled={isFinalizing}
-                className="flex-1 flex items-center justify-center gap-2 py-3 bg-slate-800 text-white rounded-xl font-semibold text-sm hover:bg-slate-700 transition-all disabled:opacity-50"
+                className="flex-1 flex items-center justify-center gap-2 py-3 bg-slate-800 text-white rounded-lg font-semibold text-sm hover:bg-slate-700 transition-all disabled:opacity-50"
               >
                 {isFinalizing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
                 {isFinalizing ? 'Finalizando...' : 'Confirmar Alta'}
@@ -1214,7 +1214,7 @@ export default function ConsultationDetail({
               <button
                 onClick={() => setShowDischargeModal(false)}
                 disabled={isFinalizing}
-                className="px-6 py-3 border border-slate-200 text-slate-600 rounded-xl font-semibold text-sm hover:bg-slate-50 transition-all"
+                className="px-6 py-3 border border-slate-200 text-slate-600 rounded-lg font-semibold text-sm hover:bg-slate-50 transition-all"
               >
                 Voltar
               </button>
@@ -1250,7 +1250,7 @@ export default function ConsultationDetail({
             </span>
             <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
               consultation.status === 'in_progress' ? 'bg-blue-100 text-blue-700' :
-              consultation.status === 'completed'   ? 'bg-green-100 text-green-700' :
+              consultation.status === 'completed'   ? 'bg-emerald-100 text-emerald-700' :
               'bg-slate-100 text-slate-600'
             }`}>
               {STATUS_LABELS[consultation.status] ?? consultation.status}
@@ -1260,11 +1260,11 @@ export default function ConsultationDetail({
 
         {/* ── Notas do Técnico de Exames ─────────────────────────────────── */}
         {consultation.exam_notes && (
-          <div className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-xl p-4">
-            <FlaskConical className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+          <div className="flex items-start gap-3 bg-sky-50 border border-sky-200 rounded-xl p-4">
+            <FlaskConical className="w-5 h-5 text-sky-600 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="font-semibold text-blue-700 text-sm">Notas do Técnico de Exames</p>
-              <p className="text-blue-600 text-sm mt-0.5 leading-relaxed">{consultation.exam_notes}</p>
+              <p className="font-semibold text-sky-700 text-sm">Notas do Técnico de Exames</p>
+              <p className="text-sky-600 text-sm mt-0.5 leading-relaxed">{consultation.exam_notes}</p>
             </div>
           </div>
         )}
@@ -1291,11 +1291,11 @@ export default function ConsultationDetail({
               </div>
             )}
             {patient.medical_history && (
-              <div className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-xl p-4">
-                <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+              <div className="flex items-start gap-3 bg-sky-50 border border-sky-200 rounded-xl p-4">
+                <AlertCircle className="w-5 h-5 text-sky-600 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-semibold text-blue-700 text-sm">Histórico Médico/Cirúrgico</p>
-                  <p className="text-blue-600 text-sm mt-0.5">{patient.medical_history}</p>
+                  <p className="font-semibold text-sky-700 text-sm">Histórico Médico/Cirúrgico</p>
+                  <p className="text-sky-600 text-sm mt-0.5">{patient.medical_history}</p>
                 </div>
               </div>
             )}
@@ -1499,8 +1499,8 @@ export default function ConsultationDetail({
         {/* ── Prontuário Veterinário ────────────────────────────────────── */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200">
           <div className="border-b border-slate-100 px-6 py-4 flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50">
-              <Stethoscope className="h-4 w-4 text-blue-600" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-50">
+              <Stethoscope className="h-4 w-4 text-teal-600" />
             </div>
             <div className="flex-1">
               <h2 className="text-base font-semibold text-slate-900">Prontuário Veterinário</h2>
@@ -1548,7 +1548,7 @@ export default function ConsultationDetail({
                 className={`w-full px-4 py-3 border rounded-xl outline-none resize-none text-sm text-slate-700 leading-relaxed transition-all duration-300 disabled:bg-slate-50 disabled:text-slate-500 ${
                   hasNotesError
                     ? `border-red-500 ring-2 ring-red-200 bg-red-50/30 focus:ring-red-300 focus:border-red-500${notesErrorPulsing ? ' animate-pulse' : ''}`
-                    : 'border-slate-300 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400'
+                    : 'border-slate-300 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400'
                 }`}
               />
               {/* Semáforo Petlove — chip flutuante de cobertura por voz. z-20
@@ -1580,14 +1580,14 @@ export default function ConsultationDetail({
 
             {/* Live transcript */}
             {(isRecording || liveTranscript) && (
-              <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-slate-600 italic min-h-[44px]">
+              <div className="bg-sky-50 border border-sky-200 rounded-xl px-4 py-3 text-sm text-slate-600 italic min-h-[44px]">
                 {liveTranscript || <span className="text-slate-400">Ouvindo... fale normalmente.</span>}
               </div>
             )}
 
             {/* Processando IA */}
             {isExtractingVoice && (
-              <div className="flex items-center gap-2 text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
+              <div className="flex items-center gap-2 text-sm text-sky-700 bg-sky-50 border border-sky-200 rounded-xl px-4 py-3">
                 <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" />
                 IA processando: preenchendo notas, registrando medicações e sugerindo documentos...
               </div>
@@ -1604,7 +1604,7 @@ export default function ConsultationDetail({
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                     isRecording
                       ? 'bg-red-100 text-red-700 hover:bg-red-200'
-                      : 'bg-green-100 text-green-700 hover:bg-green-200'
+                      : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
                   }`}
                 >
                   {isRecording ? <><Square className="w-4 h-4 fill-current" /> Parar</> : <><Mic className="w-4 h-4" /> Gravar</>}
@@ -1650,7 +1650,7 @@ export default function ConsultationDetail({
 
               {/* Indicador de Auto-Save */}
               {!isFinalized && saveStatus === 'saved' && (
-                <span className="ml-auto flex items-center gap-1.5 text-xs font-medium text-green-600">
+                <span className="ml-auto flex items-center gap-1.5 text-xs font-medium text-emerald-600">
                   ✅ Salvo
                 </span>
               )}
@@ -1737,7 +1737,7 @@ export default function ConsultationDetail({
                     </div>
                   </div>
                   <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${
-                    pc.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'
+                    pc.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
                   }`}>
                     {STATUS_LABELS[pc.status] ?? pc.status}
                   </span>
@@ -1794,10 +1794,10 @@ export default function ConsultationDetail({
 
         {/* ── Exame Mesclado (Fluxo Contínuo) ─────────────────────────── */}
         {examsMerged && (
-          <div className="rounded-xl border border-blue-200 bg-blue-50/40 overflow-hidden">
-            <div className="border-b border-blue-200 px-5 py-3 flex items-center gap-2 bg-blue-50">
-              <span className="text-blue-600 text-sm font-semibold">Laudo / Resultado do Exame</span>
-              <span className="ml-auto text-xs text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">Fluxo Contínuo</span>
+          <div className="rounded-xl border border-violet-200 bg-violet-50/40 overflow-hidden">
+            <div className="border-b border-violet-200 px-5 py-3 flex items-center gap-2 bg-violet-50">
+              <span className="text-violet-600 text-sm font-semibold">Laudo / Resultado do Exame</span>
+              <span className="ml-auto text-xs text-violet-600 bg-violet-100 px-2 py-0.5 rounded-full">Fluxo Contínuo</span>
             </div>
             <div className="px-5 py-4">
               <textarea
@@ -1805,7 +1805,7 @@ export default function ConsultationDetail({
                 onChange={e => setMergedExamNotes(e.target.value)}
                 rows={4}
                 placeholder="Dite ou escreva os achados do exame aqui..."
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm resize-none focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm resize-none focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
               />
               <button
                 onClick={() => {
@@ -1818,7 +1818,7 @@ export default function ConsultationDetail({
                   setToast({ type: 'success', message: 'Laudo incluído no prontuário.' })
                 }}
                 disabled={!mergedExamNotes.trim()}
-                className="mt-2 flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors disabled:opacity-40"
+                className="mt-2 flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 transition-colors disabled:opacity-40"
               >
                 Incluir no Prontuário
               </button>
@@ -1877,7 +1877,7 @@ export default function ConsultationDetail({
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <button
                       onClick={() => confirmPendingMed(i)}
-                      className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 transition-colors"
+                      className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-700 transition-colors"
                     >
                       <CheckSquare className="h-3.5 w-3.5" />
                       Confirmar
@@ -2107,7 +2107,7 @@ export default function ConsultationDetail({
                 <div className="space-y-4">
                   <p className="text-sm text-slate-600">Adicione medicamentos à prescrição desta consulta.</p>
                   {prescriptionSaved && (
-                    <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">Prescrição salva!</p>
+                    <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">Prescrição salva!</p>
                   )}
                   {/* Prescrições agrupadas por via de administração */}
                   {prescriptions.length > 0 && (() => {
@@ -2352,7 +2352,7 @@ export default function ConsultationDetail({
                     className="flex items-start gap-3 w-full text-left"
                   >
                     {isReviewedByVet
-                      ? <CheckSquare className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                      ? <CheckSquare className="w-5 h-5 text-teal-600 flex-shrink-0 mt-0.5" />
                       : <Square className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" />
                     }
                     <div>
@@ -2368,7 +2368,7 @@ export default function ConsultationDetail({
                     type="button"
                     onClick={() => handleFinalize('completed')}
                     disabled={isFinalizing || !isReviewedByVet || isPdfUploading}
-                    className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm transition-all disabled:opacity-60 ${
+                    className={`w-full flex items-center justify-center gap-2 py-3 rounded-lg font-semibold text-sm transition-all disabled:opacity-60 ${
                       isReviewedByVet && !isPdfUploading
                         ? 'bg-slate-800 text-white hover:bg-slate-700'
                         : 'bg-slate-50 text-slate-400 cursor-not-allowed border border-slate-200'
@@ -2403,7 +2403,7 @@ export default function ConsultationDetail({
                     data-mentor-step="vet-send-to-exams-btn"
                     onClick={() => setShowChargeBeforeExams(true)}
                     disabled={isFinalizing}
-                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-600 text-white font-semibold text-sm hover:bg-blue-700 transition-all disabled:opacity-50"
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-lg bg-teal-600 text-white font-semibold text-sm hover:bg-teal-700 transition-all disabled:opacity-50"
                   >
                     {isFinalizing ? <Loader2 className="w-5 h-5 animate-spin" /> : <FlaskConical className="w-5 h-5" />}
                     {isFinalizing ? 'Encaminhando...' : 'Encaminhar para Exames'}
@@ -2462,14 +2462,14 @@ export default function ConsultationDetail({
 
         {/* Consulta já finalizada */}
         {isFinalized && (
-          <div className="bg-green-50 border border-green-200 rounded-xl p-5 flex items-center justify-between gap-3">
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5 flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-                <ChevronRight className="w-5 h-5 text-green-600" />
+              <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                <ChevronRight className="w-5 h-5 text-emerald-600" />
               </div>
               <div>
-                <p className="font-semibold text-green-800">Consulta Concluída</p>
-                <p className="text-sm text-green-600">Prontuário revisado e assinado pelo Médico Veterinário.</p>
+                <p className="font-semibold text-emerald-800">Consulta Concluída</p>
+                <p className="text-sm text-emerald-600">Prontuário revisado e assinado pelo Médico Veterinário.</p>
               </div>
             </div>
             {consultation.status === 'completed' && (
@@ -2828,7 +2828,7 @@ function VitalRow({ label, value, highlight }: { label: string; value: string; h
   return (
     <div className="flex items-center justify-between">
       <span className="text-xs text-slate-500">{label}</span>
-      <span className={`text-xs font-semibold ${highlight ? 'text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full' : 'text-slate-700'}`}>
+      <span className={`text-xs font-semibold font-mono tabular-nums ${highlight ? 'text-sky-700 bg-sky-50 px-2 py-0.5 rounded-full' : 'text-slate-700'}`}>
         {value}
       </span>
     </div>

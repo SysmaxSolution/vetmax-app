@@ -106,15 +106,15 @@ export default function SurgeryKanban({ initialBoard, clinicId }: Props) {
             <Syringe className="h-6 w-6" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Centro Cirúrgico</h1>
-            <p className="text-sm text-slate-500">Fluxo do bloco: Preparo → Sala Cirúrgica → RPA.</p>
+            <h1 className="text-xl font-bold tracking-tight text-slate-900">Centro Cirúrgico</h1>
+            <p className="text-sm text-slate-600">Fluxo do bloco: Preparo → Sala Cirúrgica → RPA.</p>
           </div>
         </div>
         <button
           type="button"
           onClick={() => setShowAdmit(true)}
           data-testid="surgery-new-btn"
-          className="flex items-center gap-2 rounded-xl bg-red-600 hover:bg-red-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm"
+          className="flex items-center gap-2 rounded-lg bg-teal-600 hover:bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
         >
           <Plus className="h-4 w-4" /> Nova Cirurgia
         </button>

@@ -214,7 +214,7 @@ export default function EuthanasiaModal({
                 data-testid="euthanasia-consent-toggle"
                 onClick={() => setTutorConsent(v => !v)}
                 className={`flex h-4 w-4 items-center justify-center rounded border flex-shrink-0 transition-colors ${
-                  tutorConsent ? 'border-green-600 bg-green-600' : 'border-slate-300 bg-white'
+                  tutorConsent ? 'border-emerald-600 bg-emerald-600' : 'border-slate-300 bg-white'
                 }`}
               >
                 {tutorConsent && (
@@ -233,7 +233,7 @@ export default function EuthanasiaModal({
                 <select
                   value={consentMethod}
                   onChange={e => setConsentMethod(e.target.value as typeof consentMethod)}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 >
                   <option value="digital">Digital (sistema)</option>
                   <option value="paper">Físico (assinado em papel)</option>
@@ -269,7 +269,7 @@ export default function EuthanasiaModal({
 
           {/* Dupla confirmação */}
           <div className={`rounded-xl border-2 p-4 transition-colors ${
-            confirmed ? 'border-green-400 bg-green-50' : 'border-red-200 bg-red-50'
+            confirmed ? 'border-emerald-400 bg-emerald-50' : 'border-red-200 bg-red-50'
           }`}>
             <div className="flex items-start gap-2.5">
               <button
@@ -279,7 +279,7 @@ export default function EuthanasiaModal({
                 data-testid="euthanasia-double-confirm"
                 onClick={() => setConfirmed(v => !v)}
                 className={`mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border transition-colors ${
-                  confirmed ? 'border-green-600 bg-green-600' : 'border-red-400 bg-white'
+                  confirmed ? 'border-emerald-600 bg-emerald-600' : 'border-red-400 bg-white'
                 }`}
               >
                 {confirmed && (

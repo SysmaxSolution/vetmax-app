@@ -23,7 +23,7 @@ export default async function SurgeryPage() {
   const initialBoard = 'error' in board ? { preparo: [], sala: [], rpa: [] } : board
 
   return (
-    <main className="max-w-[1400px] mx-auto px-4 py-6 sm:px-6">
+    <main className="max-w-[1400px] mx-auto px-4 py-6 sm:px-6 animate-enter">
       <SurgeryKanban initialBoard={initialBoard} clinicId={profile.clinic_id as string} />
     </main>
   )
