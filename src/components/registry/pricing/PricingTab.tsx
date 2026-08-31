@@ -29,15 +29,20 @@ export default function PricingTab({ userRole = 'admin' }: Props) {
   const [settingsDirty, setSettingsDirty] = useState(false)
 
   async function reload() {
-    const [t, s] = await Promise.all([listPriceTables(), getPricingSettings()])
-    if (Array.isArray(t)) setTables(t)
-    if (!('error' in s)) {
-      setDefaultB2c(s.default_b2c_price_table_id ?? '')
-      setPrecedence(s.precedence)
-      setCompositionMode(s.composition_mode)
-      setMarginCalcType(s.margin_calc_type)
+    try {
+      const [t, s] = await Promise.all([listPriceTables(), getPricingSettings()])
+      if (Array.isArray(t)) setTables(t)
+      if (!('error' in s)) {
+        setDefaultB2c(s.default_b2c_price_table_id ?? '')
+        setPrecedence(s.precedence)
+        setCompositionMode(s.composition_mode)
+        setMarginCalcType(s.margin_calc_type)
+      }
+    } catch (e) {
+      setToast({ type: 'error', message: 'Erro ao carregar precificação.' })
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
   useEffect(() => { void reload() }, [])
 

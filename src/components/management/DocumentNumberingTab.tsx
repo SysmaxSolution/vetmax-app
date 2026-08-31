@@ -8,8 +8,8 @@ import { useState, useEffect } from 'react'
 import { Loader2, Plus, Pencil, Hash, Check, X } from 'lucide-react'
 import {
   listDocumentSequences, upsertDocumentSequence, listCompaniesLite,
-  DOC_TYPES, type DocumentSequence, type CompanyLite,
 } from '@/lib/actions/document-numbering'
+import { DOC_TYPES, type DocumentSequence, type CompanyLite } from '@/lib/doc-types'
 import { Toast } from '@/components/ui/toast'
 
 interface Props { userRole?: string }
@@ -46,10 +46,16 @@ export default function DocumentNumberingTab({ userRole = 'admin' }: Props) {
   const [toast, setToast]         = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
   async function reload() {
-    const [s, c] = await Promise.all([listDocumentSequences(), listCompaniesLite()])
-    if (!('error' in s)) setSequences(s)
-    setCompanies(c)
-    setLoading(false)
+    try {
+      const [s, c] = await Promise.all([listDocumentSequences(), listCompaniesLite()])
+      if (!('error' in s)) setSequences(s)
+      else setToast({ type: 'error', message: s.error })
+      setCompanies(c)
+    } catch (e) {
+      setToast({ type: 'error', message: 'Erro ao carregar numerações.' })
+    } finally {
+      setLoading(false)
+    }
   }
   useEffect(() => { void reload() }, [])
 
