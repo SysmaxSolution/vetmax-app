@@ -4,7 +4,7 @@ import { useState } from 'react'
 import {
   Building2, Shield, MessageCircle, Calculator,
   BarChart3, Wrench, ToggleLeft, ToggleRight, Save, Loader2,
-  HelpCircle, Tags, Hash,
+  HelpCircle, Tags, Hash, Building,
 } from 'lucide-react'
 import type { ClinicConfig, ClinicSettingsConfig, FlowConfig } from '@/lib/actions/clinic-settings'
 import { updateClinicConfig } from '@/lib/actions/clinic-settings'
@@ -16,6 +16,7 @@ import WhatsappTriggerModules from './WhatsappTriggerModules'
 import FiscalConfigForm from './FiscalConfigForm'
 import PricingTab from '@/components/registry/pricing/PricingTab'
 import DocumentNumberingTab from '../DocumentNumberingTab'
+import CompaniesTab from '../CompaniesTab'
 import { useAnimaisFoundation } from '@/components/providers/ClinicConfigProvider'
 import { useUpgradeModal } from '@/components/upgrade/UpgradeProvider'
 import type { UpgradeFeatureKey } from '@/components/upgrade/UpgradeModal'
@@ -25,7 +26,7 @@ import { Lock, ArrowUpRight } from 'lucide-react'
 
 // Categoria 'ia' removida em 2026-05-26 (cleanup de drift): IA mode e Fluxo
 // Contínuo agora são exclusivos da categoria 'acesso' (ClinicSettingsTab).
-type Category = 'geral' | 'acesso' | 'whatsapp' | 'contabil' | 'precos' | 'numeracao' | 'relatorios' | 'utilitarios'
+type Category = 'geral' | 'acesso' | 'whatsapp' | 'contabil' | 'empresas' | 'precos' | 'numeracao' | 'relatorios' | 'utilitarios'
 
 interface CategoryDef {
   key: Category
@@ -39,6 +40,7 @@ const CATEGORIES: CategoryDef[] = [
   { key: 'acesso',       label: 'Acesso',      icon: <Shield       className="h-4 w-4" />, description: 'Módulos, IA e fluxo contínuo'        },
   { key: 'whatsapp',     label: 'WhatsApp',    icon: <MessageCircle className="h-4 w-4" />, description: 'Evolution API e notificações'        },
   { key: 'contabil',     label: 'Contábil',    icon: <Calculator   className="h-4 w-4" />, description: 'Plano de contas e dados fiscais'     },
+  { key: 'empresas',     label: 'Empresas',    icon: <Building     className="h-4 w-4" />, description: 'Empresas faturantes (multi-CNPJ)'   },
   { key: 'precos',       label: 'Preços',      icon: <Tags         className="h-4 w-4" />, description: 'Tabelas de preço e composição'      },
   { key: 'numeracao',    label: 'Numeração',   icon: <Hash         className="h-4 w-4" />, description: 'Nº de OS, RPS, NFS-e…'              },
   { key: 'relatorios',   label: 'Relatórios',  icon: <BarChart3    className="h-4 w-4" />, description: 'Relatórios disponíveis'              },
@@ -73,7 +75,8 @@ export default function SettingsWorkspace({
   const animaisFoundation = useAnimaisFoundation()
 
   // A seção "Preços" (Sprint Animais) só aparece na clínica com a flag ligada.
-  const visibleCategories = CATEGORIES.filter(c => (c.key !== 'precos' && c.key !== 'numeracao') || animaisFoundation)
+  const animaisOnly = new Set(['precos', 'numeracao', 'empresas'])
+  const visibleCategories = CATEGORIES.filter(c => !animaisOnly.has(c.key) || animaisFoundation)
 
   // SysMax nunca vê paywall — segue operando direto sobre o setup real,
   // independentemente do que está em active_modules da clínica visualizada.
@@ -174,6 +177,13 @@ export default function SettingsWorkspace({
           <div className="space-y-6">
             <SectionHeader icon={<Calculator className="h-5 w-5 text-slate-600" />} title="Configurações Contábeis" description="Plano de contas e integração fiscal" />
             <AccountingSettings initialConfig={initialClinicConfig} onToast={onToast} />
+          </div>
+        )}
+
+        {activeCategory === 'empresas' && animaisFoundation && (
+          <div className="space-y-6">
+            <SectionHeader icon={<Building className="h-5 w-5 text-slate-600" />} title="Empresas Faturantes" description="CNPJs do grupo dentro desta clínica (Emp 001, 002, 003…)" />
+            <CompaniesTab />
           </div>
         )}
 

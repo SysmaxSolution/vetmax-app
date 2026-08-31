@@ -139,10 +139,10 @@ export async function addServiceToConsultation(
     .single()
   if (!item) return { error: 'Item não encontrado na clínica.' }
 
-  // Busca patient_id para resolver pricing com split convênio (Item 5, 2026-06-02).
+  // Busca patient_id (pricing convênio) + billing_company_id (empresa faturante da OS).
   const { data: consult } = await admin
     .from('consultations')
-    .select('patient_id')
+    .select('patient_id, billing_company_id')
     .eq('id', payload.consultation_id)
     .eq('clinic_id', ctx.clinicId)
     .maybeSingle()
@@ -194,6 +194,8 @@ export async function addServiceToConsultation(
       insurance_total_snapshot,
       copay_snapshot,
       repass_snapshot,
+      // Sprint Animais: serviço herda a empresa faturante da OS (multi-CNPJ).
+      company_id:               (consult as any)?.billing_company_id ?? null,
     })
     .select('id')
     .single()

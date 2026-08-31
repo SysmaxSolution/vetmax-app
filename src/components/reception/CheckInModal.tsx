@@ -14,6 +14,7 @@ import ServiceComboBox, { type SelectedService } from './ServiceComboBox'
 import { useAnimaisFoundation, useRequireAttendingVet } from '@/components/providers/ClinicConfigProvider'
 import { listPartnerClinics, type PartnerClinic } from '@/lib/actions/partner-clinics'
 import { getClinicProfessionals, type ClinicProfessional } from '@/lib/actions/professionals'
+import { listActiveCompanies } from '@/lib/actions/companies'
 
 import { VISIT_REASON_OPTIONS as ALL_REASONS } from '@/lib/visit-reasons'
 
@@ -90,10 +91,17 @@ export function CheckInModal({
   const [partnerClinicId, setPartnerClinicId] = useState<string>('')
   const [partnerClinics, setPartnerClinics] = useState<PartnerClinic[]>([])
 
+  const [billingCompanyId, setBillingCompanyId] = useState<string>('')
+  const [companies, setCompanies] = useState<{ id: string; code: string; name: string; is_default: boolean }[]>([])
   useEffect(() => {
     if (!animaisFoundation) return
     listPartnerClinics({ is_active: true }).then(res => {
       if (Array.isArray(res)) setPartnerClinics(res)
+    })
+    listActiveCompanies().then(cs => {
+      setCompanies(cs)
+      const def = cs.find(c => c.is_default) ?? cs[0]
+      if (def) setBillingCompanyId(def.id)   // pré-seleciona a empresa padrão
     })
   }, [animaisFoundation])
 
@@ -270,6 +278,7 @@ export function CheckInModal({
             urgency,
             referral_type: referralType,
             partner_clinic_id: referralType === 'referred' && partnerClinicId ? partnerClinicId : undefined,
+            billing_company_id: billingCompanyId || undefined,
           } : {}),
         })
       } else {
@@ -417,9 +426,21 @@ export function CheckInModal({
               </div>
             )}
 
-            {/* ── Sprint Animais: Urgência (triagem por cor) + Origem (B2C/B2B) ── */}
+            {/* ── Sprint Animais: Empresa faturante + Urgência + Origem (B2C/B2B) ── */}
             {animaisFoundation && !isScheduled && (
               <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-4 space-y-4">
+                {/* Empresa faturante (multi-CNPJ) */}
+                {companies.length > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Empresa faturante (CNPJ)</label>
+                    <select value={billingCompanyId} onChange={e => setBillingCompanyId(e.target.value)}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20">
+                      {companies.map(c => <option key={c.id} value={c.id}>{c.code} — {c.name}</option>)}
+                    </select>
+                    <p className="mt-1 text-[11px] text-slate-500">Os serviços desta OS entram no faturamento desta empresa.</p>
+                  </div>
+                )}
+
                 {/* Urgência */}
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">Urgência (fura a fila conforme a cor)</label>
