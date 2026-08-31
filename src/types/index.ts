@@ -281,6 +281,11 @@ export interface CheckInPayload {
   payment_method?: PaymentMethod
   scheduled_date?: string          // Se agendado, fornecer data
   weight?: number                  // Peso atual aferido na recepção (kg)
+  // Sprint Animais (gateado por animais_foundation) — todos opcionais:
+  urgency?: 'green' | 'yellow' | 'red'          // triagem por cor (0.6)
+  referral_type?: 'direct' | 'referred'         // B2C direto x B2B encaminhado (0.4)
+  partner_clinic_id?: string                    // clínica que encaminhou (0.8)
+  billing_company_id?: string                   // empresa faturante âncora da OS
 }
 
 export interface TriageUpdatePayload {

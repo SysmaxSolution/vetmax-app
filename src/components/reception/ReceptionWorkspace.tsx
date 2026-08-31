@@ -342,6 +342,27 @@ function QueueCard({
           >
             {item.patient.name}
           </button>
+          {item.urgency && item.urgency !== 'green' && (
+            <span
+              className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide rounded-full px-2 py-0.5 ${
+                item.urgency === 'red' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+              }`}
+              title="Urgência (triagem por cor)"
+            >
+              <span className={`h-2 w-2 rounded-full ${item.urgency === 'red' ? 'bg-red-500' : 'bg-amber-500'}`} />
+              {item.urgency === 'red' ? 'Emergência' : 'Risco'}
+            </span>
+          )}
+          {item.os_number && (
+            <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 rounded-full px-2 py-0.5 font-mono" title="Nº de atendimento (OS)">
+              OS {item.os_number}
+            </span>
+          )}
+          {item.referral_type === 'referred' && (
+            <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-100 rounded-full px-2 py-0.5" title="Encaminhado por clínica parceira">
+              B2B
+            </span>
+          )}
           <SpeciesBadge species={item.patient.species} />
           {age && <span className="text-xs text-slate-500 bg-slate-100 rounded-full px-2 py-0.5">{age}</span>}
           {item.patient.breed && <span className="text-xs text-slate-400">{item.patient.breed}</span>}

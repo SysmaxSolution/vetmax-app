@@ -8,6 +8,37 @@ import { logAudit } from './audit'
 import { updatePatientWeight } from './patient-weight'
 import { getTenantCtx } from '@/lib/data/context'
 
+// ─── Sprint Animais: campos extras da OS no check-in (aditivo + gateado) ──────
+// Só produz campos quando clinics.flow_config.animais_foundation === true.
+// Gera o nº de OS de forma atômica (next_document_number); se a sequência não
+// estiver configurada, NÃO derruba o check-in — apenas fica sem número.
+async function buildAnimaisOsFields(
+  admin: ReturnType<typeof createAdminClient>,
+  clinicId: string,
+  data: CheckInPayload,
+): Promise<Record<string, unknown>> {
+  const { data: clinicRow } = await admin
+    .from('clinics').select('flow_config').eq('id', clinicId).single()
+  const animais = ((clinicRow?.flow_config ?? {}) as { animais_foundation?: boolean }).animais_foundation === true
+  if (!animais) return {}
+
+  const fields: Record<string, unknown> = {
+    urgency:            data.urgency ?? null,
+    referral_type:      data.referral_type ?? null,
+    partner_clinic_id:  data.referral_type === 'referred' ? (data.partner_clinic_id ?? null) : null,
+    billing_company_id: data.billing_company_id ?? null,
+  }
+  try {
+    const { data: osNum, error } = await admin.rpc('next_document_number', {
+      p_clinic_id:  clinicId,
+      p_company_id: data.billing_company_id ?? null,
+      p_doc_type:   'os',
+    })
+    if (!error && osNum) fields.os_number = osNum
+  } catch { /* sequência de OS não configurada — segue sem número */ }
+  return fields
+}
+
 // ─── Check-in Avançado: cria/atualiza consulta com motivo e pagamento ───────
 export async function checkInPatientAdvanced(
   data: CheckInPayload
@@ -52,6 +83,8 @@ export async function checkInPatientAdvanced(
     }
   }
 
+  const animaisFields = await buildAnimaisOsFields(admin, profile.clinic_id, data)
+
   const { data: result, error } = await admin
     .from('consultations')
     .insert({
@@ -63,6 +96,7 @@ export async function checkInPatientAdvanced(
       scheduled_date: data.scheduled_date || null,
       weight:         data.weight || null,
       status:         status,
+      ...animaisFields,
     })
     .select('id')
     .single()
@@ -162,6 +196,8 @@ export async function checkInPatientWithContacts(
     }
   }
 
+  const animaisFields = await buildAnimaisOsFields(admin, profile.clinic_id, data)
+
   const { data: result, error } = await admin
     .from('consultations')
     .insert({
@@ -173,6 +209,7 @@ export async function checkInPatientWithContacts(
       scheduled_date: data.scheduled_date || null,
       weight:         data.weight || null,
       status:         status,
+      ...animaisFields,
     })
     .select('id')
     .single()
@@ -273,6 +310,9 @@ export type ReceptionQueueItem = {
   created_at: string
   payment_status: string | null
   payment_method: string | null
+  os_number: string | null
+  urgency: 'green' | 'yellow' | 'red' | null
+  referral_type: 'direct' | 'referred' | null
   patient: {
     id: string
     name: string
@@ -314,7 +354,7 @@ export async function getReceptionQueue(): Promise<ReceptionQueueItem[] | { erro
   const { data, error } = await admin
     .from('consultations')
     .select(`
-      id, status, created_at, payment_status, payment_method,
+      id, status, created_at, payment_status, payment_method, os_number, urgency, referral_type,
       patients ( id, name, species, breed, birth_date, gender, neutered, coat_color, photo_url, behavior_tags,
         tutors ( id, name, phone, address )
       )
@@ -352,6 +392,9 @@ export async function getReceptionQueue(): Promise<ReceptionQueueItem[] | { erro
     created_at:     c.created_at,
     payment_status: c.payment_status,
     payment_method: c.payment_method,
+    os_number:      c.os_number ?? null,
+    urgency:        c.urgency ?? null,
+    referral_type:  c.referral_type ?? null,
     patient: {
       id:            c.patients?.id ?? '',
       name:          c.patients?.name ?? '—',

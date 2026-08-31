@@ -11,6 +11,8 @@ import type { VisitReason, PaymentStatus } from '@/types'
 import { DateInput } from '@/components/ui/DatePicker'
 import ActivePackagesBanner from './ActivePackagesBanner'
 import ServiceComboBox, { type SelectedService } from './ServiceComboBox'
+import { useAnimaisFoundation } from '@/components/providers/ClinicConfigProvider'
+import { listPartnerClinics, type PartnerClinic } from '@/lib/actions/partner-clinics'
 
 import { VISIT_REASON_OPTIONS as ALL_REASONS } from '@/lib/visit-reasons'
 
@@ -79,6 +81,20 @@ export function CheckInModal({
   // Contatos obrigatórios
   const [address, setAddress] = useState<string>(tutorAddress ?? '')
   const [emergencyContact, setEmergencyContact] = useState<string>(tutorEmergencyContact ?? '')
+
+  // Sprint Animais (gateado): urgência por cor + origem (B2C direto / B2B encaminhado)
+  const animaisFoundation = useAnimaisFoundation()
+  const [urgency, setUrgency] = useState<'green' | 'yellow' | 'red'>('green')
+  const [referralType, setReferralType] = useState<'direct' | 'referred'>('direct')
+  const [partnerClinicId, setPartnerClinicId] = useState<string>('')
+  const [partnerClinics, setPartnerClinics] = useState<PartnerClinic[]>([])
+
+  useEffect(() => {
+    if (!animaisFoundation) return
+    listPartnerClinics({ is_active: true }).then(res => {
+      if (Array.isArray(res)) setPartnerClinics(res)
+    })
+  }, [animaisFoundation])
 
   // Checklist procedimento
   const [checkedItems, setCheckedItems] = useState<Set<number>>(new Set())
@@ -233,6 +249,12 @@ export function CheckInModal({
           weight: weight ? parseFloat(weight) : undefined,
           address: address.trim(),
           emergency_contact: emergencyContact.trim(),
+          // Sprint Animais (só efetiva quando a flag está ligada no servidor)
+          ...(animaisFoundation ? {
+            urgency,
+            referral_type: referralType,
+            partner_clinic_id: referralType === 'referred' && partnerClinicId ? partnerClinicId : undefined,
+          } : {}),
         })
       } else {
         setError('Erro: Dados do paciente ou tutor não informados.')
@@ -353,6 +375,62 @@ export function CheckInModal({
                 ))}
               </div>
             </div>
+
+            {/* ── Sprint Animais: Urgência (triagem por cor) + Origem (B2C/B2B) ── */}
+            {animaisFoundation && !isScheduled && (
+              <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-4 space-y-4">
+                {/* Urgência */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Urgência (fura a fila conforme a cor)</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {([
+                      { v: 'green',  label: 'Comum',       dot: 'bg-emerald-500', on: 'border-emerald-500 bg-emerald-50 text-emerald-700' },
+                      { v: 'yellow', label: 'Risco',       dot: 'bg-amber-500',   on: 'border-amber-500 bg-amber-50 text-amber-700' },
+                      { v: 'red',    label: 'Emergência',  dot: 'bg-red-500',     on: 'border-red-500 bg-red-50 text-red-700' },
+                    ] as const).map(o => (
+                      <button key={o.v} type="button" onClick={() => setUrgency(o.v)}
+                        className={`flex items-center justify-center gap-2 rounded-lg border-2 py-2.5 text-xs font-semibold transition-all ${
+                          urgency === o.v ? o.on : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                        }`}>
+                        <span className={`h-2.5 w-2.5 rounded-full ${o.dot}`} />
+                        {o.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Origem */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Origem do atendimento</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button type="button" onClick={() => setReferralType('direct')}
+                      className={`rounded-lg border-2 py-2.5 text-xs font-semibold transition-all ${
+                        referralType === 'direct' ? 'border-teal-600 bg-teal-50 text-teal-700' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                      }`}>
+                      Tutor direto (B2C)
+                    </button>
+                    <button type="button" onClick={() => setReferralType('referred')}
+                      className={`rounded-lg border-2 py-2.5 text-xs font-semibold transition-all ${
+                        referralType === 'referred' ? 'border-indigo-600 bg-indigo-100 text-indigo-700' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                      }`}>
+                      Encaminhado por parceiro (B2B)
+                    </button>
+                  </div>
+                  {referralType === 'referred' && (
+                    <div className="mt-2">
+                      <select value={partnerClinicId} onChange={e => setPartnerClinicId(e.target.value)}
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20">
+                        <option value="">Selecione a clínica que encaminhou…</option>
+                        {partnerClinics.map(pc => <option key={pc.id} value={pc.id}>{pc.name}</option>)}
+                      </select>
+                      {partnerClinics.length === 0 && (
+                        <p className="mt-1 text-[11px] text-amber-600">Nenhuma clínica parceira cadastrada — cadastre em Cadastros &gt; Clínicas Parceiras.</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* ── Orçamentos em aberto do tutor (Faturamento Fase 2) ── */}
             {!isEdit && openQuotes.length > 0 && (
