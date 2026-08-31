@@ -5,7 +5,7 @@ import {
   Package, Plus, AlertTriangle, RefreshCw, Trash2, Pencil,
   ArrowDownToLine, Search, X, Loader2, Check, Calendar,
   Shield, ShoppingBag, Scissors, Sparkles, FlaskConical, Pill,
-  Upload, Stethoscope, Gift, Activity, FileText,
+  Upload, Stethoscope, Gift, Activity, FileText, Tags,
 } from 'lucide-react'
 import type { StockItemV2 } from '@/lib/actions/stock'
 import type { StockCategory } from '@/lib/stock-constants'
@@ -14,6 +14,10 @@ import {
   restockItemV2, adjustStockItemV2,
   dispenseStockItem, deleteStockItemV2,
 } from '@/lib/actions/stock'
+import {
+  listPriceTables, getItemPrices, setItemPrices, type PriceTable,
+} from '@/lib/actions/pricing'
+import { useAnimaisFoundation } from '@/components/providers/ClinicConfigProvider'
 import type { GlobalCatalogSuggestion } from '@/lib/actions/catalog'
 import { searchGlobalCatalog } from '@/lib/actions/catalog'
 import { suggestDefaultInsurancePrice } from '@/lib/actions/insurance-pricing'
@@ -105,6 +109,10 @@ interface ItemForm {
   /** NFS-e (Fase 3): item da lista de serviço LC116 + código tributário municipal. */
   nfse_item_lista_servico: string
   nfse_codigo_tributario_municipio: string
+  /** Sprint Animais (0422): composição de preço. Vazio = não informado. */
+  cost_price: string
+  entry_tax_percent: string
+  margin_percent: string
 }
 
 const EMPTY_PRODUCT_FORM: ItemForm = {
@@ -114,6 +122,7 @@ const EMPTY_PRODUCT_FORM: ItemForm = {
   default_insurance_price: '',
   insurance_card_interest_percent: '',
   nfse_item_lista_servico: '', nfse_codigo_tributario_municipio: '',
+  cost_price: '', entry_tax_percent: '', margin_percent: '',
 }
 
 const EMPTY_SERVICE_FORM: ItemForm = {
@@ -123,6 +132,7 @@ const EMPTY_SERVICE_FORM: ItemForm = {
   default_insurance_price: '',
   insurance_card_interest_percent: '',
   nfse_item_lista_servico: '', nfse_codigo_tributario_municipio: '',
+  cost_price: '', entry_tax_percent: '', margin_percent: '',
 }
 
 function formFromItem(item: StockItemV2): ItemForm {
@@ -139,6 +149,9 @@ function formFromItem(item: StockItemV2): ItemForm {
       : '',
     nfse_item_lista_servico: item.nfse_item_lista_servico ?? '',
     nfse_codigo_tributario_municipio: item.nfse_codigo_tributario_municipio ?? '',
+    cost_price:        item.cost_price === null || item.cost_price === undefined ? '' : String(item.cost_price),
+    entry_tax_percent: item.entry_tax_percent === null || item.entry_tax_percent === undefined ? '' : String(item.entry_tax_percent),
+    margin_percent:    item.margin_percent === null || item.margin_percent === undefined ? '' : String(item.margin_percent),
   }
 }
 
@@ -982,6 +995,11 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
   // Campos fiscais de serviço só aparecem quando a clínica emite NFS-e (Fase 3).
   const [emitsNfse, setEmitsNfse] = useState(false)
 
+  // Sprint Animais (0422): tabelas de preço + preço por item por tabela.
+  const animaisFoundation = useAnimaisFoundation()
+  const [priceTables, setPriceTables] = useState<PriceTable[]>([])
+  const [tablePrices, setTablePrices] = useState<Record<string, string>>({})
+
   const isNew     = mode === 'add'
   const isService = serviceMode || SERVICE_CAT_KEYS.has(form.category)
   const fields    = CAT_FIELDS[form.category] ?? { batch: false, expiry: false, barcode: false, sku: false }
@@ -1004,6 +1022,23 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
     if (!isService) return
     clinicEmitsNfse().then(res => setEmitsNfse(res.emits))
   }, [isService])
+
+  // Sprint Animais: carrega as tabelas de preço e os preços já gravados deste item.
+  useEffect(() => {
+    if (!animaisFoundation) return
+    listPriceTables().then(res => {
+      if (Array.isArray(res)) setPriceTables(res.filter(t => t.is_active))
+    })
+    if (item?.id) {
+      getItemPrices(item.id).then(res => {
+        if (!('error' in res)) {
+          const asStr: Record<string, string> = {}
+          for (const [k, v] of Object.entries(res)) asStr[k] = String(v)
+          setTablePrices(asStr)
+        }
+      })
+    }
+  }, [animaisFoundation, item?.id])
 
   function toggleProvider(id: string) {
     setAcceptedProviderIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
@@ -1040,13 +1075,28 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
       // NFS-e (Fase 3): só faz sentido para serviços.
       nfse_item_lista_servico:          isService ? (form.nfse_item_lista_servico.trim() || null) : null,
       nfse_codigo_tributario_municipio: isService ? (form.nfse_codigo_tributario_municipio.trim() || null) : null,
+      // Sprint Animais (0422): composição de preço (custo/imposto/margem).
+      cost_price:        form.cost_price.trim()        === '' ? null : Number(form.cost_price.replace(',', '.')),
+      entry_tax_percent: form.entry_tax_percent.trim() === '' ? null : Number(form.entry_tax_percent.replace(',', '.')),
+      margin_percent:    form.margin_percent.trim()    === '' ? null : Number(form.margin_percent.replace(',', '.')),
     }
+
+    // Grade de preços por tabela (Sprint Animais). Persistida após salvar o item.
+    const priceEntries = animaisFoundation
+      ? priceTables.map(t => ({
+          price_table_id: t.id,
+          price: (tablePrices[t.id] ?? '').trim() === '' ? null : Number((tablePrices[t.id] ?? '').replace(',', '.')),
+        }))
+      : []
 
     if (isNew) {
       const res = await addStockItemV2({ ...basePayload, quantity: isService ? 0 : Number(form.quantity) })
       if ('error' in res) { setSaving(false); setError(res.error); return }
       if (isService && providers.length > 0) {
         await setProvidersForStockItem(res.id, acceptedProviderIds)
+      }
+      if (animaisFoundation && priceEntries.length > 0) {
+        await setItemPrices(res.id, priceEntries)
       }
       setSaving(false)
       onSaved(res, true)
@@ -1056,10 +1106,23 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
       if (isService && providers.length > 0) {
         await setProvidersForStockItem(item!.id, acceptedProviderIds)
       }
+      if (animaisFoundation && priceEntries.length > 0) {
+        await setItemPrices(item!.id, priceEntries)
+      }
       setSaving(false)
       onSaved(res, false)
     }
   }
+
+  // Sugestão de preço de venda = custo × (1 + imposto%) × (1 + margem%).
+  const suggestedPrice = (() => {
+    const c = Number((form.cost_price || '').replace(',', '.'))
+    if (!c || Number.isNaN(c)) return null
+    const tax = Number((form.entry_tax_percent || '0').replace(',', '.')) || 0
+    const mar = Number((form.margin_percent || '0').replace(',', '.')) || 0
+    const v = c * (1 + tax / 100) * (1 + mar / 100)
+    return Number.isFinite(v) ? v : null
+  })()
 
   const headerTitle = isService
     ? (isNew ? 'Novo Serviço / Procedimento' : `Editar: ${item?.name}`)
@@ -1258,6 +1321,81 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
                 </div>
               )}
             </>
+          )}
+
+          {/* Precificação (Sprint Animais) — composição de custo + grade de preços */}
+          {animaisFoundation && (
+            <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-4 space-y-4">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-indigo-600 flex items-center gap-1.5">
+                <Tags className="h-3.5 w-3.5" /> Precificação
+              </p>
+
+              {/* Composição de preço */}
+              <div>
+                <p className="text-xs font-semibold text-slate-600 mb-2">Composição do preço</p>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-500 mb-1">Custo (R$)</label>
+                    <input type="number" min="0" step="0.01" value={form.cost_price}
+                      onChange={e => set('cost_price', e.target.value)} placeholder="0.00"
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-500 mb-1">Imposto entrada (%)</label>
+                    <input type="number" min="0" step="0.001" value={form.entry_tax_percent}
+                      onChange={e => set('entry_tax_percent', e.target.value)} placeholder="0"
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-500 mb-1">Margem (%)</label>
+                    <input type="number" min="0" step="0.001" value={form.margin_percent}
+                      onChange={e => set('margin_percent', e.target.value)} placeholder="0"
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" />
+                  </div>
+                </div>
+                {suggestedPrice != null && (
+                  <div className="mt-2 flex items-center justify-between rounded-lg bg-white border border-indigo-200 px-3 py-2">
+                    <span className="text-xs text-slate-600">
+                      Preço sugerido: <strong className="text-indigo-700">R$ {suggestedPrice.toFixed(2)}</strong>
+                      <span className="text-slate-400"> (custo × imposto × margem)</span>
+                    </span>
+                    <button type="button" onClick={() => set('unit_price', suggestedPrice.toFixed(2))}
+                      className="text-xs font-semibold text-indigo-600 hover:text-indigo-800">
+                      Usar como preço de venda
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Grade de preços por tabela */}
+              <div>
+                <p className="text-xs font-semibold text-slate-600 mb-2">Preço por tabela</p>
+                {priceTables.length === 0 ? (
+                  <p className="text-[11px] text-amber-600">
+                    Nenhuma tabela de preço criada. Crie tabelas em Cadastros &gt; Precificação.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {priceTables.map(t => (
+                      <div key={t.id} className="flex items-center gap-2">
+                        <label className="flex-1 text-xs text-slate-600 truncate" title={t.name}>{t.name}</label>
+                        <div className="relative w-32">
+                          <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] text-slate-400">R$</span>
+                          <input type="number" min="0" step="0.01"
+                            value={tablePrices[t.id] ?? ''}
+                            onChange={e => setTablePrices(prev => ({ ...prev, [t.id]: e.target.value }))}
+                            placeholder="—"
+                            className="w-full rounded-lg border border-slate-300 pl-8 pr-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="text-[10px] text-slate-400 mt-1.5">
+                  Deixe em branco para a tabela usar o preço de venda padrão do item.
+                </p>
+              </div>
+            </div>
           )}
 
           {/* Fornecedor */}

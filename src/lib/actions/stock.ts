@@ -351,9 +351,13 @@ export type StockItemV2 = {
   // migration 0363 (NFS-e Fase 3: códigos de serviço por item)
   nfse_item_lista_servico:          string | null
   nfse_codigo_tributario_municipio: string | null
+  // migration 0422 (Sprint Animais: composição de preço)
+  cost_price:        number | null
+  entry_tax_percent: number | null
+  margin_percent:    number | null
 }
 
-const STOCK_V2_FIELDS = 'id, clinic_id, name, category, quantity, unit, min_quantity, unit_price, last_restock, created_at, updated_at, is_controlled, brand, sku, barcode, batch_number, expiry_date, supplier, is_service, ncm, ncm_description, cfop, unit_com, supplier_id, default_insurance_price, insurance_card_interest_percent, nfse_item_lista_servico, nfse_codigo_tributario_municipio'
+const STOCK_V2_FIELDS = 'id, clinic_id, name, category, quantity, unit, min_quantity, unit_price, last_restock, created_at, updated_at, is_controlled, brand, sku, barcode, batch_number, expiry_date, supplier, is_service, ncm, ncm_description, cfop, unit_com, supplier_id, default_insurance_price, insurance_card_interest_percent, nfse_item_lista_servico, nfse_codigo_tributario_municipio, cost_price, entry_tax_percent, margin_percent'
 
 export async function getPharmacyStockV2(): Promise<StockItemV2[] | { error: string }> {
   const ctx = await getClinicAndUser()
@@ -408,6 +412,9 @@ export async function addStockItemV2(input: {
   insurance_card_interest_percent?: number
   nfse_item_lista_servico?:          string | null
   nfse_codigo_tributario_municipio?: string | null
+  cost_price?:        number | null
+  entry_tax_percent?: number | null
+  margin_percent?:    number | null
 }): Promise<StockItemV2 | { error: string }> {
   const ctx = await getClinicAndUser()
   if (!ctx) return { error: 'Não autenticado.' }
@@ -441,6 +448,9 @@ export async function addStockItemV2(input: {
       insurance_card_interest_percent: input.insurance_card_interest_percent ?? 0,
       nfse_item_lista_servico:          input.nfse_item_lista_servico?.trim() || null,
       nfse_codigo_tributario_municipio: input.nfse_codigo_tributario_municipio?.trim() || null,
+      cost_price:        input.cost_price ?? null,
+      entry_tax_percent: input.entry_tax_percent ?? null,
+      margin_percent:    input.margin_percent ?? null,
     })
     .select(STOCK_V2_FIELDS)
     .single()
@@ -498,6 +508,9 @@ export async function updateStockItemV2(
   if ('insurance_card_interest_percent' in input) patch.insurance_card_interest_percent = (input as any).insurance_card_interest_percent ?? 0
   if ('nfse_item_lista_servico'          in input) patch.nfse_item_lista_servico          = (input as any).nfse_item_lista_servico?.trim()          || null
   if ('nfse_codigo_tributario_municipio' in input) patch.nfse_codigo_tributario_municipio = (input as any).nfse_codigo_tributario_municipio?.trim() || null
+  if ('cost_price'        in input) patch.cost_price        = (input as any).cost_price        ?? null
+  if ('entry_tax_percent' in input) patch.entry_tax_percent = (input as any).entry_tax_percent ?? null
+  if ('margin_percent'    in input) patch.margin_percent    = (input as any).margin_percent    ?? null
 
   const { data, error } = await admin
     .from('stock_items')

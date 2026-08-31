@@ -150,3 +150,65 @@ export async function savePricingSettings(input: {
   revalidatePath('/dashboard/registry')
   return { ok: true }
 }
+
+// ─── PREÇO POR ITEM POR TABELA (grade de preços) ─────────────────────────────
+// Preços de um item em cada tabela de preço. Retorna um mapa price_table_id→price.
+export async function getItemPrices(
+  stockItemId: string,
+): Promise<Record<string, number> | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return { error: ctx.error as string }
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('price_table_items')
+    .select('price_table_id, price')
+    .eq('clinic_id', ctx.clinic_id)
+    .eq('stock_item_id', stockItemId)
+  if (error) return { error: `Erro ao carregar preços do item: ${error.message}` }
+  const map: Record<string, number> = {}
+  for (const row of (data ?? []) as { price_table_id: string; price: number }[]) {
+    map[row.price_table_id] = Number(row.price)
+  }
+  return map
+}
+
+// Persiste os preços de um item: upsert dos informados, delete dos zerados/vazios.
+export async function setItemPrices(
+  stockItemId: string,
+  prices: { price_table_id: string; price: number | null }[],
+): Promise<{ ok: true } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return { error: ctx.error as string }
+  if (!CAN_MANAGE.includes(ctx.role)) return { error: 'Sem permissão' }
+  const admin = createAdminClient()
+
+  const toUpsert = prices
+    .filter(p => p.price != null && !Number.isNaN(p.price) && Number(p.price) > 0)
+    .map(p => ({
+      clinic_id: ctx.clinic_id,
+      price_table_id: p.price_table_id,
+      stock_item_id: stockItemId,
+      price: Number(p.price),
+      updated_at: new Date().toISOString(),
+    }))
+  const toDelete = prices
+    .filter(p => p.price == null || Number.isNaN(p.price) || Number(p.price) <= 0)
+    .map(p => p.price_table_id)
+
+  if (toUpsert.length > 0) {
+    const { error } = await admin
+      .from('price_table_items')
+      .upsert(toUpsert, { onConflict: 'price_table_id, stock_item_id' })
+    if (error) return { error: `Erro ao salvar preços: ${error.message}` }
+  }
+  if (toDelete.length > 0) {
+    const { error } = await admin
+      .from('price_table_items')
+      .delete()
+      .eq('clinic_id', ctx.clinic_id)
+      .eq('stock_item_id', stockItemId)
+      .in('price_table_id', toDelete)
+    if (error) return { error: `Erro ao remover preços: ${error.message}` }
+  }
+  return { ok: true }
+}
