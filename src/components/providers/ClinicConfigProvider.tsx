@@ -9,27 +9,32 @@ interface ClinicConfig {
   internacaoCompleta:  boolean
   /** flow_config.centro_cirurgico — liga o módulo Centro Cirúrgico. */
   centroCirurgico:     boolean
+  /** flow_config.animais_foundation — liga a fundação da Sprint Animais (multi-CNPJ, clínicas parceiras, tabelas de preço, OS/urgência). */
+  animaisFoundation:   boolean
 }
 
 const ClinicConfigContext = createContext<ClinicConfig>({
   aiTranscriptionMode: 'ai_assisted',
   internacaoCompleta:  false,
   centroCirurgico:     false,
+  animaisFoundation:   false,
 })
 
 export function ClinicConfigProvider({
   aiTranscriptionMode,
   internacaoCompleta = false,
   centroCirurgico = false,
+  animaisFoundation = false,
   children,
 }: {
   aiTranscriptionMode: AiTranscriptionMode
   internacaoCompleta?: boolean
   centroCirurgico?:    boolean
+  animaisFoundation?:  boolean
   children: React.ReactNode
 }) {
   return (
-    <ClinicConfigContext.Provider value={{ aiTranscriptionMode, internacaoCompleta, centroCirurgico }}>
+    <ClinicConfigContext.Provider value={{ aiTranscriptionMode, internacaoCompleta, centroCirurgico, animaisFoundation }}>
       {children}
     </ClinicConfigContext.Provider>
   )
@@ -47,4 +52,9 @@ export function useInternacaoCompleta(): boolean {
 /** Hook client: a clínica ativou o módulo Centro Cirúrgico? */
 export function useCentroCirurgico(): boolean {
   return useContext(ClinicConfigContext).centroCirurgico
+}
+
+/** Hook client: a clínica ativou a fundação da Sprint Animais? */
+export function useAnimaisFoundation(): boolean {
+  return useContext(ClinicConfigContext).animaisFoundation
 }

@@ -55,6 +55,7 @@ export interface DashboardShellProps {
   uiPreferences:        Record<string, unknown> | null
   aiTranscriptionMode:  string
   internacaoCompleta:   boolean
+  animaisFoundation?:   boolean
   whatsAppEnabled:      boolean
   // Onboarding
   hasLogo:              boolean
@@ -73,7 +74,7 @@ export default function DashboardShell({
   lowStockCount, whatsappHandoffCount, chatUnreadCount, userClinics,
   isSysmax, clinicStatus, isSurgeryMode, planName, allowedRoutes, centroCirurgico,
   pdvUnified = false, subscriptionUiEnabled = false,
-  uiPreferences, aiTranscriptionMode, internacaoCompleta, whatsAppEnabled,
+  uiPreferences, aiTranscriptionMode, internacaoCompleta, animaisFoundation = false, whatsAppEnabled,
   hasLogo, hasPets, businessType, userId, children,
 }: DashboardShellProps) {
   return (
@@ -83,6 +84,7 @@ export default function DashboardShell({
           aiTranscriptionMode={aiTranscriptionMode as any}
           internacaoCompleta={internacaoCompleta}
           centroCirurgico={centroCirurgico}
+          animaisFoundation={animaisFoundation}
         >
           <ModulesProvider modules={activeModules ?? []}>
             <WhatsAppGateProvider enabled={whatsAppEnabled}>
