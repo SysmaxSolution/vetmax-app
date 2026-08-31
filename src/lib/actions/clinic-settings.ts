@@ -44,6 +44,12 @@ export type FlowConfig = {
   /** Agenda Automatizada na Recepção (vs recepção simples do Free): agendamento
    *  automatizado e confirmações. Premium+. */
   reception_auto_schedule?: boolean
+  /** Sprint Animais — liga a fundação (multi-CNPJ, clínicas parceiras, tabelas
+   *  de preço, OS/urgência/origem no check-in). Por clínica. */
+  animais_foundation?:      boolean
+  /** Exige selecionar o profissional responsável no check-in. Off (padrão) =
+   *  atendimento pode ir aos departamentos sem responsável pré-definido. */
+  require_attending_vet?:   boolean
 }
 
 export type BusinessHourEntry = { open: string; close: string } | null

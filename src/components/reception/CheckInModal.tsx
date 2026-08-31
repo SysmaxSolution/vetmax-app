@@ -11,8 +11,9 @@ import type { VisitReason, PaymentStatus } from '@/types'
 import { DateInput } from '@/components/ui/DatePicker'
 import ActivePackagesBanner from './ActivePackagesBanner'
 import ServiceComboBox, { type SelectedService } from './ServiceComboBox'
-import { useAnimaisFoundation } from '@/components/providers/ClinicConfigProvider'
+import { useAnimaisFoundation, useRequireAttendingVet } from '@/components/providers/ClinicConfigProvider'
 import { listPartnerClinics, type PartnerClinic } from '@/lib/actions/partner-clinics'
+import { getClinicProfessionals, type ClinicProfessional } from '@/lib/actions/professionals'
 
 import { VISIT_REASON_OPTIONS as ALL_REASONS } from '@/lib/visit-reasons'
 
@@ -95,6 +96,16 @@ export function CheckInModal({
       if (Array.isArray(res)) setPartnerClinics(res)
     })
   }, [animaisFoundation])
+
+  // Profissional responsável pelo atendimento (todas as clínicas; obrigatório se configurado)
+  const requireAttendingVet = useRequireAttendingVet()
+  const [vetId, setVetId] = useState<string>('')
+  const [professionals, setProfessionals] = useState<ClinicProfessional[]>([])
+  useEffect(() => {
+    getClinicProfessionals().then(res => {
+      if (Array.isArray(res)) setProfessionals(res.filter(p => p.role === 'vet' || p.role === 'admin'))
+    })
+  }, [])
 
   // Checklist procedimento
   const [checkedItems, setCheckedItems] = useState<Set<number>>(new Set())
@@ -224,6 +235,10 @@ export function CheckInModal({
       setError('Contato de emergência é obrigatório.')
       return
     }
+    if (!isEdit && requireAttendingVet && !vetId) {
+      setError('Selecione o profissional responsável pelo atendimento.')
+      return
+    }
 
     startTransition(async () => {
       let result: { id: string } | { success: boolean } | { error: string }
@@ -249,6 +264,7 @@ export function CheckInModal({
           weight: weight ? parseFloat(weight) : undefined,
           address: address.trim(),
           emergency_contact: emergencyContact.trim(),
+          vet_id: vetId || undefined,
           // Sprint Animais (só efetiva quando a flag está ligada no servidor)
           ...(animaisFoundation ? {
             urgency,
@@ -375,6 +391,31 @@ export function CheckInModal({
                 ))}
               </div>
             </div>
+
+            {/* ── Profissional responsável (todas as clínicas) ── */}
+            {!isEdit && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Profissional responsável {requireAttendingVet ? <span className="text-red-500">*</span> : <span className="text-slate-400 font-normal">(opcional)</span>}
+                </label>
+                <p className="text-[11px] text-slate-500 mb-2 -mt-0.5">Direciona o pet para a fila do profissional. Sem responsável, fica visível a todos.</p>
+                <select
+                  value={vetId}
+                  onChange={e => setVetId(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm bg-white focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                >
+                  <option value="">— Sem responsável definido —</option>
+                  {professionals.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.full_name}{p.crmv ? ` · ${p.crmv}` : ''}
+                    </option>
+                  ))}
+                </select>
+                {professionals.length === 0 && (
+                  <p className="mt-1 text-[11px] text-amber-600">Nenhum profissional (veterinário) cadastrado nesta clínica.</p>
+                )}
+              </div>
+            )}
 
             {/* ── Sprint Animais: Urgência (triagem por cor) + Origem (B2C/B2B) ── */}
             {animaisFoundation && !isScheduled && (

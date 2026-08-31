@@ -281,6 +281,7 @@ export interface CheckInPayload {
   payment_method?: PaymentMethod
   scheduled_date?: string          // Se agendado, fornecer data
   weight?: number                  // Peso atual aferido na recepção (kg)
+  vet_id?: string                  // profissional responsável pelo atendimento (opcional)
   // Sprint Animais (gateado por animais_foundation) — todos opcionais:
   urgency?: 'green' | 'yellow' | 'red'          // triagem por cor (0.6)
   referral_type?: 'direct' | 'referred'         // B2C direto x B2B encaminhado (0.4)

@@ -9,7 +9,7 @@ import { updatePatientWeight } from './patient-weight'
 import { getTenantCtx } from '@/lib/data/context'
 
 // ─── Sprint Animais: campos extras da OS no check-in (aditivo + gateado) ──────
-// Só produz campos quando clinics.flow_config.animais_foundation === true.
+// Chamado só quando animais_foundation está ligada (o caller já fez o gate).
 // Gera o nº de OS de forma atômica (next_document_number); se a sequência não
 // estiver configurada, NÃO derruba o check-in — apenas fica sem número.
 async function buildAnimaisOsFields(
@@ -17,11 +17,6 @@ async function buildAnimaisOsFields(
   clinicId: string,
   data: CheckInPayload,
 ): Promise<Record<string, unknown>> {
-  const { data: clinicRow } = await admin
-    .from('clinics').select('flow_config').eq('id', clinicId).single()
-  const animais = ((clinicRow?.flow_config ?? {}) as { animais_foundation?: boolean }).animais_foundation === true
-  if (!animais) return {}
-
   const fields: Record<string, unknown> = {
     urgency:            data.urgency ?? null,
     referral_type:      data.referral_type ?? null,
@@ -83,7 +78,16 @@ export async function checkInPatientAdvanced(
     }
   }
 
-  const animaisFields = await buildAnimaisOsFields(admin, profile.clinic_id, data)
+  // Lê a config da clínica uma vez (responsável obrigatório? fundação Animais?)
+  const { data: clinicRow } = await admin
+    .from('clinics').select('flow_config').eq('id', profile.clinic_id).single()
+  const flow = (clinicRow?.flow_config ?? {}) as { animais_foundation?: boolean; require_attending_vet?: boolean }
+  if (flow.require_attending_vet && !data.vet_id) {
+    return { error: 'Selecione o profissional responsável pelo atendimento.' }
+  }
+  const animaisFields = flow.animais_foundation === true
+    ? await buildAnimaisOsFields(admin, profile.clinic_id, data)
+    : {}
 
   const { data: result, error } = await admin
     .from('consultations')
@@ -96,6 +100,7 @@ export async function checkInPatientAdvanced(
       scheduled_date: data.scheduled_date || null,
       weight:         data.weight || null,
       status:         status,
+      vet_id:         data.vet_id || null,
       ...animaisFields,
     })
     .select('id')
@@ -196,7 +201,16 @@ export async function checkInPatientWithContacts(
     }
   }
 
-  const animaisFields = await buildAnimaisOsFields(admin, profile.clinic_id, data)
+  // Lê a config da clínica uma vez (responsável obrigatório? fundação Animais?)
+  const { data: clinicRow } = await admin
+    .from('clinics').select('flow_config').eq('id', profile.clinic_id).single()
+  const flow = (clinicRow?.flow_config ?? {}) as { animais_foundation?: boolean; require_attending_vet?: boolean }
+  if (flow.require_attending_vet && !data.vet_id) {
+    return { error: 'Selecione o profissional responsável pelo atendimento.' }
+  }
+  const animaisFields = flow.animais_foundation === true
+    ? await buildAnimaisOsFields(admin, profile.clinic_id, data)
+    : {}
 
   const { data: result, error } = await admin
     .from('consultations')
@@ -209,6 +223,7 @@ export async function checkInPatientWithContacts(
       scheduled_date: data.scheduled_date || null,
       weight:         data.weight || null,
       status:         status,
+      vet_id:         data.vet_id || null,
       ...animaisFields,
     })
     .select('id')

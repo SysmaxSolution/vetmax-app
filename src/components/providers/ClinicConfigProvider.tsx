@@ -11,6 +11,8 @@ interface ClinicConfig {
   centroCirurgico:     boolean
   /** flow_config.animais_foundation — liga a fundação da Sprint Animais (multi-CNPJ, clínicas parceiras, tabelas de preço, OS/urgência). */
   animaisFoundation:   boolean
+  /** flow_config.require_attending_vet — exige selecionar o profissional responsável no check-in. */
+  requireAttendingVet: boolean
 }
 
 const ClinicConfigContext = createContext<ClinicConfig>({
@@ -18,6 +20,7 @@ const ClinicConfigContext = createContext<ClinicConfig>({
   internacaoCompleta:  false,
   centroCirurgico:     false,
   animaisFoundation:   false,
+  requireAttendingVet: false,
 })
 
 export function ClinicConfigProvider({
@@ -25,16 +28,18 @@ export function ClinicConfigProvider({
   internacaoCompleta = false,
   centroCirurgico = false,
   animaisFoundation = false,
+  requireAttendingVet = false,
   children,
 }: {
   aiTranscriptionMode: AiTranscriptionMode
   internacaoCompleta?: boolean
   centroCirurgico?:    boolean
   animaisFoundation?:  boolean
+  requireAttendingVet?: boolean
   children: React.ReactNode
 }) {
   return (
-    <ClinicConfigContext.Provider value={{ aiTranscriptionMode, internacaoCompleta, centroCirurgico, animaisFoundation }}>
+    <ClinicConfigContext.Provider value={{ aiTranscriptionMode, internacaoCompleta, centroCirurgico, animaisFoundation, requireAttendingVet }}>
       {children}
     </ClinicConfigContext.Provider>
   )
@@ -57,4 +62,9 @@ export function useCentroCirurgico(): boolean {
 /** Hook client: a clínica ativou a fundação da Sprint Animais? */
 export function useAnimaisFoundation(): boolean {
   return useContext(ClinicConfigContext).animaisFoundation
+}
+
+/** Hook client: exigir profissional responsável no check-in? */
+export function useRequireAttendingVet(): boolean {
+  return useContext(ClinicConfigContext).requireAttendingVet
 }

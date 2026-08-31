@@ -723,37 +723,42 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
 
         <ReceptionSubNav />
 
-        {/* ── View Toggle: Lista / Kanban ── */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setViewMode('list')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-              viewMode === 'list' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            Lista
-          </button>
-          <button
-            data-mentor-step="reception-kanban-toggle"
-            onClick={async () => {
-              setViewMode('kanban')
-              if (kanbanColumns.length === 0) {
-                setLoadingKanban(true)
-                const result = await getAgendaBoard()
-                if ('error' in result) {
-                  showToast(result.error, 'error')
-                } else {
-                  setKanbanColumns(result)
+        {/* ── View Toggle: Lista / Kanban (painel por setor) ── */}
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Visualização</span>
+          <div className="inline-flex items-center rounded-xl border border-slate-200 bg-slate-100 p-1 shadow-sm">
+            <button
+              onClick={() => setViewMode('list')}
+              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                viewMode === 'list' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
+              Lista
+            </button>
+            <button
+              data-mentor-step="reception-kanban-toggle"
+              onClick={async () => {
+                setViewMode('kanban')
+                if (kanbanColumns.length === 0) {
+                  setLoadingKanban(true)
+                  const result = await getAgendaBoard()
+                  if ('error' in result) {
+                    showToast(result.error, 'error')
+                  } else {
+                    setKanbanColumns(result)
+                  }
+                  setLoadingKanban(false)
                 }
-                setLoadingKanban(false)
-              }
-            }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-              viewMode === 'kanban' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            Kanban
-          </button>
+              }}
+              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                viewMode === 'kanban' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z" /></svg>
+              Painel por setor
+            </button>
+          </div>
         </div>
 
         {/* ── Kanban View ── */}

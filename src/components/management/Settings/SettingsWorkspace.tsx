@@ -129,6 +129,7 @@ export default function SettingsWorkspace({
               O horário de funcionamento está disponível em <strong>Gestão → Clínica</strong>.
             </p>
             <RegistrationSettings initialConfig={initialClinicConfig} onToast={onToast} />
+            <AttendingVetSettings initialConfig={initialClinicConfig} onToast={onToast} />
             <MentorIdleSettings initialConfig={initialClinicConfig} onToast={onToast} />
           </div>
         )}
@@ -281,6 +282,63 @@ function SectionHeader({ icon, title, description }: {
   )
 }
 
+
+// ─── AttendingVetSettings — exigir profissional responsável no check-in ───────
+
+function AttendingVetSettings({ initialConfig, onToast }: {
+  initialConfig: ClinicConfig | null
+  onToast: (type: 'success' | 'error', msg: string) => void
+}) {
+  const flowRaw = initialConfig?.flow_config as FlowConfig | undefined
+  const [required, setRequired] = useState<boolean>(flowRaw?.require_attending_vet ?? false)
+  const [saving, setSaving] = useState(false)
+
+  async function handleSave() {
+    setSaving(true)
+    const base: FlowConfig = initialConfig?.flow_config ?? { vet_merged_modules: [] }
+    const res = await updateClinicConfig({ flow_config: { ...base, require_attending_vet: required } })
+    setSaving(false)
+    if ('error' in res) { onToast('error', res.error); return }
+    onToast('success', 'Configuração de responsável salva!')
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div className="border-b border-slate-100 px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-50">
+            <Shield className="h-4 w-4 text-teal-600" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">Exigir profissional responsável</h3>
+            <p className="text-xs text-slate-500">Torna obrigatório escolher o responsável no check-in</p>
+          </div>
+        </div>
+        <button
+          onClick={() => setRequired(v => !v)}
+          className={`transition-colors ${required ? 'text-teal-600' : 'text-slate-300'}`}
+          title={required ? 'Tornar opcional' : 'Tornar obrigatório'}
+        >
+          {required ? <ToggleRight className="h-7 w-7" /> : <ToggleLeft className="h-7 w-7" />}
+        </button>
+      </div>
+      <div className="px-6 py-4 flex items-center justify-between gap-4">
+        <p className="text-xs text-slate-500">
+          {required
+            ? 'A recepção precisa selecionar o profissional responsável para concluir o check-in. O pet vai para a fila desse profissional.'
+            : 'Opcional: o atendimento pode seguir aos departamentos sem responsável definido (visível a todos os profissionais).'}
+        </p>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50 flex-shrink-0"
+        >
+          {saving ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Salvando…</> : <><Save className="h-3.5 w-3.5" /> Salvar</>}
+        </button>
+      </div>
+    </div>
+  )
+}
 
 // ─── AccountingSettings ───────────────────────────────────────────────────────
 
