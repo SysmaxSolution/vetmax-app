@@ -4,6 +4,7 @@ import { useState, useTransition, useEffect } from 'react'
 import Link from 'next/link'
 import { Clock, CheckCircle2, ArrowRight, Stethoscope, AlertCircle, Weight, Thermometer, History, Pencil, Plus, X, Search, UserPlus, Receipt, AlertTriangle } from 'lucide-react'
 import type { VetQueueItem, VetCompletedItem, AwaitingReviewItem } from '@/lib/actions/vet'
+import { getVetQueue } from '@/lib/actions/vet'
 import { addPatientDirectToVet } from '@/lib/actions/vet'
 import { searchPatientsForTriage, type TriagePatientSearchResult } from '@/lib/actions/triage'
 import { useRealtimeSync } from '@/hooks/useRealtimeSync'
@@ -78,6 +79,18 @@ export default function VetWorkspace({ queue, completed, awaitingReview, clinicI
 
   const [localQueue, setLocalQueue] = useState<VetQueueItem[]>(queue)
   useEffect(() => { setLocalQueue(queue) }, [queue])
+
+  // Escopo da fila: "minha" (sem responsável + meus) x "todas" (Sprint Animais).
+  const [queueScope, setQueueScope] = useState<'mine' | 'all'>('mine')
+  const [scopeLoading, setScopeLoading] = useState(false)
+  async function changeScope(scope: 'mine' | 'all') {
+    if (scope === queueScope) return
+    setQueueScope(scope)
+    setScopeLoading(true)
+    const res = await getVetQueue(scope)
+    setScopeLoading(false)
+    if (Array.isArray(res)) setLocalQueue(res)
+  }
 
   const [tab, setTab] = useState<'fila' | 'historico'>('fila')
   const [showAddModal, setShowAddModal]       = useState(false)
@@ -252,9 +265,30 @@ export default function VetWorkspace({ queue, completed, awaitingReview, clinicI
                   <p className="text-xs text-slate-500">Triagens prontas para consulta</p>
                 </div>
               </div>
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-600">
-                {localQueue.length} consulta{localQueue.length !== 1 ? 's' : ''}
-              </span>
+              <div className="flex items-center gap-3">
+                {/* Escopo da fila: minha (sem responsável + meus) x todas */}
+                <div className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-100 p-0.5">
+                  <button
+                    onClick={() => changeScope('mine')}
+                    className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${
+                      queueScope === 'mine' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    Minha fila
+                  </button>
+                  <button
+                    onClick={() => changeScope('all')}
+                    className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${
+                      queueScope === 'all' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    Todos
+                  </button>
+                </div>
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-600">
+                  {scopeLoading ? '…' : localQueue.length}
+                </span>
+              </div>
             </div>
 
             <div className="divide-y divide-slate-100 max-h-[60vh] overflow-y-auto">
@@ -279,6 +313,9 @@ export default function VetWorkspace({ queue, completed, awaitingReview, clinicI
                           <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
                             {SPECIES_EMOJI[item.patient.species] ?? '🐾'} {SPECIES_LABELS[item.patient.species] ?? item.patient.species}
                           </span>
+                          {item.vet
+                            ? <span className="text-xs font-medium text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full">Dr(a). {item.vet.full_name}</span>
+                            : <span className="text-xs font-medium text-slate-400 bg-slate-50 px-2 py-0.5 rounded-full">Sem responsável</span>}
                           {item.visit_reason === 'emergency' && (
                             <span className="text-xs font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">
                               🚨 Emergência
