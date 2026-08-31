@@ -219,12 +219,19 @@ export default function AnimaisPricingSection({
             </div>
             {priceTables.map(t => {
               const row = tableRows[t.id] ?? { margin: '', price: '' }
+              // Margem (sobre a venda) não pode chegar a 100% — venda = custo ÷ (1 − margem%).
+              const marginInvalid = marginCalcType === 'margin' && row.margin.trim() !== '' && num(row.margin) >= 100
               return (
                 <div key={t.id} className="grid grid-cols-2 sm:grid-cols-[1fr_7rem_8rem] gap-2 items-center">
                   <label className="col-span-2 sm:col-span-1 text-xs font-medium text-slate-600 truncate" title={t.name}>{t.name}</label>
-                  <input type="number" min="0" step="0.001" value={row.margin}
+                  <input type="number" min="0" max={marginCalcType === 'margin' ? 99.99 : undefined} step="0.001" value={row.margin}
                     onChange={e => onMarginChange(t.id, e.target.value)}
-                    placeholder={marginLabel} className={inputCls} />
+                    placeholder={marginLabel}
+                    className={`w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 ${
+                      marginInvalid
+                        ? 'border-red-400 focus:ring-red-500/20 focus:border-red-500'
+                        : 'border-slate-300 focus:ring-indigo-500/20 focus:border-indigo-500'
+                    }`} />
                   <div className="relative">
                     <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] text-slate-400">R$</span>
                     <input type="number" min="0" step="0.01" value={row.price}
@@ -232,6 +239,11 @@ export default function AnimaisPricingSection({
                       placeholder="—"
                       className="w-full rounded-lg border border-slate-300 pl-8 pr-2 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" />
                   </div>
+                  {marginInvalid && (
+                    <p className="col-span-2 sm:col-span-3 text-[11px] text-red-600">
+                      A margem deve ser <strong>menor que 100%</strong> (margem é sobre o preço de venda). Para lucro maior que o custo, use o cálculo por <strong>Markup</strong>.
+                    </p>
+                  )}
                 </div>
               )
             })}
@@ -239,6 +251,7 @@ export default function AnimaisPricingSection({
         )}
         <p className="text-[10px] text-slate-400 mt-1.5">
           Informe a {marginLabel.toLowerCase()} e o preço é calculado sozinho — ou digite o preço e a {marginLabel.toLowerCase()} é deduzida. Cada tabela tem a sua.
+          {marginCalcType === 'margin' && ' A margem deve ser abaixo de 100%.'}
         </p>
       </div>
     </div>
