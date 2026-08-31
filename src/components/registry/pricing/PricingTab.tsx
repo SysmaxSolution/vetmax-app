@@ -4,15 +4,15 @@ import { useState, useEffect } from 'react'
 import { Loader2, Plus, Pencil, Tag, Check, X, Save, Settings2 } from 'lucide-react'
 import {
   listPriceTables, upsertPriceTable, getPricingSettings, savePricingSettings,
-  type PriceTable, type PricingPrecedence,
+  type PriceTable, type PricingPrecedence, type CompositionMode, type MarginCalcType,
 } from '@/lib/actions/pricing'
 import { Toast } from '@/components/ui/toast'
 
-interface Props { userRole: string }
+interface Props { userRole?: string }
 
 interface Draft { id?: string; slot: number; name: string; is_active: boolean }
 
-export default function PricingTab({ userRole }: Props) {
+export default function PricingTab({ userRole = 'admin' }: Props) {
   const canManage = ['admin', 'owner', 'manager'].includes(userRole)
 
   const [tables, setTables]   = useState<PriceTable[]>([])
@@ -24,6 +24,8 @@ export default function PricingTab({ userRole }: Props) {
   // Configurações
   const [defaultB2c, setDefaultB2c] = useState<string>('')
   const [precedence, setPrecedence] = useState<PricingPrecedence>('client')
+  const [compositionMode, setCompositionMode] = useState<CompositionMode>('simple')
+  const [marginCalcType, setMarginCalcType]   = useState<MarginCalcType>('margin')
   const [settingsDirty, setSettingsDirty] = useState(false)
 
   async function reload() {
@@ -32,6 +34,8 @@ export default function PricingTab({ userRole }: Props) {
     if (!('error' in s)) {
       setDefaultB2c(s.default_b2c_price_table_id ?? '')
       setPrecedence(s.precedence)
+      setCompositionMode(s.composition_mode)
+      setMarginCalcType(s.margin_calc_type)
     }
     setLoading(false)
   }
@@ -64,6 +68,8 @@ export default function PricingTab({ userRole }: Props) {
     const res = await savePricingSettings({
       default_b2c_price_table_id: defaultB2c || null,
       precedence,
+      composition_mode: compositionMode,
+      margin_calc_type: marginCalcType,
     })
     setBusy(false)
     if ('error' in res) { setToast({ type: 'error', message: res.error }); return }
@@ -243,6 +249,72 @@ export default function PricingTab({ userRole }: Props) {
                 />
                 <span className="text-xs text-slate-700">
                   <strong>Seguir a tabela do produto</strong> — o preço padrão do item prevalece.
+                </span>
+              </label>
+            </div>
+          </div>
+
+          {/* Modo de composição de custo */}
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Composição de custo no cadastro do item</label>
+            <div className="space-y-2">
+              <label className="flex items-start gap-2 rounded-lg border border-slate-200 px-3 py-2 cursor-pointer hover:bg-slate-50">
+                <input
+                  type="radio"
+                  name="composition_mode"
+                  checked={compositionMode === 'simple'}
+                  onChange={() => { setCompositionMode('simple'); setSettingsDirty(true) }}
+                  disabled={!canManage}
+                  className="mt-0.5 text-teal-600 focus:ring-teal-500"
+                />
+                <span className="text-xs text-slate-700">
+                  <strong>Simples</strong> — custo, imposto de entrada e margem.
+                </span>
+              </label>
+              <label className="flex items-start gap-2 rounded-lg border border-slate-200 px-3 py-2 cursor-pointer hover:bg-slate-50">
+                <input
+                  type="radio"
+                  name="composition_mode"
+                  checked={compositionMode === 'complete'}
+                  onChange={() => { setCompositionMode('complete'); setSettingsDirty(true) }}
+                  disabled={!canManage}
+                  className="mt-0.5 text-teal-600 focus:ring-teal-500"
+                />
+                <span className="text-xs text-slate-700">
+                  <strong>Completa</strong> — preço de compra, desconto, impostos de entrada (ICMS/ST/IPI/Frete/IBS-CBS) e impostos de venda.
+                </span>
+              </label>
+            </div>
+          </div>
+
+          {/* Tipo de cálculo: margem x markup */}
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Cálculo do preço de venda</label>
+            <div className="space-y-2">
+              <label className="flex items-start gap-2 rounded-lg border border-slate-200 px-3 py-2 cursor-pointer hover:bg-slate-50">
+                <input
+                  type="radio"
+                  name="margin_calc_type"
+                  checked={marginCalcType === 'margin'}
+                  onChange={() => { setMarginCalcType('margin'); setSettingsDirty(true) }}
+                  disabled={!canManage}
+                  className="mt-0.5 text-teal-600 focus:ring-teal-500"
+                />
+                <span className="text-xs text-slate-700">
+                  <strong>Margem</strong> — a margem é % sobre o preço de venda. Venda = custo ÷ (1 − margem%).
+                </span>
+              </label>
+              <label className="flex items-start gap-2 rounded-lg border border-slate-200 px-3 py-2 cursor-pointer hover:bg-slate-50">
+                <input
+                  type="radio"
+                  name="margin_calc_type"
+                  checked={marginCalcType === 'markup'}
+                  onChange={() => { setMarginCalcType('markup'); setSettingsDirty(true) }}
+                  disabled={!canManage}
+                  className="mt-0.5 text-teal-600 focus:ring-teal-500"
+                />
+                <span className="text-xs text-slate-700">
+                  <strong>Markup</strong> — a margem é % sobre o custo. Venda = custo × (1 + markup%).
                 </span>
               </label>
             </div>

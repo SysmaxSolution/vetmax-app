@@ -351,13 +351,22 @@ export type StockItemV2 = {
   // migration 0363 (NFS-e Fase 3: códigos de serviço por item)
   nfse_item_lista_servico:          string | null
   nfse_codigo_tributario_municipio: string | null
-  // migration 0422 (Sprint Animais: composição de preço)
+  // migration 0422 (Sprint Animais: composição de preço simples)
   cost_price:        number | null
   entry_tax_percent: number | null
   margin_percent:    number | null
+  // migration 0424 (Sprint Animais: composição de preço completa)
+  purchase_price:            number | null
+  supplier_discount_percent: number | null
+  entry_tax_icms:    number | null
+  entry_tax_st:      number | null
+  entry_tax_ipi:     number | null
+  entry_tax_freight: number | null
+  entry_tax_ibs_cbs: number | null
+  sale_tax_percent:  number | null
 }
 
-const STOCK_V2_FIELDS = 'id, clinic_id, name, category, quantity, unit, min_quantity, unit_price, last_restock, created_at, updated_at, is_controlled, brand, sku, barcode, batch_number, expiry_date, supplier, is_service, ncm, ncm_description, cfop, unit_com, supplier_id, default_insurance_price, insurance_card_interest_percent, nfse_item_lista_servico, nfse_codigo_tributario_municipio, cost_price, entry_tax_percent, margin_percent'
+const STOCK_V2_FIELDS = 'id, clinic_id, name, category, quantity, unit, min_quantity, unit_price, last_restock, created_at, updated_at, is_controlled, brand, sku, barcode, batch_number, expiry_date, supplier, is_service, ncm, ncm_description, cfop, unit_com, supplier_id, default_insurance_price, insurance_card_interest_percent, nfse_item_lista_servico, nfse_codigo_tributario_municipio, cost_price, entry_tax_percent, margin_percent, purchase_price, supplier_discount_percent, entry_tax_icms, entry_tax_st, entry_tax_ipi, entry_tax_freight, entry_tax_ibs_cbs, sale_tax_percent'
 
 export async function getPharmacyStockV2(): Promise<StockItemV2[] | { error: string }> {
   const ctx = await getClinicAndUser()
@@ -415,6 +424,14 @@ export async function addStockItemV2(input: {
   cost_price?:        number | null
   entry_tax_percent?: number | null
   margin_percent?:    number | null
+  purchase_price?:            number | null
+  supplier_discount_percent?: number | null
+  entry_tax_icms?:    number | null
+  entry_tax_st?:      number | null
+  entry_tax_ipi?:     number | null
+  entry_tax_freight?: number | null
+  entry_tax_ibs_cbs?: number | null
+  sale_tax_percent?:  number | null
 }): Promise<StockItemV2 | { error: string }> {
   const ctx = await getClinicAndUser()
   if (!ctx) return { error: 'Não autenticado.' }
@@ -451,6 +468,14 @@ export async function addStockItemV2(input: {
       cost_price:        input.cost_price ?? null,
       entry_tax_percent: input.entry_tax_percent ?? null,
       margin_percent:    input.margin_percent ?? null,
+      purchase_price:            input.purchase_price ?? null,
+      supplier_discount_percent: input.supplier_discount_percent ?? null,
+      entry_tax_icms:    input.entry_tax_icms ?? null,
+      entry_tax_st:      input.entry_tax_st ?? null,
+      entry_tax_ipi:     input.entry_tax_ipi ?? null,
+      entry_tax_freight: input.entry_tax_freight ?? null,
+      entry_tax_ibs_cbs: input.entry_tax_ibs_cbs ?? null,
+      sale_tax_percent:  input.sale_tax_percent ?? null,
     })
     .select(STOCK_V2_FIELDS)
     .single()
@@ -511,6 +536,14 @@ export async function updateStockItemV2(
   if ('cost_price'        in input) patch.cost_price        = (input as any).cost_price        ?? null
   if ('entry_tax_percent' in input) patch.entry_tax_percent = (input as any).entry_tax_percent ?? null
   if ('margin_percent'    in input) patch.margin_percent    = (input as any).margin_percent    ?? null
+  if ('purchase_price'            in input) patch.purchase_price            = (input as any).purchase_price            ?? null
+  if ('supplier_discount_percent' in input) patch.supplier_discount_percent = (input as any).supplier_discount_percent ?? null
+  if ('entry_tax_icms'    in input) patch.entry_tax_icms    = (input as any).entry_tax_icms    ?? null
+  if ('entry_tax_st'      in input) patch.entry_tax_st      = (input as any).entry_tax_st      ?? null
+  if ('entry_tax_ipi'     in input) patch.entry_tax_ipi     = (input as any).entry_tax_ipi     ?? null
+  if ('entry_tax_freight' in input) patch.entry_tax_freight = (input as any).entry_tax_freight ?? null
+  if ('entry_tax_ibs_cbs' in input) patch.entry_tax_ibs_cbs = (input as any).entry_tax_ibs_cbs ?? null
+  if ('sale_tax_percent'  in input) patch.sale_tax_percent  = (input as any).sale_tax_percent  ?? null
 
   const { data, error } = await admin
     .from('stock_items')

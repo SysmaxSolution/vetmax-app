@@ -1,17 +1,16 @@
 'use client'
 
 import { useState } from 'react'
-import { Truck, BedDouble, DoorOpen, Package, Receipt, Building2, Tags } from 'lucide-react'
+import { Truck, BedDouble, DoorOpen, Package, Receipt, Building2 } from 'lucide-react'
 import type { Supplier } from '@/lib/actions/suppliers'
 import SuppliersTab from './suppliers/SuppliersTab'
 import RoomsTab from './RoomsTab'
 import KitsTab from './KitsTab'
 import RatesTab from './RatesTab'
 import PartnerClinicsTab from './partner-clinics/PartnerClinicsTab'
-import PricingTab from './pricing/PricingTab'
 import { useCentroCirurgico, useInternacaoCompleta, useAnimaisFoundation } from '@/components/providers/ClinicConfigProvider'
 
-type Tab = 'suppliers' | 'partners' | 'pricing' | 'boxes' | 'salas' | 'kits' | 'rates'
+type Tab = 'suppliers' | 'partners' | 'boxes' | 'salas' | 'kits' | 'rates'
 
 interface Props {
   initialSuppliers: Supplier[]
@@ -27,7 +26,6 @@ export default function RegistryWorkspace({ initialSuppliers, userRole }: Props)
   const TABS: { key: Tab; label: string; icon: React.ElementType }[] = [
     { key: 'suppliers', label: 'Fornecedores', icon: Truck },
     ...(animaisFoundation  ? [{ key: 'partners' as Tab, label: 'Clínicas Parceiras', icon: Building2 }] : []),
-    ...(animaisFoundation  ? [{ key: 'pricing'  as Tab, label: 'Precificação',       icon: Tags }] : []),
     { key: 'boxes',     label: 'Boxes',        icon: BedDouble },
     { key: 'salas',     label: 'Salas',        icon: DoorOpen },
     ...(centroCirurgico    ? [{ key: 'kits'  as Tab, label: 'Kits Cirúrgicos',   icon: Package }] : []),
@@ -71,7 +69,6 @@ export default function RegistryWorkspace({ initialSuppliers, userRole }: Props)
         <SuppliersTab initialSuppliers={initialSuppliers} userRole={userRole} />
       )}
       {activeTab === 'partners' && <PartnerClinicsTab userRole={userRole} />}
-      {activeTab === 'pricing' && <PricingTab userRole={userRole} />}
       {activeTab === 'boxes' && <RoomsTab kind="box" />}
       {activeTab === 'salas' && <RoomsTab kind="sala" />}
       {activeTab === 'kits' && <KitsTab />}

@@ -22,11 +22,15 @@ export interface PriceTable {
 }
 
 export type PricingPrecedence = 'client' | 'product'
+export type CompositionMode = 'simple' | 'complete'
+export type MarginCalcType = 'margin' | 'markup'
 
 export interface PricingSettings {
   clinic_id: string
   default_b2c_price_table_id: string | null
   precedence: PricingPrecedence
+  composition_mode: CompositionMode
+  margin_calc_type: MarginCalcType
   updated_at: string
 }
 
@@ -124,6 +128,8 @@ export async function getPricingSettings(): Promise<PricingSettings | { error: s
     clinic_id: ctx.clinic_id,
     default_b2c_price_table_id: null,
     precedence: 'client' as PricingPrecedence,
+    composition_mode: 'simple' as CompositionMode,
+    margin_calc_type: 'margin' as MarginCalcType,
     updated_at: new Date(0).toISOString(),
   }) as PricingSettings
 }
@@ -131,11 +137,15 @@ export async function getPricingSettings(): Promise<PricingSettings | { error: s
 export async function savePricingSettings(input: {
   default_b2c_price_table_id: string | null
   precedence: PricingPrecedence
+  composition_mode: CompositionMode
+  margin_calc_type: MarginCalcType
 }): Promise<{ ok: true } | { error: string }> {
   const ctx = await getCtx()
   if ('error' in ctx) return { error: ctx.error as string }
   if (!CAN_MANAGE.includes(ctx.role)) return { error: 'Sem permissão' }
   if (!['client', 'product'].includes(input.precedence)) return { error: 'Precedência inválida' }
+  if (!['simple', 'complete'].includes(input.composition_mode)) return { error: 'Modo de composição inválido' }
+  if (!['margin', 'markup'].includes(input.margin_calc_type)) return { error: 'Tipo de cálculo inválido' }
 
   const admin = createAdminClient()
   const { error } = await admin
@@ -144,10 +154,13 @@ export async function savePricingSettings(input: {
       clinic_id: ctx.clinic_id,
       default_b2c_price_table_id: input.default_b2c_price_table_id || null,
       precedence: input.precedence,
+      composition_mode: input.composition_mode,
+      margin_calc_type: input.margin_calc_type,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'clinic_id' })
   if (error) return { error: `Erro ao salvar: ${error.message}` }
   revalidatePath('/dashboard/registry')
+  revalidatePath('/dashboard/management')
   return { ok: true }
 }
 

@@ -5,7 +5,7 @@ import {
   Package, Plus, AlertTriangle, RefreshCw, Trash2, Pencil,
   ArrowDownToLine, Search, X, Loader2, Check, Calendar,
   Shield, ShoppingBag, Scissors, Sparkles, FlaskConical, Pill,
-  Upload, Stethoscope, Gift, Activity, FileText, Tags,
+  Upload, Stethoscope, Gift, Activity, FileText,
 } from 'lucide-react'
 import type { StockItemV2 } from '@/lib/actions/stock'
 import type { StockCategory } from '@/lib/stock-constants'
@@ -15,9 +15,11 @@ import {
   dispenseStockItem, deleteStockItemV2,
 } from '@/lib/actions/stock'
 import {
-  listPriceTables, getItemPrices, setItemPrices, type PriceTable,
+  listPriceTables, getItemPrices, setItemPrices, getPricingSettings,
+  type PriceTable, type CompositionMode, type MarginCalcType,
 } from '@/lib/actions/pricing'
 import { useAnimaisFoundation } from '@/components/providers/ClinicConfigProvider'
+import AnimaisPricingSection from './AnimaisPricingSection'
 import type { GlobalCatalogSuggestion } from '@/lib/actions/catalog'
 import { searchGlobalCatalog } from '@/lib/actions/catalog'
 import { suggestDefaultInsurancePrice } from '@/lib/actions/insurance-pricing'
@@ -97,7 +99,7 @@ interface Props {
   activeModules?: string[]
 }
 
-interface ItemForm {
+export interface ItemForm {
   name: string; category: StockCategory; quantity: string; unit: string
   min_quantity: string; unit_price: string; is_controlled: boolean
   brand: string; sku: string; barcode: string; batch_number: string
@@ -109,10 +111,19 @@ interface ItemForm {
   /** NFS-e (Fase 3): item da lista de serviço LC116 + código tributário municipal. */
   nfse_item_lista_servico: string
   nfse_codigo_tributario_municipio: string
-  /** Sprint Animais (0422): composição de preço. Vazio = não informado. */
+  /** Sprint Animais (0422): composição de preço simples. Vazio = não informado. */
   cost_price: string
   entry_tax_percent: string
   margin_percent: string
+  /** Sprint Animais (0424): composição de preço completa. */
+  purchase_price: string
+  supplier_discount_percent: string
+  entry_tax_icms: string
+  entry_tax_st: string
+  entry_tax_ipi: string
+  entry_tax_freight: string
+  entry_tax_ibs_cbs: string
+  sale_tax_percent: string
 }
 
 const EMPTY_PRODUCT_FORM: ItemForm = {
@@ -123,6 +134,9 @@ const EMPTY_PRODUCT_FORM: ItemForm = {
   insurance_card_interest_percent: '',
   nfse_item_lista_servico: '', nfse_codigo_tributario_municipio: '',
   cost_price: '', entry_tax_percent: '', margin_percent: '',
+  purchase_price: '', supplier_discount_percent: '',
+  entry_tax_icms: '', entry_tax_st: '', entry_tax_ipi: '', entry_tax_freight: '', entry_tax_ibs_cbs: '',
+  sale_tax_percent: '',
 }
 
 const EMPTY_SERVICE_FORM: ItemForm = {
@@ -133,6 +147,9 @@ const EMPTY_SERVICE_FORM: ItemForm = {
   insurance_card_interest_percent: '',
   nfse_item_lista_servico: '', nfse_codigo_tributario_municipio: '',
   cost_price: '', entry_tax_percent: '', margin_percent: '',
+  purchase_price: '', supplier_discount_percent: '',
+  entry_tax_icms: '', entry_tax_st: '', entry_tax_ipi: '', entry_tax_freight: '', entry_tax_ibs_cbs: '',
+  sale_tax_percent: '',
 }
 
 function formFromItem(item: StockItemV2): ItemForm {
@@ -149,9 +166,17 @@ function formFromItem(item: StockItemV2): ItemForm {
       : '',
     nfse_item_lista_servico: item.nfse_item_lista_servico ?? '',
     nfse_codigo_tributario_municipio: item.nfse_codigo_tributario_municipio ?? '',
-    cost_price:        item.cost_price === null || item.cost_price === undefined ? '' : String(item.cost_price),
-    entry_tax_percent: item.entry_tax_percent === null || item.entry_tax_percent === undefined ? '' : String(item.entry_tax_percent),
-    margin_percent:    item.margin_percent === null || item.margin_percent === undefined ? '' : String(item.margin_percent),
+    cost_price:        item.cost_price == null ? '' : String(item.cost_price),
+    entry_tax_percent: item.entry_tax_percent == null ? '' : String(item.entry_tax_percent),
+    margin_percent:    item.margin_percent == null ? '' : String(item.margin_percent),
+    purchase_price:            item.purchase_price == null ? '' : String(item.purchase_price),
+    supplier_discount_percent: item.supplier_discount_percent == null ? '' : String(item.supplier_discount_percent),
+    entry_tax_icms:    item.entry_tax_icms == null ? '' : String(item.entry_tax_icms),
+    entry_tax_st:      item.entry_tax_st == null ? '' : String(item.entry_tax_st),
+    entry_tax_ipi:     item.entry_tax_ipi == null ? '' : String(item.entry_tax_ipi),
+    entry_tax_freight: item.entry_tax_freight == null ? '' : String(item.entry_tax_freight),
+    entry_tax_ibs_cbs: item.entry_tax_ibs_cbs == null ? '' : String(item.entry_tax_ibs_cbs),
+    sale_tax_percent:  item.sale_tax_percent == null ? '' : String(item.sale_tax_percent),
   }
 }
 
@@ -995,10 +1020,13 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
   // Campos fiscais de serviço só aparecem quando a clínica emite NFS-e (Fase 3).
   const [emitsNfse, setEmitsNfse] = useState(false)
 
-  // Sprint Animais (0422): tabelas de preço + preço por item por tabela.
+  // Sprint Animais (0422/0424): tabelas de preço + preço por item + modos.
   const animaisFoundation = useAnimaisFoundation()
   const [priceTables, setPriceTables] = useState<PriceTable[]>([])
   const [tablePrices, setTablePrices] = useState<Record<string, string>>({})
+  const [compositionMode, setCompositionMode] = useState<CompositionMode>('simple')
+  const [marginCalcType, setMarginCalcType]   = useState<MarginCalcType>('margin')
+  const [formTab, setFormTab] = useState<'info' | 'precos'>('info')
 
   const isNew     = mode === 'add'
   const isService = serviceMode || SERVICE_CAT_KEYS.has(form.category)
@@ -1023,11 +1051,17 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
     clinicEmitsNfse().then(res => setEmitsNfse(res.emits))
   }, [isService])
 
-  // Sprint Animais: carrega as tabelas de preço e os preços já gravados deste item.
+  // Sprint Animais: carrega as tabelas de preço, os preços do item e os modos.
   useEffect(() => {
     if (!animaisFoundation) return
     listPriceTables().then(res => {
       if (Array.isArray(res)) setPriceTables(res.filter(t => t.is_active))
+    })
+    getPricingSettings().then(res => {
+      if (!('error' in res)) {
+        setCompositionMode(res.composition_mode)
+        setMarginCalcType(res.margin_calc_type)
+      }
     })
     if (item?.id) {
       getItemPrices(item.id).then(res => {
@@ -1075,10 +1109,18 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
       // NFS-e (Fase 3): só faz sentido para serviços.
       nfse_item_lista_servico:          isService ? (form.nfse_item_lista_servico.trim() || null) : null,
       nfse_codigo_tributario_municipio: isService ? (form.nfse_codigo_tributario_municipio.trim() || null) : null,
-      // Sprint Animais (0422): composição de preço (custo/imposto/margem).
+      // Sprint Animais (0422/0424): composição de preço.
       cost_price:        form.cost_price.trim()        === '' ? null : Number(form.cost_price.replace(',', '.')),
       entry_tax_percent: form.entry_tax_percent.trim() === '' ? null : Number(form.entry_tax_percent.replace(',', '.')),
       margin_percent:    form.margin_percent.trim()    === '' ? null : Number(form.margin_percent.replace(',', '.')),
+      purchase_price:            form.purchase_price.trim()            === '' ? null : Number(form.purchase_price.replace(',', '.')),
+      supplier_discount_percent: form.supplier_discount_percent.trim() === '' ? null : Number(form.supplier_discount_percent.replace(',', '.')),
+      entry_tax_icms:    form.entry_tax_icms.trim()    === '' ? null : Number(form.entry_tax_icms.replace(',', '.')),
+      entry_tax_st:      form.entry_tax_st.trim()      === '' ? null : Number(form.entry_tax_st.replace(',', '.')),
+      entry_tax_ipi:     form.entry_tax_ipi.trim()     === '' ? null : Number(form.entry_tax_ipi.replace(',', '.')),
+      entry_tax_freight: form.entry_tax_freight.trim() === '' ? null : Number(form.entry_tax_freight.replace(',', '.')),
+      entry_tax_ibs_cbs: form.entry_tax_ibs_cbs.trim() === '' ? null : Number(form.entry_tax_ibs_cbs.replace(',', '.')),
+      sale_tax_percent:  form.sale_tax_percent.trim()  === '' ? null : Number(form.sale_tax_percent.replace(',', '.')),
     }
 
     // Grade de preços por tabela (Sprint Animais). Persistida após salvar o item.
@@ -1114,15 +1156,6 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
     }
   }
 
-  // Sugestão de preço de venda = custo × (1 + imposto%) × (1 + margem%).
-  const suggestedPrice = (() => {
-    const c = Number((form.cost_price || '').replace(',', '.'))
-    if (!c || Number.isNaN(c)) return null
-    const tax = Number((form.entry_tax_percent || '0').replace(',', '.')) || 0
-    const mar = Number((form.margin_percent || '0').replace(',', '.')) || 0
-    const v = c * (1 + tax / 100) * (1 + mar / 100)
-    return Number.isFinite(v) ? v : null
-  })()
 
   const headerTitle = isService
     ? (isNew ? 'Novo Serviço / Procedimento' : `Editar: ${item?.name}`)
@@ -1146,6 +1179,27 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
 
         {/* Body */}
         <div className="overflow-y-auto flex-1 p-6 space-y-5">
+
+          {/* Abas internas (Sprint Animais): Informações x Preços */}
+          {animaisFoundation && (
+            <div className="flex gap-1 border-b border-slate-200 -mt-1">
+              <button type="button" onClick={() => setFormTab('info')}
+                className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                  formTab === 'info' ? 'border-teal-600 text-teal-700' : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}>
+                Informações
+              </button>
+              <button type="button" onClick={() => setFormTab('precos')}
+                className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                  formTab === 'precos' ? 'border-teal-600 text-teal-700' : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}>
+                Preços
+              </button>
+            </div>
+          )}
+
+          {/* ── Aba Informações ── */}
+          <div className={animaisFoundation && formTab !== 'info' ? 'hidden' : 'space-y-5'}>
 
           {/* Categoria */}
           <div>
@@ -1323,81 +1377,6 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
             </>
           )}
 
-          {/* Precificação (Sprint Animais) — composição de custo + grade de preços */}
-          {animaisFoundation && (
-            <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-4 space-y-4">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-indigo-600 flex items-center gap-1.5">
-                <Tags className="h-3.5 w-3.5" /> Precificação
-              </p>
-
-              {/* Composição de preço */}
-              <div>
-                <p className="text-xs font-semibold text-slate-600 mb-2">Composição do preço</p>
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-[11px] font-medium text-slate-500 mb-1">Custo (R$)</label>
-                    <input type="number" min="0" step="0.01" value={form.cost_price}
-                      onChange={e => set('cost_price', e.target.value)} placeholder="0.00"
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-medium text-slate-500 mb-1">Imposto entrada (%)</label>
-                    <input type="number" min="0" step="0.001" value={form.entry_tax_percent}
-                      onChange={e => set('entry_tax_percent', e.target.value)} placeholder="0"
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-medium text-slate-500 mb-1">Margem (%)</label>
-                    <input type="number" min="0" step="0.001" value={form.margin_percent}
-                      onChange={e => set('margin_percent', e.target.value)} placeholder="0"
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" />
-                  </div>
-                </div>
-                {suggestedPrice != null && (
-                  <div className="mt-2 flex items-center justify-between rounded-lg bg-white border border-indigo-200 px-3 py-2">
-                    <span className="text-xs text-slate-600">
-                      Preço sugerido: <strong className="text-indigo-700">R$ {suggestedPrice.toFixed(2)}</strong>
-                      <span className="text-slate-400"> (custo × imposto × margem)</span>
-                    </span>
-                    <button type="button" onClick={() => set('unit_price', suggestedPrice.toFixed(2))}
-                      className="text-xs font-semibold text-indigo-600 hover:text-indigo-800">
-                      Usar como preço de venda
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Grade de preços por tabela */}
-              <div>
-                <p className="text-xs font-semibold text-slate-600 mb-2">Preço por tabela</p>
-                {priceTables.length === 0 ? (
-                  <p className="text-[11px] text-amber-600">
-                    Nenhuma tabela de preço criada. Crie tabelas em Cadastros &gt; Precificação.
-                  </p>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {priceTables.map(t => (
-                      <div key={t.id} className="flex items-center gap-2">
-                        <label className="flex-1 text-xs text-slate-600 truncate" title={t.name}>{t.name}</label>
-                        <div className="relative w-32">
-                          <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] text-slate-400">R$</span>
-                          <input type="number" min="0" step="0.01"
-                            value={tablePrices[t.id] ?? ''}
-                            onChange={e => setTablePrices(prev => ({ ...prev, [t.id]: e.target.value }))}
-                            placeholder="—"
-                            className="w-full rounded-lg border border-slate-300 pl-8 pr-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <p className="text-[10px] text-slate-400 mt-1.5">
-                  Deixe em branco para a tabela usar o preço de venda padrão do item.
-                </p>
-              </div>
-            </div>
-          )}
-
           {/* Fornecedor */}
           <div>
             <label className="block text-xs font-semibold text-slate-600 mb-1">
@@ -1474,6 +1453,23 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
                 </div>
               )}
             </>
+          )}
+
+          </div>{/* fim aba Informações */}
+
+          {/* ── Aba Preços (Sprint Animais) ── */}
+          {animaisFoundation && (
+            <div className={formTab !== 'precos' ? 'hidden' : ''}>
+              <AnimaisPricingSection
+                form={form}
+                set={set}
+                priceTables={priceTables}
+                tablePrices={tablePrices}
+                setTablePrices={setTablePrices}
+                compositionMode={compositionMode}
+                marginCalcType={marginCalcType}
+              />
+            </div>
           )}
 
           {error && (
