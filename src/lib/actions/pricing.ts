@@ -165,30 +165,35 @@ export async function savePricingSettings(input: {
 }
 
 // ─── PREÇO POR ITEM POR TABELA (grade de preços) ─────────────────────────────
-// Preços de um item em cada tabela de preço. Retorna um mapa price_table_id→price.
+export interface ItemTablePrice {
+  price: number
+  margin: number | null
+}
+
+// Preço + margem de um item em cada tabela. Mapa price_table_id → {price, margin}.
 export async function getItemPrices(
   stockItemId: string,
-): Promise<Record<string, number> | { error: string }> {
+): Promise<Record<string, ItemTablePrice> | { error: string }> {
   const ctx = await getCtx()
   if ('error' in ctx) return { error: ctx.error as string }
   const admin = createAdminClient()
   const { data, error } = await admin
     .from('price_table_items')
-    .select('price_table_id, price')
+    .select('price_table_id, price, margin_percent')
     .eq('clinic_id', ctx.clinic_id)
     .eq('stock_item_id', stockItemId)
   if (error) return { error: `Erro ao carregar preços do item: ${error.message}` }
-  const map: Record<string, number> = {}
-  for (const row of (data ?? []) as { price_table_id: string; price: number }[]) {
-    map[row.price_table_id] = Number(row.price)
+  const map: Record<string, ItemTablePrice> = {}
+  for (const row of (data ?? []) as { price_table_id: string; price: number; margin_percent: number | null }[]) {
+    map[row.price_table_id] = { price: Number(row.price), margin: row.margin_percent == null ? null : Number(row.margin_percent) }
   }
   return map
 }
 
-// Persiste os preços de um item: upsert dos informados, delete dos zerados/vazios.
+// Persiste preço + margem por tabela: upsert dos informados, delete dos zerados/vazios.
 export async function setItemPrices(
   stockItemId: string,
-  prices: { price_table_id: string; price: number | null }[],
+  prices: { price_table_id: string; price: number | null; margin: number | null }[],
 ): Promise<{ ok: true } | { error: string }> {
   const ctx = await getCtx()
   if ('error' in ctx) return { error: ctx.error as string }
@@ -202,6 +207,7 @@ export async function setItemPrices(
       price_table_id: p.price_table_id,
       stock_item_id: stockItemId,
       price: Number(p.price),
+      margin_percent: p.margin != null && Number.isFinite(p.margin) ? Number(p.margin) : null,
       updated_at: new Date().toISOString(),
     }))
   const toDelete = prices

@@ -1023,7 +1023,7 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
   // Sprint Animais (0422/0424): tabelas de preço + preço por item + modos.
   const animaisFoundation = useAnimaisFoundation()
   const [priceTables, setPriceTables] = useState<PriceTable[]>([])
-  const [tablePrices, setTablePrices] = useState<Record<string, string>>({})
+  const [tableRows, setTableRows] = useState<Record<string, { margin: string; price: string }>>({})
   const [compositionMode, setCompositionMode] = useState<CompositionMode>('simple')
   const [marginCalcType, setMarginCalcType]   = useState<MarginCalcType>('margin')
   const [formTab, setFormTab] = useState<'info' | 'precos'>('info')
@@ -1066,9 +1066,11 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
     if (item?.id) {
       getItemPrices(item.id).then(res => {
         if (!('error' in res)) {
-          const asStr: Record<string, string> = {}
-          for (const [k, v] of Object.entries(res)) asStr[k] = String(v)
-          setTablePrices(asStr)
+          const rows: Record<string, { margin: string; price: string }> = {}
+          for (const [k, v] of Object.entries(res)) {
+            rows[k] = { price: String(v.price), margin: v.margin == null ? '' : String(v.margin) }
+          }
+          setTableRows(rows)
         }
       })
     }
@@ -1123,12 +1125,16 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
       sale_tax_percent:  form.sale_tax_percent.trim()  === '' ? null : Number(form.sale_tax_percent.replace(',', '.')),
     }
 
-    // Grade de preços por tabela (Sprint Animais). Persistida após salvar o item.
+    // Grade de preço + margem por tabela (Sprint Animais). Persistida após salvar.
     const priceEntries = animaisFoundation
-      ? priceTables.map(t => ({
-          price_table_id: t.id,
-          price: (tablePrices[t.id] ?? '').trim() === '' ? null : Number((tablePrices[t.id] ?? '').replace(',', '.')),
-        }))
+      ? priceTables.map(t => {
+          const r = tableRows[t.id]
+          return {
+            price_table_id: t.id,
+            price:  !r || r.price.trim()  === '' ? null : Number(r.price.replace(',', '.')),
+            margin: !r || r.margin.trim() === '' ? null : Number(r.margin.replace(',', '.')),
+          }
+        })
       : []
 
     if (isNew) {
@@ -1464,8 +1470,8 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
                 form={form}
                 set={set}
                 priceTables={priceTables}
-                tablePrices={tablePrices}
-                setTablePrices={setTablePrices}
+                tableRows={tableRows}
+                setTableRows={setTableRows}
                 compositionMode={compositionMode}
                 marginCalcType={marginCalcType}
               />

@@ -1,10 +1,11 @@
 'use client'
 
 // Seção "Preços" (Sprint Animais) do cadastro de produto/serviço.
-// Renderiza a composição de custo SIMPLES ou COMPLETA (conforme a config da
-// clínica em Gestão > Configurações > Preços) + a grade de preços por tabela.
-// O cálculo do preço de venda respeita margem x markup (também da config).
+// Composição de custo SIMPLES ou COMPLETA (conforme a config da clínica) e a
+// grade de PREÇO DE VENDA POR TABELA, com Margem/Markup PRÓPRIA por tabela.
+// Margem ↔ preço são auto-calculados nos dois sentidos, a partir do custo.
 
+import { useEffect } from 'react'
 import { Tags } from 'lucide-react'
 import type { ItemForm } from './PharmacyWorkspace'
 import type { PriceTable, CompositionMode, MarginCalcType } from '@/lib/actions/pricing'
@@ -16,22 +17,22 @@ const num = (s: string | undefined) => {
 const inputCls =
   'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500'
 
+export interface TableRow { margin: string; price: string }
+
 interface Props {
   form: ItemForm
   set: (key: keyof ItemForm, val: string) => void
   priceTables: PriceTable[]
-  tablePrices: Record<string, string>
-  setTablePrices: (updater: (prev: Record<string, string>) => Record<string, string>) => void
+  tableRows: Record<string, TableRow>
+  setTableRows: (updater: (prev: Record<string, TableRow>) => Record<string, TableRow>) => void
   compositionMode: CompositionMode
   marginCalcType: MarginCalcType
 }
 
 export default function AnimaisPricingSection({
-  form, set, priceTables, tablePrices, setTablePrices, compositionMode, marginCalcType,
+  form, set, priceTables, tableRows, setTableRows, compositionMode, marginCalcType,
 }: Props) {
   // ── Preço de Custo ──────────────────────────────────────────────────────────
-  // Simples: o usuário digita o custo direto (form.cost_price).
-  // Completa: calculado de compra − desconto + impostos de entrada.
   let computedCost: number
   if (compositionMode === 'complete') {
     const net = num(form.purchase_price) * (1 - num(form.supplier_discount_percent) / 100)
@@ -40,19 +41,71 @@ export default function AnimaisPricingSection({
   } else {
     computedCost = num(form.cost_price) * (1 + num(form.entry_tax_percent) / 100)
   }
-
-  // ── Preço de venda sugerido (margem x markup + impostos de venda) ────────────
-  const margin = num(form.margin_percent)
-  let base: number | null = null
-  if (computedCost > 0 && margin > 0) {
-    base = marginCalcType === 'markup'
-      ? computedCost * (1 + margin / 100)
-      : margin < 100 ? computedCost / (1 - margin / 100) : null
-  } else if (computedCost > 0) {
-    base = computedCost
-  }
   const saleTax = compositionMode === 'complete' ? num(form.sale_tax_percent) : 0
-  const suggestedPrice = base != null ? base * (1 + saleTax / 100) : null
+
+  const marginLabel = marginCalcType === 'markup' ? 'Markup' : 'Margem'
+
+  // preço de venda a partir da margem/markup daquela tabela
+  function priceFromMargin(cost: number, m: number): number | null {
+    if (cost <= 0) return null
+    const b = marginCalcType === 'markup'
+      ? cost * (1 + m / 100)
+      : (m < 100 ? cost / (1 - m / 100) : null)
+    if (b == null || !Number.isFinite(b)) return null
+    return b * (1 + saleTax / 100)
+  }
+  // margem/markup a partir do preço de venda informado
+  function marginFromPrice(cost: number, price: number): number | null {
+    if (cost <= 0 || price <= 0) return null
+    const base = price / (1 + saleTax / 100)
+    const m = marginCalcType === 'markup'
+      ? (base / cost - 1) * 100
+      : (1 - cost / base) * 100
+    return Number.isFinite(m) ? m : null
+  }
+
+  // Recalcula os preços quando o CUSTO (ou impostos de venda / tipo de cálculo)
+  // muda, mantendo a margem de cada tabela.
+  useEffect(() => {
+    setTableRows(prev => {
+      let changed = false
+      const next: Record<string, TableRow> = { ...prev }
+      for (const [id, row] of Object.entries(prev)) {
+        if (row.margin.trim() !== '' && computedCost > 0) {
+          const p = priceFromMargin(computedCost, num(row.margin))
+          const pStr = p == null ? row.price : p.toFixed(2)
+          if (pStr !== row.price) { next[id] = { ...row, price: pStr }; changed = true }
+        }
+      }
+      return changed ? next : prev
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [computedCost, saleTax, marginCalcType])
+
+  function onMarginChange(id: string, val: string) {
+    setTableRows(prev => {
+      const cur = prev[id] ?? { margin: '', price: '' }
+      let price = cur.price
+      if (val.trim() !== '' && computedCost > 0) {
+        const p = priceFromMargin(computedCost, num(val))
+        if (p != null) price = p.toFixed(2)
+      }
+      return { ...prev, [id]: { margin: val, price } }
+    })
+  }
+  function onPriceChange(id: string, val: string) {
+    setTableRows(prev => {
+      const cur = prev[id] ?? { margin: '', price: '' }
+      let margin = cur.margin
+      if (val.trim() !== '' && computedCost > 0) {
+        const m = marginFromPrice(computedCost, num(val))
+        if (m != null) margin = m.toFixed(2)
+      } else if (val.trim() === '') {
+        margin = ''
+      }
+      return { ...prev, [id]: { margin, price: val } }
+    })
+  }
 
   return (
     <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-4 space-y-5">
@@ -63,8 +116,8 @@ export default function AnimaisPricingSection({
       {/* ── COMPOSIÇÃO SIMPLES ── */}
       {compositionMode === 'simple' && (
         <div>
-          <p className="text-xs font-semibold text-slate-600 mb-2">Composição do preço</p>
-          <div className="grid grid-cols-3 gap-3">
+          <p className="text-xs font-semibold text-slate-600 mb-2">Composição do custo</p>
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-[11px] font-medium text-slate-500 mb-1">Custo (R$)</label>
               <input type="number" min="0" step="0.01" value={form.cost_price}
@@ -74,13 +127,6 @@ export default function AnimaisPricingSection({
               <label className="block text-[11px] font-medium text-slate-500 mb-1">Imposto entrada (%)</label>
               <input type="number" min="0" step="0.001" value={form.entry_tax_percent}
                 onChange={e => set('entry_tax_percent', e.target.value)} placeholder="0" className={inputCls} />
-            </div>
-            <div>
-              <label className="block text-[11px] font-medium text-slate-500 mb-1">
-                {marginCalcType === 'markup' ? 'Markup (%)' : 'Margem (%)'}
-              </label>
-              <input type="number" min="0" step="0.001" value={form.margin_percent}
-                onChange={e => set('margin_percent', e.target.value)} placeholder="0" className={inputCls} />
             </div>
           </div>
         </div>
@@ -141,13 +187,6 @@ export default function AnimaisPricingSection({
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <div>
-              <label className="block text-[11px] font-medium text-slate-500 mb-1">
-                {marginCalcType === 'markup' ? 'Markup (%)' : 'Margem (%)'}
-              </label>
-              <input type="number" min="0" step="0.001" value={form.margin_percent}
-                onChange={e => set('margin_percent', e.target.value)} placeholder="0" className={inputCls} />
-            </div>
-            <div>
               <label className="block text-[11px] font-medium text-slate-500 mb-1">Impostos da venda (%)</label>
               <input type="number" min="0" step="0.001" value={form.sale_tax_percent}
                 onChange={e => set('sale_tax_percent', e.target.value)} placeholder="0" className={inputCls} />
@@ -156,51 +195,50 @@ export default function AnimaisPricingSection({
         </>
       )}
 
-      {/* Preço de Custo calculado + sugestão de venda */}
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white border border-indigo-200 px-3 py-2">
+      {/* Preço de Custo calculado */}
+      <div className="rounded-lg bg-white border border-indigo-200 px-3 py-2">
         <span className="text-xs text-slate-600">
           Preço de Custo: <strong className="text-slate-800">R$ {computedCost.toFixed(2)}</strong>
-          {suggestedPrice != null && (
-            <>
-              <span className="mx-2 text-slate-300">·</span>
-              Venda sugerida: <strong className="text-indigo-700">R$ {suggestedPrice.toFixed(2)}</strong>
-            </>
-          )}
+          {saleTax > 0 && <span className="text-slate-400"> · impostos de venda {saleTax}% aplicados no preço final</span>}
         </span>
-        {suggestedPrice != null && (
-          <button type="button" onClick={() => set('unit_price', suggestedPrice.toFixed(2))}
-            className="text-xs font-semibold text-indigo-600 hover:text-indigo-800">
-            Usar como preço de venda
-          </button>
-        )}
       </div>
 
-      {/* Grade de preços por tabela */}
+      {/* Grade: margem/markup + preço POR TABELA (auto-calculados) */}
       <div>
-        <p className="text-xs font-semibold text-slate-600 mb-2">Preço de venda por tabela</p>
+        <p className="text-xs font-semibold text-slate-600 mb-2">{marginLabel} e preço de venda por tabela</p>
         {priceTables.length === 0 ? (
           <p className="text-[11px] text-amber-600">
             Nenhuma tabela de preço criada. Crie tabelas em Gestão &gt; Configurações &gt; Preços.
           </p>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {priceTables.map(t => (
-              <div key={t.id} className="flex items-center gap-2">
-                <label className="flex-1 text-xs text-slate-600 truncate" title={t.name}>{t.name}</label>
-                <div className="relative w-32">
-                  <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] text-slate-400">R$</span>
-                  <input type="number" min="0" step="0.01"
-                    value={tablePrices[t.id] ?? ''}
-                    onChange={e => setTablePrices(prev => ({ ...prev, [t.id]: e.target.value }))}
-                    placeholder="—"
-                    className="w-full rounded-lg border border-slate-300 pl-8 pr-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" />
+          <div className="space-y-2">
+            <div className="hidden sm:grid grid-cols-[1fr_7rem_8rem] gap-2 px-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+              <span>Tabela</span>
+              <span>{marginLabel} (%)</span>
+              <span>Preço (R$)</span>
+            </div>
+            {priceTables.map(t => {
+              const row = tableRows[t.id] ?? { margin: '', price: '' }
+              return (
+                <div key={t.id} className="grid grid-cols-2 sm:grid-cols-[1fr_7rem_8rem] gap-2 items-center">
+                  <label className="col-span-2 sm:col-span-1 text-xs font-medium text-slate-600 truncate" title={t.name}>{t.name}</label>
+                  <input type="number" min="0" step="0.001" value={row.margin}
+                    onChange={e => onMarginChange(t.id, e.target.value)}
+                    placeholder={marginLabel} className={inputCls} />
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] text-slate-400">R$</span>
+                    <input type="number" min="0" step="0.01" value={row.price}
+                      onChange={e => onPriceChange(t.id, e.target.value)}
+                      placeholder="—"
+                      className="w-full rounded-lg border border-slate-300 pl-8 pr-2 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" />
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
         <p className="text-[10px] text-slate-400 mt-1.5">
-          Deixe em branco para a tabela usar o preço de venda padrão do item.
+          Informe a {marginLabel.toLowerCase()} e o preço é calculado sozinho — ou digite o preço e a {marginLabel.toLowerCase()} é deduzida. Cada tabela tem a sua.
         </p>
       </div>
     </div>
