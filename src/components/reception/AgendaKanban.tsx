@@ -234,6 +234,14 @@ export default function AgendaKanban({ initialColumns, clinicId, checkinRequired
                         </span>
                         <span className="text-[10px] text-slate-400">{formatTime(card.created_at)}</span>
                       </div>
+                      {card.urgency && card.urgency !== 'green' && (
+                        <p className={`mt-1 text-[10px] font-bold uppercase tracking-wide flex items-center gap-1 ${
+                          card.urgency === 'red' ? 'text-red-600' : 'text-amber-600'
+                        }`}>
+                          <span className={`h-1.5 w-1.5 rounded-full ${card.urgency === 'red' ? 'bg-red-500' : 'bg-amber-500'}`} />
+                          {card.urgency === 'red' ? 'Emergência' : 'Risco'}
+                        </p>
+                      )}
                       {col.key === 'scheduled' && (
                         <p className="text-[10px] text-indigo-400 mt-1 text-center font-medium">2× clique = check-in</p>
                       )}

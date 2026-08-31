@@ -7,6 +7,7 @@ import type { CheckInPayload, VisitReason, PaymentStatus } from '@/types'
 import { logAudit } from './audit'
 import { updatePatientWeight } from './patient-weight'
 import { getTenantCtx } from '@/lib/data/context'
+import { byUrgencyThenTime } from '@/lib/urgency'
 
 // ─── Sprint Animais: campos extras da OS no check-in (aditivo + gateado) ──────
 // Chamado só quando animais_foundation está ligada (o caller já fez o gate).
@@ -429,7 +430,7 @@ export async function getReceptionQueue(): Promise<ReceptionQueueItem[] | { erro
       phone:   c.patients?.tutors?.phone ?? '',
       address: c.patients?.tutors?.address ?? null,
     },
-  }))
+  })).sort(byUrgencyThenTime)
 }
 
 // ─── Histórico de Recepção (Consultations já processadas hoje) ────────────────

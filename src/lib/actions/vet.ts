@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache'
 import type { VitalSigns } from '@/types'
 import { logAudit } from './audit'
 import { logDataAccess } from './compliance'
+import { byUrgencyThenTime } from '@/lib/urgency'
 import { runInsuranceAudit, type AuditResult } from './insurance-audit'
 
 // ─── Fila do Médico Veterinário (in_progress) ─────────────────────────────────
@@ -30,6 +31,7 @@ export type VetQueueItem = {
     phone: string
   }
   vet: { id: string; full_name: string } | null   // profissional responsável (Sprint Animais)
+  urgency: 'green' | 'yellow' | 'red' | null       // triagem por cor (Sprint Animais)
 }
 
 export async function getVetQueue(
@@ -50,7 +52,7 @@ export async function getVetQueue(
   let query = supabase
     .from('consultations')
     .select(`
-      id, status, visit_reason, created_at, weight, temperature, triage_notes, vet_id,
+      id, status, visit_reason, created_at, weight, temperature, triage_notes, vet_id, urgency,
       patients ( id, name, species, breed, allergies, chronic_diseases, behavior_tags,
         tutors ( id, name, phone )
       ),
@@ -107,8 +109,9 @@ export async function getVetQueue(
         phone: c.patients?.tutors?.phone ?? '',
       },
       vet: c.vet ? { id: c.vet.id, full_name: c.vet.full_name } : null,
+      urgency: c.urgency ?? null,
     }
-  })
+  }).sort(byUrgencyThenTime)
 }
 
 // ─── Consultas Concluídas Hoje ────────────────────────────────────────────────

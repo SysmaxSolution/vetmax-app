@@ -310,6 +310,14 @@ export default function VetWorkspace({ queue, completed, awaitingReview, clinicI
                         {/* Mobile (05/06): badges quebram linha em telas estreitas */}
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1">
                           <h3 className="font-semibold text-slate-900">{item.patient.name}</h3>
+                          {item.urgency && item.urgency !== 'green' && (
+                            <span className={`inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${
+                              item.urgency === 'red' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                            }`}>
+                              <span className={`h-2 w-2 rounded-full ${item.urgency === 'red' ? 'bg-red-500' : 'bg-amber-500'}`} />
+                              {item.urgency === 'red' ? 'Emergência' : 'Risco'}
+                            </span>
+                          )}
                           <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
                             {SPECIES_EMOJI[item.patient.species] ?? '🐾'} {SPECIES_LABELS[item.patient.species] ?? item.patient.species}
                           </span>
