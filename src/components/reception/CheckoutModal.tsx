@@ -378,7 +378,7 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
         className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4 overflow-y-auto"
         onClick={e => { if (e.target === e.currentTarget) onClose() }}
       >
-        <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden my-4 flex flex-col max-h-[90vh]">
+        <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden my-4 flex flex-col max-h-[95vh]">
 
           <div className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-4 border-b border-slate-100">
             <div className="flex items-center gap-3">
@@ -659,7 +659,10 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
                 <span>{error}</span>
               </div>
             )}
+          </div>
 
+          {/* Rodapé fixo — sempre visível, não rola com o conteúdo */}
+          <div className="flex-shrink-0 border-t border-slate-100 px-4 sm:px-6 py-4 space-y-2 bg-white">
             {creditBalance > 0.005 && (
               <div className="flex items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-sm text-teal-800">
                 <span className="text-lg">💳</span>
