@@ -133,6 +133,7 @@ export default function SettingsWorkspace({
             </p>
             <RegistrationSettings initialConfig={initialClinicConfig} onToast={onToast} />
             <AttendingVetSettings initialConfig={initialClinicConfig} onToast={onToast} />
+            <AdvanceSettings initialConfig={initialClinicConfig} onToast={onToast} />
             <MentorIdleSettings initialConfig={initialClinicConfig} onToast={onToast} />
           </div>
         )}
@@ -337,6 +338,63 @@ function AttendingVetSettings({ initialConfig, onToast }: {
           {required
             ? 'A recepção precisa selecionar o profissional responsável para concluir o check-in. O pet vai para a fila desse profissional.'
             : 'Opcional: o atendimento pode seguir aos departamentos sem responsável definido (visível a todos os profissionais).'}
+        </p>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50 flex-shrink-0"
+        >
+          {saving ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Salvando…</> : <><Save className="h-3.5 w-3.5" /> Salvar</>}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ─── AdvanceSettings — usa adiantamento no Caixa? (Fase 1, 1.6) ───────────────
+
+function AdvanceSettings({ initialConfig, onToast }: {
+  initialConfig: ClinicConfig | null
+  onToast: (type: 'success' | 'error', msg: string) => void
+}) {
+  const flowRaw = initialConfig?.flow_config as FlowConfig | undefined
+  const [uses, setUses] = useState<boolean>(flowRaw?.uses_advance ?? false)
+  const [saving, setSaving] = useState(false)
+
+  async function handleSave() {
+    setSaving(true)
+    const base: FlowConfig = initialConfig?.flow_config ?? { vet_merged_modules: [] }
+    const res = await updateClinicConfig({ flow_config: { ...base, uses_advance: uses } })
+    setSaving(false)
+    if ('error' in res) { onToast('error', res.error); return }
+    onToast('success', 'Configuração de adiantamento salva!')
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div className="border-b border-slate-100 px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-50">
+            <Calculator className="h-4 w-4 text-teal-600" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">Utiliza adiantamento?</h3>
+            <p className="text-xs text-slate-500">Permite lançar adiantamento (crédito do tutor) no Caixa</p>
+          </div>
+        </div>
+        <button
+          onClick={() => setUses(v => !v)}
+          className={`transition-colors ${uses ? 'text-teal-600' : 'text-slate-300'}`}
+          title={uses ? 'Desativar adiantamento' : 'Ativar adiantamento'}
+        >
+          {uses ? <ToggleRight className="h-7 w-7" /> : <ToggleLeft className="h-7 w-7" />}
+        </button>
+      </div>
+      <div className="px-6 py-4 flex items-center justify-between gap-4">
+        <p className="text-xs text-slate-500">
+          {uses
+            ? 'O Caixa mostra o botão "Adiantamento": o cliente deixa um valor que vira crédito para usar em consultas/procedimentos futuros.'
+            : 'Quando ativado, aparece o botão de adiantamento no Caixa e o crédito do tutor no recebimento.'}
         </p>
         <button
           onClick={handleSave}

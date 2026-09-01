@@ -50,6 +50,8 @@ export type FlowConfig = {
   /** Exige selecionar o profissional responsável no check-in. Off (padrão) =
    *  atendimento pode ir aos departamentos sem responsável pré-definido. */
   require_attending_vet?:   boolean
+  /** Habilita o lançamento de ADIANTAMENTO no Caixa (crédito do tutor p/ uso futuro). */
+  uses_advance?:            boolean
 }
 
 export type BusinessHourEntry = { open: string; close: string } | null

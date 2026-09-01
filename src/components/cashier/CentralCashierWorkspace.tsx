@@ -17,6 +17,8 @@ import CashierReversalModal from './CashierReversalModal'
 import CashierOutflowModal from './CashierOutflowModal'
 import CashierInflowModal from './CashierInflowModal'
 import CashierEditDateModal from './CashierEditDateModal'
+import AdvanceModal from './AdvanceModal'
+import { useUsesAdvance } from '@/components/providers/ClinicConfigProvider'
 
 const MODULE_LABELS: Record<string, string> = {
   grooming:        'Banho e Tosa',
@@ -98,6 +100,8 @@ export default function CentralCashierWorkspace({
   const [reversalEntry,  setReversalEntry]  = useState<CentralCashierEntry | null>(null)
   const [showOutflow,    setShowOutflow]    = useState(false)
   const [showInflow,     setShowInflow]     = useState(false)
+  const [showAdvance,    setShowAdvance]    = useState(false)
+  const usesAdvance = useUsesAdvance()
   const [editingDate,    setEditingDate]    = useState<CentralCashierEntry | null>(null)
   const [receivingEntry, setReceivingEntry] = useState<CentralCashierEntry | null>(null)
 
@@ -214,6 +218,13 @@ export default function CentralCashierWorkspace({
           onToast={showToast}
         />
       )}
+      {showAdvance && (
+        <AdvanceModal
+          onClose={() => setShowAdvance(false)}
+          onSuccess={refresh}
+          onToast={showToast}
+        />
+      )}
       {editingDate && (
         <CashierEditDateModal
           entry={editingDate}
@@ -299,6 +310,16 @@ export default function CentralCashierWorkspace({
                 <Plus className="h-4 w-4" />
                 Lançar Entrada
               </button>
+              {usesAdvance && (
+                <button
+                  onClick={() => setShowAdvance(true)}
+                  title="Adiantamento: o cliente deixa um valor que vira crédito para usar em consultas/procedimentos futuros."
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-teal-50 border border-teal-200 text-teal-700 text-sm font-medium hover:bg-teal-100 transition-colors"
+                >
+                  <Plus className="h-4 w-4" />
+                  Adiantamento
+                </button>
+              )}
               <button
                 onClick={() => setShowOutflow(true)}
                 data-mentor-step="cashier-registrar-saida"

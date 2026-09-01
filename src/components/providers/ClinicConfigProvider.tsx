@@ -13,6 +13,8 @@ interface ClinicConfig {
   animaisFoundation:   boolean
   /** flow_config.require_attending_vet — exige selecionar o profissional responsável no check-in. */
   requireAttendingVet: boolean
+  /** flow_config.uses_advance — habilita o lançamento de adiantamento no Caixa. */
+  usesAdvance:         boolean
 }
 
 const ClinicConfigContext = createContext<ClinicConfig>({
@@ -21,6 +23,7 @@ const ClinicConfigContext = createContext<ClinicConfig>({
   centroCirurgico:     false,
   animaisFoundation:   false,
   requireAttendingVet: false,
+  usesAdvance:         false,
 })
 
 export function ClinicConfigProvider({
@@ -29,6 +32,7 @@ export function ClinicConfigProvider({
   centroCirurgico = false,
   animaisFoundation = false,
   requireAttendingVet = false,
+  usesAdvance = false,
   children,
 }: {
   aiTranscriptionMode: AiTranscriptionMode
@@ -36,10 +40,11 @@ export function ClinicConfigProvider({
   centroCirurgico?:    boolean
   animaisFoundation?:  boolean
   requireAttendingVet?: boolean
+  usesAdvance?:        boolean
   children: React.ReactNode
 }) {
   return (
-    <ClinicConfigContext.Provider value={{ aiTranscriptionMode, internacaoCompleta, centroCirurgico, animaisFoundation, requireAttendingVet }}>
+    <ClinicConfigContext.Provider value={{ aiTranscriptionMode, internacaoCompleta, centroCirurgico, animaisFoundation, requireAttendingVet, usesAdvance }}>
       {children}
     </ClinicConfigContext.Provider>
   )
@@ -67,4 +72,9 @@ export function useAnimaisFoundation(): boolean {
 /** Hook client: exigir profissional responsável no check-in? */
 export function useRequireAttendingVet(): boolean {
   return useContext(ClinicConfigContext).requireAttendingVet
+}
+
+/** Hook client: a clínica usa adiantamento no Caixa? */
+export function useUsesAdvance(): boolean {
+  return useContext(ClinicConfigContext).usesAdvance
 }
