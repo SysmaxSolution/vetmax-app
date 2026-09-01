@@ -171,6 +171,14 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [insuranceSplit, invoice?.consultation_id])
 
+  // Sprint Animais 1.6: crédito/adiantamento do tutor (antes de qualquer early-return).
+  useEffect(() => {
+    if (!invoice?.tutor_id) return
+    getTutorCreditBalance(invoice.tutor_id).then(b => {
+      if (!('error' in b)) setCreditBalance(b.total)
+    })
+  }, [invoice?.tutor_id])
+
   if (loading || !invoice) {
     return (
       <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4">
@@ -273,14 +281,6 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
     }
     setShowPaymentModal(true)
   }
-
-  // Sprint Animais 1.6: carrega o crédito/adiantamento do tutor da fatura.
-  useEffect(() => {
-    if (!invoice?.tutor_id) return
-    getTutorCreditBalance(invoice.tutor_id).then(b => {
-      if (!('error' in b)) setCreditBalance(b.total)
-    })
-  }, [invoice?.tutor_id])
 
   async function handlePaymentConfirm(
     splits: PaymentSplit[],
