@@ -13,6 +13,7 @@ import InsuranceExportPanel from '@/components/reception/InsuranceExportPanel'
 import CheckoutInsurancePreviewClient from '@/components/financial/CheckoutInsurancePreviewClient'
 import InvoiceDuplicatasList from '@/components/financial/InvoiceDuplicatasList'
 import PaymentMethodModal, { type PaymentSplit } from '@/components/payments/PaymentMethodModal'
+import { addTutorAdvance, getTutorCreditBalance } from '@/lib/actions/tutor-credits'
 import { computeCheckoutTotals } from '@/lib/checkout-totals'
 import { getConsultationCopayInterestPreview, type CopayInterestPreview } from '@/lib/actions/insurance-checkout'
 import NfseTutorGate from '@/components/billing/NfseTutorGate'
@@ -50,6 +51,7 @@ interface Props {
 
 export default function CheckoutModal({ invoiceId, operatorView = false, onClose, onSuccess }: Props) {
   const [invoice,      setInvoice]      = useState<InvoiceWithDetails | null>(null)
+  const [creditBalance, setCreditBalance] = useState<number>(0)
   const [loading,      setLoading]      = useState(true)
   const [error,        setError]        = useState<string | null>(null)
 
@@ -272,7 +274,18 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
     setShowPaymentModal(true)
   }
 
-  async function handlePaymentConfirm(splits: PaymentSplit[], extras?: { copay_interest: number }) {
+  // Sprint Animais 1.6: carrega o crédito/adiantamento do tutor da fatura.
+  useEffect(() => {
+    if (!invoice?.tutor_id) return
+    getTutorCreditBalance(invoice.tutor_id).then(b => {
+      if (!('error' in b)) setCreditBalance(b.total)
+    })
+  }, [invoice?.tutor_id])
+
+  async function handlePaymentConfirm(
+    splits: PaymentSplit[],
+    extras?: { copay_interest?: number; overpayment?: { amount: number; as: 'change' | 'credit' } },
+  ) {
     if (!invoice) return
     setError(null)
     const res = await processSplitPayment(
@@ -301,7 +314,7 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
           },
         } : {}),
         // Épico A: taxa adm. líquida calculada no modal (cartão sobre copart)
-        ...(extras && extras.copay_interest > 0 && copayInterestPreview ? {
+        ...(extras?.copay_interest && extras.copay_interest > 0 && copayInterestPreview ? {
           copay_interest: {
             total:   extras.copay_interest,
             percent: copayInterestPreview.percent,
@@ -314,6 +327,18 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
       }
     )
     if ('error' in res) { setError(res.error); throw new Error(res.error) }
+
+    // Sprint Animais 1.6: sobra do pagamento lançada como crédito do tutor.
+    if (extras?.overpayment && extras.overpayment.as === 'credit' && extras.overpayment.amount > 0.005) {
+      const adv = await addTutorAdvance({
+        tutor_id: invoice.tutor_id,
+        amount:   extras.overpayment.amount,
+        company_id: (invoice as any).billing_company_id ?? null,
+        notes: 'Sobra de pagamento',
+      })
+      if ('error' in adv) setError(`Pagamento OK, mas falhou ao lançar o crédito da sobra: ${adv.error}`)
+    }
+
     const totalReceived = splits.reduce((s, p) => s + p.amount, 0)
     setShowPaymentModal(false)
 
@@ -635,6 +660,13 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
               </div>
             )}
 
+            {creditBalance > 0.005 && (
+              <div className="flex items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-sm text-teal-800">
+                <span className="text-lg">💳</span>
+                <span>Este tutor possui <strong>R$ {creditBalance.toFixed(2)}</strong> de crédito/adiantamento disponível.</span>
+              </div>
+            )}
+
             <div className="flex gap-2 pt-1">
               <button
                 onClick={onClose}
@@ -716,6 +748,8 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
             interest_full: copayInterestPreview.interest_full,
             percent:       copayInterestPreview.percent,
           } : null}
+          creditBalance={creditBalance}
+          allowCredit
           onCancel={() => setShowPaymentModal(false)}
           onConfirm={handlePaymentConfirm}
         />

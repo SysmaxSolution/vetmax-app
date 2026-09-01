@@ -623,7 +623,7 @@ export default function CashierTabReceivables({
     void prepareMultiPlan()
   }
 
-  async function handleMultiPaymentConfirm(splits: PaymentSplit[], extras?: { copay_interest: number }) {
+  async function handleMultiPaymentConfirm(splits: PaymentSplit[], extras?: { copay_interest?: number; overpayment?: { amount: number; as: 'change' | 'credit' } }) {
     if (!multiPlan) return
     setMultiProcessing(true)
 

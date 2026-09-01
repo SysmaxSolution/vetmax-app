@@ -67,17 +67,24 @@ interface Props {
     interest_full: number
     percent:       number
   } | null
+  /** Crédito/adiantamento disponível do tutor (Sprint Animais 1.6). Exibido no topo. */
+  creditBalance?: number
+  /** Permite lançar a sobra como crédito do tutor (só onde há tutor vinculado). */
+  allowCredit?: boolean
   onCancel:   () => void
-  onConfirm:  (splits: PaymentSplit[], extras?: { copay_interest: number }) => Promise<void> | void
+  onConfirm:  (splits: PaymentSplit[], extras?: { copay_interest?: number; overpayment?: { amount: number; as: 'change' | 'credit' } }) => Promise<void> | void
 }
 
-export default function PaymentMethodModal({ totalDue, subject, disableSplit, copayInterest, onCancel, onConfirm }: Props) {
+export default function PaymentMethodModal({ totalDue, subject, disableSplit, copayInterest, creditBalance, allowCredit, onCancel, onConfirm }: Props) {
   const [splits,        setSplits]        = useState<PaymentSplit[]>([])
   const [pendingMethod, setPendingMethod] = useState<PaymentMethodKey | null>(null)
   const [pendingAmount, setPendingAmount] = useState<string>('')
   const [showCardModal, setShowCardModal] = useState<'credit'|'debit'|null>(null)
   const [error,         setError]         = useState<string | null>(null)
   const [submitting,    setSubmitting]    = useState(false)
+  // Sprint Animais 1.6: sobra de dinheiro (pagou a mais) → troco OU crédito.
+  const [overpaid,      setOverpaid]      = useState(0)
+  const [changeChoice,  setChangeChoice]  = useState<'change' | 'credit'>('change')
   // Desconto sobre a taxa adm. — informado ANTES de passar o cartão (~30:48)
   const [interestDiscount, setInterestDiscount] = useState<string>('')
 
@@ -130,6 +137,12 @@ export default function PaymentMethodModal({ totalDue, subject, disableSplit, co
     }
     const clipped = Math.min(parsed, remaining + (splits.find(p => p.payment_method === pendingMethod)?.amount ?? 0))
     if (clipped <= 0) { setError('Sem saldo restante.'); return }
+
+    // Dinheiro recebido a mais → sobra (troco ou crédito). Só p/ dinheiro.
+    if (pendingMethod === 'cash' && parsed > remaining + 0.005) {
+      setOverpaid(Math.round((parsed - remaining) * 100) / 100)
+      setChangeChoice('change')
+    }
 
     const label = METHOD_OPTIONS.find(o => o.key === pendingMethod)?.label ?? pendingMethod
     const split: PaymentSplit = {
@@ -203,6 +216,7 @@ export default function PaymentMethodModal({ totalDue, subject, disableSplit, co
 
   function removeSplit(id: string) {
     setSplits(prev => prev.filter(s => s.id !== id))
+    setOverpaid(0)   // sobra depende dos pagamentos; recalcula ao refazer
   }
 
   async function handleConfirm() {
@@ -218,7 +232,10 @@ export default function PaymentMethodModal({ totalDue, subject, disableSplit, co
     // inflar aqui; só repassamos o total da taxa para o servidor.
     setSubmitting(true)
     try {
-      await onConfirm(splits, totalInterest > 0 ? { copay_interest: totalInterest } : undefined)
+      const extras: { copay_interest?: number; overpayment?: { amount: number; as: 'change' | 'credit' } } = {}
+      if (totalInterest > 0) extras.copay_interest = totalInterest
+      if (overpaid > 0.005) extras.overpayment = { amount: overpaid, as: changeChoice }
+      await onConfirm(splits, Object.keys(extras).length ? extras : undefined)
     } catch (e) {
       setSubmitting(false)
       setError(e instanceof Error ? e.message : 'Falha ao processar.')
@@ -266,6 +283,35 @@ export default function PaymentMethodModal({ totalDue, subject, disableSplit, co
                 <p className="text-xl font-bold tabular-nums">{fmt(remaining)}</p>
               </div>
             </div>
+
+            {/* Crédito/adiantamento do tutor (Sprint Animais 1.6) */}
+            {creditBalance != null && creditBalance > 0.005 && (
+              <div className="flex items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-sm text-teal-800">
+                <span className="text-lg">💳</span>
+                <span>Este tutor possui <strong>{fmt(creditBalance)}</strong> de crédito/adiantamento disponível.</span>
+              </div>
+            )}
+
+            {/* Sobra (pagou a mais em dinheiro) → troco ou crédito */}
+            {overpaid > 0.005 && (
+              <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 px-4 py-3">
+                <p className="text-sm text-slate-700 mb-2">Recebido a mais: <strong className="text-indigo-700">{fmt(overpaid)}</strong> — o que fazer com a sobra?</p>
+                {allowCredit ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <button type="button" onClick={() => setChangeChoice('change')}
+                      className={`rounded-lg border-2 py-2 text-xs font-semibold transition-all ${changeChoice === 'change' ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}>
+                      Dar troco ({fmt(overpaid)})
+                    </button>
+                    <button type="button" onClick={() => setChangeChoice('credit')}
+                      className={`rounded-lg border-2 py-2 text-xs font-semibold transition-all ${changeChoice === 'credit' ? 'border-teal-500 bg-teal-50 text-teal-700' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}>
+                      Lançar como crédito
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-xs text-amber-700 font-semibold">Troco a devolver: {fmt(overpaid)}</p>
+                )}
+              </div>
+            )}
 
             {splits.length > 0 && (
               <div className="space-y-1.5">
