@@ -121,16 +121,18 @@ export async function addTutorAdvance(input: {
   if (credErr) return { error: `Caixa lançado, mas falhou ao creditar o tutor: ${credErr.message}` }
 
   // 3) Corrige a representação no FINANCEIRO. O trigger espelhou a entrada do
-  // caixa como título RECEBIDO (type='receivable', paid) — mas adiantamento NÃO
-  // é receita, é CRÉDITO DE CLIENTE (passivo). Converte o espelho num título A
-  // PAGAR EM ABERTO (o schema exige amount > 0, então usamos 'payable' em vez de
-  // valor negativo). O caixa mantém a entrada (dinheiro real); o financeiro
-  // deixa de contar o adiantamento como RECEBIDO (evita o "recebido" dobrado).
+  // caixa como título RECEBIDO (receivable, paid) — mas adiantamento NÃO é
+  // receita, é CRÉDITO DE CLIENTE. Converte o espelho num título de CONTAS A
+  // RECEBER com valor NEGATIVO (-R$X) e EM ABERTO (crédito do cliente reduz o
+  // líquido a receber). MANTÉM type='receivable' (não troca o tipo — senão o
+  // document_number REC já gerado colide com o próximo recebimento). O caixa
+  // mantém a entrada de dinheiro; o financeiro deixa de contar o adiantamento
+  // como RECEBIDO (corrige o "recebido" dobrado). Requer CHECK amount<>0 (0428).
   if (cashierId) {
     await admin
       .from('financial_entries')
       .update({
-        type:         'payable',
+        amount:       -amount,
         status:       'pending',
         payment_date: null,
         category:     'Crédito de cliente',
@@ -290,9 +292,10 @@ export async function applyTutorCreditToInvoice(input: {
     await admin.from('financial_entries').delete().in('id', plist.map(p => p.id))
   }
 
-  // Reconcilia os títulos "Crédito de cliente" (payable, valor positivo) com o
-  // novo saldo. O crédito consumido é BAIXADO (cancelled) — não é recebimento;
-  // o recebido efetivo é a consulta. Consumo parcial reduz o título (mantém > 0).
+  // Reconcilia os títulos "Crédito de cliente" (contas a receber, valor NEGATIVO)
+  // com o novo saldo. O crédito consumido é BAIXADO (cancelled) e VINCULADO à
+  // fatura (invoice_id) — para os relatórios ligarem o crédito usado ao valor
+  // recebido da consulta. Consumo parcial reduz o título (mantém negativo).
   const newCreditBalance = Math.max(0, Math.round((totalCredit - amount) * 100) / 100)
   const { data: creditTitulos } = await admin
     .from('financial_entries')
@@ -306,11 +309,12 @@ export async function applyTutorCreditToInvoice(input: {
   for (const t of (creditTitulos ?? []) as { id: string; amount: number }[]) {
     if (keepLeft <= 0.005) {
       await admin.from('financial_entries')
-        .update({ status: 'cancelled', updated_at: new Date().toISOString() }).eq('id', t.id)
+        .update({ status: 'cancelled', invoice_id: input.invoice_id, updated_at: new Date().toISOString() })
+        .eq('id', t.id)
     } else {
-      const keep = Math.min(keepLeft, Number(t.amount))
+      const keep = Math.min(keepLeft, Math.abs(Number(t.amount)))
       await admin.from('financial_entries')
-        .update({ amount: keep, updated_at: new Date().toISOString() }).eq('id', t.id)
+        .update({ amount: -keep, updated_at: new Date().toISOString() }).eq('id', t.id)
       keepLeft = Math.round((keepLeft - keep) * 100) / 100
     }
   }
