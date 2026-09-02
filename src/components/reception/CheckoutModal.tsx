@@ -350,7 +350,7 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
   return (
     <>
       <div
-        className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4 overflow-y-auto"
+        className="fixed inset-0 z-[70] flex items-start justify-center bg-black/50 p-4 overflow-y-auto"
         onClick={e => { if (e.target === e.currentTarget) onClose() }}
       >
         <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden my-4 flex flex-col max-h-[90vh]">
@@ -541,6 +541,10 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
                 invoiceId={invoice.id}
                 totalAmount={invoice.total_amount}
                 paidAmount={invoice.paid_amount ?? 0}
+                onReversed={async () => {
+                  const refreshed = await getInvoiceWithItems(invoice.id)
+                  if (!('error' in refreshed)) setInvoice(refreshed)
+                }}
               />
             )}
 
@@ -635,32 +639,34 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
               </div>
             )}
 
-            <div className="flex gap-2 pt-1">
+          </div>
+
+          {/* Rodapé fixo — ações sempre visíveis, fora da área de rolagem (a tarja agora é útil) */}
+          <div className="flex-shrink-0 flex gap-2 border-t border-slate-100 bg-white px-4 sm:px-6 py-3">
+            <button
+              onClick={onClose}
+              className="flex-1 rounded-xl border border-slate-200 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+            >
+              Cancelar
+            </button>
+            {totalDue <= 0.005 ? (
               <button
-                onClick={onClose}
-                className="flex-1 rounded-xl border border-slate-200 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+                onClick={() => setConfirmCourtesy(true)}
+                data-mentor-step="cashier-courtesy-btn"
+                title="Esta fatura está zerada — pode ser baixada como cortesia."
+                className="flex-1 rounded-xl bg-violet-600 py-3 text-sm font-semibold text-white hover:bg-violet-700 transition-colors flex items-center justify-center gap-2"
               >
-                Cancelar
+                <Gift className="h-4 w-4" /> Baixar como cortesia
               </button>
-              {totalDue <= 0.005 ? (
-                <button
-                  onClick={() => setConfirmCourtesy(true)}
-                  data-mentor-step="cashier-courtesy-btn"
-                  title="Esta fatura está zerada — pode ser baixada como cortesia."
-                  className="flex-1 rounded-xl bg-violet-600 py-3 text-sm font-semibold text-white hover:bg-violet-700 transition-colors flex items-center justify-center gap-2"
-                >
-                  <Gift className="h-4 w-4" /> Baixar como cortesia
-                </button>
-              ) : (
-                <button
-                  onClick={openPaymentFlow}
-                  data-mentor-step="cashier-open-payment-modal-btn"
-                  className="flex-1 rounded-xl bg-teal-600 py-3 text-sm font-semibold text-white hover:bg-teal-700 transition-colors flex items-center justify-center gap-2"
-                >
-                  <Receipt className="h-4 w-4" /> Receber
-                </button>
-              )}
-            </div>
+            ) : (
+              <button
+                onClick={openPaymentFlow}
+                data-mentor-step="cashier-open-payment-modal-btn"
+                className="flex-1 rounded-xl bg-teal-600 py-3 text-sm font-semibold text-white hover:bg-teal-700 transition-colors flex items-center justify-center gap-2"
+              >
+                <Receipt className="h-4 w-4" /> Receber
+              </button>
+            )}
           </div>
         </div>
 

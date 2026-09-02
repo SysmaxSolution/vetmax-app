@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useTransition } from 'react'
-import { CheckCircle2, Clock, Loader2, RotateCcw, Wallet, Scissors } from 'lucide-react'
+import { CheckCircle2, Clock, Loader2, RotateCcw, Wallet, Scissors, CreditCard } from 'lucide-react'
 import { listInvoiceDuplicatas, reversePartialPayment, type InvoiceDuplicata } from '@/lib/actions/billing'
 
 interface Props {
@@ -117,23 +117,33 @@ export default function InvoiceDuplicatasList({ invoiceId, totalAmount, paidAmou
             </div>
           </li>
         ))}
-        {pendingDuplicatas.map(d => (
-          <li key={d.id} className="px-4 py-2 flex items-center justify-between gap-2 text-xs hover:bg-amber-50/30">
-            <div className="flex items-center gap-2 min-w-0 flex-1">
-              {d.source === 'petlove_open'
-                ? <Wallet className="h-3.5 w-3.5 text-sky-600 flex-shrink-0" />
-                : <Clock className="h-3.5 w-3.5 text-amber-600 flex-shrink-0" />}
-              <div className="min-w-0">
-                <p className="text-slate-800 truncate">{d.description}</p>
-                <p className="text-[10px] text-slate-500">
-                  {d.source === 'petlove_open' ? 'A Receber Petlove' : 'Saldo a receber'}
-                  {' · vence '}{fmtBR(d.due_date)}
-                </p>
+        {pendingDuplicatas.map(d => {
+          // Distingue a NATUREZA do pendente: cartão (a operadora repassa — o
+          // tutor já pagou) NÃO é o mesmo que saldo a receber do tutor. Rotular
+          // igual fazia o recebível de cartão parecer uma duplicata do saldo.
+          const kind = d.source === 'petlove_open' ? 'petlove'
+                     : d.source === 'card_acquirer' ? 'card'
+                     : 'saldo'
+          const meta = {
+            petlove: { icon: <Wallet className="h-3.5 w-3.5 text-sky-600 flex-shrink-0" />,       label: 'A Receber Petlove',        color: 'text-sky-700',    row: 'hover:bg-sky-50/30' },
+            card:    { icon: <CreditCard className="h-3.5 w-3.5 text-indigo-600 flex-shrink-0" />, label: 'A receber de cartão (operadora)', color: 'text-indigo-700', row: 'hover:bg-indigo-50/30' },
+            saldo:   { icon: <Clock className="h-3.5 w-3.5 text-amber-600 flex-shrink-0" />,       label: 'Saldo a receber',          color: 'text-amber-700',  row: 'hover:bg-amber-50/30' },
+          }[kind]
+          return (
+            <li key={d.id} className={`px-4 py-2 flex items-center justify-between gap-2 text-xs ${meta.row}`}>
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                {meta.icon}
+                <div className="min-w-0">
+                  <p className="text-slate-800 truncate">{d.description}</p>
+                  <p className="text-[10px] text-slate-500">
+                    {meta.label}{' · vence '}{fmtBR(d.due_date)}
+                  </p>
+                </div>
               </div>
-            </div>
-            <span className={`text-sm font-bold tabular-nums ${d.source === 'petlove_open' ? 'text-sky-700' : 'text-amber-700'}`}>{BRL(d.amount)}</span>
-          </li>
-        ))}
+              <span className={`text-sm font-bold tabular-nums ${meta.color}`}>{BRL(d.amount)}</span>
+            </li>
+          )
+        })}
         {discountEntries.map(d => (
           <li key={d.id} className="px-4 py-2 flex items-center justify-between gap-2 text-xs text-slate-500 bg-rose-50/30">
             <div className="flex items-center gap-2 min-w-0 flex-1">
