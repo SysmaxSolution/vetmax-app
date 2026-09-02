@@ -90,7 +90,7 @@ export async function listClinicTutorCredits(): Promise<ClinicCreditSummary[] | 
   const admin = createAdminClient()
   const { data, error } = await admin
     .from('tutor_credits')
-    .select('tutor_id, amount, tutors(name)')
+    .select('tutor_id, amount, kind, tutors(name)')
     .eq('clinic_id', ctx.clinic_id)
   if (error) return { error: `Erro ao carregar créditos: ${error.message}` }
 
@@ -102,9 +102,12 @@ export async function listClinicTutorCredits(): Promise<ClinicCreditSummary[] | 
     const v = Number(r.amount)
     let s = map.get(id)
     if (!s) { s = { tutor_id: id, tutor_name: name ?? '—', total_inserted: 0, total_used: 0, available: 0 }; map.set(id, s) }
+    // Saldo líquido considera TODOS os movimentos (transferências se anulam).
     s.available += v
-    if (v > 0) s.total_inserted += v
-    else       s.total_used     += -v
+    // Inserido/Utilizado contam SÓ entrada e uso reais — transfer_in/transfer_out
+    // são internos (transferência entre CNPJs do mesmo cliente) e não devem inflar.
+    if (r.kind === 'advance')    s.total_inserted += v
+    else if (r.kind === 'usage') s.total_used     += -v
   }
   return [...map.values()]
     .map(s => ({ ...s, total_inserted: round2(s.total_inserted), total_used: round2(s.total_used), available: round2(s.available) }))

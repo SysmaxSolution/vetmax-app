@@ -101,7 +101,8 @@ function DetailModal({ tutor, mode, onClose }: { tutor: ClinicCreditSummary; mod
   const [loading, setLoading] = useState(true)
   useEffect(() => { listTutorCredits(tutor.tutor_id).then(r => { if (!('error' in r)) setMovs(r); setLoading(false) }) }, [tutor.tutor_id])
   const isIn = mode === 'in'
-  const list = movs.filter(m => isIn ? Number(m.amount) > 0 : Number(m.amount) < 0)
+  // Só entradas/usos reais — transfer_in/transfer_out são internos (entre CNPJs).
+  const list = movs.filter(m => isIn ? m.kind === 'advance' : m.kind === 'usage')
   return (
     <div className="fixed inset-0 z-[80] flex items-start justify-center bg-black/50 p-4 overflow-y-auto" onClick={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl my-4 flex flex-col max-h-[90vh]">
