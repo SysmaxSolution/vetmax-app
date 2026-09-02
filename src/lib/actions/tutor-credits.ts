@@ -16,8 +16,19 @@ export interface TutorCreditMovement {
   kind: string
   reference: string | null
   company_id: string | null
+  invoice_id: string | null
   created_at: string
 }
+
+export interface ClinicCreditSummary {
+  tutor_id: string
+  tutor_name: string
+  total_inserted: number   // adiantamentos + transferências recebidas
+  total_used: number       // usos + transferências enviadas (valor absoluto)
+  available: number        // saldo líquido disponível
+}
+
+const round2 = (v: number) => Math.round(v * 100) / 100
 
 export interface TutorCreditBalance {
   total: number
@@ -64,12 +75,41 @@ export async function listTutorCredits(tutorId: string): Promise<TutorCreditMove
   const admin = createAdminClient()
   const { data, error } = await admin
     .from('tutor_credits')
-    .select('id, amount, kind, reference, company_id, created_at')
+    .select('id, amount, kind, reference, company_id, invoice_id, created_at')
     .eq('clinic_id', ctx.clinic_id)
     .eq('tutor_id', tutorId)
     .order('created_at', { ascending: false })
   if (error) return { error: `Erro ao listar movimentos: ${error.message}` }
   return (data ?? []).map((r: any) => ({ ...r, amount: Number(r.amount) })) as TutorCreditMovement[]
+}
+
+// Resumo de crédito de TODOS os clientes da clínica (tela "Créditos de clientes").
+export async function listClinicTutorCredits(): Promise<ClinicCreditSummary[] | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return { error: ctx.error as string }
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('tutor_credits')
+    .select('tutor_id, amount, tutors(name)')
+    .eq('clinic_id', ctx.clinic_id)
+  if (error) return { error: `Erro ao carregar créditos: ${error.message}` }
+
+  const map = new Map<string, ClinicCreditSummary>()
+  for (const r of (data ?? []) as any[]) {
+    const id = r.tutor_id as string
+    if (!id) continue
+    const name = Array.isArray(r.tutors) ? r.tutors[0]?.name : r.tutors?.name
+    const v = Number(r.amount)
+    let s = map.get(id)
+    if (!s) { s = { tutor_id: id, tutor_name: name ?? '—', total_inserted: 0, total_used: 0, available: 0 }; map.set(id, s) }
+    s.available += v
+    if (v > 0) s.total_inserted += v
+    else       s.total_used     += -v
+  }
+  return [...map.values()]
+    .map(s => ({ ...s, total_inserted: round2(s.total_inserted), total_used: round2(s.total_used), available: round2(s.available) }))
+    .filter(s => s.total_inserted > 0.005)
+    .sort((a, b) => b.available - a.available || a.tutor_name.localeCompare(b.tutor_name))
 }
 
 // Lança um ADIANTAMENTO: recebe o dinheiro no Caixa AGORA + credita o tutor.
@@ -177,13 +217,15 @@ export async function applyTutorCreditToInvoice(input: {
   const tutorId = (inv as { tutor_id?: string }).tutor_id
   if (!tutorId) return { error: 'Fatura sem tutor vinculado.' }
 
-  // 2) Empresa faturante (âncora da OS)
+  // 2) Empresa faturante (âncora da OS) + nº da OS (para o histórico no adiantamento)
   let billingCompany: string | null = null
+  let osNumber: string | null = null
   if ((inv as { consultation_id?: string }).consultation_id) {
     const { data: cons } = await admin
-      .from('consultations').select('billing_company_id')
+      .from('consultations').select('billing_company_id, os_number')
       .eq('id', (inv as { consultation_id?: string }).consultation_id!).maybeSingle()
     billingCompany = (cons?.billing_company_id as string | null) ?? null
+    osNumber = (cons?.os_number as string | null) ?? null
   }
 
   // 3) Saldo de crédito por empresa
@@ -275,6 +317,30 @@ export async function applyTutorCreditToInvoice(input: {
     }
   } else if (plist.length > 0) {
     await admin.from('financial_entries').delete().in('id', plist.map(p => p.id))
+  }
+
+  // 9) Histórico de USO no título do ADIANTAMENTO (contas a receber): anexa
+  // "Utilizado R$X na OS ... — dd/mm/aaaa hh:mm" ao(s) título(s) de adiantamento
+  // do tutor, para o financeiro ver de onde saiu o crédito. Também registrado no
+  // extrato (tutor_credits) com invoice_id.
+  const stamp = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  }).format(new Date()).replace(',', '')
+  const docLabel = osNumber ? `OS ${osNumber}` : `fatura ${short}`
+  const usageNote = `Utilizado R$ ${amount.toFixed(2)} na ${docLabel} — ${stamp}`
+  const { data: advTitles } = await admin
+    .from('financial_entries')
+    .select('id, notes')
+    .eq('clinic_id', ctx.clinic_id)
+    .eq('tutor_id', tutorId)
+    .eq('category', 'Adiantamento de cliente')
+    .order('created_at', { ascending: false })
+    .limit(1)
+  if (advTitles && advTitles.length > 0) {
+    const cur = (advTitles[0] as { notes?: string | null }).notes
+    await admin.from('financial_entries')
+      .update({ notes: cur ? `${cur}\n${usageNote}` : usageNote, updated_at: new Date().toISOString() })
+      .eq('id', advTitles[0].id)
   }
 
   revalidatePath('/dashboard/cashier')

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { X, Loader2, Receipt, AlertCircle, Gift, Plus, Search, Trash2 } from 'lucide-react'
+import { X, Loader2, Receipt, AlertCircle, Gift, Plus, Search, Trash2, CheckCircle2 } from 'lucide-react'
 import {
   getInvoiceWithItems, processSplitPayment, processPayment, markInvoiceAsCourtesy,
   addItemToInvoice, removeItemFromInvoice,
@@ -720,14 +720,24 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
                 Cancelar
               </button>
               {totalDue <= 0.005 ? (
-                <button
-                  onClick={() => setConfirmCourtesy(true)}
-                  data-mentor-step="cashier-courtesy-btn"
-                  title="Esta fatura está zerada — pode ser baixada como cortesia."
-                  className="flex-1 rounded-xl bg-violet-600 py-3 text-sm font-semibold text-white hover:bg-violet-700 transition-colors flex items-center justify-center gap-2"
-                >
-                  <Gift className="h-4 w-4" /> Baixar como cortesia
-                </button>
+                (invoice.paid_amount ?? 0) > 0.005 ? (
+                  // Já quitada (ex.: coberta por crédito/adiantamento) — não é cortesia.
+                  <button
+                    onClick={onClose}
+                    className="flex-1 rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <CheckCircle2 className="h-4 w-4" /> Fatura quitada · Concluir
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setConfirmCourtesy(true)}
+                    data-mentor-step="cashier-courtesy-btn"
+                    title="Esta fatura está zerada — pode ser baixada como cortesia."
+                    className="flex-1 rounded-xl bg-violet-600 py-3 text-sm font-semibold text-white hover:bg-violet-700 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Gift className="h-4 w-4" /> Baixar como cortesia
+                  </button>
+                )
               ) : (
                 <button
                   onClick={openPaymentFlow}
