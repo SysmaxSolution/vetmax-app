@@ -120,6 +120,26 @@ export async function addTutorAdvance(input: {
   })
   if (credErr) return { error: `Caixa lançado, mas falhou ao creditar o tutor: ${credErr.message}` }
 
+  // 3) Corrige a representação no FINANCEIRO. O trigger 0127 espelhou a entrada
+  // do caixa como título +R$X RECEBIDO — mas adiantamento NÃO é receita, é
+  // CRÉDITO DE CLIENTE (passivo). Converte o espelho em título NEGATIVO e EM
+  // ABERTO. O caixa mantém a entrada (dinheiro real); o financeiro deixa de
+  // contar o adiantamento como recebimento (evita o "recebido" dobrado).
+  if (cashierId) {
+    await admin
+      .from('financial_entries')
+      .update({
+        amount:       -amount,
+        status:       'pending',
+        payment_date: null,
+        category:     'Crédito de cliente',
+        description:  `Crédito de cliente (adiantamento) — ${tutorName}${input.notes ? ` · ${input.notes}` : ''}`,
+        updated_at:   new Date().toISOString(),
+      })
+      .eq('clinic_id', ctx.clinic_id)
+      .eq('cashier_entry_id', cashierId as string)
+  }
+
   revalidatePath('/dashboard/cashier')
   revalidatePath('/dashboard/financial')
   return { ok: true }
@@ -266,6 +286,31 @@ export async function applyTutorCreditToInvoice(input: {
     }
   } else if (plist.length > 0) {
     await admin.from('financial_entries').delete().in('id', plist.map(p => p.id))
+  }
+
+  // Reconcilia os títulos de CRÉDITO DE CLIENTE (categoria 'Crédito de cliente')
+  // com o novo saldo. O crédito consumido é BAIXADO (cancelled) — não vira
+  // recebimento negativo no financeiro; o recebido efetivo é a consulta.
+  const newCreditBalance = Math.max(0, Math.round((totalCredit - amount) * 100) / 100)
+  const { data: creditTitulos } = await admin
+    .from('financial_entries')
+    .select('id, amount')
+    .eq('clinic_id', ctx.clinic_id)
+    .eq('tutor_id', tutorId)
+    .eq('category', 'Crédito de cliente')
+    .eq('status', 'pending')
+    .order('created_at', { ascending: true })
+  let keepLeft = newCreditBalance
+  for (const t of (creditTitulos ?? []) as { id: string; amount: number }[]) {
+    if (keepLeft <= 0.005) {
+      await admin.from('financial_entries')
+        .update({ status: 'cancelled', updated_at: new Date().toISOString() }).eq('id', t.id)
+    } else {
+      const keep = Math.min(keepLeft, Math.abs(Number(t.amount)))
+      await admin.from('financial_entries')
+        .update({ amount: -keep, updated_at: new Date().toISOString() }).eq('id', t.id)
+      keepLeft = Math.round((keepLeft - keep) * 100) / 100
+    }
   }
 
   revalidatePath('/dashboard/cashier')
