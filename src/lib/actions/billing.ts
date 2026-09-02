@@ -1408,45 +1408,58 @@ export async function reversePartialPayment(
     .eq('id', entryId)
   if (delErr) return { error: `Falha ao estornar: ${delErr.message}` }
 
-  // 4) Soma o valor de volta no pending existente (ou cria)
-  const { data: existingPending } = await adminClient
-    .from('financial_entries')
-    .select('id, amount')
-    .eq('clinic_id', profile.clinic_id)
-    .eq('invoice_id', entry.invoice_id)
-    .eq('status', 'pending')
-    .eq('source', 'cashier')
-    .maybeSingle()
-
   const newPaidAmount = Math.max(0, Number((invoice as { paid_amount?: number }).paid_amount ?? 0) - amount)
   const newBalance    = Math.max(0, Number((invoice as { total_amount?: number }).total_amount ?? 0) - newPaidAmount)
   const newStatus: 'pending' | 'paid_partial' = newPaidAmount > 0.01 ? 'paid_partial' : 'pending'
 
-  if (existingPending) {
-    await adminClient
-      .from('financial_entries')
-      .update({ amount: Number(existingPending.amount) + amount, updated_at: new Date().toISOString() })
-      .eq('id', existingPending.id)
-  } else {
-    const patName = ((invoice as { patients?: { name?: string } | { name?: string }[] }).patients)
-    const pn = Array.isArray(patName) ? patName[0]?.name : patName?.name
-    await adminClient
-      .from('financial_entries')
-      .insert({
-        clinic_id:   profile.clinic_id,
-        type:        'receivable',
-        description: `Saldo invoice ${entry.invoice_id.slice(0,8)} · ${pn ?? '—'} (estornado)`,
-        amount:      newBalance,
-        due_date:    new Date().toISOString().slice(0, 10),
-        status:      'pending',
-        source:      'cashier',
-        category:    'Saldo a receber',
-        tutor_id:    (invoice as { tutor_id?: string }).tutor_id ?? null,
-        patient_id:  (invoice as { patient_id?: string }).patient_id ?? null,
-        invoice_id:  entry.invoice_id,
-        notes:       `Estorno de baixa anterior. Saldo voltou ao recebimento.`,
-        created_by:  user.id,
-      })
+  // 4) Reconciliação DEFENSIVA do saldo (source='cashier'). Antes usava
+  // .maybeSingle(): se já existisse mais de um pending cashier, retornava
+  // erro/null e o estorno INSERIA outro → "Saldo a receber" duplicado. Agora
+  // garante EXATAMENTE UM pending com o saldo correto (newBalance, idempotente),
+  // consolidando/removendo duplicados. Não toca em card_acquirer/petlove_open.
+  const { data: cashierPendings } = await adminClient
+    .from('financial_entries')
+    .select('id')
+    .eq('clinic_id', profile.clinic_id)
+    .eq('invoice_id', entry.invoice_id)
+    .eq('status', 'pending')
+    .eq('source', 'cashier')
+    .order('created_at', { ascending: true })
+  const pendings = (cashierPendings ?? []) as { id: string }[]
+
+  if (newBalance > 0.01) {
+    if (pendings.length > 0) {
+      await adminClient
+        .from('financial_entries')
+        .update({ amount: newBalance, updated_at: new Date().toISOString() })
+        .eq('id', pendings[0].id)
+      const extras = pendings.slice(1).map(p => p.id)
+      if (extras.length) {
+        await adminClient.from('financial_entries').delete().in('id', extras)
+      }
+    } else {
+      const patName = ((invoice as { patients?: { name?: string } | { name?: string }[] }).patients)
+      const pn = Array.isArray(patName) ? patName[0]?.name : patName?.name
+      await adminClient
+        .from('financial_entries')
+        .insert({
+          clinic_id:   profile.clinic_id,
+          type:        'receivable',
+          description: `Saldo invoice ${entry.invoice_id.slice(0,8)} · ${pn ?? '—'} (estornado)`,
+          amount:      newBalance,
+          due_date:    new Date().toISOString().slice(0, 10),
+          status:      'pending',
+          source:      'cashier',
+          category:    'Saldo a receber',
+          tutor_id:    (invoice as { tutor_id?: string }).tutor_id ?? null,
+          patient_id:  (invoice as { patient_id?: string }).patient_id ?? null,
+          invoice_id:  entry.invoice_id,
+          notes:       `Estorno de baixa anterior. Saldo voltou ao recebimento.`,
+          created_by:  user.id,
+        })
+    }
+  } else if (pendings.length > 0) {
+    await adminClient.from('financial_entries').delete().in('id', pendings.map(p => p.id))
   }
 
   // 5) Atualiza invoice

@@ -13,7 +13,7 @@ import InsuranceExportPanel from '@/components/reception/InsuranceExportPanel'
 import CheckoutInsurancePreviewClient from '@/components/financial/CheckoutInsurancePreviewClient'
 import InvoiceDuplicatasList from '@/components/financial/InvoiceDuplicatasList'
 import PaymentMethodModal, { type PaymentSplit } from '@/components/payments/PaymentMethodModal'
-import { addTutorAdvance, getTutorCreditBalance } from '@/lib/actions/tutor-credits'
+import { addTutorAdvance, getTutorCreditBalance, applyTutorCreditToInvoice } from '@/lib/actions/tutor-credits'
 import { computeCheckoutTotals } from '@/lib/checkout-totals'
 import { getConsultationCopayInterestPreview, type CopayInterestPreview } from '@/lib/actions/insurance-checkout'
 import NfseTutorGate from '@/components/billing/NfseTutorGate'
@@ -52,6 +52,8 @@ interface Props {
 export default function CheckoutModal({ invoiceId, operatorView = false, onClose, onSuccess }: Props) {
   const [invoice,      setInvoice]      = useState<InvoiceWithDetails | null>(null)
   const [creditBalance, setCreditBalance] = useState<number>(0)
+  const [creditInput,   setCreditInput]   = useState('')
+  const [applyingCredit, setApplyingCredit] = useState(false)
   const [loading,      setLoading]      = useState(true)
   const [error,        setError]        = useState<string | null>(null)
 
@@ -145,6 +147,24 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
     })
     const refreshed = await getInvoiceWithItems(invoice.id)
     if (!('error' in refreshed)) setInvoice(refreshed)
+  }
+
+  // Sprint Animais 1.6 — USO do crédito/adiantamento no recebimento.
+  async function handleUseCredit() {
+    if (!invoice || applyingCredit) return
+    const suggested = Math.min(creditBalance, totalDue)
+    const raw = creditInput.trim() ? Number(creditInput.replace(',', '.')) : suggested
+    const amount = Math.round(raw * 100) / 100
+    if (!Number.isFinite(amount) || amount <= 0) { setError('Informe um valor de crédito válido.'); return }
+    setApplyingCredit(true); setError(null)
+    const res = await applyTutorCreditToInvoice({ invoice_id: invoice.id, amount })
+    setApplyingCredit(false)
+    if ('error' in res) { setError(res.error); return }
+    setCreditInput('')
+    const refreshed = await getInvoiceWithItems(invoice.id)
+    if (!('error' in refreshed)) setInvoice(refreshed)
+    const b = await getTutorCreditBalance(invoice.tutor_id)
+    if (!('error' in b)) setCreditBalance(b.total)
   }
 
   useEffect(() => {
@@ -375,10 +395,10 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
   return (
     <>
       <div
-        className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4 overflow-y-auto"
+        className="fixed inset-0 z-[70] flex items-start justify-center bg-black/50 p-4 overflow-y-auto"
         onClick={e => { if (e.target === e.currentTarget) onClose() }}
       >
-        <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden my-4 flex flex-col max-h-[95vh]">
+        <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden my-4 flex flex-col max-h-[95vh]">
 
           <div className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-4 border-b border-slate-100">
             <div className="flex items-center gap-3">
@@ -664,9 +684,31 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
           {/* Rodapé fixo — sempre visível, não rola com o conteúdo */}
           <div className="flex-shrink-0 border-t border-slate-100 px-4 sm:px-6 py-4 space-y-2 bg-white">
             {creditBalance > 0.005 && (
-              <div className="flex items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-sm text-teal-800">
-                <span className="text-lg">💳</span>
-                <span>Este tutor possui <strong>R$ {creditBalance.toFixed(2)}</strong> de crédito/adiantamento disponível.</span>
+              <div className="rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-sm text-teal-800 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">💳</span>
+                  <span>Este tutor possui <strong>R$ {creditBalance.toFixed(2)}</strong> de crédito/adiantamento disponível.</span>
+                </div>
+                {totalDue > 0.005 && (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={creditInput}
+                      onChange={e => setCreditInput(e.target.value)}
+                      placeholder={`Ex: ${Math.min(creditBalance, totalDue).toFixed(2)}`}
+                      className="flex-1 rounded-lg border border-teal-300 bg-white px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                    />
+                    <button
+                      onClick={handleUseCredit}
+                      disabled={applyingCredit}
+                      className="flex-shrink-0 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 transition-colors disabled:opacity-50"
+                    >
+                      {applyingCredit ? 'Aplicando…' : 'Utilizar crédito'}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
