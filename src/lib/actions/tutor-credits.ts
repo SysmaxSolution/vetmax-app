@@ -120,25 +120,21 @@ export async function addTutorAdvance(input: {
   })
   if (credErr) return { error: `Caixa lançado, mas falhou ao creditar o tutor: ${credErr.message}` }
 
-  // 3) Corrige a representação no FINANCEIRO. O trigger espelhou a entrada do
-  // caixa como título RECEBIDO (receivable, paid) — mas adiantamento NÃO é
-  // receita, é CRÉDITO DE CLIENTE. Converte o espelho num título de CONTAS A
-  // RECEBER com valor NEGATIVO (-R$X) e EM ABERTO (crédito do cliente reduz o
-  // líquido a receber). MANTÉM type='receivable' (não troca o tipo — senão o
-  // document_number REC já gerado colide com o próximo recebimento). O caixa
-  // mantém a entrada de dinheiro; o financeiro deixa de contar o adiantamento
-  // como RECEBIDO (corrige o "recebido" dobrado). Requer CHECK amount<>0 (0428).
+  // 3) O adiantamento é um RECEBIMENTO REAL (entrou no caixa/banco AGORA — Dia 1)
+  // e deve ser conciliável na data e conta corretas. O trigger já espelhou a
+  // entrada como título RECEBIDO (receivable, paid); aqui só categorizamos como
+  // "Adiantamento de cliente" (não é receita de consulta) e vinculamos ao tutor
+  // (extrato). NÃO viramos crédito negativo: o dinheiro do adiantamento é o
+  // recebimento do Dia 1; o USO do crédito depois é um ABATIMENTO na consulta
+  // (não gera recebimento novo) — ver applyTutorCreditToInvoice.
   if (cashierId) {
     await admin
       .from('financial_entries')
       .update({
-        amount:       -amount,
-        status:       'pending',
-        payment_date: null,
-        category:     'Crédito de cliente',
-        tutor_id:     input.tutor_id,
-        description:  `Crédito de cliente (adiantamento) — ${tutorName}${input.notes ? ` · ${input.notes}` : ''}`,
-        updated_at:   new Date().toISOString(),
+        category:    'Adiantamento de cliente',
+        tutor_id:    input.tutor_id,
+        description: `Adiantamento de cliente — ${tutorName}${input.notes ? ` · ${input.notes}` : ''}`,
+        updated_at:  new Date().toISOString(),
       })
       .eq('clinic_id', ctx.clinic_id)
       .eq('cashier_entry_id', cashierId as string)
@@ -247,26 +243,15 @@ export async function applyTutorCreditToInvoice(input: {
   )
   if (movErr) return { error: `Falha ao debitar o crédito: ${movErr.message}` }
 
-  // 7) Lançamento PAGO documentando o pagamento por crédito (NÃO entra no caixa —
-  //    o dinheiro já entrou no adiantamento).
-  await admin.from('financial_entries').insert({
-    clinic_id:   ctx.clinic_id,
-    type:        'receivable',
-    description: `Pagamento com crédito · fatura ${short}${patName ? ` · ${patName}` : ''}`,
-    amount,
-    due_date:     new Date().toISOString().slice(0, 10),
-    payment_date: new Date().toISOString().slice(0, 10),
-    status:      'paid',
-    source:      'cashier',
-    category:    'Pagamento com crédito',
-    payment_method: 'credit',
-    tutor_id:    tutorId,
-    patient_id:  (inv as { patient_id?: string }).patient_id ?? null,
-    invoice_id:  input.invoice_id,
-    created_by:  ctx.user_id,
-  })
+  // 7) O uso do crédito NÃO gera recebimento novo — é um ABATIMENTO. O dinheiro
+  //    já foi recebido no adiantamento (Dia 1, conciliável na conta/data certas).
+  //    Aqui apenas abatemos o saldo da fatura e registramos a baixa do crédito no
+  //    EXTRATO (movimentos tutor_credits acima, vinculados a invoice_id). Só o
+  //    valor pago em dinheiro no caixa (ex.: pix no checkout) vira recebimento
+  //    conciliável. Isso evita o "recebido" dobrado e mantém a conciliação certa.
 
-  // 8) Atualiza a fatura + reconcilia o saldo pendente (um único, valor correto)
+  // 8) Abate o saldo da fatura + reconcilia o saldo pendente
+
   const newPaid    = Math.round((paid + amount) * 100) / 100
   const newBalance = Math.max(0, Math.round((total - newPaid) * 100) / 100)
   const newStatus  = newBalance <= 0.005 ? 'paid' : 'paid_partial'
@@ -290,33 +275,6 @@ export async function applyTutorCreditToInvoice(input: {
     }
   } else if (plist.length > 0) {
     await admin.from('financial_entries').delete().in('id', plist.map(p => p.id))
-  }
-
-  // Reconcilia os títulos "Crédito de cliente" (contas a receber, valor NEGATIVO)
-  // com o novo saldo. O crédito consumido é BAIXADO (cancelled) e VINCULADO à
-  // fatura (invoice_id) — para os relatórios ligarem o crédito usado ao valor
-  // recebido da consulta. Consumo parcial reduz o título (mantém negativo).
-  const newCreditBalance = Math.max(0, Math.round((totalCredit - amount) * 100) / 100)
-  const { data: creditTitulos } = await admin
-    .from('financial_entries')
-    .select('id, amount')
-    .eq('clinic_id', ctx.clinic_id)
-    .eq('tutor_id', tutorId)
-    .eq('category', 'Crédito de cliente')
-    .eq('status', 'pending')
-    .order('created_at', { ascending: true })
-  let keepLeft = newCreditBalance
-  for (const t of (creditTitulos ?? []) as { id: string; amount: number }[]) {
-    if (keepLeft <= 0.005) {
-      await admin.from('financial_entries')
-        .update({ status: 'cancelled', invoice_id: input.invoice_id, updated_at: new Date().toISOString() })
-        .eq('id', t.id)
-    } else {
-      const keep = Math.min(keepLeft, Math.abs(Number(t.amount)))
-      await admin.from('financial_entries')
-        .update({ amount: -keep, updated_at: new Date().toISOString() }).eq('id', t.id)
-      keepLeft = Math.round((keepLeft - keep) * 100) / 100
-    }
   }
 
   revalidatePath('/dashboard/cashier')
