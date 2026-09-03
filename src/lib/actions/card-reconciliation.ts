@@ -73,17 +73,20 @@ const toDate = (v: string | undefined): string | null => {
   return null
 }
 
+// Aliases de cabeçalho reconhecidos. Cobrem o CSV genérico + os nomes de coluna
+// típicos do extrato eletrônico (EDI) da Sipag/Sicoob "v2.0" e da família Cielo
+// (layout 3040), já que a Sipag entrega CSV. Ajustar contra um arquivo real.
 const CSV_ALIASES: Record<keyof StatementRow, string[]> = {
-  nsu:                ['nsu', 'doc', 'documento', 'nsu/doc', 'cv', 'comprovante'],
-  authorization:      ['autorizacao', 'autorização', 'auth', 'cod_autorizacao', 'lib'],
-  brand:              ['bandeira', 'brand', 'produto'],
-  installment:        ['parcela', 'installment', 'nº parcela', 'num_parcela'],
-  total_installments: ['total_parcelas', 'qtd_parcelas', 'parcelas', 'total parcelas'],
-  gross:              ['valor_bruto', 'bruto', 'valor bruto', 'valor_venda', 'valor', 'gross'],
-  net:                ['valor_liquido', 'liquido', 'líquido', 'valor líquido', 'valor_repasse', 'net'],
-  fee:                ['taxa', 'mdr', 'valor_taxa', 'desconto', 'comissao', 'comissão', 'fee'],
-  sale_date:          ['data_venda', 'data venda', 'data', 'data_transacao', 'sale_date'],
-  settlement_date:    ['data_repasse', 'data_pagamento', 'previsao', 'previsão', 'vencimento', 'data_credito', 'settlement'],
+  nsu:                ['nsu', 'doc', 'documento', 'nsu/doc', 'nsu_doc', 'numero_nsu', 'cv', 'comprovante', 'tid'],
+  authorization:      ['autorizacao', 'autorização', 'auth', 'cod_autorizacao', 'codigo_autorizacao', 'cod autorizacao', 'lib'],
+  brand:              ['bandeira', 'brand', 'produto', 'bandeira_cartao'],
+  installment:        ['parcela', 'installment', 'nº parcela', 'num_parcela', 'numero_parcela', 'nr_parcela'],
+  total_installments: ['total_parcelas', 'qtd_parcelas', 'quantidade_parcelas', 'parcelas', 'total parcelas'],
+  gross:              ['valor_bruto', 'bruto', 'valor bruto', 'vl_bruto', 'valor_venda', 'valor da venda', 'valor', 'gross'],
+  net:                ['valor_liquido', 'liquido', 'líquido', 'valor líquido', 'vl_liquido', 'valor_repasse', 'valor_credito', 'valor_a_creditar', 'net'],
+  fee:                ['taxa', 'mdr', 'valor_taxa', 'vl_taxa', 'taxa_administrativa', 'desconto', 'valor_desconto', 'comissao', 'comissão', 'fee'],
+  sale_date:          ['data_venda', 'data venda', 'data', 'data_transacao', 'dt_venda', 'sale_date'],
+  settlement_date:    ['data_repasse', 'data_pagamento', 'data_credito', 'data_liquidacao', 'dt_credito', 'previsao_pagamento', 'previsao', 'previsão', 'vencimento', 'settlement'],
   raw:                [],
 }
 
