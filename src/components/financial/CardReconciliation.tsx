@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Loader2, Upload, CheckCircle2, AlertTriangle, HelpCircle, Link2, PlusCircle } from 'lucide-react'
 import {
   parseCardStatement, matchCardStatement, reconcileCardInstallments, includeCardMovements,
-  type CardMatchResult, type MatchedRow,
+  type CardMatchResult, type MatchedRow, type StatementRow,
 } from '@/lib/actions/card-reconciliation'
 
 const BRL = (v: number | null) => (v == null ? '—' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }))
@@ -28,9 +28,21 @@ export default function CardReconciliation() {
   async function handleFile(file: File) {
     setError(null); setDone(null); setResult(null); setLoading(true)
     try {
-      const text = await file.text()
-      const parsed = await parseCardStatement(text, format)
-      if ('error' in parsed) { setError(parsed.error); return }
+      const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
+      let parsed: StatementRow[]
+      if (ext === 'xlsx' || ext === 'xlsm' || ext === 'xls') {
+        // relatório de vendas da Sipag (planilha) — parser dedicado no cliente
+        const { parseSipagCardXlsx } = await import('@/lib/parsers/sipagCardParser')
+        const res = await parseSipagCardXlsx(file)
+        if (res.rows.length === 0) { setError(res.errors.join(' ') || 'Nenhuma venda reconhecida na planilha.'); return }
+        if (res.errors.length) setError(res.errors.join(' '))
+        parsed = res.rows
+      } else {
+        const text = await file.text()
+        const p = await parseCardStatement(text, format)
+        if ('error' in p) { setError(p.error); return }
+        parsed = p
+      }
       if (parsed.length === 0) { setError('Nenhuma linha reconhecida no arquivo.'); return }
       const matched = await matchCardStatement(parsed)
       if ('error' in matched) { setError(matched.error); return }
@@ -102,14 +114,14 @@ export default function CardReconciliation() {
           <span className="text-xs font-semibold text-slate-500">Formato:</span>
           <select value={format} onChange={e => setFormat(e.target.value as Format)}
             className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm">
-            <option value="csv">Arquivo CSV (genérico)</option>
-            <option value="sipag_edi">Sipag (EDI)</option>
+            <option value="csv">Auto (CSV / Sipag XLSX)</option>
+            <option value="sipag_edi">Sipag (EDI/CSV)</option>
             <option value="finpet">FinPet</option>
           </select>
         </div>
         <label className="inline-flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 cursor-pointer">
           <Upload className="h-4 w-4" /> Importar extrato da adquirente
-          <input type="file" accept=".csv,.txt,.ret,.edi,.ofx" className="hidden"
+          <input type="file" accept=".csv,.txt,.ret,.edi,.ofx,.xlsx,.xlsm,.xls" className="hidden"
             onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.currentTarget.value = '' }} />
         </label>
         <span className="text-[11px] text-slate-400">API da adquirente entra depois (mesma tela).</span>
