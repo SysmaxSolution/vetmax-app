@@ -14,6 +14,7 @@ import EmployeesTab       from './cadastros/EmployeesTab'
 import ExtratoTab         from './ExtratoTab'
 import ConciliacaoTab     from './ConciliacaoTab'
 import CreditsTab         from './CreditsTab'
+import PagforTab          from './PagforTab'
 import Link from 'next/link'
 import {
   Plus, RefreshCcw, Search, Filter,
@@ -26,7 +27,7 @@ import { useModule } from '@/components/providers/ModulesProvider'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type FilterStatus = 'all' | 'pending' | 'paid' | 'cancelled'
-type MainTab = EntryType | 'extrato' | 'conciliacao' | 'creditos' | 'cadastros'
+type MainTab = EntryType | 'extrato' | 'conciliacao' | 'creditos' | 'pagfor' | 'cadastros'
 type CadastrosSubTab = 'bancos' | 'plano_contas' | 'cartoes' | 'funcionarios'
 
 interface Props {
@@ -266,6 +267,7 @@ export default function FinancialWorkspace({
   const isExtrato      = activeTab === 'extrato'
   const isConciliacao  = activeTab === 'conciliacao'
   const isCreditos     = activeTab === 'creditos'
+  const isPagfor       = activeTab === 'pagfor'
   const entries        = activeTab === 'receivable' ? receivable : payable
   const summary        = activeTab === 'receivable' ? recSummary : paySummary
 
@@ -325,6 +327,7 @@ export default function FinancialWorkspace({
     { id: 'extrato'     as MainTab, label: 'Extrato'           },
     { id: 'conciliacao' as MainTab, label: 'Conciliação'       },
     { id: 'creditos'    as MainTab, label: 'Créditos'          },
+    { id: 'pagfor'      as MainTab, label: 'PAGFOR'            },
     { id: 'cadastros'   as MainTab, label: 'Cadastros'         },
   ]
 
@@ -573,6 +576,9 @@ export default function FinancialWorkspace({
 
         {/* ── Créditos de clientes ───────────────────────────────────────── */}
         {isCreditos && <CreditsTab />}
+
+        {/* ── PAGFOR — Pagamento a Fornecedores ──────────────────────────── */}
+        {isPagfor && <PagforTab />}
 
         {/* ── Cadastros ──────────────────────────────────────────────────── */}
         {activeTab === 'cadastros' && (
