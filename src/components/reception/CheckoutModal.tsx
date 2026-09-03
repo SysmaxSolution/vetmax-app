@@ -53,6 +53,7 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
   const [invoice,      setInvoice]      = useState<InvoiceWithDetails | null>(null)
   const [creditBalance, setCreditBalance] = useState<number>(0)
   const [creditInput,   setCreditInput]   = useState('')
+  const [creditNote,    setCreditNote]    = useState<string | null>(null)
   const [applyingCredit, setApplyingCredit] = useState(false)
   const [loading,      setLoading]      = useState(true)
   const [error,        setError]        = useState<string | null>(null)
@@ -156,10 +157,14 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
     const raw = creditInput.trim() ? Number(creditInput.replace(',', '.')) : suggested
     const amount = Math.round(raw * 100) / 100
     if (!Number.isFinite(amount) || amount <= 0) { setError('Informe um valor de crédito válido.'); return }
-    setApplyingCredit(true); setError(null)
+    setApplyingCredit(true); setError(null); setCreditNote(null)
     const res = await applyTutorCreditToInvoice({ invoice_id: invoice.id, amount })
     setApplyingCredit(false)
     if ('error' in res) { setError(res.error); return }
+    // Clamp: se o valor informado excedia o saldo da fatura, avisa (não bloqueia).
+    setCreditNote(res.applied < amount - 0.005
+      ? `Aplicado ${fmt(res.applied)} — o valor informado excedia o saldo da fatura. O restante do crédito continua disponível.`
+      : null)
     setCreditInput('')
     const refreshed = await getInvoiceWithItems(invoice.id)
     if (!('error' in refreshed)) setInvoice(refreshed)
@@ -708,6 +713,9 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
                       {applyingCredit ? 'Aplicando…' : 'Utilizar crédito'}
                     </button>
                   </div>
+                )}
+                {creditNote && (
+                  <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">{creditNote}</p>
                 )}
               </div>
             )}
