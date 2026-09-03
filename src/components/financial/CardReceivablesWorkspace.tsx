@@ -255,6 +255,13 @@ export default function CardReceivablesWorkspace({
               Liquidar {selected.size} em lote · {fmt(selectedTotal)}
             </button>
           )}
+          <a
+            href="/dashboard/financial/cards/reconciliation"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-sm"
+          >
+            <CreditCard className="h-4 w-4" />
+            Conciliar extrato
+          </a>
           <button
             onClick={refresh}
             disabled={loading}
