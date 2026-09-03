@@ -3,9 +3,14 @@
 import { useEffect, useState } from 'react'
 import { Loader2, X } from 'lucide-react'
 import {
-  listClinicTutorCredits, listTutorCredits,
-  type ClinicCreditSummary, type TutorCreditMovement,
+  listClinicTutorCredits, getTutorCreditStatement,
+  type ClinicCreditSummary, type TutorCreditDetail,
 } from '@/lib/actions/tutor-credits'
+
+const PAYMENT_LABEL: Record<string, string> = {
+  cash: 'Dinheiro', pix: 'PIX', credit: 'Cartão de crédito', debit: 'Cartão de débito',
+  voucher: 'Voucher', transfer: 'Transferência', convenio: 'Convênio', other: 'Outro',
+}
 
 const BRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const fmtDate = (iso: string) =>
@@ -96,12 +101,16 @@ function Stat({ label, value, color }: { label: string; value: number; color: st
   )
 }
 
+function Field({ label, value }: { label: string; value: string | null | undefined }) {
+  if (!value) return null
+  return <span className="text-[11px] text-slate-500"><span className="text-slate-400">{label}:</span> <span className="text-slate-700 font-medium">{value}</span></span>
+}
+
 function DetailModal({ tutor, mode, onClose }: { tutor: ClinicCreditSummary; mode: 'in' | 'out'; onClose: () => void }) {
-  const [movs, setMovs]       = useState<TutorCreditMovement[]>([])
+  const [movs, setMovs]       = useState<TutorCreditDetail[]>([])
   const [loading, setLoading] = useState(true)
-  useEffect(() => { listTutorCredits(tutor.tutor_id).then(r => { if (!('error' in r)) setMovs(r); setLoading(false) }) }, [tutor.tutor_id])
+  useEffect(() => { getTutorCreditStatement(tutor.tutor_id).then(r => { if (!('error' in r)) setMovs(r); setLoading(false) }) }, [tutor.tutor_id])
   const isIn = mode === 'in'
-  // Só entradas/usos reais — transfer_in/transfer_out são internos (entre CNPJs).
   const list = movs.filter(m => isIn ? m.kind === 'advance' : m.kind === 'usage')
   return (
     <div className="fixed inset-0 z-[80] flex items-start justify-center bg-black/50 p-4 overflow-y-auto" onClick={e => { if (e.target === e.currentTarget) onClose() }}>
@@ -113,24 +122,40 @@ function DetailModal({ tutor, mode, onClose }: { tutor: ClinicCreditSummary; mod
           </div>
           <button onClick={onClose} className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100"><X className="h-5 w-5" /></button>
         </div>
-        <div className="px-5 py-4 overflow-y-auto flex-1">
+        <div className="px-5 py-4 overflow-y-auto flex-1 space-y-2">
           {loading
             ? <div className="flex items-center gap-2 text-slate-400 text-sm"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</div>
             : list.length === 0
               ? <p className="text-slate-400 text-sm text-center py-4">Nenhum movimento.</p>
-              : <ul className="divide-y divide-slate-100">
-                  {list.map(m => (
-                    <li key={m.id} className="py-2.5 flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-sm text-slate-800">{m.reference ?? m.kind}</p>
-                        <p className="text-[11px] text-slate-400 font-mono">{fmtDate(m.created_at)}</p>
-                      </div>
+              : list.map(m => (
+                  <div key={m.id} className={`rounded-xl border px-3 py-2.5 ${isIn ? 'border-emerald-100 bg-emerald-50/40' : 'border-rose-100 bg-rose-50/30'}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-sm font-semibold text-slate-800">
+                        {isIn ? 'Adiantamento (Caixa)' : (m.os_number ? `OS ${m.os_number}` : 'Uso do crédito')}
+                      </p>
                       <span className={`text-sm font-bold font-mono tabular-nums flex-shrink-0 ${isIn ? 'text-emerald-700' : 'text-rose-600'}`}>
-                        {isIn ? '+' : '−'}{BRL(Math.abs(Number(m.amount)))}
+                        {isIn ? '+' : '−'}{BRL(Math.abs(m.amount))}
                       </span>
-                    </li>
-                  ))}
-                </ul>}
+                    </div>
+                    <div className="mt-1 flex flex-col gap-0.5">
+                      {isIn ? (
+                        <>
+                          <Field label="Recebido em" value={fmtDate(m.created_at)} />
+                          <Field label="Forma" value={m.payment_method ? (PAYMENT_LABEL[m.payment_method] ?? m.payment_method) : null} />
+                          <Field label="Lançado por" value={m.user_name} />
+                        </>
+                      ) : (
+                        <>
+                          <Field label="Pet" value={m.patient_name} />
+                          <Field label="Tutor" value={m.tutor_name} />
+                          <Field label="Data da consulta" value={m.consultation_date ? fmtDate(m.consultation_date) : null} />
+                          <Field label="Crédito usado em" value={fmtDate(m.created_at)} />
+                          <Field label="Utilizado por" value={m.user_name} />
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
         </div>
       </div>
     </div>

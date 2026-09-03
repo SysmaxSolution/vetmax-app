@@ -83,6 +83,108 @@ export async function listTutorCredits(tutorId: string): Promise<TutorCreditMove
   return (data ?? []).map((r: any) => ({ ...r, amount: Number(r.amount) })) as TutorCreditMovement[]
 }
 
+export interface TutorCreditDetail {
+  id: string
+  kind: string                    // 'advance' | 'usage'
+  amount: number
+  created_at: string              // quando foi inserido / utilizado
+  user_name: string | null        // quem inseriu / utilizou
+  reference: string | null
+  // adiantamento (advance):
+  payment_method: string | null   // forma de recebimento
+  // uso (usage):
+  invoice_id: string | null
+  os_number: string | null
+  patient_name: string | null
+  tutor_name: string | null
+  consultation_date: string | null
+}
+
+// Extrato DETALHADO do crédito de um tutor (para os modais de detalhe).
+export async function getTutorCreditStatement(tutorId: string): Promise<TutorCreditDetail[] | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return { error: ctx.error as string }
+  const admin = createAdminClient()
+
+  const { data: movsRaw, error } = await admin
+    .from('tutor_credits')
+    .select('id, kind, amount, reference, invoice_id, cashier_entry_id, created_by, created_at')
+    .eq('clinic_id', ctx.clinic_id).eq('tutor_id', tutorId)
+    .in('kind', ['advance', 'usage'])
+    .order('created_at', { ascending: false })
+  if (error) return { error: `Erro ao carregar extrato: ${error.message}` }
+  const movs = (movsRaw ?? []) as any[]
+  if (movs.length === 0) return []
+
+  const uniq = (arr: any[]) => [...new Set(arr.filter(Boolean))] as string[]
+
+  // usuários
+  const userMap = new Map<string, string>()
+  const userIds = uniq(movs.map(m => m.created_by))
+  if (userIds.length) {
+    const { data: profs } = await admin.from('profiles').select('id, full_name').in('id', userIds)
+    for (const p of (profs ?? []) as any[]) userMap.set(p.id, p.full_name ?? '—')
+  }
+
+  // caixa (adiantamentos) → forma de recebimento
+  const ccMap = new Map<string, string | null>()
+  const ccIds = uniq(movs.filter(m => m.kind === 'advance').map(m => m.cashier_entry_id))
+  if (ccIds.length) {
+    const { data: cc } = await admin.from('central_cashier').select('id, payment_method').in('id', ccIds)
+    for (const c of (cc ?? []) as any[]) ccMap.set(c.id, c.payment_method ?? null)
+  }
+
+  // faturas (usos) → OS, pet, tutor, data da consulta
+  const invMap = new Map<string, { os_number: string | null; patient_name: string | null; tutor_name: string | null; consultation_date: string | null }>()
+  const invoiceIds = uniq(movs.filter(m => m.kind === 'usage').map(m => m.invoice_id))
+  if (invoiceIds.length) {
+    const { data: invs } = await admin.from('invoices').select('id, consultation_id, patient_id, tutor_id').in('id', invoiceIds)
+    const invsA = (invs ?? []) as any[]
+    const consMap = new Map<string, { os_number: string | null; created_at: string | null }>()
+    const consIds = uniq(invsA.map(i => i.consultation_id))
+    if (consIds.length) {
+      const { data: cons } = await admin.from('consultations').select('id, os_number, created_at').in('id', consIds)
+      for (const c of (cons ?? []) as any[]) consMap.set(c.id, { os_number: c.os_number ?? null, created_at: c.created_at ?? null })
+    }
+    const patMap = new Map<string, string>()
+    const patIds = uniq(invsA.map(i => i.patient_id))
+    if (patIds.length) {
+      const { data: pats } = await admin.from('patients').select('id, name').in('id', patIds)
+      for (const p of (pats ?? []) as any[]) patMap.set(p.id, p.name)
+    }
+    const tutMap = new Map<string, string>()
+    const tutIds = uniq(invsA.map(i => i.tutor_id))
+    if (tutIds.length) {
+      const { data: tuts } = await admin.from('tutors').select('id, name').in('id', tutIds)
+      for (const t of (tuts ?? []) as any[]) tutMap.set(t.id, t.name)
+    }
+    for (const i of invsA) {
+      const cons = i.consultation_id ? consMap.get(i.consultation_id) : null
+      invMap.set(i.id, {
+        os_number: cons?.os_number ?? null,
+        patient_name: i.patient_id ? (patMap.get(i.patient_id) ?? null) : null,
+        tutor_name: i.tutor_id ? (tutMap.get(i.tutor_id) ?? null) : null,
+        consultation_date: cons?.created_at ?? null,
+      })
+    }
+  }
+
+  return movs.map(m => {
+    const iv = m.invoice_id ? invMap.get(m.invoice_id) : null
+    return {
+      id: m.id, kind: m.kind, amount: Number(m.amount), created_at: m.created_at,
+      user_name: m.created_by ? (userMap.get(m.created_by) ?? null) : null,
+      reference: m.reference ?? null,
+      payment_method: m.kind === 'advance' ? (m.cashier_entry_id ? (ccMap.get(m.cashier_entry_id) ?? null) : null) : null,
+      invoice_id: m.invoice_id ?? null,
+      os_number: iv?.os_number ?? null,
+      patient_name: iv?.patient_name ?? null,
+      tutor_name: iv?.tutor_name ?? null,
+      consultation_date: iv?.consultation_date ?? null,
+    }
+  })
+}
+
 // Resumo de crédito de TODOS os clientes da clínica (tela "Créditos de clientes").
 export async function listClinicTutorCredits(): Promise<ClinicCreditSummary[] | { error: string }> {
   const ctx = await getCtx()
