@@ -2,7 +2,7 @@
 
 import { useState, useRef, useTransition, useEffect, useMemo } from 'react'
 import {
-  BankAccount, FinancialEntry, BankStatement, ReconciliationBatch, AutoMatchResult, ReconcCandidate,
+  BankAccount, BankStatement, ReconciliationBatch, AutoLinkResult, ReconcCandidate,
   importStatements, listBatchStatements, getBBStatement,
   persistAutoLinks, unlinkStatement, listReconcCandidates,
   reconcileStatements, settleOpenEntryAndLink, insertEntryFromStatement, finalizeReconciliation,
@@ -26,7 +26,7 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
   const [batch, setBatch]         = useState<ReconciliationBatch | null>(null)
   const [imported, setImported]   = useState<BankStatement[]>([])
   const [candidates, setCandidates] = useState<{ paid: ReconcCandidate[]; open: ReconcCandidate[] }>({ paid: [], open: [] })
-  const [matchResult, setMatchResult] = useState<AutoMatchResult | null>(null)
+  const [matchResult, setMatchResult] = useState<AutoLinkResult | null>(null)
   const [period, setPeriod]       = useState<{ start: string; end: string } | null>(null)
 
   // amarração: linha do extrato selecionada + cache de títulos vistos (p/ exibir vinculados)
@@ -81,11 +81,11 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
       if ('error' in res) { setErrorMsg(res.error); return }
       setBatch(res)
       await loadCandidates(start, end)
-      const auto = await persistAutoLinks(res.id, 'receivable')       // amarra automaticamente e persiste
-      if (!('error' in auto)) { setMatchResult(auto); auto.matched.forEach(p => cacheEntry(toC(p.entry))) }
+      const auto = await persistAutoLinks(res.id)                     // amarra automaticamente e persiste
+      if (!('error' in auto)) { setMatchResult(auto); auto.linked.forEach(l => cacheEntry(l.candidate)) }
       await reloadStatements(res.id)
       await loadCandidates(start, end)
-      setSuccessMsg(`${parsed.statements.length} lançamentos importados. ${'error' in auto ? '' : auto.matched.length + ' vinculados automaticamente.'}`)
+      setSuccessMsg(`${parsed.statements.length} lançamentos importados. ${'error' in auto ? '' : auto.linked.length + ' vinculados automaticamente.'}`)
     })
     if (fileRef.current) fileRef.current.value = ''
   }
@@ -106,8 +106,8 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
     else {
       setBatch(res); setIgnored(new Set()); setSelectedStmt(null)
       await loadCandidates(monthAgo, today)
-      const auto = await persistAutoLinks(res.id, 'receivable')
-      if (!('error' in auto)) { setMatchResult(auto); auto.matched.forEach(p => cacheEntry(toC(p.entry))) }
+      const auto = await persistAutoLinks(res.id)
+      if (!('error' in auto)) { setMatchResult(auto); auto.linked.forEach(l => cacheEntry(l.candidate)) }
       await reloadStatements(res.id)
       await loadCandidates(monthAgo, today)
       setSuccessMsg(`${bb.length} lançamentos importados do Banco do Brasil (simulado).`)
@@ -220,17 +220,17 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
         <div className="grid grid-cols-3 gap-3">
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-center">
             <Sparkles className="h-4 w-4 text-emerald-600 mx-auto mb-1" />
-            <p className="text-xl font-bold tabular-nums text-emerald-700">{matchResult.matched.length}</p>
+            <p className="text-xl font-bold tabular-nums text-emerald-700">{matchResult.linked.length}</p>
             <p className="text-[11px] font-semibold text-emerald-600">Vinculados automaticamente</p>
           </div>
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center">
             <Circle className="h-4 w-4 text-slate-400 mx-auto mb-1" />
-            <p className="text-xl font-bold tabular-nums text-slate-600">{matchResult.unmatched_imported.length}</p>
+            <p className="text-xl font-bold tabular-nums text-slate-600">{matchResult.unmatched_statements}</p>
             <p className="text-[11px] font-semibold text-slate-500">Extrato sem par</p>
           </div>
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-center">
             <AlertTriangle className="h-4 w-4 text-amber-500 mx-auto mb-1" />
-            <p className="text-xl font-bold tabular-nums text-amber-700">{matchResult.unmatched_entries.length}</p>
+            <p className="text-xl font-bold tabular-nums text-amber-700">{matchResult.unmatched_candidates}</p>
             <p className="text-[11px] font-semibold text-amber-600">Títulos sem par</p>
           </div>
         </div>
@@ -363,14 +363,4 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
       )}
     </div>
   )
-}
-
-// converte FinancialEntry → ReconcCandidate (p/ cache local)
-function toC(e: FinancialEntry): ReconcCandidate {
-  return {
-    id: e.id, type: e.type, description: e.description, amount: e.amount,
-    due_date: e.due_date, payment_date: e.payment_date, status: e.status,
-    category: e.category, document_number: e.document_number,
-    tutor_name: e.tutor_name, patient_name: e.patient_name,
-  }
 }

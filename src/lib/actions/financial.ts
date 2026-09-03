@@ -1786,22 +1786,59 @@ const toCandidate = (e: FinancialEntry): ReconcCandidate => ({
   tutor_name: e.tutor_name, patient_name: e.patient_name,
 })
 
-// Roda o auto-match e PERSISTE as amarrações no banco (reconciled_entry_id).
-export async function persistAutoLinks(
-  batchId: string, entryType: EntryType,
-): Promise<AutoMatchResult | { error: string }> {
+export interface AutoLinkResult {
+  linked:               { statement_id: string; candidate: ReconcCandidate }[]
+  unmatched_statements: number
+  unmatched_candidates: number
+}
+
+// Auto-amarração da 1.3: casa cada linha do extrato com um título JÁ PAGO
+// (crédito→a receber, débito→a pagar) por valor (±0,01) e data de pagamento
+// (±2 dias) e PERSISTE (reconciled_entry_id). Ignora linhas já vinculadas.
+export async function persistAutoLinks(batchId: string): Promise<AutoLinkResult | { error: string }> {
   const clinicId = await getClinicId()
   if (!clinicId) return { error: 'Não autenticado.' }
-  const res = await autoMatchStatements(batchId, entryType)
-  if ('error' in res) return res
+  const stmtsRes = await listBatchStatements(batchId)
+  if ('error' in stmtsRes) return stmtsRes
+  const stmts = stmtsRes.filter(s => !s.reconciled_entry_id)
+  if (!stmts.length) return { linked: [], unmatched_statements: 0, unmatched_candidates: 0 }
+
+  const dates = stmts.map(s => s.date).sort()
+  const pad = (d: string, days: number) => new Date(new Date(d).getTime() + days * 86400000).toISOString().slice(0, 10)
+  const start = pad(dates[0], -3), end = pad(dates[dates.length - 1], 3)
+
   const admin = createAdminClient()
-  for (const pair of res.matched) {
+  const { data: linkedRows } = await admin.from('bank_statements')
+    .select('reconciled_entry_id').eq('clinic_id', clinicId).not('reconciled_entry_id', 'is', null)
+  const linkedIds = new Set((linkedRows ?? []).map((r: Record<string, unknown>) => r.reconciled_entry_id as string))
+
+  const types: EntryType[] = ['receivable', 'payable']
+  const lists = await Promise.all(types.map(t => listEntries({ type: t, status: 'paid', paid_from: start, paid_to: end })))
+  const paid = lists.flatMap(r => Array.isArray(r) ? r : []).filter(e => !linkedIds.has(e.id))
+
+  const usedEntry = new Set<string>()
+  const linked: { statement_id: string; candidate: ReconcCandidate }[] = []
+  for (const s of stmts) {
+    const wantType: EntryType = s.type === 'credit' ? 'receivable' : 'payable'
+    const sTime = new Date(s.date).getTime()
+    const hit = paid.find(e => {
+      if (usedEntry.has(e.id) || e.type !== wantType) return false
+      if (Math.abs(e.amount - s.amount) >= 0.01) return false
+      const eDate = new Date((e.payment_date ?? e.due_date)).getTime()
+      return Math.abs(sTime - eDate) / 86400000 <= 2
+    })
+    if (!hit) continue
+    usedEntry.add(hit.id)
     await admin.from('bank_statements')
-      .update({ reconciled_entry_id: pair.entry.id })
-      .eq('id', pair.statement.id).eq('clinic_id', clinicId)
-      .is('reconciled_entry_id', null)
+      .update({ reconciled_entry_id: hit.id })
+      .eq('id', s.id).eq('clinic_id', clinicId).is('reconciled_entry_id', null)
+    linked.push({ statement_id: s.id, candidate: toCandidate(hit) })
   }
-  return res
+  return {
+    linked,
+    unmatched_statements: stmts.length - linked.length,
+    unmatched_candidates: paid.length - linked.length,
+  }
 }
 
 // Desvincular uma linha do extrato (tira a amarração).
