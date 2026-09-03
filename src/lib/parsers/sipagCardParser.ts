@@ -59,6 +59,7 @@ export async function parseSipagCardXlsx(file: File): Promise<{ rows: StatementR
   let headerRow = -1
   const colIdx: Partial<Record<keyof StatementRow, number>> = {}
   const cancelCol = { idx: -1 }
+  const methodCol = { idx: -1 }
   for (let r = 1; r <= Math.min(15, ws.rowCount); r++) {
     const row = ws.getRow(r)
     const names: string[] = []
@@ -69,6 +70,7 @@ export async function parseSipagCardXlsx(file: File): Promise<{ rows: StatementR
         const field = COL[names[j]]
         if (field) colIdx[field] = j
         if (names[j].includes('indicador de cancelamento')) cancelCol.idx = j
+        if (names[j] === 'forma de pagamento') methodCol.idx = j
       }
       break
     }
@@ -92,6 +94,8 @@ export async function parseSipagCardXlsx(file: File): Promise<{ rows: StatementR
     }
     const inst = toNum(get(row, 'installment'))
     const tot  = toNum(get(row, 'total_installments'))
+    const rawMethod = methodCol.idx > 0 ? norm(String(cellVal(row.getCell(methodCol.idx).value) ?? '')) : ''
+    const method: 'credit' | 'debit' | null = rawMethod.includes('cred') || rawMethod === 'c' ? 'credit' : rawMethod.includes('deb') || rawMethod === 'd' ? 'debit' : null
     rows.push({
       nsu:                nsu != null ? String(nsu).replace(/"/g, '').trim() : null,
       authorization:      (() => { const a = get(row, 'authorization'); return a != null ? String(a).replace(/"/g, '').trim() || null : null })(),
@@ -103,6 +107,7 @@ export async function parseSipagCardXlsx(file: File): Promise<{ rows: StatementR
       fee:                toNum(get(row, 'fee')),
       sale_date:          toDate(get(row, 'sale_date')),
       settlement_date:    toDate(get(row, 'settlement_date')),
+      method,
       raw:                `linha ${r}`,
     })
   }

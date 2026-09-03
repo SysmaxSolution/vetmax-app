@@ -9,6 +9,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
+import { listPaymentCards, createPaymentCard } from '@/lib/actions/payment-cards'
 
 async function getCtx() {
   const supabase = await createClient()
@@ -31,6 +32,7 @@ export interface StatementRow {
   fee:                number | null   // taxa (MDR) em R$
   sale_date:          string | null   // data da venda (YYYY-MM-DD)
   settlement_date:    string | null   // data de repasse/vencimento (YYYY-MM-DD)
+  method:             'credit' | 'debit' | null   // forma (crédito/débito)
   raw:                string          // linha original (rastreio)
 }
 
@@ -87,6 +89,7 @@ const CSV_ALIASES: Record<keyof StatementRow, string[]> = {
   fee:                ['taxa', 'mdr', 'valor_taxa', 'vl_taxa', 'taxa_administrativa', 'desconto', 'valor_desconto', 'comissao', 'comissão', 'fee'],
   sale_date:          ['data_venda', 'data venda', 'data', 'data_transacao', 'dt_venda', 'sale_date'],
   settlement_date:    ['data_repasse', 'data_pagamento', 'data_credito', 'data_liquidacao', 'dt_credito', 'previsao_pagamento', 'previsao', 'previsão', 'vencimento', 'settlement'],
+  method:             ['forma_pagamento', 'forma de pagamento', 'forma', 'tipo', 'credito_debito', 'modalidade'],
   raw:                [],
 }
 
@@ -115,6 +118,7 @@ function parseCsv(text: string): StatementRow[] {
       fee:                num(get('fee')),
       sale_date:          toDate(get('sale_date')),
       settlement_date:    toDate(get('settlement_date')),
+      method:             (() => { const m = (get('method') ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); return m.includes('cred') || m === 'c' ? 'credit' : m.includes('deb') || m === 'd' ? 'debit' : null })(),
       raw:                line,
     } as StatementRow
   })
@@ -313,4 +317,74 @@ export async function includeCardMovements(
   revalidatePath('/dashboard/financial')
   revalidatePath('/dashboard/financial/cards')
   return { ok: true, included }
+}
+
+// ─── Cartões não cadastrados detectados no extrato ────────────────────────────
+// Ao ler o EDI, identifica bandeiras/tipos usados que ainda NÃO estão no cadastro
+// (credit_cards) e já pré-calcula taxa média, prazo de repasse e nº de parcelas
+// a partir do próprio arquivo — para o usuário cadastrar com 1 clique.
+export interface SuggestedCard {
+  acquirer:         string
+  brand:            string
+  method:           'credit' | 'debit'
+  fee_percent:      number
+  settlement_days:  number
+  max_installments: number
+  count:            number
+}
+
+const normStr = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
+
+export async function detectUnregisteredCards(rows: StatementRow[], acquirer = 'Sipag'): Promise<SuggestedCard[] | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return { error: ctx.error as string }
+  const existing = await listPaymentCards({ only_active: false })
+  const cards = Array.isArray(existing) ? existing : []
+  const has = (brand: string, method: 'credit' | 'debit') =>
+    cards.some(c => normStr(c.brand ?? '') === normStr(brand) && c.card_type === method)
+
+  const groups = new Map<string, { brand: string; method: 'credit' | 'debit'; feePcts: number[]; days: number[]; maxInst: number; count: number }>()
+  for (const r of rows) {
+    const brand = (r.brand ?? '').trim()
+    const method = r.method
+    if (!brand || (method !== 'credit' && method !== 'debit')) continue
+    const key = `${normStr(brand)}|${method}`
+    const g = groups.get(key) ?? { brand, method, feePcts: [], days: [], maxInst: 1, count: 0 }
+    g.count++
+    if (r.gross && r.gross > 0 && r.fee != null) g.feePcts.push((r.fee / r.gross) * 100)
+    if (r.sale_date && r.settlement_date && (r.installment ?? 1) === 1) {
+      const d = (new Date(r.settlement_date).getTime() - new Date(r.sale_date).getTime()) / 86400000
+      if (d >= 0 && d < 400) g.days.push(Math.round(d))
+    }
+    g.maxInst = Math.max(g.maxInst, r.total_installments ?? 1)
+    groups.set(key, g)
+  }
+  const avg = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0)
+  const out: SuggestedCard[] = []
+  for (const g of groups.values()) {
+    if (has(g.brand, g.method)) continue
+    out.push({
+      acquirer, brand: g.brand, method: g.method,
+      fee_percent: Math.round(avg(g.feePcts) * 100) / 100,
+      settlement_days: g.days.length ? Math.round(avg(g.days)) : (g.method === 'debit' ? 1 : 30),
+      max_installments: g.method === 'debit' ? 1 : g.maxInst,
+      count: g.count,
+    })
+  }
+  return out
+}
+
+export async function registerCardsFromStatement(cards: SuggestedCard[]): Promise<{ ok: true; created: number } | { error: string }> {
+  if (!cards.length) return { error: 'Nada para cadastrar.' }
+  let created = 0
+  for (const c of cards) {
+    const res = await createPaymentCard({
+      label: `${c.acquirer} ${c.brand} ${c.method === 'debit' ? 'Débito' : 'Crédito'}`,
+      acquirer: c.acquirer, card_type: c.method, brand: c.brand,
+      fee_percent: c.fee_percent, settlement_days: c.settlement_days, max_installments: c.max_installments,
+    })
+    if (!('error' in res)) created++
+  }
+  revalidatePath('/dashboard/financial')
+  return { ok: true, created }
 }

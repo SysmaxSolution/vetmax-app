@@ -4,7 +4,8 @@ import { useState } from 'react'
 import { Loader2, Upload, CheckCircle2, AlertTriangle, HelpCircle, Link2, PlusCircle, Printer, FileDown } from 'lucide-react'
 import {
   parseCardStatement, matchCardStatement, reconcileCardInstallments, includeCardMovements,
-  type CardMatchResult, type MatchedRow, type StatementRow,
+  detectUnregisteredCards, registerCardsFromStatement,
+  type CardMatchResult, type MatchedRow, type StatementRow, type SuggestedCard,
 } from '@/lib/actions/card-reconciliation'
 
 const BRL = (v: number | null) => (v == null ? '—' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }))
@@ -24,6 +25,10 @@ export default function CardReconciliation() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   // seleção dos "não encontrados" por índice global em result.rows (não têm installment_id)
   const [selectedNf, setSelectedNf] = useState<Set<number>>(new Set())
+  // cartões (bandeira/tipo) usados no extrato que não estão cadastrados
+  const [unregistered, setUnregistered] = useState<SuggestedCard[]>([])
+  const [selCards, setSelCards] = useState<Set<number>>(new Set())
+  const [registering, setRegistering] = useState(false)
 
   async function handleFile(file: File) {
     setError(null); setDone(null); setResult(null); setLoading(true)
@@ -50,6 +55,9 @@ export default function CardReconciliation() {
       // pré-seleciona os vinculados (exatos)
       setSelected(new Set(matched.rows.filter(r => r.status === 'linked' && r.installment_id).map(r => r.installment_id!)))
       setSelectedNf(new Set())
+      // detecta cartões (bandeira/tipo) usados no extrato que não estão cadastrados
+      const unreg = await detectUnregisteredCards(parsed)
+      if (Array.isArray(unreg)) { setUnregistered(unreg); setSelCards(new Set(unreg.map((_, i) => i))) }
     } catch (e) {
       setError(`Falha ao processar: ${(e as Error).message}`)
     } finally { setLoading(false) }
@@ -131,6 +139,17 @@ export default function CardReconciliation() {
     setResult(null); setSelected(new Set()); setSelectedNf(new Set())
   }
 
+  async function handleRegisterCards() {
+    const chosen = [...selCards].map(i => unregistered[i]).filter(Boolean)
+    if (!chosen.length || registering) return
+    setRegistering(true); setError(null)
+    const res = await registerCardsFromStatement(chosen)
+    setRegistering(false)
+    if ('error' in res) { setError(res.error); return }
+    setDone(`${res.created} cartão(ões) cadastrado(s) a partir do extrato.`)
+    setUnregistered([]); setSelCards(new Set())
+  }
+
   async function handleReconcile() {
     if (!result || reconciling || selected.size === 0) return
     setReconciling(true); setError(null)
@@ -188,6 +207,33 @@ export default function CardReconciliation() {
       {loading && <div className="p-6 flex items-center justify-center gap-2 text-slate-400 text-sm"><Loader2 className="h-4 w-4 animate-spin" /> Cruzando o extrato com o sistema…</div>}
       {error && <div className="rounded-lg bg-rose-50 border border-rose-200 px-4 py-2.5 text-sm text-rose-700">{error}</div>}
       {done && <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-2.5 text-sm text-emerald-700 flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> {done}</div>}
+
+      {/* Cartões não cadastrados detectados no extrato — "amarra a ponta do cadastro" */}
+      {unregistered.length > 0 && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 space-y-3">
+          <div className="flex items-center gap-2 text-amber-800">
+            <AlertTriangle className="h-4 w-4" />
+            <p className="text-sm font-semibold">{unregistered.length} cartão(ões) usado(s) no extrato não estão cadastrados. Deseja cadastrar?</p>
+          </div>
+          <div className="space-y-1.5">
+            {unregistered.map((c, i) => (
+              <label key={i} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-amber-900">
+                <input type="checkbox" checked={selCards.has(i)} onChange={() => setSelCards(prev => { const n = new Set(prev); n.has(i) ? n.delete(i) : n.add(i); return n })} />
+                <span className="font-semibold">{c.acquirer} · {c.brand} · {c.method === 'debit' ? 'Débito' : 'Crédito'}</span>
+                <span className="text-amber-700">taxa média {c.fee_percent.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}% · repasse {c.settlement_days}d · até {c.max_installments}x · {c.count} lançamento(s)</span>
+              </label>
+            ))}
+          </div>
+          <div className="flex items-center gap-3">
+            <button onClick={handleRegisterCards} disabled={registering || selCards.size === 0}
+              className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50 flex items-center gap-2">
+              {registering ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />} Cadastrar selecionados ({selCards.size})
+            </button>
+            <button onClick={() => setUnregistered([])} className="text-xs text-amber-700 hover:text-amber-900">Ignorar por agora</button>
+          </div>
+          <p className="text-[11px] text-amber-700">Taxa, prazo de repasse e nº de parcelas foram pré-calculados do próprio extrato — ajuste depois em Cadastros › Cartões se precisar.</p>
+        </div>
+      )}
 
       {result && (
         <>
