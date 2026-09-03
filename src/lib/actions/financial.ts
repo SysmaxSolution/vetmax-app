@@ -1759,10 +1759,12 @@ function autoMatch(
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 1.3 Animais · Conciliação bancária (2 painéis + F3)
-// Extrato = "voz da verdade" (esquerda). Direita = títulos do sistema (candidatos
-// no topo, vinculados embaixo). Auto-amarração persistida → desvincular real;
-// F3: baixar título em aberto / inserir título não lançado; CONCILIAR fecha o lote.
+// 1.3 Animais · Conciliação bancária (2 painéis) — modelo N:1
+// Extrato (esquerda) = "voz da verdade". Uma linha do extrato pode ter VÁRIOS
+// títulos do sistema vinculados (ex.: repasse único do cartão = N transações).
+// VÍNCULO (bank_statement_entry_links) ≠ CONCILIAÇÃO (bank_statements.reconciled_at).
+// Selecionar linha → marcar 1+ candidatos → Vincular → Conciliar (parcial). Permite
+// desvincular e desconciliar.
 // ══════════════════════════════════════════════════════════════════════════════
 
 export interface ReconcCandidate {
@@ -1786,38 +1788,91 @@ const toCandidate = (e: FinancialEntry): ReconcCandidate => ({
   tutor_name: e.tutor_name, patient_name: e.patient_name,
 })
 
+export interface StatementWithLinks {
+  id:          string
+  date:        string
+  amount:      number
+  description: string
+  type:        'credit' | 'debit'
+  reconciled:  boolean
+  linked:      ReconcCandidate[]
+}
+
+async function fetchCandidatesByIds(clinicId: string, ids: string[]): Promise<Map<string, ReconcCandidate>> {
+  const map = new Map<string, ReconcCandidate>()
+  if (!ids.length) return map
+  const admin = createAdminClient()
+  const { data } = await admin.from('financial_entries').select(ENTRY_SELECT).eq('clinic_id', clinicId).in('id', ids)
+  for (const raw of (data ?? [])) { const c = toCandidate(mapEntry(raw as unknown as Record<string, unknown>)); map.set(c.id, c) }
+  return map
+}
+
+// Carrega as linhas do extrato do lote com seus vínculos + estado de conciliação.
+export async function getStatementsWithLinks(batchId: string): Promise<StatementWithLinks[] | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  const admin = createAdminClient()
+  const { data: stmts } = await admin.from('bank_statements')
+    .select('id, date, amount, description, type, reconciled_at')
+    .eq('clinic_id', clinicId).eq('import_batch_id', batchId)
+    .order('date', { ascending: true })
+  const list = (stmts ?? []) as Record<string, unknown>[]
+  const stmtIds = list.map(s => s.id as string)
+
+  const linkMap = new Map<string, string[]>()
+  if (stmtIds.length) {
+    const { data: links } = await admin.from('bank_statement_entry_links')
+      .select('statement_id, entry_id').eq('clinic_id', clinicId).in('statement_id', stmtIds)
+    for (const l of (links ?? []) as Record<string, unknown>[]) {
+      const a = linkMap.get(l.statement_id as string) ?? []; a.push(l.entry_id as string); linkMap.set(l.statement_id as string, a)
+    }
+  }
+  const candMap = await fetchCandidatesByIds(clinicId, [...new Set([...linkMap.values()].flat())])
+  return list.map(s => ({
+    id:          s.id as string,
+    date:        s.date as string,
+    amount:      Number(s.amount),
+    description: s.description as string,
+    type:        s.type as 'credit' | 'debit',
+    reconciled:  !!s.reconciled_at,
+    linked:      (linkMap.get(s.id as string) ?? []).map(id => candMap.get(id)).filter(Boolean) as ReconcCandidate[],
+  }))
+}
+
 export interface AutoLinkResult {
-  linked:               { statement_id: string; candidate: ReconcCandidate }[]
+  linked:               number
   unmatched_statements: number
   unmatched_candidates: number
 }
 
-// Auto-amarração da 1.3: casa cada linha do extrato com um título JÁ PAGO
-// (crédito→a receber, débito→a pagar) por valor (±0,01) e data de pagamento
-// (±2 dias) e PERSISTE (reconciled_entry_id). Ignora linhas já vinculadas.
+// Auto-amarração: casa cada linha SEM vínculo com um título JÁ PAGO (crédito→a
+// receber, débito→a pagar) por valor (±0,01) e data de pagamento (±2 dias) e cria
+// o VÍNCULO (não concilia — o usuário confirma depois).
 export async function persistAutoLinks(batchId: string): Promise<AutoLinkResult | { error: string }> {
   const clinicId = await getClinicId()
   if (!clinicId) return { error: 'Não autenticado.' }
   const stmtsRes = await listBatchStatements(batchId)
   if ('error' in stmtsRes) return stmtsRes
-  const stmts = stmtsRes.filter(s => !s.reconciled_entry_id)
-  if (!stmts.length) return { linked: [], unmatched_statements: 0, unmatched_candidates: 0 }
+  const admin = createAdminClient()
+
+  const { data: existingLinks } = await admin.from('bank_statement_entry_links')
+    .select('statement_id, entry_id').eq('clinic_id', clinicId)
+  const linkedEntryIds = new Set((existingLinks ?? []).map((r: Record<string, unknown>) => r.entry_id as string))
+  const stmtHasLink = new Set((existingLinks ?? []).map((r: Record<string, unknown>) => r.statement_id as string))
+
+  const stmts = stmtsRes.filter(s => !stmtHasLink.has(s.id))
+  if (!stmts.length) return { linked: 0, unmatched_statements: 0, unmatched_candidates: 0 }
 
   const dates = stmts.map(s => s.date).sort()
   const pad = (d: string, days: number) => new Date(new Date(d).getTime() + days * 86400000).toISOString().slice(0, 10)
   const start = pad(dates[0], -3), end = pad(dates[dates.length - 1], 3)
 
-  const admin = createAdminClient()
-  const { data: linkedRows } = await admin.from('bank_statements')
-    .select('reconciled_entry_id').eq('clinic_id', clinicId).not('reconciled_entry_id', 'is', null)
-  const linkedIds = new Set((linkedRows ?? []).map((r: Record<string, unknown>) => r.reconciled_entry_id as string))
-
   const types: EntryType[] = ['receivable', 'payable']
   const lists = await Promise.all(types.map(t => listEntries({ type: t, status: 'paid', paid_from: start, paid_to: end })))
-  const paid = lists.flatMap(r => Array.isArray(r) ? r : []).filter(e => !linkedIds.has(e.id))
+  const paid = lists.flatMap(r => Array.isArray(r) ? r : []).filter(e => !linkedEntryIds.has(e.id))
 
   const usedEntry = new Set<string>()
-  const linked: { statement_id: string; candidate: ReconcCandidate }[] = []
+  let linked = 0
   for (const s of stmts) {
     const wantType: EntryType = s.type === 'credit' ? 'receivable' : 'payable'
     const sTime = new Date(s.date).getTime()
@@ -1829,32 +1884,84 @@ export async function persistAutoLinks(batchId: string): Promise<AutoLinkResult 
     })
     if (!hit) continue
     usedEntry.add(hit.id)
-    await admin.from('bank_statements')
-      .update({ reconciled_entry_id: hit.id })
-      .eq('id', s.id).eq('clinic_id', clinicId).is('reconciled_entry_id', null)
-    linked.push({ statement_id: s.id, candidate: toCandidate(hit) })
+    await admin.from('bank_statement_entry_links').insert({ clinic_id: clinicId, statement_id: s.id, entry_id: hit.id })
+    linked++
   }
-  return {
-    linked,
-    unmatched_statements: stmts.length - linked.length,
-    unmatched_candidates: paid.length - linked.length,
-  }
+  return { linked, unmatched_statements: stmts.length - linked, unmatched_candidates: paid.length - linked }
 }
 
-// Desvincular uma linha do extrato (tira a amarração).
+// Vincular 1+ títulos do sistema a uma linha do extrato (N:1). Idempotente.
+export async function linkEntriesToStatement(statementId: string, entryIds: string[]): Promise<{ ok: true; linked: number } | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  if (!entryIds.length) return { error: 'Selecione ao menos um título.' }
+  const admin = createAdminClient()
+  const rows = entryIds.map(entry_id => ({ clinic_id: clinicId, statement_id: statementId, entry_id }))
+  const { error } = await admin.from('bank_statement_entry_links')
+    .upsert(rows, { onConflict: 'statement_id,entry_id', ignoreDuplicates: true })
+  if (error) return { error: 'Erro ao vincular: ' + error.message }
+  return { ok: true, linked: entryIds.length }
+}
+
+// Desvincular UM título de uma linha (se ficar sem vínculo, desfaz a conciliação).
+export async function unlinkEntry(statementId: string, entryId: string): Promise<{ error?: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  const admin = createAdminClient()
+  const { error } = await admin.from('bank_statement_entry_links').delete()
+    .eq('clinic_id', clinicId).eq('statement_id', statementId).eq('entry_id', entryId)
+  if (error) return { error: 'Erro ao desvincular: ' + error.message }
+  const { data: rest } = await admin.from('bank_statement_entry_links')
+    .select('id').eq('clinic_id', clinicId).eq('statement_id', statementId).limit(1)
+  if (!rest || rest.length === 0) {
+    await admin.from('bank_statements').update({ reconciled_at: null }).eq('id', statementId).eq('clinic_id', clinicId)
+  }
+  return {}
+}
+
+// Desvincular TODOS os títulos de uma linha + desconciliar.
 export async function unlinkStatement(statementId: string): Promise<{ error?: string }> {
   const clinicId = await getClinicId()
   if (!clinicId) return { error: 'Não autenticado.' }
   const admin = createAdminClient()
-  const { error } = await admin.from('bank_statements')
-    .update({ reconciled_entry_id: null })
-    .eq('id', statementId).eq('clinic_id', clinicId)
+  await admin.from('bank_statement_entry_links').delete().eq('clinic_id', clinicId).eq('statement_id', statementId)
+  const { error } = await admin.from('bank_statements').update({ reconciled_at: null }).eq('id', statementId).eq('clinic_id', clinicId)
   if (error) return { error: 'Erro ao desvincular: ' + error.message }
   return {}
 }
 
-// Candidatos do painel direito: títulos PAGOS ainda não amarrados (no período) +
-// títulos em ABERTO (para o F3 "baixar título em aberto").
+// Concilia as linhas informadas QUE TÊM vínculo (parcial — não exige todas). As
+// demais ficam pendentes.
+export async function reconcileLines(statementIds: string[]): Promise<{ ok: true; reconciled: number } | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  if (!statementIds.length) return { error: 'Nada para conciliar.' }
+  const admin = createAdminClient()
+  const { data: links } = await admin.from('bank_statement_entry_links')
+    .select('statement_id').eq('clinic_id', clinicId).in('statement_id', statementIds)
+  const hasLink = new Set((links ?? []).map((r: Record<string, unknown>) => r.statement_id as string))
+  const toRec = statementIds.filter(id => hasLink.has(id))
+  if (!toRec.length) return { error: 'Selecione linhas vinculadas para conciliar.' }
+  const now = new Date().toISOString()
+  const { error } = await admin.from('bank_statements')
+    .update({ reconciled_at: now }).in('id', toRec).eq('clinic_id', clinicId).is('reconciled_at', null)
+  if (error) return { error: 'Erro ao conciliar: ' + error.message }
+  return { ok: true, reconciled: toRec.length }
+}
+
+// Desconciliar uma linha (mantém o vínculo).
+export async function unreconcileLine(statementId: string): Promise<{ error?: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  const admin = createAdminClient()
+  const { error } = await admin.from('bank_statements')
+    .update({ reconciled_at: null }).eq('id', statementId).eq('clinic_id', clinicId)
+  if (error) return { error: 'Erro ao desconciliar: ' + error.message }
+  return {}
+}
+
+// Candidatos do painel direito: títulos PAGOS ainda não vinculados (no período) +
+// títulos em ABERTO (para "baixar título em aberto").
 export async function listReconcCandidates(params: {
   bank_account_id: string
   start_date:      string
@@ -1864,12 +1971,9 @@ export async function listReconcCandidates(params: {
   if (!clinicId) return { error: 'Não autenticado.' }
   const admin = createAdminClient()
 
-  // ids já amarrados a alguma linha de extrato (qualquer lote desta clínica)
-  const { data: linked } = await admin.from('bank_statements')
-    .select('reconciled_entry_id')
-    .eq('clinic_id', clinicId)
-    .not('reconciled_entry_id', 'is', null)
-  const linkedIds = new Set((linked ?? []).map((r: Record<string, unknown>) => r.reconciled_entry_id as string))
+  const { data: linkRows } = await admin.from('bank_statement_entry_links')
+    .select('entry_id').eq('clinic_id', clinicId)
+  const linkedIds = new Set((linkRows ?? []).map((r: Record<string, unknown>) => r.entry_id as string))
 
   const types: EntryType[] = ['receivable', 'payable']
   const [paidLists, openLists] = await Promise.all([
@@ -1884,7 +1988,7 @@ export async function listReconcCandidates(params: {
   return { paid, open }
 }
 
-// F3(a): baixar um título em ABERTO (marca pago) e amarrar à linha do extrato.
+// Baixar um título em ABERTO (marca pago) e VINCULAR à linha do extrato.
 export async function settleOpenEntryAndLink(params: {
   entry_id:        string
   statement_id:    string
@@ -1898,21 +2002,20 @@ export async function settleOpenEntryAndLink(params: {
     .update({ status: 'paid', payment_date: params.payment_date, settlement_bank_id: params.bank_account_id, updated_at: new Date().toISOString() })
     .eq('id', params.entry_id).eq('clinic_id', clinicId).eq('status', 'pending')
   if (upErr) return { error: 'Erro ao baixar título: ' + upErr.message }
-  const { error: recErr } = await admin.from('bank_statements')
-    .update({ reconciled_entry_id: params.entry_id })
-    .eq('id', params.statement_id).eq('clinic_id', clinicId)
-  if (recErr) return { error: 'Erro ao vincular: ' + recErr.message }
+  const { error: linkErr } = await admin.from('bank_statement_entry_links')
+    .upsert({ clinic_id: clinicId, statement_id: params.statement_id, entry_id: params.entry_id }, { onConflict: 'statement_id,entry_id', ignoreDuplicates: true })
+  if (linkErr) return { error: 'Erro ao vincular: ' + linkErr.message }
   return {}
 }
 
-// F3(b): inserir um título que nem tinha sido lançado, a partir da linha do extrato.
+// Inserir um título não lançado a partir da linha do extrato + VINCULAR.
 export async function insertEntryFromStatement(params: {
   statement_id:          string
   bank_account_id:       string
   category?:             string
   chart_of_accounts_id?: string
   description?:          string
-}): Promise<{ error?: string }> {
+}): Promise<{ ok: true; entry_id: string } | { error: string }> {
   const clinicId = await getClinicId()
   if (!clinicId) return { error: 'Não autenticado.' }
   const admin = createAdminClient()
@@ -1937,26 +2040,8 @@ export async function insertEntryFromStatement(params: {
   }).select('id').single()
   if (feErr || !fe) return { error: 'Falha ao inserir título: ' + (feErr?.message ?? '') }
 
-  const { error: recErr } = await admin.from('bank_statements')
-    .update({ reconciled_entry_id: fe.id })
-    .eq('id', params.statement_id).eq('clinic_id', clinicId)
-  if (recErr) return { error: 'Título criado, mas falha ao vincular: ' + recErr.message }
-  return {}
-}
-
-// CONCILIAR: fecha o lote (todas as linhas não-ignoradas vinculadas).
-export async function finalizeReconciliation(
-  batchId: string,
-): Promise<{ ok: true; matched: number } | { error: string }> {
-  const clinicId = await getClinicId()
-  if (!clinicId) return { error: 'Não autenticado.' }
-  const admin = createAdminClient()
-  const { data: stmts } = await admin.from('bank_statements')
-    .select('id, reconciled_entry_id').eq('clinic_id', clinicId).eq('import_batch_id', batchId)
-  const matched = (stmts ?? []).filter((s: Record<string, unknown>) => s.reconciled_entry_id).length
-  const { error } = await admin.from('reconciliation_batches')
-    .update({ status: 'completed', matched_count: matched })
-    .eq('id', batchId).eq('clinic_id', clinicId)
-  if (error) return { error: 'Erro ao concluir conciliação: ' + error.message }
-  return { ok: true, matched }
+  const { error: linkErr } = await admin.from('bank_statement_entry_links')
+    .insert({ clinic_id: clinicId, statement_id: params.statement_id, entry_id: fe.id })
+  if (linkErr) return { error: 'Título criado, mas falha ao vincular: ' + linkErr.message }
+  return { ok: true, entry_id: fe.id }
 }
