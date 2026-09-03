@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Loader2, Upload, CheckCircle2, AlertTriangle, HelpCircle, Link2, PlusCircle } from 'lucide-react'
+import { Loader2, Upload, CheckCircle2, AlertTriangle, HelpCircle, Link2, PlusCircle, Printer, FileDown } from 'lucide-react'
 import {
   parseCardStatement, matchCardStatement, reconcileCardInstallments, includeCardMovements,
   type CardMatchResult, type MatchedRow, type StatementRow,
@@ -61,15 +61,73 @@ export default function CardReconciliation() {
   function toggleNf(gi: number) {
     setSelectedNf(prev => { const n = new Set(prev); n.has(gi) ? n.delete(gi) : n.add(gi); return n })
   }
+  // marcar/desmarcar todos de um grupo (vinculados/divergentes → selected por installment_id)
+  function toggleAllGroup(status: MatchedRow['status']) {
+    if (!result) return
+    const ids = result.rows.filter(r => r.status === status && r.installment_id).map(r => r.installment_id!)
+    setSelected(prev => { const allIn = ids.length > 0 && ids.every(id => prev.has(id)); const n = new Set(prev); ids.forEach(id => allIn ? n.delete(id) : n.add(id)); return n })
+  }
+  // marcar/desmarcar todos os não encontrados (selectedNf por índice global)
+  function toggleAllNf() {
+    if (!result) return
+    const gis = result.rows.map((r, i) => ({ r, i })).filter(x => x.r.status === 'not_found').map(x => x.i)
+    setSelectedNf(prev => { const allIn = gis.length > 0 && gis.every(i => prev.has(i)); const n = new Set(prev); gis.forEach(i => allIn ? n.delete(i) : n.add(i)); return n })
+  }
 
-  async function handleInclude() {
+  // ── relatório prévio (imprimível/salvável) ──
+  const GROUP_LABEL: Record<MatchedRow['status'], string> = { linked: 'Vinculado', divergent: 'Divergente', not_found: 'Não encontrado', already: 'Já conciliado' }
+  function reportRows() {
+    if (!result) return [] as string[][]
+    return result.rows.map(r => {
+      const st = r.statement
+      return [
+        GROUP_LABEL[r.status],
+        st.nsu ?? '', st.brand ?? '',
+        `${st.installment ?? ''}${st.total_installments ? '/' + st.total_installments : ''}`,
+        st.gross != null ? st.gross.toFixed(2).replace('.', ',') : '',
+        st.net != null ? st.net.toFixed(2).replace('.', ',') : '',
+        st.fee != null ? st.fee.toFixed(2).replace('.', ',') : '',
+        st.settlement_date ? fmtD(st.settlement_date) : '',
+        r.status === 'divergent' ? `difere: ${r.diffs.join(', ')}` : (r.system?.patient_name ?? ''),
+      ]
+    })
+  }
+  function downloadReport() {
+    const head = ['Situação', 'NSU', 'Bandeira', 'Parcela', 'Bruto', 'Líquido', 'Taxa', 'Repasse', 'Obs.']
+    const csv = [head, ...reportRows()].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\r\n')
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob); const a = document.createElement('a')
+    a.href = url; a.download = `conciliacao_cartoes_${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(url)
+  }
+  function printReport() {
+    if (!result) return
+    const head = ['Situação', 'NSU', 'Bandeira', 'Parc.', 'Bruto', 'Líquido', 'Taxa', 'Repasse', 'Obs.']
+    const s = result.summary
+    const w = window.open('', '_blank'); if (!w) return
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Relatório de Conciliação de Cartões</title>
+      <style>body{font-family:system-ui,Arial,sans-serif;padding:24px;color:#0f172a}h1{font-size:18px;margin:0 0 4px}
+      .sub{color:#64748b;font-size:12px;margin-bottom:16px}table{width:100%;border-collapse:collapse;font-size:11px}
+      th,td{border:1px solid #e2e8f0;padding:4px 6px;text-align:left}th{background:#f1f5f9}
+      .r{text-align:right}.tot{margin:12px 0;font-size:12px}</style></head><body>
+      <h1>Relatório de Conciliação de Cartões</h1>
+      <div class="sub">Gerado em ${new Date().toLocaleString('pt-BR')}</div>
+      <div class="tot"><b>${s.total}</b> lançamentos · Vinculados <b>${s.linked}</b> · Divergentes <b>${s.divergent}</b> · Não encontrados <b>${s.not_found}</b> · Já conciliados <b>${s.already}</b></div>
+      <table><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>
+      ${reportRows().map(row => `<tr>${row.map((c, i) => `<td class="${i >= 4 && i <= 6 ? 'r' : ''}">${c}</td>`).join('')}</tr>`).join('')}
+      </tbody></table></body></html>`)
+    w.document.close(); w.focus(); setTimeout(() => w.print(), 300)
+  }
+
+  async function handleInclude(reconcile: boolean) {
     if (!result || including || selectedNf.size === 0) return
     setIncluding(true); setError(null)
     const rowsToInc = [...selectedNf].map(gi => result.rows[gi]?.statement).filter(Boolean) as CardMatchResult['rows'][number]['statement'][]
-    const res = await includeCardMovements(rowsToInc)
+    const res = await includeCardMovements(rowsToInc, { reconcile })
     setIncluding(false)
     if ('error' in res) { setError(res.error); return }
-    setDone(`${res.included} título(s) incluído(s) na movimentação de cartões e baixado(s).`)
+    setDone(reconcile
+      ? `${res.included} título(s) incluído(s) na movimentação e conciliado(s).`
+      : `${res.included} título(s) incluído(s) na movimentação de cartões (pendentes, veja em Financeiro › Cartões).`)
     setResult(null); setSelected(new Set()); setSelectedNf(new Set())
   }
 
@@ -133,7 +191,14 @@ export default function CardReconciliation() {
 
       {result && (
         <>
-          {/* Relatório prévio (resumo + legenda) */}
+          {/* Relatório prévio (resumo + legenda) — imprimível/salvável ANTES de conciliar */}
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <h3 className="text-sm font-bold text-slate-700">Relatório prévio da conciliação</h3>
+            <div className="flex items-center gap-2">
+              <button onClick={printReport} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"><Printer className="h-3.5 w-3.5" /> Imprimir</button>
+              <button onClick={downloadReport} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"><FileDown className="h-3.5 w-3.5" /> Salvar (CSV)</button>
+            </div>
+          </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {groups.map(g => {
               const n = result.summary[g.key]
@@ -154,7 +219,13 @@ export default function CardReconciliation() {
             const selectable = g.key === 'linked' || g.key === 'divergent' || g.key === 'not_found'
             return (
               <div key={g.key} className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-                <div className={`px-4 py-2 border-b border-slate-100 text-xs font-bold uppercase tracking-wide ${STYLE[g.key].header}`}>{g.label} · {rows.length}</div>
+                <div className={`px-4 py-2 border-b border-slate-100 flex items-center justify-between ${STYLE[g.key].header}`}>
+                  <span className="text-xs font-bold uppercase tracking-wide">{g.label} · {rows.length}</span>
+                  {selectable && (
+                    <button onClick={() => g.key === 'not_found' ? toggleAllNf() : toggleAllGroup(g.key)}
+                      className="text-[11px] font-semibold underline decoration-dotted hover:opacity-80">Marcar todos</button>
+                  )}
+                </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead className="bg-slate-50 text-[10px] text-slate-500 uppercase">
@@ -209,12 +280,18 @@ export default function CardReconciliation() {
               {selected.size} vinculado(s)/divergente(s) para conciliar. Divergentes serão atualizados com os dados do extrato.
               {selectedNf.size > 0 && <> · {selectedNf.size} não encontrado(s) para incluir na movimentação.</>}
             </p>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {selectedNf.size > 0 && (
-                <button onClick={handleInclude} disabled={including}
-                  className="rounded-xl bg-rose-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50 flex items-center gap-2">
-                  {including ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />} Incluir e conciliar ({selectedNf.size})
-                </button>
+                <>
+                  <button onClick={() => handleInclude(false)} disabled={including}
+                    className="rounded-xl border border-rose-300 bg-white px-4 py-2.5 text-sm font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50 flex items-center gap-2">
+                    {including ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />} Incluir na movimentação ({selectedNf.size})
+                  </button>
+                  <button onClick={() => handleInclude(true)} disabled={including}
+                    className="rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50 flex items-center gap-2">
+                    {including ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />} Incluir e conciliar ({selectedNf.size})
+                  </button>
+                </>
               )}
               <button onClick={handleReconcile} disabled={reconciling || selected.size === 0}
                 className="rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50 flex items-center gap-2">

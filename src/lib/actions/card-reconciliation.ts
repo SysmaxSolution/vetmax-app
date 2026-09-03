@@ -250,16 +250,24 @@ export async function reconcileCardInstallments(items: Array<{
   return { ok: true, reconciled }
 }
 
-// ─── Incluir "não encontrados" (movimentação avulsa) + baixar ─────────────────
-// Para linhas do extrato que NÃO existem no sistema: cria a movimentação de
-// cartão (card_installments avulso, sem venda vinculada) já com o A Receber de
-// cartão e baixa na mesma ação (a operadora repassou). O título de origem no
-// caixa não é criado aqui — só a movimentação do cartão, conforme o fluxo real.
-export async function includeCardMovements(rows: StatementRow[]): Promise<{ ok: true; included: number } | { error: string }> {
+// ─── Incluir "não encontrados" (movimentação avulsa) ──────────────────────────
+// Para linhas do extrato que NÃO existem no sistema: cria a movimentação de cartão
+// (card_installments avulso, sem venda vinculada) + o A Receber de cartão.
+// opts.reconcile:
+//   false → nasce PENDENTE (aparece individualmente em Financeiro > Cartões p/
+//           liquidar depois). Valor da parcela = bruto (a operadora deve).
+//   true  → nasce JÁ CONCILIADO/baixado (a operadora repassou). Valor recebido =
+//           líquido, p/ casar na conciliação bancária.
+// O título de origem no caixa não é criado aqui — só a movimentação do cartão.
+export async function includeCardMovements(
+  rows: StatementRow[],
+  opts: { reconcile?: boolean } = {},
+): Promise<{ ok: true; included: number } | { error: string }> {
   const ctx = await getCtx()
   if ('error' in ctx) return { error: ctx.error as string }
   if (!['admin', 'owner', 'manager'].includes(ctx.role)) return { error: 'Sem permissão para incluir movimentações.' }
   if (!rows.length) return { error: 'Nada para incluir.' }
+  const reconcile = opts.reconcile ?? false
   const admin = createAdminClient()
   const today = new Date().toISOString()
   const todayD = today.slice(0, 10)
@@ -274,13 +282,14 @@ export async function includeCardMovements(rows: StatementRow[]): Promise<{ ok: 
     const inst  = st.installment ?? 1
     const tot   = st.total_installments ?? 1
     const settle = st.settlement_date ?? todayD
-    const label = `Cartão avulso (conciliação)${st.brand ? ` · ${st.brand}` : ''} · ${inst}/${tot} · NSU ${st.nsu ?? '—'}`
+    const label = `Cartão avulso${st.brand ? ` · ${st.brand}` : ''} · ${inst}/${tot} · NSU ${st.nsu ?? '—'}`
 
-    // A Receber de cartão avulso — nasce já baixado (repasse confirmado no extrato).
-    // Valor = líquido efetivamente creditado, para casar na conciliação bancária.
+    const fePayload = reconcile
+      ? { amount: net,   status: 'paid'    as const, payment_date: settle }   // repassado
+      : { amount: gross, status: 'pending' as const, payment_date: null }     // a receber
     const { data: fe, error: feErr } = await admin.from('financial_entries').insert({
-      clinic_id: ctx.clinic_id, type: 'receivable', description: label, amount: net,
-      due_date: settle, payment_date: settle, status: 'paid',
+      clinic_id: ctx.clinic_id, type: 'receivable', description: label,
+      amount: fePayload.amount, due_date: settle, payment_date: fePayload.payment_date, status: fePayload.status,
       source: 'card_acquirer', category: 'A receber de cartão', payment_method: 'credit',
       created_by: ctx.user_id,
     }).select('id').single()
@@ -289,10 +298,12 @@ export async function includeCardMovements(rows: StatementRow[]): Promise<{ ok: 
     const { error: ciErr } = await admin.from('card_installments').insert({
       clinic_id: ctx.clinic_id, split_id: null, invoice_id: null,
       installment_number: inst, total_installments: tot, payment_method: 'credit',
-      card_brand: st.brand, card_nsu: st.nsu,
+      card_acquirer: 'Sipag', card_brand: st.brand, card_nsu: st.nsu, card_authorization: st.authorization,
+      transaction_date: st.sale_date,
       gross_amount: gross, fee_percent: feePct, fee_amount: fee, net_amount: net,
-      expected_settlement_date: settle, status: 'reconciled',
-      settled_amount: net, settled_at: today, reconciled_at: today,
+      expected_settlement_date: settle,
+      status: reconcile ? 'reconciled' : 'pending',
+      settled_amount: reconcile ? net : null, settled_at: reconcile ? today : null, reconciled_at: reconcile ? today : null,
       pending_entry_id: fe.id,
     })
     if (ciErr) { await admin.from('financial_entries').delete().eq('id', fe.id); continue }
