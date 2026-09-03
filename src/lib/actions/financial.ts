@@ -2045,3 +2045,63 @@ export async function insertEntryFromStatement(params: {
   if (linkErr) return { error: 'Título criado, mas falha ao vincular: ' + linkErr.message }
   return { ok: true, entry_id: fe.id }
 }
+
+// ─── EXTRATO (movimentações efetivas) ─────────────────────────────────────────
+// Lista os títulos BAIXADOS (pagos) no contas a receber/pagar — as movimentações
+// efetivas de caixa/banco — com o status de conciliação de cada um (conciliado se
+// vinculado a uma linha do extrato já conciliada; senão vinculado ou pendente).
+export interface ExtratoMovement {
+  id:              string
+  date:            string
+  description:     string
+  amount:          number
+  type:            EntryType
+  category:        string | null
+  document_number: string | null
+  tutor_name:      string | null
+  patient_name:    string | null
+  bank_name:       string | null
+  status:          'reconciled' | 'linked' | 'pending'
+}
+export interface EffectiveExtratoResult {
+  movements:      ExtratoMovement[]
+  total_entradas: number
+  total_saidas:   number
+  saldo:          number
+}
+export async function getEffectiveExtrato(params: {
+  start_date: string; end_date: string; bank_account_id?: string
+}): Promise<EffectiveExtratoResult | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  const admin = createAdminClient()
+
+  const types: EntryType[] = ['receivable', 'payable']
+  const lists = await Promise.all(types.map(t => listEntries({ type: t, status: 'paid', paid_from: params.start_date, paid_to: params.end_date })))
+  let entries = lists.flatMap(r => Array.isArray(r) ? r : [])
+  if (params.bank_account_id) entries = entries.filter(e => e.settlement_bank_id === params.bank_account_id)
+
+  // estado de conciliação por título
+  const { data: links } = await admin.from('bank_statement_entry_links')
+    .select('entry_id, statement_id').eq('clinic_id', clinicId)
+  const linkRows = (links ?? []) as Record<string, unknown>[]
+  const stmtIds = [...new Set(linkRows.map(l => l.statement_id as string))]
+  const reconStmt = new Set<string>()
+  if (stmtIds.length) {
+    const { data: st } = await admin.from('bank_statements').select('id, reconciled_at').in('id', stmtIds)
+    for (const s of (st ?? []) as Record<string, unknown>[]) if (s.reconciled_at) reconStmt.add(s.id as string)
+  }
+  const linkedEntry = new Set(linkRows.map(l => l.entry_id as string))
+  const reconciledEntry = new Set(linkRows.filter(l => reconStmt.has(l.statement_id as string)).map(l => l.entry_id as string))
+
+  const movements: ExtratoMovement[] = entries.map(e => ({
+    id: e.id, date: e.payment_date ?? e.due_date, description: e.description, amount: e.amount,
+    type: e.type, category: e.category, document_number: e.document_number,
+    tutor_name: e.tutor_name, patient_name: e.patient_name, bank_name: e.settlement_bank_name,
+    status: (reconciledEntry.has(e.id) ? 'reconciled' : linkedEntry.has(e.id) ? 'linked' : 'pending') as ExtratoMovement['status'],
+  })).sort((a, b) => a.date.localeCompare(b.date))
+
+  const total_entradas = movements.filter(m => m.type === 'receivable').reduce((s, m) => s + m.amount, 0)
+  const total_saidas   = movements.filter(m => m.type === 'payable').reduce((s, m) => s + m.amount, 0)
+  return { movements, total_entradas, total_saidas, saldo: total_entradas - total_saidas }
+}
