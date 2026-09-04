@@ -11,6 +11,7 @@ import BankAccountsTab    from './cadastros/BankAccountsTab'
 import ChartOfAccountsTab from './cadastros/ChartOfAccountsTab'
 import CreditCardsTab     from './cadastros/CreditCardsTab'
 import EmployeesTab       from './cadastros/EmployeesTab'
+import CommissionsTab      from './cadastros/CommissionsTab'
 import ExtratoTab         from './ExtratoTab'
 import ConciliacaoTab     from './ConciliacaoTab'
 import CreditsTab         from './CreditsTab'
@@ -29,7 +30,7 @@ import { useModule } from '@/components/providers/ModulesProvider'
 
 type FilterStatus = 'all' | 'pending' | 'paid' | 'cancelled'
 type MainTab = EntryType | 'extrato' | 'conciliacao' | 'creditos' | 'pagfor' | 'cnpjs' | 'cadastros'
-type CadastrosSubTab = 'bancos' | 'plano_contas' | 'cartoes' | 'funcionarios'
+type CadastrosSubTab = 'bancos' | 'plano_contas' | 'cartoes' | 'funcionarios' | 'comissoes'
 
 interface Props {
   initialReceivable:        FinancialEntry[]
@@ -357,6 +358,7 @@ export default function FinancialWorkspace({
     { id: 'plano_contas', label: 'Plano de Contas' },
     { id: 'cartoes',      label: 'Cartões' },
     { id: 'funcionarios', label: 'Funcionários' },
+    { id: 'comissoes',    label: 'Comissões' },
   ]
 
   return (
@@ -634,6 +636,7 @@ export default function FinancialWorkspace({
                 onToast={(_type, _msg) => {}}
               />
             )}
+            {cadastrosTab === 'comissoes' && <CommissionsTab />}
           </div>
         )}
       </div>
