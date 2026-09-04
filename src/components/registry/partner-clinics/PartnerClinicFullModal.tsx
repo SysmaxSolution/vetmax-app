@@ -6,6 +6,7 @@ import {
   upsertPartnerClinic, setPartnerClinicActive,
   type PartnerClinic, type PartnerClinicInput,
 } from '@/lib/actions/partner-clinics'
+import PartnerExamCostsSection from './PartnerExamCostsSection'
 
 function formatCnpj(v: string) {
   const d = v.replace(/\D/g, '').slice(0, 14)
@@ -290,6 +291,9 @@ export default function PartnerClinicFullModal({ clinic, priceTables, onClose, o
               </div>
             )}
           </div>
+
+          {/* Custos de exames (laboratório) — só para parceira já salva */}
+          {clinic?.id && <PartnerExamCostsSection partnerClinicId={clinic.id} />}
 
           {/* Notas */}
           <div>

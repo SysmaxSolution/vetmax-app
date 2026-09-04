@@ -174,3 +174,45 @@ export async function listPriceTablesLite(): Promise<{ id: string; name: string;
     .order('slot', { ascending: true })
   return (data ?? []) as { id: string; name: string; slot: number }[]
 }
+
+// ─── 1.11 F1 · Matriz de custo por laboratório × exame ────────────────────────
+export interface PartnerExamCost {
+  catalog_item_id: string
+  name:            string
+  sale_price:      number   // preço ao tutor (clinic_catalog.price)
+  cost:            number   // custo a pagar ao laboratório
+}
+
+// Custos de exames de UM laboratório (todos os exames do catálogo + o custo já
+// cadastrado, 0 se ainda não definido).
+export async function listPartnerExamCosts(partnerClinicId: string): Promise<PartnerExamCost[] | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx && ctx.error) return { error: ctx.error }
+  const admin = createAdminClient()
+  const [{ data: catalog }, { data: costs }] = await Promise.all([
+    admin.from('clinic_catalog').select('id, name, price').eq('clinic_id', ctx.clinic_id).eq('item_type', 'exam').eq('is_active', true).order('name'),
+    admin.from('partner_clinic_exam_costs').select('catalog_item_id, cost').eq('clinic_id', ctx.clinic_id).eq('partner_clinic_id', partnerClinicId),
+  ])
+  const costMap = new Map((costs ?? []).map((c: Record<string, unknown>) => [c.catalog_item_id as string, Number(c.cost)]))
+  return (catalog ?? []).map((r: Record<string, unknown>) => ({
+    catalog_item_id: r.id as string, name: r.name as string,
+    sale_price: Number(r.price), cost: costMap.get(r.id as string) ?? 0,
+  }))
+}
+
+export async function upsertPartnerExamCost(input: {
+  partner_clinic_id: string; catalog_item_id: string; cost: number
+}): Promise<{ ok: true } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx && ctx.error) return { error: ctx.error }
+  if (!CAN_MANAGE.includes(ctx.role)) return { error: 'Sem permissão.' }
+  if (!(input.cost >= 0)) return { error: 'Custo inválido.' }
+  const admin = createAdminClient()
+  const { error } = await admin.from('partner_clinic_exam_costs').upsert({
+    clinic_id: ctx.clinic_id, partner_clinic_id: input.partner_clinic_id,
+    catalog_item_id: input.catalog_item_id, cost: input.cost, updated_at: new Date().toISOString(),
+  }, { onConflict: 'partner_clinic_id,catalog_item_id' })
+  if (error) return { error: error.message }
+  revalidatePath('/dashboard/management')
+  return { ok: true }
+}
