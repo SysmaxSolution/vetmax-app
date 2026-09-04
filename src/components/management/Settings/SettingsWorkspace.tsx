@@ -4,8 +4,9 @@ import { useState } from 'react'
 import {
   Building2, Shield, MessageCircle, Calculator,
   BarChart3, Wrench, ToggleLeft, ToggleRight, Save, Loader2,
-  HelpCircle, Tags, Hash, Building,
+  HelpCircle, Tags, Hash, Building, Landmark,
 } from 'lucide-react'
+import FinancialIntegrationsForm from './FinancialIntegrationsForm'
 import type { ClinicConfig, ClinicSettingsConfig, FlowConfig } from '@/lib/actions/clinic-settings'
 import { updateClinicConfig } from '@/lib/actions/clinic-settings'
 import ModulesTab from '../ModulesTab'
@@ -26,7 +27,7 @@ import { Lock, ArrowUpRight } from 'lucide-react'
 
 // Categoria 'ia' removida em 2026-05-26 (cleanup de drift): IA mode e Fluxo
 // Contínuo agora são exclusivos da categoria 'acesso' (ClinicSettingsTab).
-type Category = 'geral' | 'acesso' | 'whatsapp' | 'contabil' | 'empresas' | 'precos' | 'numeracao' | 'relatorios' | 'utilitarios'
+type Category = 'geral' | 'acesso' | 'whatsapp' | 'contabil' | 'financeiro' | 'empresas' | 'precos' | 'numeracao' | 'relatorios' | 'utilitarios'
 
 interface CategoryDef {
   key: Category
@@ -40,6 +41,7 @@ const CATEGORIES: CategoryDef[] = [
   { key: 'acesso',       label: 'Acesso',      icon: <Shield       className="h-4 w-4" />, description: 'Módulos, IA e fluxo contínuo'        },
   { key: 'whatsapp',     label: 'WhatsApp',    icon: <MessageCircle className="h-4 w-4" />, description: 'Evolution API e notificações'        },
   { key: 'contabil',     label: 'Contábil',    icon: <Calculator   className="h-4 w-4" />, description: 'Plano de contas e dados fiscais'     },
+  { key: 'financeiro',   label: 'Financeiro',  icon: <Landmark     className="h-4 w-4" />, description: 'Integração bancária e PIX'           },
   { key: 'empresas',     label: 'Empresas',    icon: <Building     className="h-4 w-4" />, description: 'Empresas faturantes (multi-CNPJ)'   },
   { key: 'precos',       label: 'Preços',      icon: <Tags         className="h-4 w-4" />, description: 'Tabelas de preço e composição'      },
   { key: 'numeracao',    label: 'Numeração',   icon: <Hash         className="h-4 w-4" />, description: 'Nº de OS, RPS, NFS-e…'              },
@@ -181,6 +183,13 @@ export default function SettingsWorkspace({
           </div>
         )}
 
+        {activeCategory === 'financeiro' && (
+          <div className="space-y-6">
+            <SectionHeader icon={<Landmark className="h-5 w-5 text-slate-600" />} title="Integrações Financeiras" description="Integração bancária (extrato/conciliação) e PIX — cada uma condicional à ativação" />
+            <FinancialIntegrationsForm onToast={onToast} />
+          </div>
+        )}
+
         {activeCategory === 'empresas' && animaisFoundation && (
           <div className="space-y-6">
             <SectionHeader icon={<Building className="h-5 w-5 text-slate-600" />} title="Empresas Faturantes" description="CNPJs do grupo dentro desta clínica (Emp 001, 002, 003…)" />
@@ -262,7 +271,7 @@ function UpsellCard({
             type="button"
             onClick={onClick}
             data-feature={feature}
-            className="inline-flex items-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-700 px-4 py-2 text-sm font-bold text-white shadow-md shadow-violet-200 transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg bg-violet-600 hover:bg-violet-700 px-4 py-2 text-sm font-bold text-white shadow-md shadow-violet-200 transition-colors"
           >
             Quero habilitar
             <ArrowUpRight className="h-4 w-4" />
@@ -593,7 +602,7 @@ function RegistrationSettings({ initialConfig, onToast }: {
         <button
           onClick={handleSave}
           disabled={saving}
-          className="flex items-center gap-2 px-5 py-2.5 bg-teal-600 text-white text-sm font-semibold rounded-xl hover:bg-teal-700 transition-colors disabled:opacity-50"
+          className="flex items-center gap-2 px-5 py-2.5 bg-teal-600 text-white text-sm font-semibold shadow-sm rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-60"
         >
           {saving
             ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando...</>
@@ -683,7 +692,7 @@ function MentorIdleSettings({ initialConfig, onToast }: {
         <button
           onClick={handleSave}
           disabled={saving}
-          className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50"
+          className="flex items-center gap-2 px-5 py-2.5 bg-teal-600 text-white text-sm font-semibold shadow-sm rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-60"
         >
           {saving
             ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando...</>

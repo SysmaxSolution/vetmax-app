@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useRef, useTransition, useMemo } from 'react'
+import { useState, useRef, useTransition, useMemo, useEffect } from 'react'
+import { isBankIntegrationEnabled } from '@/lib/actions/financial-integrations'
 import {
   BankAccount, ReconciliationBatch, StatementWithLinks, ReconcCandidate, AutoLinkResult,
   importStatements, getBBStatement, getStatementsWithLinks, persistAutoLinks, listReconcCandidates,
@@ -44,7 +45,10 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
   const [apiStart, setApiStart] = useState(firstOfMonth())
   const [apiEnd, setApiEnd]     = useState(new Date().toISOString().slice(0, 10))
   const [apiLoading, setApiLoading] = useState(false)
+  const [bankApiEnabled, setBankApiEnabled] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => { isBankIntegrationEnabled().then(setBankApiEnabled) }, [])
 
   const candById = useMemo(() => {
     const m = new Map<string, ReconcCandidate>()
@@ -207,7 +211,8 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
           </div>
         </div>
 
-        {/* Buscar extrato direto do banco (Sicoob) por período */}
+        {/* Buscar extrato direto do banco (Sicoob) por período — só com integração ativa */}
+        {bankApiEnabled && (
         <div className="flex flex-wrap items-end gap-2 rounded-lg border border-sky-200 bg-sky-50/60 px-3 py-2.5">
           <Building2 className="h-4 w-4 text-sky-600 mb-2" />
           <div>
@@ -224,6 +229,7 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
           </button>
           <span className="text-[10px] text-sky-600/80 mb-2">API Conta Corrente v4 · sandbox de teste (produção usa o e-CNPJ da clínica)</span>
         </div>
+        )}
         {parseErrors.length > 0 && (
           <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
             <p className="text-sm font-semibold text-amber-800 mb-1">Avisos de importação:</p>
