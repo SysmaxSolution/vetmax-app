@@ -3,6 +3,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { getTenantCtx } from '@/lib/data/context'
+import { fetchSicoobExtrato } from '@/lib/integrations/sicoob'
 
 // ─── Types base (G-09) ────────────────────────────────────────────────────────
 
@@ -2171,4 +2172,31 @@ export async function getCrossCompanyOverview(params: {
     row.credito_inserido = r2(row.credito_inserido); row.credito_utilizado = r2(row.credito_utilizado); row.credito_disponivel = r2(row.credito_disponivel)
   }
   return { companies: [...map.values()].sort((a, b) => a.company_name.localeCompare(b.company_name)) }
+}
+
+// ─── 1.3 · Buscar extrato do banco (Sicoob) por período e auto-vincular ───────
+// Puxa o extrato da conta corrente Sicoob (API v4) no período informado, importa
+// como lote e roda a auto-amarração — o usuário só confirma a conciliação.
+export async function importBankStatementFromSicoob(params: {
+  bank_account_id: string; start_date: string; end_date: string
+}): Promise<{ ok: true; batch_id: string; imported: number; linked: number; warnings: string[] } | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  const admin = createAdminClient()
+  const { data: acct } = await admin.from('bank_accounts')
+    .select('account, name').eq('id', params.bank_account_id).eq('clinic_id', clinicId).single()
+  if (!acct) return { error: 'Conta bancária não encontrada.' }
+  const conta = String((acct as { account?: string }).account ?? '').trim()
+  if (!conta) return { error: 'A conta selecionada não tem número cadastrado (necessário para buscar no Sicoob).' }
+
+  let res: { statements: { date: string; amount: number; description: string; type: 'credit' | 'debit'; external_id?: string }[]; warnings: string[] }
+  try { res = await fetchSicoobExtrato({ conta, start_date: params.start_date, end_date: params.end_date }) }
+  catch (e) { return { error: `Sicoob: ${(e as Error).message}` } }
+  if (!res.statements.length) return { error: `Nenhum lançamento retornado pelo Sicoob no período.${res.warnings.length ? ' (' + res.warnings.join(' · ') + ')' : ''}` }
+
+  const imp = await importStatements({ bank_account_id: params.bank_account_id, source: 'sicoob_api', statements: res.statements })
+  if ('error' in imp) return { error: imp.error }
+  const auto = await persistAutoLinks(imp.id)
+  const linked = 'error' in auto ? 0 : auto.linked
+  return { ok: true, batch_id: imp.id, imported: res.statements.length, linked, warnings: res.warnings }
 }

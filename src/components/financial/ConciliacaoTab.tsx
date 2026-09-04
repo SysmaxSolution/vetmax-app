@@ -5,7 +5,7 @@ import {
   BankAccount, ReconciliationBatch, StatementWithLinks, ReconcCandidate, AutoLinkResult,
   importStatements, getBBStatement, getStatementsWithLinks, persistAutoLinks, listReconcCandidates,
   linkEntriesToStatement, unlinkEntry, unlinkStatement, reconcileLines, unreconcileLine,
-  settleOpenEntryAndLink, insertEntryFromStatement,
+  settleOpenEntryAndLink, insertEntryFromStatement, importBankStatementFromSicoob,
 } from '@/lib/actions/financial'
 import { parseFile } from '@/lib/parsers/bankStatementParser'
 import {
@@ -39,6 +39,11 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
   const [isPending, startTransition] = useTransition()
   const [isBBLoading, setIsBBLoading] = useState(false)
   const [busy, setBusy]           = useState(false)
+  // buscar extrato do banco (Sicoob) por período
+  const firstOfMonth = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01` }
+  const [apiStart, setApiStart] = useState(firstOfMonth())
+  const [apiEnd, setApiEnd]     = useState(new Date().toISOString().slice(0, 10))
+  const [apiLoading, setApiLoading] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const candById = useMemo(() => {
@@ -105,6 +110,21 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
       setSuccessMsg(`${bb.length} lançamentos importados do Banco (simulado).`)
     }
     setIsBBLoading(false)
+  }
+
+  async function handleSicoobImport() {
+    if (!selectedBank || apiLoading) { if (!selectedBank) setErrorMsg('Selecione a conta bancária.'); return }
+    setErrorMsg(null); setSuccessMsg(null); setBatch(null); setStatements([]); setMatchResult(null); setActiveStmt(null); setSelCands(new Set())
+    setApiLoading(true)
+    const res = await importBankStatementFromSicoob({ bank_account_id: selectedBank, start_date: apiStart, end_date: apiEnd })
+    setApiLoading(false)
+    if ('error' in res) { setErrorMsg(res.error); return }
+    setPeriod({ start: apiStart, end: apiEnd })
+    // recupera o lote recém-criado como batch (para as ações de reload)
+    setBatch({ id: res.batch_id, clinic_id: '', bank_account_id: selectedBank, source: 'sicoob_api', imported_at: '', total_records: res.imported, matched_count: res.linked, status: 'pending' })
+    setMatchResult({ linked: res.linked, unmatched_statements: res.imported - res.linked, unmatched_candidates: 0 })
+    await loadData(res.batch_id, apiStart, apiEnd)
+    setSuccessMsg(`${res.imported} lançamentos do Sicoob importados. ${res.linked} vinculados automaticamente.${res.warnings.length ? ' Avisos: ' + res.warnings.join(' · ') : ''}`)
   }
 
   const active = statements.find(s => s.id === activeStmt) ?? null
@@ -185,10 +205,24 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
               <Upload className="h-4 w-4" /> {isPending ? 'Processando...' : 'Upload OFX / CSV / TXT / XLSX'}
             </label>
           </div>
-          <button onClick={handleBBImport} disabled={!selectedBank || isBBLoading}
-            className="flex items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-100 disabled:opacity-50">
-            <Building2 className={`h-4 w-4 ${isBBLoading ? 'animate-spin' : ''}`} /> Importar do Banco (API)
+        </div>
+
+        {/* Buscar extrato direto do banco (Sicoob) por período */}
+        <div className="flex flex-wrap items-end gap-2 rounded-lg border border-sky-200 bg-sky-50/60 px-3 py-2.5">
+          <Building2 className="h-4 w-4 text-sky-600 mb-2" />
+          <div>
+            <label className="block text-[10px] font-semibold text-sky-700 mb-1">Buscar do banco · início</label>
+            <input type="date" value={apiStart} onChange={e => setApiStart(e.target.value)} className="rounded-lg border border-sky-200 bg-white px-2.5 py-1.5 text-sm" />
+          </div>
+          <div>
+            <label className="block text-[10px] font-semibold text-sky-700 mb-1">fim</label>
+            <input type="date" value={apiEnd} onChange={e => setApiEnd(e.target.value)} className="rounded-lg border border-sky-200 bg-white px-2.5 py-1.5 text-sm" />
+          </div>
+          <button onClick={handleSicoobImport} disabled={!selectedBank || apiLoading}
+            className="flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-50">
+            {apiLoading ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <Building2 className="h-4 w-4" />} Buscar extrato (Sicoob)
           </button>
+          <span className="text-[10px] text-sky-600/80 mb-2">API Conta Corrente v4 · sandbox de teste (produção usa o e-CNPJ da clínica)</span>
         </div>
         {parseErrors.length > 0 && (
           <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
