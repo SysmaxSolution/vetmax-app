@@ -175,44 +175,69 @@ export async function listPriceTablesLite(): Promise<{ id: string; name: string;
   return (data ?? []) as { id: string; name: string; slot: number }[]
 }
 
-// ─── 1.11 F1 · Matriz de custo por laboratório × exame ────────────────────────
-export interface PartnerExamCost {
-  catalog_item_id: string
-  name:            string
-  sale_price:      number   // preço ao tutor (clinic_catalog.price)
-  cost:            number   // custo a pagar ao laboratório
+// ─── 1.11 · Comissão da parceira/laboratório por serviço/produto (% ou valor) ──
+export type PartnerCommScope = 'all' | 'product' | 'service' | 'package'
+export type PartnerCommType  = 'percent' | 'fixed'
+export interface PartnerCommission {
+  id:              string
+  item_type:       PartnerCommScope
+  item_id:         string | null
+  item_name:       string | null
+  commission_type: PartnerCommType
+  value:           number
 }
 
-// Custos de exames de UM laboratório (todos os exames do catálogo + o custo já
-// cadastrado, 0 se ainda não definido).
-export async function listPartnerExamCosts(partnerClinicId: string): Promise<PartnerExamCost[] | { error: string }> {
+export async function listPartnerCommissions(partnerClinicId: string): Promise<PartnerCommission[] | { error: string }> {
   const ctx = await getCtx()
   if ('error' in ctx && ctx.error) return { error: ctx.error }
   const admin = createAdminClient()
-  const [{ data: catalog }, { data: costs }] = await Promise.all([
-    admin.from('clinic_catalog').select('id, name, price').eq('clinic_id', ctx.clinic_id).eq('item_type', 'exam').eq('is_active', true).order('name'),
-    admin.from('partner_clinic_exam_costs').select('catalog_item_id, cost').eq('clinic_id', ctx.clinic_id).eq('partner_clinic_id', partnerClinicId),
-  ])
-  const costMap = new Map((costs ?? []).map((c: Record<string, unknown>) => [c.catalog_item_id as string, Number(c.cost)]))
-  return (catalog ?? []).map((r: Record<string, unknown>) => ({
-    catalog_item_id: r.id as string, name: r.name as string,
-    sale_price: Number(r.price), cost: costMap.get(r.id as string) ?? 0,
+  const { data } = await admin.from('partner_clinic_commissions')
+    .select('id, item_type, item_id, item_name, commission_type, value')
+    .eq('clinic_id', ctx.clinic_id).eq('partner_clinic_id', partnerClinicId)
+    .order('created_at', { ascending: true })
+  return (data ?? []).map((r: Record<string, unknown>) => ({
+    id: r.id as string, item_type: r.item_type as PartnerCommScope, item_id: (r.item_id as string) ?? null,
+    item_name: (r.item_name as string) ?? null, commission_type: r.commission_type as PartnerCommType, value: Number(r.value),
   }))
 }
 
-export async function upsertPartnerExamCost(input: {
-  partner_clinic_id: string; catalog_item_id: string; cost: number
+export async function addPartnerCommission(input: {
+  partner_clinic_id: string
+  item_type:         PartnerCommScope
+  item_id?:          string | null
+  item_name?:        string | null
+  commission_type:   PartnerCommType
+  value:             number
 }): Promise<{ ok: true } | { error: string }> {
   const ctx = await getCtx()
   if ('error' in ctx && ctx.error) return { error: ctx.error }
   if (!CAN_MANAGE.includes(ctx.role)) return { error: 'Sem permissão.' }
-  if (!(input.cost >= 0)) return { error: 'Custo inválido.' }
+  if (!(input.value >= 0)) return { error: 'Valor inválido.' }
+  if (input.commission_type === 'percent' && input.value > 100) return { error: 'Percentual não pode passar de 100%.' }
+  const itemId = input.item_type === 'all' ? null : (input.item_id ?? null)
+  if (input.item_type !== 'all' && !itemId) return { error: 'Selecione o item.' }
   const admin = createAdminClient()
-  const { error } = await admin.from('partner_clinic_exam_costs').upsert({
+  // substitui regra existente do mesmo item (ou a regra 'all')
+  const del = admin.from('partner_clinic_commissions').delete()
+    .eq('clinic_id', ctx.clinic_id).eq('partner_clinic_id', input.partner_clinic_id)
+  await (itemId ? del.eq('item_id', itemId) : del.is('item_id', null).eq('item_type', 'all'))
+  const { error } = await admin.from('partner_clinic_commissions').insert({
     clinic_id: ctx.clinic_id, partner_clinic_id: input.partner_clinic_id,
-    catalog_item_id: input.catalog_item_id, cost: input.cost, updated_at: new Date().toISOString(),
-  }, { onConflict: 'partner_clinic_id,catalog_item_id' })
+    item_type: input.item_type, item_id: itemId, item_name: input.item_name ?? null,
+    commission_type: input.commission_type, value: input.value,
+  })
   if (error) return { error: error.message }
   revalidatePath('/dashboard/management')
   return { ok: true }
+}
+
+export async function deletePartnerCommission(id: string): Promise<{ error?: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx && ctx.error) return { error: ctx.error }
+  if (!CAN_MANAGE.includes(ctx.role)) return { error: 'Sem permissão.' }
+  const admin = createAdminClient()
+  const { error } = await admin.from('partner_clinic_commissions').delete().eq('id', id).eq('clinic_id', ctx.clinic_id)
+  if (error) return { error: error.message }
+  revalidatePath('/dashboard/management')
+  return {}
 }

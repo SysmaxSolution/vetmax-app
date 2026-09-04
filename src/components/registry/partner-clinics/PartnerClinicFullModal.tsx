@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { X, Save, Loader2, Building2, Trash2, RefreshCcw } from 'lucide-react'
 import {
   upsertPartnerClinic, setPartnerClinicActive,
   type PartnerClinic, type PartnerClinicInput,
 } from '@/lib/actions/partner-clinics'
-import PartnerExamCostsSection from './PartnerExamCostsSection'
+import PartnerCommissionsSection from './PartnerCommissionsSection'
 
 function formatCnpj(v: string) {
   const d = v.replace(/\D/g, '').slice(0, 14)
@@ -50,6 +50,29 @@ export default function PartnerClinicFullModal({ clinic, priceTables, onClose, o
     clinic?.commission_percent != null ? String(clinic.commission_percent) : '',
   )
   const [notes, setNotes]           = useState(clinic?.notes ?? '')
+  const [cnpjLoading, setCnpjLoading] = useState(false)
+
+  // Auto-preenche pelos dados públicos do CNPJ (Receita) quando 14 dígitos
+  useEffect(() => {
+    const digits = cnpj.replace(/\D/g, '')
+    if (digits.length !== 14) return
+    let cancelled = false
+    setCnpjLoading(true)
+    fetch(`https://publica.cnpj.ws/cnpj/${digits}`)
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { razao_social?: string; nome_fantasia?: string; estabelecimento?: { logradouro?: string; numero?: string; bairro?: string; cidade?: { nome?: string }; estado?: { sigla?: string }; telefone?: string; email?: string } } | null) => {
+        if (cancelled || !d) return
+        const est = d.estabelecimento
+        setLegalName(prev => prev || d.razao_social || '')
+        setName(prev => prev || d.nome_fantasia || d.razao_social || '')
+        setAddress(prev => prev || [est?.logradouro, est?.numero, est?.bairro, est?.cidade?.nome && `${est.cidade.nome}/${est.estado?.sigla ?? ''}`].filter(Boolean).join(', '))
+        setPhone(prev => prev || (est?.telefone ?? ''))
+        setEmail(prev => prev || (est?.email ?? ''))
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setCnpjLoading(false) })
+    return () => { cancelled = true }
+  }, [cnpj])
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -172,12 +195,12 @@ export default function PartnerClinicFullModal({ clinic, priceTables, onClose, o
           {/* CNPJ + CRMV */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">CNPJ</label>
+              <label className="block text-xs font-medium text-slate-700 mb-1 flex items-center gap-1.5">CNPJ {cnpjLoading && <Loader2 className="h-3 w-3 animate-spin text-teal-500" />}</label>
               <input
                 type="text"
                 value={formatCnpj(cnpj)}
                 onChange={e => setCnpj(e.target.value.replace(/\D/g, ''))}
-                placeholder="00.000.000/0000-00"
+                placeholder="00.000.000/0000-00 (auto-preenche os dados)"
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
               />
             </div>
@@ -292,8 +315,8 @@ export default function PartnerClinicFullModal({ clinic, priceTables, onClose, o
             )}
           </div>
 
-          {/* Custos de exames (laboratório) — só para parceira já salva */}
-          {clinic?.id && <PartnerExamCostsSection partnerClinicId={clinic.id} />}
+          {/* Comissão por serviço/produto — só para parceira já salva */}
+          {clinic?.id && <PartnerCommissionsSection partnerClinicId={clinic.id} />}
 
           {/* Notas */}
           <div>
