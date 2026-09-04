@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import {
-  Loader2, CheckCircle2, Building2, Search,
+  Loader2, CheckCircle2, Building2, KeyRound,
   UserCircle2, Phone, CreditCard, Eye, EyeOff, AtSign,
   Stethoscope, Scissors,
 } from 'lucide-react'
-import { signUpWithClinic, searchClinics } from '@/lib/actions/auth'
+import { signUpWithClinic } from '@/lib/actions/auth'
 import { recordAttribution } from '@/lib/actions/attribution'
 import type { BusinessType } from '@/types'
 
@@ -62,14 +62,8 @@ export default function RegisterPage() {
   const [cnpjData, setCnpjData]       = useState<CnpjData | null>(null)
   const [cnpjError, setCnpjError]     = useState('')
 
-  // Clínica existente
-  const [clinicSearch, setClinicSearch]       = useState('')
-  const [clinicResults, setClinicResults]     = useState<{ id: string; name: string }[]>([])
-  const [selectedClinic, setSelectedClinic]   = useState<{ id: string; name: string } | null>(null)
-  const [searchLoading, setSearchLoading]     = useState(false)
-  const [showDropdown, setShowDropdown]       = useState(false)
-  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  const searchContainerRef = useRef<HTMLDivElement>(null)
+  // Clínica existente — adesão por CÓDIGO DE ACESSO (fornecido pelo admin da clínica)
+  const [joinCode, setJoinCode] = useState('')
 
   // Dados pessoais
   const [username, setUsername] = useState('')
@@ -112,34 +106,6 @@ export default function RegisterPage() {
     return () => { cancelled = true }
   }, [cnpj])
 
-  // ── Busca de clínica com debounce ──────────────────────────────────────────
-  useEffect(() => {
-    clearTimeout(searchDebounceRef.current)
-    if (!clinicSearch || clinicSearch.length < 2) {
-      setClinicResults([])
-      setShowDropdown(false)
-      return
-    }
-    setSearchLoading(true)
-    searchDebounceRef.current = setTimeout(async () => {
-      const results = await searchClinics(clinicSearch)
-      setClinicResults(results)
-      setShowDropdown(results.length > 0)
-      setSearchLoading(false)
-    }, 400)
-  }, [clinicSearch])
-
-  // Fecha dropdown ao clicar fora
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
-        setShowDropdown(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [])
-
   // ── Submit ─────────────────────────────────────────────────────────────────
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -154,8 +120,8 @@ export default function RegisterPage() {
     formData.set('password', password)
     formData.set('terms_accepted', String(termsAccepted))
 
-    if (clinicMode === 'existing' && selectedClinic) {
-      formData.set('clinic_id', selectedClinic.id)
+    if (clinicMode === 'existing') {
+      formData.set('join_code', joinCode.trim())
     } else {
       if (!businessType) {
         setError('Selecione o segmento da sua clínica antes de continuar.')
@@ -385,54 +351,25 @@ export default function RegisterPage() {
               </div>
             )}
 
-            {/* Clínica existente */}
+            {/* Clínica existente — só por CÓDIGO DE ACESSO (o admin da clínica fornece) */}
             {clinicMode === 'existing' && (
-              <div ref={searchContainerRef} className="relative">
-                <div className="absolute left-3 top-1/2 -translate-y-1/2">
-                  {searchLoading
-                    ? <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
-                    : <Search className="h-4 w-4 text-slate-400" />}
-                </div>
-                <input
-                  value={clinicSearch}
-                  onChange={e => { setClinicSearch(e.target.value); setSelectedClinic(null) }}
-                  onFocus={() => clinicResults.length > 0 && setShowDropdown(true)}
-                  className={`${fieldClass} pl-9`}
-                  placeholder="Buscar clínica pelo nome..."
-                  autoComplete="off"
-                />
-
-                {showDropdown && clinicResults.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 z-10 mt-1 rounded-xl border border-slate-200 bg-white shadow-lg overflow-hidden">
-                    {clinicResults.map(c => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedClinic(c)
-                          setClinicSearch(c.name)
-                          setShowDropdown(false)
-                        }}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-teal-50 hover:text-teal-800 text-left transition-colors"
-                      >
-                        <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md bg-teal-100 text-teal-700 text-xs font-bold">
-                          {c.name.charAt(0).toUpperCase()}
-                        </div>
-                        {c.name}
-                      </button>
-                    ))}
+              <div>
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2">
+                    <KeyRound className="h-4 w-4 text-slate-400" />
                   </div>
-                )}
-
-                {selectedClinic && (
-                  <p className="mt-2 text-xs text-teal-700 ml-1 flex items-center gap-1">
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    Clínica selecionada: <span className="font-semibold">{selectedClinic.name}</span>
-                  </p>
-                )}
-                {!selectedClinic && clinicSearch.length >= 2 && !searchLoading && clinicResults.length === 0 && (
-                  <p className="mt-2 text-xs text-slate-400 ml-1">Nenhuma clínica encontrada com este nome.</p>
-                )}
+                  <input
+                    value={joinCode}
+                    onChange={e => setJoinCode(e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 12))}
+                    className={`${fieldClass} pl-9 font-mono tracking-widest`}
+                    placeholder="CÓDIGO DE ACESSO"
+                    autoComplete="off"
+                  />
+                </div>
+                <p className="mt-2 text-xs text-slate-400 ml-1">
+                  Peça o <span className="font-semibold text-slate-600">código de acesso</span> ao administrador da sua clínica
+                  (Gestão &gt; Usuários). Você entrará com o perfil que ele definir.
+                </p>
               </div>
             )}
           </div>
@@ -587,7 +524,7 @@ export default function RegisterPage() {
             disabled={
               loading ||
               !termsAccepted ||
-              (clinicMode === 'existing' && !selectedClinic) ||
+              (clinicMode === 'existing' && joinCode.trim().length < 4) ||
               (clinicMode === 'new' && !businessType)
             }
             className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-teal-100 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
