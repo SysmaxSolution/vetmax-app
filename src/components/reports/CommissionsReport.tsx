@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import {
-  Loader2, AlertTriangle, ChevronDown, ChevronUp,
+  AlertTriangle, ChevronDown, ChevronUp,
   Percent, Search, User, Clock, CheckCircle2,
 } from 'lucide-react'
-import { getCommissionsReport, type CommissionReport } from '@/lib/actions/commissions'
+import { Spinner } from '@/components/ui/Spinner'
+import { getCommissionsReport, payCommissions, type CommissionReport } from '@/lib/actions/commissions'
 
 type StatusFilter = 'all' | 'pending' | 'paid'
 
@@ -38,6 +39,18 @@ export default function CommissionsReport() {
   const [data,           setData]           = useState<CommissionReport[]>([])
   const [error,          setError]          = useState<string | null>(null)
   const [expanded,       setExpanded]       = useState<Set<string>>(new Set())
+  const [payingId,       setPayingId]       = useState<string | null>(null)
+  const [payMsg,         setPayMsg]         = useState<string | null>(null)
+
+  async function handlePay(profId: string) {
+    if (payingId) return
+    setPayingId(profId); setPayMsg(null)
+    const res = await payCommissions({ professional_id: profId, from: dateFrom || undefined, to: dateTo || undefined })
+    setPayingId(null)
+    if ('error' in res) { setPayMsg(res.error); return }
+    setPayMsg(`${res.paid} comissão(ões) paga(s) · ${fmt(res.total)}.`)
+    await fetchData(dateFrom, dateTo)
+  }
 
   const fetchData = useCallback(async (from?: string, to?: string) => {
     setLoading(true)
@@ -96,7 +109,7 @@ export default function CommissionsReport() {
                 onClick={() => setStatusFilter(s)}
                 className={`px-3 py-1.5 text-xs font-medium transition-colors ${
                   statusFilter === s
-                    ? 'bg-violet-600 text-white'
+                    ? 'bg-teal-600 text-white'
                     : 'text-slate-600 hover:bg-slate-50'
                 }`}
               >
@@ -113,7 +126,7 @@ export default function CommissionsReport() {
             type="date"
             value={dateFrom}
             onChange={e => setDateFrom(e.target.value)}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-700 bg-white outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500"
+            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-700 bg-white outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
           />
         </div>
 
@@ -124,16 +137,16 @@ export default function CommissionsReport() {
             type="date"
             value={dateTo}
             onChange={e => setDateTo(e.target.value)}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-700 bg-white outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500"
+            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-700 bg-white outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
           />
         </div>
 
         <button
           onClick={() => fetchData(dateFrom, dateTo)}
           disabled={loading}
-          className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-semibold hover:bg-violet-700 transition-colors disabled:opacity-50"
+          className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-semibold shadow-sm hover:bg-teal-700 transition-colors disabled:opacity-60"
         >
-          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
+          {loading ? <Spinner size="sm" /> : <Search className="h-3.5 w-3.5" />}
           Filtrar
         </button>
       </div>
@@ -143,7 +156,7 @@ export default function CommissionsReport() {
         <div className="grid grid-cols-3 gap-3">
           <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-center">
             <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-0.5">Total</p>
-            <p className="text-lg font-bold text-slate-800">{fmt(grandTotal)}</p>
+            <p className="text-lg font-bold text-slate-800 font-mono tabular-nums">{fmt(grandTotal)}</p>
             <p className="text-[10px] text-slate-400">{filteredData.length} profissional(is)</p>
           </div>
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-center">
@@ -151,14 +164,14 @@ export default function CommissionsReport() {
               <Clock className="h-3 w-3 text-amber-500" />
               <p className="text-[10px] font-semibold text-amber-600 uppercase tracking-wide">A Pagar</p>
             </div>
-            <p className="text-lg font-bold text-amber-700">{fmt(grandPending)}</p>
+            <p className="text-lg font-bold text-amber-700 font-mono tabular-nums">{fmt(grandPending)}</p>
           </div>
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center">
             <div className="flex items-center justify-center gap-1 mb-0.5">
               <CheckCircle2 className="h-3 w-3 text-emerald-500" />
               <p className="text-[10px] font-semibold text-emerald-600 uppercase tracking-wide">Pago</p>
             </div>
-            <p className="text-lg font-bold text-emerald-700">{fmt(grandPaid)}</p>
+            <p className="text-lg font-bold text-emerald-700 font-mono tabular-nums">{fmt(grandPaid)}</p>
           </div>
         </div>
       )}
@@ -166,7 +179,7 @@ export default function CommissionsReport() {
       {/* ── Estado de carregamento / erro / vazio ─────────────────────────────── */}
       {loading && (
         <div className="flex items-center justify-center py-16">
-          <Loader2 className="h-7 w-7 animate-spin text-violet-600" />
+          <Spinner size="lg" className="text-teal-600" />
         </div>
       )}
 
@@ -186,6 +199,8 @@ export default function CommissionsReport() {
       )}
 
       {/* ── Lista por profissional ─────────────────────────────────────────────── */}
+      {payMsg && <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-2 text-sm text-emerald-700 mb-3">{payMsg}</div>}
+
       {!loading && !error && filteredData.length > 0 && (
         <div className="space-y-3">
           {filteredData.map(prof => {
@@ -200,8 +215,8 @@ export default function CommissionsReport() {
                   className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-slate-50 transition-colors"
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-violet-100">
-                      <User className="h-4 w-4 text-violet-600" />
+                    <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-slate-100">
+                      <User className="h-4 w-4 text-teal-600" />
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-slate-800 truncate">{prof.professional_name}</p>
@@ -210,9 +225,9 @@ export default function CommissionsReport() {
                   </div>
                   <div className="flex items-center gap-4 flex-shrink-0 ml-4">
                     <div className="text-right">
-                      <p className="text-sm font-bold text-slate-800">{fmt(prof.total_amount)}</p>
+                      <p className="text-sm font-bold text-slate-800 font-mono tabular-nums">{fmt(prof.total_amount)}</p>
                       {prof.pending_amount > 0 && (
-                        <p className="text-xs text-amber-600 font-medium">{fmt(prof.pending_amount)} pendente</p>
+                        <p className="text-xs text-amber-600 font-medium font-mono tabular-nums">{fmt(prof.pending_amount)} pendente</p>
                       )}
                     </div>
                     {isOpen
@@ -228,7 +243,7 @@ export default function CommissionsReport() {
                       <div key={entry.id} className="flex items-center justify-between px-5 py-3 gap-4">
                         <div className="min-w-0 flex-1">
                           <p className="text-xs text-slate-700 leading-snug line-clamp-2">{entry.description}</p>
-                          <p className="text-[10px] text-slate-400 mt-0.5">{fmtDate(entry.due_date)}</p>
+                          <p className="text-[10px] text-slate-400 mt-0.5 font-mono tabular-nums">{fmtDate(entry.due_date)}</p>
                         </div>
                         <div className="flex items-center gap-3 flex-shrink-0">
                           <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border capitalize ${
@@ -236,10 +251,19 @@ export default function CommissionsReport() {
                           }`}>
                             {entry.status === 'pending' ? 'Pendente' : 'Pago'}
                           </span>
-                          <span className="text-sm font-semibold text-slate-800">{fmt(entry.amount)}</span>
+                          <span className="text-sm font-semibold text-slate-800 font-mono tabular-nums">{fmt(entry.amount)}</span>
                         </div>
                       </div>
                     ))}
+                    {prof.pending_amount > 0 && (
+                      <div className="flex items-center justify-between px-5 py-3 bg-slate-50">
+                        <span className="text-xs font-semibold text-amber-700 font-mono tabular-nums">{fmt(prof.pending_amount)} pendente</span>
+                        <button onClick={() => handlePay(prof.professional_id)} disabled={payingId === prof.professional_id}
+                          className="rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-50 inline-flex items-center gap-1.5">
+                          {payingId === prof.professional_id ? <Spinner className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />} Pagar comissões pendentes
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

@@ -375,3 +375,34 @@ export async function getCommissionsReport(filters?: {
 
   return Object.values(byProfessional)
 }
+
+// ─── Pagamento de comissões (1.5) — baixa os títulos de comissão pendentes ────
+// do profissional no período (competência) selecionado.
+export async function payCommissions(params: {
+  professional_id: string
+  from?: string
+  to?:   string
+}): Promise<{ ok: true; paid: number; total: number } | { error: string }> {
+  const ctx = await getClinicCtx()
+  if (!ctx) return { error: 'Não autenticado.' }
+  if (!['admin', 'owner', 'manager', 'accountant'].includes(ctx.role)) return { error: 'Sem permissão para pagar comissões.' }
+  const admin = createAdminClient()
+  let q = admin.from('financial_entries')
+    .select('id, amount')
+    .eq('clinic_id', ctx.clinic_id).eq('category', 'commission').eq('type', 'payable')
+    .eq('status', 'pending').eq('professional_id', params.professional_id)
+  if (params.from) q = (q as any).gte('due_date', params.from)
+  if (params.to)   q = (q as any).lte('due_date', params.to)
+  const { data: rows } = await q
+  const list = (rows ?? []) as { id: string; amount: number }[]
+  if (list.length === 0) return { error: 'Nenhuma comissão pendente no período.' }
+  const total = Math.round(list.reduce((s, r) => s + Number(r.amount), 0) * 100) / 100
+  const today = new Date().toISOString().slice(0, 10)
+  const { error } = await admin.from('financial_entries')
+    .update({ status: 'paid', payment_date: today, updated_at: new Date().toISOString() })
+    .in('id', list.map(r => r.id))
+  if (error) return { error: 'Erro ao pagar comissões: ' + error.message }
+  revalidatePath('/dashboard/reports/commissions')
+  revalidatePath('/dashboard/financial')
+  return { ok: true, paid: list.length, total }
+}
