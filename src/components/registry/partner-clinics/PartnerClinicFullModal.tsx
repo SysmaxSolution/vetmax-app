@@ -315,8 +315,15 @@ export default function PartnerClinicFullModal({ clinic, priceTables, onClose, o
             )}
           </div>
 
-          {/* Comissão por serviço/produto — só para parceira já salva */}
-          {clinic?.id && <PartnerCommissionsSection partnerClinicId={clinic.id} />}
+          {/* Comissão por serviço/produto */}
+          {clinic?.id ? (
+            <PartnerCommissionsSection partnerClinicId={clinic.id} />
+          ) : (
+            <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-xs text-slate-500">
+              <span className="font-semibold text-slate-600">Comissão por serviço/produto:</span> salve a clínica primeiro
+              (botão abaixo) e reabra o cadastro para vincular serviços/produtos com % ou valor de comissão.
+            </div>
+          )}
 
           {/* Notas */}
           <div>

@@ -8,6 +8,7 @@ import {
   Stethoscope, Scissors,
 } from 'lucide-react'
 import { signUpWithClinic } from '@/lib/actions/auth'
+import { lookupCnpjAction } from '@/lib/actions/cnpj'
 import { recordAttribution } from '@/lib/actions/attribution'
 import type { BusinessType } from '@/types'
 
@@ -35,14 +36,7 @@ function formatPhone(value: string): string {
 interface CnpjData {
   razao_social?:  string
   nome_fantasia?: string
-  estabelecimento?: {
-    logradouro?: string
-    numero?:     string
-    bairro?:     string
-    cidade?:     { nome?: string }
-    estado?:     { sigla?: string }
-    telefone?:   string
-  }
+  address?:       string
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
@@ -92,16 +86,16 @@ export default function RegisterPage() {
     let cancelled = false
     setCnpjLoading(true)
     setCnpjError('')
-    fetch(`https://publica.cnpj.ws/cnpj/${digits}`)
-      .then(r => r.ok ? r.json() as Promise<CnpjData> : null)
-      .then(data => {
+    // Consulta no SERVIDOR (a API pública não envia CORS → fetch do browser é bloqueado)
+    lookupCnpjAction(digits)
+      .then(res => {
         if (cancelled) return
-        if (!data) { setCnpjError('CNPJ não encontrado na base de dados.'); return }
-        setCnpjData(data)
-        const nome = data.nome_fantasia || data.razao_social
+        if (!res.ok) { setCnpjError(res.reason === 'not_found' ? 'CNPJ não encontrado na base de dados.' : 'Erro ao consultar CNPJ. Tente novamente.'); return }
+        setCnpjData({ razao_social: res.razao_social, nome_fantasia: res.nome_fantasia, address: res.address })
+        const nome = res.nome_fantasia || res.razao_social
         if (nome && !clinicName) setClinicName(nome)
       })
-      .catch(() => { if (!cancelled) setCnpjError('Erro ao consultar CNPJ. Verifique sua conexão.') })
+      .catch(() => { if (!cancelled) setCnpjError('Erro ao consultar CNPJ.') })
       .finally(() => { if (!cancelled) setCnpjLoading(false) })
     return () => { cancelled = true }
   }, [cnpj])
@@ -337,11 +331,8 @@ export default function RegisterPage() {
                     {cnpjData.nome_fantasia && cnpjData.nome_fantasia !== cnpjData.razao_social && (
                       <p className="text-teal-600">{cnpjData.nome_fantasia}</p>
                     )}
-                    {cnpjData.estabelecimento?.cidade?.nome && (
-                      <p className="mt-0.5 text-teal-600">
-                        {cnpjData.estabelecimento.logradouro}, {cnpjData.estabelecimento.numero} —{' '}
-                        {cnpjData.estabelecimento.cidade.nome}/{cnpjData.estabelecimento.estado?.sigla}
-                      </p>
+                    {cnpjData.address && (
+                      <p className="mt-0.5 text-teal-600">{cnpjData.address}</p>
                     )}
                   </div>
                 )}
