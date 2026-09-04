@@ -46,6 +46,7 @@ const PAYMENT_METHOD_LABEL: Record<string, { label: string; icon: React.Componen
   debit:     { label: 'Débito',      icon: CreditCard  },
   cash:      { label: 'Dinheiro',    icon: Banknote    },
   voucher:   { label: 'Vale',        icon: Wallet      },
+  credit_balance: { label: 'Utilização de crédito', icon: Wallet },
   convenio:  { label: 'Convênio',    icon: Wallet      },
   transfer:  { label: 'Transf.',     icon: Building2   },
   courtesy:  { label: 'Cortesia',    icon: Receipt     },

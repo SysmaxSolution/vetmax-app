@@ -448,6 +448,39 @@ export async function applyTutorCreditToInvoice(input: {
       .eq('id', advTitles[0].id)
   }
 
+  // 10) CAIXA CENTRAL: o título da consulta deixa de ficar pendente e passa a
+  // constar RECEBIDO com a modalidade "Utilização de crédito". Não gera dinheiro
+  // novo nem financial_entry (trigger 0427 pula source_module='consultation') — o
+  // recebimento em dinheiro já foi o adiantamento; aqui é só a baixa operacional
+  // do título pela via do crédito, para o caixa não mostrá-lo pendente.
+  const consultationId = (inv as { consultation_id?: string }).consultation_id
+  if (consultationId) {
+    const { data: ccPend } = await admin.from('central_cashier')
+      .select('id, tutor_name, patient_name, session_id, effective_date')
+      .eq('clinic_id', ctx.clinic_id).eq('source_module', 'consultation')
+      .eq('source_id', input.invoice_id).eq('status', 'pending')
+      .order('created_at', { ascending: true }).limit(1).maybeSingle()
+
+    await admin.from('central_cashier').insert({
+      clinic_id: ctx.clinic_id, source_module: 'consultation', source_id: input.invoice_id,
+      amount, status: 'recorded', payment_method: 'credit_balance',
+      reason: `Recebimento por utilização de crédito · ${docLabel}`,
+      patient_name:   (ccPend?.patient_name as string) ?? patName ?? null,
+      tutor_name:     (ccPend?.tutor_name as string) ?? null,
+      effective_date: (ccPend?.effective_date as string) ?? new Date().toISOString().slice(0, 10),
+      session_id:     (ccPend?.session_id as string) ?? null,
+      recorded_by:    ctx.user_id,
+    })
+
+    if (ccPend) {
+      if (newBalance <= 0.005) {
+        await admin.from('central_cashier').update({ status: 'archived' }).eq('id', (ccPend as { id: string }).id)
+      } else {
+        await admin.from('central_cashier').update({ amount: newBalance }).eq('id', (ccPend as { id: string }).id)
+      }
+    }
+  }
+
   revalidatePath('/dashboard/cashier')
   revalidatePath('/dashboard/financial')
   return {
