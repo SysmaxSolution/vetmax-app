@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition, useMemo } from 'react'
+import { useAutoRefresh } from '@/hooks/useAutoRefresh'
 import {
   listEntries, getFinancialSummary,
   type FinancialEntry, type EntryType, type FinancialSummary,
@@ -320,6 +321,8 @@ export default function FinancialWorkspace({
     setModal(null)
     refresh()
   }
+
+  useAutoRefresh(refresh)   // auto-refresh a cada 15s
 
   const overdueCount = isTitulos ? (activeTab === 'receivable' ? receivable : payable).filter(isOverdue).length : 0
 

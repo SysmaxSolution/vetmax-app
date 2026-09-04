@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { isCentroCirurgico } from '@/lib/actions/clinic-settings'
 import { getSurgeriesBoard } from '@/lib/actions/surgeries'
 import SurgeryKanban from '@/components/hospitalization/SurgeryKanban'
+import AutoRefresh from '@/components/shared/AutoRefresh'
 
 export const metadata = { title: 'Centro Cirúrgico | SysVetMax' }
 
@@ -24,6 +25,7 @@ export default async function SurgeryPage() {
 
   return (
     <main className="max-w-[1400px] mx-auto px-4 py-6 sm:px-6 animate-enter">
+      <AutoRefresh />
       <SurgeryKanban initialBoard={initialBoard} clinicId={profile.clinic_id as string} />
     </main>
   )

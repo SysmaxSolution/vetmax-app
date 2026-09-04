@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
+import { useAutoRefresh } from '@/hooks/useAutoRefresh'
 import {
   DollarSign, CheckCircle2, Archive, RefreshCw, Filter,
   TrendingUp, AlertCircle, Clock, BadgeCheck, RotateCcw, Minus, Plus,
@@ -158,6 +159,8 @@ export default function CentralCashierWorkspace({
     showToast('Pagamento registrado.', 'success')
     void refresh()
   }
+
+  useAutoRefresh(() => { void refresh() })   // auto-refresh a cada 15s
 
   const handleArchive = async (id: string) => {
     if (!confirm('Arquivar esta entrada? Ela não aparecerá mais no caixa ativo.')) return

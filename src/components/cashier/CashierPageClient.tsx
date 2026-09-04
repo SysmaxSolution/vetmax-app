@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
+import { useAutoRefresh } from '@/hooks/useAutoRefresh'
 import { CheckCircle2, AlertCircle, LayoutDashboard, Receipt, ArrowDownCircle, Settings, FileBarChart } from 'lucide-react'
 import { listCashierEntries, getCashierSummary } from '@/lib/actions/core-management'
 import { getCashierDashboard, getCurrentSession, listOutflows } from '@/lib/actions/cashier-sessions'
@@ -87,6 +88,8 @@ export default function CashierPageClient({
     if (newSession && !('error' in newSession)) setSession(newSession)
     else if (!newSession || ('error' in newSession)) setSession(null)
   }, [today, firstOfMonth])
+
+  useAutoRefresh(() => { void refresh() })   // auto-refresh a cada 15s
 
   return (
     <div className="max-w-6xl mx-auto px-3 sm:px-6 py-6 sm:py-8 space-y-6 animate-enter">

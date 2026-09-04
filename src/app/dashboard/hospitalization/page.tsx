@@ -2,6 +2,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getHospitalizationsBoard } from '@/lib/actions/hospitalizations'
 import HospitalizationKanban from '@/components/hospitalization/HospitalizationKanban'
+import AutoRefresh from '@/components/shared/AutoRefresh'
 
 export const metadata = { title: 'Internação | SysVetMax' }
 
@@ -27,6 +28,7 @@ export default async function HospitalizationPage() {
 
   return (
     <main className="max-w-[1400px] mx-auto px-4 py-6 sm:px-6 animate-enter">
+      <AutoRefresh />
       <HospitalizationKanban
         initialBoard={board}
         clinicId={profile.clinic_id}

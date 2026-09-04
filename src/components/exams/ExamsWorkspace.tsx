@@ -158,6 +158,8 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
   const [examSuccess, setExamSuccess] = useState('')
   const [examError, setExamError] = useState('')
   const [localQueue, setLocalQueue] = useState<ExamQueueItem[]>(queue)
+  // re-sincroniza a fila quando o router.refresh() (realtime/auto-refresh) traz novos dados
+  useEffect(() => { setLocalQueue(queue) }, [queue])
   const [localExamRequests, setLocalExamRequests] = useState<ExamRequest[]>(examRequests)
   const [resultModalId, setResultModalId] = useState<string | null>(null)
   const [resultText, setResultText] = useState('')
