@@ -212,7 +212,8 @@ export async function signUpWithClinic(
   const fullName     = (formData.get('full_name')     as string ?? '').trim()
   const username     = (formData.get('username')      as string ?? '').trim().toLowerCase()
   const phone        = (formData.get('phone')         as string ?? '').trim()
-  const clinicId     = (formData.get('clinic_id')     as string ?? '').trim()   // adesão a existente
+  const joinCode     = (formData.get('join_code')     as string ?? '').trim().toUpperCase()   // adesão por código
+  let   clinicId     = ''                                                        // resolvido do código
   const clinicName   = (formData.get('clinic_name')   as string ?? '').trim()   // nova clínica
   const cnpj         = (formData.get('cnpj')          as string ?? '').replace(/\D/g, '')
   const businessType = (formData.get('business_type') as string ?? 'vet_clinic').trim()
@@ -225,8 +226,8 @@ export async function signUpWithClinic(
   if (!email || !password || !fullName) {
     return { error: 'Preencha os campos obrigatórios.' }
   }
-  if (!clinicId && !clinicName) {
-    return { error: 'Selecione uma clínica existente ou informe o nome da nova clínica.' }
+  if (!joinCode && !clinicName) {
+    return { error: 'Informe o código de acesso da clínica ou o nome da nova clínica.' }
   }
   if (password.length < 8) {
     return { error: 'A senha deve ter no mínimo 8 caracteres.' }
@@ -236,6 +237,16 @@ export async function signUpWithClinic(
   }
 
   const admin = createAdminClient()
+
+  // Adesão a clínica existente: SÓ por código de acesso (fornecido pelo admin da
+  // clínica). Não há mais busca pública de clínicas (evita enumeração/adesão
+  // indevida ao tenant).
+  if (joinCode) {
+    const { data: cl } = await admin
+      .from('clinics').select('id').eq('join_code', joinCode).eq('status', 'active').maybeSingle()
+    if (!cl) return { error: 'Código de acesso inválido. Confirme o código com o administrador da clínica.' }
+    clinicId = cl.id as string
+  }
 
   // Verifica e-mail duplicado (Supabase retorna sucesso silencioso)
   const { data: existingUsers } = await admin.auth.admin.listUsers({ perPage: 1000 })
@@ -306,20 +317,37 @@ export async function signUpUser(formData: FormData) {
   return signUpWithClinic(formData)
 }
 
-// ── Busca clínicas ativas por nome (autocomplete no cadastro) ─────────────────
-export async function searchClinics(
-  query: string
-): Promise<{ id: string; name: string }[]> {
-  if (!query || query.trim().length < 2) return []
+// ── Código de acesso da clínica (adesão segura — substitui a busca pública) ────
+// Só o admin da clínica vê/regenera. Novos usuários entram com este código.
+export async function getClinicJoinCode(): Promise<{ code: string } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+  const { data: profile } = await supabase.from('profiles').select('clinic_id, role').eq('id', user.id).single()
+  if (!profile?.clinic_id) return { error: 'Clínica não encontrada.' }
+  if (profile.role !== 'admin') return { error: 'Apenas administradores podem ver o código de acesso.' }
   const admin = createAdminClient()
-  const { data } = await admin
-    .from('clinics')
-    .select('id, name')
-    .eq('status', 'active')
-    .ilike('name', `%${query.trim()}%`)
-    .order('name')
-    .limit(10)
-  return data ?? []
+  let { data: cl } = await admin.from('clinics').select('join_code').eq('id', profile.clinic_id).single()
+  if (!cl?.join_code) {
+    const code = crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()
+    await admin.from('clinics').update({ join_code: code }).eq('id', profile.clinic_id)
+    cl = { join_code: code }
+  }
+  return { code: cl.join_code as string }
+}
+
+export async function regenerateClinicJoinCode(): Promise<{ code: string } | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+  const { data: profile } = await supabase.from('profiles').select('clinic_id, role').eq('id', user.id).single()
+  if (!profile?.clinic_id) return { error: 'Clínica não encontrada.' }
+  if (profile.role !== 'admin') return { error: 'Apenas administradores podem regenerar o código.' }
+  const admin = createAdminClient()
+  const code = crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()
+  const { error } = await admin.from('clinics').update({ join_code: code }).eq('id', profile.clinic_id)
+  if (error) return { error: error.message }
+  return { code }
 }
 
 // ── Completa a sessão após OAuth ou phone OTP (seta cookie, roteia) ───────────
