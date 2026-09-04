@@ -2105,3 +2105,70 @@ export async function getEffectiveExtrato(params: {
   const total_saidas   = movements.filter(m => m.type === 'payable').reduce((s, m) => s + m.amount, 0)
   return { movements, total_entradas, total_saidas, saldo: total_entradas - total_saidas }
 }
+
+// ─── 1.4 · Visão cruzada por CNPJ (empresa faturante) ─────────────────────────
+// Consolida, por empresa, o recebido/pago no período (atribuído pela conta
+// bancária da empresa via settlement_bank_id) + o saldo de crédito por empresa
+// (tutor_credits.company_id, incl. transferências inter-CNPJ).
+export interface CompanyOverview {
+  company_id:         string | null
+  company_name:       string
+  recebido:           number
+  pago:               number
+  saldo:              number
+  credito_inserido:   number
+  credito_utilizado:  number
+  credito_disponivel: number
+}
+export async function getCrossCompanyOverview(params: {
+  start_date: string; end_date: string
+}): Promise<{ companies: CompanyOverview[] } | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  const admin = createAdminClient()
+
+  const [{ data: comps }, { data: accts }] = await Promise.all([
+    admin.from('companies').select('id, name').eq('clinic_id', clinicId),
+    admin.from('bank_accounts').select('id, company_id').eq('clinic_id', clinicId),
+  ])
+  const compName    = new Map<string, string>((comps ?? []).map((c: Record<string, unknown>) => [c.id as string, c.name as string]))
+  const acctCompany = new Map<string, string | null>((accts ?? []).map((a: Record<string, unknown>) => [a.id as string, (a.company_id as string | null) ?? null]))
+
+  const types: EntryType[] = ['receivable', 'payable']
+  const lists = await Promise.all(types.map(t => listEntries({ type: t, status: 'paid', paid_from: params.start_date, paid_to: params.end_date })))
+  const entries = lists.flatMap(r => Array.isArray(r) ? r : [])
+  const { data: credits } = await admin.from('tutor_credits').select('company_id, amount, kind, created_at').eq('clinic_id', clinicId)
+
+  const map = new Map<string | null, CompanyOverview>()
+  const ensure = (cid: string | null): CompanyOverview => {
+    if (!map.has(cid)) map.set(cid, {
+      company_id: cid, company_name: cid ? (compName.get(cid) ?? 'Empresa') : 'Sem empresa/conta',
+      recebido: 0, pago: 0, saldo: 0, credito_inserido: 0, credito_utilizado: 0, credito_disponivel: 0,
+    })
+    return map.get(cid)!
+  }
+  for (const c of (comps ?? []) as Record<string, unknown>[]) ensure(c.id as string)
+
+  for (const e of entries) {
+    const cid = e.settlement_bank_id ? (acctCompany.get(e.settlement_bank_id) ?? null) : null
+    const row = ensure(cid)
+    if (e.type === 'receivable') row.recebido += e.amount; else row.pago += e.amount
+  }
+  const inPeriod = (iso: string) => iso.slice(0, 10) >= params.start_date && iso.slice(0, 10) <= params.end_date
+  for (const cr of (credits ?? []) as Record<string, unknown>[]) {
+    const cid = (cr.company_id as string | null) ?? null
+    const row = ensure(cid)
+    const amt = Number(cr.amount)
+    row.credito_disponivel += amt
+    if (inPeriod(cr.created_at as string)) {
+      if (cr.kind === 'advance') row.credito_inserido += amt
+      if (cr.kind === 'usage')   row.credito_utilizado += Math.abs(amt)
+    }
+  }
+  const r2 = (n: number) => Math.round(n * 100) / 100
+  for (const row of map.values()) {
+    row.recebido = r2(row.recebido); row.pago = r2(row.pago); row.saldo = r2(row.recebido - row.pago)
+    row.credito_inserido = r2(row.credito_inserido); row.credito_utilizado = r2(row.credito_utilizado); row.credito_disponivel = r2(row.credito_disponivel)
+  }
+  return { companies: [...map.values()].sort((a, b) => a.company_name.localeCompare(b.company_name)) }
+}

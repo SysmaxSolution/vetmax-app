@@ -358,9 +358,12 @@ export async function applyTutorCreditToInvoice(input: {
   const patName = Array.isArray(pats) ? pats[0]?.name : pats?.name
   const short = input.invoice_id.slice(0, 8)
   const usageRef = `Uso na fatura ${short}${patName ? ` · ${patName}` : ''}`
+  const docLabel = osNumber ? `OS ${osNumber}` : `fatura ${short}`
 
   // 5) Aloca: crédito da própria empresa faturante primeiro; depois transfere das outras
   const movements: Array<{ company_id: string | null; amount: number; kind: string; reference: string }> = []
+  // transferências entre CNPJs (origem→faturante) que viram Débito/Crédito bancário
+  const bankTransfers: Array<{ debit_company: string | null; credit_company: string | null; amount: number }> = []
   const companiesOrdered = [...byCompany.keys()].sort(
     (a, b) => (a === billingCompany ? -1 : b === billingCompany ? 1 : 0),
   )
@@ -376,6 +379,7 @@ export async function applyTutorCreditToInvoice(input: {
       movements.push({ company_id: comp,           amount: -take, kind: 'transfer_out', reference: `Transferência p/ fatura ${short}` })
       movements.push({ company_id: billingCompany, amount:  take, kind: 'transfer_in',  reference: `Transferência de crédito · fatura ${short}` })
       movements.push({ company_id: billingCompany, amount: -take, kind: 'usage',         reference: usageRef })
+      bankTransfers.push({ debit_company: comp, credit_company: billingCompany, amount: take })
     }
     need -= take
   }
@@ -389,6 +393,33 @@ export async function applyTutorCreditToInvoice(input: {
     })),
   )
   if (movErr) return { error: `Falha ao debitar o crédito: ${movErr.message}` }
+
+  // 6b) TRANSFERÊNCIA INTER-CNPJ na MOVIMENTAÇÃO BANCÁRIA (partida dobrada): quando
+  // o crédito usado é de outra empresa, o dinheiro precisa "sair" da conta da
+  // empresa de origem (Débito) e "entrar" na conta da empresa faturante (Crédito).
+  // Cada lançamento fica na conta bancária da respectiva empresa (auditável, casa
+  // na conciliação por conta/CNPJ e alimenta a visão cruzada 1.4).
+  if (bankTransfers.length > 0) {
+    const [{ data: accts }, { data: comps }] = await Promise.all([
+      admin.from('bank_accounts').select('id, company_id, is_default').eq('clinic_id', ctx.clinic_id),
+      admin.from('companies').select('id, name').eq('clinic_id', ctx.clinic_id),
+    ])
+    const acctByCompany = new Map<string, string>()
+    for (const a of (accts ?? []) as { id: string; company_id: string | null; is_default: boolean }[]) {
+      if (a.company_id && (!acctByCompany.has(a.company_id) || a.is_default)) acctByCompany.set(a.company_id, a.id)
+    }
+    const compName = new Map((comps ?? []).map((c: { id: string; name: string }) => [c.id, c.name]))
+    const todayD = new Date().toISOString().slice(0, 10)
+    for (const bt of bankTransfers) {
+      const fromName = (bt.debit_company && compName.get(bt.debit_company)) || 'outra empresa'
+      const toName   = (bt.credit_company && compName.get(bt.credit_company)) || 'empresa faturante'
+      const base = { clinic_id: ctx.clinic_id, amount: bt.amount, due_date: todayD, payment_date: todayD, issue_date: todayD, status: 'paid', source: 'manual', category: 'Transferência inter-CNPJ', created_by: ctx.user_id }
+      await admin.from('financial_entries').insert([
+        { ...base, type: 'payable',    description: `Transferência inter-CNPJ → ${toName} (uso de crédito) · ${docLabel}`, settlement_bank_id: bt.debit_company ? acctByCompany.get(bt.debit_company) ?? null : null },
+        { ...base, type: 'receivable', description: `Transferência inter-CNPJ ← ${fromName} (crédito) · ${docLabel}`,        settlement_bank_id: bt.credit_company ? acctByCompany.get(bt.credit_company) ?? null : null },
+      ])
+    }
+  }
 
   // 7) O uso do crédito NÃO gera recebimento novo — é um ABATIMENTO. O dinheiro
   //    já foi recebido no adiantamento (Dia 1, conciliável na conta/data certas).
@@ -431,7 +462,6 @@ export async function applyTutorCreditToInvoice(input: {
   const stamp = new Intl.DateTimeFormat('pt-BR', {
     timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
   }).format(new Date()).replace(',', '')
-  const docLabel = osNumber ? `OS ${osNumber}` : `fatura ${short}`
   const usageNote = `Utilizado R$ ${amount.toFixed(2)} na ${docLabel} — ${stamp}`
   const { data: advTitles } = await admin
     .from('financial_entries')
