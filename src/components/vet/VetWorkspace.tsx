@@ -10,6 +10,7 @@ import { searchPatientsForTriage, type TriagePatientSearchResult } from '@/lib/a
 import { useRealtimeSync } from '@/hooks/useRealtimeSync'
 import { BehaviorTagsBadges } from '@/components/ui/BehaviorTagsBadges'
 import PatientFullModal from '@/components/patients/PatientFullModal'
+import ReceptionWaitingPanel from '@/components/shared/ReceptionWaitingPanel'
 import AttendanceCardMenu from '@/components/shared/AttendanceCardMenu'
 import { VISIT_REASON_OPTIONS as CANONICAL_VISIT_REASONS, VISIT_REASON_LABELS } from '@/lib/visit-reasons'
 
@@ -157,6 +158,9 @@ export default function VetWorkspace({ queue, completed, awaitingReview, clinicI
             Incluir Paciente
           </button>
         </div>
+
+        {/* Aguardando na recepção — chamar direto para o consultório */}
+        <ReceptionWaitingPanel mode="vet" />
 
         {/* ── Anti-cemitério: prontuários no caixa aguardando finalização ──── */}
         {awaitingReview.length > 0 && (() => {

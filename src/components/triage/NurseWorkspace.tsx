@@ -9,6 +9,7 @@ import { searchPatientsForTriage, type TriagePatientSearchResult } from '@/lib/a
 import { useRealtimeSync } from '@/hooks/useRealtimeSync'
 import { BehaviorTagsBadges } from '@/components/ui/BehaviorTagsBadges'
 import AttendanceCardMenu from '@/components/shared/AttendanceCardMenu'
+import ReceptionWaitingPanel from '@/components/shared/ReceptionWaitingPanel'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -80,6 +81,9 @@ export default function NurseWorkspace({ queue, history, clinicId }: NurseWorksp
           <h1 className="text-xl font-bold tracking-tight text-slate-900">Triagem Veterinária</h1>
           <p className="mt-0.5 text-sm text-slate-600">Coleta de sinais vitais e avaliação inicial do paciente</p>
         </div>
+
+        {/* Aguardando na recepção — chamar para a triagem */}
+        <ReceptionWaitingPanel mode="triage" />
 
         {/* Tab Switcher */}
         <div className="flex gap-1 rounded-xl bg-slate-100 p-1 w-fit">
