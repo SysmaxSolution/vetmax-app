@@ -22,14 +22,13 @@ const TOKEN_URL  = 'https://auth.sicoob.com.br/auth/realms/cooperado/protocol/op
 
 function isSandbox() { return (process.env.SICOOB_ENV ?? 'sandbox') !== 'production' }
 
-// undici Agent com certificado mTLS (só produção). No sandbox retorna undefined.
+// Transporte com certificado mTLS (só produção). No sandbox não há certificado.
+// O transporte com e-CNPJ A1 (undici Agent {connect:{pfx}}) será plugado no
+// onboarding da 1ª clínica — depende do certificado real. Por ora, produção fica
+// gated com aviso claro; o sandbox roda sem certificado.
 async function mtlsDispatcher(): Promise<unknown> {
   if (isSandbox()) return undefined
-  const pfxB64 = process.env.SICOOB_PFX_BASE64
-  if (!pfxB64) throw new Error('Certificado e-CNPJ (SICOOB_PFX_BASE64) não configurado para produção.')
-  // @ts-expect-error undici é nativo do Node (sem @types); usado só em produção
-  const { Agent } = await import('undici')
-  return new Agent({ connect: { pfx: Buffer.from(pfxB64, 'base64'), passphrase: process.env.SICOOB_PFX_PASSWORD ?? '' } })
+  throw new Error('Produção Sicoob requer o certificado e-CNPJ A1 (mTLS) da clínica — pendente de onboarding.')
 }
 
 async function getToken(dispatcher: unknown): Promise<string> {
