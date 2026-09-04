@@ -329,6 +329,7 @@ export type ReceptionQueueItem = {
   os_number: string | null
   urgency: 'green' | 'yellow' | 'red' | null
   referral_type: 'direct' | 'referred' | null
+  visit_reason: string | null
   patient: {
     id: string
     name: string
@@ -370,7 +371,7 @@ export async function getReceptionQueue(): Promise<ReceptionQueueItem[] | { erro
   const { data, error } = await admin
     .from('consultations')
     .select(`
-      id, status, created_at, payment_status, payment_method, os_number, urgency, referral_type,
+      id, status, created_at, payment_status, payment_method, os_number, urgency, referral_type, visit_reason,
       patients ( id, name, species, breed, birth_date, gender, neutered, coat_color, photo_url, behavior_tags,
         tutors ( id, name, phone, address )
       )
@@ -411,6 +412,7 @@ export async function getReceptionQueue(): Promise<ReceptionQueueItem[] | { erro
     os_number:      c.os_number ?? null,
     urgency:        c.urgency ?? null,
     referral_type:  c.referral_type ?? null,
+    visit_reason:   c.visit_reason ?? null,
     patient: {
       id:            c.patients?.id ?? '',
       name:          c.patients?.name ?? '—',
@@ -546,6 +548,26 @@ export async function moveDirectToVet(
   if (error) return { error: 'Erro ao enviar ao consultório: ' + error.message }
   revalidatePath('/dashboard/reception')
   revalidatePath('/dashboard/vet')
+  return null
+}
+
+// ─── Enviar consulta da recepção para a fila de EXAMES ────────────────────────
+export async function moveToExams(
+  consultationId: string
+): Promise<{ error: string } | null> {
+  const ctx = await getTenantCtx()
+  if (!ctx) return { error: 'Não autenticado.' }
+
+  const adminC = createAdminClient()
+  const { error } = await adminC
+    .from('consultations')
+    .update({ status: 'waiting_exam', updated_at: new Date().toISOString() })
+    .eq('id', consultationId)
+    .eq('clinic_id', ctx.clinicId)
+
+  if (error) return { error: 'Erro ao enviar para exames: ' + error.message }
+  revalidatePath('/dashboard/reception')
+  revalidatePath('/dashboard/exams')
   return null
 }
 

@@ -13,6 +13,7 @@ import { useRealtimeSync } from '@/hooks/useRealtimeSync'
 import { BehaviorTagsBadges } from '@/components/ui/BehaviorTagsBadges'
 import { PetAvatar } from '@/components/ui/PetAvatar'
 import AttendanceCardMenu from '@/components/shared/AttendanceCardMenu'
+import ReceptionWaitingPanel from '@/components/shared/ReceptionWaitingPanel'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -242,6 +243,9 @@ export default function ExamsWorkspace({ queue, history, examRequests, clinicId 
             Solicitar Exame
           </button>
         </div>
+
+        {/* Aguardando na recepção (marcados como exame) — chamar para a fila */}
+        <ReceptionWaitingPanel mode="exams" />
 
         {/* Tab Switcher */}
         <div className="flex gap-1 rounded-xl bg-slate-100 p-1 w-fit">

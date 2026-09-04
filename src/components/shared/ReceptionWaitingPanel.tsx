@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { PhoneCall, Clock, RefreshCcw, Users } from 'lucide-react'
-import { getReceptionQueue, moveToTriage, moveDirectToVet, type ReceptionQueueItem } from '@/lib/actions/consultations'
+import { getReceptionQueue, moveToTriage, moveDirectToVet, moveToExams, type ReceptionQueueItem } from '@/lib/actions/consultations'
 
 const SPECIES_EMOJI: Record<string, string> = { dog: '🐕', cat: '🐱', bird: '🐦', rabbit: '🐰', rodent: '🐭', reptile: '🦎', fish: '🐠', exotic: '✨' }
 const URGENCY_DOT: Record<string, string> = { red: 'bg-red-500', orange: 'bg-orange-500', yellow: 'bg-yellow-400', green: 'bg-emerald-500', blue: 'bg-sky-500' }
@@ -15,12 +15,13 @@ function waitedMin(iso: string): string {
 }
 
 /**
- * Painel "Aguardando na recepção" para as rotinas Triagem e Consultório.
+ * Painel "Aguardando na recepção" para Triagem, Consultório e Exames.
  * Fluxo orgânico: além de a recepção enviar, o profissional VÊ quem chegou e
- * CHAMA — para a Triagem (mode='triage' → status 'triage') ou direto para o
- * Consultório (mode='vet' → status 'in_progress').
+ * CHAMA — Triagem (mode='triage' → 'triage'), Consultório (mode='vet' →
+ * 'in_progress') ou Exames (mode='exams' → 'waiting_exam'). No modo 'exames' só
+ * lista os check-ins marcados como exame (visit_reason='exam').
  */
-export default function ReceptionWaitingPanel({ mode }: { mode: 'triage' | 'vet' }) {
+export default function ReceptionWaitingPanel({ mode }: { mode: 'triage' | 'vet' | 'exams' }) {
   const [items, setItems]   = useState<ReceptionQueueItem[]>([])
   const [loaded, setLoaded] = useState(false)
   const [callingId, setCallingId] = useState<string | null>(null)
@@ -29,9 +30,12 @@ export default function ReceptionWaitingPanel({ mode }: { mode: 'triage' | 'vet'
 
   const load = useCallback(async () => {
     const res = await getReceptionQueue()
-    if (Array.isArray(res)) setItems(res.filter(c => c.status === 'reception' || c.status === 'scheduled'))
+    if (Array.isArray(res)) setItems(res.filter(c =>
+      (c.status === 'reception' || c.status === 'scheduled') &&
+      (mode !== 'exams' || c.visit_reason === 'exam')
+    ))
     setLoaded(true)
-  }, [])
+  }, [mode])
 
   useEffect(() => {
     load()
@@ -43,7 +47,7 @@ export default function ReceptionWaitingPanel({ mode }: { mode: 'triage' | 'vet'
     if (callingId) return
     setCallingId(id)
     startTransition(async () => {
-      const err = mode === 'triage' ? await moveToTriage(id) : await moveDirectToVet(id)
+      const err = mode === 'triage' ? await moveToTriage(id) : mode === 'exams' ? await moveToExams(id) : await moveDirectToVet(id)
       setCallingId(null)
       if (err) return
       setItems(prev => prev.filter(c => c.id !== id))
@@ -53,7 +57,7 @@ export default function ReceptionWaitingPanel({ mode }: { mode: 'triage' | 'vet'
 
   if (loaded && items.length === 0) return null
 
-  const label = mode === 'triage' ? 'Chamar p/ Triagem' : 'Chamar p/ Consultório'
+  const label = mode === 'triage' ? 'Chamar p/ Triagem' : mode === 'exams' ? 'Chamar p/ Exames' : 'Chamar p/ Consultório'
   return (
     <div className="rounded-2xl border border-teal-200 bg-teal-50/60 p-4">
       <div className="flex items-center justify-between mb-3">
