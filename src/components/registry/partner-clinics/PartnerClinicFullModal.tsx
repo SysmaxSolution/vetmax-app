@@ -7,6 +7,7 @@ import {
   type PartnerClinic, type PartnerClinicInput,
 } from '@/lib/actions/partner-clinics'
 import PartnerCommissionsSection from './PartnerCommissionsSection'
+import { lookupCnpjAction } from '@/lib/actions/cnpj'
 
 function formatCnpj(v: string) {
   const d = v.replace(/\D/g, '').slice(0, 14)
@@ -52,22 +53,21 @@ export default function PartnerClinicFullModal({ clinic, priceTables, onClose, o
   const [notes, setNotes]           = useState(clinic?.notes ?? '')
   const [cnpjLoading, setCnpjLoading] = useState(false)
 
-  // Auto-preenche pelos dados públicos do CNPJ (Receita) quando 14 dígitos
+  // Auto-preenche pelos dados públicos do CNPJ (Receita) quando 14 dígitos.
+  // A consulta roda no SERVIDOR (a API não envia CORS → fetch do browser é bloqueado).
   useEffect(() => {
     const digits = cnpj.replace(/\D/g, '')
     if (digits.length !== 14) return
     let cancelled = false
     setCnpjLoading(true)
-    fetch(`https://publica.cnpj.ws/cnpj/${digits}`)
-      .then(r => r.ok ? r.json() : null)
-      .then((d: { razao_social?: string; nome_fantasia?: string; estabelecimento?: { logradouro?: string; numero?: string; bairro?: string; cidade?: { nome?: string }; estado?: { sigla?: string }; telefone?: string; email?: string } } | null) => {
-        if (cancelled || !d) return
-        const est = d.estabelecimento
-        setLegalName(prev => prev || d.razao_social || '')
-        setName(prev => prev || d.nome_fantasia || d.razao_social || '')
-        setAddress(prev => prev || [est?.logradouro, est?.numero, est?.bairro, est?.cidade?.nome && `${est.cidade.nome}/${est.estado?.sigla ?? ''}`].filter(Boolean).join(', '))
-        setPhone(prev => prev || (est?.telefone ?? ''))
-        setEmail(prev => prev || (est?.email ?? ''))
+    lookupCnpjAction(digits)
+      .then(res => {
+        if (cancelled || !res.ok) return
+        setLegalName(prev => prev || res.razao_social)
+        setName(prev => prev || res.nome_fantasia || res.razao_social)
+        setAddress(prev => prev || (res.address ?? ''))
+        setPhone(prev => prev || (res.phone ?? ''))
+        setEmail(prev => prev || (res.email ?? ''))
       })
       .catch(() => {})
       .finally(() => { if (!cancelled) setCnpjLoading(false) })
