@@ -131,3 +131,76 @@ export async function submitTrainingReport(reportType: 'request' | 'bug', messag
   if (error) return { error: error.message }
   return { ok: true }
 }
+
+// ── Painel do Gestor (admin da clínica) ──────────────────────────────────────
+export async function getTrainingAdminOverview() {
+  const c = await ctx()
+  if (!c) return { error: 'Não autenticado.' as const }
+  if (c.role !== 'admin') return { error: 'Acesso restrito ao gestor.' as const }
+
+  const [{ data: profiles }, { data: progress }, { data: videos }, { data: reports }, { data: access }] = await Promise.all([
+    c.admin.from('profiles').select('id, full_name, role').eq('clinic_id', c.clinicId),
+    c.admin.from('training_progress').select('profile_id, completed, updated_at').eq('clinic_id', c.clinicId),
+    c.admin.from('training_videos').select('id, module_key').eq('is_active', true),
+    c.admin.from('training_reports').select('id, report_type, message, status, created_at, module_key, video_id, profile_id')
+      .eq('clinic_id', c.clinicId).order('created_at', { ascending: false }).limit(100),
+    c.admin.from('training_module_access').select('profile_id, module_key, can_view').eq('clinic_id', c.clinicId),
+  ])
+  const totalVideos = (videos ?? []).length
+  const vidCode = new Map<string, string>()
+  const { data: vcodes } = await c.admin.from('training_videos').select('id, code')
+  ;(vcodes ?? []).forEach(v => vidCode.set(v.id as string, v.code as string))
+  const nameById = new Map((profiles ?? []).map(p => [p.id as string, (p.full_name as string) || 'Usuário']))
+
+  const doneByUser = new Map<string, number>()
+  const lastByUser = new Map<string, string>()
+  ;(progress ?? []).forEach(p => {
+    if (p.completed) doneByUser.set(p.profile_id as string, (doneByUser.get(p.profile_id as string) ?? 0) + 1)
+    const cur = lastByUser.get(p.profile_id as string)
+    if (!cur || (p.updated_at as string) > cur) lastByUser.set(p.profile_id as string, p.updated_at as string)
+  })
+
+  const users = (profiles ?? []).map(p => ({
+    id: p.id as string,
+    name: (p.full_name as string) || 'Usuário',
+    role: (p.role as string) || 'user',
+    completed: doneByUser.get(p.id as string) ?? 0,
+    total: totalVideos,
+    lastActive: lastByUser.get(p.id as string) ?? null,
+  })).sort((a, b) => b.completed - a.completed)
+
+  const reportList = (reports ?? []).map(r => ({
+    id: r.id as string,
+    type: r.report_type as 'request' | 'bug',
+    message: r.message as string,
+    status: r.status as string,
+    createdAt: r.created_at as string,
+    moduleKey: (r.module_key as string) ?? null,
+    videoCode: r.video_id ? (vidCode.get(r.video_id as string) ?? null) : null,
+    userName: r.profile_id ? (nameById.get(r.profile_id as string) ?? 'Usuário') : 'Usuário',
+  }))
+
+  const accessList = (access ?? []).map(a => ({ profileId: a.profile_id as string, moduleKey: a.module_key as string, canView: !!a.can_view }))
+
+  return { totalVideos, users, reports: reportList, access: accessList }
+}
+
+export async function setTrainingModuleAccess(profileId: string, moduleKey: string, canView: boolean) {
+  const c = await ctx()
+  if (!c) return { error: 'Não autenticado.' as const }
+  if (c.role !== 'admin') return { error: 'Acesso restrito ao gestor.' as const }
+  const { error } = await c.admin.from('training_module_access').upsert({
+    clinic_id: c.clinicId, profile_id: profileId, module_key: moduleKey, can_view: canView, updated_at: new Date().toISOString(),
+  }, { onConflict: 'profile_id,module_key' })
+  if (error) return { error: error.message }
+  return { ok: true }
+}
+
+export async function updateTrainingReportStatus(reportId: string, status: 'open' | 'in_progress' | 'resolved') {
+  const c = await ctx()
+  if (!c) return { error: 'Não autenticado.' as const }
+  if (c.role !== 'admin') return { error: 'Acesso restrito ao gestor.' as const }
+  const { error } = await c.admin.from('training_reports').update({ status }).eq('id', reportId).eq('clinic_id', c.clinicId)
+  if (error) return { error: error.message }
+  return { ok: true }
+}

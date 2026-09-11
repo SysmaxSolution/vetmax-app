@@ -10,6 +10,7 @@ import {
 import {
   TRAINING_MODULES, TRAINING_CHEERS, TRAINING_QUIZ_CORRECT, TRAINING_QUIZ_WRONG,
 } from '@/lib/training-modules'
+import TrainingAdmin from './TrainingAdmin'
 
 type Vid = { id: string; moduleKey: string; code: string; title: string; description: string; duration: number; watchPercent: number; completed: boolean }
 type UserT = { name: string; email: string; role: string }
@@ -24,6 +25,7 @@ export default function TrainingAcademy({ user, videos }: { user: UserT; videos:
   const [filter, setFilter] = useState<string>('all')
   const [active, setActive] = useState<Vid | null>(null)
   const [reportFor, setReportFor] = useState<Vid | 'general' | null>(null)
+  const [adminView, setAdminView] = useState(false)
 
   const modules = useMemo(() => {
     const present = TRAINING_MODULES.filter(m => videos.some(v => v.moduleKey === m.key))
@@ -43,6 +45,8 @@ export default function TrainingAcademy({ user, videos }: { user: UserT; videos:
 
   const shownModules = filter === 'all' ? modules : modules.filter(m => m.key === filter)
 
+  if (adminView) return <TrainingAdmin onBack={() => setAdminView(false)} />
+
   return (
     <div className="space-y-6">
       {/* Cabeçalho + progresso geral */}
@@ -60,6 +64,12 @@ export default function TrainingAcademy({ user, videos }: { user: UserT; videos:
             <div className="font-bold text-lg">{totalDone} <span className="font-normal text-teal-100">de {videos.length} aulas</span></div>
             <div className="text-teal-100">concluídas</div>
           </div>
+          {user.role === 'admin' && (
+            <button onClick={() => setAdminView(true)}
+              className="ml-2 px-3 py-2 rounded-lg bg-white/15 hover:bg-white/25 text-white text-xs font-semibold whitespace-nowrap transition">
+              Painel do Gestor
+            </button>
+          )}
         </div>
       </div>
 
