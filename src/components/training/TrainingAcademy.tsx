@@ -92,32 +92,35 @@ export default function TrainingAcademy({ user, videos }: { user: UserT; videos:
             <div className="flex-1 max-w-[240px] h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
               <div className="h-full bg-teal-500 rounded-full transition-all" style={{ width: `${m.percent}%` }} />
             </div>
-            <span className="text-xs font-semibold text-slate-500">{m.percent}%</span>
+            <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">{m.percent}%</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {m.vids.map(v => {
-              const p = prog[v.id] || { pct: 0, done: false }
-              return (
-                <button key={v.id} onClick={() => setActive(v)}
-                  className="text-left bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition group">
-                  <div className="aspect-video bg-gradient-to-br from-teal-600/90 to-teal-800 flex items-center justify-center relative">
-                    <div className="w-14 h-14 rounded-full bg-white/20 group-hover:bg-white/30 flex items-center justify-center transition">
-                      <Play className="w-7 h-7 text-white ml-1" fill="white" />
-                    </div>
-                    {p.done && <div className="absolute top-2 right-2 bg-emerald-500 text-white rounded-full p-1"><CheckCircle2 className="w-4 h-4" /></div>}
-                    {!p.done && p.pct > 0 && <div className="absolute bottom-0 inset-x-0 h-1.5 bg-black/20"><div className="h-full bg-teal-300" style={{ width: `${p.pct}%` }} /></div>}
-                    <span className="absolute top-2 left-2 text-[10px] font-bold text-white/90 bg-black/25 px-1.5 py-0.5 rounded">{v.code.toUpperCase()}</span>
-                  </div>
-                  <div className="p-3">
-                    <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100 leading-snug">{v.title}</h3>
-                    <p className="text-xs text-slate-500 mt-1 line-clamp-2">{v.description}</p>
-                  </div>
-                </button>
-              )
-            })}
+            {m.vids.map(v => (
+              <VideoCard key={v.id} v={v} p={prog[v.id] || { pct: 0, done: false }} onOpen={() => setActive(v)} />
+            ))}
           </div>
         </section>
       ))}
+
+      {shownModules.length === 0 && (
+        <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800/40 px-6 py-12 text-center">
+          <div className="mx-auto w-14 h-14 rounded-2xl bg-teal-50 dark:bg-teal-500/10 flex items-center justify-center mb-4">
+            <GraduationCap className="w-7 h-7 text-teal-600" />
+          </div>
+          <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">Conteúdo em preparação</h3>
+          <p className="text-sm text-slate-600 dark:text-slate-300 mt-1 max-w-md mx-auto">
+            {filter === 'all'
+              ? 'As vídeo-aulas deste módulo ainda estão sendo publicadas. Assim que forem liberadas, aparecerão aqui automaticamente.'
+              : 'Ainda não há aulas neste módulo. Escolha "Todos" para ver os módulos disponíveis.'}
+          </p>
+          {filter !== 'all' && (
+            <button onClick={() => setFilter('all')}
+              className="mt-4 px-4 py-2 rounded-lg bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700">
+              Ver todos os módulos
+            </button>
+          )}
+        </div>
+      )}
 
       {active && (
         <PlayerModal
@@ -147,6 +150,70 @@ export default function TrainingAcademy({ user, videos }: { user: UserT; videos:
   )
 }
 
+// ── Card de aula com pré-visualização no hover (estilo YouTube) ──────────────
+function VideoCard({ v, p, onOpen }: { v: Vid; p: { pct: number; done: boolean }; onOpen: () => void }) {
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [hovering, setHovering] = useState(false)
+  const [ready, setReady] = useState(false)
+  const urlCache = useRef<string | null>(null)
+  const fetching = useRef(false)
+  const enterTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const vref = useRef<HTMLVideoElement>(null)
+
+  const ensureUrl = useCallback(async () => {
+    if (urlCache.current) { setPreviewUrl(urlCache.current); return }
+    if (fetching.current) return
+    fetching.current = true
+    const r = await getVideoSignedUrl(v.id)
+    fetching.current = false
+    if (!('error' in r)) { urlCache.current = r.url; setPreviewUrl(r.url) }
+  }, [v.id])
+
+  function onEnter() {
+    setHovering(true)
+    // pequeno atraso evita disparar ao passar o mouse de raspão
+    enterTimer.current = setTimeout(() => { void ensureUrl() }, 350)
+  }
+  function onLeave() {
+    setHovering(false); setReady(false)
+    if (enterTimer.current) clearTimeout(enterTimer.current)
+    const el = vref.current; if (el) { try { el.pause() } catch { /* noop */ } }
+  }
+  // Mantém a prévia curta (~5s) em loop enquanto o mouse está em cima.
+  function onTimeUpdate() {
+    const el = vref.current; if (el && el.currentTime > 5) el.currentTime = 0.01
+  }
+
+  const showPreview = hovering && !!previewUrl
+
+  return (
+    <button onClick={onOpen} onMouseEnter={onEnter} onMouseLeave={onLeave} onFocus={onEnter} onBlur={onLeave}
+      className="text-left bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition group">
+      <div className="aspect-video bg-gradient-to-br from-teal-600/90 to-teal-800 flex items-center justify-center relative overflow-hidden">
+        {/* prévia em vídeo (mudo), aparece ao passar o mouse */}
+        {showPreview && (
+          <video ref={vref} src={previewUrl!} muted playsInline autoPlay preload="metadata"
+            onLoadedData={() => setReady(true)} onTimeUpdate={onTimeUpdate}
+            className={`absolute inset-0 w-full h-full object-cover pointer-events-none transition-opacity duration-300 ${ready ? 'opacity-100' : 'opacity-0'}`} />
+        )}
+        {/* botão play (some quando a prévia está rolando) */}
+        <div className={`w-14 h-14 rounded-full bg-white/20 group-hover:bg-white/30 flex items-center justify-center transition-opacity ${ready ? 'opacity-0' : 'opacity-100'}`}>
+          <Play className="w-7 h-7 text-white ml-1" fill="white" />
+        </div>
+        {/* etiqueta "prévia" enquanto roda */}
+        {ready && <span className="absolute bottom-2 right-2 text-[9px] font-bold text-white bg-black/45 px-1.5 py-0.5 rounded uppercase tracking-wide">Prévia</span>}
+        {p.done && <div className="absolute top-2 right-2 bg-emerald-500 text-white rounded-full p-1"><CheckCircle2 className="w-4 h-4" /></div>}
+        {!p.done && p.pct > 0 && <div className="absolute bottom-0 inset-x-0 h-1.5 bg-black/20"><div className="h-full bg-teal-300" style={{ width: `${p.pct}%` }} /></div>}
+        <span className="absolute top-2 left-2 text-[10px] font-bold text-white bg-black/40 px-1.5 py-0.5 rounded">{v.code.toUpperCase()}</span>
+      </div>
+      <div className="p-3">
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 leading-snug">{v.title}</h3>
+        <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 line-clamp-2">{v.description}</p>
+      </div>
+    </button>
+  )
+}
+
 // ── Player com marca d'água + rastreio + quiz ────────────────────────────────
 function PlayerModal({ video, user, onClose, onProgress, onReport }: {
   video: Vid; user: UserT; onClose: () => void; onProgress: (id: string, pct: number, done: boolean) => void; onReport: () => void
@@ -163,7 +230,7 @@ function PlayerModal({ video, user, onClose, onProgress, onReport }: {
   const loadUrl = useCallback(async () => {
     setErr(null)
     const r = await getVideoSignedUrl(video.id)
-    if ('error' in r) { setErr(r.error); return }
+    if ('error' in r) { setErr(r.error ?? 'Erro ao carregar o vídeo.'); return }
     setUrl(r.url)
   }, [video.id])
 
@@ -358,7 +425,7 @@ function ReportModal({ video, onClose }: { video: Vid | null; onClose: () => voi
 // ── Utilitários visuais ──────────────────────────────────────────────────────
 function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
-    <button onClick={onClick} className={`px-3 py-1.5 rounded-full text-[12.5px] font-semibold whitespace-nowrap border transition ${active ? 'bg-teal-600 border-teal-600 text-white' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 hover:border-teal-400 hover:text-teal-600'}`}>{children}</button>
+    <button onClick={onClick} className={`px-3 py-1.5 rounded-full text-[12.5px] font-semibold whitespace-nowrap border transition ${active ? 'bg-teal-600 border-teal-600 text-white' : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-teal-400 hover:text-teal-600'}`}>{children}</button>
   )
 }
 function Ring({ value, size = 56, stroke = 6, light = false }: { value: number; size?: number; stroke?: number; light?: boolean }) {

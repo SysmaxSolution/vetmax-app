@@ -13,10 +13,19 @@ async function ctx() {
   const admin = createAdminClient()
   const { data: profile } = await admin
     .from('profiles')
-    .select('clinic_id, role, full_name')
+    .select('clinic_id, role, full_name, is_sysmax')
     .eq('id', user.id)
     .single()
   if (!profile?.clinic_id) return null
+  // Gate: a clínica precisa ter a Academia ativada (flow_config.usa_treinamento).
+  // SysMax (suporte) sempre acessa. Acervo é global; ativação é por clínica.
+  const isSysmax = profile.is_sysmax === true
+  let enabled = isSysmax
+  if (!enabled) {
+    const { data: clinic } = await admin
+      .from('clinics').select('flow_config').eq('id', profile.clinic_id).single()
+    enabled = (clinic?.flow_config as { usa_treinamento?: boolean } | null)?.usa_treinamento === true
+  }
   return {
     admin,
     userId: user.id,
@@ -24,6 +33,7 @@ async function ctx() {
     name: (profile.full_name as string) || (user.email ?? 'Usuário'),
     role: (profile.role as string) || 'user',
     clinicId: profile.clinic_id as string,
+    enabled,
   }
 }
 
@@ -38,6 +48,7 @@ async function allowedModules(admin: ReturnType<typeof createAdminClient>, profi
 export async function getTrainingCatalog() {
   const c = await ctx()
   if (!c) return { error: 'Não autenticado.' as const }
+  if (!c.enabled) return { error: 'Academia de Treinamento não ativada para esta clínica.' as const }
 
   const [{ data: videos }, { data: progress }] = await Promise.all([
     c.admin.from('training_videos').select('id, module_key, code, title, description, duration_seconds, sort_order')
@@ -70,6 +81,7 @@ export async function getTrainingCatalog() {
 export async function getVideoSignedUrl(videoId: string) {
   const c = await ctx()
   if (!c) return { error: 'Não autenticado.' as const }
+  if (!c.enabled) return { error: 'Academia de Treinamento não ativada para esta clínica.' as const }
   const { data: v } = await c.admin.from('training_videos').select('storage_path, module_key, is_active').eq('id', videoId).single()
   if (!v || !v.is_active) return { error: 'Vídeo indisponível.' as const }
   const allowed = await allowedModules(c.admin, c.userId)

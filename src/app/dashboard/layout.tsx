@@ -97,7 +97,7 @@ export default async function DashboardLayout({
   const allowedRoutes  = FREE_ROUTES[businessType] ?? FREE_ROUTES.vet_clinic
 
   // Feature flags da Sprint Internação/Cirurgia (clinics.flow_config).
-  const flowConfig         = ((clinicData as any)?.flow_config ?? {}) as { internacao_completa?: boolean; centro_cirurgico?: boolean; pdv_unified_with_cashier?: boolean; subscription_plans_ui?: boolean; animais_foundation?: boolean; require_attending_vet?: boolean; uses_advance?: boolean }
+  const flowConfig         = ((clinicData as any)?.flow_config ?? {}) as { internacao_completa?: boolean; centro_cirurgico?: boolean; pdv_unified_with_cashier?: boolean; subscription_plans_ui?: boolean; animais_foundation?: boolean; require_attending_vet?: boolean; uses_advance?: boolean; usa_convenios?: boolean; usa_treinamento?: boolean }
   const internacaoCompleta = flowConfig.internacao_completa === true
   const centroCirurgico    = flowConfig.centro_cirurgico === true
   // Sprint Animais — fundação (multi-CNPJ, clínicas parceiras, tabelas de preço, OS/urgência)
@@ -106,6 +106,9 @@ export default async function DashboardLayout({
   const requireAttendingVet = flowConfig.require_attending_vet === true
   // Adiantamento no Caixa (config por clínica)
   const usesAdvance         = flowConfig.uses_advance === true
+  const usaConvenios        = flowConfig.usa_convenios === true
+  // Academia de Treinamento (config por clínica) — acervo global, progresso local
+  const usaTreinamento      = flowConfig.usa_treinamento === true
   // Épico B (04/06, Q4): PDV unificado ao Caixa — esconde o módulo PDV do menu
   const pdvUnified         = flowConfig.pdv_unified_with_cashier === true
   // Monetização SaaS Fase 1 — rollout restrito da UI de Planos (Vet Teste)
@@ -253,6 +256,8 @@ export default async function DashboardLayout({
     animaisFoundation,
     requireAttendingVet,
     usesAdvance,
+    usaConvenios,
+    usaTreinamento,
     whatsAppEnabled,
     hasLogo:              !!(clinicData as any)?.logo_url,
     hasPets:              (petCountResult.count ?? 0) > 0,

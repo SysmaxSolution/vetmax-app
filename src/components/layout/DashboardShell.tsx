@@ -58,6 +58,8 @@ export interface DashboardShellProps {
   animaisFoundation?:   boolean
   requireAttendingVet?: boolean
   usesAdvance?:         boolean
+  usaConvenios?:        boolean
+  usaTreinamento?:      boolean
   whatsAppEnabled:      boolean
   // Onboarding
   hasLogo:              boolean
@@ -76,7 +78,7 @@ export default function DashboardShell({
   lowStockCount, whatsappHandoffCount, chatUnreadCount, userClinics,
   isSysmax, clinicStatus, isSurgeryMode, planName, allowedRoutes, centroCirurgico,
   pdvUnified = false, subscriptionUiEnabled = false,
-  uiPreferences, aiTranscriptionMode, internacaoCompleta, animaisFoundation = false, requireAttendingVet = false, usesAdvance = false, whatsAppEnabled,
+  uiPreferences, aiTranscriptionMode, internacaoCompleta, animaisFoundation = false, requireAttendingVet = false, usesAdvance = false, usaConvenios = false, usaTreinamento = false, whatsAppEnabled,
   hasLogo, hasPets, businessType, userId, children,
 }: DashboardShellProps) {
   return (
@@ -89,6 +91,7 @@ export default function DashboardShell({
           animaisFoundation={animaisFoundation}
           requireAttendingVet={requireAttendingVet}
           usesAdvance={usesAdvance}
+          usaConvenios={usaConvenios}
         >
           <ModulesProvider modules={activeModules ?? []}>
             <WhatsAppGateProvider enabled={whatsAppEnabled}>
@@ -111,6 +114,7 @@ export default function DashboardShell({
                   allowedRoutes={allowedRoutes}
                   centroCirurgico={centroCirurgico}
                   pdvUnified={pdvUnified}
+                  usaTreinamento={usaTreinamento}
                   subscriptionUiEnabled={subscriptionUiEnabled}
                 >
                   {children}

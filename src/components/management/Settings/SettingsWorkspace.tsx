@@ -4,17 +4,19 @@ import { useState } from 'react'
 import {
   Building2, Shield, MessageCircle, Calculator,
   BarChart3, Wrench, ToggleLeft, ToggleRight, Save, Loader2,
-  HelpCircle, Tags, Hash, Building, Landmark,
+  HelpCircle, Tags, Hash, Building, Landmark, FlaskConical, GraduationCap,
 } from 'lucide-react'
 import FinancialIntegrationsForm from './FinancialIntegrationsForm'
 import type { ClinicConfig, ClinicSettingsConfig, FlowConfig } from '@/lib/actions/clinic-settings'
-import { updateClinicConfig } from '@/lib/actions/clinic-settings'
+import { updateClinicConfig, getClinicConfig } from '@/lib/actions/clinic-settings'
 import ModulesTab from '../ModulesTab'
 import ClinicSettingsTab from '../ClinicSettingsTab'
 import CsvImporter from '../CsvImporter'
 import WhatsappIntelligentSetup from './WhatsappIntelligentSetup'
 import WhatsappTriggerModules from './WhatsappTriggerModules'
 import FiscalConfigForm from './FiscalConfigForm'
+import LabAgentSettings from './LabAgentSettings'
+import AnalyteMappingPanel from './AnalyteMappingPanel'
 import PricingTab from '@/components/registry/pricing/PricingTab'
 import DocumentNumberingTab from '../DocumentNumberingTab'
 import CompaniesTab from '../CompaniesTab'
@@ -27,7 +29,7 @@ import { Lock, ArrowUpRight } from 'lucide-react'
 
 // Categoria 'ia' removida em 2026-05-26 (cleanup de drift): IA mode e Fluxo
 // Contínuo agora são exclusivos da categoria 'acesso' (ClinicSettingsTab).
-type Category = 'geral' | 'acesso' | 'whatsapp' | 'contabil' | 'financeiro' | 'empresas' | 'precos' | 'numeracao' | 'relatorios' | 'utilitarios'
+type Category = 'geral' | 'acesso' | 'whatsapp' | 'contabil' | 'financeiro' | 'empresas' | 'precos' | 'numeracao' | 'laboratorio' | 'relatorios' | 'utilitarios'
 
 interface CategoryDef {
   key: Category
@@ -45,6 +47,7 @@ const CATEGORIES: CategoryDef[] = [
   { key: 'empresas',     label: 'Empresas',    icon: <Building     className="h-4 w-4" />, description: 'Empresas faturantes (multi-CNPJ)'   },
   { key: 'precos',       label: 'Preços',      icon: <Tags         className="h-4 w-4" />, description: 'Tabelas de preço e composição'      },
   { key: 'numeracao',    label: 'Numeração',   icon: <Hash         className="h-4 w-4" />, description: 'Nº de OS, RPS, NFS-e…'              },
+  { key: 'laboratorio',  label: 'Laboratório', icon: <FlaskConical className="h-4 w-4" />, description: 'Agentes-ponte dos aparelhos'         },
   { key: 'relatorios',   label: 'Relatórios',  icon: <BarChart3    className="h-4 w-4" />, description: 'Relatórios disponíveis'              },
   { key: 'utilitarios',  label: 'Utilitários', icon: <Wrench       className="h-4 w-4" />, description: 'Exportação e importação de dados'    },
 ]
@@ -77,7 +80,7 @@ export default function SettingsWorkspace({
   const animaisFoundation = useAnimaisFoundation()
 
   // A seção "Preços" (Sprint Animais) só aparece na clínica com a flag ligada.
-  const animaisOnly = new Set(['precos', 'numeracao', 'empresas'])
+  const animaisOnly = new Set(['precos', 'numeracao', 'empresas', 'laboratorio'])
   const visibleCategories = CATEGORIES.filter(c => !animaisOnly.has(c.key) || animaisFoundation)
 
   // SysMax nunca vê paywall — segue operando direto sobre o setup real,
@@ -136,6 +139,8 @@ export default function SettingsWorkspace({
             <RegistrationSettings initialConfig={initialClinicConfig} onToast={onToast} />
             <AttendingVetSettings initialConfig={initialClinicConfig} onToast={onToast} />
             <AdvanceSettings initialConfig={initialClinicConfig} onToast={onToast} />
+            <ConveniosSettings initialConfig={initialClinicConfig} onToast={onToast} />
+            <TreinamentoSettings initialConfig={initialClinicConfig} onToast={onToast} />
             <MentorIdleSettings initialConfig={initialClinicConfig} onToast={onToast} />
           </div>
         )}
@@ -187,6 +192,15 @@ export default function SettingsWorkspace({
           <div className="space-y-6">
             <SectionHeader icon={<Landmark className="h-5 w-5 text-slate-600" />} title="Integrações Financeiras" description="Integração bancária (extrato/conciliação) e PIX — cada uma condicional à ativação" />
             <FinancialIntegrationsForm onToast={onToast} />
+          </div>
+        )}
+
+        {activeCategory === 'laboratorio' && animaisFoundation && (
+          <div className="space-y-6">
+            <SectionHeader icon={<FlaskConical className="h-5 w-5 text-slate-600" />} title="Agentes-ponte de Laboratório" description="Serviço instalado no PC dos aparelhos (URIT/BK-200) — worklist e resultados automáticos por HL7/MLLP" />
+            <LabAgentSettings onToast={onToast} />
+            <SectionHeader icon={<FlaskConical className="h-5 w-5 text-slate-600" />} title="Analitos & Mapeamento" description="Catálogo de analitos e de-para do código que o aparelho envia → item do catálogo" />
+            <AnalyteMappingPanel />
           </div>
         )}
 
@@ -404,6 +418,120 @@ function AdvanceSettings({ initialConfig, onToast }: {
           {uses
             ? 'O Caixa mostra o botão "Adiantamento": o cliente deixa um valor que vira crédito para usar em consultas/procedimentos futuros.'
             : 'Quando ativado, aparece o botão de adiantamento no Caixa e o crédito do tutor no recebimento.'}
+        </p>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50 flex-shrink-0"
+        >
+          {saving ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Salvando…</> : <><Save className="h-3.5 w-3.5" /> Salvar</>}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function ConveniosSettings({ initialConfig, onToast }: {
+  initialConfig: ClinicConfig | null
+  onToast: (type: 'success' | 'error', msg: string) => void
+}) {
+  const flowRaw = initialConfig?.flow_config as FlowConfig | undefined
+  const [uses, setUses] = useState<boolean>(flowRaw?.usa_convenios ?? false)
+  const [saving, setSaving] = useState(false)
+
+  async function handleSave() {
+    setSaving(true)
+    // Relê a config fresca para mesclar sem apagar outras flags do JSONB.
+    const fresh = await getClinicConfig()
+    const base: FlowConfig = (('error' in fresh) ? initialConfig?.flow_config : fresh.flow_config) ?? { vet_merged_modules: [] }
+    const res = await updateClinicConfig({ flow_config: { ...base, usa_convenios: uses } })
+    setSaving(false)
+    if ('error' in res) { onToast('error', res.error); return }
+    onToast('success', 'Configuração de convênios salva!')
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div className="border-b border-slate-100 px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-50">
+            <Shield className="h-4 w-4 text-teal-600" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">Utiliza convênios?</h3>
+            <p className="text-xs text-slate-500">Petlove, Vetplan, AVA e outros — cadastro, repasse e conciliação</p>
+          </div>
+        </div>
+        <button
+          onClick={() => setUses(v => !v)}
+          className={`transition-colors ${uses ? 'text-teal-600' : 'text-slate-300'}`}
+          title={uses ? 'Desativar convênios' : 'Ativar convênios'}
+        >
+          {uses ? <ToggleRight className="h-7 w-7" /> : <ToggleLeft className="h-7 w-7" />}
+        </button>
+      </div>
+      <div className="px-6 py-4 flex items-center justify-between gap-4">
+        <p className="text-xs text-slate-500">
+          {uses
+            ? 'O sistema mostra o cadastro de Convênios (Gestão), a conciliação de repasses e as opções de convênio no atendimento/caixa.'
+            : 'Quando desativado, nada relacionado a convênios, repasses ou conciliação aparece em nenhuma tela.'}
+        </p>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50 flex-shrink-0"
+        >
+          {saving ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Salvando…</> : <><Save className="h-3.5 w-3.5" /> Salvar</>}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function TreinamentoSettings({ initialConfig, onToast }: {
+  initialConfig: ClinicConfig | null
+  onToast: (type: 'success' | 'error', msg: string) => void
+}) {
+  const flowRaw = initialConfig?.flow_config as FlowConfig | undefined
+  const [uses, setUses] = useState<boolean>(flowRaw?.usa_treinamento ?? false)
+  const [saving, setSaving] = useState(false)
+
+  async function handleSave() {
+    setSaving(true)
+    // Relê a config fresca para mesclar sem apagar outras flags do JSONB.
+    const fresh = await getClinicConfig()
+    const base: FlowConfig = (('error' in fresh) ? initialConfig?.flow_config : fresh.flow_config) ?? { vet_merged_modules: [] }
+    const res = await updateClinicConfig({ flow_config: { ...base, usa_treinamento: uses } })
+    setSaving(false)
+    if ('error' in res) { onToast('error', res.error); return }
+    onToast('success', 'Configuração de treinamento salva!')
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div className="border-b border-slate-100 px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-50">
+            <GraduationCap className="h-4 w-4 text-teal-600" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">Academia de Treinamento?</h3>
+            <p className="text-xs text-slate-500">Vídeo-aulas do sistema — acervo compartilhado, progresso da sua equipe</p>
+          </div>
+        </div>
+        <button
+          onClick={() => setUses(v => !v)}
+          className={`transition-colors ${uses ? 'text-teal-600' : 'text-slate-300'}`}
+          title={uses ? 'Desativar treinamento' : 'Ativar treinamento'}
+        >
+          {uses ? <ToggleRight className="h-7 w-7" /> : <ToggleLeft className="h-7 w-7" />}
+        </button>
+      </div>
+      <div className="px-6 py-4 flex items-center justify-between gap-4">
+        <p className="text-xs text-slate-500">
+          {uses
+            ? 'O menu mostra "Treinamento": sua equipe assiste às vídeo-aulas dentro do sistema. O acervo de vídeos é o mesmo para todas as clínicas; o progresso de cada colaborador e o controle de acesso são exclusivos desta clínica.'
+            : 'Quando ativado, aparece o item "Treinamento" no menu com o acervo de vídeo-aulas. O gestor acompanha a evolução dos próprios colaboradores.'}
         </p>
         <button
           onClick={handleSave}

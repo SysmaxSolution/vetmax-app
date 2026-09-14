@@ -79,6 +79,8 @@ export interface NavContext {
   isSysmax:        boolean
   centroCirurgico: boolean
   pdvUnified:      boolean
+  /** flow_config.usa_treinamento — liga a Academia de Treinamento no menu. */
+  usaTreinamento:  boolean
 }
 
 /**
@@ -97,6 +99,9 @@ export function getVisibleNavLinks(ctx: NavContext): NavLink[] {
     // Centro Cirúrgico é gated pela feature flag flow_config.centro_cirurgico,
     // não por active_modules — só aparece quando a clínica o ativou.
     if (link.href === '/dashboard/surgery') return ctx.centroCirurgico
+    // Treinamento é gated pela flag flow_config.usa_treinamento (Gestão >
+    // Configurações). SysMax (suporte) sempre vê. Só aparece quando ativado.
+    if (link.href === '/dashboard/treinamento') return ctx.usaTreinamento || ctx.isSysmax
     // Épico B (04/06, Q4): PDV unificado ao Caixa — módulo some do menu;
     // a venda avulsa vive em Caixa > Recebimentos.
     if (link.href === '/dashboard/sales' && ctx.pdvUnified) return false

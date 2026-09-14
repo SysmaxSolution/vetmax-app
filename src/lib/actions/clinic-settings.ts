@@ -52,6 +52,22 @@ export type FlowConfig = {
   require_attending_vet?:   boolean
   /** Habilita o lançamento de ADIANTAMENTO no Caixa (crédito do tutor p/ uso futuro). */
   uses_advance?:            boolean
+  // ── Portal do Tutor + Agendamento online (Fase 3) ───────────────────────────
+  /** A clínica usa o Portal do Tutor? (acesso do tutor ao histórico + agendamento) */
+  portal_enabled?:          boolean
+  /** Como o tutor agenda PELO PORTAL: 'off' (não agenda) | 'reception' (recepção
+   *  confirma — fluxo M9) | 'direct' (cai direto na agenda). Padrão: 'reception'. */
+  booking_mode_portal?:     'off' | 'reception' | 'direct'
+  /** Como o tutor agenda PELO WHATSAPP-bot: mesmos valores. Padrão: 'reception'
+   *  (preserva o comportamento atual do M9). */
+  booking_mode_whatsapp?:   'off' | 'reception' | 'direct'
+  /** A clínica trabalha com convênios (Petlove/Vetplan/AVA/outros)? Gate global:
+   *  quando false, nenhuma tela mostra convênio, repasse ou conciliação. */
+  usa_convenios?:           boolean
+  /** A clínica ativou a Academia de Treinamento? Gate do menu + rota /dashboard/treinamento.
+   *  Os vídeos são um acervo GLOBAL compartilhado por todas as clínicas ativadas;
+   *  progresso, quizzes e controle de colaboradores são particulares de cada clínica. */
+  usa_treinamento?:         boolean
 }
 
 export type BusinessHourEntry = { open: string; close: string } | null
@@ -208,6 +224,16 @@ async function getFlowFlag(flag: keyof FlowConfig): Promise<boolean> {
 /** TRUE quando a clínica ativou a versão avançada da Internação. */
 export async function isInternacaoCompleta(): Promise<boolean> {
   return getFlowFlag('internacao_completa')
+}
+
+/** TRUE quando a clínica trabalha com convênios (gate global de convênio/repasse). */
+export async function usesConvenios(): Promise<boolean> {
+  return getFlowFlag('usa_convenios')
+}
+
+/** TRUE quando a clínica ativou a Academia de Treinamento (gate do menu + rota). */
+export async function usesTreinamento(): Promise<boolean> {
+  return getFlowFlag('usa_treinamento')
 }
 
 /** TRUE quando a clínica ativou o módulo Centro Cirúrgico. */
