@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import {
   GraduationCap, Play, CheckCircle2, X, Flag, Loader2, Trophy, Lock, Sparkles,
 } from 'lucide-react'
@@ -269,7 +270,10 @@ function PlayerModal({ video, user, onClose, onProgress, onReport }: {
     if (!('error' in q) && q.questions.length) setQuiz(q.questions)
   }
 
-  return (
+  // Portala para o body: escapa de ancestrais com transform (animate-enter/shell)
+  // que quebram o position:fixed e jogam o modal pro meio da página. Sempre centrado na viewport.
+  if (typeof document === 'undefined') return null
+  return createPortal(
     <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-3 sm:p-6" onClick={onClose}>
       <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-4xl max-h-[92vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-100 dark:border-slate-800">
@@ -321,7 +325,8 @@ function PlayerModal({ video, user, onClose, onProgress, onReport }: {
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
@@ -402,7 +407,8 @@ function ReportModal({ video, onClose }: { video: Vid | null; onClose: () => voi
     if (!('error' in r)) setOk(true)
   }
 
-  return (
+  if (typeof document === 'undefined') return null
+  return createPortal(
     <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-md p-5 shadow-xl space-y-4" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between">
@@ -431,7 +437,8 @@ function ReportModal({ video, onClose }: { video: Vid | null; onClose: () => voi
           </>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
