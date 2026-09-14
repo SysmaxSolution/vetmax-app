@@ -159,6 +159,7 @@ function VideoCard({ v, p, onOpen }: { v: Vid; p: { pct: number; done: boolean }
   const fetching = useRef(false)
   const enterTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const vref = useRef<HTMLVideoElement>(null)
+  const startRef = useRef(0.01)
 
   const ensureUrl = useCallback(async () => {
     if (urlCache.current) { setPreviewUrl(urlCache.current); return }
@@ -179,9 +180,18 @@ function VideoCard({ v, p, onOpen }: { v: Vid; p: { pct: number; done: boolean }
     if (enterTimer.current) clearTimeout(enterTimer.current)
     const el = vref.current; if (el) { try { el.pause() } catch { /* noop */ } }
   }
-  // Mantém a prévia curta (~5s) em loop enquanto o mouse está em cima.
+  // Pula a abertura/login (comum a TODAS as aulas) e faz loop de ~5s num trecho
+  // representativo do conteúdo do módulo — assim a prévia mostra o que a aula aborda.
+  function onLoadedMeta() {
+    const el = vref.current; if (!el) return
+    const d = el.duration || 0
+    startRef.current = d > 14 ? Math.min(Math.max(d * 0.15, 8), d - 6) : 0.01
+    try { el.currentTime = startRef.current } catch { /* noop */ }
+  }
   function onTimeUpdate() {
-    const el = vref.current; if (el && el.currentTime > 5) el.currentTime = 0.01
+    const el = vref.current; if (!el) return
+    const s = startRef.current
+    if (el.currentTime > s + 5 || el.currentTime < s - 0.3) { try { el.currentTime = s } catch { /* noop */ } }
   }
 
   const showPreview = hovering && !!previewUrl
@@ -193,7 +203,9 @@ function VideoCard({ v, p, onOpen }: { v: Vid; p: { pct: number; done: boolean }
         {/* prévia em vídeo (mudo), aparece ao passar o mouse */}
         {showPreview && (
           <video ref={vref} src={previewUrl!} muted playsInline autoPlay preload="metadata"
+            onLoadedMetadata={onLoadedMeta}
             onLoadedData={() => setReady(true)} onTimeUpdate={onTimeUpdate}
+            style={{ transform: 'translateZ(0)' }}
             className={`absolute inset-0 w-full h-full object-cover pointer-events-none transition-opacity duration-300 ${ready ? 'opacity-100' : 'opacity-0'}`} />
         )}
         {/* botão play (some quando a prévia está rolando) */}
@@ -274,7 +286,8 @@ function PlayerModal({ video, user, onClose, onProgress, onReport }: {
               disablePictureInPicture
               onTimeUpdate={handleTime} onEnded={handleEnded}
               onError={() => loadUrl()}
-              className="w-full h-full" />
+              style={{ transform: 'translateZ(0)' }}
+              className="w-full h-full object-contain" />
           ) : err ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center text-white gap-3">
               <Lock className="w-8 h-8 opacity-70" /><p className="text-sm">{err}</p>
