@@ -30,13 +30,17 @@ import type {
 import {
   makeTextElement, makeImageElement, makeLineElement,
   makeDynamicTagElement, makeDynamicImageElement, makeRepeaterElement,
-  makeFillableFieldElement,
+  makeFillableFieldElement, makeQrValidationElement,
 } from '@/lib/canva/elements'
 import { MACRO_BLOCKS, type MacroBlock } from '@/lib/canva/macros'
+import { QrCode, BadgeCheck } from 'lucide-react'
 
 interface Props {
   onAdd: (element: CanvasElement) => void
   onAddMany: (elements: CanvasElement[]) => void
+  /** Macro "Aplicar identidade da clínica" (cabeçalho/rodapé pinados +
+   *  assinatura) — implementada pelo CanvasEditor. */
+  onApplyIdentity?: () => void
   /** Armar inserção: o próximo clique no canvas vai posicionar os elementos
    *  produzidos por factory(x, y). label aparece na faixa do banner. */
   onArm: (factory: (x: number, y: number) => CanvasElement[], label: string) => void
@@ -64,7 +68,7 @@ function placedAt(el: CanvasElement, x: number, y: number): CanvasElement {
 }
 
 export default function ElementsToolbar({
-  onAdd, onAddMany, onArm, armed, onUploadImage, computeStartY,
+  onAdd, onAddMany, onArm, armed, onUploadImage, computeStartY, onApplyIdentity,
 }: Props) {
   const [modal, setModal] = useState<'tags' | 'images' | 'repeater' | 'blocks' | null>(null)
   const [uploading, setUploading] = useState(false)
@@ -143,6 +147,23 @@ export default function ElementsToolbar({
           icon={<LayoutTemplate className="w-5 h-5" />}
           label="Blocos Prontos"
           onClick={() => setModal('blocks')}
+        />
+
+        {onApplyIdentity && (
+          <ToolButton
+            icon={<BadgeCheck className="w-5 h-5" />}
+            label="Identidade da Clínica"
+            onClick={onApplyIdentity}
+          />
+        )}
+
+        <ToolButton
+          icon={<QrCode className="w-5 h-5" />}
+          label="QR Validação"
+          onClick={() => onArm(
+            (x, y) => [placedAt(makeQrValidationElement(), x, y)],
+            'QR de validação (rodapé, repete em todas)',
+          )}
         />
 
         <ToolButton

@@ -19,7 +19,7 @@ import type {
   CanvasElement, TextElement, ImageElement, LineElement,
   DynamicTagElement, CompositeTagElement,
   DynamicImageElement, RepeaterElement, RepeaterItemLine, BrushStrokeElement,
-  FillableFieldElement, FillableInputType, ElementPin,
+  FillableFieldElement, FillableInputType, ElementPin, QrValidationElement,
   TypographyStyle,
 } from '@/lib/canva/elements'
 import { findImageTag, findTag } from '@/lib/canva/dynamic-tags'
@@ -80,6 +80,7 @@ export default function PropertiesPanel({ element, onPatch, onDelete, onMoveZ }:
       {element.kind === 'repeater' && <RepeaterSection element={element} onPatch={onPatch} />}
       {element.kind === 'image' && <ImageSection element={element} onPatch={onPatch} />}
       {element.kind === 'line' && <LineSection element={element} onPatch={onPatch} />}
+      {element.kind === 'qr_validation' && <QrValidationSection element={element} onPatch={onPatch} />}
       {element.kind === 'brush_stroke' && <BrushStrokeSection element={element} onPatch={onPatch} />}
       {element.kind === 'fillable_field' && <FillableFieldSection element={element} onPatch={onPatch} />}
 
@@ -1423,5 +1424,40 @@ function kindLabel(k: CanvasElement['kind']): string {
     case 'repeater':       return 'Lista Repetível'
     case 'brush_stroke':   return 'Pincel'
     case 'fillable_field': return 'Campo Preenchível'
+    case 'qr_validation':  return 'QR de Validação'
   }
+}
+
+// ── Section: QR de validação ─────────────────────────────────────────────────
+
+function QrValidationSection({ element, onPatch }: { element: QrValidationElement; onPatch: Props['onPatch'] }) {
+  return (
+    <Section title="QR de Validação">
+      <p className="text-[11px] text-slate-500 leading-snug">
+        Gerado na emissão do documento (código + hash SHA-256, migration 0457). Aponta para
+        <code className="text-violet-700"> /public/verificar/&lt;código&gt;</code>. No editor aparece um placeholder.
+      </p>
+      <label className="mt-2 flex items-center gap-1.5 text-xs text-slate-700">
+        <input type="checkbox" checked={element.showCode !== false}
+          onChange={e => onPatch({ showCode: e.target.checked } as Partial<CanvasElement>)} />
+        Mostrar código abaixo do QR
+      </label>
+      <label className="block mt-2">
+        <span className="text-[10px] text-slate-600">Legenda</span>
+        <input
+          className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
+          value={element.caption ?? ''}
+          placeholder="ex: Verifique a autenticidade"
+          onChange={e => onPatch({ caption: e.target.value } as Partial<CanvasElement>)}
+        />
+      </label>
+      <div className="mt-3 border-t border-slate-200 pt-3">
+        <TypographyEditor
+          compact
+          value={element.typography}
+          onChange={next => onPatch({ typography: next } as Partial<CanvasElement>)}
+        />
+      </div>
+    </Section>
+  )
 }

@@ -35,6 +35,8 @@ import type {
 import { makeBrushStrokeElement, makeCompositeTagElement, nextElementId } from '@/lib/canva/elements'
 import { findTag } from '@/lib/canva/dynamic-tags'
 import { isPinned } from '@/lib/canva/pagination'
+import { applyIdentityToState, isIdentityElement } from '@/lib/canva/identity'
+import { getClinicDocumentIdentity } from '@/lib/actions/clinic-identity'
 
 /** Kinds que podem entrar numa mescla (gera um único CompositeTagElement). */
 type MergeableElement = TextElement | DynamicTagElement | CompositeTagElement
@@ -77,6 +79,8 @@ type DocAction =
   | { type: 'delete_many'; ids: string[] }
   | { type: 'move_z'; id: string; dir: 'front' | 'back' | 'forward' | 'backward' }
   | { type: 'merge_tags'; ids: string[]; composite: CanvasElement }
+  /** Substitui page+elements de uma vez (macro de identidade) — 1 frame de undo. */
+  | { type: 'replace_page'; page: PageConfig; elements: CanvasElement[] }
 
 type HistoryAction =
   | DocAction
@@ -145,6 +149,9 @@ function docReducer(state: CanvasState, action: DocAction): CanvasState {
       const remaining = state.elements.filter(el => !set.has(el.id))
       return { ...state, elements: [...remaining, action.composite] }
     }
+
+    case 'replace_page':
+      return { ...state, page: action.page, elements: action.elements }
 
     case 'move_z': {
       const all = [...state.elements].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
@@ -549,6 +556,31 @@ export default function CanvasEditor({
 
   const handleCancelArm = useCallback(() => setArmed(null), [])
 
+  /** Macro "Aplicar identidade da clínica": busca a configuração (0467) e
+   *  insere/substitui cabeçalho, rodapé (pinados) e assinatura na página 1.
+   *  Modelo vazio também adota a página padrão da identidade. */
+  const handleApplyIdentity = useCallback(async () => {
+    setError(null)
+    if (pageIndex !== 0) {
+      setError('A identidade é aplicada na página 1 (cabeçalho/rodapé repetem nas demais). Volte para a página 1.')
+      return
+    }
+    try {
+      const { identity, configured } = await getClinicDocumentIdentity()
+      const next = applyIdentityToState(
+        { version: 1, page: state.page, elements: state.elements },
+        identity,
+      )
+      dispatch({ type: 'replace_page', page: next.page, elements: next.elements })
+      setSelectedIds(next.elements.filter(isIdentityElement).map(e => e.id))
+      if (!configured) {
+        setError('Identidade padrão aplicada — personalize em Gestão > Modelos > Identidade documental.')
+      }
+    } catch (e: any) {
+      setError(e?.message ?? 'falha ao aplicar identidade')
+    }
+  }, [pageIndex, state.page, state.elements])
+
   /** Posiciona os elementos armados nas coordenadas do clique. */
   const handlePlace = useCallback((x: number, y: number) => {
     if (!armed) return
@@ -930,6 +962,7 @@ export default function CanvasEditor({
             onAddMany={(elements) => { dispatch({ type: 'add_many', elements }); setSelectedIds([]) }}
             onArm={handleArm}
             armed={!!armed}
+            onApplyIdentity={handleApplyIdentity}
             onUploadImage={handleUploadImage}
             computeStartY={() => {
               const others = state.elements.filter(e => e.kind !== 'brush_stroke')

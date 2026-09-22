@@ -12,7 +12,7 @@ import type {
   CanvasElement, TextElement, ImageElement, LineElement,
   DynamicTagElement, CompositeTagElement,
   DynamicImageElement, RepeaterElement, RepeaterItemLine, BrushStrokeElement,
-  FillableFieldElement,
+  FillableFieldElement, QrValidationElement,
   TypographyStyle, BlockStyle,
 } from '@/lib/canva/elements'
 import {
@@ -97,7 +97,44 @@ export function ElementRenderer({ element, ctx, isPrint, fillableValues, repeate
     case 'repeater':        return <RepeaterRenderer       e={element} ctx={ctx} isPrint={isPrint} itemSlice={repeaterItemSlice} />
     case 'brush_stroke':    return <BrushStrokeFallback    e={element} />
     case 'fillable_field':  return <FillableFieldRenderer  e={element} value={fillableValues?.[element.fieldKey]} isPrint={isPrint} />
+    case 'qr_validation':   return <QrValidationRenderer   e={element} ctx={ctx} isPrint={isPrint} />
   }
+}
+
+/** QR de autenticidade. Usa ctx.doc.qr_svg (gerado no servidor na emissão)
+ *  + ctx.doc.verify_code_fmt. Sem código (editor/preview de modelo) mostra
+ *  placeholder; no print de documento não assinado, fica vazio. */
+function QrValidationRenderer({ e, ctx, isPrint }: { e: QrValidationElement; ctx?: ResolveContext; isPrint?: boolean }) {
+  const doc = (ctx?.doc ?? {}) as Record<string, unknown>
+  const svg = typeof doc.qr_svg === 'string' ? doc.qr_svg : null
+  const code = typeof doc.verify_code_fmt === 'string' ? doc.verify_code_fmt : ''
+  const showCode = e.showCode !== false
+  const typ = typographyToCss(e.typography)
+
+  const wrapper: CSSProperties = {
+    width: '100%', height: '100%',
+    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start',
+    gap: 2, overflow: 'hidden', ...blockToCss(e.block),
+  }
+  // Quadrado do QR: ocupa a largura e o que sobrar de altura para legenda
+  const square: CSSProperties = { width: '100%', aspectRatio: '1 / 1', maxHeight: showCode || e.caption ? '72%' : '100%' }
+
+  if (svg) {
+    return (
+      <div style={wrapper}>
+        <div style={square} dangerouslySetInnerHTML={{ __html: svg }} />
+        {showCode && code && <span style={{ ...typ, fontFamily: 'monospace', lineHeight: 1 }}>{code}</span>}
+        {e.caption && <span style={{ ...typ, lineHeight: 1.1 }}>{e.caption}</span>}
+      </div>
+    )
+  }
+  if (isPrint) return <div style={{ width: '100%', height: '100%' }} />
+  return (
+    <div style={{ ...wrapper, justifyContent: 'center', background: 'rgba(124,58,237,0.06)', border: '1px dashed rgba(124,58,237,0.5)', borderRadius: 4, color: '#7c3aed' }}>
+      <div style={{ ...square, maxHeight: '60%', display: 'grid', placeItems: 'center', fontSize: 9, fontWeight: 700 }}>QR</div>
+      <span style={{ fontSize: 7, textAlign: 'center', lineHeight: 1.1, padding: '0 2px' }}>validação gerada na emissão</span>
+    </div>
+  )
 }
 
 function FillableFieldRenderer({

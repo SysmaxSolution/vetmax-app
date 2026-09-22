@@ -8,7 +8,7 @@
  * Print fidelity: editor e LaudoPrintable consomem a MESMA estrutura.
  */
 
-export type ElementKind = 'text' | 'image' | 'line' | 'dynamic_tag' | 'composite_tag' | 'dynamic_image' | 'repeater' | 'brush_stroke' | 'fillable_field'
+export type ElementKind = 'text' | 'image' | 'line' | 'dynamic_tag' | 'composite_tag' | 'dynamic_image' | 'repeater' | 'brush_stroke' | 'fillable_field' | 'qr_validation'
 
 /** Posição/tamanho em % do canvas (0-100). 0/0 = canto superior esquerdo. */
 export interface ElementBox {
@@ -268,6 +268,21 @@ export interface FillableFieldElement extends ElementCommon {
   typography: TypographyStyle
 }
 
+/**
+ * QR de validação de autenticidade. Em tempo de emissão o documento recebe
+ * verify_code + hash (migration 0457 / laudo-signature); o print injeta
+ * ctx.doc.qr_svg (SVG gerado no servidor) e ctx.doc.verify_url. No editor
+ * e em previews sem documento emitido aparece um placeholder.
+ */
+export interface QrValidationElement extends ElementCommon {
+  kind: 'qr_validation'
+  /** Mostra o código curto (K7Q2M-9XR4T) abaixo do QR. Default true. */
+  showCode?: boolean
+  /** Texto pequeno ao lado/abaixo (ex.: "Verifique a autenticidade"). */
+  caption?: string
+  typography?: TypographyStyle
+}
+
 export type CanvasElement =
   | TextElement
   | ImageElement
@@ -278,6 +293,7 @@ export type CanvasElement =
   | RepeaterElement
   | BrushStrokeElement
   | FillableFieldElement
+  | QrValidationElement
 
 // ── Factory helpers ──────────────────────────────────────────────────────────
 
@@ -398,6 +414,21 @@ export function makeFillableFieldElement(
     required: false,
     inputType: 'text',
     typography: { ...DEFAULT_TYPOGRAPHY },
+    zIndex: 1,
+    ...overrides,
+  }
+}
+
+export function makeQrValidationElement(overrides?: Partial<QrValidationElement>): QrValidationElement {
+  return {
+    id: nextElementId('qr_validation'),
+    kind: 'qr_validation',
+    // Quadrado ~2,4 cm no A4 (11,5% da largura ≈ 2,4 cm; 8% da altura ≈ 2,4 cm)
+    box: { x: 84, y: 88, w: 11.5, h: 9.5 },
+    showCode: true,
+    caption: 'Verifique a autenticidade',
+    typography: { ...DEFAULT_TYPOGRAPHY, fontSize: 6, color: '#64748b', align: 'center' },
+    pin: 'footer',
     zIndex: 1,
     ...overrides,
   }

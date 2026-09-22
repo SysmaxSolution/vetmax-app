@@ -16,7 +16,8 @@ import type {
 import { CANVA_DEFAULT_MARGINS, validateContent } from '@/lib/canva/types'
 import { formatClinicDate } from '@/lib/time'
 import type { CanvasState } from '@/lib/canva/canvas-state'
-import { isCanvasState } from '@/lib/canva/canvas-state'
+import { isCanvasState, defaultCanvasState } from '@/lib/canva/canvas-state'
+import { applyIdentityToState, hydrateIdentity } from '@/lib/canva/identity'
 import type { FillableFieldElement } from '@/lib/canva/elements'
 import type { VitalSigns } from '@/types'
 import type { ResolveContext } from '@/lib/canva/dynamic-tags'
@@ -693,11 +694,13 @@ Responda SOMENTE com o JSON:`
 export interface CreateBlankCanvasTemplateInput {
   name: string
   type: 'laudo' | 'receita' | 'encaminhamento' | 'termo' | 'exame' | 'outro'
+  /** Default true — herda a identidade documental da clínica (0467). */
+  apply_identity?: boolean
 }
 
 export async function createBlankCanvasTemplate(
   input: CreateBlankCanvasTemplateInput,
-): Promise<{ id: string }> {
+): Promise<{ id: string; canvas_state: CanvasState }> {
   const { profile } = await requireClinic()
   if (profile.role !== 'admin') throw new Error('apenas admin pode criar modelos')
 
@@ -706,15 +709,18 @@ export async function createBlankCanvasTemplate(
 
   const admin = createAdminClient()
 
-  const blankCanvasState = {
-    version: 1,
-    page: {
-      size: 'A4',
-      orientation: 'portrait',
-      margins: { top: 2, bottom: 2, left: 2, right: 2 },
-      backgroundImageUrl: null,
-    },
-    elements: [],
+  // Modelos novos HERDAM a identidade documental da clínica (0467) por
+  // padrão: página padrão + cabeçalho/rodapé pinados + assinatura.
+  let canvasState: CanvasState = defaultCanvasState()
+  if (input.apply_identity !== false) {
+    const { data: ident } = await admin
+      .from('clinic_document_identity')
+      .select('config')
+      .eq('clinic_id', profile.clinic_id)
+      .maybeSingle()
+    if (ident?.config) {
+      canvasState = applyIdentityToState(canvasState, hydrateIdentity(ident.config), { adoptPage: true })
+    }
   }
 
   const { data, error } = await admin
@@ -725,12 +731,12 @@ export async function createBlankCanvasTemplate(
       type: input.type,
       file_url: null,
       extracted_fields: [],
-      canvas_state: blankCanvasState,
+      canvas_state: canvasState,
       engine: 'canva-native',
-      margin_top: 2.0,
-      margin_bottom: 2.0,
-      margin_left: 2.0,
-      margin_right: 2.0,
+      margin_top: canvasState.page.margins.top,
+      margin_bottom: canvasState.page.margins.bottom,
+      margin_left: canvasState.page.margins.left,
+      margin_right: canvasState.page.margins.right,
       block_style: 'solid',
     })
     .select('id')
@@ -739,7 +745,7 @@ export async function createBlankCanvasTemplate(
   if (error || !data) throw new Error(error?.message ?? 'falha ao criar modelo')
 
   revalidatePath('/dashboard/management')
-  return { id: data.id }
+  return { id: data.id, canvas_state: canvasState }
 }
 
 // ── Herdar de modelo existente (lista + clonagem dentro da mesma clínica) ───

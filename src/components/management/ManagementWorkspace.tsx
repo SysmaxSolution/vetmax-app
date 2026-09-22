@@ -19,6 +19,8 @@ import ImportTemplateModal from './ImportTemplateModal'
 import CanvasEditor from '@/components/canva/editor/CanvasEditor'
 import NewCanvasTemplateDialog from '@/components/canva/editor/NewCanvasTemplateDialog'
 import DuplicateTemplateModal from './DuplicateTemplateModal'
+import DocumentIdentityModal from './DocumentIdentityModal'
+import { BadgeCheck } from 'lucide-react'
 import { hydrateCanvasState, type CanvasState } from '@/lib/canva/canvas-state'
 import { Toast } from '@/components/ui/toast'
 import ConveniosTab from './ConveniosTab'
@@ -191,6 +193,7 @@ export default function ManagementWorkspace({
   const [canvaEditing,    setCanvaEditing]    = useState<DocumentTemplate | null>(null)
   const [duplicatingTemplate, setDuplicatingTemplate] = useState<DocumentTemplate | null>(null)
   const [showNewBlankDialog, setShowNewBlankDialog] = useState(false)
+  const [showIdentityModal, setShowIdentityModal] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
@@ -515,6 +518,11 @@ export default function ManagementWorkspace({
               <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-600">
                 {templates.length} modelo{templates.length !== 1 ? 's' : ''}
               </span>
+              <button onClick={() => setShowIdentityModal(true)}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-violet-200 bg-violet-50 text-violet-700 text-sm font-semibold hover:bg-violet-100 transition-colors"
+                title="Cabeçalho, rodapé, cores, fonte e página padrão herdados por todos os modelos">
+                <BadgeCheck className="w-4 h-4" /><span className="hidden sm:inline">Identidade documental</span>
+              </button>
               <button onClick={() => setShowNewBlankDialog(true)}
                 className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg bg-teal-600 text-white text-sm font-semibold shadow-sm hover:bg-teal-700 transition-colors"
                 title="Cria um modelo em branco e abre o editor visual">
@@ -1182,6 +1190,18 @@ export default function ManagementWorkspace({
               setToast({ type: 'success', message: 'Modelo salvo.' })
             }
           }}
+        />
+      )}
+
+      {/* Identidade documental da clínica (herdada pelos modelos Canvas) */}
+      {showIdentityModal && (
+        <DocumentIdentityModal
+          clinic={{
+            name: clinicName, cnpj: clinicCnpj, phone: clinicPhone, address: clinicAddress,
+            city: clinicData?.city ?? null, state: clinicData?.state ?? null, logo_url: logoUrl,
+          }}
+          onClose={() => setShowIdentityModal(false)}
+          onSaved={() => setToast({ type: 'success', message: 'Identidade documental salva. Modelos novos já herdam; nos existentes use "Identidade da Clínica" no editor.' })}
         />
       )}
 
