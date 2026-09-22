@@ -979,14 +979,18 @@ export async function createCanvaPatientDocument(
   }
 
   // Lê config do template para snapshot (vet pode imprimir histórico anos depois
-  // mesmo se o admin trocar o papel timbrado no meio do caminho)
+  // mesmo se o admin trocar o papel timbrado — ou o layout inteiro — depois)
   const { data: tpl, error: tplErr } = await supabase
     .from('document_templates')
-    .select('background_image_url, margin_top, margin_bottom, margin_left, margin_right, block_style')
+    .select('background_image_url, margin_top, margin_bottom, margin_left, margin_right, block_style, canvas_state')
     .eq('id', input.template_id)
     .eq('clinic_id', profile.clinic_id)
     .single()
   if (tplErr || !tpl) throw new Error(tplErr?.message ?? 'template não encontrado')
+
+  // Snapshot imutável do layout (migration 0466). Documentos sem snapshot
+  // (antigos) caem no template em loadCanvaPatientDocument.
+  const snapshot = isCanvasState(tpl.canvas_state) ? (tpl.canvas_state as CanvasState) : null
 
   const { data, error } = await supabase
     .from('patient_documents')
@@ -1003,6 +1007,8 @@ export async function createCanvaPatientDocument(
       margin_left: tpl.margin_left ?? CANVA_DEFAULT_MARGINS.left,
       margin_right: tpl.margin_right ?? CANVA_DEFAULT_MARGINS.right,
       block_style: tpl.block_style ?? 'solid',
+      canvas_state_snapshot: snapshot,
+      snapshot_taken_at: snapshot ? new Date().toISOString() : null,
     })
     .select('id')
     .single()
@@ -1022,18 +1028,19 @@ export async function loadCanvaPatientDocument(documentId: string): Promise<{
 
   const { data, error } = await supabase
     .from('patient_documents')
-    .select('document_name, content_json, background_image_url, margin_top, margin_bottom, margin_left, margin_right, block_style, template_id')
+    .select('document_name, content_json, background_image_url, margin_top, margin_bottom, margin_left, margin_right, block_style, template_id, canvas_state_snapshot')
     .eq('id', documentId)
     .eq('clinic_id', profile.clinic_id)
     .single()
 
   if (error || !data) throw new Error(error?.message ?? 'documento não encontrado')
 
-  // Busca canvas_state do template (motor visual). Snapshot por documento
-  // ainda não é persistido — para histórico fiel, copiar canvas_state em
-  // patient_documents é uma melhoria futura.
+  // Snapshot do documento (migration 0466) tem precedência — histórico fiel.
+  // Fallback: canvas_state ATUAL do template (documentos anteriores ao snapshot).
   let canvas_state: CanvasState | null = null
-  if (data.template_id) {
+  if (isCanvasState(data.canvas_state_snapshot)) {
+    canvas_state = data.canvas_state_snapshot as CanvasState
+  } else if (data.template_id) {
     const { data: tpl } = await supabase
       .from('document_templates')
       .select('canvas_state')
@@ -1083,12 +1090,34 @@ export async function updateCanvaPatientDocument(
     throw new Error('content_json inválido (esperado static_fields + dynamic_fields[])')
   }
 
+  // Backfill: documento anterior ao snapshot (0466) ganha o snapshot do
+  // template na 1ª edição — a partir daí o layout fica congelado.
+  const { data: existing } = await supabase
+    .from('patient_documents')
+    .select('template_id, canvas_state_snapshot')
+    .eq('id', input.document_id)
+    .eq('clinic_id', profile.clinic_id)
+    .maybeSingle()
+  let backfill: { canvas_state_snapshot: CanvasState; snapshot_taken_at: string } | null = null
+  if (existing && !isCanvasState(existing.canvas_state_snapshot) && existing.template_id) {
+    const { data: tpl } = await supabase
+      .from('document_templates')
+      .select('canvas_state')
+      .eq('id', existing.template_id)
+      .eq('clinic_id', profile.clinic_id)
+      .maybeSingle()
+    if (tpl && isCanvasState(tpl.canvas_state)) {
+      backfill = { canvas_state_snapshot: tpl.canvas_state as CanvasState, snapshot_taken_at: new Date().toISOString() }
+    }
+  }
+
   const { data, error } = await supabase
     .from('patient_documents')
     .update({
       document_name: input.document_name,
       content_json: input.content_json,
       updated_at: new Date().toISOString(),
+      ...(backfill ?? {}),
     })
     .eq('id', input.document_id)
     .eq('clinic_id', profile.clinic_id)
@@ -1121,7 +1150,7 @@ export async function deletePatientDocument(documentId: string): Promise<{ id: s
 
 /** Carrega doc Canvas existente no shape CanvasDraftResult (+ document_id)
  *  para reabertura no CanvasDocumentDraftModal em modo edição.
- *  Reutiliza canvas_state ATUAL do template (não snapshot histórico). */
+ *  Usa o snapshot do documento (0466); fallback = canvas_state atual do template. */
 export async function loadCanvaDocumentForEdit(documentId: string): Promise<
   (CanvasDraftResult & { document_id: string; existing_doc_name: string }) | { error: string }
 > {
@@ -1129,7 +1158,7 @@ export async function loadCanvaDocumentForEdit(documentId: string): Promise<
 
   const { data: doc, error: docErr } = await supabase
     .from('patient_documents')
-    .select('id, document_name, content_json, template_id, patient_id, consultation_id, created_at, background_image_url, margin_top, margin_bottom, margin_left, margin_right, block_style')
+    .select('id, document_name, content_json, template_id, patient_id, consultation_id, created_at, background_image_url, margin_top, margin_bottom, margin_left, margin_right, block_style, canvas_state_snapshot')
     .eq('id', documentId)
     .eq('clinic_id', profile.clinic_id)
     .single()
@@ -1145,11 +1174,13 @@ export async function loadCanvaDocumentForEdit(documentId: string): Promise<
     .single()
 
   if (tplErr || !template) return { error: 'Template do documento não encontrado.' }
-  if (!isCanvasState(template.canvas_state)) {
+
+  const snapshotOk = isCanvasState(doc.canvas_state_snapshot)
+  if (!snapshotOk && !isCanvasState(template.canvas_state)) {
     return { error: 'Template não é Canvas Visual — use o motor legado pra editar.' }
   }
 
-  const cs = template.canvas_state as CanvasState
+  const cs = (snapshotOk ? doc.canvas_state_snapshot : template.canvas_state) as CanvasState
   const fillableDefs = cs.elements.filter(
     (e): e is FillableFieldElement => e.kind === 'fillable_field',
   )
