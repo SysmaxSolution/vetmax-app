@@ -24,6 +24,8 @@ import CanvaA4Preview from './CanvaA4Preview'
 import CanvasStage from './editor/CanvasStage'
 import { readRepeaterItems } from './editor/ElementRenderers'
 import type { ResolveContext } from '@/lib/canva/dynamic-tags'
+import type { ClinicFontFace } from '@/lib/canva/fonts'
+import CanvaFontsScope from './CanvaFontsScope'
 
 /** Página real ou virtual (gerada por overflow do repeater). */
 interface ExpandedPage {
@@ -97,6 +99,9 @@ interface Props {
   canvasState?: CanvasState | null
   /** Contexto para resolver dynamic tags (tutor, pet, consulta, etc.). */
   resolveContext?: ResolveContext
+  /** Fontes da clínica (signed URLs) — injetadas como @font-face. Quando
+   *  omitido, o CanvaFontsScope busca no cliente. */
+  clinicFonts?: ClinicFontFace[]
 }
 
 // Página padrão do motor legado (CanvaA4Preview) — sempre A4 retrato.
@@ -113,7 +118,7 @@ export function buildPageCssRule(page: PageConfig): string {
 }
 
 export default function LaudoPrintable({
-  documentTitle, config, content, patient, autoPrint, canvasState, resolveContext,
+  documentTitle, config, content, patient, autoPrint, canvasState, resolveContext, clinicFonts,
 }: Props) {
   const printAreaRef = useRef<HTMLDivElement>(null)
   const [busy, setBusy] = useState(false)
@@ -222,7 +227,7 @@ export default function LaudoPrintable({
   }, [])
 
   return (
-    <div className="canva-print-shell min-h-screen bg-slate-100 py-8" style={shellVars}>
+    <CanvaFontsScope clinicFonts={clinicFonts} className="canva-print-shell min-h-screen bg-slate-100 py-8" style={shellVars}>
       {/* @page dinâmico — tamanho/orientação reais da folha no Ctrl+P */}
       <style dangerouslySetInnerHTML={{ __html: buildPageCssRule(docPage) }} />
       <div
@@ -292,6 +297,6 @@ export default function LaudoPrintable({
           />
         )}
       </div>
-    </div>
+    </CanvaFontsScope>
   )
 }

@@ -4,6 +4,7 @@ import { loadCanvaPatientDocument } from '@/lib/actions/canva-templates'
 import LaudoPrintable from '@/components/canva/LaudoPrintable'
 import { buildResolveContext } from '@/lib/canva/resolve-context'
 import { parseMedicamentosText } from '@/lib/canva/parse-medicamentos'
+import { listClinicFonts } from '@/lib/actions/clinic-fonts'
 
 interface Props {
   params: Promise<{ docId: string }>
@@ -18,7 +19,10 @@ export default async function PrintLaudoPage({ params, searchParams }: Props) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const loaded = await loadCanvaPatientDocument(docId)
+  const [loaded, clinicFonts] = await Promise.all([
+    loadCanvaPatientDocument(docId),
+    listClinicFonts(),
+  ])
 
   const { data: doc } = await supabase
     .from('patient_documents')
@@ -76,6 +80,7 @@ export default async function PrintLaudoPage({ params, searchParams }: Props) {
       resolveContext={resolveContext}
       patient={patient}
       autoPrint={auto === '1'}
+      clinicFonts={clinicFonts}
     />
   )
 }

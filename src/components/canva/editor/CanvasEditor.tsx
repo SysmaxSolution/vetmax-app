@@ -51,6 +51,8 @@ import CanvasStage from './CanvasStage'
 import ElementsToolbar from './ElementsToolbar'
 import PropertiesPanel from './PropertiesPanel'
 import PageSettingsPanel from './PageSettingsPanel'
+import ClinicFontsManager from './ClinicFontsManager'
+import CanvaFontsScope from '@/components/canva/CanvaFontsScope'
 
 interface Props {
   templateId: string
@@ -759,7 +761,7 @@ export default function CanvasEditor({
         : { label: 'Pronto para editar', tone: 'idle' }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-stretch bg-slate-900/40 backdrop-blur-sm">
+    <CanvaFontsScope className="fixed inset-0 z-50 flex items-stretch bg-slate-900/40 backdrop-blur-sm">
       <div className="m-auto flex h-[98vh] w-[min(1600px,99vw)] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
         {/* Header — duas linhas em telas estreitas, uma só em telas largas */}
         <header className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-2">
@@ -876,6 +878,7 @@ export default function CanvasEditor({
           onChange={page => dispatch({ type: 'set_page', page })}
           onUploadBackground={handleUploadBackground}
           pageLabel={pageCountUI > 1 ? `Página ${pageIndex + 1} de ${pageCountUI}` : undefined}
+          extraControls={<ClinicFontsManager />}
         />
 
         {/* Tab bar de páginas — só aparece se tiver multi-page OU
@@ -1009,7 +1012,7 @@ export default function CanvasEditor({
           />
         )}
       </div>
-    </div>
+    </CanvaFontsScope>
   )
 }
 

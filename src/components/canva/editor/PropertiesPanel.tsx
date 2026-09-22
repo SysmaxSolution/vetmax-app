@@ -27,6 +27,8 @@ import { wrapTextareaSelection } from '@/lib/canva/text-format'
 import type { TextListStyle } from '@/lib/canva/elements'
 import EmojiPicker from './EmojiPicker'
 import { Strikethrough } from 'lucide-react'
+import { useCanvaFonts } from '@/components/canva/CanvaFontsScope'
+import { fontOptions } from '@/lib/canva/fonts'
 
 interface Props {
   element: CanvasElement | null
@@ -1000,6 +1002,13 @@ function TypographyEditor({
 }) {
   const t = value ?? {}
   const patch = (partial: Partial<TypographyStyle>) => onChange({ ...t, ...partial })
+  const { clinicFonts } = useCanvaFonts()
+  const options = fontOptions(clinicFonts)
+  const clinicOpts = options.filter(o => o.source === 'clinica')
+  const stdOpts = options.filter(o => o.source === 'padrao')
+  // Fonte salva que não está mais na lista (removida) — mantém visível
+  const current = t.fontFamily ?? 'Inter'
+  const unknownCurrent = !options.some(o => o.family.toLowerCase() === current.toLowerCase())
 
   return (
     <div className="space-y-2">
@@ -1008,16 +1017,18 @@ function TypographyEditor({
           <span className="text-[10px] text-slate-600">Fonte</span>
           <select
             className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
-            value={t.fontFamily ?? 'Inter'}
+            value={current}
             onChange={e => patch({ fontFamily: e.target.value })}
           >
-            <option value="Inter">Inter</option>
-            <option value="Times New Roman">Times New Roman</option>
-            <option value="Georgia">Georgia</option>
-            <option value="Arial">Arial</option>
-            <option value="Helvetica">Helvetica</option>
-            <option value="Courier New">Courier New</option>
-            <option value="Roboto">Roboto</option>
+            {unknownCurrent && <option value={current}>{current} (não encontrada)</option>}
+            {clinicOpts.length > 0 && (
+              <optgroup label="Da clínica">
+                {clinicOpts.map(o => <option key={o.family} value={o.family}>{o.family}</option>)}
+              </optgroup>
+            )}
+            <optgroup label="Padrão">
+              {stdOpts.map(o => <option key={o.family} value={o.family}>{o.family}</option>)}
+            </optgroup>
           </select>
         </label>
         <NumField label="Tamanho (pt)" value={t.fontSize ?? 11} step={0.5}

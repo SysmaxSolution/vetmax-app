@@ -4,6 +4,7 @@ import LaudoPrintable from '@/components/canva/LaudoPrintable'
 import { buildPreviewContext } from '@/lib/canva/resolve-context'
 import { hydrateCanvasState, type CanvasState } from '@/lib/canva/canvas-state'
 import type { CanvaContentJson, CanvaTemplateConfig, CanvaBlockStyle } from '@/lib/canva/types'
+import { listClinicFonts } from '@/lib/actions/clinic-fonts'
 
 interface Props {
   params: Promise<{ templateId: string }>
@@ -38,7 +39,10 @@ export default async function PreviewTemplatePage({ params, searchParams }: Prop
   if (!tpl) redirect('/dashboard/management?canva_preview_error=template_not_found')
 
   const canvasState: CanvasState = hydrateCanvasState(tpl.canvas_state)
-  const resolveContext = await buildPreviewContext(supabase, profile.clinic_id, user.id)
+  const [resolveContext, clinicFonts] = await Promise.all([
+    buildPreviewContext(supabase, profile.clinic_id, user.id),
+    listClinicFonts(),
+  ])
 
   const config: CanvaTemplateConfig = {
     background_image_url: tpl.background_image_url ?? canvasState.page.backgroundImageUrl ?? null,
@@ -85,6 +89,7 @@ export default async function PreviewTemplatePage({ params, searchParams }: Prop
         crmv:         String(vet.crmv ?? ''),
       }}
       autoPrint={auto === '1'}
+      clinicFonts={clinicFonts}
     />
   )
 }

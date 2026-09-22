@@ -23,13 +23,16 @@ import { MOCK_REPEATER_DATA } from '@/lib/canva/mock-data'
 import {
   parseInlineMarkdown, getListPrefix, splitIntoTopics,
 } from '@/lib/canva/text-format'
+import { fontFamilyCss } from '@/lib/canva/fonts'
 
 // ── Estilo helpers ───────────────────────────────────────────────────────────
 
 export function typographyToCss(t?: TypographyStyle): CSSProperties {
   if (!t) return {}
   return {
-    fontFamily: t.fontFamily,
+    // Fallback stack + CSS var das Google Fonts embutidas (CanvaFontsScope).
+    // Fontes da clínica resolvem pelo @font-face injetado no mesmo scope.
+    fontFamily: t.fontFamily ? fontFamilyCss(t.fontFamily) : undefined,
     fontSize: t.fontSize != null ? `${t.fontSize}pt` : undefined,
     fontWeight: t.fontWeight,
     fontStyle: t.fontStyle,

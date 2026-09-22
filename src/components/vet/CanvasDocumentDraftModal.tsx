@@ -30,6 +30,7 @@ import type {
 } from '@/lib/canva/types'
 import CanvasStructuredDataAccordion from '@/components/vet/CanvasStructuredDataAccordion'
 import type { ResolveContext } from '@/lib/canva/dynamic-tags'
+import CanvaFontsScope from '@/components/canva/CanvaFontsScope'
 
 interface Props {
   draft: CanvasDraftResult
@@ -210,7 +211,7 @@ export default function CanvasDocumentDraftModal({
   }, [onClose, saving])
 
   return typeof document !== 'undefined' ? createPortal(
-    <div className="fixed inset-0 z-50 flex items-stretch bg-slate-900/40 backdrop-blur-sm">
+    <CanvaFontsScope className="fixed inset-0 z-50 flex items-stretch bg-slate-900/40 backdrop-blur-sm">
       <div className="m-auto flex h-[96vh] w-[min(1480px,98vw)] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
         {/* Header */}
         <header className="flex items-center justify-between border-b border-slate-200 px-5 py-3 flex-shrink-0">
@@ -357,7 +358,7 @@ export default function CanvasDocumentDraftModal({
           </section>
         </div>
       </div>
-    </div>,
+    </CanvaFontsScope>,
     document.body,
   ) : null
 }
