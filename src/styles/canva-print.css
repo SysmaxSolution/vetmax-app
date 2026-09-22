@@ -18,6 +18,10 @@
  * apaga o shell junto (tela branca).
  * ========================================================================== */
 
+/* Default global (outras telas que imprimem). O LaudoPrintable injeta um
+   <style> posterior com `@page { size: <w>mm <h>mm }` calculado do
+   PageConfig do documento (A4/A5/A6/Carta/Etiqueta/custom + orientação) —
+   a regra injetada vence por vir depois na cascata. */
 @page {
   size: A4 portrait;
   margin: 0;
@@ -61,7 +65,9 @@
     position: absolute !important;
     top: 0 !important;
     left: 0 !important;
-    width: 21cm !important;
+    /* --canva-page-w/-h são setadas inline pelo LaudoPrintable (shell) e
+       pelo CanvasStage (folha) a partir do PageConfig. Fallback = A4. */
+    width: var(--canva-page-w, 21cm) !important;
     padding: 0 !important;
     margin: 0 !important;
     background: #fff !important;
@@ -73,7 +79,7 @@
   }
 
   .canva-print-area {
-    width: 21cm !important;
+    width: var(--canva-page-w, 21cm) !important;
     max-width: none !important;
     margin: 0 !important;
     padding: 0 !important;
@@ -83,9 +89,11 @@
     gap: 0 !important;
   }
 
+  /* Cada folha carrega suas próprias vars (multi-page pode misturar
+     tamanhos; o @page do documento segue a página 1). */
   .canva-a4-page {
-    width: 21cm !important;
-    height: 29.7cm !important;
+    width: var(--canva-page-w, 21cm) !important;
+    height: var(--canva-page-h, 29.7cm) !important;
     margin: 0 !important;
     box-shadow: none !important;
     border-radius: 0 !important;

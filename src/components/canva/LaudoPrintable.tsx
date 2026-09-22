@@ -18,7 +18,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Download, Loader2, Printer } from 'lucide-react'
 import type { CanvaContentJson, CanvaTemplateConfig } from '@/lib/canva/types'
 import type { CanvasState, PageConfig } from '@/lib/canva/canvas-state'
-import { getAllPages } from '@/lib/canva/canvas-state'
+import { getAllPages, pageDimensionsCm, pageDimensionsMm, pageDimensionsPx } from '@/lib/canva/canvas-state'
 import type { CanvasElement, RepeaterElement } from '@/lib/canva/elements'
 import CanvaA4Preview from './CanvaA4Preview'
 import CanvasStage from './editor/CanvasStage'
@@ -99,10 +99,18 @@ interface Props {
   resolveContext?: ResolveContext
 }
 
-// A4 portrait em pixels a 96dpi — base do render no DOM e do html2canvas.
-// 21cm × 96 / 2.54 = 793.7 → 794. 29.7cm × 96 / 2.54 = 1122.5 → 1123.
-const A4_W_PX = 794
-const A4_H_PX = 1123
+// Página padrão do motor legado (CanvaA4Preview) — sempre A4 retrato.
+const LEGACY_A4: PageConfig = {
+  size: 'A4', orientation: 'portrait', margins: { top: 2, bottom: 2, left: 2, right: 2 },
+}
+
+/** Gera a regra @page do documento a partir da página 1. Injetada como
+ *  <style> dentro do shell — vem depois do canva-print.css na cascata e
+ *  por isso sobrescreve o `size: A4 portrait` global. */
+export function buildPageCssRule(page: PageConfig): string {
+  const { w, h } = pageDimensionsMm(page)
+  return `@page { size: ${w}mm ${h}mm; margin: 0; }`
+}
 
 export default function LaudoPrintable({
   documentTitle, config, content, patient, autoPrint, canvasState, resolveContext,
@@ -133,32 +141,47 @@ export default function LaudoPrintable({
       ])
 
       const pages = Array.from(printAreaRef.current.querySelectorAll<HTMLElement>('.canva-a4-page'))
-      const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
-      const W = 210, H = 297
+      // Formato de cada página vem do PageConfig correspondente (páginas
+      // virtuais herdam o da página real). Sem canvasState = motor legado A4.
+      const pageConfigs: PageConfig[] = expandedPages.length > 0
+        ? expandedPages.map(p => p.page)
+        : [LEGACY_A4]
+      const cfgAt = (i: number) => pageConfigs[Math.min(i, pageConfigs.length - 1)]
+
+      const first = pageDimensionsMm(cfgAt(0))
+      const pdf = new jsPDF({
+        unit: 'mm',
+        format: [first.w, first.h],
+        orientation: first.w > first.h ? 'landscape' : 'portrait',
+      })
 
       // Para cada página, fixa explicitamente width/height em px e captura
       // com windowWidth/Height idênticos. Garante que html2canvas trabalha
-      // num "viewport sintético" A4 — independe do zoom/scroll do browser.
+      // num "viewport sintético" do tamanho da folha — independe do
+      // zoom/scroll do browser.
       for (let i = 0; i < pages.length; i++) {
         const node = pages[i]
+        const cfg = cfgAt(i)
+        const { w: wMm, h: hMm } = pageDimensionsMm(cfg)
+        const { w: wPx, h: hPx } = pageDimensionsPx(cfg)
 
         // Snapshot dos estilos inline pra restaurar depois da captura
         const orig = {
           width:  node.style.width,
           height: node.style.height,
         }
-        node.style.width  = `${A4_W_PX}px`
-        node.style.height = `${A4_H_PX}px`
+        node.style.width  = `${wPx}px`
+        node.style.height = `${hPx}px`
 
         const canvas = await html2canvas(node, {
           scale: 2,
           useCORS: true,
           backgroundColor: '#ffffff',
           logging: false,
-          width:        A4_W_PX,
-          height:       A4_H_PX,
-          windowWidth:  A4_W_PX,
-          windowHeight: A4_H_PX,
+          width:        wPx,
+          height:       hPx,
+          windowWidth:  wPx,
+          windowHeight: hPx,
         })
 
         // Restaura estilos originais
@@ -166,8 +189,8 @@ export default function LaudoPrintable({
         node.style.height = orig.height
 
         const img = canvas.toDataURL('image/png')
-        if (i > 0) pdf.addPage('a4', 'portrait')
-        pdf.addImage(img, 'PNG', 0, 0, W, H, undefined, 'FAST')
+        if (i > 0) pdf.addPage([wMm, hMm], wMm > hMm ? 'landscape' : 'portrait')
+        pdf.addImage(img, 'PNG', 0, 0, wMm, hMm, undefined, 'FAST')
       }
 
       const safe = documentTitle.replace(/[^\w.-]+/g, '_')
@@ -175,7 +198,15 @@ export default function LaudoPrintable({
     } finally {
       setBusy(false)
     }
-  }, [documentTitle])
+  }, [documentTitle, expandedPages])
+
+  // Página 1 dita o @page do documento e a largura do shell/controles.
+  const docPage: PageConfig = expandedPages[0]?.page ?? canvasState?.page ?? LEGACY_A4
+  const docCm = pageDimensionsCm(docPage)
+  const shellVars = {
+    '--canva-page-w': `${docCm.w}cm`,
+    '--canva-page-h': `${docCm.h}cm`,
+  } as React.CSSProperties
 
   useEffect(() => {
     if (autoPrint) {
@@ -191,8 +222,13 @@ export default function LaudoPrintable({
   }, [])
 
   return (
-    <div className="canva-print-shell min-h-screen bg-slate-100 py-8">
-      <div className="canva-print-controls mx-auto mb-4 flex w-[21cm] items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
+    <div className="canva-print-shell min-h-screen bg-slate-100 py-8" style={shellVars}>
+      {/* @page dinâmico — tamanho/orientação reais da folha no Ctrl+P */}
+      <style dangerouslySetInnerHTML={{ __html: buildPageCssRule(docPage) }} />
+      <div
+        className="canva-print-controls mx-auto mb-4 flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-2 shadow-sm"
+        style={{ width: `${docCm.w}cm`, maxWidth: '100%' }}
+      >
         <h1 className="text-sm font-semibold text-slate-800 truncate">{documentTitle}</h1>
         <div className="flex items-center gap-2 flex-shrink-0">
           <button
@@ -216,13 +252,13 @@ export default function LaudoPrintable({
         </div>
       </div>
 
-      {/* Render em TAMANHO A4 REAL (21cm) — what-you-see-is-what-you-print.
-          Sem max-w shrink. O CanvasStage internamente usa width: 21cm via
-          mode='print', então é literal 794px @ 96dpi. */}
+      {/* Render em TAMANHO REAL da folha — what-you-see-is-what-you-print.
+          Sem max-w shrink. O CanvasStage internamente usa a largura em cm
+          do PageConfig via mode='print' (A4 = 794px @ 96dpi). */}
       <div
         ref={printAreaRef}
         className="canva-print-area mx-auto"
-        style={{ width: '21cm' }}
+        style={{ width: `${docCm.w}cm` }}
       >
         {canvasState ? (
           // Multi-page: páginas reais (extraPages) + virtuais (overflow do

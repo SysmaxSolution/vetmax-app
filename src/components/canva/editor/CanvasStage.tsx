@@ -88,13 +88,22 @@ export default function CanvasStage({
   const isPrint = mode === 'print'
   const pageBg = state.page.backgroundColor || '#fff'
 
+  // Vars lidas pelo canva-print.css (@media print) — permitem que a folha
+  // tenha o tamanho real do PageConfig (A5, Carta, etiqueta, custom).
+  const pageVars = {
+    '--canva-page-w': `${pageWcm}cm`,
+    '--canva-page-h': `${pageHcm}cm`,
+  } as CSSProperties
+
   const pageStyle: CSSProperties = isPrint
     ? {
+        ...pageVars,
         width: `${pageWcm}cm`, height: `${pageHcm}cm`,
         position: 'relative', overflow: 'hidden', background: pageBg,
         breakAfter: 'page', pageBreakAfter: 'always',
       }
     : {
+        ...pageVars,
         width: '100%',
         aspectRatio: `${pageWcm} / ${pageHcm}`,
         position: 'relative',

@@ -378,6 +378,7 @@ export default function CanvasEditor({
         ...DEFAULT_PAGE_CONFIG,
         size: prev[0].page.size,
         orientation: prev[0].page.orientation,
+        customMm: prev[0].page.customMm ? { ...prev[0].page.customMm } : null,
         margins: { ...prev[0].page.margins },
         backgroundImageUrl: null,
       }
