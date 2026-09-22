@@ -21,8 +21,9 @@ import {
 } from 'lucide-react'
 import {
   tagsByGroup, imageTagsByGroup, type DynamicTagDef, type DynamicImageTagDef,
-  TAG_GROUP_LABEL, type TagGroup,
+  TAG_GROUP_LABEL, TAG_GROUPS_ORDER, type TagGroup,
 } from '@/lib/canva/dynamic-tags'
+import { Hash } from 'lucide-react'
 import type {
   CanvasElement, RepeaterSource,
 } from '@/lib/canva/elements'
@@ -142,6 +143,20 @@ export default function ElementsToolbar({
           icon={<LayoutTemplate className="w-5 h-5" />}
           label="Blocos Prontos"
           onClick={() => setModal('blocks')}
+        />
+
+        <ToolButton
+          icon={<Hash className="w-5 h-5" />}
+          label="Pág. X de Y"
+          onClick={() => onArm(
+            (x, y) => [placedAt(makeTextElement({
+              content: 'Pág. {{doc.page}} de {{doc.total_pages}}',
+              box: { x: 0, y: 0, w: 22, h: 3 },
+              pin: 'footer',
+              typography: { fontSize: 8, align: 'right', color: '#64748b' },
+            }), x, y)],
+            'Numeração de páginas (rodapé, repete em todas)',
+          )}
         />
 
         <ToolButton
@@ -360,7 +375,7 @@ function TagsModal({
           <GroupChip active={activeGroup === 'all'} onClick={() => setActiveGroup('all')}>
             Todos
           </GroupChip>
-          {(['pet', 'tutor', 'consulta', 'vet', 'clinica'] as TagGroup[]).map(g => (
+          {TAG_GROUPS_ORDER.map(g => (
             <GroupChip key={g} active={activeGroup === g} onClick={() => setActiveGroup(g)}>
               {TAG_GROUP_LABEL[g]}
             </GroupChip>

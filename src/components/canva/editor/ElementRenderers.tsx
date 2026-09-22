@@ -16,10 +16,13 @@ import type {
   TypographyStyle, BlockStyle,
 } from '@/lib/canva/elements'
 import {
-  resolveTagValue, resolveImageTagUrl, findImageTag,
+  resolveTagValue, resolveImageTagUrl, findImageTag, resolveInlineTags,
   type ResolveContext,
 } from '@/lib/canva/dynamic-tags'
 import { MOCK_REPEATER_DATA } from '@/lib/canva/mock-data'
+import { readRepeaterItems } from '@/lib/canva/repeater-data'
+// Re-export para compatibilidade (LaudoPrintable e outros importavam daqui).
+export { readRepeaterSource, readRepeaterItems } from '@/lib/canva/repeater-data'
 import {
   parseInlineMarkdown, getListPrefix, splitIntoTopics,
 } from '@/lib/canva/text-format'
@@ -85,7 +88,7 @@ interface RenderProps {
 
 export function ElementRenderer({ element, ctx, isPrint, fillableValues, repeaterItemSlice }: RenderProps) {
   switch (element.kind) {
-    case 'text':            return <TextRenderer           e={element} isPrint={isPrint} />
+    case 'text':            return <TextRenderer           e={element} ctx={ctx} isPrint={isPrint} />
     case 'image':           return <ImageRenderer          e={element} isPrint={isPrint} />
     case 'line':            return <LineRenderer           e={element} />
     case 'dynamic_tag':     return <DynamicTagRenderer     e={element} ctx={ctx} isPrint={isPrint} />
@@ -202,9 +205,11 @@ function BrushStrokeFallback({ e }: { e: BrushStrokeElement }) {
   )
 }
 
-function TextRenderer({ e, isPrint }: { e: TextElement; isPrint?: boolean }) {
+function TextRenderer({ e, ctx, isPrint }: { e: TextElement; ctx?: ResolveContext; isPrint?: boolean }) {
   const fallback = isPrint ? '' : 'Texto livre'
-  const raw = e.content || fallback
+  // Tokens {{tag.id}} no texto livre (ex.: "Pág. {{doc.page}} de {{doc.total_pages}}")
+  // resolvem quando há contexto; no editor ficam visíveis como token.
+  const raw = resolveInlineTags(e.content || fallback, ctx)
 
   const vAlign = e.typography.vAlign ?? 'top'
   const needsVerticalFlex = vAlign === 'middle' || vAlign === 'bottom'
@@ -688,24 +693,8 @@ const PRESCRIPTION_GROUP_LABEL: Record<string, string> = {
 }
 
 // ── Repeater data helpers ────────────────────────────────────────────────────
-
-export function readRepeaterSource(source: RepeaterElement['source'], ctx?: ResolveContext): Record<string, unknown>[] {
-  if (!ctx) return []
-  const consultation = ctx.consultation as Record<string, unknown> | undefined
-  if (!consultation) return []
-  const list = consultation[source]
-  return Array.isArray(list) ? (list as Record<string, unknown>[]) : []
-}
-
-/** Fonte + filtro do elemento. DEVE ser usado tanto pelo RepeaterRenderer
- *  quanto pela paginação (expandPagesForRepeaterOverflow) — senão os slices
- *  de página são calculados sobre uma lista diferente da renderizada. */
-export function readRepeaterItems(e: RepeaterElement, ctx?: ResolveContext): Record<string, unknown>[] {
-  const items = readRepeaterSource(e.source, ctx)
-  if (!e.filter?.field) return items
-  const { field, equals, negate } = e.filter
-  return items.filter(item => (item[field] === equals) !== Boolean(negate))
-}
+// readRepeaterSource/readRepeaterItems vivem em src/lib/canva/repeater-data.ts
+// (puro) — compartilhados com a paginação (src/lib/canva/pagination.ts).
 
 function applyItemTemplate(template: string, item: Record<string, unknown>): string {
   // 1. Substitui {{key}} pelo valor (string vazia se ausente).

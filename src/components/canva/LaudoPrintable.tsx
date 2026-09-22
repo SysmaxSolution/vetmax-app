@@ -18,62 +18,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Download, Loader2, Printer } from 'lucide-react'
 import type { CanvaContentJson, CanvaTemplateConfig } from '@/lib/canva/types'
 import type { CanvasState, PageConfig } from '@/lib/canva/canvas-state'
-import { getAllPages, pageDimensionsCm, pageDimensionsMm, pageDimensionsPx } from '@/lib/canva/canvas-state'
-import type { CanvasElement, RepeaterElement } from '@/lib/canva/elements'
+import { pageDimensionsCm, pageDimensionsMm, pageDimensionsPx } from '@/lib/canva/canvas-state'
 import CanvaA4Preview from './CanvaA4Preview'
 import CanvasStage from './editor/CanvasStage'
-import { readRepeaterItems } from './editor/ElementRenderers'
 import type { ResolveContext } from '@/lib/canva/dynamic-tags'
 import type { ClinicFontFace } from '@/lib/canva/fonts'
 import CanvaFontsScope from './CanvaFontsScope'
-
-/** Página real ou virtual (gerada por overflow do repeater). */
-interface ExpandedPage {
-  page: PageConfig
-  elements: CanvasElement[]
-  /** Map de repeater id → slice de itens. Quando vazio/undefined, o
-   *  repeater renderiza tudo (comportamento legado). Quando setado,
-   *  cada repeater pega só o intervalo correspondente. */
-  repeaterSlices?: Record<string, { start: number; end: number }>
-  /** Etiqueta opcional pra debug ("1", "1 (cont.)", etc.). */
-  label?: string
-}
-
-/** Expande páginas reais em páginas virtuais quando algum Repeater tem
- *  maxItemsPerPage e mais itens reais que isso. Cada página virtual herda
- *  os MESMOS elementos da página real — assim cabeçalhos, assinaturas e
- *  rodapés aparecem em todas, e o repeater muda apenas seu slice. */
-function expandPagesForRepeaterOverflow(
-  pages: ReturnType<typeof getAllPages>,
-  resolveContext: ResolveContext | undefined,
-): ExpandedPage[] {
-  const out: ExpandedPage[] = []
-  for (const p of pages) {
-    const repeaters = p.elements.filter((el): el is RepeaterElement => el.kind === 'repeater')
-    // Pega o primeiro repeater paginável da página (suporte a múltiplos
-    // repeaters paginados na MESMA página é raro — fica como evolução futura)
-    const paged = repeaters.find(r => r.maxItemsPerPage && r.maxItemsPerPage > 0)
-    if (!paged) {
-      out.push({ page: p.page, elements: p.elements })
-      continue
-    }
-    const items = readRepeaterItems(paged, resolveContext)
-    const effectiveTotal = Math.min(items.length, paged.maxLines ?? items.length)
-    const max = paged.maxItemsPerPage!
-    const slices = Math.max(1, Math.ceil(effectiveTotal / max))
-    for (let s = 0; s < slices; s++) {
-      out.push({
-        page: p.page,
-        elements: p.elements,
-        repeaterSlices: {
-          [paged.id]: { start: s * max, end: Math.min(effectiveTotal, (s + 1) * max) },
-        },
-        label: slices > 1 ? `${p.index + 1}${s > 0 ? ` (cont. ${s + 1}/${slices})` : ''}` : undefined,
-      })
-    }
-  }
-  return out
-}
+// Paginação (páginas reais → virtuais por overflow do repeater → elementos
+// pinados em todas → numeração) vive em src/lib/canva/pagination.ts (puro).
+import { expandPages, withDocPageContext, type ExpandedPage } from '@/lib/canva/pagination'
 
 interface PatientHeader {
   patient_name?: string
@@ -133,7 +86,7 @@ export default function LaudoPrintable({
   // re-calcular slices a cada render do html2canvas.
   const expandedPages = useMemo<ExpandedPage[]>(() => {
     if (!canvasState) return []
-    return expandPagesForRepeaterOverflow(getAllPages(canvasState), resolveContext)
+    return expandPages(canvasState, resolveContext)
   }, [canvasState, resolveContext])
 
   const doDownloadPdf = useCallback(async () => {
@@ -278,7 +231,7 @@ export default function LaudoPrintable({
               <CanvasStage
                 state={{ version: 1, page: p.page, elements: p.elements }}
                 mode="print"
-                resolveContext={resolveContext}
+                resolveContext={withDocPageContext(resolveContext, p)}
                 fillableValues={content.fillable_fields}
                 repeaterSlices={p.repeaterSlices}
               />

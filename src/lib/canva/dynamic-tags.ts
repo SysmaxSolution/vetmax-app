@@ -4,6 +4,8 @@
  * com os dados reais do paciente/consulta/clínica.
  */
 
+import { formatAgeAMD } from './age-format'
+
 export interface DynamicTagDef {
   id: string                 // identificador estável (usado em CanvasElement.tagId)
   label: string              // PT-BR exibido na toolbar
@@ -17,13 +19,15 @@ export interface DynamicTagDef {
   preview?: string
 }
 
-export type TagGroup = 'tutor' | 'pet' | 'consulta' | 'clinica' | 'vet'
+export type TagGroup = 'tutor' | 'pet' | 'consulta' | 'clinica' | 'vet' | 'documento'
 export type TagFormat =
   | 'date' | 'datetime' | 'time'
   | 'day_2digits' | 'month_2digits' | 'month_name_br' | 'year_4digits' | 'weekday_br'
   | 'weight_kg' | 'temperature_c'
   | 'phone_br' | 'cpf_br' | 'currency_brl'
   | 'uppercase'
+  /** Idade no formato "9 A 3 M 30 D" a partir da data de nascimento. */
+  | 'age_amd'
 
 export const DYNAMIC_TAGS: DynamicTagDef[] = [
   // ── Tutor ────────────────────────────────────────────────────────────────
@@ -81,18 +85,30 @@ export const DYNAMIC_TAGS: DynamicTagDef[] = [
   { id: 'vet.phone',      label: 'Telefone',           group: 'vet', path: 'vet.phone',         format: 'phone_br', preview: '(11) 97777-6666' },
   { id: 'vet.mapa_code',  label: 'Código MAPA',        group: 'vet', path: 'vet.mapa_code',     preview: 'SP-12345' },
   { id: 'vet.username',   label: 'Usuário (login)',    group: 'vet', path: 'vet.username',      preview: 'lais.silva' },
+
+  // ── Documento (numeração, emissão, autenticidade) — ctx.doc é injetado
+  //    por página pelo print (withDocPageContext) e pela action de emissão.
+  { id: 'doc.page',          label: 'Nº da página',         group: 'documento', path: 'doc.page',          preview: '1' },
+  { id: 'doc.total_pages',   label: 'Total de páginas',     group: 'documento', path: 'doc.total_pages',   preview: '2' },
+  { id: 'doc.page_of_total', label: 'Pág. X de Y',          group: 'documento', path: 'doc.page_of_total', preview: '1 de 2' },
+  { id: 'doc.printed_at',    label: 'Impresso em (data+hora)', group: 'documento', path: 'doc.printed_at', format: 'datetime', preview: '22/09/2026 14:30' },
+  { id: 'doc.verify_code',   label: 'Código de verificação', group: 'documento', path: 'doc.verify_code_fmt', preview: 'K7Q2M-9XR4T' },
+  { id: 'doc.verify_url',    label: 'Link de verificação',  group: 'documento', path: 'doc.verify_url',    preview: 'https://…/public/verificar/K7Q2M9XR4T' },
 ]
 
 export const TAG_GROUP_LABEL: Record<TagGroup | ImageTagGroup, string> = {
-  tutor:    'Tutor',
-  pet:      'Pet',
-  consulta: 'Consulta',
-  clinica:  'Clínica',
-  vet:      'Médico Veterinário',
+  tutor:     'Tutor',
+  pet:       'Pet',
+  consulta:  'Consulta',
+  clinica:   'Clínica',
+  vet:       'Médico Veterinário',
+  documento: 'Documento',
 }
 
+export const TAG_GROUPS_ORDER: TagGroup[] = ['pet', 'tutor', 'consulta', 'vet', 'clinica', 'documento']
+
 export function tagsByGroup(): Array<{ group: TagGroup; label: string; tags: DynamicTagDef[] }> {
-  const groups: TagGroup[] = ['pet', 'tutor', 'consulta', 'vet', 'clinica']
+  const groups: TagGroup[] = TAG_GROUPS_ORDER
   return groups.map(g => ({
     group: g,
     label: TAG_GROUP_LABEL[g],
@@ -153,6 +169,10 @@ export interface ResolveContext {
   consultation?: Record<string, unknown>
   clinic?:  Record<string, unknown>
   vet?:     Record<string, unknown>
+  /** Metadados do documento em emissão/impressão: page, total_pages,
+   *  page_of_total, printed_at, verify_code, verify_code_fmt, verify_url,
+   *  qr_svg (SVG do QR gerado no servidor). */
+  doc?:     Record<string, unknown>
 }
 
 function getPath(obj: unknown, path: string): unknown {
@@ -164,14 +184,30 @@ function getPath(obj: unknown, path: string): unknown {
   }, obj)
 }
 
-export function resolveTagValue(tagId: string, ctx: ResolveContext): string {
+/** Data de referência para cálculos relativos (idade): data do documento
+ *  quando existir (print histórico), senão agora. */
+function referenceDate(ctx: ResolveContext): Date {
+  const raw = ctx.consultation?.date
+  const d = raw ? toDate(raw) : null
+  return d ?? new Date()
+}
+
+/**
+ * Resolve o valor de uma tag. `formatOverride` permite ao elemento trocar
+ * o formatador padrão da tag (ex.: pet.age → 'age_amd' = "9 A 3 M 30 D").
+ */
+export function resolveTagValue(tagId: string, ctx: ResolveContext, formatOverride?: TagFormat): string {
   const def = findTag(tagId)
   if (!def) return ''
 
-  const raw = getPath(ctx, def.path)
+  const format = formatOverride ?? def.format
+  // age_amd precisa da data de nascimento crua, não da idade pré-formatada
+  const path = format === 'age_amd' && def.group === 'pet' ? 'patient.birth_date' : def.path
+  const raw = getPath(ctx, path)
   if (raw === null || raw === undefined || raw === '') return ''
 
-  switch (def.format) {
+  switch (format) {
+    case 'age_amd':        return formatAgeAMD(raw, referenceDate(ctx))
     case 'date':           return formatDateBR(raw)
     case 'datetime':       return formatDateTimeBR(raw)
     case 'time':           return formatTimeBR(raw)
@@ -188,6 +224,20 @@ export function resolveTagValue(tagId: string, ctx: ResolveContext): string {
     case 'uppercase':      return String(raw).toUpperCase()
     default:               return String(raw)
   }
+}
+
+/**
+ * Substitui tokens `{{tag.id}}` dentro de texto livre (TextElement) pelos
+ * valores resolvidos. Tokens de tags desconhecidas ficam intactos. Quando
+ * não há contexto (editor sem preview) o texto volta como está.
+ */
+export function resolveInlineTags(text: string, ctx?: ResolveContext): string {
+  if (!ctx || !text || !text.includes('{{')) return text
+  return text.replace(/\{\{\s*([a-z_]+\.[a-z_]+)\s*\}\}/gi, (m, id: string) => {
+    const def = findTag(id)
+    if (!def) return m
+    return resolveTagValue(id, ctx)
+  })
 }
 
 function toDate(raw: unknown): Date | null {

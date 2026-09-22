@@ -54,6 +54,9 @@ interface Props {
    *  dispara onPlace(x, y) em %. Elementos existentes ficam inertes para
    *  o usuário poder clicar "em cima" deles. */
   armed?: { label: string } | null
+  /** Elementos "fantasma" (modo edit): pinados da página 1 exibidos nas
+   *  páginas 2+ como referência, sem seleção/drag. Edite-os na página 1. */
+  ghostElements?: CanvasElement[]
   onSelect?: (id: string | null, opts?: { append?: boolean }) => void
   onElementChange?: (id: string, patch: Partial<CanvasElement>) => void
   onBrushStrokeComplete?: (points: Array<{ x: number; y: number }>, settings: BrushSettings) => void
@@ -63,7 +66,7 @@ interface Props {
 export default function CanvasStage({
   state, selectedId, selectedIds, resolveContext, fillableValues,
   repeaterSlices,
-  mode = 'edit', brush, armed, cleanPreview, zoom,
+  mode = 'edit', brush, armed, cleanPreview, zoom, ghostElements,
   onSelect, onElementChange, onBrushStrokeComplete, onPlace,
 }: Props) {
   const multiSelected = new Set(selectedIds ?? (selectedId ? [selectedId] : []))
@@ -232,6 +235,29 @@ export default function CanvasStage({
         brushActive={!!brush}
         onSelect={(id) => onSelect?.(id)}
       />
+
+      {/* Pinados da página 1 (fantasma, só no editor das páginas 2+) */}
+      {!isPrint && ghostElements && ghostElements
+        .filter(el => el.kind !== 'brush_stroke')
+        .map(el => (
+          <div
+            key={`ghost_${el.id}`}
+            title="Elemento pinado da página 1 — edite-o na página 1"
+            style={{
+              position: 'absolute',
+              left: `${el.box.x}%`, top: `${el.box.y}%`,
+              width: `${el.box.w}%`, height: `${el.box.h}%`,
+              zIndex: el.zIndex ?? 1,
+              transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
+              transformOrigin: 'top left',
+              opacity: 0.55,
+              pointerEvents: 'none',
+              outline: cleanPreview ? 'none' : '1px dashed rgba(14,165,233,0.6)',
+            }}
+          >
+            <ElementRenderer element={el} ctx={resolveContext} fillableValues={fillableValues} />
+          </div>
+        ))}
 
       {/* Outros elementos */}
       {[...otherElements]

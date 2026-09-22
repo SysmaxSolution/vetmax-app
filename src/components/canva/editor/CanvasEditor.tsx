@@ -34,6 +34,7 @@ import type {
 } from '@/lib/canva/elements'
 import { makeBrushStrokeElement, makeCompositeTagElement, nextElementId } from '@/lib/canva/elements'
 import { findTag } from '@/lib/canva/dynamic-tags'
+import { isPinned } from '@/lib/canva/pagination'
 
 /** Kinds que podem entrar numa mescla (gera um único CompositeTagElement). */
 type MergeableElement = TextElement | DynamicTagElement | CompositeTagElement
@@ -975,6 +976,7 @@ export default function CanvasEditor({
                   brush={brushMode}
                   armed={armed ? { label: armed.label } : null}
                   zoom={zoom}
+                  ghostElements={pageIndex > 0 ? pageBuffer[0]?.elements.filter(isPinned) : undefined}
                   onSelect={handleSelect}
                   onElementChange={handleElementChange}
                   onBrushStrokeComplete={handleBrushStrokeComplete}

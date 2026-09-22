@@ -24,7 +24,8 @@ import {
 } from '@/lib/actions/canva-templates'
 import type { CanvasDraftResult } from '@/lib/actions/canva-templates'
 import CanvasStage from '@/components/canva/editor/CanvasStage'
-import { getAllPages } from '@/lib/canva/canvas-state'
+import { pageDimensionsCm } from '@/lib/canva/canvas-state'
+import { expandPages, withDocPageContext } from '@/lib/canva/pagination'
 import type {
   CanvaContentJson, CanvaDynamicField,
 } from '@/lib/canva/types'
@@ -190,6 +191,10 @@ export default function CanvasDocumentDraftModal({
     return next as ResolveContext
   }, [draft.resolve_context, structuredOverrides])
 
+  // Mesma paginação do print: páginas virtuais (repeater) + pinados + "Pág. X de Y".
+  const previewPages = useMemo(() => expandPages(draft.canvas_state, enrichedContext), [draft.canvas_state, enrichedContext])
+  const previewWidthCm = pageDimensionsCm(draft.canvas_state.page).w
+
   function setFillable(key: string, value: string) {
     setFillableValues(prev => ({ ...prev, [key]: value }))
     if (aiFilled.has(key)) {
@@ -338,19 +343,20 @@ export default function CanvasDocumentDraftModal({
               <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-700">Preview ao vivo</span>
               <span>Atualiza enquanto você preenche.</span>
             </div>
-            <div style={{ width: '21cm', maxWidth: '100%' }} className="mx-auto space-y-4">
-              {getAllPages(draft.canvas_state).map((p, idx) => (
+            <div style={{ width: `${previewWidthCm}cm`, maxWidth: '100%' }} className="mx-auto space-y-4">
+              {previewPages.map((p, idx) => (
                 <div key={idx} className="relative">
-                  {getAllPages(draft.canvas_state).length > 1 && (
+                  {previewPages.length > 1 && (
                     <div className="absolute -top-3 left-1 z-10 inline-flex items-center rounded-full bg-violet-600 px-2 py-0.5 text-[10px] font-semibold text-white shadow">
-                      Página {idx + 1}
+                      Página {p.pageNumber} de {p.totalPages}
                     </div>
                   )}
                   <CanvasStage
                     state={{ version: 1, page: p.page, elements: p.elements }}
                     mode="print"
-                    resolveContext={enrichedContext}
+                    resolveContext={withDocPageContext(enrichedContext, p)}
                     fillableValues={fillableValues}
+                    repeaterSlices={p.repeaterSlices}
                   />
                 </div>
               ))}
