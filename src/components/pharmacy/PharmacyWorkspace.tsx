@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition, useMemo, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import {
   Package, Plus, AlertTriangle, RefreshCw, Trash2, Pencil,
   ArrowDownToLine, Search, X, Loader2, Check, Calendar,
@@ -102,6 +103,7 @@ interface Props {
 export interface ItemForm {
   name: string; category: StockCategory; quantity: string; unit: string
   min_quantity: string; unit_price: string; is_controlled: boolean
+  substance: string; concentration: string; control_class: string; is_human_use: boolean
   brand: string; sku: string; barcode: string; batch_number: string
   expiry_date: string; supplier: string
   /** Preço base do serviço quando o pet tem convênio. Vazio = sem default. */
@@ -129,6 +131,7 @@ export interface ItemForm {
 const EMPTY_PRODUCT_FORM: ItemForm = {
   name: '', category: 'medication', quantity: '0', unit: 'un',
   min_quantity: '0', unit_price: '0', is_controlled: false,
+  substance: '', concentration: '', control_class: '', is_human_use: false,
   brand: '', sku: '', barcode: '', batch_number: '', expiry_date: '', supplier: '',
   default_insurance_price: '',
   insurance_card_interest_percent: '',
@@ -142,6 +145,7 @@ const EMPTY_PRODUCT_FORM: ItemForm = {
 const EMPTY_SERVICE_FORM: ItemForm = {
   name: '', category: 'service', quantity: '0', unit: 'un',
   min_quantity: '0', unit_price: '0', is_controlled: false,
+  substance: '', concentration: '', control_class: '', is_human_use: false,
   brand: '', sku: '', barcode: '', batch_number: '', expiry_date: '', supplier: '',
   default_insurance_price: '',
   insurance_card_interest_percent: '',
@@ -157,7 +161,10 @@ function formFromItem(item: StockItemV2): ItemForm {
     name: item.name, category: item.category,
     quantity: String(item.quantity), unit: item.unit,
     min_quantity: String(item.min_quantity), unit_price: String(item.unit_price),
-    is_controlled: item.is_controlled, brand: item.brand ?? '', sku: item.sku ?? '',
+    is_controlled: item.is_controlled,
+    substance: item.substance ?? '', concentration: item.concentration ?? '',
+    control_class: item.control_class ?? '', is_human_use: Boolean(item.is_human_use),
+    brand: item.brand ?? '', sku: item.sku ?? '',
     barcode: item.barcode ?? '', batch_number: item.batch_number ?? '',
     expiry_date: item.expiry_date ?? '', supplier: item.supplier ?? '',
     default_insurance_price: item.default_insurance_price === null ? '' : String(item.default_insurance_price),
@@ -988,7 +995,9 @@ function SimpleModal({ title, onClose, color, children }: {
     green: 'from-emerald-600 to-emerald-700',
     amber: 'from-amber-600 to-amber-700',
   }
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl overflow-hidden animate-scale-in">
@@ -998,7 +1007,8 @@ function SimpleModal({ title, onClose, color, children }: {
         </div>
         <div className="p-5">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
@@ -1095,6 +1105,10 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
       min_quantity:  isService ? 0 : Number(form.min_quantity),
       unit_price:    Number(form.unit_price),
       is_controlled: form.is_controlled,
+      substance:     form.is_controlled ? (form.substance || null) : null,
+      concentration: form.is_controlled ? (form.concentration || null) : null,
+      control_class: form.is_controlled ? (form.control_class || null) : null,
+      is_human_use:  form.is_controlled ? form.is_human_use : false,
       is_service:    isService,
       brand:         form.brand || null,
       sku:           form.sku || null,
@@ -1167,7 +1181,9 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
     ? (isNew ? 'Novo Serviço / Procedimento' : `Editar: ${item?.name}`)
     : (isNew ? 'Novo Item de Estoque'         : `Editar: ${item?.name}`)
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="w-full max-w-2xl bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh] animate-scale-in">
@@ -1451,11 +1467,42 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
                 </div>
               </label>
               {form.is_controlled && (
-                <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-                  <Shield className="h-4 w-4 text-red-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-red-700">
-                    A dispensação exige receituário assinado por Médico Veterinário (CFMV). Mantenha os registros para fiscalização.
-                  </p>
+                <div className="space-y-3">
+                  <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+                    <Shield className="h-4 w-4 text-red-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-red-700">
+                      A dispensação exige receituário assinado por Médico Veterinário (CFMV). Estes dados alimentam o <strong>Livro de Controlados</strong> (Relatórios).
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-medium text-slate-600 mb-1">Substância / princípio ativo</label>
+                      <input type="text" value={form.substance} onChange={e => set('substance', e.target.value)}
+                        placeholder="Ex.: Cloridrato de Tramadol"
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-medium text-slate-600 mb-1">Concentração</label>
+                      <input type="text" value={form.concentration} onChange={e => set('concentration', e.target.value)}
+                        placeholder="Ex.: 50 mg/mL"
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-medium text-slate-600 mb-1">Lista (Portaria 344)</label>
+                      <select value={form.control_class} onChange={e => set('control_class', e.target.value)}
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20">
+                        <option value="">Não informada</option>
+                        {['A1','A2','A3','B1','B2','C1','C2','C3','C4','C5'].map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                    <div className="flex items-end">
+                      <label className="flex items-center gap-2 cursor-pointer select-none pb-1">
+                        <input type="checkbox" checked={form.is_human_use} onChange={e => set('is_human_use', e.target.checked)}
+                          className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500/30" />
+                        <span className="text-sm text-slate-700">Forma farmacêutica <strong>humana</strong> <span className="text-slate-400">(escrituração separada)</span></span>
+                      </label>
+                    </div>
+                  </div>
                 </div>
               )}
             </>
@@ -1496,7 +1543,8 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

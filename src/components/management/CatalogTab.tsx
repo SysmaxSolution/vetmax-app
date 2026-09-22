@@ -44,9 +44,11 @@ interface FormState {
   item_type: CatalogItemType
   name:      string
   price:     string
+  publish_to_portal:         boolean
+  expected_duration_minutes: string
 }
 
-const EMPTY_FORM: FormState = { item_type: 'consultation', name: '', price: '' }
+const EMPTY_FORM: FormState = { item_type: 'consultation', name: '', price: '', publish_to_portal: false, expected_duration_minutes: '' }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -73,7 +75,11 @@ export default function CatalogTab({ initialItems, onToast }: Props) {
   }
 
   const openEdit = (item: CatalogItem) => {
-    setForm({ id: item.id, item_type: item.item_type, name: item.name, price: String(item.price) })
+    setForm({
+      id: item.id, item_type: item.item_type, name: item.name, price: String(item.price),
+      publish_to_portal: item.publish_to_portal ?? false,
+      expected_duration_minutes: item.expected_duration_minutes != null ? String(item.expected_duration_minutes) : '',
+    })
     setFormError(null)
     setShowForm(true)
   }
@@ -85,11 +91,14 @@ export default function CatalogTab({ initialItems, onToast }: Props) {
 
     setSaving(true)
     setFormError(null)
+    const durRaw = form.expected_duration_minutes.trim()
     const payload: SaveCatalogPayload = {
       id:        form.id,
       item_type: form.item_type,
       name:      form.name.trim(),
       price,
+      publish_to_portal:         form.publish_to_portal,
+      expected_duration_minutes: durRaw ? parseInt(durRaw, 10) : null,
     }
     const result = await saveCatalogItem(payload)
     setSaving(false)
@@ -155,7 +164,7 @@ export default function CatalogTab({ initialItems, onToast }: Props) {
         </div>
         <button
           onClick={openCreate}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-teal-600 text-white text-sm font-semibold shadow-sm hover:bg-teal-700 transition-colors"
         >
           <Plus className="w-4 h-4" />Novo Item
         </button>
@@ -207,6 +216,33 @@ export default function CatalogTab({ initialItems, onToast }: Props) {
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
+          </div>
+
+          {/* Prazo médio + publicação no portal */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 mt-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Prazo/duração médio (min)</label>
+              <input
+                type="number" min="0" step="5"
+                value={form.expected_duration_minutes}
+                onChange={e => setForm(f => ({ ...f, expected_duration_minutes: e.target.value }))}
+                placeholder="ex.: 30"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <p className="mt-1 text-[10px] text-slate-400">Estima o bloco na agenda.</p>
+            </div>
+            <label className="sm:col-span-2 flex items-start gap-2 rounded-lg border border-slate-200 px-3 py-2 cursor-pointer hover:bg-white">
+              <input
+                type="checkbox"
+                checked={form.publish_to_portal}
+                onChange={e => setForm(f => ({ ...f, publish_to_portal: e.target.checked }))}
+                className="mt-0.5 h-4 w-4 accent-emerald-600"
+              />
+              <span>
+                <span className="block text-sm font-medium text-slate-700">Publicar resultado no Portal do Tutor</span>
+                <span className="block text-[10px] text-slate-400">Quando o MV liberar, o resultado/laudo deste serviço vai automaticamente ao portal. (Exames/imagem)</span>
+              </span>
+            </label>
           </div>
           {formError && (
             <p className="mt-2 text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{formError}</p>

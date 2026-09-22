@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import { X, CheckCircle2, Receipt, AlertCircle } from 'lucide-react'
 import { createSale, type CreateSaleParams, type SaleTutor } from '@/lib/actions/sales'
 import { sellPackageToPet } from '@/lib/actions/packages'
@@ -134,7 +135,7 @@ export default function CheckoutModal({
           onConfirm={handlePaymentConfirm}
         />
       )}
-      {error && !isPending && (
+      {error && !isPending && typeof document !== 'undefined' && createPortal(
         <div role="dialog" aria-modal="true" className="fixed inset-0 z-[10010] flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-3 animate-scale-in">
             <div className="flex items-center gap-3">
@@ -165,7 +166,8 @@ export default function CheckoutModal({
             )}
             {isPending && <CheckCircle2 className="h-4 w-4 animate-pulse text-slate-300" />}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   )

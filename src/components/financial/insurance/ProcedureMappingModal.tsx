@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Search, Save, Loader2, CheckCircle2, AlertCircle, Box, Wrench } from 'lucide-react'
 import {
   upsertProcedureMappings,
@@ -105,7 +106,7 @@ export default function ProcedureMappingModal({
 
   if (!open) return null
 
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4"
       onClick={onClose}
@@ -248,8 +249,9 @@ export default function ProcedureMappingModal({
           </div>
         </footer>
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }
 
 // ─── MappingRow ───────────────────────────────────────────────────────────────

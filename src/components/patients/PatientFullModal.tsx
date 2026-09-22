@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { X, Save, User, Dog, MapPin, PhoneCall, Syringe, Camera, Shield, Trash2, Plus, AlertTriangle, Cpu, Paperclip, FileText, Upload, ExternalLink, Share2, Pencil, Calendar, StickyNote, Tag } from 'lucide-react'
 import { Spinner } from '@/components/ui/Spinner'
@@ -9,6 +10,7 @@ import { DateInput } from '@/components/ui/DatePicker'
 import { updateFullProfile, uploadPetPhoto, softDeletePatient } from '@/lib/actions/pets'
 import { uploadAttachment, getAttachments, deleteAttachment, updateAttachmentMetadata, type Attachment, type AttachmentMetadata } from '@/lib/actions/attachments'
 import { registerTutorAndPet, addPatientToTutor, getTutorByCpf, recordConsent } from '@/lib/actions/tutors'
+import InvitePortalButton from '@/components/patients/InvitePortalButton'
 import { getRegistrationSettings } from '@/lib/actions/clinic-settings'
 import ConsentModal from '@/components/reception/ConsentModal'
 import SMSConsentToggle from '@/components/reception/SMSConsentToggle'
@@ -728,6 +730,7 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
         onDecline={() => setShowConsent(false)}
       />
     )}
+    {typeof document !== 'undefined' && createPortal(
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
 
@@ -1005,6 +1008,11 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
           {/* ══ ABA: TUTOR ══ */}
           {tab === 'tutor' && (
             <div className="space-y-6">
+
+              {/* Convite para a Área do Tutor (só com tutor já salvo) */}
+              {isEdit && patient.tutor?.id && (
+                <InvitePortalButton tutorId={patient.tutor.id} />
+              )}
 
               {/* Aviso: dados opcionais */}
               {!isEdit && (
@@ -1887,7 +1895,9 @@ export default function PatientFullModal({ patient, mode, tutorId: propTutorId, 
           </div>
         </div>
       )}
-    </div>
+    </div>,
+    document.body,
+    )}
     </>
   )
 }

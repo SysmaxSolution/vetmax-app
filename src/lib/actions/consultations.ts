@@ -22,16 +22,23 @@ async function buildAnimaisOsFields(
     urgency:            data.urgency ?? null,
     referral_type:      data.referral_type ?? null,
     partner_clinic_id:  data.referral_type === 'referred' ? (data.partner_clinic_id ?? null) : null,
+    referring_professional_id: data.referral_type === 'referred' ? (data.referring_professional_id ?? null) : null,
     billing_company_id: data.billing_company_id ?? null,
   }
+  // P0 (0.9): TODA OS nasce com número. A RPC _auto emite o próximo número e,
+  // se a sequência ainda não existe, auto-provisiona (idempotente) e emite o nº 1.
   try {
-    const { data: osNum, error } = await admin.rpc('next_document_number', {
+    const { data: osNum, error } = await admin.rpc('next_document_number_auto', {
       p_clinic_id:  clinicId,
       p_company_id: data.billing_company_id ?? null,
       p_doc_type:   'os',
     })
     if (!error && osNum) fields.os_number = osNum
-  } catch { /* sequência de OS não configurada — segue sem número */ }
+    else if (error) console.error('[os_number] falha ao emitir número da OS:', error.message)
+  } catch (e) {
+    // Não derruba a recepção por um erro anômalo de numeração, mas registra.
+    console.error('[os_number] exceção ao emitir número da OS:', e)
+  }
   return fields
 }
 

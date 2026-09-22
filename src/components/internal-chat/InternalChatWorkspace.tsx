@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useTransition, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import {
   Send, Search, Plus, X, MessageSquare, Users, Loader2, Paperclip,
   FileText, Check, UserPlus, Pin, PinOff, BellOff, Bell,
@@ -428,7 +429,7 @@ export default function InternalChatWorkspace({
   return (
     <div className="mx-auto max-w-6xl px-3 sm:px-6 py-4 sm:py-6">
       <div className="mb-4">
-        <h1 className="text-2xl font-semibold text-slate-900">Chat Interno</h1>
+        <h1 className="text-xl font-bold tracking-tight text-slate-900">Chat Interno</h1>
         <p className="mt-0.5 text-sm text-slate-500">Mensagens em tempo real entre a equipe</p>
       </div>
 
@@ -441,7 +442,7 @@ export default function InternalChatWorkspace({
               <button
                 type="button"
                 onClick={() => setActiveSection('chats')}
-                className={`flex-1 rounded-md py-1 transition-colors ${
+                className={`flex-1 rounded-lg py-1 transition-colors ${
                   activeSection === 'chats' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                 }`}
               >
@@ -450,7 +451,7 @@ export default function InternalChatWorkspace({
               <button
                 type="button"
                 onClick={() => setActiveSection('channels')}
-                className={`flex-1 rounded-md py-1 transition-colors ${
+                className={`flex-1 rounded-lg py-1 transition-colors ${
                   activeSection === 'channels' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                 }`}
               >
@@ -703,7 +704,7 @@ export default function InternalChatWorkspace({
                                   editado
                                 </span>
                               )}
-                              <p className={`text-[10px] ${mine ? 'text-violet-100' : 'text-slate-400'}`}>
+                              <p className={`text-[10px] font-mono tabular-nums ${mine ? 'text-violet-100' : 'text-slate-400'}`}>
                                 {formatTimestamp(m.created_at)}
                               </p>
                               {/* Botão de menu por hover */}
@@ -734,7 +735,7 @@ export default function InternalChatWorkspace({
                   disabled={uploading || pending}
                   title="Anexar arquivo (até 25MB)"
                   aria-label="Anexar arquivo"
-                  className="flex items-center justify-center h-10 w-10 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-violet-700 disabled:opacity-50 transition-colors"
+                  className="flex items-center justify-center h-10 w-10 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-violet-700 disabled:opacity-50 transition-colors"
                 >
                   {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
                 </button>
@@ -744,13 +745,13 @@ export default function InternalChatWorkspace({
                   onKeyDown={handleKeyDown}
                   rows={1}
                   placeholder="Mensagem… (Enter envia, Shift+Enter quebra linha)"
-                  className="flex-1 resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500 max-h-32"
+                  className="flex-1 resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500 max-h-32"
                   style={{ minHeight: '40px' }}
                 />
                 <button
                   type="submit"
                   disabled={!draft.trim() || pending}
-                  className="flex items-center justify-center h-10 w-10 rounded-xl bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50 transition-colors"
+                  className="flex items-center justify-center h-10 w-10 rounded-lg bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50 transition-colors"
                   aria-label="Enviar"
                 >
                   {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
@@ -762,14 +763,14 @@ export default function InternalChatWorkspace({
       </div>
 
       {/* ── Modal: novo chat / grupo / canal ─────────────────────────────── */}
-      {newChatOpen && (
+      {newChatOpen && typeof document !== 'undefined' && createPortal(
         <div
           role="dialog"
           aria-modal="true"
           className="fixed inset-0 z-[10010] flex items-start justify-center bg-slate-900/60 backdrop-blur-sm p-4 pt-[10vh]"
           onClick={closeNewChat}
         >
-          <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={e => e.stopPropagation()}>
+          <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-xl animate-scale-in" onClick={e => e.stopPropagation()}>
             {/* Tabs */}
             <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2 bg-slate-50">
               <div className="flex gap-1 rounded-lg bg-white border border-slate-200 p-0.5">
@@ -778,7 +779,7 @@ export default function InternalChatWorkspace({
                     key={mode}
                     type="button"
                     onClick={() => setNewChatMode(mode as any)}
-                    className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-semibold transition-colors ${
+                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1 text-xs font-semibold transition-colors ${
                       newChatMode === mode ? 'bg-violet-600 text-white' : 'text-slate-600 hover:bg-slate-50'
                     }`}
                   >
@@ -888,7 +889,8 @@ export default function InternalChatWorkspace({
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {/* ── Context menu de conversa (clique direito) ─────────────────────── */}

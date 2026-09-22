@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useMemo, useState, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import { Copy, Loader2, Search, X, AlertCircle, CheckCircle2 } from 'lucide-react'
 import {
   listClinicsForSupport, duplicateTemplateToClinics,
@@ -101,9 +102,9 @@ export default function DuplicateTemplateModal({
 
   const allVisibleSelected = filtered.length > 0 && filtered.every(c => selectedIds.has(c.id))
 
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-      <div className="flex w-full max-w-2xl flex-col rounded-2xl bg-white shadow-2xl overflow-hidden" style={{ maxHeight: '90vh' }}>
+      <div className="flex w-full max-w-2xl flex-col rounded-2xl bg-white shadow-xl overflow-hidden animate-scale-in" style={{ maxHeight: '90vh' }}>
         <header className="flex items-center justify-between border-b border-slate-200 px-5 py-3 flex-shrink-0">
           <div className="min-w-0">
             <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
@@ -293,7 +294,7 @@ export default function DuplicateTemplateModal({
                 <button
                   onClick={submit}
                   disabled={submitting || selectedIds.size === 0}
-                  className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-violet-700 disabled:opacity-50"
+                  className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-teal-700 disabled:opacity-60"
                 >
                   {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Copy className="w-3.5 h-3.5" />}
                   Duplicar para {selectedIds.size} {selectedIds.size === 1 ? 'clínica' : 'clínicas'}
@@ -303,6 +304,7 @@ export default function DuplicateTemplateModal({
           </>
         )}
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }

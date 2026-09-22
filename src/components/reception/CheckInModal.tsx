@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { checkInPatientWithContacts, updateConsultation } from '@/lib/actions/consultations'
 import { getTutorConsentStatus, recordConsent } from '@/lib/actions/tutors'
 import ConsentModal from '@/components/reception/ConsentModal'
@@ -13,6 +14,9 @@ import ActivePackagesBanner from './ActivePackagesBanner'
 import ServiceComboBox, { type SelectedService } from './ServiceComboBox'
 import { useAnimaisFoundation, useRequireAttendingVet } from '@/components/providers/ClinicConfigProvider'
 import { listPartnerClinics, type PartnerClinic } from '@/lib/actions/partner-clinics'
+import { listPartnerProfessionals } from '@/lib/actions/partner-portal'
+import type { PartnerProfessional } from '@/lib/portal/partner-types'
+import { getPetPreconsultations, markPreconsultation, type PreconsultRecord } from '@/lib/actions/portal-preconsult'
 import { getClinicProfessionals, type ClinicProfessional } from '@/lib/actions/professionals'
 import { listActiveCompanies } from '@/lib/actions/companies'
 
@@ -90,6 +94,9 @@ export function CheckInModal({
   const [referralType, setReferralType] = useState<'direct' | 'referred'>('direct')
   const [partnerClinicId, setPartnerClinicId] = useState<string>('')
   const [partnerClinics, setPartnerClinics] = useState<PartnerClinic[]>([])
+  // Profissional solicitante da parceira (B2B) — flui para todos os procedimentos da OS
+  const [referringProfessionalId, setReferringProfessionalId] = useState<string>('')
+  const [referringPros, setReferringPros] = useState<PartnerProfessional[]>([])
 
   const [billingCompanyId, setBillingCompanyId] = useState<string>('')
   const [companies, setCompanies] = useState<{ id: string; code: string; name: string; is_default: boolean }[]>([])
@@ -104,6 +111,15 @@ export function CheckInModal({
       if (def) setBillingCompanyId(def.id)   // pré-seleciona a empresa padrão
     })
   }, [animaisFoundation])
+
+  // Carrega os profissionais da parceira escolhida (para vincular o solicitante).
+  useEffect(() => {
+    setReferringProfessionalId('')
+    if (!partnerClinicId) { setReferringPros([]); return }
+    listPartnerProfessionals(partnerClinicId).then(res => {
+      if (Array.isArray(res)) setReferringPros(res.filter(p => p.isActive))
+    })
+  }, [partnerClinicId])
 
   // Profissional responsável pelo atendimento (todas as clínicas; obrigatório se configurado)
   const requireAttendingVet = useRequireAttendingVet()
@@ -153,6 +169,15 @@ export function CheckInModal({
     })
     return () => { cancelled = true }
   }, [patientId])
+
+  // Pré-consultas enviadas pelo tutor pelo portal (item 3.4c) — mostra na recepção.
+  const [preconsults, setPreconsults] = useState<PreconsultRecord[]>([])
+  useEffect(() => {
+    if (!patientId || isEdit) return
+    let cancelled = false
+    getPetPreconsultations(patientId).then(res => { if (!cancelled) setPreconsults(res) })
+    return () => { cancelled = true }
+  }, [patientId, isEdit])
 
   // Verifica se o consentimento LGPD do tutor está desatualizado (re-aceite).
   useEffect(() => {
@@ -278,6 +303,7 @@ export function CheckInModal({
             urgency,
             referral_type: referralType,
             partner_clinic_id: referralType === 'referred' && partnerClinicId ? partnerClinicId : undefined,
+            referring_professional_id: referralType === 'referred' && referringProfessionalId ? referringProfessionalId : undefined,
             billing_company_id: billingCompanyId || undefined,
           } : {}),
         })
@@ -333,7 +359,7 @@ export function CheckInModal({
   const reasonOption = VISIT_REASON_OPTIONS.find(r => r.value === visitReason)
   const isEmergency = visitReason === 'emergency'
 
-  return (
+  return typeof document === 'undefined' ? null : createPortal(
     <>
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
@@ -362,6 +388,29 @@ export function CheckInModal({
         {/* Body — SCROLL INTERNO */}
         <div className="flex-1 overflow-y-auto">
           <form ref={formRef} onSubmit={handleSubmit} className="px-4 sm:px-6 pt-5 pb-6 space-y-5">
+
+            {/* ── Pré-consulta enviada pelo tutor (portal) ── */}
+            {preconsults.length > 0 && (
+              <div className="rounded-xl border border-teal-200 bg-teal-50/60 px-4 py-3">
+                <p className="text-sm font-semibold text-teal-800 flex items-center gap-1.5">
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.6a1 1 0 0 1 .7.3l5.4 5.4a1 1 0 0 1 .3.7V19a2 2 0 0 1-2 2Z" /></svg>
+                  Pré-consulta enviada pelo tutor
+                </p>
+                {preconsults.map(pc => (
+                  <div key={pc.id} className="mt-2 rounded-lg bg-white/70 border border-teal-100 px-3 py-2 text-sm text-teal-900">
+                    <p><span className="font-medium">Motivo:</span> {pc.chiefComplaint}</p>
+                    {pc.symptoms && <p className="text-[13px] text-teal-800/90"><span className="font-medium">Sintomas:</span> {pc.symptoms}{pc.durationText ? ` · ${pc.durationText}` : ''}</p>}
+                    {(pc.fasting !== null || pc.currentMeds) && <p className="text-[13px] text-teal-800/90">{pc.fasting !== null ? `Jejum: ${pc.fasting ? 'sim' : 'não'}` : ''}{pc.fasting !== null && pc.currentMeds ? ' · ' : ''}{pc.currentMeds ? `Medicações: ${pc.currentMeds}` : ''}</p>}
+                    {pc.notes && <p className="text-[13px] text-teal-800/90"><span className="font-medium">Obs.:</span> {pc.notes}</p>}
+                    <button type="button"
+                      onClick={() => { markPreconsultation(pc.id, 'used'); setPreconsults(prev => prev.filter(x => x.id !== pc.id)) }}
+                      className="mt-1.5 text-[11px] font-semibold text-teal-700 hover:underline">
+                      Marcar como aproveitada
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* ── LGPD: re-consentimento pendente (termo evoluiu) ── */}
             {consentStale && !consentReaccepted && (
@@ -487,6 +536,17 @@ export function CheckInModal({
                       </select>
                       {partnerClinics.length === 0 && (
                         <p className="mt-1 text-[11px] text-amber-600">Nenhuma clínica parceira cadastrada — cadastre em Cadastros &gt; Clínicas Parceiras.</p>
+                      )}
+                      {partnerClinicId && (
+                        <div className="mt-2">
+                          <label className="block text-[11px] font-medium text-slate-500 mb-1">Profissional solicitante (opcional)</label>
+                          <select value={referringProfessionalId} onChange={e => setReferringProfessionalId(e.target.value)}
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20">
+                            <option value="">Sem profissional específico (acesso geral da parceira)</option>
+                            {referringPros.map(p => <option key={p.id} value={p.id}>{p.name}{p.crmv ? ` · CRMV ${p.crmv}` : ''}</option>)}
+                          </select>
+                          <p className="mt-1 text-[11px] text-slate-400">O MV solicitante vê no portal do parceiro os resultados que ele encaminhou. Vale para todos os procedimentos desta OS.</p>
+                        </div>
                       )}
                     </div>
                   )}
@@ -700,6 +760,7 @@ export function CheckInModal({
         onDecline={() => setShowConsent(false)}
       />
     )}
-    </>
+    </>,
+    document.body,
   )
 }

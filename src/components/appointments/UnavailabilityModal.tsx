@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, CalendarOff, Loader2, Save, Plus, Trash2, RotateCw } from 'lucide-react'
+import { createPortal } from 'react-dom'
+import { X, CalendarOff, Save, Plus, Trash2, RotateCw } from 'lucide-react'
+import { Spinner } from '@/components/ui/Spinner'
 import { DateInput, TimePicker } from '@/components/ui/DatePicker'
 import { getClinicProfessionals, type ClinicProfessional } from '@/lib/actions/professionals'
 import { createUnavailabilities, type Recurrence } from '@/lib/actions/unavailabilities'
@@ -132,14 +134,14 @@ export default function UnavailabilityModal({ defaultProfessionalId, onClose, on
     onClose()
   }
 
-  return (
+  return typeof document === 'undefined' ? null : createPortal(
     <div
       role="dialog"
       aria-modal="true"
       className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-900/70 p-3 sm:p-4 overflow-y-auto"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="w-full max-w-xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+      <div className="w-full max-w-xl bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[92vh] animate-scale-in">
 
         {/* Header */}
         <div className="flex-shrink-0 flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-rose-50/50">
@@ -164,13 +166,13 @@ export default function UnavailabilityModal({ defaultProfessionalId, onClose, on
           <div>
             <label className="block text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
               Profissional <span className="text-rose-500">*</span>
-              {loadingProfs && <Loader2 className="h-3 w-3 animate-spin text-slate-400" />}
+              {loadingProfs && <Spinner size="sm" className="text-slate-400" />}
             </label>
             <select
               value={professionalId}
               onChange={e => setProfessionalId(e.target.value)}
               disabled={loadingProfs}
-              className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500/20 bg-white"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 bg-white"
             >
               <option value="">Selecione...</option>
               {professionals.map(p => (
@@ -189,7 +191,7 @@ export default function UnavailabilityModal({ defaultProfessionalId, onClose, on
               value={title}
               onChange={e => setTitle(e.target.value)}
               placeholder="Ex: Férias, Congresso, Almoço estendido..."
-              className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500/20"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
             />
           </div>
 
@@ -201,14 +203,14 @@ export default function UnavailabilityModal({ defaultProfessionalId, onClose, on
                 <button
                   type="button"
                   onClick={() => setDateMode('range')}
-                  className={`px-2.5 py-1 transition-colors ${dateMode === 'range' ? 'bg-rose-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`}
+                  className={`px-2.5 py-1 transition-colors ${dateMode === 'range' ? 'bg-teal-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`}
                 >
                   Intervalo
                 </button>
                 <button
                   type="button"
                   onClick={() => setDateMode('list')}
-                  className={`px-2.5 py-1 transition-colors border-l border-slate-200 ${dateMode === 'list' ? 'bg-rose-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`}
+                  className={`px-2.5 py-1 transition-colors border-l border-slate-200 ${dateMode === 'list' ? 'bg-teal-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`}
                 >
                   Datas específicas
                 </button>
@@ -246,7 +248,7 @@ export default function UnavailabilityModal({ defaultProfessionalId, onClose, on
                 <button
                   type="button"
                   onClick={() => setDateList(prev => [...prev, todayStr()])}
-                  className="flex items-center gap-1.5 text-xs font-semibold text-rose-600 hover:text-rose-700"
+                  className="flex items-center gap-1.5 text-xs font-semibold text-teal-600 hover:text-teal-700"
                 >
                   <Plus className="h-3 w-3" /> Adicionar data
                 </button>
@@ -262,14 +264,14 @@ export default function UnavailabilityModal({ defaultProfessionalId, onClose, on
                 <button
                   type="button"
                   onClick={() => setTimeMode('range')}
-                  className={`px-2.5 py-1 transition-colors ${timeMode === 'range' ? 'bg-rose-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`}
+                  className={`px-2.5 py-1 transition-colors ${timeMode === 'range' ? 'bg-teal-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`}
                 >
                   Intervalo
                 </button>
                 <button
                   type="button"
                   onClick={() => setTimeMode('blocks')}
-                  className={`px-2.5 py-1 transition-colors border-l border-slate-200 ${timeMode === 'blocks' ? 'bg-rose-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`}
+                  className={`px-2.5 py-1 transition-colors border-l border-slate-200 ${timeMode === 'blocks' ? 'bg-teal-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`}
                 >
                   Múltiplos blocos
                 </button>
@@ -308,7 +310,7 @@ export default function UnavailabilityModal({ defaultProfessionalId, onClose, on
                 <button
                   type="button"
                   onClick={() => setTimeBlocks(prev => [...prev, { start: '14:00', end: '18:00' }])}
-                  className="flex items-center gap-1.5 text-xs font-semibold text-rose-600 hover:text-rose-700"
+                  className="flex items-center gap-1.5 text-xs font-semibold text-teal-600 hover:text-teal-700"
                 >
                   <Plus className="h-3 w-3" /> Adicionar bloco
                 </button>
@@ -329,8 +331,8 @@ export default function UnavailabilityModal({ defaultProfessionalId, onClose, on
                   onClick={() => setRecurrence(o.value)}
                   className={`rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${
                     recurrence === o.value
-                      ? 'bg-rose-600 border-rose-600 text-white'
-                      : 'bg-white border-slate-200 text-slate-600 hover:border-rose-300'
+                      ? 'bg-teal-600 border-teal-600 text-white'
+                      : 'bg-white border-slate-200 text-slate-600 hover:border-teal-300'
                   }`}
                 >
                   {o.label}
@@ -356,7 +358,7 @@ export default function UnavailabilityModal({ defaultProfessionalId, onClose, on
               onChange={e => setNotes(e.target.value)}
               rows={2}
               placeholder="Detalhes para a equipe..."
-              className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm resize-none focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500/20"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm resize-none focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
             />
           </div>
 
@@ -364,7 +366,7 @@ export default function UnavailabilityModal({ defaultProfessionalId, onClose, on
           <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5 text-xs text-slate-600">
             <span className="font-semibold text-slate-800">Resumo:</span>{' '}
             {totalRows > 0
-              ? <>Serão criados <span className="font-bold text-rose-600">{totalRows}</span> bloqueio{totalRows !== 1 ? 's' : ''}
+              ? <>Serão criados <span className="font-mono tabular-nums font-bold text-teal-600">{totalRows}</span> bloqueio{totalRows !== 1 ? 's' : ''}
                   {' '}({resolvedDates.length} data{resolvedDates.length !== 1 ? 's' : ''} × {resolvedBlocks.length} bloco{resolvedBlocks.length !== 1 ? 's' : ''} de horário)
                   {recurrence !== 'none' && <> com repetição <span className="font-semibold">{RECURRENCE_OPTIONS.find(o => o.value === recurrence)?.label.toLowerCase()}</span></>}.
                 </>
@@ -384,7 +386,7 @@ export default function UnavailabilityModal({ defaultProfessionalId, onClose, on
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+            className="flex-1 rounded-lg border border-slate-200 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
           >
             Cancelar
           </button>
@@ -392,14 +394,15 @@ export default function UnavailabilityModal({ defaultProfessionalId, onClose, on
             type="button"
             disabled={saving || totalRows === 0 || !professionalId}
             onClick={handleSave}
-            className="flex-1 rounded-xl bg-rose-600 hover:bg-rose-700 py-2.5 text-sm font-semibold text-white transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            className="flex-1 rounded-lg bg-teal-600 hover:bg-teal-700 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors disabled:opacity-60 flex items-center justify-center gap-2 focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
           >
             {saving
-              ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando...</>
+              ? <><Spinner /> Salvando...</>
               : <><Save className="h-4 w-4" /> Salvar Evento</>}
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

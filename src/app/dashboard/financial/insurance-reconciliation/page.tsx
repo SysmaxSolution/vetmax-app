@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ArrowLeft, FileSpreadsheet } from 'lucide-react'
 import { listImportedRemittances } from '@/lib/actions/petlove-import'
 import PetloveReconciliationClient from '@/components/financial/insurance/PetloveReconciliationClient'
+import ConvenioImportButton from '@/components/financial/insurance/ConvenioImportButton'
 
 export const metadata = { title: 'Conciliação de Convênios | SysVetMax' }
 
@@ -20,11 +21,12 @@ export default async function InsuranceReconciliationPage() {
     redirect('/dashboard')
   }
 
-  // Module guard: só acessa se 'petlove_reconciliation' estiver ativo na clínica
+  // Gate: módulo ativo + a clínica trabalha com convênios (flow_config.usa_convenios)
   const { data: clinic } = await admin
-    .from('clinics').select('active_modules').eq('id', profile.clinic_id).single()
+    .from('clinics').select('active_modules, flow_config').eq('id', profile.clinic_id).single()
   const modules = (clinic?.active_modules as string[] | null) ?? []
-  if (!modules.includes('petlove_reconciliation')) {
+  const usaConvenios = (clinic?.flow_config as { usa_convenios?: boolean } | null)?.usa_convenios === true
+  if (!modules.includes('petlove_reconciliation') || !usaConvenios) {
     redirect('/dashboard/financial')
   }
 
@@ -46,12 +48,13 @@ export default async function InsuranceReconciliationPage() {
           <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center flex-shrink-0">
             <FileSpreadsheet className="h-6 w-6 text-purple-600" />
           </div>
-          <div>
+          <div className="flex-1">
             <h1 className="text-xl font-bold tracking-tight text-slate-900">Conciliação de Convênios</h1>
             <p className="text-sm text-slate-600 mt-1">
               Importe a remessa fechada para conciliar repasses ou o extrato em aberto para uma prévia que atualiza cadastros e preços.
             </p>
           </div>
+          <ConvenioImportButton />
         </header>
 
         <PetloveReconciliationClient initialRemittances={initialList} />

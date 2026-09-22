@@ -356,6 +356,11 @@ export default function ConsultationDetail({
     return () => window.removeEventListener('afterprint', handleAfterPrint)
   }, [])
 
+  useEffect(() => {
+    document.body.classList.toggle('print-mode-isolate', !!printData)
+    return () => document.body.classList.remove('print-mode-isolate')
+  }, [printData])
+
   const handlePrint = (data: PrintState) => {
     setShowDischargeModal(false)
     setPrintData(data)
@@ -1068,7 +1073,7 @@ export default function ConsultationDetail({
       )}
 
       {/* ── Modal Checklist de Alta ─────────────────────────────────────── */}
-      {showDischargeModal && (
+      {showDischargeModal && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             {/* Header */}
@@ -1220,7 +1225,8 @@ export default function ConsultationDetail({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       <div className="space-y-5">
@@ -2515,7 +2521,7 @@ export default function ConsultationDetail({
         )}
 
         {/* Modal de Adendo ao prontuário finalizado */}
-        {addendumModalOpen && (
+        {addendumModalOpen && typeof document !== 'undefined' && createPortal(
           <div
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
             onClick={() => !addendumSaving && setAddendumModalOpen(false)}
@@ -2579,7 +2585,8 @@ export default function ConsultationDetail({
                 </button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body,
         )}
 
       </div>
@@ -2684,7 +2691,7 @@ export default function ConsultationDetail({
       )}
 
     {/* ── Modal Mágico: Cadastro Vivo ───────────────────────────────── */}
-      {profileUpdates && (
+      {profileUpdates && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 overflow-hidden">
             <div className="flex items-center gap-3 mb-4">
@@ -2738,11 +2745,12 @@ export default function ConsultationDetail({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {/* Modal de Configurações de Voz */}
-      {voiceConfigOpen && (
+      {voiceConfigOpen && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5">
             <div className="flex items-center justify-between">
@@ -2804,7 +2812,8 @@ export default function ConsultationDetail({
               {configSaving ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando…</> : <><Save className="h-4 w-4" /> Salvar Configurações</>}
             </button>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {dictionaryOpen && <VoiceDictionaryModal onClose={() => setDictionaryOpen(false)} />}

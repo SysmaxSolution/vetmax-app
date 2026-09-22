@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { AlertCircle, Clock, CheckCircle2, ChevronRight, Stethoscope, History, Pencil, Plus, ArrowRight } from 'lucide-react'
 import type { TriageQueueItem, TriageHistoryItem } from '@/lib/actions/triage'
@@ -325,7 +326,7 @@ export default function NurseWorkspace({ queue, history, clinicId }: NurseWorksp
       </main>
 
       {/* Modal: Adicionar à Fila de Triagem */}
-      {showAddModal && (
+      {showAddModal && typeof document !== 'undefined' && createPortal(
         <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4 animate-scale-in">
             <h2 className="text-base font-semibold text-slate-900">Registrar na Fila de Triagem</h2>
@@ -425,7 +426,8 @@ export default function NurseWorkspace({ queue, history, clinicId }: NurseWorksp
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )

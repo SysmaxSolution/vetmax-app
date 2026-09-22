@@ -13,6 +13,7 @@
  */
 
 import { useRef, useState, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import {
   Type, Image as ImageIcon, Minus, Loader2,
   Tag as TagIcon, ListOrdered, AlignLeft, Stamp, Search, X, LayoutTemplate, Lightbulb,
@@ -578,7 +579,9 @@ function ModalShell({
   children: React.ReactNode
   maxWidth?: number
 }) {
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
       <div
         className="flex flex-col bg-white rounded-2xl shadow-2xl overflow-hidden w-full"
@@ -600,7 +603,8 @@ function ModalShell({
         {children}
       </div>
       <div className="fixed inset-0 -z-10" onClick={onClose} />
-    </div>
+    </div>,
+    document.body,
   )
 }
 

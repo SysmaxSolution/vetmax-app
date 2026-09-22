@@ -190,7 +190,7 @@ function PetCard({ card }: { card: KanbanCard }) {
 
       {/* MV responsável (apenas Consultório) */}
       {card.vetName && (
-        <div className="flex items-center gap-1.5 text-xs text-teal-700 bg-teal-50 rounded-md px-2 py-1">
+        <div className="flex items-center gap-1.5 text-xs text-teal-700 bg-teal-50 rounded-lg px-2 py-1">
           <Stethoscope className="w-3 h-3 flex-shrink-0" />
           <span className="truncate font-medium">{card.vetName}</span>
         </div>
@@ -198,7 +198,7 @@ function PetCard({ card }: { card: KanbanCard }) {
 
       {/* Badge de pagamento — apenas coluna Faturamento */}
       {card.column === 'billing' && card.paymentStatus && (
-        <div className={`flex items-center justify-between rounded-md px-2 py-1 text-xs font-medium ${
+        <div className={`flex items-center justify-between rounded-lg px-2 py-1 text-xs font-medium ${
           card.paymentStatus === 'paid'
             ? 'bg-emerald-50 text-emerald-700'
             : card.paymentStatus === 'courtesy'

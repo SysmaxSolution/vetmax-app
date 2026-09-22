@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Scissors, Loader2, Save, Calendar, DollarSign, Tag } from 'lucide-react'
 import { createGroomingSession, getGroomingCatalog, updateGroomingPricing } from '@/lib/actions/grooming'
 import type { GroomingCatalogItem, GroomingServicePrice } from '@/lib/actions/grooming'
@@ -136,7 +137,9 @@ export default function GroomingCheckinModal({
 
   const isScheduling = initialMode === 'schedule' || (!!scheduledAt && new Date(scheduledAt) > new Date())
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden max-h-[90vh] flex flex-col animate-scale-in">
 
@@ -319,6 +322,7 @@ export default function GroomingCheckinModal({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

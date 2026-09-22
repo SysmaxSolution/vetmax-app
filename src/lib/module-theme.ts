@@ -35,6 +35,7 @@ const PATH_TO_MODULE: Record<string, ModuleKey> = {
   '/dashboard/triage':          'triage',
   '/dashboard/vet':             'vet',
   '/dashboard/exams':           'exams',
+  '/dashboard/imaging':         'exams',
   '/dashboard/hospitalization': 'hospitalization',
   '/dashboard/surgery':         'surgery',
   '/dashboard/grooming':        'grooming',

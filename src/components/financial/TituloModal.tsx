@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Loader2, Trash2, CheckCircle, AlertCircle, RotateCcw, Hash, ShieldCheck } from 'lucide-react'
 import {
   createEntry, updateEntry, deleteEntry, baixarTitulo, reverseFinancialEntry,
@@ -254,7 +255,7 @@ export default function TituloModal({
   const fc  = 'w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20'
   const lc  = 'block text-xs font-semibold text-slate-500 uppercase mb-1.5'
 
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
@@ -750,6 +751,7 @@ export default function TituloModal({
           </div>
         )}
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }

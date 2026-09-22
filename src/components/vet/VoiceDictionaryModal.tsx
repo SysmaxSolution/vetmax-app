@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { BookOpen, X, Check, Trash2, Plus, Loader2, Sparkles, Pencil } from 'lucide-react'
 import {
   listClinicCorrections,
@@ -108,7 +109,7 @@ export default function VoiceDictionaryModal({ onClose }: { onClose: () => void 
     )
   }
 
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[88vh]">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
@@ -173,6 +174,7 @@ export default function VoiceDictionaryModal({ onClose }: { onClose: () => void 
           )}
         </div>
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }

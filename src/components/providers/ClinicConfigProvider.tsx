@@ -15,6 +15,8 @@ interface ClinicConfig {
   requireAttendingVet: boolean
   /** flow_config.uses_advance — habilita o lançamento de adiantamento no Caixa. */
   usesAdvance:         boolean
+  /** flow_config.usa_convenios — a clínica trabalha com convênios (gate global). */
+  usaConvenios:        boolean
 }
 
 const ClinicConfigContext = createContext<ClinicConfig>({
@@ -24,6 +26,7 @@ const ClinicConfigContext = createContext<ClinicConfig>({
   animaisFoundation:   false,
   requireAttendingVet: false,
   usesAdvance:         false,
+  usaConvenios:        false,
 })
 
 export function ClinicConfigProvider({
@@ -33,6 +36,7 @@ export function ClinicConfigProvider({
   animaisFoundation = false,
   requireAttendingVet = false,
   usesAdvance = false,
+  usaConvenios = false,
   children,
 }: {
   aiTranscriptionMode: AiTranscriptionMode
@@ -41,10 +45,11 @@ export function ClinicConfigProvider({
   animaisFoundation?:  boolean
   requireAttendingVet?: boolean
   usesAdvance?:        boolean
+  usaConvenios?:       boolean
   children: React.ReactNode
 }) {
   return (
-    <ClinicConfigContext.Provider value={{ aiTranscriptionMode, internacaoCompleta, centroCirurgico, animaisFoundation, requireAttendingVet, usesAdvance }}>
+    <ClinicConfigContext.Provider value={{ aiTranscriptionMode, internacaoCompleta, centroCirurgico, animaisFoundation, requireAttendingVet, usesAdvance, usaConvenios }}>
       {children}
     </ClinicConfigContext.Provider>
   )
@@ -77,4 +82,9 @@ export function useRequireAttendingVet(): boolean {
 /** Hook client: a clínica usa adiantamento no Caixa? */
 export function useUsesAdvance(): boolean {
   return useContext(ClinicConfigContext).usesAdvance
+}
+
+/** Hook client: a clínica trabalha com convênios? (gate de convênio/repasse na UI) */
+export function useUsaConvenios(): boolean {
+  return useContext(ClinicConfigContext).usaConvenios
 }

@@ -16,6 +16,7 @@
  *    quando o material estiver pronto).
  */
 
+import { createPortal } from 'react-dom'
 import { X, ArrowUpRight, MessageCircle, Mail, PlayCircle, Sparkles, type LucideIcon } from 'lucide-react'
 import { BedDouble, MessageSquareText, FileBarChart2, Lock, Cpu, MessageSquare, Syringe, FlaskConical, Stethoscope, DollarSign, ShoppingBag, Truck, ShoppingCart, Shield, Boxes } from 'lucide-react'
 
@@ -303,7 +304,7 @@ export default function UpgradeModal({ featureKey, override, onClose, showPlansC
     `Olá,\n\nGostaria de conhecer melhor o recurso "${meta.title}" do SysVetMax (${meta.targetPlan}).\n\nObrigado!`,
   )
 
-  return (
+  return typeof document === 'undefined' ? null : createPortal(
     <>
       <div
         className="fixed inset-0 z-[9950] bg-slate-900/60 backdrop-blur-sm"
@@ -415,6 +416,7 @@ export default function UpgradeModal({ featureKey, override, onClose, showPlansC
           </div>
         </div>
       </div>
-    </>
+    </>,
+    document.body,
   )
 }

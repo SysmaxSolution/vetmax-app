@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import {
   X, CreditCard, Banknote, Smartphone, Building2, Receipt, Plus, Trash2, Check, Loader2, AlertCircle, Percent, QrCode,
 } from 'lucide-react'
@@ -263,6 +264,7 @@ export default function PaymentMethodModal({ totalDue, subject, disableSplit, co
 
   return (
     <>
+      {typeof document !== 'undefined' && createPortal(
       <div
         role="dialog"
         aria-modal="true"
@@ -532,7 +534,9 @@ export default function PaymentMethodModal({ totalDue, subject, disableSplit, co
             </button>
           </div>
         </div>
-      </div>
+      </div>,
+      document.body,
+      )}
 
       {showPixQr && (
         <PixDynamicModal

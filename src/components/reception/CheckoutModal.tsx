@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Loader2, Receipt, AlertCircle, Gift, Plus, Search, Trash2, CheckCircle2 } from 'lucide-react'
 import {
   getInvoiceWithItems, processSplitPayment, processPayment, markInvoiceAsCourtesy,
@@ -205,24 +206,26 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
   }, [invoice?.tutor_id])
 
   if (loading || !invoice) {
-    return (
+    return typeof document === 'undefined' ? null : createPortal(
       <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4">
         <div className="bg-white rounded-2xl p-10 flex items-center gap-3">
           <Loader2 className="h-5 w-5 animate-spin text-teal-600" />
           <span className="text-sm text-slate-600">Carregando fatura...</span>
         </div>
-      </div>
+      </div>,
+      document.body,
     )
   }
 
   if (error) {
-    return (
+    return typeof document === 'undefined' ? null : createPortal(
       <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4">
         <div className="bg-white rounded-2xl p-8 max-w-sm w-full text-center space-y-3">
           <p className="text-red-600 text-sm">{error}</p>
           <button onClick={onClose} className="text-slate-500 text-sm underline">Fechar</button>
         </div>
-      </div>
+      </div>,
+      document.body,
     )
   }
 
@@ -368,26 +371,43 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
     setShowPaymentModal(false)
 
     // Pergunta de NFS-e: só quando a clínica emite nota e há consulta vinculada.
+    // 1 nota por empresa faturante (CNPJ). Modo automático (config) emite sem
+    // perguntar; senão, o operador confirma.
     if (invoice.consultation_id) {
       const emits = await clinicEmitsNfse()
       if (emits.emits) {
         setNfsePrompt({ consultationId: invoice.consultation_id, petName: invoice.patient.name, total: totalReceived })
-        return // finaliza após a decisão do operador
+        if (emits.auto) { void runEmitNfse(invoice.consultation_id, invoice.patient.name, totalReceived) }
+        return // finaliza após a emissão/decisão
       }
     }
     onSuccess(invoice.patient.name, totalReceived)
   }
 
-  async function handleEmitNfse() {
-    if (!nfsePrompt) return
+  // Emite as NFS-e (uma por empresa faturante) e trata sucesso/erro parcial.
+  async function runEmitNfse(consultationId: string, petName: string, total: number) {
     setEmittingNfse(true)
     setNfseResult(null)
-    const res = await emitNfseForConsultation(nfsePrompt.consultationId)
+    const res = await emitNfseForConsultation(consultationId)
     setEmittingNfse(false)
     if ('error' in res) { setNfseResult('Erro: ' + res.error); return }
-    const { petName, total } = nfsePrompt
+    const fail = res.results.filter(r => r.error)
+    const ok   = res.results.filter(r => !r.error)
+    if (fail.length > 0) {
+      // Erro parcial: mantém o painel aberto mostrando quais CNPJs falharam.
+      setNfseResult(
+        `${ok.length} nota(s) enviada(s). Falha em ${fail.length}: ` +
+        fail.map(f => `${f.company_name} — ${f.error}`).join(' · '),
+      )
+      return
+    }
     setNfsePrompt(null)
     onSuccess(petName, total)
+  }
+
+  async function handleEmitNfse() {
+    if (!nfsePrompt) return
+    await runEmitNfse(nfsePrompt.consultationId, nfsePrompt.petName, nfsePrompt.total)
   }
 
   function handleSkipNfse() {
@@ -397,7 +417,7 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
     onSuccess(petName, total)
   }
 
-  return (
+  return typeof document === 'undefined' ? null : createPortal(
     <>
       <div
         className="fixed inset-0 z-[70] flex items-start justify-center bg-black/50 p-4 overflow-y-auto"
@@ -868,11 +888,12 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
               </div>
             </div>
             <p className="text-sm text-slate-600">
-              Deseja emitir a <strong>NFS-e</strong> deste atendimento agora? A nota será gerada com base nos
-              serviços cobrados e enviada ao provedor (Focus NFe).
+              Deseja emitir a <strong>NFS-e</strong> deste atendimento agora? Será gerada
+              <strong> uma nota por empresa faturante (CNPJ)</strong> presente nos serviços cobrados,
+              enviada ao provedor (Focus NFe).
             </p>
             {nfseResult && (
-              <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-600">{nfseResult}</div>
+              <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-700">{nfseResult}</div>
             )}
             <div className="flex gap-2 pt-1">
               <button
@@ -893,6 +914,7 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
           </div>
         </div>
       )}
-    </>
+    </>,
+    document.body,
   )
 }

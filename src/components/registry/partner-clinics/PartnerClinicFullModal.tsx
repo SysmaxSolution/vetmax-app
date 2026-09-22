@@ -1,12 +1,14 @@
 'use client'
 
 import { useState, useTransition, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Save, Loader2, Building2, Trash2, RefreshCcw } from 'lucide-react'
 import {
   upsertPartnerClinic, setPartnerClinicActive,
   type PartnerClinic, type PartnerClinicInput,
 } from '@/lib/actions/partner-clinics'
 import PartnerCommissionsSection from './PartnerCommissionsSection'
+import PartnerProfessionalsPanel from './PartnerProfessionalsPanel'
 import { lookupCnpjAction } from '@/lib/actions/cnpj'
 
 function formatCnpj(v: string) {
@@ -126,7 +128,7 @@ export default function PartnerClinicFullModal({ clinic, priceTables, onClose, o
     })
   }
 
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4"
       onClick={onClose}
@@ -336,6 +338,15 @@ export default function PartnerClinicFullModal({ clinic, priceTables, onClose, o
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 resize-none"
             />
           </div>
+
+          {/* Profissionais & Acesso ao Portal do Veterinário */}
+          {clinic?.id ? (
+            <PartnerProfessionalsPanel partnerClinicId={clinic.id} />
+          ) : (
+            <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-xs text-slate-500">
+              <span className="font-semibold text-slate-600">Profissionais &amp; acesso ao portal:</span> salve a clínica primeiro e reabra para cadastrar os MVs e gerar os códigos de acesso.
+            </div>
+          )}
         </form>
 
         {/* Footer */}
@@ -386,6 +397,7 @@ export default function PartnerClinicFullModal({ clinic, priceTables, onClose, o
           </div>
         </div>
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }

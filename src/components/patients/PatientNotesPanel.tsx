@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { FileText, Plus, AlertTriangle, X, Heart, Skull, Trash2, Stethoscope, Brain, Pencil } from 'lucide-react'
 import { Spinner } from '@/components/ui/Spinner'
 import { DateTimePicker } from '@/components/ui/DatePicker'
@@ -199,7 +200,7 @@ export default function PatientNotesPanel({ patientId, patientName, isDeceased, 
       )}
 
       {/* 05/06: confirmação de REVERSÃO do óbito (só admin; pet volta ativo) */}
-      {confirmRevert && (
+      {confirmRevert && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[10060] flex items-center justify-center bg-black/50 p-4" onClick={() => !reverting && setConfirmRevert(null)}>
           <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl p-5 space-y-3" onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-3">
@@ -242,11 +243,12 @@ export default function PatientNotesPanel({ patientId, patientName, isDeceased, 
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {/* Confirmação de delete */}
-      {confirmDelete && (
+      {confirmDelete && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[10060] flex items-center justify-center bg-black/40 p-4" onClick={() => setConfirmDelete(null)}>
           <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl p-5 space-y-3" onClick={e => e.stopPropagation()}>
             <p className="text-sm font-semibold text-slate-900">Remover esta nota?</p>
@@ -271,7 +273,8 @@ export default function PatientNotesPanel({ patientId, patientName, isDeceased, 
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )
@@ -287,7 +290,7 @@ function NoteTypeSelector({
   onPick: (t: NoteType) => void
 }) {
   const types: NoteType[] = ['observation', 'clinical', 'behavior', 'other', 'death']
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div className="fixed inset-0 z-[10050] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
@@ -320,8 +323,9 @@ function NoteTypeSelector({
           })}
         </div>
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }
 
 function GenericNoteModal({
@@ -338,6 +342,7 @@ function GenericNoteModal({
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const label = NOTE_TYPE_LABEL[noteType].label
+  const canPortal = typeof document !== 'undefined'
 
   async function handleSave() {
     if (!content.trim()) { setError('Conteúdo é obrigatório.'); return }
@@ -353,7 +358,7 @@ function GenericNoteModal({
     onSaved()
   }
 
-  return (
+  return canPortal ? createPortal(
     <div className="fixed inset-0 z-[10055] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
@@ -400,8 +405,9 @@ function GenericNoteModal({
           </button>
         </div>
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }
 
 function DeathNoteModal({
@@ -454,7 +460,7 @@ function DeathNoteModal({
     onSaved()
   }
 
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div className="fixed inset-0 z-[10055] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="border-b border-violet-200 bg-gradient-to-br from-violet-50 to-white px-5 py-4 flex items-center justify-between sticky top-0 z-10">
@@ -593,6 +599,7 @@ function DeathNoteModal({
           )}
         </div>
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }

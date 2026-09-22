@@ -21,6 +21,7 @@ export interface PurchaseOrder {
   notes:        string | null
   created_at:   string
   updated_at:   string
+  duplicatas?:  { numero: string; vencimento: string; valor: number }[]
   supplier?:    { id: string; name: string; document: string | null } | null
   items?:       PurchaseOrderItem[]
 }
@@ -143,6 +144,7 @@ export async function importNFeXML(
       total_value: parsed.total_value,
       status:      'pending',
       xml_content: xmlContent,
+      duplicatas:  parsed.duplicatas ?? [],
       created_by:  ctx.user_id,
     })
     .select('id')
@@ -343,7 +345,7 @@ export async function listPurchaseOrders(filters?: {
     .from('purchase_orders')
     .select(`
       id, clinic_id, supplier_id, nfe_key, nfe_number, nfe_series,
-      issue_date, total_value, status, notes, created_at, updated_at,
+      issue_date, total_value, status, notes, created_at, updated_at, duplicatas,
       supplier:suppliers(id, name, document)
     `)
     .eq('clinic_id', ctx.clinic_id)
@@ -467,6 +469,71 @@ export async function confirmPurchaseReceipt(
   revalidatePath('/dashboard/purchases')
   revalidatePath('/dashboard/pharmacy')
   return { success: true }
+}
+
+// ─── Lançar Contas a Pagar a partir da compra (1.8) ───────────────────────────
+// Gera N títulos (parcelas) em financial_entries (type='payable'), amarrando
+// fornecedor, ordem de compra, nº do documento, espécie e parcela. Idempotente
+// por ordem (não relança se já houver títulos desta compra).
+
+export interface PurchaseInstallmentInput {
+  due_date: string
+  amount:   number
+  especie?: string | null
+}
+
+export async function launchPayablesFromPurchase(
+  orderId: string,
+  input: { installments: PurchaseInstallmentInput[]; category?: string; chart_of_accounts_id?: string | null },
+): Promise<{ ok: true; count: number; total: number } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return { error: ctx.error as string }
+  if (!['admin', 'owner', 'manager'].includes(ctx.role)) return { error: 'Sem permissão para lançar contas a pagar.' }
+  if (!input.installments?.length) return { error: 'Informe ao menos uma parcela.' }
+  if (input.installments.some(i => !i.due_date || !(i.amount > 0))) return { error: 'Todas as parcelas precisam de vencimento e valor positivo.' }
+
+  const admin = createAdminClient()
+  const { data: order } = await admin
+    .from('purchase_orders')
+    .select('id, nfe_number, issue_date, supplier_id, supplier:suppliers(id, name)')
+    .eq('id', orderId).eq('clinic_id', ctx.clinic_id).maybeSingle()
+  if (!order) return { error: 'Ordem de compra não encontrada.' }
+
+  // Idempotência: não relança se já há títulos desta compra.
+  const { count: existing } = await admin
+    .from('financial_entries')
+    .select('id', { count: 'exact', head: true })
+    .eq('clinic_id', ctx.clinic_id).eq('purchase_order_id', orderId)
+  if ((existing ?? 0) > 0) return { error: 'Esta compra já teve contas a pagar lançadas.' }
+
+  const supplierName = ((order as any).supplier?.name as string | null) ?? null
+  const n = input.installments.length
+  const rows = input.installments.map((inst, i) => ({
+    clinic_id:            ctx.clinic_id,
+    type:                 'payable',
+    description:          `Compra${order.nfe_number ? ` NF ${order.nfe_number}` : ''}${supplierName ? ` — ${supplierName}` : ''}${n > 1 ? ` (${i + 1}/${n})` : ''}`,
+    amount:               Math.round(inst.amount * 100) / 100,
+    due_date:             inst.due_date,
+    issue_date:           (order.issue_date as string) ?? null,
+    category:             input.category ?? 'Fornecedores',
+    chart_of_accounts_id: input.chart_of_accounts_id ?? null,
+    beneficiary:          supplierName,
+    supplier_id:          order.supplier_id ?? null,
+    purchase_order_id:    orderId,
+    document_number:      order.nfe_number ? `${order.nfe_number}${n > 1 ? `/${i + 1}` : ''}` : null,
+    especie:              inst.especie ?? null,
+    installment_number:   i + 1,
+    total_installments:   n,
+    status:               'pending',
+    created_by:           ctx.user_id,
+  }))
+  const { error } = await admin.from('financial_entries').insert(rows)
+  if (error) return { error: 'Erro ao lançar contas a pagar: ' + error.message }
+
+  revalidatePath('/dashboard/financial')
+  revalidatePath('/dashboard/purchases')
+  const sum = input.installments.reduce((s, x) => s + x.amount, 0)
+  return { ok: true, count: n, total: Math.round(sum * 100) / 100 }
 }
 
 // ─── Match item to stock ──────────────────────────────────────────────────────

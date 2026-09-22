@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Trash2, Loader2 } from 'lucide-react'
 import { removeFromQueue } from '@/lib/actions/queue'
 import { useRouter } from 'next/navigation'
@@ -41,7 +42,9 @@ export function RemoveFromQueueModal({
     })
   }
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
@@ -91,6 +94,7 @@ export function RemoveFromQueueModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

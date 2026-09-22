@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { Receipt, RefreshCw, ShoppingBag, Scissors, Ban, Users, AlertTriangle, ShoppingCart, Trash2 } from 'lucide-react'
 import { Spinner } from '@/components/ui/Spinner'
 import { getPendingInvoices, processSplitPayment, type InvoiceWithDetails } from '@/lib/actions/billing'
@@ -203,7 +204,7 @@ function GroomingPaymentModal({
     onWaived(session.patient_name)
   }
 
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl animate-scale-in">
         <div className="flex items-center gap-3 mb-4">
@@ -278,8 +279,9 @@ function GroomingPaymentModal({
           </button>
         </div>
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }
 
 // ─── Hospitalization / Surgery pending card ───────────────────────────────────
@@ -362,7 +364,7 @@ function HospReceiveModal({
     }
   }
 
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl animate-scale-in">
         <div className="flex items-center gap-3 mb-4">
@@ -429,8 +431,9 @@ function HospReceiveModal({
           </button>
         </div>
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -837,7 +840,7 @@ export default function CashierTabReceivables({
       )}
 
       {/* Q3: aviso de tutores diferentes */}
-      {confirmMixedTutors && (
+      {confirmMixedTutors && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl space-y-3 animate-scale-in">
             <div className="flex items-center gap-3">
@@ -865,7 +868,8 @@ export default function CashierTabReceivables({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {activeGrooming && (

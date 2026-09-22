@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import {
   X, Check, Loader2, Package, Shield,
   Pill, FlaskConical, ShoppingBag, Scissors, Sparkles,
@@ -101,7 +102,9 @@ export default function PharmacyCatalogQuickAdd({ suggestion, onClose, onSaved }
     })
   }
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
@@ -280,6 +283,7 @@ export default function PharmacyCatalogQuickAdd({ suggestion, onClose, onSaved }
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

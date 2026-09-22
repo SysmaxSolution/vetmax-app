@@ -10,7 +10,7 @@ function SummaryCard({ label, value, color }: { label: string; value: number; co
   return (
     <div className={`rounded-xl border p-4 ${color}`}>
       <p className="text-xs font-medium uppercase tracking-wide mb-1 opacity-70">{label}</p>
-      <p className="text-xl font-bold">{fmt(value)}</p>
+      <p className="text-xl font-bold font-mono tabular-nums">{fmt(value)}</p>
     </div>
   )
 }
@@ -84,22 +84,22 @@ export default function FinancialReport() {
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">De</label>
           <input type="date" value={from} onChange={e => setFrom(e.target.value)}
-            className="w-full sm:w-auto rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            className="w-full sm:w-auto rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Até</label>
           <input type="date" value={to} onChange={e => setTo(e.target.value)}
-            className="w-full sm:w-auto rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            className="w-full sm:w-auto rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Categoria</label>
           <input type="text" placeholder="Todas" value={cat} onChange={e => setCat(e.target.value)}
-            className="w-full sm:w-36 rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            className="w-full sm:w-36 rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Forma de Pagamento</label>
           <select value={method} onChange={e => setMethod(e.target.value)}
-            className="w-full sm:w-auto rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+            className="w-full sm:w-auto rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
             <option value="">Todas</option>
             <option value="cash">Dinheiro</option>
             <option value="card">Cartão</option>
@@ -108,7 +108,7 @@ export default function FinancialReport() {
           </select>
         </div>
         <button onClick={run} disabled={pending}
-          className="rounded-lg bg-violet-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50 transition-colors">
+          className="rounded-lg bg-teal-600 px-4 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 disabled:opacity-60 transition-colors">
           {pending ? 'Carregando…' : 'Gerar'}
         </button>
       </div>
@@ -118,7 +118,7 @@ export default function FinancialReport() {
       )}
 
       {result === null && !pending && (
-        <div className="rounded-lg bg-violet-50 border border-violet-100 px-4 py-8 text-center text-sm text-violet-500">
+        <div className="rounded-xl bg-slate-50 border border-slate-200 px-4 py-8 text-center text-sm text-slate-500">
           Selecione o período e clique em Gerar.
         </div>
       )}
@@ -147,10 +147,10 @@ export default function FinancialReport() {
           {/* Entries table */}
           <div className="overflow-x-auto rounded-xl border border-slate-200">
             <table className="w-full text-sm">
-              <thead className="bg-violet-50">
+              <thead className="bg-slate-50">
                 <tr>
                   {['Tipo', 'Valor', 'Descrição', 'Categoria', 'Pagamento', 'Status', 'Vencimento'].map(h => (
-                    <th key={h} className="px-4 py-3 text-left font-semibold text-violet-800 text-xs uppercase tracking-wide">{h}</th>
+                    <th key={h} className="px-4 py-3 text-left font-semibold text-slate-500 text-xs uppercase tracking-wide">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -158,7 +158,7 @@ export default function FinancialReport() {
                 {result.rows.length === 0 ? (
                   <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-400">Nenhum lançamento encontrado.</td></tr>
                 ) : result.rows.slice(0, 200).map(r => (
-                  <tr key={r.id} className="hover:bg-violet-50/30 transition-colors">
+                  <tr key={r.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-2.5">
                       <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${
                         r.type === 'inflow' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
@@ -166,7 +166,7 @@ export default function FinancialReport() {
                         {r.type === 'inflow' ? 'Entrada' : 'Saída'}
                       </span>
                     </td>
-                    <td className="px-4 py-2.5 font-semibold">{fmt(r.amount)}</td>
+                    <td className="px-4 py-2.5 font-semibold font-mono tabular-nums">{fmt(r.amount)}</td>
                     <td className="px-4 py-2.5 text-slate-700 max-w-[200px] truncate">{r.description ?? '—'}</td>
                     <td className="px-4 py-2.5 text-slate-600">{r.category ?? '—'}</td>
                     <td className="px-4 py-2.5 text-slate-600 capitalize">{r.payment_method ?? '—'}</td>
@@ -177,7 +177,7 @@ export default function FinancialReport() {
                         {r.status === 'paid' ? 'Pago' : 'Pendente'}
                       </span>
                     </td>
-                    <td className="px-4 py-2.5 text-slate-600">
+                    <td className="px-4 py-2.5 text-slate-600 font-mono tabular-nums">
                       {r.due_date ? new Date(r.due_date + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}
                     </td>
                   </tr>

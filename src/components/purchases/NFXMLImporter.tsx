@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import { Upload, X, FileText, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
 import { importNFeXML, enrichProductFromNCM } from '@/lib/actions/purchases'
 import type { PurchaseOrder } from '@/lib/actions/purchases'
@@ -71,7 +72,9 @@ export function NFXMLImporter({ onClose, onImported }: Props) {
     })
   }
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-2xl rounded-2xl bg-white shadow-xl flex flex-col max-h-[90vh] animate-scale-in">
         {/* Header */}
@@ -166,6 +169,7 @@ export function NFXMLImporter({ onClose, onImported }: Props) {
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

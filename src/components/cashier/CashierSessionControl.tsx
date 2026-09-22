@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Lock, Unlock, Printer, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { Spinner } from '@/components/ui/Spinner'
 import {
@@ -138,7 +139,7 @@ export default function CashierSessionControl({ session, userRole, onRefresh, on
 
   // ── Modal: conferência cega ──
   if (conferenceOpen && expected && session) {
-    return (
+    return typeof document !== 'undefined' ? createPortal(
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
         <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto animate-scale-in" data-mentor-step="cashier-conferencia">
           <div>
@@ -264,15 +265,16 @@ export default function CashierSessionControl({ session, userRole, onRefresh, on
             )}
           </div>
         </div>
-      </div>
-    )
+      </div>,
+      document.body,
+    ) : null
   }
 
   // ── Modal: relatório de fechamento (comprovante imprimível) ──
   if (closingReport) {
     const cr = closingReport
     const diff = cr.session.difference
-    return (
+    return typeof document !== 'undefined' ? createPortal(
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 print:relative print:bg-white print:p-0">
         <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto animate-scale-in print:shadow-none print:max-h-none print:rounded-none" id="closing-report-print">
           <div className="flex items-center justify-between print:hidden">
@@ -360,8 +362,9 @@ export default function CashierSessionControl({ session, userRole, onRefresh, on
             </button>
           </div>
         </div>
-      </div>
-    )
+      </div>,
+      document.body,
+    ) : null
   }
 
   if (!canManage) return null

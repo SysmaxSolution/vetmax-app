@@ -1,4 +1,4 @@
-﻿import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
@@ -44,7 +44,7 @@ function KpiCard({
   color: 'green' | 'blue' | 'indigo' | 'amber'
 }) {
   const palette = {
-    green:  { bg: 'bg-green-50',  border: 'border-green-100',  icon: 'bg-green-100 text-green-700',   value: 'text-green-700'  },
+    green:  { bg: 'bg-emerald-50',  border: 'border-emerald-100',  icon: 'bg-emerald-100 text-emerald-700',   value: 'text-emerald-700'  },
     blue:   { bg: 'bg-blue-50',   border: 'border-blue-100',   icon: 'bg-blue-100 text-blue-700',     value: 'text-blue-700'   },
     indigo: { bg: 'bg-indigo-50', border: 'border-indigo-100', icon: 'bg-indigo-100 text-indigo-700', value: 'text-indigo-700' },
     amber:  { bg: 'bg-amber-50',  border: 'border-amber-100',  icon: 'bg-amber-100 text-amber-700',   value: 'text-amber-700'  },
@@ -57,7 +57,7 @@ function KpiCard({
       </div>
       <div className="min-w-0">
         <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">{label}</p>
-        <p className={`text-2xl font-bold mt-0.5 ${palette.value}`}>{value}</p>
+        <p className={`text-2xl font-bold mt-0.5 font-mono tabular-nums ${palette.value}`}>{value}</p>
         <p className="text-xs text-slate-400 mt-0.5">{sub}</p>
       </div>
     </div>
@@ -146,15 +146,15 @@ export default async function DirectorPanelPage() {
   const allOk = action && relevantCounts.every(c => c === 0)
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 animate-enter">
 
       {/* ── Saudação ──────────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">
+          <h1 className="text-xl font-bold tracking-tight text-slate-900">
             {greetingByHour()}, {profile.full_name.split(' ')[0]}!
           </h1>
-          <p className="text-sm text-slate-500 mt-0.5 capitalize">{todayLabel()}</p>
+          <p className="text-sm text-slate-600 mt-0.5 capitalize">{todayLabel()}</p>
         </div>
         <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm flex-shrink-0">
           <TrendingUp className="h-4 w-4 text-blue-600" />
@@ -207,7 +207,7 @@ export default async function DirectorPanelPage() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Internação</p>
-            <p className="text-xl font-bold text-rose-700 mt-0.5">
+            <p className="text-xl font-bold text-rose-700 mt-0.5 font-mono tabular-nums">
               {occupancy ? occupancy.active : '—'} internado{occupancy?.active !== 1 ? 's' : ''}
             </p>
             <p className="text-xs text-slate-400 mt-0.5">

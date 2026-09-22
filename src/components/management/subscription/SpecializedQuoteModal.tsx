@@ -5,6 +5,7 @@
 // O cliente confirma a combinação montada no configurador e deixa o contato.
 
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { BadgeCheck, Loader2, X } from 'lucide-react'
 import { requestSpecializedQuote } from '@/lib/actions/subscription'
 
@@ -48,9 +49,9 @@ export default function SpecializedQuoteModal({
     onSubmitted()
   }
 
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl">
+      <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl animate-scale-in">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <BadgeCheck className="h-5 w-5 text-violet-500" />
@@ -132,13 +133,14 @@ export default function SpecializedQuoteModal({
           <button
             onClick={handleSubmit}
             disabled={saving}
-            className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-60"
+            className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-tiolet-700 disabled:opacity-60"
           >
             {saving && <Loader2 className="h-4 w-4 animate-spin" />}
             Solicitar proposta
           </button>
         </div>
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }

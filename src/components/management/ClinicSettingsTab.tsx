@@ -12,6 +12,7 @@ import {
   type FlowConfig, type ClinicConfig, type ClinicSettingsConfig, type AiTranscriptionMode,
 } from '@/lib/actions/clinic-settings'
 import { useUpgradeModal } from '@/components/upgrade/UpgradeProvider'
+import PortalBookingSettings from '@/components/management/PortalBookingSettings'
 
 const MERGEABLE = [
   { key: 'triage' as const, label: 'Triagem', desc: 'Coleta de sinais vitais dentro do Consultório' },
@@ -131,6 +132,9 @@ export default function ClinicSettingsTab({
   return (
     <div className="space-y-6">
 
+      {/* ── Portal do Tutor & Agendamento Online ─────────────────────────────── */}
+      <PortalBookingSettings initialConfig={initialConfig} onToast={onToast} />
+
       {/* ── Sessão 1: Protocolo de Check-in ──────────────────────────────────── */}
       <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
         <div className="border-b border-slate-100 px-6 py-4 flex items-center gap-3">
@@ -190,7 +194,7 @@ export default function ClinicSettingsTab({
           <button
             onClick={saveChecklist}
             disabled={savingChecklist}
-            className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-teal-600 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 transition-colors disabled:opacity-50"
+            className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-teal-600 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 transition-colors disabled:opacity-60"
           >
             {savingChecklist
               ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando...</>
@@ -286,7 +290,7 @@ export default function ClinicSettingsTab({
           <button
             onClick={saveAiMode}
             disabled={savingAiMode}
-            className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-violet-600 py-2.5 text-sm font-semibold text-white hover:bg-violet-700 transition-colors disabled:opacity-50"
+            className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-teal-600 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 transition-colors disabled:opacity-60"
           >
             {savingAiMode
               ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando...</>
@@ -316,7 +320,7 @@ export default function ClinicSettingsTab({
               <button
                 type="button"
                 onClick={() => openUpgrade('continuous_flow')}
-                className="inline-flex items-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-700 px-4 py-2 text-sm font-bold text-white shadow-md shadow-violet-200 transition-colors"
+                className="inline-flex items-center gap-2 rounded-lg bg-violet-600 hover:bg-violet-700 px-4 py-2 text-sm font-bold text-white shadow-md shadow-violet-200 transition-colors"
               >
                 Habilitar Fluxo Contínuo
                 <ArrowUpRight className="h-4 w-4" />
@@ -407,7 +411,7 @@ export default function ClinicSettingsTab({
           <button
             onClick={saveFlow}
             disabled={savingFlow}
-            className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-amber-500 py-2.5 text-sm font-semibold text-white hover:bg-amber-600 transition-colors disabled:opacity-50"
+            className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-teal-600 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 transition-colors disabled:opacity-60"
           >
             {savingFlow
               ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando...</>
@@ -494,7 +498,7 @@ function RequiredFieldsConfig({ initialSettingsConfig, onToast }: { initialSetti
         <button
           onClick={saveRequiredFields}
           disabled={saving}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 transition-colors disabled:opacity-50"
+          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-teal-600 text-white text-sm font-semibold shadow-sm hover:bg-teal-700 transition-colors disabled:opacity-60"
         >
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
           {saving ? 'Salvando...' : 'Salvar Campos Obrigatórios'}

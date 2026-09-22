@@ -258,7 +258,7 @@ function CampaignCard({
         <button
           onClick={handleClick}
           disabled={saving}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors ml-auto"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 text-white text-xs font-semibold shadow-sm rounded-lg hover:bg-teal-700 disabled:opacity-60 transition-colors ml-auto"
         >
           {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
           Salvar

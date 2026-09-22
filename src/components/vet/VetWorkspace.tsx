@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { Clock, CheckCircle2, ArrowRight, Stethoscope, AlertCircle, Weight, Thermometer, History, Pencil, Plus, X, Search, UserPlus, Receipt, AlertTriangle } from 'lucide-react'
 import type { VetQueueItem, VetCompletedItem, AwaitingReviewItem } from '@/lib/actions/vet'
@@ -467,7 +468,7 @@ export default function VetWorkspace({ queue, completed, awaitingReview, clinicI
       </main>
 
       {/* Modal: Incluir Paciente Diretamente */}
-      {showAddModal && (
+      {showAddModal && typeof document !== 'undefined' && createPortal(
         <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4 animate-scale-in">
             <div className="flex items-center justify-between">
@@ -606,7 +607,8 @@ export default function VetWorkspace({ queue, completed, awaitingReview, clinicI
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {/* PatientFullModal para novo cadastro direto do Consultório */}

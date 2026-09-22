@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import {
   submitTriageAndMoveToDoctor,
@@ -1092,7 +1093,7 @@ export default function TriageForm({
         />
       )}
 
-      {voiceConfigOpen && (
+      {voiceConfigOpen && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-5 animate-scale-in">
             <div className="flex items-center justify-between">
@@ -1149,7 +1150,8 @@ export default function TriageForm({
               {configSaving ? <><Spinner size="md" label="Salvando…" /> Salvando…</> : <><Save className="h-4 w-4" /> Salvar Configurações</>}
             </button>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   )

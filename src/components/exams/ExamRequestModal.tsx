@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { X, TestTubes, Loader2 } from 'lucide-react'
 import { requestExam } from '@/lib/actions/exams'
 
@@ -76,7 +77,9 @@ export default function ExamRequestModal({
     }
   }
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-xl">
         {/* Header */}
@@ -160,6 +163,7 @@ export default function ExamRequestModal({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

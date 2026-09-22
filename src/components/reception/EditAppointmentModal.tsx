@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { X, CalendarDays, Loader2, Save, MessageCircle } from 'lucide-react'
 import { getAppointmentById, updateAppointment } from '@/lib/actions/appointments'
 import { getProfessionalSlots, checkProfessionalAvailability } from '@/lib/actions/appointment-slots'
@@ -192,7 +193,7 @@ export default function EditAppointmentModal({ appointmentId, onClose, onSuccess
   }
 
   // ── Render ────────────────────────────────────────────────────────────────────
-  return (
+  return typeof document === 'undefined' ? null : createPortal(
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4 overflow-y-auto"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
@@ -452,6 +453,7 @@ export default function EditAppointmentModal({ appointmentId, onClose, onSuccess
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

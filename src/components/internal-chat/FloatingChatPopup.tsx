@@ -133,7 +133,7 @@ export function FloatingChatPopupHost({
           key={card.id}
           style={{ opacity: 1 - i * 0.1, transform: `translateY(${i * 2}px)` }}
           className="pointer-events-auto w-72 rounded-xl border border-slate-200 bg-white shadow-xl
-                     overflow-hidden transition-all duration-300 animate-in slide-in-from-right-4"
+                     overflow-hidden animate-enter"
         >
           <div className="flex items-start gap-3 p-3">
             <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 text-sm font-bold">

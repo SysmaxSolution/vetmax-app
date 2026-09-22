@@ -98,6 +98,7 @@ export interface TutorCreditDetail {
   patient_name: string | null
   tutor_name: string | null
   consultation_date: string | null
+  company_name: string | null      // empresa faturante onde o crédito foi inserido/utilizado
 }
 
 // Extrato DETALHADO do crédito de um tutor (para os modais de detalhe).
@@ -108,7 +109,7 @@ export async function getTutorCreditStatement(tutorId: string): Promise<TutorCre
 
   const { data: movsRaw, error } = await admin
     .from('tutor_credits')
-    .select('id, kind, amount, reference, invoice_id, cashier_entry_id, created_by, created_at')
+    .select('id, kind, amount, reference, invoice_id, cashier_entry_id, company_id, created_by, created_at')
     .eq('clinic_id', ctx.clinic_id).eq('tutor_id', tutorId)
     .in('kind', ['advance', 'usage'])
     .order('created_at', { ascending: false })
@@ -132,6 +133,14 @@ export async function getTutorCreditStatement(tutorId: string): Promise<TutorCre
   if (ccIds.length) {
     const { data: cc } = await admin.from('central_cashier').select('id, payment_method').in('id', ccIds)
     for (const c of (cc ?? []) as any[]) ccMap.set(c.id, c.payment_method ?? null)
+  }
+
+  // empresas faturantes → nome (para adiantamento e uso)
+  const compMap = new Map<string, string>()
+  const compIds = uniq(movs.map(m => m.company_id))
+  if (compIds.length) {
+    const { data: comps } = await admin.from('companies').select('id, name').in('id', compIds)
+    for (const c of (comps ?? []) as any[]) compMap.set(c.id, c.name ?? '—')
   }
 
   // faturas (usos) → OS, pet, tutor, data da consulta
@@ -181,6 +190,7 @@ export async function getTutorCreditStatement(tutorId: string): Promise<TutorCre
       patient_name: iv?.patient_name ?? null,
       tutor_name: iv?.tutor_name ?? null,
       consultation_date: iv?.consultation_date ?? null,
+      company_name: m.company_id ? (compMap.get(m.company_id) ?? null) : null,
     }
   })
 }
@@ -413,7 +423,7 @@ export async function applyTutorCreditToInvoice(input: {
     for (const bt of bankTransfers) {
       const fromName = (bt.debit_company && compName.get(bt.debit_company)) || 'outra empresa'
       const toName   = (bt.credit_company && compName.get(bt.credit_company)) || 'empresa faturante'
-      const base = { clinic_id: ctx.clinic_id, amount: bt.amount, due_date: todayD, payment_date: todayD, issue_date: todayD, status: 'paid', source: 'manual', category: 'Transferência inter-CNPJ', created_by: ctx.user_id }
+      const base = { clinic_id: ctx.clinic_id, amount: bt.amount, due_date: todayD, payment_date: todayD, issue_date: todayD, status: 'paid', source: 'manual', category: 'Transferência inter-CNPJ', is_intercompany: true, created_by: ctx.user_id }
       await admin.from('financial_entries').insert([
         { ...base, type: 'payable',    description: `Transferência inter-CNPJ → ${toName} (uso de crédito) · ${docLabel}`, settlement_bank_id: bt.debit_company ? acctByCompany.get(bt.debit_company) ?? null : null },
         { ...base, type: 'receivable', description: `Transferência inter-CNPJ ← ${fromName} (crédito) · ${docLabel}`,        settlement_bank_id: bt.credit_company ? acctByCompany.get(bt.credit_company) ?? null : null },
@@ -454,6 +464,24 @@ export async function applyTutorCreditToInvoice(input: {
   } else if (plist.length > 0) {
     await admin.from('financial_entries').delete().in('id', plist.map(p => p.id))
   }
+
+  // Reconhece a RECEITA do serviço no CONSUMO do crédito (regime de reconhecimento):
+  // o adiantamento é passivo (não é receita quando recebido); a receita nasce aqui,
+  // ao consumir. Cria um título receivable/paid com forma "credit_balance" — sem
+  // dinheiro novo no caixa (o caixa exclui credit_balance dos recebimentos reais).
+  await admin.from('financial_entries').insert({
+    clinic_id: ctx.clinic_id, type: 'receivable', status: 'paid',
+    description: `Serviço quitado com crédito · ${docLabel}${patName ? ` · ${patName}` : ''}`,
+    amount, due_date: new Date().toISOString().slice(0, 10),
+    payment_date: new Date().toISOString().slice(0, 10),
+    issue_date: new Date().toISOString().slice(0, 10),
+    payment_method: 'credit_balance', source: 'cashier',
+    invoice_id: input.invoice_id,
+    consultation_id: (inv as { consultation_id?: string }).consultation_id ?? null,
+    company_id: billingCompany,
+    tutor_id: tutorId, patient_id: (inv as { patient_id?: string }).patient_id ?? null,
+    created_by: ctx.user_id,
+  })
 
   // 9) Histórico de USO no título do ADIANTAMENTO (contas a receber): anexa
   // "Utilizado R$X na OS ... — dd/mm/aaaa hh:mm" ao(s) título(s) de adiantamento

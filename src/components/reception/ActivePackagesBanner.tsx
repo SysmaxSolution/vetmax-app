@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import { Gift, Loader2, ChevronDown, ChevronUp, Check, X, User, Calendar } from 'lucide-react'
 import { getPetActivePackages, schedulePackageSession, type PatientActivePackage } from '@/lib/actions/packages'
 import { getClinicProfessionals, type ClinicProfessional } from '@/lib/actions/professionals'
@@ -153,7 +154,7 @@ function UseSessionModal({ pap, petName, onClose, onSuccess }: {
   const sessionNumber = total - remaining + 1
   const isLast        = remaining === 1
 
-  return (
+  return typeof document === 'undefined' ? null : createPortal(
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
@@ -251,6 +252,7 @@ function UseSessionModal({ pap, petName, onClose, onSuccess }: {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

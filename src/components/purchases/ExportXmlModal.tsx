@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Download, Loader2, AlertCircle } from 'lucide-react'
 import { exportNFeZip } from '@/lib/actions/purchases'
 
@@ -68,7 +69,9 @@ export function ExportXmlModal({ onClose }: Props) {
     })
   }
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
       <div className="relative w-full max-w-sm rounded-2xl bg-white shadow-xl p-6 animate-scale-in">
         {/* Header */}
@@ -153,6 +156,7 @@ export function ExportXmlModal({ onClose }: Props) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

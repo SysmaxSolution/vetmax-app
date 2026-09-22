@@ -12,6 +12,7 @@
  */
 
 import { useState, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import { Copy, Loader2, Plus, Sparkles, X } from 'lucide-react'
 import { createBlankCanvasTemplate } from '@/lib/actions/canva-templates'
 import type { CanvasState } from '@/lib/canva/canvas-state'
@@ -85,7 +86,9 @@ export default function NewCanvasTemplateDialog({ onClose, onCreated }: Props) {
     )
   }
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-6 backdrop-blur-sm">
       <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl" onClick={e => e.stopPropagation()}>
         <header className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
@@ -175,6 +178,7 @@ export default function NewCanvasTemplateDialog({ onClose, onCreated }: Props) {
           </button>
         </footer>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

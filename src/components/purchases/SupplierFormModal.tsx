@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Building2, Loader2, AlertCircle } from 'lucide-react'
 import type { Supplier, SupplierCategory } from '@/lib/actions/suppliers'
 import { upsertSupplier } from '@/lib/actions/suppliers'
@@ -76,7 +77,9 @@ export function SupplierFormModal({ supplier, onClose, onSaved }: Props) {
     })
   }
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl max-h-[90vh] flex flex-col animate-scale-in">
         {/* Header */}
@@ -155,6 +158,7 @@ export function SupplierFormModal({ supplier, onClose, onSaved }: Props) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

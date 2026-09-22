@@ -2,6 +2,14 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { accumulateDre, dreTotals } from '@/lib/reports/dre-logic'
+import { type EntryLike } from '@/lib/finance/reconciliation'
+import { agingBucket, daysOverdue, summarizeAging } from '@/lib/reports/aging-logic'
+import { projectCashflow, type CashPeriod } from '@/lib/reports/cashflow-logic'
+import { groupSum, type GroupRow } from '@/lib/reports/revenue-breakdown'
+import { classifyStock, type StockRow, type StockSummary } from '@/lib/reports/stock-report-logic'
+import { summarizeClients, type ClientRow, type ClientsSummary } from '@/lib/reports/clients-logic'
+import { isIntercompany, isCreditBalance, isRecognizedRevenue, netAmount } from '@/lib/finance/reconciliation'
 
 // ─── Auth helper ──────────────────────────────────────────────────────────────
 
@@ -309,35 +317,42 @@ export async function getFinancialReport(params: {
   }
 
   const admin = createAdminClient()
+  const SEL = 'id, type, amount, description, category, payment_method, status, due_date, payment_date, created_at, is_intercompany'
+  const toEnd = params.to + 'T23:59:59'
 
-  let q = admin
-    .from('financial_entries')
-    .select('id, type, amount, description, category, payment_method, status, due_date, payment_date, created_at')
-    .eq('clinic_id', ctx.clinic_id)
-    .gte('created_at', params.from)
-    .lte('created_at', params.to + 'T23:59:59')
-
-  if (params.category)       q = q.eq('category',       params.category)
-  if (params.payment_method) q = q.eq('payment_method', params.payment_method)
-
-  const { data, error } = await q
-  if (error) return { error: error.message }
-
-  const rows = data ?? []
+  // Janela correta (PONTA 3): pagos pela data de pagamento; pendentes pelo
+  // vencimento — não por created_at.
+  const applyFilters = (qq: any) => {
+    if (params.category)       qq = qq.eq('category',       params.category)
+    if (params.payment_method) qq = qq.eq('payment_method', params.payment_method)
+    return qq
+  }
+  const [paidRes, pendRes] = await Promise.all([
+    applyFilters(admin.from('financial_entries').select(SEL).eq('clinic_id', ctx.clinic_id).eq('status', 'paid').gte('payment_date', params.from).lte('payment_date', toEnd)),
+    applyFilters(admin.from('financial_entries').select(SEL).eq('clinic_id', ctx.clinic_id).eq('status', 'pending').gte('due_date', params.from).lte('due_date', params.to)),
+  ])
+  if (paidRes.error) return { error: paidRes.error.message }
+  if (pendRes.error) return { error: pendRes.error.message }
+  const rows = [...(paidRes.data ?? []), ...(pendRes.data ?? [])]
 
   let totalReceivable = 0, totalPayable = 0, totalReceived = 0, totalPaid = 0
   const byDayMap = new Map<string, { inflow: number; outflow: number }>()
 
   for (const r of rows) {
+    // Elimina movimento interno inter-CNPJ (não é caixa do grupo).
+    if ((r as any).is_intercompany) continue
     const amt = Number(r.amount)
-    const day = (r.created_at as string).slice(0, 10)
+    const isPaid = r.status === 'paid'
+    // "Utilização de crédito" não é caixa novo — o dinheiro entrou no adiantamento.
+    const isCreditBalance = r.payment_method === 'credit_balance'
+    const day = (((isPaid ? r.payment_date : r.due_date) as string) ?? (r.created_at as string)).slice(0, 10)
     const entry = byDayMap.get(day) ?? { inflow: 0, outflow: 0 }
 
-    if (r.type === 'inflow') {
-      if (r.status === 'paid') { totalReceived += amt; entry.inflow += amt }
+    if (r.type === 'receivable') {
+      if (isPaid) { if (!isCreditBalance) { totalReceived += amt; entry.inflow += amt } }
       else totalReceivable += amt
     } else {
-      if (r.status === 'paid') { totalPaid += amt; entry.outflow += amt }
+      if (isPaid) { if (!isCreditBalance) { totalPaid += amt; entry.outflow += amt } }
       else totalPayable += amt
     }
 
@@ -357,7 +372,7 @@ export async function getFinancialReport(params: {
     by_day:           byDay,
     rows: rows.map(r => ({
       id:             r.id,
-      type:           r.type as 'inflow' | 'outflow',
+      type:           (r.type === 'receivable' ? 'inflow' : 'outflow') as 'inflow' | 'outflow',
       amount:         Number(r.amount),
       description:    r.description ?? null,
       category:       r.category    ?? null,
@@ -382,61 +397,85 @@ export async function getDREReport(params: {
   }
 
   const admin = createAdminClient()
-  const { data, error } = await admin
-    .from('financial_entries')
-    .select('type, amount, category, status, payment_date')
-    .eq('clinic_id', ctx.clinic_id)
-    .eq('status', 'paid')
-    .gte('payment_date', params.from)
-    .lte('payment_date', params.to + 'T23:59:59')
+  const [{ data, error }, cmv] = await Promise.all([
+    admin
+      .from('financial_entries')
+      .select('type, amount, category, status, payment_date, is_intercompany, purchase_order_id')
+      .eq('clinic_id', ctx.clinic_id)
+      .eq('status', 'paid')
+      .gte('payment_date', params.from)
+      .lte('payment_date', params.to + 'T23:59:59'),
+    computeCMVFromConsumption(admin, ctx.clinic_id, params.from, params.to),
+  ])
 
   if (error) return { error: error.message }
 
-  const rows = data ?? []
-
-  let receita_bruta = 0
-  let deducoes      = 0
-  let cmv           = 0
-  let desp_op       = 0
-  let amort         = 0
-
-  for (const r of rows) {
-    const amt = Number(r.amount)
-    const cat = (r.category ?? '').toLowerCase()
-
-    if (r.type === 'inflow') {
-      receita_bruta += amt
-    } else {
-      if (cat.includes('deduc') || cat.includes('imposto') || cat.includes('tax')) {
-        deducoes += amt
-      } else if (cat.includes('cmv') || cat.includes('custo') || cat.includes('estoque') || cat.includes('produto')) {
-        cmv += amt
-      } else if (cat.includes('amort') || cat.includes('deprec')) {
-        amort += amt
-      } else {
-        desp_op += amt
-      }
-    }
-  }
-
-  const receita_liquida = receita_bruta - deducoes
-  const lucro_bruto     = receita_liquida - cmv
-  const ebitda          = lucro_bruto - desp_op
-  const lajir           = ebitda - amort
-
-  const fmt = (v: number) => v
+  const buckets = accumulateDre((data ?? []) as EntryLike[])
+  const t = dreTotals(buckets, cmv)
 
   return [
-    { label: 'Receita Bruta',            value: fmt(receita_bruta),   indent: 0, bold: true,  negative: false },
-    { label: '(-) Deduções e Impostos',  value: fmt(deducoes),        indent: 1, bold: false, negative: true  },
-    { label: 'Receita Líquida',          value: fmt(receita_liquida), indent: 0, bold: true,  negative: false },
-    { label: '(-) CMV',                  value: fmt(cmv),             indent: 1, bold: false, negative: true  },
-    { label: 'Lucro Bruto',              value: fmt(lucro_bruto),     indent: 0, bold: true,  negative: false },
-    { label: '(-) Despesas Operacionais',value: fmt(desp_op),         indent: 1, bold: false, negative: true  },
-    { label: 'EBITDA',                   value: fmt(ebitda),          indent: 0, bold: true,  negative: false },
-    { label: '(-) Amortizações/Deprec.', value: fmt(amort),           indent: 1, bold: false, negative: true  },
-    { label: 'LAJIR (EBIT)',             value: fmt(lajir),           indent: 0, bold: true,  negative: false },
+    { label: 'Receita Bruta',                 value: t.receita_bruta,   indent: 0, bold: true,  negative: false },
+    { label: '(-) Deduções e Impostos',       value: t.deducoes,        indent: 1, bold: false, negative: true  },
+    { label: 'Receita Líquida',               value: t.receita_liquida, indent: 0, bold: true,  negative: false },
+    { label: '(-) CMV (custo dos produtos)',  value: t.cmv,             indent: 1, bold: false, negative: true  },
+    { label: 'Lucro Bruto',                   value: t.lucro_bruto,     indent: 0, bold: true,  negative: false },
+    { label: '(-) Despesas Variáveis (comissões)', value: t.desp_var,   indent: 1, bold: false, negative: true  },
+    { label: 'Margem de Contribuição',        value: t.margem_contrib,  indent: 0, bold: true,  negative: false },
+    { label: '(-) Despesas Operacionais',     value: t.desp_op,         indent: 1, bold: false, negative: true  },
+    { label: 'EBITDA',                        value: t.ebitda,          indent: 0, bold: true,  negative: false },
+    { label: '(-) Amortizações/Deprec.',      value: t.amort,           indent: 1, bold: false, negative: true  },
+    { label: 'LAJIR (EBIT)',                  value: t.lajir,           indent: 0, bold: true,  negative: false },
   ]
+}
+
+// CMV por CONSUMO no período: valor de custo das saídas de PRODUTOS (não serviços).
+// Fontes: sale_items (PDV) + stock_movements DEBIT de consulta/internação. Custo
+// unitário = cost_price → purchase_price → 0. Perdas/ajustes NÃO entram no CMV.
+async function computeCMVFromConsumption(
+  admin: ReturnType<typeof createAdminClient>, clinicId: string, from: string, to: string,
+): Promise<number> {
+  const toEnd = to + 'T23:59:59'
+  const { data: itemsRaw } = await admin
+    .from('stock_items')
+    .select('id, cost_price, purchase_price, is_service')
+    .eq('clinic_id', clinicId)
+  const cost = new Map<string, number>()
+  for (const it of (itemsRaw ?? []) as any[]) {
+    if (it.is_service) continue
+    cost.set(it.id, Number(it.cost_price ?? it.purchase_price ?? 0))
+  }
+  if (cost.size === 0) return 0
+
+  let cmv = 0
+
+  // PDV: sale_items de vendas não canceladas no período
+  const { data: saleRaw } = await admin
+    .from('sale_items')
+    .select('stock_item_id, quantity, sale:sales!inner(created_at, cancelled_at)')
+    .eq('clinic_id', clinicId)
+  for (const s of (saleRaw ?? []) as any[]) {
+    const sale = Array.isArray(s.sale) ? s.sale[0] : s.sale
+    if (!sale || sale.cancelled_at) continue
+    if (sale.created_at < from || sale.created_at > toEnd) continue
+    const c = cost.get(s.stock_item_id); if (c == null) continue
+    cmv += Number(s.quantity ?? 0) * c
+  }
+
+  // Consumo clínico: stock_movements DEBIT de consulta/internação no período
+  const { data: movRaw } = await admin
+    .from('stock_movements')
+    .select('stock_item_id, quantity_change, movement_type, source, created_at')
+    .eq('clinic_id', clinicId)
+    .eq('movement_type', 'DEBIT')
+    .in('source', ['CONSULTATION', 'HOSPITALIZATION'])
+    .gte('created_at', from)
+    .lte('created_at', toEnd)
+  for (const m of (movRaw ?? []) as any[]) {
+    const c = cost.get(m.stock_item_id); if (c == null) continue
+    cmv += Math.abs(Number(m.quantity_change ?? 0)) * c
+  }
+
+  return Math.round(cmv * 100) / 100
 }
 
 // ─── G13-6: Curva ABC ─────────────────────────────────────────────────────────
@@ -458,7 +497,7 @@ export async function getCurvaABCReport(params: {
     .from('financial_entries')
     .select('description, category, amount, type')
     .eq('clinic_id', ctx.clinic_id)
-    .eq('type', 'inflow')
+    .eq('type', 'receivable')
     .eq('status', 'paid')
     .gte('payment_date', params.from)
     .lte('payment_date', params.to + 'T23:59:59')
@@ -716,4 +755,263 @@ export async function saveReportsEnabled(
 
   if (error) return { error: error.message }
   return { success: true }
+}
+
+// ─── Aging de Recebíveis / Pagáveis (P0) ──────────────────────────────────────
+// Sintético: totais por faixa de atraso (a vencer / 0-30 / 31-60 / 61-90 / 90+).
+// Analítico: cada título pendente com dias de atraso e a parte (cliente/fornecedor).
+
+export interface AgingRow {
+  id:           string
+  party:        string          // cliente (receivable) ou fornecedor (payable)
+  document:     string | null   // nº documento / OS
+  description:  string
+  due_date:     string
+  days_overdue: number          // <0 = a vencer
+  amount:       number
+  bucket:       string
+}
+export interface AgingBucket { key: string; label: string; total: number; count: number }
+export interface AgingReport {
+  as_of:   string
+  type:    'receivable' | 'payable'
+  buckets: AgingBucket[]
+  rows:    AgingRow[]
+  total:   number
+}
+
+export async function getAgingReport(params: {
+  type:  'receivable' | 'payable'
+  as_of?: string
+}): Promise<AgingReport | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return { error: ctx.error }
+  if (!['admin', 'owner', 'manager', 'accountant'].includes(ctx.role)) return { error: 'Acesso negado' }
+
+  const asOf = params.as_of ?? new Date().toISOString().slice(0, 10)
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('financial_entries')
+    .select('id, type, amount, discount, description, due_date, document_number, beneficiary, is_intercompany, is_clinic_discount, tutors(name), consultation:consultations!consultation_id(os_number)')
+    .eq('clinic_id', ctx.clinic_id)
+    .eq('type', params.type)
+    .eq('status', 'pending')
+    .eq('is_clinic_discount', false)
+    .order('due_date', { ascending: true })
+    .limit(5000)
+  if (error) return { error: error.message }
+
+  const rows: AgingRow[] = []
+  let total = 0
+  for (const r of (data ?? []) as any[]) {
+    if (r.is_intercompany) continue
+    const net = Math.round((Number(r.amount) - Number(r.discount ?? 0)) * 100) / 100
+    const due = (r.due_date as string)
+    const days = daysOverdue(due, asOf)
+    const bucket = agingBucket(days)
+    const tut = Array.isArray(r.tutors) ? r.tutors[0] : r.tutors
+    const party = params.type === 'receivable'
+      ? (tut?.name ?? 'Cliente não informado')
+      : (r.beneficiary ?? 'Fornecedor não informado')
+    const cons = Array.isArray(r.consultation) ? r.consultation[0] : r.consultation
+    const osNum = cons?.os_number as string | null | undefined
+    rows.push({
+      id: r.id, party, document: r.document_number ?? (osNum ? `OS ${osNum}` : null),
+      description: r.description ?? '', due_date: due, days_overdue: days,
+      amount: net, bucket,
+    })
+    total += net
+  }
+
+  const buckets: AgingBucket[] = summarizeAging(rows.map(r => ({ bucket: r.bucket, amount: r.amount })))
+  return { as_of: asOf, type: params.type, buckets, rows, total: Math.round(total * 100) / 100 }
+}
+
+// ─── Fluxo de Caixa Projetado (realizado × a realizar) ────────────────────────
+export interface CashflowReport { from: string; to: string; periods: CashPeriod[]; totals: { realizado_in: number; realizado_out: number; previsto_in: number; previsto_out: number } }
+
+export async function getCashflowProjection(params: { from: string; to: string }): Promise<CashflowReport | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return { error: ctx.error }
+  if (!['admin', 'owner', 'manager', 'accountant'].includes(ctx.role)) return { error: 'Acesso negado' }
+  const admin = createAdminClient()
+  const toEnd = params.to + 'T23:59:59'
+  const SEL = 'type, amount, discount, status, payment_date, due_date, payment_method, is_intercompany, is_clinic_discount'
+  const [paidRes, pendRes] = await Promise.all([
+    admin.from('financial_entries').select(SEL).eq('clinic_id', ctx.clinic_id).eq('is_clinic_discount', false).eq('status', 'paid').gte('payment_date', params.from).lte('payment_date', toEnd),
+    admin.from('financial_entries').select(SEL).eq('clinic_id', ctx.clinic_id).eq('is_clinic_discount', false).eq('status', 'pending').gte('due_date', params.from).lte('due_date', params.to),
+  ])
+  if (paidRes.error) return { error: paidRes.error.message }
+  if (pendRes.error) return { error: pendRes.error.message }
+
+  const items: { type: string; amount: number; date: string; realized: boolean }[] = []
+  for (const r of (paidRes.data ?? []) as any[]) {
+    if (isIntercompany(r) || isCreditBalance(r)) continue   // realizado = caixa real
+    items.push({ type: r.type, amount: netAmount(r), date: (r.payment_date as string).slice(0, 10), realized: true })
+  }
+  for (const r of (pendRes.data ?? []) as any[]) {
+    if (isIntercompany(r)) continue
+    items.push({ type: r.type, amount: netAmount(r), date: (r.due_date as string).slice(0, 10), realized: false })
+  }
+  const periods = projectCashflow(items)
+  const totals = periods.reduce((a, p) => ({
+    realizado_in: a.realizado_in + p.realizado_in, realizado_out: a.realizado_out + p.realizado_out,
+    previsto_in: a.previsto_in + p.previsto_in, previsto_out: a.previsto_out + p.previsto_out,
+  }), { realizado_in: 0, realizado_out: 0, previsto_in: 0, previsto_out: 0 })
+  return { from: params.from, to: params.to, periods, totals }
+}
+
+// ─── Faturamento por dimensão (receita reconhecida) ───────────────────────────
+export type RevenueDimension = 'category' | 'payment_method' | 'company' | 'month'
+export interface RevenueBreakdownReport { from: string; to: string; dimension: RevenueDimension; rows: GroupRow[]; total: number }
+
+const PM_LABEL: Record<string, string> = { cash: 'Dinheiro', pix: 'PIX', credit: 'Cartão de crédito', debit: 'Cartão de débito', credit_balance: 'Crédito do cliente', transfer: 'Transferência', boleto: 'Boleto', voucher: 'Voucher', convenio: 'Convênio', other: 'Outro' }
+
+export async function getRevenueBreakdown(params: { from: string; to: string; dimension: RevenueDimension }): Promise<RevenueBreakdownReport | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return { error: ctx.error }
+  if (!['admin', 'owner', 'manager', 'accountant'].includes(ctx.role)) return { error: 'Acesso negado' }
+  const admin = createAdminClient()
+  const toEnd = params.to + 'T23:59:59'
+  const { data, error } = await admin
+    .from('financial_entries')
+    .select('type, amount, discount, status, payment_date, category, payment_method, company_id, is_intercompany, is_clinic_discount')
+    .eq('clinic_id', ctx.clinic_id).eq('is_clinic_discount', false)
+    .eq('type', 'receivable').eq('status', 'paid')
+    .gte('payment_date', params.from).lte('payment_date', toEnd)
+  if (error) return { error: error.message }
+
+  const companyName = new Map<string, string>()
+  if (params.dimension === 'company') {
+    const { data: comps } = await admin.from('companies').select('id, name').eq('clinic_id', ctx.clinic_id)
+    for (const c of (comps ?? []) as any[]) companyName.set(c.id, c.name)
+  }
+
+  const items = ((data ?? []) as any[])
+    .filter(r => isRecognizedRevenue(r))
+    .map(r => {
+      const amount = netAmount(r)
+      if (params.dimension === 'category')       return { key: r.category ?? '—', label: r.category ?? 'Sem categoria', amount }
+      if (params.dimension === 'payment_method') { const pm = r.payment_method ?? '—'; return { key: pm, label: PM_LABEL[pm] ?? pm, amount } }
+      if (params.dimension === 'company')        { const cid = r.company_id ?? '—'; return { key: cid, label: cid === '—' ? 'Sem empresa' : (companyName.get(cid) ?? 'Empresa'), amount } }
+      const mo = (r.payment_date as string).slice(0, 7); return { key: mo, label: mo, amount }
+    })
+  const { rows, total } = groupSum(items)
+  return { from: params.from, to: params.to, dimension: params.dimension, rows, total }
+}
+
+// ─── Posição de Estoque (ruptura / validade / valor) ──────────────────────────
+export interface StockReport { as_of: string; expiry_days: number; rows: StockRow[]; summary: StockSummary }
+
+export async function getStockReport(params: { as_of?: string; expiry_days?: number }): Promise<StockReport | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return { error: ctx.error }
+  if (!['admin', 'owner', 'manager', 'accountant'].includes(ctx.role)) return { error: 'Acesso negado' }
+  const admin = createAdminClient()
+  const asOf = params.as_of ?? new Date().toISOString().slice(0, 10)
+  const expiryDays = params.expiry_days ?? 60
+  const { data, error } = await admin
+    .from('stock_items')
+    .select('id, name, quantity, min_quantity, unit_price, cost_price, purchase_price, expiry_date, is_service, archived_at')
+    .eq('clinic_id', ctx.clinic_id)
+    .is('archived_at', null)
+    .eq('is_service', false)
+  if (error) return { error: error.message }
+  const { rows, summary } = classifyStock((data ?? []) as any[], asOf, expiryDays)
+  return { as_of: asOf, expiry_days: expiryDays, rows, summary }
+}
+
+// ─── Clientes: novos × recorrentes + ticket médio ─────────────────────────────
+export interface ClientsReport { from: string; to: string; summary: ClientsSummary; rows: ClientRow[] }
+
+export async function getClientsReport(params: { from: string; to: string }): Promise<ClientsReport | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return { error: ctx.error }
+  if (!['admin', 'owner', 'manager', 'accountant'].includes(ctx.role)) return { error: 'Acesso negado' }
+  const admin = createAdminClient()
+  const toEnd = params.to + 'T23:59:59'
+
+  // Atendimentos do período por tutor
+  const { data: cons, error } = await admin
+    .from('consultations')
+    .select('tutor_id, created_at')
+    .eq('clinic_id', ctx.clinic_id)
+    .gte('created_at', params.from).lte('created_at', toEnd)
+    .not('tutor_id', 'is', null)
+  if (error) return { error: error.message }
+  const apptByTutor = new Map<string, number>()
+  for (const c of (cons ?? []) as any[]) apptByTutor.set(c.tutor_id, (apptByTutor.get(c.tutor_id) ?? 0) + 1)
+  const tutorIds = [...apptByTutor.keys()]
+  if (tutorIds.length === 0) return { from: params.from, to: params.to, summary: summarizeClients([]), rows: [] }
+
+  // Primeiro atendimento de sempre (para novo × recorrente) + nomes + faturamento
+  const [firstRes, nameRes, revRes] = await Promise.all([
+    admin.from('consultations').select('tutor_id, created_at').eq('clinic_id', ctx.clinic_id).in('tutor_id', tutorIds).order('created_at', { ascending: true }),
+    admin.from('tutors').select('id, name').eq('clinic_id', ctx.clinic_id).in('id', tutorIds),
+    admin.from('financial_entries').select('tutor_id, amount, discount, type, status, category, is_intercompany').eq('clinic_id', ctx.clinic_id).eq('type', 'receivable').eq('status', 'paid').gte('payment_date', params.from).lte('payment_date', toEnd).in('tutor_id', tutorIds),
+  ])
+  const firstSeen = new Map<string, string>()
+  for (const c of (firstRes.data ?? []) as any[]) if (!firstSeen.has(c.tutor_id)) firstSeen.set(c.tutor_id, c.created_at)
+  const nameById = new Map<string, string>()
+  for (const t of (nameRes.data ?? []) as any[]) nameById.set(t.id, t.name)
+  const revByTutor = new Map<string, number>()
+  for (const r of (revRes.data ?? []) as any[]) {
+    if (isRecognizedRevenue(r)) revByTutor.set(r.tutor_id, (revByTutor.get(r.tutor_id) ?? 0) + netAmount(r))
+  }
+
+  const rows: ClientRow[] = tutorIds.map(id => ({
+    tutor_id: id,
+    name: nameById.get(id) ?? 'Cliente',
+    appointments: apptByTutor.get(id) ?? 0,
+    faturamento: Math.round((revByTutor.get(id) ?? 0) * 100) / 100,
+    is_new: (firstSeen.get(id) ?? '') >= params.from,
+  })).sort((a, b) => b.faturamento - a.faturamento || b.appointments - a.appointments)
+
+  return { from: params.from, to: params.to, summary: summarizeClients(rows), rows }
+}
+
+// ─── DRE por CNPJ (comparativo por empresa faturante) ─────────────────────────
+export interface DREByCompanyRow { company_id: string | null; company_name: string; receita: number; deducoes: number; despesas: number; resultado: number }
+export interface DREByCompanyReport { from: string; to: string; rows: DREByCompanyRow[] }
+
+export async function getDREByCompany(params: { from: string; to: string }): Promise<DREByCompanyReport | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return { error: ctx.error }
+  if (!['admin', 'owner', 'manager', 'accountant'].includes(ctx.role)) return { error: 'Acesso negado' }
+  const admin = createAdminClient()
+  const toEnd = params.to + 'T23:59:59'
+
+  const [entRes, acctRes, compRes] = await Promise.all([
+    admin.from('financial_entries').select('type, amount, category, status, settlement_bank_id, is_intercompany, purchase_order_id, is_clinic_discount').eq('clinic_id', ctx.clinic_id).eq('is_clinic_discount', false).eq('status', 'paid').gte('payment_date', params.from).lte('payment_date', toEnd),
+    admin.from('bank_accounts').select('id, company_id').eq('clinic_id', ctx.clinic_id),
+    admin.from('companies').select('id, name').eq('clinic_id', ctx.clinic_id),
+  ])
+  if (entRes.error) return { error: entRes.error.message }
+  const acctCompany = new Map<string, string | null>()
+  for (const a of (acctRes.data ?? []) as any[]) acctCompany.set(a.id, a.company_id ?? null)
+  const compName = new Map<string, string>()
+  for (const c of (compRes.data ?? []) as any[]) compName.set(c.id, c.name)
+
+  const byCompany = new Map<string | null, EntryLike[]>()
+  for (const e of (entRes.data ?? []) as any[]) {
+    const cid = e.settlement_bank_id ? (acctCompany.get(e.settlement_bank_id) ?? null) : null
+    if (!byCompany.has(cid)) byCompany.set(cid, [])
+    byCompany.get(cid)!.push(e)
+  }
+
+  const rows: DREByCompanyRow[] = [...byCompany.entries()].map(([cid, entries]) => {
+    const b = accumulateDre(entries)
+    const t = dreTotals(b, 0)   // CMV consolidado fica no DRE principal
+    const despesas = Math.round((t.deducoes + t.desp_var + t.desp_op + t.amort) * 100) / 100
+    return {
+      company_id: cid,
+      company_name: cid ? (compName.get(cid) ?? 'Empresa') : 'Sem empresa/conta',
+      receita: t.receita_bruta,
+      deducoes: t.deducoes,
+      despesas,
+      resultado: Math.round((t.receita_bruta - despesas) * 100) / 100,
+    }
+  }).sort((a, b) => b.receita - a.receita)
+
+  return { from: params.from, to: params.to, rows }
 }

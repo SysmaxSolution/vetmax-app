@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useKanbanEdgeScroll } from '@/hooks/useKanbanEdgeScroll'
 import { Scissors, Clock, CheckCircle2, Loader2, X, Calendar, DollarSign, CheckCheck, Trash2, Ban } from 'lucide-react'
 import { useRealtimeSync } from '@/hooks/useRealtimeSync'
@@ -349,7 +350,7 @@ export default function GroomingKanban({ initialBoard, clinicId }: Props) {
       )}
 
       {/* Modal de Confirmação de Cancelamento */}
-      {cancelTarget && (
+      {cancelTarget && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4 animate-scale-in">
             <div className="flex items-start justify-between">
@@ -409,7 +410,8 @@ export default function GroomingKanban({ initialBoard, clinicId }: Props) {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {/* Toast de sucesso na entrega */}
@@ -421,7 +423,7 @@ export default function GroomingKanban({ initialBoard, clinicId }: Props) {
       )}
 
       {/* Modal de Confirmação de Cortesia */}
-      {waiveTarget && (
+      {waiveTarget && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4 animate-scale-in">
             <div className="flex items-start justify-between">
@@ -459,11 +461,12 @@ export default function GroomingKanban({ initialBoard, clinicId }: Props) {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {/* Modal de Confirmação de Remoção da Fila */}
-      {archiveTarget && (
+      {archiveTarget && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4 animate-scale-in">
             <div className="flex items-start justify-between">
@@ -501,11 +504,12 @@ export default function GroomingKanban({ initialBoard, clinicId }: Props) {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {/* Modal de Confirmação de Entrega */}
-      {pendingDeliver && (
+      {pendingDeliver && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4 animate-scale-in">
             <div className="flex items-start justify-between">
@@ -560,7 +564,8 @@ export default function GroomingKanban({ initialBoard, clinicId }: Props) {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )

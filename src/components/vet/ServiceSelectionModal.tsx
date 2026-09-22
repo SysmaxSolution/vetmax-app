@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import { Search, Plus, X, Tag, Loader2, Check, CircleHelp, PackagePlus, Shield } from 'lucide-react'
 import { searchServices, type ServiceItem } from '@/lib/actions/services'
 import { addStockItemV2 } from '@/lib/actions/stock'
@@ -173,7 +174,7 @@ export default function ServiceSelectionModal({ alreadyAddedIds = [], consultati
 
   const pickedTotal = picked.reduce((s, p) => s + effectivePrice(p.item) * p.quantity, 0)
 
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -433,6 +434,7 @@ export default function ServiceSelectionModal({ alreadyAddedIds = [], consultati
           )}
         </div>
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }

@@ -8,6 +8,7 @@
  */
 
 import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import {
   X, Search, Plus, Minus, Trash2, Loader2, UserCircle, PawPrint, FileText,
 } from 'lucide-react'
@@ -146,7 +147,9 @@ export default function NewQuotationModal({ clinicId, currentUserId, professiona
     onCreated(res.id)
   }
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-3 overflow-y-auto" onClick={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="w-full max-w-2xl bg-white rounded-2xl shadow-xl my-4 flex flex-col max-h-[92vh] animate-scale-in">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-teal-50/40 flex-shrink-0">
@@ -285,6 +288,7 @@ export default function NewQuotationModal({ clinicId, currentUserId, professiona
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

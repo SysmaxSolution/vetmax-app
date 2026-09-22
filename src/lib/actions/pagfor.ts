@@ -11,6 +11,10 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getTenantCtx } from '@/lib/data/context'
 import { revalidatePath } from 'next/cache'
+import {
+  consultarDDA, consultarBoletoParaPagar, pagarBoleto, consultarComprovante, cancelarAgendamento,
+  type PagamentosRuntime,
+} from '@/lib/integrations/sicoob-pagamentos'
 
 async function ctx() {
   const t = await getTenantCtx()
@@ -173,4 +177,99 @@ export async function generatePagforRemittance(entry_ids: string[]): Promise<{ c
     filename: `pagfor_remessa_${new Date().toISOString().slice(0, 10)}.csv`,
     count: rows.length,
   }
+}
+
+// ─── Sicoob Pagamentos (API real): varredura DDA + agendar/pagar ─────────────
+async function loadPagamentosRuntime(admin: ReturnType<typeof createAdminClient>, clinicId: string, bankAccountId?: string): Promise<PagamentosRuntime | { error: string }> {
+  let q = admin.from('bank_accounts').select('id, boleto_config, boleto_enabled, is_default').eq('clinic_id', clinicId)
+  q = bankAccountId ? q.eq('id', bankAccountId) : q.eq('boleto_enabled', true).order('is_default', { ascending: false })
+  const { data: acc } = await q.limit(1).maybeSingle()
+  if (!acc) return { error: 'Configure uma conta com carteira bancária (Cadastros → Bancos → Carteira Bancária).' }
+  const cfg = ((acc as any).boleto_config ?? {}) as { conta?: string; agencia?: string; environment?: 'sandbox' | 'production' }
+  const environment = cfg.environment === 'production' ? 'production' : 'sandbox'
+  const numeroConta = Number((cfg.conta ?? '').replace(/\D/g, '')) || (environment === 'sandbox' ? 12345 : 0)
+  const agencia = Number((cfg.agencia ?? '').replace(/\D/g, '')) || (environment === 'sandbox' ? 4321 : 0)
+  if (environment === 'production' && (!numeroConta || !agencia)) return { error: 'Conta/agência da carteira bancária incompletas.' }
+  return { environment, numeroConta, agencia, clientId: process.env.SICOOB_CLIENT_ID }
+}
+
+/** Varredura do DDA direto no banco (substitui a importação manual do CSV). */
+export async function fetchDdaFromBank(params: { bankAccountId?: string; dataInicial: string; dataFinal: string; situacao?: number; tipoData?: number }): Promise<{ ok: true; boletos: DdaBoleto[] } | { error: string }> {
+  const c = await ctx()
+  if (!c) return { error: 'Não autenticado.' }
+  if (!['admin', 'owner', 'manager'].includes(c.role)) return { error: 'Sem permissão.' }
+  const admin = createAdminClient()
+  const rt = await loadPagamentosRuntime(admin, c.clinicId, params.bankAccountId)
+  if ('error' in rt) return { error: rt.error }
+  // situacao e tipoData são obrigatórios na API (default: 1 = a pagar / por vencimento).
+  const res = await consultarDDA(rt, { dataInicial: params.dataInicial, dataFinal: params.dataFinal, situacao: params.situacao ?? 1, tipoData: params.tipoData ?? 1 })
+  if (!res.ok) return { error: res.error }
+  return { ok: true, boletos: res.boletos as DdaBoleto[] }
+}
+
+/**
+ * Agenda/paga no banco os títulos a pagar selecionados (consulta + pagamento),
+ * grava idPagamento + data agendada + observação. Produção exige certificado A1.
+ */
+export async function payBoletosViaBank(params: { entry_ids: string[]; bankAccountId?: string; dataPagamento: string; observacao?: string }): Promise<{ ok: true; agendados: number; falhas: { id: string; erro: string }[] } | { error: string }> {
+  const c = await ctx()
+  if (!c) return { error: 'Não autenticado.' }
+  if (!['admin', 'owner', 'manager'].includes(c.role)) return { error: 'Sem permissão.' }
+  if (!params.entry_ids.length) return { error: 'Nenhum título selecionado.' }
+  const admin = createAdminClient()
+  const rt = await loadPagamentosRuntime(admin, c.clinicId, params.bankAccountId)
+  if ('error' in rt) return { error: rt.error }
+
+  let agendados = 0
+  const falhas: { id: string; erro: string }[] = []
+  for (const id of params.entry_ids) {
+    const { data: e } = await admin.from('financial_entries')
+      .select('id, barcode, amount, beneficiary, description, notes, document_number').eq('id', id).eq('clinic_id', c.clinicId).eq('type', 'payable').maybeSingle()
+    const barcode = (e as any)?.barcode ? String((e as any).barcode).replace(/\D/g, '') : ''
+    if (!e || !barcode) { falhas.push({ id, erro: 'Título sem código de barras.' }); continue }
+    // 1) consulta o boleto (obtém identificadorConsulta)
+    const cons = await consultarBoletoParaPagar(rt, barcode, params.dataPagamento)
+    if (!cons.ok) { falhas.push({ id, erro: cons.error }); continue }
+    const r = (cons.raw as any)?.resultado ?? cons.raw
+    const identificador = r?.identificadorConsulta ?? r?.hash ?? ''
+    // 2) paga/agenda
+    const pay = await pagarBoleto(rt, barcode, {
+      identificadorConsulta: identificador, valor: Number((e as any).amount), dataPagamento: params.dataPagamento,
+      observacao: params.observacao ?? `PAGFOR — ${(e as any).description ?? (e as any).beneficiary ?? 'fornecedor'}`,
+      pagadorNome: (e as any).beneficiary ?? undefined, conta: { agencia: rt.agencia, conta: rt.numeroConta },
+    })
+    if (!pay.ok) { falhas.push({ id, erro: pay.error }); continue }
+    const nota = `Pagamento agendado no Sicoob para ${params.dataPagamento.split('-').reverse().join('/')} (idPagamento ${pay.idPagamento ?? '—'}).`
+    await admin.from('financial_entries').update({
+      scheduled_payment_date: params.dataPagamento,
+      notes: [(e as any).notes, nota].filter(Boolean).join('\n'),
+      updated_at: new Date().toISOString(),
+    }).eq('id', id).eq('clinic_id', c.clinicId)
+    agendados++
+  }
+  revalidatePath('/dashboard/financial')
+  return { ok: true, agendados, falhas }
+}
+
+/** Comprovante de um pagamento agendado/efetuado. */
+export async function getPagforComprovante(idPagamento: string, bankAccountId?: string): Promise<{ ok: true; raw: unknown } | { error: string }> {
+  const c = await ctx()
+  if (!c) return { error: 'Não autenticado.' }
+  const admin = createAdminClient()
+  const rt = await loadPagamentosRuntime(admin, c.clinicId, bankAccountId)
+  if ('error' in rt) return { error: rt.error }
+  const res = await consultarComprovante(rt, idPagamento)
+  return res.ok ? { ok: true, raw: res.raw } : { error: res.error }
+}
+
+/** Cancela um pagamento agendado no banco. */
+export async function cancelPagforAgendamento(idPagamento: string, bankAccountId?: string): Promise<{ ok: true } | { error: string }> {
+  const c = await ctx()
+  if (!c) return { error: 'Não autenticado.' }
+  if (!['admin', 'owner', 'manager'].includes(c.role)) return { error: 'Sem permissão.' }
+  const admin = createAdminClient()
+  const rt = await loadPagamentosRuntime(admin, c.clinicId, bankAccountId)
+  if ('error' in rt) return { error: rt.error }
+  const res = await cancelarAgendamento(rt, idPagamento)
+  return res.ok ? { ok: true } : { error: res.error }
 }

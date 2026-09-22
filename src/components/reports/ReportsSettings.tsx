@@ -58,7 +58,7 @@ export default function ReportsSettings({ enabled, onSave }: Props) {
               aria-checked={local[key]}
               onClick={() => toggle(key)}
               className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                local[key] ? 'bg-violet-600' : 'bg-slate-200'
+                local[key] ? 'bg-teal-600' : 'bg-slate-200'
               }`}
             >
               <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform ${
@@ -81,7 +81,7 @@ export default function ReportsSettings({ enabled, onSave }: Props) {
       <button
         onClick={save}
         disabled={pending}
-        className="rounded-lg bg-violet-600 px-5 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50 transition-colors"
+        className="rounded-lg bg-teal-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 disabled:opacity-60 transition-colors"
       >
         {pending ? 'Salvando…' : 'Salvar configurações'}
       </button>

@@ -1,11 +1,13 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import {
   listBankAccounts, createBankAccount, updateBankAccount, deleteBankAccount,
   type BankAccount, type CreateBankAccountData,
 } from '@/lib/actions/financial'
 import { Plus, Search, Pencil, Trash2, Star, X, Loader2, AlertCircle, Building2 } from 'lucide-react'
+import BoletoCarteiraPanel from './BoletoCarteiraPanel'
 
 // ─── BCB Top-20 banks ─────────────────────────────────────────────────────────
 
@@ -73,6 +75,7 @@ function AccountModal({
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const [confirmDel, setConfirmDel] = useState(false)
+  const [tab, setTab] = useState<'dados' | 'carteira'>('dados')
 
   function selectBank(code: string) {
     const b = BCB_BANKS.find(b => b.code === code)
@@ -104,9 +107,9 @@ function AccountModal({
     })
   }
 
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={e => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl animate-scale-in">
+      <div className="w-full max-w-2xl rounded-2xl bg-white shadow-xl animate-scale-in">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <h2 className="text-base font-bold text-slate-800">
             {mode === 'create' ? 'Nova Conta Bancária' : 'Editar Conta'}
@@ -116,6 +119,17 @@ function AccountModal({
           </button>
         </div>
 
+        {mode === 'edit' && (
+          <div className="flex gap-1 border-b border-slate-100 px-5 pt-2">
+            {([['dados', 'Dados da Conta'], ['carteira', 'Carteira Bancária']] as const).map(([k, l]) => (
+              <button key={k} onClick={() => setTab(k)} className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px ${tab === k ? 'border-teal-600 text-teal-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>{l}</button>
+            ))}
+          </div>
+        )}
+
+        {mode === 'edit' && tab === 'carteira' && account ? (
+          <div className="p-5 max-h-[70vh] overflow-y-auto"><BoletoCarteiraPanel accountId={account.id} /></div>
+        ) : (
         <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
           <div>
             <label className={labelClass}>Nome da Conta *</label>
@@ -222,9 +236,10 @@ function AccountModal({
             </div>
           )}
         </div>
+        )}
 
         <div className="flex items-center gap-2 border-t border-slate-100 px-5 py-4">
-          {mode === 'edit' && !confirmDel && (
+          {mode === 'edit' && !confirmDel && tab === 'dados' && (
             <button onClick={() => setConfirmDel(true)}
               className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-100">
               <Trash2 className="h-3.5 w-3.5" /> Excluir
@@ -232,17 +247,20 @@ function AccountModal({
           )}
           <div className="flex-1" />
           <button onClick={onClose} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">
-            Cancelar
+            {tab === 'carteira' ? 'Fechar' : 'Cancelar'}
           </button>
-          <button onClick={handleSave} disabled={isPending}
-            className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60">
-            {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            {mode === 'create' ? 'Criar Conta' : 'Salvar'}
-          </button>
+          {tab === 'dados' && (
+            <button onClick={handleSave} disabled={isPending}
+              className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60">
+              {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {mode === 'create' ? 'Criar Conta' : 'Salvar'}
+            </button>
+          )}
         </div>
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────

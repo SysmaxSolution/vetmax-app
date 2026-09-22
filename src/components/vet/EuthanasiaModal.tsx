@@ -9,6 +9,7 @@
  */
 
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { AlertTriangle, X, ShieldCheck, Loader2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
@@ -87,7 +88,7 @@ export default function EuthanasiaModal({
     }
   }
 
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -326,6 +327,7 @@ export default function EuthanasiaModal({
           </button>
         </div>
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }

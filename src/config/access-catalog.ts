@@ -161,7 +161,7 @@ export const ACCESS_CATALOG: AccessModule[] = [
       { key: 'payable',     label: 'Contas a Pagar',     actions: ['view', 'create', 'edit', 'delete', 'approve'] },
       { key: 'receivable',  label: 'Contas a Receber',   actions: ['view', 'create', 'edit', 'delete'] },
       { key: 'cashflow',    label: 'Fluxo de Caixa',     actions: ['view', 'export'] },
-      { key: 'insurance',   label: 'Conciliação Petlove', actions: ['view', 'edit', 'export'] },
+      { key: 'insurance',   label: 'Conciliação de Convênios', actions: ['view', 'edit', 'export'] },
     ],
   },
   {
@@ -207,7 +207,7 @@ export const ACCESS_CATALOG: AccessModule[] = [
   },
   {
     key:   'petlove_reconciliation',
-    label: 'Conciliação Petlove',
+    label: 'Conciliação de Convênios',
     description: 'Importação de extratos e conciliação financeira do convênio Petlove.',
     actions: ['view', 'create', 'edit', 'export', 'approve'],
   },

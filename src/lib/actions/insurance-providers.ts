@@ -6,6 +6,8 @@ import { revalidatePath } from 'next/cache'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+export type ReceiptMode = 'convenio_repasse' | 'ong_guia' | 'particular_desconto'
+
 export type InsuranceProvider = {
   id:           string
   clinic_id:    string
@@ -13,6 +15,8 @@ export type InsuranceProvider = {
   plan_types:   string[]
   portal_url:   string | null
   contact_info: { phone?: string; email?: string; contact_name?: string }
+  receipt_mode: ReceiptMode
+  config:       Record<string, unknown>
   is_active:    boolean
   created_at:   string
 }
@@ -40,7 +44,7 @@ export async function getInsuranceProviders(): Promise<InsuranceProvider[] | { e
 
   const { data, error } = await supabase
     .from('insurance_providers')
-    .select('id, clinic_id, name, plan_types, portal_url, contact_info, is_active, created_at')
+    .select('id, clinic_id, name, plan_types, portal_url, contact_info, receipt_mode, config, is_active, created_at')
     .eq('clinic_id', clinicId)
     .order('name')
 
@@ -49,6 +53,8 @@ export async function getInsuranceProviders(): Promise<InsuranceProvider[] | { e
     ...r,
     plan_types:   Array.isArray(r.plan_types)   ? r.plan_types   : [],
     contact_info: (r.contact_info && typeof r.contact_info === 'object') ? r.contact_info as InsuranceProvider['contact_info'] : {},
+    receipt_mode: (r.receipt_mode as ReceiptMode) ?? 'convenio_repasse',
+    config:       (r.config && typeof r.config === 'object') ? r.config as Record<string, unknown> : {},
   }))
 }
 
@@ -57,6 +63,8 @@ export async function createInsuranceProvider(input: {
   plan_types:    string[]
   portal_url?:   string
   contact_info?: { phone?: string; email?: string; contact_name?: string }
+  receipt_mode?: ReceiptMode
+  config?:       Record<string, unknown>
 }): Promise<{ id: string } | { error: string }> {
   const ctx = await getCtx()
   if ('error' in ctx) return ctx
@@ -72,6 +80,8 @@ export async function createInsuranceProvider(input: {
       plan_types:   input.plan_types,
       portal_url:   input.portal_url?.trim() || null,
       contact_info: input.contact_info ?? {},
+      receipt_mode: input.receipt_mode ?? 'convenio_repasse',
+      config:       input.config ?? {},
     })
     .select('id')
     .single()
@@ -88,6 +98,8 @@ export async function updateInsuranceProvider(
     plan_types:   string[]
     portal_url:   string | null
     contact_info: { phone?: string; email?: string; contact_name?: string }
+    receipt_mode: ReceiptMode
+    config:       Record<string, unknown>
     is_active:    boolean
   }>
 ): Promise<{ success: true } | { error: string }> {

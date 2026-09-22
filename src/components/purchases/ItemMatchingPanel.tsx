@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition, useCallback, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Search, Plus, Link2, Loader2, AlertCircle, Sparkles } from 'lucide-react'
 import type { PurchaseOrderItem, StockMatchSuggestion } from '@/lib/actions/purchases'
 import { matchItemToStock, autoCreateStockFromItem, enrichProductFromNCM, searchProductByEAN, searchStockMatchesForPurchaseItem } from '@/lib/actions/purchases'
@@ -84,7 +85,9 @@ export function ItemMatchingPanel({ item, onClose, onMatched }: Props) {
     if (!('error' in res)) setNcmData(res.description)
   }
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl animate-scale-in">
         {/* Header */}
@@ -271,6 +274,7 @@ export function ItemMatchingPanel({ item, onClose, onMatched }: Props) {
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

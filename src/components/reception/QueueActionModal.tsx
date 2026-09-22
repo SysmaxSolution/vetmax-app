@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { X, AlertTriangle, Calendar } from 'lucide-react'
 import { DateTimePicker } from '@/components/ui/DatePicker'
 import { cancelAttendance } from '@/lib/actions/attendance-cancel'
@@ -51,7 +52,7 @@ export default function QueueActionModal({ mode, consultationId, patientName, tu
 
   const isCancel = mode === 'cancel'
 
-  return (
+  return typeof document === 'undefined' ? null : createPortal(
     <div className="fixed inset-0 z-[10050] flex items-center justify-center bg-slate-900/50 p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
@@ -128,6 +129,7 @@ export default function QueueActionModal({ mode, consultationId, patientName, tu
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

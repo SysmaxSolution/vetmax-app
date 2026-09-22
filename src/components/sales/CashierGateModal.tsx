@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Lock, Unlock, AlertTriangle } from 'lucide-react'
 import { openCashierSession, linkOrphanSalesToSession } from '@/lib/actions/cashier-sessions'
 
@@ -36,7 +37,9 @@ export default function CashierGateModal({ onSessionOpened, onClose }: CashierGa
     })
   }
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -152,6 +155,7 @@ export default function CashierGateModal({ onSessionOpened, onClose }: CashierGa
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

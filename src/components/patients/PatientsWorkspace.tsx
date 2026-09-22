@@ -1,11 +1,12 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Search, Users, Pencil, Plus, Archive, ArchiveRestore } from 'lucide-react'
+import { Search, Users, Pencil, Plus, Archive, ArchiveRestore, KeyRound } from 'lucide-react'
 import { getPatientsList, type PatientsListItem } from '@/lib/actions/timeline'
 import { reactivatePatient } from '@/lib/actions/pets'
 import PetTimelineModal from '@/components/pet/PetTimelineModal'
 import PatientFullModal from '@/components/patients/PatientFullModal'
+import TutorPortalAccessModal from '@/components/patients/TutorPortalAccessModal'
 import { formatPetAge } from '@/lib/utils/pet-age'
 import { PetAvatar } from '@/components/ui/PetAvatar'
 import { Spinner } from '@/components/ui/Spinner'
@@ -53,6 +54,7 @@ function PatientCard({
   const sp = SPECIES_LABELS[patient.species] ?? { label: patient.species, emoji: '🐾', color: 'bg-slate-100 text-slate-600' }
   const age = calcAge(patient.birth_date)
   const isDeceased = !!patient.deceased_at
+  const [showPortal, setShowPortal] = useState(false)
 
   return (
     <div className={`flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 rounded-xl border px-4 sm:px-5 py-4 transition-all ${
@@ -162,9 +164,24 @@ function PatientCard({
               <span className="hidden xs:inline">Ver Histórico</span>
               <span className="xs:hidden">Histórico</span>
             </button>
+            {patient.tutor?.id && (
+              <button
+                type="button"
+                onClick={() => setShowPortal(true)}
+                className="flex items-center gap-1.5 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-semibold text-teal-700 hover:bg-teal-100 transition-colors"
+                title="Gerar acesso do tutor ao portal"
+              >
+                <KeyRound className="h-3.5 w-3.5" />
+                <span className="hidden xs:inline">Acesso Portal</span>
+                <span className="xs:hidden">Portal</span>
+              </button>
+            )}
           </>
         )}
       </div>
+      {showPortal && patient.tutor?.id && (
+        <TutorPortalAccessModal tutorId={patient.tutor.id} tutorName={patient.tutor.name ?? null} onClose={() => setShowPortal(false)} />
+      )}
     </div>
   )
 }

@@ -5,6 +5,7 @@
 // e credita o tutor (razão tutor_credits). O uso do crédito é no recebimento.
 
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Loader2, Wallet, Search } from 'lucide-react'
 import { searchTutorsAndPatients, type SearchResult } from '@/lib/actions/tutors'
 import { addTutorAdvance, getTutorCreditBalance } from '@/lib/actions/tutor-credits'
@@ -87,7 +88,7 @@ export default function AdvanceModal({ onClose, onSuccess, onToast }: Props) {
     onClose()
   }
 
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4" onClick={onClose}>
       <div className="w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col rounded-2xl bg-white shadow-xl animate-scale-in" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
@@ -177,6 +178,7 @@ export default function AdvanceModal({ onClose, onSuccess, onToast }: Props) {
           </button>
         </div>
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }

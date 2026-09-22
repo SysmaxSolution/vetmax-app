@@ -4,10 +4,12 @@
 // CRUD das entidades de faturamento (Emp 001/002/003) dentro de uma clínica.
 
 import { useState, useEffect } from 'react'
-import { Loader2, Plus, Pencil, Building2, Check, X, Star } from 'lucide-react'
+import { Loader2, Plus, Pencil, Building2, Check, X, Star, FileCheck2 } from 'lucide-react'
 import {
   listCompanies, upsertCompany, setCompanyActive, type Company,
 } from '@/lib/actions/companies'
+import { listCompanyFiscalConfigs, type CompanyFiscalConfig } from '@/lib/actions/nfse'
+import CompanyFiscalModal from './CompanyFiscalModal'
 import { Toast } from '@/components/ui/toast'
 
 interface Props { userRole?: string }
@@ -40,12 +42,15 @@ export default function CompaniesTab({ userRole = 'admin' }: Props) {
   const [busy, setBusy]           = useState(false)
   const [draft, setDraft]         = useState<Draft | null>(null)
   const [toast, setToast]         = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [fiscalConfigs, setFiscalConfigs] = useState<CompanyFiscalConfig[]>([])
+  const [fiscalFor, setFiscalFor] = useState<Company | null>(null)
 
   async function reload() {
     try {
-      const res = await listCompanies()
+      const [res, fc] = await Promise.all([listCompanies(), listCompanyFiscalConfigs()])
       if (!('error' in res)) setCompanies(res)
       else setToast({ type: 'error', message: res.error })
+      if (!('error' in fc)) setFiscalConfigs(fc)
     } catch {
       setToast({ type: 'error', message: 'Erro ao carregar empresas.' })
     } finally {
@@ -197,9 +202,16 @@ export default function CompaniesTab({ userRole = 'admin' }: Props) {
               </div>
               {canManage && (
                 <div className="flex items-center gap-2">
+                  {fiscalConfigs.find(f => f.company_id === c.id)?.emits_nfse && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold rounded-full px-2 py-0.5 bg-blue-100 text-blue-700"><FileCheck2 className="h-3 w-3" /> NFS-e</span>
+                  )}
                   <button type="button" onClick={() => toggleActive(c)} disabled={busy}
                     className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-50">
                     {c.is_active ? 'Desativar' : 'Reativar'}
+                  </button>
+                  <button type="button" onClick={() => setFiscalFor(c)}
+                    className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-50 transition-colors">
+                    <FileCheck2 className="h-3.5 w-3.5" /> Fiscal
                   </button>
                   <button type="button" onClick={() => editDraft(c)}
                     className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-colors">
@@ -210,6 +222,16 @@ export default function CompaniesTab({ userRole = 'admin' }: Props) {
             </div>
           ))}
         </div>
+      )}
+
+      {fiscalFor && (
+        <CompanyFiscalModal
+          company={{ id: fiscalFor.id, name: fiscalFor.name, cnpj: fiscalFor.cnpj ?? null, inscricao_municipal: fiscalFor.municipal_registration ?? null }}
+          config={fiscalConfigs.find(f => f.company_id === fiscalFor.id)}
+          onClose={() => setFiscalFor(null)}
+          onSaved={reload}
+          onToast={(type, message) => setToast({ type, message })}
+        />
       )}
     </>
   )

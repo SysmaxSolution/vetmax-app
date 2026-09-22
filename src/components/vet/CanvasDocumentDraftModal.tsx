@@ -15,6 +15,7 @@
  */
 
 import { useEffect, useMemo, useState, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import {
   AlertCircle, Download, Eye, Loader2, Pencil, Printer, Save, Sparkles, X,
 } from 'lucide-react'
@@ -208,7 +209,7 @@ export default function CanvasDocumentDraftModal({
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose, saving])
 
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div className="fixed inset-0 z-50 flex items-stretch bg-slate-900/40 backdrop-blur-sm">
       <div className="m-auto flex h-[96vh] w-[min(1480px,98vw)] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
         {/* Header */}
@@ -356,8 +357,9 @@ export default function CanvasDocumentDraftModal({
           </section>
         </div>
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }
 
 // ── Sub-components ───────────────────────────────────────────────────────────

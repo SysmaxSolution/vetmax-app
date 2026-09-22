@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import confetti from 'canvas-confetti'
 import { CheckCircle2, ArrowRight, Sparkles, Receipt, Gift, AlertCircle, Tags, TrendingUp, Users, UserPlus } from 'lucide-react'
@@ -65,7 +66,7 @@ export default function SuccessDialog({
     ? applied.individual_entries_created + applied.retroactive_entries_created
     : 0
 
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
       onClick={onClose}
@@ -181,8 +182,9 @@ export default function SuccessDialog({
           Voltar para Remessas
         </Link>
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }
 
 function HeadlineCard({

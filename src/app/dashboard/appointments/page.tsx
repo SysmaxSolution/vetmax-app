@@ -26,15 +26,15 @@ export default async function AppointmentsPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <main className="mx-auto max-w-6xl px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+      <main className="mx-auto max-w-6xl px-4 sm:px-6 py-6 sm:py-8 space-y-6 animate-enter">
 
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900 flex items-center gap-2">
-              <CalendarDays className="h-6 w-6 text-blue-600" />
+            <h1 className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
+              <CalendarDays className="h-5 w-5 text-blue-600" />
               Agenda
             </h1>
-            <p className="mt-0.5 text-sm text-slate-500">
+            <p className="mt-0.5 text-sm text-slate-600">
               Consultas e sessões de Banho & Tosa — visão Mês, Semana e Dia
             </p>
           </div>

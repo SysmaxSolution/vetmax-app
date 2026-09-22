@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import {
   X, User, Shield, Loader2, Camera, FileSignature,
@@ -280,12 +281,12 @@ export default function UserManagementModal({
     { key: 'comissoes',  label: 'Comissões',  Icon: Percent },
   ] as const
 
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh] animate-scale-in">
 
         {/* Header */}
         <div className="bg-gradient-to-r from-teal-600 to-teal-700 px-6 py-5 flex items-center justify-between flex-shrink-0">
@@ -769,9 +770,9 @@ export default function UserManagementModal({
           )}
 
           {/* ── Modal de busca de item específico ── */}
-          {showItemModal && (
+          {showItemModal && typeof document !== 'undefined' && createPortal(
             <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-              <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden">
+              <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden animate-scale-in">
                 {/* Header */}
                 <div className={`px-5 py-4 flex items-center justify-between ${
                   itemModalType === 'product' ? 'bg-blue-600' :
@@ -895,7 +896,7 @@ export default function UserManagementModal({
                       type="button"
                       onClick={handleSaveItemCommission}
                       disabled={!selectedItem || !itemPct || savingItemComm}
-                      className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 transition-colors disabled:opacity-50"
+                      className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-teal-600 text-white text-sm font-semibold shadow-sm hover:bg-teal-700 transition-colors disabled:opacity-50"
                     >
                       {savingItemComm ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                       Salvar Comissão
@@ -910,7 +911,8 @@ export default function UserManagementModal({
                   </div>
                 </div>
               </div>
-            </div>
+            </div>,
+            document.body,
           )}
 
           {/* Acessos e Permissões Granulares foram movidos para o modal
@@ -937,7 +939,7 @@ export default function UserManagementModal({
                 type="button"
                 onClick={handleSaveUser}
                 disabled={saving}
-                className="flex items-center gap-2 px-5 py-2 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 transition-colors disabled:opacity-60"
+                className="flex items-center gap-2 px-5 py-2 rounded-lg bg-teal-600 text-white text-sm font-semibold shadow-sm hover:bg-teal-700 transition-colors disabled:opacity-60"
               >
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                 Salvar
@@ -947,6 +949,7 @@ export default function UserManagementModal({
         </div>
 
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }

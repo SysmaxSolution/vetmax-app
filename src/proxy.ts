@@ -22,6 +22,14 @@ const PUBLIC_PATHS = [
   // senha. Incidente Almavet 24/07: /public/* fora desta lista redirecionava
   // a carteira para /login.
   '/public',
+  // Portal do Tutor (Fase 3): área logada do tutor com autenticação PRÓPRIA
+  // (cookie sysvet_tutor via link no WhatsApp) — NÃO usa a sessão Supabase de
+  // staff, então precisa ficar fora do gate do proxy. A proteção é feita dentro
+  // de /portal (getTutorContext), não aqui.
+  '/portal',
+  // Portal do Parceiro (vet solicitante): autenticação própria por código
+  // (cookie sysvet_parceiro), fora do gate de staff.
+  '/parceiro',
   '/forgot-password',
   '/reset-password',
   '/privacidade',

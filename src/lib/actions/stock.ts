@@ -330,6 +330,11 @@ export type StockItemV2 = {
   updated_at:   string
   // migration 0099
   is_controlled: boolean
+  // migration 0441 — Livro de Controlados
+  substance:     string | null
+  concentration: string | null
+  is_human_use:  boolean
+  control_class: string | null
   brand:         string | null
   sku:           string | null
   barcode:       string | null
@@ -366,7 +371,7 @@ export type StockItemV2 = {
   sale_tax_percent:  number | null
 }
 
-const STOCK_V2_FIELDS = 'id, clinic_id, name, category, quantity, unit, min_quantity, unit_price, last_restock, created_at, updated_at, is_controlled, brand, sku, barcode, batch_number, expiry_date, supplier, is_service, ncm, ncm_description, cfop, unit_com, supplier_id, default_insurance_price, insurance_card_interest_percent, nfse_item_lista_servico, nfse_codigo_tributario_municipio, cost_price, entry_tax_percent, margin_percent, purchase_price, supplier_discount_percent, entry_tax_icms, entry_tax_st, entry_tax_ipi, entry_tax_freight, entry_tax_ibs_cbs, sale_tax_percent'
+const STOCK_V2_FIELDS = 'id, clinic_id, name, category, quantity, unit, min_quantity, unit_price, last_restock, created_at, updated_at, is_controlled, substance, concentration, is_human_use, control_class, brand, sku, barcode, batch_number, expiry_date, supplier, is_service, ncm, ncm_description, cfop, unit_com, supplier_id, default_insurance_price, insurance_card_interest_percent, nfse_item_lista_servico, nfse_codigo_tributario_municipio, cost_price, entry_tax_percent, margin_percent, purchase_price, supplier_discount_percent, entry_tax_icms, entry_tax_st, entry_tax_ipi, entry_tax_freight, entry_tax_ibs_cbs, sale_tax_percent'
 
 export async function getPharmacyStockV2(): Promise<StockItemV2[] | { error: string }> {
   const ctx = await getClinicAndUser()
@@ -406,6 +411,10 @@ export async function addStockItemV2(input: {
   category?:      StockCategory
   unit_price?:    number
   is_controlled?: boolean
+  substance?:     string | null
+  concentration?: string | null
+  is_human_use?:  boolean
+  control_class?: string | null
   brand?:         string | null
   sku?:           string | null
   barcode?:       string | null
@@ -450,6 +459,10 @@ export async function addStockItemV2(input: {
       unit_price:      input.unit_price ?? 0,
       last_restock:    input.quantity > 0 ? new Date().toISOString() : null,
       is_controlled:   input.is_controlled ?? false,
+      substance:       input.substance?.trim() || null,
+      concentration:   input.concentration?.trim() || null,
+      is_human_use:    input.is_human_use ?? false,
+      control_class:   input.control_class?.trim() || null,
       is_service:      input.is_service ?? false,
       brand:           input.brand?.trim() || null,
       sku:             input.sku?.trim() || null,
@@ -518,6 +531,10 @@ export async function updateStockItemV2(
   if (input.min_quantity  !== undefined) patch.min_quantity  = input.min_quantity
   if (input.unit_price    !== undefined) patch.unit_price    = input.unit_price
   if (input.is_controlled !== undefined) patch.is_controlled = input.is_controlled
+  if ('substance'     in input) patch.substance     = (input as any).substance?.trim()     || null
+  if ('concentration' in input) patch.concentration = (input as any).concentration?.trim() || null
+  if (input.is_human_use !== undefined) patch.is_human_use = input.is_human_use
+  if ('control_class' in input) patch.control_class = (input as any).control_class?.trim() || null
   if ('brand'        in input) patch.brand        = input.brand?.trim()        || null
   if ('sku'          in input) patch.sku          = input.sku?.trim()          || null
   if ('barcode'      in input) patch.barcode      = input.barcode?.trim()      || null

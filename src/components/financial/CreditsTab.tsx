@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Loader2, X } from 'lucide-react'
 import {
   listClinicTutorCredits, getTutorCreditStatement,
@@ -112,7 +113,7 @@ function DetailModal({ tutor, mode, onClose }: { tutor: ClinicCreditSummary; mod
   useEffect(() => { getTutorCreditStatement(tutor.tutor_id).then(r => { if (!('error' in r)) setMovs(r); setLoading(false) }) }, [tutor.tutor_id])
   const isIn = mode === 'in'
   const list = movs.filter(m => isIn ? m.kind === 'advance' : m.kind === 'usage')
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div className="fixed inset-0 z-[80] flex items-start justify-center bg-black/50 p-4 overflow-y-auto" onClick={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl my-4 flex flex-col max-h-[90vh]">
         <div className="flex-shrink-0 flex items-center justify-between px-5 py-4 border-b border-slate-100">
@@ -142,10 +143,13 @@ function DetailModal({ tutor, mode, onClose }: { tutor: ClinicCreditSummary; mod
                         <>
                           <Field label="Recebido em" value={fmtDate(m.created_at)} />
                           <Field label="Forma" value={m.payment_method ? (PAYMENT_LABEL[m.payment_method] ?? m.payment_method) : null} />
+                          <Field label="Empresa" value={m.company_name} />
                           <Field label="Lançado por" value={m.user_name} />
                         </>
                       ) : (
                         <>
+                          <Field label="OS / NS" value={m.os_number ? `Nº ${m.os_number}` : null} />
+                          <Field label="Empresa" value={m.company_name} />
                           <Field label="Pet" value={m.patient_name} />
                           <Field label="Tutor" value={m.tutor_name} />
                           <Field label="Data da consulta" value={m.consultation_date ? fmtDate(m.consultation_date) : null} />
@@ -158,6 +162,7 @@ function DetailModal({ tutor, mode, onClose }: { tutor: ClinicCreditSummary; mod
                 ))}
         </div>
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }

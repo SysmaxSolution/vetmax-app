@@ -1,8 +1,18 @@
 'use client'
 
 import { useState } from 'react'
-import { BarChart3, Users, DollarSign, TrendingUp, PieChart, MessageCircle, ClipboardList, PawPrint, Percent } from 'lucide-react'
+import { BarChart3, Users, DollarSign, TrendingUp, PieChart, MessageCircle, ClipboardList, PawPrint, Percent, ShieldAlert, CalendarClock, LineChart, Layers, Boxes, LayoutDashboard, Sparkles, Barcode } from 'lucide-react'
+import BoletoMovementReport from '@/components/financial/BoletoMovementReport'
 import PetFrequencyReport from './PetFrequencyReport'
+import BIDashboard from './BIDashboard'
+import SmartReportBuilder from './SmartReportBuilder'
+import ControlledBookReport from './ControlledBookReport'
+import AgingReport from './AgingReport'
+import CashflowProjectionReport from './CashflowProjectionReport'
+import RevenueBreakdownReport from './RevenueBreakdownReport'
+import StockPositionReport from './StockPositionReport'
+import ClientsReport from './ClientsReport'
+import DREByCompanyReport from './DREByCompanyReport'
 import ProfessionalProductivityReport from './ProfessionalProductivityReport'
 import FinancialReport from './FinancialReport'
 import DREReport from './DREReport'
@@ -14,12 +24,33 @@ import type { ReportsEnabled } from '@/lib/actions/reports-g13'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+type ModuleKey = 'painel' | 'financeiro' | 'clinico' | 'operacional' | 'estoque' | 'comercial' | 'regulatorio'
+const MODULE_ORDER: { key: ModuleKey; label: string }[] = [
+  { key: 'painel', label: 'Painel' },
+  { key: 'financeiro', label: 'Financeiro' },
+  { key: 'clinico', label: 'Clínico' },
+  { key: 'operacional', label: 'Operacional' },
+  { key: 'estoque', label: 'Estoque' },
+  { key: 'comercial', label: 'Comercial' },
+  { key: 'regulatorio', label: 'Regulatório' },
+]
+
 interface ReportCategory {
-  key:        keyof ReportsEnabled | 'commissions'
+  key:        keyof ReportsEnabled | 'commissions' | 'controlled' | 'aging' | 'cashflow' | 'revenue' | 'stock_position' | 'clients' | 'dre_company' | 'dashboard' | 'smart' | 'boleto_movement'
   label:      string
   icon:       React.ComponentType<{ className: string }>
   description: string
   component?: React.ReactNode
+}
+
+// Módulo de cada relatório (para agrupar a navegação por módulo).
+const CATEGORY_MODULE: Record<string, ModuleKey> = {
+  dashboard: 'painel', smart: 'painel',
+  financial: 'financeiro', dre: 'financeiro', curva_abc: 'financeiro', commissions: 'financeiro',
+  cashflow: 'financeiro', revenue: 'financeiro', dre_company: 'financeiro', aging: 'financeiro', boleto_movement: 'financeiro',
+  pet_frequency: 'clinico', productivity: 'clinico',
+  operational: 'operacional', stock_position: 'estoque',
+  whatsapp: 'comercial', clients: 'comercial', controlled: 'regulatorio',
 }
 
 interface Props {
@@ -56,9 +87,23 @@ function SidebarItem({
 
 export default function ReportsWorkspace({ initialEnabled }: Props) {
   const [enabled, setEnabled] = useState<ReportsEnabled>(initialEnabled)
-  const [activeKey, setActiveKey] = useState<string>('pet_frequency')
+  const [activeKey, setActiveKey] = useState<string>('dashboard')
 
   const ALL_CATEGORIES: ReportCategory[] = [
+    {
+      key:         'dashboard',
+      label:       'Painel (BI)',
+      icon:        LayoutDashboard,
+      description: 'Visão geral em gráficos: faturamento, recebimentos, a receber, categorias, aging e top clientes.',
+      component:   <BIDashboard />,
+    },
+    {
+      key:         'smart',
+      label:       'Relatório Inteligente (IA)',
+      icon:        Sparkles,
+      description: 'Descreva em português o relatório que precisa — a IA interpreta e o sistema calcula (a IA nunca gera número).',
+      component:   <SmartReportBuilder />,
+    },
     {
       key:         'pet_frequency',
       label:       'Periodicidade por Pet',
@@ -115,16 +160,78 @@ export default function ReportsWorkspace({ initialEnabled }: Props) {
       description: 'Comissões pagas e pendentes por profissional, com filtros por status e período.',
       component:   <CommissionsReport />,
     },
+    {
+      key:         'cashflow',
+      label:       'Fluxo de Caixa',
+      icon:        LineChart,
+      description: 'Realizado × projetado por mês, com entradas, saídas e saldo acumulado.',
+      component:   <CashflowProjectionReport />,
+    },
+    {
+      key:         'revenue',
+      label:       'Faturamento por Dimensão',
+      icon:        Layers,
+      description: 'Receita reconhecida agrupada por categoria, forma de pagamento, empresa (CNPJ) ou mês, com participação (%).',
+      component:   <RevenueBreakdownReport />,
+    },
+    {
+      key:         'dre_company',
+      label:       'DRE por CNPJ',
+      icon:        TrendingUp,
+      description: 'Resultado por empresa faturante (receita, deduções, despesas e resultado) + consolidado do grupo.',
+      component:   <DREByCompanyReport />,
+    },
+    {
+      key:         'clients',
+      label:       'Clientes (Novos × Recorrentes)',
+      icon:        Users,
+      description: 'Novos vs recorrentes, ticket médio e faturamento por cliente no período.',
+      component:   <ClientsReport />,
+    },
+    {
+      key:         'stock_position',
+      label:       'Posição de Estoque',
+      icon:        Boxes,
+      description: 'Ruptura (abaixo do mínimo), validade próxima e valor imobilizado, com filtro por situação.',
+      component:   <StockPositionReport />,
+    },
+    {
+      key:         'aging',
+      label:       'Aging (A Receber/Pagar)',
+      icon:        CalendarClock,
+      description: 'Títulos pendentes por faixa de atraso (a vencer / 0–30 / 31–60 / 61–90 / 90+), com drill-down sintético → analítico por cliente/fornecedor.',
+      component:   <AgingReport />,
+    },
+    {
+      key:         'boleto_movement',
+      label:       'Movimentação de Boletos',
+      icon:        Barcode,
+      description: 'Trilha completa dos boletos: emissão, 2ª via, envios, consultas, instruções, retornos do banco, pagamentos e baixas — com quem fez e quando.',
+      component:   <BoletoMovementReport />,
+    },
+    {
+      key:         'controlled',
+      label:       'Livro de Controlados',
+      icon:        ShieldAlert,
+      description: 'Razão por substância (humano × veterinário) — entradas, saídas, perdas e saldo. Retroativo e impressão para a Vigilância (Portaria 344/1998).',
+      component:   <ControlledBookReport />,
+    },
   ]
 
-  // Filter visible categories (commissions always shown)
+  // Filter visible categories (relatórios gerenciais sempre visíveis)
+  const ALWAYS_ON = ['dashboard', 'smart', 'commissions', 'controlled', 'aging', 'cashflow', 'revenue', 'stock_position', 'clients', 'dre_company', 'boleto_movement']
   const visibleCategories = ALL_CATEGORIES.filter(cat => {
-    if (cat.key === 'commissions') return true
+    if (ALWAYS_ON.includes(cat.key as string)) return true
     return enabled[cat.key as keyof ReportsEnabled]
   })
 
   const activeCategory = visibleCategories.find(c => c.key === activeKey)
     ?? visibleCategories[0]
+
+  // Agrupa por módulo (na ordem de MODULE_ORDER), omitindo módulos sem itens.
+  const grouped = MODULE_ORDER
+    .map(m => ({ ...m, cats: visibleCategories.filter(c => (CATEGORY_MODULE[c.key] ?? 'painel') === m.key) }))
+    .filter(g => g.cats.length > 0)
 
   // Ensure activeKey is always valid
   const safeActiveKey = activeCategory?.key ?? 'settings'
@@ -143,37 +250,44 @@ export default function ReportsWorkspace({ initialEnabled }: Props) {
           </div>
         </div>
 
-        {/* Mobile: chips horizontais; Desktop: lista vertical */}
-        <div className="flex flex-wrap gap-2 lg:hidden">
-          {visibleCategories.map(cat => (
-            <button
-              key={cat.key}
-              onClick={() => setActiveKey(cat.key)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                safeActiveKey === cat.key
-                  ? 'bg-violet-600 text-white shadow-sm'
-                  : 'bg-slate-100 text-slate-600 hover:bg-violet-50 hover:text-violet-700'
-              }`}
-            >
-              <cat.icon className="w-3 h-3 flex-shrink-0" />
-              <span>{cat.label}</span>
-            </button>
+        {/* Mobile: chips por módulo; Desktop: lista vertical com seções de módulo */}
+        <div className="lg:hidden space-y-2">
+          {grouped.map(g => (
+            <div key={g.key}>
+              <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">{g.label}</p>
+              <div className="flex flex-wrap gap-2">
+                {g.cats.map(cat => (
+                  <button
+                    key={cat.key}
+                    onClick={() => setActiveKey(cat.key)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                      safeActiveKey === cat.key ? 'bg-violet-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-violet-50 hover:text-violet-700'
+                    }`}
+                  >
+                    <cat.icon className="w-3 h-3 flex-shrink-0" />
+                    <span>{cat.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
-        <div className="hidden lg:flex lg:flex-col lg:space-y-1">
-          {visibleCategories.map(cat => (
-            <SidebarItem
-              key={cat.key}
-              cat={cat}
-              active={safeActiveKey === cat.key}
-              onClick={() => setActiveKey(cat.key)}
-            />
+        <div className="hidden lg:block lg:space-y-3">
+          {grouped.map(g => (
+            <div key={g.key}>
+              <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">{g.label}</p>
+              <div className="flex flex-col space-y-1">
+                {g.cats.map(cat => (
+                  <SidebarItem key={cat.key} cat={cat} active={safeActiveKey === cat.key} onClick={() => setActiveKey(cat.key)} />
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 p-4 lg:p-6 overflow-y-auto">
+      <main className="flex-1 p-4 lg:p-6 overflow-y-auto animate-enter">
         {activeCategory && (
           <>
             <div className="mb-6">
@@ -182,7 +296,7 @@ export default function ReportsWorkspace({ initialEnabled }: Props) {
                   <activeCategory.icon className="w-5 h-5 text-violet-600" />
                 </div>
                 <div>
-                  <h1 className="text-lg font-bold text-slate-800">{activeCategory.label}</h1>
+                  <h1 className="text-lg font-bold tracking-tight text-slate-900">{activeCategory.label}</h1>
                   <p className="text-xs text-slate-500">{activeCategory.description}</p>
                 </div>
               </div>

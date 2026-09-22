@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import {
   Shield, CheckCircle2, AlertTriangle, Ban, ChevronDown, ChevronUp,
   Copy, Check, X, Loader2, FileText,
@@ -86,7 +87,7 @@ function OverrideModal({
     })
   }
 
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
@@ -127,8 +128,9 @@ function OverrideModal({
           </button>
         </div>
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }
 
 // ─── Main Banner ──────────────────────────────────────────────────────────────

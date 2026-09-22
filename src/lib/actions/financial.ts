@@ -26,6 +26,7 @@ export interface FinancialEntry {
   payment_method:       string | null
   tutor_id:             string | null
   patient_id:           string | null
+  beneficiary:          string | null   // fornecedor/favorecido (contas a pagar)
   category:             string | null
   notes:                string | null
   created_by:           string | null
@@ -49,6 +50,10 @@ export interface FinancialEntry {
   // vínculo com invoice mestre (duplicatas) + flag de ajuste contábil
   invoice_id:           string | null
   is_clinic_discount:   boolean
+  // vínculo com a consulta de origem (OS) — identificação em A Pagar/Receber
+  consultation_id:      string | null
+  os_number:            string | null
+  is_intercompany:      boolean
 }
 
 export interface FinancialSummary {
@@ -84,6 +89,14 @@ export interface CreateEntryData {
   notes?:               string
   professional_id?:     string
   chart_of_accounts_id?: string
+  // Contas a pagar de compra (1.8) — fornecedor, documento, parcela e espécie.
+  beneficiary?:         string | null
+  supplier_id?:         string | null
+  purchase_order_id?:   string | null
+  document_number?:     string | null
+  especie?:             string | null
+  installment_number?:  number | null
+  total_installments?:  number | null
 }
 
 export interface BaixarTituloData {
@@ -265,9 +278,16 @@ export async function createEntry(
       notes:                data.notes                || null,
       professional_id:      data.professional_id      || null,
       chart_of_accounts_id: data.chart_of_accounts_id || null,
+      beneficiary:          data.beneficiary          || null,
+      supplier_id:          data.supplier_id          || null,
+      purchase_order_id:    data.purchase_order_id    || null,
+      document_number:      data.document_number      || null,
+      especie:              data.especie              || null,
+      installment_number:   data.installment_number   ?? null,
+      total_installments:   data.total_installments   ?? null,
       created_by:           user.id,
       status:               'pending',
-      // document_number e professional_id preenchidos pelo trigger trg_fe_defaults
+      // document_number (quando null) e professional_id preenchidos pelo trigger trg_fe_defaults
     })
     .select(ENTRY_SELECT)
     .single()
@@ -729,6 +749,27 @@ export async function baixarTitulo(
   }
 
   return {}
+}
+
+// ─── baixarTitulosBulk ────────────────────────────────────────────────────────
+// Baixa em massa de títulos (A Pagar ou A Receber). Reusa baixarTitulo por id
+// para manter idênticos os efeitos colaterais (baixa integral, lançamento no
+// extrato quando informada a conta). Usado pela seleção múltipla da tela.
+export async function baixarTitulosBulk(
+  ids: string[],
+  data: BaixarTituloData,
+): Promise<{ ok: true; paid: number; failed: number } | { error: string }> {
+  if (!ids.length)            return { error: 'Nenhum título selecionado.' }
+  if (!data.payment_date)     return { error: 'Data obrigatória.' }
+  if (!data.payment_method)   return { error: 'Forma de pagamento obrigatória.' }
+
+  let paid = 0, failed = 0
+  for (const id of ids) {
+    const res = await baixarTitulo(id, data)
+    if (res.error) failed += 1
+    else paid += 1
+  }
+  return { ok: true, paid, failed }
 }
 
 // ─── getFinancialSummary ──────────────────────────────────────────────────────
@@ -1664,6 +1705,7 @@ const ENTRY_SELECT = [
   'professional:profiles!professional_id(full_name)',
   'chart_account:chart_of_accounts!chart_of_accounts_id(code, name)',
   'settlement_bank:bank_accounts!settlement_bank_id(name)',
+  'consultation:consultations!consultation_id(os_number)',
 ].join(', ')
 
 function mapEntry(raw: Record<string, unknown>): FinancialEntry {
@@ -1672,6 +1714,7 @@ function mapEntry(raw: Record<string, unknown>): FinancialEntry {
   const professional = raw.professional    as { full_name: string }        | null
   const chartAcc     = raw.chart_account   as { code: string; name: string } | null
   const settleBank   = raw.settlement_bank as { name: string }             | null
+  const consultation = raw.consultation    as { os_number: string | null } | null
   return {
     id:                   raw.id                   as string,
     clinic_id:            raw.clinic_id            as string,
@@ -1687,6 +1730,7 @@ function mapEntry(raw: Record<string, unknown>): FinancialEntry {
     payment_method:       (raw.payment_method      as string | null) ?? null,
     tutor_id:             (raw.tutor_id            as string | null) ?? null,
     patient_id:           (raw.patient_id          as string | null) ?? null,
+    beneficiary:          (raw.beneficiary         as string | null) ?? null,
     category:             (raw.category            as string | null) ?? null,
     notes:                (raw.notes               as string | null) ?? null,
     created_by:           (raw.created_by          as string | null) ?? null,
@@ -1706,6 +1750,9 @@ function mapEntry(raw: Record<string, unknown>): FinancialEntry {
     cashier_outflow_id:   (raw.cashier_outflow_id  as string | null) ?? null,
     invoice_id:           (raw.invoice_id          as string | null) ?? null,
     is_clinic_discount:   Boolean(raw.is_clinic_discount),
+    consultation_id:      (raw.consultation_id     as string | null) ?? null,
+    os_number:            consultation?.os_number  ?? null,
+    is_intercompany:      Boolean(raw.is_intercompany),
   }
 }
 
@@ -2151,6 +2198,9 @@ export async function getCrossCompanyOverview(params: {
   for (const c of (comps ?? []) as Record<string, unknown>[]) ensure(c.id as string)
 
   for (const e of entries) {
+    // Elimina movimento interno inter-CNPJ e "utilização de crédito" (não é caixa
+    // novo) das colunas de recebido/pago consolidadas.
+    if (e.is_intercompany || e.payment_method === 'credit_balance') continue
     const cid = e.settlement_bank_id ? (acctCompany.get(e.settlement_bank_id) ?? null) : null
     const row = ensure(cid)
     if (e.type === 'receivable') row.recebido += e.amount; else row.pago += e.amount

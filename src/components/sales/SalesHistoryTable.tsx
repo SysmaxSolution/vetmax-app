@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import { XCircle, Clock, AlertTriangle, BellRing } from 'lucide-react'
 import { cancelSale, requestSaleCorrection, type Sale } from '@/lib/actions/sales'
 import { PAYMENT_LABELS } from './SalesCart'
@@ -165,7 +166,7 @@ export default function SalesHistoryTable({ sales, clinicId, onSalesUpdate }: Sa
       </div>
 
       {/* Modal de cancelamento / solicitação de correção (B4) */}
-      {cancelTarget && (
+      {cancelTarget && typeof document !== 'undefined' && createPortal(
         <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4">
             <div className="flex items-center gap-3">
@@ -230,7 +231,8 @@ export default function SalesHistoryTable({ sales, clinicId, onSalesUpdate }: Sa
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )

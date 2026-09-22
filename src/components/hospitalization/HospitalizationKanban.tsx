@@ -1,6 +1,7 @@
 ﻿'use client'
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { Clock, BedDouble, LogOut, Loader2, Sparkles, X, Stethoscope, FileText, Plus, Bell, BellRing, Biohazard, LayoutGrid, CalendarClock, Lock } from 'lucide-react'
 import { useRealtimeSync } from '@/hooks/useRealtimeSync'
@@ -1105,7 +1106,7 @@ function DischargeModal({ card, isProcessing, onConfirm, onSendToReview, onCance
     printDischargePdf(summary)
   }
 
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6 space-y-5">
 
@@ -1201,8 +1202,9 @@ function DischargeModal({ card, isProcessing, onConfirm, onSendToReview, onCance
           Cancelar
         </button>
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }
 
 // ─── Componente Interno: AdmitModal ───────────────────────────────────────────
@@ -1242,7 +1244,7 @@ function AdmitModal({ onClose, onSuccess, preselectedBox }: { onClose: () => voi
     onClose()
   }
 
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6 space-y-4">
         <div className="flex items-start justify-between gap-4">
@@ -1312,6 +1314,7 @@ function AdmitModal({ onClose, onSuccess, preselectedBox }: { onClose: () => voi
           </button>
         </div>
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { X, BedDouble, Loader2, AlertTriangle, Mic, Square, Sparkles } from 'lucide-react'
 import { createHospitalization, type HospitalizationStatus } from '@/lib/actions/hospitalizations'
 import { extractAdmissionReason } from '@/lib/actions/ai_extraction'
@@ -119,7 +120,7 @@ export default function AdmitPetModal({
     })
   }
 
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
@@ -269,6 +270,7 @@ export default function AdmitPetModal({
           </div>
         </form>
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }

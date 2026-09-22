@@ -11,6 +11,7 @@
  */
 
 import { useEffect, useRef, useState, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import {
   ImagePlus, Loader2, Save, Sparkles, Upload, X,
 } from 'lucide-react'
@@ -118,7 +119,9 @@ export default function CanvaTemplateEditor({
     setMargins(m => ({ ...m, [k]: Number(v.toFixed(1)) }))
   }
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-stretch bg-slate-900/40 backdrop-blur-sm">
       <div className="m-auto flex h-[92vh] w-[min(1280px,96vw)] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
         {/* Header */}
@@ -260,7 +263,8 @@ export default function CanvaTemplateEditor({
           </main>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

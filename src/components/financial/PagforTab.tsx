@@ -1,10 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { Loader2, Upload, CheckCircle2, XCircle, PlusCircle, CalendarClock, FileDown } from 'lucide-react'
+import { Loader2, Upload, CheckCircle2, XCircle, PlusCircle, CalendarClock, FileDown, Landmark, Banknote } from 'lucide-react'
 import { parseDdaCsv } from '@/lib/parsers/ddaParser'
 import {
   matchDdaBoletos, insertPayablesFromDda, schedulePayments, generatePagforRemittance,
+  fetchDdaFromBank, payBoletosViaBank,
   type DdaBoleto, type DdaMatchResult,
 } from '@/lib/actions/pagfor'
 
@@ -20,6 +21,32 @@ export default function PagforTab() {
   const [busy, setBusy]       = useState<string | null>(null)
   const [error, setError]     = useState<string | null>(null)
   const [done, setDone]       = useState<string | null>(null)
+  const today = new Date().toISOString().slice(0, 10)
+  const [ddaFrom, setDdaFrom] = useState(today)
+  const [ddaTo, setDdaTo]     = useState(today)
+
+  async function handleFetchDda() {
+    setError(null); setDone(null); setResult(null); setLoading(true)
+    try {
+      const res = await fetchDdaFromBank({ dataInicial: ddaFrom, dataFinal: ddaTo })
+      if ('error' in res) { setError(res.error); return }
+      if (!res.boletos.length) { setError('Nenhum boleto no DDA para o período (ou sandbox sem dados).'); return }
+      setParsed(res.boletos)
+      await runMatch(res.boletos)
+    } catch (e) { setError(`Falha ao buscar DDA: ${(e as Error).message}`) }
+    finally { setLoading(false) }
+  }
+
+  async function handleBankPay() {
+    const ids = selGreenIds(); if (!ids.length) { setError('Selecione títulos já lançados (verdes) para pagar/agendar no banco.'); return }
+    setBusy('bankpay'); setError(null)
+    const res = await payBoletosViaBank({ entry_ids: ids, dataPagamento: scheduleDate || today })
+    setBusy(null)
+    if ('error' in res) { setError(res.error); return }
+    const falhas = res.falhas.length ? ` ${res.falhas.length} falharam.` : ''
+    setDone(`${res.agendados} pagamento(s) agendado(s) no Sicoob para ${fmtD(scheduleDate || today)}.${falhas}`)
+    await runMatch(parsed)
+  }
 
   async function runMatch(boletos: DdaBoleto[]) {
     const res = await matchDdaBoletos(boletos)
@@ -82,14 +109,32 @@ export default function PagforTab() {
 
   return (
     <div className="space-y-4">
-      {/* Importar DDA */}
+      {/* Buscar DDA direto no banco (API Sicoob Pagamentos) */}
+      <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-4 flex flex-wrap items-end gap-3">
+        <div className="flex items-center gap-2">
+          <Landmark className="h-4 w-4 text-indigo-600" />
+          <div>
+            <p className="text-sm font-semibold text-indigo-800">Buscar DDA no banco (Sicoob)</p>
+            <p className="text-[11px] text-indigo-500">Varredura automática dos boletos a pagar do CNPJ. Produção exige o certificado e-CNPJ A1.</p>
+          </div>
+        </div>
+        <div className="flex items-end gap-2">
+          <div><label className="block text-[10px] text-slate-500">De</label><input type="date" value={ddaFrom} onChange={e => setDdaFrom(e.target.value)} className="rounded-lg border border-slate-200 px-2 py-1 text-xs" /></div>
+          <div><label className="block text-[10px] text-slate-500">Até</label><input type="date" value={ddaTo} onChange={e => setDdaTo(e.target.value)} className="rounded-lg border border-slate-200 px-2 py-1 text-xs" /></div>
+          <button onClick={handleFetchDda} disabled={loading} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2">
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Landmark className="h-4 w-4" />}Buscar DDA
+          </button>
+        </div>
+      </div>
+
+      {/* Importar DDA (CSV — alternativa manual) */}
       <div className="rounded-xl border border-slate-200 bg-white p-4 flex flex-wrap items-center gap-3">
-        <label className="inline-flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 cursor-pointer">
-          <Upload className="h-4 w-4" /> Importar DDA (boletos contra o CNPJ)
+        <label className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer">
+          <Upload className="h-4 w-4" /> Importar DDA por arquivo (CSV)
           <input type="file" accept=".csv,.txt,.ret" className="hidden"
             onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.currentTarget.value = '' }} />
         </label>
-        <span className="text-[11px] text-slate-400">Verde = já lançado · Vermelho = falta lançar. CNAB/API do banco entram com o convênio.</span>
+        <span className="text-[11px] text-slate-400">Verde = já lançado · Vermelho = falta lançar.</span>
       </div>
 
       {loading && <div className="p-6 flex items-center justify-center gap-2 text-slate-400 text-sm"><Loader2 className="h-4 w-4 animate-spin" /> Cruzando o DDA com contas a pagar…</div>}
@@ -163,8 +208,12 @@ export default function PagforTab() {
                 {busy === 'insert' ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />} Lançar selecionados
               </button>
               <button onClick={handleSchedule} disabled={busy !== null || selGreenIds().length === 0}
+                className="rounded-lg border border-indigo-300 px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50 disabled:opacity-50 flex items-center gap-2">
+                {busy === 'schedule' ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarClock className="h-4 w-4" />} Agendar (local)
+              </button>
+              <button onClick={handleBankPay} disabled={busy !== null || selGreenIds().length === 0}
                 className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2">
-                {busy === 'schedule' ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarClock className="h-4 w-4" />} Agendar pagamento
+                {busy === 'bankpay' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Banknote className="h-4 w-4" />} Pagar no banco (Sicoob)
               </button>
               <button onClick={handleRemittance} disabled={busy !== null || selGreenIds().length === 0}
                 className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50 flex items-center gap-2">
