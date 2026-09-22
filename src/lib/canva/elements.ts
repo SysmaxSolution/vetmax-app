@@ -96,7 +96,18 @@ export interface DynamicTagElement extends ElementCommon {
   typography: TypographyStyle
   /** Fallback quando o valor resolvido for vazio/nulo. */
   fallback?: string
+  /** Troca o formatador padrão da tag (ex.: pet.age com 'age_amd' →
+   *  "9 A 3 M 30 D"). Ausente = formato padrão do catálogo. */
+  formatOverride?: TagFormatId
 }
+
+/** Espelho de TagFormat (dynamic-tags.ts) — evita import circular. */
+export type TagFormatId =
+  | 'date' | 'datetime' | 'time'
+  | 'day_2digits' | 'month_2digits' | 'month_name_br' | 'year_4digits' | 'weekday_br'
+  | 'weight_kg' | 'temperature_c'
+  | 'phone_br' | 'cpf_br' | 'currency_brl'
+  | 'uppercase' | 'age_amd'
 
 /** Parte de uma CompositeTagElement. Pode ser:
  *    - Uma resolução de tag dinâmica (tagId preenchido)

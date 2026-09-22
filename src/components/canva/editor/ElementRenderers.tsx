@@ -358,7 +358,7 @@ function LineRenderer({ e }: { e: LineElement }) {
 }
 
 function DynamicTagRenderer({ e, ctx, isPrint }: { e: DynamicTagElement; ctx?: ResolveContext; isPrint?: boolean }) {
-  const resolved = ctx ? resolveTagValue(e.tagId, ctx) : ''
+  const resolved = ctx ? resolveTagValue(e.tagId, ctx, e.formatOverride) : ''
   const display = resolved || e.fallback || (isPrint ? '' : `{{${e.tagId}}}`)
   const text = `${e.prefix ?? ''}${display}${e.suffix ?? ''}`
 

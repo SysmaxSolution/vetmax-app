@@ -18,6 +18,7 @@ export const MOCK_PATIENT = {
   breed: 'Golden Retriever',
   sex: 'Macho',
   age: '4 anos',
+  birth_date: '2022-06-10',
   weight: 28.4,
   color: 'Dourado',
   microchip: '900215001234567',

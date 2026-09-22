@@ -26,21 +26,21 @@ export function ageParts(birth: unknown, reference: Date = new Date()): AgeParts
   const b0 = new Date(b.getFullYear(), b.getMonth(), b.getDate())
   if (b0 > r) return { years: 0, months: 0, days: 0 }
 
-  let years = r.getFullYear() - b0.getFullYear()
-  let months = r.getMonth() - b0.getMonth()
-  let days = r.getDate() - b0.getDate()
+  // Meses inteiros completos entre as datas; se o dia de referência ainda
+  // não alcançou o dia do nascimento, o mês corrente não fechou.
+  let totalMonths = (r.getFullYear() - b0.getFullYear()) * 12 + (r.getMonth() - b0.getMonth())
+  if (r.getDate() < b0.getDate()) totalMonths -= 1
+  if (totalMonths < 0) totalMonths = 0
 
-  if (days < 0) {
-    months -= 1
-    // dias do mês anterior ao de referência
-    const prevMonthDays = new Date(r.getFullYear(), r.getMonth(), 0).getDate()
-    days += prevMonthDays
-  }
-  if (months < 0) {
-    years -= 1
-    months += 12
-  }
-  return { years, months, days }
+  // Âncora = nascimento + totalMonths (dia clampado ao tamanho do mês, ex.
+  // 31/01 + 1 mês = 28/02). Dias = distância real até a referência.
+  const anchorYear = b0.getFullYear() + Math.floor((b0.getMonth() + totalMonths) / 12)
+  const anchorMonth = (b0.getMonth() + totalMonths) % 12
+  const daysInAnchorMonth = new Date(anchorYear, anchorMonth + 1, 0).getDate()
+  const anchor = new Date(anchorYear, anchorMonth, Math.min(b0.getDate(), daysInAnchorMonth))
+  const days = Math.max(0, Math.round((r.getTime() - anchor.getTime()) / 86_400_000))
+
+  return { years: Math.floor(totalMonths / 12), months: totalMonths % 12, days }
 }
 
 /** "9 A 3 M 30 D". Retorna '' quando a data é inválida/ausente. */

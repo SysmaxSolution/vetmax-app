@@ -43,6 +43,8 @@ export const DYNAMIC_TAGS: DynamicTagDef[] = [
   { id: 'pet.breed',     label: 'Raça',                group: 'pet',    path: 'patient.breed',       preview: 'Golden Retriever' },
   { id: 'pet.sex',       label: 'Sexo',                group: 'pet',    path: 'patient.sex',         preview: 'Macho' },
   { id: 'pet.age',       label: 'Idade',               group: 'pet',    path: 'patient.age',         preview: '4 anos' },
+  { id: 'pet.age_amd',   label: 'Idade (A M D)',       group: 'pet',    path: 'patient.birth_date',  format: 'age_amd', preview: '4 A 3 M 12 D' },
+  { id: 'pet.birth_date',label: 'Data de Nascimento',  group: 'pet',    path: 'patient.birth_date',  format: 'date', preview: '10/06/2022' },
   { id: 'pet.weight',    label: 'Peso',                group: 'pet',    path: 'patient.weight',      format: 'weight_kg', preview: '28,4 kg' },
   { id: 'pet.color',     label: 'Pelagem',             group: 'pet',    path: 'patient.color',       preview: 'Dourado' },
   { id: 'pet.microchip', label: 'Microchip',           group: 'pet',    path: 'patient.microchip',   preview: '900215001234567' },

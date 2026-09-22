@@ -600,6 +600,24 @@ function DynamicTagSection({ element, onPatch }: { element: DynamicTagElement; o
           onChange={e => onPatch({ fallback: e.target.value } as Partial<CanvasElement>)}
         />
       </label>
+      {(element.tagId === 'pet.age' || element.tagId === 'pet.age_amd') && (
+        <label className="block mt-2">
+          <span className="text-[10px] text-slate-600">Formato da idade</span>
+          <select
+            className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
+            value={element.formatOverride === 'age_amd' || element.tagId === 'pet.age_amd' ? 'age_amd' : 'default'}
+            onChange={e => {
+              const v = e.target.value
+              // pet.age_amd é sempre A M D; para pet.age o override alterna
+              onPatch({ formatOverride: v === 'age_amd' ? 'age_amd' : undefined } as Partial<CanvasElement>)
+            }}
+            disabled={element.tagId === 'pet.age_amd'}
+          >
+            <option value="default">Padrão — "4 anos" / "7 meses"</option>
+            <option value="age_amd">Anos/Meses/Dias — "9 A 3 M 30 D"</option>
+          </select>
+        </label>
+      )}
       <TypographyControls element={element} onPatch={onPatch} />
     </Section>
   )
