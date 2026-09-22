@@ -27,3 +27,24 @@ export function formatVerifyCode(code: string): string {
 export function sha256Hex(buf: Buffer | Uint8Array): string {
   return createHash('sha256').update(buf).digest('hex')
 }
+
+/** JSON canônico (chaves ordenadas recursivamente) — hash estável
+ *  independente da ordem em que o Postgres/JS serializam o objeto. */
+export function canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value ?? null)
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`
+  const obj = value as Record<string, unknown>
+  const keys = Object.keys(obj).filter(k => obj[k] !== undefined).sort()
+  return `{${keys.map(k => `${JSON.stringify(k)}:${canonicalJson(obj[k])}`).join(',')}}`
+}
+
+/**
+ * Hash de autenticidade de um documento do motor Canvas (não há PDF no
+ * storage — o print é client-side). Cobre o layout congelado (snapshot) e
+ * o conteúdo preenchido pelo MV. Qualquer alteração em um dos dois muda o
+ * hash → /public/verificar acusa "Documento alterado".
+ */
+export function hashCanvasDocument(canvasStateSnapshot: unknown, contentJson: unknown): string {
+  const payload = canonicalJson({ v: 1, canvas_state_snapshot: canvasStateSnapshot ?? null, content_json: contentJson ?? null })
+  return createHash('sha256').update(payload, 'utf8').digest('hex')
+}

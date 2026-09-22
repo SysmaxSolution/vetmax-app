@@ -18,6 +18,7 @@ import { formatClinicDate } from '@/lib/time'
 import type { CanvasState } from '@/lib/canva/canvas-state'
 import { isCanvasState, defaultCanvasState } from '@/lib/canva/canvas-state'
 import { applyIdentityToState, hydrateIdentity } from '@/lib/canva/identity'
+import { generateVerifyCode, hashCanvasDocument } from '@/lib/portal/laudo-verify'
 import type { FillableFieldElement } from '@/lib/canva/elements'
 import type { VitalSigns } from '@/types'
 import type { ResolveContext } from '@/lib/canva/dynamic-tags'
@@ -998,6 +999,11 @@ export async function createCanvaPatientDocument(
   // (antigos) caem no template em loadCanvaPatientDocument.
   const snapshot = isCanvasState(tpl.canvas_state) ? (tpl.canvas_state as CanvasState) : null
 
+  // Autenticidade (0457): código público + hash SHA-256 do snapshot+conteúdo
+  // + quem emitiu. O QR do rodapé aponta para /public/verificar/<código>.
+  const signer = await loadSigner(supabase, profile.id)
+  const nowIso = new Date().toISOString()
+
   const { data, error } = await supabase
     .from('patient_documents')
     .insert({
@@ -1014,7 +1020,13 @@ export async function createCanvaPatientDocument(
       margin_right: tpl.margin_right ?? CANVA_DEFAULT_MARGINS.right,
       block_style: tpl.block_style ?? 'solid',
       canvas_state_snapshot: snapshot,
-      snapshot_taken_at: snapshot ? new Date().toISOString() : null,
+      snapshot_taken_at: snapshot ? nowIso : null,
+      verify_code: generateVerifyCode(),
+      content_hash: hashCanvasDocument(snapshot, input.content_json),
+      signed_by: profile.id,
+      signed_at: nowIso,
+      signer_name: signer.name,
+      signer_crmv: signer.crmv,
     })
     .select('id')
     .single()
@@ -1024,17 +1036,35 @@ export async function createCanvaPatientDocument(
   return { id: data.id }
 }
 
+/** Nome + CRMV de quem emite (para signer_name/signer_crmv — 0457). */
+async function loadSigner(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+): Promise<{ name: string | null; crmv: string | null }> {
+  const { data } = await supabase
+    .from('profiles')
+    .select('full_name, crmv')
+    .eq('id', userId)
+    .maybeSingle()
+  return { name: data?.full_name ?? null, crmv: data?.crmv ?? null }
+}
+
 export async function loadCanvaPatientDocument(documentId: string): Promise<{
   config: CanvaTemplateConfig
   content: CanvaContentJson
   document_name: string
   canvas_state: CanvasState | null
+  /** Autenticidade (0457) — usados pelo print para montar ctx.doc + QR. */
+  verify_code: string | null
+  signed_at: string | null
+  signer_name: string | null
+  signer_crmv: string | null
 }> {
   const { supabase, profile } = await requireClinic()
 
   const { data, error } = await supabase
     .from('patient_documents')
-    .select('document_name, content_json, background_image_url, margin_top, margin_bottom, margin_left, margin_right, block_style, template_id, canvas_state_snapshot')
+    .select('document_name, content_json, background_image_url, margin_top, margin_bottom, margin_left, margin_right, block_style, template_id, canvas_state_snapshot, verify_code, signed_at, signer_name, signer_crmv')
     .eq('id', documentId)
     .eq('clinic_id', profile.clinic_id)
     .single()
@@ -1062,6 +1092,10 @@ export async function loadCanvaPatientDocument(documentId: string): Promise<{
     document_name: data.document_name,
     content: (data.content_json as CanvaContentJson) ?? { static_fields: {}, dynamic_fields: [] },
     canvas_state,
+    verify_code: data.verify_code ?? null,
+    signed_at: data.signed_at ?? null,
+    signer_name: data.signer_name ?? null,
+    signer_crmv: data.signer_crmv ?? null,
     config: {
       background_image_url: data.background_image_url ?? null,
       margins: {
@@ -1100,7 +1134,7 @@ export async function updateCanvaPatientDocument(
   // template na 1ª edição — a partir daí o layout fica congelado.
   const { data: existing } = await supabase
     .from('patient_documents')
-    .select('template_id, canvas_state_snapshot')
+    .select('template_id, canvas_state_snapshot, verify_code')
     .eq('id', input.document_id)
     .eq('clinic_id', profile.clinic_id)
     .maybeSingle()
@@ -1117,13 +1151,27 @@ export async function updateCanvaPatientDocument(
     }
   }
 
+  // Reemissão: recalcula o hash sobre snapshot + conteúdo novo e carimba
+  // quem editou. O verify_code é preservado (o QR já impresso continua
+  // válido); documentos legados sem código ganham um.
+  const effectiveSnapshot = backfill?.canvas_state_snapshot
+    ?? (isCanvasState(existing?.canvas_state_snapshot) ? (existing!.canvas_state_snapshot as CanvasState) : null)
+  const signer = await loadSigner(supabase, profile.id)
+  const nowIso = new Date().toISOString()
+
   const { data, error } = await supabase
     .from('patient_documents')
     .update({
       document_name: input.document_name,
       content_json: input.content_json,
-      updated_at: new Date().toISOString(),
+      updated_at: nowIso,
       ...(backfill ?? {}),
+      verify_code: existing?.verify_code ?? generateVerifyCode(),
+      content_hash: hashCanvasDocument(effectiveSnapshot, input.content_json),
+      signed_by: profile.id,
+      signed_at: nowIso,
+      signer_name: signer.name,
+      signer_crmv: signer.crmv,
     })
     .eq('id', input.document_id)
     .eq('clinic_id', profile.clinic_id)

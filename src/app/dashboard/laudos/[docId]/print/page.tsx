@@ -5,6 +5,16 @@ import LaudoPrintable from '@/components/canva/LaudoPrintable'
 import { buildResolveContext } from '@/lib/canva/resolve-context'
 import { parseMedicamentosText } from '@/lib/canva/parse-medicamentos'
 import { listClinicFonts } from '@/lib/actions/clinic-fonts'
+import { headers } from 'next/headers'
+import { buildDocVerificationContext } from '@/lib/canva/doc-verification'
+
+async function getOrigin(): Promise<string> {
+  const h = await headers()
+  const host = h.get('x-forwarded-host') ?? h.get('host')
+  const proto = h.get('x-forwarded-proto') ?? 'https'
+  if (host) return `${proto}://${host}`
+  return process.env.NEXT_PUBLIC_SITE_URL ?? 'https://sysvetmax-dev.vercel.app'
+}
 
 interface Props {
   params: Promise<{ docId: string }>
@@ -39,6 +49,17 @@ export default async function PrintLaudoPage({ params, searchParams }: Props) {
         { documentDate: doc.created_at ? new Date(doc.created_at) : undefined },
       )
     : {}
+
+  // Autenticidade: ctx.doc (código, URL, QR em SVG, emissor) consumido pelo
+  // elemento qr_validation e pelas tags doc.verify_code / doc.verify_url.
+  // doc.page / doc.total_pages são injetados por página pelo LaudoPrintable.
+  resolveContext.doc = await buildDocVerificationContext({
+    verifyCode: loaded.verify_code,
+    origin: await getOrigin(),
+    signedAt: loaded.signed_at,
+    signerName: loaded.signer_name,
+    signerCrmv: loaded.signer_crmv,
+  })
 
   // Fallback do Repeater de prescrições: quando a consulta NÃO tem
   // entradas na tabela `prescriptions` mas o vet digitou medicações no
