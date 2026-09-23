@@ -253,9 +253,21 @@ export default async function DashboardLayout({
   // Seleciona o shell com base em clinics.layout_version (default: 'classic')
   const layoutVersion = (clinicData as any)?.layout_version ?? 'classic'
 
+  // key={clinic_id} força remount completo do provider tree ao trocar de clínica
+  // (ClinicSwitcher usa router.push/refresh, não mais window.location.href — ver
+  // issue #29) — garante que useState(initialX) dos providers recomecem com os
+  // dados da clínica nova em vez de reter o estado antigo numa navegação client-side.
   if (layoutVersion === 'modern') {
-    return <DashboardShellModern {...shellProps}><DeploySkewGuard />{dunningBanner}{children}</DashboardShellModern>
+    return (
+      <DashboardShellModern key={profile.clinic_id} {...shellProps}>
+        <DeploySkewGuard />{dunningBanner}{children}
+      </DashboardShellModern>
+    )
   }
 
-  return <DashboardShellClassic {...shellProps}><DeploySkewGuard />{dunningBanner}{children}</DashboardShellClassic>
+  return (
+    <DashboardShellClassic key={profile.clinic_id} {...shellProps}>
+      <DeploySkewGuard />{dunningBanner}{children}
+    </DashboardShellClassic>
+  )
 }
