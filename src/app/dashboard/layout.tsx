@@ -265,5 +265,13 @@ export default async function DashboardLayout({
     userId:               user.id,
   }
 
-  return <DashboardShell {...shellProps}><DeploySkewGuard />{dunningBanner}{children}</DashboardShell>
+  // key={clinic_id} força remount completo do provider tree ao trocar de clínica
+  // (ClinicSwitcher usa router.push/refresh, não mais window.location.href — ver
+  // issue #29) — garante que useState(initialX) dos providers (ThemeProvider,
+  // etc.) recomecem com os dados da clínica nova em vez de reter o estado antigo.
+  return (
+    <DashboardShell key={profile.clinic_id} {...shellProps}>
+      <DeploySkewGuard />{dunningBanner}{children}
+    </DashboardShell>
+  )
 }
