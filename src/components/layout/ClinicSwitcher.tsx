@@ -1,6 +1,7 @@
 ﻿'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { ChevronDown, Check, AlertCircle } from 'lucide-react'
 import type { UserClinicInfo } from '@/lib/actions/clinic-switcher'
 import { switchClinic } from '@/lib/actions/clinic-switcher'
@@ -13,6 +14,7 @@ interface ClinicSwitcherProps {
 }
 
 export function ClinicSwitcher({ currentClinicId, clinicName, clinics, logoUrl }: ClinicSwitcherProps) {
+  const router = useRouter()
   const [open, setOpen] = useState(false)
   const [switching, setSwitching] = useState<string | null>(null)
   const [switchError, setSwitchError] = useState<string | null>(null)
@@ -37,8 +39,17 @@ export function ClinicSwitcher({ currentClinicId, clinicName, clinics, logoUrl }
       setSwitchError(res.error)
       return
     }
-    // Hard navigation garante re-execução completa dos Server Components com os novos dados de perfil
-    window.location.href = '/dashboard'
+    // Navegação client-side (não window.location.href): o hard navigation antigo
+    // disparava um erro interno do App Router (React #310 — "Rendered more hooks
+    // than during the previous render", dentro do próprio componente Router do
+    // Next.js, issue #29) sempre que havia uma transição do client router ainda
+    // em voo no momento do reload. router.push + refresh força os Server
+    // Components a re-executar com os novos dados de perfil/clínica sem recarregar
+    // o documento inteiro; o `key={clinicId}` nos shells (dashboard/layout.tsx)
+    // garante remount limpo do provider tree, preservando a mesma garantia de
+    // "estado sempre fresco" que o hard navigation dava.
+    router.refresh()
+    router.push('/dashboard')
   }
 
   return (
