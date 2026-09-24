@@ -1,12 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import { BarChart3, Users, DollarSign, TrendingUp, PieChart, MessageCircle, ClipboardList, PawPrint, Percent, ShieldAlert, CalendarClock, LineChart, Layers, Boxes, LayoutDashboard, Sparkles, Barcode } from 'lucide-react'
+import { BarChart3, Users, DollarSign, TrendingUp, PieChart, MessageCircle, ClipboardList, PawPrint, Percent, ShieldAlert, CalendarClock, LineChart, Layers, Boxes, LayoutDashboard, Sparkles, Barcode, FlaskConical } from 'lucide-react'
 import BoletoMovementReport from '@/components/financial/BoletoMovementReport'
 import PetFrequencyReport from './PetFrequencyReport'
 import BIDashboard from './BIDashboard'
 import SmartReportBuilder from './SmartReportBuilder'
 import ControlledBookReport from './ControlledBookReport'
+import ExamRejectionsReport from './ExamRejectionsReport'
 import AgingReport from './AgingReport'
 import CashflowProjectionReport from './CashflowProjectionReport'
 import RevenueBreakdownReport from './RevenueBreakdownReport'
@@ -36,7 +37,7 @@ const MODULE_ORDER: { key: ModuleKey; label: string }[] = [
 ]
 
 interface ReportCategory {
-  key:        keyof ReportsEnabled | 'commissions' | 'controlled' | 'aging' | 'cashflow' | 'revenue' | 'stock_position' | 'clients' | 'dre_company' | 'dashboard' | 'smart' | 'boleto_movement'
+  key:        keyof ReportsEnabled | 'commissions' | 'controlled' | 'aging' | 'cashflow' | 'revenue' | 'stock_position' | 'clients' | 'dre_company' | 'dashboard' | 'smart' | 'boleto_movement' | 'exam_rejections'
   label:      string
   icon:       React.ComponentType<{ className: string }>
   description: string
@@ -51,10 +52,13 @@ const CATEGORY_MODULE: Record<string, ModuleKey> = {
   pet_frequency: 'clinico', productivity: 'clinico',
   operational: 'operacional', stock_position: 'estoque',
   whatsapp: 'comercial', clients: 'comercial', controlled: 'regulatorio',
+  exam_rejections: 'operacional',
 }
 
 interface Props {
   initialEnabled: ReportsEnabled
+  /** flow_config.usa_fluxo_rejeicao_exame — liga o relatorio de nao realizados. */
+  usesExamRejection?: boolean
 }
 
 // ─── Sidebar item ─────────────────────────────────────────────────────────────
@@ -85,7 +89,7 @@ function SidebarItem({
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function ReportsWorkspace({ initialEnabled }: Props) {
+export default function ReportsWorkspace({ initialEnabled, usesExamRejection = false }: Props) {
   const [enabled, setEnabled] = useState<ReportsEnabled>(initialEnabled)
   const [activeKey, setActiveKey] = useState<string>('dashboard')
 
@@ -216,10 +220,18 @@ export default function ReportsWorkspace({ initialEnabled }: Props) {
       description: 'Razão por substância (humano × veterinário) — entradas, saídas, perdas e saldo. Retroativo e impressão para a Vigilância (Portaria 344/1998).',
       component:   <ControlledBookReport />,
     },
+    // Só existe para clínicas com o Fluxo de Rejeição de Exame ligado.
+    ...(usesExamRejection ? [{
+      key:         'exam_rejections' as const,
+      label:       'Exames Não Realizados',
+      icon:        FlaskConical,
+      description: 'Exames não realizados e refeitos, com o motivo de cada um, o cliente e o valor que não foi cobrado. Complementa o boleto, que cobra só os realizados.',
+      component:   <ExamRejectionsReport />,
+    }] : []),
   ]
 
   // Filter visible categories (relatórios gerenciais sempre visíveis)
-  const ALWAYS_ON = ['dashboard', 'smart', 'commissions', 'controlled', 'aging', 'cashflow', 'revenue', 'stock_position', 'clients', 'dre_company', 'boleto_movement']
+  const ALWAYS_ON = ['dashboard', 'smart', 'commissions', 'controlled', 'exam_rejections', 'aging', 'cashflow', 'revenue', 'stock_position', 'clients', 'dre_company', 'boleto_movement']
   const visibleCategories = ALL_CATEGORIES.filter(cat => {
     if (ALWAYS_ON.includes(cat.key as string)) return true
     return enabled[cat.key as keyof ReportsEnabled]
