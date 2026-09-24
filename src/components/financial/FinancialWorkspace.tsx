@@ -28,7 +28,7 @@ import {
   X, Loader2,
 } from 'lucide-react'
 import { useModule } from '@/components/providers/ModulesProvider'
-import { useUsaConvenios } from '@/components/providers/ClinicConfigProvider'
+import { useUsaConvenios, useUsaBoleto, useAnimaisFoundation } from '@/components/providers/ClinicConfigProvider'
 import { sumByStatus } from '@/lib/finance/entry-totals'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -515,6 +515,10 @@ export default function FinancialWorkspace({
 
   const overdueCount = isTitulos ? (activeTab === 'receivable' ? receivable : payable).filter(isOverdue).length : 0
 
+  // Tarefa 0 — Boletos e CNPJs deixam de ser abas fixas: cada um tem gate próprio.
+  // Boletos: flow_config.usa_boleto (padrão desligado). CNPJs: animais_foundation.
+  const usaBoleto = useUsaBoleto()
+  const animaisFoundation = useAnimaisFoundation()
   const mainTabs = [
     { id: 'receivable'  as MainTab, label: 'Contas a Receber' },
     { id: 'payable'     as MainTab, label: 'Contas a Pagar'   },
@@ -522,8 +526,8 @@ export default function FinancialWorkspace({
     { id: 'conciliacao' as MainTab, label: 'Conciliação'       },
     { id: 'creditos'    as MainTab, label: 'Créditos'          },
     { id: 'pagfor'      as MainTab, label: 'PAGFOR'            },
-    { id: 'boletos'     as MainTab, label: 'Boletos'           },
-    { id: 'cnpjs'       as MainTab, label: 'CNPJs'             },
+    ...(usaBoleto        ? [{ id: 'boletos' as MainTab, label: 'Boletos' }] : []),
+    ...(animaisFoundation ? [{ id: 'cnpjs'  as MainTab, label: 'CNPJs'   }] : []),
     { id: 'cadastros'   as MainTab, label: 'Cadastros'         },
   ]
 

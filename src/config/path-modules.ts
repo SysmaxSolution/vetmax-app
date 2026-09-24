@@ -22,6 +22,9 @@ export const PATH_SEGMENT_TO_MODULE: Record<string, string> = {
   billing:         'billing',
   'internal-chat': 'internal_chat',
   appointments:    'reception',  // sub-tela de recepção
+  // Tarefa 0: ambos escapavam do gatekeeper de plano (moduleKeyFromPath → null).
+  imaging:            'exams',     // Imagem/DICOM vive sob o módulo pago Exames
+  'portal-mensagens': 'reception', // caixa de mensagens do Portal do Tutor
 }
 
 export function moduleKeyFromPath(pathname: string): string | null {

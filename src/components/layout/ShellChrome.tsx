@@ -198,6 +198,8 @@ export interface ShellChromeProps {
   centroCirurgico:       boolean
   pdvUnified:            boolean
   usaTreinamento:        boolean
+  usaImagem:             boolean
+  portalEnabled:         boolean
   subscriptionUiEnabled: boolean
   children:              React.ReactNode
 }
@@ -206,7 +208,7 @@ export default function ShellChrome({
   userName, clinicName, clinicId, userRole, logoUrl, activeModules,
   lowStockCount, whatsappHandoffCount, chatUnreadCount, userClinics,
   isSysmax, clinicStatus, isSurgeryMode, planName, allowedRoutes,
-  centroCirurgico, pdvUnified, usaTreinamento, subscriptionUiEnabled, children,
+  centroCirurgico, pdvUnified, usaTreinamento, usaImagem, portalEnabled, subscriptionUiEnabled, children,
 }: ShellChromeProps) {
   const [collapsed,  setCollapsed]  = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -231,8 +233,8 @@ export default function ShellChrome({
 
   const navContext: NavContext = useMemo(() => ({
     userRole, activeModules, planName, allowedRoutes,
-    isSysmax, centroCirurgico, pdvUnified, usaTreinamento,
-  }), [userRole, activeModules, planName, allowedRoutes, isSysmax, centroCirurgico, pdvUnified, usaTreinamento])
+    isSysmax, centroCirurgico, pdvUnified, usaTreinamento, usaImagem, portalEnabled,
+  }), [userRole, activeModules, planName, allowedRoutes, isSysmax, centroCirurgico, pdvUnified, usaTreinamento, usaImagem, portalEnabled])
 
   const badgeCounts: NavBadgeCounts = useMemo(() => ({
     lowStockCount, whatsappHandoffCount, chatUnreadCount,

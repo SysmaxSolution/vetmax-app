@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getTutorContext } from '@/lib/portal/session'
 import { canAccessPatient } from '@/lib/portal/access'
+import { clinicFlowFlag, routineOffError } from '@/lib/clinic/flow-gate'
 
 export interface PortalMessage {
   id: string
@@ -75,6 +76,12 @@ async function staff(): Promise<{ userId: string; clinicId: string } | { error: 
   if (!user) return { error: 'Não autenticado.' }
   const { data: profile } = await supabase.from('profiles').select('clinic_id').eq('id', user.id).single()
   if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
+  // Gate da rotina (Tarefa 0): sem flow_config.portal_enabled a caixa de
+  // mensagens do Portal é inerte, mesmo por chamada direta da action.
+  const admin = createAdminClient()
+  if (!(await clinicFlowFlag(admin, profile.clinic_id as string, 'portal_enabled'))) {
+    return routineOffError('O Portal do Tutor')
+  }
   return { userId: user.id, clinicId: profile.clinic_id as string }
 }
 

@@ -16,6 +16,7 @@ import {
 import { sendImagesReadyEmail, sendLaudoReadyEmail } from '@/lib/imaging/email'
 import { notifyTutorResultReleased } from '@/lib/actions/tutor-portal'
 import { signLaudoDocument } from '@/lib/actions/laudo-signature'
+import { clinicFlowFlag, routineOffError } from '@/lib/clinic/flow-gate'
 import type {
   ImagingStudyRow, CreateStudyInput, PublicStudyFile, PublicStudyView, StaffStudyDetail,
 } from '@/lib/imaging/types'
@@ -34,6 +35,10 @@ async function getCtx(): Promise<Ctx | { error: string }> {
   const { data: profile } = await supabase
     .from('profiles').select('clinic_id, role').eq('id', user.id).single()
   if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
+  // Gate da rotina (Tarefa 0): flow_config.usa_imagem, padrão desligado.
+  if (!(await clinicFlowFlag(createAdminClient(), profile.clinic_id as string, 'usa_imagem'))) {
+    return routineOffError('O módulo de Imagem')
+  }
   return { userId: user.id, clinicId: profile.clinic_id as string, role: (profile.role as string) ?? '' }
 }
 

@@ -64,7 +64,12 @@ export default function PortalBookingSettings({ initialConfig, onToast }: Props)
         <label className="flex items-center justify-between gap-4 cursor-pointer">
           <div>
             <p className="text-sm font-medium text-slate-800">Usar o Portal do Tutor</p>
-            <p className="text-xs text-slate-500">Libera a Área do Tutor (histórico, exames, vacinas e agendamento).</p>
+            <p className="text-xs text-slate-500">
+              Libera a Área do Tutor (histórico, exames, vacinas e agendamento) e o item
+              &quot;Portal (Tutores)&quot; no menu da equipe. Desligado, o tutor não entra e a caixa de
+              mensagens some. <strong>Não</strong> envia mensagens automáticas: o aviso de vacina é
+              uma rotina separada, em &quot;Aviso automático de vacina&quot;.
+            </p>
           </div>
           <input type="checkbox" checked={portalEnabled} onChange={e => setPortalEnabled(e.target.checked)}
                  className="h-5 w-9 appearance-none rounded-full bg-slate-200 checked:bg-teal-500 relative transition-colors cursor-pointer

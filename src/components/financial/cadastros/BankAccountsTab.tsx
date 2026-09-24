@@ -8,6 +8,7 @@ import {
 } from '@/lib/actions/financial'
 import { Plus, Search, Pencil, Trash2, Star, X, Loader2, AlertCircle, Building2 } from 'lucide-react'
 import BoletoCarteiraPanel from './BoletoCarteiraPanel'
+import { useUsaBoleto } from '@/components/providers/ClinicConfigProvider'
 
 // ─── BCB Top-20 banks ─────────────────────────────────────────────────────────
 
@@ -76,6 +77,9 @@ function AccountModal({
   const [isPending, startTransition] = useTransition()
   const [confirmDel, setConfirmDel] = useState(false)
   const [tab, setTab] = useState<'dados' | 'carteira'>('dados')
+  // Tarefa 0 — a carteira de cobrança só existe quando a rotina de Boletos
+  // está ativada para a clínica (flow_config.usa_boleto, padrão desligado).
+  const usaBoleto = useUsaBoleto()
 
   function selectBank(code: string) {
     const b = BCB_BANKS.find(b => b.code === code)
@@ -121,13 +125,16 @@ function AccountModal({
 
         {mode === 'edit' && (
           <div className="flex gap-1 border-b border-slate-100 px-5 pt-2">
-            {([['dados', 'Dados da Conta'], ['carteira', 'Carteira Bancária']] as const).map(([k, l]) => (
+            {(usaBoleto
+              ? ([['dados', 'Dados da Conta'], ['carteira', 'Carteira Bancária']] as const)
+              : ([['dados', 'Dados da Conta']] as const)
+            ).map(([k, l]) => (
               <button key={k} onClick={() => setTab(k)} className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px ${tab === k ? 'border-teal-600 text-teal-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>{l}</button>
             ))}
           </div>
         )}
 
-        {mode === 'edit' && tab === 'carteira' && account ? (
+        {mode === 'edit' && tab === 'carteira' && account && usaBoleto ? (
           <div className="p-5 max-h-[70vh] overflow-y-auto"><BoletoCarteiraPanel accountId={account.id} /></div>
         ) : (
         <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">

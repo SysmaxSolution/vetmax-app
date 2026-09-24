@@ -81,6 +81,10 @@ export interface NavContext {
   pdvUnified:      boolean
   /** flow_config.usa_treinamento — liga a Academia de Treinamento no menu. */
   usaTreinamento:  boolean
+  /** flow_config.usa_imagem — liga o módulo de Imagem/DICOM no menu. Padrão: false. */
+  usaImagem?:      boolean
+  /** flow_config.portal_enabled — liga o Portal (Tutores) no menu. Padrão: false. */
+  portalEnabled?:  boolean
 }
 
 /**
@@ -102,6 +106,14 @@ export function getVisibleNavLinks(ctx: NavContext): NavLink[] {
     // Treinamento é gated pela flag flow_config.usa_treinamento (Gestão >
     // Configurações). SysMax (suporte) sempre vê. Só aparece quando ativado.
     if (link.href === '/dashboard/treinamento') return ctx.usaTreinamento || ctx.isSysmax
+    // Tarefa 0 — rotinas novas têm flag PRÓPRIA (flow_config), não herdam mais
+    // 'exams'/'reception'. Padrão desligado: some do menu até a Sysmax ativar.
+    // Imagem continua exigindo o módulo pago Exames ALÉM da flag.
+    if (link.href === '/dashboard/imaging') {
+      if (!ctx.usaImagem) return false
+      return !ctx.activeModules || ctx.activeModules.includes('exams')
+    }
+    if (link.href === '/dashboard/portal-mensagens') return ctx.portalEnabled === true
     // Épico B (04/06, Q4): PDV unificado ao Caixa — módulo some do menu;
     // a venda avulsa vive em Caixa > Recebimentos.
     if (link.href === '/dashboard/sales' && ctx.pdvUnified) return false

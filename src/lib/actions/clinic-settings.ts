@@ -76,6 +76,33 @@ export type FlowConfig = {
    *  quando o exame é realizado/liberado. DESLIGADA (padrão) = fluxo atual,
    *  bit-a-bit, para todos os outros clientes. */
   usa_fluxo_rejeicao_exame?: boolean
+
+  // ── Tarefa 0 (pré-produção): flag PRÓPRIA por rotina nova ───────────────────
+  // Padrão de TODAS: DESLIGADA. Ligar é ato explícito de configuração
+  // (Gestão > Configurações). Com a flag off: some do menu, a rota redireciona
+  // e as server actions da rotina recusam.
+  /** Módulo de Imagem + visualizador DICOM (/dashboard/imaging). */
+  usa_imagem?:              boolean
+  /** Laboratório: painel de resultados/analitos/HL7 dentro do exame. */
+  usa_laboratorio?:         boolean
+  /** Boletos de cobrança (aba Boletos no Financeiro, emissão/reimpressão). */
+  usa_boleto?:              boolean
+  /** Recall de vacina por WhatsApp. ⚠️ Ligar ENVIA MENSAGEM AOS TUTORES.
+   *  Separada de portal_enabled de propósito (LGPD + risco de ban da instância). */
+  vaccine_recall_enabled?:  boolean
+  /** Hora local (0-23) em que o recall de vacina roda. Padrão: 9. */
+  vaccine_recall_hour?:     number
+  /** Antecedência, em dias, do aviso de vacina. Padrão: 7. */
+  vaccine_recall_days?:     number
+  /** Fuso IANA usado para interpretar vaccine_recall_hour. Padrão: America/Sao_Paulo. */
+  vaccine_recall_tz?:       string
+  /** Quando o laboratório parceiro NÃO realiza o exame, o custo dele deixa de ser
+   *  devido? TRUE = cancela/não gera o contas a pagar do lab na rejeição.
+   *  FALSE (padrão) = mantém o payable — comportamento atual, bit-a-bit. */
+  cancela_custo_lab_na_recusa?: boolean
+  /** Rejeitar exame JÁ FATURADO estorna a fatura automaticamente?
+   *  FALSE (padrão) = recusa a rejeição e orienta estorno manual no Financeiro. */
+  estorna_exame_faturado_na_recusa?: boolean
 }
 
 export type BusinessHourEntry = { open: string; close: string } | null
@@ -252,6 +279,28 @@ export async function usesFluxoRejeicaoExame(): Promise<boolean> {
 /** TRUE quando a clínica ativou o módulo Centro Cirúrgico. */
 export async function isCentroCirurgico(): Promise<boolean> {
   return getFlowFlag('centro_cirurgico')
+}
+
+// ─── Tarefa 0 — gates por rotina (padrão DESLIGADO) ─────────────────────────
+
+/** TRUE quando a clínica ativou o módulo de Imagem/DICOM. */
+export async function usesImagem(): Promise<boolean> {
+  return getFlowFlag('usa_imagem')
+}
+
+/** TRUE quando a clínica ativou o Laboratório (resultados/analitos/HL7 no exame). */
+export async function usesLaboratorio(): Promise<boolean> {
+  return getFlowFlag('usa_laboratorio')
+}
+
+/** TRUE quando a clínica ativou os Boletos de cobrança. */
+export async function usesBoleto(): Promise<boolean> {
+  return getFlowFlag('usa_boleto')
+}
+
+/** TRUE quando a clínica ativou o Portal do Tutor. */
+export async function usesPortalTutor(): Promise<boolean> {
+  return getFlowFlag('portal_enabled')
 }
 
 // ─── Sub-features por tier (re-packaging 0408) ───────────────────────────────

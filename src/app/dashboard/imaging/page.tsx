@@ -23,9 +23,14 @@ export default async function ImagingPage() {
 
   if (!profile?.clinic_id) redirect('/onboarding')
 
-  const { data: clinicRow } = await supabase.from('clinics').select('active_modules').eq('id', profile.clinic_id).single()
+  // Gate duplo: flag PRÓPRIA da rotina (flow_config.usa_imagem, padrão desligado)
+  // E o módulo pago Exames. `mods` nulo antes era bypass — agora nega.
+  const { data: clinicRow } = await admin
+    .from('clinics').select('active_modules, flow_config').eq('id', profile.clinic_id).single()
+  const usaImagem = (clinicRow?.flow_config as { usa_imagem?: boolean } | null)?.usa_imagem === true
+  if (!usaImagem) redirect('/dashboard')
   const mods = clinicRow?.active_modules as string[] | null
-  if (mods && !mods.includes('exams')) redirect('/dashboard')
+  if (!mods?.includes('exams')) redirect('/dashboard')
 
   const [studiesResult, partnersResult, catalogResult] = await Promise.all([
     listImagingStudies(),

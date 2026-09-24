@@ -30,6 +30,7 @@ import type { VetConsultationDetail } from '@/lib/actions/vet'
 import type { DocumentTemplate } from '@/types'
 import type { PatientDocument } from '@/lib/actions/documents'
 import type { Attachment } from '@/lib/actions/attachments'
+import { useUsaLaboratorio } from '@/components/providers/ClinicConfigProvider'
 
 // ─── Labels ──────────────────────────────────────────────────────────────────
 
@@ -82,6 +83,9 @@ export default function ExamDetail({
 }: Props) {
   const router = useRouter()
   const aiMode = useAiTranscriptionMode()
+  // Tarefa 0 — painel de laboratório (analitos/HL7/liberação) só para quem
+  // ativou a rotina (flow_config.usa_laboratorio, padrão desligado).
+  const usaLaboratorio = useUsaLaboratorio()
   const { patient, tutor, vital_signs } = consultation
   // Já enviado a laboratório parceiro (aguardando resultado) — não reofertar o
   // envio (evita dupla cobrança); o exame já foi cobrado no caixa.
@@ -622,8 +626,12 @@ export default function ExamDetail({
           />
         )}
 
-        {/* Resultados do exame (Fase 2): entrada/import + conferência e liberação (2.4) */}
-        <ExamResultsPanel consultationId={consultation.id} canRelease={userRole !== 'receptionist' && userRole !== 'assistant'} />
+        {/* Resultados do exame (Fase 2): entrada/import + conferência e liberação (2.4).
+            Tarefa 0 — só existe para quem ativou a rotina de Laboratório
+            (flow_config.usa_laboratorio, padrão desligado). */}
+        {usaLaboratorio && (
+          <ExamResultsPanel consultationId={consultation.id} canRelease={userRole !== 'receptionist' && userRole !== 'assistant'} />
+        )}
 
         {/* Serviços/Produtos do exame — painel fixo (como no consultório).
             Permite vincular/visualizar o serviço antes de enviar ao laboratório. */}

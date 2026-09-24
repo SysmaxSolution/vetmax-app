@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import { MessageCircle } from 'lucide-react'
 import ClinicPortalInbox from '@/components/portal/ClinicPortalInbox'
@@ -10,6 +11,16 @@ export default async function PortalMessagesPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
+
+  // Gate da rotina: flow_config.portal_enabled (padrão desligado). Antes a
+  // única checagem era "está logado?", e o item herdava o módulo 'reception'.
+  const admin = createAdminClient()
+  const { data: profile } = await admin
+    .from('profiles').select('clinic_id').eq('id', user.id).single()
+  if (!profile?.clinic_id) redirect('/dashboard')
+  const { data: clinic } = await admin
+    .from('clinics').select('flow_config').eq('id', profile.clinic_id).single()
+  if ((clinic?.flow_config as { portal_enabled?: boolean } | null)?.portal_enabled !== true) redirect('/dashboard')
 
   return (
     <div className="min-h-screen bg-slate-50">

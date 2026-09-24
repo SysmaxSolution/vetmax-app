@@ -5,6 +5,7 @@ import {
   Building2, Shield, MessageCircle, Calculator,
   BarChart3, Wrench, ToggleLeft, ToggleRight, Save, Loader2,
   HelpCircle, Tags, Hash, Building, Landmark, FlaskConical, GraduationCap,
+  ScanLine, Barcode, Syringe,
 } from 'lucide-react'
 import FinancialIntegrationsForm from './FinancialIntegrationsForm'
 import type { ClinicConfig, ClinicSettingsConfig, FlowConfig } from '@/lib/actions/clinic-settings'
@@ -18,6 +19,8 @@ import FiscalConfigForm from './FiscalConfigForm'
 import LabAgentSettings from './LabAgentSettings'
 import AnalyteMappingPanel from './AnalyteMappingPanel'
 import ExamRejectionSettings from './ExamRejectionSettings'
+import FlowFlagCard from './FlowFlagCard'
+import VaccineRecallSettings from './VaccineRecallSettings'
 import PricingTab from '@/components/registry/pricing/PricingTab'
 import DocumentNumberingTab from '../DocumentNumberingTab'
 import CompaniesTab from '../CompaniesTab'
@@ -142,7 +145,62 @@ export default function SettingsWorkspace({
             <AdvanceSettings initialConfig={initialClinicConfig} onToast={onToast} />
             <ConveniosSettings initialConfig={initialClinicConfig} onToast={onToast} />
             <TreinamentoSettings initialConfig={initialClinicConfig} onToast={onToast} />
+
+            {/* ── Tarefa 0 — ativação por rotina (padrão DESLIGADO) ─────────── */}
+            <FlowFlagCard
+              initialConfig={initialClinicConfig} onToast={onToast}
+              flag="usa_imagem"
+              icon={<ScanLine className="h-4 w-4 text-teal-600" />}
+              title="Módulo de Imagem (raio-X, ultrassom, DICOM)?"
+              subtitle="Estudos de imagem, visualizador DICOM, laudo e link para o MV solicitante"
+              whenOn="O menu mostra “Imagem”: a equipe cadastra estudos, sobe arquivos DICOM, anexa laudo e libera para o tutor e para o Médico Veterinário solicitante."
+              whenOff="Quando desativado, o item “Imagem” some do menu, a rota redireciona para o painel e as ações de imagem são recusadas. Exige também o módulo Exames."
+              successMessage="Módulo de Imagem configurado!"
+            />
+            <FlowFlagCard
+              initialConfig={initialClinicConfig} onToast={onToast}
+              flag="usa_laboratorio"
+              icon={<FlaskConical className="h-4 w-4 text-teal-600" />}
+              title="Laboratório dentro do exame?"
+              subtitle="Lançamento de analitos, importação HL7 dos aparelhos e liberação pelo MV"
+              whenOn="Dentro de cada exame aparece o painel de resultados: digitação/importação de analitos, etiqueta de tubo e conferência + liberação pelo Médico Veterinário."
+              whenOff="Quando desativado, o painel de resultados não aparece no exame e as ações de laboratório são recusadas. O exame continua funcionando normalmente sem ele."
+              successMessage="Laboratório configurado!"
+            />
+            <FlowFlagCard
+              initialConfig={initialClinicConfig} onToast={onToast}
+              flag="usa_boleto"
+              icon={<Barcode className="h-4 w-4 text-teal-600" />}
+              title="Emitir boletos de cobrança?"
+              subtitle="Aba Boletos no Financeiro, carteira bancária, envio por e-mail/WhatsApp e baixa automática"
+              whenOn="O Financeiro mostra a aba “Boletos” e a aba “Carteira Bancária” no cadastro da conta. É preciso configurar a carteira e habilitar a conta para emitir."
+              whenOff="Quando desativado, a aba Boletos some do Financeiro, a carteira bancária some do cadastro da conta e emitir/enviar boleto é recusado."
+              successMessage="Boletos configurados!"
+            />
+            <VaccineRecallSettings initialConfig={initialClinicConfig} onToast={onToast} />
+
             <ExamRejectionSettings initialConfig={initialClinicConfig} onToast={onToast} />
+            <FlowFlagCard
+              initialConfig={initialClinicConfig} onToast={onToast}
+              flag="cancela_custo_lab_na_recusa"
+              icon={<FlaskConical className="h-4 w-4 text-teal-600" />}
+              title="Exame não realizado pelo laboratório parceiro deixa de ser devido?"
+              subtitle="O que acontece com o contas a pagar do laboratório quando o exame volta rejeitado"
+              whenOn="Ao rejeitar a linha do exame, o sistema CANCELA o contas a pagar do custo do laboratório parceiro (ou não o gera). Use quando o contrato diz que exame não realizado não se paga."
+              whenOff="Padrão. O contas a pagar do laboratório parceiro continua devido mesmo com o exame rejeitado — é o comportamento atual; o ajuste, se houver, é manual no Financeiro."
+              successMessage="Custo do laboratório na recusa configurado!"
+            />
+            <FlowFlagCard
+              initialConfig={initialClinicConfig} onToast={onToast}
+              flag="estorna_exame_faturado_na_recusa"
+              icon={<Syringe className="h-4 w-4 text-teal-600" />}
+              title="Rejeitar exame já faturado estorna automaticamente?"
+              subtitle="Caminho do dinheiro — a fatura do tutor/cliente é ajustada sozinha"
+              warning="Isto mexe em documento financeiro já emitido. Toda rejeição e todo estorno ficam registrados na trilha de auditoria com o autor. Fatura já PAGA/baixada nunca é alterada — o sistema recusa e pede o estorno manual."
+              whenOn="Ao rejeitar uma linha já faturada, o sistema estorna/ajusta o valor na fatura em aberto automaticamente e registra a trilha."
+              whenOff="Padrão. Rejeitar uma linha já faturada é recusado, com orientação para estornar manualmente no Financeiro."
+              successMessage="Estorno automático configurado!"
+            />
             <MentorIdleSettings initialConfig={initialClinicConfig} onToast={onToast} />
           </div>
         )}

@@ -11,6 +11,7 @@ import { parseHL7ORU } from '@/lib/lab/hl7-parser'
 import { resolveAnalyte, normKey, type AnalyteMapping } from '@/lib/lab/analyte-resolve'
 import { notifyTutorResultReleased } from '@/lib/actions/tutor-portal'
 import { usesExamRejectionFlow } from '@/lib/exams/rejection-gate'
+import { clinicFlowFlag, routineOffError } from '@/lib/clinic/flow-gate'
 
 async function getCtx() {
   const supabase = await createClient()
@@ -18,7 +19,12 @@ async function getCtx() {
   if (!user) return { error: 'Não autenticado' as const }
   const { data: profile } = await supabase.from('profiles').select('clinic_id, role').eq('id', user.id).single()
   if (!profile?.clinic_id) return { error: 'Perfil sem clínica' as const }
-  return { admin: createAdminClient(), clinic_id: profile.clinic_id as string, user_id: user.id, role: (profile.role as string) ?? 'staff' }
+  const admin = createAdminClient()
+  // Gate da rotina (Tarefa 0): flow_config.usa_laboratorio, padrão desligado.
+  if (!(await clinicFlowFlag(admin, profile.clinic_id as string, 'usa_laboratorio'))) {
+    return { error: routineOffError('O Laboratório').error }
+  }
+  return { admin, clinic_id: profile.clinic_id as string, user_id: user.id, role: (profile.role as string) ?? 'staff' }
 }
 
 export interface ExamResultRow {

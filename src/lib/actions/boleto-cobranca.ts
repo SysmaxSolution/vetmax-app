@@ -9,6 +9,7 @@ import { buildBoletoView, type BoletoView } from '@/lib/boleto/view'
 import { incluirBoleto, type CobrancaRuntime } from '@/lib/integrations/sicoob-cobranca'
 import { evolutionSendText } from '@/lib/evolution-api-client'
 import { logBoletoEvent } from '@/lib/boleto/events'
+import { clinicFlowFlag, routineOffError } from '@/lib/clinic/flow-gate'
 
 async function getOrigin(): Promise<string> {
   const h = await headers()
@@ -28,6 +29,14 @@ async function ctx(): Promise<Ctx | { error: string }> {
   return { userId: user.id, clinicId: p.clinic_id as string, role: (p.role as string) ?? '', name: (p.full_name as string) ?? null }
 }
 const canManage = (role: string) => ['admin', 'owner', 'manager'].includes(role)
+
+/** Gate da rotina de Boletos (flow_config.usa_boleto, padrão desligado).
+ *  Aplicado a tudo que EMITE ou ENVIA boleto; a configuração da carteira segue
+ *  acessível para a Sysmax preparar a conta antes de ligar a rotina. */
+async function boletoRoutineOn(clinicId: string): Promise<{ error: string } | null> {
+  const on = await clinicFlowFlag(createAdminClient(), clinicId, 'usa_boleto')
+  return on ? null : routineOffError('A rotina de Boletos')
+}
 
 // ─── Config da carteira (por conta bancária) ─────────────────────────────────
 export interface BoletoConfig {
@@ -133,6 +142,7 @@ function runtimeFromConfig(cfg: BoletoConfig): CobrancaRuntime {
 
 export async function emitOrReprintBoleto(financialEntryId: string, bankAccountId?: string): Promise<{ ok: true; boletoId: string; reprint: boolean } | { error: string }> {
   const c = await ctx(); if ('error' in c) return { error: c.error }
+  const off = await boletoRoutineOn(c.clinicId); if (off) return off
   if (!canManage(c.role)) return { error: 'Sem permissão.' }
   const admin = createAdminClient()
 
@@ -269,6 +279,7 @@ async function boletoLinkAndContacts(admin: ReturnType<typeof createAdminClient>
 
 export async function sendBoletoEmail(boletoId: string): Promise<{ ok: true } | { error: string }> {
   const c = await ctx(); if ('error' in c) return { error: c.error }
+  const off = await boletoRoutineOn(c.clinicId); if (off) return off
   if (!canManage(c.role)) return { error: 'Sem permissão.' }
   const admin = createAdminClient()
   const info = await boletoLinkAndContacts(admin, c.clinicId, boletoId)
@@ -297,6 +308,7 @@ export async function sendBoletoEmail(boletoId: string): Promise<{ ok: true } | 
 
 export async function sendBoletoWhatsApp(boletoId: string): Promise<{ ok: true } | { error: string }> {
   const c = await ctx(); if ('error' in c) return { error: c.error }
+  const off = await boletoRoutineOn(c.clinicId); if (off) return off
   if (!canManage(c.role)) return { error: 'Sem permissão.' }
   const admin = createAdminClient()
   const info = await boletoLinkAndContacts(admin, c.clinicId, boletoId)

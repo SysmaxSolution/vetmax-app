@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { incluirBoleto, consultarBoleto, baixarBoleto, type CobrancaRuntime } from '@/lib/integrations/sicoob-cobranca'
 import type { BoletoInput } from '@/lib/integrations/sicoob-cobranca-map'
 import { logBoletoEvent } from '@/lib/boleto/events'
+import { clinicFlowFlag, routineOffError } from '@/lib/clinic/flow-gate'
 
 type Ctx = { userId: string; clinicId: string; role: string }
 async function ctx(): Promise<Ctx | { error: string }> {
@@ -13,6 +14,10 @@ async function ctx(): Promise<Ctx | { error: string }> {
   if (!user) return { error: 'Não autenticado.' }
   const { data: profile } = await supabase.from('profiles').select('clinic_id, role').eq('id', user.id).single()
   if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
+  // Gate da rotina (Tarefa 0): flow_config.usa_boleto, padrão desligado.
+  if (!(await clinicFlowFlag(createAdminClient(), profile.clinic_id as string, 'usa_boleto'))) {
+    return routineOffError('A rotina de Boletos')
+  }
   return { userId: user.id, clinicId: profile.clinic_id as string, role: (profile.role as string) ?? '' }
 }
 
