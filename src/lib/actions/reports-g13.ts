@@ -693,6 +693,17 @@ export async function getOperationalReport(params: {
 
 // ─── G13-9: Reports Settings ──────────────────────────────────────────────────
 
+// Tarefa 0 — TODO relatório é ativável/desativável por clínica. As 12 chaves
+// abaixo das 7 originais eram forçadas por um ALWAYS_ON em ReportsWorkspace que
+// burlava este mecanismo: o admin via os relatórios e NÃO conseguia desligá-los,
+// porque as chaves nem existiam aqui.
+//
+// DECISÃO DE DEFAULT (Tarefa 0, documentada): todas nascem LIGADAS para quem já
+// tem o módulo Relatórios. Motivo: desligar por padrão seria uma REGRESSÃO para
+// a Clínica Animais, que já usa esses relatórios no ambiente de testes. O que
+// muda é que agora dá para desligar — a ativação vira escolha, não imposição.
+// Relatórios presos a uma rotina (Boletos, Rejeição de Exame) continuam ANDados
+// com a flag da rotina na tela, então ligado aqui não significa visível lá.
 export interface ReportsEnabled {
   pet_frequency:    boolean
   productivity:     boolean
@@ -701,6 +712,19 @@ export interface ReportsEnabled {
   curva_abc:        boolean
   whatsapp:         boolean
   operational:      boolean
+  // ── antes no ALWAYS_ON ──
+  dashboard:        boolean
+  smart:            boolean
+  commissions:      boolean
+  controlled:       boolean
+  aging:            boolean
+  cashflow:         boolean
+  revenue:          boolean
+  stock_position:   boolean
+  clients:          boolean
+  dre_company:      boolean
+  boleto_movement:  boolean
+  exam_rejections:  boolean
 }
 
 const REPORTS_DEFAULTS: ReportsEnabled = {
@@ -711,6 +735,18 @@ const REPORTS_DEFAULTS: ReportsEnabled = {
   curva_abc:        true,
   whatsapp:         true,
   operational:      true,
+  dashboard:        true,
+  smart:            true,
+  commissions:      true,
+  controlled:       true,
+  aging:            true,
+  cashflow:         true,
+  revenue:          true,
+  stock_position:   true,
+  clients:          true,
+  dre_company:      true,
+  boleto_movement:  true,
+  exam_rejections:  true,
 }
 
 export async function getReportsEnabled(): Promise<ReportsEnabled | { error: string }> {
@@ -727,14 +763,28 @@ export async function getReportsEnabled(): Promise<ReportsEnabled | { error: str
   const raw = (data as any)?.reports_enabled
   if (!raw || typeof raw !== 'object') return REPORTS_DEFAULTS
 
+  // `?? true` preserva o comportamento de quem já tinha reports_enabled gravado
+  // sem as chaves novas: elas entram ligadas, como estavam de fato.
   return {
-    pet_frequency: raw.pet_frequency ?? true,
-    productivity:  raw.productivity  ?? true,
-    financial:     raw.financial     ?? true,
-    dre:           raw.dre           ?? true,
-    curva_abc:     raw.curva_abc     ?? true,
-    whatsapp:      raw.whatsapp      ?? true,
-    operational:   raw.operational   ?? true,
+    pet_frequency:   raw.pet_frequency   ?? true,
+    productivity:    raw.productivity    ?? true,
+    financial:       raw.financial       ?? true,
+    dre:             raw.dre             ?? true,
+    curva_abc:       raw.curva_abc       ?? true,
+    whatsapp:        raw.whatsapp        ?? true,
+    operational:     raw.operational     ?? true,
+    dashboard:       raw.dashboard       ?? true,
+    smart:           raw.smart           ?? true,
+    commissions:     raw.commissions     ?? true,
+    controlled:      raw.controlled      ?? true,
+    aging:           raw.aging           ?? true,
+    cashflow:        raw.cashflow        ?? true,
+    revenue:         raw.revenue         ?? true,
+    stock_position:  raw.stock_position  ?? true,
+    clients:         raw.clients         ?? true,
+    dre_company:     raw.dre_company     ?? true,
+    boleto_movement: raw.boleto_movement ?? true,
+    exam_rejections: raw.exam_rejections ?? true,
   }
 }
 

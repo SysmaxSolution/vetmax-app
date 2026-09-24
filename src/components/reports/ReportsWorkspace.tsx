@@ -22,6 +22,8 @@ import WhatsAppReport from './WhatsAppReport'
 import OperationalReport from './OperationalReport'
 import CommissionsReport from './CommissionsReport'
 import type { ReportsEnabled } from '@/lib/actions/reports-g13'
+import { useUsaBoleto } from '@/components/providers/ClinicConfigProvider'
+import { isReportVisible } from '@/lib/reports/visibility'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -91,6 +93,8 @@ function SidebarItem({
 
 export default function ReportsWorkspace({ initialEnabled, usesExamRejection = false }: Props) {
   const [enabled, setEnabled] = useState<ReportsEnabled>(initialEnabled)
+  // O extrato de boletos acompanha a rotina de Boletos (flow_config.usa_boleto).
+  const usaBoleto = useUsaBoleto()
   const [activeKey, setActiveKey] = useState<string>('dashboard')
 
   const ALL_CATEGORIES: ReportCategory[] = [
@@ -230,12 +234,17 @@ export default function ReportsWorkspace({ initialEnabled, usesExamRejection = f
     }] : []),
   ]
 
-  // Filter visible categories (relatórios gerenciais sempre visíveis)
-  const ALWAYS_ON = ['dashboard', 'smart', 'commissions', 'controlled', 'exam_rejections', 'aging', 'cashflow', 'revenue', 'stock_position', 'clients', 'dre_company', 'boleto_movement']
-  const visibleCategories = ALL_CATEGORIES.filter(cat => {
-    if (ALWAYS_ON.includes(cat.key as string)) return true
-    return enabled[cat.key as keyof ReportsEnabled]
-  })
+  // Tarefa 0 — o ALWAYS_ON foi REMOVIDO. Ele forçava 12 relatórios ignorando o
+  // reports_enabled que já existia por clínica, e como as chaves nem estavam em
+  // ReportsEnabled o admin não conseguia desligá-los. Agora todo relatório
+  // obedece à configuração (Gestão > Configurações > Relatórios).
+  // A única regra extra: relatório que pertence a uma ROTINA some junto com a
+  // rotina — não faz sentido esconder a aba Boletos e manter o extrato dela.
+  const visibleCategories = ALL_CATEGORIES.filter(cat =>
+    isReportVisible(cat.key as string, enabled as unknown as Record<string, boolean | undefined>, {
+      usaBoleto, usesExamRejection,
+    }),
+  )
 
   const activeCategory = visibleCategories.find(c => c.key === activeKey)
     ?? visibleCategories[0]
