@@ -17,6 +17,7 @@ import WhatsappTriggerModules from './WhatsappTriggerModules'
 import FiscalConfigForm from './FiscalConfigForm'
 import LabAgentSettings from './LabAgentSettings'
 import AnalyteMappingPanel from './AnalyteMappingPanel'
+import ExamRejectionSettings from './ExamRejectionSettings'
 import PricingTab from '@/components/registry/pricing/PricingTab'
 import DocumentNumberingTab from '../DocumentNumberingTab'
 import CompaniesTab from '../CompaniesTab'
@@ -141,6 +142,7 @@ export default function SettingsWorkspace({
             <AdvanceSettings initialConfig={initialClinicConfig} onToast={onToast} />
             <ConveniosSettings initialConfig={initialClinicConfig} onToast={onToast} />
             <TreinamentoSettings initialConfig={initialClinicConfig} onToast={onToast} />
+            <ExamRejectionSettings initialConfig={initialClinicConfig} onToast={onToast} />
             <MentorIdleSettings initialConfig={initialClinicConfig} onToast={onToast} />
           </div>
         )}

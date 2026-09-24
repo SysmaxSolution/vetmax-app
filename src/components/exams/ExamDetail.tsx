@@ -16,6 +16,7 @@ import { returnToVet, dischargeFromExams, sendExamToPartnerLab } from '@/lib/act
 import { listPartnerClinics, type PartnerClinic } from '@/lib/actions/partner-clinics'
 import ConsultationServicesPanel from '@/components/vet/ConsultationServicesPanel'
 import ExamResultsPanel from '@/components/exams/ExamResultsPanel'
+import ExamRejectionPanel from '@/components/exams/ExamRejectionPanel'
 import { formatPetAge } from '@/lib/utils/pet-age'
 import { Toast } from '@/components/ui/toast'
 import { PetAvatar } from '@/components/ui/PetAvatar'
@@ -55,6 +56,8 @@ interface Props {
   initialAttachments?: Attachment[]
   userRole?:           string
   insuranceCard?:      import('@/lib/actions/insurance-coverage').InsuranceCardData | null
+  /** flow_config.usa_fluxo_rejeicao_exame — liga o painel de realização/rejeição. */
+  usesExamRejection?:  boolean
 }
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
@@ -75,6 +78,7 @@ export default function ExamDetail({
   initialAttachments = [],
   userRole,
   insuranceCard,
+  usesExamRejection = false,
 }: Props) {
   const router = useRouter()
   const aiMode = useAiTranscriptionMode()
@@ -601,10 +605,21 @@ export default function ExamDetail({
           <div className="flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-800">
             <FlaskConical className="h-4 w-4 flex-shrink-0" />
             <span>
-              Exame <strong>enviado a laboratório parceiro</strong> — aguardando o resultado. O valor já foi
-              lançado no caixa. Quando o laudo voltar, anexe o resultado e escolha o desfecho abaixo (alta ou devolver ao médico).
+              Exame <strong>enviado a laboratório parceiro</strong> — aguardando o resultado.{' '}
+              {usesExamRejection
+                ? 'A cobrança fica retida até o exame ser liberado: exame não realizado não é cobrado.'
+                : 'O valor já foi lançado no caixa.'}{' '}
+              Quando o laudo voltar, anexe o resultado e escolha o desfecho abaixo (alta ou devolver ao médico).
             </span>
           </div>
+        )}
+
+        {/* Fluxo de Rejeição de Exame (opt-in por clínica) — realizado × não realizado */}
+        {usesExamRejection && (
+          <ExamRejectionPanel
+            consultationId={consultation.id}
+            onToast={(type, message) => setToast({ type, message })}
+          />
         )}
 
         {/* Resultados do exame (Fase 2): entrada/import + conferência e liberação (2.4) */}

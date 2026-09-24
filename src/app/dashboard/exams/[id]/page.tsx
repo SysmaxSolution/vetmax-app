@@ -32,11 +32,17 @@ export default async function ExamDetailPage({ params }: Props) {
 
   const clinicName = (profile.clinics as unknown as { name: string } | null)?.name ?? 'Minha Clínica'
 
-  const [consultResult, templatesResult, docsResult] = await Promise.all([
+  const [consultResult, templatesResult, docsResult, clinicRow] = await Promise.all([
     getVetConsultation(id),
     getTemplates(),
     getPatientDocuments(id),
+    admin.from('clinics').select('flow_config').eq('id', profile.clinic_id).maybeSingle(),
   ])
+
+  // Fluxo de Rejeição de Exame — opt-in por clínica (padrão desligado).
+  const usesExamRejection =
+    ((clinicRow.data?.flow_config ?? {}) as { usa_fluxo_rejeicao_exame?: boolean })
+      .usa_fluxo_rejeicao_exame === true
 
   if ('error' in consultResult) redirect('/dashboard/exams')
 
@@ -69,6 +75,7 @@ export default async function ExamDetailPage({ params }: Props) {
         initialAttachments={initialAttachments}
         userRole={profile.role}
         insuranceCard={insuranceCard}
+        usesExamRejection={usesExamRejection}
       />
     </div>
   )
