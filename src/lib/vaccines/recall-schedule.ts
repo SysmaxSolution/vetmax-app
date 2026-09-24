@@ -68,10 +68,33 @@ export function localDateInTimeZone(now: Date, timeZone: string): string {
  *
  * @param lastRunDate data LOCAL da última execução (YYYY-MM-DD) ou null.
  */
-export function shouldRunNow(cfg: RecallConfig, now: Date, lastRunDate: string | null = null): boolean {
+export type CronMode = 'hourly' | 'daily'
+
+/**
+ * Frequência real do cron do ambiente. Vercel só aceita cron sub-diário em
+ * conta Pro; o projeto de testes é Hobby e roda uma vez por dia. Com
+ * VACCINE_RECALL_CRON_HOURLY=1 (produção, cron "0 * * * *") o horário escolhido
+ * pela clínica é respeitado ao minuto; sem ela, o único disparo diário atende
+ * todas as clínicas ativas — o horário vira aproximado, nunca ignorado a ponto
+ * de a clínica ficar sem recall.
+ */
+export function cronModeFromEnv(env: Record<string, string | undefined> = process.env): CronMode {
+  return env.VACCINE_RECALL_CRON_HOURLY === '1' ? 'hourly' : 'daily'
+}
+
+export function shouldRunNow(
+  cfg: RecallConfig,
+  now: Date,
+  lastRunDate: string | null = null,
+  mode: CronMode = 'hourly',
+): boolean {
   if (!cfg.enabled) return false
   const today = localDateInTimeZone(now, cfg.timeZone)
   if (lastRunDate === today) return false
+  // Num cron diário não dá para esperar a hora exata: o próximo disparo só vem
+  // no dia seguinte, e uma clínica configurada para um horário posterior ao do
+  // cron nunca seria atendida. Nesse modo, o disparo do dia atende todas.
+  if (mode === 'daily') return true
   return localHourInTimeZone(now, cfg.timeZone) >= cfg.hour
 }
 

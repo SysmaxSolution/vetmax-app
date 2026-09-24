@@ -112,7 +112,7 @@ export default function VaccineRecallSettings({ initialConfig, onToast }: {
         <div className="flex items-center justify-between gap-4">
           <p className="text-xs text-slate-500">
             {uses
-              ? `Todos os dias às ${String(hour).padStart(2, '0')}:00, o sistema avisa por WhatsApp os tutores dos pets com vacina vencendo nos próximos ${days} dia(s).`
+              ? `Uma vez por dia, a partir das ${String(hour).padStart(2, '0')}:00, o sistema avisa por WhatsApp os tutores dos pets com vacina vencendo nos próximos ${days} dia(s). Cada vacina é avisada uma única vez.`
               : 'Quando desativado, nenhuma mensagem automática de vacina é enviada. Ligar o Portal do Tutor, sozinho, NÃO dispara esses avisos.'}
           </p>
           <button

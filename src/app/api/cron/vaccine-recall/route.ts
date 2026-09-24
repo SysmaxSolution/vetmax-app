@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendTutorPortalWhatsApp } from '@/lib/actions/tutor-portal'
-import { parseRecallConfig, shouldRunNow, recallWindow, localDateInTimeZone } from '@/lib/vaccines/recall-schedule'
+import { parseRecallConfig, shouldRunNow, recallWindow, localDateInTimeZone, cronModeFromEnv } from '@/lib/vaccines/recall-schedule'
 
 // GET /api/cron/vaccine-recall
 // Recall proativo de vacina: avisa o Tutor (WhatsApp + link do portal) quando a
@@ -9,11 +9,14 @@ import { parseRecallConfig, shouldRunNow, recallWindow, localDateInTimeZone } fr
 // (produção); a seleção de quem roda agora é feita AQUI, comparando a hora local
 // configurada por cada clínica com a hora corrente.
 //
-// A rota é AGNÓSTICA à frequência do cron: dispara na primeira execução em que
-// a hora local da clínica já alcançou a hora configurada, e a tabela
-// clinic_vaccine_recall_runs (0474) garante uma execução por clínica por dia.
-// Assim funciona igual com cron de hora em hora (produção) e com cron diário
-// (ambiente de testes, cuja conta Vercel só permite cron diário).
+// A rota é AGNÓSTICA à frequência do cron, e a tabela clinic_vaccine_recall_runs
+// (0474) garante UMA execução por clínica por dia local:
+//   VACCINE_RECALL_CRON_HOURLY=1 + cron "0 * * * *" (produção/Pro) → dispara na
+//     primeira execução em que a hora local já alcançou a hora configurada.
+//   sem a variável + cron diário (ambiente de testes, cuja conta Vercel é Hobby
+//     e recusa cron sub-diário) → o disparo do dia atende todas as clínicas
+//     ativas; o horário escolhido vira aproximado em vez de a clínica ficar sem
+//     recall por ter escolhido um horário posterior ao do cron.
 //
 // Tarefa 0 — duas mudanças de segurança/consentimento:
 //  (a) auth FAIL-CLOSED, igual aos demais crons. Antes, sem CRON_SECRET no
@@ -35,6 +38,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const admin = createAdminClient()
   const now = new Date()
+  const mode = cronModeFromEnv()
 
   // Só clínicas que ATIVARAM o recall. O filtro grosso vai para o banco; a
   // conferência estrita (=== true) fica no parse.
@@ -54,7 +58,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const { data: lastRun } = await admin
       .from('clinic_vaccine_recall_runs')
       .select('run_date').eq('clinic_id', c.id).eq('run_date', today).maybeSingle()
-    if (!shouldRunNow(cfg, now, (lastRun as { run_date?: string } | null)?.run_date ?? null)) continue
+    if (!shouldRunNow(cfg, now, (lastRun as { run_date?: string } | null)?.run_date ?? null, mode)) continue
 
     // Reserva o dia ANTES de enviar: se duas execuções do cron se cruzarem, a
     // segunda encontra a linha e não redispara. PK (clinic_id, run_date).
@@ -91,5 +95,5 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       .update({ sent: sentHere }).eq('clinic_id', c.id).eq('run_date', today)
   }
 
-  return NextResponse.json({ sent, skipped, considered, clinics: ranFor.length })
+  return NextResponse.json({ sent, skipped, considered, clinics: ranFor.length, mode })
 }
