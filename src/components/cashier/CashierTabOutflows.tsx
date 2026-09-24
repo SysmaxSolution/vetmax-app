@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { ArrowDownCircle, RefreshCw, PlusCircle, BadgeCheck, Loader2 } from 'lucide-react'
+import { ArrowDownCircle, RefreshCw, PlusCircle, BadgeCheck } from 'lucide-react'
+import { Spinner } from '@/components/ui/Spinner'
 import { listOutflows, verifyOutflow, type CashierOutflow } from '@/lib/actions/cashier-sessions'
 import CashierOutflowModal from './CashierOutflowModal'
 
@@ -30,7 +31,7 @@ const CATEGORY_COLOR: Record<string, string> = {
   despesa_operacional: 'bg-orange-100 text-orange-700',
   fornecedor:          'bg-amber-100 text-amber-700',
   estorno:             'bg-slate-100 text-slate-600',
-  troco:               'bg-blue-100 text-blue-700',
+  troco:               'bg-sky-100 text-sky-700',
   other:               'bg-slate-100 text-slate-600',
 }
 
@@ -103,7 +104,7 @@ export default function CashierTabOutflows({ initialOutflows, sessionId, userRol
           <button
             onClick={refresh}
             disabled={refreshing}
-            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
           >
             <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
             Atualizar
@@ -112,7 +113,7 @@ export default function CashierTabOutflows({ initialOutflows, sessionId, userRol
             <button
               data-testid="btn-registrar-saida"
               onClick={() => setShowModal(true)}
-              className="flex items-center gap-2 rounded-xl bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-900 transition-colors"
+              className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 transition-colors"
             >
               <PlusCircle className="h-4 w-4" />
               Registrar Saída
@@ -136,7 +137,7 @@ export default function CashierTabOutflows({ initialOutflows, sessionId, userRol
           {outflows.map(outflow => (
             <div
               key={outflow.id}
-              className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white px-5 py-4"
+              className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm"
             >
               <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-red-50">
                 <ArrowDownCircle className="h-5 w-5 text-red-500" />
@@ -153,10 +154,10 @@ export default function CashierTabOutflows({ initialOutflows, sessionId, userRol
                   )}
                 </div>
                 <p className="mt-1 text-sm text-slate-700 truncate">{outflow.description}</p>
-                <p className="text-xs text-slate-400">{fmtDate(outflow.created_at)}</p>
+                <p className="text-xs text-slate-400 font-mono tabular-nums">{fmtDate(outflow.created_at)}</p>
               </div>
               <div className="flex-shrink-0 flex items-center gap-3">
-                <p className="text-lg font-bold text-red-600">- {fmt(Number(outflow.amount))}</p>
+                <p className="text-lg font-bold text-red-600 font-mono tabular-nums">- {fmt(Number(outflow.amount))}</p>
                 {canVerify && !outflow.verified_at && (
                   <button
                     onClick={() => handleVerify(outflow.id)}
@@ -165,7 +166,7 @@ export default function CashierTabOutflows({ initialOutflows, sessionId, userRol
                     className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium hover:bg-emerald-100 transition-colors disabled:opacity-50"
                   >
                     {verifyingId === outflow.id
-                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ? <Spinner size="sm" />
                       : <BadgeCheck className="h-3.5 w-3.5" />}
                     Verificar
                   </button>
@@ -187,14 +188,14 @@ export default function CashierTabOutflows({ initialOutflows, sessionId, userRol
               <div key={cat} className="flex items-center justify-between text-sm">
                 <span className="text-slate-600">
                   {CATEGORY_LABELS[cat] ?? cat}
-                  <span className="text-xs text-slate-400 ml-1">({v.count})</span>
+                  <span className="text-xs text-slate-400 ml-1 font-mono tabular-nums">({v.count})</span>
                 </span>
-                <span className="font-semibold text-red-600 tabular-nums">- {fmt(v.amount)}</span>
+                <span className="font-semibold text-red-600 font-mono tabular-nums">- {fmt(v.amount)}</span>
               </div>
             ))}
             <div className="flex items-center justify-between border-t border-slate-200 pt-2">
               <span className="text-sm font-bold text-slate-700">Total de Saídas</span>
-              <span data-testid="outflows-grand-total" className="text-base font-bold text-red-600 tabular-nums">- {fmt(totalOutflows)}</span>
+              <span data-testid="outflows-grand-total" className="text-base font-bold text-red-600 font-mono tabular-nums">- {fmt(totalOutflows)}</span>
             </div>
           </div>
         </div>

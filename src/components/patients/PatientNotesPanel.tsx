@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { FileText, Plus, Loader2, AlertTriangle, X, Heart, Skull, Trash2, Stethoscope, Brain, Pencil } from 'lucide-react'
+import { createPortal } from 'react-dom'
+import { FileText, Plus, AlertTriangle, X, Heart, Skull, Trash2, Stethoscope, Brain, Pencil } from 'lucide-react'
+import { Spinner } from '@/components/ui/Spinner'
 import { DateTimePicker } from '@/components/ui/DatePicker'
 import {
   createPatientNote, listPatientNotes, recordPatientDeath, deletePatientNote,
@@ -54,7 +56,7 @@ export default function PatientNotesPanel({ patientId, patientName, isDeceased, 
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
       <header className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <FileText className="h-4 w-4 text-slate-500" />
@@ -68,7 +70,7 @@ export default function PatientNotesPanel({ patientId, patientName, isDeceased, 
         <button
           type="button"
           onClick={() => setShowSelector(true)}
-          className="flex items-center gap-1 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-bold text-white hover:bg-slate-700 transition-colors"
+          className="flex items-center gap-1 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-teal-700 transition-colors"
         >
           <Plus className="h-3.5 w-3.5" />
           Nova nota
@@ -77,7 +79,7 @@ export default function PatientNotesPanel({ patientId, patientName, isDeceased, 
 
       {loading ? (
         <div className="px-5 py-6 flex items-center justify-center text-xs text-slate-400">
-          <Loader2 className="h-4 w-4 animate-spin mr-2" /> Carregando…
+          <Spinner size="md" className="mr-2" /> Carregando…
         </div>
       ) : notes.length === 0 ? (
         <p className="px-5 py-6 text-center text-xs text-slate-400">
@@ -101,7 +103,7 @@ export default function PatientNotesPanel({ patientId, patientName, isDeceased, 
                       </div>
                       <p className="text-sm text-slate-700 mt-0.5 whitespace-pre-wrap break-words">{n.content}</p>
                       <p className="text-[10px] text-slate-400 mt-1">
-                        {new Date(n.created_at).toLocaleString('pt-BR')}
+                        <span className="font-mono tabular-nums">{new Date(n.created_at).toLocaleString('pt-BR')}</span>
                         {n.created_by_name ? ` · ${n.created_by_name}` : ''}
                       </p>
                     </div>
@@ -198,9 +200,9 @@ export default function PatientNotesPanel({ patientId, patientName, isDeceased, 
       )}
 
       {/* 05/06: confirmação de REVERSÃO do óbito (só admin; pet volta ativo) */}
-      {confirmRevert && (
+      {confirmRevert && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[10060] flex items-center justify-center bg-black/50 p-4" onClick={() => !reverting && setConfirmRevert(null)}>
-          <div className="w-full max-w-sm rounded-xl bg-white shadow-xl p-5 space-y-3" onClick={e => e.stopPropagation()}>
+          <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl p-5 space-y-3" onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-100">
                 <AlertTriangle className="h-5 w-5 text-red-600" />
@@ -237,17 +239,18 @@ export default function PatientNotesPanel({ patientId, patientName, isDeceased, 
                 disabled={reverting}
                 className="flex-1 rounded-lg bg-red-600 py-2 text-xs font-bold text-white hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
               >
-                {reverting ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Revertendo…</> : 'Reverter óbito'}
+                {reverting ? <><Spinner size="sm" /> Revertendo…</> : 'Reverter óbito'}
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {/* Confirmação de delete */}
-      {confirmDelete && (
+      {confirmDelete && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[10060] flex items-center justify-center bg-black/40 p-4" onClick={() => setConfirmDelete(null)}>
-          <div className="w-full max-w-sm rounded-xl bg-white shadow-xl p-5 space-y-3" onClick={e => e.stopPropagation()}>
+          <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl p-5 space-y-3" onClick={e => e.stopPropagation()}>
             <p className="text-sm font-semibold text-slate-900">Remover esta nota?</p>
             <p className="text-xs text-slate-500">A ação não pode ser desfeita.</p>
             <div className="flex gap-2">
@@ -270,7 +273,8 @@ export default function PatientNotesPanel({ patientId, patientName, isDeceased, 
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )
@@ -286,7 +290,7 @@ function NoteTypeSelector({
   onPick: (t: NoteType) => void
 }) {
   const types: NoteType[] = ['observation', 'clinical', 'behavior', 'other', 'death']
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div className="fixed inset-0 z-[10050] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
@@ -319,8 +323,9 @@ function NoteTypeSelector({
           })}
         </div>
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }
 
 function GenericNoteModal({
@@ -337,6 +342,7 @@ function GenericNoteModal({
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const label = NOTE_TYPE_LABEL[noteType].label
+  const canPortal = typeof document !== 'undefined'
 
   async function handleSave() {
     if (!content.trim()) { setError('Conteúdo é obrigatório.'); return }
@@ -352,7 +358,7 @@ function GenericNoteModal({
     onSaved()
   }
 
-  return (
+  return canPortal ? createPortal(
     <div className="fixed inset-0 z-[10055] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
@@ -373,7 +379,7 @@ function GenericNoteModal({
               onChange={e => setTitle(e.target.value)}
               maxLength={120}
               placeholder="Ex: Preferência alimentar"
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-500/20"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
             />
           </div>
           <div>
@@ -384,7 +390,7 @@ function GenericNoteModal({
               rows={5}
               maxLength={5000}
               placeholder="Escreva a anotação…"
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-500/20"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
             />
             <p className="text-[10px] text-slate-400 text-right mt-0.5">{content.length}/5000</p>
           </div>
@@ -394,13 +400,14 @@ function GenericNoteModal({
         </div>
         <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-5 py-3">
           <button onClick={onClose} disabled={submitting} className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-50">Cancelar</button>
-          <button onClick={handleSave} disabled={submitting} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50 flex items-center gap-2">
-            {submitting ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando…</> : 'Salvar nota'}
+          <button onClick={handleSave} disabled={submitting} className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50 flex items-center gap-2">
+            {submitting ? <><Spinner size="md" /> Salvando…</> : 'Salvar nota'}
           </button>
         </div>
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }
 
 function DeathNoteModal({
@@ -453,7 +460,7 @@ function DeathNoteModal({
     onSaved()
   }
 
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div className="fixed inset-0 z-[10055] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="border-b border-violet-200 bg-gradient-to-br from-violet-50 to-white px-5 py-4 flex items-center justify-between sticky top-0 z-10">
@@ -586,12 +593,13 @@ function DeathNoteModal({
               className="rounded-lg bg-violet-700 px-4 py-2 text-sm font-bold text-white hover:bg-violet-800 disabled:opacity-50 flex items-center gap-2"
             >
               {submitting
-                ? <><Loader2 className="h-4 w-4 animate-spin" /> {isEdit ? 'Salvando…' : 'Registrando…'}</>
+                ? <><Spinner size="md" /> {isEdit ? 'Salvando…' : 'Registrando…'}</>
                 : <>{isEdit ? 'Salvar alterações' : 'Confirmar óbito definitivamente'}</>}
             </button>
           )}
         </div>
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }

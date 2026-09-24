@@ -7,6 +7,40 @@ import type { CheckInPayload, VisitReason, PaymentStatus } from '@/types'
 import { logAudit } from './audit'
 import { updatePatientWeight } from './patient-weight'
 import { getTenantCtx } from '@/lib/data/context'
+import { byUrgencyThenTime } from '@/lib/urgency'
+
+// ─── Sprint Animais: campos extras da OS no check-in (aditivo + gateado) ──────
+// Chamado só quando animais_foundation está ligada (o caller já fez o gate).
+// Gera o nº de OS de forma atômica (next_document_number); se a sequência não
+// estiver configurada, NÃO derruba o check-in — apenas fica sem número.
+async function buildAnimaisOsFields(
+  admin: ReturnType<typeof createAdminClient>,
+  clinicId: string,
+  data: CheckInPayload,
+): Promise<Record<string, unknown>> {
+  const fields: Record<string, unknown> = {
+    urgency:            data.urgency ?? null,
+    referral_type:      data.referral_type ?? null,
+    partner_clinic_id:  data.referral_type === 'referred' ? (data.partner_clinic_id ?? null) : null,
+    referring_professional_id: data.referral_type === 'referred' ? (data.referring_professional_id ?? null) : null,
+    billing_company_id: data.billing_company_id ?? null,
+  }
+  // P0 (0.9): TODA OS nasce com número. A RPC _auto emite o próximo número e,
+  // se a sequência ainda não existe, auto-provisiona (idempotente) e emite o nº 1.
+  try {
+    const { data: osNum, error } = await admin.rpc('next_document_number_auto', {
+      p_clinic_id:  clinicId,
+      p_company_id: data.billing_company_id ?? null,
+      p_doc_type:   'os',
+    })
+    if (!error && osNum) fields.os_number = osNum
+    else if (error) console.error('[os_number] falha ao emitir número da OS:', error.message)
+  } catch (e) {
+    // Não derruba a recepção por um erro anômalo de numeração, mas registra.
+    console.error('[os_number] exceção ao emitir número da OS:', e)
+  }
+  return fields
+}
 
 // ─── Check-in Avançado: cria/atualiza consulta com motivo e pagamento ───────
 export async function checkInPatientAdvanced(
@@ -52,6 +86,17 @@ export async function checkInPatientAdvanced(
     }
   }
 
+  // Lê a config da clínica uma vez (responsável obrigatório? fundação Animais?)
+  const { data: clinicRow } = await admin
+    .from('clinics').select('flow_config').eq('id', profile.clinic_id).single()
+  const flow = (clinicRow?.flow_config ?? {}) as { animais_foundation?: boolean; require_attending_vet?: boolean }
+  if (flow.require_attending_vet && !data.vet_id) {
+    return { error: 'Selecione o profissional responsável pelo atendimento.' }
+  }
+  const animaisFields = flow.animais_foundation === true
+    ? await buildAnimaisOsFields(admin, profile.clinic_id, data)
+    : {}
+
   const { data: result, error } = await admin
     .from('consultations')
     .insert({
@@ -63,6 +108,8 @@ export async function checkInPatientAdvanced(
       scheduled_date: data.scheduled_date || null,
       weight:         data.weight || null,
       status:         status,
+      vet_id:         data.vet_id || null,
+      ...animaisFields,
     })
     .select('id')
     .single()
@@ -162,6 +209,17 @@ export async function checkInPatientWithContacts(
     }
   }
 
+  // Lê a config da clínica uma vez (responsável obrigatório? fundação Animais?)
+  const { data: clinicRow } = await admin
+    .from('clinics').select('flow_config').eq('id', profile.clinic_id).single()
+  const flow = (clinicRow?.flow_config ?? {}) as { animais_foundation?: boolean; require_attending_vet?: boolean }
+  if (flow.require_attending_vet && !data.vet_id) {
+    return { error: 'Selecione o profissional responsável pelo atendimento.' }
+  }
+  const animaisFields = flow.animais_foundation === true
+    ? await buildAnimaisOsFields(admin, profile.clinic_id, data)
+    : {}
+
   const { data: result, error } = await admin
     .from('consultations')
     .insert({
@@ -173,6 +231,8 @@ export async function checkInPatientWithContacts(
       scheduled_date: data.scheduled_date || null,
       weight:         data.weight || null,
       status:         status,
+      vet_id:         data.vet_id || null,
+      ...animaisFields,
     })
     .select('id')
     .single()
@@ -273,6 +333,10 @@ export type ReceptionQueueItem = {
   created_at: string
   payment_status: string | null
   payment_method: string | null
+  os_number: string | null
+  urgency: 'green' | 'yellow' | 'red' | null
+  referral_type: 'direct' | 'referred' | null
+  visit_reason: string | null
   patient: {
     id: string
     name: string
@@ -314,7 +378,7 @@ export async function getReceptionQueue(): Promise<ReceptionQueueItem[] | { erro
   const { data, error } = await admin
     .from('consultations')
     .select(`
-      id, status, created_at, payment_status, payment_method,
+      id, status, created_at, payment_status, payment_method, os_number, urgency, referral_type, visit_reason,
       patients ( id, name, species, breed, birth_date, gender, neutered, coat_color, photo_url, behavior_tags,
         tutors ( id, name, phone, address )
       )
@@ -352,6 +416,10 @@ export async function getReceptionQueue(): Promise<ReceptionQueueItem[] | { erro
     created_at:     c.created_at,
     payment_status: c.payment_status,
     payment_method: c.payment_method,
+    os_number:      c.os_number ?? null,
+    urgency:        c.urgency ?? null,
+    referral_type:  c.referral_type ?? null,
+    visit_reason:   c.visit_reason ?? null,
     patient: {
       id:            c.patients?.id ?? '',
       name:          c.patients?.name ?? '—',
@@ -371,7 +439,7 @@ export async function getReceptionQueue(): Promise<ReceptionQueueItem[] | { erro
       phone:   c.patients?.tutors?.phone ?? '',
       address: c.patients?.tutors?.address ?? null,
     },
-  }))
+  })).sort(byUrgencyThenTime)
 }
 
 // ─── Histórico de Recepção (Consultations já processadas hoje) ────────────────
@@ -487,6 +555,26 @@ export async function moveDirectToVet(
   if (error) return { error: 'Erro ao enviar ao consultório: ' + error.message }
   revalidatePath('/dashboard/reception')
   revalidatePath('/dashboard/vet')
+  return null
+}
+
+// ─── Enviar consulta da recepção para a fila de EXAMES ────────────────────────
+export async function moveToExams(
+  consultationId: string
+): Promise<{ error: string } | null> {
+  const ctx = await getTenantCtx()
+  if (!ctx) return { error: 'Não autenticado.' }
+
+  const adminC = createAdminClient()
+  const { error } = await adminC
+    .from('consultations')
+    .update({ status: 'waiting_exam', updated_at: new Date().toISOString() })
+    .eq('id', consultationId)
+    .eq('clinic_id', ctx.clinicId)
+
+  if (error) return { error: 'Erro ao enviar para exames: ' + error.message }
+  revalidatePath('/dashboard/reception')
+  revalidatePath('/dashboard/exams')
   return null
 }
 

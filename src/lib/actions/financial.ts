@@ -3,6 +3,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { getTenantCtx } from '@/lib/data/context'
+import { fetchSicoobExtrato } from '@/lib/integrations/sicoob'
 
 // ─── Types base (G-09) ────────────────────────────────────────────────────────
 
@@ -25,6 +26,7 @@ export interface FinancialEntry {
   payment_method:       string | null
   tutor_id:             string | null
   patient_id:           string | null
+  beneficiary:          string | null   // fornecedor/favorecido (contas a pagar)
   category:             string | null
   notes:                string | null
   created_by:           string | null
@@ -48,6 +50,10 @@ export interface FinancialEntry {
   // vínculo com invoice mestre (duplicatas) + flag de ajuste contábil
   invoice_id:           string | null
   is_clinic_discount:   boolean
+  // vínculo com a consulta de origem (OS) — identificação em A Pagar/Receber
+  consultation_id:      string | null
+  os_number:            string | null
+  is_intercompany:      boolean
 }
 
 export interface FinancialSummary {
@@ -83,6 +89,14 @@ export interface CreateEntryData {
   notes?:               string
   professional_id?:     string
   chart_of_accounts_id?: string
+  // Contas a pagar de compra (1.8) — fornecedor, documento, parcela e espécie.
+  beneficiary?:         string | null
+  supplier_id?:         string | null
+  purchase_order_id?:   string | null
+  document_number?:     string | null
+  especie?:             string | null
+  installment_number?:  number | null
+  total_installments?:  number | null
 }
 
 export interface BaixarTituloData {
@@ -264,9 +278,16 @@ export async function createEntry(
       notes:                data.notes                || null,
       professional_id:      data.professional_id      || null,
       chart_of_accounts_id: data.chart_of_accounts_id || null,
+      beneficiary:          data.beneficiary          || null,
+      supplier_id:          data.supplier_id          || null,
+      purchase_order_id:    data.purchase_order_id    || null,
+      document_number:      data.document_number      || null,
+      especie:              data.especie              || null,
+      installment_number:   data.installment_number   ?? null,
+      total_installments:   data.total_installments   ?? null,
       created_by:           user.id,
       status:               'pending',
-      // document_number e professional_id preenchidos pelo trigger trg_fe_defaults
+      // document_number (quando null) e professional_id preenchidos pelo trigger trg_fe_defaults
     })
     .select(ENTRY_SELECT)
     .single()
@@ -728,6 +749,27 @@ export async function baixarTitulo(
   }
 
   return {}
+}
+
+// ─── baixarTitulosBulk ────────────────────────────────────────────────────────
+// Baixa em massa de títulos (A Pagar ou A Receber). Reusa baixarTitulo por id
+// para manter idênticos os efeitos colaterais (baixa integral, lançamento no
+// extrato quando informada a conta). Usado pela seleção múltipla da tela.
+export async function baixarTitulosBulk(
+  ids: string[],
+  data: BaixarTituloData,
+): Promise<{ ok: true; paid: number; failed: number } | { error: string }> {
+  if (!ids.length)            return { error: 'Nenhum título selecionado.' }
+  if (!data.payment_date)     return { error: 'Data obrigatória.' }
+  if (!data.payment_method)   return { error: 'Forma de pagamento obrigatória.' }
+
+  let paid = 0, failed = 0
+  for (const id of ids) {
+    const res = await baixarTitulo(id, data)
+    if (res.error) failed += 1
+    else paid += 1
+  }
+  return { ok: true, paid, failed }
 }
 
 // ─── getFinancialSummary ──────────────────────────────────────────────────────
@@ -1663,6 +1705,7 @@ const ENTRY_SELECT = [
   'professional:profiles!professional_id(full_name)',
   'chart_account:chart_of_accounts!chart_of_accounts_id(code, name)',
   'settlement_bank:bank_accounts!settlement_bank_id(name)',
+  'consultation:consultations!consultation_id(os_number)',
 ].join(', ')
 
 function mapEntry(raw: Record<string, unknown>): FinancialEntry {
@@ -1671,6 +1714,7 @@ function mapEntry(raw: Record<string, unknown>): FinancialEntry {
   const professional = raw.professional    as { full_name: string }        | null
   const chartAcc     = raw.chart_account   as { code: string; name: string } | null
   const settleBank   = raw.settlement_bank as { name: string }             | null
+  const consultation = raw.consultation    as { os_number: string | null } | null
   return {
     id:                   raw.id                   as string,
     clinic_id:            raw.clinic_id            as string,
@@ -1686,6 +1730,7 @@ function mapEntry(raw: Record<string, unknown>): FinancialEntry {
     payment_method:       (raw.payment_method      as string | null) ?? null,
     tutor_id:             (raw.tutor_id            as string | null) ?? null,
     patient_id:           (raw.patient_id          as string | null) ?? null,
+    beneficiary:          (raw.beneficiary         as string | null) ?? null,
     category:             (raw.category            as string | null) ?? null,
     notes:                (raw.notes               as string | null) ?? null,
     created_by:           (raw.created_by          as string | null) ?? null,
@@ -1705,6 +1750,9 @@ function mapEntry(raw: Record<string, unknown>): FinancialEntry {
     cashier_outflow_id:   (raw.cashier_outflow_id  as string | null) ?? null,
     invoice_id:           (raw.invoice_id          as string | null) ?? null,
     is_clinic_discount:   Boolean(raw.is_clinic_discount),
+    consultation_id:      (raw.consultation_id     as string | null) ?? null,
+    os_number:            consultation?.os_number  ?? null,
+    is_intercompany:      Boolean(raw.is_intercompany),
   }
 }
 
@@ -1756,4 +1804,449 @@ function autoMatch(
   const unmatched_entries  = entries.filter(e  => !usedEntryIds.has(e.id))
 
   return { matched, unmatched_imported, unmatched_entries }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 1.3 Animais · Conciliação bancária (2 painéis) — modelo N:1
+// Extrato (esquerda) = "voz da verdade". Uma linha do extrato pode ter VÁRIOS
+// títulos do sistema vinculados (ex.: repasse único do cartão = N transações).
+// VÍNCULO (bank_statement_entry_links) ≠ CONCILIAÇÃO (bank_statements.reconciled_at).
+// Selecionar linha → marcar 1+ candidatos → Vincular → Conciliar (parcial). Permite
+// desvincular e desconciliar.
+// ══════════════════════════════════════════════════════════════════════════════
+
+export interface ReconcCandidate {
+  id:              string
+  type:            EntryType
+  description:     string
+  amount:          number
+  due_date:        string
+  payment_date:    string | null
+  status:          EntryStatus
+  category:        string | null
+  document_number: string | null
+  tutor_name:      string | null
+  patient_name:    string | null
+}
+
+const toCandidate = (e: FinancialEntry): ReconcCandidate => ({
+  id: e.id, type: e.type, description: e.description, amount: e.amount,
+  due_date: e.due_date, payment_date: e.payment_date, status: e.status,
+  category: e.category, document_number: e.document_number,
+  tutor_name: e.tutor_name, patient_name: e.patient_name,
+})
+
+export interface StatementWithLinks {
+  id:          string
+  date:        string
+  amount:      number
+  description: string
+  type:        'credit' | 'debit'
+  reconciled:  boolean
+  linked:      ReconcCandidate[]
+}
+
+async function fetchCandidatesByIds(clinicId: string, ids: string[]): Promise<Map<string, ReconcCandidate>> {
+  const map = new Map<string, ReconcCandidate>()
+  if (!ids.length) return map
+  const admin = createAdminClient()
+  const { data } = await admin.from('financial_entries').select(ENTRY_SELECT).eq('clinic_id', clinicId).in('id', ids)
+  for (const raw of (data ?? [])) { const c = toCandidate(mapEntry(raw as unknown as Record<string, unknown>)); map.set(c.id, c) }
+  return map
+}
+
+// Carrega as linhas do extrato do lote com seus vínculos + estado de conciliação.
+export async function getStatementsWithLinks(batchId: string): Promise<StatementWithLinks[] | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  const admin = createAdminClient()
+  const { data: stmts } = await admin.from('bank_statements')
+    .select('id, date, amount, description, type, reconciled_at')
+    .eq('clinic_id', clinicId).eq('import_batch_id', batchId)
+    .order('date', { ascending: true })
+  const list = (stmts ?? []) as Record<string, unknown>[]
+  const stmtIds = list.map(s => s.id as string)
+
+  const linkMap = new Map<string, string[]>()
+  if (stmtIds.length) {
+    const { data: links } = await admin.from('bank_statement_entry_links')
+      .select('statement_id, entry_id').eq('clinic_id', clinicId).in('statement_id', stmtIds)
+    for (const l of (links ?? []) as Record<string, unknown>[]) {
+      const a = linkMap.get(l.statement_id as string) ?? []; a.push(l.entry_id as string); linkMap.set(l.statement_id as string, a)
+    }
+  }
+  const candMap = await fetchCandidatesByIds(clinicId, [...new Set([...linkMap.values()].flat())])
+  return list.map(s => ({
+    id:          s.id as string,
+    date:        s.date as string,
+    amount:      Number(s.amount),
+    description: s.description as string,
+    type:        s.type as 'credit' | 'debit',
+    reconciled:  !!s.reconciled_at,
+    linked:      (linkMap.get(s.id as string) ?? []).map(id => candMap.get(id)).filter(Boolean) as ReconcCandidate[],
+  }))
+}
+
+export interface AutoLinkResult {
+  linked:               number
+  unmatched_statements: number
+  unmatched_candidates: number
+}
+
+// Auto-amarração: casa cada linha SEM vínculo com um título JÁ PAGO (crédito→a
+// receber, débito→a pagar) por valor (±0,01) e data de pagamento (±2 dias) e cria
+// o VÍNCULO (não concilia — o usuário confirma depois).
+export async function persistAutoLinks(batchId: string): Promise<AutoLinkResult | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  const stmtsRes = await listBatchStatements(batchId)
+  if ('error' in stmtsRes) return stmtsRes
+  const admin = createAdminClient()
+
+  const { data: existingLinks } = await admin.from('bank_statement_entry_links')
+    .select('statement_id, entry_id').eq('clinic_id', clinicId)
+  const linkedEntryIds = new Set((existingLinks ?? []).map((r: Record<string, unknown>) => r.entry_id as string))
+  const stmtHasLink = new Set((existingLinks ?? []).map((r: Record<string, unknown>) => r.statement_id as string))
+
+  const stmts = stmtsRes.filter(s => !stmtHasLink.has(s.id))
+  if (!stmts.length) return { linked: 0, unmatched_statements: 0, unmatched_candidates: 0 }
+
+  const dates = stmts.map(s => s.date).sort()
+  const pad = (d: string, days: number) => new Date(new Date(d).getTime() + days * 86400000).toISOString().slice(0, 10)
+  const start = pad(dates[0], -3), end = pad(dates[dates.length - 1], 3)
+
+  const types: EntryType[] = ['receivable', 'payable']
+  const lists = await Promise.all(types.map(t => listEntries({ type: t, status: 'paid', paid_from: start, paid_to: end })))
+  const paid = lists.flatMap(r => Array.isArray(r) ? r : []).filter(e => !linkedEntryIds.has(e.id))
+
+  const usedEntry = new Set<string>()
+  let linked = 0
+  for (const s of stmts) {
+    const wantType: EntryType = s.type === 'credit' ? 'receivable' : 'payable'
+    const sTime = new Date(s.date).getTime()
+    const hit = paid.find(e => {
+      if (usedEntry.has(e.id) || e.type !== wantType) return false
+      if (Math.abs(e.amount - s.amount) >= 0.01) return false
+      const eDate = new Date((e.payment_date ?? e.due_date)).getTime()
+      return Math.abs(sTime - eDate) / 86400000 <= 2
+    })
+    if (!hit) continue
+    usedEntry.add(hit.id)
+    await admin.from('bank_statement_entry_links').insert({ clinic_id: clinicId, statement_id: s.id, entry_id: hit.id })
+    linked++
+  }
+  return { linked, unmatched_statements: stmts.length - linked, unmatched_candidates: paid.length - linked }
+}
+
+// Vincular 1+ títulos do sistema a uma linha do extrato (N:1). Idempotente.
+export async function linkEntriesToStatement(statementId: string, entryIds: string[]): Promise<{ ok: true; linked: number } | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  if (!entryIds.length) return { error: 'Selecione ao menos um título.' }
+  const admin = createAdminClient()
+  const rows = entryIds.map(entry_id => ({ clinic_id: clinicId, statement_id: statementId, entry_id }))
+  const { error } = await admin.from('bank_statement_entry_links')
+    .upsert(rows, { onConflict: 'statement_id,entry_id', ignoreDuplicates: true })
+  if (error) return { error: 'Erro ao vincular: ' + error.message }
+  return { ok: true, linked: entryIds.length }
+}
+
+// Desvincular UM título de uma linha (se ficar sem vínculo, desfaz a conciliação).
+export async function unlinkEntry(statementId: string, entryId: string): Promise<{ error?: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  const admin = createAdminClient()
+  const { error } = await admin.from('bank_statement_entry_links').delete()
+    .eq('clinic_id', clinicId).eq('statement_id', statementId).eq('entry_id', entryId)
+  if (error) return { error: 'Erro ao desvincular: ' + error.message }
+  const { data: rest } = await admin.from('bank_statement_entry_links')
+    .select('id').eq('clinic_id', clinicId).eq('statement_id', statementId).limit(1)
+  if (!rest || rest.length === 0) {
+    await admin.from('bank_statements').update({ reconciled_at: null }).eq('id', statementId).eq('clinic_id', clinicId)
+  }
+  return {}
+}
+
+// Desvincular TODOS os títulos de uma linha + desconciliar.
+export async function unlinkStatement(statementId: string): Promise<{ error?: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  const admin = createAdminClient()
+  await admin.from('bank_statement_entry_links').delete().eq('clinic_id', clinicId).eq('statement_id', statementId)
+  const { error } = await admin.from('bank_statements').update({ reconciled_at: null }).eq('id', statementId).eq('clinic_id', clinicId)
+  if (error) return { error: 'Erro ao desvincular: ' + error.message }
+  return {}
+}
+
+// Concilia as linhas informadas QUE TÊM vínculo (parcial — não exige todas). As
+// demais ficam pendentes.
+export async function reconcileLines(statementIds: string[]): Promise<{ ok: true; reconciled: number } | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  if (!statementIds.length) return { error: 'Nada para conciliar.' }
+  const admin = createAdminClient()
+  const { data: links } = await admin.from('bank_statement_entry_links')
+    .select('statement_id').eq('clinic_id', clinicId).in('statement_id', statementIds)
+  const hasLink = new Set((links ?? []).map((r: Record<string, unknown>) => r.statement_id as string))
+  const toRec = statementIds.filter(id => hasLink.has(id))
+  if (!toRec.length) return { error: 'Selecione linhas vinculadas para conciliar.' }
+  const now = new Date().toISOString()
+  const { error } = await admin.from('bank_statements')
+    .update({ reconciled_at: now }).in('id', toRec).eq('clinic_id', clinicId).is('reconciled_at', null)
+  if (error) return { error: 'Erro ao conciliar: ' + error.message }
+  return { ok: true, reconciled: toRec.length }
+}
+
+// Desconciliar uma linha (mantém o vínculo).
+export async function unreconcileLine(statementId: string): Promise<{ error?: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  const admin = createAdminClient()
+  const { error } = await admin.from('bank_statements')
+    .update({ reconciled_at: null }).eq('id', statementId).eq('clinic_id', clinicId)
+  if (error) return { error: 'Erro ao desconciliar: ' + error.message }
+  return {}
+}
+
+// Candidatos do painel direito: títulos PAGOS ainda não vinculados (no período) +
+// títulos em ABERTO (para "baixar título em aberto").
+export async function listReconcCandidates(params: {
+  bank_account_id: string
+  start_date:      string
+  end_date:        string
+}): Promise<{ paid: ReconcCandidate[]; open: ReconcCandidate[] } | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  const admin = createAdminClient()
+
+  const { data: linkRows } = await admin.from('bank_statement_entry_links')
+    .select('entry_id').eq('clinic_id', clinicId)
+  const linkedIds = new Set((linkRows ?? []).map((r: Record<string, unknown>) => r.entry_id as string))
+
+  const types: EntryType[] = ['receivable', 'payable']
+  const [paidLists, openLists] = await Promise.all([
+    Promise.all(types.map(t => listEntries({ type: t, status: 'paid', paid_from: params.start_date, paid_to: params.end_date }))),
+    Promise.all(types.map(t => listEntries({ type: t, status: 'pending' }))),
+  ])
+
+  const flat = (lists: (FinancialEntry[] | { error: string })[]) =>
+    lists.flatMap(r => Array.isArray(r) ? r : [])
+  const paid = flat(paidLists).filter(e => !linkedIds.has(e.id)).map(toCandidate)
+  const open = flat(openLists).filter(e => !linkedIds.has(e.id)).map(toCandidate)
+  return { paid, open }
+}
+
+// Baixar um título em ABERTO (marca pago) e VINCULAR à linha do extrato.
+export async function settleOpenEntryAndLink(params: {
+  entry_id:        string
+  statement_id:    string
+  bank_account_id: string
+  payment_date:    string
+}): Promise<{ error?: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  const admin = createAdminClient()
+  const { error: upErr } = await admin.from('financial_entries')
+    .update({ status: 'paid', payment_date: params.payment_date, settlement_bank_id: params.bank_account_id, updated_at: new Date().toISOString() })
+    .eq('id', params.entry_id).eq('clinic_id', clinicId).eq('status', 'pending')
+  if (upErr) return { error: 'Erro ao baixar título: ' + upErr.message }
+  const { error: linkErr } = await admin.from('bank_statement_entry_links')
+    .upsert({ clinic_id: clinicId, statement_id: params.statement_id, entry_id: params.entry_id }, { onConflict: 'statement_id,entry_id', ignoreDuplicates: true })
+  if (linkErr) return { error: 'Erro ao vincular: ' + linkErr.message }
+  return {}
+}
+
+// Inserir um título não lançado a partir da linha do extrato + VINCULAR.
+export async function insertEntryFromStatement(params: {
+  statement_id:          string
+  bank_account_id:       string
+  category?:             string
+  chart_of_accounts_id?: string
+  description?:          string
+}): Promise<{ ok: true; entry_id: string } | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  const admin = createAdminClient()
+  const user = await getAuthUser()
+
+  const { data: stmt } = await admin.from('bank_statements')
+    .select('id, amount, description, type, date')
+    .eq('id', params.statement_id).eq('clinic_id', clinicId).single()
+  if (!stmt) return { error: 'Lançamento do extrato não encontrado.' }
+
+  const type: EntryType = stmt.type === 'credit' ? 'receivable' : 'payable'
+  const { data: fe, error: feErr } = await admin.from('financial_entries').insert({
+    clinic_id: clinicId, type,
+    description: params.description || stmt.description || 'Lançamento do extrato',
+    amount: Math.abs(Number(stmt.amount)),
+    due_date: stmt.date, payment_date: stmt.date, issue_date: stmt.date,
+    status: 'paid', source: 'manual',
+    category: params.category ?? null,
+    chart_of_accounts_id: params.chart_of_accounts_id ?? null,
+    settlement_bank_id: params.bank_account_id,
+    created_by: user?.id ?? null,
+  }).select('id').single()
+  if (feErr || !fe) return { error: 'Falha ao inserir título: ' + (feErr?.message ?? '') }
+
+  const { error: linkErr } = await admin.from('bank_statement_entry_links')
+    .insert({ clinic_id: clinicId, statement_id: params.statement_id, entry_id: fe.id })
+  if (linkErr) return { error: 'Título criado, mas falha ao vincular: ' + linkErr.message }
+  return { ok: true, entry_id: fe.id }
+}
+
+// ─── EXTRATO (movimentações efetivas) ─────────────────────────────────────────
+// Lista os títulos BAIXADOS (pagos) no contas a receber/pagar — as movimentações
+// efetivas de caixa/banco — com o status de conciliação de cada um (conciliado se
+// vinculado a uma linha do extrato já conciliada; senão vinculado ou pendente).
+export interface ExtratoMovement {
+  id:              string
+  date:            string
+  description:     string
+  amount:          number
+  type:            EntryType
+  category:        string | null
+  document_number: string | null
+  tutor_name:      string | null
+  patient_name:    string | null
+  bank_name:       string | null
+  status:          'reconciled' | 'linked' | 'pending'
+}
+export interface EffectiveExtratoResult {
+  movements:      ExtratoMovement[]
+  total_entradas: number
+  total_saidas:   number
+  saldo:          number
+}
+export async function getEffectiveExtrato(params: {
+  start_date: string; end_date: string; bank_account_id?: string
+}): Promise<EffectiveExtratoResult | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  const admin = createAdminClient()
+
+  const types: EntryType[] = ['receivable', 'payable']
+  const lists = await Promise.all(types.map(t => listEntries({ type: t, status: 'paid', paid_from: params.start_date, paid_to: params.end_date })))
+  let entries = lists.flatMap(r => Array.isArray(r) ? r : [])
+  if (params.bank_account_id) entries = entries.filter(e => e.settlement_bank_id === params.bank_account_id)
+
+  // estado de conciliação por título
+  const { data: links } = await admin.from('bank_statement_entry_links')
+    .select('entry_id, statement_id').eq('clinic_id', clinicId)
+  const linkRows = (links ?? []) as Record<string, unknown>[]
+  const stmtIds = [...new Set(linkRows.map(l => l.statement_id as string))]
+  const reconStmt = new Set<string>()
+  if (stmtIds.length) {
+    const { data: st } = await admin.from('bank_statements').select('id, reconciled_at').in('id', stmtIds)
+    for (const s of (st ?? []) as Record<string, unknown>[]) if (s.reconciled_at) reconStmt.add(s.id as string)
+  }
+  const linkedEntry = new Set(linkRows.map(l => l.entry_id as string))
+  const reconciledEntry = new Set(linkRows.filter(l => reconStmt.has(l.statement_id as string)).map(l => l.entry_id as string))
+
+  const movements: ExtratoMovement[] = entries.map(e => ({
+    id: e.id, date: e.payment_date ?? e.due_date, description: e.description, amount: e.amount,
+    type: e.type, category: e.category, document_number: e.document_number,
+    tutor_name: e.tutor_name, patient_name: e.patient_name, bank_name: e.settlement_bank_name,
+    status: (reconciledEntry.has(e.id) ? 'reconciled' : linkedEntry.has(e.id) ? 'linked' : 'pending') as ExtratoMovement['status'],
+  })).sort((a, b) => a.date.localeCompare(b.date))
+
+  const total_entradas = movements.filter(m => m.type === 'receivable').reduce((s, m) => s + m.amount, 0)
+  const total_saidas   = movements.filter(m => m.type === 'payable').reduce((s, m) => s + m.amount, 0)
+  return { movements, total_entradas, total_saidas, saldo: total_entradas - total_saidas }
+}
+
+// ─── 1.4 · Visão cruzada por CNPJ (empresa faturante) ─────────────────────────
+// Consolida, por empresa, o recebido/pago no período (atribuído pela conta
+// bancária da empresa via settlement_bank_id) + o saldo de crédito por empresa
+// (tutor_credits.company_id, incl. transferências inter-CNPJ).
+export interface CompanyOverview {
+  company_id:         string | null
+  company_name:       string
+  recebido:           number
+  pago:               number
+  saldo:              number
+  credito_inserido:   number
+  credito_utilizado:  number
+  credito_disponivel: number
+}
+export async function getCrossCompanyOverview(params: {
+  start_date: string; end_date: string
+}): Promise<{ companies: CompanyOverview[] } | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  const admin = createAdminClient()
+
+  const [{ data: comps }, { data: accts }] = await Promise.all([
+    admin.from('companies').select('id, name').eq('clinic_id', clinicId),
+    admin.from('bank_accounts').select('id, company_id').eq('clinic_id', clinicId),
+  ])
+  const compName    = new Map<string, string>((comps ?? []).map((c: Record<string, unknown>) => [c.id as string, c.name as string]))
+  const acctCompany = new Map<string, string | null>((accts ?? []).map((a: Record<string, unknown>) => [a.id as string, (a.company_id as string | null) ?? null]))
+
+  const types: EntryType[] = ['receivable', 'payable']
+  const lists = await Promise.all(types.map(t => listEntries({ type: t, status: 'paid', paid_from: params.start_date, paid_to: params.end_date })))
+  const entries = lists.flatMap(r => Array.isArray(r) ? r : [])
+  const { data: credits } = await admin.from('tutor_credits').select('company_id, amount, kind, created_at').eq('clinic_id', clinicId)
+
+  const map = new Map<string | null, CompanyOverview>()
+  const ensure = (cid: string | null): CompanyOverview => {
+    if (!map.has(cid)) map.set(cid, {
+      company_id: cid, company_name: cid ? (compName.get(cid) ?? 'Empresa') : 'Sem empresa/conta',
+      recebido: 0, pago: 0, saldo: 0, credito_inserido: 0, credito_utilizado: 0, credito_disponivel: 0,
+    })
+    return map.get(cid)!
+  }
+  for (const c of (comps ?? []) as Record<string, unknown>[]) ensure(c.id as string)
+
+  for (const e of entries) {
+    // Elimina movimento interno inter-CNPJ e "utilização de crédito" (não é caixa
+    // novo) das colunas de recebido/pago consolidadas.
+    if (e.is_intercompany || e.payment_method === 'credit_balance') continue
+    const cid = e.settlement_bank_id ? (acctCompany.get(e.settlement_bank_id) ?? null) : null
+    const row = ensure(cid)
+    if (e.type === 'receivable') row.recebido += e.amount; else row.pago += e.amount
+  }
+  const inPeriod = (iso: string) => iso.slice(0, 10) >= params.start_date && iso.slice(0, 10) <= params.end_date
+  for (const cr of (credits ?? []) as Record<string, unknown>[]) {
+    const cid = (cr.company_id as string | null) ?? null
+    const row = ensure(cid)
+    const amt = Number(cr.amount)
+    row.credito_disponivel += amt
+    if (inPeriod(cr.created_at as string)) {
+      if (cr.kind === 'advance') row.credito_inserido += amt
+      if (cr.kind === 'usage')   row.credito_utilizado += Math.abs(amt)
+    }
+  }
+  const r2 = (n: number) => Math.round(n * 100) / 100
+  for (const row of map.values()) {
+    row.recebido = r2(row.recebido); row.pago = r2(row.pago); row.saldo = r2(row.recebido - row.pago)
+    row.credito_inserido = r2(row.credito_inserido); row.credito_utilizado = r2(row.credito_utilizado); row.credito_disponivel = r2(row.credito_disponivel)
+  }
+  return { companies: [...map.values()].sort((a, b) => a.company_name.localeCompare(b.company_name)) }
+}
+
+// ─── 1.3 · Buscar extrato do banco (Sicoob) por período e auto-vincular ───────
+// Puxa o extrato da conta corrente Sicoob (API v4) no período informado, importa
+// como lote e roda a auto-amarração — o usuário só confirma a conciliação.
+export async function importBankStatementFromSicoob(params: {
+  bank_account_id: string; start_date: string; end_date: string
+}): Promise<{ ok: true; batch_id: string; imported: number; linked: number; warnings: string[] } | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  const admin = createAdminClient()
+  const { data: acct } = await admin.from('bank_accounts')
+    .select('account, name').eq('id', params.bank_account_id).eq('clinic_id', clinicId).single()
+  if (!acct) return { error: 'Conta bancária não encontrada.' }
+  const conta = String((acct as { account?: string }).account ?? '').trim()
+  if (!conta) return { error: 'A conta selecionada não tem número cadastrado (necessário para buscar no Sicoob).' }
+
+  let res: { statements: { date: string; amount: number; description: string; type: 'credit' | 'debit'; external_id?: string }[]; warnings: string[] }
+  try { res = await fetchSicoobExtrato({ conta, start_date: params.start_date, end_date: params.end_date }) }
+  catch (e) { return { error: `Sicoob: ${(e as Error).message}` } }
+  if (!res.statements.length) return { error: `Nenhum lançamento retornado pelo Sicoob no período.${res.warnings.length ? ' (' + res.warnings.join(' · ') + ')' : ''}` }
+
+  const imp = await importStatements({ bank_account_id: params.bank_account_id, source: 'sicoob_api', statements: res.statements })
+  if ('error' in imp) return { error: imp.error }
+  const auto = await persistAutoLinks(imp.id)
+  const linked = 'error' in auto ? 0 : auto.linked
+  return { ok: true, batch_id: imp.id, imported: res.statements.length, linked, warnings: res.warnings }
 }

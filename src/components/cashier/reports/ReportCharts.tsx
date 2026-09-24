@@ -46,7 +46,7 @@ function BarChart({ data }: { data: CashierReportSummary['by_day'] }) {
   const barW = (barGroupW - 4) / 2
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-4">
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">
         Entradas vs Saídas por dia
       </p>
@@ -150,7 +150,7 @@ function PieChart({ data }: { data: CashierReportSummary['by_payment_method'] })
   })
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-4">
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">
         Recebimentos por Forma de Pagamento
       </p>
@@ -179,8 +179,8 @@ function PieChart({ data }: { data: CashierReportSummary['by_payment_method'] })
                 <span className="text-slate-700">{PAYMENT_LABELS[s.key] ?? s.key}</span>
               </div>
               <div className="text-right">
-                <span className="font-semibold text-slate-900 tabular-nums">{fmt(s.amount)}</span>
-                <span className="ml-1.5 text-slate-400">({s.pct}%)</span>
+                <span className="font-semibold text-slate-900 font-mono tabular-nums">{fmt(s.amount)}</span>
+                <span className="ml-1.5 text-slate-400 font-mono tabular-nums">({s.pct}%)</span>
               </div>
             </div>
           ))}

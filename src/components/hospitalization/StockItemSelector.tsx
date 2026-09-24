@@ -134,7 +134,7 @@ export default function StockItemSelector({ value, onChange, showLowStockBadge =
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Nome, SKU ou código de barras..."
-                className="w-full rounded-md border border-slate-200 pl-8 pr-2 py-1.5 text-xs focus:border-violet-500 focus:outline-none"
+                className="w-full rounded-lg border border-slate-200 pl-8 pr-2 py-1.5 text-xs focus:border-violet-500 focus:outline-none"
               />
               {searching && (
                 <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 animate-spin text-slate-400" />

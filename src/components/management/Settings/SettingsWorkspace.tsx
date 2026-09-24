@@ -4,16 +4,27 @@ import { useState } from 'react'
 import {
   Building2, Shield, MessageCircle, Calculator,
   BarChart3, Wrench, ToggleLeft, ToggleRight, Save, Loader2,
-  HelpCircle,
+  HelpCircle, Tags, Hash, Building, Landmark, FlaskConical, GraduationCap,
+  ScanLine, Barcode, Syringe,
 } from 'lucide-react'
+import FinancialIntegrationsForm from './FinancialIntegrationsForm'
 import type { ClinicConfig, ClinicSettingsConfig, FlowConfig } from '@/lib/actions/clinic-settings'
-import { updateClinicConfig } from '@/lib/actions/clinic-settings'
+import { updateClinicConfig, getClinicConfig } from '@/lib/actions/clinic-settings'
 import ModulesTab from '../ModulesTab'
 import ClinicSettingsTab from '../ClinicSettingsTab'
 import CsvImporter from '../CsvImporter'
 import WhatsappIntelligentSetup from './WhatsappIntelligentSetup'
 import WhatsappTriggerModules from './WhatsappTriggerModules'
 import FiscalConfigForm from './FiscalConfigForm'
+import LabAgentSettings from './LabAgentSettings'
+import AnalyteMappingPanel from './AnalyteMappingPanel'
+import ExamRejectionSettings from './ExamRejectionSettings'
+import FlowFlagCard from './FlowFlagCard'
+import VaccineRecallSettings from './VaccineRecallSettings'
+import PricingTab from '@/components/registry/pricing/PricingTab'
+import DocumentNumberingTab from '../DocumentNumberingTab'
+import CompaniesTab from '../CompaniesTab'
+import { useAnimaisFoundation } from '@/components/providers/ClinicConfigProvider'
 import { useUpgradeModal } from '@/components/upgrade/UpgradeProvider'
 import type { UpgradeFeatureKey } from '@/components/upgrade/UpgradeModal'
 import { Lock, ArrowUpRight } from 'lucide-react'
@@ -22,7 +33,7 @@ import { Lock, ArrowUpRight } from 'lucide-react'
 
 // Categoria 'ia' removida em 2026-05-26 (cleanup de drift): IA mode e Fluxo
 // Contínuo agora são exclusivos da categoria 'acesso' (ClinicSettingsTab).
-type Category = 'geral' | 'acesso' | 'whatsapp' | 'contabil' | 'relatorios' | 'utilitarios'
+type Category = 'geral' | 'acesso' | 'whatsapp' | 'contabil' | 'financeiro' | 'empresas' | 'precos' | 'numeracao' | 'laboratorio' | 'relatorios' | 'utilitarios'
 
 interface CategoryDef {
   key: Category
@@ -36,6 +47,11 @@ const CATEGORIES: CategoryDef[] = [
   { key: 'acesso',       label: 'Acesso',      icon: <Shield       className="h-4 w-4" />, description: 'Módulos, IA e fluxo contínuo'        },
   { key: 'whatsapp',     label: 'WhatsApp',    icon: <MessageCircle className="h-4 w-4" />, description: 'Evolution API e notificações'        },
   { key: 'contabil',     label: 'Contábil',    icon: <Calculator   className="h-4 w-4" />, description: 'Plano de contas e dados fiscais'     },
+  { key: 'financeiro',   label: 'Financeiro',  icon: <Landmark     className="h-4 w-4" />, description: 'Integração bancária e PIX'           },
+  { key: 'empresas',     label: 'Empresas',    icon: <Building     className="h-4 w-4" />, description: 'Empresas faturantes (multi-CNPJ)'   },
+  { key: 'precos',       label: 'Preços',      icon: <Tags         className="h-4 w-4" />, description: 'Tabelas de preço e composição'      },
+  { key: 'numeracao',    label: 'Numeração',   icon: <Hash         className="h-4 w-4" />, description: 'Nº de OS, RPS, NFS-e…'              },
+  { key: 'laboratorio',  label: 'Laboratório', icon: <FlaskConical className="h-4 w-4" />, description: 'Agentes-ponte dos aparelhos'         },
   { key: 'relatorios',   label: 'Relatórios',  icon: <BarChart3    className="h-4 w-4" />, description: 'Relatórios disponíveis'              },
   { key: 'utilitarios',  label: 'Utilitários', icon: <Wrench       className="h-4 w-4" />, description: 'Exportação e importação de dados'    },
 ]
@@ -65,6 +81,11 @@ export default function SettingsWorkspace({
 }: Props) {
   const [activeCategory, setActiveCategory] = useState<Category>('geral')
   const { open: openUpgrade } = useUpgradeModal()
+  const animaisFoundation = useAnimaisFoundation()
+
+  // A seção "Preços" (Sprint Animais) só aparece na clínica com a flag ligada.
+  const animaisOnly = new Set(['precos', 'numeracao', 'empresas', 'laboratorio'])
+  const visibleCategories = CATEGORIES.filter(c => !animaisOnly.has(c.key) || animaisFoundation)
 
   // SysMax nunca vê paywall — segue operando direto sobre o setup real,
   // independentemente do que está em active_modules da clínica visualizada.
@@ -80,7 +101,7 @@ export default function SettingsWorkspace({
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Categorias</p>
           </div>
           <div className="flex sm:flex-col overflow-x-auto pb-1 sm:pb-0 gap-1 py-1 sm:py-1 px-1 sm:px-0">
-            {CATEGORIES.map(cat => {
+            {visibleCategories.map(cat => {
               const isActive = activeCategory === cat.key
               return (
                 <button
@@ -120,6 +141,66 @@ export default function SettingsWorkspace({
               O horário de funcionamento está disponível em <strong>Gestão → Clínica</strong>.
             </p>
             <RegistrationSettings initialConfig={initialClinicConfig} onToast={onToast} />
+            <AttendingVetSettings initialConfig={initialClinicConfig} onToast={onToast} />
+            <AdvanceSettings initialConfig={initialClinicConfig} onToast={onToast} />
+            <ConveniosSettings initialConfig={initialClinicConfig} onToast={onToast} />
+            <TreinamentoSettings initialConfig={initialClinicConfig} onToast={onToast} />
+
+            {/* ── Tarefa 0 — ativação por rotina (padrão DESLIGADO) ─────────── */}
+            <FlowFlagCard
+              initialConfig={initialClinicConfig} onToast={onToast}
+              flag="usa_imagem"
+              icon={<ScanLine className="h-4 w-4 text-teal-600" />}
+              title="Módulo de Imagem (raio-X, ultrassom, DICOM)?"
+              subtitle="Estudos de imagem, visualizador DICOM, laudo e link para o MV solicitante"
+              whenOn="O menu mostra “Imagem”: a equipe cadastra estudos, sobe arquivos DICOM, anexa laudo e libera para o tutor e para o Médico Veterinário solicitante."
+              whenOff="Quando desativado, o item “Imagem” some do menu, a rota redireciona para o painel e as ações de imagem são recusadas. Exige também o módulo Exames."
+              successMessage="Módulo de Imagem configurado!"
+            />
+            <FlowFlagCard
+              initialConfig={initialClinicConfig} onToast={onToast}
+              flag="usa_laboratorio"
+              icon={<FlaskConical className="h-4 w-4 text-teal-600" />}
+              title="Laboratório dentro do exame?"
+              subtitle="Lançamento de analitos, importação HL7 dos aparelhos e liberação pelo MV"
+              whenOn="Dentro de cada exame aparece o painel de resultados: digitação/importação de analitos, etiqueta de tubo e conferência + liberação pelo Médico Veterinário."
+              whenOff="Quando desativado, o painel de resultados não aparece no exame e as ações de laboratório são recusadas. O exame continua funcionando normalmente sem ele."
+              successMessage="Laboratório configurado!"
+            />
+            <FlowFlagCard
+              initialConfig={initialClinicConfig} onToast={onToast}
+              flag="usa_boleto"
+              icon={<Barcode className="h-4 w-4 text-teal-600" />}
+              title="Emitir boletos de cobrança?"
+              subtitle="Aba Boletos no Financeiro, carteira bancária, envio por e-mail/WhatsApp e baixa automática"
+              whenOn="O Financeiro mostra a aba “Boletos” e a aba “Carteira Bancária” no cadastro da conta. É preciso configurar a carteira e habilitar a conta para emitir."
+              whenOff="Quando desativado, a aba Boletos some do Financeiro, a carteira bancária some do cadastro da conta e emitir/enviar boleto é recusado."
+              successMessage="Boletos configurados!"
+            />
+            <VaccineRecallSettings initialConfig={initialClinicConfig} onToast={onToast} />
+
+            <ExamRejectionSettings initialConfig={initialClinicConfig} onToast={onToast} />
+            <FlowFlagCard
+              initialConfig={initialClinicConfig} onToast={onToast}
+              flag="cancela_custo_lab_na_recusa"
+              icon={<FlaskConical className="h-4 w-4 text-teal-600" />}
+              title="Exame não realizado pelo laboratório parceiro deixa de ser devido?"
+              subtitle="O que acontece com o contas a pagar do laboratório quando o exame volta rejeitado"
+              whenOn="Ao rejeitar a linha do exame, o sistema CANCELA o contas a pagar do custo do laboratório parceiro (ou não o gera). Use quando o contrato diz que exame não realizado não se paga."
+              whenOff="Padrão. O contas a pagar do laboratório parceiro continua devido mesmo com o exame rejeitado — é o comportamento atual; o ajuste, se houver, é manual no Financeiro."
+              successMessage="Custo do laboratório na recusa configurado!"
+            />
+            <FlowFlagCard
+              initialConfig={initialClinicConfig} onToast={onToast}
+              flag="estorna_exame_faturado_na_recusa"
+              icon={<Syringe className="h-4 w-4 text-teal-600" />}
+              title="Rejeitar exame já faturado estorna automaticamente?"
+              subtitle="Caminho do dinheiro — a fatura do tutor/cliente é ajustada sozinha"
+              warning="Isto mexe em documento financeiro já emitido. Toda rejeição e todo estorno ficam registrados na trilha de auditoria com o autor. Fatura já PAGA/baixada nunca é alterada — o sistema recusa e pede o estorno manual."
+              whenOn="Ao rejeitar uma linha já faturada, o sistema estorna/ajusta o valor na fatura em aberto automaticamente e registra a trilha."
+              whenOff="Padrão. Rejeitar uma linha já faturada é recusado, com orientação para estornar manualmente no Financeiro."
+              successMessage="Estorno automático configurado!"
+            />
             <MentorIdleSettings initialConfig={initialClinicConfig} onToast={onToast} />
           </div>
         )}
@@ -164,6 +245,43 @@ export default function SettingsWorkspace({
           <div className="space-y-6">
             <SectionHeader icon={<Calculator className="h-5 w-5 text-slate-600" />} title="Configurações Contábeis" description="Plano de contas e integração fiscal" />
             <AccountingSettings initialConfig={initialClinicConfig} onToast={onToast} />
+          </div>
+        )}
+
+        {activeCategory === 'financeiro' && (
+          <div className="space-y-6">
+            <SectionHeader icon={<Landmark className="h-5 w-5 text-slate-600" />} title="Integrações Financeiras" description="Integração bancária (extrato/conciliação) e PIX — cada uma condicional à ativação" />
+            <FinancialIntegrationsForm onToast={onToast} />
+          </div>
+        )}
+
+        {activeCategory === 'laboratorio' && animaisFoundation && (
+          <div className="space-y-6">
+            <SectionHeader icon={<FlaskConical className="h-5 w-5 text-slate-600" />} title="Agentes-ponte de Laboratório" description="Serviço instalado no PC dos aparelhos (URIT/BK-200) — worklist e resultados automáticos por HL7/MLLP" />
+            <LabAgentSettings onToast={onToast} />
+            <SectionHeader icon={<FlaskConical className="h-5 w-5 text-slate-600" />} title="Analitos & Mapeamento" description="Catálogo de analitos e de-para do código que o aparelho envia → item do catálogo" />
+            <AnalyteMappingPanel />
+          </div>
+        )}
+
+        {activeCategory === 'empresas' && animaisFoundation && (
+          <div className="space-y-6">
+            <SectionHeader icon={<Building className="h-5 w-5 text-slate-600" />} title="Empresas Faturantes" description="CNPJs do grupo dentro desta clínica (Emp 001, 002, 003…)" />
+            <CompaniesTab />
+          </div>
+        )}
+
+        {activeCategory === 'precos' && animaisFoundation && (
+          <div className="space-y-6">
+            <SectionHeader icon={<Tags className="h-5 w-5 text-slate-600" />} title="Preços" description="Tabelas de preço, composição de custo e regras de precificação" />
+            <PricingTab />
+          </div>
+        )}
+
+        {activeCategory === 'numeracao' && animaisFoundation && (
+          <div className="space-y-6">
+            <SectionHeader icon={<Hash className="h-5 w-5 text-slate-600" />} title="Numeração de Documentos" description="Número inicial, prefixo e série de OS, RPS, NFS-e por empresa" />
+            <DocumentNumberingTab />
           </div>
         )}
 
@@ -227,7 +345,7 @@ function UpsellCard({
             type="button"
             onClick={onClick}
             data-feature={feature}
-            className="inline-flex items-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-700 px-4 py-2 text-sm font-bold text-white shadow-md shadow-violet-200 transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg bg-violet-600 hover:bg-violet-700 px-4 py-2 text-sm font-bold text-white shadow-md shadow-violet-200 transition-colors"
           >
             Quero habilitar
             <ArrowUpRight className="h-4 w-4" />
@@ -258,6 +376,234 @@ function SectionHeader({ icon, title, description }: {
   )
 }
 
+
+// ─── AttendingVetSettings — exigir profissional responsável no check-in ───────
+
+function AttendingVetSettings({ initialConfig, onToast }: {
+  initialConfig: ClinicConfig | null
+  onToast: (type: 'success' | 'error', msg: string) => void
+}) {
+  const flowRaw = initialConfig?.flow_config as FlowConfig | undefined
+  const [required, setRequired] = useState<boolean>(flowRaw?.require_attending_vet ?? false)
+  const [saving, setSaving] = useState(false)
+
+  async function handleSave() {
+    setSaving(true)
+    const base: FlowConfig = initialConfig?.flow_config ?? { vet_merged_modules: [] }
+    const res = await updateClinicConfig({ flow_config: { ...base, require_attending_vet: required } })
+    setSaving(false)
+    if ('error' in res) { onToast('error', res.error); return }
+    onToast('success', 'Configuração de responsável salva!')
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div className="border-b border-slate-100 px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-50">
+            <Shield className="h-4 w-4 text-teal-600" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">Exigir profissional responsável</h3>
+            <p className="text-xs text-slate-500">Torna obrigatório escolher o responsável no check-in</p>
+          </div>
+        </div>
+        <button
+          onClick={() => setRequired(v => !v)}
+          className={`transition-colors ${required ? 'text-teal-600' : 'text-slate-300'}`}
+          title={required ? 'Tornar opcional' : 'Tornar obrigatório'}
+        >
+          {required ? <ToggleRight className="h-7 w-7" /> : <ToggleLeft className="h-7 w-7" />}
+        </button>
+      </div>
+      <div className="px-6 py-4 flex items-center justify-between gap-4">
+        <p className="text-xs text-slate-500">
+          {required
+            ? 'A recepção precisa selecionar o profissional responsável para concluir o check-in. O pet vai para a fila desse profissional.'
+            : 'Opcional: o atendimento pode seguir aos departamentos sem responsável definido (visível a todos os profissionais).'}
+        </p>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50 flex-shrink-0"
+        >
+          {saving ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Salvando…</> : <><Save className="h-3.5 w-3.5" /> Salvar</>}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ─── AdvanceSettings — usa adiantamento no Caixa? (Fase 1, 1.6) ───────────────
+
+function AdvanceSettings({ initialConfig, onToast }: {
+  initialConfig: ClinicConfig | null
+  onToast: (type: 'success' | 'error', msg: string) => void
+}) {
+  const flowRaw = initialConfig?.flow_config as FlowConfig | undefined
+  const [uses, setUses] = useState<boolean>(flowRaw?.uses_advance ?? false)
+  const [saving, setSaving] = useState(false)
+
+  async function handleSave() {
+    setSaving(true)
+    const base: FlowConfig = initialConfig?.flow_config ?? { vet_merged_modules: [] }
+    const res = await updateClinicConfig({ flow_config: { ...base, uses_advance: uses } })
+    setSaving(false)
+    if ('error' in res) { onToast('error', res.error); return }
+    onToast('success', 'Configuração de adiantamento salva!')
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div className="border-b border-slate-100 px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-50">
+            <Calculator className="h-4 w-4 text-teal-600" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">Utiliza adiantamento?</h3>
+            <p className="text-xs text-slate-500">Permite lançar adiantamento (crédito do tutor) no Caixa</p>
+          </div>
+        </div>
+        <button
+          onClick={() => setUses(v => !v)}
+          className={`transition-colors ${uses ? 'text-teal-600' : 'text-slate-300'}`}
+          title={uses ? 'Desativar adiantamento' : 'Ativar adiantamento'}
+        >
+          {uses ? <ToggleRight className="h-7 w-7" /> : <ToggleLeft className="h-7 w-7" />}
+        </button>
+      </div>
+      <div className="px-6 py-4 flex items-center justify-between gap-4">
+        <p className="text-xs text-slate-500">
+          {uses
+            ? 'O Caixa mostra o botão "Adiantamento": o cliente deixa um valor que vira crédito para usar em consultas/procedimentos futuros.'
+            : 'Quando ativado, aparece o botão de adiantamento no Caixa e o crédito do tutor no recebimento.'}
+        </p>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50 flex-shrink-0"
+        >
+          {saving ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Salvando…</> : <><Save className="h-3.5 w-3.5" /> Salvar</>}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function ConveniosSettings({ initialConfig, onToast }: {
+  initialConfig: ClinicConfig | null
+  onToast: (type: 'success' | 'error', msg: string) => void
+}) {
+  const flowRaw = initialConfig?.flow_config as FlowConfig | undefined
+  const [uses, setUses] = useState<boolean>(flowRaw?.usa_convenios ?? false)
+  const [saving, setSaving] = useState(false)
+
+  async function handleSave() {
+    setSaving(true)
+    // Relê a config fresca para mesclar sem apagar outras flags do JSONB.
+    const fresh = await getClinicConfig()
+    const base: FlowConfig = (('error' in fresh) ? initialConfig?.flow_config : fresh.flow_config) ?? { vet_merged_modules: [] }
+    const res = await updateClinicConfig({ flow_config: { ...base, usa_convenios: uses } })
+    setSaving(false)
+    if ('error' in res) { onToast('error', res.error); return }
+    onToast('success', 'Configuração de convênios salva!')
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div className="border-b border-slate-100 px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-50">
+            <Shield className="h-4 w-4 text-teal-600" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">Utiliza convênios?</h3>
+            <p className="text-xs text-slate-500">Petlove, Vetplan, AVA e outros — cadastro, repasse e conciliação</p>
+          </div>
+        </div>
+        <button
+          onClick={() => setUses(v => !v)}
+          className={`transition-colors ${uses ? 'text-teal-600' : 'text-slate-300'}`}
+          title={uses ? 'Desativar convênios' : 'Ativar convênios'}
+        >
+          {uses ? <ToggleRight className="h-7 w-7" /> : <ToggleLeft className="h-7 w-7" />}
+        </button>
+      </div>
+      <div className="px-6 py-4 flex items-center justify-between gap-4">
+        <p className="text-xs text-slate-500">
+          {uses
+            ? 'O sistema mostra o cadastro de Convênios (Gestão), a conciliação de repasses e as opções de convênio no atendimento/caixa.'
+            : 'Quando desativado, nada relacionado a convênios, repasses ou conciliação aparece em nenhuma tela.'}
+        </p>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50 flex-shrink-0"
+        >
+          {saving ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Salvando…</> : <><Save className="h-3.5 w-3.5" /> Salvar</>}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function TreinamentoSettings({ initialConfig, onToast }: {
+  initialConfig: ClinicConfig | null
+  onToast: (type: 'success' | 'error', msg: string) => void
+}) {
+  const flowRaw = initialConfig?.flow_config as FlowConfig | undefined
+  const [uses, setUses] = useState<boolean>(flowRaw?.usa_treinamento ?? false)
+  const [saving, setSaving] = useState(false)
+
+  async function handleSave() {
+    setSaving(true)
+    // Relê a config fresca para mesclar sem apagar outras flags do JSONB.
+    const fresh = await getClinicConfig()
+    const base: FlowConfig = (('error' in fresh) ? initialConfig?.flow_config : fresh.flow_config) ?? { vet_merged_modules: [] }
+    const res = await updateClinicConfig({ flow_config: { ...base, usa_treinamento: uses } })
+    setSaving(false)
+    if ('error' in res) { onToast('error', res.error); return }
+    onToast('success', 'Configuração de treinamento salva!')
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div className="border-b border-slate-100 px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-50">
+            <GraduationCap className="h-4 w-4 text-teal-600" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">Academia de Treinamento?</h3>
+            <p className="text-xs text-slate-500">Vídeo-aulas do sistema — acervo compartilhado, progresso da sua equipe</p>
+          </div>
+        </div>
+        <button
+          onClick={() => setUses(v => !v)}
+          className={`transition-colors ${uses ? 'text-teal-600' : 'text-slate-300'}`}
+          title={uses ? 'Desativar treinamento' : 'Ativar treinamento'}
+        >
+          {uses ? <ToggleRight className="h-7 w-7" /> : <ToggleLeft className="h-7 w-7" />}
+        </button>
+      </div>
+      <div className="px-6 py-4 flex items-center justify-between gap-4">
+        <p className="text-xs text-slate-500">
+          {uses
+            ? 'O menu mostra "Treinamento": sua equipe assiste às vídeo-aulas dentro do sistema. O acervo de vídeos é o mesmo para todas as clínicas; o progresso de cada colaborador e o controle de acesso são exclusivos desta clínica.'
+            : 'Quando ativado, aparece o item "Treinamento" no menu com o acervo de vídeo-aulas. O gestor acompanha a evolução dos próprios colaboradores.'}
+        </p>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50 flex-shrink-0"
+        >
+          {saving ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Salvando…</> : <><Save className="h-3.5 w-3.5" /> Salvar</>}
+        </button>
+      </div>
+    </div>
+  )
+}
 
 // ─── AccountingSettings ───────────────────────────────────────────────────────
 
@@ -444,7 +790,7 @@ function RegistrationSettings({ initialConfig, onToast }: {
         <button
           onClick={handleSave}
           disabled={saving}
-          className="flex items-center gap-2 px-5 py-2.5 bg-teal-600 text-white text-sm font-semibold rounded-xl hover:bg-teal-700 transition-colors disabled:opacity-50"
+          className="flex items-center gap-2 px-5 py-2.5 bg-teal-600 text-white text-sm font-semibold shadow-sm rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-60"
         >
           {saving
             ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando...</>
@@ -534,7 +880,7 @@ function MentorIdleSettings({ initialConfig, onToast }: {
         <button
           onClick={handleSave}
           disabled={saving}
-          className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50"
+          className="flex items-center gap-2 px-5 py-2.5 bg-teal-600 text-white text-sm font-semibold shadow-sm rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-60"
         >
           {saving
             ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando...</>

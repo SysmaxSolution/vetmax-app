@@ -43,6 +43,7 @@ export interface FiscalConfig {
   rps_serie:           string | null
   rps_proximo_numero:  number
   rps_lote:            number
+  nfse_auto_checkout:  boolean
   // Flags de presença do token (nunca expõe o valor ao client).
   has_token_sandbox:    boolean
   has_token_production: boolean
@@ -67,7 +68,47 @@ export interface FiscalConfigInput {
   rps_serie?:           string | null
   rps_proximo_numero?:  number
   rps_lote?:            number
+  nfse_auto_checkout?:  boolean
   /** Quando presente (string não-vazia), atualiza o token do ambiente. */
+  focus_token_sandbox?:    string
+  focus_token_production?: string
+}
+
+/** Config fiscal de uma empresa faturante (NFS-e por CNPJ). Sem tokens (segurança). */
+export interface CompanyFiscalConfig {
+  company_id:          string
+  company_name:        string
+  company_code:        string | null
+  cnpj:                string | null   // identidade (vem de companies)
+  inscricao_municipal: string | null   // identidade (vem de companies)
+  emits_nfse:          boolean
+  is_active:           boolean
+  environment:         'sandbox' | 'production'
+  regime_tributario:   string | null
+  optante_simples:     boolean
+  codigo_municipio:    string | null
+  cnae:                string | null
+  item_lista_servico:  string | null
+  codigo_tributario_municipio: string | null
+  iss_aliquota:        number | null
+  iss_retido:          boolean
+  has_token_sandbox:    boolean
+  has_token_production: boolean
+}
+
+export interface CompanyFiscalConfigInput {
+  company_id:           string
+  emits_nfse?:          boolean
+  is_active?:           boolean
+  environment?:         'sandbox' | 'production'
+  regime_tributario?:   string | null
+  optante_simples?:     boolean
+  codigo_municipio?:    string | null
+  cnae?:                string | null
+  item_lista_servico?:  string | null
+  codigo_tributario_municipio?: string | null
+  iss_aliquota?:        number | null
+  iss_retido?:          boolean
   focus_token_sandbox?:    string
   focus_token_production?: string
 }
@@ -134,7 +175,7 @@ export async function getFiscalConfig(): Promise<FiscalConfig | null | { error: 
   const { admin, clinic_id } = ctx
   const { data, error } = await admin
     .from('clinic_fiscal_config')
-    .select('emits_nfse, is_active, environment, provider, cnpj, inscricao_municipal, razao_social, regime_tributario, optante_simples, codigo_municipio, cnae, item_lista_servico, codigo_tributario_municipio, iss_aliquota, iss_retido, rps_serie, rps_proximo_numero, rps_lote, focus_token_sandbox, focus_token_production')
+    .select('emits_nfse, is_active, environment, provider, cnpj, inscricao_municipal, razao_social, regime_tributario, optante_simples, codigo_municipio, cnae, item_lista_servico, codigo_tributario_municipio, iss_aliquota, iss_retido, rps_serie, rps_proximo_numero, rps_lote, nfse_auto_checkout, focus_token_sandbox, focus_token_production')
     .eq('clinic_id', clinic_id)
     .maybeSingle()
   if (error) {
@@ -172,7 +213,7 @@ export async function upsertFiscalConfig(
     'emits_nfse', 'is_active', 'environment', 'cnpj', 'inscricao_municipal',
     'razao_social', 'regime_tributario', 'optante_simples', 'codigo_municipio',
     'cnae', 'item_lista_servico', 'codigo_tributario_municipio', 'iss_aliquota',
-    'iss_retido', 'rps_serie', 'rps_proximo_numero', 'rps_lote',
+    'iss_retido', 'rps_serie', 'rps_proximo_numero', 'rps_lote', 'nfse_auto_checkout',
   ] as Array<keyof FiscalConfigInput>).forEach(assign)
 
   // Tokens: só grava se string não-vazia (mantém o existente caso contrário).
@@ -188,6 +229,159 @@ export async function upsertFiscalConfig(
     .upsert(patch, { onConflict: 'clinic_id' })
   if (error) return { error: 'Erro ao salvar configuração fiscal: ' + error.message }
 
+  return { success: true }
+}
+
+// ─── Config fiscal EFETIVA por empresa faturante (resolver) ───────────────────
+// Se a empresa tem config própria ativa (company_fiscal_config), usa-a — a
+// IDENTIDADE (CNPJ/inscrição) vem de companies. Senão, cai para a config da
+// clínica (clinic_fiscal_config). Retrocompat total p/ clínicas de 1 CNPJ.
+
+type ResolvedFiscal = {
+  emits:               boolean
+  active:              boolean
+  environment:         'sandbox' | 'production'
+  token:               string | null
+  prestador:           { cnpj: string | null; inscricao_municipal: string | null; codigo_municipio: string | null }
+  iss_aliquota:        number | null
+  iss_retido:          boolean
+  item_lista_servico:  string | null
+  codigo_tributario_municipio: string | null
+  source:              'company' | 'clinic'
+}
+
+async function resolveFiscalForCompany(
+  admin: Ctx['admin'], clinic_id: string, company_id: string | null,
+): Promise<ResolvedFiscal | { error: string }> {
+  if (company_id) {
+    const { data: cc } = await admin
+      .from('company_fiscal_config')
+      .select('emits_nfse, is_active, environment, focus_token_sandbox, focus_token_production, codigo_municipio, item_lista_servico, codigo_tributario_municipio, iss_aliquota, iss_retido')
+      .eq('clinic_id', clinic_id).eq('company_id', company_id).maybeSingle()
+    if (cc && cc.emits_nfse) {
+      const { data: comp } = await admin
+        .from('companies')
+        .select('cnpj, municipal_registration')
+        .eq('id', company_id).maybeSingle()
+      const env = (cc.environment === 'production' ? 'production' : 'sandbox') as 'sandbox' | 'production'
+      return {
+        emits: Boolean(cc.emits_nfse),
+        active: Boolean(cc.is_active),
+        environment: env,
+        token: (env === 'production' ? cc.focus_token_production : cc.focus_token_sandbox) ?? null,
+        prestador: {
+          cnpj: (comp?.cnpj as string | null) ?? null,
+          inscricao_municipal: (comp?.municipal_registration as string | null) ?? null,
+          codigo_municipio: cc.codigo_municipio ?? null,
+        },
+        iss_aliquota: cc.iss_aliquota === null ? null : Number(cc.iss_aliquota),
+        iss_retido: Boolean(cc.iss_retido),
+        item_lista_servico: cc.item_lista_servico ?? null,
+        codigo_tributario_municipio: cc.codigo_tributario_municipio ?? null,
+        source: 'company',
+      }
+    }
+  }
+  // Fallback: config por clínica
+  const { data: cfg } = await admin
+    .from('clinic_fiscal_config')
+    .select('emits_nfse, is_active, environment, cnpj, inscricao_municipal, codigo_municipio, item_lista_servico, codigo_tributario_municipio, iss_aliquota, iss_retido, focus_token_sandbox, focus_token_production')
+    .eq('clinic_id', clinic_id).maybeSingle()
+  if (!cfg) return { error: 'Configuração fiscal ausente.' }
+  const env = (cfg.environment === 'production' ? 'production' : 'sandbox') as 'sandbox' | 'production'
+  return {
+    emits: Boolean(cfg.emits_nfse),
+    active: Boolean(cfg.is_active),
+    environment: env,
+    token: (env === 'production' ? cfg.focus_token_production : cfg.focus_token_sandbox) ?? null,
+    prestador: {
+      cnpj: (cfg.cnpj as string | null) ?? null,
+      inscricao_municipal: (cfg.inscricao_municipal as string | null) ?? null,
+      codigo_municipio: cfg.codigo_municipio ?? null,
+    },
+    iss_aliquota: cfg.iss_aliquota === null ? null : Number(cfg.iss_aliquota),
+    iss_retido: Boolean(cfg.iss_retido),
+    item_lista_servico: cfg.item_lista_servico ?? null,
+    codigo_tributario_municipio: cfg.codigo_tributario_municipio ?? null,
+    source: 'clinic',
+  }
+}
+
+// ─── CRUD da config fiscal POR EMPRESA (tela de Empresas Faturantes) ──────────
+// Lista as empresas faturantes com sua config fiscal (sem tokens). A UI mostra
+// uma seção "Fiscal (NFS-e)" por empresa.
+export async function listCompanyFiscalConfigs(): Promise<CompanyFiscalConfig[] | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+  const { admin, clinic_id } = ctx
+
+  const { data: comps } = await admin
+    .from('companies')
+    .select('id, code, name, legal_name, cnpj, municipal_registration, is_active')
+    .eq('clinic_id', clinic_id)
+    .order('code', { ascending: true })
+  if (!comps || comps.length === 0) return []
+
+  const { data: cfgs } = await admin
+    .from('company_fiscal_config')
+    .select('company_id, emits_nfse, is_active, environment, regime_tributario, optante_simples, codigo_municipio, cnae, item_lista_servico, codigo_tributario_municipio, iss_aliquota, iss_retido, focus_token_sandbox, focus_token_production')
+    .eq('clinic_id', clinic_id)
+  const byCompany = new Map<string, any>()
+  for (const c of cfgs ?? []) byCompany.set((c as any).company_id, c)
+
+  return (comps as any[]).map(comp => {
+    const c = byCompany.get(comp.id)
+    return {
+      company_id:          comp.id,
+      company_name:        comp.name ?? comp.legal_name ?? '—',
+      company_code:        comp.code ?? null,
+      cnpj:                comp.cnpj ?? null,
+      inscricao_municipal: comp.municipal_registration ?? null,
+      emits_nfse:          Boolean(c?.emits_nfse),
+      is_active:           Boolean(c?.is_active),
+      environment:         (c?.environment === 'production' ? 'production' : 'sandbox') as 'sandbox' | 'production',
+      regime_tributario:   c?.regime_tributario ?? null,
+      optante_simples:     Boolean(c?.optante_simples),
+      codigo_municipio:    c?.codigo_municipio ?? null,
+      cnae:                c?.cnae ?? null,
+      item_lista_servico:  c?.item_lista_servico ?? null,
+      codigo_tributario_municipio: c?.codigo_tributario_municipio ?? null,
+      iss_aliquota:        c?.iss_aliquota === null || c?.iss_aliquota === undefined ? null : Number(c.iss_aliquota),
+      iss_retido:          Boolean(c?.iss_retido),
+      has_token_sandbox:    Boolean(c?.focus_token_sandbox && String(c.focus_token_sandbox).trim()),
+      has_token_production: Boolean(c?.focus_token_production && String(c.focus_token_production).trim()),
+    } as CompanyFiscalConfig
+  })
+}
+
+export async function upsertCompanyFiscalConfig(
+  input: CompanyFiscalConfigInput,
+): Promise<{ success: true } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+  const { admin, clinic_id } = ctx
+  if (!input.company_id) return { error: 'Empresa obrigatória.' }
+
+  // Garante que a empresa pertence à clínica
+  const { data: comp } = await admin
+    .from('companies').select('id').eq('id', input.company_id).eq('clinic_id', clinic_id).maybeSingle()
+  if (!comp) return { error: 'Empresa não encontrada.' }
+
+  const patch: Record<string, unknown> = { clinic_id, company_id: input.company_id }
+  const assign = (k: keyof CompanyFiscalConfigInput) => { if (input[k] !== undefined) patch[k] = input[k] }
+  ;([
+    'emits_nfse', 'is_active', 'environment', 'regime_tributario', 'optante_simples',
+    'codigo_municipio', 'cnae', 'item_lista_servico', 'codigo_tributario_municipio',
+    'iss_aliquota', 'iss_retido',
+  ] as Array<keyof CompanyFiscalConfigInput>).forEach(assign)
+
+  if (input.focus_token_sandbox && input.focus_token_sandbox.trim())    patch.focus_token_sandbox = input.focus_token_sandbox.trim()
+  if (input.focus_token_production && input.focus_token_production.trim()) patch.focus_token_production = input.focus_token_production.trim()
+
+  const { error } = await admin
+    .from('company_fiscal_config')
+    .upsert(patch, { onConflict: 'company_id' })
+  if (error) return { error: 'Erro ao salvar configuração fiscal da empresa: ' + error.message }
   return { success: true }
 }
 
@@ -238,16 +432,18 @@ export async function buildNfsePayload(
 
   const { data: doc } = await admin
     .from('billing_documents')
-    .select('id, doc_number, total_amount, tutor_id, issue_date')
+    .select('id, doc_number, total_amount, tutor_id, issue_date, company_id')
     .eq('id', billingDocumentId).eq('clinic_id', clinic_id).maybeSingle()
   if (!doc) return { error: 'Documento não encontrado.' }
   if (!doc.tutor_id) return { error: 'Documento sem tutor — NFS-e exige tomador.' }
 
-  const cfg = await getFiscalConfig()
-  if (!cfg || 'error' in cfg) return { error: 'Configuração fiscal ausente.' }
+  // Config fiscal EFETIVA da empresa faturante da nota (fallback = clínica).
+  const cfg = await resolveFiscalForCompany(admin, clinic_id, (doc.company_id as string | null) ?? null)
+  if ('error' in cfg) return { error: cfg.error }
   // Alíquota ISS e dados do prestador vêm da config. O item LC116 e o código
-  // tributário do município vêm do CADASTRO DO SERVIÇO (resolvidos abaixo).
-  if (!cfg.cnpj || !cfg.inscricao_municipal || !cfg.codigo_municipio || cfg.iss_aliquota === null) {
+  // tributário do município vêm do CADASTRO DO SERVIÇO (resolvidos abaixo; com
+  // fallback para o item_lista_servico padrão da config).
+  if (!cfg.prestador.cnpj || !cfg.prestador.inscricao_municipal || !cfg.prestador.codigo_municipio || cfg.iss_aliquota === null) {
     return { error: 'Configuração fiscal incompleta (CNPJ, inscrição municipal, código do município e alíquota ISS).' }
   }
 
@@ -302,7 +498,12 @@ export async function buildNfsePayload(
     if (val > topValue) { topValue = val; itemListaServico = code; codigoTributarioMunicipio = codMunByItemCode.get(code) ?? null }
   }
   if (!itemListaServico) {
-    return { error: 'Nenhum serviço desta nota tem o "Item da Lista de Serviço (LC 116)" preenchido. Defina-o no cadastro do serviço.' }
+    // Fallback: item padrão da config fiscal (empresa ou clínica).
+    itemListaServico = cfg.item_lista_servico
+    codigoTributarioMunicipio = cfg.codigo_tributario_municipio
+  }
+  if (!itemListaServico) {
+    return { error: 'Nenhum serviço desta nota tem o "Item da Lista de Serviço (LC 116)" preenchido. Defina-o no cadastro do serviço ou na configuração fiscal.' }
   }
 
   const onlyDigits = (s: string | null | undefined) => String(s ?? '').replace(/\D/g, '')
@@ -311,9 +512,9 @@ export async function buildNfsePayload(
   const payload: FocusNfsePayload = {
     data_emissao: (doc.issue_date as string) ?? new Date().toISOString(),
     prestador: {
-      cnpj:                onlyDigits(cfg.cnpj),
-      inscricao_municipal: cfg.inscricao_municipal,
-      codigo_municipio:    cfg.codigo_municipio,
+      cnpj:                onlyDigits(cfg.prestador.cnpj),
+      inscricao_municipal: cfg.prestador.inscricao_municipal as string,
+      codigo_municipio:    cfg.prestador.codigo_municipio as string,
     },
     tomador: {
       ...(cpfDigits.length > 11 ? { cnpj: cpfDigits } : { cpf: cpfDigits }),
@@ -324,7 +525,7 @@ export async function buildNfsePayload(
         numero:           (tutor.address_number as string) || 'S/N',
         complemento:      (tutor.address_complement as string) || undefined,
         bairro:           (tutor.neighborhood as string) || '',
-        codigo_municipio: cfg.codigo_municipio,
+        codigo_municipio: cfg.prestador.codigo_municipio as string,
         uf:               (tutor.state as string) || '',
         cep:              onlyDigits(tutor.cep),
       },
@@ -390,17 +591,19 @@ export async function emitNfse(
   if ('error' in built) return built
   const { payload, ref } = built
 
-  // Lê config COM token (apenas server-side; nunca retorna o token).
-  const { data: cfg } = await admin
-    .from('clinic_fiscal_config')
-    .select('emits_nfse, is_active, environment, focus_token_sandbox, focus_token_production')
-    .eq('clinic_id', clinic_id).maybeSingle()
+  // Empresa faturante da nota → config fiscal EFETIVA (empresa ou clínica).
+  const { data: docRow } = await admin
+    .from('billing_documents')
+    .select('company_id')
+    .eq('id', billingDocumentId).eq('clinic_id', clinic_id).maybeSingle()
+  const cfg = await resolveFiscalForCompany(admin, clinic_id, (docRow?.company_id as string | null) ?? null)
+  if ('error' in cfg) return { error: cfg.error, payload }
 
-  if (!cfg || !cfg.emits_nfse || !cfg.is_active) {
-    return { error: 'Emissão de NFS-e não está ativa para esta clínica.', payload }
+  if (!cfg.emits || !cfg.active) {
+    return { error: 'Emissão de NFS-e não está ativa para esta empresa/clínica.', payload }
   }
-  const env   = (cfg.environment === 'production' ? 'production' : 'sandbox') as 'sandbox' | 'production'
-  const token = env === 'production' ? cfg.focus_token_production : cfg.focus_token_sandbox
+  const env   = cfg.environment
+  const token = cfg.token
   if (!token) {
     return { error: 'Token do Focus NFe não configurado para o ambiente selecionado.', payload }
   }
@@ -451,17 +654,14 @@ export async function consultNfse(
 
   const { data: doc } = await admin
     .from('billing_documents')
-    .select('id')
+    .select('id, company_id')
     .eq('clinic_id', clinic_id).eq('nfse_ref', ref).maybeSingle()
   if (!doc) return { error: 'Documento da NFS-e não encontrado para este ref.' }
 
-  const { data: cfg } = await admin
-    .from('clinic_fiscal_config')
-    .select('environment, focus_token_sandbox, focus_token_production')
-    .eq('clinic_id', clinic_id).maybeSingle()
-  if (!cfg) return { error: 'Configuração fiscal ausente.' }
-  const env   = (cfg.environment === 'production' ? 'production' : 'sandbox') as 'sandbox' | 'production'
-  const token = env === 'production' ? cfg.focus_token_production : cfg.focus_token_sandbox
+  const cfg = await resolveFiscalForCompany(admin, clinic_id, (doc.company_id as string | null) ?? null)
+  if ('error' in cfg) return { error: cfg.error }
+  const env   = cfg.environment
+  const token = cfg.token
   if (!token) return { error: 'Token do Focus NFe não configurado.' }
 
   const targetUrl = `${FOCUS_NFE_ENDPOINTS[env]}${focusNfsePath(ref)}`
@@ -487,9 +687,17 @@ export async function consultNfse(
 // Cria o documento NFS-e a partir dos serviços da consulta e dispara a emissão
 // no provedor. É o ponto que o CheckoutModal chama ao confirmar "Emitir NFS-e?".
 
+export interface NfseEmissionResult {
+  company_name: string
+  doc_number:   string
+  ref?:         string
+  status?:      string
+  error?:       string
+}
+
 export async function emitNfseForConsultation(
   consultationId: string,
-): Promise<{ ref: string; status: string; doc_number: string } | { error: string }> {
+): Promise<{ results: NfseEmissionResult[] } | { error: string }> {
   // Trava CFMV/fiscal (council 2026-08-10): a NFS-e é documento fiscal e precisa
   // de lastro clínico IMUTÁVEL. Cobrar o tutor no caixa pode ocorrer antes da
   // assinatura (fluxo "Enviar ao caixa sem finalizar"), mas emitir a NOTA exige
@@ -507,11 +715,20 @@ export async function emitNfseForConsultation(
     return { error: 'NFS-e só pode ser emitida após a finalização e assinatura do prontuário (CFMV). Finalize a consulta ("Dar Alta") antes de emitir a nota fiscal.' }
   }
 
-  const { createNfseDocumentForConsultation } = await import('./billing-documents')
-  const created = await createNfseDocumentForConsultation(consultationId)
+  // Uma nota POR EMPRESA FATURANTE presente na OS (desmembramento por CNPJ).
+  const { createNfseDocumentsForConsultation } = await import('./billing-documents')
+  const created = await createNfseDocumentsForConsultation(consultationId)
   if ('error' in created) return created
+  if (created.length === 0) return { error: 'Consulta sem serviços para emitir NFS-e.' }
 
-  const emitted = await emitNfse(created.id)
-  if ('error' in emitted) return { error: emitted.error }
-  return { ref: emitted.ref, status: emitted.status, doc_number: created.doc_number }
+  const results: NfseEmissionResult[] = []
+  for (const d of created) {
+    const emitted = await emitNfse(d.id)
+    if ('error' in emitted) {
+      results.push({ company_name: d.company_name, doc_number: d.doc_number, error: emitted.error })
+    } else {
+      results.push({ company_name: d.company_name, doc_number: d.doc_number, ref: emitted.ref, status: emitted.status })
+    }
+  }
+  return { results }
 }

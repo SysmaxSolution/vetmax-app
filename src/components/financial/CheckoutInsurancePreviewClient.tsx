@@ -147,7 +147,7 @@ export default function CheckoutInsurancePreviewClient(props: Props) {
   const { totals } = preview
 
   return (
-    <section className="rounded-2xl border border-sky-200 bg-gradient-to-br from-sky-50 to-blue-50 overflow-hidden">
+    <section className="rounded-xl border border-sky-200 bg-gradient-to-br from-sky-50 to-blue-50 overflow-hidden">
       <header className="px-5 py-3 border-b border-sky-200/70 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <ShieldCheck className="h-4 w-4 text-sky-600" />
@@ -160,44 +160,44 @@ export default function CheckoutInsurancePreviewClient(props: Props) {
 
       {/* Totalizadores — lista horizontal compacta que cabe em qualquer modal */}
       <div className="px-4 py-3 border-b border-sky-200/60 space-y-1.5">
-        <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md bg-white border border-sky-100">
+        <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-white border border-sky-100">
           <div className="flex items-center gap-2 text-xs text-sky-800 min-w-0">
             <Wallet className="h-3.5 w-3.5 text-sky-600 flex-shrink-0" />
             <span className="truncate">Cobrar do tutor AGORA</span>
           </div>
-          <span className="text-sm font-bold text-sky-900 tabular-nums flex-shrink-0">{BRL(totals.charge_now)}</span>
+          <span className="text-sm font-bold text-sky-900 font-mono tabular-nums flex-shrink-0">{BRL(totals.charge_now)}</span>
         </div>
         {/* C4 (04/06): dados administrativos (repasse, economia, desconto da
             clínica) só na visão completa — o operador vê o que vai cobrar. */}
         {!props.compact && (
           <>
-            <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md bg-white border border-sky-100">
+            <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-white border border-sky-100">
               <div className="flex items-center gap-2 text-xs text-sky-800 min-w-0">
                 <CreditCard className="h-3.5 w-3.5 text-sky-600 flex-shrink-0" />
                 <span className="truncate">Petlove cobra no cartão</span>
               </div>
-              <span className="text-sm font-bold text-sky-900 tabular-nums flex-shrink-0">{BRL(totals.deferred_provider)}</span>
+              <span className="text-sm font-bold text-sky-900 font-mono tabular-nums flex-shrink-0">{BRL(totals.deferred_provider)}</span>
             </div>
-            <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md bg-white border border-sky-100">
+            <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-white border border-sky-100">
               <div className="flex items-center gap-2 text-xs text-sky-800 min-w-0">
                 <FileClock className="h-3.5 w-3.5 text-sky-600 flex-shrink-0" />
                 <span className="truncate">A Receber Petlove (repasse)</span>
               </div>
-              <span className="text-sm font-bold text-sky-900 tabular-nums flex-shrink-0">{BRL(totals.receivable)}</span>
+              <span className="text-sm font-bold text-sky-900 font-mono tabular-nums flex-shrink-0">{BRL(totals.receivable)}</span>
             </div>
-            <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md bg-emerald-50 border border-emerald-200">
+            <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200">
               <div className="flex items-center gap-2 text-xs text-emerald-800 min-w-0">
                 <TrendingDown className="h-3.5 w-3.5 text-emerald-600 flex-shrink-0" />
                 <span className="truncate">Tutor economizou</span>
               </div>
-              <span className="text-sm font-bold text-emerald-900 tabular-nums flex-shrink-0">{BRL(totals.tutor_saved)}</span>
+              <span className="text-sm font-bold text-emerald-900 font-mono tabular-nums flex-shrink-0">{BRL(totals.tutor_saved)}</span>
             </div>
-            <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md bg-rose-50 border border-rose-200">
+            <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-rose-50 border border-rose-200">
               <div className="flex items-center gap-2 text-xs text-rose-800 min-w-0">
                 <Scissors className="h-3.5 w-3.5 text-rose-600 flex-shrink-0" />
                 <span className="truncate">Desconto da clínica</span>
               </div>
-              <span className="text-sm font-bold text-rose-900 tabular-nums flex-shrink-0">{BRL(totals.clinic_discount)}</span>
+              <span className="text-sm font-bold text-rose-900 font-mono tabular-nums flex-shrink-0">{BRL(totals.clinic_discount)}</span>
             </div>
           </>
         )}
@@ -218,13 +218,13 @@ export default function CheckoutInsurancePreviewClient(props: Props) {
             </div>
             <div className="flex items-center gap-3 flex-shrink-0">
               {it.charge_now > 0 && (
-                <span className="text-sky-700">caixa <strong className="tabular-nums">{BRL(it.charge_now)}</strong></span>
+                <span className="text-sky-700">caixa <strong className="font-mono tabular-nums">{BRL(it.charge_now)}</strong></span>
               )}
               {!props.compact && it.deferred_provider > 0 && (
-                <span className="text-sky-700">cartão <strong className="tabular-nums">{BRL(it.deferred_provider)}</strong></span>
+                <span className="text-sky-700">cartão <strong className="font-mono tabular-nums">{BRL(it.deferred_provider)}</strong></span>
               )}
               {!props.compact && it.receivable > 0 && (
-                <span className="text-emerald-700">repasse <strong className="tabular-nums">{BRL(it.receivable)}</strong></span>
+                <span className="text-emerald-700">repasse <strong className="font-mono tabular-nums">{BRL(it.receivable)}</strong></span>
               )}
             </div>
           </li>
@@ -301,7 +301,7 @@ export default function CheckoutInsurancePreviewClient(props: Props) {
       <footer className="px-5 py-2 bg-sky-50/60 border-t border-sky-100 text-[10px] text-sky-700 flex items-center justify-between gap-3">
         <div>
           <strong>Total cheio (preço particular):</strong>{' '}
-          <span className="tabular-nums">{BRL(totals.grand_total)}</span>
+          <span className="font-mono tabular-nums">{BRL(totals.grand_total)}</span>
         </div>
         {props.patientName && props.tutorName && (
           <TutorSummaryPrint

@@ -85,7 +85,7 @@ export default function SalesCart({ items, onChange, disabled = false }: SalesCa
                     value={item.quantity}
                     disabled={disabled}
                     onChange={e => update(item.key, { quantity: Math.max(0.001, Number(e.target.value)) })}
-                    className="w-12 text-center text-sm border border-slate-200 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-50"
+                    className="w-12 text-center text-sm border border-slate-200 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-teal-400 disabled:opacity-50"
                   />
                   <button
                     type="button"
@@ -97,14 +97,14 @@ export default function SalesCart({ items, onChange, disabled = false }: SalesCa
                   </button>
                 </div>
                 <span className="text-xs text-slate-400">×</span>
-                <span className="text-xs text-slate-600">R$ {item.unit_price.toFixed(2)}</span>
+                <span className="text-xs text-slate-600 font-mono tabular-nums">R$ {item.unit_price.toFixed(2)}</span>
                 {item.discount > 0 && (
-                  <span className="text-xs text-green-600">-R$ {item.discount.toFixed(2)}</span>
+                  <span className="text-xs text-emerald-600 font-mono tabular-nums">-R$ {item.discount.toFixed(2)}</span>
                 )}
               </div>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
-              <span className="text-sm font-semibold text-slate-900 min-w-[4rem] text-right">
+              <span className="text-sm font-semibold text-slate-900 min-w-[4rem] text-right font-mono tabular-nums">
                 R$ {lineTotal.toFixed(2)}
               </span>
               <button
@@ -124,7 +124,7 @@ export default function SalesCart({ items, onChange, disabled = false }: SalesCa
       {/* Subtotal */}
       <div className="flex justify-between items-center pt-2 border-t border-slate-200 px-1">
         <span className="text-sm text-slate-500">Subtotal</span>
-        <span className="text-sm font-semibold text-slate-900">R$ {subtotal.toFixed(2)}</span>
+        <span className="text-sm font-semibold text-slate-900 font-mono tabular-nums">R$ {subtotal.toFixed(2)}</span>
       </div>
     </div>
   )

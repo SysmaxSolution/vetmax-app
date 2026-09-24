@@ -8,6 +8,7 @@
 // só display + escolha do método + aceite dos termos.
 
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { X, CreditCard, Smartphone, Loader2, ShieldCheck } from 'lucide-react'
 import type { BillingCycle, SubscriptionModuleCatalogRow } from '@/types'
 import type { PriceTotals } from '@/lib/subscription/pricing'
@@ -67,9 +68,9 @@ export default function CheckoutDummyModal({ plan, basePrice, selectedModules, c
     }
   }
 
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl flex flex-col max-h-[90vh]">
+      <div className="w-full max-w-md rounded-2xl bg-white shadow-xl flex flex-col max-h-[90vh] animate-scale-in">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <div>
@@ -211,6 +212,7 @@ export default function CheckoutDummyModal({ plan, basePrice, selectedModules, c
           </button>
         </div>
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }

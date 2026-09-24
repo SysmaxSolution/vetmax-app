@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import {
   X, ChevronRight, ChevronDown, Check, Loader2, Shield, Search,
   AlertTriangle, ToggleLeft, ToggleRight, Eye,
@@ -172,12 +173,12 @@ export default function UserAccessRightsModal({
   }
 
   // ── Render ──────────────────────────────────────────────────────────────────
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="w-full max-w-3xl max-h-[90vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+      <div className="w-full max-w-3xl max-h-[90vh] bg-white rounded-2xl shadow-xl flex flex-col overflow-hidden animate-scale-in">
         {/* Header */}
         <div className="bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-4 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-3">
@@ -261,7 +262,7 @@ export default function UserAccessRightsModal({
                     type="button"
                     disabled={isSelfEditing}
                     onClick={() => bulkAllModules(true)}
-                    className="px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 rounded-md disabled:opacity-30"
+                    className="px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 rounded-lg disabled:opacity-30"
                   >
                     Liberar tudo
                   </button>
@@ -269,7 +270,7 @@ export default function UserAccessRightsModal({
                     type="button"
                     disabled={isSelfEditing}
                     onClick={() => bulkAllModules(false)}
-                    className="px-2.5 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50 rounded-md disabled:opacity-30"
+                    className="px-2.5 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50 rounded-lg disabled:opacity-30"
                   >
                     Bloquear tudo
                   </button>
@@ -352,7 +353,7 @@ export default function UserAccessRightsModal({
                           type="button"
                           disabled={isSelfEditing || isBulkLoading}
                           onClick={() => bulkAllModule(mod, true)}
-                          className="px-2 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-50 rounded-md disabled:opacity-30"
+                          className="px-2 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-50 rounded-lg disabled:opacity-30"
                           title="Liberar tudo neste módulo"
                         >
                           Liberar tudo
@@ -361,7 +362,7 @@ export default function UserAccessRightsModal({
                           type="button"
                           disabled={isSelfEditing || isBulkLoading}
                           onClick={() => bulkAllModule(mod, false)}
-                          className="px-2 py-1 text-[11px] font-medium text-rose-700 hover:bg-rose-50 rounded-md disabled:opacity-30"
+                          className="px-2 py-1 text-[11px] font-medium text-rose-700 hover:bg-rose-50 rounded-lg disabled:opacity-30"
                           title="Bloquear tudo neste módulo"
                         >
                           Bloquear tudo
@@ -419,14 +420,15 @@ export default function UserAccessRightsModal({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 transition-colors"
+            className="px-4 py-2 rounded-lg bg-teal-600 text-white text-sm font-semibold shadow-sm hover:bg-teal-700 transition-colors"
           >
             Concluído
           </button>
         </div>
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }
 
 // ─── Sub-componente: linha de ações ──────────────────────────────────────────

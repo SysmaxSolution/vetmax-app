@@ -12,7 +12,11 @@ import { useClinicalVoiceAssistant } from '@/hooks/useClinicalVoiceAssistant'
 import { useNativeKeepAwake } from '@/hooks/useNativeKeepAwake'
 import { getClinicVoiceTriggers, updateClinicVoiceTriggers } from '@/lib/actions/clinic-settings'
 import { useAiTranscriptionMode } from '@/components/providers/ClinicConfigProvider'
-import { returnToVet, dischargeFromExams } from '@/lib/actions/exams'
+import { returnToVet, dischargeFromExams, sendExamToPartnerLab } from '@/lib/actions/exams'
+import { listPartnerClinics, type PartnerClinic } from '@/lib/actions/partner-clinics'
+import ConsultationServicesPanel from '@/components/vet/ConsultationServicesPanel'
+import ExamResultsPanel from '@/components/exams/ExamResultsPanel'
+import ExamRejectionPanel from '@/components/exams/ExamRejectionPanel'
 import { formatPetAge } from '@/lib/utils/pet-age'
 import { Toast } from '@/components/ui/toast'
 import { PetAvatar } from '@/components/ui/PetAvatar'
@@ -26,6 +30,7 @@ import type { VetConsultationDetail } from '@/lib/actions/vet'
 import type { DocumentTemplate } from '@/types'
 import type { PatientDocument } from '@/lib/actions/documents'
 import type { Attachment } from '@/lib/actions/attachments'
+import { useUsaLaboratorio } from '@/components/providers/ClinicConfigProvider'
 
 // ─── Labels ──────────────────────────────────────────────────────────────────
 
@@ -52,6 +57,8 @@ interface Props {
   initialAttachments?: Attachment[]
   userRole?:           string
   insuranceCard?:      import('@/lib/actions/insurance-coverage').InsuranceCardData | null
+  /** flow_config.usa_fluxo_rejeicao_exame — liga o painel de realização/rejeição. */
+  usesExamRejection?:  boolean
 }
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
@@ -72,10 +79,17 @@ export default function ExamDetail({
   initialAttachments = [],
   userRole,
   insuranceCard,
+  usesExamRejection = false,
 }: Props) {
   const router = useRouter()
   const aiMode = useAiTranscriptionMode()
+  // Tarefa 0 — painel de laboratório (analitos/HL7/liberação) só para quem
+  // ativou a rotina (flow_config.usa_laboratorio, padrão desligado).
+  const usaLaboratorio = useUsaLaboratorio()
   const { patient, tutor, vital_signs } = consultation
+  // Já enviado a laboratório parceiro (aguardando resultado) — não reofertar o
+  // envio (evita dupla cobrança); o exame já foi cobrado no caixa.
+  const alreadySentToLab = consultation.status === 'awaiting_lab_result'
 
   // Registra contexto de chat para este exame (mesma sala da consulta)
 
@@ -88,6 +102,13 @@ export default function ExamDetail({
   const [showRemoveModal,  setShowRemoveModal]  = useState(false)
   const [showAdmitModal,   setShowAdmitModal]   = useState(false)
   const [isDischargingExam, setIsDischargingExam] = useState(false)
+
+  // Enviar para laboratório parceiro (F2)
+  const [showLabModal,  setShowLabModal]  = useState(false)
+  const [labs,          setLabs]          = useState<PartnerClinic[]>([])
+  const [selectedLabId, setSelectedLabId] = useState('')
+  const [labDeadline,   setLabDeadline]   = useState('')
+  const [isSendingLab,  setIsSendingLab]  = useState(false)
 
   // Document suggestions from voice dictation
   const [examSuggestions, setExamSuggestions] = useState<Array<{ tipo: string; motivo: string; title: string; summary: string }>>([])
@@ -165,6 +186,12 @@ export default function ExamDetail({
     return () => window.removeEventListener('afterprint', handleAfterPrint)
   }, [])
 
+  // Isola a folha na impressão (classe no body — ver globals.css @media print).
+  useEffect(() => {
+    document.body.classList.toggle('print-mode-isolate', !!printData)
+    return () => document.body.classList.remove('print-mode-isolate')
+  }, [printData])
+
   const handlePrint = (data: PrintState) => {
     setPrintData(data)
     setTimeout(() => window.print(), 500)
@@ -195,6 +222,30 @@ export default function ExamDetail({
     setIsDischargingExam(false)
     if ('error' in res) { setToast({ type: 'error', message: res.error }); return }
     setToast({ type: 'success', message: `Alta de ${patient.name} concluída.` })
+    setTimeout(() => router.push('/dashboard/exams'), 1200)
+  }
+
+  // ─── Enviar para laboratório parceiro (F2) ────────────────────────────────
+  const openLabModal = async () => {
+    setShowLabModal(true)
+    if (labs.length === 0) {
+      const res = await listPartnerClinics({ is_active: true })
+      if (!('error' in res)) setLabs(res)
+    }
+  }
+
+  const handleSendToLab = async () => {
+    if (!selectedLabId) return
+    setIsSendingLab(true)
+    const res = await sendExamToPartnerLab({
+      consultation_id: consultation.id,
+      partner_clinic_id: selectedLabId,
+      return_deadline: labDeadline || null,
+    })
+    setIsSendingLab(false)
+    if ('error' in res) { setToast({ type: 'error', message: res.error }); return }
+    setShowLabModal(false)
+    setToast({ type: 'success', message: `Exame de ${patient.name} enviado ao laboratório parceiro. Valor lançado no caixa.` })
     setTimeout(() => router.push('/dashboard/exams'), 1200)
   }
 
@@ -272,29 +323,30 @@ export default function ExamDetail({
       />
 
       {/* Modal de confirmação */}
-      {showConfirm && (
+      {showConfirm && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 animate-scale-in">
             <h2 className="text-base font-bold text-slate-900">Devolver ao Médico?</h2>
             <p className="text-sm text-slate-500">
               {patient.name} voltará para o painel do Médico Veterinário com os documentos gerados.
             </p>
             {examNotes.trim() && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-700">
+              <div className="bg-sky-50 border border-sky-200 rounded-lg p-3 text-xs text-sky-700">
                 <strong>Notas para o MV:</strong> {examNotes}
               </div>
             )}
             <div className="flex gap-2 pt-1">
-              <button onClick={() => setShowConfirm(false)} className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">
+              <button onClick={() => setShowConfirm(false)} className="flex-1 rounded-lg border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">
                 Cancelar
               </button>
-              <button onClick={handleReturn} disabled={isReturning} className="flex-1 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2">
+              <button onClick={handleReturn} disabled={isReturning} className="flex-1 rounded-lg bg-teal-600 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50 flex items-center justify-center gap-2">
                 {isReturning ? <Loader2 className="h-4 w-4 animate-spin" /> : <ChevronRight className="h-4 w-4" />}
                 {isReturning ? 'Devolvendo...' : 'Confirmar'}
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       <div className="space-y-5">
@@ -315,7 +367,7 @@ export default function ExamDetail({
             )}
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-blue-700 bg-blue-100 px-2.5 py-1 rounded-full flex items-center gap-1">
+            <span className="text-xs font-medium text-violet-700 bg-violet-100 px-2.5 py-1 rounded-full flex items-center gap-1">
               <FlaskConical className="w-3 h-3" />Laboratório / Exames
             </span>
           </div>
@@ -334,11 +386,11 @@ export default function ExamDetail({
               </div>
             )}
             {patient.medical_history && (
-              <div className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-xl p-4">
-                <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+              <div className="flex items-start gap-3 bg-sky-50 border border-sky-200 rounded-xl p-4">
+                <AlertCircle className="w-5 h-5 text-sky-600 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-semibold text-blue-700 text-sm">Histórico Médico/Cirúrgico</p>
-                  <p className="text-blue-600 text-sm mt-0.5">{patient.medical_history}</p>
+                  <p className="font-semibold text-sky-700 text-sm">Histórico Médico/Cirúrgico</p>
+                  <p className="text-sky-600 text-sm mt-0.5">{patient.medical_history}</p>
                 </div>
               </div>
             )}
@@ -378,10 +430,10 @@ export default function ExamDetail({
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Sinais Vitais (Triagem)</p>
               {vital_signs ? (
                 <>
-                  <InfoRow label="Peso" value={`${vital_signs.weight} kg`} />
-                  <InfoRow label="Temperatura" value={`${vital_signs.temperature}°C`} />
+                  <InfoRow label="Peso" value={`${vital_signs.weight} kg`} mono />
+                  <InfoRow label="Temperatura" value={`${vital_signs.temperature}°C`} mono />
                   {vital_signs.heart_rate > 0 && (
-                    <InfoRow label="FC" value={`${vital_signs.heart_rate} bpm`} />
+                    <InfoRow label="FC" value={`${vital_signs.heart_rate} bpm`} mono />
                   )}
                   {vital_signs.mucous_color && (
                     <InfoRow label="Mucosas" value={MUCOUS_LABELS[vital_signs.mucous_color] ?? vital_signs.mucous_color} />
@@ -433,8 +485,8 @@ export default function ExamDetail({
         {/* Motor de Voz — Ditado do Laudo */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200">
           <div className="border-b border-slate-100 px-6 py-4 flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50">
-              <Mic className="h-4 w-4 text-blue-600" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-50">
+              <Mic className="h-4 w-4 text-teal-600" />
             </div>
             <div className="flex-1">
               <h2 className="text-base font-semibold text-slate-900">Ditado do Laudo</h2>
@@ -455,7 +507,7 @@ export default function ExamDetail({
 
             {/* Live transcript */}
             {(isRecording || liveTranscript) && (
-              <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-slate-600 italic min-h-[56px]">
+              <div className="bg-sky-50 border border-sky-200 rounded-xl px-4 py-3 text-sm text-slate-600 italic min-h-[56px]">
                 {liveTranscript || <span className="text-slate-400">Ouvindo... fale normalmente.</span>}
               </div>
             )}
@@ -464,14 +516,14 @@ export default function ExamDetail({
             {examSuggestions.length > 0 && (
               <div className="space-y-2">
                 {examSuggestions.map((s, i) => (
-                  <div key={i} className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
+                  <div key={i} className="flex items-start gap-3 bg-sky-50 border border-sky-200 rounded-xl px-4 py-3">
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-blue-700 mb-0.5">Transcrição capturada</p>
+                      <p className="text-xs font-semibold text-sky-700 mb-0.5">Transcrição capturada</p>
                       <p className="text-sm text-slate-700 leading-relaxed line-clamp-2">{s.motivo}</p>
                     </div>
                     <button
                       onClick={() => setExamSuggestions(prev => prev.filter((_, idx) => idx !== i))}
-                      className="text-blue-400 hover:text-blue-600 p-1 flex-shrink-0"
+                      className="text-sky-400 hover:text-sky-600 p-1 flex-shrink-0"
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>
@@ -489,10 +541,10 @@ export default function ExamDetail({
               <button
                 type="button"
                 onClick={() => voiceAssistant.manualToggle()}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all ${
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-semibold text-sm transition-all ${
                   isRecording
                     ? 'bg-red-100 text-red-700 hover:bg-red-200 animate-pulse'
-                    : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                    : 'bg-teal-100 text-teal-700 hover:bg-teal-200'
                 }`}
               >
                 {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
@@ -548,13 +600,49 @@ export default function ExamDetail({
               onChange={e => setExamNotes(e.target.value)}
               placeholder="Ex: As imagens do Raio-X ficaram um pouco escuras, mas o laudo está anexo. Recomendo repetir em 48h."
               rows={4}
-              className="w-full px-4 py-3 border border-slate-300 rounded-xl outline-none resize-none text-sm text-slate-700 leading-relaxed focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+              className="w-full px-4 py-3 border border-slate-300 rounded-lg outline-none resize-none text-sm text-slate-700 leading-relaxed focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400"
             />
           </div>
         </div>
 
+        {alreadySentToLab && (
+          <div className="flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-800">
+            <FlaskConical className="h-4 w-4 flex-shrink-0" />
+            <span>
+              Exame <strong>enviado a laboratório parceiro</strong> — aguardando o resultado.{' '}
+              {usesExamRejection
+                ? 'A cobrança fica retida até o exame ser liberado: exame não realizado não é cobrado.'
+                : 'O valor já foi lançado no caixa.'}{' '}
+              Quando o laudo voltar, anexe o resultado e escolha o desfecho abaixo (alta ou devolver ao médico).
+            </span>
+          </div>
+        )}
+
+        {/* Fluxo de Rejeição de Exame (opt-in por clínica) — realizado × não realizado */}
+        {usesExamRejection && (
+          <ExamRejectionPanel
+            consultationId={consultation.id}
+            onToast={(type, message) => setToast({ type, message })}
+          />
+        )}
+
+        {/* Resultados do exame (Fase 2): entrada/import + conferência e liberação (2.4).
+            Tarefa 0 — só existe para quem ativou a rotina de Laboratório
+            (flow_config.usa_laboratorio, padrão desligado). */}
+        {usaLaboratorio && (
+          <ExamResultsPanel consultationId={consultation.id} canRelease={userRole !== 'receptionist' && userRole !== 'assistant'} />
+        )}
+
+        {/* Serviços/Produtos do exame — painel fixo (como no consultório).
+            Permite vincular/visualizar o serviço antes de enviar ao laboratório. */}
+        <ConsultationServicesPanel
+          consultationId={consultation.id}
+          isFinalized={false}
+          petHasInsurance={!!insuranceCard}
+        />
+
         {/* Botões de Desfecho */}
-        <div className="bg-white rounded-xl shadow-sm border border-blue-200">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200">
           <div className="p-6">
             <h2 className="text-base font-semibold text-slate-900 mb-1">Desfecho dos Exames</h2>
             <p className="text-xs text-slate-500 mb-4">Selecione o próximo passo para {patient.name}</p>
@@ -562,7 +650,7 @@ export default function ExamDetail({
               <button
                 onClick={handleExamDischarge}
                 disabled={isDischargingExam || isReturning}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-green-300 text-green-700 text-sm font-semibold hover:bg-green-50 disabled:opacity-50 transition-colors"
+                className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-emerald-300 text-emerald-700 text-sm font-semibold hover:bg-emerald-50 disabled:opacity-50 transition-colors"
               >
                 {isDischargingExam ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogOut className="w-4 h-4" />}
                 Dar Alta
@@ -575,10 +663,20 @@ export default function ExamDetail({
                 <BedDouble className="w-4 h-4" />
                 Internar
               </button>
+              {!alreadySentToLab && (
+                <button
+                  onClick={openLabModal}
+                  disabled={isDischargingExam || isReturning || isSendingLab}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-violet-300 text-violet-700 text-sm font-semibold hover:bg-violet-50 disabled:opacity-50 transition-colors"
+                >
+                  <FlaskConical className="w-4 h-4" />
+                  Enviar para laboratório parceiro
+                </button>
+              )}
               <button
                 onClick={() => setShowConfirm(true)}
                 disabled={isReturning || isDischargingExam}
-                className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 shadow-sm transition-colors ml-auto"
+                className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 disabled:opacity-50 shadow-sm transition-colors ml-auto"
               >
                 {isReturning
                   ? <><Loader2 className="w-4 h-4 animate-spin" />Devolvendo...</>
@@ -602,6 +700,64 @@ export default function ExamDetail({
         />
       )}
 
+      {/* Modal: Enviar para laboratório parceiro (F2) */}
+      {showLabModal && createPortal(
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={() => !isSendingLab && setShowLabModal(false)}>
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2 border-b border-slate-100 px-6 py-4">
+              <FlaskConical className="h-5 w-5 text-violet-600" />
+              <h2 className="text-base font-bold text-slate-900">Enviar para laboratório parceiro</h2>
+            </div>
+            <div className="space-y-4 px-6 py-5">
+              <p className="text-xs text-slate-500">
+                O valor do exame será lançado no caixa para cobrança do tutor e o exame ficará com status
+                <span className="font-medium text-slate-700"> “Aguardando resultado de laboratório parceiro”</span>.
+              </p>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-600">Laboratório / clínica parceira</label>
+                <select
+                  value={selectedLabId}
+                  onChange={e => setSelectedLabId(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-500/20"
+                >
+                  <option value="">Selecione…</option>
+                  {labs.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                </select>
+                {labs.length === 0 && (
+                  <p className="mt-1 text-xs text-amber-600">Nenhuma clínica parceira ativa. Cadastre em Cadastros › Clínicas Parceiras.</p>
+                )}
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-600">Prazo de retorno do resultado <span className="font-normal text-slate-400">(opcional)</span></label>
+                <input
+                  type="date"
+                  value={labDeadline}
+                  onChange={e => setLabDeadline(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-500/20"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 border-t border-slate-100 px-6 py-4">
+              <button
+                onClick={() => setShowLabModal(false)}
+                disabled={isSendingLab}
+                className="flex-1 rounded-lg border border-slate-300 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSendToLab}
+                disabled={isSendingLab || !selectedLabId}
+                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-violet-600 py-2.5 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50"
+              >
+                {isSendingLab ? <><Loader2 className="h-4 w-4 animate-spin" />Enviando…</> : <>Confirmar envio</>}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+
       {showAdmitModal && (
         <AdmitPetModal
           patientId={patient.id}
@@ -617,9 +773,9 @@ export default function ExamDetail({
       )}
 
       {/* Modal de Configurações de Voz */}
-      {voiceConfigOpen && (
+      {voiceConfigOpen && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5 animate-scale-in">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <Settings className="h-4 w-4 text-teal-600" /> Configurações de Voz
@@ -670,11 +826,12 @@ export default function ExamDetail({
             </div>
 
             <button type="button" onClick={saveVoiceConfig} disabled={configSaving}
-              className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 rounded-xl text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+              className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 rounded-lg text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50">
               {configSaving ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando…</> : <><Save className="h-4 w-4" /> Salvar Configurações</>}
             </button>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
 
@@ -684,11 +841,11 @@ export default function ExamDetail({
 
 // ─── Sub-componente ───────────────────────────────────────────────────────────
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+function InfoRow({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="flex items-center justify-between">
       <span className="text-xs text-slate-500">{label}</span>
-      <span className="text-xs font-medium text-slate-700 text-right max-w-[60%] truncate">{value}</span>
+      <span className={`text-xs font-medium text-slate-700 text-right max-w-[60%] truncate ${mono ? 'font-mono tabular-nums' : ''}`}>{value}</span>
     </div>
   )
 }

@@ -104,7 +104,7 @@ export default function PackagePDVSearch({ selectedPet, onSelectPet, onAdd }: Pr
               onChange={handlePetChange}
               onFocus={() => petResults.length > 0 && setPetOpen(true)}
               onBlur={() => setTimeout(() => setPetOpen(false), 150)}
-              className="w-full border border-slate-300 rounded-xl pl-9 pr-9 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className="w-full border border-slate-300 rounded-lg pl-9 pr-9 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
             {petOpen && (
               <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
@@ -140,7 +140,7 @@ export default function PackagePDVSearch({ selectedPet, onSelectPet, onAdd }: Pr
             placeholder="Filtrar pacotes…"
             value={pkgQuery}
             onChange={e => setPkgQuery(e.target.value)}
-            className="w-full border border-slate-300 rounded-xl pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+            className="w-full border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
           />
         </div>
 
@@ -159,7 +159,7 @@ export default function PackagePDVSearch({ selectedPet, onSelectPet, onAdd }: Pr
                   <p className="text-sm font-semibold text-slate-800 truncate">{pkg.name}</p>
                   <p className="text-xs text-slate-400">{pkg.total_sessions} sessões · a cada {pkg.interval_days}d</p>
                 </div>
-                <span className="text-sm font-bold text-teal-700 shrink-0">
+                <span className="text-sm font-bold text-teal-700 shrink-0 font-mono tabular-nums">
                   R$ {pkg.price.toFixed(2)}
                 </span>
                 <button

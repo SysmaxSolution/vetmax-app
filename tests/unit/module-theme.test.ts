@@ -90,7 +90,7 @@ describe('TC-THEME-006 → getTabTheme retorna theme do módulo', () => {
 describe('TC-THEME-007 → getTabTheme retorna fallback para path desconhecido', () => {
   test('/outro → fallback slate', () => {
     const t = getTabTheme('/outro')
-    expect(t.bg).toBe('bg-slate-50')
+    expect(t.bg).toBe('bg-slate-100')
     expect(t.active).toBe('bg-slate-900')
     expect(t.hover).toMatch(/slate/)
   })

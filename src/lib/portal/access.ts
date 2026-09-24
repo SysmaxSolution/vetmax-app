@@ -1,0 +1,101 @@
+// Lógica PURA de isolamento do Portal do Tutor. Sem I/O. É o coração da
+// segurança multi-clínica: garante que a pessoa logada só acessa os pets dos
+// (tutor_id, clinic_id) que lhe foram VINCULADOS — nunca por CPF solto, nunca
+// cruzando clínicas. Testada isoladamente (inclusive o caso CPF em 2 clínicas).
+
+export function normalizeCpf(cpf: string | null | undefined): string {
+  return (cpf ?? '').replace(/\D/g, '')
+}
+
+export function normalizePhone(phone: string | null | undefined): string {
+  return (phone ?? '').replace(/\D/g, '')
+}
+
+export interface LinkRow {
+  tutor_id: string
+  clinic_id: string
+}
+
+/** IDs de tutor (por clínica) que a pessoa pode enxergar. */
+export function allowedTutorIds(links: LinkRow[]): string[] {
+  return Array.from(new Set(links.map(l => l.tutor_id)))
+}
+
+export function allowedClinicIds(links: LinkRow[]): string[] {
+  return Array.from(new Set(links.map(l => l.clinic_id)))
+}
+
+/**
+ * Um pet é acessível SOMENTE se existe um vínculo com o MESMO tutor_id E a MESMA
+ * clinic_id do pet. Casar só por tutor_id (ou só por clinic_id) vazaria entre
+ * clínicas quando o mesmo CPF é tutor em mais de uma.
+ */
+export function canAccessPatient(
+  patientTutorId: string | null | undefined,
+  patientClinicId: string | null | undefined,
+  links: LinkRow[],
+): boolean {
+  if (!patientTutorId || !patientClinicId) return false
+  return links.some(l => l.tutor_id === patientTutorId && l.clinic_id === patientClinicId)
+}
+
+/**
+ * Mantém só os vínculos cuja clínica está com a rotina do Portal LIGADA.
+ *
+ * O Portal é uma rotina opcional (`clinics.flow_config.portal_enabled`, padrão
+ * DESLIGADO). Uma pessoa pode ser tutora em mais de uma clínica: a recusa é
+ * SEMPRE por clínica — desligar o Portal na clínica A não pode derrubar o acesso
+ * aos pets da clínica B. É por isso que o filtro é sobre a lista de vínculos, e
+ * não uma negação global da sessão.
+ */
+export function filterLinksByEnabledClinics(links: LinkRow[], enabledClinicIds: Iterable<string>): LinkRow[] {
+  const allow = new Set(enabledClinicIds)
+  return links.filter(l => allow.has(l.clinic_id))
+}
+
+/**
+ * Clínicas vinculadas que estão com o Portal DESLIGADO. Serve só para dar uma
+ * mensagem honesta ao tutor ("não está disponível") sem revelar o que existe lá
+ * dentro — nenhum dado da clínica bloqueada é carregado.
+ */
+export function blockedClinicIds(links: LinkRow[], enabledClinicIds: Iterable<string>): string[] {
+  const allow = new Set(enabledClinicIds)
+  return Array.from(new Set(links.map(l => l.clinic_id).filter(id => !allow.has(id))))
+}
+
+/** Filtra uma lista de pets deixando só os acessíveis pela pessoa. */
+export function filterAccessiblePatients<T extends { tutor_id?: string | null; clinic_id?: string | null }>(
+  patients: T[],
+  links: LinkRow[],
+): T[] {
+  return patients.filter(p => canAccessPatient(p.tutor_id, p.clinic_id, links))
+}
+
+// ── Validade de token de login (uso único) ───────────────────────────────────
+export interface LoginTokenLike { expires_at: string; consumed_at: string | null }
+
+export type TokenInvalidReason = 'consumed' | 'expired'
+
+export function checkLoginToken(
+  tok: LoginTokenLike,
+  nowISO: string,
+): { ok: boolean; reason?: TokenInvalidReason } {
+  if (tok.consumed_at) return { ok: false, reason: 'consumed' }
+  if (new Date(tok.expires_at).getTime() <= new Date(nowISO).getTime()) return { ok: false, reason: 'expired' }
+  return { ok: true }
+}
+
+// ── Validade de sessão ────────────────────────────────────────────────────────
+export interface SessionLike { expires_at: string; revoked_at: string | null }
+
+export function isSessionValid(s: SessionLike, nowISO: string): boolean {
+  if (s.revoked_at) return false
+  return new Date(s.expires_at).getTime() > new Date(nowISO).getTime()
+}
+
+export function computeExpiryISO(nowISO: string, ms: number): string {
+  return new Date(new Date(nowISO).getTime() + ms).toISOString()
+}
+
+export const LOGIN_TOKEN_TTL_MS = 30 * 60 * 1000        // 30 min
+export const SESSION_TTL_MS     = 30 * 24 * 60 * 60 * 1000 // 30 dias

@@ -17,7 +17,7 @@ export default async function WhatsappPage() {
   const currentUserName = profileRes.data?.full_name ?? null
 
   return (
-    <div className="mx-auto max-w-4xl px-3 sm:px-6 py-6">
+    <div className="mx-auto max-w-4xl px-3 sm:px-6 py-6 animate-enter">
       <ConversationsPageClient
         initialConversations={Array.isArray(conversations) ? conversations : []}
         clinicId={clinicId}

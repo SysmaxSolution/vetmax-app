@@ -110,7 +110,7 @@ export default function ReportTable({ rows }: Props) {
   )
 
   return (
-    <div data-mentor-step="cashier-reports-table" className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+    <div data-mentor-step="cashier-reports-table" className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 border-b border-slate-200">
@@ -135,7 +135,7 @@ export default function ReportTable({ rows }: Props) {
                       ? <span className="inline-flex items-center gap-1 text-emerald-700"><TrendingUp className="h-3.5 w-3.5" />Entrada</span>
                       : <span className="inline-flex items-center gap-1 text-red-600"><TrendingDown className="h-3.5 w-3.5" />Saída</span>}
                   </td>
-                  <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">
+                  <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap font-mono tabular-nums">
                     {fmtDate(r.occurred_at)}
                   </td>
                   <td className="px-3 py-2.5 text-slate-700">
@@ -174,7 +174,7 @@ export default function ReportTable({ rows }: Props) {
                       {STATUS_LABELS[r.status] ?? r.status}
                     </span>
                   </td>
-                  <td className={`px-3 py-2.5 text-right font-semibold tabular-nums ${
+                  <td className={`px-3 py-2.5 text-right font-semibold font-mono tabular-nums ${
                     isInflow ? 'text-emerald-700' : 'text-red-600'
                   }`}>
                     {isInflow ? '+' : '−'} {fmt(Math.abs(Number(r.amount)))}

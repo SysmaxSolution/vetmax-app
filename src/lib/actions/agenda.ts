@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import type { ConsultationStatus } from '@/types'
+import { byUrgencyThenTime } from '@/lib/urgency'
 
 export interface AgendaCard {
   id: string
@@ -25,6 +26,7 @@ export interface AgendaCard {
     id: string
     full_name: string
   } | null
+  urgency: 'green' | 'yellow' | 'red' | null
 }
 
 export type AgendaColumn = {
@@ -66,7 +68,7 @@ export async function getAgendaBoard(date?: string): Promise<AgendaColumn[] | { 
   const { data, error } = await admin
     .from('consultations')
     .select(`
-      id, status, visit_reason, created_at, scheduled_date, vet_id,
+      id, status, visit_reason, created_at, scheduled_date, vet_id, urgency,
       patients ( id, name, species, photo_url, tutor_id,
         tutors ( id, name )
       ),
@@ -97,11 +99,13 @@ export async function getAgendaBoard(date?: string): Promise<AgendaColumn[] | { 
       name: c.patients?.tutors?.name ?? '—',
     },
     vet: c.vet ? { id: c.vet.id, full_name: c.vet.full_name } : null,
+    urgency: c.urgency ?? null,
   }))
 
   return KANBAN_COLUMNS.map(col => ({
     ...col,
-    cards: cards.filter(c => c.status === col.key),
+    // Emergência fura a fila dentro de cada coluna (Sprint Animais).
+    cards: cards.filter(c => c.status === col.key).sort(byUrgencyThenTime),
   }))
 }
 

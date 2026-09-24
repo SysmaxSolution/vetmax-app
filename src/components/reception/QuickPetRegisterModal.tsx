@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Zap, X, Loader2, Save, CalendarDays } from 'lucide-react'
 import { registerTutorAndPet } from '@/lib/actions/tutors'
 import type { PatientSpecies } from '@/types'
@@ -91,7 +92,7 @@ export default function QuickPetRegisterModal({ onClose, onSuccess, showSchedule
     })
   }
 
-  return (
+  return typeof document === 'undefined' ? null : createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -220,6 +221,7 @@ export default function QuickPetRegisterModal({ onClose, onSuccess, showSchedule
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

@@ -36,21 +36,21 @@ export default function DREReport() {
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">De</label>
           <input type="date" value={from} onChange={e => setFrom(e.target.value)}
-            className="w-full sm:w-auto rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            className="w-full sm:w-auto rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Até</label>
           <input type="date" value={to} onChange={e => setTo(e.target.value)}
-            className="w-full sm:w-auto rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            className="w-full sm:w-auto rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
         </div>
         <div className="flex flex-wrap gap-2">
           <button onClick={run} disabled={pending}
-            className="rounded-lg bg-violet-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50 transition-colors">
+            className="rounded-lg bg-teal-600 px-4 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 disabled:opacity-60 transition-colors">
             {pending ? 'Carregando…' : 'Gerar'}
           </button>
           {lines && (
             <button onClick={handlePrint}
-              className="rounded-lg border border-violet-200 px-4 py-1.5 text-sm font-medium text-violet-700 hover:bg-violet-50 transition-colors">
+              className="rounded-lg border border-slate-200 px-4 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
               Imprimir / Exportar PDF
             </button>
           )}
@@ -62,7 +62,7 @@ export default function DREReport() {
       )}
 
       {lines === null && !pending && (
-        <div className="rounded-lg bg-violet-50 border border-violet-100 px-4 py-8 text-center text-sm text-violet-500 print:hidden">
+        <div className="rounded-xl bg-slate-50 border border-slate-200 px-4 py-8 text-center text-sm text-slate-500 print:hidden">
           Selecione o período e clique em Gerar para ver a DRE.
         </div>
       )}
@@ -78,10 +78,10 @@ export default function DREReport() {
           </div>
 
           <table className="w-full text-sm">
-            <thead className="bg-violet-50 print:bg-slate-100">
+            <thead className="bg-slate-50 print:bg-slate-100">
               <tr>
-                <th className="px-6 py-3 text-left font-semibold text-violet-800 text-xs uppercase tracking-wide">Conta</th>
-                <th className="px-6 py-3 text-right font-semibold text-violet-800 text-xs uppercase tracking-wide">Valor</th>
+                <th className="px-6 py-3 text-left font-semibold text-slate-500 text-xs uppercase tracking-wide">Conta</th>
+                <th className="px-6 py-3 text-right font-semibold text-slate-500 text-xs uppercase tracking-wide">Valor</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -91,8 +91,8 @@ export default function DREReport() {
                 const isLAJIR    = line.label.startsWith('LAJIR')
                 return (
                   <tr key={i} className={`
-                    ${line.bold ? 'bg-violet-50/60' : ''}
-                    ${isLAJIR ? 'bg-violet-100' : ''}
+                    ${line.bold ? 'bg-slate-50' : ''}
+                    ${isLAJIR ? 'bg-teal-50' : ''}
                     hover:bg-slate-50 transition-colors
                   `}>
                     <td className={`px-6 py-3 ${line.bold ? 'font-bold text-slate-800' : 'text-slate-600'}`}
@@ -116,10 +116,12 @@ export default function DREReport() {
             </tbody>
           </table>
 
-          <div className="px-6 py-3 bg-slate-50 border-t border-slate-200">
+          <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 space-y-1">
+            <p className="text-xs font-semibold text-teal-700">Regime de caixa (considera apenas títulos baixados no período, pela data de pagamento).</p>
             <p className="text-xs text-slate-400">
-              * Classificação automática baseada na categoria dos lançamentos financeiros.
-              Valores em parênteses representam deduções.
+              * Adiantamentos são passivo (a receita é reconhecida no consumo do crédito).
+              Compras de estoque viram CMV no consumo, não despesa na compra. Transferências
+              inter-CNPJ são eliminadas. Valores em parênteses representam deduções.
             </p>
           </div>
         </div>

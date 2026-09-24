@@ -44,6 +44,70 @@ export type FlowConfig = {
   /** Agenda Automatizada na Recepção (vs recepção simples do Free): agendamento
    *  automatizado e confirmações. Premium+. */
   reception_auto_schedule?: boolean
+  /** Sprint Animais — liga a fundação (multi-CNPJ, clínicas parceiras, tabelas
+   *  de preço, OS/urgência/origem no check-in). Por clínica. */
+  animais_foundation?:      boolean
+  /** Exige selecionar o profissional responsável no check-in. Off (padrão) =
+   *  atendimento pode ir aos departamentos sem responsável pré-definido. */
+  require_attending_vet?:   boolean
+  /** Habilita o lançamento de ADIANTAMENTO no Caixa (crédito do tutor p/ uso futuro). */
+  uses_advance?:            boolean
+  // ── Portal do Tutor + Agendamento online (Fase 3) ───────────────────────────
+  /** A clínica usa o Portal do Tutor? (acesso do tutor ao histórico + agendamento) */
+  portal_enabled?:          boolean
+  /** A clínica usa o Portal do Parceiro? (/parceiro — o veterinário SOLICITANTE
+   *  acessa as imagens e os laudos dos pets que encaminhou). Rotina separada do
+   *  Portal do Tutor: o público é outro e a clínica de imagem pode querer só um
+   *  dos dois. Padrão DESLIGADO. */
+  partner_portal_enabled?:  boolean
+  /** Como o tutor agenda PELO PORTAL: 'off' (não agenda) | 'reception' (recepção
+   *  confirma — fluxo M9) | 'direct' (cai direto na agenda). Padrão: 'reception'. */
+  booking_mode_portal?:     'off' | 'reception' | 'direct'
+  /** Como o tutor agenda PELO WHATSAPP-bot: mesmos valores. Padrão: 'reception'
+   *  (preserva o comportamento atual do M9). */
+  booking_mode_whatsapp?:   'off' | 'reception' | 'direct'
+  /** A clínica trabalha com convênios (Petlove/Vetplan/AVA/outros)? Gate global:
+   *  quando false, nenhuma tela mostra convênio, repasse ou conciliação. */
+  usa_convenios?:           boolean
+  /** A clínica ativou a Academia de Treinamento? Gate do menu + rota /dashboard/treinamento.
+   *  Os vídeos são um acervo GLOBAL compartilhado por todas as clínicas ativadas;
+   *  progresso, quizzes e controle de colaboradores são particulares de cada clínica. */
+  usa_treinamento?:         boolean
+  /** Fluxo de Rejeição de Exame (laboratório de referência). Quando LIGADA:
+   *  o laboratório marca cada exame como realizado ou não realizado + motivo;
+   *  o não realizado avisa automaticamente quem encaminhou (clínica parceira /
+   *  MV solicitante) e o tutor, fica fora da cobrança e espera a decisão do
+   *  cliente (recoletar ou não). O título financeiro do exame só é gerado
+   *  quando o exame é realizado/liberado. DESLIGADA (padrão) = fluxo atual,
+   *  bit-a-bit, para todos os outros clientes. */
+  usa_fluxo_rejeicao_exame?: boolean
+
+  // ── Tarefa 0 (pré-produção): flag PRÓPRIA por rotina nova ───────────────────
+  // Padrão de TODAS: DESLIGADA. Ligar é ato explícito de configuração
+  // (Gestão > Configurações). Com a flag off: some do menu, a rota redireciona
+  // e as server actions da rotina recusam.
+  /** Módulo de Imagem + visualizador DICOM (/dashboard/imaging). */
+  usa_imagem?:              boolean
+  /** Laboratório: painel de resultados/analitos/HL7 dentro do exame. */
+  usa_laboratorio?:         boolean
+  /** Boletos de cobrança (aba Boletos no Financeiro, emissão/reimpressão). */
+  usa_boleto?:              boolean
+  /** Recall de vacina por WhatsApp. ⚠️ Ligar ENVIA MENSAGEM AOS TUTORES.
+   *  Separada de portal_enabled de propósito (LGPD + risco de ban da instância). */
+  vaccine_recall_enabled?:  boolean
+  /** Hora local (0-23) em que o recall de vacina roda. Padrão: 9. */
+  vaccine_recall_hour?:     number
+  /** Antecedência, em dias, do aviso de vacina. Padrão: 7. */
+  vaccine_recall_days?:     number
+  /** Fuso IANA usado para interpretar vaccine_recall_hour. Padrão: America/Sao_Paulo. */
+  vaccine_recall_tz?:       string
+  /** Quando o laboratório parceiro NÃO realiza o exame, o custo dele deixa de ser
+   *  devido? TRUE = cancela/não gera o contas a pagar do lab na rejeição.
+   *  FALSE (padrão) = mantém o payable — comportamento atual, bit-a-bit. */
+  cancela_custo_lab_na_recusa?: boolean
+  /** Rejeitar exame JÁ FATURADO estorna a fatura automaticamente?
+   *  FALSE (padrão) = recusa a rejeição e orienta estorno manual no Financeiro. */
+  estorna_exame_faturado_na_recusa?: boolean
 }
 
 export type BusinessHourEntry = { open: string; close: string } | null
@@ -202,9 +266,46 @@ export async function isInternacaoCompleta(): Promise<boolean> {
   return getFlowFlag('internacao_completa')
 }
 
+/** TRUE quando a clínica trabalha com convênios (gate global de convênio/repasse). */
+export async function usesConvenios(): Promise<boolean> {
+  return getFlowFlag('usa_convenios')
+}
+
+/** TRUE quando a clínica ativou a Academia de Treinamento (gate do menu + rota). */
+export async function usesTreinamento(): Promise<boolean> {
+  return getFlowFlag('usa_treinamento')
+}
+
+/** TRUE quando a clínica ativou o Fluxo de Rejeição de Exame. */
+export async function usesFluxoRejeicaoExame(): Promise<boolean> {
+  return getFlowFlag('usa_fluxo_rejeicao_exame')
+}
+
 /** TRUE quando a clínica ativou o módulo Centro Cirúrgico. */
 export async function isCentroCirurgico(): Promise<boolean> {
   return getFlowFlag('centro_cirurgico')
+}
+
+// ─── Tarefa 0 — gates por rotina (padrão DESLIGADO) ─────────────────────────
+
+/** TRUE quando a clínica ativou o módulo de Imagem/DICOM. */
+export async function usesImagem(): Promise<boolean> {
+  return getFlowFlag('usa_imagem')
+}
+
+/** TRUE quando a clínica ativou o Laboratório (resultados/analitos/HL7 no exame). */
+export async function usesLaboratorio(): Promise<boolean> {
+  return getFlowFlag('usa_laboratorio')
+}
+
+/** TRUE quando a clínica ativou os Boletos de cobrança. */
+export async function usesBoleto(): Promise<boolean> {
+  return getFlowFlag('usa_boleto')
+}
+
+/** TRUE quando a clínica ativou o Portal do Tutor. */
+export async function usesPortalTutor(): Promise<boolean> {
+  return getFlowFlag('portal_enabled')
 }
 
 // ─── Sub-features por tier (re-packaging 0408) ───────────────────────────────

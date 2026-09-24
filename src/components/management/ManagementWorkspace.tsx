@@ -55,7 +55,7 @@ const MODULE_LABELS_PT: Record<string, string> = {
   whatsapp:              'WhatsApp',
   whatsapp_intelligent:  'WhatsApp IA',
   mentor:                'Mentor IA',
-  petlove_reconciliation: 'Conciliação Petlove',
+  petlove_reconciliation: 'Conciliação de Convênios',
   internal_chat:         'Chat Interno',
 }
 import PremiumPaywall from '@/components/paywall/PremiumPaywall'

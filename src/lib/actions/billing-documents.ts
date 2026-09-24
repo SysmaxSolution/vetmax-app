@@ -15,6 +15,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { computeBillingTotal } from '@/lib/billing/compute'
+import { groupServicesByCompany } from '@/lib/billing/nfse-split'
 
 // ─── Tipos ──────────────────────────────────────────────────────────────────
 
@@ -954,18 +955,30 @@ export async function validateTutorForNfse(
  * clinic_fiscal_config é criada na Fase 3 — enquanto não existir, retorna
  * false (sem quebrar). Usado para revelar o gate de NFS-e no Caixa/Check-in.
  */
-export async function clinicEmitsNfse(): Promise<{ emits: boolean }> {
+export async function clinicEmitsNfse(): Promise<{ emits: boolean; auto?: boolean }> {
   const ctx = await getCtx()
   if ('error' in ctx) return { emits: false }
   const { admin, clinic_id } = ctx
   try {
     const { data, error } = await admin
       .from('clinic_fiscal_config')
-      .select('emits_nfse, is_active')
+      .select('emits_nfse, is_active, nfse_auto_checkout')
       .eq('clinic_id', clinic_id)
       .maybeSingle()
-    if (error) return { emits: false } // tabela ausente (Fase 3 pendente) ou sem config
-    return { emits: Boolean(data?.emits_nfse && data?.is_active) }
+    const auto = Boolean(data?.nfse_auto_checkout)
+    if (!error && data?.emits_nfse && data?.is_active) return { emits: true, auto }
+    // Multi-CNPJ: alguma empresa faturante com emissão ativa também revela o gate.
+    try {
+      const { data: cc } = await admin
+        .from('company_fiscal_config')
+        .select('company_id')
+        .eq('clinic_id', clinic_id)
+        .eq('emits_nfse', true)
+        .eq('is_active', true)
+        .limit(1)
+      if (cc && cc.length > 0) return { emits: true, auto }
+    } catch { /* tabela ausente → ignora */ }
+    return { emits: false }
   } catch {
     return { emits: false }
   }
@@ -1066,4 +1079,138 @@ export async function createNfseDocumentForConsultation(
 
   revalidatePath('/dashboard/billing')
   return { id: doc.id as string, doc_number: doc.doc_number as string }
+}
+
+/**
+ * NFS-e DESMEMBRADA por empresa faturante (Fase 1 · 1.A). Agrupa os serviços
+ * ATIVOS da consulta por `company_id` e cria UMA nota (billing_document) por
+ * empresa faturante presente na OS. Idempotente por (consulta, empresa).
+ * Numeração por empresa via next_document_number('nfse'); fallback clínica
+ * (rpc_next_billing_number) quando não há sequência por empresa configurada.
+ * Clínicas de 1 CNPJ caem no grupo company_id=null → 1 nota (retrocompat).
+ */
+export async function createNfseDocumentsForConsultation(
+  consultationId: string,
+): Promise<Array<{ id: string; doc_number: string; company_id: string | null; company_name: string }> | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return ctx
+  const { admin, clinic_id, user_id } = ctx
+  if (!consultationId) return { error: 'consultation_id obrigatório.' }
+
+  const { data: consult } = await admin
+    .from('consultations')
+    .select('id, patient_id, tutor_id, vet_id')
+    .eq('id', consultationId).eq('clinic_id', clinic_id).maybeSingle()
+  if (!consult) return { error: 'Consulta não encontrada.' }
+
+  const { data: services } = await admin
+    .from('consultation_services')
+    .select('stock_item_id, name_snapshot, price_snapshot, quantity, company_id')
+    .eq('clinic_id', clinic_id)
+    .eq('consultation_id', consultationId)
+    .is('cancelled_at', null)
+    .order('created_at', { ascending: true })
+  if (!services || services.length === 0) return { error: 'Consulta sem serviços para emitir NFS-e.' }
+
+  // Agrupa por empresa faturante (null = sem empresa → nível clínica)
+  const groups = groupServicesByCompany(services as any[])
+
+  // Nomes das empresas (para o retorno/UI)
+  const companyIds = [...groups.keys()].filter(Boolean) as string[]
+  const companyName = new Map<string, string>()
+  if (companyIds.length > 0) {
+    const { data: comps } = await admin
+      .from('companies').select('id, name, legal_name').eq('clinic_id', clinic_id).in('id', companyIds)
+    for (const c of (comps ?? []) as any[]) companyName.set(c.id, c.name ?? c.legal_name ?? '—')
+  }
+
+  const tutorName   = await nameOf(admin, 'tutors', consult.tutor_id)
+  const patientName = await nameOf(admin, 'patients', consult.patient_id, 'name')
+  const profName    = await nameOf(admin, 'profiles', consult.vet_id, 'full_name')
+  const supabase = await createClient()
+
+  const out: Array<{ id: string; doc_number: string; company_id: string | null; company_name: string }> = []
+
+  for (const [companyId, grpServices] of groups) {
+    const label = companyId ? (companyName.get(companyId) ?? 'Empresa') : 'Clínica'
+
+    // Idempotência por (consulta, empresa) — não duplica nota da mesma empresa.
+    let existingQ = admin
+      .from('billing_documents')
+      .select('id, doc_number')
+      .eq('clinic_id', clinic_id)
+      .eq('consultation_id', consultationId)
+      .eq('doc_type', 'nfse')
+      .neq('status', 'cancelled')
+    existingQ = companyId ? existingQ.eq('company_id', companyId) : existingQ.is('company_id', null)
+    const { data: existing } = await existingQ.maybeSingle()
+    if (existing) {
+      out.push({ id: existing.id as string, doc_number: existing.doc_number as string, company_id: companyId, company_name: label })
+      continue
+    }
+
+    const items = grpServices.map((s: any) => ({
+      stock_item_id: (s.stock_item_id as string) ?? null,
+      description:   String(s.name_snapshot ?? 'Serviço'),
+      quantity:      Number(s.quantity ?? 1),
+      unit_price:    Number(s.price_snapshot ?? 0),
+    }))
+    const total = computeBillingTotal(items)
+
+    // Numeração: por empresa (next_document_number 'nfse') com fallback clínica.
+    let docNumber: string | null = null
+    if (companyId) {
+      try {
+        const { data: n, error } = await supabase.rpc('next_document_number', {
+          p_clinic_id: clinic_id, p_company_id: companyId, p_doc_type: 'nfse',
+        })
+        if (!error && n) docNumber = n as string
+      } catch { /* sequência por empresa não configurada → fallback abaixo */ }
+    }
+    if (!docNumber) {
+      const { data: n2, error: e2 } = await supabase.rpc('rpc_next_billing_number', {
+        p_clinic_id: clinic_id, p_doc_type: 'nfse',
+      })
+      if (e2 || !n2) return { error: 'Erro ao gerar número da NFS-e: ' + (e2?.message ?? '') }
+      docNumber = n2 as string
+    }
+
+    const { data: doc, error: docErr } = await admin
+      .from('billing_documents')
+      .insert({
+        clinic_id,
+        company_id:      companyId,
+        doc_type:        'nfse',
+        doc_number:      docNumber,
+        status:          'processing',
+        is_billed:       true,
+        issue_date:      new Date().toISOString(),
+        tutor_id:        consult.tutor_id,
+        patient_id:      consult.patient_id,
+        professional_id: consult.vet_id,
+        consultation_id: consultationId,
+        total_amount:    total,
+        payload: { snapshot: { tutor_name: tutorName, patient_name: patientName, professional_name: profName, company: label } },
+        created_by: user_id,
+      })
+      .select('id, doc_number')
+      .single()
+    if (docErr || !doc) return { error: 'Erro ao criar NFS-e: ' + (docErr?.message ?? '') }
+
+    const itemRows = items.map((it, idx) => ({
+      clinic_id, document_id: doc.id, stock_item_id: it.stock_item_id,
+      description: it.description, quantity: it.quantity, unit_price: it.unit_price,
+      total_price: Math.round(it.quantity * it.unit_price * 100) / 100, sort_order: idx,
+    }))
+    const { error: itemsErr2 } = await admin.from('billing_document_items').insert(itemRows)
+    if (itemsErr2) {
+      await admin.from('billing_documents').delete().eq('id', doc.id)
+      return { error: 'Erro ao gravar itens da NFS-e: ' + itemsErr2.message }
+    }
+
+    out.push({ id: doc.id as string, doc_number: doc.doc_number as string, company_id: companyId, company_name: label })
+  }
+
+  revalidatePath('/dashboard/billing')
+  return out
 }

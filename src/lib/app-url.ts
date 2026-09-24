@@ -32,7 +32,7 @@ export function getAppUrl(): string {
     configured &&
     configured.startsWith('https://') &&
     !configured.includes('localhost') &&
-    !configured.includes('vercel.app')
+    (!configured.includes('vercel.app') || process.env.NEXT_PUBLIC_ALLOW_VERCEL_HOST === '1')
   ) {
     return stripTrailingSlash(configured)
   }
@@ -53,7 +53,7 @@ export function getClientAppUrl(): string {
     configured &&
     configured.startsWith('https://') &&
     !configured.includes('localhost') &&
-    !configured.includes('vercel.app')
+    (!configured.includes('vercel.app') || process.env.NEXT_PUBLIC_ALLOW_VERCEL_HOST === '1')
   ) {
     return stripTrailingSlash(configured)
   }

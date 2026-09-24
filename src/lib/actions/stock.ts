@@ -330,6 +330,11 @@ export type StockItemV2 = {
   updated_at:   string
   // migration 0099
   is_controlled: boolean
+  // migration 0441 — Livro de Controlados
+  substance:     string | null
+  concentration: string | null
+  is_human_use:  boolean
+  control_class: string | null
   brand:         string | null
   sku:           string | null
   barcode:       string | null
@@ -351,9 +356,22 @@ export type StockItemV2 = {
   // migration 0363 (NFS-e Fase 3: códigos de serviço por item)
   nfse_item_lista_servico:          string | null
   nfse_codigo_tributario_municipio: string | null
+  // migration 0422 (Sprint Animais: composição de preço simples)
+  cost_price:        number | null
+  entry_tax_percent: number | null
+  margin_percent:    number | null
+  // migration 0424 (Sprint Animais: composição de preço completa)
+  purchase_price:            number | null
+  supplier_discount_percent: number | null
+  entry_tax_icms:    number | null
+  entry_tax_st:      number | null
+  entry_tax_ipi:     number | null
+  entry_tax_freight: number | null
+  entry_tax_ibs_cbs: number | null
+  sale_tax_percent:  number | null
 }
 
-const STOCK_V2_FIELDS = 'id, clinic_id, name, category, quantity, unit, min_quantity, unit_price, last_restock, created_at, updated_at, is_controlled, brand, sku, barcode, batch_number, expiry_date, supplier, is_service, ncm, ncm_description, cfop, unit_com, supplier_id, default_insurance_price, insurance_card_interest_percent, nfse_item_lista_servico, nfse_codigo_tributario_municipio'
+const STOCK_V2_FIELDS = 'id, clinic_id, name, category, quantity, unit, min_quantity, unit_price, last_restock, created_at, updated_at, is_controlled, substance, concentration, is_human_use, control_class, brand, sku, barcode, batch_number, expiry_date, supplier, is_service, ncm, ncm_description, cfop, unit_com, supplier_id, default_insurance_price, insurance_card_interest_percent, nfse_item_lista_servico, nfse_codigo_tributario_municipio, cost_price, entry_tax_percent, margin_percent, purchase_price, supplier_discount_percent, entry_tax_icms, entry_tax_st, entry_tax_ipi, entry_tax_freight, entry_tax_ibs_cbs, sale_tax_percent'
 
 export async function getPharmacyStockV2(): Promise<StockItemV2[] | { error: string }> {
   const ctx = await getClinicAndUser()
@@ -393,6 +411,10 @@ export async function addStockItemV2(input: {
   category?:      StockCategory
   unit_price?:    number
   is_controlled?: boolean
+  substance?:     string | null
+  concentration?: string | null
+  is_human_use?:  boolean
+  control_class?: string | null
   brand?:         string | null
   sku?:           string | null
   barcode?:       string | null
@@ -408,6 +430,17 @@ export async function addStockItemV2(input: {
   insurance_card_interest_percent?: number
   nfse_item_lista_servico?:          string | null
   nfse_codigo_tributario_municipio?: string | null
+  cost_price?:        number | null
+  entry_tax_percent?: number | null
+  margin_percent?:    number | null
+  purchase_price?:            number | null
+  supplier_discount_percent?: number | null
+  entry_tax_icms?:    number | null
+  entry_tax_st?:      number | null
+  entry_tax_ipi?:     number | null
+  entry_tax_freight?: number | null
+  entry_tax_ibs_cbs?: number | null
+  sale_tax_percent?:  number | null
 }): Promise<StockItemV2 | { error: string }> {
   const ctx = await getClinicAndUser()
   if (!ctx) return { error: 'Não autenticado.' }
@@ -426,6 +459,10 @@ export async function addStockItemV2(input: {
       unit_price:      input.unit_price ?? 0,
       last_restock:    input.quantity > 0 ? new Date().toISOString() : null,
       is_controlled:   input.is_controlled ?? false,
+      substance:       input.substance?.trim() || null,
+      concentration:   input.concentration?.trim() || null,
+      is_human_use:    input.is_human_use ?? false,
+      control_class:   input.control_class?.trim() || null,
       is_service:      input.is_service ?? false,
       brand:           input.brand?.trim() || null,
       sku:             input.sku?.trim() || null,
@@ -441,6 +478,17 @@ export async function addStockItemV2(input: {
       insurance_card_interest_percent: input.insurance_card_interest_percent ?? 0,
       nfse_item_lista_servico:          input.nfse_item_lista_servico?.trim() || null,
       nfse_codigo_tributario_municipio: input.nfse_codigo_tributario_municipio?.trim() || null,
+      cost_price:        input.cost_price ?? null,
+      entry_tax_percent: input.entry_tax_percent ?? null,
+      margin_percent:    input.margin_percent ?? null,
+      purchase_price:            input.purchase_price ?? null,
+      supplier_discount_percent: input.supplier_discount_percent ?? null,
+      entry_tax_icms:    input.entry_tax_icms ?? null,
+      entry_tax_st:      input.entry_tax_st ?? null,
+      entry_tax_ipi:     input.entry_tax_ipi ?? null,
+      entry_tax_freight: input.entry_tax_freight ?? null,
+      entry_tax_ibs_cbs: input.entry_tax_ibs_cbs ?? null,
+      sale_tax_percent:  input.sale_tax_percent ?? null,
     })
     .select(STOCK_V2_FIELDS)
     .single()
@@ -483,6 +531,10 @@ export async function updateStockItemV2(
   if (input.min_quantity  !== undefined) patch.min_quantity  = input.min_quantity
   if (input.unit_price    !== undefined) patch.unit_price    = input.unit_price
   if (input.is_controlled !== undefined) patch.is_controlled = input.is_controlled
+  if ('substance'     in input) patch.substance     = (input as any).substance?.trim()     || null
+  if ('concentration' in input) patch.concentration = (input as any).concentration?.trim() || null
+  if (input.is_human_use !== undefined) patch.is_human_use = input.is_human_use
+  if ('control_class' in input) patch.control_class = (input as any).control_class?.trim() || null
   if ('brand'        in input) patch.brand        = input.brand?.trim()        || null
   if ('sku'          in input) patch.sku          = input.sku?.trim()          || null
   if ('barcode'      in input) patch.barcode      = input.barcode?.trim()      || null
@@ -498,6 +550,17 @@ export async function updateStockItemV2(
   if ('insurance_card_interest_percent' in input) patch.insurance_card_interest_percent = (input as any).insurance_card_interest_percent ?? 0
   if ('nfse_item_lista_servico'          in input) patch.nfse_item_lista_servico          = (input as any).nfse_item_lista_servico?.trim()          || null
   if ('nfse_codigo_tributario_municipio' in input) patch.nfse_codigo_tributario_municipio = (input as any).nfse_codigo_tributario_municipio?.trim() || null
+  if ('cost_price'        in input) patch.cost_price        = (input as any).cost_price        ?? null
+  if ('entry_tax_percent' in input) patch.entry_tax_percent = (input as any).entry_tax_percent ?? null
+  if ('margin_percent'    in input) patch.margin_percent    = (input as any).margin_percent    ?? null
+  if ('purchase_price'            in input) patch.purchase_price            = (input as any).purchase_price            ?? null
+  if ('supplier_discount_percent' in input) patch.supplier_discount_percent = (input as any).supplier_discount_percent ?? null
+  if ('entry_tax_icms'    in input) patch.entry_tax_icms    = (input as any).entry_tax_icms    ?? null
+  if ('entry_tax_st'      in input) patch.entry_tax_st      = (input as any).entry_tax_st      ?? null
+  if ('entry_tax_ipi'     in input) patch.entry_tax_ipi     = (input as any).entry_tax_ipi     ?? null
+  if ('entry_tax_freight' in input) patch.entry_tax_freight = (input as any).entry_tax_freight ?? null
+  if ('entry_tax_ibs_cbs' in input) patch.entry_tax_ibs_cbs = (input as any).entry_tax_ibs_cbs ?? null
+  if ('sale_tax_percent'  in input) patch.sale_tax_percent  = (input as any).sale_tax_percent  ?? null
 
   const { data, error } = await admin
     .from('stock_items')

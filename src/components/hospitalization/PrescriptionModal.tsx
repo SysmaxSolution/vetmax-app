@@ -1,6 +1,7 @@
 ﻿'use client'
 
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   X, FileText, Send, Loader2, Download, Edit3, Eye, PenLine, Pill
 } from 'lucide-react'
@@ -270,7 +271,7 @@ export default function PrescriptionModal({ data, card, onClose }: Props) {
 
   const busy = isGenerating || isSharing
 
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
 
@@ -418,6 +419,7 @@ export default function PrescriptionModal({ data, card, onClose }: Props) {
           </button>
         </div>
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }

@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache'
 import type { VitalSigns } from '@/types'
 import { logAudit } from './audit'
 import { logDataAccess } from './compliance'
+import { byUrgencyThenTime } from '@/lib/urgency'
 import { runInsuranceAudit, type AuditResult } from './insurance-audit'
 
 // ─── Fila do Médico Veterinário (in_progress) ─────────────────────────────────
@@ -29,9 +30,13 @@ export type VetQueueItem = {
     name: string
     phone: string
   }
+  vet: { id: string; full_name: string } | null   // profissional responsável (Sprint Animais)
+  urgency: 'green' | 'yellow' | 'red' | null       // triagem por cor (Sprint Animais)
 }
 
-export async function getVetQueue(): Promise<VetQueueItem[] | { error: string }> {
+export async function getVetQueue(
+  scope: 'mine' | 'all' = 'mine',
+): Promise<VetQueueItem[] | { error: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Não autenticado.' }
@@ -44,17 +49,26 @@ export async function getVetQueue(): Promise<VetQueueItem[] | { error: string }>
 
   if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('consultations')
     .select(`
-      id, status, visit_reason, created_at, weight, temperature, triage_notes,
+      id, status, visit_reason, created_at, weight, temperature, triage_notes, vet_id, urgency,
       patients ( id, name, species, breed, allergies, chronic_diseases, behavior_tags,
         tutors ( id, name, phone )
-      )
+      ),
+      vet:profiles!vet_id ( id, full_name )
     `)
     .eq('clinic_id', profile.clinic_id)
     .in('status', ['in_progress', 'revisao_pos_internacao'])
-    .order('created_at', { ascending: true })
+
+  // "Minha fila" = pets sem responsável (visíveis a todos) + os atribuídos a mim.
+  // "Todos" = fila completa da clínica (comportamento anterior). Sem atribuição
+  // de responsável, todo vet_id é null → ambos os escopos mostram tudo (igual antes).
+  if (scope === 'mine') {
+    query = query.or(`vet_id.is.null,vet_id.eq.${user.id}`)
+  }
+
+  const { data, error } = await query.order('created_at', { ascending: true })
 
   if (error) return { error: 'Erro ao buscar fila: ' + error.message }
 
@@ -94,8 +108,10 @@ export async function getVetQueue(): Promise<VetQueueItem[] | { error: string }>
         name: c.patients?.tutors?.name ?? '—',
         phone: c.patients?.tutors?.phone ?? '',
       },
+      vet: c.vet ? { id: c.vet.id, full_name: c.vet.full_name } : null,
+      urgency: c.urgency ?? null,
     }
-  })
+  }).sort(byUrgencyThenTime)
 }
 
 // ─── Consultas Concluídas Hoje ────────────────────────────────────────────────

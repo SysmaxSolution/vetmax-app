@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
+import { usesExamRejectionFlow } from '@/lib/exams/rejection-gate'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -82,6 +83,12 @@ export async function generateInvoice(
     .maybeSingle()
   if (existing) return { id: existing.id }
 
+  // Fluxo de Rejeição de Exame (opt-in por clínica): quando LIGADO, exames com
+  // trava de cobrança (não realizados, aguardando decisão ou aguardando o
+  // resultado) ficam FORA da fatura — o título só nasce no exame realizado.
+  // Quando DESLIGADO nada é consultado e a query abaixo é a de sempre.
+  const rejectionFlowOn = await usesExamRejectionFlow(admin, profile.clinic_id)
+
   // Fonte primária do faturamento (Refator 2026-05-25): consultation_services
   // (n:n com snapshot de price/name no momento da seleção). clinic_catalog
   // permanece apenas como fallback de medicações que vieram de
@@ -98,14 +105,17 @@ export async function generateInvoice(
       `)
       .eq('id', consultationId)
       .single(),
-    admin
-      .from('consultation_services')
-      .select('id, stock_item_id, name_snapshot, price_snapshot, quantity, added_at_stage, insurance_total_snapshot, copay_snapshot, repass_snapshot, stock_items ( category )')
-      .eq('clinic_id', profile.clinic_id)
-      .eq('consultation_id', consultationId)
-      .is('cancelled_at', null)
-      .is('billed_in_invoice_id', null)
-      .order('created_at', { ascending: true }),
+    (() => {
+      const q = admin
+        .from('consultation_services')
+        .select('id, stock_item_id, name_snapshot, price_snapshot, quantity, added_at_stage, insurance_total_snapshot, copay_snapshot, repass_snapshot, stock_items ( category )')
+        .eq('clinic_id', profile.clinic_id)
+        .eq('consultation_id', consultationId)
+        .is('cancelled_at', null)
+        .is('billed_in_invoice_id', null)
+      return (rejectionFlowOn ? q.is('exam_billing_hold_at', null) : q)
+        .order('created_at', { ascending: true })
+    })(),
     admin
       .from('clinic_catalog')
       .select('item_type, name, price')
@@ -126,6 +136,26 @@ export async function generateInvoice(
   // Guard de encerramento: sem serviços ativos a fatura iria zerada para o
   // Caixa Central. Decisão do PO: nunca permitir alta zerada.
   if (services.length === 0) {
+    // Com o Fluxo de Rejeição de Exame ligado, a lista pode estar vazia porque
+    // os exames estão travados (não realizados / aguardando decisão do cliente
+    // / aguardando liberação) — e não porque ninguém lançou serviço. A mensagem
+    // precisa dizer a verdade, senão a recepção procura um erro que não existe.
+    if (rejectionFlowOn) {
+      const { count } = await admin
+        .from('consultation_services')
+        .select('id', { count: 'exact', head: true })
+        .eq('clinic_id', profile.clinic_id)
+        .eq('consultation_id', consultationId)
+        .is('cancelled_at', null)
+        .is('billed_in_invoice_id', null)
+        .not('exam_billing_hold_at', 'is', null)
+      if ((count ?? 0) > 0) {
+        return {
+          error: 'Nada a faturar: os exames desta OS não foram realizados ou ainda aguardam liberação. '
+               + 'Exame não realizado não é cobrado — libere o resultado, registre a decisão do cliente ou cancele o atendimento.',
+        }
+      }
+    }
     return {
       error: 'Nenhum serviço lançado nesta consulta. Adicione ao menos um serviço antes de encerrar o atendimento.',
     }
@@ -1408,45 +1438,58 @@ export async function reversePartialPayment(
     .eq('id', entryId)
   if (delErr) return { error: `Falha ao estornar: ${delErr.message}` }
 
-  // 4) Soma o valor de volta no pending existente (ou cria)
-  const { data: existingPending } = await adminClient
-    .from('financial_entries')
-    .select('id, amount')
-    .eq('clinic_id', profile.clinic_id)
-    .eq('invoice_id', entry.invoice_id)
-    .eq('status', 'pending')
-    .eq('source', 'cashier')
-    .maybeSingle()
-
   const newPaidAmount = Math.max(0, Number((invoice as { paid_amount?: number }).paid_amount ?? 0) - amount)
   const newBalance    = Math.max(0, Number((invoice as { total_amount?: number }).total_amount ?? 0) - newPaidAmount)
   const newStatus: 'pending' | 'paid_partial' = newPaidAmount > 0.01 ? 'paid_partial' : 'pending'
 
-  if (existingPending) {
-    await adminClient
-      .from('financial_entries')
-      .update({ amount: Number(existingPending.amount) + amount, updated_at: new Date().toISOString() })
-      .eq('id', existingPending.id)
-  } else {
-    const patName = ((invoice as { patients?: { name?: string } | { name?: string }[] }).patients)
-    const pn = Array.isArray(patName) ? patName[0]?.name : patName?.name
-    await adminClient
-      .from('financial_entries')
-      .insert({
-        clinic_id:   profile.clinic_id,
-        type:        'receivable',
-        description: `Saldo invoice ${entry.invoice_id.slice(0,8)} · ${pn ?? '—'} (estornado)`,
-        amount:      newBalance,
-        due_date:    new Date().toISOString().slice(0, 10),
-        status:      'pending',
-        source:      'cashier',
-        category:    'Saldo a receber',
-        tutor_id:    (invoice as { tutor_id?: string }).tutor_id ?? null,
-        patient_id:  (invoice as { patient_id?: string }).patient_id ?? null,
-        invoice_id:  entry.invoice_id,
-        notes:       `Estorno de baixa anterior. Saldo voltou ao recebimento.`,
-        created_by:  user.id,
-      })
+  // 4) Reconciliação DEFENSIVA do saldo (source='cashier'). Antes usava
+  // .maybeSingle(): se já existisse mais de um pending cashier, retornava
+  // erro/null e o estorno INSERIA outro → "Saldo a receber" duplicado. Agora
+  // garante EXATAMENTE UM pending com o saldo correto (newBalance, idempotente),
+  // consolidando/removendo duplicados. Não toca em card_acquirer/petlove_open.
+  const { data: cashierPendings } = await adminClient
+    .from('financial_entries')
+    .select('id')
+    .eq('clinic_id', profile.clinic_id)
+    .eq('invoice_id', entry.invoice_id)
+    .eq('status', 'pending')
+    .eq('source', 'cashier')
+    .order('created_at', { ascending: true })
+  const pendings = (cashierPendings ?? []) as { id: string }[]
+
+  if (newBalance > 0.01) {
+    if (pendings.length > 0) {
+      await adminClient
+        .from('financial_entries')
+        .update({ amount: newBalance, updated_at: new Date().toISOString() })
+        .eq('id', pendings[0].id)
+      const extras = pendings.slice(1).map(p => p.id)
+      if (extras.length) {
+        await adminClient.from('financial_entries').delete().in('id', extras)
+      }
+    } else {
+      const patName = ((invoice as { patients?: { name?: string } | { name?: string }[] }).patients)
+      const pn = Array.isArray(patName) ? patName[0]?.name : patName?.name
+      await adminClient
+        .from('financial_entries')
+        .insert({
+          clinic_id:   profile.clinic_id,
+          type:        'receivable',
+          description: `Saldo invoice ${entry.invoice_id.slice(0,8)} · ${pn ?? '—'} (estornado)`,
+          amount:      newBalance,
+          due_date:    new Date().toISOString().slice(0, 10),
+          status:      'pending',
+          source:      'cashier',
+          category:    'Saldo a receber',
+          tutor_id:    (invoice as { tutor_id?: string }).tutor_id ?? null,
+          patient_id:  (invoice as { patient_id?: string }).patient_id ?? null,
+          invoice_id:  entry.invoice_id,
+          notes:       `Estorno de baixa anterior. Saldo voltou ao recebimento.`,
+          created_by:  user.id,
+        })
+    }
+  } else if (pendings.length > 0) {
+    await adminClient.from('financial_entries').delete().in('id', pendings.map(p => p.id))
   }
 
   // 5) Atualiza invoice
@@ -1544,16 +1587,29 @@ export async function generatePartialInvoice(
   const tutor   = patient?.tutors as any
   if (!patient?.id || !tutor?.id) return { error: 'Paciente ou tutor não encontrado.' }
 
-  const { data: services } = await admin
+  // Fluxo de Rejeição de Exame (opt-in): exame travado não entra na parcial.
+  // Flag desligada → a query abaixo é exatamente a de antes.
+  const rejectionFlowOn = await usesExamRejectionFlow(admin, profile.clinic_id)
+
+  const servicesQuery = admin
     .from('consultation_services')
     .select('id, stock_item_id, name_snapshot, price_snapshot, quantity, copay_snapshot, stock_items ( category )')
     .eq('clinic_id', profile.clinic_id)
     .eq('consultation_id', consultationId)
     .is('cancelled_at', null)
     .is('billed_in_invoice_id', null)
-    .order('created_at', { ascending: true })
+  const { data: services } = await (rejectionFlowOn
+    ? servicesQuery.is('exam_billing_hold_at', null)
+    : servicesQuery
+  ).order('created_at', { ascending: true })
 
   if (!services || services.length === 0) {
+    if (rejectionFlowOn) {
+      return {
+        error: 'Nada a cobrar agora: os exames desta OS ainda não foram realizados/liberados. '
+             + 'Exame não realizado não é cobrado — o título é gerado quando o exame for liberado.',
+      }
+    }
     return { error: 'Nenhum serviço novo para cobrar. Lance ao menos um serviço antes de gerar a fatura parcial.' }
   }
 

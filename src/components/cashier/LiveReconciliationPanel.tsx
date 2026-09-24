@@ -2,9 +2,10 @@
 
 import { useState } from 'react'
 import {
-  Activity, RefreshCw, Loader2, Banknote, Smartphone, CreditCard,
+  Activity, RefreshCw, Banknote, Smartphone, CreditCard,
   Wallet, Users, AlertTriangle, CheckCircle2, Clock,
 } from 'lucide-react'
+import { Spinner } from '@/components/ui/Spinner'
 import { getSessionReconciliation, type SessionReconciliation } from '@/lib/actions/cashier-sessions'
 
 function fmt(v: number) {
@@ -38,7 +39,7 @@ export default function LiveReconciliationPanel({ sessionId, onToast }: Props) {
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
       <div className="flex items-center gap-2 px-5 py-3.5 border-b border-slate-100">
         <Activity className="h-4 w-4 text-teal-500" />
         <h3 className="text-sm font-semibold text-slate-700">Reconciliação ao Vivo</h3>
@@ -46,9 +47,9 @@ export default function LiveReconciliationPanel({ sessionId, onToast }: Props) {
         <button
           onClick={load}
           disabled={loading}
-          className="ml-auto flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-colors"
+          className="ml-auto flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-colors"
         >
-          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+          {loading ? <Spinner size="sm" /> : <RefreshCw className="h-3.5 w-3.5" />}
           {data ? 'Atualizar' : 'Ver posição agora'}
         </button>
       </div>
@@ -86,7 +87,7 @@ export default function LiveReconciliationPanel({ sessionId, onToast }: Props) {
                       <Icon className="h-3.5 w-3.5" />{meta.label}
                       {m === 'cash' && <span className="text-[10px] text-slate-400">(gaveta)</span>}
                     </div>
-                    <p className="text-base font-bold text-slate-900 tabular-nums">{fmt(val)}</p>
+                    <p className="text-base font-bold text-slate-900 font-mono tabular-nums">{fmt(val)}</p>
                   </div>
                 )
               })}
@@ -97,22 +98,22 @@ export default function LiveReconciliationPanel({ sessionId, onToast }: Props) {
           <div className="grid grid-cols-3 gap-3">
             <div className="rounded-lg bg-emerald-50 p-3 text-center">
               <p className="text-xs text-slate-500 mb-0.5">Entradas</p>
-              <p className="text-sm font-bold text-emerald-700 tabular-nums">{fmt(data.total_inflows)}</p>
+              <p className="text-sm font-bold text-emerald-700 font-mono tabular-nums">{fmt(data.total_inflows)}</p>
             </div>
             <div className="rounded-lg bg-red-50 p-3 text-center">
               <p className="text-xs text-slate-500 mb-0.5">Saídas</p>
-              <p className="text-sm font-bold text-red-600 tabular-nums">{fmt(data.total_outflows)}</p>
+              <p className="text-sm font-bold text-red-600 font-mono tabular-nums">{fmt(data.total_outflows)}</p>
             </div>
-            <div className="rounded-lg bg-blue-50 p-3 text-center">
+            <div className="rounded-lg bg-sky-50 p-3 text-center">
               <p className="text-xs text-slate-500 mb-0.5">Esperado total</p>
-              <p className="text-sm font-bold text-blue-700 tabular-nums">{fmt(data.expected_total)}</p>
+              <p className="text-sm font-bold text-sky-700 font-mono tabular-nums">{fmt(data.expected_total)}</p>
             </div>
           </div>
 
           {data.pending_amount > 0 && (
             <div className="flex items-center justify-between rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-sm">
               <span className="flex items-center gap-1.5 text-slate-500"><Clock className="h-3.5 w-3.5" /> Ainda a receber (pendente)</span>
-              <span className="font-semibold text-slate-700 tabular-nums">{fmt(data.pending_amount)}</span>
+              <span className="font-semibold text-slate-700 font-mono tabular-nums">{fmt(data.pending_amount)}</span>
             </div>
           )}
 
@@ -126,7 +127,7 @@ export default function LiveReconciliationPanel({ sessionId, onToast }: Props) {
                 {data.by_operator.map(op => (
                   <div key={op.id} className="flex items-center justify-between text-sm border-b border-slate-50 pb-1.5 last:border-0">
                     <span className="text-slate-700">{op.name}</span>
-                    <span className="flex items-center gap-3 tabular-nums">
+                    <span className="flex items-center gap-3 font-mono tabular-nums">
                       <span className="text-emerald-600">+{fmt(op.inflows)}</span>
                       {op.outflows > 0 && <span className="text-red-500">−{fmt(op.outflows)}</span>}
                     </span>

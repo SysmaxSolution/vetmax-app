@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import { Plus, Pencil, Trash2, Shield, FileText, ChevronRight, X, Loader2, Check, AlertTriangle, Ban, Info } from 'lucide-react'
 import {
   getInsuranceProviders,
@@ -94,7 +95,7 @@ function ProviderFormModal({
 
   const set = (k: keyof ProviderFormData) => (v: string) => setForm(f => ({ ...f, [k]: v }))
 
-  return (
+  return typeof document === 'undefined' ? null : createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
@@ -135,7 +136,8 @@ function ProviderFormModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
@@ -162,7 +164,7 @@ function RuleFormModal({
 
   const set = (k: keyof RuleFormData) => (v: string) => setForm(f => ({ ...f, [k]: v as any }))
 
-  return (
+  return typeof document === 'undefined' ? null : createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
@@ -221,7 +223,8 @@ function RuleFormModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

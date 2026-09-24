@@ -64,7 +64,7 @@ export default function PetlovePriceHistory({ items }: { items: PetlovePriceHist
                 </p>
               </div>
             </div>
-            <span className={`text-sm font-semibold tabular-nums flex-shrink-0 ${item.price_fixed ? 'text-emerald-700' : 'text-purple-700'}`}>
+            <span className={`text-sm font-semibold font-mono tabular-nums flex-shrink-0 ${item.price_fixed ? 'text-emerald-700' : 'text-purple-700'}`}>
               {formatBRL(item.last_repass_value)}
             </span>
           </div>

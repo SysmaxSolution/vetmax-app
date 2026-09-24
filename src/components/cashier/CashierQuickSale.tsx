@@ -15,7 +15,8 @@
  */
 
 import { useState, useEffect } from 'react'
-import { ShoppingCart, X, Plus, Minus, ChevronDown, ChevronUp, Loader2, ClipboardList, PawPrint } from 'lucide-react'
+import { ShoppingCart, X, Plus, Minus, ChevronDown, ChevronUp, ClipboardList, PawPrint } from 'lucide-react'
+import { Spinner } from '@/components/ui/Spinner'
 import { createSale, launchPendingSale, listTutorPets, type SaleTutor } from '@/lib/actions/sales'
 import TutorSearch from '@/components/sales/TutorSearch'
 import ProductSearch from '@/components/sales/ProductSearch'
@@ -168,7 +169,7 @@ export default function CashierQuickSale({ clinicId, activeModules = [], onToast
           <ShoppingCart className="h-4 w-4" />
           Nova venda avulsa
           {cart.length > 0 && (
-            <span className="rounded-full bg-teal-600 text-white text-[10px] font-bold px-2 py-0.5">
+            <span className="rounded-full bg-teal-600 text-white text-[10px] font-bold px-2 py-0.5 font-mono tabular-nums">
               {cart.length} item{cart.length !== 1 ? 's' : ''} · {fmt(total)}
             </span>
           )}
@@ -195,7 +196,7 @@ export default function CashierQuickSale({ clinicId, activeModules = [], onToast
               <select
                 value={petId}
                 onChange={e => setPetId(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400"
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400"
               >
                 <option value="">— Sem pet vinculado —</option>
                 {tutorPets.map(p => (
@@ -228,22 +229,22 @@ export default function CashierQuickSale({ clinicId, activeModules = [], onToast
                     <button type="button" onClick={() => setQty(l.key, l.quantity - 1)} className="rounded p-1 text-slate-400 hover:bg-slate-100">
                       <Minus className="h-3.5 w-3.5" />
                     </button>
-                    <span className="w-7 text-center text-sm font-semibold tabular-nums">{l.quantity}</span>
+                    <span className="w-7 text-center text-sm font-semibold font-mono tabular-nums">{l.quantity}</span>
                     <button type="button" onClick={() => setQty(l.key, l.quantity + 1)} className="rounded p-1 text-slate-400 hover:bg-slate-100">
                       <Plus className="h-3.5 w-3.5" />
                     </button>
                   </div>
-                  <span className="w-20 text-right text-sm font-semibold text-slate-900 tabular-nums flex-shrink-0">
+                  <span className="w-20 text-right text-sm font-semibold text-slate-900 font-mono tabular-nums flex-shrink-0">
                     {fmt((l.unit_price - l.discount) * l.quantity)}
                   </span>
-                  <button type="button" onClick={() => setQty(l.key, 0)} className="rounded p-1 text-rose-400 hover:bg-rose-50 flex-shrink-0">
+                  <button type="button" onClick={() => setQty(l.key, 0)} className="rounded p-1 text-red-400 hover:bg-red-50 flex-shrink-0">
                     <X className="h-3.5 w-3.5" />
                   </button>
                 </div>
               ))}
               <div className="flex items-center justify-between px-4 py-3 bg-slate-50 rounded-b-xl">
                 <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Total</span>
-                <span className="text-base font-bold text-slate-900 tabular-nums">{fmt(total)}</span>
+                <span className="text-base font-bold text-slate-900 font-mono tabular-nums">{fmt(total)}</span>
               </div>
             </div>
           )}
@@ -260,10 +261,10 @@ export default function CashierQuickSale({ clinicId, activeModules = [], onToast
               onClick={handleLaunch}
               data-mentor-step="cashier-quick-sale-launch-btn"
               title="A venda fica pendente nos Recebimentos — marque junto com a consulta e receba tudo num pagamento só."
-              className="flex-1 rounded-xl border-2 border-teal-600 bg-white hover:bg-teal-50 py-2.5 text-sm font-bold text-teal-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+              className="flex-1 rounded-lg border-2 border-teal-600 bg-white hover:bg-teal-50 py-2.5 text-sm font-bold text-teal-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
             >
               {launching
-                ? <><Loader2 className="h-4 w-4 animate-spin" /> Lançando...</>
+                ? <><Spinner /> Lançando...</>
                 : <><ClipboardList className="h-4 w-4" /> Lançar</>}
             </button>
             <button
@@ -271,9 +272,9 @@ export default function CashierQuickSale({ clinicId, activeModules = [], onToast
               disabled={cart.length === 0 || launching}
               onClick={() => { setError(null); setShowPayment(true) }}
               data-mentor-step="cashier-quick-sale-receive-btn"
-              className="flex-[1.4] rounded-xl bg-teal-600 hover:bg-teal-700 py-2.5 text-sm font-bold text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-[1.4] rounded-lg bg-teal-600 hover:bg-teal-700 py-2.5 text-sm font-bold text-white shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Receber {total > 0 ? fmt(total) : ''}
+              Receber {total > 0 ? <span className="font-mono tabular-nums">{fmt(total)}</span> : ''}
             </button>
           </div>
           <p className="text-[10px] text-slate-500 -mt-1">

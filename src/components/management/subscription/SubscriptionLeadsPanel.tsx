@@ -154,7 +154,7 @@ export default function SubscriptionLeadsPanel({ onToast }: Props) {
                       <button
                         onClick={() => savePrice(lead)}
                         disabled={busyId === lead.id}
-                        className="rounded-lg bg-violet-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-violet-700 disabled:opacity-60"
+                        className="rounded-lg bg-teal-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-60"
                       >
                         {busyId === lead.id ? '…' : 'Salvar'}
                       </button>

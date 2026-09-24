@@ -42,7 +42,7 @@ export default async function RemittanceReviewPage({ params }: { params: Promise
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <main className="mx-auto max-w-5xl px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+      <main className="mx-auto max-w-5xl px-4 sm:px-6 py-6 sm:py-8 space-y-6 animate-enter">
         <Link
           href="/dashboard/financial/insurance-reconciliation"
           className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 transition-colors"

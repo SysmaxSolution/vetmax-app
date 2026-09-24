@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { CreditCard, X, Check, Loader2, ExternalLink, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 import {
@@ -99,7 +100,9 @@ export default function CardSelectionModal({
     })
   }
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -326,6 +329,7 @@ export default function CardSelectionModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

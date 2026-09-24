@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition, useMemo, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import {
   Package, Plus, AlertTriangle, RefreshCw, Trash2, Pencil,
   ArrowDownToLine, Search, X, Loader2, Check, Calendar,
@@ -14,6 +15,12 @@ import {
   restockItemV2, adjustStockItemV2,
   dispenseStockItem, deleteStockItemV2,
 } from '@/lib/actions/stock'
+import {
+  listPriceTables, getItemPrices, setItemPrices, getPricingSettings,
+  type PriceTable, type CompositionMode, type MarginCalcType,
+} from '@/lib/actions/pricing'
+import { useAnimaisFoundation } from '@/components/providers/ClinicConfigProvider'
+import AnimaisPricingSection from './AnimaisPricingSection'
 import type { GlobalCatalogSuggestion } from '@/lib/actions/catalog'
 import { searchGlobalCatalog } from '@/lib/actions/catalog'
 import { suggestDefaultInsurancePrice } from '@/lib/actions/insurance-pricing'
@@ -93,9 +100,10 @@ interface Props {
   activeModules?: string[]
 }
 
-interface ItemForm {
+export interface ItemForm {
   name: string; category: StockCategory; quantity: string; unit: string
   min_quantity: string; unit_price: string; is_controlled: boolean
+  substance: string; concentration: string; control_class: string; is_human_use: boolean
   brand: string; sku: string; barcode: string; batch_number: string
   expiry_date: string; supplier: string
   /** Preço base do serviço quando o pet tem convênio. Vazio = sem default. */
@@ -105,24 +113,47 @@ interface ItemForm {
   /** NFS-e (Fase 3): item da lista de serviço LC116 + código tributário municipal. */
   nfse_item_lista_servico: string
   nfse_codigo_tributario_municipio: string
+  /** Sprint Animais (0422): composição de preço simples. Vazio = não informado. */
+  cost_price: string
+  entry_tax_percent: string
+  margin_percent: string
+  /** Sprint Animais (0424): composição de preço completa. */
+  purchase_price: string
+  supplier_discount_percent: string
+  entry_tax_icms: string
+  entry_tax_st: string
+  entry_tax_ipi: string
+  entry_tax_freight: string
+  entry_tax_ibs_cbs: string
+  sale_tax_percent: string
 }
 
 const EMPTY_PRODUCT_FORM: ItemForm = {
   name: '', category: 'medication', quantity: '0', unit: 'un',
   min_quantity: '0', unit_price: '0', is_controlled: false,
+  substance: '', concentration: '', control_class: '', is_human_use: false,
   brand: '', sku: '', barcode: '', batch_number: '', expiry_date: '', supplier: '',
   default_insurance_price: '',
   insurance_card_interest_percent: '',
   nfse_item_lista_servico: '', nfse_codigo_tributario_municipio: '',
+  cost_price: '', entry_tax_percent: '', margin_percent: '',
+  purchase_price: '', supplier_discount_percent: '',
+  entry_tax_icms: '', entry_tax_st: '', entry_tax_ipi: '', entry_tax_freight: '', entry_tax_ibs_cbs: '',
+  sale_tax_percent: '',
 }
 
 const EMPTY_SERVICE_FORM: ItemForm = {
   name: '', category: 'service', quantity: '0', unit: 'un',
   min_quantity: '0', unit_price: '0', is_controlled: false,
+  substance: '', concentration: '', control_class: '', is_human_use: false,
   brand: '', sku: '', barcode: '', batch_number: '', expiry_date: '', supplier: '',
   default_insurance_price: '',
   insurance_card_interest_percent: '',
   nfse_item_lista_servico: '', nfse_codigo_tributario_municipio: '',
+  cost_price: '', entry_tax_percent: '', margin_percent: '',
+  purchase_price: '', supplier_discount_percent: '',
+  entry_tax_icms: '', entry_tax_st: '', entry_tax_ipi: '', entry_tax_freight: '', entry_tax_ibs_cbs: '',
+  sale_tax_percent: '',
 }
 
 function formFromItem(item: StockItemV2): ItemForm {
@@ -130,7 +161,10 @@ function formFromItem(item: StockItemV2): ItemForm {
     name: item.name, category: item.category,
     quantity: String(item.quantity), unit: item.unit,
     min_quantity: String(item.min_quantity), unit_price: String(item.unit_price),
-    is_controlled: item.is_controlled, brand: item.brand ?? '', sku: item.sku ?? '',
+    is_controlled: item.is_controlled,
+    substance: item.substance ?? '', concentration: item.concentration ?? '',
+    control_class: item.control_class ?? '', is_human_use: Boolean(item.is_human_use),
+    brand: item.brand ?? '', sku: item.sku ?? '',
     barcode: item.barcode ?? '', batch_number: item.batch_number ?? '',
     expiry_date: item.expiry_date ?? '', supplier: item.supplier ?? '',
     default_insurance_price: item.default_insurance_price === null ? '' : String(item.default_insurance_price),
@@ -139,6 +173,17 @@ function formFromItem(item: StockItemV2): ItemForm {
       : '',
     nfse_item_lista_servico: item.nfse_item_lista_servico ?? '',
     nfse_codigo_tributario_municipio: item.nfse_codigo_tributario_municipio ?? '',
+    cost_price:        item.cost_price == null ? '' : String(item.cost_price),
+    entry_tax_percent: item.entry_tax_percent == null ? '' : String(item.entry_tax_percent),
+    margin_percent:    item.margin_percent == null ? '' : String(item.margin_percent),
+    purchase_price:            item.purchase_price == null ? '' : String(item.purchase_price),
+    supplier_discount_percent: item.supplier_discount_percent == null ? '' : String(item.supplier_discount_percent),
+    entry_tax_icms:    item.entry_tax_icms == null ? '' : String(item.entry_tax_icms),
+    entry_tax_st:      item.entry_tax_st == null ? '' : String(item.entry_tax_st),
+    entry_tax_ipi:     item.entry_tax_ipi == null ? '' : String(item.entry_tax_ipi),
+    entry_tax_freight: item.entry_tax_freight == null ? '' : String(item.entry_tax_freight),
+    entry_tax_ibs_cbs: item.entry_tax_ibs_cbs == null ? '' : String(item.entry_tax_ibs_cbs),
+    sale_tax_percent:  item.sale_tax_percent == null ? '' : String(item.sale_tax_percent),
   }
 }
 
@@ -296,14 +341,14 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole, activ
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <div className="max-w-7xl mx-auto px-4 py-6 space-y-5">
+      <div className="max-w-7xl mx-auto px-4 py-6 space-y-5 animate-enter">
 
         {/* Header */}
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-2">
             <div>
-              <h1 className="text-xl font-bold text-slate-900">Estoque</h1>
-              <p className="text-sm text-slate-500">
+              <h1 className="text-xl font-bold tracking-tight text-slate-900">Estoque</h1>
+              <p className="text-sm text-slate-600">
                 {products.length} produto{products.length !== 1 ? 's' : ''} · {services.length} serviço{services.length !== 1 ? 's' : ''}
               </p>
             </div>
@@ -312,7 +357,7 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole, activ
               {userRole === 'admin' && view !== 'packages' && (
                 <button
                   onClick={() => setCsvImportOpen(true)}
-                  className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-600 text-xs font-semibold hover:border-slate-300 hover:bg-slate-50 transition-colors"
+                  className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 text-xs font-semibold hover:border-slate-300 hover:bg-slate-50 transition-colors"
                 >
                   <Upload className="h-3.5 w-3.5" /> Importar CSV
                 </button>
@@ -321,7 +366,7 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole, activ
               {userRole === 'admin' && view !== 'packages' && (
                 <button
                   onClick={() => setFormModal({ mode: 'add', serviceMode: isServiceView })}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-teal-600 text-white text-sm font-semibold shadow-sm hover:bg-teal-700 focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 transition-colors"
                 >
                   <Plus className="h-4 w-4" />
                   <span className="hidden xs:inline">{isServiceView ? 'Novo Serviço' : 'Novo Item'}</span>
@@ -332,7 +377,7 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole, activ
 
           {/* Toggle Produtos / Serviços / Pacotes — linha separada, scroll em mobile */}
           <div className="w-full overflow-x-auto pb-0.5 -mb-0.5">
-            <div className="flex rounded-xl overflow-hidden border border-slate-200 bg-white w-full sm:w-auto">
+            <div className="flex rounded-lg overflow-hidden border border-slate-200 bg-white w-full sm:w-auto">
               <button
                 onClick={() => switchView('products')}
                 className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-semibold transition-colors ${
@@ -367,7 +412,7 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole, activ
             {lowCount > 0 && (
               <button
                 onClick={() => setStatusFilter(s => s === 'critical' ? 'all' : 'critical')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium transition-colors ${
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
                   statusFilter === 'critical'
                     ? 'bg-red-600 text-white border-red-600'
                     : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
@@ -388,7 +433,7 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole, activ
 
         {/* Toast */}
         {toast && (
-          <div className={`fixed bottom-5 right-5 z-50 flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg text-sm font-medium ${
+          <div className={`fixed bottom-5 right-5 z-50 flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg text-sm font-medium animate-enter-fast ${
             toast.ok ? 'bg-teal-600 text-white' : 'bg-red-600 text-white'
           }`}>
             {toast.ok ? <Check className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
@@ -427,7 +472,7 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole, activ
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder={isServiceView ? 'Buscar por nome…' : 'Buscar por nome, marca ou código…'}
-              className="w-full pl-9 pr-3 py-2.5 border border-slate-300 rounded-xl text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 bg-white"
+              className="w-full pl-9 pr-3 py-2.5 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 bg-white"
             />
             {search && (
               <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
@@ -438,7 +483,7 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole, activ
           {view === 'products' && (
             <button
               onClick={() => setStatusFilter(s => s === 'ok' ? 'all' : 'ok')}
-              className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-colors ${
+              className={`px-3 py-2 rounded-lg text-xs font-semibold border transition-colors ${
                 statusFilter === 'ok'
                   ? 'bg-emerald-600 text-white border-emerald-600'
                   : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'
@@ -639,7 +684,7 @@ function ProductsTable({ filtered, userRole, searchTerm, catalogLoading, catalog
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <p className="text-sm font-semibold text-slate-900 leading-tight">{s.name}</p>
                             {s.ncm && (
-                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 uppercase tracking-wide">
+                              <span className="text-[9px] font-bold font-mono tabular-nums px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 uppercase tracking-wide">
                                 NCM {s.ncm}
                               </span>
                             )}
@@ -648,7 +693,7 @@ function ProductsTable({ filtered, userRole, searchTerm, catalogLoading, catalog
                           <div className="flex items-center gap-2 mt-0.5">
                             <CatBadge cat={cat} />
                             {s.price_avg != null && (
-                              <span className="text-xs font-semibold text-slate-600">
+                              <span className="text-xs font-semibold text-slate-600 font-mono tabular-nums">
                                 R$ {s.price_avg.toFixed(2)}
                               </span>
                             )}
@@ -740,18 +785,18 @@ function ProductsTable({ filtered, userRole, searchTerm, catalogLoading, catalog
                       {cat?.icon}{cat?.label ?? item.category}
                     </span>
                   </td>
-                  <td className={`px-3 py-3 text-right font-bold tabular-nums ${
+                  <td className={`px-3 py-3 text-right font-bold font-mono tabular-nums ${
                     st === 'critical' ? 'text-red-600' : st === 'warning' ? 'text-amber-600' : 'text-slate-900'
                   }`}>
                     {Number(item.quantity).toLocaleString('pt-BR', { maximumFractionDigits: 3 })}
                   </td>
                   <td className="px-3 py-3 text-center text-slate-500 text-xs">{item.unit}</td>
-                  <td className="px-3 py-3 text-right text-slate-600 tabular-nums text-xs">
+                  <td className="px-3 py-3 text-right text-slate-600 font-mono tabular-nums text-xs">
                     {item.unit_price > 0 ? `R$ ${item.unit_price.toFixed(2)}` : <span className="text-slate-300">—</span>}
                   </td>
                   <td className="px-3 py-3 text-center">
                     {item.expiry_date ? (
-                      <span className={`text-xs font-medium ${
+                      <span className={`text-xs font-medium font-mono tabular-nums ${
                         days !== null && days < 0   ? 'text-red-600 font-bold' :
                         days !== null && days <= 30 ? 'text-amber-600' : 'text-slate-500'
                       }`}>
@@ -818,16 +863,16 @@ function ProductsTable({ filtered, userRole, searchTerm, catalogLoading, catalog
                   <div className="flex flex-wrap items-center gap-1.5">
                     <p className="text-sm font-semibold text-slate-900 leading-tight">{s.name}</p>
                     {s.ncm && (
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-teal-100 text-teal-700 uppercase tracking-wide">NCM {s.ncm}</span>
+                      <span className="text-[9px] font-bold font-mono tabular-nums px-1.5 py-0.5 rounded bg-teal-100 text-teal-700 uppercase tracking-wide">NCM {s.ncm}</span>
                     )}
                     {s.barcode && (
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 uppercase tracking-wide">EAN {s.barcode}</span>
+                      <span className="text-[9px] font-bold font-mono tabular-nums px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 uppercase tracking-wide">EAN {s.barcode}</span>
                     )}
                   </div>
                   <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                     {s.brand && <p className="text-xs text-slate-500">{s.brand}</p>}
                     {s.price_avg != null && (
-                      <span className="text-xs font-bold text-emerald-700">R$ {s.price_avg.toFixed(2)}</span>
+                      <span className="text-xs font-bold text-emerald-700 font-mono tabular-nums">R$ {s.price_avg.toFixed(2)}</span>
                     )}
                     {s.unit && <span className="text-xs text-slate-400">· {s.unit}</span>}
                   </div>
@@ -896,7 +941,7 @@ function ServicesTable({ filtered, userRole, onEdit, onDelete }: {
                       {cat?.icon}{cat?.label ?? item.category}
                     </span>
                   </td>
-                  <td className="px-3 py-3 text-right font-semibold text-slate-900 tabular-nums">
+                  <td className="px-3 py-3 text-right font-semibold text-slate-900 font-mono tabular-nums">
                     {item.unit_price > 0
                       ? `R$ ${item.unit_price.toFixed(2)}`
                       : <span className="text-slate-300 font-normal">—</span>}
@@ -927,7 +972,7 @@ function ActionBtn({ children, title, color, onClick }: {
   onClick: () => void
 }) {
   const colors = {
-    blue:  'text-blue-500 hover:bg-blue-50 hover:text-blue-700',
+    blue:  'text-sky-500 hover:bg-sky-50 hover:text-sky-700',
     green: 'text-emerald-500 hover:bg-emerald-50 hover:text-emerald-700',
     teal:  'text-teal-500 hover:bg-teal-50 hover:text-teal-700',
     amber: 'text-amber-500 hover:bg-amber-50 hover:text-amber-700',
@@ -946,21 +991,24 @@ function SimpleModal({ title, onClose, color, children }: {
   children: React.ReactNode
 }) {
   const headers = {
-    blue:  'from-blue-600 to-blue-700',
+    blue:  'from-teal-600 to-teal-700',
     green: 'from-emerald-600 to-emerald-700',
     amber: 'from-amber-600 to-amber-700',
   }
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden">
+      <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl overflow-hidden animate-scale-in">
         <div className={`bg-gradient-to-r ${headers[color]} px-5 py-4 flex items-center justify-between`}>
           <p className="text-sm font-semibold text-white">{title}</p>
           <button onClick={onClose} className="text-white/80 hover:text-white"><X className="h-4 w-4" /></button>
         </div>
         <div className="p-5">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
@@ -981,6 +1029,14 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
   const [acceptedProviderIds, setAcceptedProviderIds] = useState<string[]>([])
   // Campos fiscais de serviço só aparecem quando a clínica emite NFS-e (Fase 3).
   const [emitsNfse, setEmitsNfse] = useState(false)
+
+  // Sprint Animais (0422/0424): tabelas de preço + preço por item + modos.
+  const animaisFoundation = useAnimaisFoundation()
+  const [priceTables, setPriceTables] = useState<PriceTable[]>([])
+  const [tableRows, setTableRows] = useState<Record<string, { margin: string; price: string }>>({})
+  const [compositionMode, setCompositionMode] = useState<CompositionMode>('simple')
+  const [marginCalcType, setMarginCalcType]   = useState<MarginCalcType>('margin')
+  const [formTab, setFormTab] = useState<'info' | 'precos'>('info')
 
   const isNew     = mode === 'add'
   const isService = serviceMode || SERVICE_CAT_KEYS.has(form.category)
@@ -1005,6 +1061,31 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
     clinicEmitsNfse().then(res => setEmitsNfse(res.emits))
   }, [isService])
 
+  // Sprint Animais: carrega as tabelas de preço, os preços do item e os modos.
+  useEffect(() => {
+    if (!animaisFoundation) return
+    listPriceTables().then(res => {
+      if (Array.isArray(res)) setPriceTables(res.filter(t => t.is_active))
+    })
+    getPricingSettings().then(res => {
+      if (!('error' in res)) {
+        setCompositionMode(res.composition_mode)
+        setMarginCalcType(res.margin_calc_type)
+      }
+    })
+    if (item?.id) {
+      getItemPrices(item.id).then(res => {
+        if (!('error' in res)) {
+          const rows: Record<string, { margin: string; price: string }> = {}
+          for (const [k, v] of Object.entries(res)) {
+            rows[k] = { price: String(v.price), margin: v.margin == null ? '' : String(v.margin) }
+          }
+          setTableRows(rows)
+        }
+      })
+    }
+  }, [animaisFoundation, item?.id])
+
   function toggleProvider(id: string) {
     setAcceptedProviderIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
   }
@@ -1024,6 +1105,10 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
       min_quantity:  isService ? 0 : Number(form.min_quantity),
       unit_price:    Number(form.unit_price),
       is_controlled: form.is_controlled,
+      substance:     form.is_controlled ? (form.substance || null) : null,
+      concentration: form.is_controlled ? (form.concentration || null) : null,
+      control_class: form.is_controlled ? (form.control_class || null) : null,
+      is_human_use:  form.is_controlled ? form.is_human_use : false,
       is_service:    isService,
       brand:         form.brand || null,
       sku:           form.sku || null,
@@ -1040,13 +1125,40 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
       // NFS-e (Fase 3): só faz sentido para serviços.
       nfse_item_lista_servico:          isService ? (form.nfse_item_lista_servico.trim() || null) : null,
       nfse_codigo_tributario_municipio: isService ? (form.nfse_codigo_tributario_municipio.trim() || null) : null,
+      // Sprint Animais (0422/0424): composição de preço.
+      cost_price:        form.cost_price.trim()        === '' ? null : Number(form.cost_price.replace(',', '.')),
+      entry_tax_percent: form.entry_tax_percent.trim() === '' ? null : Number(form.entry_tax_percent.replace(',', '.')),
+      margin_percent:    form.margin_percent.trim()    === '' ? null : Number(form.margin_percent.replace(',', '.')),
+      purchase_price:            form.purchase_price.trim()            === '' ? null : Number(form.purchase_price.replace(',', '.')),
+      supplier_discount_percent: form.supplier_discount_percent.trim() === '' ? null : Number(form.supplier_discount_percent.replace(',', '.')),
+      entry_tax_icms:    form.entry_tax_icms.trim()    === '' ? null : Number(form.entry_tax_icms.replace(',', '.')),
+      entry_tax_st:      form.entry_tax_st.trim()      === '' ? null : Number(form.entry_tax_st.replace(',', '.')),
+      entry_tax_ipi:     form.entry_tax_ipi.trim()     === '' ? null : Number(form.entry_tax_ipi.replace(',', '.')),
+      entry_tax_freight: form.entry_tax_freight.trim() === '' ? null : Number(form.entry_tax_freight.replace(',', '.')),
+      entry_tax_ibs_cbs: form.entry_tax_ibs_cbs.trim() === '' ? null : Number(form.entry_tax_ibs_cbs.replace(',', '.')),
+      sale_tax_percent:  form.sale_tax_percent.trim()  === '' ? null : Number(form.sale_tax_percent.replace(',', '.')),
     }
+
+    // Grade de preço + margem por tabela (Sprint Animais). Persistida após salvar.
+    const priceEntries = animaisFoundation
+      ? priceTables.map(t => {
+          const r = tableRows[t.id]
+          return {
+            price_table_id: t.id,
+            price:  !r || r.price.trim()  === '' ? null : Number(r.price.replace(',', '.')),
+            margin: !r || r.margin.trim() === '' ? null : Number(r.margin.replace(',', '.')),
+          }
+        })
+      : []
 
     if (isNew) {
       const res = await addStockItemV2({ ...basePayload, quantity: isService ? 0 : Number(form.quantity) })
       if ('error' in res) { setSaving(false); setError(res.error); return }
       if (isService && providers.length > 0) {
         await setProvidersForStockItem(res.id, acceptedProviderIds)
+      }
+      if (animaisFoundation && priceEntries.length > 0) {
+        await setItemPrices(res.id, priceEntries)
       }
       setSaving(false)
       onSaved(res, true)
@@ -1056,19 +1168,25 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
       if (isService && providers.length > 0) {
         await setProvidersForStockItem(item!.id, acceptedProviderIds)
       }
+      if (animaisFoundation && priceEntries.length > 0) {
+        await setItemPrices(item!.id, priceEntries)
+      }
       setSaving(false)
       onSaved(res, false)
     }
   }
 
+
   const headerTitle = isService
     ? (isNew ? 'Novo Serviço / Procedimento' : `Editar: ${item?.name}`)
     : (isNew ? 'Novo Item de Estoque'         : `Editar: ${item?.name}`)
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh] animate-scale-in">
 
         {/* Header */}
         <div className="bg-gradient-to-r from-teal-600 to-teal-700 px-6 py-4 flex items-center justify-between flex-shrink-0">
@@ -1084,6 +1202,27 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
         {/* Body */}
         <div className="overflow-y-auto flex-1 p-6 space-y-5">
 
+          {/* Abas internas (Sprint Animais): Informações x Preços */}
+          {animaisFoundation && (
+            <div className="flex gap-1 border-b border-slate-200 -mt-1">
+              <button type="button" onClick={() => setFormTab('info')}
+                className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                  formTab === 'info' ? 'border-teal-600 text-teal-700' : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}>
+                Informações
+              </button>
+              <button type="button" onClick={() => setFormTab('precos')}
+                className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                  formTab === 'precos' ? 'border-teal-600 text-teal-700' : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}>
+                Preços
+              </button>
+            </div>
+          )}
+
+          {/* ── Aba Informações ── */}
+          <div className={animaisFoundation && formTab !== 'info' ? 'hidden' : 'space-y-5'}>
+
           {/* Categoria */}
           <div>
             <label className="block text-xs font-semibold text-slate-600 mb-2">
@@ -1096,7 +1235,7 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
                     set('category', cat.key)
                     if (cat.key === 'controlled_medication') set('is_controlled', true)
                   }}
-                  className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border-2 text-left text-xs font-semibold transition-all ${
+                  className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border-2 text-left text-xs font-semibold transition-all ${
                     form.category === cat.key
                       ? 'border-teal-500 bg-teal-50 text-teal-700'
                       : 'border-slate-200 text-slate-600 hover:border-slate-300'
@@ -1199,8 +1338,8 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
 
               {/* NFS-e (Fase 3): códigos fiscais do serviço — só quando a clínica emite nota */}
               {emitsNfse && (
-                <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-4 space-y-3">
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-blue-500 flex items-center gap-1.5">
+                <div className="rounded-xl border border-sky-100 bg-sky-50/50 p-4 space-y-3">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-sky-600 flex items-center gap-1.5">
                     <FileText className="h-3.5 w-3.5" /> Dados fiscais (NFS-e)
                   </p>
                   <div className="grid sm:grid-cols-2 gap-3">
@@ -1209,14 +1348,14 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
                       <input type="text" value={form.nfse_item_lista_servico}
                         onChange={e => set('nfse_item_lista_servico', e.target.value)}
                         placeholder="ex.: 5.07"
-                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" />
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500" />
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-600 mb-1">Código Tributário do Município</label>
                       <input type="text" value={form.nfse_codigo_tributario_municipio}
                         onChange={e => set('nfse_codigo_tributario_municipio', e.target.value)}
                         placeholder="código do serviço no município"
-                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" />
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500" />
                     </div>
                   </div>
                   <p className="text-[10px] text-slate-400">
@@ -1328,14 +1467,62 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
                 </div>
               </label>
               {form.is_controlled && (
-                <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-                  <Shield className="h-4 w-4 text-red-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-red-700">
-                    A dispensação exige receituário assinado por Médico Veterinário (CFMV). Mantenha os registros para fiscalização.
-                  </p>
+                <div className="space-y-3">
+                  <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+                    <Shield className="h-4 w-4 text-red-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-red-700">
+                      A dispensação exige receituário assinado por Médico Veterinário (CFMV). Estes dados alimentam o <strong>Livro de Controlados</strong> (Relatórios).
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-medium text-slate-600 mb-1">Substância / princípio ativo</label>
+                      <input type="text" value={form.substance} onChange={e => set('substance', e.target.value)}
+                        placeholder="Ex.: Cloridrato de Tramadol"
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-medium text-slate-600 mb-1">Concentração</label>
+                      <input type="text" value={form.concentration} onChange={e => set('concentration', e.target.value)}
+                        placeholder="Ex.: 50 mg/mL"
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-medium text-slate-600 mb-1">Lista (Portaria 344)</label>
+                      <select value={form.control_class} onChange={e => set('control_class', e.target.value)}
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20">
+                        <option value="">Não informada</option>
+                        {['A1','A2','A3','B1','B2','C1','C2','C3','C4','C5'].map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                    <div className="flex items-end">
+                      <label className="flex items-center gap-2 cursor-pointer select-none pb-1">
+                        <input type="checkbox" checked={form.is_human_use} onChange={e => set('is_human_use', e.target.checked)}
+                          className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500/30" />
+                        <span className="text-sm text-slate-700">Forma farmacêutica <strong>humana</strong> <span className="text-slate-400">(escrituração separada)</span></span>
+                      </label>
+                    </div>
+                  </div>
                 </div>
               )}
             </>
+          )}
+
+          </div>{/* fim aba Informações */}
+
+          {/* ── Aba Preços (Sprint Animais) ── */}
+          {animaisFoundation && (
+            <div className={formTab !== 'precos' ? 'hidden' : ''}>
+              <AnimaisPricingSection
+                form={form}
+                set={set}
+                priceTables={priceTables}
+                tableRows={tableRows}
+                setTableRows={setTableRows}
+                compositionMode={compositionMode}
+                marginCalcType={marginCalcType}
+              />
+            </div>
           )}
 
           {error && (
@@ -1346,17 +1533,18 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
         {/* Footer */}
         <div className="border-t border-slate-200 px-6 py-4 flex gap-3 flex-shrink-0">
           <button onClick={onClose}
-            className="flex-1 py-2.5 rounded-xl border border-slate-300 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
+            className="flex-1 py-2.5 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
             Cancelar
           </button>
           <button onClick={handleSubmit} disabled={saving}
-            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 transition-colors disabled:opacity-60">
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 transition-colors disabled:opacity-60">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
             {isNew ? 'Cadastrar' : 'Salvar'}
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
@@ -1384,26 +1572,26 @@ function RestockForm({ item, onDone, onError }: {
   }
   return (
     <div className="space-y-3">
-      <p className="text-xs text-slate-500">Qtd. atual: <strong className="text-slate-800">{item.quantity} {item.unit}</strong></p>
+      <p className="text-xs text-slate-500">Qtd. atual: <strong className="text-slate-800 font-mono tabular-nums">{item.quantity} {item.unit}</strong></p>
       <input type="number" min="0.001" step="0.001" value={qty} onChange={e => setQty(e.target.value)}
         placeholder="Quantidade a adicionar"
-        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" />
+        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500" />
       <div className="grid grid-cols-2 gap-2">
         <label className="block">
           <span className="text-[10px] font-bold text-slate-500 uppercase">Validade do lote</span>
           <input type="date" value={expiry} onChange={e => setExpiry(e.target.value)}
-            className="mt-0.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" />
+            className="mt-0.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500" />
         </label>
         <label className="block">
           <span className="text-[10px] font-bold text-slate-500 uppercase">Nº do lote</span>
           <input value={batch} onChange={e => setBatch(e.target.value)} placeholder="opcional"
-            className="mt-0.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" />
+            className="mt-0.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500" />
         </label>
       </div>
       <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Nota: NF, fornecedor… (opcional)"
-        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" />
+        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500" />
       <button onClick={handle} disabled={saving}
-        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-60">
+        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 transition-colors disabled:opacity-60">
         {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Repor Estoque
       </button>
     </div>
@@ -1426,7 +1614,7 @@ function DispenseForm({ item, onDone, onError }: {
   }
   return (
     <div className="space-y-3">
-      <p className="text-xs text-slate-500">Disponível: <strong className="text-slate-800">{item.quantity} {item.unit}</strong>
+      <p className="text-xs text-slate-500">Disponível: <strong className="text-slate-800 font-mono tabular-nums">{item.quantity} {item.unit}</strong>
         {item.is_controlled && <span className="ml-2 text-[10px] text-red-600 font-bold bg-red-50 px-1.5 py-0.5 rounded">CONTROLADO</span>}
       </p>
       <input type="number" min="0.001" step="0.001" value={qty} onChange={e => setQty(e.target.value)}
@@ -1435,7 +1623,7 @@ function DispenseForm({ item, onDone, onError }: {
       <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Nota: consulta, paciente… (opcional)"
         className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500" />
       <button onClick={handle} disabled={saving}
-        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-60">
+        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-60">
         {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowDownToLine className="h-4 w-4" />} Dispensar
       </button>
     </div>
@@ -1473,7 +1661,7 @@ function AdjustForm({ item, onDone, onError }: {
           className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500" />
       </div>
       <button onClick={handle} disabled={saving}
-        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 transition-colors disabled:opacity-60">
+        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 transition-colors disabled:opacity-60">
         {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Confirmar Ajuste
       </button>
     </div>

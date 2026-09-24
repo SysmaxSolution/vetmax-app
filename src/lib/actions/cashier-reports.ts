@@ -93,7 +93,10 @@ export async function generateCashierReport(
 
   if (error) return { error: `Erro ao gerar relatório: ${error.message}` }
 
-  const rows = (data ?? []) as CashierReportRow[]
+  // "Utilização de crédito" (payment_method='credit_balance') NÃO é dinheiro novo
+  // no caixa — o valor entrou quando o adiantamento foi recebido. Excluir do
+  // relatório de caixa evita contar o mesmo dinheiro duas vezes (auditoria 1).
+  const rows = ((data ?? []) as CashierReportRow[]).filter(r => r.payment_method !== 'credit_balance')
 
   // Aggregations
   let totalInflows = 0

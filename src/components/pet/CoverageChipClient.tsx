@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ShieldCheck, Clock, ShieldX, HelpCircle, Loader2 } from 'lucide-react'
+import { ShieldCheck, Clock, ShieldX, HelpCircle } from 'lucide-react'
+import { Spinner } from '@/components/ui/Spinner'
 import { checkProcedureCoverage, type ProcedureCoverageResult } from '@/lib/actions/insurance-coverage'
 
 interface Props {
@@ -22,7 +23,7 @@ const ICON_BY_BADGE = {
 const STYLE_BY_BADGE = {
   green:  'bg-emerald-50  text-emerald-700 border-emerald-200',
   yellow: 'bg-amber-50    text-amber-700   border-amber-200',
-  red:    'bg-rose-50     text-rose-700    border-rose-200',
+  red:    'bg-red-50      text-red-700     border-red-200',
   gray:   'bg-slate-50    text-slate-600   border-slate-200',
 }
 
@@ -61,7 +62,7 @@ export default function CoverageChipClient(props: Props) {
   if (loading && !res) {
     return (
       <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md border bg-slate-50 text-slate-400 border-slate-200">
-        <Loader2 className="h-3 w-3 animate-spin" /> Verificando…
+        <Spinner size="sm" label="Verificando…" /> Verificando…
       </span>
     )
   }

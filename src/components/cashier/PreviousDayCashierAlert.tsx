@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { AlertTriangle, X, Loader2 } from 'lucide-react'
+import { AlertTriangle, X } from 'lucide-react'
+import { Spinner } from '@/components/ui/Spinner'
 import { getStaleOpenSession } from '@/lib/actions/cashier-manual'
 import { closeCashierSession } from '@/lib/actions/cashier-sessions'
 
@@ -56,9 +57,9 @@ export default function PreviousDayCashierAlert({ onResolved }: Props) {
   })
 
   return (
-    <div className="rounded-2xl border-2 border-amber-300 bg-amber-50 px-5 py-4 shadow-sm space-y-3">
+    <div className="rounded-xl border-2 border-amber-300 bg-amber-50 px-5 py-4 shadow-sm space-y-3">
       <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-200 flex-shrink-0">
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-200 flex-shrink-0">
           <AlertTriangle className="h-5 w-5 text-amber-800" />
         </div>
         <div className="flex-1 min-w-0">
@@ -66,7 +67,7 @@ export default function PreviousDayCashierAlert({ onResolved }: Props) {
             Caixa do dia anterior ainda aberto
           </h3>
           <p className="text-xs text-amber-800 mt-0.5">
-            A sessão aberta em <strong>{openedAt}</strong>{' '}
+            A sessão aberta em <strong className="font-mono tabular-nums">{openedAt}</strong>{' '}
             {session.days_open === 1 ? '(ontem)' : `há ${session.days_open} dias`} ainda não foi fechada.
             Para iniciar o caixa de hoje você precisa fechar a sessão anterior primeiro.
           </p>
@@ -90,15 +91,15 @@ export default function PreviousDayCashierAlert({ onResolved }: Props) {
         <button
           onClick={handleClose}
           disabled={closing}
-          className="flex items-center gap-1.5 rounded-xl bg-amber-700 hover:bg-amber-800 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
+          className="flex items-center gap-1.5 rounded-lg bg-amber-700 hover:bg-amber-800 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
         >
-          {closing ? <Loader2 className="h-3 w-3 animate-spin" /> : <AlertTriangle className="h-3 w-3" />}
+          {closing ? <Spinner size="sm" /> : <AlertTriangle className="h-3 w-3" />}
           Fechar sessão de {openedAt}
         </button>
         <button
           onClick={() => setDismissed(true)}
           disabled={closing}
-          className="rounded-xl border border-amber-300 bg-white hover:bg-amber-100 px-4 py-2 text-xs font-semibold text-amber-800 disabled:opacity-50"
+          className="rounded-lg border border-amber-300 bg-white hover:bg-amber-100 px-4 py-2 text-xs font-semibold text-amber-800 disabled:opacity-50"
         >
           Decidir mais tarde
         </button>

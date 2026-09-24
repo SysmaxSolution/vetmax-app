@@ -249,7 +249,7 @@ export default function ConsultationServicesPanel({
     <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
       <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/60 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
-          <Receipt className="h-4 w-4 text-blue-500" />
+          <Receipt className="h-4 w-4 text-teal-500" />
           Serviços Lançados
           {activeLines.length > 0 && (
             <span className="text-[10px] font-normal text-slate-500">({activeLines.length} ativo{activeLines.length !== 1 ? 's' : ''})</span>
@@ -260,7 +260,7 @@ export default function ConsultationServicesPanel({
             </span>
           )}
         </h3>
-        <span className="text-sm font-bold text-blue-700">{formatBRL(total)}</span>
+        <span className="text-sm font-bold text-teal-700 font-mono tabular-nums">{formatBRL(total)}</span>
       </div>
 
       {/* Totalizadores split (visível só com convênio + algum copay/repass cadastrado) */}
@@ -268,11 +268,11 @@ export default function ConsultationServicesPanel({
         <div className="px-4 py-2.5 border-b border-slate-100 bg-indigo-50/40 grid grid-cols-2 gap-2 text-[11px]">
           <div className="flex justify-between">
             <span className="text-slate-600">Tutor pagará (Coparticipação):</span>
-            <span className="font-bold text-emerald-700">{formatBRL(tutorDue)}</span>
+            <span className="font-bold text-emerald-700 font-mono tabular-nums">{formatBRL(tutorDue)}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-slate-600">Repasse Petlove:</span>
-            <span className="font-bold text-indigo-700">{formatBRL(repassPetlove)}</span>
+            <span className="font-bold text-indigo-700 font-mono tabular-nums">{formatBRL(repassPetlove)}</span>
           </div>
         </div>
       )}
@@ -299,18 +299,18 @@ export default function ConsultationServicesPanel({
             return (
               <li key={line.id} className="px-4 py-2.5">
                 <div className="flex items-center gap-3">
-                  <Tag className="h-3.5 w-3.5 text-blue-500 flex-shrink-0" />
+                  <Tag className="h-3.5 w-3.5 text-teal-500 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-slate-800 truncate">{line.name_snapshot}</p>
                     <p className="text-[10px] text-slate-500 flex items-center gap-1.5">
                       <span className={`rounded-full px-1.5 py-0.5 font-semibold ${STAGE_COLOR[line.added_at_stage]}`}>
                         {STAGE_LABEL[line.added_at_stage] ?? line.added_at_stage}
                       </span>
-                      <span>{formatBRL(line.price_snapshot)}</span>
+                      <span className="font-mono tabular-nums">{formatBRL(line.price_snapshot)}</span>
                       {line.quantity !== 1 && <span>× {line.quantity}</span>}
                     </p>
                   </div>
-                  <p className="text-xs font-semibold text-slate-700 flex-shrink-0">
+                  <p className="text-xs font-semibold text-slate-700 flex-shrink-0 font-mono tabular-nums">
                     {formatBRL(line.price_snapshot * line.quantity)}
                   </p>
                   {!isFinalized && (
@@ -331,13 +331,13 @@ export default function ConsultationServicesPanel({
                   <button
                     type="button"
                     onClick={() => setPriceDrafts(prev => ({ ...prev, [line.id]: line.price_snapshot.toFixed(2).replace('.', ',') }))}
-                    className="mt-1.5 text-[10px] font-semibold text-blue-700 hover:text-blue-900 hover:underline"
+                    className="mt-1.5 text-[10px] font-semibold text-teal-700 hover:text-teal-900 hover:underline"
                   >
                     + Alterar preço
                   </button>
                 )}
                 {!isFinalized && canEditPrice && priceDrafts[line.id] !== undefined && (
-                  <div className="mt-2 ml-5 rounded-lg border border-blue-200 bg-blue-50/40 p-2.5 flex items-end gap-2">
+                  <div className="mt-2 ml-5 rounded-lg border border-teal-200 bg-teal-50/40 p-2.5 flex items-end gap-2">
                     <div className="flex-1">
                       <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Preço unitário (R$)</label>
                       <input
@@ -345,15 +345,15 @@ export default function ConsultationServicesPanel({
                         value={priceDrafts[line.id]}
                         onChange={e => setPriceDrafts(prev => ({ ...prev, [line.id]: e.target.value }))}
                         placeholder="0,00"
-                        className="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-400"
+                        className="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-teal-400"
                       />
                     </div>
                     <button type="button" onClick={() => handleSavePrice(line)} disabled={priceSaving === line.id}
-                      className="rounded-md bg-blue-600 hover:bg-blue-700 px-2.5 py-1.5 text-[10px] font-bold text-white disabled:opacity-50">
+                      className="rounded-lg bg-teal-600 hover:bg-teal-700 px-2.5 py-1.5 text-[10px] font-bold text-white disabled:opacity-50">
                       {priceSaving === line.id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Salvar'}
                     </button>
                     <button type="button" onClick={() => setPriceDrafts(prev => { const n = { ...prev }; delete n[line.id]; return n })}
-                      className="rounded-md border border-slate-200 px-2.5 py-1.5 text-[10px] font-semibold text-slate-500 hover:bg-slate-50">
+                      className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-[10px] font-semibold text-slate-500 hover:bg-slate-50">
                       Cancelar
                     </button>
                   </div>
@@ -475,7 +475,7 @@ export default function ConsultationServicesPanel({
             onClick={() => setShowModal(true)}
             disabled={isPending}
             data-mentor-step="vet-insert-service-btn"
-            className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-blue-300 bg-blue-50/40 hover:bg-blue-50 py-2 text-xs font-semibold text-blue-700 disabled:opacity-50"
+            className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-teal-300 bg-teal-50/40 hover:bg-teal-50 py-2 text-xs font-semibold text-teal-700 disabled:opacity-50"
           >
             <Plus className="h-3 w-3" /> Inserir serviços / itens
           </button>

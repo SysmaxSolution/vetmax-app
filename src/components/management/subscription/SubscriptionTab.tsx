@@ -7,6 +7,7 @@
 // Para SysMax, exibe o painel de pricing editável (PricingAdminPanel).
 
 import { useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import {
   BadgeCheck, Check, CreditCard, Crown, Loader2, MessageCircle, Sparkles,
@@ -689,9 +690,9 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
         />
       )}
 
-      {showDowngrade && (
+      {showDowngrade && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl animate-scale-in">
             <div className="flex items-center gap-2 text-amber-600">
               <AlertTriangle className="h-5 w-5" />
               <h3 className="text-base font-semibold text-slate-900">Voltar para o Free?</h3>
@@ -719,7 +720,8 @@ export default function SubscriptionTab({ overview, isSysmax = false }: Props) {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}

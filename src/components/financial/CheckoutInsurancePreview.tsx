@@ -56,7 +56,7 @@ export default async function CheckoutInsurancePreview({ consultationId, patient
   const { totals } = preview
 
   return (
-    <section className="rounded-2xl border border-sky-200 bg-gradient-to-br from-sky-50 to-blue-50 overflow-hidden">
+    <section className="rounded-xl border border-sky-200 bg-gradient-to-br from-sky-50 to-blue-50 overflow-hidden">
       <header className="px-5 py-3 border-b border-sky-200/70 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <ShieldCheck className="h-4 w-4 text-sky-600" />
@@ -74,28 +74,28 @@ export default async function CheckoutInsurancePreview({ consultationId, patient
             <Wallet className="h-3 w-3" />
             Cobrar do tutor AGORA
           </div>
-          <div className="text-base font-bold text-sky-900 tabular-nums">{BRL(totals.charge_now)}</div>
+          <div className="text-base font-bold text-sky-900 font-mono tabular-nums">{BRL(totals.charge_now)}</div>
         </div>
         <div className="rounded-lg bg-white px-3 py-2 border border-sky-100">
           <div className="flex items-center gap-1.5 text-[11px] text-sky-700 font-medium mb-0.5">
             <CreditCard className="h-3 w-3" />
             Petlove cobra no cartão
           </div>
-          <div className="text-base font-bold text-sky-900 tabular-nums">{BRL(totals.deferred_provider)}</div>
+          <div className="text-base font-bold text-sky-900 font-mono tabular-nums">{BRL(totals.deferred_provider)}</div>
         </div>
         <div className="rounded-lg bg-white px-3 py-2 border border-sky-100">
           <div className="flex items-center gap-1.5 text-[11px] text-sky-700 font-medium mb-0.5">
             <FileClock className="h-3 w-3" />
             Vai pra A Receber Petlove
           </div>
-          <div className="text-base font-bold text-sky-900 tabular-nums">{BRL(totals.receivable)}</div>
+          <div className="text-base font-bold text-sky-900 font-mono tabular-nums">{BRL(totals.receivable)}</div>
         </div>
         <div className="rounded-lg bg-emerald-50 px-3 py-2 border border-emerald-200">
           <div className="flex items-center gap-1.5 text-[11px] text-emerald-700 font-medium mb-0.5">
             <TrendingDown className="h-3 w-3" />
             Tutor economizou
           </div>
-          <div className="text-base font-bold text-emerald-800 tabular-nums">{BRL(totals.tutor_saved)}</div>
+          <div className="text-base font-bold text-emerald-800 font-mono tabular-nums">{BRL(totals.tutor_saved)}</div>
         </div>
       </div>
 
@@ -120,7 +120,7 @@ export default async function CheckoutInsurancePreview({ consultationId, patient
                   </div>
                   <p className="text-[10px] text-slate-500 mt-0.5">{it.coverage.message}</p>
                 </div>
-                <span className="text-[10px] text-slate-400 tabular-nums flex-shrink-0">
+                <span className="text-[10px] text-slate-400 font-mono tabular-nums flex-shrink-0">
                   Total: {BRL(it.total_price)}
                 </span>
               </div>
@@ -136,7 +136,7 @@ export default async function CheckoutInsurancePreview({ consultationId, patient
                         <em className="text-[9px] text-slate-400">(Petlove cobra no cartão)</em>
                       )}
                     </span>
-                    <strong className="tabular-nums text-emerald-800">
+                    <strong className="font-mono tabular-nums text-emerald-800">
                       {BRL(it.charge_now + it.deferred_provider)}
                     </strong>
                   </div>
@@ -148,7 +148,7 @@ export default async function CheckoutInsurancePreview({ consultationId, patient
                       Repasse Petlove · contas a receber
                       <em className="text-[9px] text-slate-400">(informativo — não cobrar)</em>
                     </span>
-                    <strong className="tabular-nums text-indigo-800">
+                    <strong className="font-mono tabular-nums text-indigo-800">
                       {BRL(it.receivable)}
                     </strong>
                   </div>
@@ -162,7 +162,7 @@ export default async function CheckoutInsurancePreview({ consultationId, patient
       <footer className="px-5 py-2 bg-sky-50/60 border-t border-sky-100 text-[10px] text-sky-700 flex items-center justify-between gap-3">
         <div>
           <strong>Total cheio (preço particular):</strong>{' '}
-          <span className="tabular-nums">{BRL(totals.grand_total)}</span>
+          <span className="font-mono tabular-nums">{BRL(totals.grand_total)}</span>
           {' · '}
           Esta é uma prévia — clique em <em>&quot;Aplicar prévia&quot;</em> para gravar a marcação no faturamento.
         </div>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import {
   X, Loader2, ChevronDown, ChevronRight, ClipboardCheck, HeartPulse, FileText,
   Mic, MicOff, Plus, Save, FileStack, Zap, Receipt, BedDouble, CheckCircle2, ShieldAlert,
@@ -170,7 +171,7 @@ export default function SurgeryFichaModal({ surgeryId, onClose, onChanged }: Pro
     { key: 'resp_rate', label: 'FR', unit: 'mpm' }, { key: 'spo2', label: 'SpO₂', unit: '%' },
   ]
 
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-900/65 p-3 sm:p-4 overflow-y-auto" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[94vh]">
         {/* Header */}
@@ -365,6 +366,7 @@ export default function SurgeryFichaModal({ surgeryId, onClose, onChanged }: Pro
           </div>
         )}
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }

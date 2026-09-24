@@ -1,6 +1,7 @@
 ﻿'use client'
 
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Shield, X, FileText, CheckCircle, ExternalLink } from 'lucide-react'
 import { CONSENT_VERSION } from '@/lib/consent-version'
 
@@ -79,7 +80,7 @@ export default function ConsentModal({ tutorName, onAccept, onDecline }: Props) 
     }
   }
 
-  return (
+  return typeof document === 'undefined' ? null : createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -180,7 +181,8 @@ export default function ConsentModal({ tutorName, onAccept, onDecline }: Props) 
           </p>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

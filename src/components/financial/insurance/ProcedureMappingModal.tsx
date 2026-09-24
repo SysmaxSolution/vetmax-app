@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Search, Save, Loader2, CheckCircle2, AlertCircle, Box, Wrench } from 'lucide-react'
 import {
   upsertProcedureMappings,
@@ -105,13 +106,13 @@ export default function ProcedureMappingModal({
 
   if (!open) return null
 
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[90vh] flex flex-col"
+        className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-4xl max-h-[90vh] flex flex-col animate-scale-in"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -248,8 +249,9 @@ export default function ProcedureMappingModal({
           </div>
         </footer>
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }
 
 // ─── MappingRow ───────────────────────────────────────────────────────────────
@@ -268,7 +270,7 @@ function MappingRow({
       {/* Esquerda: nome Petlove */}
       <div className="min-w-0">
         <p className="font-medium text-slate-900 truncate">{row.external_procedure_name}</p>
-        <p className="text-xs text-slate-500 mt-0.5 tabular-nums">
+        <p className="text-xs text-slate-500 mt-0.5 font-mono tabular-nums">
           {row.occurrence_count} ocorrência{row.occurrence_count !== 1 ? 's' : ''}
           {' · '}
           média {row.average_repass_value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
@@ -343,7 +345,7 @@ function SearchableCombobox({
               </>}
         </span>
         {selected && (
-          <span className="text-xs tabular-nums text-purple-600 flex-shrink-0">
+          <span className="text-xs font-mono tabular-nums text-purple-600 flex-shrink-0">
             {selected.unit_price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
           </span>
         )}
@@ -359,7 +361,7 @@ function SearchableCombobox({
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Filtrar por nome…"
-                className="w-full pl-8 pr-2 py-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:border-purple-400"
+                className="w-full pl-8 pr-2 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-teal-500"
               />
             </div>
           </div>
@@ -388,7 +390,7 @@ function SearchableCombobox({
                           : <Box className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />}
                         <span className="truncate">{o.name}</span>
                       </span>
-                      <span className="text-xs tabular-nums text-slate-500 flex-shrink-0">
+                      <span className="text-xs font-mono tabular-nums text-slate-500 flex-shrink-0">
                         {o.unit_price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                       </span>
                     </button>

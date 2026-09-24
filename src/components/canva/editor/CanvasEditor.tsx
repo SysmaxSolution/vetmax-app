@@ -20,6 +20,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import {
   Eye, EyeOff, Loader2, Paintbrush, Redo2, Save, Sparkles, Undo2, X, Eraser,
   Combine, ZoomIn, ZoomOut, Maximize2, FileText, FilePlus, Trash2, MousePointerClick,
@@ -1089,7 +1090,7 @@ function MergeTagsModal({
     .map(p => `${p.prefix}<${p.staticText ?? p.label}>${p.suffix}`)
     .join(separator)
 
-  return (
+  return typeof document === 'undefined' ? null : createPortal(
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
       <div className="flex w-full max-w-xl flex-col rounded-2xl bg-white shadow-2xl overflow-hidden" style={{ maxHeight: '85vh' }}>
         <header className="flex items-center justify-between border-b border-slate-200 px-4 py-3 flex-shrink-0">
@@ -1209,7 +1210,8 @@ function MergeTagsModal({
           </button>
         </footer>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

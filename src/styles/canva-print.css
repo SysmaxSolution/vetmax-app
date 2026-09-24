@@ -39,8 +39,13 @@
     background: #fff !important;
   }
 
-  /* Esconde TODO o conteúdo (mas preserva a hierarquia até o shell) */
-  body * {
+  /* Esconde TODO o conteúdo (mas preserva a hierarquia até o shell) — APENAS
+     quando a página do Canva ativa a classe body.print-mode-canva (LaudoPrintable).
+     NÃO usar :has(): não é avaliado no pipeline de impressão real do Chromium,
+     então ESTA regra global (importada em globals.css) escondia o conteúdo de
+     QUALQUER página ao imprimir (boleto, histórico do portal), gerando PDF em
+     branco. A classe no body é confiável. */
+  body.print-mode-canva * {
     visibility: hidden;
   }
 

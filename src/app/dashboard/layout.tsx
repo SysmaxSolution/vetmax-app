@@ -10,8 +10,7 @@ import { FREE_ROUTES } from '@/config/access-matrix'
 import type { PlanName, BusinessType, SubscriptionLifecycleState, BillingCycle } from '@/types'
 import { hasOpenClinicalRecords } from '@/lib/billing/provision'
 import SubscriptionDunningBanner from '@/components/management/subscription/SubscriptionDunningBanner'
-import DashboardShellClassic from '@/components/layout/DashboardShellClassic'
-import DashboardShellModern from '@/components/layout/DashboardShellModern'
+import DashboardShell from '@/components/layout/DashboardShell'
 import DeploySkewGuard from '@/components/system/DeploySkewGuard'
 
 export default async function DashboardLayout({
@@ -47,6 +46,8 @@ export default async function DashboardLayout({
   const [{ data: clinicData }, whatsAppRow, clinicsResult, petCountResult, subResult] = await Promise.all([
     admin
       .from('clinics')
+      // layout_version continua na query mas NÃO seleciona mais o shell —
+      // reservado para layouts futuros em Configurações > Aparência (Issue #23).
       .select('logo_url, active_modules, status, ai_transcription_mode, business_type, ui_preferences, flow_config, layout_version')
       .eq('id', profile.clinic_id)
       .single(),
@@ -96,9 +97,24 @@ export default async function DashboardLayout({
   const allowedRoutes  = FREE_ROUTES[businessType] ?? FREE_ROUTES.vet_clinic
 
   // Feature flags da Sprint Internação/Cirurgia (clinics.flow_config).
-  const flowConfig         = ((clinicData as any)?.flow_config ?? {}) as { internacao_completa?: boolean; centro_cirurgico?: boolean; pdv_unified_with_cashier?: boolean; subscription_plans_ui?: boolean }
+  const flowConfig         = ((clinicData as any)?.flow_config ?? {}) as { internacao_completa?: boolean; centro_cirurgico?: boolean; pdv_unified_with_cashier?: boolean; subscription_plans_ui?: boolean; animais_foundation?: boolean; require_attending_vet?: boolean; uses_advance?: boolean; usa_convenios?: boolean; usa_treinamento?: boolean; usa_imagem?: boolean; usa_laboratorio?: boolean; usa_boleto?: boolean; portal_enabled?: boolean }
   const internacaoCompleta = flowConfig.internacao_completa === true
   const centroCirurgico    = flowConfig.centro_cirurgico === true
+  // Sprint Animais — fundação (multi-CNPJ, clínicas parceiras, tabelas de preço, OS/urgência)
+  const animaisFoundation  = flowConfig.animais_foundation === true
+  // Exigir profissional responsável no check-in (config por clínica)
+  const requireAttendingVet = flowConfig.require_attending_vet === true
+  // Adiantamento no Caixa (config por clínica)
+  const usesAdvance         = flowConfig.uses_advance === true
+  const usaConvenios        = flowConfig.usa_convenios === true
+  // Academia de Treinamento (config por clínica) — acervo global, progresso local
+  const usaTreinamento      = flowConfig.usa_treinamento === true
+  // Tarefa 0 — flags PRÓPRIAS das rotinas novas. Padrão: DESLIGADO. Sem elas a
+  // rotina some do menu, a rota redireciona e as actions recusam.
+  const usaImagem           = flowConfig.usa_imagem === true
+  const usaLaboratorio      = flowConfig.usa_laboratorio === true
+  const usaBoleto           = flowConfig.usa_boleto === true
+  const portalEnabled       = flowConfig.portal_enabled === true
   // Épico B (04/06, Q4): PDV unificado ao Caixa — esconde o módulo PDV do menu
   const pdvUnified         = flowConfig.pdv_unified_with_cashier === true
   // Monetização SaaS Fase 1 — rollout restrito da UI de Planos (Vet Teste)
@@ -220,7 +236,7 @@ export default async function DashboardLayout({
     </div>
   ) : null
 
-  // Props compartilhadas entre os shells de layout
+  // Props do shell único (Issue #23 — Decisão do Diretor: UM layout só)
   const shellProps = {
     userName:             profile.full_name ?? '',
     clinicName,
@@ -243,6 +259,15 @@ export default async function DashboardLayout({
     uiPreferences:        (clinicData as any)?.ui_preferences ?? null,
     aiTranscriptionMode:  (clinicData as any)?.ai_transcription_mode ?? 'ai_assisted',
     internacaoCompleta,
+    animaisFoundation,
+    requireAttendingVet,
+    usesAdvance,
+    usaConvenios,
+    usaTreinamento,
+    usaImagem,
+    usaLaboratorio,
+    usaBoleto,
+    portalEnabled,
     whatsAppEnabled,
     hasLogo:              !!(clinicData as any)?.logo_url,
     hasPets:              (petCountResult.count ?? 0) > 0,
@@ -250,12 +275,5 @@ export default async function DashboardLayout({
     userId:               user.id,
   }
 
-  // Seleciona o shell com base em clinics.layout_version (default: 'classic')
-  const layoutVersion = (clinicData as any)?.layout_version ?? 'classic'
-
-  if (layoutVersion === 'modern') {
-    return <DashboardShellModern {...shellProps}><DeploySkewGuard />{dunningBanner}{children}</DashboardShellModern>
-  }
-
-  return <DashboardShellClassic {...shellProps}><DeploySkewGuard />{dunningBanner}{children}</DashboardShellClassic>
+  return <DashboardShell {...shellProps}><DeploySkewGuard />{dunningBanner}{children}</DashboardShell>
 }

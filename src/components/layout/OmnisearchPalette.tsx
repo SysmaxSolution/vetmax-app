@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import {
   Search, X, Loader2, ChevronRight, ArrowLeft,
@@ -123,8 +124,9 @@ export default function OmnisearchPalette({
   }, [open, navTarget, highlight, drillGroup, onClose, handleNavigate, result])
 
   if (!open) return null
+  if (typeof document === 'undefined') return null
 
-  return (
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -269,6 +271,7 @@ export default function OmnisearchPalette({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

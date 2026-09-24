@@ -8,14 +8,30 @@ interface Props {
   onSave:   (v: ReportsEnabled) => void
 }
 
+// Tarefa 0 — a lista passou a cobrir TODOS os relatórios. As 12 últimas eram
+// forçadas por um ALWAYS_ON no ReportsWorkspace e não apareciam aqui, então o
+// admin não tinha como desligá-las. Padrão de todas: ligadas (ver
+// REPORTS_DEFAULTS em reports-g13.ts) — o que muda é poder desligar.
 const LABELS: Record<keyof ReportsEnabled, string> = {
-  pet_frequency: 'Periodicidade por Pet',
-  productivity:  'Produtividade por Profissional',
-  financial:     'Financeiro (Receber/Pagar)',
-  dre:           'DRE — Demonstração de Resultado',
-  curva_abc:     'Curva ABC',
-  whatsapp:      'WhatsApp (Campanhas)',
-  operational:   'Relatórios Operacionais',
+  pet_frequency:   'Periodicidade por Pet',
+  productivity:    'Produtividade por Profissional',
+  financial:       'Financeiro (Receber/Pagar)',
+  dre:             'DRE — Demonstração de Resultado',
+  curva_abc:       'Curva ABC',
+  whatsapp:        'WhatsApp (Campanhas)',
+  operational:     'Relatórios Operacionais',
+  dashboard:       'Painel (BI) — visão geral em gráficos',
+  smart:           'Relatório Inteligente (IA)',
+  commissions:     'Comissões por Profissional',
+  controlled:      'Livro de Controlados (Portaria 344/1998)',
+  aging:           'Aging (A Receber / A Pagar)',
+  cashflow:        'Fluxo de Caixa (realizado × projetado)',
+  revenue:         'Faturamento por Dimensão',
+  stock_position:  'Posição de Estoque',
+  clients:         'Clientes (Novos × Recorrentes)',
+  dre_company:     'DRE por CNPJ',
+  boleto_movement: 'Movimentação de Boletos',
+  exam_rejections: 'Exames Não Realizados',
 }
 
 export default function ReportsSettings({ enabled, onSave }: Props) {
@@ -45,6 +61,11 @@ export default function ReportsSettings({ enabled, onSave }: Props) {
       <p className="text-sm text-slate-600">
         Ative ou desative os tipos de relatório visíveis no menu lateral para todos os usuários desta clínica.
       </p>
+      <p className="text-xs text-slate-500">
+        Relatórios ligados a uma rotina só aparecem se a rotina também estiver ativa — por exemplo,
+        &quot;Movimentação de Boletos&quot; exige a rotina de Boletos e &quot;Exames Não Realizados&quot;
+        exige o Fluxo de Rejeição de Exame.
+      </p>
 
       <div className="divide-y divide-slate-100 rounded-xl border border-slate-200 overflow-hidden">
         {(Object.entries(LABELS) as [keyof ReportsEnabled, string][]).map(([key, label]) => (
@@ -58,7 +79,7 @@ export default function ReportsSettings({ enabled, onSave }: Props) {
               aria-checked={local[key]}
               onClick={() => toggle(key)}
               className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                local[key] ? 'bg-violet-600' : 'bg-slate-200'
+                local[key] ? 'bg-teal-600' : 'bg-slate-200'
               }`}
             >
               <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform ${
@@ -81,7 +102,7 @@ export default function ReportsSettings({ enabled, onSave }: Props) {
       <button
         onClick={save}
         disabled={pending}
-        className="rounded-lg bg-violet-600 px-5 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50 transition-colors"
+        className="rounded-lg bg-teal-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 disabled:opacity-60 transition-colors"
       >
         {pending ? 'Salvando…' : 'Salvar configurações'}
       </button>

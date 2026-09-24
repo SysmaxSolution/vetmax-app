@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Building2, Loader2, AlertCircle } from 'lucide-react'
 import type { Supplier, SupplierCategory } from '@/lib/actions/suppliers'
 import { upsertSupplier } from '@/lib/actions/suppliers'
@@ -30,7 +31,7 @@ function field(label: string, content: React.ReactNode) {
   )
 }
 
-const INPUT_CLS = 'w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-purple-400 focus:outline-none'
+const INPUT_CLS = 'w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none'
 
 export function SupplierFormModal({ supplier, onClose, onSaved }: Props) {
   const isEdit = !!supplier
@@ -76,9 +77,11 @@ export function SupplierFormModal({ supplier, onClose, onSaved }: Props) {
     })
   }
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl max-h-[90vh] flex flex-col">
+      <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl max-h-[90vh] flex flex-col animate-scale-in">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 shrink-0">
           <div className="flex items-center gap-2">
@@ -148,13 +151,14 @@ export function SupplierFormModal({ supplier, onClose, onSaved }: Props) {
             type="submit"
             form="supplier-form"
             disabled={isPending || form.name.length < 2}
-            className="flex items-center gap-2 rounded-lg bg-purple-600 px-5 py-2 text-sm font-bold text-white hover:bg-purple-700 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-lg bg-teal-600 px-5 py-2 text-sm font-bold text-white hover:bg-teal-700 disabled:opacity-50"
           >
             {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
             {isEdit ? 'Salvar' : 'Cadastrar'}
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

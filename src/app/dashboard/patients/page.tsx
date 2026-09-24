@@ -26,7 +26,7 @@ export default async function PatientsPage() {
   const patients = 'error' in patientsResult ? [] : patientsResult
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-8">
+    <div className="max-w-4xl mx-auto px-6 py-8 animate-enter">
       <PatientsWorkspace
         initialPatients={patients}
         clinicName={clinicName}

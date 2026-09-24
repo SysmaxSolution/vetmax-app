@@ -84,8 +84,10 @@ export async function approveAppointmentRequest(
       appointment_datetime: datetime,
       reason:               req.visit_reason ?? 'consultation',
       status:               'scheduled',
-      source:               'whatsapp',
-      vet_id:               opts.vetId ?? req.vet_id ?? null,
+      source:               req.source ?? 'whatsapp',
+      // appointments tem professional_id (não vet_id). O vet sugerido na
+      // solicitação (req.vet_id) é o profissional do agendamento.
+      professional_id:      opts.vetId ?? req.vet_id ?? null,
     })
     .select('id')
     .single()

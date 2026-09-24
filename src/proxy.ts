@@ -22,6 +22,14 @@ const PUBLIC_PATHS = [
   // senha. Incidente Almavet 24/07: /public/* fora desta lista redirecionava
   // a carteira para /login.
   '/public',
+  // Portal do Tutor (Fase 3): área logada do tutor com autenticação PRÓPRIA
+  // (cookie sysvet_tutor via link no WhatsApp) — NÃO usa a sessão Supabase de
+  // staff, então precisa ficar fora do gate do proxy. A proteção é feita dentro
+  // de /portal (getTutorContext), não aqui.
+  '/portal',
+  // Portal do Parceiro (vet solicitante): autenticação própria por código
+  // (cookie sysvet_parceiro), fora do gate de staff.
+  '/parceiro',
   '/forgot-password',
   '/reset-password',
   '/privacidade',
@@ -60,7 +68,9 @@ export async function proxy(request: NextRequest) {
   // Acessos por subdomínios obsoletos da Vercel são redirecionados para o
   // domínio canônico, preservando path e query (?code=… do email Supabase etc).
   const host = request.headers.get('host') ?? ''
-  if (host.endsWith('.vercel.app')) {
+  // Ambiente de testes (sysvetmax-dev) roda em *.vercel.app de propósito —
+  // NEXT_PUBLIC_ALLOW_VERCEL_HOST=1 (setado SÓ lá) desliga o redirect canônico.
+  if (host.endsWith('.vercel.app') && process.env.NEXT_PUBLIC_ALLOW_VERCEL_HOST !== '1') {
     return NextResponse.redirect(`${getAppUrl()}${pathname}${search}`, 308)
   }
 

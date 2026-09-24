@@ -25,10 +25,10 @@ export default function VaccineStatusBadges({ vaccines, className = '' }: Props)
             className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border cursor-default ${
               overdue
                 ? 'bg-red-50 text-red-700 border-red-200'
-                : 'bg-green-50 text-green-700 border-green-200'
+                : 'bg-emerald-50 text-emerald-700 border-emerald-200'
             }`}
           >
-            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${overdue ? 'bg-red-500' : 'bg-green-500'}`} />
+            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${overdue ? 'bg-red-500' : 'bg-emerald-500'}`} />
             {v.vaccine_name}: {overdue ? 'Atrasada' : 'Em dia'}
           </span>
         )

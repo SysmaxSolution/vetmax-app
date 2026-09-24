@@ -29,6 +29,10 @@ export interface CatalogItem {
   name:       string
   price:      number
   is_active:  boolean
+  /** Se true, o resultado/laudo deste serviço é publicado no Portal do Tutor. */
+  publish_to_portal: boolean
+  /** Prazo/duração médio do atendimento (min) — estimativa p/ o bloco de agenda. */
+  expected_duration_minutes: number | null
   created_at: string
 }
 
@@ -37,7 +41,11 @@ export interface SaveCatalogPayload {
   item_type: CatalogItemType
   name:      string
   price:     number
+  publish_to_portal?:         boolean
+  expected_duration_minutes?: number | null
 }
+
+const CATALOG_COLS = 'id, clinic_id, item_type, name, price, is_active, publish_to_portal, expected_duration_minutes, created_at'
 
 const REVALIDATE_PATH = '/dashboard/management'
 
@@ -57,7 +65,7 @@ export async function getCatalog(): Promise<CatalogItem[] | { error: string }> {
 
   const { data, error } = await supabase
     .from('clinic_catalog')
-    .select('id, clinic_id, item_type, name, price, is_active, created_at')
+    .select(CATALOG_COLS)
     .eq('clinic_id', profile.clinic_id)
     .order('item_type')
     .order('name')
@@ -87,11 +95,14 @@ export async function saveCatalogItem(
   if (payload.price < 0)    return { error: 'Preço não pode ser negativo.' }
 
   const admin = createAdminClient()
+  const dur = payload.expected_duration_minutes
   const record = {
     clinic_id:  profile.clinic_id,
     item_type:  payload.item_type,
     name:       payload.name.trim(),
     price:      payload.price,
+    publish_to_portal:         payload.publish_to_portal ?? false,
+    expected_duration_minutes: (typeof dur === 'number' && dur > 0) ? Math.round(dur) : null,
     updated_at: new Date().toISOString(),
   }
 
@@ -102,7 +113,7 @@ export async function saveCatalogItem(
       .update(record)
       .eq('id', payload.id)
       .eq('clinic_id', profile.clinic_id)
-      .select('id, clinic_id, item_type, name, price, is_active, created_at')
+      .select(CATALOG_COLS)
       .single()
     if (error || !data) return { error: 'Erro ao atualizar: ' + (error?.message ?? '') }
     result = data
@@ -110,7 +121,7 @@ export async function saveCatalogItem(
     const { data, error } = await admin
       .from('clinic_catalog')
       .insert({ ...record, is_active: true })
-      .select('id, clinic_id, item_type, name, price, is_active, created_at')
+      .select(CATALOG_COLS)
       .single()
     if (error || !data) return { error: 'Erro ao criar item: ' + (error?.message ?? '') }
     result = data
@@ -193,7 +204,7 @@ export async function seedDefaultCatalog(
 
   if ((count ?? 0) > 0) return // já tem itens
 
-  const defaults: Omit<CatalogItem, 'id' | 'created_at'>[] = [
+  const defaults: Array<{ clinic_id: string; item_type: CatalogItemType; name: string; price: number; is_active: boolean }> = [
     { clinic_id: clinicId, item_type: 'consultation', name: 'Consulta Veterinária', price: 150.00, is_active: true },
     { clinic_id: clinicId, item_type: 'consultation', name: 'Retorno / Consulta de Acompanhamento', price: 80.00, is_active: true },
     { clinic_id: clinicId, item_type: 'exam',         name: 'Hemograma Completo', price: 90.00,  is_active: true },

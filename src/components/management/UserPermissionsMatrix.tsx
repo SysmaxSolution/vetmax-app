@@ -236,7 +236,7 @@ export default function UserPermissionsMatrix({
             type="button"
             onClick={handleSave}
             disabled={saving || !dirty}
-            className="flex items-center gap-2 px-5 py-2 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 px-5 py-2 rounded-lg bg-teal-600 text-white text-sm font-semibold shadow-sm hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving
               ? <Loader2 className="h-4 w-4 animate-spin" />

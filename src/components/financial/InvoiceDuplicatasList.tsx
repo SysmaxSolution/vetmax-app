@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useTransition } from 'react'
-import { CheckCircle2, Clock, Loader2, RotateCcw, Wallet, Scissors } from 'lucide-react'
+import { CheckCircle2, Clock, Loader2, RotateCcw, Wallet, Scissors, CreditCard } from 'lucide-react'
 import { listInvoiceDuplicatas, reversePartialPayment, type InvoiceDuplicata } from '@/lib/actions/billing'
 
 interface Props {
@@ -79,11 +79,11 @@ export default function InvoiceDuplicatasList({ invoiceId, totalAmount, paidAmou
       <div className="px-4 py-2.5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
         <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wide">Duplicatas da fatura</h4>
         <div className="text-[11px] text-slate-500">
-          Total <strong className="text-slate-800 tabular-nums">{BRL(totalAmount)}</strong>
+          Total <strong className="text-slate-800 font-mono tabular-nums">{BRL(totalAmount)}</strong>
           {' · '}
-          Recebido <strong className="text-emerald-700 tabular-nums">{BRL(paidAmount)}</strong>
+          Recebido <strong className="text-emerald-700 font-mono tabular-nums">{BRL(paidAmount)}</strong>
           {' · '}
-          Saldo <strong className="text-amber-700 tabular-nums">{BRL(balance)}</strong>
+          Saldo <strong className="text-amber-700 font-mono tabular-nums">{BRL(balance)}</strong>
         </div>
       </div>
 
@@ -95,19 +95,19 @@ export default function InvoiceDuplicatasList({ invoiceId, totalAmount, paidAmou
               <div className="min-w-0">
                 <p className="text-slate-800 truncate">{d.description}</p>
                 <p className="text-[10px] text-slate-500">
-                  Baixado em {fmtBR(d.payment_date)}
+                  Baixado em <span className="font-mono tabular-nums">{fmtBR(d.payment_date)}</span>
                   {d.payment_method && ` · ${d.payment_method.toUpperCase()}`}
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
-              <span className="text-sm font-bold text-emerald-700 tabular-nums">{BRL(d.amount)}</span>
+              <span className="text-sm font-bold text-emerald-700 font-mono tabular-nums">{BRL(d.amount)}</span>
               {canReverse && (
                 <button
                   onClick={() => handleReverse(d.id)}
                   disabled={reversingId === d.id}
                   title="Estornar baixa"
-                  className="inline-flex items-center justify-center h-7 w-7 rounded-md text-rose-500 hover:bg-rose-50 hover:text-rose-700 disabled:opacity-50"
+                  className="inline-flex items-center justify-center h-7 w-7 rounded-lg text-rose-500 hover:bg-rose-50 hover:text-rose-700 disabled:opacity-50"
                 >
                   {reversingId === d.id
                     ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -117,23 +117,33 @@ export default function InvoiceDuplicatasList({ invoiceId, totalAmount, paidAmou
             </div>
           </li>
         ))}
-        {pendingDuplicatas.map(d => (
-          <li key={d.id} className="px-4 py-2 flex items-center justify-between gap-2 text-xs hover:bg-amber-50/30">
-            <div className="flex items-center gap-2 min-w-0 flex-1">
-              {d.source === 'petlove_open'
-                ? <Wallet className="h-3.5 w-3.5 text-sky-600 flex-shrink-0" />
-                : <Clock className="h-3.5 w-3.5 text-amber-600 flex-shrink-0" />}
-              <div className="min-w-0">
-                <p className="text-slate-800 truncate">{d.description}</p>
-                <p className="text-[10px] text-slate-500">
-                  {d.source === 'petlove_open' ? 'A Receber Petlove' : 'Saldo a receber'}
-                  {' · vence '}{fmtBR(d.due_date)}
-                </p>
+        {pendingDuplicatas.map(d => {
+          // Distingue a NATUREZA do pendente: cartão (a operadora repassa — o tutor
+          // já pagou) NÃO é saldo a receber do tutor. Rotular igual fazia o recebível
+          // de cartão parecer duplicata do saldo.
+          const kind = d.source === 'petlove_open' ? 'petlove'
+                     : d.source === 'card_acquirer' ? 'card'
+                     : 'saldo'
+          const meta = {
+            petlove: { icon: <Wallet className="h-3.5 w-3.5 text-sky-600 flex-shrink-0" />,       label: 'A Receber Petlove',               color: 'text-sky-700',    row: 'hover:bg-sky-50/30' },
+            card:    { icon: <CreditCard className="h-3.5 w-3.5 text-indigo-600 flex-shrink-0" />, label: 'A receber de cartão (operadora)', color: 'text-indigo-700', row: 'hover:bg-indigo-50/30' },
+            saldo:   { icon: <Clock className="h-3.5 w-3.5 text-amber-600 flex-shrink-0" />,       label: 'Saldo a receber',                 color: 'text-amber-700',  row: 'hover:bg-amber-50/30' },
+          }[kind]
+          return (
+            <li key={d.id} className={`px-4 py-2 flex items-center justify-between gap-2 text-xs ${meta.row}`}>
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                {meta.icon}
+                <div className="min-w-0">
+                  <p className="text-slate-800 truncate">{d.description}</p>
+                  <p className="text-[10px] text-slate-500">
+                    {meta.label}{' · vence '}<span className="font-mono tabular-nums">{fmtBR(d.due_date)}</span>
+                  </p>
+                </div>
               </div>
-            </div>
-            <span className={`text-sm font-bold tabular-nums ${d.source === 'petlove_open' ? 'text-sky-700' : 'text-amber-700'}`}>{BRL(d.amount)}</span>
-          </li>
-        ))}
+              <span className={`text-sm font-bold font-mono tabular-nums ${meta.color}`}>{BRL(d.amount)}</span>
+            </li>
+          )
+        })}
         {discountEntries.map(d => (
           <li key={d.id} className="px-4 py-2 flex items-center justify-between gap-2 text-xs text-slate-500 bg-rose-50/30">
             <div className="flex items-center gap-2 min-w-0 flex-1">

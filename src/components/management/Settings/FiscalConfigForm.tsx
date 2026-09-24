@@ -22,6 +22,7 @@ interface Props {
 type FormState = {
   emits_nfse:          boolean
   is_active:           boolean
+  nfse_auto_checkout:  boolean
   environment:         'sandbox' | 'production'
   cnpj:                string
   inscricao_municipal: string
@@ -40,7 +41,7 @@ type FormState = {
 }
 
 const EMPTY: FormState = {
-  emits_nfse: false, is_active: false, environment: 'sandbox',
+  emits_nfse: false, is_active: false, nfse_auto_checkout: false, environment: 'sandbox',
   cnpj: '', inscricao_municipal: '', razao_social: '', regime_tributario: 'simples_nacional',
   optante_simples: true, codigo_municipio: '', cnae: '',
   iss_aliquota_pct: '', iss_retido: false,
@@ -50,7 +51,8 @@ const EMPTY: FormState = {
 
 function fromConfig(c: FiscalConfig): FormState {
   return {
-    emits_nfse: c.emits_nfse, is_active: c.is_active, environment: c.environment,
+    emits_nfse: c.emits_nfse, is_active: c.is_active, nfse_auto_checkout: c.nfse_auto_checkout,
+    environment: c.environment,
     cnpj: c.cnpj ?? '', inscricao_municipal: c.inscricao_municipal ?? '',
     razao_social: c.razao_social ?? '', regime_tributario: c.regime_tributario ?? 'simples_nacional',
     optante_simples: c.optante_simples, codigo_municipio: c.codigo_municipio ?? '',
@@ -103,7 +105,8 @@ export default function FiscalConfigForm({ onToast }: Props) {
       : null
 
     const payload: FiscalConfigInput = {
-      emits_nfse: form.emits_nfse, is_active: form.is_active, environment: form.environment,
+      emits_nfse: form.emits_nfse, is_active: form.is_active, nfse_auto_checkout: form.nfse_auto_checkout,
+      environment: form.environment,
       cnpj: form.cnpj.trim() || null, inscricao_municipal: form.inscricao_municipal.trim() || null,
       razao_social: form.razao_social.trim() || null, regime_tributario: form.regime_tributario || null,
       optante_simples: form.optante_simples, codigo_municipio: form.codigo_municipio.trim() || null,
@@ -155,7 +158,15 @@ export default function FiscalConfigForm({ onToast }: Props) {
           <Toggle
             label="Configuração ativa" desc="Liga a integração com o provedor"
             value={form.is_active} onChange={v => set('is_active', v)} />
+          <Toggle
+            label="Emitir automaticamente no checkout" desc="Sem perguntar ao operador — 1 nota por CNPJ"
+            value={form.nfse_auto_checkout} onChange={v => set('nfse_auto_checkout', v)} />
         </div>
+        <p className="-mt-2 text-[11px] text-slate-500">
+          Clínicas com múltiplos CNPJs (empresas faturantes) configuram token e tributação
+          de cada empresa na aba <strong>Empresas</strong> — a nota sai desmembrada por CNPJ.
+          Esta seção é a configuração padrão da clínica (usada quando a empresa não tem config própria).
+        </p>
 
         {/* Ambiente */}
         <div>
@@ -164,7 +175,7 @@ export default function FiscalConfigForm({ onToast }: Props) {
             {(['sandbox', 'production'] as const).map(env => (
               <button key={env} type="button" onClick={() => set('environment', env)}
                 className={`px-4 py-2 font-semibold transition-colors ${
-                  form.environment === env ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'
+                  form.environment === env ? 'bg-teal-600 text-white' : 'text-slate-500 hover:bg-slate-50'
                 }`}>
                 {env === 'sandbox' ? 'Homologação' : 'Produção'}
               </button>
@@ -235,7 +246,7 @@ export default function FiscalConfigForm({ onToast }: Props) {
         </Section>
 
         <button onClick={handleSave} disabled={saving}
-          className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white text-sm font-semibold rounded-xl hover:bg-slate-800 transition-colors disabled:opacity-50">
+          className="flex items-center gap-2 px-5 py-2.5 bg-teal-600 text-white text-sm font-semibold shadow-sm rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-50">
           {saving ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando…</> : <><Save className="h-4 w-4" /> Salvar Configuração Fiscal</>}
         </button>
       </div>

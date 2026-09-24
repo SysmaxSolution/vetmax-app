@@ -63,7 +63,7 @@ export default function WhatsappTriggerModules({ onToast }: { onToast?: (type: '
       </div>
 
       <button type="button" onClick={save} disabled={saving}
-        className="flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50">
+        className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 disabled:opacity-50">
         {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Salvar gatilhos
       </button>
     </div>

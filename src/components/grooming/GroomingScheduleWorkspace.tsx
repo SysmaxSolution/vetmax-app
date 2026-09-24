@@ -96,15 +96,15 @@ export default function GroomingScheduleWorkspace({ clinicId }: Props) {
   const isSubmitDisabled = saving || slotAvailable === false
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-enter">
       {/* Header */}
       <div className="flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-100">
           <Scissors className="h-5 w-5 text-teal-600" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Agendamento — Banho e Tosa</h1>
-          <p className="text-sm text-slate-500">Selecione data, horário e preencha os dados do agendamento.</p>
+          <h1 className="text-xl font-bold tracking-tight text-slate-900">Agendamento — Banho e Tosa</h1>
+          <p className="text-sm text-slate-600">Selecione data, horário e preencha os dados do agendamento.</p>
         </div>
       </div>
 
@@ -117,7 +117,7 @@ export default function GroomingScheduleWorkspace({ clinicId }: Props) {
       <form onSubmit={handleSubmit} className="grid md:grid-cols-2 gap-6">
         {/* Coluna esquerda: data + horário */}
         <div className="space-y-4">
-          <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
             {/* Data */}
             <div>
               <label htmlFor="schedule-date" className="flex items-center gap-2 text-sm font-semibold text-slate-700 mb-2">
@@ -169,7 +169,7 @@ export default function GroomingScheduleWorkspace({ clinicId }: Props) {
         </div>
 
         {/* Coluna direita: formulário */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
           <h2 className="text-sm font-semibold text-slate-700">Dados do Agendamento</h2>
 
           <div className="space-y-3">
@@ -239,8 +239,8 @@ export default function GroomingScheduleWorkspace({ clinicId }: Props) {
           {selectedDate && selectedTime && (
             <div className="rounded-xl bg-teal-50 border border-teal-200 p-3 text-xs text-teal-800">
               <p className="font-semibold mb-1">Resumo</p>
-              <p>Data: {new Date(selectedDate + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
-              <p>Horário: {selectedTime}</p>
+              <p>Data: <span className="font-mono tabular-nums">{new Date(selectedDate + 'T12:00:00').toLocaleDateString('pt-BR')}</span></p>
+              <p>Horário: <span className="font-mono tabular-nums">{selectedTime}</span></p>
               <p>Serviço: {SERVICES.find(s => s.value === selectedService)?.label}</p>
             </div>
           )}
@@ -248,7 +248,7 @@ export default function GroomingScheduleWorkspace({ clinicId }: Props) {
           <button
             type="submit"
             disabled={isSubmitDisabled}
-            className="w-full flex items-center justify-center gap-2 rounded-xl bg-teal-600 px-4 py-3 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="w-full flex items-center justify-center gap-2 rounded-lg bg-teal-600 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {saving ? <>Salvando...</> : <><ChevronRight className="h-4 w-4" />Agendar</>}
           </button>

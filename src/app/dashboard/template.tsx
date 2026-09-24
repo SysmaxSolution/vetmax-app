@@ -12,6 +12,13 @@ import PremiumPaywall from '@/components/paywall/PremiumPaywall'
 // pelo gatekeeper centralizado (clinic_contracted_modules + catálogo +
 // FREE_MODULES). O backfill 0365 garante que nenhuma clínica existente perde
 // acesso. NÃO mover esta checagem para o proxy (edge) — custo por request.
+// Design System 2026 (Fase 1b): template remonta a cada navegação, então é o
+// ponto certo para a transição de módulo — 120ms, compositor-only (o keyframe
+// termina em transform:none, não interfere em modais/toasts fixed).
+function ModuleTransition({ children }: { children: React.ReactNode }) {
+  return <div className="animate-enter-fast">{children}</div>
+}
+
 export default async function DashboardTemplate({
   children,
 }: {
@@ -28,16 +35,16 @@ export default async function DashboardTemplate({
     pathname.startsWith('/dashboard/settings') ||
     pathname.startsWith('/dashboard/management')
   ) {
-    return <>{children}</>
+    return <ModuleTransition>{children}</ModuleTransition>
   }
 
   // Rota sem module key mapeada (ex.: telas utilitárias) — não bloqueia.
   const moduleKey = moduleKeyFromPath(pathname)
-  if (!moduleKey) return <>{children}</>
+  if (!moduleKey) return <ModuleTransition>{children}</ModuleTransition>
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return <>{children}</>
+  if (!user) return <ModuleTransition>{children}</ModuleTransition>
 
   const admin = createAdminClient()
   const { data: profile } = await admin
@@ -46,15 +53,15 @@ export default async function DashboardTemplate({
     .eq('id', user.id)
     .single()
 
-  if (!profile?.clinic_id) return <>{children}</>
+  if (!profile?.clinic_id) return <ModuleTransition>{children}</ModuleTransition>
 
   // SysMax Support nunca tem restrição de plano
-  if (profile.is_sysmax === true) return <>{children}</>
+  if (profile.is_sysmax === true) return <ModuleTransition>{children}</ModuleTransition>
 
   const allowed = await checkModuleAccess(profile.clinic_id, moduleKey)
   if (!allowed) {
-    return <PremiumPaywall route={pathname} />
+    return <ModuleTransition><PremiumPaywall route={pathname} /></ModuleTransition>
   }
 
-  return <>{children}</>
+  return <ModuleTransition>{children}</ModuleTransition>
 }

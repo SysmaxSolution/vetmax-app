@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { Shield, Plus, Trash2, ChevronRight, AlertTriangle, Info, XCircle, Loader2, X } from 'lucide-react'
 import {
   getInsuranceProviders, createInsuranceProvider, deleteInsuranceProvider,
-  type InsuranceProvider,
+  type InsuranceProvider, type ReceiptMode,
 } from '@/lib/actions/insurance-providers'
 import {
   getInsuranceRules, createInsuranceRule, deleteInsuranceRule,
@@ -25,6 +25,15 @@ const SEVERITY_ICON: Record<RuleSeverity, React.ReactNode> = {
   blocking: <XCircle className="w-3.5 h-3.5" />,
   warning:  <AlertTriangle className="w-3.5 h-3.5" />,
   info:     <Info className="w-3.5 h-3.5" />,
+}
+
+const RECEIPT_MODE_LABELS: Record<ReceiptMode, string> = {
+  convenio_repasse:    'Convênio (repasse) — a clínica cobra do convênio',
+  ong_guia:            'ONG (guia PAGA / ENCAMINHADA)',
+  particular_desconto: 'Particular com desconto',
+}
+const RECEIPT_MODE_SHORT: Record<ReceiptMode, string> = {
+  convenio_repasse: 'Repasse', ong_guia: 'ONG/Guia', particular_desconto: 'Desconto',
 }
 
 const RULE_TYPE_LABELS: Record<RuleType, string> = {
@@ -49,6 +58,7 @@ export default function ConveniosTab({ onToast }: Props) {
   const [pPortal, setPPortal]       = useState('')
   const [pPhone, setPPhone]         = useState('')
   const [pEmail, setPEmail]         = useState('')
+  const [pReceipt, setPReceipt]     = useState<ReceiptMode>('convenio_repasse')
   const [savingProvider, setSavingProvider] = useState(false)
 
   // Rule form
@@ -85,13 +95,14 @@ export default function ConveniosTab({ onToast }: Props) {
       name: pName, plan_types: plans,
       portal_url: pPortal || undefined,
       contact_info: { phone: pPhone || undefined, email: pEmail || undefined },
+      receipt_mode: pReceipt,
     })
     setSavingProvider(false)
     if ('error' in res) return onToast('error', res.error)
     const fresh = await getInsuranceProviders()
     if (!('error' in fresh)) setProviders(fresh)
     onToast('success', `Convênio "${pName}" cadastrado.`)
-    setPName(''); setPPlans(''); setPPortal(''); setPPhone(''); setPEmail('')
+    setPName(''); setPPlans(''); setPPortal(''); setPPhone(''); setPEmail(''); setPReceipt('convenio_repasse')
     setShowProviderForm(false)
   }
 
@@ -173,6 +184,13 @@ export default function ConveniosTab({ onToast }: Props) {
                 placeholder="Nome do convênio *" value={pName} onChange={e => setPName(e.target.value)} />
               <input className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-teal-500"
                 placeholder="Tipos de plano (separados por vírgula) *" value={pPlans} onChange={e => setPPlans(e.target.value)} />
+              <div>
+                <label className="block text-[11px] font-medium text-slate-500 mb-1">Como a clínica recebe</label>
+                <select className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-teal-500 bg-white"
+                  value={pReceipt} onChange={e => setPReceipt(e.target.value as ReceiptMode)}>
+                  {(Object.entries(RECEIPT_MODE_LABELS) as [ReceiptMode, string][]).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </select>
+              </div>
               <input className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-teal-500"
                 placeholder="URL do portal (opcional)" value={pPortal} onChange={e => setPPortal(e.target.value)} />
               <div className="grid grid-cols-2 gap-2">
@@ -205,7 +223,10 @@ export default function ConveniosTab({ onToast }: Props) {
                   }`}
                 >
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-slate-900 truncate">{p.name}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-sm font-semibold text-slate-900 truncate">{p.name}</p>
+                      <span className="flex-none text-[9px] font-semibold uppercase rounded-full bg-slate-100 text-slate-500 px-1.5 py-0.5">{RECEIPT_MODE_SHORT[p.receipt_mode] ?? 'Repasse'}</span>
+                    </div>
                     <p className="text-xs text-slate-400 truncate">{p.plan_types.join(', ')}</p>
                   </div>
                   <div className="flex items-center gap-1">
@@ -240,7 +261,7 @@ export default function ConveniosTab({ onToast }: Props) {
               </div>
               <button
                 onClick={() => setShowRuleForm(v => !v)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 text-white text-xs font-semibold rounded-lg hover:bg-teal-700 transition-colors"
               >
                 <Plus className="w-3.5 h-3.5" />Nova Regra
               </button>
@@ -274,7 +295,7 @@ export default function ConveniosTab({ onToast }: Props) {
                 <textarea className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-slate-500 resize-none"
                   rows={2} placeholder="Template de justificativa (opcional)" value={rTemplate} onChange={e => setRTemplate(e.target.value)} />
                 <button onClick={handleAddRule} disabled={savingRule}
-                  className="w-full py-2 bg-slate-900 text-white text-sm font-semibold rounded-lg hover:bg-slate-800 disabled:opacity-50 flex items-center justify-center gap-2">
+                  className="w-full py-2 bg-teal-600 text-white text-sm font-semibold rounded-lg hover:bg-teal-700 disabled:opacity-60 flex items-center justify-center gap-2">
                   {savingRule ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                   {savingRule ? 'Salvando...' : 'Adicionar Regra'}
                 </button>

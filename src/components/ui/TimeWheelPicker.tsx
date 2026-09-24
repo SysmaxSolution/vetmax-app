@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Clock, Check, X } from 'lucide-react'
 
 /**
@@ -132,7 +133,9 @@ export default function TimeWheelPicker({
     onConfirm(value)
   }
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -197,6 +200,7 @@ export default function TimeWheelPicker({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

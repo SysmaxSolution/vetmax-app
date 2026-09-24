@@ -7,6 +7,7 @@ import { searchGlobalCatalog, type CatalogSuggestion } from '@/lib/actions/catal
 import { isEAN } from '@/lib/utils/ean'
 import type { CartItem } from './SalesCart'
 import QuickAddProductModal from './QuickAddProductModal'
+import { Spinner } from '@/components/ui/Spinner'
 
 interface ProductSearchProps {
   onAdd:           (item: CartItem) => void
@@ -143,7 +144,7 @@ export default function ProductSearch({ onAdd, disabled = false, refocusTrigger,
       <div className="relative">
         <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
           {loading
-            ? <div className="h-4 w-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+            ? <Spinner className="text-teal-500" />
             : <Search className="h-4 w-4 text-slate-400" />
           }
         </div>
@@ -157,7 +158,7 @@ export default function ProductSearch({ onAdd, disabled = false, refocusTrigger,
           onChange={handleChange}
           onFocus={() => results.length > 0 && setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 150)}
-          className="w-full border border-slate-300 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+          className="w-full border border-slate-300 rounded-lg pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-50"
         />
 
         {/* Dropdown de resultados */}
@@ -171,13 +172,13 @@ export default function ProductSearch({ onAdd, disabled = false, refocusTrigger,
                     key={p.id}
                     type="button"
                     onMouseDown={() => addProduct(p)}
-                    className="w-full text-left px-4 py-2.5 hover:bg-blue-50 border-b border-slate-100 last:border-0 flex items-center justify-between gap-3 transition-colors"
+                    className="w-full text-left px-4 py-2.5 hover:bg-teal-50 border-b border-slate-100 last:border-0 flex items-center justify-between gap-3 transition-colors"
                   >
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-slate-900 truncate">{p.name}</p>
                       <p className="text-xs text-slate-400">{CATEGORY_LABELS[p.category] ?? p.category} · Estoque: {p.quantity} {p.unit}</p>
                     </div>
-                    <span className="text-sm font-semibold text-blue-600 flex-shrink-0">R$ {p.unit_price.toFixed(2)}</span>
+                    <span className="text-sm font-semibold text-teal-700 flex-shrink-0 font-mono tabular-nums">R$ {p.unit_price.toFixed(2)}</span>
                   </button>
                 ))}
               </>
@@ -282,7 +283,7 @@ export default function ProductSearch({ onAdd, disabled = false, refocusTrigger,
           type="button"
           onClick={() => setShowManual(true)}
           disabled={disabled}
-          className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-blue-600 transition-colors disabled:opacity-40"
+          className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-teal-600 transition-colors disabled:opacity-40"
         >
           <Plus className="h-3.5 w-3.5" />
           Adicionar item manual

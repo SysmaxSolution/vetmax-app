@@ -78,7 +78,7 @@ export default function ReportFilters({ filters, onChange, onSubmit, loading }: 
     (filters.q.trim() ? 1 : 0)
 
   return (
-    <div data-mentor-step="cashier-reports-filters" className="bg-white rounded-xl border border-slate-200 p-4 space-y-4">
+    <div data-mentor-step="cashier-reports-filters" className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-4">
       {/* Período + Busca + Submit */}
       <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
         <div className="sm:col-span-3">
@@ -98,7 +98,7 @@ export default function ReportFilters({ filters, onChange, onSubmit, loading }: 
               value={filters.q}
               onChange={e => update('q', e.target.value)}
               placeholder="Pet, tutor ou descrição do produto/serviço..."
-              className="w-full rounded-lg border border-slate-300 pl-9 pr-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+              className="w-full rounded-lg border border-slate-200 pl-9 pr-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
             />
           </div>
         </div>
@@ -124,7 +124,7 @@ export default function ReportFilters({ filters, onChange, onSubmit, loading }: 
           <Filter className="h-3.5 w-3.5" />
           Filtros avançados
           {activeFilterCount > 0 && (
-            <span className="rounded-full bg-teal-100 text-teal-700 text-xs font-bold px-1.5 py-0.5 leading-none">
+            <span className="rounded-full bg-teal-100 text-teal-700 text-xs font-bold font-mono tabular-nums px-1.5 py-0.5 leading-none">
               {activeFilterCount}
             </span>
           )}
@@ -149,7 +149,7 @@ export default function ReportFilters({ filters, onChange, onSubmit, loading }: 
             <select
               value={filters.source_module}
               onChange={e => update('source_module', e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 bg-white"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 bg-white"
             >
               {MODULE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
@@ -159,7 +159,7 @@ export default function ReportFilters({ filters, onChange, onSubmit, loading }: 
             <select
               value={filters.payment_method}
               onChange={e => update('payment_method', e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 bg-white"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 bg-white"
             >
               {PAYMENT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
@@ -169,7 +169,7 @@ export default function ReportFilters({ filters, onChange, onSubmit, loading }: 
             <select
               value={filters.status}
               onChange={e => update('status', e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 bg-white"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 bg-white"
             >
               {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>

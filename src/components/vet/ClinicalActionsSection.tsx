@@ -232,7 +232,7 @@ export default function ClinicalActionsSection({
                     type="button"
                     onClick={handleCalcDose}
                     disabled={calcLoading}
-                    className="ml-2 text-blue-600 hover:underline disabled:opacity-50"
+                    className="ml-2 text-teal-600 hover:underline disabled:opacity-50"
                   >
                     {calcLoading ? 'Calculando…' : '⚡ Calcular (IA)'}
                   </button>
@@ -246,7 +246,7 @@ export default function ClinicalActionsSection({
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400"
               />
               {calcSuggestion && (
-                <p className="mt-1 text-xs text-blue-600">Sugestão IA: {calcSuggestion}</p>
+                <p className="mt-1 text-xs text-teal-600">Sugestão IA: {calcSuggestion}</p>
               )}
             </div>
           </div>

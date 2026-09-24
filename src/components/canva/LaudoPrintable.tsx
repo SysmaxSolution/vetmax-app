@@ -184,6 +184,12 @@ export default function LaudoPrintable({
     }
   }, [autoPrint, doPrint])
 
+  // Isola a folha A4 na impressão (classe no body — ver canva-print.css @media print).
+  useEffect(() => {
+    document.body.classList.add('print-mode-canva')
+    return () => document.body.classList.remove('print-mode-canva')
+  }, [])
+
   return (
     <div className="canva-print-shell min-h-screen bg-slate-100 py-8">
       <div className="canva-print-controls mx-auto mb-4 flex w-[21cm] items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
