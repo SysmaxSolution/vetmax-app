@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { sendToCashier } from '@/lib/actions/vet'
 import { computeLabCost } from '@/lib/labs/commission'
+import { EXAM_QUEUE_STATUSES, examQueueMoveError } from '@/lib/exams/queue-status'
 import { usesExamRejectionFlow } from '@/lib/exams/rejection-gate'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -180,14 +181,25 @@ export async function dischargeFromExams(
     .single()
   if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
 
-  const { error } = await supabase
+  // Aceita os DOIS estados da fila de exames. Antes só 'waiting_exam': quando o
+  // exame tinha ido a laboratório parceiro ('awaiting_lab_result') o UPDATE
+  // casava zero linhas, o Supabase não devolvia erro e a action reportava
+  // sucesso sem fazer nada.
+  const { data: moved, error } = await supabase
     .from('consultations')
     .update({ status: 'completed', updated_at: new Date().toISOString() })
     .eq('id', consultationId)
     .eq('clinic_id', profile.clinic_id)
-    .eq('status', 'waiting_exam')
+    .in('status', EXAM_QUEUE_STATUSES as unknown as string[])
+    .select('id')
 
   if (error) return { error: 'Erro ao dar alta: ' + error.message }
+  if (!moved?.length) {
+    const { data: cur } = await supabase
+      .from('consultations').select('status')
+      .eq('id', consultationId).eq('clinic_id', profile.clinic_id).maybeSingle()
+    return { error: examQueueMoveError((cur as { status?: string } | null)?.status) }
+  }
 
   revalidatePath('/dashboard/exams')
   revalidatePath('/dashboard/reception')
@@ -215,14 +227,22 @@ export async function returnToVet(
   }
   if (examNotes?.trim()) payload.exam_notes = examNotes.trim()
 
-  const { error } = await supabase
+  // Mesmo bug de dischargeFromExams: 'awaiting_lab_result' também é fila de exames.
+  const { data: moved, error } = await supabase
     .from('consultations')
     .update(payload)
     .eq('id', consultationId)
     .eq('clinic_id', profile.clinic_id)
-    .eq('status', 'waiting_exam')
+    .in('status', EXAM_QUEUE_STATUSES as unknown as string[])
+    .select('id')
 
   if (error) return { error: 'Erro ao devolver consulta: ' + error.message }
+  if (!moved?.length) {
+    const { data: cur } = await supabase
+      .from('consultations').select('status')
+      .eq('id', consultationId).eq('clinic_id', profile.clinic_id).maybeSingle()
+    return { error: examQueueMoveError((cur as { status?: string } | null)?.status) }
+  }
 
   revalidatePath('/dashboard/exams')
   revalidatePath('/dashboard/vet')
