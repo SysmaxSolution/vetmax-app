@@ -459,7 +459,7 @@ export async function rejectExamLine(input: {
   // Com `estorna_exame_faturado_na_recusa` DESLIGADA (padrão) o comportamento é
   // o atual: recusa + orientação. Ligada, o sistema estorna a fatura EM ABERTO
   // e registra trilha. Fatura paga/baixada é recusada de qualquer forma.
-  let reversal: Awaited<ReturnType<typeof prepareBilledReversal>> = null
+  let reversal: Awaited<ReturnType<typeof prepareBilledReversal>> | null = null
   if (line.billed_in_invoice_id) {
     reversal = await prepareBilledReversal(ctx, line.billed_in_invoice_id as string, line)
     if (reversal.plan.action === 'refuse') {
