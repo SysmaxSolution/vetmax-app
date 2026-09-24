@@ -68,6 +68,14 @@ export type FlowConfig = {
    *  Os vídeos são um acervo GLOBAL compartilhado por todas as clínicas ativadas;
    *  progresso, quizzes e controle de colaboradores são particulares de cada clínica. */
   usa_treinamento?:         boolean
+  /** Fluxo de Rejeição de Exame (laboratório de referência). Quando LIGADA:
+   *  o laboratório marca cada exame como realizado ou não realizado + motivo;
+   *  o não realizado avisa automaticamente quem encaminhou (clínica parceira /
+   *  MV solicitante) e o tutor, fica fora da cobrança e espera a decisão do
+   *  cliente (recoletar ou não). O título financeiro do exame só é gerado
+   *  quando o exame é realizado/liberado. DESLIGADA (padrão) = fluxo atual,
+   *  bit-a-bit, para todos os outros clientes. */
+  usa_fluxo_rejeicao_exame?: boolean
 }
 
 export type BusinessHourEntry = { open: string; close: string } | null
@@ -234,6 +242,11 @@ export async function usesConvenios(): Promise<boolean> {
 /** TRUE quando a clínica ativou a Academia de Treinamento (gate do menu + rota). */
 export async function usesTreinamento(): Promise<boolean> {
   return getFlowFlag('usa_treinamento')
+}
+
+/** TRUE quando a clínica ativou o Fluxo de Rejeição de Exame. */
+export async function usesFluxoRejeicaoExame(): Promise<boolean> {
+  return getFlowFlag('usa_fluxo_rejeicao_exame')
 }
 
 /** TRUE quando a clínica ativou o módulo Centro Cirúrgico. */
