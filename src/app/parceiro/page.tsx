@@ -1,7 +1,9 @@
 import Link from 'next/link'
 import { getPartnerContext } from '@/lib/portal/partner-session'
 import { getPartnerReferredPets } from '@/lib/actions/partner-portal'
+import { getPartnerPendingExamDecisions } from '@/lib/actions/exam-rejection-portal'
 import PartnerLoginForm from '@/components/portal/PartnerLoginForm'
+import ExamDecisionCard from '@/components/portal/ExamDecisionCard'
 import { PawPrint, ArrowRight, FileImage, ShieldCheck } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
@@ -22,7 +24,10 @@ export default async function PartnerHome() {
     )
   }
 
-  const petsResult = await getPartnerReferredPets()
+  const [petsResult, pendingDecisions] = await Promise.all([
+    getPartnerReferredPets(),
+    getPartnerPendingExamDecisions(),
+  ])
   const pets = Array.isArray(petsResult) ? petsResult : []
 
   return (
@@ -37,6 +42,12 @@ export default async function PartnerHome() {
           </p>
         </div>
       </section>
+
+      {pendingDecisions.length > 0 && (
+        <section className="w-full px-5 sm:px-8 lg:px-12 pt-10">
+          <ExamDecisionCard items={pendingDecisions} audience="partner" />
+        </section>
+      )}
 
       <section className="w-full px-5 sm:px-8 lg:px-12 py-10">
         <div className="flex items-baseline justify-between mb-6">

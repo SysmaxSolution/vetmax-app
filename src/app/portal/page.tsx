@@ -3,6 +3,8 @@ import { getTutorContext } from '@/lib/portal/session'
 import { getPortalPets } from '@/lib/actions/portal-data'
 import { PawPrint, ArrowRight, ShieldCheck, AlertCircle } from 'lucide-react'
 import PortalLoginForm from '@/components/portal/PortalLoginForm'
+import ExamDecisionCard from '@/components/portal/ExamDecisionCard'
+import { getTutorPendingExamDecisions } from '@/lib/actions/exam-rejection-portal'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,7 +33,10 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     )
   }
 
-  const petsResult = await getPortalPets()
+  const [petsResult, pendingDecisions] = await Promise.all([
+    getPortalPets(),
+    getTutorPendingExamDecisions(),
+  ])
   const pets = Array.isArray(petsResult) ? petsResult : []
   const first = ctx.fullName ? ctx.fullName.split(' ')[0] : null
 
@@ -50,6 +55,13 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
           </p>
         </div>
       </section>
+
+      {/* Exames não realizados aguardando a decisão do tutor */}
+      {pendingDecisions.length > 0 && (
+        <section className="w-full px-5 sm:px-8 lg:px-12 pt-10">
+          <ExamDecisionCard items={pendingDecisions} audience="tutor" />
+        </section>
+      )}
 
       {/* Pets — full-width */}
       <section className="w-full px-5 sm:px-8 lg:px-12 py-10 sm:py-12">
