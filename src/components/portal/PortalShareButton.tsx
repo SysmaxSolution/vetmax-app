@@ -16,8 +16,8 @@ export default function PortalShareButton({ url, label = 'Compartilhar' }: { url
   }
   return (
     <button onClick={share}
-      className="text-xs font-medium text-[#6A7A72] flex items-center gap-1 rounded-full border border-[#EDE9E0] px-3 py-1.5 hover:border-[#C9A96A]/60 whitespace-nowrap">
-      {copied ? <Check className="h-3.5 w-3.5 text-[#17624A]" /> : <Share2 className="h-3.5 w-3.5" />}
+      className="text-xs font-medium text-[var(--pt-muted)] flex items-center gap-1 rounded-full border border-[var(--pt-border)] px-3 py-1.5 hover:border-[var(--pt-accent-ring)] whitespace-nowrap">
+      {copied ? <Check className="h-3.5 w-3.5 text-[var(--pt-primary)]" /> : <Share2 className="h-3.5 w-3.5" />}
       {copied ? 'Copiado' : label}
     </button>
   )

@@ -25,7 +25,7 @@ export default async function PortalPrintPage({ params }: { params: Promise<{ id
     <div className="w-full px-5 sm:px-8 lg:px-12 py-8 print:px-0 print:py-0">
       <div className="max-w-3xl mx-auto">
         <div className="flex items-center justify-between mb-6 print:hidden">
-          <Link href={`/portal/pet/${id}`} className="inline-flex items-center gap-1 text-sm text-[#6A7A72] hover:text-[#0E3B2E]">
+          <Link href={`/portal/pet/${id}`} className="inline-flex items-center gap-1 text-sm text-[var(--pt-muted)] hover:text-[var(--pt-primary-dark)]">
             <ChevronLeft className="h-4 w-4" />Voltar ao pet
           </Link>
           <PrintButton />

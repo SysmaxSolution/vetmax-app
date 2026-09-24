@@ -26,12 +26,12 @@ export default function TrendChart({ trend }: { trend: PortalTrend }) {
   return (
     <div className="px-6 py-4">
       <div className="flex items-baseline justify-between mb-1">
-        <span className="text-sm font-medium text-[#16221C]">{trend.analyte}</span>
+        <span className="text-sm font-medium text-[var(--pt-text)]">{trend.analyte}</span>
         <span className="flex items-baseline gap-1.5">
-          <span className="text-sm font-semibold tabular-nums" style={{ color: last.flag && FLAG_COLOR[last.flag] ? FLAG_COLOR[last.flag] : '#16221C' }}>
+          <span className="text-sm font-semibold tabular-nums" style={{ color: last.flag && FLAG_COLOR[last.flag] ? FLAG_COLOR[last.flag] : 'var(--pt-text)' }}>
             {fmtNum(last.value)}{trend.unit ? ` ${trend.unit}` : ''}
           </span>
-          <span className={`inline-flex items-center text-[11px] ${dir === 'up' ? 'text-rose-600' : dir === 'down' ? 'text-sky-600' : 'text-[#9AA69F]'}`}>
+          <span className={`inline-flex items-center text-[11px] ${dir === 'up' ? 'text-rose-600' : dir === 'down' ? 'text-sky-600' : 'text-[var(--pt-muted-soft)]'}`}>
             {dir === 'up' ? <TrendingUp className="h-3 w-3" /> : dir === 'down' ? <TrendingDown className="h-3 w-3" /> : <Minus className="h-3 w-3" />}
           </span>
         </span>
@@ -39,19 +39,19 @@ export default function TrendChart({ trend }: { trend: PortalTrend }) {
       <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="block">
         <defs>
           <linearGradient id={`g-${trend.analyte.replace(/\W/g, '')}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#17624A" stopOpacity="0.18" />
-            <stop offset="100%" stopColor="#17624A" stopOpacity="0" />
+            <stop offset="0%" stopColor="var(--pt-primary)" stopOpacity="0.18" />
+            <stop offset="100%" stopColor="var(--pt-primary)" stopOpacity="0" />
           </linearGradient>
         </defs>
         <path d={area} fill={`url(#g-${trend.analyte.replace(/\W/g, '')})`} />
-        <path d={path} fill="none" stroke="#17624A" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" />
+        <path d={path} fill="none" stroke="var(--pt-primary)" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" />
         {pts.map((p, i) => {
           const f = trend.points[i].flag
           return <circle key={i} cx={p.x} cy={p.y} r={i === pts.length - 1 ? 3.2 : 2}
-            fill={f && FLAG_COLOR[f] ? FLAG_COLOR[f] : '#17624A'} stroke="#fff" strokeWidth="1" />
+            fill={f && FLAG_COLOR[f] ? FLAG_COLOR[f] : 'var(--pt-primary)'} stroke="#fff" strokeWidth="1" />
         })}
       </svg>
-      <div className="flex justify-between text-[10px] text-[#B3BDB6] mt-0.5">
+      <div className="flex justify-between text-[10px] text-[var(--pt-faint)] mt-0.5">
         <span>{fmtDate(first.date)}</span>
         <span>{fmtDate(last.date)}</span>
       </div>

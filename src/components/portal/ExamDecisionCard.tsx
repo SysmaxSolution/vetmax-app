@@ -36,16 +36,16 @@ export default function ExamDecisionCard({ items, audience }: {
   }
 
   return (
-    <section className="rounded-2xl border border-[#F0D9A8] bg-[#FFFBF2] p-6 sm:p-7">
+    <section className="rounded-2xl border border-[var(--pt-accent-light)] bg-[var(--pt-accent-faint)] p-6 sm:p-7">
       <div className="flex items-start gap-3">
-        <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-[#B07A22]" />
+        <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-[var(--pt-accent-strong)]" />
         <div>
-          <h2 className="text-lg text-[#16221C]" style={{ fontFamily: 'var(--font-fraunces-p), serif' }}>
+          <h2 className="text-lg text-[var(--pt-text)]" style={{ fontFamily: 'var(--pt-heading-font)' }}>
             Exames não realizados
           </h2>
-          <p className="mt-1 text-[13px] leading-relaxed text-[#6B7A71]">
+          <p className="mt-1 text-[13px] leading-relaxed text-[var(--pt-muted)]">
             Não foi possível realizar {items.length === 1 ? 'o exame abaixo' : 'os exames abaixo'}.{' '}
-            <strong className="text-[#16221C]">Nada disso será cobrado.</strong>{' '}
+            <strong className="text-[var(--pt-text)]">Nada disso será cobrado.</strong>{' '}
             Escolha se prefere uma nova coleta.
           </p>
         </div>
@@ -59,33 +59,33 @@ export default function ExamDecisionCard({ items, audience }: {
         {items.map(it => {
           const decided = done[it.serviceLineId]
           return (
-            <li key={it.serviceLineId} className="rounded-xl border border-[#EDE4D0] bg-white p-4">
+            <li key={it.serviceLineId} className="rounded-xl border border-[var(--pt-accent-light)] bg-white p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-[#16221C]">
-                    {it.examName} <span className="font-normal text-[#9AA69F]">· {it.petName}</span>
+                  <p className="text-sm font-semibold text-[var(--pt-text)]">
+                    {it.examName} <span className="font-normal text-[var(--pt-muted-soft)]">· {it.petName}</span>
                   </p>
-                  <p className="mt-0.5 text-[13px] text-[#B07A22]">Motivo: {it.reason}</p>
-                  {it.note && <p className="mt-0.5 text-[13px] text-[#6B7A71]">{it.note}</p>}
-                  <p className="mt-1 text-[11px] text-[#9AA69F]">
+                  <p className="mt-0.5 text-[13px] text-[var(--pt-accent-strong)]">Motivo: {it.reason}</p>
+                  {it.note && <p className="mt-0.5 text-[13px] text-[var(--pt-muted)]">{it.note}</p>}
+                  <p className="mt-1 text-[11px] text-[var(--pt-muted-soft)]">
                     {it.osNumber ? `OS ${it.osNumber} · ` : ''}{fmt(it.rejectedAt)}
                   </p>
                 </div>
 
                 {decided ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E8F3ED] px-3 py-1.5 text-xs font-semibold text-[#17624A]">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--pt-accent-faint)] px-3 py-1.5 text-xs font-semibold text-[var(--pt-primary)]">
                     <CheckCircle2 className="h-3.5 w-3.5" />
                     {decided === 'recollect' ? 'Recoleta solicitada' : 'Sem recoleta'}
                   </span>
                 ) : (
                   <div className="flex flex-shrink-0 flex-wrap gap-2">
                     <button onClick={() => respond(it.serviceLineId, 'recollect')} disabled={busyId === it.serviceLineId}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#17624A] px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-[#0E3B2E] disabled:opacity-50">
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--pt-primary)] px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-[var(--pt-primary-dark)] disabled:opacity-50">
                       {busyId === it.serviceLineId ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCw className="h-3.5 w-3.5" />}
                       Solicitar recoleta
                     </button>
                     <button onClick={() => respond(it.serviceLineId, 'no_recollect')} disabled={busyId === it.serviceLineId}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-[#DDD6C6] bg-white px-3.5 py-2 text-xs font-semibold text-[#6B7A71] transition hover:bg-[#F7F5EF] disabled:opacity-50">
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--pt-border)] bg-white px-3.5 py-2 text-xs font-semibold text-[var(--pt-muted)] transition hover:bg-[var(--pt-tint)] disabled:opacity-50">
                       <Ban className="h-3.5 w-3.5" /> Não recoletar
                     </button>
                   </div>

@@ -12,7 +12,7 @@ export default async function PortalBookingPage({ params }: { params: Promise<{ 
 
   if ('error' in res) {
     if (res.error === 'auth') {
-      return <div className="px-5 sm:px-8 lg:px-12 py-16 text-center text-[#6A7A72]">Sua sessão expirou. Acesse novamente pelo link do WhatsApp.</div>
+      return <div className="px-5 sm:px-8 lg:px-12 py-16 text-center text-[var(--pt-muted)]">Sua sessão expirou. Acesse novamente pelo link do WhatsApp.</div>
     }
     notFound()
   }
@@ -20,15 +20,15 @@ export default async function PortalBookingPage({ params }: { params: Promise<{ 
   return (
     <div className="w-full px-5 sm:px-8 lg:px-12 py-10">
       <div className="max-w-2xl mx-auto space-y-6">
-        <Link href={`/portal/pet/${id}`} className="inline-flex items-center gap-1 text-sm text-[#6A7A72] hover:text-[#0E3B2E]">
+        <Link href={`/portal/pet/${id}`} className="inline-flex items-center gap-1 text-sm text-[var(--pt-muted)] hover:text-[var(--pt-primary-dark)]">
           <ChevronLeft className="h-4 w-4" />Voltar ao pet
         </Link>
 
         {res.mode === 'off' ? (
-          <div className="bg-white rounded-2xl border border-[#EDE9E0] p-12 text-center">
-            <CalendarClock className="h-10 w-10 text-[#E5E0D5] mx-auto mb-3" />
-            <p className="text-[#16221C] font-medium">Agendamento online indisponível</p>
-            <p className="text-sm text-[#9AA69F] mt-1">Esta clínica ainda não habilitou o agendamento pelo portal. Fale com a recepção.</p>
+          <div className="bg-white rounded-2xl border border-[var(--pt-border)] p-12 text-center">
+            <CalendarClock className="h-10 w-10 text-[var(--pt-border)] mx-auto mb-3" />
+            <p className="text-[var(--pt-text)] font-medium">Agendamento online indisponível</p>
+            <p className="text-sm text-[var(--pt-muted-soft)] mt-1">Esta clínica ainda não habilitou o agendamento pelo portal. Fale com a recepção.</p>
           </div>
         ) : (
           <PortalBookingForm
