@@ -25,6 +25,19 @@
  *  11. Laudo de Tomografia (1 página)               type: laudo
  *  12. Laudo CCZ (formulário, tamanho Carta)        type: outro
  *
+ * +3 novos em 24/09/2026, após 2ª coleta de arquivos no WhatsApp comercial
+ * (grupo Animais, 9 arquivos novos de 23/09 — exports do sistema legado da
+ * clínica + 1 print de tela do catálogo de "Cartas"):
+ *  13. Autorização para Eutanásia                  type: termo
+ *  14. Autorização para Não Realização de Procedimento (genérica, sem
+ *      checklist de exames — distinta do "Termo de Não Aceitação de
+ *      Conduta" já mapeado e ainda bloqueado)       type: termo
+ *  15. Atestado de Vacinação (Animais)              type: outro
+ *      — repeater source:'vaccines' sobre patient_vaccines; exigiu estender
+ *        resolve-context.ts/PropertiesPanel.tsx/mock-data.ts para expor
+ *        manufacturer/lot_number/validity_date/administration_route (colunas
+ *        já existiam desde 0400/0412, só não eram lidas pelo repeater).
+ *
  * Todos usam rodapé com Pág. X de Y (doc.page_of_total), impresso em
  * (doc.printed_at) e QR de validação (qr_validation) — recursos da Fase 1
  * (pagination.ts / identity.ts / doc-verification.ts).
@@ -107,6 +120,14 @@ const IMG_SIGN = box => ({
 
 const QR = (box, extra = {}) => ({
   id: eid('qr_validation'), kind: 'qr_validation', box, showCode: true, caption: 'Verifique a autenticidade', zIndex: 2, ...extra,
+})
+
+const REPEATER = (box, source, itemTemplate, extra = {}) => ({
+  id: eid('repeater'), kind: 'repeater', box, source, itemTemplate,
+  groupAndEnumerate: false, lineSpacing: 5,
+  typography: { fontFamily: FONT, fontSize: 9.5, fontWeight: 400, color: INK, align: 'left', vAlign: 'top', lineHeight: 1.4 },
+  zIndex: 2,
+  ...extra,
 })
 
 // ── Blocos compostos reutilizáveis ───────────────────────────────────────────
@@ -552,6 +573,89 @@ function deriveExtractedFields(canvasState) {
   return out
 }
 
+// ── 13. Autorização para Eutanásia ───────────────────────────────────────────
+// Novo em 24/09/2026: confirmado no grupo do WhatsApp (arquivo real do sistema
+// legado da Animais, "AUTORIZAÇÃO PARA EUTANÁSIA 3") — não fazia parte do
+// diagnóstico de 22/09. Estrutura simples (identificação + declaração +
+// assinatura), sem dados reais copiados do PDF de origem.
+
+function buildAutorizacaoEutanasia() {
+  return state([
+    ...header(),
+    title('AUTORIZAÇÃO PARA EUTANÁSIA', 13.5),
+    CT({ x: 6, y: 20, w: 88, h: 5 }, [
+      { tagId: 'tutor.name', prefix: 'Eu, ' },
+      { tagId: 'tutor.cpf', prefix: 'CPF ' },
+      { tagId: '', staticText: 'na qualidade de responsável pelo animal abaixo identificado:' },
+    ], { fontSize: 10.5, lineHeight: 1.5, align: 'justify' }, { separator: ', ' }),
+    ...idBlockCompact(25.5),
+    FF({ x: 6, y: 37, w: 88, h: 5 }, 'indicacao_clinica', 'Indicação clínica / justificativa: ', { required: true, inputType: 'textarea', placeholder: '_______________________________________' }),
+    T({ x: 6, y: 44, w: 88, h: 20 },
+      'DECLARO que fui devidamente informado(a) e esclarecido(a) pelo Médico Veterinário responsável sobre o quadro clínico do animal acima identificado e, por minha livre e espontânea vontade, AUTORIZO a realização do procedimento de eutanásia, não havendo o que possa reclamar em qualquer oportunidade, nos termos da Resolução CFMV nº 1.000/2012.',
+      { fontSize: 9.5, align: 'justify', lineHeight: 1.55 }),
+    cityDate(65),
+    ...dualSignature(69),
+    twoViasNote(87),
+    ...footerPagQR(),
+  ])
+}
+
+// ── 14. Autorização para Não Realização de Procedimento ──────────────────────
+// Novo em 24/09/2026: versão genérica (sem checklist de exames pré-anestésicos)
+// confirmada no sistema legado da Animais ("AUTORIZAÇÃO PARA NÃO REALIZAÇÃO DE
+// PROCEDIMENTO") — coexiste com o já mapeado "Termo de Não Aceitação de
+// Conduta" (esse sim específico de exames pré-anestésicos, com checkboxes,
+// que segue bloqueado por complexidade). Este é o caso simples: recusa
+// pontual de UM procedimento/exame indicado pelo MV.
+
+function buildAutorizacaoNaoRealizacaoProcedimento() {
+  return state([
+    ...header(),
+    title('DECLARAÇÃO DE NÃO AUTORIZAÇÃO DE PROCEDIMENTOS E/OU EXAMES', 13.5, 11.5),
+    ...idBlockCompact(20),
+    FF({ x: 6, y: 32, w: 88, h: 5 }, 'procedimento_recusado', 'Procedimento/exame indicado e não autorizado: ', { required: true, placeholder: '_______________________________________' }),
+    T({ x: 6, y: 39, w: 88, h: 22 },
+      'DECLARO ter sido cientificado(a) pelo Médico Veterinário responsável pelo caso sobre o procedimento/exame acima indicado e suas finalidades. COMPREENDI todas as explicações, mas NÃO AUTORIZO o referido procedimento no animal acima identificado.\n\n' +
+      'ESTOU CIENTE de que a não realização do procedimento/exame poderá prejudicar o diagnóstico e a indicação do correto tratamento do meu animal pelo Médico Veterinário, sendo de minha total responsabilidade as consequências dessa decisão, não havendo o que possa reclamar em qualquer oportunidade.',
+      { fontSize: 9.5, align: 'justify', lineHeight: 1.55 }),
+    cityDate(63),
+    ...dualSignature(67),
+    twoViasNote(85),
+    ...footerPagQR(),
+  ])
+}
+
+// ── 15. Atestado de Vacinação ─────────────────────────────────────────────────
+// Novo em 24/09/2026: antes bloqueado no diagnóstico de 22/09 (lista variável
+// de vacinas). Confirmado agora que o motor Canvas JÁ TEM suporte nativo a
+// repeater source:'vaccines' (ElementsToolbar.tsx, resolve-context.ts), lendo
+// de patient_vaccines — só faltava o template. Estendido nesta sessão:
+// resolve-context.ts e PropertiesPanel.tsx passaram a expor manufacturer/
+// lot_number/validity_date/administration_route (colunas já existiam desde
+// as migrations 0400/0412, só não eram lidas pelo repeater).
+
+function buildAtestadoVacinacao() {
+  return state([
+    ...header(),
+    title('ATESTADO DE VACINAÇÃO', 13.5),
+    CT({ x: 6, y: 20, w: 88, h: 5 }, [
+      { tagId: 'pet.name', prefix: 'Atesto, para os devidos fins, que o animal de nome ' },
+      { tagId: 'pet.breed', prefix: ', da raça ' },
+    ], { fontSize: 10.5, lineHeight: 1.5, align: 'justify' }, { separator: '' }),
+    CT({ x: 6, y: 24.5, w: 88, h: 5 }, [
+      { tagId: 'tutor.name', prefix: 'pertencente a ' },
+      { tagId: 'tutor.cpf', prefix: 'CPF ' },
+    ], { fontSize: 10.5, lineHeight: 1.5, align: 'justify' }, { separator: ', ' }),
+    T({ x: 6, y: 29, w: 88, h: 4 }, 'encontra-se com a vacinação em dia, tendo recebido as seguintes vacinas:', { fontSize: 10.5, lineHeight: 1.5 }),
+    REPEATER({ x: 6, y: 35, w: 88, h: 33 }, 'vaccines',
+      '{{name}} — Lote: {{lot}} · Fabricante: {{manufacturer}} · Validade: {{validity}} · Via: {{route}}',
+      { maxItemsPerPage: 8, block: { borderColor: '#0f172a', borderWidth: 1, borderRadius: 6, paddingX: 12, paddingY: 8 } }),
+    cityDate(70),
+    ...vetSignature(73.5),
+    ...footerPagQR(),
+  ])
+}
+
 // ── Catálogo final ───────────────────────────────────────────────────────────
 
 const TEMPLATES = [
@@ -567,6 +671,9 @@ const TEMPLATES = [
   { name: 'Laudo de Radiografia',                              type: 'laudo',          build: buildLaudoRadiografia },
   { name: 'Laudo de Tomografia',                                type: 'laudo',          build: buildLaudoTomografia },
   { name: 'Laudo CCZ',                                          type: 'outro',          build: buildLaudoCCZ },
+  { name: 'Autorização para Eutanásia',                        type: 'termo',          build: buildAutorizacaoEutanasia },
+  { name: 'Autorização para Não Realização de Procedimento',   type: 'termo',          build: buildAutorizacaoNaoRealizacaoProcedimento },
+  { name: 'Atestado de Vacinação (Animais)',                   type: 'outro',          build: buildAtestadoVacinacao },
 ]
 
 // ── Execução ─────────────────────────────────────────────────────────────────

@@ -1002,6 +1002,10 @@ const REPEATER_FIELDS_BY_SOURCE: Record<RepeaterElement['source'], Array<{ field
     { field: 'name', label: 'Vacina' },
     { field: 'date', label: 'Data' },
     { field: 'next', label: 'Próxima' },
+    { field: 'manufacturer', label: 'Fabricante' },
+    { field: 'lot', label: 'Lote' },
+    { field: 'validity', label: 'Validade' },
+    { field: 'route', label: 'Via de Administração' },
   ],
   dynamic_fields: [
     { field: 'name', label: 'Nome' },

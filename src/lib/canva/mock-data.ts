@@ -90,8 +90,8 @@ export const MOCK_EXAM_ITEMS = [
 ]
 
 export const MOCK_VACCINES = [
-  { name: 'V10 (polivalente)', date: '15/04/2026', next: '15/04/2027' },
-  { name: 'Antirrábica',       date: '15/04/2026', next: '15/04/2027' },
+  { name: 'V10 (polivalente)', date: '15/04/2026', next: '15/04/2027', manufacturer: 'Zoetis', lot: '016/25', validity: '15/04/2027', route: 'SC' },
+  { name: 'Antirrábica',       date: '15/04/2026', next: '15/04/2027', manufacturer: 'Zoetis', lot: '005/25', validity: '15/04/2027', route: 'SC' },
 ]
 
 export const MOCK_DYNAMIC_FIELDS = [
