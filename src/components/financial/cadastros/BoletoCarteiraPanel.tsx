@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Loader2, Save, Barcode } from 'lucide-react'
-import { listBoletoAccounts, saveBoletoConfig, type BoletoConfig } from '@/lib/actions/boleto-cobranca'
+import { Loader2, Save, Barcode, Link2 } from 'lucide-react'
+import { listBoletoAccounts, saveBoletoConfig, ensureBoletoWebhookUrl, type BoletoConfig } from '@/lib/actions/boleto-cobranca'
 
 export default function BoletoCarteiraPanel({ accountId }: { accountId: string }) {
   const [cfg, setCfg] = useState<BoletoConfig>({})
@@ -11,6 +11,8 @@ export default function BoletoCarteiraPanel({ accountId }: { accountId: string }
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; t: string } | null>(null)
+  const [hookUrl, setHookUrl] = useState<string | null>(null)
+  const [hookBusy, setHookBusy] = useState(false)
 
   useEffect(() => {
     listBoletoAccounts().then(accs => {
@@ -28,6 +30,15 @@ export default function BoletoCarteiraPanel({ accountId }: { accountId: string }
     const r = await saveBoletoConfig(accountId, cfg, enabled, nextNN)
     setBusy(false)
     setMsg('error' in r ? { ok: false, t: r.error } : { ok: true, t: 'Carteira salva.' })
+  }
+
+  async function revealWebhook() {
+    setHookBusy(true)
+    try {
+      const r = await ensureBoletoWebhookUrl(accountId)
+      if ('error' in r) setMsg({ ok: false, t: r.error })
+      else setHookUrl(r.url)
+    } finally { setHookBusy(false) }
   }
 
   if (loading) return <div className="py-6 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-slate-300" /></div>
@@ -82,6 +93,24 @@ export default function BoletoCarteiraPanel({ accountId }: { accountId: string }
       <div>
         <label className={L}>Mensagens / instruções no boleto (uma por linha)</label>
         <textarea className={F} rows={3} value={(cfg.mensagens ?? []).join('\n')} onChange={e => set('mensagens', e.target.value.split('\n'))} placeholder={'Não receber após 30 dias do vencimento\nApós o vencimento, cobrar multa de 2% + juros'} />
+      </div>
+
+      <div className="border-t border-slate-100 pt-3">
+        <p className="text-xs font-semibold text-slate-600 mb-1">Baixa automática (retorno do banco)</p>
+        <p className="text-[11px] text-slate-500 mb-2">
+          O &quot;nosso número&quot; é sequencial <strong>por conta</strong>, então ele sozinho não diz de qual clínica é o
+          boleto. Registre no Sicoob a URL de retorno <strong>exclusiva desta conta</strong> abaixo — sem ela o sistema
+          recusa a baixa quando o mesmo nosso número existe em mais de uma conta, em vez de arriscar baixar o título errado.
+        </p>
+        {hookUrl ? (
+          <input readOnly onFocus={e => e.currentTarget.select()} className={`${F} font-mono text-[11px]`} value={hookUrl} />
+        ) : (
+          <button type="button" onClick={revealWebhook} disabled={hookBusy}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-60">
+            {hookBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
+            Gerar / ver URL de retorno desta conta
+          </button>
+        )}
       </div>
 
       {msg && <p className={`text-sm ${msg.ok ? 'text-emerald-600' : 'text-rose-600'}`}>{msg.t}</p>}

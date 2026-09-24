@@ -38,18 +38,43 @@ export interface BoletoConfig {
   beneficiarioNome?: string; beneficiarioDoc?: string; beneficiarioEndereco?: string
   environment?: 'sandbox' | 'production'
 }
-export interface BankAccountBoleto { id: string; name: string; bankName: string | null; enabled: boolean; nextNossoNumero: number; config: BoletoConfig }
+export interface BankAccountBoleto { id: string; name: string; bankName: string | null; enabled: boolean; nextNossoNumero: number; config: BoletoConfig; webhookToken: string | null }
 
 export async function listBoletoAccounts(): Promise<BankAccountBoleto[]> {
   const c = await ctx(); if ('error' in c) return []
   const admin = createAdminClient()
   const { data } = await admin.from('bank_accounts')
-    .select('id, name, bank_name, boleto_enabled, next_nosso_numero, boleto_config')
+    .select('id, name, bank_name, boleto_enabled, next_nosso_numero, boleto_config, boleto_webhook_token')
     .eq('clinic_id', c.clinicId).order('is_default', { ascending: false }).order('name')
   return (data ?? []).map((a: any) => ({
     id: a.id, name: a.name, bankName: a.bank_name ?? null, enabled: !!a.boleto_enabled,
     nextNossoNumero: Number(a.next_nosso_numero ?? 1), config: (a.boleto_config ?? {}) as BoletoConfig,
+    webhookToken: (a.boleto_webhook_token as string | null) ?? null,
   }))
+}
+
+/**
+ * Devolve (criando na primeira vez) a URL de callback EXCLUSIVA desta conta
+ * bancária. É ela que torna a baixa automática inequívoca: `nosso_numero` é
+ * sequencial por conta (0462), então sem o token duas clínicas colidem.
+ */
+export async function ensureBoletoWebhookUrl(bankAccountId: string): Promise<{ url: string; token: string } | { error: string }> {
+  const c = await ctx(); if ('error' in c) return { error: c.error }
+  if (!canManage(c.role)) return { error: 'Sem permissão.' }
+  const admin = createAdminClient()
+  const { data: acc } = await admin.from('bank_accounts')
+    .select('id, boleto_webhook_token').eq('id', bankAccountId).eq('clinic_id', c.clinicId).maybeSingle()
+  if (!acc) return { error: 'Conta bancária não encontrada.' }
+
+  let token = (acc as any).boleto_webhook_token as string | null
+  if (!token) {
+    token = `bwh_${randomBytes(18).toString('hex')}`
+    const { error } = await admin.from('bank_accounts')
+      .update({ boleto_webhook_token: token }).eq('id', bankAccountId).eq('clinic_id', c.clinicId)
+    if (error) return { error: error.message }
+  }
+  const origin = await getOrigin()
+  return { url: `${origin}/api/webhooks/sicoob-cobranca?key=SEU_SICOOB_WEBHOOK_SECRET&conta=${token}`, token }
 }
 
 export async function saveBoletoConfig(bankAccountId: string, config: BoletoConfig, enabled: boolean, nextNossoNumero?: number): Promise<{ ok: true } | { error: string }> {
