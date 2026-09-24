@@ -13,6 +13,7 @@ import {
 } from '@/lib/actions/clinic-settings'
 import { useUpgradeModal } from '@/components/upgrade/UpgradeProvider'
 import PortalBookingSettings from '@/components/management/PortalBookingSettings'
+import PortalThemeSettings from '@/components/management/PortalThemeSettings'
 
 const MERGEABLE = [
   { key: 'triage' as const, label: 'Triagem', desc: 'Coleta de sinais vitais dentro do Consultório' },
@@ -134,6 +135,9 @@ export default function ClinicSettingsTab({
 
       {/* ── Portal do Tutor & Agendamento Online ─────────────────────────────── */}
       <PortalBookingSettings initialConfig={initialConfig} onToast={onToast} />
+
+      {/* ── Identidade visual do Portal do Tutor (white-label) ───────────────── */}
+      <PortalThemeSettings onToast={onToast} />
 
       {/* ── Sessão 1: Protocolo de Check-in ──────────────────────────────────── */}
       <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
