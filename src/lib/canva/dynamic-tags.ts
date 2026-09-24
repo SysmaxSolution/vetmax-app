@@ -249,7 +249,7 @@ function toDate(raw: unknown): Date | null {
 
 function formatTimeBR(raw: unknown): string {
   const d = toDate(raw); if (!d) return ''
-  return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })
 }
 function formatDayBR(raw: unknown): string {
   const d = toDate(raw); if (!d) return ''
@@ -273,7 +273,7 @@ function formatYear(raw: unknown): string {
 }
 function formatWeekday(raw: unknown): string {
   const d = toDate(raw); if (!d) return ''
-  return d.toLocaleDateString('pt-BR', { weekday: 'long' })
+  return d.toLocaleDateString('pt-BR', { weekday: 'long', timeZone: 'America/Sao_Paulo' })
 }
 function formatTemperatureC(raw: unknown): string {
   const n = typeof raw === 'number' ? raw : parseFloat(String(raw))
@@ -284,13 +284,13 @@ function formatTemperatureC(raw: unknown): string {
 function formatDateBR(raw: unknown): string {
   const d = raw instanceof Date ? raw : new Date(String(raw))
   if (Number.isNaN(d.getTime())) return ''
-  return d.toLocaleDateString('pt-BR')
+  return d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })
 }
 
 function formatDateTimeBR(raw: unknown): string {
   const d = raw instanceof Date ? raw : new Date(String(raw))
   if (Number.isNaN(d.getTime())) return ''
-  return d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+  return d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Sao_Paulo' })
 }
 
 function formatWeightKg(raw: unknown): string {
