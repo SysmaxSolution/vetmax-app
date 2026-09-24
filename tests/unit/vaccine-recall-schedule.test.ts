@@ -49,21 +49,27 @@ describe('shouldRunNow', () => {
   it('desligado nunca roda, mesmo na hora certa', () => {
     expect(shouldRunNow(cfg({ enabled: false }), new Date('2026-09-24T12:00:00Z'))).toBe(false)
   })
-  it('roda exatamente na hora local configurada', () => {
+  it('roda na hora local configurada', () => {
     expect(shouldRunNow(cfg(), new Date('2026-09-24T12:00:00Z'))).toBe(true)   // 09h em SP
     expect(shouldRunNow(cfg(), new Date('2026-09-24T12:59:00Z'))).toBe(true)
   })
-  it('não roda nas outras horas', () => {
-    expect(shouldRunNow(cfg(), new Date('2026-09-24T13:00:00Z'))).toBe(false)
-    expect(shouldRunNow(cfg(), new Date('2026-09-24T11:00:00Z'))).toBe(false)
+  it('NÃO roda antes da hora configurada', () => {
+    expect(shouldRunNow(cfg(), new Date('2026-09-24T11:00:00Z'))).toBe(false)  // 08h em SP
+    expect(shouldRunNow(cfg({ hour: 18 }), new Date('2026-09-24T12:00:00Z'))).toBe(false)
   })
-  it('duas clínicas em horários diferentes não colidem', () => {
-    const t = new Date('2026-09-24T21:00:00Z') // 18h em SP
-    expect(shouldRunNow(cfg({ hour: 18 }), t)).toBe(true)
-    expect(shouldRunNow(cfg({ hour: 9 }), t)).toBe(false)
+  it('não redispara no mesmo dia depois de já ter rodado', () => {
+    // 13:00Z = 10h em SP; já rodou hoje (2026-09-24 local)
+    expect(shouldRunNow(cfg(), new Date('2026-09-24T13:00:00Z'), '2026-09-24')).toBe(false)
   })
-  it('fuso diferente muda quem roda na mesma hora UTC', () => {
-    const t = new Date('2026-09-24T12:00:00Z')
+  it('volta a rodar no dia seguinte', () => {
+    expect(shouldRunNow(cfg(), new Date('2026-09-25T13:00:00Z'), '2026-09-24')).toBe(true)
+  })
+  it('num cron DIÁRIO tardio ainda atende a clínica no mesmo dia', () => {
+    // clínica pediu 08:00; o cron só rodou às 09h locais — atende, não perde o dia
+    expect(shouldRunNow(cfg({ hour: 8 }), new Date('2026-09-24T12:00:00Z'), null)).toBe(true)
+  })
+  it('fuso diferente muda quem já alcançou a hora', () => {
+    const t = new Date('2026-09-24T12:00:00Z') // 09h em SP, 08h em Manaus
     expect(shouldRunNow(cfg({ hour: 9, timeZone: 'America/Sao_Paulo' }), t)).toBe(true)
     expect(shouldRunNow(cfg({ hour: 9, timeZone: 'America/Manaus' }), t)).toBe(false)
   })

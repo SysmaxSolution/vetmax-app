@@ -1,13 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendTutorPortalWhatsApp } from '@/lib/actions/tutor-portal'
-import { parseRecallConfig, shouldRunNow, recallWindow } from '@/lib/vaccines/recall-schedule'
+import { parseRecallConfig, shouldRunNow, recallWindow, localDateInTimeZone } from '@/lib/vaccines/recall-schedule'
 
 // GET /api/cron/vaccine-recall
 // Recall proativo de vacina: avisa o Tutor (WhatsApp + link do portal) quando a
-// próxima dose está próxima. Registrado em vercel.json DE HORA EM HORA — a
-// seleção de quem roda agora é feita aqui, comparando a hora local configurada
-// por cada clínica com a hora corrente.
+// próxima dose está próxima. Registrado em vercel.json de hora em hora
+// (produção); a seleção de quem roda agora é feita AQUI, comparando a hora local
+// configurada por cada clínica com a hora corrente.
+//
+// A rota é AGNÓSTICA à frequência do cron: dispara na primeira execução em que
+// a hora local da clínica já alcançou a hora configurada, e a tabela
+// clinic_vaccine_recall_runs (0474) garante uma execução por clínica por dia.
+// Assim funciona igual com cron de hora em hora (produção) e com cron diário
+// (ambiente de testes, cuja conta Vercel só permite cron diário).
 //
 // Tarefa 0 — duas mudanças de segurança/consentimento:
 //  (a) auth FAIL-CLOSED, igual aos demais crons. Antes, sem CRON_SECRET no
@@ -43,8 +49,20 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   for (const c of (clinics ?? []) as { id: string; flow_config: Record<string, unknown> | null }[]) {
     const cfg = parseRecallConfig(c.flow_config)
-    if (!shouldRunNow(cfg, now)) continue
+    const today = localDateInTimeZone(now, cfg.timeZone)
+
+    const { data: lastRun } = await admin
+      .from('clinic_vaccine_recall_runs')
+      .select('run_date').eq('clinic_id', c.id).eq('run_date', today).maybeSingle()
+    if (!shouldRunNow(cfg, now, (lastRun as { run_date?: string } | null)?.run_date ?? null)) continue
+
+    // Reserva o dia ANTES de enviar: se duas execuções do cron se cruzarem, a
+    // segunda encontra a linha e não redispara. PK (clinic_id, run_date).
+    const { error: claimErr } = await admin
+      .from('clinic_vaccine_recall_runs').insert({ clinic_id: c.id, run_date: today })
+    if (claimErr) continue   // já reservado por outra execução
     ranFor.push(c.id)
+    let sentHere = 0
 
     const { from, to } = recallWindow(cfg, now)
     const { data: vaccines, error } = await admin
@@ -65,9 +83,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       const r = await sendTutorPortalWhatsApp(pet.tutor_id, msg)
       if (r.ok) {
         await admin.from('patient_vaccines').update({ portal_recall_sent_at: new Date().toISOString() }).eq('id', (v as any).id)
-        sent++
+        sent++; sentHere++
       } else skipped++
     }
+
+    await admin.from('clinic_vaccine_recall_runs')
+      .update({ sent: sentHere }).eq('clinic_id', c.id).eq('run_date', today)
   }
 
   return NextResponse.json({ sent, skipped, considered, clinics: ranFor.length })

@@ -56,10 +56,23 @@ export function localDateInTimeZone(now: Date, timeZone: string): string {
   }
 }
 
-/** A clínica deve receber o recall NESTA execução horária? */
-export function shouldRunNow(cfg: RecallConfig, now: Date): boolean {
+/**
+ * A clínica deve receber o recall NESTA execução do cron?
+ *
+ * A regra é "a hora local já alcançou a hora configurada E ainda não rodou
+ * hoje", e não "a hora local é exatamente a configurada". Isso faz a rotina se
+ * comportar igual em qualquer frequência de cron: de hora em hora (produção)
+ * ela dispara exatamente na hora escolhida; num cron diário (ambiente de testes,
+ * onde a conta só permite cron diário) ela ainda dispara uma vez, no mesmo dia.
+ * A trava de uma execução por dia vem de clinic_vaccine_recall_runs (0474).
+ *
+ * @param lastRunDate data LOCAL da última execução (YYYY-MM-DD) ou null.
+ */
+export function shouldRunNow(cfg: RecallConfig, now: Date, lastRunDate: string | null = null): boolean {
   if (!cfg.enabled) return false
-  return localHourInTimeZone(now, cfg.timeZone) === cfg.hour
+  const today = localDateInTimeZone(now, cfg.timeZone)
+  if (lastRunDate === today) return false
+  return localHourInTimeZone(now, cfg.timeZone) >= cfg.hour
 }
 
 /** Janela [hoje, hoje+dias] em datas locais da clínica. */

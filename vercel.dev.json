@@ -1,0 +1,24 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/classify-errors",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/hospitalization-dailies",
+      "schedule": "5 0 * * *"
+    },
+    {
+      "path": "/api/cron/subscription-dunning",
+      "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/cron/voice-retention-purge",
+      "schedule": "45 3 * * *"
+    },
+    {
+      "path": "/api/cron/vaccine-recall",
+      "schedule": "0 9 * * *"
+    }
+  ]
+}
