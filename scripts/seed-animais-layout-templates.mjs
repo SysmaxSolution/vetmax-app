@@ -38,6 +38,12 @@
  *        manufacturer/lot_number/validity_date/administration_route (colunas
  *        já existiam desde 0400/0412, só não eram lidas pelo repeater).
  *
+ * +1 em 24/09/2026, reavaliação do "Termo de Não Aceitação de Conduta"
+ * (estava bloqueado desde 22/09 por suposta "complexidade de checklist de
+ * exames" — na prática são só 3 itens FIXOS com linha em branco pra marcação
+ * manual, sem lista variável nenhuma; não precisava do motor de fluxo):
+ *  16. Termo de Não Aceitação de Conduta e Não Realização de Exames  type: termo
+ *
  * Todos usam rodapé com Pág. X de Y (doc.page_of_total), impresso em
  * (doc.printed_at) e QR de validação (qr_validation) — recursos da Fase 1
  * (pagination.ts / identity.ts / doc-verification.ts).
@@ -656,6 +662,38 @@ function buildAtestadoVacinacao() {
   ])
 }
 
+// ── 16. Termo de Não Aceitação de Conduta e Não Realização de Exames ────────
+// Reavaliado em 24/09/2026: o diagnóstico original bloqueou por "complexidade
+// de checklist de exames", mas o arquivo fonte mostra apenas 3 itens FIXOS
+// (não uma lista variável) — cada um com uma linha em branco para marcação
+// manual. Não precisa de repeater nem do motor de fluxo: é texto/campo fixo,
+// igual aos demais termos. Desbloqueado sem mudança nenhuma no motor.
+
+function buildTermoNaoAceitacaoConduta() {
+  return state([
+    ...header(),
+    title('TERMO DE NÃO ACEITAÇÃO DE CONDUTA E NÃO REALIZAÇÃO DE EXAMES', 14, 11.5),
+    ...idBlockFull(20),
+    T({ x: 6, y: 37, w: 88, h: 14 },
+      'Declaro que fui devidamente informado e esclarecido quanto aos riscos anestésicos/cirúrgicos do animal acima referido (do qual sou responsável). Estou ciente que o procedimento anestésico pode apresentar intercorrências e me responsabilizo em NÃO realizar os seguintes procedimentos/exames solicitados pelo Médico Veterinário:',
+      { fontSize: 9.5, align: 'justify', lineHeight: 1.5 }),
+    FF({ x: 6, y: 53, w: 9, h: 4 }, 'confirma_nao_hematologicos', '', { placeholder: '_____' }),
+    T({ x: 17, y: 53, w: 77, h: 4 }, 'Exames hematológicos (no máximo 15 dias antes da data do procedimento anestésico)', { fontSize: 9.5 }),
+    FF({ x: 6, y: 59, w: 9, h: 4 }, 'confirma_nao_ecg_eco', '', { placeholder: '_____' }),
+    T({ x: 17, y: 59, w: 77, h: 4 }, 'Eletrocardiograma e ecocardiograma (no máximo 6 meses antes da data do procedimento anestésico)', { fontSize: 9.5 }),
+    FF({ x: 6, y: 65, w: 9, h: 4 }, 'confirma_nao_jejum', '', { placeholder: '_____' }),
+    T({ x: 17, y: 65, w: 77, h: 4 }, 'Jejum alimentar e/ou hídrico conforme recomendação do Médico Veterinário', { fontSize: 9.5 }),
+    LN({ x: 31, y: 79, w: 38, h: 0.15 }),
+    T({ x: 31, y: 79.6, w: 38, h: 4 }, 'Assinatura do responsável pelo animal', { fontSize: 8, color: MUTE, align: 'center' }),
+    LN({ x: 6, y: 89, w: 42, h: 0.15 }),
+    T({ x: 6, y: 89.6, w: 42, h: 4 }, 'Assinatura do Veterinário Anestesista', { fontSize: 8, color: MUTE, align: 'center' }),
+    LN({ x: 50, y: 89, w: 42, h: 0.15 }),
+    DT({ x: 50, y: 84.5, w: 42, h: 4 }, 'vet.name', { fontSize: 9, fontWeight: 600, align: 'center' }),
+    T({ x: 50, y: 89.6, w: 42, h: 4 }, 'Assinatura do veterinário responsável', { fontSize: 8, color: MUTE, align: 'center' }),
+    ...footerPagQR(),
+  ])
+}
+
 // ── Catálogo final ───────────────────────────────────────────────────────────
 
 const TEMPLATES = [
@@ -674,6 +712,7 @@ const TEMPLATES = [
   { name: 'Autorização para Eutanásia',                        type: 'termo',          build: buildAutorizacaoEutanasia },
   { name: 'Autorização para Não Realização de Procedimento',   type: 'termo',          build: buildAutorizacaoNaoRealizacaoProcedimento },
   { name: 'Atestado de Vacinação (Animais)',                   type: 'outro',          build: buildAtestadoVacinacao },
+  { name: 'Termo de Não Aceitação de Conduta',                 type: 'termo',          build: buildTermoNaoAceitacaoConduta },
 ]
 
 // ── Execução ─────────────────────────────────────────────────────────────────
