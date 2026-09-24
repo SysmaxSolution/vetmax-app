@@ -979,6 +979,22 @@ export interface CreateCanvaPatientDocumentInput {
 export async function createCanvaPatientDocument(
   input: CreateCanvaPatientDocumentInput,
 ): Promise<{ id: string }> {
+  try {
+    return await createCanvaPatientDocumentInner(input)
+  } catch (e) {
+    // Log com contexto real do erro — evita que uma falha real vire só
+    // "Application error" genérico do Next.js em produção, sem pista alguma
+    // de onde/por quê quebrou (achado 24/09: 500 intermitente sem causa
+    // de código — reproduzido e resolvido por redeploy, mas o log daquele
+    // dia não tinha detalhe nenhum pra confirmar isso rapidamente).
+    console.error('[createCanvaPatientDocument] falhou:', e)
+    throw new Error(e instanceof Error ? e.message : 'falha ao salvar documento')
+  }
+}
+
+async function createCanvaPatientDocumentInner(
+  input: CreateCanvaPatientDocumentInput,
+): Promise<{ id: string }> {
   const { supabase, profile } = await requireClinic()
 
   if (!validateContent(input.content_json)) {
