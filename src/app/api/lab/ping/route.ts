@@ -7,7 +7,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 // pendente definido no painel, devolve `reconfigure` (uma vez) e limpa o pending.
 export async function GET(req: Request) {
   const auth = await authenticateAgent(req)
-  if (!auth) return NextResponse.json({ error: 'Token inválido.' }, { status: 401 })
+  if (!auth) return NextResponse.json({ error: 'Token inválido ou Laboratório não ativado para esta clínica.' }, { status: 401 })
   const admin = createAdminClient()
 
   const url = new URL(req.url)

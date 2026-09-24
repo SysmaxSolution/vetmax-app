@@ -5,7 +5,7 @@ import { authenticateAgent, sampleByBarcode } from '@/lib/lab/agent-auth'
 // quais exames dosar. Retorna a amostra + exames (o agente monta o DSR).
 export async function POST(req: Request) {
   const auth = await authenticateAgent(req)
-  if (!auth) return NextResponse.json({ error: 'Token inválido.' }, { status: 401 })
+  if (!auth) return NextResponse.json({ error: 'Token inválido ou Laboratório não ativado para esta clínica.' }, { status: 401 })
   let body: any
   try { body = await req.json() } catch { return NextResponse.json({ error: 'JSON inválido.' }, { status: 400 }) }
   const barcode = String(body?.barcode ?? '').trim()

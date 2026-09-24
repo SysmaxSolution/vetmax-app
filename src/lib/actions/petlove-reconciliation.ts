@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { clinicFlowFlag, routineOffError } from '@/lib/clinic/flow-gate'
 import { revalidatePath } from 'next/cache'
 import { runMatchEngine, bulkCreatePatientsFromPetlove } from '@/lib/actions/petlove-matching'
 import { learnCoverageFromRemittance } from '@/lib/actions/insurance-coverage'
@@ -73,6 +74,11 @@ async function getCtx(): Promise<ClinicCtx | { error: string }> {
   const { data: profile } = await admin
     .from('profiles').select('clinic_id').eq('id', user.id).single()
   if (!profile?.clinic_id) return { error: 'Perfil sem clínica vinculada.' }
+  // Gate da rotina (F-4): a tela já checa flow_config.usa_convenios; a action
+  // também precisa checar, senão uma chamada direta contorna o gate.
+  if (!(await clinicFlowFlag(admin, profile.clinic_id as string, 'usa_convenios'))) {
+    return routineOffError('A conciliação de convênios')
+  }
   return { supabase: admin, clinicId: profile.clinic_id, userId: user.id }
 }
 

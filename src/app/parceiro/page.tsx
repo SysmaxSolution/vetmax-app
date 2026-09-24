@@ -24,6 +24,28 @@ export default async function PartnerHome() {
     )
   }
 
+  // Rotina desligada na clínica de referência (F-2): sessão válida, nenhum dado
+  // servido. Mensagem clara, sem revelar o que existe do outro lado.
+  if (ctx.routineOff) {
+    return (
+      <div className="px-5 sm:px-8 lg:px-12 py-16 flex justify-center">
+        <div className="max-w-md w-full bg-white rounded-2xl border border-[#EDE9E0] p-10 text-center">
+          <ShieldCheck className="h-10 w-10 text-[#C9A96A] mx-auto mb-4" />
+          <h1 className="text-xl text-[#16221C]" style={serif}>Portal do Veterinário indisponível</h1>
+          <p className="mt-3 text-sm text-[#6A7A72] leading-relaxed">
+            A clínica de referência ainda não disponibilizou este portal. Fale com ela para
+            receber as imagens e os laudos dos pets que você encaminhou.
+          </p>
+          <form action="/parceiro/sair" method="post" className="mt-6">
+            <button type="submit" className="text-xs font-medium text-[#6A7A72] hover:text-[#0E3B2E] rounded-full border border-[#EDE9E0] px-4 py-2 transition hover:border-[#C9A96A]/60">
+              Sair
+            </button>
+          </form>
+        </div>
+      </div>
+    )
+  }
+
   const [petsResult, pendingDecisions] = await Promise.all([
     getPartnerReferredPets(),
     getPartnerPendingExamDecisions(),

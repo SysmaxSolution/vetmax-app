@@ -39,6 +39,30 @@ export function canAccessPatient(
   return links.some(l => l.tutor_id === patientTutorId && l.clinic_id === patientClinicId)
 }
 
+/**
+ * Mantém só os vínculos cuja clínica está com a rotina do Portal LIGADA.
+ *
+ * O Portal é uma rotina opcional (`clinics.flow_config.portal_enabled`, padrão
+ * DESLIGADO). Uma pessoa pode ser tutora em mais de uma clínica: a recusa é
+ * SEMPRE por clínica — desligar o Portal na clínica A não pode derrubar o acesso
+ * aos pets da clínica B. É por isso que o filtro é sobre a lista de vínculos, e
+ * não uma negação global da sessão.
+ */
+export function filterLinksByEnabledClinics(links: LinkRow[], enabledClinicIds: Iterable<string>): LinkRow[] {
+  const allow = new Set(enabledClinicIds)
+  return links.filter(l => allow.has(l.clinic_id))
+}
+
+/**
+ * Clínicas vinculadas que estão com o Portal DESLIGADO. Serve só para dar uma
+ * mensagem honesta ao tutor ("não está disponível") sem revelar o que existe lá
+ * dentro — nenhum dado da clínica bloqueada é carregado.
+ */
+export function blockedClinicIds(links: LinkRow[], enabledClinicIds: Iterable<string>): string[] {
+  const allow = new Set(enabledClinicIds)
+  return Array.from(new Set(links.map(l => l.clinic_id).filter(id => !allow.has(id))))
+}
+
 /** Filtra uma lista de pets deixando só os acessíveis pela pessoa. */
 export function filterAccessiblePatients<T extends { tutor_id?: string | null; clinic_id?: string | null }>(
   patients: T[],

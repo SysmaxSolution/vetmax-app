@@ -9,7 +9,7 @@ import { hashCode, verifyCode, isLocked, onFail } from '@/lib/portal/access-code
 import { encryptCode, decryptCode, maskCode } from '@/lib/portal/code-crypto'
 import { generatePartnerCode, splitPartnerCode } from '@/lib/portal/partner-code'
 import { computeExpiryISO, SESSION_TTL_MS } from '@/lib/portal/access'
-import { getPartnerContext, PARTNER_COOKIE } from '@/lib/portal/partner-session'
+import { getPartnerContext, partnerPortalEnabled, PARTNER_COOKIE } from '@/lib/portal/partner-session'
 import type { PartnerProfessional, PartnerReferredPet, PartnerPetImaging } from '@/lib/portal/partner-types'
 
 async function getOrigin(): Promise<string> {
@@ -180,6 +180,13 @@ export async function loginPartnerWithCode(code: string): Promise<{ ok: true; ki
   }
   await admin.from(table).update({ code_fail_count: 0, code_locked_until: null }).eq('id', (acct as any).id)
 
+  // Gate da rotina (F-2): a clínica de referência precisa ter o Portal do
+  // Parceiro ativado. Só depois de validar o código — para não transformar a
+  // mensagem num oráculo de códigos válidos.
+  if (!(await partnerPortalEnabled(admin, (acct as any).clinic_id as string))) {
+    return { error: 'O Portal do Veterinário não está disponível para esta clínica.' }
+  }
+
   const kind: 'admin' | 'professional' = pc ? 'admin' : 'professional'
   const partnerClinicId = pc ? (pc as any).id : (pro as any).partner_clinic_id
   const token = 'ps_' + randomBytes(32).toString('hex')
@@ -221,7 +228,7 @@ async function professionalReferredPetIds(
 // ─── Portal — dados (pets encaminhados) ──────────────────────────────────────
 export async function getPartnerReferredPets(): Promise<PartnerReferredPet[] | { error: string }> {
   const ctx = await getPartnerContext()
-  if (!ctx) return { error: 'auth' }
+  if (!ctx || ctx.routineOff) return { error: 'auth' }
   const admin = createAdminClient()
 
   // Coleta patient_ids encaminhados conforme o tipo de acesso
@@ -258,7 +265,7 @@ export async function getPartnerReferredPets(): Promise<PartnerReferredPet[] | {
 
 export async function getPartnerPetImaging(petId: string): Promise<{ petName: string; imaging: PartnerPetImaging[] } | { error: string }> {
   const ctx = await getPartnerContext()
-  if (!ctx) return { error: 'auth' }
+  if (!ctx || ctx.routineOff) return { error: 'auth' }
   const admin = createAdminClient()
 
   // Profissional: só pode ver o pet se ele o encaminhou (imaging OU consulta). Fecha IDOR.

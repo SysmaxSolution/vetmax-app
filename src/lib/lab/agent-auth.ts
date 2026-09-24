@@ -2,6 +2,7 @@
 // Usada pelos route handlers /api/lab/*. Resolve o clinic_id pelo token.
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import { clinicFlowFlag } from '@/lib/clinic/flow-gate'
 
 export interface AgentAuth { clinic_id: string; agent_id: string }
 
@@ -16,6 +17,10 @@ export async function authenticateAgent(req: Request): Promise<AgentAuth | null>
     .eq('token', token)
     .maybeSingle()
   if (!data || !data.is_active) return null
+  // Gate da rotina (F-3): o token do agente sozinho não basta — a clínica precisa
+  // ter o Laboratório ativado (flow_config.usa_laboratorio). Fica AQUI, e não em
+  // cada route handler, para que /api/lab/* futuro já nasça fechado.
+  if (!(await clinicFlowFlag(admin, data.clinic_id as string, 'usa_laboratorio'))) return null
   // best-effort: marca visto agora
   const ip = req.headers.get('x-forwarded-for') || null
   await admin.from('lab_agents').update({ last_seen_at: new Date().toISOString(), last_ip: ip }).eq('id', data.id)

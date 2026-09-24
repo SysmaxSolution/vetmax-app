@@ -55,6 +55,11 @@ export type FlowConfig = {
   // ── Portal do Tutor + Agendamento online (Fase 3) ───────────────────────────
   /** A clínica usa o Portal do Tutor? (acesso do tutor ao histórico + agendamento) */
   portal_enabled?:          boolean
+  /** A clínica usa o Portal do Parceiro? (/parceiro — o veterinário SOLICITANTE
+   *  acessa as imagens e os laudos dos pets que encaminhou). Rotina separada do
+   *  Portal do Tutor: o público é outro e a clínica de imagem pode querer só um
+   *  dos dois. Padrão DESLIGADO. */
+  partner_portal_enabled?:  boolean
   /** Como o tutor agenda PELO PORTAL: 'off' (não agenda) | 'reception' (recepção
    *  confirma — fluxo M9) | 'direct' (cai direto na agenda). Padrão: 'reception'. */
   booking_mode_portal?:     'off' | 'reception' | 'direct'

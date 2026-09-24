@@ -33,6 +33,29 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     )
   }
 
+  // Rotina desligada na(s) clínica(s) do vínculo: a sessão é válida, mas nada do
+  // Portal é carregado. Mensagem honesta e sem revelar o que existe lá dentro —
+  // nenhum pet, exame ou vacina chega a ser consultado (ver getTutorContext).
+  if (ctx.portalDisabled) {
+    return (
+      <div className="px-5 sm:px-8 lg:px-12 py-16 flex justify-center">
+        <div className="max-w-md w-full bg-white rounded-2xl border border-[#EDE9E0] p-10 text-center">
+          <ShieldCheck className="h-10 w-10 text-[#C9A96A] mx-auto mb-4" />
+          <h1 className="text-xl text-[#16221C]" style={serif}>Área do Tutor indisponível</h1>
+          <p className="mt-3 text-sm text-[#6A7A72] leading-relaxed">
+            A clínica em que você tem cadastro ainda não disponibilizou a Área do Tutor.
+            Fale com a recepção para receber as informações do seu pet.
+          </p>
+          <form action="/portal/sair" method="post" className="mt-6">
+            <button type="submit" className="text-xs font-medium text-[#6A7A72] hover:text-[#0E3B2E] rounded-full border border-[#EDE9E0] px-4 py-2 transition hover:border-[#C9A96A]/60">
+              Sair
+            </button>
+          </form>
+        </div>
+      </div>
+    )
+  }
+
   const [petsResult, pendingDecisions] = await Promise.all([
     getPortalPets(),
     getTutorPendingExamDecisions(),

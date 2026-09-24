@@ -4,14 +4,38 @@
 // exportar também constantes/tipos.
 import { cookies } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { isSessionValid, computeExpiryISO, SESSION_TTL_MS, type LinkRow } from '@/lib/portal/access'
+import {
+  isSessionValid, computeExpiryISO, SESSION_TTL_MS,
+  allowedClinicIds, filterLinksByEnabledClinics, type LinkRow,
+} from '@/lib/portal/access'
 
 export const TUTOR_COOKIE = 'sysvet_tutor'
 
 export interface TutorContext {
   tutorUserId: string
   fullName: string | null
+  /** Vínculos VISÍVEIS — só clínicas com `flow_config.portal_enabled === true`. */
   links: LinkRow[]
+  /** Há vínculo, mas nenhuma das clínicas tem o Portal ligado. Para a mensagem. */
+  portalDisabled: boolean
+}
+
+type Admin = ReturnType<typeof createAdminClient>
+
+/**
+ * Dentre as clínicas informadas, quais têm a rotina do Portal ligada.
+ * Leitura ESTRITA (`=== true`): chave ausente = desligada.
+ */
+export async function portalEnabledClinicIds(admin: Admin, clinicIds: string[]): Promise<string[]> {
+  if (clinicIds.length === 0) return []
+  try {
+    const { data } = await admin.from('clinics').select('id, flow_config').in('id', clinicIds)
+    return (data ?? [])
+      .filter((c: any) => ((c.flow_config ?? {}) as Record<string, unknown>).portal_enabled === true)
+      .map((c: any) => c.id as string)
+  } catch {
+    return []   // fail-closed: na dúvida, o Portal não abre
+  }
 }
 
 /** Resolve a sessão do tutor a partir do cookie. Retorna null se ausente/inválida. */
@@ -42,9 +66,19 @@ export async function getTutorContext(): Promise<TutorContext | null> {
     expires_at: computeExpiryISO(nowISO, SESSION_TTL_MS),
   }).eq('id', session.id)
 
+  // Gate da rotina: a sessão pode ser válida e MESMO ASSIM a clínica não usar o
+  // Portal. Antes deste filtro, um tutor com sessão entrava em /portal e via o
+  // pet de uma clínica com `portal_enabled` desligado (achado F-1 do QA).
+  // O filtro é por clínica — vínculo com outra clínica que usa o Portal continua
+  // funcionando normalmente.
+  const rawLinks: LinkRow[] = (links ?? []).map((l: any) => ({ tutor_id: l.tutor_id, clinic_id: l.clinic_id }))
+  const enabled = await portalEnabledClinicIds(admin, allowedClinicIds(rawLinks))
+  const visibleLinks = filterLinksByEnabledClinics(rawLinks, enabled)
+
   return {
     tutorUserId: session.tutor_user_id as string,
     fullName: (user as any)?.full_name ?? null,
-    links: (links ?? []).map((l: any) => ({ tutor_id: l.tutor_id, clinic_id: l.clinic_id })),
+    links: visibleLinks,
+    portalDisabled: rawLinks.length > 0 && visibleLinks.length === 0,
   }
 }

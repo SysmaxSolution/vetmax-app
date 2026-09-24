@@ -9,7 +9,7 @@ import {
   normalizeCpf, normalizePhone, checkLoginToken, computeExpiryISO,
   LOGIN_TOKEN_TTL_MS, SESSION_TTL_MS,
 } from '@/lib/portal/access'
-import { TUTOR_COOKIE } from '@/lib/portal/session'
+import { TUTOR_COOKIE, portalEnabledClinicIds } from '@/lib/portal/session'
 import {
   generateAccessCode, hashCode, verifyCode, normalizeCode, isLocked, onFail,
 } from '@/lib/portal/access-code'
@@ -347,6 +347,21 @@ export async function sendTutorPortalWhatsApp(tutorId: string, message: string):
   } catch { return { ok: false } }
 }
 
+/**
+ * A pessoa tem vínculo com pelo menos UMA clínica que usa o Portal?
+ * Gate de LOGIN da rotina — o gate de LEITURA vive em `getTutorContext`, que
+ * filtra os vínculos clínica a clínica.
+ */
+async function hasPortalAccess(
+  admin: ReturnType<typeof createAdminClient>, tutorUserId: string,
+): Promise<boolean> {
+  const { data: links } = await admin
+    .from('tutor_user_links').select('clinic_id').eq('tutor_user_id', tutorUserId)
+  const clinicIds = Array.from(new Set((links ?? []).map((l: any) => l.clinic_id as string)))
+  if (clinicIds.length === 0) return false
+  return (await portalEnabledClinicIds(admin, clinicIds)).length > 0
+}
+
 // ─── Login permanente por CPF + código ──────────────────────────────────────
 async function createTutorSessionRow(
   admin: ReturnType<typeof createAdminClient>, tutorUserId: string,
@@ -387,9 +402,13 @@ export async function loginTutorWithCode(
     return generic
   }
 
-  // Só permite se ainda houver vínculo ativo (cadastro na clínica)
-  const { count } = await admin.from('tutor_user_links').select('id', { count: 'exact', head: true }).eq('tutor_user_id', (tu as any).id)
-  if (!count) return { error: 'Seu acesso não está ativo em nenhuma clínica. Fale com a recepção.' }
+  // Só permite se ainda houver vínculo ativo (cadastro na clínica) E se ao menos
+  // UMA dessas clínicas usa a rotina do Portal (flow_config.portal_enabled).
+  // Sem isso, a sessão nascia válida e o tutor entrava numa clínica que não
+  // disponibilizou o Portal (achado F-1).
+  if (!(await hasPortalAccess(admin, (tu as any).id))) {
+    return { error: 'A Área do Tutor não está disponível para o seu cadastro. Fale com a recepção da clínica.' }
+  }
 
   await admin.from('tutor_users').update({ code_fail_count: 0, code_locked_until: null }).eq('id', (tu as any).id)
   const { token, maxAge } = await createTutorSessionRow(admin, (tu as any).id)
@@ -412,6 +431,13 @@ export async function createTutorSessionFromToken(
 
   const check = checkLoginToken(tok as any, new Date().toISOString())
   if (!check.ok) return { error: check.reason === 'expired' ? 'Link expirado. Peça um novo à clínica.' : 'Este link já foi usado.' }
+
+  // Gate da rotina ANTES de consumir: se nenhuma clínica do vínculo usa o
+  // Portal, recusa sem queimar o link (ele volta a valer quando a clínica ligar
+  // a rotina, dentro do prazo do token).
+  if (!(await hasPortalAccess(admin, tok.tutor_user_id as string))) {
+    return { error: 'A Área do Tutor não está disponível para esta clínica.' }
+  }
 
   // consome (uso único)
   await admin.from('tutor_login_tokens').update({ consumed_at: new Date().toISOString() }).eq('id', tok.id)

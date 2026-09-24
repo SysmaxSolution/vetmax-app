@@ -12,6 +12,12 @@ export interface PartnerContext {
   professionalId: string | null
   clinicId: string
   name: string
+  /**
+   * A clínica de referência NÃO ativou o Portal do Parceiro
+   * (`flow_config.partner_portal_enabled`, padrão desligado — achado F-2).
+   * A sessão segue válida (o parceiro consegue sair), mas nenhum dado é servido.
+   */
+  routineOff: boolean
 }
 
 export async function getPartnerContext(): Promise<PartnerContext | null> {
@@ -41,5 +47,18 @@ export async function getPartnerContext(): Promise<PartnerContext | null> {
   return {
     kind: (s as any).kind, partnerClinicId: (s as any).partner_clinic_id,
     professionalId: (s as any).professional_id ?? null, clinicId: (s as any).clinic_id, name,
+    routineOff: !(await partnerPortalEnabled(admin, (s as any).clinic_id as string)),
+  }
+}
+
+/** Leitura ESTRITA da flag do Portal do Parceiro. Chave ausente = desligada. */
+export async function partnerPortalEnabled(
+  admin: ReturnType<typeof createAdminClient>, clinicId: string,
+): Promise<boolean> {
+  try {
+    const { data } = await admin.from('clinics').select('flow_config').eq('id', clinicId).maybeSingle()
+    return ((data?.flow_config ?? {}) as Record<string, unknown>).partner_portal_enabled === true
+  } catch {
+    return false   // fail-closed
   }
 }

@@ -3,6 +3,7 @@ import { zipSync, strToU8 } from 'fflate'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { AGENT_BUNDLE } from '@/lib/lab/agent-bundle'
+import { clinicFlowFlag } from '@/lib/clinic/flow-gate'
 
 // Gera e devolve o instalador .zip do agente já com o config.json do token.
 // Autenticado por sessão (admin da clínica). Uso: /api/lab/installer?agent=<id>
@@ -14,6 +15,11 @@ export async function GET(req: Request) {
   if (!profile?.clinic_id) return NextResponse.json({ error: 'Perfil sem clínica.' }, { status: 403 })
   if (!['admin', 'owner', 'manager'].includes((profile.role as string) ?? '')) {
     return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 })
+  }
+  // Gate da rotina (F-3): o instalador entrega o TOKEN do agente — só sai se a
+  // clínica ativou o Laboratório.
+  if (!(await clinicFlowFlag(createAdminClient(), profile.clinic_id as string, 'usa_laboratorio'))) {
+    return NextResponse.json({ error: 'O Laboratório não está ativado para esta clínica.' }, { status: 403 })
   }
 
   const url = new URL(req.url)

@@ -9,7 +9,7 @@ import { resolveAnalyte, normKey, type AnalyteMapping } from '@/lib/lab/analyte-
 // Idempotente por (consultation, source hl7): reimportar substitui o rascunho hl7.
 export async function POST(req: Request) {
   const auth = await authenticateAgent(req)
-  if (!auth) return NextResponse.json({ error: 'Token inválido.' }, { status: 401 })
+  if (!auth) return NextResponse.json({ error: 'Token inválido ou Laboratório não ativado para esta clínica.' }, { status: 401 })
   let body: any
   try { body = await req.json() } catch { return NextResponse.json({ error: 'JSON inválido.' }, { status: 400 }) }
 

@@ -25,6 +25,7 @@ interface Props {
 export default function PortalBookingSettings({ initialConfig, onToast }: Props) {
   const fc = initialConfig?.flow_config
   const [portalEnabled, setPortalEnabled] = useState<boolean>(fc?.portal_enabled ?? false)
+  const [partnerEnabled, setPartnerEnabled] = useState<boolean>(fc?.partner_portal_enabled ?? false)
   const [portalMode,    setPortalMode]    = useState<Mode>((fc?.booking_mode_portal as Mode) ?? 'reception')
   const [whatsappMode,  setWhatsappMode]  = useState<Mode>((fc?.booking_mode_whatsapp as Mode) ?? 'reception')
   const [saving, setSaving] = useState(false)
@@ -38,6 +39,7 @@ export default function PortalBookingSettings({ initialConfig, onToast }: Props)
       flow_config: {
         ...base,
         portal_enabled:        portalEnabled,
+        partner_portal_enabled: partnerEnabled,
         booking_mode_portal:   portalMode,
         booking_mode_whatsapp: whatsappMode,
       },
@@ -72,6 +74,22 @@ export default function PortalBookingSettings({ initialConfig, onToast }: Props)
             </p>
           </div>
           <input type="checkbox" checked={portalEnabled} onChange={e => setPortalEnabled(e.target.checked)}
+                 className="h-5 w-9 appearance-none rounded-full bg-slate-200 checked:bg-teal-500 relative transition-colors cursor-pointer
+                            before:content-[''] before:absolute before:top-0.5 before:left-0.5 before:h-4 before:w-4 before:rounded-full before:bg-white before:transition-transform checked:before:translate-x-4" />
+        </label>
+
+        {/* Portal do Parceiro — rotina separada (F-2): o público é o veterinario
+            SOLICITANTE, nao o tutor. Uma clinica de imagem pode querer so este. */}
+        <label className="flex items-center justify-between gap-4 cursor-pointer">
+          <div>
+            <p className="text-sm font-medium text-slate-800">Usar o Portal do Veterinário (parceiro)</p>
+            <p className="text-xs text-slate-500">
+              Libera <code>/parceiro</code>, onde o médico-veterinário que encaminhou o pet acessa
+              as imagens e os laudos com o código de acesso da clínica parceira. Desligado,
+              o código não entra e nenhum dado é servido.
+            </p>
+          </div>
+          <input type="checkbox" checked={partnerEnabled} onChange={e => setPartnerEnabled(e.target.checked)}
                  className="h-5 w-9 appearance-none rounded-full bg-slate-200 checked:bg-teal-500 relative transition-colors cursor-pointer
                             before:content-[''] before:absolute before:top-0.5 before:left-0.5 before:h-4 before:w-4 before:rounded-full before:bg-white before:transition-transform checked:before:translate-x-4" />
         </label>

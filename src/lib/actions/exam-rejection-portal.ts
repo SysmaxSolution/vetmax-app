@@ -114,7 +114,7 @@ async function partnerConsultationIds(
 
 export async function getPartnerPendingExamDecisions(): Promise<PendingExamDecision[]> {
   const ctx = await getPartnerContext()
-  if (!ctx) return FLAG_OFF
+  if (!ctx || ctx.routineOff) return FLAG_OFF
   const admin = createAdminClient()
   if (!await flagOn(admin, ctx.clinicId)) return FLAG_OFF
   return loadPending(admin, ctx.clinicId, await partnerConsultationIds(admin, ctx))
@@ -125,6 +125,7 @@ export async function submitPartnerExamDecision(
 ): Promise<{ ok: true; recollect: boolean } | { error: string }> {
   const ctx = await getPartnerContext()
   if (!ctx) return { error: 'Sessão expirada. Entre novamente.' }
+  if (ctx.routineOff) return { error: 'Portal do Veterinário indisponível para esta clínica.' }
   const admin = createAdminClient()
   if (!await flagOn(admin, ctx.clinicId)) return { error: 'Fluxo indisponível.' }
 
