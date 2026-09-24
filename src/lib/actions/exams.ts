@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { sendToCashier } from '@/lib/actions/vet'
 import { computeLabCost } from '@/lib/labs/commission'
+import { usesExamRejectionFlow } from '@/lib/exams/rejection-gate'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -440,9 +441,37 @@ export async function sendExamToPartnerLab(input: {
     .select('id, name').eq('id', input.partner_clinic_id).eq('clinic_id', clinicId).maybeSingle()
   if (!lab) return { error: 'Laboratório parceiro não encontrado.' }
 
-  // 1) cobra o tutor (envia ao caixa) — mesmo fluxo do consultório
-  const cash = await sendToCashier(input.consultation_id)
-  if ('error' in cash) return { error: cash.error }
+  // 1) cobrança. Comportamento padrão (e de todas as clínicas sem a flag):
+  //    cobra o tutor na hora, enviando ao caixa — mesmo fluxo do consultório.
+  //    Com o Fluxo de Rejeição de Exame LIGADO a cobrança é ADIADA: o exame
+  //    enviado ao laboratório ainda pode voltar não realizado (amostra
+  //    lipêmica etc.) e, nesse caso, não pode ser cobrado. As linhas de exame
+  //    ganham a trava e o título nasce só quando o resultado for liberado.
+  const rejectionFlowOn = await usesExamRejectionFlow(admin, clinicId)
+  if (rejectionFlowOn) {
+    const holdAt = new Date().toISOString()
+    const { data: examLines } = await admin
+      .from('consultation_services')
+      .select('id, stock_items ( category )')
+      .eq('clinic_id', clinicId)
+      .eq('consultation_id', input.consultation_id)
+      .is('cancelled_at', null)
+      .is('billed_in_invoice_id', null)
+      .is('exam_billing_hold_at', null)
+    const ids = (examLines ?? []).filter(l => {
+      const si = (l as { stock_items?: { category?: string } | Array<{ category?: string }> }).stock_items
+      const cat = Array.isArray(si) ? si[0]?.category : si?.category
+      return cat === 'exam'
+    }).map(l => l.id as string)
+    if (ids.length > 0) {
+      await admin.from('consultation_services')
+        .update({ exam_state: 'pending', exam_billing_hold_at: holdAt, exam_return_deadline: input.return_deadline ?? null, updated_at: holdAt })
+        .in('id', ids).eq('clinic_id', clinicId)
+    }
+  } else {
+    const cash = await sendToCashier(input.consultation_id)
+    if ('error' in cash) return { error: cash.error }
+  }
 
   // 2) marca a consulta: aguardando resultado do lab + lab + prazo
   await admin.from('consultations').update({

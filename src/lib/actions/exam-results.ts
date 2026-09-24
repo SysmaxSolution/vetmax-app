@@ -10,6 +10,7 @@ import { revalidatePath } from 'next/cache'
 import { parseHL7ORU } from '@/lib/lab/hl7-parser'
 import { resolveAnalyte, normKey, type AnalyteMapping } from '@/lib/lab/analyte-resolve'
 import { notifyTutorResultReleased } from '@/lib/actions/tutor-portal'
+import { usesExamRejectionFlow } from '@/lib/exams/rejection-gate'
 
 async function getCtx() {
   const supabase = await createClient()
@@ -115,6 +116,30 @@ export async function releaseExamResults(consultationId: string): Promise<{ ok: 
     .select('id')
   if (error) return { error: 'Erro ao liberar: ' + error.message }
   const released = (data ?? []).length
+
+  // Fluxo de Rejeição de Exame (opt-in): liberar o resultado é o gatilho da
+  // cobrança. As linhas de exame ainda travadas viram 'performed', perdem a
+  // trava e são enviadas ao caixa. As linhas rejeitadas/encerradas NÃO são
+  // tocadas — continuam fora da cobrança. Com a flag desligada nada disso roda.
+  if (released > 0 && await usesExamRejectionFlow(ctx.admin, ctx.clinic_id)) {
+    const now = new Date().toISOString()
+    const { data: freed } = await ctx.admin
+      .from('consultation_services')
+      .update({ exam_state: 'performed', exam_billing_hold_at: null, updated_at: now })
+      .eq('clinic_id', ctx.clinic_id)
+      .eq('consultation_id', consultationId)
+      .is('cancelled_at', null)
+      .is('billed_in_invoice_id', null)
+      .not('exam_billing_hold_at', 'is', null)
+      .in('exam_state', ['pending'])
+      .select('id')
+    if ((freed ?? []).length > 0) {
+      try {
+        const { sendToCashier } = await import('./vet')
+        await sendToCashier(consultationId)
+      } catch { /* best-effort: a fatura final varre o que sobrar */ }
+    }
+  }
 
   // Avisa o tutor por WhatsApp (best-effort; só se a clínica usa o portal)
   if (released > 0) {
