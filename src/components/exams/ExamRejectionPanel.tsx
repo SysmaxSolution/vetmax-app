@@ -11,7 +11,7 @@ import { createPortal } from 'react-dom'
 import { FlaskConical, CheckCircle2, XCircle, Loader2, AlertTriangle, RotateCw, Ban, X, Link2 } from 'lucide-react'
 import {
   listExamLines, listRejectionReasons, rejectExamLine, markExamPerformed,
-  recordExamDecisionByStaff, type ExamLine, type RejectionReason,
+  recordExamDecisionByStaff, isBilledReversalOn, type ExamLine, type RejectionReason,
 } from '@/lib/actions/exam-rejection'
 import { STATE_LABEL, type ExamState } from '@/lib/exams/rejection-flow'
 
@@ -39,12 +39,19 @@ export default function ExamRejectionPanel({ consultationId, onToast }: Props) {
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId]   = useState<string | null>(null)
   const [rejectTarget, setRejectTarget] = useState<ExamLine | null>(null)
+  // Tarefa 0, item 7: com o estorno automático ligado, a linha JÁ FATURADA
+  // também pode ser marcada como não realizada — o sistema estorna a fatura em
+  // aberto e registra a trilha. Desligado (padrão), o botão continua oculto.
+  const [billedReversal, setBilledReversal] = useState(false)
 
   const load = useCallback(async () => {
-    const [l, r] = await Promise.all([listExamLines(consultationId), listRejectionReasons()])
+    const [l, r, b] = await Promise.all([
+      listExamLines(consultationId), listRejectionReasons(), isBilledReversalOn(),
+    ])
     setLoading(false)
     if (!('error' in l)) setLines(l)
     if (!('error' in r)) setReasons(r)
+    setBilledReversal(b)
   }, [consultationId])
 
   useEffect(() => { void load() }, [load])
@@ -147,7 +154,7 @@ export default function ExamRejectionPanel({ consultationId, onToast }: Props) {
                 </div>
 
                 <div className="flex flex-shrink-0 flex-wrap gap-2">
-                  {(state === null || state === 'pending') && !line.billed && (
+                  {(state === null || state === 'pending') && (!line.billed || billedReversal) && (
                     <>
                       <button onClick={() => perform(line)} disabled={busy}
                         className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
@@ -231,6 +238,17 @@ function RejectExamModal({ line, reasons, onClose, onDone, onError }: {
         </div>
 
         <div className="space-y-4 px-6 py-5">
+          {line.billed && (
+            <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5">
+              <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-rose-600" />
+              <p className="text-xs leading-relaxed text-rose-900">
+                <strong>Este exame já está numa fatura.</strong> Como a clínica ativou o estorno automático,
+                o valor será abatido da fatura <strong>em aberto</strong> e tudo fica registrado na trilha de
+                auditoria com o seu nome. Fatura já paga/baixada não é alterada — nesse caso o sistema recusa
+                e pede o estorno manual no Financeiro.
+              </p>
+            </div>
+          )}
           <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
             <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
             <p className="text-xs leading-relaxed text-amber-900">

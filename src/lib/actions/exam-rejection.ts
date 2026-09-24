@@ -21,6 +21,14 @@ import {
 } from '@/lib/exams/rejection-flow'
 import { applyExamDecision } from '@/lib/exams/apply-decision'
 import { notifyExamRejection } from '@/lib/exams/rejection-notify'
+import { computeLabCost } from '@/lib/labs/commission'
+import {
+  planLabCostOnRejection,
+  planBilledExamReversal,
+  lineBilledAmount,
+  type InvoiceSnapshot,
+  type LabPayable,
+} from '@/lib/exams/rejection-money'
 
 // ─── Contexto + gate da flag ─────────────────────────────────────────────────
 
@@ -31,6 +39,10 @@ interface Ctx {
   role:    string
   flagOn:  boolean
   clinicName: string
+  /** flow_config.cancela_custo_lab_na_recusa — item 6 da Tarefa 0. */
+  cancelaCustoLab: boolean
+  /** flow_config.estorna_exame_faturado_na_recusa — item 7 da Tarefa 0. */
+  estornaFaturado: boolean
 }
 
 async function getCtx(): Promise<Ctx | { error: string }> {
@@ -46,7 +58,11 @@ async function getCtx(): Promise<Ctx | { error: string }> {
   const { data: clinic } = await admin
     .from('clinics').select('name, flow_config').eq('id', profile.clinic_id).single()
 
-  const flow = (clinic?.flow_config ?? {}) as { usa_fluxo_rejeicao_exame?: boolean }
+  const flow = (clinic?.flow_config ?? {}) as {
+    usa_fluxo_rejeicao_exame?: boolean
+    cancela_custo_lab_na_recusa?: boolean
+    estorna_exame_faturado_na_recusa?: boolean
+  }
   return {
     admin,
     clinicId: profile.clinic_id as string,
@@ -54,6 +70,8 @@ async function getCtx(): Promise<Ctx | { error: string }> {
     role: (profile.role as string) ?? 'staff',
     flagOn: flow.usa_fluxo_rejeicao_exame === true,
     clinicName: (clinic?.name as string) ?? 'Laboratório',
+    cancelaCustoLab: flow.cancela_custo_lab_na_recusa === true,
+    estornaFaturado: flow.estorna_exame_faturado_na_recusa === true,
   }
 }
 
@@ -63,6 +81,16 @@ const FLAG_OFF = 'O Fluxo de Rejeição de Exame não está ativado para esta cl
 export async function isExamRejectionFlowOn(): Promise<boolean> {
   const ctx = await getCtx()
   return 'error' in ctx ? false : ctx.flagOn
+}
+
+/**
+ * TRUE quando a clínica ativou o estorno automático de exame já faturado
+ * (flow_config.estorna_exame_faturado_na_recusa). Gate de UI: sem isso o botão
+ * "Não realizado" continua escondido nas linhas já faturadas, como hoje.
+ */
+export async function isBilledReversalOn(): Promise<boolean> {
+  const ctx = await getCtx()
+  return 'error' in ctx ? false : (ctx.flagOn && ctx.estornaFaturado)
 }
 
 // ─── Catálogo de motivos ─────────────────────────────────────────────────────
@@ -270,6 +298,145 @@ async function loadLine(ctx: Ctx, serviceLineId: string) {
   return data
 }
 
+// ─── Caminho do dinheiro na rejeição (itens 6 e 7 da Tarefa 0) ──────────────
+
+type LineRow = NonNullable<Awaited<ReturnType<typeof loadLine>>>
+
+/**
+ * Monta o plano de estorno da linha já faturada. Não escreve nada — só lê a
+ * fatura e delega a decisão ao módulo puro `planBilledExamReversal`.
+ */
+async function prepareBilledReversal(ctx: Ctx, invoiceId: string, line: LineRow) {
+  const { data: inv } = await ctx.admin
+    .from('invoices')
+    .select('id, status, subtotal, discount, total_amount, paid_at')
+    .eq('id', invoiceId).eq('clinic_id', ctx.clinicId).maybeSingle()
+
+  const amount = lineBilledAmount(line.price_snapshot as number | null, line.quantity as number | null)
+  const plan = planBilledExamReversal(ctx.estornaFaturado, (inv as InvoiceSnapshot | null) ?? null, amount)
+  return { invoiceId, amount, plan }
+}
+
+/**
+ * Executa o estorno planejado na fatura EM ABERTO: remove o item correspondente,
+ * baixa subtotal/total, solta a linha do vínculo de faturamento e ajusta a
+ * pendência do caixa. Devolve o resumo para a trilha de auditoria.
+ */
+async function applyBilledReversal(
+  ctx: Ctx,
+  reversal: NonNullable<Awaited<ReturnType<typeof prepareBilledReversal>>>,
+  line: LineRow,
+): Promise<string> {
+  const { invoiceId, amount, plan } = reversal
+  const now = new Date().toISOString()
+
+  // Item da fatura correspondente a esta linha (casa descrição + valor).
+  const { data: items } = await ctx.admin
+    .from('invoice_items')
+    .select('id, description, total_price')
+    .eq('invoice_id', invoiceId)
+  const match = (items ?? []).find(
+    (it) => it.description === line.name_snapshot && Math.abs(Number(it.total_price) - amount) < 0.005,
+  )
+  if (match) await ctx.admin.from('invoice_items').delete().eq('id', match.id)
+
+  await ctx.admin.from('invoices')
+    .update({ subtotal: plan.newSubtotal, total_amount: plan.newTotal, updated_at: now })
+    .eq('id', invoiceId).eq('clinic_id', ctx.clinicId)
+
+  // A linha deixa de estar faturada — volta a ser um serviço em aberto travado.
+  await ctx.admin.from('consultation_services')
+    .update({ billed_in_invoice_id: null, updated_at: now })
+    .eq('id', line.id).eq('clinic_id', ctx.clinicId)
+
+  // Pendência do caixa (ainda não paga) acompanha o novo valor.
+  const { data: pend } = await ctx.admin
+    .from('central_cashier')
+    .select('id, amount, status')
+    .eq('clinic_id', ctx.clinicId).eq('source_id', invoiceId).eq('status', 'pending')
+  for (const p of (pend ?? [])) {
+    const next = Math.round(Math.max(0, Number(p.amount) - amount) * 100) / 100
+    if (next <= 0) await ctx.admin.from('central_cashier').delete().eq('id', p.id)
+    else await ctx.admin.from('central_cashier').update({ amount: next }).eq('id', p.id)
+  }
+
+  await logAudit({
+    action: 'EXAM_BILLING_REVERSED',
+    entity_type: 'invoices',
+    entity_id: invoiceId,
+    details: {
+      service_line_id: line.id, exam: line.name_snapshot,
+      valor_estornado: amount,
+      total_anterior: plan.newTotal + amount,
+      total_novo: plan.newTotal,
+      item_removido: match?.id ?? null,
+      fatura_zerada: plan.clearsInvoice,
+      autor: ctx.userId,
+      origem: 'rejeicao_de_exame',
+    },
+  })
+  return plan.message
+}
+
+/**
+ * Item 6 — ajusta (ou não) o contas a PAGAR do laboratório parceiro quando a
+ * linha volta rejeitada. Quem decide é `flow_config.cancela_custo_lab_na_recusa`.
+ */
+async function adjustPartnerLabCost(ctx: Ctx, line: LineRow): Promise<string> {
+  const consultationId = line.consultation_id as string
+
+  const { data: cons } = await ctx.admin
+    .from('consultations')
+    .select('id, lab_partner_clinic_id')
+    .eq('id', consultationId).eq('clinic_id', ctx.clinicId).maybeSingle()
+  const partnerId = (cons as { lab_partner_clinic_id?: string | null } | null)?.lab_partner_clinic_id
+  if (!partnerId) {
+    return ctx.cancelaCustoLab ? 'Sem laboratório parceiro neste atendimento — nada a ajustar.' : 'não aplicável'
+  }
+
+  const [{ data: rules }, { data: payables }] = await Promise.all([
+    ctx.admin.from('partner_clinic_commissions')
+      .select('item_id, item_type, commission_type, value')
+      .eq('clinic_id', ctx.clinicId).eq('partner_clinic_id', partnerId).eq('is_active', true),
+    ctx.admin.from('financial_entries')
+      .select('id, amount, status')
+      .eq('clinic_id', ctx.clinicId).eq('consultation_id', consultationId)
+      .eq('type', 'payable').eq('category', 'Laboratório')
+      .order('created_at', { ascending: false }).limit(1),
+  ])
+
+  const rejectedCost = computeLabCost(
+    [{ stock_item_id: line.stock_item_id as string | null, price_snapshot: Number(line.price_snapshot ?? 0), quantity: Number(line.quantity ?? 1) }],
+    (rules ?? []) as { item_id?: string | null; item_type?: string | null; commission_type: string; value: number }[],
+  )
+  const payable = ((payables ?? [])[0] as LabPayable | undefined) ?? null
+  const plan = planLabCostOnRejection(ctx.cancelaCustoLab, payable, rejectedCost)
+
+  if (plan.action === 'reduce' || plan.action === 'cancel') {
+    const now = new Date().toISOString()
+    if (plan.action === 'cancel') {
+      await ctx.admin.from('financial_entries')
+        .update({ status: 'cancelled', updated_at: now })
+        .eq('id', payable!.id).eq('clinic_id', ctx.clinicId)
+    } else {
+      await ctx.admin.from('financial_entries')
+        .update({ amount: plan.newAmount, updated_at: now })
+        .eq('id', payable!.id).eq('clinic_id', ctx.clinicId)
+    }
+    await logAudit({
+      action: 'EXAM_LAB_COST_ADJUSTED',
+      entity_type: 'financial_entries',
+      entity_id: payable!.id,
+      details: {
+        service_line_id: line.id, exam: line.name_snapshot,
+        acao: plan.action, valor_anterior: payable!.amount, valor_novo: plan.newAmount,
+        custo_do_exame: rejectedCost, autor: ctx.userId, origem: 'rejeicao_de_exame',
+      },
+    })
+  }
+  return plan.reason
+}
+
 /**
  * O laboratório marca o exame como NÃO REALIZADO, com motivo obrigatório.
  * Efeitos: estado 'rejected', trava de cobrança, notificação automática de quem
@@ -287,8 +454,28 @@ export async function rejectExamLine(input: {
 
   const line = await loadLine(ctx, input.serviceLineId)
   if (!line) return { error: 'Exame não encontrado.' }
+
+  // ── Item 7 da Tarefa 0: exame JÁ FATURADO ──────────────────────────────────
+  // Com `estorna_exame_faturado_na_recusa` DESLIGADA (padrão) o comportamento é
+  // o atual: recusa + orientação. Ligada, o sistema estorna a fatura EM ABERTO
+  // e registra trilha. Fatura paga/baixada é recusada de qualquer forma.
+  let reversal: Awaited<ReturnType<typeof prepareBilledReversal>> = null
   if (line.billed_in_invoice_id) {
-    return { error: 'Este exame já foi faturado. Faça o estorno no Financeiro antes de marcar como não realizado.' }
+    reversal = await prepareBilledReversal(ctx, line.billed_in_invoice_id as string, line)
+    if (reversal.plan.action === 'refuse') {
+      await logAudit({
+        action: 'EXAM_REJECT_BLOCKED_BILLED',
+        entity_type: 'consultations',
+        entity_id: line.consultation_id as string,
+        details: {
+          service_line_id: line.id, exam: line.name_snapshot,
+          invoice_id: line.billed_in_invoice_id,
+          auto_reversal_enabled: ctx.estornaFaturado,
+          motivo: reversal.plan.message,
+        },
+      })
+      return { error: reversal.plan.message }
+    }
   }
 
   const step = nextExamState((line.exam_state as ExamState | null) ?? null, { type: 'reject' })
@@ -314,6 +501,15 @@ export async function rejectExamLine(input: {
     .eq('id', line.id).eq('clinic_id', ctx.clinicId)
   if (error) return { error: 'Erro ao registrar a não realização: ' + error.message }
 
+  // Item 7 — estorno da fatura em aberto (só quando a clínica ativou).
+  let reversalApplied: string | null = null
+  if (reversal && reversal.plan.action === 'reverse') {
+    reversalApplied = await applyBilledReversal(ctx, reversal, line)
+  }
+
+  // Item 6 — custo do laboratório parceiro deixa de ser devido (configurável).
+  const labAdjust = await adjustPartnerLabCost(ctx, line)
+
   await logAudit({
     action: 'EXAM_REJECTED',
     entity_type: 'consultations',
@@ -321,6 +517,9 @@ export async function rejectExamLine(input: {
     details: {
       service_line_id: line.id, exam: line.name_snapshot,
       reason_id: reason.id, reason: reason.label, note: input.note?.trim() || null,
+      rejected_by: ctx.userId,
+      faturamento_estornado: reversalApplied,
+      custo_laboratorio: labAdjust,
     },
   })
 
