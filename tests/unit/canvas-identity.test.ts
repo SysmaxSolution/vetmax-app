@@ -7,7 +7,7 @@ import {
   DEFAULT_IDENTITY, hydrateIdentity, buildIdentityElements, applyIdentityToState,
   isIdentityElement, identityPageConfig,
 } from '@/lib/canva/identity'
-import { defaultCanvasState } from '@/lib/canva/canvas-state'
+import { defaultCanvasState, type CanvasState } from '@/lib/canva/canvas-state'
 import { makeTextElement } from '@/lib/canva/elements'
 import { collectPinnedElements, expandPages } from '@/lib/canva/pagination'
 
@@ -83,7 +83,7 @@ describe('identity — aplicação no canvas_state', () => {
 
   it('modelo com conteúdo mantém a página e os elementos próprios; reaplicar substitui sem duplicar', () => {
     const own = makeTextElement({ content: 'meu texto' })
-    let cs = { ...defaultCanvasState(), elements: [own] }
+    let cs: CanvasState = { ...defaultCanvasState(), elements: [own] }
     cs = applyIdentityToState(cs, DEFAULT_IDENTITY)
     const n1 = cs.elements.length
     expect(cs.page.size).toBe('A4')
