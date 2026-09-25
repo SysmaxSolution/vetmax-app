@@ -13,6 +13,7 @@ const CATALOG = [
 ]
 
 const BASE = {
+  starterBase: 49,
   premiumBase: 99,
   enterpriseBase: 299,
   annualDiscountPercent: 20,
@@ -83,7 +84,7 @@ describe('computePlanPrice', () => {
 
   it('arredonda centavos corretamente (2 casas)', () => {
     const t = computePlanPrice({
-      plan: 'premium', premiumBase: 0.1, enterpriseBase: 0,
+      plan: 'premium', starterBase: 0, premiumBase: 0.1, enterpriseBase: 0,
       annualDiscountPercent: 33.33,
       catalog: [{ module_key: 'x', monthly_price: 0.2, included_in_plan: 'enterprise' }],
       addonKeys: ['x'], cycle: 'yearly',

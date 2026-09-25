@@ -1,3 +1,5 @@
+export {} // isola o escopo do arquivo (evita colisão de nomes globais entre testes)
+
 /**
  * Unit — Validação microchip ISO 11784/11785 (15 dígitos numéricos)
  *
