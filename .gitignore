@@ -67,6 +67,19 @@ pw-results.txt
 # ─── TypeScript build info (derivado, não fonte de verdade) ──────────────────
 *.tsbuildinfo
 
+# ─── Sensível / jurídico / dados reais — NUNCA commitar (LGPD) ────────────────
+/contratos/
+/backup-prod-offboard/
+/integracoes/
+/Orion/
+/.claire/
+/.tmp/
+_fb_full_out.txt
+
+# ─── Imagens médicas DICOM e assets pesados de laboratório ───────────────────
+*.dcm
+public/lab-agent/
+
 # ─── Python cache ─────────────────────────────────────────────────────────────
 **/__pycache__/
 *.pyc
