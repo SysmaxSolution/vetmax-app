@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
 const SPECIES_EMOJI: Record<string, string> = {
   dog: '🐕', cat: '🐈', bird: '🐦', rabbit: '🐰', rodent: '🐭', reptile: '🦎', fish: '🐟', exotic: '🐾',
 }
-const serif = { fontFamily: 'var(--font-fraunces-p), serif' }
+const serif = { fontFamily: 'var(--pt-heading-font)' }
 
 export default async function PartnerHome() {
   const ctx = await getPartnerContext()
@@ -29,15 +29,15 @@ export default async function PartnerHome() {
   if (ctx.routineOff) {
     return (
       <div className="px-5 sm:px-8 lg:px-12 py-16 flex justify-center">
-        <div className="max-w-md w-full bg-white rounded-2xl border border-[#EDE9E0] p-10 text-center">
-          <ShieldCheck className="h-10 w-10 text-[#C9A96A] mx-auto mb-4" />
-          <h1 className="text-xl text-[#16221C]" style={serif}>Portal do Veterinário indisponível</h1>
-          <p className="mt-3 text-sm text-[#6A7A72] leading-relaxed">
+        <div className="max-w-md w-full bg-white rounded-2xl border border-[var(--pt-border)] p-10 text-center">
+          <ShieldCheck className="h-10 w-10 text-[var(--pt-accent)] mx-auto mb-4" />
+          <h1 className="text-xl text-[var(--pt-text)]" style={serif}>Portal do Veterinário indisponível</h1>
+          <p className="mt-3 text-sm text-[var(--pt-muted)] leading-relaxed">
             A clínica de referência ainda não disponibilizou este portal. Fale com ela para
             receber as imagens e os laudos dos pets que você encaminhou.
           </p>
           <form action="/parceiro/sair" method="post" className="mt-6">
-            <button type="submit" className="text-xs font-medium text-[#6A7A72] hover:text-[#0E3B2E] rounded-full border border-[#EDE9E0] px-4 py-2 transition hover:border-[#C9A96A]/60">
+            <button type="submit" className="text-xs font-medium text-[var(--pt-muted)] hover:text-[var(--pt-primary-dark)] rounded-full border border-[var(--pt-border)] px-4 py-2 transition hover:border-[var(--pt-accent-ring)]">
               Sair
             </button>
           </form>
@@ -54,10 +54,11 @@ export default async function PartnerHome() {
 
   return (
     <div>
-      <section className="relative overflow-hidden bg-gradient-to-br from-[#0E3B2E] via-[#134A38] to-[#17624A]">
+      <section className="relative overflow-hidden"
+               style={{ background: 'linear-gradient(135deg, var(--pt-primary-dark), var(--pt-primary-mid) 55%, var(--pt-primary))' }}>
         <div className="absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 20% 20%, white 1px, transparent 1px)', backgroundSize: '28px 28px' }} />
         <div className="relative w-full px-5 sm:px-8 lg:px-12 py-12 sm:py-16">
-          <p className="text-[11px] uppercase tracking-[0.24em] text-[#C9A96A]">Pets encaminhados</p>
+          <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--pt-accent)]">Pets encaminhados</p>
           <h1 className="mt-3 text-3xl sm:text-4xl text-white leading-[1.05]" style={serif}>{ctx.name}</h1>
           <p className="mt-3 max-w-xl text-[15px] text-white/70">
             {ctx.kind === 'admin' ? 'Todos os pets encaminhados pela sua clínica.' : 'Os pets que você encaminhou.'} Acompanhe imagens e laudos assim que ficam prontos.
@@ -73,40 +74,40 @@ export default async function PartnerHome() {
 
       <section className="w-full px-5 sm:px-8 lg:px-12 py-10">
         <div className="flex items-baseline justify-between mb-6">
-          <h2 className="text-xl text-[#16221C]" style={serif}>Pacientes</h2>
-          <span className="text-xs text-[#9AA69F]">{pets.length} {pets.length === 1 ? 'pet' : 'pets'}</span>
+          <h2 className="text-xl text-[var(--pt-text)]" style={serif}>Pacientes</h2>
+          <span className="text-xs text-[var(--pt-muted-soft)]">{pets.length} {pets.length === 1 ? 'pet' : 'pets'}</span>
         </div>
 
         {pets.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-[#EDE9E0] p-16 text-center">
-            <PawPrint className="h-12 w-12 text-[#E5E0D5] mx-auto mb-3" />
-            <p className="text-sm text-[#9AA69F]">Nenhum pet encaminhado encontrado ainda.</p>
+          <div className="bg-white rounded-2xl border border-[var(--pt-border)] p-16 text-center">
+            <PawPrint className="h-12 w-12 text-[var(--pt-border)] mx-auto mb-3" />
+            <p className="text-sm text-[var(--pt-muted-soft)]">Nenhum pet encaminhado encontrado ainda.</p>
           </div>
         ) : (
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {pets.map(pet => (
               <Link key={pet.id} href={`/parceiro/pet/${pet.id}`}
-                    className="group bg-white rounded-2xl border border-[#EDE9E0] p-6 transition hover:shadow-[0_12px_40px_-16px_rgba(14,59,46,0.25)] hover:border-[#C9A96A]/50">
+                    className="group bg-white rounded-2xl border border-[var(--pt-border)] p-6 transition hover:shadow-[0_12px_40px_-16px_rgba(14,59,46,0.25)] hover:border-[var(--pt-accent-soft)]">
                 <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 rounded-full ring-1 ring-[#C9A96A]/40 bg-[#F2EFE8] flex items-center justify-center text-3xl flex-shrink-0">
+                  <div className="w-14 h-14 rounded-full ring-1 ring-[var(--pt-accent-line)] bg-[var(--pt-tint)] flex items-center justify-center text-3xl flex-shrink-0">
                     {SPECIES_EMOJI[pet.species ?? ''] ?? '🐾'}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-lg text-[#16221C] truncate" style={serif}>{pet.name}</p>
-                    <p className="text-xs text-[#9AA69F] truncate">{pet.tutorName ? `Tutor: ${pet.tutorName}` : '—'}</p>
+                    <p className="text-lg text-[var(--pt-text)] truncate" style={serif}>{pet.name}</p>
+                    <p className="text-xs text-[var(--pt-muted-soft)] truncate">{pet.tutorName ? `Tutor: ${pet.tutorName}` : '—'}</p>
                   </div>
                 </div>
-                <div className="mt-5 pt-4 border-t border-[#F0ECE3] flex items-center justify-between">
-                  <span className="text-xs font-medium text-[#17624A] flex items-center gap-1.5"><FileImage className="h-3.5 w-3.5" />{pet.imagingCount} exame(s)</span>
-                  <ArrowRight className="h-4 w-4 text-[#C9A96A] group-hover:translate-x-1 transition-transform" />
+                <div className="mt-5 pt-4 border-t border-[var(--pt-border-soft)] flex items-center justify-between">
+                  <span className="text-xs font-medium text-[var(--pt-primary)] flex items-center gap-1.5"><FileImage className="h-3.5 w-3.5" />{pet.imagingCount} exame(s)</span>
+                  <ArrowRight className="h-4 w-4 text-[var(--pt-accent)] group-hover:translate-x-1 transition-transform" />
                 </div>
               </Link>
             ))}
           </div>
         )}
 
-        <p className="mt-8 text-[11px] text-[#9AA69F] flex items-center gap-2">
-          <ShieldCheck className="h-3.5 w-3.5 text-[#17624A]" />
+        <p className="mt-8 text-[11px] text-[var(--pt-muted-soft)] flex items-center gap-2">
+          <ShieldCheck className="h-3.5 w-3.5 text-[var(--pt-primary)]" />
           Acesso restrito ao veterinário solicitante. Conteúdo sigiloso, sob responsabilidade do centro de diagnóstico.
         </p>
       </section>

@@ -290,11 +290,14 @@ console.log('  (o efeito dessas duas políticas no caixa é coberto por scripts/
 // o gate no caminho de SESSÃO — que é outro do caminho de menu/rota do staff.
 
 // helper: requisição com cookie próprio do portal (sem a sessão de staff)
-async function publicPage(path, cookie) {
+// `follow`: segue redirects, como faria o navegador. Necessário desde que
+// `/portal` virou a porta de entrada SEM contexto de clínica — com um único
+// vínculo ela redireciona para `/portal/c/<slug>`, onde a lista de pets mora.
+async function publicPage(path, cookie, follow = false) {
   const bust = (path.includes('?') ? '&' : '?') + 'qa=' + randomBytes(4).toString('hex')
   const r = await fetch(`${BASE}${path}${bust}`, {
     headers: { cookie, 'user-agent': 'verify-flag-isolation', 'cache-control': 'no-store' },
-    redirect: 'manual',
+    redirect: follow ? 'follow' : 'manual',
   })
   const body = r.status >= 300 && r.status < 400 ? '' : stripScripts(await r.text())
   return { status: r.status, body, shows: (re) => r.status === 200 && re.test(body) }
@@ -319,7 +322,7 @@ else {
     const cookie = `sysvet_tutor=${tutorSessionToken}`
     for (const on of [false, true]) {
       await setFlag('portal_enabled', on)
-      const p = await publicPage('/portal', cookie)
+      const p = await publicPage('/portal', cookie, true)
       const petVisivel = p.shows(/\[QA\] Pet Isolamento/)
       const msgIndisponivel = p.shows(/Área do Tutor indisponível/i)
       check(petVisivel === on,

@@ -12,7 +12,7 @@ export default async function PreconsultPage({ params }: { params: Promise<{ id:
 
   if ('error' in res) {
     if (res.error === 'auth') {
-      return <div className="px-5 sm:px-8 lg:px-12 py-16 text-center text-[#6A7A72]">Sua sessão expirou. Acesse novamente pelo link do WhatsApp.</div>
+      return <div className="px-5 sm:px-8 lg:px-12 py-16 text-center text-[var(--pt-muted)]">Sua sessão expirou. Acesse novamente pelo link do WhatsApp.</div>
     }
     notFound()
   }
@@ -20,7 +20,7 @@ export default async function PreconsultPage({ params }: { params: Promise<{ id:
   return (
     <div className="w-full px-5 sm:px-8 lg:px-12 py-10">
       <div className="max-w-2xl mx-auto space-y-6">
-        <Link href={`/portal/pet/${id}`} className="inline-flex items-center gap-1 text-sm text-[#6A7A72] hover:text-[#0E3B2E]">
+        <Link href={`/portal/pet/${id}`} className="inline-flex items-center gap-1 text-sm text-[var(--pt-muted)] hover:text-[var(--pt-primary-dark)]">
           <ChevronLeft className="h-4 w-4" />Voltar ao pet
         </Link>
         <PreconsultForm petId={id} petName={res.name} />
