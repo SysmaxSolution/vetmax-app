@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev --port 4000",
     "dev:turbo": "next dev --turbopack --port 4000",
-    "build": "next build",
+    "build": "cross-env NODE_OPTIONS=--max-old-space-size=8192 next build",
     "start": "next start",
     "lint": "eslint",
     "db:migrate": "node scripts/migrate.js",
@@ -91,6 +91,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/react-rnd": "^7.4.4",
+    "cross-env": "^7.0.3",
     "csv-parse": "^5.6.0",
     "dotenv": "^16.4.7",
     "eslint": "^9",
