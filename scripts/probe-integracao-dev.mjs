@@ -1,4 +1,5 @@
-// Sonda o banco DEV: quais objetos-chave das migrations da integração já existem.
+// Sonda o banco DEV: quais objetos-chave das migrations da integração já existem
+// e quais dados de demonstração as quatro frentes deixaram prontos.
 // Credenciais SOMENTE via .env.local (SUPABASE_DEV_DB_PASSWORD) — nunca no código.
 import pg from 'pg'; import { config } from 'dotenv'
 import { resolve, dirname } from 'path'; import { fileURLToPath } from 'url'
@@ -27,4 +28,17 @@ const ck = await c.query(
 console.log('0486 check de integridade:', ck.rows.map(r => r.conname).join(', ') || '(ausente)')
 const b = await c.query(`SELECT id FROM storage.buckets WHERE id IN ('clinic-fonts','exam-graphs') ORDER BY 1`)
 console.log('buckets:', b.rows.map(r => r.id).join(', ') || '(nenhum)')
+
+// ── Dados de demonstração por frente (multi-tenant: sempre por clinic_id) ────
+const cl = await c.query(
+  `SELECT id, name, portal_slug FROM clinics WHERE name ILIKE '%animais%' ORDER BY name`)
+for (const r of cl.rows) {
+  const tpl = await c.query(
+    `SELECT count(*)::int AS n FROM document_templates WHERE clinic_id = $1`, [r.id])
+  const doc = await c.query(
+    `SELECT count(*)::int AS n FROM patient_documents WHERE clinic_id = $1 AND template_id IS NOT NULL`, [r.id])
+  const gr = await c.query(
+    `SELECT count(*)::int AS n FROM exam_result_graphs WHERE clinic_id = $1`, [r.id])
+  console.log(`clínica "${r.name}" (${r.id}) slug=${r.portal_slug ?? '—'} | modelos Canvas: ${tpl.rows[0].n} | documentos emitidos: ${doc.rows[0].n} | gráficos de hemograma: ${gr.rows[0].n}`)
+}
 await c.end()
