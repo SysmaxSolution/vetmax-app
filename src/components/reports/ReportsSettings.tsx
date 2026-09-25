@@ -32,6 +32,7 @@ const LABELS: Record<keyof ReportsEnabled, string> = {
   dre_company:     'DRE por CNPJ',
   boleto_movement: 'Movimentação de Boletos',
   exam_rejections: 'Exames Não Realizados',
+  client_statement: 'Extrato do Cliente (pago × em aberto, com PDF)',
 }
 
 export default function ReportsSettings({ enabled, onSave }: Props) {

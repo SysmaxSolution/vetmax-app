@@ -8,6 +8,7 @@ import {
   getEntryContext,
   type FinancialEntry, type EntryType, type BaixarTituloData, type EntryContext,
 } from '@/lib/actions/financial'
+import { getEntrySettler } from '@/lib/actions/client-statement'
 
 // ─── Static lists ─────────────────────────────────────────────────────────────
 
@@ -109,6 +110,19 @@ export default function TituloModal({
     })
     return () => { cancelled = true }
   }, [entry?.id, innerMode])
+
+  // ── Quem deu baixa (pedido da Bruna, treinamento 18/09/2026) ───────────────
+  // `undefined` = ainda carregando · `null` = título sem baixa / sem ator.
+  const [settler, setSettler] = useState<{ label: string; source: string } | null | undefined>(undefined)
+  useEffect(() => {
+    if (!entry?.id || entry.status !== 'paid' || innerMode !== 'edit') { setSettler(null); return }
+    let cancelled = false
+    getEntrySettler(entry.id).then(res => {
+      if (cancelled) return
+      setSettler(res && 'error' in res ? null : res)
+    }).catch(() => { if (!cancelled) setSettler(null) })
+    return () => { cancelled = true }
+  }, [entry?.id, entry?.status, innerMode])
 
   // ── Campos da baixa ────────────────────────────────────────────────────────
   const [paymentDate,       setPaymentDate]        = useState(entry?.payment_date ?? todayStr())
@@ -374,6 +388,20 @@ export default function TituloModal({
                         readOnly
                         value={formatDate(entry.payment_date)}
                         className={`${fc} cursor-not-allowed bg-slate-100 text-slate-400`}
+                      />
+                    </div>
+                  )}
+                  {/* Rastreabilidade da baixa (pedido da Bruna, 18/09/2026):
+                      qual operador deu baixa, sem sair da tela. */}
+                  {entry.status === 'paid' && (
+                    <div className="col-span-2">
+                      <label className={lc}>Baixa feita por</label>
+                      <input
+                        readOnly
+                        value={settler === undefined ? 'Carregando…' : (settler?.label ?? 'Não registrado')}
+                        className={`${fc} cursor-not-allowed bg-slate-100 ${
+                          settler && settler.source !== 'unknown' ? 'text-slate-600' : 'text-slate-400'
+                        }`}
                       />
                     </div>
                   )}

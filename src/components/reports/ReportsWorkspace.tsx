@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { BarChart3, Users, DollarSign, TrendingUp, PieChart, MessageCircle, ClipboardList, PawPrint, Percent, ShieldAlert, CalendarClock, LineChart, Layers, Boxes, LayoutDashboard, Sparkles, Barcode, FlaskConical } from 'lucide-react'
+import { BarChart3, Users, DollarSign, TrendingUp, PieChart, MessageCircle, ClipboardList, PawPrint, Percent, ShieldAlert, CalendarClock, LineChart, Layers, Boxes, LayoutDashboard, Sparkles, Barcode, FlaskConical, FileText } from 'lucide-react'
 import BoletoMovementReport from '@/components/financial/BoletoMovementReport'
 import PetFrequencyReport from './PetFrequencyReport'
 import BIDashboard from './BIDashboard'
@@ -9,6 +9,7 @@ import SmartReportBuilder from './SmartReportBuilder'
 import ControlledBookReport from './ControlledBookReport'
 import ExamRejectionsReport from './ExamRejectionsReport'
 import AgingReport from './AgingReport'
+import ClientStatementReport from './ClientStatementReport'
 import CashflowProjectionReport from './CashflowProjectionReport'
 import RevenueBreakdownReport from './RevenueBreakdownReport'
 import StockPositionReport from './StockPositionReport'
@@ -39,7 +40,7 @@ const MODULE_ORDER: { key: ModuleKey; label: string }[] = [
 ]
 
 interface ReportCategory {
-  key:        keyof ReportsEnabled | 'commissions' | 'controlled' | 'aging' | 'cashflow' | 'revenue' | 'stock_position' | 'clients' | 'dre_company' | 'dashboard' | 'smart' | 'boleto_movement' | 'exam_rejections'
+  key:        keyof ReportsEnabled | 'commissions' | 'controlled' | 'aging' | 'cashflow' | 'revenue' | 'stock_position' | 'clients' | 'dre_company' | 'dashboard' | 'smart' | 'boleto_movement' | 'exam_rejections' | 'client_statement'
   label:      string
   icon:       React.ComponentType<{ className: string }>
   description: string
@@ -55,6 +56,7 @@ const CATEGORY_MODULE: Record<string, ModuleKey> = {
   operational: 'operacional', stock_position: 'estoque',
   whatsapp: 'comercial', clients: 'comercial', controlled: 'regulatorio',
   exam_rejections: 'operacional',
+  client_statement: 'financeiro',
 }
 
 interface Props {
@@ -195,6 +197,13 @@ export default function ReportsWorkspace({ initialEnabled, usesExamRejection = f
       icon:        Users,
       description: 'Novos vs recorrentes, ticket médio e faturamento por cliente no período.',
       component:   <ClientsReport />,
+    },
+    {
+      key:         'client_statement',
+      label:       'Extrato do Cliente',
+      icon:        FileText,
+      description: 'Pago × em aberto de um tutor, clinica parceira ou protetor no periodo, com o operador que deu baixa, quebra por empresa faturante e PDF para entregar ou enviar.',
+      component:   <ClientStatementReport />,
     },
     {
       key:         'stock_position',

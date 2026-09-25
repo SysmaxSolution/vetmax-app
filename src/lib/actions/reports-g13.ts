@@ -725,6 +725,8 @@ export interface ReportsEnabled {
   dre_company:      boolean
   boleto_movement:  boolean
   exam_rejections:  boolean
+  // Extrato do Cliente (treinamento Animais 18/09/2026)
+  client_statement: boolean
 }
 
 const REPORTS_DEFAULTS: ReportsEnabled = {
@@ -747,6 +749,7 @@ const REPORTS_DEFAULTS: ReportsEnabled = {
   dre_company:      true,
   boleto_movement:  true,
   exam_rejections:  true,
+  client_statement: true,
 }
 
 export async function getReportsEnabled(): Promise<ReportsEnabled | { error: string }> {
@@ -785,6 +788,7 @@ export async function getReportsEnabled(): Promise<ReportsEnabled | { error: str
     dre_company:     raw.dre_company     ?? true,
     boleto_movement: raw.boleto_movement ?? true,
     exam_rejections: raw.exam_rejections ?? true,
+    client_statement: raw.client_statement ?? true,
   }
 }
 
