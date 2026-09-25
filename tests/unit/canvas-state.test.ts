@@ -41,8 +41,24 @@ describe('canvas-state', () => {
 
     it('rejeita page.size inválido', () => {
       const s = defaultCanvasState()
-      ;(s.page as any).size = 'Letter'
+      ;(s.page as any).size = 'B9'
       expect(isCanvasState(s)).toBe(false)
+    })
+
+    it('aceita os tamanhos novos (Letter/A6/Etiqueta) e custom com mm', () => {
+      for (const size of ['Letter', 'A6', 'Etiqueta']) {
+        const s = defaultCanvasState()
+        ;(s.page as any).size = size
+        expect(isCanvasState(s)).toBe(true)
+      }
+      const c = defaultCanvasState()
+      c.page = { ...c.page, size: 'custom', customMm: { w: 100, h: 150 } }
+      expect(isCanvasState(c)).toBe(true)
+      // custom sem customMm é inválido (estrito) — hydrate corrige para A4
+      const bad = defaultCanvasState()
+      ;(bad.page as any).size = 'custom'
+      expect(isCanvasState(bad)).toBe(false)
+      expect(hydrateCanvasState(bad).page.size).toBe('A4')
     })
 
     it('rejeita elements que não é array', () => {

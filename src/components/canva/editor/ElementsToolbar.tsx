@@ -21,21 +21,26 @@ import {
 } from 'lucide-react'
 import {
   tagsByGroup, imageTagsByGroup, type DynamicTagDef, type DynamicImageTagDef,
-  TAG_GROUP_LABEL, type TagGroup,
+  TAG_GROUP_LABEL, TAG_GROUPS_ORDER, type TagGroup,
 } from '@/lib/canva/dynamic-tags'
+import { Hash } from 'lucide-react'
 import type {
   CanvasElement, RepeaterSource,
 } from '@/lib/canva/elements'
 import {
   makeTextElement, makeImageElement, makeLineElement,
   makeDynamicTagElement, makeDynamicImageElement, makeRepeaterElement,
-  makeFillableFieldElement,
+  makeFillableFieldElement, makeQrValidationElement,
 } from '@/lib/canva/elements'
 import { MACRO_BLOCKS, type MacroBlock } from '@/lib/canva/macros'
+import { QrCode, BadgeCheck } from 'lucide-react'
 
 interface Props {
   onAdd: (element: CanvasElement) => void
   onAddMany: (elements: CanvasElement[]) => void
+  /** Macro "Aplicar identidade da clínica" (cabeçalho/rodapé pinados +
+   *  assinatura) — implementada pelo CanvasEditor. */
+  onApplyIdentity?: () => void
   /** Armar inserção: o próximo clique no canvas vai posicionar os elementos
    *  produzidos por factory(x, y). label aparece na faixa do banner. */
   onArm: (factory: (x: number, y: number) => CanvasElement[], label: string) => void
@@ -63,7 +68,7 @@ function placedAt(el: CanvasElement, x: number, y: number): CanvasElement {
 }
 
 export default function ElementsToolbar({
-  onAdd, onAddMany, onArm, armed, onUploadImage, computeStartY,
+  onAdd, onAddMany, onArm, armed, onUploadImage, computeStartY, onApplyIdentity,
 }: Props) {
   const [modal, setModal] = useState<'tags' | 'images' | 'repeater' | 'blocks' | null>(null)
   const [uploading, setUploading] = useState(false)
@@ -142,6 +147,37 @@ export default function ElementsToolbar({
           icon={<LayoutTemplate className="w-5 h-5" />}
           label="Blocos Prontos"
           onClick={() => setModal('blocks')}
+        />
+
+        {onApplyIdentity && (
+          <ToolButton
+            icon={<BadgeCheck className="w-5 h-5" />}
+            label="Identidade da Clínica"
+            onClick={onApplyIdentity}
+          />
+        )}
+
+        <ToolButton
+          icon={<QrCode className="w-5 h-5" />}
+          label="QR Validação"
+          onClick={() => onArm(
+            (x, y) => [placedAt(makeQrValidationElement(), x, y)],
+            'QR de validação (rodapé, repete em todas)',
+          )}
+        />
+
+        <ToolButton
+          icon={<Hash className="w-5 h-5" />}
+          label="Pág. X de Y"
+          onClick={() => onArm(
+            (x, y) => [placedAt(makeTextElement({
+              content: 'Pág. {{doc.page}} de {{doc.total_pages}}',
+              box: { x: 0, y: 0, w: 22, h: 3 },
+              pin: 'footer',
+              typography: { fontSize: 8, align: 'right', color: '#64748b' },
+            }), x, y)],
+            'Numeração de páginas (rodapé, repete em todas)',
+          )}
         />
 
         <ToolButton
@@ -360,7 +396,7 @@ function TagsModal({
           <GroupChip active={activeGroup === 'all'} onClick={() => setActiveGroup('all')}>
             Todos
           </GroupChip>
-          {(['pet', 'tutor', 'consulta', 'vet', 'clinica'] as TagGroup[]).map(g => (
+          {TAG_GROUPS_ORDER.map(g => (
             <GroupChip key={g} active={activeGroup === g} onClick={() => setActiveGroup(g)}>
               {TAG_GROUP_LABEL[g]}
             </GroupChip>
