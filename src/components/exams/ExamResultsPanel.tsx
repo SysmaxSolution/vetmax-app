@@ -4,7 +4,7 @@
 // liberação pelo MV (2.4). Rascunho editável; liberado é imutável.
 
 import { useEffect, useState } from 'react'
-import { Loader2, Plus, Trash2, FlaskConical, CheckCircle2, Upload, Lock, Printer } from 'lucide-react'
+import { Loader2, Plus, Trash2, FlaskConical, CheckCircle2, Upload, Lock, Printer, FileText } from 'lucide-react'
 import {
   listExamResults, saveExamResults, releaseExamResults, importHL7Results,
   type ExamResultRow,
@@ -81,6 +81,7 @@ export default function ExamResultsPanel({ consultationId, canRelease = true }: 
       <div className="flex items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/60 px-4 py-3">
         <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2"><FlaskConical className="h-4 w-4 text-teal-500" /> Resultados do exame</h3>
         <div className="flex items-center gap-3">
+          <a href={`/dashboard/exams/${consultationId}/laudo`} className="flex items-center gap-1.5 text-xs font-medium text-teal-700 hover:text-teal-900"><FileText className="h-3.5 w-3.5" /> Ver laudo</a>
           <button onClick={printLabel} className="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-700"><Printer className="h-3.5 w-3.5" /> Etiqueta do tubo</button>
           <button onClick={() => setShowHl7(v => !v)} className="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-700"><Upload className="h-3.5 w-3.5" /> Importar HL7</button>
         </div>

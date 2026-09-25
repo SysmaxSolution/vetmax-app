@@ -7,7 +7,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
-import { parseHL7ORU } from '@/lib/lab/hl7-parser'
+import { parseHL7ORU, stripEncapsulatedData } from '@/lib/lab/hl7-parser'
+import { persistExamGraphs } from '@/lib/lab/persist-graphs'
 import { resolveAnalyte, normKey, type AnalyteMapping } from '@/lib/lab/analyte-resolve'
 import { notifyTutorResultReleased } from '@/lib/actions/tutor-portal'
 import { usesExamRejectionFlow } from '@/lib/exams/rejection-gate'
@@ -94,6 +95,10 @@ export async function importHL7Results(consultationId: string, hl7: string): Pro
   const graphByCode = new Map<string, unknown>()
   for (const g of parsed.graphs) if (g.code) graphByCode.set(normKey(g.code), { kind: g.name, mime: g.mime, encoding: g.encoding, data: g.data })
 
+  // Uma mensagem real do URIT tem ~46 KB de base64 e estourava o teto de 20 000
+  // (raw_hl7 ficava NULL). Guardamos a versão sem os payloads das curvas.
+  const lean = stripEncapsulatedData(hl7)
+
   const rows = parsed.analytes.map(a => ({
     clinic_id: ctx.clinic_id, consultation_id: consultationId,
     panel: parsed.panel, analyte_code: a.code, analyte_name: a.name,
@@ -101,10 +106,12 @@ export async function importHL7Results(consultationId: string, hl7: string): Pro
     value_text: a.value, unit: a.unit, ref_low: a.ref_low, ref_high: a.ref_high,
     ref_text: a.ref_text, flag: a.flag, status: 'draft', source: 'hl7', created_by: ctx.user_id,
     graph_data: a.code && graphByCode.has(normKey(a.code)) ? graphByCode.get(normKey(a.code)) : null,
-    raw_hl7: hl7.length <= 20000 ? hl7 : null,
+    raw_hl7: lean.length <= 20000 ? lean : null,
   }))
   const { error } = await ctx.admin.from('exam_results').insert(rows)
   if (error) return { error: 'Erro ao importar HL7: ' + error.message }
+  // Curvas (ED) vão para a tabela própria — uma vez por consulta, não por analito.
+  await persistExamGraphs(ctx.admin, ctx.clinic_id, consultationId, parsed.graphs)
   revalidatePath(`/dashboard/exams/${consultationId}`)
   return { ok: true, count: rows.length }
 }
