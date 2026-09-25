@@ -130,7 +130,7 @@ async function main() {
   const { rows: old } = await q(
     `SELECT c.id FROM consultations c
        JOIN patients p ON p.id = c.patient_id
-      WHERE c.clinic_id = $1 AND p.name LIKE $2`, [CLINIC_ID, `${TAG}%`])
+      WHERE c.clinic_id = $1 AND p.notes = $2`, [CLINIC_ID, TAG])
   for (const r of old) {
     await q('DELETE FROM exam_result_graphs WHERE clinic_id=$1 AND consultation_id=$2', [CLINIC_ID, r.id])
     await q('DELETE FROM exam_results      WHERE clinic_id=$1 AND consultation_id=$2', [CLINIC_ID, r.id])
@@ -182,8 +182,10 @@ async function main() {
   }
   console.log(`MV: ${vet ? `${vet.full_name} (CRMV ${vet.crmv ?? '—'})` : 'nenhum encontrado — laudo sai sem assinatura'}`)
 
-  // 4) Tutor de teste (find-or-create)
-  const tutorName = `${TAG} Tutor de Demonstração`
+  // 4) Tutor de teste (find-or-create).
+  // O marcador do seed vive em patients.notes, NÃO no nome — o nome do pet sai
+  // impresso no laudo e não pode carregar sujeira de script.
+  const tutorName = 'Tutor de Demonstração (seed laudo)'
   const { rows: tFound } = await q('SELECT id FROM tutors WHERE clinic_id=$1 AND name=$2 LIMIT 1', [CLINIC_ID, tutorName])
   const tutor = tFound[0] ?? (await q(
     `INSERT INTO tutors (clinic_id, name, email, phone)
@@ -208,12 +210,12 @@ async function main() {
   const out = []
   for (const sc of scenarios) {
     const released = sc.key === 'released'
-    const petName = `${TAG} ${sc.pet}`
-    const { rows: pFound } = await q('SELECT id FROM patients WHERE clinic_id=$1 AND name=$2 LIMIT 1', [CLINIC_ID, petName])
+    const { rows: pFound } = await q(
+      'SELECT id FROM patients WHERE clinic_id=$1 AND name=$2 AND notes=$3 LIMIT 1', [CLINIC_ID, sc.pet, TAG])
     const pet = pFound[0] ?? (await q(
-      `INSERT INTO patients (clinic_id, tutor_id, name, species, breed, gender, neutered, birth_date)
-       VALUES ($1,$2,$3,'dog','SRD Canino',$4,true,$5) RETURNING id`,
-      [CLINIC_ID, tutor.id, petName, sc.pet === 'Mel' ? 'female' : 'male', '2017-08-13'])).rows[0]
+      `INSERT INTO patients (clinic_id, tutor_id, name, species, breed, gender, neutered, birth_date, notes)
+       VALUES ($1,$2,$3,'dog','SRD Canino',$4,true,$5,$6) RETURNING id`,
+      [CLINIC_ID, tutor.id, sc.pet, sc.pet === 'Mel' ? 'female' : 'male', '2017-08-13', TAG])).rows[0]
 
     const { rows: cFound } = await q(
       'SELECT id FROM consultations WHERE clinic_id=$1 AND patient_id=$2 ORDER BY created_at LIMIT 1', [CLINIC_ID, pet.id])

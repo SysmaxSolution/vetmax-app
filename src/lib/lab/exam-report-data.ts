@@ -51,8 +51,23 @@ export const speciesLabel = (s: string | null | undefined): string =>
 export const genderLabel = (g: string | null | undefined): string =>
   g === 'male' ? 'macho' : g === 'female' ? 'fêmea' : 'sexo indef.'
 
-export const neuteredLabel = (n: boolean | null | undefined): string =>
-  n === true ? 'castrado(a)' : n === false ? 'não castrado(a)' : 'castração indef.'
+export const neuteredLabel = (n: boolean | null | undefined, gender?: string | null): string => {
+  if (n === null || n === undefined) return 'castração indef.'
+  const o = gender === 'female' ? 'a' : gender === 'male' ? 'o' : 'o(a)'
+  return n ? `castrad${o}` : `não castrad${o}`
+}
+
+/**
+ * CRMV como no laudo da Animais: "CRMV-SP: 73073".
+ * A coluna guarda no formato UF+número ("SP73073", validado por CHECK), então
+ * concatenar "CRMV-SP " na frente sairia "CRMV-SP SP73073".
+ */
+export function formatCrmv(crmv: string | null | undefined): string | null {
+  const s = String(crmv ?? '').trim().toUpperCase()
+  if (!s) return null
+  const m = s.match(/^([A-Z]{2})\s*-?\s*(\d{3,10})$/)
+  return m ? `CRMV-${m[1]}: ${m[2]}` : `CRMV: ${s}`
+}
 
 /** Idade no formato da Animais: "9a 9d", "3a 2m", "5m 12d". */
 export function ageLabel(birth: string | null | undefined, now = new Date()): string | null {

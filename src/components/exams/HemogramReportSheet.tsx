@@ -5,8 +5,12 @@
 // Veterinário — a assinatura só aparece quando o resultado está LIBERADO.
 
 import type { ExamReportData } from '@/lib/lab/exam-report-data'
-import { ageLabel, deviceLabel, genderLabel, neuteredLabel, speciesLabel } from '@/lib/lab/exam-report-data'
+import { ageLabel, deviceLabel, formatCrmv, genderLabel, neuteredLabel, speciesLabel } from '@/lib/lab/exam-report-data'
 import type { HemogramRow } from '@/lib/lab/hemogram-report'
+
+// O analisador não produz morfologia nem hematozoários — isso é leitura de
+// lâmina, ato do Médico Veterinário. O campo fica explicitamente em aberto.
+const OBS_EMPTY = 'A preencher pelo Médico Veterinário (leitura de lâmina).'
 
 const fmtDate = (iso: string | null | undefined) => {
   if (!iso) return '—'
@@ -46,6 +50,16 @@ function Rows({ rows, showAbs }: { rows: HemogramRow[]; showAbs: boolean }) {
   )
 }
 
+/** Linha "Rótulo.........: valor" com os pontinhos alinhados, como no laudo da Animais. */
+function Meta({ k, v }: { k: string; v: string }) {
+  return (
+    <div className="ld-metarow">
+      <span className="ld-lead">{k}<span className="ld-dots">{'.'.repeat(40)}</span></span>
+      <span>: <i>{v}</i></span>
+    </div>
+  )
+}
+
 function PageHeader({ d }: { d: ExamReportData }) {
   const p = d.header.patient
   const age = ageLabel(p.birth_date)
@@ -53,7 +67,7 @@ function PageHeader({ d }: { d: ExamReportData }) {
     speciesLabel(p.species),
     p.breed || null,
     genderLabel(p.gender),
-    neuteredLabel(p.neutered),
+    neuteredLabel(p.neutered, p.gender),
     p.birth_date ? `nascido em ${fmtDate(p.birth_date)}` : null,
     age ? `idade ${age}` : null,
   ].filter(Boolean).join(', ')
@@ -95,7 +109,7 @@ function PageHeader({ d }: { d: ExamReportData }) {
           <div className="ld-lbl">Veterinário:</div>
           <div className="ld-vals">
             <div className="ld-strong">{d.header.vet.name ?? '—'}</div>
-            {d.header.vet.crmv && <div className="ld-strong">CRMV-SP {d.header.vet.crmv}</div>}
+            {formatCrmv(d.header.vet.crmv) && <div className="ld-strong">{formatCrmv(d.header.vet.crmv)}</div>}
           </div>
         </div>
 
@@ -122,7 +136,7 @@ function PageFooter({ d, page, total }: { d: ExamReportData; page: number; total
             <img src={d.header.vet.signature_url} alt="Assinatura" className="ld-sign-img" />
           )}
           <div>Assinado eletronicamente por {(d.header.vet.name ?? '').toUpperCase() || '—'}</div>
-          {d.header.vet.crmv && <div>CRMV-SP: {d.header.vet.crmv}</div>}
+          {formatCrmv(d.header.vet.crmv) && <div>{formatCrmv(d.header.vet.crmv)}</div>}
           {d.released_at && <div className="ld-sign-meta">Liberado em {fmtDateTime(d.released_at)}</div>}
         </div>
       ) : (
@@ -152,10 +166,10 @@ export default function HemogramReportSheet({ data }: { data: ExamReportData }) 
         <main className="ld-body">
           <h1 className="ld-title">{(data.panel ?? 'Hemograma').toUpperCase()}</h1>
           <div className="ld-meta">
-            <div>Material...............: <i>SANGUE TOTAL COM E.D.T.A.</i></div>
-            <div>Metodologia.......: <i>IMPEDÂNCIA E CITOMETRIA DE FLUXO A LASER</i></div>
-            <div>Equipamento......: <i>{deviceLabel(data.device) ?? 'Analisador hematológico'}</i></div>
-            <div>Amostra...............: <i>{data.sample_id ?? '—'}{data.collected_at ? ` · colhida em ${fmtDateTime(data.collected_at)}` : ''}</i></div>
+            <Meta k="Material" v="SANGUE TOTAL COM E.D.T.A." />
+            <Meta k="Metodologia" v="IMPEDÂNCIA E CITOMETRIA DE FLUXO A LASER" />
+            <Meta k="Equipamento" v={deviceLabel(data.device) ?? 'Analisador hematológico'} />
+            <Meta k="Amostra" v={`${data.sample_id ?? '—'}${data.collected_at ? ` · colhida em ${fmtDateTime(data.collected_at)}` : ''}`} />
           </div>
 
           <table className="ld-table">
@@ -171,19 +185,19 @@ export default function HemogramReportSheet({ data }: { data: ExamReportData }) 
               <Rows rows={report.erythrogram} showAbs />
 
               <tr><td colSpan={8} className="ld-obs-lbl">Observações série vermelha</td></tr>
-              <tr><td colSpan={8} className="ld-obs">—</td></tr>
+              <tr><td colSpan={8} className="ld-obs">{OBS_EMPTY}</td></tr>
 
               <tr><td colSpan={8} className="ld-sub">Leucograma</td></tr>
               <Rows rows={report.leukogram} showAbs />
 
               <tr><td colSpan={8} className="ld-obs-lbl">Observações série branca</td></tr>
-              <tr><td colSpan={8} className="ld-obs">—</td></tr>
+              <tr><td colSpan={8} className="ld-obs">{OBS_EMPTY}</td></tr>
 
               <tr><td colSpan={8} className="ld-sub">Série plaquetária</td></tr>
               <Rows rows={report.platelets} showAbs />
 
               <tr><td colSpan={8} className="ld-obs-lbl">Avaliação plaquetária</td></tr>
-              <tr><td colSpan={8} className="ld-obs">—</td></tr>
+              <tr><td colSpan={8} className="ld-obs">{OBS_EMPTY}</td></tr>
 
               {report.other.length > 0 && (
                 <>
@@ -193,7 +207,7 @@ export default function HemogramReportSheet({ data }: { data: ExamReportData }) 
               )}
 
               <tr><td colSpan={8} className="ld-obs-lbl">Pesquisa de hematozoários</td></tr>
-              <tr><td colSpan={8} className="ld-obs">—</td></tr>
+              <tr><td colSpan={8} className="ld-obs">{OBS_EMPTY}</td></tr>
             </tbody>
           </table>
 
@@ -214,7 +228,7 @@ export default function HemogramReportSheet({ data }: { data: ExamReportData }) 
           <main className="ld-body">
             <h1 className="ld-title">HISTOGRAMAS E SCATTERGRAMAS</h1>
             <div className="ld-meta">
-              <div>Origem.................: <i>curvas geradas pelo {deviceLabel(data.device) ?? 'analisador'}</i></div>
+              <Meta k="Origem" v={`curvas geradas pelo ${deviceLabel(data.device) ?? 'analisador'}`} />
             </div>
             <div className="ld-grid">
               {report.graphs.filter(g => g.src).map(g => (
@@ -268,6 +282,9 @@ const CSS = `
 .ld-title { font-size: 13px; font-weight: 700; margin: 0 0 4px; }
 .ld-meta { font-size: 7.6px; color: var(--ink); line-height: 1.45; margin-bottom: 10px; }
 .ld-meta i { font-style: italic; }
+.ld-metarow { display: grid; grid-template-columns: 74px 1fr; }
+.ld-lead { overflow: hidden; white-space: nowrap; }
+.ld-dots { letter-spacing: .5px; }
 
 .ld-table { width: 100%; border-collapse: collapse; font-size: 8.6px; }
 .ld-colhead th { font-size: 8.6px; font-weight: 700; text-align: left;
@@ -288,7 +305,7 @@ const CSS = `
 .ld-flag-a { color: #b45309; }
 
 .ld-obs-lbl { font-size: 8.6px; padding: 9px 0 1px; }
-.ld-obs { font-size: 11px; color: #3a3a3a; padding: 0 0 8px 6px; }
+.ld-obs { font-size: 9.5px; font-style: italic; color: #8a8a8a; padding: 0 0 8px 6px; }
 
 .ld-note { font-size: 7.2px; color: var(--muted); margin: 14px 0 0; line-height: 1.4; }
 
