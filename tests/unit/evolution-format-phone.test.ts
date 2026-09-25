@@ -1,3 +1,5 @@
+export {} // isola o escopo do arquivo (evita colisão de nomes globais entre testes)
+
 /**
  * Unit — Evolution API formatPhone (privado)
  * Função copiada de src/lib/evolution-api-client.ts (linha 18-23) para teste puro.

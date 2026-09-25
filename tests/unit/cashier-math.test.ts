@@ -1,3 +1,5 @@
+export {} // isola o escopo do arquivo (evita colisão de nomes globais entre testes)
+
 /**
  * Unit — Cashier Math (utilities financeiras)
  * Implementações inline de funções comumente usadas no Caixa Central VetMax.

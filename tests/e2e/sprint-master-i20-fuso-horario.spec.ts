@@ -29,12 +29,17 @@ function expectedClinicHHMM(iso: string): string {
 }
 
 let _serverAlive = true
+// UUID do adminA gerado pelo seed (o auth do Supabase cria o id; não vem do fixture)
+let adminAId = ''
 test.beforeAll(async ({ browser }) => {
   const _ctx = await browser.newContext(); const _pg = await _ctx.newPage()
   _serverAlive = await _pg.goto(process.env.TEST_BASE_URL ?? 'http://localhost:4000', { waitUntil: 'domcontentloaded', timeout: 8_000 }).then(() => true).catch(() => false)
   await _ctx.close()
   if (!_serverAlive) console.log('[SKIP ALL] sprint-master-i20-fuso-horario.spec.ts — servidor fora do ar')
-  if (_serverAlive) await seedUsers().catch(e => console.warn('[i20] seedUsers falhou:', e.message))
+  if (_serverAlive) {
+    const ids = await seedUsers().catch(e => { console.warn('[i20] seedUsers falhou:', e.message); return null })
+    adminAId = ids?.adminA ?? ''
+  }
 })
 test.beforeEach(async ({}, testInfo) => { if (!_serverAlive) testInfo.skip() })
 
@@ -70,7 +75,7 @@ test.describe('TC-I20-01: log de dose usa horário local da clínica', () => {
   })
 
   test('TC-I20-01: novo registro carrega "às HH:MM" no fuso local da clínica', async ({ page }, testInfo) => {
-    if (!hospId || !prescId) { console.log('TC-I20-01: SKIP — seed falhou'); testInfo.skip(); return }
+    if (!hospId || !prescId || !adminAId) { console.log('TC-I20-01: SKIP — seed falhou'); testInfo.skip(); return }
 
     // Aciona o caminho server-side (applyHospitalizationDose) via supabase admin
     // simulando a confirmação de dose: insere a administração + lança o log
@@ -81,7 +86,7 @@ test.describe('TC-I20-01: log de dose usa horário local da clínica', () => {
     const expectedHHMM = expectedClinicHHMM(nowIso)
     await admin.from('hospitalization_records').insert({
       hospitalization_id: hospId, clinic_id: CLINIC_A,
-      user_id: fixtures.users.adminA.id, user_name: 'E2E',
+      user_id: adminAId, user_name: 'E2E',
       notes: `💉 Dose administrada às ${expectedHHMM} por E2E.`,
       medications: [{ name: 'Dipirona', dose: '500mg', route: 'IV', notes: '' }],
       improvement_level: 'estavel', created_at: nowIso,

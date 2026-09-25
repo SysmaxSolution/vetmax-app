@@ -1,3 +1,5 @@
+export {} // isola o escopo do arquivo (evita colisão de nomes globais entre testes)
+
 /**
  * Unit — Módulo de Pacientes & Tutores
  * Sessão 1 · Fase 1 (Fundação)

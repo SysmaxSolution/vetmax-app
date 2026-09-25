@@ -1,3 +1,5 @@
+export {} // isola o escopo do arquivo (evita colisão de nomes globais entre testes)
+
 /**
  * Unit — calculateAge (módulo Pet) — casos novos complementando patients.test.ts
  *

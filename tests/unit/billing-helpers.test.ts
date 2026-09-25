@@ -1,3 +1,5 @@
+export {} // isola o escopo do arquivo (evita colisão de nomes globais entre testes)
+
 /**
  * Unit — Billing Helpers (normalizeName + cálculos de desconto/parcelamento)
  * Função normalizeName copiada de src/lib/actions/billing.ts (linhas 47-53).
