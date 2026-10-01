@@ -88,12 +88,12 @@ export default function TrainingAcademy({ user, videos }: { user: UserT; videos:
       {shownModules.map(m => (
         <section key={m.key} className="space-y-3">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-teal-50 dark:bg-teal-500/10 flex items-center justify-center text-lg">{m.icon}</div>
-            <h2 className="text-base font-bold text-slate-800 dark:text-slate-100">{m.name}</h2>
-            <div className="flex-1 max-w-[240px] h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+            <div className="w-9 h-9 rounded-lg bg-teal-50 flex items-center justify-center text-lg">{m.icon}</div>
+            <h2 className="text-base font-bold text-slate-800">{m.name}</h2>
+            <div className="flex-1 max-w-[240px] h-2 rounded-full bg-slate-200 overflow-hidden">
               <div className="h-full bg-teal-500 rounded-full transition-all" style={{ width: `${m.percent}%` }} />
             </div>
-            <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">{m.percent}%</span>
+            <span className="text-xs font-semibold text-slate-600">{m.percent}%</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {m.vids.map(v => (
@@ -104,12 +104,12 @@ export default function TrainingAcademy({ user, videos }: { user: UserT; videos:
       ))}
 
       {shownModules.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800/40 px-6 py-12 text-center">
-          <div className="mx-auto w-14 h-14 rounded-2xl bg-teal-50 dark:bg-teal-500/10 flex items-center justify-center mb-4">
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
+          <div className="mx-auto w-14 h-14 rounded-2xl bg-teal-50 flex items-center justify-center mb-4">
             <GraduationCap className="w-7 h-7 text-teal-600" />
           </div>
-          <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">Conteúdo em preparação</h3>
-          <p className="text-sm text-slate-600 dark:text-slate-300 mt-1 max-w-md mx-auto">
+          <h3 className="text-base font-bold text-slate-800">Conteúdo em preparação</h3>
+          <p className="text-sm text-slate-600 mt-1 max-w-md mx-auto">
             {filter === 'all'
               ? 'As vídeo-aulas deste módulo ainda estão sendo publicadas. Assim que forem liberadas, aparecerão aqui automaticamente.'
               : 'Ainda não há aulas neste módulo. Escolha "Todos" para ver os módulos disponíveis.'}
@@ -199,7 +199,7 @@ function VideoCard({ v, p, onOpen }: { v: Vid; p: { pct: number; done: boolean }
 
   return (
     <button onClick={onOpen} onMouseEnter={onEnter} onMouseLeave={onLeave} onFocus={onEnter} onBlur={onLeave}
-      className="text-left bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition group">
+      className="text-left bg-white border border-slate-200 rounded-xl overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition group">
       <div className="aspect-video bg-gradient-to-br from-teal-600/90 to-teal-800 flex items-center justify-center relative overflow-hidden">
         {/* prévia em vídeo (mudo), aparece ao passar o mouse */}
         {showPreview && (
@@ -220,8 +220,8 @@ function VideoCard({ v, p, onOpen }: { v: Vid; p: { pct: number; done: boolean }
         <span className="absolute top-2 left-2 text-[10px] font-bold text-white bg-black/40 px-1.5 py-0.5 rounded">{v.code.toUpperCase()}</span>
       </div>
       <div className="p-3">
-        <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 leading-snug">{v.title}</h3>
-        <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 line-clamp-2">{v.description}</p>
+        <h3 className="text-sm font-semibold text-slate-900 leading-snug">{v.title}</h3>
+        <p className="text-xs text-slate-600 mt-1 line-clamp-2">{v.description}</p>
       </div>
     </button>
   )
@@ -275,10 +275,10 @@ function PlayerModal({ video, user, onClose, onProgress, onReport }: {
   if (typeof document === 'undefined') return null
   return createPortal(
     <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-3 sm:p-6" onClick={onClose}>
-      <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-4xl max-h-[92vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-100 dark:border-slate-800">
+      <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[92vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-100">
           <span className="text-[11px] font-bold text-teal-600">{video.code.toUpperCase()}</span>
-          <h2 className="font-semibold text-slate-800 dark:text-slate-100 text-sm flex-1 truncate">{video.title}</h2>
+          <h2 className="font-semibold text-slate-800 text-sm flex-1 truncate">{video.title}</h2>
           <button onClick={onReport} title="Reportar / pedir vídeo" className="text-slate-400 hover:text-amber-600 p-1"><Flag className="w-5 h-5" /></button>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-700 p-1"><X className="w-5 h-5" /></button>
         </div>
@@ -307,10 +307,10 @@ function PlayerModal({ video, user, onClose, onProgress, onReport }: {
         </div>
 
         <div className="p-5 space-y-4">
-          <p className="text-sm text-slate-600 dark:text-slate-300">{video.description}</p>
+          <p className="text-sm text-slate-600">{video.description}</p>
 
           {cheer && (
-            <div className="flex items-center gap-2 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-300 px-4 py-3 text-sm font-medium">
+            <div className="flex items-center gap-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 text-sm font-medium">
               <Trophy className="w-5 h-5 flex-shrink-0" /> {cheer}
             </div>
           )}
@@ -350,26 +350,26 @@ function Quiz({ videoId, questions }: { videoId: string; questions: QuizQ[] }) {
 
   if (finished) {
     return (
-      <div className="rounded-xl bg-teal-50 dark:bg-teal-500/10 border border-teal-200 dark:border-teal-500/20 px-4 py-3 text-sm text-teal-700 dark:text-teal-300 font-medium flex items-center gap-2">
+      <div className="rounded-xl bg-teal-50 border border-teal-200 px-4 py-3 text-sm text-teal-700 font-medium flex items-center gap-2">
         <Trophy className="w-5 h-5" /> Quiz concluído! Você reforçou o que aprendeu nesta aula. 🎉
       </div>
     )
   }
   return (
-    <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+    <div className="rounded-xl border border-slate-200 p-4 space-y-3">
       <div className="flex items-center justify-between">
         <span className="text-xs font-bold text-teal-600 uppercase tracking-wide">Quiz de reforço</span>
         <span className="text-xs text-slate-400">{idx + 1} / {questions.length}</span>
       </div>
-      <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{q.question}</p>
+      <p className="text-sm font-semibold text-slate-800">{q.question}</p>
       <div className="space-y-2">
         {q.options.map((opt, i) => {
           const isChosen = chosen === i
-          let cls = 'border-slate-200 dark:border-slate-700 hover:border-teal-400'
+          let cls = 'border-slate-200 hover:border-teal-400'
           if (result) {
-            if (i === result.correctIndex) cls = 'border-emerald-500 bg-emerald-50 dark:bg-emerald-500/10'
-            else if (isChosen) cls = 'border-red-400 bg-red-50 dark:bg-red-500/10'
-            else cls = 'border-slate-200 dark:border-slate-700 opacity-60'
+            if (i === result.correctIndex) cls = 'border-emerald-500 bg-emerald-50'
+            else if (isChosen) cls = 'border-red-400 bg-red-50'
+            else cls = 'border-slate-200 opacity-60'
           }
           return (
             <button key={i} disabled={!!result || busy} onClick={() => answer(i)}
@@ -380,9 +380,9 @@ function Quiz({ videoId, questions }: { videoId: string; questions: QuizQ[] }) {
         })}
       </div>
       {result && (
-        <div className={`text-sm px-3 py-2 rounded-lg font-medium ${result.correct ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300'}`}>
+        <div className={`text-sm px-3 py-2 rounded-lg font-medium ${result.correct ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
           {result.correct ? pick(TRAINING_QUIZ_CORRECT) : TRAINING_QUIZ_WRONG}
-          {result.explanation && <div className="text-slate-500 dark:text-slate-400 mt-1 font-normal">{result.explanation}</div>}
+          {result.explanation && <div className="text-slate-500 mt-1 font-normal">{result.explanation}</div>}
           <button onClick={next} className="mt-2 text-teal-600 font-semibold text-sm hover:underline">
             {idx + 1 < questions.length ? 'Próxima pergunta →' : 'Concluir quiz →'}
           </button>
@@ -410,27 +410,27 @@ function ReportModal({ video, onClose }: { video: Vid | null; onClose: () => voi
   if (typeof document === 'undefined') return null
   return createPortal(
     <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-md p-5 shadow-xl space-y-4" onClick={e => e.stopPropagation()}>
+      <div className="bg-white rounded-2xl w-full max-w-md p-5 shadow-xl space-y-4" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2"><Flag className="w-5 h-5 text-amber-500" /> Report</h3>
+          <h3 className="font-semibold text-slate-800 flex items-center gap-2"><Flag className="w-5 h-5 text-amber-500" /> Report</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-700"><X className="w-5 h-5" /></button>
         </div>
         {ok ? (
           <div className="text-center py-6 space-y-2">
             <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto" />
-            <p className="text-sm text-slate-600 dark:text-slate-300">Recebemos seu report! Obrigado por ajudar a melhorar o treinamento. 💚</p>
+            <p className="text-sm text-slate-600">Recebemos seu report! Obrigado por ajudar a melhorar o treinamento. 💚</p>
             <button onClick={onClose} className="mt-2 px-4 py-2 rounded-lg bg-teal-600 text-white text-sm font-semibold">Fechar</button>
           </div>
         ) : (
           <>
             <div className="grid grid-cols-2 gap-2">
-              <button onClick={() => setType('request')} className={`px-3 py-2.5 rounded-lg border text-sm font-medium ${type === 'request' ? 'border-teal-500 bg-teal-50 dark:bg-teal-500/10 text-teal-700 dark:text-teal-300' : 'border-slate-200 dark:border-slate-700'}`}>Pedir um vídeo</button>
-              <button onClick={() => setType('bug')} className={`px-3 py-2.5 rounded-lg border text-sm font-medium ${type === 'bug' ? 'border-amber-500 bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300' : 'border-slate-200 dark:border-slate-700'}`}>Relatar problema</button>
+              <button onClick={() => setType('request')} className={`px-3 py-2.5 rounded-lg border text-sm font-medium ${type === 'request' ? 'border-teal-500 bg-teal-50 text-teal-700' : 'border-slate-200'}`}>Pedir um vídeo</button>
+              <button onClick={() => setType('bug')} className={`px-3 py-2.5 rounded-lg border text-sm font-medium ${type === 'bug' ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-slate-200'}`}>Relatar problema</button>
             </div>
             <p className="text-xs text-slate-500">{video ? <>Sobre a aula <b>{video.code.toUpperCase()} — {video.title}</b>.</> : type === 'request' ? 'Qual rotina você gostaria de ver em vídeo?' : 'Descreva o problema encontrado.'}</p>
             <textarea value={msg} onChange={e => setMsg(e.target.value)} rows={4} autoFocus
               placeholder={type === 'request' ? 'Ex.: um vídeo sobre como fazer o fechamento de caixa por operador…' : 'Ex.: a narração fala da tela X, mas o vídeo mostra a tela Y…'}
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-700 dark:bg-slate-800 px-3 py-2 text-sm outline-none focus:border-teal-500" />
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500" />
             <button onClick={submit} disabled={busy || !msg.trim()} className="w-full py-2.5 rounded-lg bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 disabled:opacity-50 flex items-center justify-center gap-2">
               {busy && <Loader2 className="w-4 h-4 animate-spin" />} Enviar report
             </button>
@@ -445,7 +445,7 @@ function ReportModal({ video, onClose }: { video: Vid | null; onClose: () => voi
 // ── Utilitários visuais ──────────────────────────────────────────────────────
 function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
-    <button onClick={onClick} className={`px-3 py-1.5 rounded-full text-[12.5px] font-semibold whitespace-nowrap border transition ${active ? 'bg-teal-600 border-teal-600 text-white' : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-teal-400 hover:text-teal-600'}`}>{children}</button>
+    <button onClick={onClick} className={`px-3 py-1.5 rounded-full text-[12.5px] font-semibold whitespace-nowrap border transition ${active ? 'bg-teal-600 border-teal-600 text-white' : 'bg-white border-slate-300 text-slate-700 hover:border-teal-400 hover:text-teal-600'}`}>{children}</button>
   )
 }
 function Ring({ value, size = 56, stroke = 6, light = false }: { value: number; size?: number; stroke?: number; light?: boolean }) {
