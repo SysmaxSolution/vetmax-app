@@ -13,6 +13,7 @@ import net from 'node:net'
 import zlib from 'node:zlib'
 import fs from 'node:fs'
 import crypto from 'node:crypto'
+import { spawn, execFileSync } from 'node:child_process'
 import path from 'node:path'
 import os from 'node:os'
 
@@ -28,6 +29,15 @@ function parseArgs() {
 }
 const args = parseArgs()
 let cfg = {}
+// Versão desta cópia do agente. É o que o servidor compara para decidir se há
+// atualização. Mexeu no arquivo? Suba a versão — é ela que viaja no heartbeat.
+const VERSION = '2026.10.01'
+
+const agentFile  = path.join(process.cwd(), 'agent.mjs')
+const prevFile   = path.join(process.cwd(), 'agent.prev.mjs')
+const stageFile  = path.join(process.cwd(), 'agent.next.mjs')
+const updState   = path.join(process.cwd(), 'update-state.json')
+
 const cfgPath = path.join(process.cwd(), 'config.json')
 if (fs.existsSync(cfgPath)) { try { cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8')) } catch {} }
 let environment = args.env || cfg.environment || 'dev'
@@ -281,9 +291,101 @@ async function handleMessage(msg, sock) {
   }
 }
 
+// ─── Auto-atualização ───────────────────────────────────────────────────────
+// Ninguém precisa entrar por AnyDesk para atualizar o agente. O heartbeat já
+// pergunta se existe versão nova; aqui ela é baixada, conferida e trocada, e o
+// processo se reinicia sozinho. Três travas para não atrapalhar a clínica:
+//   1. só troca com ZERO conexões de aparelho abertas (nunca no meio de um exame);
+//   2. confere o SHA-256 e roda `node --check` ANTES de trocar — arquivo
+//      corrompido não chega a virar o agente que roda;
+//   3. guarda a versão anterior; se a nova não conseguir se comunicar logo após
+//      subir, ela volta sozinha.
+
+let conexoesAbertas = 0
+let atualizando = false
+
+const lerEstadoUpdate = () => {
+  try { return JSON.parse(fs.readFileSync(updState, 'utf8')) } catch { return {} }
+}
+const gravarEstadoUpdate = (o) => {
+  try { fs.writeFileSync(updState, JSON.stringify(o, null, 2)) } catch {}
+}
+
+/** Reinicia o agente: solta a porta, sobe o novo processo e sai. */
+function reiniciar(motivo) {
+  log('⟳ reiniciando —', motivo)
+  const subir = () => {
+    try {
+      spawn(process.execPath, [agentFile], { cwd: process.cwd(), detached: true, stdio: 'ignore' }).unref()
+    } catch (e) { log('! não consegui subir o novo processo:', e.message) }
+    process.exit(0)
+  }
+  // Fecha o servidor primeiro para o processo novo conseguir a porta.
+  try { server.close(subir) } catch { subir() }
+  setTimeout(subir, 3000).unref?.()
+}
+
+async function aplicarAtualizacao(info) {
+  if (atualizando || !info?.version || info.version === VERSION) return
+  if (conexoesAbertas > 0) { log(`· versão ${info.version} disponível — esperando o aparelho terminar (${conexoesAbertas} conexão(ões))`); return }
+  if (!fs.existsSync(agentFile)) { log('! não achei agent.mjs no diretório de trabalho — atualização ignorada'); return }
+  atualizando = true
+  try {
+    log(`↓ baixando versão ${info.version} (atual: ${VERSION})`)
+    const r = await api('/api/lab/agent-update?version=' + encodeURIComponent(info.version), 'GET')
+    const fonte = String(r?.source ?? '')
+    if (!fonte) throw new Error('resposta sem o conteúdo do agente')
+
+    const hash = crypto.createHash('sha256').update(fonte, 'utf8').digest('hex')
+    if (info.sha256 && hash !== info.sha256) throw new Error(`hash não confere (esperado ${info.sha256.slice(0, 12)}…, veio ${hash.slice(0, 12)}…)`)
+
+    fs.writeFileSync(stageFile, fonte, 'utf8')
+    // Arquivo truncado/corrompido morre aqui, e não virando o agente que roda.
+    execFileSync(process.execPath, ['--check', stageFile], { stdio: 'pipe' })
+
+    // Entre conferir e trocar, um aparelho pode ter conectado.
+    if (conexoesAbertas > 0) { log('· aparelho conectou durante o download — troca adiada'); fs.unlinkSync(stageFile); atualizando = false; return }
+
+    fs.copyFileSync(agentFile, prevFile)
+    fs.renameSync(stageFile, agentFile)
+    gravarEstadoUpdate({ pending: true, from: VERSION, to: info.version, at: new Date().toISOString() })
+    log(`✓ versão ${info.version} instalada (anterior guardada em agent.prev.mjs)`)
+    reiniciar(`atualização ${VERSION} → ${info.version}`)
+  } catch (e) {
+    log('! atualização falhou:', e.message)
+    try { if (fs.existsSync(stageFile)) fs.unlinkSync(stageFile) } catch {}
+    try { await api('/api/lab/agent-update', 'POST', { version: info.version, ok: false, error: String(e.message).slice(0, 300) }) } catch {}
+    atualizando = false
+  }
+}
+
+/** Primeiro heartbeat depois de uma troca: confirma ou desfaz. */
+async function conferirPosAtualizacao(pingOk) {
+  const st = lerEstadoUpdate()
+  if (!st.pending) return
+  if (st.to !== VERSION) return            // não é esta troca
+  if (pingOk) {
+    gravarEstadoUpdate({ pending: false, from: st.from, to: st.to, at: st.at, confirmed_at: new Date().toISOString() })
+    log(`✓ versão ${VERSION} confirmada (vinha de ${st.from})`)
+    try { await api('/api/lab/agent-update', 'POST', { version: VERSION, ok: true }) } catch {}
+    return
+  }
+  const falhas = Number(st.failures ?? 0) + 1
+  gravarEstadoUpdate({ ...st, failures: falhas })
+  if (falhas < 3) { log(`! versão nova sem comunicação (${falhas}/3)`); return }
+  if (!fs.existsSync(prevFile)) { log('! sem cópia anterior para voltar'); return }
+  log(`! versão ${VERSION} não se comunicou 3x — voltando para ${st.from}`)
+  try {
+    fs.copyFileSync(prevFile, agentFile)
+    gravarEstadoUpdate({ pending: false, rolled_back_from: VERSION, to: st.from, at: new Date().toISOString() })
+    reiniciar(`rollback para ${st.from}`)
+  } catch (e) { log('! rollback falhou:', e.message) }
+}
+
 // ─── Servidor MLLP (LAN) ─────────────────────────────────────────────────────
 const server = net.createServer(sock => {
   const peer = sock.remoteAddress
+  conexoesAbertas++
   log('• conexão do aparelho', peer)
   let buf = ''
   sock.setEncoding('binary')
@@ -293,26 +395,41 @@ const server = net.createServer(sock => {
     for (const m of messages) { try { await handleMessage(m, sock) } catch (e) { log('erro:', e.message) } }
   })
   sock.on('error', e => log('socket erro:', e.message))
-  sock.on('close', () => log('• conexão encerrada', peer))
+  sock.on('close', () => { conexoesAbertas = Math.max(0, conexoesAbertas - 1); log('• conexão encerrada', peer) })
 })
 
 // Ping periódico: confirma pareamento, informa o ambiente atual e recebe (uma vez)
 // eventual reconfiguração remota agendada no painel.
 async function heartbeat() {
   try {
-    const p = await api('/api/lab/ping?env=' + encodeURIComponent(environment), 'GET')
+    const p = await api(`/api/lab/ping?env=${encodeURIComponent(environment)}&v=${encodeURIComponent(VERSION)}`, 'GET')
     if (p.reconfigure) applyReconfigure(p.reconfigure)
+    await conferirPosAtualizacao(true)
+    if (p.update) await aplicarAtualizacao(p.update)
     return p
-  } catch (e) { log('! ping falhou (', e.message, ') — verifique token/ambiente'); return null }
+  } catch (e) {
+    log('! ping falhou (', e.message, ') — verifique token/ambiente')
+    await conferirPosAtualizacao(false)
+    return null
+  }
 }
 
 // ─── Boot ────────────────────────────────────────────────────────────────────
 ;(async () => {
-  log(`SYSVETMAX Lab Agent · ambiente=${environment} · ${baseUrl}`)
+  log(`SYSVETMAX Lab Agent v${VERSION} · ambiente=${environment} · ${baseUrl}`)
   if (!dryRun) {
     const p = await heartbeat()
     if (p) log('✓ pareado com a clínica:', p.clinic_name || p.clinic_id)
   }
+  // Numa troca de versão o processo antigo pode levar um instante para soltar a
+  // porta. Em vez de morrer com EADDRINUSE, tenta de novo por até 15 s.
+  let tentativas = 0
+  server.on('error', (e) => {
+    if (e.code !== 'EADDRINUSE' || tentativas >= 15) { log('! erro ao escutar:', e.message); process.exit(1) }
+    tentativas++
+    if (tentativas === 1) log(`· porta ${port} ainda ocupada (processo anterior saindo) — aguardando`)
+    setTimeout(() => server.listen(port), 1000)
+  })
   server.listen(port, () => log(`escutando MLLP em 0.0.0.0:${port} (aponte o aparelho para o IP deste PC:${port})`))
   setInterval(() => flushQueue().catch(() => {}), 30000)   // reenvia a fila a cada 30s
   if (!dryRun) setInterval(() => heartbeat().catch(() => {}), 60000)   // ping + reconfiguração remota
