@@ -10,6 +10,7 @@
 // O ambiente (dev/prod) só troca a URL base — o token vale no ambiente onde foi gerado.
 
 import net from 'node:net'
+import zlib from 'node:zlib'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
@@ -33,12 +34,17 @@ let token = args.token || cfg.token || process.env.SYSVETMAX_LAB_TOKEN
 let baseUrl = args.url || cfg.url || ENV_URLS[environment] || ENV_URLS.dev
 const port = Number(args.port || cfg.port || 9100)
 const dryRun = Boolean(args.dry || cfg.dry)
+// Compressão do corpo enviado à nuvem. Liga por padrão; `--no-gzip` (ou
+// "gzip": false no config.json) desliga. Se o servidor recusar o corpo
+// comprimido, o agente volta sozinho para JSON puro — ver api().
+let gzipEnabled = !(args['no-gzip'] === true || cfg.gzip === false)
+const GZIP_MIN_BYTES = 4096   // abaixo disso comprimir não paga o CPU
 
 if (!token) { console.error('ERRO: informe --token (código de pareamento).'); process.exit(1) }
 
 // Persiste o ambiente/token atuais em config.json (usado no próximo boot).
 function persistConfig() {
-  try { fs.writeFileSync(cfgPath, JSON.stringify({ environment, url: baseUrl, token, port, dry: dryRun }, null, 2)) } catch (e) { log('! não consegui gravar config.json:', e.message) }
+  try { fs.writeFileSync(cfgPath, JSON.stringify({ environment, url: baseUrl, token, port, dry: dryRun, gzip: gzipEnabled }, null, 2)) } catch (e) { log('! não consegui gravar config.json:', e.message) }
 }
 
 // Promoção/repontamento remoto: o painel agenda um destino; aqui aplicamos ao vivo
@@ -93,14 +99,38 @@ function buildDsr(id, sample) {
 }
 
 // ─── Nuvem ──────────────────────────────────────────────────────────────────
-async function api(pathName, method, body) {
-  const res = await fetch(baseUrl + pathName, {
-    method, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-    body: body ? JSON.stringify(body) : undefined,
-  })
+// Um ORU de hemograma do URIT tem ~47 kB (quase tudo base64 dos histogramas);
+// gzip leva o mesmo corpo em ~12 kB. A rota /api/lab/results aceita os dois
+// formatos, então um agente antigo (sem esta versão) continua funcionando.
+async function send(pathName, method, body, useGzip) {
+  const headers = { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }
+  let payload
+  if (body !== undefined && body !== null) {
+    payload = Buffer.from(JSON.stringify(body), 'utf8')
+    if (useGzip) {
+      payload = zlib.gzipSync(payload, { level: 6 })
+      headers['Content-Encoding'] = 'gzip'
+    }
+  }
+  const res = await fetch(baseUrl + pathName, { method, headers, body: payload })
   const json = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(json.error || ('HTTP ' + res.status))
-  return json
+  return { ok: res.ok, status: res.status, json }
+}
+
+async function api(pathName, method, body) {
+  const raw = body ? Buffer.byteLength(JSON.stringify(body), 'utf8') : 0
+  const useGzip = gzipEnabled && raw >= GZIP_MIN_BYTES
+  let r = await send(pathName, method, body, useGzip)
+
+  // Agente novo contra servidor antigo (ou proxy que engole o cabeçalho):
+  // desliga a compressão para o resto da sessão e reenvia em JSON puro.
+  if (!r.ok && useGzip && (r.status === 400 || r.status === 415)) {
+    log('! servidor recusou corpo comprimido — reenviando sem gzip (desligado nesta sessao)')
+    gzipEnabled = false
+    r = await send(pathName, method, body, false)
+  }
+  if (!r.ok) throw new Error(r.json.error || ('HTTP ' + r.status))
+  return r.json
 }
 
 async function flushQueue() {
@@ -124,7 +154,11 @@ async function handleMessage(msg, sock) {
     log('↓ ORU de', device, '· amostra', barcode || '(sem PID)')
     const payload = { hl7: msg, barcode }
     try {
-      if (dryRun) log('   [dry-run] POST /api/lab/results', JSON.stringify(payload).length, 'bytes')
+      if (dryRun) {
+        const plain = Buffer.byteLength(JSON.stringify(payload), 'utf8')
+        const gz = zlib.gzipSync(Buffer.from(JSON.stringify(payload), 'utf8'), { level: 6 }).length
+        log('   [dry-run] POST /api/lab/results', plain, 'bytes cru ·', gz, 'bytes com gzip')
+      }
       else { const r = await api('/api/lab/results', 'POST', payload); log('   ✓ gravado:', r.count, 'analitos na consulta', r.consultation_id) }
       sock.write(frameMLLP(buildAck(id, 'AA')))
     } catch (e) {
