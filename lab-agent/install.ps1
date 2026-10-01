@@ -58,9 +58,15 @@ if (Test-Path (Join-Path $PSScriptRoot 'node.exe')) {
   $nodeExe = $destNode
 } else {
   [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-  $sources = @()
+  # ORDEM IMPORTA: o runtime vem da FONTE OFICIAL do Node.
+  # Antes a primeira origem era o nosso proprio deploy ($BundledUrl/lab-agent/
+  # node.exe) e cada instalacao consumia ~80 MB da nossa transferencia na
+  # Vercel - um dos gatilhos do bloqueio por FAIR_USE_LIMITS_EXCEEDED.
+  # O nosso dominio fica apenas como ultimo recurso (rede que bloqueie
+  # nodejs.org); public/lab-agent/ nao e publicado (.vercelignore), entao essa
+  # origem so existe se alguem hospedar o arquivo de proposito.
+  $sources = @('https://nodejs.org/dist/v22.13.1/win-x64/node.exe')
   if ($script:BundledUrl) { $sources += "$script:BundledUrl/lab-agent/node.exe" }
-  $sources += 'https://nodejs.org/dist/v22.13.1/win-x64/node.exe'   # fallback oficial
   foreach ($srcUrl in $sources) {
     try {
       Info "Baixando o runtime (node.exe, ~80 MB, uma vez) de $srcUrl ..."
