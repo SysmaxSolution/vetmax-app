@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server'
 import { authenticateAgent, sampleByBarcode } from '@/lib/lab/agent-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { parseHL7ORU } from '@/lib/lab/hl7-parser'
+import { parseHL7ORU, stripEncapsulatedData } from '@/lib/lab/hl7-parser'
+import { persistExamGraphs } from '@/lib/lab/persist-graphs'
 import { resolveAnalyte, normKey, type AnalyteMapping } from '@/lib/lab/analyte-resolve'
+import { readLabRequest } from '@/lib/lab/request-body'
 
 // Recebimento de resultados: o agente repassa o ORU do aparelho. Casa a amostra
 // pelo barcode e grava os analitos em exam_results (rascunho, source='hl7').
@@ -10,8 +12,12 @@ import { resolveAnalyte, normKey, type AnalyteMapping } from '@/lib/lab/analyte-
 export async function POST(req: Request) {
   const auth = await authenticateAgent(req)
   if (!auth) return NextResponse.json({ error: 'Token inválido ou Laboratório não ativado para esta clínica.' }, { status: 401 })
-  let body: any
-  try { body = await req.json() } catch { return NextResponse.json({ error: 'JSON inválido.' }, { status: 400 }) }
+  // Aceita o corpo COMPRIMIDO (Content-Encoding: gzip) e, sem o cabeçalho,
+  // JSON puro — é assim que o agente já instalado na clínica continua
+  // funcionando sem ser atualizado.
+  const read = await readLabRequest<{ hl7?: unknown; barcode?: unknown }>(req)
+  if ('error' in read) return NextResponse.json({ error: read.error }, { status: 400 })
+  const body = read.body
 
   const hl7 = String(body?.hl7 ?? '')
   const barcode = String(body?.barcode ?? '').trim()
@@ -21,9 +27,15 @@ export async function POST(req: Request) {
   if ('error' in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 })
   if (parsed.analytes.length === 0) return NextResponse.json({ error: 'Sem resultados (OBX).' }, { status: 400 })
 
-  // Barcode: do corpo (o agente extrai do PID) ou tenta do próprio HL7 (PID-3)
-  const code = barcode || (hl7.split(/\r\n|\r|\n/).find(s => s.startsWith('PID'))?.split('|')[3] ?? '').split('^')[0].trim()
-  if (!code) return NextResponse.json({ error: 'Não foi possível identificar a amostra (barcode/PID).' }, { status: 400 })
+  // Identificação da amostra, em ordem de confiança:
+  //  1) barcode do corpo (o agente leu do leitor/PID);
+  //  2) PID-3 do HL7;
+  //  3) OBR-3 — é ONDE o URIT BH-5100 põe o nº da amostra. No aparelho da
+  //     clínica o PID vem VAZIO (`PID|1||||||0|`) e PID-3 é lote de CQ, então
+  //     sem este fallback todo resultado real era rejeitado com 400.
+  const pidCode = (hl7.split(/\r\n|\r|\n/).find(s => s.startsWith('PID'))?.split('|')[3] ?? '').split('^')[0].trim()
+  const code = barcode || pidCode || (parsed.sample_id ?? '')
+  if (!code) return NextResponse.json({ error: 'Não foi possível identificar a amostra (barcode/PID-3/OBR-3).' }, { status: 400 })
 
   const sample = await sampleByBarcode(auth.clinic_id, code)
   if (!sample) return NextResponse.json({ found: false, barcode: code, error: 'Amostra não encontrada.' }, { status: 404 })
@@ -42,6 +54,8 @@ export async function POST(req: Request) {
   const graphByCode = new Map<string, unknown>()
   for (const g of parsed.graphs) if (g.code) graphByCode.set(normKey(g.code), { kind: g.name, mime: g.mime, encoding: g.encoding, data: g.data })
 
+  const lean = stripEncapsulatedData(hl7)
+
   const rows = parsed.analytes.map(a => ({
     clinic_id: auth.clinic_id, consultation_id: sample.consultation_id,
     panel: parsed.panel, analyte_code: a.code, analyte_name: a.name,
@@ -49,10 +63,12 @@ export async function POST(req: Request) {
     value_text: a.value, unit: a.unit, ref_low: a.ref_low, ref_high: a.ref_high,
     ref_text: a.ref_text, flag: a.flag, status: 'draft', source: 'hl7',
     graph_data: a.code && graphByCode.has(normKey(a.code)) ? graphByCode.get(normKey(a.code)) : null,
-    raw_hl7: hl7.length <= 20000 ? hl7 : null,
+    raw_hl7: lean.length <= 20000 ? lean : null,
   }))
   const { error } = await admin.from('exam_results').insert(rows)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  return NextResponse.json({ ok: true, consultation_id: sample.consultation_id, count: rows.length })
+  const g = await persistExamGraphs(admin, auth.clinic_id, sample.consultation_id, parsed.graphs)
+
+  return NextResponse.json({ ok: true, consultation_id: sample.consultation_id, count: rows.length, graphs: g.saved })
 }
