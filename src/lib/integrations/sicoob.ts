@@ -10,6 +10,8 @@
 //
 // Retorno normalizado no formato consumido por importStatements (BankStatement).
 
+import https from 'node:https'
+
 export interface SicoobTx { date: string; amount: number; description: string; type: 'credit' | 'debit'; external_id?: string }
 
 const SANDBOX = {
@@ -22,28 +24,102 @@ const TOKEN_URL  = 'https://auth.sicoob.com.br/auth/realms/cooperado/protocol/op
 
 function isSandbox() { return (process.env.SICOOB_ENV ?? 'sandbox') !== 'production' }
 
-// Transporte com certificado mTLS (só produção). No sandbox não há certificado.
-// O transporte com e-CNPJ A1 (undici Agent {connect:{pfx}}) será plugado no
-// onboarding da 1ª clínica — depende do certificado real. Por ora, produção fica
-// gated com aviso claro; o sandbox roda sem certificado.
-async function mtlsDispatcher(): Promise<unknown> {
-  if (isSandbox()) return undefined
-  throw new Error('Produção Sicoob requer o certificado e-CNPJ A1 (mTLS) da clínica — pendente de onboarding.')
+// --- Transporte mTLS (so producao) -----------------------------------------
+// O Sicoob exige TLS mutuo com o e-CNPJ A1 da empresa: nao basta o token, o
+// servidor confere o certificado do cliente no aperto de mao. Usamos
+// `node:https` em vez de undici -- o `dispatcher` do fetch so existe no undici
+// como pacote, que nao esta disponivel aqui; `node:https` sempre esta e aceita
+// pfx direto. Roda em runtime Node (Server Action/route handler), nao em Edge.
+//
+// O certificado NUNCA fica no banco nem no repositorio: vem de variavel de
+// ambiente, em base64, com a senha separada.
+interface Pfx { pfx: Buffer; passphrase: string | undefined }
+
+function carregarPfx(): Pfx {
+  const b64 = process.env.SICOOB_PFX_BASE64
+  if (!b64) {
+    throw new Error('Certificado e-CNPJ A1 ausente: configure SICOOB_PFX_BASE64 (e SICOOB_PFX_PASSWORD).')
+  }
+  const pfx = Buffer.from(b64, 'base64')
+  if (pfx.length < 500) throw new Error('SICOOB_PFX_BASE64 parece invalido (conteudo muito curto).')
+  return { pfx, passphrase: process.env.SICOOB_PFX_PASSWORD || undefined }
 }
 
-async function getToken(dispatcher: unknown): Promise<string> {
+/** Requisicao HTTPS com o certificado do cliente apresentado no handshake. */
+function requisicaoMtls(
+  url: string,
+  init: { method?: string; headers?: Record<string, string>; body?: string },
+): Promise<{ status: number; text: string }> {
+  const { pfx, passphrase } = carregarPfx()
+  const u = new URL(url)
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      {
+        host: u.hostname,
+        port: u.port || 443,
+        path: u.pathname + u.search,
+        method: init.method ?? 'GET',
+        headers: init.headers ?? {},
+        pfx,
+        passphrase,
+        // Validacao do servidor continua ligada -- mTLS e mutuo, nao substitui.
+        rejectUnauthorized: true,
+      },
+      res => {
+        let txt = ''
+        res.setEncoding('utf8')
+        res.on('data', c => { txt += c })
+        res.on('end', () => resolve({ status: res.statusCode ?? 0, text: txt }))
+      },
+    )
+    req.on('error', e => {
+      const code = (e as NodeJS.ErrnoException).code
+      const m = code === 'ERR_OSSL_UNSUPPORTED'
+        ? 'o Node recusou o .pfx (algoritmo legado) -- reexporte o certificado'
+        : e.message
+      reject(new Error('Falha de conexao com o Sicoob: ' + m))
+    })
+    if (init.body) req.write(init.body)
+    req.end()
+  })
+}
+
+async function getToken(): Promise<string> {
   if (isSandbox()) return SANDBOX.token
   const clientId = process.env.SICOOB_CLIENT_ID
-  if (!clientId) throw new Error('SICOOB_CLIENT_ID não configurado.')
-  const body = new URLSearchParams({ grant_type: 'client_credentials', client_id: clientId, scope: 'openid cco_extrato cco_saldo' })
-  const res = await fetch(TOKEN_URL, {
-    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body,
-    ...(dispatcher ? { dispatcher } : {}),
-  } as RequestInit)
-  if (!res.ok) throw new Error(`Falha no token Sicoob (${res.status}).`)
-  const j = await res.json() as { access_token?: string }
+  if (!clientId) throw new Error('SICOOB_CLIENT_ID nao configurado.')
+  if (clientId === SANDBOX.client_id) {
+    // Erro comum no onboarding: o client_id publico da documentacao e de
+    // sandbox e nao autentica em producao, mesmo com o certificado certo.
+    throw new Error('O SICOOB_CLIENT_ID configurado e o client_id publico de SANDBOX. Crie o aplicativo no portal Sicoob Developers e use o client_id de producao.')
+  }
+  const body = new URLSearchParams({
+    grant_type: 'client_credentials', client_id: clientId, scope: 'openid cco_extrato cco_saldo',
+  }).toString()
+  const r = await requisicaoMtls(TOKEN_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Content-Length': String(Buffer.byteLength(body)),
+    },
+    body,
+  })
+  if (r.status !== 200) throw new Error('Falha no token Sicoob (' + r.status + '): ' + r.text.slice(0, 200))
+  const j = JSON.parse(r.text || '{}') as { access_token?: string }
   if (!j.access_token) throw new Error('Token Sicoob ausente na resposta.')
   return j.access_token
+}
+
+/** Diagnostico de onboarding: aperta a mao com o Sicoob e diz o que falta. */
+export async function testarConexaoSicoob(): Promise<{ ok: boolean; etapa: string; detalhe: string }> {
+  if (isSandbox()) return { ok: true, etapa: 'sandbox', detalhe: 'Ambiente sandbox -- nao usa certificado.' }
+  try { carregarPfx() } catch (e) { return { ok: false, etapa: 'certificado', detalhe: (e as Error).message } }
+  try {
+    await getToken()
+    return { ok: true, etapa: 'token', detalhe: 'Certificado aceito e token emitido.' }
+  } catch (e) {
+    return { ok: false, etapa: 'token', detalhe: (e as Error).message }
+  }
 }
 
 const toDate = (v: unknown): string | null => {
@@ -66,15 +142,22 @@ const inferType = (tipo: unknown, valor: number): 'credit' | 'debit' => {
 }
 
 // Busca o extrato de UM mês (janela de dias). O Sicoob limita a ~3 meses de histórico.
-async function fetchMonth(conta: string, mes: number, ano: number, diaIni: number, diaFim: number, dispatcher: unknown, token: string, clientId: string): Promise<SicoobTx[]> {
+async function fetchMonth(conta: string, mes: number, ano: number, diaIni: number, diaFim: number, token: string, clientId: string): Promise<SicoobTx[]> {
   const base = isSandbox() ? SANDBOX.base : PROD_BASE
   const url = `${base}/extrato/${mes}/${ano}?diaInicial=${diaIni}&diaFinal=${diaFim}&numeroContaCorrente=${encodeURIComponent(conta)}&agruparCNAB=false`
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}`, client_id: clientId, Accept: 'application/json' },
-    ...(dispatcher ? { dispatcher } : {}),
-  } as RequestInit)
-  if (!res.ok) throw new Error(`Extrato Sicoob ${mes}/${ano} falhou (${res.status}).`)
-  const j = await res.json() as { transacoes?: Array<Record<string, unknown>> }
+  const headers = { Authorization: 'Bearer ' + token, client_id: clientId, Accept: 'application/json' }
+
+  let corpo: string
+  if (isSandbox()) {
+    const res = await fetch(url, { headers })
+    if (!res.ok) throw new Error('Extrato Sicoob ' + mes + '/' + ano + ' falhou (' + res.status + ').')
+    corpo = await res.text()
+  } else {
+    const r = await requisicaoMtls(url, { headers })
+    if (r.status !== 200) throw new Error('Extrato Sicoob ' + mes + '/' + ano + ' falhou (' + r.status + '): ' + r.text.slice(0, 160))
+    corpo = r.text
+  }
+  const j = JSON.parse(corpo || '{}') as { transacoes?: Array<Record<string, unknown>> }
   const txs = Array.isArray(j.transacoes) ? j.transacoes : []
   const out: SicoobTx[] = []
   for (const t of txs) {
@@ -98,9 +181,8 @@ export async function fetchSicoobExtrato(params: {
   const end   = new Date(params.end_date + 'T00:00:00')
   if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) throw new Error('Período inválido.')
 
-  const dispatcher = await mtlsDispatcher()
   const clientId = isSandbox() ? SANDBOX.client_id : (process.env.SICOOB_CLIENT_ID ?? '')
-  const token = await getToken(dispatcher)
+  const token = await getToken()
 
   const statements: SicoobTx[] = []
   const cur = new Date(start.getFullYear(), start.getMonth(), 1)
@@ -110,7 +192,7 @@ export async function fetchSicoobExtrato(params: {
     const diaIni = (cur.getFullYear() === start.getFullYear() && cur.getMonth() === start.getMonth()) ? start.getDate() : 1
     const diaFim = (cur.getFullYear() === end.getFullYear() && cur.getMonth() === end.getMonth()) ? end.getDate() : lastDay
     try {
-      const monthTxs = await fetchMonth(params.conta, mes, ano, diaIni, diaFim, dispatcher, token, clientId)
+      const monthTxs = await fetchMonth(params.conta, mes, ano, diaIni, diaFim, token, clientId)
       statements.push(...monthTxs)
     } catch (e) {
       warnings.push(`${String(mes).padStart(2, '0')}/${ano}: ${(e as Error).message}`)
