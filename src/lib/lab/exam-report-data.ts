@@ -7,7 +7,8 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { parseHL7ORU } from './hl7-parser'
-import { buildHemogramReport, type HemogramReport } from './hemogram-report'
+import { buildHemogramReport, type HemogramReport, type HemogramGraphInput } from './hemogram-report'
+import { GRAPH_BUCKET, GRAPH_SIGNED_TTL, resolveGraphSrc } from './graph-storage'
 
 export interface ReportHeader {
   os_number:   string
@@ -92,6 +93,64 @@ interface ResultRow {
   panel: string | null; raw_hl7: string | null
 }
 
+interface GraphRow {
+  id: string; code: string; title: string | null
+  mime: string | null; encoding: string | null
+  storage_path: string | null; bytes: number | null
+  width: number | null; height: number | null
+}
+
+/**
+ * Resolve a imagem de cada curva para o laudo.
+ *
+ * Caminho novo (0487): uma única chamada `createSignedUrls` devolve as 7 URLs
+ * do bucket privado — o HTML do laudo leva links de ~300 B e o NAVEGADOR busca
+ * os PNGs direto no Storage do Supabase. Nenhum byte de imagem passa pela
+ * função serverless (era isso que queimava o fast origin transfer).
+ *
+ * Caminho legado: linhas gravadas pela 0485 só têm base64. Aí sim buscamos o
+ * `data` — e SÓ dessas linhas — para o laudo antigo continuar renderizando.
+ */
+async function resolveReportGraphs(
+  admin: SupabaseClient, clinicId: string, consultationId: string, rows: GraphRow[],
+): Promise<HemogramGraphInput[]> {
+  if (rows.length === 0) return []
+
+  const paths = rows.map(r => r.storage_path).filter((p): p is string => Boolean(p))
+  const signedByPath = new Map<string, string>()
+  if (paths.length > 0) {
+    const { data: signed } = await admin.storage.from(GRAPH_BUCKET)
+      .createSignedUrls(paths, GRAPH_SIGNED_TTL)
+    for (const s of signed ?? []) {
+      if (s?.path && s?.signedUrl) signedByPath.set(s.path, s.signedUrl)
+    }
+  }
+
+  // Legado: só as curvas sem objeto no Storage (ou cuja assinatura falhou).
+  const legacyIds = rows
+    .filter(r => !r.storage_path || !signedByPath.has(r.storage_path))
+    .map(r => r.id)
+  const legacyData = new Map<string, string>()
+  if (legacyIds.length > 0) {
+    const { data: legacy } = await admin.from('exam_result_graphs')
+      .select('id, data')
+      .eq('clinic_id', clinicId).eq('consultation_id', consultationId)
+      .in('id', legacyIds)
+    for (const l of legacy ?? []) {
+      if (l?.data) legacyData.set(l.id as string, l.data as string)
+    }
+  }
+
+  return rows.map(r => ({
+    code: r.code, name: r.title,
+    mime: r.mime, encoding: r.encoding,
+    src: resolveGraphSrc(
+      { storage_path: r.storage_path, mime: r.mime, encoding: r.encoding, data: legacyData.get(r.id) ?? null },
+      signedByPath,
+    ),
+  }))
+}
+
 /**
  * Carrega o laudo da consulta. SEMPRE filtra por clinic_id (o admin client
  * ignora RLS). Prefere os resultados LIBERADOS; só cai no rascunho quando não
@@ -113,8 +172,11 @@ export async function getExamReportData(
       .select('analyte_code, analyte_name, value_text, unit, ref_text, ref_low, ref_high, flag, status, source, released_at, panel, raw_hl7')
       .eq('clinic_id', clinicId).eq('consultation_id', consultationId)
       .order('created_at', { ascending: true }),
+    // Curvas: NÃO traz `data` aqui. Desde a 0487 o payload está no Storage e o
+    // que vem do banco são ~150 B de metadado por curva (eram ~6,5 kB de
+    // base64 cada, ~45 kB por hemograma, atravessando a função serverless).
     admin.from('exam_result_graphs')
-      .select('code, title, mime, encoding, data')
+      .select('id, code, title, mime, encoding, storage_path, bytes, width, height')
       .eq('clinic_id', clinicId).eq('consultation_id', consultationId)
       .order('created_at', { ascending: true }),
     admin.from('clinics')
@@ -147,17 +209,15 @@ export async function getExamReportData(
   const meta = raw ? parseHL7ORU(raw) : null
   const hl7 = meta && !('error' in meta) ? meta : null
 
+  const graphInputs = await resolveReportGraphs(admin, clinicId, consultationId, (graphRows ?? []) as GraphRow[])
+
   const report = buildHemogramReport(
     use.map(r => ({
       code: r.analyte_code, name: r.analyte_name, value: r.value_text, unit: r.unit,
       ref_text: r.ref_text, ref_low: r.ref_low, ref_high: r.ref_high,
       flag: (r.flag as 'H' | 'L' | 'N' | 'A' | null) ?? null,
     })),
-    (graphRows ?? []).map(g => ({
-      code: g.code as string, name: (g.title as string) ?? null,
-      mime: g.mime as string | null, encoding: g.encoding as string | null,
-      source: null, data: g.data as string,
-    })),
+    graphInputs,
   )
 
   const addr = [clinic?.address, clinic?.neighborhood].filter(Boolean).join(', ')

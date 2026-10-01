@@ -4,7 +4,7 @@
 // seções do laudo (Eritrograma / Leucograma / Plaquetas), no formato visual
 // usado pela Clínica Animais. A conclusão clínica é do Médico Veterinário.
 
-import type { HL7Analyte, HL7Graph } from './hl7-parser'
+import type { HL7Analyte } from './hl7-parser'
 import { graphDataUri } from './hl7-parser'
 
 export type HemogramSection = 'erythrogram' | 'leukogram' | 'platelets' | 'other'
@@ -30,8 +30,25 @@ export interface HemogramRow {
 export interface HemogramGraph {
   code:  string
   title: string
-  /** `data:` URI pronto para <img>; null quando o payload não é imagem utilizável. */
+  /**
+   * Origem da imagem pronta para <img>. Desde a 0487 é a signed URL do bucket
+   * `exam-graphs` (o navegador baixa direto do Storage, fora da nossa função);
+   * nas linhas legadas, o `data:` URI do base64. Null quando não é imagem.
+   */
   src:   string | null
+}
+
+/**
+ * Entrada de curva aceita pelo montador. `src` já resolvido (signed URL) tem
+ * prioridade; sem ele, cai no base64 — é o que mantém os laudos antigos de pé.
+ */
+export interface HemogramGraphInput {
+  code?:     string | null
+  name?:     string | null
+  mime?:     string | null
+  encoding?: string | null
+  data?:     string | null
+  src?:      string | null
 }
 
 export interface HemogramReport {
@@ -106,7 +123,7 @@ export function graphTitle(code: string | null | undefined): string {
   return GRAPH_TITLES[key] ?? (code || 'Gráfico do aparelho')
 }
 
-export function buildHemogramReport(analytes: HL7Analyte[], graphs: HL7Graph[] = []): HemogramReport {
+export function buildHemogramReport(analytes: HL7Analyte[], graphs: HemogramGraphInput[] = []): HemogramReport {
   const byBase = new Map<string, HemogramRow>()
   const order = new Map<string, number>()
   const section = new Map<string, HemogramSection>()
@@ -158,7 +175,7 @@ export function buildHemogramReport(analytes: HL7Analyte[], graphs: HL7Graph[] =
     graphs: graphs.map(g => ({
       code: g.code ?? '',
       title: graphTitle(g.code),
-      src: graphDataUri(g),
+      src: g.src ?? graphDataUri({ mime: g.mime ?? null, encoding: g.encoding ?? null, data: g.data ?? '' }),
     })),
   }
 }
