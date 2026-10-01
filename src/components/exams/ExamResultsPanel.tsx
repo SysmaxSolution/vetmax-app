@@ -7,8 +7,9 @@ import { useEffect, useState } from 'react'
 import { Loader2, Plus, Trash2, FlaskConical, CheckCircle2, Upload, Lock, Printer, FileText } from 'lucide-react'
 import {
   listExamResults, saveExamResults, releaseExamResults, importHL7Results,
-  type ExamResultRow,
+  listConsultationExams, type ExamResultRow,
 } from '@/lib/actions/exam-results'
+import type { ExamSummary } from '@/lib/lab/exam-key'
 import { getExamLabelData } from '@/lib/actions/exams'
 import { printLabels } from '@/components/lab/TubeLabel'
 
@@ -26,8 +27,11 @@ export default function ExamResultsPanel({ consultationId, canRelease = true }: 
   const [hl7, setHl7]           = useState('')
   const [showHl7, setShowHl7]   = useState(false)
   const [msg, setMsg]           = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
+  const [exames, setExames]     = useState<ExamSummary[]>([])
 
   async function reload() {
+    const ex = await listConsultationExams(consultationId)
+    setExames(Array.isArray(ex) ? ex : [])
     const res = await listExamResults(consultationId)
     if (!('error' in res)) {
       setReleased(res.released)
@@ -66,12 +70,15 @@ export default function ExamResultsPanel({ consultationId, canRelease = true }: 
     printLabels([{ sample_code: d.sample_code, patient_name: d.patient_name, tutor_name: d.tutor_name, species: d.species, exams: d.exams }])
   }
 
-  async function release() {
+  async function release(examKey?: string, titulo?: string) {
     setBusy(true)
-    const res = await releaseExamResults(consultationId)
+    const res = await releaseExamResults(consultationId, examKey ?? null)
     setBusy(false)
     if ('error' in res) return flash('err', res.error)
-    flash('ok', `${res.released} resultado(s) liberado(s).`); void reload()
+    flash('ok', examKey
+      ? `${titulo} liberado — ${res.released} parâmetro(s) assinados.`
+      : `${res.released} resultado(s) liberado(s).`)
+    void reload()
   }
 
   if (loading) return <div className="rounded-xl border border-slate-200 bg-white p-6 flex items-center gap-2 text-slate-400 text-sm"><Loader2 className="h-4 w-4 animate-spin" /> Carregando resultados…</div>
@@ -95,6 +102,50 @@ export default function ExamResultsPanel({ consultationId, canRelease = true }: 
             <textarea value={hl7} onChange={e => setHl7(e.target.value)} rows={4} placeholder="Cole a mensagem HL7 (ORU) do aparelho…"
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs font-mono focus:border-teal-500 focus:outline-none" />
             <button onClick={doImportHl7} disabled={busy || !hl7.trim()} className="rounded-lg bg-slate-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-50">Importar</button>
+          </div>
+        )}
+
+        {/* Exames da OS — cada um se confere e se libera sozinho.
+            No laudo da Animais cada exame tem a sua própria assinatura, e na
+            prática o hemograma fica pronto antes da bioquímica. */}
+        {exames.length > 0 && (
+          <div className="rounded-lg border border-slate-200 overflow-hidden">
+            <div className="bg-slate-50 px-3 py-1.5 text-[11px] font-semibold text-slate-500">
+              {exames.length} exame{exames.length > 1 ? 's' : ''} neste atendimento
+            </div>
+            <ul className="divide-y divide-slate-100">
+              {exames.map(e => (
+                <li key={e.key} className="flex flex-wrap items-center gap-2 px-3 py-2">
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-xs font-semibold text-slate-700">{e.title}</span>
+                    <span className="block text-[11px] text-slate-400">
+                      {e.total} parâmetro{e.total > 1 ? 's' : ''}
+                      {e.draft > 0 && e.released > 0 ? ` · ${e.released} já liberados` : ''}
+                    </span>
+                  </span>
+                  <a
+                    href={`/dashboard/exams/${consultationId}/laudo?exame=${encodeURIComponent(e.key)}`}
+                    className="text-[11px] font-medium text-teal-700 hover:underline"
+                  >
+                    ver laudo
+                  </a>
+                  {e.status === 'released' ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                      <Lock className="h-3 w-3" /> Liberado
+                    </span>
+                  ) : canRelease ? (
+                    <button
+                      onClick={() => release(e.key, e.title)} disabled={busy}
+                      className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                    >
+                      <CheckCircle2 className="h-3 w-3" /> Conferir e liberar
+                    </button>
+                  ) : (
+                    <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">Rascunho</span>
+                  )}
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 
@@ -142,12 +193,12 @@ export default function ExamResultsPanel({ consultationId, canRelease = true }: 
         <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
           <button onClick={save} disabled={busy} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">{busy ? 'Salvando…' : 'Salvar rascunho'}</button>
           {canRelease && (
-            <button onClick={release} disabled={busy} className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 ml-auto">
-              <CheckCircle2 className="h-4 w-4" /> Conferir e liberar
+            <button onClick={() => release()} disabled={busy || exames.every(e => e.status === 'released')} className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-40 ml-auto">
+              <CheckCircle2 className="h-4 w-4" /> Liberar todos os exames
             </button>
           )}
         </div>
-        <p className="text-[11px] text-slate-400">O rascunho é editável. Ao <strong>liberar</strong> (Médico Veterinário), o resultado fica imutável e disponível para o laudo/tutor (item 2.4).</p>
+        <p className="text-[11px] text-slate-400">O rascunho é editável. Ao <strong>liberar</strong> (Médico Veterinário), aquele exame fica imutável e vira laudo assinado. Cada exame assina o seu — a cobrança do atendimento só é disparada quando o último sai do rascunho.</p>
       </div>
     </div>
   )

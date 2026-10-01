@@ -8,18 +8,28 @@ import Link from 'next/link'
 import { ArrowLeft, Printer, Lock } from 'lucide-react'
 
 export default function ReportToolbar({
-  consultationId, released, releasedAt,
-}: { consultationId: string; released: boolean; releasedAt: string | null }) {
+  consultationId, released, releasedAt, examTitle = null, hasOthers = false,
+}: {
+  consultationId: string
+  released: boolean
+  releasedAt: string | null
+  /** Nome do exame deste laudo. Null = laudo único/antigo. */
+  examTitle?: string | null
+  /** Há mais exames na mesma OS — oferece a volta para a lista. */
+  hasOthers?: boolean
+}) {
   return (
     <div className="print:hidden sticky top-0 z-20 flex flex-wrap items-center gap-3 border-b border-slate-200 bg-white px-4 py-3">
       <Link
-        href={`/dashboard/exams/${consultationId}`}
+        href={hasOthers ? `/dashboard/exams/${consultationId}/laudo` : `/dashboard/exams/${consultationId}`}
         className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
       >
-        <ArrowLeft className="h-4 w-4" /> Voltar ao exame
+        <ArrowLeft className="h-4 w-4" /> {hasOthers ? 'Outros exames da OS' : 'Voltar ao exame'}
       </Link>
 
-      <span className="text-sm font-medium text-slate-700">Laudo de hemograma</span>
+      <span className="text-sm font-medium text-slate-700">
+        {examTitle ? `Laudo — ${examTitle}` : 'Laudo'}
+      </span>
 
       {released ? (
         <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">

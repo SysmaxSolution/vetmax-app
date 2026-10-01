@@ -8,6 +8,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { parseHL7ORU } from './hl7-parser'
 import { buildHemogramReport, type HemogramReport } from './hemogram-report'
+import { examKeyOf, summarizeExams, type ExamSummary } from './exam-key'
 import { buildBiochemReport, isBiochemAnalyte, type BiochemReport } from './biochem-report'
 import {
   applyReferenceSet, pickReferenceSet,
@@ -31,6 +32,10 @@ export interface ExamReportData {
   /** Laudo montado pela TABELA DA CLÍNICA. Null quando ela não cadastrou uma —
    *  aí vale o comportamento antigo, com as faixas do aparelho. */
   resolved:    ResolvedReport | null
+  /** Todos os exames desta OS, cada um com o seu estado. É a lista da capa. */
+  exams:       ExamSummary[]
+  /** Exame que ESTE laudo representa. Null = a OS inteira (índice). */
+  exam:        ExamSummary | null
   /** 'released' quando o Médico Veterinário já conferiu e liberou. */
   status:      'released' | 'draft' | 'empty'
   released_at: string | null
@@ -113,6 +118,8 @@ export async function getExamReportData(
   admin: SupabaseClient,
   clinicId: string,
   consultationId: string,
+  /** Qual exame montar. Omitido = devolve só o resumo da OS (para a capa). */
+  examKey?: string | null,
 ): Promise<ExamReportData | null> {
   const { data: cons } = await admin
     .from('consultations')
@@ -149,10 +156,23 @@ export async function getExamReportData(
         .eq('clinic_id', clinicId).eq('id', patient.tutor_id).maybeSingle()
     : { data: null }
 
-  const rows = (results ?? []) as ResultRow[]
-  const released = rows.filter(r => r.status === 'released')
-  const use = released.length > 0 ? released : rows
-  const status: ExamReportData['status'] = released.length > 0 ? 'released' : (rows.length > 0 ? 'draft' : 'empty')
+  const todas = (results ?? []) as ResultRow[]
+
+  // Cada exame da OS tem estado próprio. A regra anterior era
+  // `released.length > 0 ? released : rows` — com isso, liberar o hemograma
+  // fazia a bioquímica em rascunho SUMIR do laudo, e o documento saía marcado
+  // como liberado. Exame é a unidade; um não decide pelo outro.
+  const exams = summarizeExams(todas.map(r => ({
+    analyte_code: r.analyte_code, analyte_name: r.analyte_name,
+    status: r.status, released_at: r.released_at,
+  })))
+  const exam = examKey ? (exams.find(e => e.key === examKey) ?? null) : null
+  if (examKey && !exam) return null
+
+  const rows = exam ? todas.filter(r => examKeyOf(r.analyte_code, r.analyte_name).key === exam.key) : todas
+  const use = rows
+  const status: ExamReportData['status'] =
+    rows.length === 0 ? 'empty' : (exam ? exam.status : (exams.every(e => e.status === 'released') ? 'released' : 'draft'))
 
   // Metadados da amostra: vêm do HL7 guardado (versão sem os payloads base64).
   const raw = use.find(r => r.raw_hl7)?.raw_hl7 ?? null
@@ -247,14 +267,16 @@ export async function getExamReportData(
     report,
     biochem: buildBiochemReport(bioAnalytes),
     resolved,
+    exams,
+    exam,
     status,
-    released_at: released[0]?.released_at ?? null,
+    released_at: exam ? exam.released_at : (status === 'released' ? (use.find(r => r.released_at)?.released_at ?? null) : null),
     source: use[0]?.source ?? null,
     device: hl7?.device ?? null,
     collected_at: hl7?.observed_at ?? null,
     sample_id: hl7?.sample_id ?? null,
     specimen: hl7?.specimen ?? null,
-    panel: use.find(r => r.panel)?.panel ?? hl7?.panel
+    panel: exam?.title ?? use.find(r => r.panel)?.panel ?? hl7?.panel
       ?? (hemAnalytes.length === 0 && bioAnalytes.length > 0 ? 'Bioquímico' : 'Hemograma'),
   }
 }

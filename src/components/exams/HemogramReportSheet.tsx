@@ -284,7 +284,10 @@ export default function HemogramReportSheet({ data }: { data: ExamReportData }) 
     ? config.rows.length > 0
     : report.erythrogram.length + report.leukogram.length +
       report.platelets.length + report.other.length > 0
-  const hasGraphs = report.graphs.some(g => g.src)
+  // As curvas são do analisador hematológico: só saem no laudo do hemograma.
+  // Num laudo de creatinina elas não têm o que fazer.
+  const hasGraphs = report.graphs.some(g => g.src) &&
+    (!data.exam || data.exam.group === 'hemograma')
 
   const bioPaginas: BiochemBlock[][] = []
   for (let i = 0; i < biochem.blocks.length; i += BIOCHEM_POR_PAGINA) {

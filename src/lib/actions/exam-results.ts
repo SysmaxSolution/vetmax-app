@@ -13,6 +13,7 @@ import { resolveAnalyte, normKey, type AnalyteMapping } from '@/lib/lab/analyte-
 import { notifyTutorResultReleased } from '@/lib/actions/tutor-portal'
 import { usesExamRejectionFlow } from '@/lib/exams/rejection-gate'
 import { clinicFlowFlag, routineOffError } from '@/lib/clinic/flow-gate'
+import { examKeyOf, summarizeExams, type ExamSummary } from '@/lib/lab/exam-key'
 
 async function getCtx() {
   const supabase = await createClient()
@@ -51,6 +52,25 @@ export async function listExamResults(consultationId: string): Promise<{ draft: 
   if (error) return { error: error.message }
   const rows = (data ?? []) as ExamResultRow[]
   return { draft: rows.filter(r => r.status === 'draft'), released: rows.filter(r => r.status === 'released') }
+}
+
+/**
+ * Os exames desta OS, cada um com o seu estado. É o que permite conferir e
+ * liberar um a um — o hemograma sai na hora, a bioquímica costuma demorar.
+ */
+export async function listConsultationExams(
+  consultationId: string,
+): Promise<ExamSummary[] | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return { error: ctx.error as string }
+  const { data, error } = await ctx.admin
+    .from('exam_results')
+    .select('analyte_code, analyte_name, status, released_at')
+    .eq('clinic_id', ctx.clinic_id).eq('consultation_id', consultationId)
+  if (error) return { error: error.message }
+  return summarizeExams((data ?? []) as {
+    analyte_code: string | null; analyte_name: string; status: string; released_at: string | null
+  }[])
 }
 
 // Substitui os resultados em RASCUNHO da consulta (os liberados são imutáveis).
@@ -117,15 +137,41 @@ export async function importHL7Results(consultationId: string, hl7: string): Pro
 }
 
 // 2.4 — CONFERÊNCIA E LIBERAÇÃO pelo Médico Veterinário. Só MV/admin.
-export async function releaseExamResults(consultationId: string): Promise<{ ok: true; released: number } | { error: string }> {
+/**
+ * Libera UM exame da OS (ou todos, se `examKey` vier vazio).
+ *
+ * Exame é a unidade assinada: no laudo da Animais o hemograma assina sozinho e
+ * cada exame de bioquímica assina o seu. Liberar a OS inteira de uma vez fazia
+ * o Médico Veterinário assinar em bloco o que deveria conferir um a um — e
+ * impedia o caso comum, em que o hemograma sai na hora e a bioquímica demora.
+ */
+export async function releaseExamResults(
+  consultationId: string,
+  examKey?: string | null,
+): Promise<{ ok: true; released: number } | { error: string }> {
   const ctx = await getCtx()
   if ('error' in ctx) return { error: ctx.error as string }
   if (!['vet', 'admin', 'owner', 'manager'].includes(ctx.role)) {
     return { error: 'Apenas o Médico Veterinário pode liberar o resultado.' }
   }
+
+  const { data: rascunhos, error: erroLeitura } = await ctx.admin.from('exam_results')
+    .select('id, analyte_code, analyte_name')
+    .eq('clinic_id', ctx.clinic_id).eq('consultation_id', consultationId).eq('status', 'draft')
+  if (erroLeitura) return { error: 'Erro ao ler os resultados: ' + erroLeitura.message }
+
+  const alvos = (rascunhos ?? [])
+    .filter(r => !examKey || examKeyOf(
+      (r as { analyte_code: string | null }).analyte_code,
+      (r as { analyte_name: string }).analyte_name,
+    ).key === examKey)
+    .map(r => (r as { id: string }).id)
+
+  if (alvos.length === 0) return { ok: true, released: 0 }
+
   const { data, error } = await ctx.admin.from('exam_results')
     .update({ status: 'released', released_by: ctx.user_id, released_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-    .eq('clinic_id', ctx.clinic_id).eq('consultation_id', consultationId).eq('status', 'draft')
+    .in('id', alvos)
     .select('id')
   if (error) return { error: 'Erro ao liberar: ' + error.message }
   const released = (data ?? []).length
@@ -134,7 +180,14 @@ export async function releaseExamResults(consultationId: string): Promise<{ ok: 
   // cobrança. As linhas de exame ainda travadas viram 'performed', perdem a
   // trava e são enviadas ao caixa. As linhas rejeitadas/encerradas NÃO são
   // tocadas — continuam fora da cobrança. Com a flag desligada nada disso roda.
-  if (released > 0 && await usesExamRejectionFlow(ctx.admin, ctx.clinic_id)) {
+  // A cobrança é disparada pelo FIM da OS, não por um exame avulso: só quando
+  // não sobrou nenhum rascunho é que as linhas travadas vão para o caixa.
+  const { data: sobra } = await ctx.admin.from('exam_results')
+    .select('id').eq('clinic_id', ctx.clinic_id).eq('consultation_id', consultationId)
+    .eq('status', 'draft').limit(1)
+  const osCompleta = (sobra ?? []).length === 0
+
+  if (released > 0 && osCompleta && await usesExamRejectionFlow(ctx.admin, ctx.clinic_id)) {
     const now = new Date().toISOString()
     const { data: freed } = await ctx.admin
       .from('consultation_services')
@@ -155,7 +208,7 @@ export async function releaseExamResults(consultationId: string): Promise<{ ok: 
   }
 
   // Avisa o tutor por WhatsApp (best-effort; só se a clínica usa o portal)
-  if (released > 0) {
+  if (released > 0 && osCompleta) {
     try {
       const { data: cons } = await ctx.admin
         .from('consultations').select('patient_id, patients!patient_id ( tutor_id, name )')
@@ -167,5 +220,6 @@ export async function releaseExamResults(consultationId: string): Promise<{ ok: 
   }
 
   revalidatePath(`/dashboard/exams/${consultationId}`)
+  revalidatePath(`/dashboard/exams/${consultationId}/laudo`)
   return { ok: true, released }
 }
