@@ -9,6 +9,10 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { parseHL7ORU } from './hl7-parser'
 import { buildHemogramReport, type HemogramReport } from './hemogram-report'
 import { buildBiochemReport, isBiochemAnalyte, type BiochemReport } from './biochem-report'
+import {
+  applyReferenceSet, pickReferenceSet,
+  type ReferenceSet, type ResolvedReport,
+} from './reference-set'
 
 export interface ReportHeader {
   os_number:   string
@@ -24,6 +28,9 @@ export interface ExamReportData {
   report:      HemogramReport
   /** Blocos de bioquímica (Sérium 200 / BK-200). Vazio quando só veio hemograma. */
   biochem:     BiochemReport
+  /** Laudo montado pela TABELA DA CLÍNICA. Null quando ela não cadastrou uma —
+   *  aí vale o comportamento antigo, com as faixas do aparelho. */
+  resolved:    ResolvedReport | null
   /** 'released' quando o Médico Veterinário já conferiu e liberou. */
   status:      'released' | 'draft' | 'empty'
   released_at: string | null
@@ -172,6 +179,38 @@ export async function getExamReportData(
     })),
   )
 
+  // Tabela de referência da clínica. O exame lógico não vem do rótulo que o
+  // aparelho manda (o URIT diz "5190Vet"), e sim do que ele realmente mediu.
+  const panelKey = hemAnalytes.length > 0 ? 'hemograma' : (bioAnalytes.length > 0 ? 'bioquimico' : null)
+  let resolved: ResolvedReport | null = null
+  if (panelKey) {
+    const [{ data: sets }, { data: manuais }] = await Promise.all([
+      admin.from('lab_reference_sets')
+        .select('id, panel_key, species, name, lab_reference_items(id, sort_order, label, analyte_code, section, input_source, unit, ref_text, ref_low, ref_high, ref_abs_text, ref_abs_low, ref_abs_high, is_visible, is_editable, default_text)')
+        .eq('clinic_id', clinicId).eq('panel_key', panelKey).eq('is_active', true),
+      admin.from('exam_manual_entries')
+        .select('label, value_text')
+        .eq('clinic_id', clinicId).eq('consultation_id', consultationId),
+    ])
+
+    const conjuntos: ReferenceSet[] = (sets ?? []).map(s => ({
+      id: s.id as string,
+      panel_key: s.panel_key as string,
+      species: (s.species as string) ?? null,
+      name: s.name as string,
+      items: ((s as { lab_reference_items?: unknown[] }).lab_reference_items ?? []) as ReferenceSet['items'],
+    }))
+
+    const escolhido = pickReferenceSet(conjuntos, panelKey, (patient?.species as string) ?? null)
+    if (escolhido) {
+      const digitado: Record<string, string> = {}
+      for (const m of manuais ?? []) {
+        if ((m as { value_text?: string }).value_text) digitado[(m as { label: string }).label] = (m as { value_text: string }).value_text
+      }
+      resolved = applyReferenceSet(escolhido, allAnalytes, digitado)
+    }
+  }
+
   const addr = [clinic?.address, clinic?.neighborhood].filter(Boolean).join(', ')
   const cityLine = [clinic?.city, clinic?.state].filter(Boolean).join(' / ')
   const fullAddr = [addr, [cityLine, clinic?.cep].filter(Boolean).join(' - ')].filter(Boolean).join(' · ')
@@ -207,6 +246,7 @@ export async function getExamReportData(
     },
     report,
     biochem: buildBiochemReport(bioAnalytes),
+    resolved,
     status,
     released_at: released[0]?.released_at ?? null,
     source: use[0]?.source ?? null,

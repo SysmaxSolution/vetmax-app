@@ -1,3 +1,4 @@
+import React from 'react'
 // Folha do laudo de hemograma — layout da Clínica Animais.
 // Componente de APRESENTAÇÃO (server-safe, sem estado): recebe os dados já
 // montados e desenha as páginas A4. Não interpreta resultado: imprime os
@@ -8,6 +9,7 @@ import type { ExamReportData } from '@/lib/lab/exam-report-data'
 import { ageLabel, deviceLabel, formatCrmv, genderLabel, neuteredLabel, speciesLabel } from '@/lib/lab/exam-report-data'
 import type { HemogramRow } from '@/lib/lab/hemogram-report'
 import type { BiochemBlock } from '@/lib/lab/biochem-report'
+import type { ResolvedReport, ResolvedRow, ReferenceSection } from '@/lib/lab/reference-set'
 
 // O analisador não produz morfologia nem hematozoários — isso é leitura de
 // lâmina, ato do Médico Veterinário. O campo fica explicitamente em aberto.
@@ -58,6 +60,90 @@ function Meta({ k, v }: { k: string; v: string }) {
       <span className="ld-lead">{k}<span className="ld-dots">{'.'.repeat(40)}</span></span>
       <span>: <i>{v}</i></span>
     </div>
+  )
+}
+
+/**
+ * Corpo do laudo montado pela TABELA DA CLÍNICA (lab_reference_sets).
+ * Aqui quem manda é a configuração: a ordem das linhas, os rótulos, as faixas
+ * e de onde vem cada valor. O que o aparelho mediu e a clínica não usa não
+ * aparece — é esse o pedido.
+ */
+const SECOES: { key: ReferenceSection; titulo: string }[] = [
+  { key: 'erythrogram', titulo: 'Eritrograma' },
+  { key: 'leukogram',   titulo: 'Leucograma' },
+  { key: 'platelets',   titulo: 'Série plaquetária' },
+  { key: 'biochem',     titulo: 'Bioquímica' },
+  { key: 'other',       titulo: 'Outros' },
+]
+
+function LinhaResolvida({ r }: { r: ResolvedRow }) {
+  // Linha de texto (observações, avaliação, nota) ocupa a largura toda.
+  if (r.source === 'text') {
+    return (
+      <>
+        <tr><td colSpan={8} className="ld-obs-lbl">{r.label}</td></tr>
+        <tr><td colSpan={8} className="ld-obs">{r.value || 'A preencher pelo Médico Veterinário.'}</td></tr>
+      </>
+    )
+  }
+  const vazio = r.value === null || r.value === ''
+  return (
+    <tr>
+      <td className="ld-name">{r.label}</td>
+      <td className="ld-colon">:</td>
+      <td className="ld-val">
+        {vazio ? <span className="ld-pend">—</span> : <>{r.value}<Flag f={r.flag} /></>}
+      </td>
+      <td className="ld-unit">{r.unit ?? ''}</td>
+      <td className="ld-val">{r.value_abs ?? ''}{r.value_abs ? <Flag f={r.flag_abs} /> : null}</td>
+      <td className="ld-unit">{r.unit_abs ?? ''}</td>
+      <td className="ld-ref">{r.ref_abs ?? ''}</td>
+      <td className="ld-ref">{r.ref ?? ''}</td>
+    </tr>
+  )
+}
+
+function CorpoConfigurado({ d, rel }: { d: ExamReportData; rel: ResolvedReport }) {
+  return (
+    <>
+      <h1 className="ld-title">HEMOGRAMA</h1>
+      <div className="ld-meta">
+        <Meta k="Material" v="SANGUE TOTAL COM E.D.T.A." />
+        <Meta k="Equipamento" v={deviceLabel(d.device) ?? 'Analisador hematológico'} />
+        <Meta k="Amostra" v={`${d.sample_id ?? '—'}${d.collected_at ? ` · colhida em ${fmtDateTime(d.collected_at)}` : ''}`} />
+        <Meta k="Referência" v={rel.set_name} />
+      </div>
+
+      <table className="ld-table">
+        <thead>
+          <tr className="ld-colhead">
+            <th colSpan={6}></th>
+            <th>Vlr Ref. Absoluto</th>
+            <th>Vlr Ref. Relativo</th>
+          </tr>
+        </thead>
+        <tbody>
+          {SECOES.map(sec => {
+            const linhas = rel.rows.filter(r => r.section === sec.key)
+            if (!linhas.length) return null
+            return (
+              <React.Fragment key={sec.key}>
+                <tr><td colSpan={8} className="ld-sub">{sec.titulo}</td></tr>
+                {linhas.map(r => <LinhaResolvida key={r.item_id} r={r} />)}
+              </React.Fragment>
+            )
+          })}
+        </tbody>
+      </table>
+
+      <p className="ld-note">
+        Faixas de referência conforme a tabela da clínica ({rel.set_name}). O
+        diferencial leucocitário e os campos de texto são leitura de lâmina,
+        preenchidos pelo laboratório. A interpretação clínica é de
+        responsabilidade do Médico Veterinário.
+      </p>
+    </>
   )
 }
 
@@ -191,9 +277,13 @@ const BIOCHEM_POR_PAGINA = 4
 
 export default function HemogramReportSheet({ data }: { data: ExamReportData }) {
   const { report, biochem } = data
-  const hasHemogram =
-    report.erythrogram.length + report.leukogram.length +
-    report.platelets.length + report.other.length > 0
+  // Quando a clínica cadastrou a tabela dela, é ela que desenha o laudo.
+  // Sem tabela, vale o comportamento antigo (faixas do aparelho).
+  const config = data.resolved
+  const hasHemogram = config
+    ? config.rows.length > 0
+    : report.erythrogram.length + report.leukogram.length +
+      report.platelets.length + report.other.length > 0
   const hasGraphs = report.graphs.some(g => g.src)
 
   const bioPaginas: BiochemBlock[][] = []
@@ -216,57 +306,61 @@ export default function HemogramReportSheet({ data }: { data: ExamReportData }) 
           <PageHeader d={data} />
 
           <main className="ld-body">
-            <h1 className="ld-title">{(data.panel ?? 'Hemograma').toUpperCase()}</h1>
-            <div className="ld-meta">
-              <Meta k="Material" v="SANGUE TOTAL COM E.D.T.A." />
-              <Meta k="Metodologia" v="IMPEDÂNCIA E CITOMETRIA DE FLUXO A LASER" />
-              <Meta k="Equipamento" v={deviceLabel(data.device) ?? 'Analisador hematológico'} />
-              <Meta k="Amostra" v={`${data.sample_id ?? '—'}${data.collected_at ? ` · colhida em ${fmtDateTime(data.collected_at)}` : ''}`} />
-            </div>
+            {config ? <CorpoConfigurado d={data} rel={config} /> : (
+              <>
+              <h1 className="ld-title">{(data.panel ?? 'Hemograma').toUpperCase()}</h1>
+              <div className="ld-meta">
+                <Meta k="Material" v="SANGUE TOTAL COM E.D.T.A." />
+                <Meta k="Metodologia" v="IMPEDÂNCIA E CITOMETRIA DE FLUXO A LASER" />
+                <Meta k="Equipamento" v={deviceLabel(data.device) ?? 'Analisador hematológico'} />
+                <Meta k="Amostra" v={`${data.sample_id ?? '—'}${data.collected_at ? ` · colhida em ${fmtDateTime(data.collected_at)}` : ''}`} />
+              </div>
 
-            <table className="ld-table">
-              <thead>
-                <tr className="ld-colhead">
-                  <th colSpan={6}></th>
-                  <th>Vlr Ref. Absoluto</th>
-                  <th>Vlr Ref. Relativo</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr><td colSpan={8} className="ld-sub">Eritrograma</td></tr>
-                <Rows rows={report.erythrogram} showAbs />
+              <table className="ld-table">
+                <thead>
+                  <tr className="ld-colhead">
+                    <th colSpan={6}></th>
+                    <th>Vlr Ref. Absoluto</th>
+                    <th>Vlr Ref. Relativo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td colSpan={8} className="ld-sub">Eritrograma</td></tr>
+                  <Rows rows={report.erythrogram} showAbs />
 
-                <tr><td colSpan={8} className="ld-obs-lbl">Observações série vermelha</td></tr>
-                <tr><td colSpan={8} className="ld-obs">{OBS_EMPTY}</td></tr>
+                  <tr><td colSpan={8} className="ld-obs-lbl">Observações série vermelha</td></tr>
+                  <tr><td colSpan={8} className="ld-obs">{OBS_EMPTY}</td></tr>
 
-                <tr><td colSpan={8} className="ld-sub">Leucograma</td></tr>
-                <Rows rows={report.leukogram} showAbs />
+                  <tr><td colSpan={8} className="ld-sub">Leucograma</td></tr>
+                  <Rows rows={report.leukogram} showAbs />
 
-                <tr><td colSpan={8} className="ld-obs-lbl">Observações série branca</td></tr>
-                <tr><td colSpan={8} className="ld-obs">{OBS_EMPTY}</td></tr>
+                  <tr><td colSpan={8} className="ld-obs-lbl">Observações série branca</td></tr>
+                  <tr><td colSpan={8} className="ld-obs">{OBS_EMPTY}</td></tr>
 
-                <tr><td colSpan={8} className="ld-sub">Série plaquetária</td></tr>
-                <Rows rows={report.platelets} showAbs />
+                  <tr><td colSpan={8} className="ld-sub">Série plaquetária</td></tr>
+                  <Rows rows={report.platelets} showAbs />
 
-                <tr><td colSpan={8} className="ld-obs-lbl">Avaliação plaquetária</td></tr>
-                <tr><td colSpan={8} className="ld-obs">{OBS_EMPTY}</td></tr>
+                  <tr><td colSpan={8} className="ld-obs-lbl">Avaliação plaquetária</td></tr>
+                  <tr><td colSpan={8} className="ld-obs">{OBS_EMPTY}</td></tr>
 
-                {report.other.length > 0 && (
-                  <>
-                    <tr><td colSpan={8} className="ld-sub">Outros parâmetros do aparelho</td></tr>
-                    <Rows rows={report.other} showAbs />
-                  </>
-                )}
+                  {report.other.length > 0 && (
+                    <>
+                      <tr><td colSpan={8} className="ld-sub">Outros parâmetros do aparelho</td></tr>
+                      <Rows rows={report.other} showAbs />
+                    </>
+                  )}
 
-                <tr><td colSpan={8} className="ld-obs-lbl">Pesquisa de hematozoários</td></tr>
-                <tr><td colSpan={8} className="ld-obs">{OBS_EMPTY}</td></tr>
-              </tbody>
-            </table>
+                  <tr><td colSpan={8} className="ld-obs-lbl">Pesquisa de hematozoários</td></tr>
+                  <tr><td colSpan={8} className="ld-obs">{OBS_EMPTY}</td></tr>
+                </tbody>
+              </table>
 
-            <p className="ld-note">
-              Valores, unidades e faixas de referência conforme emitidos pelo analisador.
-              A interpretação clínica é de responsabilidade do Médico Veterinário.
-            </p>
+              <p className="ld-note">
+                Valores, unidades e faixas de referência conforme emitidos pelo analisador.
+                A interpretação clínica é de responsabilidade do Médico Veterinário.
+              </p>
+              </>
+            )}
           </main>
 
           <PageFooter d={data} page={1} total={total} />
@@ -385,6 +479,9 @@ const CSS = `
 .ld-obs { font-size: 9.5px; font-style: italic; color: #8a8a8a; padding: 0 0 8px 6px; }
 
 .ld-note { font-size: 7.2px; color: var(--muted); margin: 14px 0 0; line-height: 1.4; }
+
+/* ---- linha ainda não digitada (lâmina) ---- */
+.ld-pend { color: #b45309; }
 
 /* ---- blocos de bioquímica ---- */
 .ld-bq { margin-bottom: 16px; break-inside: avoid; page-break-inside: avoid; }
