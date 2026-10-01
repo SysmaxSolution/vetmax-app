@@ -8,6 +8,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { parseHL7ORU } from './hl7-parser'
 import { buildHemogramReport, type HemogramReport } from './hemogram-report'
+import { buildBiochemReport, isBiochemAnalyte, type BiochemReport } from './biochem-report'
 
 export interface ReportHeader {
   os_number:   string
@@ -21,6 +22,8 @@ export interface ReportHeader {
 export interface ExamReportData {
   header:      ReportHeader
   report:      HemogramReport
+  /** Blocos de bioquímica (Sérium 200 / BK-200). Vazio quando só veio hemograma. */
+  biochem:     BiochemReport
   /** 'released' quando o Médico Veterinário já conferiu e liberou. */
   status:      'released' | 'draft' | 'empty'
   released_at: string | null
@@ -147,12 +150,19 @@ export async function getExamReportData(
   const meta = raw ? parseHL7ORU(raw) : null
   const hl7 = meta && !('error' in meta) ? meta : null
 
+  // Um mesmo atendimento pode ter hemograma (URIT) E bioquímica (Sérium 200):
+  // os dois aparelhos escrevem na mesma consulta. Separar antes de montar evita
+  // que os analitos de bioquímica caiam em "Outros parâmetros" do hemograma.
+  const allAnalytes = use.map(r => ({
+    code: r.analyte_code, name: r.analyte_name, value: r.value_text, unit: r.unit,
+    ref_text: r.ref_text, ref_low: r.ref_low, ref_high: r.ref_high,
+    flag: (r.flag as 'H' | 'L' | 'N' | 'A' | null) ?? null,
+  }))
+  const bioAnalytes = allAnalytes.filter(a => isBiochemAnalyte(a.code, a.name))
+  const hemAnalytes = allAnalytes.filter(a => !isBiochemAnalyte(a.code, a.name))
+
   const report = buildHemogramReport(
-    use.map(r => ({
-      code: r.analyte_code, name: r.analyte_name, value: r.value_text, unit: r.unit,
-      ref_text: r.ref_text, ref_low: r.ref_low, ref_high: r.ref_high,
-      flag: (r.flag as 'H' | 'L' | 'N' | 'A' | null) ?? null,
-    })),
+    hemAnalytes,
     (graphRows ?? []).map(g => ({
       code: g.code as string, name: (g.title as string) ?? null,
       mime: g.mime as string | null, encoding: g.encoding as string | null,
@@ -194,12 +204,14 @@ export async function getExamReportData(
       },
     },
     report,
+    biochem: buildBiochemReport(bioAnalytes),
     status,
     released_at: released[0]?.released_at ?? null,
     source: use[0]?.source ?? null,
     device: hl7?.device ?? null,
     collected_at: hl7?.observed_at ?? null,
     sample_id: hl7?.sample_id ?? null,
-    panel: use.find(r => r.panel)?.panel ?? hl7?.panel ?? 'Hemograma',
+    panel: use.find(r => r.panel)?.panel ?? hl7?.panel
+      ?? (hemAnalytes.length === 0 && bioAnalytes.length > 0 ? 'Bioquímico' : 'Hemograma'),
   }
 }

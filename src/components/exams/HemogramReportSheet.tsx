@@ -7,6 +7,7 @@
 import type { ExamReportData } from '@/lib/lab/exam-report-data'
 import { ageLabel, deviceLabel, formatCrmv, genderLabel, neuteredLabel, speciesLabel } from '@/lib/lab/exam-report-data'
 import type { HemogramRow } from '@/lib/lab/hemogram-report'
+import type { BiochemBlock } from '@/lib/lab/biochem-report'
 
 // O analisador não produz morfologia nem hematozoários — isso é leitura de
 // lâmina, ato do Médico Veterinário. O campo fica explicitamente em aberto.
@@ -57,6 +58,41 @@ function Meta({ k, v }: { k: string; v: string }) {
       <span className="ld-lead">{k}<span className="ld-dots">{'.'.repeat(40)}</span></span>
       <span>: <i>{v}</i></span>
     </div>
+  )
+}
+
+/**
+ * Bloco de bioquímica no formato do laudo da Animais: título à esquerda,
+ * "Valores de Referência" alinhado à direita, Material/Metodologia abaixo e
+ * a(s) linha(s) de resultado. Um bloco por exame — bilirrubinas trazem três.
+ */
+function BiochemCard({ b }: { b: BiochemBlock }) {
+  return (
+    <section className="ld-bq">
+      <div className="ld-bq-head">
+        <h2 className="ld-bq-title">{b.title}</h2>
+        <div className="ld-bq-refhead">Valores de Referência</div>
+      </div>
+
+      <div className="ld-meta ld-bq-meta">
+        {b.material && <Meta k="Material" v={b.material} />}
+        {b.method   && <Meta k="Metodologia" v={b.method} />}
+      </div>
+
+      <table className="ld-table ld-bq-table">
+        <tbody>
+          {b.rows.map((r, i) => (
+            <tr key={`${b.key}-${r.label}-${i}`}>
+              <td className="ld-name">{r.label}</td>
+              <td className="ld-colon">:</td>
+              <td className="ld-val">{r.value}<Flag f={r.flag} /></td>
+              <td className="ld-unit">{r.unit ?? ''}</td>
+              <td className="ld-ref">{r.ref ?? '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
   )
 }
 
@@ -149,76 +185,116 @@ function PageFooter({ d, page, total }: { d: ExamReportData; page: number; total
   )
 }
 
+/** Quantos blocos de bioquímica cabem numa folha A4 sem estourar. */
+const BIOCHEM_POR_PAGINA = 4
+
 export default function HemogramReportSheet({ data }: { data: ExamReportData }) {
-  const { report } = data
+  const { report, biochem } = data
+  const hasHemogram =
+    report.erythrogram.length + report.leukogram.length +
+    report.platelets.length + report.other.length > 0
   const hasGraphs = report.graphs.some(g => g.src)
-  const total = hasGraphs ? 2 : 1
+
+  const bioPaginas: BiochemBlock[][] = []
+  for (let i = 0; i < biochem.blocks.length; i += BIOCHEM_POR_PAGINA) {
+    bioPaginas.push(biochem.blocks.slice(i, i + BIOCHEM_POR_PAGINA))
+  }
+
+  // Numeração: hemograma (se houver) → bioquímica → curvas.
+  const total = Math.max(1, (hasHemogram ? 1 : 0) + bioPaginas.length + (hasGraphs ? 1 : 0))
+  const primeiraBio = (hasHemogram ? 1 : 0) + 1
 
   return (
     <div className="ld-sheet">
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
 
-      {/* ---------- Página 1: HEMOGRAMA ---------- */}
-      <section className="ld-page">
-        {data.status !== 'released' && <div className="ld-watermark">RASCUNHO</div>}
-        <PageHeader d={data} />
+      {/* ---------- HEMOGRAMA (só quando o hematológico mandou algo) ---------- */}
+      {hasHemogram && (
+        <section className="ld-page">
+          {data.status !== 'released' && <div className="ld-watermark">RASCUNHO</div>}
+          <PageHeader d={data} />
 
-        <main className="ld-body">
-          <h1 className="ld-title">{(data.panel ?? 'Hemograma').toUpperCase()}</h1>
-          <div className="ld-meta">
-            <Meta k="Material" v="SANGUE TOTAL COM E.D.T.A." />
-            <Meta k="Metodologia" v="IMPEDÂNCIA E CITOMETRIA DE FLUXO A LASER" />
-            <Meta k="Equipamento" v={deviceLabel(data.device) ?? 'Analisador hematológico'} />
-            <Meta k="Amostra" v={`${data.sample_id ?? '—'}${data.collected_at ? ` · colhida em ${fmtDateTime(data.collected_at)}` : ''}`} />
-          </div>
+          <main className="ld-body">
+            <h1 className="ld-title">{(data.panel ?? 'Hemograma').toUpperCase()}</h1>
+            <div className="ld-meta">
+              <Meta k="Material" v="SANGUE TOTAL COM E.D.T.A." />
+              <Meta k="Metodologia" v="IMPEDÂNCIA E CITOMETRIA DE FLUXO A LASER" />
+              <Meta k="Equipamento" v={deviceLabel(data.device) ?? 'Analisador hematológico'} />
+              <Meta k="Amostra" v={`${data.sample_id ?? '—'}${data.collected_at ? ` · colhida em ${fmtDateTime(data.collected_at)}` : ''}`} />
+            </div>
 
-          <table className="ld-table">
-            <thead>
-              <tr className="ld-colhead">
-                <th colSpan={6}></th>
-                <th>Vlr Ref. Absoluto</th>
-                <th>Vlr Ref. Relativo</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr><td colSpan={8} className="ld-sub">Eritrograma</td></tr>
-              <Rows rows={report.erythrogram} showAbs />
+            <table className="ld-table">
+              <thead>
+                <tr className="ld-colhead">
+                  <th colSpan={6}></th>
+                  <th>Vlr Ref. Absoluto</th>
+                  <th>Vlr Ref. Relativo</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td colSpan={8} className="ld-sub">Eritrograma</td></tr>
+                <Rows rows={report.erythrogram} showAbs />
 
-              <tr><td colSpan={8} className="ld-obs-lbl">Observações série vermelha</td></tr>
-              <tr><td colSpan={8} className="ld-obs">{OBS_EMPTY}</td></tr>
+                <tr><td colSpan={8} className="ld-obs-lbl">Observações série vermelha</td></tr>
+                <tr><td colSpan={8} className="ld-obs">{OBS_EMPTY}</td></tr>
 
-              <tr><td colSpan={8} className="ld-sub">Leucograma</td></tr>
-              <Rows rows={report.leukogram} showAbs />
+                <tr><td colSpan={8} className="ld-sub">Leucograma</td></tr>
+                <Rows rows={report.leukogram} showAbs />
 
-              <tr><td colSpan={8} className="ld-obs-lbl">Observações série branca</td></tr>
-              <tr><td colSpan={8} className="ld-obs">{OBS_EMPTY}</td></tr>
+                <tr><td colSpan={8} className="ld-obs-lbl">Observações série branca</td></tr>
+                <tr><td colSpan={8} className="ld-obs">{OBS_EMPTY}</td></tr>
 
-              <tr><td colSpan={8} className="ld-sub">Série plaquetária</td></tr>
-              <Rows rows={report.platelets} showAbs />
+                <tr><td colSpan={8} className="ld-sub">Série plaquetária</td></tr>
+                <Rows rows={report.platelets} showAbs />
 
-              <tr><td colSpan={8} className="ld-obs-lbl">Avaliação plaquetária</td></tr>
-              <tr><td colSpan={8} className="ld-obs">{OBS_EMPTY}</td></tr>
+                <tr><td colSpan={8} className="ld-obs-lbl">Avaliação plaquetária</td></tr>
+                <tr><td colSpan={8} className="ld-obs">{OBS_EMPTY}</td></tr>
 
-              {report.other.length > 0 && (
-                <>
-                  <tr><td colSpan={8} className="ld-sub">Outros parâmetros do aparelho</td></tr>
-                  <Rows rows={report.other} showAbs />
-                </>
-              )}
+                {report.other.length > 0 && (
+                  <>
+                    <tr><td colSpan={8} className="ld-sub">Outros parâmetros do aparelho</td></tr>
+                    <Rows rows={report.other} showAbs />
+                  </>
+                )}
 
-              <tr><td colSpan={8} className="ld-obs-lbl">Pesquisa de hematozoários</td></tr>
-              <tr><td colSpan={8} className="ld-obs">{OBS_EMPTY}</td></tr>
-            </tbody>
-          </table>
+                <tr><td colSpan={8} className="ld-obs-lbl">Pesquisa de hematozoários</td></tr>
+                <tr><td colSpan={8} className="ld-obs">{OBS_EMPTY}</td></tr>
+              </tbody>
+            </table>
 
-          <p className="ld-note">
-            Valores, unidades e faixas de referência conforme emitidos pelo analisador.
-            A interpretação clínica é de responsabilidade do Médico Veterinário.
-          </p>
-        </main>
+            <p className="ld-note">
+              Valores, unidades e faixas de referência conforme emitidos pelo analisador.
+              A interpretação clínica é de responsabilidade do Médico Veterinário.
+            </p>
+          </main>
 
-        <PageFooter d={data} page={1} total={total} />
-      </section>
+          <PageFooter d={data} page={1} total={total} />
+        </section>
+      )}
+
+      {/* ---------- BIOQUÍMICA: um bloco por exame, como no laudo da Animais ---------- */}
+      {bioPaginas.map((blocos, i) => (
+        <section className="ld-page" key={`bio-${i}`}>
+          {data.status !== 'released' && <div className="ld-watermark">RASCUNHO</div>}
+          <PageHeader d={data} />
+          <main className="ld-body">
+            {i === 0 && (
+              <div className="ld-meta">
+                <Meta k="Equipamento" v={deviceLabel(data.device) ?? 'Analisador bioquímico'} />
+                <Meta k="Amostra" v={`${data.sample_id ?? '—'}${data.collected_at ? ` · colhida em ${fmtDateTime(data.collected_at)}` : ''}`} />
+              </div>
+            )}
+            {blocos.map(b => <BiochemCard key={b.key} b={b} />)}
+            <p className="ld-note">
+              Valores e unidades conforme emitidos pelo analisador. As faixas de
+              referência são as do aparelho quando ele as envia; na ausência delas,
+              as do catálogo da clínica. A interpretação clínica é de
+              responsabilidade do Médico Veterinário.
+            </p>
+          </main>
+          <PageFooter d={data} page={primeiraBio + i} total={total} />
+        </section>
+      ))}
 
       {/* ---------- Página 2: histogramas e scattergramas ---------- */}
       {hasGraphs && (
@@ -244,7 +320,7 @@ export default function HemogramReportSheet({ data }: { data: ExamReportData }) 
               qualquer tratamento de imagem.
             </p>
           </main>
-          <PageFooter d={data} page={2} total={total} />
+          <PageFooter d={data} page={total} total={total} />
         </section>
       )}
     </div>
@@ -308,6 +384,16 @@ const CSS = `
 .ld-obs { font-size: 9.5px; font-style: italic; color: #8a8a8a; padding: 0 0 8px 6px; }
 
 .ld-note { font-size: 7.2px; color: var(--muted); margin: 14px 0 0; line-height: 1.4; }
+
+/* ---- blocos de bioquímica ---- */
+.ld-bq { margin-bottom: 16px; break-inside: avoid; page-break-inside: avoid; }
+.ld-bq-head { display: flex; align-items: baseline; justify-content: space-between;
+  gap: 16px; border-bottom: .8px solid #ccc; padding-bottom: 2px; }
+.ld-bq-title { font-size: 11px; font-weight: 700; margin: 0; }
+.ld-bq-refhead { font-size: 8.2px; font-weight: 700; white-space: nowrap; }
+.ld-bq-meta { margin: 5px 0 4px; }
+.ld-bq-table td { padding: 2.2px 4px; }
+.ld-bq-table .ld-ref { text-align: right; }
 
 /* ---- gráficos ---- */
 .ld-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; margin-top: 6px; }
