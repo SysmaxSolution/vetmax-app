@@ -121,7 +121,21 @@ async function getToken(cfg: SicoobConfig): Promise<string> {
     },
     body,
   })
-  if (r.status !== 200) throw new Error('Falha no token Sicoob (' + r.status + '): ' + r.text.slice(0, 200))
+  if (r.status !== 200) {
+    // Chegar aqui com 401 invalid_client significa que o certificado JÁ passou
+    // (sem ele o gateway responde 403 antes da autenticação). Então o problema
+    // está no cadastro do aplicativo no portal Sicoob, não no nosso lado — e
+    // repassar o erro cru do OAuth não ajuda ninguém a resolver.
+    if (r.status === 401 && /invalid_client/.test(r.text)) {
+      throw new Error(
+        'O Sicoob aceitou o certificado, mas não reconheceu o Client ID. '
+        + 'No portal Sicoob Developers, confira: o aplicativo foi criado em PRODUÇÃO e está ativo; '
+        + 'o certificado da empresa está VINCULADO a esse aplicativo; os escopos cco_extrato e cco_saldo '
+        + 'estão habilitados; e o Client ID foi copiado por inteiro.',
+      )
+    }
+    throw new Error('Falha no token Sicoob (' + r.status + '): ' + r.text.slice(0, 200))
+  }
   const j = JSON.parse(r.text || '{}') as { access_token?: string }
   if (!j.access_token) throw new Error('Token Sicoob ausente na resposta.')
   return j.access_token
