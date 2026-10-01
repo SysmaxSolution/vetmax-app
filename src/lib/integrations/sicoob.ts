@@ -22,7 +22,26 @@ const SANDBOX = {
 const PROD_BASE  = 'https://api.sicoob.com.br/conta-corrente/v4'
 const TOKEN_URL  = 'https://auth.sicoob.com.br/auth/realms/cooperado/protocol/openid-connect/token'
 
-function isSandbox() { return (process.env.SICOOB_ENV ?? 'sandbox') !== 'production' }
+/**
+ * Configuracao da integracao. Vem da CLINICA (tela de Integracoes Financeiras),
+ * nao de variavel de ambiente.
+ *
+ * Antes `isSandbox()` lia `process.env.SICOOB_ENV`, que nunca foi definido ->
+ * dava sandbox sempre. A clinica marcava "Producao" na tela, o client_id dela
+ * era ignorado e a conciliacao trazia os lancamentos ficticios do sandbox como
+ * se fossem do banco. Era o pior tipo de defeito: silencioso e plausivel.
+ */
+export interface SicoobConfig {
+  environment: 'sandbox' | 'production'
+  client_id:   string
+  /** e-CNPJ A1 da empresa. Obrigatorio em producao (mTLS). */
+  pfx?:        Buffer | null
+  passphrase?: string | null
+}
+
+const ehSandbox = (cfg: SicoobConfig) => cfg.environment !== 'production'
+
+
 
 // --- Transporte mTLS (so producao) -----------------------------------------
 // O Sicoob exige TLS mutuo com o e-CNPJ A1 da empresa: nao basta o token, o
@@ -35,22 +54,20 @@ function isSandbox() { return (process.env.SICOOB_ENV ?? 'sandbox') !== 'product
 // ambiente, em base64, com a senha separada.
 interface Pfx { pfx: Buffer; passphrase: string | undefined }
 
-function carregarPfx(): Pfx {
-  const b64 = process.env.SICOOB_PFX_BASE64
-  if (!b64) {
-    throw new Error('Certificado e-CNPJ A1 ausente: configure SICOOB_PFX_BASE64 (e SICOOB_PFX_PASSWORD).')
+function carregarPfx(cfg: SicoobConfig): Pfx {
+  if (!cfg.pfx || cfg.pfx.length < 500) {
+    throw new Error('Certificado e-CNPJ A1 nao cadastrado para esta clinica. Envie o arquivo .pfx em Configuracoes > Financeiro.')
   }
-  const pfx = Buffer.from(b64, 'base64')
-  if (pfx.length < 500) throw new Error('SICOOB_PFX_BASE64 parece invalido (conteudo muito curto).')
-  return { pfx, passphrase: process.env.SICOOB_PFX_PASSWORD || undefined }
+  return { pfx: cfg.pfx, passphrase: cfg.passphrase || undefined }
 }
 
 /** Requisicao HTTPS com o certificado do cliente apresentado no handshake. */
 function requisicaoMtls(
   url: string,
+  cfg: SicoobConfig,
   init: { method?: string; headers?: Record<string, string>; body?: string },
 ): Promise<{ status: number; text: string }> {
-  const { pfx, passphrase } = carregarPfx()
+  const { pfx, passphrase } = carregarPfx(cfg)
   const u = new URL(url)
   return new Promise((resolve, reject) => {
     const req = https.request(
@@ -84,10 +101,10 @@ function requisicaoMtls(
   })
 }
 
-async function getToken(): Promise<string> {
-  if (isSandbox()) return SANDBOX.token
-  const clientId = process.env.SICOOB_CLIENT_ID
-  if (!clientId) throw new Error('SICOOB_CLIENT_ID nao configurado.')
+async function getToken(cfg: SicoobConfig): Promise<string> {
+  if (ehSandbox(cfg)) return SANDBOX.token
+  const clientId = cfg.client_id?.trim()
+  if (!clientId) throw new Error('Client ID do Sicoob nao preenchido em Configuracoes > Financeiro.')
   if (clientId === SANDBOX.client_id) {
     // Erro comum no onboarding: o client_id publico da documentacao e de
     // sandbox e nao autentica em producao, mesmo com o certificado certo.
@@ -96,7 +113,7 @@ async function getToken(): Promise<string> {
   const body = new URLSearchParams({
     grant_type: 'client_credentials', client_id: clientId, scope: 'openid cco_extrato cco_saldo',
   }).toString()
-  const r = await requisicaoMtls(TOKEN_URL, {
+  const r = await requisicaoMtls(TOKEN_URL, cfg, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -111,11 +128,11 @@ async function getToken(): Promise<string> {
 }
 
 /** Diagnostico de onboarding: aperta a mao com o Sicoob e diz o que falta. */
-export async function testarConexaoSicoob(): Promise<{ ok: boolean; etapa: string; detalhe: string }> {
-  if (isSandbox()) return { ok: true, etapa: 'sandbox', detalhe: 'Ambiente sandbox -- nao usa certificado.' }
-  try { carregarPfx() } catch (e) { return { ok: false, etapa: 'certificado', detalhe: (e as Error).message } }
+export async function testarConexaoSicoob(cfg: SicoobConfig): Promise<{ ok: boolean; etapa: string; detalhe: string }> {
+  if (ehSandbox(cfg)) return { ok: true, etapa: 'sandbox', detalhe: 'Ambiente sandbox -- nao usa certificado nem client_id proprio.' }
+  try { carregarPfx(cfg) } catch (e) { return { ok: false, etapa: 'certificado', detalhe: (e as Error).message } }
   try {
-    await getToken()
+    await getToken(cfg)
     return { ok: true, etapa: 'token', detalhe: 'Certificado aceito e token emitido.' }
   } catch (e) {
     return { ok: false, etapa: 'token', detalhe: (e as Error).message }
@@ -142,18 +159,18 @@ const inferType = (tipo: unknown, valor: number): 'credit' | 'debit' => {
 }
 
 // Busca o extrato de UM mês (janela de dias). O Sicoob limita a ~3 meses de histórico.
-async function fetchMonth(conta: string, mes: number, ano: number, diaIni: number, diaFim: number, token: string, clientId: string): Promise<SicoobTx[]> {
-  const base = isSandbox() ? SANDBOX.base : PROD_BASE
+async function fetchMonth(cfg: SicoobConfig, conta: string, mes: number, ano: number, diaIni: number, diaFim: number, token: string, clientId: string): Promise<SicoobTx[]> {
+  const base = ehSandbox(cfg) ? SANDBOX.base : PROD_BASE
   const url = `${base}/extrato/${mes}/${ano}?diaInicial=${diaIni}&diaFinal=${diaFim}&numeroContaCorrente=${encodeURIComponent(conta)}&agruparCNAB=false`
   const headers = { Authorization: 'Bearer ' + token, client_id: clientId, Accept: 'application/json' }
 
   let corpo: string
-  if (isSandbox()) {
+  if (ehSandbox(cfg)) {
     const res = await fetch(url, { headers })
     if (!res.ok) throw new Error('Extrato Sicoob ' + mes + '/' + ano + ' falhou (' + res.status + ').')
     corpo = await res.text()
   } else {
-    const r = await requisicaoMtls(url, { headers })
+    const r = await requisicaoMtls(url, cfg, { headers })
     if (r.status !== 200) throw new Error('Extrato Sicoob ' + mes + '/' + ano + ' falhou (' + r.status + '): ' + r.text.slice(0, 160))
     corpo = r.text
   }
@@ -174,15 +191,16 @@ async function fetchMonth(conta: string, mes: number, ano: number, diaIni: numbe
 
 // Busca o extrato por PERÍODO (itera os meses do intervalo, respeitando o limite).
 export async function fetchSicoobExtrato(params: {
-  conta: string; start_date: string; end_date: string
+  conta: string; start_date: string; end_date: string; config: SicoobConfig
 }): Promise<{ statements: SicoobTx[]; warnings: string[] }> {
+  const cfg = params.config
   const warnings: string[] = []
   const start = new Date(params.start_date + 'T00:00:00')
   const end   = new Date(params.end_date + 'T00:00:00')
   if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) throw new Error('Período inválido.')
 
-  const clientId = isSandbox() ? SANDBOX.client_id : (process.env.SICOOB_CLIENT_ID ?? '')
-  const token = await getToken()
+  const clientId = ehSandbox(cfg) ? SANDBOX.client_id : (cfg.client_id ?? '')
+  const token = await getToken(cfg)
 
   const statements: SicoobTx[] = []
   const cur = new Date(start.getFullYear(), start.getMonth(), 1)
@@ -192,7 +210,7 @@ export async function fetchSicoobExtrato(params: {
     const diaIni = (cur.getFullYear() === start.getFullYear() && cur.getMonth() === start.getMonth()) ? start.getDate() : 1
     const diaFim = (cur.getFullYear() === end.getFullYear() && cur.getMonth() === end.getMonth()) ? end.getDate() : lastDay
     try {
-      const monthTxs = await fetchMonth(params.conta, mes, ano, diaIni, diaFim, token, clientId)
+      const monthTxs = await fetchMonth(cfg, params.conta, mes, ano, diaIni, diaFim, token, clientId)
       statements.push(...monthTxs)
     } catch (e) {
       warnings.push(`${String(mes).padStart(2, '0')}/${ano}: ${(e as Error).message}`)
@@ -203,7 +221,7 @@ export async function fetchSicoobExtrato(params: {
   // SANDBOX retorna dados fictícios (lorem) que o parser descarta → gera alguns
   // lançamentos de DEMONSTRAÇÃO no período p/ validar o fluxo ponta a ponta. Em
   // produção (com e-CNPJ real) isto nunca roda.
-  if (isSandbox() && statements.length === 0) {
+  if (ehSandbox(cfg) && statements.length === 0) {
     const d0 = params.start_date, d1 = params.end_date
     statements.push(
       { date: d0, amount: 500, description: '[SANDBOX] PIX RECEBIDO', type: 'credit', external_id: 'SBX-1' },
@@ -215,4 +233,4 @@ export async function fetchSicoobExtrato(params: {
   return { statements, warnings }
 }
 
-export function sicoobEnvLabel(): string { return isSandbox() ? 'sandbox (teste)' : 'produção' }
+export const sicoobEnvLabel = (cfg: SicoobConfig): string => (ehSandbox(cfg) ? 'sandbox (teste)' : 'produção')
