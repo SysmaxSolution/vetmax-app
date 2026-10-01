@@ -17,6 +17,7 @@ import WhatsappIntelligentSetup from './WhatsappIntelligentSetup'
 import WhatsappTriggerModules from './WhatsappTriggerModules'
 import FiscalConfigForm from './FiscalConfigForm'
 import LabAgentSettings from './LabAgentSettings'
+import ReferenceSetsPanel from './ReferenceSetsPanel'
 import AnalyteMappingPanel from './AnalyteMappingPanel'
 import ExamRejectionSettings from './ExamRejectionSettings'
 import FlowFlagCard from './FlowFlagCard'
@@ -261,6 +262,8 @@ export default function SettingsWorkspace({
             <LabAgentSettings onToast={onToast} />
             <SectionHeader icon={<FlaskConical className="h-5 w-5 text-slate-600" />} title="Analitos & Mapeamento" description="Catálogo de analitos e de-para do código que o aparelho envia → item do catálogo" />
             <AnalyteMappingPanel />
+            <SectionHeader icon={<FlaskConical className="h-5 w-5 text-slate-600" />} title="Tabela de Referência do Laudo" description="Quais linhas saem no laudo, em que ordem, com que faixa e de onde vem cada valor (aparelho, lâmina ou texto) — por exame e por espécie" />
+            <ReferenceSetsPanel onToast={onToast} />
           </div>
         )}
 
