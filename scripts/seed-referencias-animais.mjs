@@ -26,7 +26,7 @@ import { config } from 'dotenv'
 const __d = dirname(fileURLToPath(import.meta.url))
 config({ path: resolve(__d, '../.env.local') })
 
-const CLINIC_ID = process.env.ANIMAIS_CLINIC_ID ?? 'ad1c3fca-d264-42c3-9a11-4b7ddac52a72'
+let CLINIC_ID = null
 const PANEL = 'hemograma'
 const SPECIES = 'dog'
 const args = new Set(process.argv.slice(2))
@@ -101,9 +101,36 @@ const client = new pg.Client({
   ssl: { rejectUnauthorized: false },
 })
 
+// Resolve a clínica alvo PELO NOME e confere antes de gravar.
+//
+// Lição de 01/10/2026: estes scripts traziam um UUID fixo como padrão que era,
+// na verdade, o da "Sys Demo". Rodaram sem reclamar e semearam o laudo na
+// clínica errada — do lado de fora pareceu vazamento entre clínicas. UUID solto
+// em script de seed não se valida sozinho; nome, sim.
+async function resolverClinicaAnimais(q) {
+  if (process.env.ANIMAIS_CLINIC_ID) {
+    const { rows } = await q('SELECT id, name FROM clinics WHERE id = $1', [process.env.ANIMAIS_CLINIC_ID])
+    if (!rows[0]) { console.error(`ANIMAIS_CLINIC_ID=${process.env.ANIMAIS_CLINIC_ID} não existe neste banco.`); process.exit(1) }
+    console.log(`clínica alvo: ${rows[0].name} (${rows[0].id}) — via ANIMAIS_CLINIC_ID`)
+    return rows[0].id
+  }
+  const { rows } = await q("SELECT id, name FROM clinics WHERE name ILIKE '%animais%' ORDER BY name")
+  if (rows.length === 0) {
+    console.error('Não achei nenhuma clínica com "Animais" no nome. Informe ANIMAIS_CLINIC_ID.'); process.exit(1)
+  }
+  if (rows.length > 1) {
+    console.error('Mais de uma clínica casa com "Animais" — informe ANIMAIS_CLINIC_ID:')
+    for (const r of rows) console.error(`   ${r.id}  ${r.name}`)
+    process.exit(1)
+  }
+  console.log(`clínica alvo: ${rows[0].name} (${rows[0].id})`)
+  return rows[0].id
+}
+
 async function main() {
   await client.connect()
   const q = (sql, p) => client.query(sql, p)
+  CLINIC_ID = await resolverClinicaAnimais(q)
 
   if (CLEAN) {
     const { rowCount } = await q('DELETE FROM lab_reference_sets WHERE clinic_id=$1 AND panel_key=$2', [CLINIC_ID, PANEL])
