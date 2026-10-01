@@ -102,10 +102,7 @@ export default function FinancialIntegrationsForm({ onToast }: { onToast: (t: 's
                     <input value={b.conta} onChange={e => setBank(i, { conta: e.target.value })} className={input} /></label>
                 </div>
                 {b.provider === 'sicoob' && b.environment === 'production' && (
-                  <div className="space-y-2 pt-1">
-                    <p className="text-[11px] text-amber-600">
-                      Produção exige o certificado e-CNPJ A1 (mTLS) da empresa — envie abaixo.
-                    </p>
+                  <div className="pt-1">
                     <BankCertificateCard
                       bankCode={b.bank_code}
                       bankLabel={bankName(b.bank_code)}

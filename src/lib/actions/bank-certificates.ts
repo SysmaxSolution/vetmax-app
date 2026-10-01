@@ -10,7 +10,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
-import { encryptSecret, validarPfx } from '@/lib/integrations/bank-certificate'
+import { encryptSecret, lerPfx } from '@/lib/integrations/bank-certificate'
 
 const PODE_EDITAR = ['admin', 'owner', 'manager']
 
@@ -61,44 +61,44 @@ export async function listarCertificados(): Promise<CertificadoInfo[]> {
   })
 }
 
+export interface CertificadoAceito { ok: true; subject_cn: string | null; cnpj: string | null; not_after: string | null }
+
 export async function enviarCertificado(input: {
   bank_code:  string
   file_name:  string
   /** Conteúdo do .pfx em base64 (o componente lê o arquivo no navegador). */
   pfx_base64: string
   passphrase: string
-  /** Opcionais, só para o alerta de vencimento e identificação na tela. */
-  cnpj?:      string
-  not_after?: string
-}): Promise<{ ok: true } | { error: string }> {
+}): Promise<CertificadoAceito | { error: string }> {
   const c = await ctx(); if ('error' in c) return { error: c.error }
   if (!PODE_EDITAR.includes(c.role)) return { error: 'Sem permissão para configurar o certificado.' }
 
-  let pfx: Buffer
-  try { pfx = Buffer.from(input.pfx_base64, 'base64') }
+  let bruto: Buffer
+  try { bruto = Buffer.from(input.pfx_base64, 'base64') }
   catch { return { error: 'Arquivo inválido.' } }
 
-  // Valida ANTES de guardar: senha errada e certificado com criptografia
-  // antiga são os dois tropeços reais do onboarding, e os dois só apareceriam
-  // na hora de puxar o extrato.
-  const v = validarPfx(pfx, input.passphrase || undefined)
-  if (!v.ok) return { error: v.erro ?? 'Certificado inválido.' }
+  // Lê o arquivo COMO A CERTIFICADORA ENTREGOU (inclusive no container RC2-40
+  // que o Node não abre) e devolve um reempacotado em AES-256, já com titular
+  // e validade — ninguém digita CNPJ nem vencimento.
+  const lido = lerPfx(bruto, input.passphrase)
+  if (!lido.ok) return { error: lido.erro }
 
   const { error } = await c.admin.from('clinic_bank_certificates').upsert({
     clinic_id:            c.clinicId,
     bank_code:            (input.bank_code || '756').replace(/\D/g, '') || '756',
     file_name:            input.file_name?.slice(0, 200) ?? null,
-    pfx_encrypted:        encryptSecret(pfx),
+    pfx_encrypted:        encryptSecret(lido.pfx),
     passphrase_encrypted: input.passphrase ? encryptSecret(input.passphrase) : null,
-    cnpj:                 input.cnpj?.trim() || null,
-    not_after:            input.not_after || null,
+    subject_cn:           lido.subject_cn,
+    cnpj:                 lido.cnpj,
+    not_after:            lido.not_after,
     uploaded_by:          c.userId,
     updated_at:           new Date().toISOString(),
   }, { onConflict: 'clinic_id,bank_code' })
 
   if (error) return { error: 'Erro ao guardar o certificado: ' + error.message }
   revalidatePath('/dashboard/management')
-  return { ok: true }
+  return { ok: true, subject_cn: lido.subject_cn, cnpj: lido.cnpj, not_after: lido.not_after }
 }
 
 export async function removerCertificado(bankCode: string): Promise<{ ok: true } | { error: string }> {
