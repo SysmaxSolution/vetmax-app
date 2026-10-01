@@ -92,6 +92,14 @@ function readQueue() {
     const item = (o && o.v === 2) ? o : { v: 2, payload: o, first: Date.now(), tries: 0, next: 0 }
     const hl7 = String(item.payload?.hl7 ?? '')
     if (!hl7) continue
+    // A fila gravada pela versão anterior guardou `barcode` VAZIO (ela só lia
+    // PID-3, que nos dois aparelhos vem em branco). Sem número de amostra a
+    // sonda barata não tem o que perguntar e o item voltaria a custar o corpo
+    // inteiro — então recupera do próprio HL7 ao carregar.
+    if (!String(item.payload?.barcode ?? '').trim()) {
+      const b = pidBarcode(hl7)
+      if (b) item.payload = { ...item.payload, barcode: b }
+    }
     const key = sha1(hl7)
     if (seen.has(key)) continue   // mesma mensagem duplicada (retransmissão do aparelho ou cópia de pasta)
     seen.add(key); item.key = key
