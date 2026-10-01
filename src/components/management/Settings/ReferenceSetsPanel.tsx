@@ -63,6 +63,7 @@ export default function ReferenceSetsPanel({
   const [busy, setBusy]       = useState(false)
   const [sujo, setSujo]       = useState(false)
   const [novo, setNovo]       = useState(false)
+  const [dupl, setDupl]       = useState(false)
 
   const carregar = useCallback(async (manterId?: string | null) => {
     const lista = await listReferenceSets()
@@ -113,17 +114,14 @@ export default function ReferenceSetsPanel({
     void carregar(selId)
   }
 
-  async function duplicar() {
+  async function duplicar(species: string, nome: string) {
     if (!sel) return
-    const esp = prompt('Duplicar esta tabela para qual espécie?\n\nEscreva: dog, cat, bird, rabbit, rodent — ou deixe em branco para "todas".', 'cat')
-    if (esp === null) return
-    const nome = prompt('Nome da nova tabela:', sel.name.replace(/Canin[ao]/i, 'Felino'))
-    if (!nome) return
     setBusy(true)
-    const res = await duplicateReferenceSet(sel.id, { species: esp.trim() || null, name: nome })
+    const res = await duplicateReferenceSet(sel.id, { species: species || null, name: nome })
     setBusy(false)
     if ('error' in res) return onToast('error', res.error)
-    onToast('success', 'Tabela duplicada — agora é só ajustar as faixas.')
+    setDupl(false)
+    onToast('success', 'Tabela duplicada com todas as linhas — agora é só ajustar as faixas.')
     void carregar(res.id)
   }
 
@@ -211,7 +209,7 @@ export default function ReferenceSetsPanel({
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={duplicar} disabled={busy}
+              <button onClick={() => setDupl(v => !v)} disabled={busy}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-300 disabled:opacity-50">
                 <Copy className="h-3.5 w-3.5" /> Duplicar p/ outra espécie
               </button>
@@ -226,6 +224,10 @@ export default function ReferenceSetsPanel({
               </button>
             </div>
           </header>
+
+          {dupl && (
+            <FormDuplicar origem={sel} busy={busy} onCancel={() => setDupl(false)} onConfirm={duplicar} />
+          )}
 
           <div className="overflow-x-auto">
             <table className="w-full min-w-[60rem] text-xs">
@@ -428,6 +430,58 @@ function FormNovaTabela({
           <button onClick={() => onCreate(panel, esp, nome.trim() || sugestao)} disabled={busy}
             className="rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-50">
             Criar
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Duplicar a tabela para outra espécie. É o caminho curto do dia a dia: a
+ * clínica monta a canina, duplica para felina e corrige só as faixas que mudam
+ * — em vez de redigitar 26 linhas.
+ */
+function FormDuplicar({
+  origem, busy, onCancel, onConfirm,
+}: {
+  origem: RefSet; busy: boolean
+  onCancel: () => void
+  onConfirm: (species: string, nome: string) => void
+}) {
+  const livres = ESPECIES.filter(e => e.key !== (origem.species ?? ''))
+  const [esp, setEsp]   = useState(livres[0]?.key ?? '')
+  const [nome, setNome] = useState('')
+
+  const sugestao = `${EXAMES.find(e => e.key === origem.panel_key)?.label ?? origem.panel_key} — ${especieLabel(esp || null)}`
+
+  return (
+    <div className="border-b border-slate-200 bg-teal-50/60 px-4 py-3">
+      <p className="mb-2 text-xs text-slate-600">
+        Copia as <strong>{origem.items.length} linhas</strong> de &ldquo;{origem.name}&rdquo; para outra
+        espécie. As faixas vêm junto — depois é só ajustar o que for diferente.
+      </p>
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="text-xs text-slate-600">
+          <span className="mb-1 block font-medium">Nova espécie</span>
+          <select value={esp} onChange={e => setEsp(e.target.value)}
+            className="rounded border border-slate-200 bg-white px-2 py-1.5 text-xs">
+            {livres.map(e => <option key={e.key} value={e.key}>{e.label}</option>)}
+          </select>
+        </label>
+        <label className="min-w-[14rem] flex-1 text-xs text-slate-600">
+          <span className="mb-1 block font-medium">Nome da nova tabela</span>
+          <input value={nome} onChange={e => setNome(e.target.value)} placeholder={sugestao}
+            className="w-full rounded border border-slate-200 bg-white px-2 py-1.5 text-xs" />
+        </label>
+        <div className="flex gap-2">
+          <button onClick={onCancel}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600">
+            Cancelar
+          </button>
+          <button onClick={() => onConfirm(esp, nome.trim() || sugestao)} disabled={busy}
+            className="rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-50">
+            Duplicar
           </button>
         </div>
       </div>
