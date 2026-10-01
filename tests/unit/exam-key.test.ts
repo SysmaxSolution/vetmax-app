@@ -72,3 +72,37 @@ describe('estado de cada exame na OS', () => {
     expect(summarizeExams([])).toEqual([])
   })
 })
+
+describe('OS real da Mel no ambiente de testes (URIT + Sérium na mesma consulta)', () => {
+  // Exatamente os códigos que os dois aparelhos gravaram nessa consulta.
+  const CODIGOS = [
+    'ALBUMINA', 'ALY#', 'ALY%', 'BASO#', 'BASO%', 'CREAT', 'EOS#', 'EOS%',
+    'HCT', 'HGB', 'LIC#', 'LIC%', 'LYM#', 'LYM%', 'MCH', 'MCHC', 'MCV',
+    'MON#', 'MON%', 'MPV', 'NEU#', 'NEU%', 'NRBC#', 'NRBC%', 'PLT', 'RBC',
+    'RDW_CV', 'TGP-EB', 'UREIA-EB', 'WBC',
+  ]
+
+  it('vira 5 laudos distintos, não um documento misturado', () => {
+    const exames = summarizeExams(CODIGOS.map(c => r(c)))
+    expect(exames.map(e => e.title)).toEqual([
+      'HEMOGRAMA', 'ALBUMINA', 'ALT (T.G.P.)', 'CREATININA', 'UREIA',
+    ])
+  })
+
+  it('o hemograma leva os 26 parâmetros do aparelho; cada bioquímico leva o seu', () => {
+    const exames = summarizeExams(CODIGOS.map(c => r(c)))
+    expect(exames.find(e => e.key === 'hemograma')!.total).toBe(26)
+    for (const k of ['bio:ALB', 'bio:ALT', 'bio:CREA', 'bio:UREIA']) {
+      expect(exames.find(e => e.key === k)!.total).toBe(1)
+    }
+  })
+
+  it('liberar só o hemograma deixa os quatro bioquímicos em rascunho', () => {
+    const exames = summarizeExams(CODIGOS.map(c => {
+      const bio = ['ALBUMINA', 'CREAT', 'TGP-EB', 'UREIA-EB'].includes(c)
+      return r(c, bio ? 'draft' : 'released', bio ? null : '2026-10-01T15:00:00Z')
+    }))
+    expect(exames.find(e => e.key === 'hemograma')!.status).toBe('released')
+    expect(exames.filter(e => e.group === 'bioquimico').every(e => e.status === 'draft')).toBe(true)
+  })
+})
