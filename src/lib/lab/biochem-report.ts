@@ -84,13 +84,15 @@ export const BIOCHEM_DEFS: Record<string, Def> = {
   CREA:  D('CREA',  'CREATININA', 'Resultado', SORO_PLASMA, ENZIMATICO, '0,7 a 1,8 mg/dL', 60),
   CREAT: D('CREA',  'CREATININA', 'Resultado', SORO_PLASMA, ENZIMATICO, '0,7 a 1,8 mg/dL', 60),
   CRE:   D('CREA',  'CREATININA', 'Resultado', SORO_PLASMA, ENZIMATICO, '0,7 a 1,8 mg/dL', 60),
-  UREIA: D('UREIA', 'UREIA', 'Resultado', SORO_PLASMA, null, null, 70),
+  UREIA:      D('UREIA', 'UREIA', 'Resultado', SORO_PLASMA, null, null, 70),
+  'UREIA-EB': D('UREIA', 'UREIA', 'Resultado', SORO_PLASMA, null, null, 70),
   UREA:  D('UREIA', 'UREIA', 'Resultado', SORO_PLASMA, null, null, 70),
   BUN:   D('UREIA', 'UREIA', 'Resultado', SORO_PLASMA, null, null, 70),
 
   // ── Proteínas ─────────────────────────────────────────────────────────────
-  ALB:  D('ALB', 'ALBUMINA', 'Resultado', SORO, null, null, 80),
-  ALBU: D('ALB', 'ALBUMINA', 'Resultado', SORO, null, null, 80),
+  ALB:      D('ALB', 'ALBUMINA', 'Resultado', SORO, null, null, 80),
+  ALBU:     D('ALB', 'ALBUMINA', 'Resultado', SORO, null, null, 80),
+  ALBUMINA: D('ALB', 'ALBUMINA', 'Resultado', SORO, null, null, 80),
   PT:   D('PT',  'PROTEÍNA TOTAL', 'Resultado', SORO, null, '6,0 a 8,0 g/dL', 85),
   TP:   D('PT',  'PROTEÍNA TOTAL', 'Resultado', SORO, null, '6,0 a 8,0 g/dL', 85),
 
@@ -122,9 +124,32 @@ function deviceRef(a: HL7Analyte): string | null {
   const t = (a.ref_text ?? '').trim()
   if (t) return t
   if (a.ref_low != null && a.ref_high != null) {
-    return `${a.ref_low} a ${a.ref_high}${a.unit ? ' ' + a.unit : ''}`
+    // Deixa no formato cru `low~high` para a formatação final tratar os dois
+    // caminhos (OBX-7 textual e par estruturado) do mesmo jeito.
+    return `${a.ref_low}~${a.ref_high}${a.unit ? ' ' + a.unit : ''}`
   }
   return null
+}
+
+/**
+ * Valor como a Animais imprime: duas casas e vírgula decimal.
+ * O Sérium 200 manda 15 casas (`0.736809636395488`) — a própria tela dele
+ * mostra `0.74`. O número cru continua intacto em `exam_results.value_text`;
+ * aqui só se decide como ele aparece no papel.
+ */
+export function formatBiochemValue(raw: string): string {
+  const n = Number(String(raw ?? '').trim().replace(',', '.'))
+  if (!Number.isFinite(n)) return String(raw ?? '')
+  return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+/** Faixa como a Animais imprime: `0,5 a 1,5` em vez de `0.5~1.5`. */
+export function formatBiochemRange(raw: string | null): string | null {
+  if (!raw) return null
+  const m = raw.match(/^\s*(-?\d+(?:[.,]\d+)?)\s*[-~]\s*(-?\d+(?:[.,]\d+)?)\s*(.*)$/)
+  if (!m) return raw
+  const num = (v: string) => v.replace('.', ',')
+  return `${num(m[1])} a ${num(m[2])}${m[3] ? ' ' + m[3].trim() : ''}`.trim()
 }
 
 export function buildBiochemReport(analytes: HL7Analyte[]): BiochemReport {
@@ -145,10 +170,10 @@ export function buildBiochemReport(analytes: HL7Analyte[]): BiochemReport {
     const dev = deviceRef(a)
     b.rows.push({
       label: def.row,
-      value: a.value,
+      value: formatBiochemValue(a.value),
       unit:  a.unit,
       flag:  a.flag ?? null,
-      ref:        dev ?? def.ref,
+      ref:        formatBiochemRange(dev) ?? def.ref,
       ref_source: dev ? 'device' : (def.ref ? 'clinic' : null),
     })
   }

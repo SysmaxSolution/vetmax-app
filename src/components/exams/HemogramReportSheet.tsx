@@ -66,7 +66,7 @@ function Meta({ k, v }: { k: string; v: string }) {
  * "Valores de Referência" alinhado à direita, Material/Metodologia abaixo e
  * a(s) linha(s) de resultado. Um bloco por exame — bilirrubinas trazem três.
  */
-function BiochemCard({ b }: { b: BiochemBlock }) {
+function BiochemCard({ b, specimen }: { b: BiochemBlock; specimen: string | null }) {
   return (
     <section className="ld-bq">
       <div className="ld-bq-head">
@@ -75,7 +75,8 @@ function BiochemCard({ b }: { b: BiochemBlock }) {
       </div>
 
       <div className="ld-meta ld-bq-meta">
-        {b.material && <Meta k="Material" v={b.material} />}
+        {(b.material ?? specimen?.toUpperCase() ?? null) &&
+          <Meta k="Material" v={b.material ?? (specimen as string).toUpperCase()} />}
         {b.method   && <Meta k="Metodologia" v={b.method} />}
       </div>
 
@@ -284,7 +285,7 @@ export default function HemogramReportSheet({ data }: { data: ExamReportData }) 
                 <Meta k="Amostra" v={`${data.sample_id ?? '—'}${data.collected_at ? ` · colhida em ${fmtDateTime(data.collected_at)}` : ''}`} />
               </div>
             )}
-            {blocos.map(b => <BiochemCard key={b.key} b={b} />)}
+            {blocos.map(b => <BiochemCard key={b.key} b={b} specimen={data.specimen} />)}
             <p className="ld-note">
               Valores e unidades conforme emitidos pelo analisador. As faixas de
               referência são as do aparelho quando ele as envia; na ausência delas,

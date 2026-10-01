@@ -1,4 +1,7 @@
-import { buildBiochemReport, isBiochemAnalyte, biochemDef } from '@/lib/lab/biochem-report'
+import {
+  buildBiochemReport, isBiochemAnalyte, biochemDef,
+  formatBiochemValue, formatBiochemRange,
+} from '@/lib/lab/biochem-report'
 import type { HL7Analyte } from '@/lib/lab/hl7-parser'
 
 const a = (p: Partial<HL7Analyte> & { code: string; value: string }): HL7Analyte => ({
@@ -34,7 +37,7 @@ describe('buildBiochemReport', () => {
     const [bloco] = buildBiochemReport([
       a({ code: 'CREAT', value: '0.74', ref_text: '0.5-1.5 mg/dL' }),
     ]).blocks
-    expect(bloco.rows[0].ref).toBe('0.5-1.5 mg/dL')
+    expect(bloco.rows[0].ref).toBe('0,5 a 1,5 mg/dL')
     expect(bloco.rows[0].ref_source).toBe('device')
   })
 
@@ -54,7 +57,7 @@ describe('buildBiochemReport', () => {
     const [bloco] = buildBiochemReport([
       a({ code: 'UREIA', value: '41.6', unit: 'mg/dL', ref_low: 21.4, ref_high: 59.9 }),
     ]).blocks
-    expect(bloco.rows[0].ref).toBe('21.4 a 59.9 mg/dL')
+    expect(bloco.rows[0].ref).toBe('21,4 a 59,9 mg/dL')
     expect(bloco.rows[0].ref_source).toBe('device')
   })
 
@@ -83,5 +86,49 @@ describe('reconhecimento de analito', () => {
 
   it('normaliza maiúsculas, espaços e sujeira do código', () => {
     expect(biochemDef(' tgp-eb ')?.title).toBe('ALT (T.G.P.)')
+  })
+})
+
+describe('apresentação dos números (o Sérium manda 15 casas)', () => {
+  it('imprime duas casas com vírgula, como no laudo da Animais', () => {
+    expect(formatBiochemValue('0.736809636395488')).toBe('0,74')
+    expect(formatBiochemValue('46.4773518081531')).toBe('46,48')
+    expect(formatBiochemValue('3.01688979110317')).toBe('3,02')
+  })
+
+  it('não quebra em valor não numérico — devolve como veio', () => {
+    expect(formatBiochemValue('NEGATIVO')).toBe('NEGATIVO')
+  })
+
+  it('traduz a faixa com til do BK-200 para o formato impresso', () => {
+    expect(formatBiochemRange('0.5~1.5')).toBe('0,5 a 1,5')
+    expect(formatBiochemRange('10~88')).toBe('10 a 88')
+    expect(formatBiochemRange('6.0-17.0')).toBe('6,0 a 17,0')
+  })
+})
+
+describe('mensagem REAL do Sérium 200 (amostra 7, pet BENTO 9S)', () => {
+  const reais: Parameters<typeof buildBiochemReport>[0] = [
+    a({ code: 'CREAT',    value: '0.736809636395488', unit: 'mg/dL', ref_text: '0.5~1.5' }),
+    a({ code: 'TGP-EB',   value: '46.4773518081531',  unit: 'U/L',   ref_text: '10~88'   }),
+    a({ code: 'UREIA-EB', value: '41.5646525552736',  unit: 'mg/dL', ref_text: '10~56'   }),
+    a({ code: 'ALBUMINA', value: '3.01688979110317',  unit: 'mg/dL', ref_text: '2.2~3.9' }),
+  ]
+
+  it('reconhece os quatro analitos e usa a faixa do aparelho em todos', () => {
+    const r = buildBiochemReport(reais)
+    expect(r.blocks.map(b => b.title)).toEqual([
+      'ALT (T.G.P.)', 'CREATININA', 'UREIA', 'ALBUMINA',
+    ])
+    expect(r.blocks.every(b => b.rows[0].ref_source === 'device')).toBe(true)
+  })
+
+  it('imprime os mesmos números que aparecem na tela do aparelho', () => {
+    const r = buildBiochemReport(reais)
+    const porTitulo = Object.fromEntries(r.blocks.map(b => [b.title, b.rows[0]]))
+    expect(porTitulo['CREATININA'].value).toBe('0,74')
+    expect(porTitulo['UREIA'].value).toBe('41,56')
+    expect(porTitulo['ALBUMINA'].value).toBe('3,02')
+    expect(porTitulo['ALT (T.G.P.)'].ref).toBe('10 a 88')
   })
 })

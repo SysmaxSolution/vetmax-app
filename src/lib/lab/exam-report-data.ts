@@ -32,6 +32,8 @@ export interface ExamReportData {
   device:      string | null
   collected_at: string | null
   sample_id:   string | null
+  /** Tipo de amostra declarado pelo aparelho (OBR-15). Ex.: "soro". */
+  specimen:    string | null
   panel:       string | null
 }
 
@@ -211,6 +213,7 @@ export async function getExamReportData(
     device: hl7?.device ?? null,
     collected_at: hl7?.observed_at ?? null,
     sample_id: hl7?.sample_id ?? null,
+    specimen: hl7?.specimen ?? null,
     panel: use.find(r => r.panel)?.panel ?? hl7?.panel
       ?? (hemAnalytes.length === 0 && bioAnalytes.length > 0 ? 'Bioquímico' : 'Hemograma'),
   }

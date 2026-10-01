@@ -2,21 +2,16 @@
 //
 // ORIGEM DOS DADOS — importa ser explícito, porque laudo não se inventa:
 //
-//  • VALORES: são os 4 resultados REAIS que o Sérium 200 (MaxBio BK-200) da
-//    Animais produziu para a amostra do pet BENTO e que ficaram presos na tela
-//    do aparelho com "Servidor nao conectado!" — CREAT 0,74 · TGP 46,5 ·
-//    UREIA 41,6 · ALBU 3,02. Foram lidos da foto da tela do analisador.
+//  • O caminho normal é --jsonl: o HL7 REAL que o Sérium 200 (BIOBASE BK-200)
+//    mandou ao agente-ponte em 01/10/2026 11:10 (amostra 7, pet BENTO 9S) e
+//    que ficou preso na fila com "Servidor nao conectado!". Dele vêm valores,
+//    unidades E as faixas de referência (OBX-7: 0.5~1.5, 10~88, 10~56, 2.2~3.9).
 //
-//  • FAIXAS DE REFERÊNCIA: NÃO são semeadas. O HL7 montado aqui deixa o OBX-7
-//    VAZIO de propósito, porque ainda não sabemos o que o Sérium escreve nesse
-//    campo. Quem preenche é o catálogo da clínica (biochem-report.ts, extraído
-//    dos laudos reais em anexos/Animais_Layouts) e, onde a Animais também não
-//    publica faixa, o laudo imprime "—". Assim que o aparelho transmitir de
-//    verdade, a faixa dele (OBX-7) passa a mandar — sem mexer em código.
-//
-//  • Com --jsonl <arquivo> o script usa o HL7 REAL do agente-ponte
-//    (pending-results.jsonl / rejected-results.jsonl) no lugar dos 4 valores
-//    acima. É o caminho definitivo quando o Sérium transmitir.
+//  • Sem --jsonl, o script monta um ORU com os 4 valores lidos da tela do
+//    aparelho e SEM faixa (OBX-7 vazio) — aí quem preenche é o catálogo da
+//    clínica em biochem-report.ts, extraído dos laudos reais deles. Onde a
+//    Animais também não publica faixa, o laudo imprime "—". Faixa de
+//    referência veterinária não se inventa.
 //
 // Uso:
 //   node scripts/seed-bioquimico-animais.mjs              # rascunho
@@ -98,11 +93,14 @@ function parseORU(message) {
     } else if (f[0] === 'OBX') {
       if ((f[2] ?? '').trim().toUpperCase() === 'ED') continue      // bioquímica não manda imagem
       const obsId = (f[3] ?? '').split('^')
+      // BIOBASE BK-200: OBX-3 e id interno (`344`) e OBX-4 traz o nome (`CREAT`).
+      const subId = (f[4] ?? '').trim()
+      const usaSubId = /^\d+$/.test(obsId[0] ?? '') && subId !== '' && !/^\d+$/.test(subId)
       const ref = (f[7] ?? '').trim()
-      const m = ref.match(/^\s*(-?\d+(?:[.,]\d+)?)\s*-\s*(-?\d+(?:[.,]\d+)?)\s*$/)
+      const m = ref.match(/^\s*(-?\d+(?:[.,]\d+)?)\s*[-~]\s*(-?\d+(?:[.,]\d+)?)\s*$/)
       out.analytes.push({
-        code: obsId[0] || null,
-        name: obsId[1] || obsId[0] || '',
+        code: (usaSubId ? subId : obsId[0]) || null,
+        name: (usaSubId ? subId : (obsId[1] || obsId[0])) || '',
         value: (f[5] ?? '').trim(),
         unit: (f[6] ?? '').trim() || null,
         ref_text: ref || null,
