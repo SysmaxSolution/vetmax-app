@@ -70,6 +70,8 @@ export const BIOCHEM_DEFS: Record<string, Def> = {
   'TGO-EB': D('AST', 'AST (T.G.O.)', 'Resultado', SORO_PLASMA, 'CINÉTICO', null, 20),
   FA:       D('FA',  'FOSFATASE ALCALINA', 'Resultado', SORO, 'CINÉTICO / ENZIMÁTICO', '10,0 a 96,0 U/L', 30),
   ALP:      D('FA',  'FOSFATASE ALCALINA', 'Resultado', SORO, 'CINÉTICO / ENZIMÁTICO', '10,0 a 96,0 U/L', 30),
+  // Como o Sérium 200 escreve de verdade (visto nos resultados de 03/10/2026).
+  FALIFCC:  D('FA',  'FOSFATASE ALCALINA', 'Resultado', SORO, 'CINÉTICO / ENZIMÁTICO', '10,0 a 96,0 U/L', 30),
   GGT:      D('GGT', 'GAMA-GLUTAMIL TRANSFERASE (GGT)', 'Resultado', SORO_PLASMA, ENZIMATICO, '0 a 6,4 U/L', 40),
 
   // ── Bilirrubinas (um bloco, três linhas — como no laudo da Animais) ────────
@@ -97,12 +99,19 @@ export const BIOCHEM_DEFS: Record<string, Def> = {
   TP:   D('PT',  'PROTEÍNA TOTAL', 'Resultado', SORO, null, '6,0 a 8,0 g/dL', 85),
 
   // ── Lipídios e glicemia ───────────────────────────────────────────────────
-  COL:  D('COL',  'COLESTEROL TOTAL', 'Resultado', SORO, ENZIMATICO, '135 a 270 mg/dL', 90),
-  CHOL: D('COL',  'COLESTEROL TOTAL', 'Resultado', SORO, ENZIMATICO, '135 a 270 mg/dL', 90),
+  COL:        D('COL',  'COLESTEROL TOTAL', 'Resultado', SORO, ENZIMATICO, '135 a 270 mg/dL', 90),
+  CHOL:       D('COL',  'COLESTEROL TOTAL', 'Resultado', SORO, ENZIMATICO, '135 a 270 mg/dL', 90),
+  COLESTEROL: D('COL',  'COLESTEROL TOTAL', 'Resultado', SORO, ENZIMATICO, '135 a 270 mg/dL', 90),
   TRIG: D('TRIG', 'TRIGLICERIDES', 'Resultado', SORO, ENZIMATICO, '20 a 112 mg/dL', 95),
   TG:   D('TRIG', 'TRIGLICERIDES', 'Resultado', SORO, ENZIMATICO, '20 a 112 mg/dL', 95),
-  GLI:  D('GLI',  'GLICOSE', 'Resultado', 'SORO OU PLASMA FLUORETADO', ENZIMATICO, null, 100),
-  GLU:  D('GLI',  'GLICOSE', 'Resultado', 'SORO OU PLASMA FLUORETADO', ENZIMATICO, null, 100),
+  TRI:  D('TRIG', 'TRIGLICERIDES', 'Resultado', SORO, ENZIMATICO, '20 a 112 mg/dL', 95),
+  GLI:     D('GLI',  'GLICOSE', 'Resultado', 'SORO OU PLASMA FLUORETADO', ENZIMATICO, null, 100),
+  GLU:     D('GLI',  'GLICOSE', 'Resultado', 'SORO OU PLASMA FLUORETADO', ENZIMATICO, null, 100),
+  GLICOSE: D('GLI',  'GLICOSE', 'Resultado', 'SORO OU PLASMA FLUORETADO', ENZIMATICO, null, 100),
+
+  // ── Urina ─────────────────────────────────────────────────────────────────
+  // "PROT. UR" no Sérium. Material é URINA, não soro — por isso bloco próprio.
+  PROTUR: D('PROTUR', 'PROTEÍNAS URINÁRIAS', 'Resultado', 'URINA', ENZIMATICO, null, 110),
 }
 
 /** Normaliza o código do aparelho: `TGP-EB` e `tgp_eb` caem na mesma chave. */

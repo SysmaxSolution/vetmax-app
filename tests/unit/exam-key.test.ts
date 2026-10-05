@@ -106,3 +106,32 @@ describe('OS real da Mel no ambiente de testes (URIT + Sérium na mesma consulta
     expect(exames.filter(e => e.group === 'bioquimico').every(e => e.status === 'draft')).toBe(true)
   })
 })
+
+describe('códigos que o Sérium 200 mandou de verdade em 03/10/2026', () => {
+  // Colhidos dos resultados reais do Tutu e do Toby. O aparelho escreve
+  // "COLESTEROL", "TRI", "GLICOSE", "FAL IFCC" — nenhum batia com o catálogo,
+  // e cairiam todos em "outros", sem virar exame com rótulo e assinatura.
+  it('cada um vira o seu exame', () => {
+    const esperado: Record<string, string> = {
+      'COLESTEROL': 'COLESTEROL TOTAL',
+      'TRI':        'TRIGLICERIDES',
+      'GLICOSE':    'GLICOSE',
+      'FAL IFCC':   'FOSFATASE ALCALINA',
+      'PROT. UR':   'PROTEÍNAS URINÁRIAS',
+      'CREAT':      'CREATININA',
+      'TGP-EB':     'ALT (T.G.P.)',
+      'UREIA-EB':   'UREIA',
+    }
+    for (const [codigo, titulo] of Object.entries(esperado)) {
+      expect(examKeyOf(codigo).title).toBe(titulo)
+      expect(examKeyOf(codigo).group).toBe('bioquimico')
+    }
+  })
+
+  it('a OS do Toby vira 7 laudos distintos', () => {
+    const exames = summarizeExams(
+      ['COLESTEROL', 'CREAT', 'FAL IFCC', 'GLICOSE', 'TGP-EB', 'TRI', 'UREIA-EB'].map(c => r(c)))
+    expect(exames).toHaveLength(7)
+    expect(exames.every(e => e.group === 'bioquimico')).toBe(true)
+  })
+})
