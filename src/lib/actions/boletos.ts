@@ -37,7 +37,17 @@ async function loadCobrancaConfig(clinicId: string): Promise<CobrancaRuntime | {
     return { environment, numeroCliente: numeroCliente || 25546454, numeroContaCorrente: numeroContaCorrente || 12345, codigoModalidade: codigoModalidade || 1 }
   }
   if (!numeroCliente || !numeroContaCorrente) return { error: 'Configure numeroCliente e conta corrente da cobrança Sicoob.' }
-  return { environment, numeroCliente, numeroContaCorrente, codigoModalidade, clientId: cob.clientId ?? bank.client_id }
+
+  // A credencial (client_id + certificado e-CNPJ) vem da configuracao da
+  // CLINICA, igual ao extrato — nao de variavel de ambiente nem do bloco da
+  // carteira. Sem isto, producao caia no stub "pendente de onboarding".
+  const { resolverConfigSicoob } = await import('@/lib/integrations/sicoob-config')
+  const cred = await resolverConfigSicoob(admin, clinicId, {
+    agency: bank.agencia ?? null, account: bank.conta ?? null, bank_code: bank.bank_code ?? '756',
+  })
+  if ('error' in cred) return { error: cred.error }
+
+  return { ...cred.config, numeroCliente, numeroContaCorrente, codigoModalidade }
 }
 
 export interface EmitBoletoInput extends BoletoInput {
