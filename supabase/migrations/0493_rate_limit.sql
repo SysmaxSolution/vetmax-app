@@ -65,5 +65,10 @@ BEGIN
   RETURN v_hits > p_limit;
 END $$;
 
-REVOKE EXECUTE ON FUNCTION rate_limit_exceeded(text, integer, integer) FROM public, anon;
+-- Só o service role conta. `authenticated` tambem precisa ser revogado: o
+-- Supabase concede ALL ON FUNCTIONS para anon/authenticated/service_role por
+-- DEFAULT PRIVILEGES, então revogar de `public` e `anon` deixa o usuário
+-- logado com EXECUTE — e com isso ele poderia chamar a função com o bucket de
+-- OUTRA clínica e esgotar o teto dela.
+REVOKE EXECUTE ON FUNCTION rate_limit_exceeded(text, integer, integer) FROM public, anon, authenticated;
 GRANT  EXECUTE ON FUNCTION rate_limit_exceeded(text, integer, integer) TO service_role;
