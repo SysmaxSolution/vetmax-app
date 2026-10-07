@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { normalizeServiceName, buildNormalizedNameIndex } from '@/lib/service-name-normalize'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface ProcedureMappingRow {
@@ -91,7 +92,7 @@ export async function getProcedureMappingStatus(
     .eq('clinic_id', clinicId)
     .eq('remittance_id', remittanceId)
 
-  if (linesErr) return { error: linesErr.message }
+  if (linesErr) return { error: mensagemErro(linesErr, 'lib/actions/petlove-mapping.ts') }
 
   const agg = new Map<string, { count: number; sum: number }>()
   for (const l of lines ?? []) {
@@ -165,7 +166,7 @@ export async function listStockItemsForMapping(): Promise<StockItemOption[] | { 
     .order('is_service', { ascending: false })
     .order('name')
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/petlove-mapping.ts') }
   return (data ?? []).map(s => ({
     id:         s.id,
     name:       s.name,

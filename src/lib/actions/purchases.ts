@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache'
 import { parseNFeXML } from '@/lib/utils/nfe-parser'
 import type { ParsedNFe } from '@/lib/utils/nfe-parser'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface PurchaseOrder {
@@ -151,7 +152,7 @@ export async function importNFeXML(
     .single()
 
   if (orderErr || !order) {
-    return { error: `Erro ao criar ordem de compra: ${orderErr?.message ?? ''}` }
+    return { error: `Erro ao criar ordem de compra: ${(orderErr ? mensagemErro(orderErr, 'lib/actions/purchases.ts') : '')}` }
   }
 
   // Inserir itens + auto-match por EAN
@@ -260,7 +261,7 @@ export async function createManualPurchaseOrder(
     .single()
 
   if (orderErr || !order) {
-    return { error: `Erro ao criar entrada manual: ${orderErr?.message ?? ''}` }
+    return { error: `Erro ao criar entrada manual: ${(orderErr ? mensagemErro(orderErr, 'lib/actions/purchases.ts') : '')}` }
   }
 
   // Auto-match dos itens contra estoque (EAN ou nome)
@@ -355,7 +356,7 @@ export async function listPurchaseOrders(filters?: {
   if (filters?.supplier_id) q = q.eq('supplier_id', filters.supplier_id)
 
   const { data, error } = await q.limit(100)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/purchases.ts') }
   return (data ?? []) as unknown as PurchaseOrder[]
 }
 
@@ -528,7 +529,7 @@ export async function launchPayablesFromPurchase(
     created_by:           ctx.user_id,
   }))
   const { error } = await admin.from('financial_entries').insert(rows)
-  if (error) return { error: 'Erro ao lançar contas a pagar: ' + error.message }
+  if (error) return { error: 'Erro ao lançar contas a pagar: ' + mensagemErro(error, 'lib/actions/purchases.ts') }
 
   revalidatePath('/dashboard/financial')
   revalidatePath('/dashboard/purchases')
@@ -551,7 +552,7 @@ export async function matchItemToStock(
     .update({ stock_item_id: stockItemId, is_matched: true })
     .eq('id', itemId)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/purchases.ts') }
   return { success: true }
 }
 
@@ -652,7 +653,7 @@ export async function autoCreateStockFromItem(
     .single()
 
   if (error || !created) {
-    return { error: `Erro ao criar produto: ${error?.message ?? ''}` }
+    return { error: `Erro ao criar produto: ${(error ? mensagemErro(error, 'lib/actions/purchases.ts') : '')}` }
   }
 
   await admin.from('purchase_order_items').update({
@@ -743,7 +744,7 @@ export async function exportNFeZip(params: {
     .lte('issue_date', endDate)
     .order('issue_date', { ascending: true })
 
-  if (error) return { error: `Erro ao buscar NF-es: ${error.message}` }
+  if (error) return { error: `Erro ao buscar NF-es: ${mensagemErro(error, 'lib/actions/purchases.ts')}` }
   if (!orders || orders.length === 0) {
     return { error: `Nenhuma NF-e com XML encontrada para ${month.toString().padStart(2, '0')}/${year}.` }
   }
@@ -792,7 +793,7 @@ export async function cancelPurchaseOrder(
     .eq('clinic_id', ctx.clinic_id)
     .neq('status', 'received')
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/purchases.ts') }
   revalidatePath('/dashboard/purchases')
   return { success: true }
 }

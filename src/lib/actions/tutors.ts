@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { CONSENT_VERSION, isConsentStale } from '@/lib/consent-version'
 import type { CreateTutorPayload, CreatePatientPayload } from '@/types'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Busca inteligente: CPF do Tutor, Nome do Tutor ou Nome do Pet ────────────
 export type SearchResult = {
   type: 'tutor_with_patients'
@@ -93,7 +94,7 @@ export async function searchTutorsAndPatients(
     .in('id', tutorIds)
     .order('name')
 
-  if (error || !tutors) return { error: 'Erro na busca: ' + error?.message }
+  if (error || !tutors) return { error: 'Erro na busca: ' + mensagemErro(error, 'lib/actions/tutors.ts') }
 
   const { data: allPatients } = await admin
     .from('patients')
@@ -233,7 +234,7 @@ export async function registerTutorAndPet(
       .upsert(tutorRow, { onConflict: 'clinic_id,cpf' })
       .select('id')
       .single()
-    if (tutorErr || !data) return { error: 'Erro ao salvar Tutor: ' + (tutorErr?.message ?? '') }
+    if (tutorErr || !data) return { error: 'Erro ao salvar Tutor: ' + ((tutorErr ? mensagemErro(tutorErr, 'lib/actions/tutors.ts') : '')) }
     tutor = data
   } else {
     const { data, error: tutorErr } = await admin
@@ -241,7 +242,7 @@ export async function registerTutorAndPet(
       .insert(tutorRow)
       .select('id')
       .single()
-    if (tutorErr || !data) return { error: 'Erro ao salvar Tutor: ' + (tutorErr?.message ?? '') }
+    if (tutorErr || !data) return { error: 'Erro ao salvar Tutor: ' + ((tutorErr ? mensagemErro(tutorErr, 'lib/actions/tutors.ts') : '')) }
     tutor = data
   }
 
@@ -271,7 +272,7 @@ export async function registerTutorAndPet(
     .select('id')
     .single()
 
-  if (patErr || !patient) return { error: 'Erro ao salvar Pet: ' + (patErr?.message ?? '') }
+  if (patErr || !patient) return { error: 'Erro ao salvar Pet: ' + ((patErr ? mensagemErro(patErr, 'lib/actions/tutors.ts') : '')) }
 
   return { tutorId: tutor.id, patientId: patient.id }
 }
@@ -319,7 +320,7 @@ export async function addPatientToTutor(
     .select('id')
     .single()
 
-  if (error || !patient) return { error: 'Erro ao adicionar Pet: ' + (error?.message ?? '') }
+  if (error || !patient) return { error: 'Erro ao adicionar Pet: ' + ((error ? mensagemErro(error, 'lib/actions/tutors.ts') : '')) }
   return { id: patient.id }
 }
 
@@ -348,7 +349,7 @@ export async function recordConsent(
     p_consent_version: CONSENT_VERSION,
   })
 
-  if (error) return { error: 'Erro ao registrar consentimento: ' + error.message }
+  if (error) return { error: 'Erro ao registrar consentimento: ' + mensagemErro(error, 'lib/actions/tutors.ts') }
   return { success: true, historyId: data?.history_id ?? '' }
 }
 

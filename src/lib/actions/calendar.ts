@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type CalendarEventType = 'appointment' | 'grooming'
@@ -96,8 +97,8 @@ export async function getUnifiedCalendarEvents(
       .order('scheduled_at'),
   ])
 
-  if (appointmentsRes.error) return { error: `Erro ao buscar consultas: ${appointmentsRes.error.message}` }
-  if (groomingRes.error)     return { error: `Erro ao buscar tosas: ${groomingRes.error.message}` }
+  if (appointmentsRes.error) return { error: `Erro ao buscar consultas: ${mensagemErro(appointmentsRes.error, 'lib/actions/calendar.ts')}` }
+  if (groomingRes.error)     return { error: `Erro ao buscar tosas: ${mensagemErro(groomingRes.error, 'lib/actions/calendar.ts')}` }
 
   const events: UnifiedCalendarEvent[] = []
 
@@ -198,8 +199,8 @@ export async function getUnifiedEventsForRange(
       .order('scheduled_at'),
   ])
 
-  if (apptRes.error) return { error: `Erro ao buscar consultas: ${apptRes.error.message}` }
-  if (groomRes.error) return { error: `Erro ao buscar tosas: ${groomRes.error.message}` }
+  if (apptRes.error) return { error: `Erro ao buscar consultas: ${mensagemErro(apptRes.error, 'lib/actions/calendar.ts')}` }
+  if (groomRes.error) return { error: `Erro ao buscar tosas: ${mensagemErro(groomRes.error, 'lib/actions/calendar.ts')}` }
 
   const events: UnifiedCalendarEvent[] = []
 
@@ -264,7 +265,7 @@ export async function getClinicProfessionals(): Promise<CalendarProfessional[] |
     .in('role', ['vet', 'groomer', 'admin', 'owner', 'manager'])
     .order('full_name')
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/calendar.ts') }
   return (data ?? []).map((p: any) => ({
     id:   p.id,
     name: p.full_name ?? 'Profissional',
@@ -309,8 +310,8 @@ export async function getUnifiedMonthCounts(
       .neq('current_status', 'cancelled'),
   ])
 
-  if (appointmentsRes.error) return { error: appointmentsRes.error.message }
-  if (groomingRes.error)     return { error: groomingRes.error.message }
+  if (appointmentsRes.error) return { error: mensagemErro(appointmentsRes.error, 'lib/actions/calendar.ts') }
+  if (groomingRes.error)     return { error: mensagemErro(groomingRes.error, 'lib/actions/calendar.ts') }
 
   const counts: Record<string, number> = {}
 

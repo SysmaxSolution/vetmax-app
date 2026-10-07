@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { authenticateAgent } from '@/lib/lab/agent-auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { resolveAgentUpdate } from '@/lib/lab/agent-release'
+import { limitarPorIp } from '@/lib/api/rate-limit'
 
 // Canal de auto-atualização do agente-ponte.
 //
@@ -13,6 +14,9 @@ import { resolveAgentUpdate } from '@/lib/lab/agent-release'
 // o Laboratório ativado na clínica não chega aqui (ver authenticateAgent).
 
 export async function GET(req: Request) {
+  const barrado = await limitarPorIp(req, { escopo: 'lab:update', limite: 30 })
+  if (barrado) return barrado
+
   const auth = await authenticateAgent(req)
   if (!auth) return NextResponse.json({ error: 'Token inválido ou Laboratório não ativado para esta clínica.' }, { status: 401 })
 

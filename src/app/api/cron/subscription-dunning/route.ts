@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { attemptSuspendSubscription, planDunningTransition } from '@/lib/billing/provision'
 
+import { mensagemErro } from '@/lib/errors'
 // GET /api/cron/subscription-dunning  (Vercel Cron, diário)
 // R7 — máquina de estados da assinatura dirigida por tempo:
 //   • mensal: past_due há ≥7d → tenta suspender (grace se D3 segura);
@@ -28,7 +29,7 @@ export async function GET(request: NextRequest) {
     .in('lifecycle_state', ['past_due', 'grace', 'active', 'expiring'])
     .eq('is_grandfathered', false)
   if (error) {
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: false, error: mensagemErro(error, 'app/api/cron/subscription-dunning/route.ts') }, { status: 500 })
   }
 
   const actions: Array<{ clinic_id: string; action: string }> = []

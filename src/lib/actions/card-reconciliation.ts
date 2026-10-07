@@ -11,6 +11,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { listPaymentCards, createPaymentCard } from '@/lib/actions/payment-cards'
 
+import { mensagemErro } from '@/lib/errors'
 async function getCtx() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -131,7 +132,7 @@ export async function parseCardStatement(text: string, format: 'csv' | 'sipag_ed
     // houver um arquivo real de exemplo. Por ora, tenta CSV como fallback.
     return parseCsv(text)
   } catch (e) {
-    return { error: `Falha ao ler o arquivo: ${(e as Error).message}` }
+    return { error: `Falha ao ler o arquivo: ${mensagemErro(e, 'lib/actions/card-reconciliation.ts')}` }
   }
 }
 

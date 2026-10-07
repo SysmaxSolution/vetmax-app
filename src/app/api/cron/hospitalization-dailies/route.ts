@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
+import { mensagemErro } from '@/lib/errors'
 // GET /api/cron/hospitalization-dailies
 // Vercel Cron (diário) — lança a diária do dia para toda internação ATIVA
 // (status observation/ward/icu). ready_for_discharge/discharged não acumulam
@@ -16,7 +17,7 @@ export async function GET(request: NextRequest) {
   const { data, error } = await admin.rpc('rpc_accrue_hospitalization_dailies', { p_hospitalization_id: null })
 
   if (error) {
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: false, error: mensagemErro(error, 'app/api/cron/hospitalization-dailies/route.ts') }, { status: 500 })
   }
 
   return NextResponse.json({ ok: true, charged: typeof data === 'number' ? data : data ?? 0 })

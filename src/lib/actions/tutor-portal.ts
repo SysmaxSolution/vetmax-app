@@ -15,6 +15,7 @@ import {
 } from '@/lib/portal/access-code'
 import { encryptCode, decryptCode, maskCode } from '@/lib/portal/code-crypto'
 
+import { mensagemErro } from '@/lib/errors'
 async function getOrigin(): Promise<string> {
   const h = await headers()
   const host = h.get('x-forwarded-host') ?? h.get('host')
@@ -235,7 +236,7 @@ export async function addHouseholdMember(tutorId: string, memberCpf: string): Pr
     const { error } = await admin.from('tutor_user_links').insert({
       tutor_user_id: (tu as any).id, tutor_id: (member as any).id, clinic_id: profile.clinic_id, linked_via: 'household',
     })
-    if (error) return { error: error.message }
+    if (error) return { error: mensagemErro(error, 'lib/actions/tutor-portal.ts') }
   }
   return { ok: true, name: (member as any).name ?? null }
 }

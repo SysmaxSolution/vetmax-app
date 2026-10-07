@@ -9,6 +9,7 @@ import { FREE_MODULES } from '@/config/access-matrix'
 import { PLAN_LIMITS, type LimitedPlan } from '@/lib/subscription/plan-limits'
 import type { BusinessType } from '@/types'
 
+import { mensagemErro } from '@/lib/errors'
 type Admin = ReturnType<typeof createAdminClient>
 
 // Recalcula clinics.active_modules e flow_config a partir do PLANO (bundles)
@@ -83,7 +84,7 @@ export async function syncClinicModulesFromContract(
     .from('clinics')
     .update({ active_modules: nextModules, flow_config: nextFlow })
     .eq('id', clinicId)
-  if (error) return { error: 'Erro ao sincronizar módulos: ' + error.message }
+  if (error) return { error: 'Erro ao sincronizar módulos: ' + mensagemErro(error, 'lib/billing/provision.ts') }
 
   // Quotas por plano (specialized é sob medida — não tocar)
   if (planName !== 'specialized') {
@@ -92,7 +93,7 @@ export async function syncClinicModulesFromContract(
       .from('clinics')
       .update({ user_limit: limits.users })
       .eq('id', clinicId)
-    if (limitError) return { error: 'Erro ao ajustar limite de usuários: ' + limitError.message }
+    if (limitError) return { error: 'Erro ao ajustar limite de usuários: ' + mensagemErro(limitError, 'lib/billing/provision.ts') }
 
     const { error: quotaError } = await admin
       .from('tenant_quotas')
@@ -100,7 +101,7 @@ export async function syncClinicModulesFromContract(
         { clinic_id: clinicId, resource_name: 'custom_documents', limit_amount: limits.documents, reset_date: null },
         { onConflict: 'clinic_id,resource_name' }
       )
-    if (quotaError) return { error: 'Erro ao ajustar quota de documentos: ' + quotaError.message }
+    if (quotaError) return { error: 'Erro ao ajustar quota de documentos: ' + mensagemErro(quotaError, 'lib/billing/provision.ts') }
   }
   return {}
 }
@@ -127,7 +128,7 @@ export async function applyPlanContracts(
       .update({ is_active: false })
       .eq('clinic_id', clinicId)
       .in('module_key', keysToDeactivate)
-    if (error) return { error: 'Erro ao atualizar módulos: ' + error.message }
+    if (error) return { error: 'Erro ao atualizar módulos: ' + mensagemErro(error, 'lib/billing/provision.ts') }
   }
   if (addonKeys.length > 0) {
     const { error } = await admin
@@ -141,7 +142,7 @@ export async function applyPlanContracts(
         })),
         { onConflict: 'clinic_id,module_key' }
       )
-    if (error) return { error: 'Erro ao contratar módulos: ' + error.message }
+    if (error) return { error: 'Erro ao contratar módulos: ' + mensagemErro(error, 'lib/billing/provision.ts') }
   }
   return {}
 }
@@ -169,7 +170,7 @@ export async function activatePaidSubscription(
     .from('tenant_subscriptions')
     .update({ lifecycle_state: 'active', status: 'active', is_grandfathered: false, past_due_since: null })
     .eq('clinic_id', clinicId)
-  if (error) return { error: 'Erro ao ativar assinatura: ' + error.message }
+  if (error) return { error: 'Erro ao ativar assinatura: ' + mensagemErro(error, 'lib/billing/provision.ts') }
 
   const plan = sub.plan_name as string
   if (plan === 'premium' || plan === 'enterprise') {
@@ -200,7 +201,7 @@ export async function activatePaidSubscription(
           })),
           { onConflict: 'clinic_id,module_key' }
         )
-      if (contractError) return { error: 'Erro ao restaurar módulos contratados: ' + contractError.message }
+      if (contractError) return { error: 'Erro ao restaurar módulos contratados: ' + mensagemErro(contractError, 'lib/billing/provision.ts') }
     }
     if (restore?.active_modules?.length) {
       const { error: clinicError } = await admin
@@ -210,7 +211,7 @@ export async function activatePaidSubscription(
           ...(restore.flow_config ? { flow_config: restore.flow_config } : {}),
         })
         .eq('id', clinicId)
-      if (clinicError) return { error: 'Erro ao restaurar configuração da clínica: ' + clinicError.message }
+      if (clinicError) return { error: 'Erro ao restaurar configuração da clínica: ' + mensagemErro(clinicError, 'lib/billing/provision.ts') }
     } else if (restore?.contract_keys?.length) {
       const synced = await syncClinicModulesFromContract(admin, clinicId)
       if (synced.error) return synced
@@ -302,7 +303,7 @@ export async function attemptSuspendSubscription(
     .from('tenant_subscriptions')
     .update({ lifecycle_state: targetState })
     .eq('clinic_id', clinicId)
-  if (error) return { error: 'Erro ao suspender assinatura: ' + error.message }
+  if (error) return { error: 'Erro ao suspender assinatura: ' + mensagemErro(error, 'lib/billing/provision.ts') }
   // sync agora vê suspended/expired → desliga módulos pagos (mantém contratos).
   const synced = await syncClinicModulesFromContract(admin, clinicId)
   if (synced.error) return synced

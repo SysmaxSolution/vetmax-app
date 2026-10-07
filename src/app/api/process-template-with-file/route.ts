@@ -5,6 +5,7 @@ import { writeFileSync, unlinkSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import { createClient } from '@/lib/supabase/server'
+import { limitarPorIp } from '@/lib/api/rate-limit'
 
 const PDFParser = require('pdf2json')
 
@@ -160,6 +161,9 @@ FORMATO: APENAS um array JSON. Sem markdown.
  * Response: { fields, template_html?, page_images? }
  */
 export async function POST(request: NextRequest) {
+  const barrado = await limitarPorIp(request, { escopo: 'ia:template3', limite: 20 })
+  if (barrado) return barrado
+
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()

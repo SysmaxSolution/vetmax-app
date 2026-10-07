@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
+import { mensagemErro } from '@/lib/errors'
 export async function setSurgeryMode(
   isInSurgery: boolean,
 ): Promise<{ success: true } | { error: string }> {
@@ -16,7 +17,7 @@ export async function setSurgeryMode(
     .update({ is_in_surgery: isInSurgery })
     .eq('id', user.id)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/surgery-mode.ts') }
   return { success: true }
 }
 
@@ -34,6 +35,6 @@ export async function resolveUrgencyEscalation(
     .eq('id', logId)
     .is('resolved_at', null)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/surgery-mode.ts') }
   return { success: true }
 }

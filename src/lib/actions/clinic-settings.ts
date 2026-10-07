@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type FlowConfig = {
@@ -202,7 +203,7 @@ export async function updateClinicConfig(payload: {
     .update(payload)
     .eq('id', profile.clinic_id)
 
-  if (error) return { error: 'Erro ao salvar: ' + error.message }
+  if (error) return { error: 'Erro ao salvar: ' + mensagemErro(error, 'lib/actions/clinic-settings.ts') }
 
   revalidatePath('/dashboard', 'layout')
   revalidatePath('/dashboard/management')
@@ -395,7 +396,7 @@ export async function uploadClinicLogo(
     .from('clinic-logos')
     .upload(path, file, { upsert: true, contentType: file.type })
 
-  if (upErr) return { error: 'Erro no upload: ' + upErr.message }
+  if (upErr) return { error: 'Erro no upload: ' + mensagemErro(upErr, 'lib/actions/clinic-settings.ts') }
 
   const { data: { publicUrl } } = admin.storage
     .from('clinic-logos')
@@ -408,7 +409,7 @@ export async function uploadClinicLogo(
     .update({ logo_url: publicUrl })
     .eq('id', profile.clinic_id)
 
-  if (dbErr) return { error: 'Erro ao salvar URL da logo: ' + dbErr.message }
+  if (dbErr) return { error: 'Erro ao salvar URL da logo: ' + mensagemErro(dbErr, 'lib/actions/clinic-settings.ts') }
 
   revalidatePath('/dashboard', 'layout')
   return { url }
@@ -464,7 +465,7 @@ export async function updateClinicVoiceTriggers(
     .update({ voice_start_triggers: startTriggers, voice_stop_triggers: stopTriggers })
     .eq('id', profile.clinic_id)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/clinic-settings.ts') }
   revalidatePath('/dashboard/grooming')
   revalidatePath('/dashboard/vet', 'layout')
   revalidatePath('/dashboard/hospitalization', 'layout')
@@ -548,7 +549,7 @@ export async function updateRequiredFields(
       { onConflict: 'clinic_id' }
     )
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/clinic-settings.ts') }
 
   revalidatePath('/dashboard/reception')
   revalidatePath('/dashboard/triage', 'layout')
@@ -597,7 +598,7 @@ export async function setDailyAlertTime(
       { onConflict: 'clinic_id' }
     )
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/clinic-settings.ts') }
   revalidatePath('/dashboard/management')
   return { success: true }
 }
@@ -662,7 +663,7 @@ export async function updateLayoutVersion(
     .update({ layout_version: version })
     .eq('id', profile.clinic_id)
 
-  if (error) return { error: 'Falha ao salvar layout: ' + error.message }
+  if (error) return { error: 'Falha ao salvar layout: ' + mensagemErro(error, 'lib/actions/clinic-settings.ts') }
 
   revalidatePath('/dashboard', 'layout')
   return { success: true }

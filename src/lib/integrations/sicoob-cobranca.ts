@@ -5,6 +5,7 @@
 import 'server-only'
 import { buildBoletoPayload, parseBoletoResponse, type BoletoInput, type SicoobBoletoConfig, type BoletoResult } from './sicoob-cobranca-map'
 
+import { mensagemErro } from '@/lib/errors'
 const SANDBOX = {
   base:      'https://sandbox.sicoob.com.br/sicoob/sandbox/cobranca-bancaria/v3',
   client_id: '9b5e603e428cc477a2841e2683c92d21',
@@ -68,7 +69,7 @@ export async function incluirBoleto(cfg: CobrancaRuntime, input: BoletoInput): P
     }
     return { ok: true, result: parseBoletoResponse(raw), raw }
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Erro ao emitir boleto.' }
+    return { ok: false, error: e instanceof Error ? mensagemErro(e, 'lib/integrations/sicoob-cobranca.ts') : 'Erro ao emitir boleto.' }
   }
 }
 
@@ -83,7 +84,7 @@ export async function consultarBoleto(cfg: CobrancaRuntime, nossoNumero: string)
     if (!res.ok) return { ok: false, error: `Sicoob retornou ${res.status}` }
     return { ok: true, raw }
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Erro ao consultar boleto.' }
+    return { ok: false, error: e instanceof Error ? mensagemErro(e, 'lib/integrations/sicoob-cobranca.ts') : 'Erro ao consultar boleto.' }
   }
 }
 
@@ -100,6 +101,6 @@ export async function baixarBoleto(cfg: CobrancaRuntime, nossoNumero: string): P
     if (!res.ok) return { ok: false, error: `Sicoob retornou ${res.status}` }
     return { ok: true }
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Erro ao baixar boleto.' }
+    return { ok: false, error: e instanceof Error ? mensagemErro(e, 'lib/integrations/sicoob-cobranca.ts') : 'Erro ao baixar boleto.' }
   }
 }

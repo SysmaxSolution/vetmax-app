@@ -17,6 +17,7 @@ import { sendImagesReadyEmail, sendLaudoReadyEmail } from '@/lib/imaging/email'
 import { notifyTutorResultReleased } from '@/lib/actions/tutor-portal'
 import { signLaudoDocument } from '@/lib/actions/laudo-signature'
 import { clinicFlowFlag, routineOffError } from '@/lib/clinic/flow-gate'
+import { mensagemErro } from '@/lib/errors'
 import type {
   ImagingStudyRow, CreateStudyInput, PublicStudyFile, PublicStudyView, StaffStudyDetail,
 } from '@/lib/imaging/types'
@@ -113,7 +114,7 @@ export async function createImagingStudy(
     })
     .select('id').single()
 
-  if (error || !data) return { error: 'Erro ao criar estudo: ' + (error?.message ?? '') }
+  if (error || !data) return { error: 'Erro ao criar estudo: ' + ((error ? mensagemErro(error, 'lib/actions/imaging.ts') : '')) }
   revalidatePath('/dashboard/exams')
   return { id: data.id as string }
 }
@@ -137,7 +138,7 @@ export async function listImagingStudies(): Promise<ImagingStudyRow[] | { error:
     .order('created_at', { ascending: false })
     .limit(200)
 
-  if (error) return { error: 'Erro ao listar: ' + error.message }
+  if (error) return { error: 'Erro ao listar: ' + mensagemErro(error, 'lib/actions/imaging.ts') }
   return (data ?? []).map((r: any) => ({
     id: r.id,
     patient_id: r.patient_id,
@@ -201,7 +202,7 @@ export async function uploadImagingFile(
   const buffer = Buffer.from(await file.arrayBuffer())
   const { error: upErr } = await admin.storage.from(BUCKET)
     .upload(path, buffer, { contentType: file.type || 'application/octet-stream', upsert: false })
-  if (upErr) return { error: 'Erro no upload: ' + upErr.message }
+  if (upErr) return { error: 'Erro no upload: ' + mensagemErro(upErr, 'lib/actions/imaging.ts') }
 
   const { data: rec, error: dbErr } = await admin.from('imaging_files').insert({
     clinic_id: ctx.clinicId, study_id: studyId, storage_path: path,
@@ -210,7 +211,7 @@ export async function uploadImagingFile(
   }).select('id').single()
   if (dbErr || !rec) {
     await admin.storage.from(BUCKET).remove([path])
-    return { error: 'Erro ao registrar arquivo: ' + (dbErr?.message ?? '') }
+    return { error: 'Erro ao registrar arquivo: ' + ((dbErr ? mensagemErro(dbErr, 'lib/actions/imaging.ts') : '')) }
   }
 
   // Primeiro upload → marca images_ready e dispara e-mail ao vet solicitante
@@ -384,7 +385,7 @@ export async function revokeShareLink(linkId: string): Promise<{ ok: true } | { 
   const { error } = await admin.from('imaging_share_links')
     .update({ revoked_at: new Date().toISOString() })
     .eq('id', linkId).eq('clinic_id', ctx.clinicId)
-  if (error) return { error: 'Erro ao revogar: ' + error.message }
+  if (error) return { error: 'Erro ao revogar: ' + mensagemErro(error, 'lib/actions/imaging.ts') }
   return { ok: true }
 }
 
@@ -517,7 +518,7 @@ export async function listLaudoCandidates(
     .eq('patient_id', patientId).eq('clinic_id', ctx.clinicId)
     .not('generated_pdf_path', 'is', null)
     .order('created_at', { ascending: false }).limit(50)
-  if (error) return { error: 'Erro ao listar documentos: ' + error.message }
+  if (error) return { error: 'Erro ao listar documentos: ' + mensagemErro(error, 'lib/actions/imaging.ts') }
   return (data ?? []).map((d: any) => ({
     id: d.id, name: d.document_name ?? 'Documento', created_at: d.created_at,
   }))

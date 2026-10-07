@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { runMatchEngine } from '@/lib/actions/petlove-matching'
 import { parseConvenioCsv, type ColumnMapping } from '@/lib/finance/convenio-csv'
 
+import { mensagemErro } from '@/lib/errors'
 type Ctx = { userId: string; clinicId: string; role: string }
 async function ctx(): Promise<Ctx | { error: string }> {
   const supabase = await createClient()
@@ -66,7 +67,7 @@ export async function importConvenioRemittance(input: {
     total_service_value: total, referral_bonus_value: 0, credit_adjustment: 0, debit_adjustment: 0, total_gross_value: total,
     raw_summary: { imported_via: 'convenio_csv', provider: input.providerName }, imported_by: c.userId, imported_at: new Date().toISOString(),
   }).select('id').single()
-  if (remErr) return { error: 'Falha ao criar demonstrativo: ' + remErr.message }
+  if (remErr) return { error: 'Falha ao criar demonstrativo: ' + mensagemErro(remErr, 'lib/actions/convenio-import.ts') }
   const remittanceId = (rem as any).id
 
   const linesPayload = parsed.lines.map(l => ({
@@ -77,7 +78,7 @@ export async function importConvenioRemittance(input: {
     repass_value: l.repass_value, coparticipation_value: l.coparticipation_value, match_status: 'pending',
   }))
   const { error: linErr } = await admin.from('petlove_remittance_lines').insert(linesPayload)
-  if (linErr) return { error: 'Falha ao gravar linhas: ' + linErr.message }
+  if (linErr) return { error: 'Falha ao gravar linhas: ' + mensagemErro(linErr, 'lib/actions/convenio-import.ts') }
 
   const match = await runMatchEngine(remittanceId)
   const matched = 'error' in match ? 0 : match.matched

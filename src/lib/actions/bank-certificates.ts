@@ -12,6 +12,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { encryptSecret, lerPfx } from '@/lib/integrations/bank-certificate'
 
+import { mensagemErro } from '@/lib/errors'
 const PODE_EDITAR = ['admin', 'owner', 'manager']
 
 type Ctx = { admin: ReturnType<typeof createAdminClient>; clinicId: string; userId: string; role: string }
@@ -96,7 +97,7 @@ export async function enviarCertificado(input: {
     updated_at:           new Date().toISOString(),
   }, { onConflict: 'clinic_id,bank_code' })
 
-  if (error) return { error: 'Erro ao guardar o certificado: ' + error.message }
+  if (error) return { error: 'Erro ao guardar o certificado: ' + mensagemErro(error, 'lib/actions/bank-certificates.ts') }
   revalidatePath('/dashboard/management')
   return { ok: true, subject_cn: lido.subject_cn, cnpj: lido.cnpj, not_after: lido.not_after }
 }
@@ -106,7 +107,7 @@ export async function removerCertificado(bankCode: string): Promise<{ ok: true }
   if (!PODE_EDITAR.includes(c.role)) return { error: 'Sem permissão para configurar o certificado.' }
   const { error } = await c.admin.from('clinic_bank_certificates')
     .delete().eq('clinic_id', c.clinicId).eq('bank_code', (bankCode || '756').replace(/\D/g, '') || '756')
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/bank-certificates.ts') }
   revalidatePath('/dashboard/management')
   return { ok: true }
 }

@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
 export interface ClinicUserFull {
@@ -83,7 +84,7 @@ export async function adminUpdateUser(
     .eq('id', userId)
     .eq('clinic_id', profile.clinic_id)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/user-management.ts') }
   revalidatePath('/dashboard/management')
   return { success: true }
 }
@@ -118,7 +119,7 @@ export async function adminChangePassword(
   if (!targetProfile) return { error: 'Usuário não encontrado nesta clínica.' }
 
   const { error } = await admin.auth.admin.updateUserById(targetUserId, { password: newPassword })
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/user-management.ts') }
   return { success: true }
 }
 
@@ -151,7 +152,7 @@ export async function uploadUserSignature(
   const { error: upErr } = await admin.storage
     .from('user-signatures')
     .upload(path, file, { upsert: true, contentType: file.type })
-  if (upErr) return { error: upErr.message }
+  if (upErr) return { error: mensagemErro(upErr, 'lib/actions/user-management.ts') }
 
   const { data: { publicUrl } } = admin.storage.from('user-signatures').getPublicUrl(path)
 
@@ -188,7 +189,7 @@ export async function getUserModuleAccess(
     .eq('clinic_id', profile.clinic_id)
     .eq('user_id', targetUserId)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/user-management.ts') }
   return (data ?? []) as UserModuleAccessRow[]
 }
 
@@ -217,7 +218,7 @@ export async function setUserModuleAccess(
       { onConflict: 'clinic_id,user_id,module_name' }
     )
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/user-management.ts') }
   revalidatePath('/dashboard/management')
   return { success: true }
 }
@@ -248,7 +249,7 @@ export async function updateUserPhone(
     .eq('id', userId)
     .eq('clinic_id', profile.clinic_id)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/user-management.ts') }
   revalidatePath('/dashboard/management')
   return { success: true }
 }
@@ -277,7 +278,7 @@ export async function updateUserSpecialties(
     .eq('id', userId)
     .eq('clinic_id', profile.clinic_id)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/user-management.ts') }
   revalidatePath('/dashboard/management')
   return { success: true }
 }
@@ -303,7 +304,7 @@ export async function updateOwnProfile(data: {
   if ('photo_url' in data)            patch.photo_url   = data.photo_url
 
   const { error } = await supabase.from('profiles').update(patch).eq('id', user.id)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/user-management.ts') }
   revalidatePath('/dashboard/profile')
   revalidatePath('/dashboard')
   return { success: true }
@@ -332,7 +333,7 @@ export async function updateUserNickname(
     .eq('id', userId)
     .eq('clinic_id', profile.clinic_id)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/user-management.ts') }
   revalidatePath('/dashboard/management')
   return { success: true }
 }

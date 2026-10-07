@@ -11,6 +11,7 @@ import { classifyStock, type StockRow, type StockSummary } from '@/lib/reports/s
 import { summarizeClients, type ClientRow, type ClientsSummary } from '@/lib/reports/clients-logic'
 import { isIntercompany, isCreditBalance, isRecognizedRevenue, netAmount } from '@/lib/finance/reconciliation'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Auth helper ──────────────────────────────────────────────────────────────
 
 async function getCtx(): Promise<{ error: string } | { clinic_id: string; role: string }> {
@@ -157,7 +158,7 @@ export async function getPetFrequencyReport(params: {
     .lte('created_at', params.to + 'T23:59:59')
 
   const { data, error } = await query
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/reports-g13.ts') }
 
   const map = new Map<string, {
     pet_id: string; pet_name: string; species: string; breed: string | null
@@ -243,8 +244,8 @@ export async function getProfessionalProductivityReport(params: {
       .not('prescriber_id', 'is', null),
   ])
 
-  if (profRes.error)    return { error: profRes.error.message }
-  if (consultRes.error) return { error: consultRes.error.message }
+  if (profRes.error)    return { error: mensagemErro(profRes.error, 'lib/actions/reports-g13.ts') }
+  if (consultRes.error) return { error: mensagemErro(consultRes.error, 'lib/actions/reports-g13.ts') }
 
   // Agrupa por profissional
   const consultsByVet = new Map<string, number>()
@@ -331,8 +332,8 @@ export async function getFinancialReport(params: {
     applyFilters(admin.from('financial_entries').select(SEL).eq('clinic_id', ctx.clinic_id).eq('status', 'paid').gte('payment_date', params.from).lte('payment_date', toEnd)),
     applyFilters(admin.from('financial_entries').select(SEL).eq('clinic_id', ctx.clinic_id).eq('status', 'pending').gte('due_date', params.from).lte('due_date', params.to)),
   ])
-  if (paidRes.error) return { error: paidRes.error.message }
-  if (pendRes.error) return { error: pendRes.error.message }
+  if (paidRes.error) return { error: mensagemErro(paidRes.error, 'lib/actions/reports-g13.ts') }
+  if (pendRes.error) return { error: mensagemErro(pendRes.error, 'lib/actions/reports-g13.ts') }
   const rows = [...(paidRes.data ?? []), ...(pendRes.data ?? [])]
 
   let totalReceivable = 0, totalPayable = 0, totalReceived = 0, totalPaid = 0
@@ -408,7 +409,7 @@ export async function getDREReport(params: {
     computeCMVFromConsumption(admin, ctx.clinic_id, params.from, params.to),
   ])
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/reports-g13.ts') }
 
   const buckets = accumulateDre((data ?? []) as EntryLike[])
   const t = dreTotals(buckets, cmv)
@@ -509,7 +510,7 @@ export async function getCurvaABCReport(params: {
   }
 
   const { data, error } = await q
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/reports-g13.ts') }
 
   const rows = data ?? []
 
@@ -807,7 +808,7 @@ export async function saveReportsEnabled(
       { onConflict: 'clinic_id' }
     )
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/reports-g13.ts') }
   return { success: true }
 }
 
@@ -853,7 +854,7 @@ export async function getAgingReport(params: {
     .eq('is_clinic_discount', false)
     .order('due_date', { ascending: true })
     .limit(5000)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/reports-g13.ts') }
 
   const rows: AgingRow[] = []
   let total = 0
@@ -895,8 +896,8 @@ export async function getCashflowProjection(params: { from: string; to: string }
     admin.from('financial_entries').select(SEL).eq('clinic_id', ctx.clinic_id).eq('is_clinic_discount', false).eq('status', 'paid').gte('payment_date', params.from).lte('payment_date', toEnd),
     admin.from('financial_entries').select(SEL).eq('clinic_id', ctx.clinic_id).eq('is_clinic_discount', false).eq('status', 'pending').gte('due_date', params.from).lte('due_date', params.to),
   ])
-  if (paidRes.error) return { error: paidRes.error.message }
-  if (pendRes.error) return { error: pendRes.error.message }
+  if (paidRes.error) return { error: mensagemErro(paidRes.error, 'lib/actions/reports-g13.ts') }
+  if (pendRes.error) return { error: mensagemErro(pendRes.error, 'lib/actions/reports-g13.ts') }
 
   const items: { type: string; amount: number; date: string; realized: boolean }[] = []
   for (const r of (paidRes.data ?? []) as any[]) {
@@ -933,7 +934,7 @@ export async function getRevenueBreakdown(params: { from: string; to: string; di
     .eq('clinic_id', ctx.clinic_id).eq('is_clinic_discount', false)
     .eq('type', 'receivable').eq('status', 'paid')
     .gte('payment_date', params.from).lte('payment_date', toEnd)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/reports-g13.ts') }
 
   const companyName = new Map<string, string>()
   if (params.dimension === 'company') {
@@ -970,7 +971,7 @@ export async function getStockReport(params: { as_of?: string; expiry_days?: num
     .eq('clinic_id', ctx.clinic_id)
     .is('archived_at', null)
     .eq('is_service', false)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/reports-g13.ts') }
   const { rows, summary } = classifyStock((data ?? []) as any[], asOf, expiryDays)
   return { as_of: asOf, expiry_days: expiryDays, rows, summary }
 }
@@ -992,7 +993,7 @@ export async function getClientsReport(params: { from: string; to: string }): Pr
     .eq('clinic_id', ctx.clinic_id)
     .gte('created_at', params.from).lte('created_at', toEnd)
     .not('tutor_id', 'is', null)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/reports-g13.ts') }
   const apptByTutor = new Map<string, number>()
   for (const c of (cons ?? []) as any[]) apptByTutor.set(c.tutor_id, (apptByTutor.get(c.tutor_id) ?? 0) + 1)
   const tutorIds = [...apptByTutor.keys()]
@@ -1040,7 +1041,7 @@ export async function getDREByCompany(params: { from: string; to: string }): Pro
     admin.from('bank_accounts').select('id, company_id').eq('clinic_id', ctx.clinic_id),
     admin.from('companies').select('id, name').eq('clinic_id', ctx.clinic_id),
   ])
-  if (entRes.error) return { error: entRes.error.message }
+  if (entRes.error) return { error: mensagemErro(entRes.error, 'lib/actions/reports-g13.ts') }
   const acctCompany = new Map<string, string | null>()
   for (const a of (acctRes.data ?? []) as any[]) acctCompany.set(a.id, a.company_id ?? null)
   const compName = new Map<string, string>()

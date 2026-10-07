@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 export type AttendanceEntity = 'triage' | 'consultation' | 'exam' | 'hospitalization' | 'surgery'
 
 const TABLE_BY_ENTITY: Record<AttendanceEntity, string> = {
@@ -69,7 +70,7 @@ export async function cancelAttendance(input: {
     .eq('clinic_id', profile.clinic_id)
     .select('id')
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/attendance-cancel.ts') }
   if (!updated || updated.length === 0) return { error: 'Atendimento não encontrado ou você não tem permissão para cancelá-lo.' }
 
   for (const path of REVALIDATE_BY_ENTITY[input.entity]) {

@@ -7,6 +7,7 @@ import { logAudit } from './audit'
 import { deductStockForMedication } from './stock'
 import { correctTranscript } from './voice-corrections'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export type AppliedMedication = {
@@ -67,7 +68,7 @@ export async function getAppliedMedications(
     .eq('clinic_id', profile.clinic_id)
     .order('created_at', { ascending: true })
 
-  if (error) return { error: 'Erro ao buscar medicações: ' + error.message }
+  if (error) return { error: 'Erro ao buscar medicações: ' + mensagemErro(error, 'lib/actions/pharmacy.ts') }
   return (data ?? []) as AppliedMedication[]
 }
 
@@ -108,7 +109,7 @@ export async function addAppliedMedication(data: {
     .select('id, consultation_id, medication_name, dosage, route, notes, is_controlled, created_at')
     .single()
 
-  if (error || !result) return { error: 'Erro ao registrar medicação: ' + (error?.message ?? '') }
+  if (error || !result) return { error: 'Erro ao registrar medicação: ' + ((error ? mensagemErro(error, 'lib/actions/pharmacy.ts') : '')) }
 
   await logAudit({
     action: 'ADD_MEDICATION',
@@ -152,7 +153,7 @@ export async function deleteAppliedMedication(
     .eq('id', id)
     .eq('clinic_id', profile.clinic_id)
 
-  if (error) return { error: 'Erro ao remover medicação: ' + error.message }
+  if (error) return { error: 'Erro ao remover medicação: ' + mensagemErro(error, 'lib/actions/pharmacy.ts') }
 
   // 1. PRIMEIRO LOGAMOS A AUDITORIA (Usando 'id' em vez de 'medicationId')
   await logAudit({
@@ -201,7 +202,7 @@ export async function updateAppliedMedication(
     .select('id, consultation_id, medication_name, dosage, route, notes, is_controlled, created_at')
     .single()
 
-  if (error || !result) return { error: 'Erro ao atualizar medicação: ' + (error?.message ?? '') }
+  if (error || !result) return { error: 'Erro ao atualizar medicação: ' + ((error ? mensagemErro(error, 'lib/actions/pharmacy.ts') : '')) }
 
   await logAudit({
     action: 'UPDATE_MEDICATION',
@@ -238,7 +239,7 @@ export async function getReferrals(
     .eq('clinic_id', profile.clinic_id)
     .order('created_at', { ascending: true })
 
-  if (error) return { error: 'Erro ao buscar encaminhamentos: ' + error.message }
+  if (error) return { error: 'Erro ao buscar encaminhamentos: ' + mensagemErro(error, 'lib/actions/pharmacy.ts') }
   return (data ?? []) as Referral[]
 }
 
@@ -274,7 +275,7 @@ export async function addReferral(data: {
     .select('id, consultation_id, type, description, doctor_notes, created_at')
     .single()
 
-  if (error || !result) return { error: 'Erro ao registrar encaminhamento: ' + (error?.message ?? '') }
+  if (error || !result) return { error: 'Erro ao registrar encaminhamento: ' + ((error ? mensagemErro(error, 'lib/actions/pharmacy.ts') : '')) }
 
   revalidatePath(`/dashboard/vet/${data.consultation_id}`)
   return result as Referral
@@ -302,7 +303,7 @@ export async function deleteReferral(
     .eq('id', id)
     .eq('clinic_id', profile.clinic_id)
 
-  if (error) return { error: 'Erro ao remover encaminhamento: ' + error.message }
+  if (error) return { error: 'Erro ao remover encaminhamento: ' + mensagemErro(error, 'lib/actions/pharmacy.ts') }
 
   revalidatePath(`/dashboard/vet/${consultationId}`)
   return { success: true }

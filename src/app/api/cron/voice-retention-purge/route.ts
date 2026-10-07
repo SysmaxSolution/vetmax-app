@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
+import { mensagemErro } from '@/lib/errors'
 // GET /api/cron/voice-retention-purge
 // Vercel Cron (diário) — LGPD Art. 16: anonimiza (NULL no texto cru) os eventos
 // de voz já processados após 180 dias, via rpc_purge_voice_correction_events.
@@ -16,7 +17,7 @@ export async function GET(request: NextRequest) {
   const { data, error } = await admin.rpc('rpc_purge_voice_correction_events', { p_retention_days: 180 })
 
   if (error) {
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: false, error: mensagemErro(error, 'app/api/cron/voice-retention-purge/route.ts') }, { status: 500 })
   }
 
   return NextResponse.json({ ok: true, purged: typeof data === 'number' ? data : data ?? 0 })

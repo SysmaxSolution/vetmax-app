@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import type { PatientSpecies } from '@/types'
 
+import { mensagemErro } from '@/lib/errors'
 export type BreedSuggestion = {
   id: string
   name: string
@@ -131,7 +132,7 @@ export async function createBreedIfMissing(
       .limit(1)
       .maybeSingle()
     if (retry) return { breed: retry as BreedSuggestion }
-    return { error: error.message }
+    return { error: mensagemErro(error, 'lib/actions/breeds.ts') }
   }
 
   return { breed: inserted as BreedSuggestion }

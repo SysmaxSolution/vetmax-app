@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
+import { mensagemErro } from '@/lib/errors'
 const BUCKET = 'training-videos'
 const SIGNED_TTL = 60 * 8 // 8 min — curto, renovável
 
@@ -103,7 +104,7 @@ export async function saveVideoProgress(videoId: string, watchedSeconds: number,
     completed, completed_at: completed ? new Date().toISOString() : null,
     updated_at: new Date().toISOString(),
   }, { onConflict: 'profile_id,video_id' })
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/training.ts') }
   return { ok: true, completed }
 }
 
@@ -140,7 +141,7 @@ export async function submitTrainingReport(reportType: 'request' | 'bug', messag
     clinic_id: c.clinicId, profile_id: c.userId, video_id: videoId ?? null,
     module_key: moduleKey ?? null, report_type: reportType, message: message.trim(),
   })
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/training.ts') }
   return { ok: true }
 }
 
@@ -204,7 +205,7 @@ export async function setTrainingModuleAccess(profileId: string, moduleKey: stri
   const { error } = await c.admin.from('training_module_access').upsert({
     clinic_id: c.clinicId, profile_id: profileId, module_key: moduleKey, can_view: canView, updated_at: new Date().toISOString(),
   }, { onConflict: 'profile_id,module_key' })
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/training.ts') }
   return { ok: true }
 }
 
@@ -213,6 +214,6 @@ export async function updateTrainingReportStatus(reportId: string, status: 'open
   if (!c) return { error: 'Não autenticado.' as const }
   if (c.role !== 'admin') return { error: 'Acesso restrito ao gestor.' as const }
   const { error } = await c.admin.from('training_reports').update({ status }).eq('id', reportId).eq('clinic_id', c.clinicId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/training.ts') }
   return { ok: true }
 }

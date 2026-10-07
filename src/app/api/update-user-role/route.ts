@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
+import { mensagemErro } from '@/lib/errors'
 const VALID_ROLES = ['admin', 'vet', 'assistant', 'receptionist', 'pharmacist'] as const
 type Role = typeof VALID_ROLES[number]
 
@@ -67,7 +68,7 @@ export async function POST(request: NextRequest) {
       .eq('clinic_id', callerProfile.clinic_id)
 
     if (error) {
-      return NextResponse.json({ error: `Erro ao atualizar role: ${error.message}` }, { status: 500 })
+      return NextResponse.json({ error: `Erro ao atualizar role: ${mensagemErro(error, 'app/api/update-user-role/route.ts')}` }, { status: 500 })
     }
 
     return NextResponse.json({ success: true, user_id: targetId, new_role: role })

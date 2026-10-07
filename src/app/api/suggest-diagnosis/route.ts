@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
+import { limitarPorIp } from '@/lib/api/rate-limit'
 
 const client = new Anthropic()
 
@@ -18,6 +19,9 @@ const CRT_LABELS: Record<string, string> = {
 }
 
 export async function POST(req: Request) {
+  const barrado = await limitarPorIp(req, { escopo: 'ia:diagnostico', limite: 20 })
+  if (barrado) return barrado
+
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()

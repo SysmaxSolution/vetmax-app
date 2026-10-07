@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server'
 import { authenticateAgent, sampleByBarcode } from '@/lib/lab/agent-auth'
+import { limitarPorIp } from '@/lib/api/rate-limit'
 
 // Worklist: o agente recebe o QRY do aparelho (barcode do tubo) e pergunta aqui
 // quais exames dosar. Retorna a amostra + exames (o agente monta o DSR).
 export async function POST(req: Request) {
+  const barrado = await limitarPorIp(req, { escopo: 'lab:worklist', limite: 120 })
+  if (barrado) return barrado
+
   const auth = await authenticateAgent(req)
   if (!auth) return NextResponse.json({ error: 'Token inválido ou Laboratório não ativado para esta clínica.' }, { status: 401 })
   let body: any

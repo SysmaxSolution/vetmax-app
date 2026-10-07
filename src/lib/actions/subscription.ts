@@ -20,6 +20,7 @@ import {
   asaasCycle,
 } from '@/lib/billing/asaas'
 import type { DummyPaymentPayload, SubscriptionOverview, AsaasCheckout, SubscriptionLead } from '@/lib/subscription/types'
+import { mensagemErro } from '@/lib/errors'
 import type {
   BillingCycle,
   BusinessType,
@@ -105,7 +106,7 @@ async function provisionAsaasCheckout(args: {
       })
       customerId = customer.id
     } catch (e) {
-      return { error: e instanceof Error ? e.message : 'Falha ao criar cliente no gateway.' }
+      return { error: e instanceof Error ? mensagemErro(e, 'lib/actions/subscription.ts') : 'Falha ao criar cliente no gateway.' }
     }
   }
 
@@ -132,7 +133,7 @@ async function provisionAsaasCheckout(args: {
     })
     subscriptionId = sub.id
   } catch (e) {
-    return { error: e instanceof Error ? e.message : 'Falha ao criar assinatura no gateway.' }
+    return { error: e instanceof Error ? mensagemErro(e, 'lib/actions/subscription.ts') : 'Falha ao criar assinatura no gateway.' }
   }
 
   // 3. Primeira cobrança → fatura hospedada (não-fatal se ainda não disponível).
@@ -347,7 +348,7 @@ export async function subscribeToPlan(input: {
       },
       { onConflict: 'clinic_id' }
     )
-  if (subError) return { error: 'Erro ao registrar assinatura: ' + subError.message }
+  if (subError) return { error: 'Erro ao registrar assinatura: ' + mensagemErro(subError, 'lib/actions/subscription.ts') }
 
   // Ativação de módulos (R6): NÃO ativa agora — nem PIX nem cartão. Os módulos
   // liberam só no PAYMENT_CONFIRMED (activatePaidSubscription no webhook). O
@@ -391,14 +392,14 @@ export async function downgradeToFree(): Promise<{ ok: true } | { error: string 
       },
       { onConflict: 'clinic_id' }
     )
-  if (subError) return { error: 'Erro ao alterar plano: ' + subError.message }
+  if (subError) return { error: 'Erro ao alterar plano: ' + mensagemErro(subError, 'lib/actions/subscription.ts') }
 
   // Desativa TODAS as contratadas (preserva histórico/contracted_at)
   const { error: deactivateError } = await admin
     .from('clinic_contracted_modules')
     .update({ is_active: false })
     .eq('clinic_id', ctx.clinicId)
-  if (deactivateError) return { error: 'Erro ao desativar módulos: ' + deactivateError.message }
+  if (deactivateError) return { error: 'Erro ao desativar módulos: ' + mensagemErro(deactivateError, 'lib/actions/subscription.ts') }
 
   const sync = await syncClinicModulesFromContract(admin, ctx.clinicId)
   if (sync.error) return { error: sync.error }
@@ -456,7 +457,7 @@ export async function updateSubscriptionPricing(input: {
       .from('subscription_module_catalog')
       .update({ monthly_price: mod.monthly_price, is_available: mod.is_available })
       .eq('module_key', mod.module_key)
-    if (error) return { error: `Erro ao salvar ${mod.module_key}: ` + error.message }
+    if (error) return { error: `Erro ao salvar ${mod.module_key}: ` + mensagemErro(error, 'lib/actions/subscription.ts') }
     const prev = oldPrice.get(mod.module_key)
     if (prev != null && Number(prev) !== Number(mod.monthly_price)) {
       auditRows.push({ scope: 'catalog_module', target_key: mod.module_key, old_value: prev, new_value: mod.monthly_price })
@@ -467,7 +468,7 @@ export async function updateSubscriptionPricing(input: {
     .from('subscription_plan_config')
     .update({ premium_base_price, enterprise_base_price, annual_discount_percent })
     .eq('id', 1)
-  if (cfgError) return { error: 'Erro ao salvar configuração de preços: ' + cfgError.message }
+  if (cfgError) return { error: 'Erro ao salvar configuração de preços: ' + mensagemErro(cfgError, 'lib/actions/subscription.ts') }
 
   for (const [key, oldV, newV] of [
     ['premium_base', Number(oldConfig?.premium_base_price), premium_base_price],
@@ -543,7 +544,7 @@ export async function requestSpecializedQuote(input: {
     message: input.message?.trim().slice(0, 2000) || null,
     status: 'new',
   })
-  if (error) return { error: 'Não foi possível registrar a solicitação: ' + error.message }
+  if (error) return { error: 'Não foi possível registrar a solicitação: ' + mensagemErro(error, 'lib/actions/subscription.ts') }
   return { ok: true }
 }
 
@@ -559,7 +560,7 @@ export async function listSubscriptionLeads(): Promise<{ leads: SubscriptionLead
     .select('id, clinic_id, contact_name, contact_email, contact_phone, desired_module_keys, estimate_monthly, message, status, created_at, clinics(name)')
     .order('created_at', { ascending: false })
     .limit(200)
-  if (error) return { error: 'Erro ao carregar leads: ' + error.message }
+  if (error) return { error: 'Erro ao carregar leads: ' + mensagemErro(error, 'lib/actions/subscription.ts') }
 
   const leads = (data ?? []).map((r: Record<string, unknown>) => ({
     id: r.id as string,
@@ -592,7 +593,7 @@ export async function updateLeadStatus(input: {
     .from('subscription_leads')
     .update({ status: input.status, handled_by: ctx.userId })
     .eq('id', input.leadId)
-  if (error) return { error: 'Erro ao atualizar lead: ' + error.message }
+  if (error) return { error: 'Erro ao atualizar lead: ' + mensagemErro(error, 'lib/actions/subscription.ts') }
   revalidatePath('/dashboard/management')
   return { ok: true }
 }
@@ -634,7 +635,7 @@ export async function setSpecializedPrice(input: {
       },
       { onConflict: 'clinic_id' }
     )
-  if (error) return { error: 'Erro ao definir preço: ' + error.message }
+  if (error) return { error: 'Erro ao definir preço: ' + mensagemErro(error, 'lib/actions/subscription.ts') }
 
   await writePriceAudit(admin, ctx, [{
     scope: 'specialized_clinic',

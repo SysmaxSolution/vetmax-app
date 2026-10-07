@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache'
 import type { DocumentTemplate, SaveTemplatePayload } from '@/types'
 import { logAudit } from './audit'
 
+import { mensagemErro } from '@/lib/errors'
 /**
  * Obter todos os templates de documentos da clínica
  * Filtra por clinic_id automaticamente via RLS
@@ -41,7 +42,7 @@ export async function getTemplates(): Promise<DocumentTemplate[] | { error: stri
     .eq('clinic_id', profile.clinic_id)
     .order('created_at', { ascending: false })
 
-  if (error) return { error: 'Erro ao buscar templates: ' + error.message }
+  if (error) return { error: 'Erro ao buscar templates: ' + mensagemErro(error, 'lib/actions/templates.ts') }
 
   return (data || []) as DocumentTemplate[]
 }
@@ -135,7 +136,7 @@ export async function saveTemplate(
     .single()
 
   if (error || !data) {
-    return { error: 'Erro ao salvar template: ' + (error?.message || 'desconhecido') }
+    return { error: 'Erro ao salvar template: ' + (mensagemErro(error, 'lib/actions/templates.ts') || 'desconhecido') }
   }
 
   await logAudit({ action: 'CREATE_TEMPLATE', entity_type: 'document_templates', entity_id: data.id, details: { name: payload.name, type: payload.type } })
@@ -173,7 +174,7 @@ export async function deleteTemplate(id: string): Promise<{ success: boolean } |
     .eq('id', id)
     .eq('clinic_id', profile.clinic_id)
 
-  if (error) return { error: 'Erro ao deletar template: ' + error.message }
+  if (error) return { error: 'Erro ao deletar template: ' + mensagemErro(error, 'lib/actions/templates.ts') }
 
   await logAudit({ action: 'DELETE_TEMPLATE', entity_type: 'document_templates', entity_id: id })
 
@@ -226,7 +227,7 @@ export async function updateTemplate(
     .single()
 
   if (error || !data) {
-    return { error: 'Erro ao atualizar template: ' + (error?.message || 'desconhecido') }
+    return { error: 'Erro ao atualizar template: ' + (mensagemErro(error, 'lib/actions/templates.ts') || 'desconhecido') }
   }
 
   await logAudit({ action: 'UPDATE_TEMPLATE', entity_type: 'document_templates', entity_id: data.id, details: { name: payload.name, type: payload.type } })

@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface BotConfig {
@@ -70,6 +71,6 @@ export async function saveBotConfig(
       updated_at:           new Date().toISOString(),
     }, { onConflict: 'clinic_id' })
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/whatsapp-bot.ts') }
   return { success: true }
 }

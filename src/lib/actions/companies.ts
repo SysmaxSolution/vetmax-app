@@ -10,6 +10,8 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
+import { zCpfCnpjPreservandoFormato } from '@/lib/validation/primitivos'
 export interface Company {
   id: string
   clinic_id: string
@@ -59,7 +61,7 @@ export async function listCompanies(): Promise<Company[] | { error: string }> {
     .select('id, clinic_id, code, name, legal_name, cnpj, municipal_registration, is_default, is_active, created_at, updated_at')
     .eq('clinic_id', ctx.clinic_id)
     .order('code', { ascending: true })
-  if (error) return { error: `Erro ao listar empresas: ${error.message}` }
+  if (error) return { error: `Erro ao listar empresas: ${mensagemErro(error, 'lib/actions/companies.ts')}` }
   return (data ?? []) as Company[]
 }
 
@@ -73,6 +75,15 @@ export async function upsertCompany(input: CompanyInput): Promise<{ id: string }
   if (!code) return { error: 'Informe o código da empresa (ex.: 001)' }
   if (name.length < 2) return { error: 'Nome deve ter ao menos 2 caracteres' }
 
+  // CNPJ é o documento que vai na NFS-e e no boleto. Sem conferir o dígito
+  // aqui, o erro só aparece como rejeição da prefeitura ou do banco, depois
+  // da nota já numerada. Preserva o formato gravado (produção usa máscara).
+  const cnpjInformado = input.cnpj?.trim() || null
+  if (cnpjInformado) {
+    const c = zCpfCnpjPreservandoFormato.safeParse(cnpjInformado)
+    if (!c.success) return { error: c.error.issues[0]?.message ?? 'CNPJ inválido.' }
+  }
+
   const admin = createAdminClient()
 
   // Só uma empresa padrão por clínica: se marcar esta como padrão, desmarca as outras.
@@ -85,7 +96,7 @@ export async function upsertCompany(input: CompanyInput): Promise<{ id: string }
     code,
     name,
     legal_name: input.legal_name?.trim() || null,
-    cnpj: input.cnpj?.trim() || null,
+    cnpj: cnpjInformado,
     municipal_registration: input.municipal_registration?.trim() || null,
     is_default: input.is_default === true,
     is_active: input.is_active !== false,
@@ -100,7 +111,7 @@ export async function upsertCompany(input: CompanyInput): Promise<{ id: string }
       .eq('clinic_id', ctx.clinic_id)
       .select('id')
       .single()
-    if (error) return { error: `Erro ao atualizar: ${error.message}` }
+    if (error) return { error: `Erro ao atualizar: ${mensagemErro(error, 'lib/actions/companies.ts')}` }
     revalidatePath('/dashboard/management')
     return { id: data.id as string }
   }
@@ -112,7 +123,7 @@ export async function upsertCompany(input: CompanyInput): Promise<{ id: string }
     .single()
   if (error) {
     if (error.code === '23505') return { error: `Já existe uma empresa com o código ${code}` }
-    return { error: `Erro ao criar: ${error.message}` }
+    return { error: `Erro ao criar: ${mensagemErro(error, 'lib/actions/companies.ts')}` }
   }
   revalidatePath('/dashboard/management')
   return { id: data.id as string }
@@ -128,7 +139,7 @@ export async function setCompanyActive(id: string, is_active: boolean): Promise<
     .update({ is_active, updated_at: new Date().toISOString() })
     .eq('id', id)
     .eq('clinic_id', ctx.clinic_id)
-  if (error) return { error: `Erro: ${error.message}` }
+  if (error) return { error: `Erro: ${mensagemErro(error, 'lib/actions/companies.ts')}` }
   revalidatePath('/dashboard/management')
   return { ok: true }
 }

@@ -22,6 +22,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 // síncronos não são permitidos aqui). Reexportados via funções quando preciso.
 import { FOCUS_NFE_ENDPOINTS, focusNfsePath } from '@/lib/billing/nfse-focus'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
 export interface FiscalConfig {
@@ -227,7 +228,7 @@ export async function upsertFiscalConfig(
   const { error } = await admin
     .from('clinic_fiscal_config')
     .upsert(patch, { onConflict: 'clinic_id' })
-  if (error) return { error: 'Erro ao salvar configuração fiscal: ' + error.message }
+  if (error) return { error: 'Erro ao salvar configuração fiscal: ' + mensagemErro(error, 'lib/actions/nfse.ts') }
 
   return { success: true }
 }
@@ -381,7 +382,7 @@ export async function upsertCompanyFiscalConfig(
   const { error } = await admin
     .from('company_fiscal_config')
     .upsert(patch, { onConflict: 'company_id' })
-  if (error) return { error: 'Erro ao salvar configuração fiscal da empresa: ' + error.message }
+  if (error) return { error: 'Erro ao salvar configuração fiscal da empresa: ' + mensagemErro(error, 'lib/actions/nfse.ts') }
   return { success: true }
 }
 
@@ -620,7 +621,7 @@ export async function emitNfse(
       cache:   'no-store',
     })
   } catch (e) {
-    return { error: 'Falha de rede ao contatar o provedor de NFS-e: ' + (e instanceof Error ? e.message : 'erro'), payload }
+    return { error: 'Falha de rede ao contatar o provedor de NFS-e: ' + (e instanceof Error ? mensagemErro(e, 'lib/actions/nfse.ts') : 'erro'), payload }
   }
 
   let body: any = null
@@ -671,7 +672,7 @@ export async function consultNfse(
   try {
     res = await fetch(targetUrl, { method: 'GET', headers: { Authorization: authHeader }, cache: 'no-store' })
   } catch (e) {
-    return { error: 'Falha de rede ao consultar a NFS-e: ' + (e instanceof Error ? e.message : 'erro') }
+    return { error: 'Falha de rede ao consultar a NFS-e: ' + (e instanceof Error ? mensagemErro(e, 'lib/actions/nfse.ts') : 'erro') }
   }
   let body: any = null
   try { body = await res.json() } catch { /* */ }

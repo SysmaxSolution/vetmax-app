@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
 /**
@@ -75,7 +76,7 @@ export async function listClinicalVitals(hospitalizationId: string): Promise<Cli
     .order('recorded_at', { ascending: false })
     .limit(200)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/vitals.ts') }
   return (data ?? []).map((r): ClinicalVital => ({
     id:             r.id as string,
     recorded_at:    r.recorded_at as string,
@@ -136,7 +137,7 @@ export async function recordClinicalVital(payload: RecordVitalPayload): Promise<
     .select('id')
     .single()
 
-  if (error) return { error: 'Erro ao registrar sinais vitais: ' + error.message }
+  if (error) return { error: 'Erro ao registrar sinais vitais: ' + mensagemErro(error, 'lib/actions/vitals.ts') }
   revalidatePath('/dashboard/hospitalization')
   return { id: data.id as string }
 }

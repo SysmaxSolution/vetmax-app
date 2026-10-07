@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 
+import { mensagemErro } from '@/lib/errors'
 export async function POST(request: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -30,7 +31,7 @@ export async function POST(request: Request) {
       triage_required_fields: triage_required_fields ?? ['weight', 'temperature', 'chief_complaint'],
     }, { onConflict: 'clinic_id' })
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return NextResponse.json({ error: mensagemErro(error, 'app/api/update-required-fields/route.ts') }, { status: 500 })
 
   return NextResponse.json({ success: true })
 }

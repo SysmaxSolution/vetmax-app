@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache'
 import { logAudit } from '@/lib/actions/audit'
 import { hasAccessRight } from '@/lib/actions/access-rights'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
 export interface ServiceItem {
@@ -88,7 +89,7 @@ export async function searchServices(query: string): Promise<ServiceItem[] | { e
   }
 
   const { data, error } = await qb
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/services.ts') }
   return (data ?? []).map((row): ServiceItem => ({
     id:            row.id as string,
     name:          row.name as string,
@@ -200,7 +201,7 @@ export async function addServiceToConsultation(
     .select('id')
     .single()
 
-  if (error) return { error: 'Erro ao adicionar serviço: ' + error.message }
+  if (error) return { error: 'Erro ao adicionar serviço: ' + mensagemErro(error, 'lib/actions/services.ts') }
 
   // Auditoria CFMV — quem lançou o serviço, quando, com que preço/qty/stage.
   await logAudit({
@@ -255,7 +256,7 @@ export async function cancelConsultationService(
     .eq('clinic_id', ctx.clinicId)
     .is('cancelled_at', null)   // não re-cancela
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/services.ts') }
 
   if (lineBefore) {
     await logAudit({
@@ -321,7 +322,7 @@ export async function updateConsultationServicePrice(input: {
     .update({ price_snapshot: input.new_price, updated_at: new Date().toISOString() })
     .eq('id', input.service_line_id)
     .eq('clinic_id', ctx.clinicId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/services.ts') }
 
   await logAudit({
     action:      'CONSULTATION_SERVICE_PRICE_UPDATE',
@@ -360,7 +361,7 @@ export async function listConsultationServices(
     .eq('consultation_id', consultationId)
     .order('created_at', { ascending: true })
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/services.ts') }
   return (data ?? []).map((row): ConsultationServiceLine => ({
     id:              row.id as string,
     consultation_id: row.consultation_id as string,
@@ -399,7 +400,7 @@ export async function hasActiveConsultationService(
     .eq('consultation_id', consultationId)
     .is('cancelled_at', null)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/services.ts') }
   return { has: (count ?? 0) > 0 }
 }
 
@@ -467,7 +468,7 @@ export async function createQuickService(input: {
 
   if (error) {
     if (error.code === '23505') return { error: 'Já existe um item com esse nome.' }
-    return { error: 'Erro ao cadastrar item: ' + error.message }
+    return { error: 'Erro ao cadastrar item: ' + mensagemErro(error, 'lib/actions/services.ts') }
   }
 
   revalidatePath('/dashboard/pharmacy')

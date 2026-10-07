@@ -5,6 +5,9 @@ import { createClient } from '@/lib/supabase/server'
 import { getTenantCtx } from '@/lib/data/context'
 import { fetchSicoobExtrato } from '@/lib/integrations/sicoob'
 
+import { mensagemErro } from '@/lib/errors'
+import { valida } from '@/lib/validation/primitivos'
+import { EsquemaCriarTitulo, EsquemaAtualizarTitulo, EsquemaBaixarTitulo } from '@/lib/validation/financeiro'
 // ─── Types base (G-09) ────────────────────────────────────────────────────────
 
 export type EntryType   = 'receivable' | 'payable'
@@ -256,9 +259,12 @@ export async function createEntry(
   const clinicId = await getClinicId()
   if (!clinicId) return { error: 'Clínica não encontrada.' }
 
-  if (!data.description?.trim()) return { error: 'Descrição obrigatória.' }
-  if (!data.amount || data.amount <= 0) return { error: 'Valor deve ser positivo.' }
-  if (!data.due_date) return { error: 'Data de vencimento obrigatória.' }
+  // Antes daqui só se conferia description/amount/due_date. Passavam NaN,
+  // valor com 3 casas (centavo fantasma no livro), data inexistente, uuid
+  // malformado e desconto maior que o título.
+  const v = valida(EsquemaCriarTitulo, data)
+  if ('error' in v) return v
+  data = v.dados as CreateEntryData
 
   const admin = createAdminClient()
   const { data: entry, error } = await admin
@@ -292,7 +298,7 @@ export async function createEntry(
     .select(ENTRY_SELECT)
     .single()
 
-  if (error) return { error: 'Erro ao criar título: ' + error.message }
+  if (error) return { error: 'Erro ao criar título: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return mapEntry(entry as unknown as Record<string, unknown>)
 }
 
@@ -329,7 +335,7 @@ export async function listEntries(
   if (filters.paid_to)   query = query.lte('payment_date', filters.paid_to)
 
   const { data, error } = await query.limit(500)
-  if (error) return { error: 'Erro ao buscar títulos: ' + error.message }
+  if (error) return { error: 'Erro ao buscar títulos: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return (data ?? []).map(row => mapEntry(row as unknown as Record<string, unknown>))
 }
 
@@ -470,6 +476,11 @@ export async function updateEntry(
   const clinicId = await getClinicId()
   if (!clinicId) return { error: 'Não autenticado.' }
 
+  // Edição não revalidava nada: dava para trocar o valor de um título por NaN.
+  const v = valida(EsquemaAtualizarTitulo, data)
+  if ('error' in v) return v
+  data = v.dados as Partial<CreateEntryData>
+
   const updates: Record<string, unknown> = {}
   if (data.description          !== undefined) updates.description          = data.description.trim()
   if (data.amount               !== undefined) updates.amount               = data.amount
@@ -491,7 +502,7 @@ export async function updateEntry(
     .eq('id', id)
     .eq('clinic_id', clinicId)
 
-  if (error) return { error: 'Erro ao atualizar título: ' + error.message }
+  if (error) return { error: 'Erro ao atualizar título: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return {}
 }
 
@@ -522,7 +533,7 @@ export async function deleteEntry(
     .eq('id', id)
     .eq('clinic_id', clinicId)
 
-  if (error) return { error: 'Erro ao excluir título: ' + error.message }
+  if (error) return { error: 'Erro ao excluir título: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return {}
 }
 
@@ -577,7 +588,7 @@ export async function reverseFinancialEntry(
       .eq('id', id)
       .eq('clinic_id', clinicId)
 
-    if (updErr) return { error: 'Erro ao estornar título: ' + updErr.message }
+    if (updErr) return { error: 'Erro ao estornar título: ' + mensagemErro(updErr, 'lib/actions/financial.ts') }
 
     // Lança débito no extrato bancário (estorno do crédito original)
     if (prevBankId && prevPayDate) {
@@ -621,8 +632,9 @@ export async function baixarTitulo(
   id: string,
   data: BaixarTituloData
 ): Promise<{ error?: string }> {
-  if (!data.payment_date)   return { error: 'Data de recebimento obrigatória.' }
-  if (!data.payment_method) return { error: 'Modalidade de recebimento obrigatória.' }
+  const v = valida(EsquemaBaixarTitulo, data)
+  if ('error' in v) return v
+  data = v.dados as BaixarTituloData
 
   const clinicId = await getClinicId()
   if (!clinicId) return { error: 'Não autenticado.' }
@@ -675,7 +687,7 @@ export async function baixarTitulo(
       })
       .eq('id', id)
       .eq('clinic_id', clinicId)
-    if (updErr) return { error: 'Erro ao atualizar saldo do título: ' + updErr.message }
+    if (updErr) return { error: 'Erro ao atualizar saldo do título: ' + mensagemErro(updErr, 'lib/actions/financial.ts') }
 
     // 2) Cria entry filho paid com a baixa
     await admin
@@ -745,7 +757,7 @@ export async function baixarTitulo(
     .eq('clinic_id', clinicId)
     .eq('status', 'pending')
 
-  if (error) return { error: 'Erro ao baixar título: ' + error.message }
+  if (error) return { error: 'Erro ao baixar título: ' + mensagemErro(error, 'lib/actions/financial.ts') }
 
   // Lança crédito no extrato bancário
   if (data.settlement_bank_id) {
@@ -864,7 +876,7 @@ export async function listBankAccounts(): Promise<BankAccount[] | { error: strin
     .order('is_default', { ascending: false })
     .order('name')
 
-  if (error) return { error: 'Erro ao buscar contas: ' + error.message }
+  if (error) return { error: 'Erro ao buscar contas: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return (data ?? []) as BankAccount[]
 }
 
@@ -893,7 +905,7 @@ export async function createBankAccount(
     .select('id, clinic_id, name, bank_name, bank_code, ispb, agency, account, pix_key, is_default, balance, initial_balance, created_at')
     .single()
 
-  if (error) return { error: 'Erro ao criar conta: ' + error.message }
+  if (error) return { error: 'Erro ao criar conta: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return row as BankAccount
 }
 
@@ -922,7 +934,7 @@ export async function updateBankAccount(
     .eq('id', id)
     .eq('clinic_id', clinicId)
 
-  if (error) return { error: 'Erro ao atualizar conta: ' + error.message }
+  if (error) return { error: 'Erro ao atualizar conta: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return {}
 }
 
@@ -937,7 +949,7 @@ export async function deleteBankAccount(id: string): Promise<{ error?: string }>
     .eq('id', id)
     .eq('clinic_id', clinicId)
 
-  if (error) return { error: 'Erro ao excluir conta: ' + error.message }
+  if (error) return { error: 'Erro ao excluir conta: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return {}
 }
 
@@ -955,7 +967,7 @@ export async function listChartOfAccounts(): Promise<ChartOfAccount[] | { error:
     .eq('is_active', true)
     .order('code')
 
-  if (error) return { error: 'Erro ao buscar plano de contas: ' + error.message }
+  if (error) return { error: 'Erro ao buscar plano de contas: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return (data ?? []) as ChartOfAccount[]
 }
 
@@ -982,7 +994,7 @@ export async function createChartOfAccount(
     .select('id, clinic_id, code, name, type, parent_id, is_system, is_active, created_at')
     .single()
 
-  if (error) return { error: 'Erro ao criar conta: ' + error.message }
+  if (error) return { error: 'Erro ao criar conta: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return row as ChartOfAccount
 }
 
@@ -1019,7 +1031,7 @@ export async function updateChartOfAccount(
     .select('id, clinic_id, code, name, type, parent_id, is_system, is_active, created_at')
     .single()
 
-  if (error) return { error: 'Erro ao atualizar conta: ' + error.message }
+  if (error) return { error: 'Erro ao atualizar conta: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return row as ChartOfAccount
 }
 
@@ -1044,7 +1056,7 @@ export async function deleteChartOfAccount(id: string): Promise<{ error?: string
     .eq('id', id)
     .eq('clinic_id', clinicId)
 
-  if (error) return { error: 'Erro ao desativar conta: ' + error.message }
+  if (error) return { error: 'Erro ao desativar conta: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return {}
 }
 
@@ -1134,7 +1146,7 @@ export async function replicateDefaultChartOfAccounts(): Promise<
         .insert({ clinic_id: clinicId, code: root.code, name: root.name, type: root.type, parent_id: null, is_system: false })
         .select('id')
         .single()
-      if (error || !newRoot) return { error: `Erro ao criar conta raiz ${root.code}: ${error?.message}` }
+      if (error || !newRoot) return { error: `Erro ao criar conta raiz ${root.code}: ${mensagemErro(error, 'lib/actions/financial.ts')}` }
       parentId = newRoot.id as string
       existingByCode.set(root.code, parentId)
       created++
@@ -1147,7 +1159,7 @@ export async function replicateDefaultChartOfAccounts(): Promise<
       const { error } = await admin
         .from('chart_of_accounts')
         .insert({ clinic_id: clinicId, code: child.code, name: child.name, type: child.type, parent_id: parentId, is_system: false })
-      if (error) return { error: `Erro ao criar conta ${child.code}: ${error.message}` }
+      if (error) return { error: `Erro ao criar conta ${child.code}: ${mensagemErro(error, 'lib/actions/financial.ts')}` }
       created++
     }
   }
@@ -1168,7 +1180,7 @@ export async function listCreditCards(): Promise<CreditCard[] | { error: string 
     .eq('clinic_id', clinicId)
     .order('name')
 
-  if (error) return { error: 'Erro ao buscar cartões: ' + error.message }
+  if (error) return { error: 'Erro ao buscar cartões: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return (data ?? []) as CreditCard[]
 }
 
@@ -1198,7 +1210,7 @@ export async function createCreditCard(
     .select('id, clinic_id, name, administrator, brand, type, installments_max, fee_percent, days_to_receive, requires_nsu, is_active, created_at, interest_percent, interest_amount')
     .single()
 
-  if (error) return { error: 'Erro ao criar cartão: ' + error.message }
+  if (error) return { error: 'Erro ao criar cartão: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return row as CreditCard
 }
 
@@ -1228,7 +1240,7 @@ export async function updateCreditCard(
     .eq('id', id)
     .eq('clinic_id', clinicId)
 
-  if (error) return { error: 'Erro ao atualizar cartão: ' + error.message }
+  if (error) return { error: 'Erro ao atualizar cartão: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return {}
 }
 
@@ -1243,7 +1255,7 @@ export async function deleteCreditCard(id: string): Promise<{ error?: string }> 
     .eq('id', id)
     .eq('clinic_id', clinicId)
 
-  if (error) return { error: 'Erro ao excluir cartão: ' + error.message }
+  if (error) return { error: 'Erro ao excluir cartão: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return {}
 }
 
@@ -1264,7 +1276,7 @@ export async function listEmployees(inclueSalary = false): Promise<Employee[] | 
     .eq('clinic_id', ctx.clinicId)
     .order('name')
 
-  if (error) return { error: 'Erro ao buscar funcionários: ' + error.message }
+  if (error) return { error: 'Erro ao buscar funcionários: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return (data ?? []) as unknown as Employee[]
 }
 
@@ -1296,7 +1308,7 @@ export async function createEmployee(
     .select('id, clinic_id, user_id, name, role, email, phone, cpf, address, hire_date, salary, pix_key, vacation_days, is_active, created_at, updated_at')
     .single()
 
-  if (error) return { error: 'Erro ao criar funcionário: ' + error.message }
+  if (error) return { error: 'Erro ao criar funcionário: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return row as Employee
 }
 
@@ -1328,7 +1340,7 @@ export async function updateEmployee(
     .eq('id', id)
     .eq('clinic_id', ctx.clinicId)
 
-  if (error) return { error: 'Erro ao atualizar funcionário: ' + error.message }
+  if (error) return { error: 'Erro ao atualizar funcionário: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return {}
 }
 
@@ -1344,7 +1356,7 @@ export async function deleteEmployee(id: string): Promise<{ error?: string }> {
     .eq('id', id)
     .eq('clinic_id', ctx.clinicId)
 
-  if (error) return { error: 'Erro ao desativar funcionário: ' + error.message }
+  if (error) return { error: 'Erro ao desativar funcionário: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return {}
 }
 
@@ -1485,7 +1497,7 @@ export async function getExtrato(
     .order('date', { ascending: true })
     .order('imported_at', { ascending: true })
 
-  if (error) return { error: 'Erro ao buscar extrato: ' + error.message }
+  if (error) return { error: 'Erro ao buscar extrato: ' + mensagemErro(error, 'lib/actions/financial.ts') }
 
   const statements = (data ?? []) as BankStatement[]
   const total_entradas = statements.filter(s => s.type === 'credit').reduce((acc, s) => acc + s.amount, 0)
@@ -1558,7 +1570,7 @@ export async function importStatements(
     .select('id, clinic_id, bank_account_id, source, imported_at, total_records, matched_count, status')
     .single()
 
-  if (batchError) return { error: 'Erro ao criar lote: ' + batchError.message }
+  if (batchError) return { error: 'Erro ao criar lote: ' + mensagemErro(batchError, 'lib/actions/financial.ts') }
 
   // Insere os lançamentos
   const rows = data.statements.map(s => ({
@@ -1576,7 +1588,7 @@ export async function importStatements(
     .from('bank_statements')
     .insert(rows)
 
-  if (insertError) return { error: 'Erro ao inserir lançamentos: ' + insertError.message }
+  if (insertError) return { error: 'Erro ao inserir lançamentos: ' + mensagemErro(insertError, 'lib/actions/financial.ts') }
 
   return batch as ReconciliationBatch
 }
@@ -1597,7 +1609,7 @@ export async function reconcileStatements(
     .eq('id', statementId)
     .eq('clinic_id', clinicId)
 
-  if (error) return { error: 'Erro ao conciliar: ' + error.message }
+  if (error) return { error: 'Erro ao conciliar: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return {}
 }
 
@@ -1619,7 +1631,7 @@ export async function listBatches(
   if (bank_account_id) query = query.eq('bank_account_id', bank_account_id)
 
   const { data, error } = await query.limit(50)
-  if (error) return { error: 'Erro ao buscar lotes: ' + error.message }
+  if (error) return { error: 'Erro ao buscar lotes: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return (data ?? []) as ReconciliationBatch[]
 }
 
@@ -1639,7 +1651,7 @@ export async function listBatchStatements(
     .eq('import_batch_id', batch_id)
     .order('date', { ascending: true })
 
-  if (error) return { error: 'Erro ao buscar lançamentos: ' + error.message }
+  if (error) return { error: 'Erro ao buscar lançamentos: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return (data ?? []) as BankStatement[]
 }
 
@@ -1961,7 +1973,7 @@ export async function linkEntriesToStatement(statementId: string, entryIds: stri
   const rows = entryIds.map(entry_id => ({ clinic_id: clinicId, statement_id: statementId, entry_id }))
   const { error } = await admin.from('bank_statement_entry_links')
     .upsert(rows, { onConflict: 'statement_id,entry_id', ignoreDuplicates: true })
-  if (error) return { error: 'Erro ao vincular: ' + error.message }
+  if (error) return { error: 'Erro ao vincular: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return { ok: true, linked: entryIds.length }
 }
 
@@ -1972,7 +1984,7 @@ export async function unlinkEntry(statementId: string, entryId: string): Promise
   const admin = createAdminClient()
   const { error } = await admin.from('bank_statement_entry_links').delete()
     .eq('clinic_id', clinicId).eq('statement_id', statementId).eq('entry_id', entryId)
-  if (error) return { error: 'Erro ao desvincular: ' + error.message }
+  if (error) return { error: 'Erro ao desvincular: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   const { data: rest } = await admin.from('bank_statement_entry_links')
     .select('id').eq('clinic_id', clinicId).eq('statement_id', statementId).limit(1)
   if (!rest || rest.length === 0) {
@@ -1988,7 +2000,7 @@ export async function unlinkStatement(statementId: string): Promise<{ error?: st
   const admin = createAdminClient()
   await admin.from('bank_statement_entry_links').delete().eq('clinic_id', clinicId).eq('statement_id', statementId)
   const { error } = await admin.from('bank_statements').update({ reconciled_at: null }).eq('id', statementId).eq('clinic_id', clinicId)
-  if (error) return { error: 'Erro ao desvincular: ' + error.message }
+  if (error) return { error: 'Erro ao desvincular: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return {}
 }
 
@@ -2007,7 +2019,7 @@ export async function reconcileLines(statementIds: string[]): Promise<{ ok: true
   const now = new Date().toISOString()
   const { error } = await admin.from('bank_statements')
     .update({ reconciled_at: now }).in('id', toRec).eq('clinic_id', clinicId).is('reconciled_at', null)
-  if (error) return { error: 'Erro ao conciliar: ' + error.message }
+  if (error) return { error: 'Erro ao conciliar: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return { ok: true, reconciled: toRec.length }
 }
 
@@ -2018,7 +2030,7 @@ export async function unreconcileLine(statementId: string): Promise<{ error?: st
   const admin = createAdminClient()
   const { error } = await admin.from('bank_statements')
     .update({ reconciled_at: null }).eq('id', statementId).eq('clinic_id', clinicId)
-  if (error) return { error: 'Erro ao desconciliar: ' + error.message }
+  if (error) return { error: 'Erro ao desconciliar: ' + mensagemErro(error, 'lib/actions/financial.ts') }
   return {}
 }
 
@@ -2063,10 +2075,10 @@ export async function settleOpenEntryAndLink(params: {
   const { error: upErr } = await admin.from('financial_entries')
     .update({ status: 'paid', payment_date: params.payment_date, settlement_bank_id: params.bank_account_id, updated_at: new Date().toISOString() })
     .eq('id', params.entry_id).eq('clinic_id', clinicId).eq('status', 'pending')
-  if (upErr) return { error: 'Erro ao baixar título: ' + upErr.message }
+  if (upErr) return { error: 'Erro ao baixar título: ' + mensagemErro(upErr, 'lib/actions/financial.ts') }
   const { error: linkErr } = await admin.from('bank_statement_entry_links')
     .upsert({ clinic_id: clinicId, statement_id: params.statement_id, entry_id: params.entry_id }, { onConflict: 'statement_id,entry_id', ignoreDuplicates: true })
-  if (linkErr) return { error: 'Erro ao vincular: ' + linkErr.message }
+  if (linkErr) return { error: 'Erro ao vincular: ' + mensagemErro(linkErr, 'lib/actions/financial.ts') }
   return {}
 }
 
@@ -2100,11 +2112,11 @@ export async function insertEntryFromStatement(params: {
     settlement_bank_id: params.bank_account_id,
     created_by: user?.id ?? null,
   }).select('id').single()
-  if (feErr || !fe) return { error: 'Falha ao inserir título: ' + (feErr?.message ?? '') }
+  if (feErr || !fe) return { error: 'Falha ao inserir título: ' + ((feErr ? mensagemErro(feErr, 'lib/actions/financial.ts') : '')) }
 
   const { error: linkErr } = await admin.from('bank_statement_entry_links')
     .insert({ clinic_id: clinicId, statement_id: params.statement_id, entry_id: fe.id })
-  if (linkErr) return { error: 'Título criado, mas falha ao vincular: ' + linkErr.message }
+  if (linkErr) return { error: 'Título criado, mas falha ao vincular: ' + mensagemErro(linkErr, 'lib/actions/financial.ts') }
   return { ok: true, entry_id: fe.id }
 }
 
@@ -2265,7 +2277,7 @@ export async function importBankStatementFromSicoob(params: {
 
   let res: { statements: { date: string; amount: number; description: string; type: 'credit' | 'debit'; external_id?: string }[]; warnings: string[] }
   try { res = await fetchSicoobExtrato({ conta, start_date: params.start_date, end_date: params.end_date, config: resolucao.config }) }
-  catch (e) { return { error: `Sicoob: ${(e as Error).message}` } }
+  catch (e) { return { error: `Sicoob: ${mensagemErro(e, 'lib/actions/financial.ts')}` } }
   if (!res.statements.length) return { error: `Nenhum lançamento retornado pelo Sicoob no período.${res.warnings.length ? ' (' + res.warnings.join(' · ') + ')' : ''}` }
 
   const imp = await importStatements({ bank_account_id: params.bank_account_id, source: 'sicoob_api', statements: res.statements })

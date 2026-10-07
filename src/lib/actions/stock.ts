@@ -64,7 +64,7 @@ export async function getPharmacyStock(): Promise<StockItem[] | { error: string 
     .eq('clinic_id', ctx.clinic_id)
     .order('medication_name', { ascending: true })
 
-  if (error) return { error: 'Erro ao buscar estoque: ' + error.message }
+  if (error) return { error: 'Erro ao buscar estoque: ' + mensagemErro(error, 'lib/actions/stock.ts') }
   return (data ?? []) as StockItem[]
 }
 
@@ -78,7 +78,7 @@ export async function getLowStockItems(): Promise<StockItem[] | { error: string 
     .select('id, clinic_id, medication_name, quantity, unit, min_stock_level, last_restock, created_at, updated_at')
     .eq('clinic_id', ctx.clinic_id)
 
-  if (error) return { error: 'Erro ao buscar alertas: ' + error.message }
+  if (error) return { error: 'Erro ao buscar alertas: ' + mensagemErro(error, 'lib/actions/stock.ts') }
   return ((data ?? []) as StockItem[]).filter(item => Number(item.quantity) < Number(item.min_stock_level))
 }
 
@@ -107,7 +107,7 @@ export async function getStockMovements(stockItemId?: string): Promise<StockMove
   if (stockItemId) query = query.eq('stock_item_id', stockItemId)
 
   const { data, error } = await query
-  if (error) return { error: 'Erro ao buscar movimentações: ' + error.message }
+  if (error) return { error: 'Erro ao buscar movimentações: ' + mensagemErro(error, 'lib/actions/stock.ts') }
   return (data ?? []) as StockMovement[]
 }
 
@@ -140,7 +140,7 @@ export async function addStockItem(input: {
 
   if (error) {
     if (error.code === '23505') return { error: 'Medicamento já cadastrado no estoque.' }
-    return { error: 'Erro ao cadastrar medicamento: ' + error.message }
+    return { error: 'Erro ao cadastrar medicamento: ' + mensagemErro(error, 'lib/actions/stock.ts') }
   }
 
   // Registra movimento inicial
@@ -197,7 +197,7 @@ export async function restockItem(
     .eq('id', stockItemId)
     .eq('clinic_id', ctx.clinic_id)
 
-  if (updateErr) return { error: 'Erro ao repor estoque: ' + updateErr.message }
+  if (updateErr) return { error: 'Erro ao repor estoque: ' + mensagemErro(updateErr, 'lib/actions/stock.ts') }
 
   await admin.from('stock_movements').insert({
     clinic_id:       ctx.clinic_id,
@@ -251,7 +251,7 @@ export async function adjustStockItem(
     .eq('id', stockItemId)
     .eq('clinic_id', ctx.clinic_id)
 
-  if (error) return { error: 'Erro ao ajustar estoque: ' + error.message }
+  if (error) return { error: 'Erro ao ajustar estoque: ' + mensagemErro(error, 'lib/actions/stock.ts') }
 
   await admin.from('stock_movements').insert({
     clinic_id:       ctx.clinic_id,
@@ -294,7 +294,7 @@ export async function deleteStockItem(stockItemId: string): Promise<{ success: t
     .eq('id', stockItemId)
     .eq('clinic_id', ctx.clinic_id)
 
-  if (error) return { error: 'Erro ao remover item: ' + error.message }
+  if (error) return { error: 'Erro ao remover item: ' + mensagemErro(error, 'lib/actions/stock.ts') }
 
   await logAudit({
     action: 'STOCK_DELETE_ITEM',
@@ -310,6 +310,7 @@ export async function deleteStockItem(stockItemId: string): Promise<{ success: t
 // ─── Funções para tabela stock_items ─────────────────────────────────────────
 
 import type { StockCategory } from '@/lib/stock-constants'
+import { mensagemErro } from '@/lib/errors'
 // ATENÇÃO (HF 05/06): NUNCA re-exporte tipos (`export type { X } from ...`)
 // de um arquivo 'use server' — o Turbopack registra todo export como server
 // action em runtime e o re-export vira ReferenceError, derrubando TODAS as
@@ -384,7 +385,7 @@ export async function getPharmacyStockV2(): Promise<StockItemV2[] | { error: str
     .is('archived_at', null)
     .order('name', { ascending: true })
 
-  if (error) return { error: 'Erro ao buscar estoque: ' + error.message }
+  if (error) return { error: 'Erro ao buscar estoque: ' + mensagemErro(error, 'lib/actions/stock.ts') }
   return (data ?? []) as StockItemV2[]
 }
 
@@ -399,7 +400,7 @@ export async function getLowStockItemsV2(): Promise<StockItemV2[] | { error: str
     .is('archived_at', null)
     .order('name', { ascending: true })
 
-  if (error) return { error: 'Erro ao buscar alertas: ' + error.message }
+  if (error) return { error: 'Erro ao buscar alertas: ' + mensagemErro(error, 'lib/actions/stock.ts') }
   return ((data ?? []) as StockItemV2[]).filter(item => Number(item.quantity) <= Number(item.min_quantity))
 }
 
@@ -495,7 +496,7 @@ export async function addStockItemV2(input: {
 
   if (error) {
     if (error.code === '23505') return { error: 'Item já cadastrado no estoque.' }
-    return { error: 'Erro ao cadastrar item: ' + error.message }
+    return { error: 'Erro ao cadastrar item: ' + mensagemErro(error, 'lib/actions/stock.ts') }
   }
 
   // Retroalimentação FIFO: item com saldo inicial já nasce com seu 1º lote.
@@ -570,7 +571,7 @@ export async function updateStockItemV2(
     .select(STOCK_V2_FIELDS)
     .single()
 
-  if (error) return { error: 'Erro ao atualizar item: ' + error.message }
+  if (error) return { error: 'Erro ao atualizar item: ' + mensagemErro(error, 'lib/actions/stock.ts') }
 
   revalidatePath('/dashboard/pharmacy')
   return data as StockItemV2
@@ -629,7 +630,7 @@ export async function restockItemV2(
     .eq('id', itemId)
     .eq('clinic_id', ctx.clinic_id)
 
-  if (error) return { error: 'Erro ao repor estoque: ' + error.message }
+  if (error) return { error: 'Erro ao repor estoque: ' + mensagemErro(error, 'lib/actions/stock.ts') }
 
   await admin.from('stock_movements').insert({
     clinic_id:       ctx.clinic_id,
@@ -674,7 +675,7 @@ export async function adjustStockItemV2(
     .eq('id', itemId)
     .eq('clinic_id', ctx.clinic_id)
 
-  if (error) return { error: 'Erro ao ajustar estoque: ' + error.message }
+  if (error) return { error: 'Erro ao ajustar estoque: ' + mensagemErro(error, 'lib/actions/stock.ts') }
 
   await admin.from('stock_movements').insert({
     clinic_id:       ctx.clinic_id,
@@ -710,7 +711,7 @@ export async function deleteStockItemV2(itemId: string): Promise<{ success: true
     .eq('clinic_id', ctx.clinic_id)
     .is('archived_at', null)
 
-  if (error) return { error: 'Erro ao remover item: ' + error.message }
+  if (error) return { error: 'Erro ao remover item: ' + mensagemErro(error, 'lib/actions/stock.ts') }
 
   revalidatePath('/dashboard/pharmacy')
   return { success: true }
@@ -765,7 +766,7 @@ export async function bulkImportStockItems(
       last_restock:  !row.is_service && row.quantity > 0 ? new Date().toISOString() : null,
     })
     if (error?.code === '23505') skipped++  // duplicata
-    else if (error) return { error: `Erro em "${row.name}": ${error.message}` }
+    else if (error) return { error: `Erro em "${row.name}": ${mensagemErro(error, 'lib/actions/stock.ts')}` }
     else inserted++
   }
 
@@ -802,7 +803,7 @@ export async function dispenseStockItem(
     .eq('id', stockItemId)
     .eq('clinic_id', ctx.clinic_id)
 
-  if (error) return { error: 'Erro ao dispensar: ' + error.message }
+  if (error) return { error: 'Erro ao dispensar: ' + mensagemErro(error, 'lib/actions/stock.ts') }
 
   revalidatePath('/dashboard/pharmacy')
   return { success: true, new_quantity: qtyAfter }

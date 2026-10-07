@@ -22,6 +22,7 @@ import {
 import { applyExamDecision } from '@/lib/exams/apply-decision'
 import { notifyExamRejection } from '@/lib/exams/rejection-notify'
 import { computeLabCost } from '@/lib/labs/commission'
+import { mensagemErro } from '@/lib/errors'
 import {
   planLabCostOnRejection,
   planBilledExamReversal,
@@ -111,7 +112,7 @@ export async function listRejectionReasons(
     .eq('clinic_id', ctx.clinicId)
   if (!includeInactive) q = q.eq('is_active', true)
   const { data, error } = await q.order('sort_order', { ascending: true }).order('label', { ascending: true })
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/exam-rejection.ts') }
   return (data ?? []) as RejectionReason[]
 }
 
@@ -141,7 +142,7 @@ export async function saveRejectionReason(input: {
         updated_at: new Date().toISOString(),
       })
       .eq('id', input.id).eq('clinic_id', ctx.clinicId)
-    if (error) return { error: error.message }
+    if (error) return { error: mensagemErro(error, 'lib/actions/exam-rejection.ts') }
     revalidatePath('/dashboard/management')
     return { id: input.id }
   }
@@ -156,7 +157,7 @@ export async function saveRejectionReason(input: {
     .select('id').single()
   if (error) {
     if (error.code === '23505') return { error: 'Já existe um motivo com este código.' }
-    return { error: error.message }
+    return { error: mensagemErro(error, 'lib/actions/exam-rejection.ts') }
   }
   revalidatePath('/dashboard/management')
   return { id: data.id as string }
@@ -171,7 +172,7 @@ export async function deleteRejectionReason(id: string): Promise<{ ok: true } | 
     .from('exam_rejection_reasons')
     .update({ is_active: false, updated_at: new Date().toISOString() })
     .eq('id', id).eq('clinic_id', ctx.clinicId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/exam-rejection.ts') }
   revalidatePath('/dashboard/management')
   return { ok: true }
 }
@@ -199,7 +200,7 @@ export async function seedDefaultRejectionReasons(): Promise<{ inserted: number 
   if (rows.length === 0) return { inserted: 0 }
 
   const { error } = await ctx.admin.from('exam_rejection_reasons').insert(rows)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/exam-rejection.ts') }
   revalidatePath('/dashboard/management')
   return { inserted: rows.length }
 }
@@ -245,7 +246,7 @@ export async function listExamLines(consultationId: string): Promise<ExamLine[] 
     .eq('consultation_id', consultationId)
     .is('cancelled_at', null)
     .order('created_at', { ascending: true })
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/exam-rejection.ts') }
 
   const rows = (data ?? []).filter(r => {
     const si = (r as { stock_items?: { category?: string } | Array<{ category?: string }> }).stock_items
@@ -499,7 +500,7 @@ export async function rejectExamLine(input: {
       updated_at:               now,
     })
     .eq('id', line.id).eq('clinic_id', ctx.clinicId)
-  if (error) return { error: 'Erro ao registrar a não realização: ' + error.message }
+  if (error) return { error: 'Erro ao registrar a não realização: ' + mensagemErro(error, 'lib/actions/exam-rejection.ts') }
 
   // Item 7 — estorno da fatura em aberto (só quando a clínica ativou).
   let reversalApplied: string | null = null
@@ -556,7 +557,7 @@ export async function markExamPerformed(
     .from('consultation_services')
     .update({ exam_state: step.state, exam_billing_hold_at: null, updated_at: now })
     .eq('id', line.id).eq('clinic_id', ctx.clinicId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/exam-rejection.ts') }
 
   await logAudit({
     action: 'EXAM_PERFORMED', entity_type: 'consultations',
@@ -703,7 +704,7 @@ export async function getExamRejectionReport(params: {
     .gte('exam_rejected_at', fromIso)
     .lte('exam_rejected_at', toIso)
     .order('exam_rejected_at', { ascending: false })
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/exam-rejection.ts') }
 
   const lines = data ?? []
   if (lines.length === 0) {

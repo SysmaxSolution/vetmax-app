@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { evolutionSendText } from '@/lib/evolution-api-client'
 
+import { mensagemErro } from '@/lib/errors'
 // GET /api/cron/wpp-appointment-reminders
 // Cron de confirmação de consultas 24h antes via WhatsApp.
 // Disparar a cada hora — ex.: vercel.json { "path": "/api/cron/wpp-appointment-reminders", "schedule": "0 * * * *" }
@@ -51,7 +52,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   if (fetchError) {
     console.error('[wpp-appointment-reminders] Erro ao buscar consultas:', fetchError.message)
-    return NextResponse.json({ error: fetchError.message }, { status: 500 })
+    return NextResponse.json({ error: mensagemErro(fetchError, 'app/api/cron/wpp-appointment-reminders/route.ts') }, { status: 500 })
   }
 
   if (!consultations || consultations.length === 0) {

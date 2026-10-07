@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
 export interface TemplateItem {
@@ -60,7 +61,7 @@ export async function listPrescriptionTemplates(): Promise<PrescriptionTemplateS
     .eq('is_active', true)
     .order('name', { ascending: true })
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/prescription-templates.ts') }
   return (data ?? []).map((r): PrescriptionTemplateSummary => ({
     id:          r.id as string,
     name:        r.name as string,
@@ -129,7 +130,7 @@ export async function createPrescriptionTemplate(payload: CreateTemplatePayload)
     })
     .select('id')
     .single()
-  if (tplErr) return { error: 'Erro ao criar protocolo: ' + tplErr.message }
+  if (tplErr) return { error: 'Erro ao criar protocolo: ' + mensagemErro(tplErr, 'lib/actions/prescription-templates.ts') }
 
   const templateId = tpl.id as string
   const rows = items.map((i, idx) => ({
@@ -149,7 +150,7 @@ export async function createPrescriptionTemplate(payload: CreateTemplatePayload)
   if (itErr) {
     // rollback best-effort do cabeçalho órfão
     await admin.from('prescription_templates').delete().eq('id', templateId)
-    return { error: 'Erro ao salvar itens do protocolo: ' + itErr.message }
+    return { error: 'Erro ao salvar itens do protocolo: ' + mensagemErro(itErr, 'lib/actions/prescription-templates.ts') }
   }
 
   revalidatePath('/dashboard/hospitalization')
@@ -166,7 +167,7 @@ export async function deletePrescriptionTemplate(id: string): Promise<{ success:
     .update({ is_active: false })
     .eq('id', id)
     .eq('clinic_id', ctx.clinicId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/prescription-templates.ts') }
   revalidatePath('/dashboard/hospitalization')
   return { success: true }
 }
@@ -228,7 +229,7 @@ export async function applyTemplateToHospitalization(
   }))
 
   const { error } = await admin.from('hospitalization_prescriptions').insert(rows)
-  if (error) return { error: 'Erro ao aplicar protocolo: ' + error.message }
+  if (error) return { error: 'Erro ao aplicar protocolo: ' + mensagemErro(error, 'lib/actions/prescription-templates.ts') }
 
   revalidatePath('/dashboard/hospitalization')
   return { count: rows.length }

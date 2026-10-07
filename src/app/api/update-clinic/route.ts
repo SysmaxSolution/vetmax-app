@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logServerError } from '@/lib/error-logger'
 
+import { mensagemErro } from '@/lib/errors'
 /**
  * POST /api/update-clinic
  * Atualiza dados da clínica (admin only)
@@ -65,14 +66,14 @@ export async function POST(request: NextRequest) {
     if (error) {
       await logServerError({
         path:     '/api/update-clinic',
-        error:    error.message,
+        error: mensagemErro(error, 'app/api/update-clinic/route.ts'),
         source:   'api',
         module:   'management',
         clinicId: profile.clinic_id,
         userId:   user.id,
       })
       return NextResponse.json(
-        { error: `Erro ao atualizar clínica: ${error.message}` },
+        { error: `Erro ao atualizar clínica: ${mensagemErro(error, 'app/api/update-clinic/route.ts')}` },
         { status: 500 }
       )
     }

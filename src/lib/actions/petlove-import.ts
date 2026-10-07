@@ -8,6 +8,7 @@ import { revalidatePath } from 'next/cache'
 import { runMatchEngine, bulkCreatePatientsFromPetlove } from '@/lib/actions/petlove-matching'
 import { computePetloveDueDate } from '@/lib/utils/petlove-dates'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface PetloveRemittanceLineAST {
@@ -489,7 +490,7 @@ async function findOrCreatePetloveProvider(
     .select('id')
     .single()
 
-  if (error) return { error: `Falha ao cadastrar convênio Petlove: ${error.message}` }
+  if (error) return { error: `Falha ao cadastrar convênio Petlove: ${mensagemErro(error, 'lib/actions/petlove-import.ts')}` }
   return { id: data.id }
 }
 
@@ -548,7 +549,7 @@ export async function stageRemittance(parsed: PetloveRemittanceAST): Promise<Sta
         .eq('status', 'pending')
         .in('petlove_remittance_line_id', idsToClear)
       if (feDelErr) {
-        return { error: `Falha ao limpar contas a receber pendentes da prévia anterior: ${feDelErr.message}` }
+        return { error: `Falha ao limpar contas a receber pendentes da prévia anterior: ${mensagemErro(feDelErr, 'lib/actions/petlove-import.ts')}` }
       }
     }
 
@@ -559,7 +560,7 @@ export async function stageRemittance(parsed: PetloveRemittanceAST): Promise<Sta
       .eq('remittance_id', dupe.id)
       .eq('clinic_id', clinicId)
     if (delErr) {
-      return { error: `Falha ao limpar linhas anteriores da remessa em aberto: ${delErr.message}` }
+      return { error: `Falha ao limpar linhas anteriores da remessa em aberto: ${mensagemErro(delErr, 'lib/actions/petlove-import.ts')}` }
     }
 
     const { error: updErr } = await supabase
@@ -581,7 +582,7 @@ export async function stageRemittance(parsed: PetloveRemittanceAST): Promise<Sta
       })
       .eq('id', dupe.id)
     if (updErr) {
-      return { error: `Falha ao atualizar header da remessa em aberto: ${updErr.message}` }
+      return { error: `Falha ao atualizar header da remessa em aberto: ${mensagemErro(updErr, 'lib/actions/petlove-import.ts')}` }
     }
 
     const insErr = await insertLines(supabase, clinicId, dupe.id, parsed.lines)
@@ -614,7 +615,7 @@ export async function stageRemittance(parsed: PetloveRemittanceAST): Promise<Sta
     .single()
 
   if (remErr || !remittance) {
-    return { error: `Falha ao gravar header da remessa: ${remErr?.message ?? 'erro desconhecido'}` }
+    return { error: `Falha ao gravar header da remessa: ${(remErr ? mensagemErro(remErr, 'lib/actions/petlove-import.ts') : 'erro desconhecido')}` }
   }
 
   const insErr = await insertLines(supabase, clinicId, remittance.id, parsed.lines)
@@ -772,7 +773,7 @@ async function applyPreviewSideEffects(
     .not('matched_patient_id', 'is', null)
     .in('match_status', ['matched', 'partial', 'orphan_invoice', 'manual_resolved'])
 
-  if (linesErr) return { error: `Falha ao carregar linhas para side-effects: ${linesErr.message}` }
+  if (linesErr) return { error: `Falha ao carregar linhas para side-effects: ${mensagemErro(linesErr, 'lib/actions/petlove-import.ts')}` }
   if (!lines || lines.length === 0) {
     return { matched: matchRes.matched ?? 0, auto_created_patients: autoCreatedPatients, auto_created_tutors: autoCreatedTutors, patients_updated: 0, prices_updated: 0, pending_entries_created: 0, pending_total_amount: 0, errors }
   }
@@ -1037,7 +1038,7 @@ export async function getPetlovePriceHistoryForPet(
   }
 
   const { data, error } = await query
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/petlove-import.ts') }
 
   const byProcedure = new Map<string, PetlovePriceHistoryItem>()
   for (const row of data ?? []) {
@@ -1110,7 +1111,7 @@ export async function listImportedRemittances(): Promise<ImportedRemittanceSumma
     .order('imported_at', { ascending: false })
     .limit(20)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/petlove-import.ts') }
   return (data ?? []).map(r => ({
     id:                r.id,
     remittance_number: r.remittance_number,

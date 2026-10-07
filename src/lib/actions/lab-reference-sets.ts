@@ -14,6 +14,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { parseFaixa } from '@/lib/lab/reference-range'
 
+import { mensagemErro } from '@/lib/errors'
 const PODE_EDITAR = ['admin', 'owner', 'manager', 'vet']
 
 type Ctx = { admin: ReturnType<typeof createAdminClient>; clinicId: string; role: string }
@@ -99,7 +100,7 @@ export async function createReferenceSet(input: {
   if (error) {
     // O índice único é por clínica/exame/espécie — o erro cru não ajuda ninguém.
     if (error.code === '23505') return { error: 'Já existe uma tabela desse exame para essa espécie.' }
-    return { error: error.message }
+    return { error: mensagemErro(error, 'lib/actions/lab-reference-sets.ts') }
   }
   revalidatePath('/dashboard/management')
   return { ok: true, id: data.id as string }
@@ -131,7 +132,7 @@ export async function duplicateReferenceSet(
     const { error } = await c.admin.from('lab_reference_items').insert(
       (itens ?? []).map(i => ({ ...i, clinic_id: c.clinicId, set_id: novo.id })),
     )
-    if (error) return { error: 'Tabela criada, mas as linhas não foram copiadas: ' + error.message }
+    if (error) return { error: 'Tabela criada, mas as linhas não foram copiadas: ' + mensagemErro(error, 'lib/actions/lab-reference-sets.ts') }
   }
   revalidatePath('/dashboard/management')
   return novo
@@ -145,7 +146,7 @@ export async function updateReferenceSet(
   const { error } = await c.admin.from('lab_reference_sets')
     .update({ ...patch, updated_at: new Date().toISOString() })
     .eq('clinic_id', c.clinicId).eq('id', setId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/lab-reference-sets.ts') }
   revalidatePath('/dashboard/management')
   return { ok: true }
 }
@@ -155,7 +156,7 @@ export async function deleteReferenceSet(setId: string): Promise<{ ok: true } | 
   if (!PODE_EDITAR.includes(c.role)) return { error: 'Sem permissão para editar a tabela de referência.' }
   const { error } = await c.admin.from('lab_reference_sets')
     .delete().eq('clinic_id', c.clinicId).eq('id', setId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/lab-reference-sets.ts') }
   revalidatePath('/dashboard/management')
   return { ok: true }
 }
@@ -205,7 +206,7 @@ export async function saveReferenceItems(
       }
     })
     const { error } = await c.admin.from('lab_reference_items').insert(rows)
-    if (error) return { error: 'Erro ao gravar as linhas: ' + error.message }
+    if (error) return { error: 'Erro ao gravar as linhas: ' + mensagemErro(error, 'lib/actions/lab-reference-sets.ts') }
   }
 
   revalidatePath('/dashboard/management')

@@ -23,6 +23,7 @@ import {
 } from '@/lib/lab/reference-set'
 import type { HL7Analyte } from '@/lib/lab/hl7-parser'
 
+import { mensagemErro } from '@/lib/errors'
 async function getCtx() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -186,7 +187,7 @@ export async function saveManualEntries(
       })),
       { onConflict: 'consultation_id,label' },
     )
-    if (error) return { error: 'Erro ao salvar: ' + error.message }
+    if (error) return { error: 'Erro ao salvar: ' + mensagemErro(error, 'lib/actions/exam-manual-entries.ts') }
   }
 
   revalidatePath(`/dashboard/exams/${consultationId}`)

@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type ReceiptMode = 'convenio_repasse' | 'ong_guia' | 'particular_desconto'
@@ -48,7 +49,7 @@ export async function getInsuranceProviders(): Promise<InsuranceProvider[] | { e
     .eq('clinic_id', clinicId)
     .order('name')
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/insurance-providers.ts') }
   return (data ?? []).map(r => ({
     ...r,
     plan_types:   Array.isArray(r.plan_types)   ? r.plan_types   : [],
@@ -86,7 +87,7 @@ export async function createInsuranceProvider(input: {
     .select('id')
     .single()
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/insurance-providers.ts') }
   revalidatePath('/dashboard/settings/insurance')
   return { id: data.id }
 }
@@ -112,7 +113,7 @@ export async function updateInsuranceProvider(
     .update({ ...input, updated_at: new Date().toISOString() })
     .eq('id', id)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/insurance-providers.ts') }
   revalidatePath('/dashboard/settings/insurance')
   return { success: true }
 }
@@ -127,7 +128,7 @@ export async function deleteInsuranceProvider(id: string): Promise<{ success: tr
     .delete()
     .eq('id', id)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/insurance-providers.ts') }
   revalidatePath('/dashboard/settings/insurance')
   return { success: true }
 }
@@ -143,7 +144,7 @@ export async function getProvidersForStockItem(stockItemId: string): Promise<str
     .select('insurance_provider_id')
     .eq('stock_item_id', stockItemId)
     .eq('clinic_id', clinicId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/insurance-providers.ts') }
   return (data ?? []).map((r: any) => r.insurance_provider_id as string)
 }
 
@@ -160,7 +161,7 @@ export async function setProvidersForStockItem(
     .delete()
     .eq('stock_item_id', stockItemId)
     .eq('clinic_id', clinicId)
-  if (delErr) return { error: delErr.message }
+  if (delErr) return { error: mensagemErro(delErr, 'lib/actions/insurance-providers.ts') }
   if (providerIds.length > 0) {
     const rows = providerIds.map(pid => ({
       stock_item_id:         stockItemId,
@@ -170,7 +171,7 @@ export async function setProvidersForStockItem(
     const { error: insErr } = await admin
       .from('stock_item_insurance_providers')
       .insert(rows)
-    if (insErr) return { error: insErr.message }
+    if (insErr) return { error: mensagemErro(insErr, 'lib/actions/insurance-providers.ts') }
   }
   return { success: true }
 }

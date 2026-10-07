@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { evolutionSendText } from '@/lib/evolution-api-client'
 import type { AppointmentRequest } from '@/types'
 
+import { mensagemErro } from '@/lib/errors'
 async function getClinicId(): Promise<string | null> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -36,7 +37,7 @@ export async function getAppointmentRequests(
   }
 
   const { data, error } = await q
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/appointment-requests.ts') }
 
   return (data ?? []).map((row: Record<string, unknown>) => {
     const tutor = (Array.isArray(row.tutor) ? row.tutor[0] : row.tutor) as Record<string, string> | null
@@ -92,7 +93,7 @@ export async function approveAppointmentRequest(
     .select('id')
     .single()
 
-  if (apptErr || !appt) return { error: apptErr?.message ?? 'Erro ao criar agendamento.' }
+  if (apptErr || !appt) return { error: (apptErr ? mensagemErro(apptErr, 'lib/actions/appointment-requests.ts') : 'Erro ao criar agendamento.') }
 
   await admin
     .from('appointment_requests')

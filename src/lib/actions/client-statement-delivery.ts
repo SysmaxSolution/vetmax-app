@@ -15,6 +15,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getClientStatement } from '@/lib/actions/client-statement'
 import type { ClientKind, ClientStatementResult } from '@/lib/reports/client-statement-logic'
 
+import { mensagemErro } from '@/lib/errors'
 interface StatementParams {
   from:        string
   to:          string
@@ -71,7 +72,7 @@ export async function generateClientStatementPdf(
   try {
     buffer = await renderClientStatementPdfBuffer(data)
   } catch (e) {
-    return { error: 'Falha ao gerar o PDF: ' + (e instanceof Error ? e.message : 'erro') }
+    return { error: 'Falha ao gerar o PDF: ' + (e instanceof Error ? mensagemErro(e, 'lib/actions/client-statement-delivery.ts') : 'erro') }
   }
 
   const fileName    = fileNameFor(data)
@@ -81,7 +82,7 @@ export async function generateClientStatementPdf(
   const { error: upErr } = await admin.storage
     .from('clinic-attachments')
     .upload(storagePath, buffer, { contentType: 'application/pdf', upsert: true })
-  if (upErr) return { error: 'Erro ao salvar o PDF: ' + upErr.message }
+  if (upErr) return { error: 'Erro ao salvar o PDF: ' + mensagemErro(upErr, 'lib/actions/client-statement-delivery.ts') }
 
   const { data: signed } = await admin.storage
     .from('clinic-attachments')
@@ -209,7 +210,7 @@ export async function sendClientStatementEmail(
   try {
     buffer = await renderClientStatementPdfBuffer(data)
   } catch (e) {
-    return { error: 'Falha ao gerar o PDF: ' + (e instanceof Error ? e.message : 'erro') }
+    return { error: 'Falha ao gerar o PDF: ' + (e instanceof Error ? mensagemErro(e, 'lib/actions/client-statement-delivery.ts') : 'erro') }
   }
 
   const { Resend } = await import('resend')
@@ -223,6 +224,6 @@ export async function sendClientStatementEmail(
     html:    emailHtml(data),
     attachments: [{ filename: fileNameFor(data), content: buffer.toString('base64') }],
   })
-  if (error) return { error: 'Erro ao enviar e-mail: ' + error.message }
+  if (error) return { error: 'Erro ao enviar e-mail: ' + mensagemErro(error, 'lib/actions/client-statement-delivery.ts') }
   return { success: true }
 }

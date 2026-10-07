@@ -15,6 +15,7 @@ import { usesExamRejectionFlow } from '@/lib/exams/rejection-gate'
 import { clinicFlowFlag, routineOffError } from '@/lib/clinic/flow-gate'
 import { examKeyOf, summarizeExams, type ExamSummary } from '@/lib/lab/exam-key'
 
+import { mensagemErro } from '@/lib/errors'
 async function getCtx() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -49,7 +50,7 @@ export async function listExamResults(consultationId: string): Promise<{ draft: 
     .select('id, panel, analyte_name, value_text, unit, ref_text, flag, status, source')
     .eq('clinic_id', ctx.clinic_id).eq('consultation_id', consultationId)
     .order('panel', { ascending: true }).order('created_at', { ascending: true })
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/exam-results.ts') }
   const rows = (data ?? []) as ExamResultRow[]
   return { draft: rows.filter(r => r.status === 'draft'), released: rows.filter(r => r.status === 'released') }
 }
@@ -67,7 +68,7 @@ export async function listConsultationExams(
     .from('exam_results')
     .select('analyte_code, analyte_name, status, released_at')
     .eq('clinic_id', ctx.clinic_id).eq('consultation_id', consultationId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/exam-results.ts') }
   return summarizeExams((data ?? []) as {
     analyte_code: string | null; analyte_name: string; status: string; released_at: string | null
   }[])
@@ -92,7 +93,7 @@ export async function saveExamResults(consultationId: string, analytes: ExamResu
       flag: a.flag || null, status: 'draft', source: 'manual', created_by: ctx.user_id,
     }))
     const { error } = await ctx.admin.from('exam_results').insert(rows)
-    if (error) return { error: 'Erro ao salvar resultados: ' + error.message }
+    if (error) return { error: 'Erro ao salvar resultados: ' + mensagemErro(error, 'lib/actions/exam-results.ts') }
   }
   revalidatePath(`/dashboard/exams/${consultationId}`)
   return { ok: true }
@@ -129,7 +130,7 @@ export async function importHL7Results(consultationId: string, hl7: string): Pro
     raw_hl7: lean.length <= 20000 ? lean : null,
   }))
   const { error } = await ctx.admin.from('exam_results').insert(rows)
-  if (error) return { error: 'Erro ao importar HL7: ' + error.message }
+  if (error) return { error: 'Erro ao importar HL7: ' + mensagemErro(error, 'lib/actions/exam-results.ts') }
   // Curvas (ED) vão para a tabela própria — uma vez por consulta, não por analito.
   await persistExamGraphs(ctx.admin, ctx.clinic_id, consultationId, parsed.graphs)
   revalidatePath(`/dashboard/exams/${consultationId}`)
@@ -158,7 +159,7 @@ export async function releaseExamResults(
   const { data: rascunhos, error: erroLeitura } = await ctx.admin.from('exam_results')
     .select('id, analyte_code, analyte_name')
     .eq('clinic_id', ctx.clinic_id).eq('consultation_id', consultationId).eq('status', 'draft')
-  if (erroLeitura) return { error: 'Erro ao ler os resultados: ' + erroLeitura.message }
+  if (erroLeitura) return { error: 'Erro ao ler os resultados: ' + mensagemErro(erroLeitura, 'lib/actions/exam-results.ts') }
 
   const alvos = (rascunhos ?? [])
     .filter(r => !examKey || examKeyOf(
@@ -173,7 +174,7 @@ export async function releaseExamResults(
     .update({ status: 'released', released_by: ctx.user_id, released_at: new Date().toISOString(), updated_at: new Date().toISOString() })
     .in('id', alvos)
     .select('id')
-  if (error) return { error: 'Erro ao liberar: ' + error.message }
+  if (error) return { error: 'Erro ao liberar: ' + mensagemErro(error, 'lib/actions/exam-results.ts') }
   const released = (data ?? []).length
 
   // Fluxo de Rejeição de Exame (opt-in): liberar o resultado é o gatilho da

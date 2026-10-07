@@ -6,6 +6,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { HL7Graph } from './hl7-parser'
 import { graphTitle } from './hemogram-report'
 
+import { mensagemErro } from '@/lib/errors'
 /**
  * Grava/atualiza as curvas da consulta. Idempotente por (consultation_id, code):
  * reimportar o mesmo ORU substitui a imagem em vez de acumular.
@@ -33,6 +34,6 @@ export async function persistExamGraphs(
 
   const { error } = await admin.from('exam_result_graphs')
     .upsert(rows, { onConflict: 'consultation_id,code' })
-  if (error) return { saved: 0, error: error.message }
+  if (error) return { saved: 0, error: mensagemErro(error, 'lib/lab/persist-graphs.ts') }
   return { saved: rows.length }
 }

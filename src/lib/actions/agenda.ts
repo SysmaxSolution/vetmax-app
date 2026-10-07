@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache'
 import type { ConsultationStatus } from '@/types'
 import { byUrgencyThenTime } from '@/lib/urgency'
 
+import { mensagemErro } from '@/lib/errors'
 export interface AgendaCard {
   id: string
   status: ConsultationStatus
@@ -80,7 +81,7 @@ export async function getAgendaBoard(date?: string): Promise<AgendaColumn[] | { 
     .lte('created_at', endIso)
     .order('created_at', { ascending: true })
 
-  if (error) return { error: 'Erro ao buscar agenda: ' + error.message }
+  if (error) return { error: 'Erro ao buscar agenda: ' + mensagemErro(error, 'lib/actions/agenda.ts') }
 
   const cards: AgendaCard[] = (data ?? []).map((c: any) => ({
     id: c.id,
@@ -151,7 +152,7 @@ export async function moveAgendaCard(
     .update({ status: newStatus })
     .eq('id', consultationId)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/agenda.ts') }
   revalidatePath('/dashboard/reception')
   return { success: true }
 }

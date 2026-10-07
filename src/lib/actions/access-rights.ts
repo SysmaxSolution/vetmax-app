@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import type { AccessAction } from '@/config/access-catalog'
 
+import { mensagemErro } from '@/lib/errors'
 // ──────────────────────────────────────────────────────────────────────────────
 // Direitos de Acesso (Module → Tab → Action)
 //
@@ -60,7 +61,7 @@ export async function getUserAccessRights(
     .eq('clinic_id', ctx.clinic_id)
     .eq('user_id', targetUserId)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/access-rights.ts') }
   return (data ?? []) as GranularPermissionRow[]
 }
 
@@ -103,7 +104,7 @@ export async function setUserAccessRight(payload: {
       { onConflict: 'clinic_id,user_id,module,action' }
     )
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/access-rights.ts') }
   revalidatePath('/dashboard/management')
   return { success: true }
 }
@@ -144,7 +145,7 @@ export async function setUserAccessRightsBulk(
     .from('user_permissions_granular')
     .upsert(payload, { onConflict: 'clinic_id,user_id,module,action' })
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/access-rights.ts') }
   revalidatePath('/dashboard/management')
   return { success: true }
 }

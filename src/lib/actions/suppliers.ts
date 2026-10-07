@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type SupplierCategory =
@@ -82,7 +83,7 @@ export async function listSuppliers(filters?: {
   }
 
   const { data, error } = await query.order('name', { ascending: true })
-  if (error) return { error: `Erro ao listar fornecedores: ${error.message}` }
+  if (error) return { error: `Erro ao listar fornecedores: ${mensagemErro(error, 'lib/actions/suppliers.ts')}` }
   return (data ?? []) as Supplier[]
 }
 
@@ -104,7 +105,7 @@ export async function searchSuppliers(query: string): Promise<Supplier[] | { err
     .order('name')
     .limit(10)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/suppliers.ts') }
   return (data ?? []) as Supplier[]
 }
 
@@ -154,7 +155,7 @@ export async function upsertSupplier(
       if (error.message.includes('suppliers_unique_per_clinic')) {
         return { error: `Já existe um fornecedor com o nome "${name}"` }
       }
-      return { error: `Erro ao atualizar: ${error.message}` }
+      return { error: `Erro ao atualizar: ${mensagemErro(error, 'lib/actions/suppliers.ts')}` }
     }
 
     revalidatePath('/dashboard/registry')
@@ -171,7 +172,7 @@ export async function upsertSupplier(
     if (error.message.includes('suppliers_unique_per_clinic')) {
       return { error: `Já existe um fornecedor com o nome "${name}"` }
     }
-    return { error: `Erro ao cadastrar: ${error.message}` }
+    return { error: `Erro ao cadastrar: ${mensagemErro(error, 'lib/actions/suppliers.ts')}` }
   }
 
   revalidatePath('/dashboard/registry')
@@ -196,7 +197,7 @@ export async function deactivateSupplier(
     .eq('id', supplierId)
     .eq('clinic_id', ctx.clinic_id)
 
-  if (error) return { error: `Erro ao desativar: ${error.message}` }
+  if (error) return { error: `Erro ao desativar: ${mensagemErro(error, 'lib/actions/suppliers.ts')}` }
 
   revalidatePath('/dashboard/registry')
   return { success: true }
@@ -220,7 +221,7 @@ export async function reactivateSupplier(
     .eq('id', supplierId)
     .eq('clinic_id', ctx.clinic_id)
 
-  if (error) return { error: `Erro ao reativar: ${error.message}` }
+  if (error) return { error: `Erro ao reativar: ${mensagemErro(error, 'lib/actions/suppliers.ts')}` }
 
   revalidatePath('/dashboard/registry')
   return { success: true }

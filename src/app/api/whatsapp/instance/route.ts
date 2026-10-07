@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { evolutionCreateInstance, evolutionGetConnectionState, evolutionSetWebhook } from '@/lib/evolution-api-client'
 
+import { mensagemErro } from '@/lib/errors'
 // POST /api/whatsapp/instance
 // Cria (ou garante existência) de uma instância Evolution API para a clínica autenticada.
 // Salva o nome da instância em clinic_whatsapp_settings.evolution_instance_name.
@@ -75,7 +76,7 @@ export async function POST() {
     }, { onConflict: 'clinic_id' })
 
   if (dbError) {
-    return NextResponse.json({ error: dbError.message }, { status: 500 })
+    return NextResponse.json({ error: mensagemErro(dbError, 'app/api/whatsapp/instance/route.ts') }, { status: 500 })
   }
 
   return NextResponse.json({ instanceName, state: currentState === 'not_created' ? 'created' : currentState })

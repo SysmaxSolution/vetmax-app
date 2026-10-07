@@ -19,6 +19,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { mensagemErro } from '@/lib/errors'
 import {
   resolveSettledBy,
   settledByLabel,
@@ -89,7 +90,7 @@ export async function listStatementClients(params: {
       `and(payment_date.gte.${params.from},payment_date.lte.${params.to}),` +
       `and(due_date.gte.${params.from},due_date.lte.${params.to})`,
     )
-  if (error) return { error: 'Erro ao listar clientes: ' + error.message }
+  if (error) return { error: 'Erro ao listar clientes: ' + mensagemErro(error, 'lib/actions/client-statement.ts') }
 
   const rows = (entries ?? []) as Array<{ tutor_id: string | null; consultation_id: string | null }>
   const tutorIds   = [...new Set(rows.map(r => r.tutor_id).filter(Boolean))] as string[]
@@ -280,8 +281,8 @@ export async function getClientStatement(params: {
     base().eq('status', 'paid').gte('payment_date', params.from).lte('payment_date', params.to),
     base().eq('status', 'pending').gte('due_date', params.from).lte('due_date', params.to),
   ])
-  if (paidRes.error)    return { error: 'Erro ao ler recebimentos: ' + paidRes.error.message }
-  if (pendingRes.error) return { error: 'Erro ao ler títulos em aberto: ' + pendingRes.error.message }
+  if (paidRes.error)    return { error: 'Erro ao ler recebimentos: ' + mensagemErro(paidRes.error, 'lib/actions/client-statement.ts') }
+  if (pendingRes.error) return { error: 'Erro ao ler títulos em aberto: ' + mensagemErro(pendingRes.error, 'lib/actions/client-statement.ts') }
 
   const raw = [
     ...((paidRes.data ?? []) as unknown as RawEntry[]),

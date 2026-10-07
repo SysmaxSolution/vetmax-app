@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { classifyError } from '@/lib/error-classifier'
 import { runAutoFixCycle } from '@/lib/fix-planner'
 
+import { mensagemErro } from '@/lib/errors'
 // GET /api/cron/classify-errors
 // Invocado pelo Vercel Cron a cada hora.
 // 1. Classifica erros sem module (priority/module ausentes) via Claude Haiku.
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest) {
 
   if (fetchErr) {
     console.error('[classify-cron] Erro ao buscar não classificados:', fetchErr.message)
-    return NextResponse.json({ error: fetchErr.message }, { status: 500 })
+    return NextResponse.json({ error: mensagemErro(fetchErr, 'app/api/cron/classify-errors/route.ts') }, { status: 500 })
   }
 
   const rows = unclassified ?? []

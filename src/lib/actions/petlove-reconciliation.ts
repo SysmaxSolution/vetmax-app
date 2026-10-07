@@ -8,6 +8,7 @@ import { runMatchEngine, bulkCreatePatientsFromPetlove } from '@/lib/actions/pet
 import { learnCoverageFromRemittance } from '@/lib/actions/insurance-coverage'
 import { normalizeServiceName, buildNormalizedNameIndex } from '@/lib/service-name-normalize'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface ApplyReconciliationResult {
@@ -212,7 +213,7 @@ export async function deleteRemittance(
     .delete()
     .eq('clinic_id', clinicId)
     .eq('id', remittanceId)
-  if (delRemErr) return { error: `Falha ao excluir remessa: ${delRemErr.message}` }
+  if (delRemErr) return { error: `Falha ao excluir remessa: ${mensagemErro(delRemErr, 'lib/actions/petlove-reconciliation.ts')}` }
 
   revalidatePath('/dashboard/financial/insurance-reconciliation')
   revalidatePath('/dashboard/financial')
@@ -317,7 +318,7 @@ export async function applyReconciliation(
     .select('id, match_status, matched_invoice_item_id, matched_patient_id, matched_tutor_id, repass_value, coparticipation_value, procedure_name_raw, plan_name_raw, service_date, external_appointment_id, microchip_raw, pet_name_raw, tutor_name_raw')
     .eq('clinic_id', clinicId)
     .eq('remittance_id', remittanceId)
-  if (linesErr) return { error: linesErr.message }
+  if (linesErr) return { error: mensagemErro(linesErr, 'lib/actions/petlove-reconciliation.ts') }
   if (!lines || lines.length === 0) return { error: 'Remessa sem linhas para conciliar.' }
 
   // Log de auto-criação de pets (issue 3: histórico no perfil)

@@ -13,6 +13,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
+import { mensagemErro } from '@/lib/errors'
 import {
   resolvePortalTheme, sanitizeHex, sanitizeImageUrl, isHeadingFontId,
   slugifyClinicName, uniqueClinicSlug, isValidClinicSlug, DEFAULT_PORTAL_THEME,
@@ -85,7 +86,7 @@ export async function saveClinicPortalTheme(input: {
 
   const admin = createAdminClient()
   const { error } = await admin.from('clinic_portal_themes').upsert(row, { onConflict: 'clinic_id' })
-  if (error) return { error: 'Erro ao salvar a identidade: ' + error.message }
+  if (error) return { error: 'Erro ao salvar a identidade: ' + mensagemErro(error, 'lib/actions/portal-theme.ts') }
 
   revalidatePath('/portal', 'layout')
   revalidatePath('/parceiro', 'layout')
@@ -98,7 +99,7 @@ export async function resetClinicPortalTheme(): Promise<{ success: true } | { er
   if ('error' in gate) return gate
   const admin = createAdminClient()
   const { error } = await admin.from('clinic_portal_themes').delete().eq('clinic_id', gate.clinicId)
-  if (error) return { error: 'Erro ao restaurar: ' + error.message }
+  if (error) return { error: 'Erro ao restaurar: ' + mensagemErro(error, 'lib/actions/portal-theme.ts') }
   revalidatePath('/portal', 'layout')
   return { success: true }
 }
@@ -132,7 +133,7 @@ export async function saveClinicPortalSlug(
   if (clash) return { error: `O endereço "${slug}" já está em uso por outra clínica.` }
 
   const { error } = await admin.from('clinics').update({ portal_slug: slug }).eq('id', gate.clinicId)
-  if (error) return { error: 'Erro ao salvar o endereço: ' + error.message }
+  if (error) return { error: 'Erro ao salvar o endereço: ' + mensagemErro(error, 'lib/actions/portal-theme.ts') }
 
   revalidatePath('/portal', 'layout')
   return { success: true, slug }

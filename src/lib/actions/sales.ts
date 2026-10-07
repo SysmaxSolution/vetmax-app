@@ -7,6 +7,9 @@ import { sendWhatsAppMessage } from './whatsapp'
 import { isEAN } from '@/lib/utils/ean'
 import { processCommissions } from './commissions'
 
+import { mensagemErro } from '@/lib/errors'
+import { valida } from '@/lib/validation/primitivos'
+import { EsquemaCriarVenda } from '@/lib/validation/financeiro'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface SaleItem {
@@ -163,7 +166,11 @@ export async function createSale(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Não autenticado.' }
 
-  if (params.items.length === 0) return { error: 'Adicione pelo menos um item à venda.' }
+  // Antes só se checava "tem item". Quantidade negativa, preço com 3 casas e
+  // desconto maior que o bruto chegavam à RPC e viravam venda torta no caixa.
+  const v = valida(EsquemaCriarVenda, params)
+  if ('error' in v) return v
+  params = v.dados as CreateSaleParams
 
   const { data, error } = await supabase.rpc('rpc_create_sale', {
     p_clinic_id:       params.clinic_id,
@@ -176,7 +183,7 @@ export async function createSale(
     p_patient_id:      params.patient_id ?? null,
   })
 
-  if (error) return { error: 'Erro ao registrar venda: ' + error.message }
+  if (error) return { error: 'Erro ao registrar venda: ' + mensagemErro(error, 'lib/actions/sales.ts') }
 
   revalidatePath('/dashboard/sales')
   revalidatePath('/dashboard/cashier')
@@ -312,7 +319,7 @@ export async function listTutorPets(
     .is('deleted_at', null)   // PDV não deve listar pets arquivados (B11)
     .order('name')
     .limit(30)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/sales.ts') }
   return (data ?? []).map(p => ({ id: p.id as string, name: p.name as string, species: (p.species as string) ?? '' }))
 }
 
@@ -381,7 +388,7 @@ export async function launchPendingSale(params: {
       const { data: s2 } = await admin.from('stock_items').select('quantity').eq('id', d.id).single()
       await admin.from('stock_items').update({ quantity: Number(s2?.quantity ?? 0) + d.qty }).eq('id', d.id)
     }
-    return { error: 'Erro ao lançar venda: ' + (saleErr?.message ?? 'falha') }
+    return { error: 'Erro ao lançar venda: ' + ((saleErr ? mensagemErro(saleErr, 'lib/actions/sales.ts') : 'falha')) }
   }
 
   const { error: itemsErr } = await admin.from('sale_items').insert(
@@ -395,7 +402,7 @@ export async function launchPendingSale(params: {
       discount:      i.discount,
     })),
   )
-  if (itemsErr) return { error: 'Venda lançada, mas falha nos itens: ' + itemsErr.message }
+  if (itemsErr) return { error: 'Venda lançada, mas falha nos itens: ' + mensagemErro(itemsErr, 'lib/actions/sales.ts') }
 
   revalidatePath('/dashboard/cashier')
   return { id: sale.id as string, total }
@@ -413,7 +420,7 @@ export async function listPendingSales(): Promise<PendingSale[] | { error: strin
     .eq('payment_status', 'pending')
     .order('created_at', { ascending: false })
     .limit(50)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/sales.ts') }
 
   return (data ?? []).map((s: any) => {
     const items: Array<{ description: string }> = s.sale_items ?? []
@@ -470,7 +477,7 @@ export async function settlePendingSale(
       payment_method: (splits[0]?.payment_method ?? 'other') as string,
     })
     .eq('id', saleId)
-  if (updErr) return { error: 'Erro ao baixar venda: ' + updErr.message }
+  if (updErr) return { error: 'Erro ao baixar venda: ' + mensagemErro(updErr, 'lib/actions/sales.ts') }
 
   for (const split of splits) {
     await admin.from('central_cashier').insert({
@@ -581,7 +588,7 @@ export async function cancelSale(
     p_reason:  reason,
   })
 
-  if (error) return { error: 'Erro ao cancelar venda: ' + error.message }
+  if (error) return { error: 'Erro ao cancelar venda: ' + mensagemErro(error, 'lib/actions/sales.ts') }
 
   revalidatePath('/dashboard/sales')
   revalidatePath('/dashboard/cashier')
@@ -711,7 +718,7 @@ export async function getDailySales(date?: string): Promise<Sale[] | { error: st
     .lte('created_at', endOf)
     .order('created_at', { ascending: false })
 
-  if (error) return { error: 'Erro ao buscar vendas: ' + error.message }
+  if (error) return { error: 'Erro ao buscar vendas: ' + mensagemErro(error, 'lib/actions/sales.ts') }
 
   return (data ?? []).map((s: any) => ({
     id:              s.id,
@@ -764,7 +771,7 @@ export async function getSalesSummary(
     .gte('created_at', `${startDate}T00:00:00.000Z`)
     .lte('created_at', `${endDate}T23:59:59.999Z`)
 
-  if (error) return { error: 'Erro ao buscar resumo: ' + error.message }
+  if (error) return { error: 'Erro ao buscar resumo: ' + mensagemErro(error, 'lib/actions/sales.ts') }
 
   const rows = data ?? []
   const active = rows.filter((r: any) => r.payment_status !== 'cancelled')

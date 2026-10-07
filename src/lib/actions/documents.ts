@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache'
 import type { VitalSigns, ExtractedField } from '@/types'
 import { SYSTEM_TEMPLATES, isSystemTemplate } from '@/lib/system-templates'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export type PatientDocument = {
@@ -47,7 +48,7 @@ export async function getPatientDocuments(
     .eq('clinic_id', profile.clinic_id)
     .order('created_at', { ascending: false })
 
-  if (error) return { error: 'Erro ao buscar documentos: ' + error.message }
+  if (error) return { error: 'Erro ao buscar documentos: ' + mensagemErro(error, 'lib/actions/documents.ts') }
 
   return (data ?? []).map((d: any) => ({
     id:                          d.id,
@@ -289,7 +290,7 @@ export async function savePatientDocument(data: {
     .single()
 
   if (error || !result) {
-    return { error: 'Erro ao salvar documento: ' + (error?.message ?? '') }
+    return { error: 'Erro ao salvar documento: ' + ((error ? mensagemErro(error, 'lib/actions/documents.ts') : '')) }
   }
 
   revalidatePath(`/dashboard/vet/${data.consultation_id}`)
@@ -326,7 +327,7 @@ export async function updatePatientDocument(
     .single()
 
   if (error || !result) {
-    return { error: 'Erro ao atualizar documento: ' + (error?.message ?? '') }
+    return { error: 'Erro ao atualizar documento: ' + ((error ? mensagemErro(error, 'lib/actions/documents.ts') : '')) }
   }
 
   revalidatePath(`/dashboard/vet/${consultationId}`)
