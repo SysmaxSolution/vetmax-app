@@ -47,6 +47,11 @@ afterEach(() => {
   jest.restoreAllMocks()
 })
 
+function configureWebhook() {
+  process.env.SALES_SIGNUP_WEBHOOK_URL = 'https://painel.test/api/webhooks/signup'
+  process.env.SALES_SIGNUP_WEBHOOK_SECRET = 's3cret'
+}
+
 function configureWhatsApp(recipients: string) {
   process.env.COMMERCIAL_WHATSAPP = recipients
   process.env.EVOLUTION_API_URL = 'https://evolution.test'
@@ -54,7 +59,7 @@ function configureWhatsApp(recipients: string) {
   process.env.COMMERCIAL_ALERT_INSTANCE = 'sysmax-comercial'
 }
 
-describe('sendFreeSignupAlert — WhatsApp', () => {
+describe('sendFreeSignupAlert — envio direto por WhatsApp (sem webhook configurado)', () => {
   it('envia para cada número da lista separada por vírgula', async () => {
     configureWhatsApp('5516996095475, 5511939623300')
     await sendFreeSignupAlert({ clinicName: 'Clínica Teste', email: 'a@b.com' })
@@ -100,10 +105,9 @@ describe('sendFreeSignupAlert — WhatsApp', () => {
   })
 })
 
-describe('sendFreeSignupAlert — webhook do painel comercial', () => {
+describe('sendFreeSignupAlert — webhook do painel comercial (primeiro)', () => {
   it('faz POST com o secret e omite campos nulos', async () => {
-    process.env.SALES_SIGNUP_WEBHOOK_URL = 'https://painel.test/api/webhooks/signup'
-    process.env.SALES_SIGNUP_WEBHOOK_SECRET = 's3cret'
+    configureWebhook()
 
     await sendFreeSignupAlert({
       clinicName: 'Clínica Teste',
@@ -127,29 +131,124 @@ describe('sendFreeSignupAlert — webhook do painel comercial', () => {
     expect(typeof body.createdAt).toBe('string')
   })
 
-  it('sem as envs não chama fetch', async () => {
+  it('webhook 2xx → NÃO envia WhatsApp direto (sem alerta duplicado)', async () => {
+    configureWebhook()
+    configureWhatsApp('5516996095475,5511939623300')
+
     await sendFreeSignupAlert({ clinicName: 'X' })
-    expect(fetchMock).not.toHaveBeenCalled()
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(sendText).not.toHaveBeenCalled()
   })
 
-  it('erro de rede ou resposta não-ok nunca lança', async () => {
+  it('webhook com URL mas sem secret conta como não configurado → envio direto', async () => {
     process.env.SALES_SIGNUP_WEBHOOK_URL = 'https://painel.test/api/webhooks/signup'
-    process.env.SALES_SIGNUP_WEBHOOK_SECRET = 's3cret'
-
-    fetchMock.mockRejectedValueOnce(new Error('timeout'))
-    await expect(sendFreeSignupAlert({ clinicName: 'X' })).resolves.toBeUndefined()
-
-    fetchMock.mockResolvedValueOnce({ ok: false, status: 500 })
-    await expect(sendFreeSignupAlert({ clinicName: 'X' })).resolves.toBeUndefined()
-  })
-
-  it('falha do WhatsApp não impede o webhook', async () => {
     configureWhatsApp('5516996095475')
-    process.env.SALES_SIGNUP_WEBHOOK_URL = 'https://painel.test/api/webhooks/signup'
-    process.env.SALES_SIGNUP_WEBHOOK_SECRET = 's3cret'
+
+    await sendFreeSignupAlert({ clinicName: 'X' })
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(sendText).toHaveBeenCalledTimes(1)
+  })
+
+  it('sem as envs do webhook não chama fetch e envia direto', async () => {
+    configureWhatsApp('5516996095475,5511939623300')
+
+    await sendFreeSignupAlert({ clinicName: 'X' })
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(sendText).toHaveBeenCalledTimes(2)
+  })
+
+  it('webhook 500 → fallback: envia WhatsApp direto para todos os destinos', async () => {
+    configureWebhook()
+    configureWhatsApp('5516996095475,5511939623300')
+    fetchMock.mockResolvedValue({ ok: false, status: 500 })
+
+    await sendFreeSignupAlert({ clinicName: 'Clínica Fallback' })
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(sendText).toHaveBeenCalledTimes(2)
+    expect(sendText.mock.calls.map((c) => c[1])).toEqual(['5516996095475', '5511939623300'])
+    expect(sendText.mock.calls[0][2]).toContain('Clínica Fallback')
+  })
+
+  it('webhook 401 (segredo errado) → fallback direto', async () => {
+    configureWebhook()
+    configureWhatsApp('5516996095475')
+    fetchMock.mockResolvedValue({ ok: false, status: 401 })
+
+    await sendFreeSignupAlert({ clinicName: 'X' })
+
+    expect(sendText).toHaveBeenCalledTimes(1)
+  })
+
+  it('timeout do webhook → fallback direto', async () => {
+    configureWebhook()
+    configureWhatsApp('5516996095475')
+    fetchMock.mockRejectedValue(new DOMException('The operation timed out.', 'TimeoutError'))
+
+    await expect(sendFreeSignupAlert({ clinicName: 'X' })).resolves.toBeUndefined()
+
+    expect(sendText).toHaveBeenCalledTimes(1)
+  })
+
+  it('erro de rede no webhook → fallback direto', async () => {
+    configureWebhook()
+    configureWhatsApp('5516996095475')
+    fetchMock.mockRejectedValue(new TypeError('fetch failed'))
+
+    await expect(sendFreeSignupAlert({ clinicName: 'X' })).resolves.toBeUndefined()
+
+    expect(sendText).toHaveBeenCalledTimes(1)
+  })
+
+  it('fallback usa P0_ALERT_PHONE quando COMMERCIAL_WHATSAPP não está definido', async () => {
+    configureWebhook()
+    process.env.P0_ALERT_PHONE = '5511939623300'
+    process.env.EVOLUTION_API_URL = 'https://evolution.test'
+    process.env.EVOLUTION_API_KEY = 'k'
+    process.env.EVOLUTION_INSTANCE = 'inst'
+    fetchMock.mockResolvedValue({ ok: false, status: 502 })
+
+    await sendFreeSignupAlert({ clinicName: 'X' })
+
+    expect(sendText).toHaveBeenCalledTimes(1)
+    expect(sendText.mock.calls[0][1]).toBe('5511939623300')
+  })
+
+  it('webhook falhou e um destino do fallback também falha: o outro é enviado e nunca lança', async () => {
+    configureWebhook()
+    configureWhatsApp('5516996095475,5511939623300')
+    fetchMock.mockResolvedValue({ ok: false, status: 500 })
+    sendText.mockRejectedValueOnce(new Error('evolution fora'))
+
+    await expect(sendFreeSignupAlert({ clinicName: 'X' })).resolves.toBeUndefined()
+
+    expect(sendText).toHaveBeenCalledTimes(2)
+  })
+
+  it('webhook e WhatsApp falhando juntos nunca lançam', async () => {
+    configureWebhook()
+    configureWhatsApp('5516996095475')
+    fetchMock.mockRejectedValue(new Error('rede'))
     sendText.mockRejectedValue(new Error('evolution fora'))
 
+    await expect(sendFreeSignupAlert({ clinicName: 'X' })).resolves.toBeUndefined()
+  })
+
+  it('logs do fallback não vazam telefone completo nem o segredo', async () => {
+    configureWebhook()
+    configureWhatsApp('5516996095475')
+    fetchMock.mockResolvedValue({ ok: false, status: 500 })
+    const info = jest.spyOn(console, 'info').mockImplementation(() => {})
+    const error = jest.spyOn(console, 'error').mockImplementation(() => {})
+
     await sendFreeSignupAlert({ clinicName: 'X' })
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    const logged = [...info.mock.calls, ...error.mock.calls].flat().join(' ')
+    expect(logged).toContain('***5475')
+    expect(logged).not.toContain('5516996095475')
+    expect(logged).not.toContain('s3cret')
   })
 })

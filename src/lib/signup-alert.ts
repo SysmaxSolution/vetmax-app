@@ -2,11 +2,14 @@ import { evolutionSendText } from '@/lib/evolution-api-client'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Alerta comercial: avisa o time quando uma nova clínica nasce no plano Free
-// (self-signup PLG) e registra o cadastro como lead no painel comercial. Falha
-// SEMPRE em silêncio — nunca pode quebrar o cadastro do cliente.
-// WhatsApp: COMMERCIAL_WHATSAPP (lista separada por vírgula; fallback
-// P0_ALERT_PHONE) na instância COMMERCIAL_ALERT_INSTANCE ?? P0_ALERT_INSTANCE ??
-// EVOLUTION_INSTANCE. Painel: SALES_SIGNUP_WEBHOOK_URL + SALES_SIGNUP_WEBHOOK_SECRET.
+// (self-signup PLG). Falha SEMPRE em silêncio — nunca pode quebrar o cadastro.
+// Webhook primeiro: SALES_SIGNUP_WEBHOOK_URL + SALES_SIGNUP_WEBHOOK_SECRET
+// registram o lead no painel comercial, que é dono do alerta (grava e avisa por
+// WhatsApp). Se o webhook responder 2xx, NÃO há envio direto (evita alerta
+// duplicado). Fallback: sem webhook configurado ou com falha (timeout, erro de
+// rede, não-2xx), envia direto via COMMERCIAL_WHATSAPP (lista separada por vírgula;
+// fallback P0_ALERT_PHONE) na instância COMMERCIAL_ALERT_INSTANCE ??
+// P0_ALERT_INSTANCE ?? EVOLUTION_INSTANCE.
 // ─────────────────────────────────────────────────────────────────────────────
 export interface FreeSignupAlertOptions {
   clinicName: string
@@ -74,12 +77,13 @@ async function notifyWhatsApp(opts: FreeSignupAlertOptions): Promise<void> {
   )
 }
 
-async function notifySalesPanel(opts: FreeSignupAlertOptions): Promise<void> {
+/** true somente se o painel comercial aceitou o lead (2xx) — ele passa a ser dono do alerta. */
+async function notifySalesPanel(opts: FreeSignupAlertOptions): Promise<boolean> {
   const url = process.env.SALES_SIGNUP_WEBHOOK_URL
   const secret = process.env.SALES_SIGNUP_WEBHOOK_SECRET
   if (!url || !secret) {
-    console.warn('[Signup Alert] SALES_SIGNUP_WEBHOOK_URL/SECRET não configurados — painel comercial ignorado')
-    return
+    console.warn('[Signup Alert] SALES_SIGNUP_WEBHOOK_URL/SECRET não configurados — usando envio direto por WhatsApp')
+    return false
   }
 
   const payload: Record<string, string> = { createdAt: new Date().toISOString() }
@@ -96,12 +100,22 @@ async function notifySalesPanel(opts: FreeSignupAlertOptions): Promise<void> {
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(WEBHOOK_TIMEOUT_MS),
     })
-    if (!res.ok) console.error(`[Signup Alert] Painel comercial respondeu ${res.status}`)
+    if (!res.ok) {
+      console.error(`[Signup Alert] Painel comercial respondeu ${res.status} — usando envio direto por WhatsApp`)
+      return false
+    }
+    return true
   } catch (err) {
-    console.error('[Signup Alert] Falha ao registrar lead no painel comercial:', err)
+    console.error('[Signup Alert] Falha ao registrar lead no painel comercial — usando envio direto por WhatsApp:', err)
+    return false
   }
 }
 
 export async function sendFreeSignupAlert(opts: FreeSignupAlertOptions): Promise<void> {
-  await Promise.allSettled([notifyWhatsApp(opts), notifySalesPanel(opts)])
+  try {
+    const handledByPanel = await notifySalesPanel(opts)
+    if (!handledByPanel) await notifyWhatsApp(opts)
+  } catch (err) {
+    console.error('[Signup Alert] Falha inesperada:', err)
+  }
 }
