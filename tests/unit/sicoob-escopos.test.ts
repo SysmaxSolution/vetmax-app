@@ -1,4 +1,4 @@
-import { ESCOPO_EXTRATO, extrairTransacoes, toNum } from '@/lib/integrations/sicoob'
+import { ESCOPO_EXTRATO, extrairTransacoes, toNum, normalizarConta } from '@/lib/integrations/sicoob'
 
 // Tudo abaixo foi MEDIDO contra o Sicoob de produção em 2026-10-07, com o
 // e-CNPJ A1 da clínica e o client_id de produção — não é suposição.
@@ -140,5 +140,44 @@ describe('toNum — os dois formatos de valor', () => {
   it('negativo é preservado (o sinal decide crédito/débito quando falta tipo)', () => {
     expect(toNum('-150.25')).toBe(-150.25)
     expect(toNum('-1.500,25')).toBe(-1500.25)
+  })
+})
+
+// ── normalizarConta ──────────────────────────────────────────────────────────
+// O quarto defeito. O cadastro guarda a conta MASCARADA ("8658-4") e a action
+// mandava o valor cru para a URL. Medido contra o Sicoob de produção:
+//
+//   numeroContaCorrente=8658-4  -> 404 Not Found
+//   numeroContaCorrente=86584   -> 200, extrato real
+//   numeroContaCorrente=8658    -> 400 "Número da conta corrente é obrigatório"
+//
+// O 404 parecia conta inexistente no banco, e não formato errado. Escapou da
+// primeira verificação fim a fim porque o script de teste normalizava a conta
+// por conta própria, em vez de passar o valor cru como a aplicação passa.
+
+describe('normalizarConta', () => {
+  it('remove a máscara e PRESERVA o dígito verificador', () => {
+    expect(normalizarConta('8658-4')).toBe('86584')
+    expect(normalizarConta('8.658-4')).toBe('86584')
+    expect(normalizarConta('12345-6')).toBe('123456')
+  })
+
+  it('não mexe no que já vem só com dígitos', () => {
+    expect(normalizarConta('86584')).toBe('86584')
+  })
+
+  it('aceita espaços e formatos variados do cadastro', () => {
+    expect(normalizarConta(' 8658 - 4 ')).toBe('86584')
+    expect(normalizarConta('C/C 8.658-4')).toBe('86584')
+  })
+
+  it('vazio para entrada ausente, para a action poder recusar com mensagem', () => {
+    for (const v of [null, undefined, '', '   ', '-', 'sem numero']) {
+      expect(normalizarConta(v)).toBe('')
+    }
+  })
+
+  it('número também funciona', () => {
+    expect(normalizarConta(86584)).toBe('86584')
   })
 })

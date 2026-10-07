@@ -171,6 +171,15 @@ const toDate = (v: unknown): string | null => {
   return null
 }
 /**
+ * Numero da conta como a API quer: so digitos, COM o digito verificador.
+ *
+ * O cadastro guarda mascarado ("8658-4") e a action mandava cru. Medido
+ * contra o Sicoob de producao (2026-10-07):
+ *   8658-4 -> 404 Not Found   |   86584 -> 200 extrato real   |   8658 -> 400
+ */
+export const normalizarConta = (v: unknown): string => String(v ?? '').replace(/\D/g, '')
+
+/**
  * Converte valor monetario que chega em DOIS formatos diferentes.
  *
  * O SANDBOX devolve numero (1555.05). A PRODUCAO devolve string "1555.05",
@@ -261,6 +270,17 @@ export async function fetchSicoobExtrato(params: {
   const end   = new Date(params.end_date + 'T00:00:00')
   if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) throw new Error('Período inválido.')
 
+  // A conta chega MASCARADA do cadastro ("8658-4") e a API quer so digitos.
+  // Medido contra o Sicoob de producao (2026-10-07):
+  //   numeroContaCorrente=8658-4  -> 404 Not Found
+  //   numeroContaCorrente=86584   -> 200, extrato real
+  //   numeroContaCorrente=8658    -> 400 "Numero da conta corrente e obrigatorio"
+  // Normalizar AQUI, na fronteira, e nao em cada chamador: a action mandava o
+  // valor cru de bank_accounts.account e o 404 parecia conta inexistente.
+  // O digito verificador faz parte do numero — nao remover.
+  const contaDigitos = normalizarConta(params.conta)
+  if (!contaDigitos) throw new Error('Conta sem numero cadastrado — confira o cadastro da conta bancaria.')
+
   const clientId = ehSandbox(cfg) ? SANDBOX.client_id : (cfg.client_id ?? '')
   const token = await getToken(cfg)
 
@@ -272,7 +292,7 @@ export async function fetchSicoobExtrato(params: {
     const diaIni = (cur.getFullYear() === start.getFullYear() && cur.getMonth() === start.getMonth()) ? start.getDate() : 1
     const diaFim = (cur.getFullYear() === end.getFullYear() && cur.getMonth() === end.getMonth()) ? end.getDate() : lastDay
     try {
-      const monthTxs = await fetchMonth(cfg, params.conta, mes, ano, diaIni, diaFim, token, clientId)
+      const monthTxs = await fetchMonth(cfg, contaDigitos, mes, ano, diaIni, diaFim, token, clientId)
       statements.push(...monthTxs)
     } catch (e) {
       warnings.push(`${String(mes).padStart(2, '0')}/${ano}: ${(e as Error).message}`)
