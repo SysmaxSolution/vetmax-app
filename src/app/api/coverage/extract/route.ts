@@ -16,7 +16,6 @@ import { createClient } from '@/lib/supabase/server'
 import { extractCoverageCore } from '@/lib/ai/coverage-extractor'
 import { limitarPorIp } from '@/lib/api/rate-limit'
 
-import { limitarPorIp } from '@/lib/api/rate-limit'
 export async function POST(req: Request) {
   const barrado = await limitarPorIp(req, { escopo: 'ia:cobertura', limite: 20 })
   if (barrado) return barrado

@@ -6,7 +6,6 @@ import { sendP0Alert } from '@/lib/p0-alert'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { limitarPorIp } from '@/lib/api/rate-limit'
 
-import { limitarPorIp } from '@/lib/api/rate-limit'
 // POST /api/webhooks/vercel-logs
 // Recebe logs do Vercel Log Drain (HTTP format).
 // Autenticado por HMAC-SHA1 via header x-vercel-signature.

@@ -4,7 +4,6 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { resolveAgentUpdate } from '@/lib/lab/agent-release'
 import { limitarPorIp } from '@/lib/api/rate-limit'
 
-import { limitarPorIp } from '@/lib/api/rate-limit'
 // Verificação de pareamento + canal de reconfiguração remota.
 // O agente pinga periodicamente (com ?env=dev|prod). Se houver um destino
 // pendente definido no painel, devolve `reconfigure` (uma vez) e limpa o pending.

@@ -6,7 +6,6 @@ import { handleDirectorCommand } from '@/lib/director-commands'
 import { isWithinWindow, isWithinBusinessHours, type WeeklyBusinessHours } from '@/lib/time'
 import { limitarPorIp } from '@/lib/api/rate-limit'
 
-import { limitarPorIp } from '@/lib/api/rate-limit'
 // POST /api/webhooks/whatsapp/[clinicId]
 // Normaliza nomes de eventos (uppercase/lowercase) para compatibilidade com v1.8.4 e v2.x.
 

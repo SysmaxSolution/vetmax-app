@@ -6,7 +6,6 @@ import { VETMAX_KNOWLEDGE_BASE } from '@/lib/mentor/knowledge-base'
 import { getRouteContext, serializeRouteContext } from '@/lib/mentor/context-map'
 import { limitarPorIp } from '@/lib/api/rate-limit'
 
-import { limitarPorIp } from '@/lib/api/rate-limit'
 /**
  * POST /api/mentor-chat
  * Body: { question: string, pathname?: string }

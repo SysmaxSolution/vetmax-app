@@ -7,7 +7,6 @@ import { tmpdir } from 'os'
 import { createClient } from '@/lib/supabase/server'
 import { limitarPorIp } from '@/lib/api/rate-limit'
 
-import { limitarPorIp } from '@/lib/api/rate-limit'
 const PDFParser = require('pdf2json')
 
 const anthropic = new Anthropic({
