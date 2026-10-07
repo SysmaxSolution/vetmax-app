@@ -11,6 +11,7 @@ import { evolutionSendText } from '@/lib/evolution-api-client'
 import { logBoletoEvent } from '@/lib/boleto/events'
 import { clinicFlowFlag, routineOffError } from '@/lib/clinic/flow-gate'
 
+import { mensagemErro } from '@/lib/errors'
 async function getOrigin(): Promise<string> {
   const h = await headers()
   const host = h.get('x-forwarded-host') ?? h.get('host')
@@ -80,7 +81,7 @@ export async function ensureBoletoWebhookUrl(bankAccountId: string): Promise<{ u
     token = `bwh_${randomBytes(18).toString('hex')}`
     const { error } = await admin.from('bank_accounts')
       .update({ boleto_webhook_token: token }).eq('id', bankAccountId).eq('clinic_id', c.clinicId)
-    if (error) return { error: error.message }
+    if (error) return { error: mensagemErro(error, 'lib/actions/boleto-cobranca.ts') }
   }
   const origin = await getOrigin()
   return { url: `${origin}/api/webhooks/sicoob-cobranca?key=SEU_SICOOB_WEBHOOK_SECRET&conta=${token}`, token }
@@ -93,7 +94,7 @@ export async function saveBoletoConfig(bankAccountId: string, config: BoletoConf
   const patch: Record<string, unknown> = { boleto_config: config, boleto_enabled: enabled }
   if (typeof nextNossoNumero === 'number' && nextNossoNumero >= 1) patch.next_nosso_numero = Math.floor(nextNossoNumero)
   const { error } = await admin.from('bank_accounts').update(patch).eq('id', bankAccountId).eq('clinic_id', c.clinicId)
-  return error ? { error: error.message } : { ok: true }
+  return error ? { error: mensagemErro(error, 'lib/actions/boleto-cobranca.ts') } : { ok: true }
 }
 
 // ─── Duplicatas em aberto (recebíveis) p/ emitir/reimprimir ──────────────────
@@ -220,7 +221,7 @@ export async function emitOrReprintBoleto(financialEntryId: string, bankAccountI
     situacao, pagador_nome: pag.nome, pagador_cpf_cnpj: (pag.cpfCnpj ?? '').replace(/\D/g, ''),
     public_token: publicToken, raw_response: raw as any, error_message: errorMsg, created_by: c.userId,
   }).select('id').single()
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/boleto-cobranca.ts') }
   const boletoId = (row as any).id
   await logBoletoEvent(admin, {
     clinicId: c.clinicId, boletoId, eventType: errorMsg ? 'erro' : 'emitido', actorId: c.userId, actorName: c.name,
@@ -300,7 +301,7 @@ export async function sendBoletoEmail(boletoId: string): Promise<{ ok: true } | 
       <p><a href="${info.url}" style="background:#0E3B2E;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none">Abrir e imprimir o boleto</a></p>
       <p style="color:#8a968e;font-size:12px">Se o botão não abrir, copie: ${info.url}</p></div>`
     await resend.emails.send({ from: 'SysVetMax <noreply@sysmaxsolutions.com>', to: info.email, subject: `Boleto — ${valorFmt} (venc. ${venc})`, html })
-  } catch (e) { return { error: e instanceof Error ? e.message : 'Falha ao enviar e-mail.' } }
+  } catch (e) { return { error: e instanceof Error ? mensagemErro(e, 'lib/actions/boleto-cobranca.ts') : 'Falha ao enviar e-mail.' } }
   await admin.from('clinic_boletos').update({ email_sent_at: new Date().toISOString() }).eq('id', boletoId)
   await logBoletoEvent(admin, { clinicId: c.clinicId, boletoId, eventType: 'email_enviado', actorId: c.userId, actorName: c.name, detail: `Boleto enviado por e-mail para ${info.email}` })
   return { ok: true }

@@ -11,6 +11,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import type { DocumentSequence, CompanyLite } from '@/lib/doc-types'
 
+import { mensagemErro } from '@/lib/errors'
 async function getCtx() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -51,7 +52,7 @@ export async function listDocumentSequences(): Promise<DocumentSequence[] | { er
       .order('doc_type', { ascending: true }),
     admin.from('companies').select('id, name').eq('clinic_id', ctx.clinic_id),
   ])
-  if (error) return { error: `Erro ao listar numerações: ${error.message}` }
+  if (error) return { error: `Erro ao listar numerações: ${mensagemErro(error, 'lib/actions/document-numbering.ts')}` }
 
   const byId = new Map((companies ?? []).map((c: any) => [c.id, c.name as string]))
   return ((seqs ?? []) as any[]).map(s => ({
@@ -102,7 +103,7 @@ export async function upsertDocumentSequence(input: {
       .eq('clinic_id', ctx.clinic_id)
       .select('id')
       .single()
-    if (error) return { error: `Erro ao atualizar: ${error.message}` }
+    if (error) return { error: `Erro ao atualizar: ${mensagemErro(error, 'lib/actions/document-numbering.ts')}` }
     revalidatePath('/dashboard/management')
     return { id: data.id as string }
   }
@@ -114,7 +115,7 @@ export async function upsertDocumentSequence(input: {
     .single()
   if (error) {
     if (error.code === '23505') return { error: 'Já existe uma numeração para esse tipo/empresa' }
-    return { error: `Erro ao criar: ${error.message}` }
+    return { error: `Erro ao criar: ${mensagemErro(error, 'lib/actions/document-numbering.ts')}` }
   }
   revalidatePath('/dashboard/management')
   return { id: data.id as string }

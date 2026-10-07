@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { randomUUID } from 'crypto'
 import { logAudit } from './audit'
 
+import { mensagemErro } from '@/lib/errors'
 const TEMPLATE_BUCKET = 'document-templates'
 const PATIENT_DOC_BUCKET = 'patient-documents'
 
@@ -57,7 +58,7 @@ export async function uploadTemplatePdf(
     })
 
   if (uploadErr) {
-    return { error: 'Erro no upload do PDF: ' + uploadErr.message }
+    return { error: 'Erro no upload do PDF: ' + mensagemErro(uploadErr, 'lib/actions/template-storage.ts') }
   }
 
   await logAudit({
@@ -100,7 +101,7 @@ export async function getTemplatePdfSignedUrl(
     .from(TEMPLATE_BUCKET)
     .createSignedUrl(templatePath, expiresInSeconds)
 
-  if (error || !data) return { error: 'Erro ao gerar URL: ' + (error?.message || '') }
+  if (error || !data) return { error: 'Erro ao gerar URL: ' + (mensagemErro(error, 'lib/actions/template-storage.ts') || '') }
   return { url: data.signedUrl }
 }
 
@@ -128,7 +129,7 @@ export async function deleteTemplatePdf(
 
   const admin = createAdminClient()
   const { error } = await admin.storage.from(TEMPLATE_BUCKET).remove([templatePath])
-  if (error) return { error: 'Erro ao remover: ' + error.message }
+  if (error) return { error: 'Erro ao remover: ' + mensagemErro(error, 'lib/actions/template-storage.ts') }
   return { success: true }
 }
 
@@ -162,7 +163,7 @@ export async function uploadGeneratedPatientPdf(
       upsert: true,
     })
 
-  if (uploadErr) return { error: 'Erro upload: ' + uploadErr.message }
+  if (uploadErr) return { error: 'Erro upload: ' + mensagemErro(uploadErr, 'lib/actions/template-storage.ts') }
   return { path }
 }
 
@@ -218,7 +219,7 @@ export async function getTemplateUploadUrls(input: {
     const { data, error } = await admin.storage
       .from(TEMPLATE_BUCKET)
       .createSignedUploadUrl(path, { upsert: false })
-    if (error || !data) return { error: 'Erro criando token PDF: ' + (error?.message || '') }
+    if (error || !data) return { error: 'Erro criando token PDF: ' + (mensagemErro(error, 'lib/actions/template-storage.ts') || '') }
     result.pdf = { path, token: data.token }
   }
 
@@ -230,7 +231,7 @@ export async function getTemplateUploadUrls(input: {
       const { data, error } = await admin.storage
         .from(TEMPLATE_BUCKET)
         .createSignedUploadUrl(path, { upsert: true })
-      if (error || !data) return { error: `Erro criando token pagina ${i}: ${error?.message || ''}` }
+      if (error || !data) return { error: `Erro criando token pagina ${i}: ${mensagemErro(error, 'lib/actions/template-storage.ts') || ''}` }
       result.pages.push({ path, token: data.token, idx: i })
     }
   }
@@ -320,7 +321,7 @@ export async function uploadCleanedPages(
         cacheControl: '3600',
         upsert: true,
       })
-    if (upErr) return { error: `Erro upload pagina ${idx}: ${upErr.message}` }
+    if (upErr) return { error: `Erro upload pagina ${idx}: ${mensagemErro(upErr, 'lib/actions/template-storage.ts')}` }
     paths.push(path)
   }
 
@@ -369,7 +370,7 @@ export async function getCleanedPagesSignedUrls(
     const { data, error } = await admin.storage
       .from(TEMPLATE_BUCKET)
       .createSignedUrl(p, expiresInSeconds)
-    if (error || !data) return { error: `Erro signed URL ${p}: ${error?.message || ''}` }
+    if (error || !data) return { error: `Erro signed URL ${p}: ${mensagemErro(error, 'lib/actions/template-storage.ts') || ''}` }
     urls.push(data.signedUrl)
   }
   return { urls }
@@ -402,7 +403,7 @@ export async function deleteCleanedPages(
 
   const admin = createAdminClient()
   const { error } = await admin.storage.from(TEMPLATE_BUCKET).remove(paths)
-  if (error) return { error: 'Erro ao remover paginas: ' + error.message }
+  if (error) return { error: 'Erro ao remover paginas: ' + mensagemErro(error, 'lib/actions/template-storage.ts') }
   return { success: true }
 }
 
@@ -426,6 +427,6 @@ export async function getPatientDocSignedUrl(
   const { data, error } = await admin.storage
     .from(PATIENT_DOC_BUCKET)
     .createSignedUrl(path, expiresInSeconds)
-  if (error || !data) return { error: 'Erro ao gerar URL: ' + (error?.message || '') }
+  if (error || !data) return { error: 'Erro ao gerar URL: ' + (mensagemErro(error, 'lib/actions/template-storage.ts') || '') }
   return { url: data.signedUrl }
 }

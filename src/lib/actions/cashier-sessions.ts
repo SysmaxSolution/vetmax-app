@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type CashierSessionStatus = 'open' | 'closed'
@@ -119,7 +120,7 @@ export async function openCashierSession(
     if (error.message.includes('uidx_cashier_sessions_one_open_per_clinic')) {
       return { error: 'Já existe um caixa aberto para esta clínica. Feche-o antes de abrir outro.' }
     }
-    return { error: `Erro ao abrir caixa: ${error.message}` }
+    return { error: `Erro ao abrir caixa: ${mensagemErro(error, 'lib/actions/cashier-sessions.ts')}` }
   }
 
   revalidatePath('/dashboard/cashier')
@@ -156,7 +157,7 @@ export async function getSessionExpectedTotals(
   // Vincula órfãos à sessão de forma atômica (advisory lock) antes de calcular,
   // para que a query por session_id seja correta por construção (migration 0392).
   const { error: linkErr } = await supabase.rpc('rpc_link_session_orphans', { p_session_id: sessionId })
-  if (linkErr) return { error: `Erro ao consolidar lançamentos da sessão: ${linkErr.message}` }
+  if (linkErr) return { error: `Erro ao consolidar lançamentos da sessão: ${mensagemErro(linkErr, 'lib/actions/cashier-sessions.ts')}` }
 
   const [entriesRes, outflowsRes] = await Promise.all([
     supabase
@@ -240,7 +241,7 @@ export async function getSessionReconciliation(
 
   // Consolida órfãos na sessão (atômico) antes de medir.
   const { error: linkErr } = await supabase.rpc('rpc_link_session_orphans', { p_session_id: sessionId })
-  if (linkErr) return { error: `Erro ao consolidar lançamentos: ${linkErr.message}` }
+  if (linkErr) return { error: `Erro ao consolidar lançamentos: ${mensagemErro(linkErr, 'lib/actions/cashier-sessions.ts')}` }
 
   const [entriesRes, outflowsRes, orphanRes] = await Promise.all([
     supabase
@@ -352,7 +353,7 @@ export async function closeCashierSession(
   // Vincula órfãos à sessão (advisory lock) antes de somar, para que o
   // comprovante salvo bata com a conferência exibida ao operador (migration 0392).
   const { error: linkErr } = await supabase.rpc('rpc_link_session_orphans', { p_session_id: sessionId })
-  if (linkErr) return { error: `Erro ao consolidar lançamentos da sessão: ${linkErr.message}` }
+  if (linkErr) return { error: `Erro ao consolidar lançamentos da sessão: ${mensagemErro(linkErr, 'lib/actions/cashier-sessions.ts')}` }
 
   // Fetch all entries for this session
   const [entriesRes, outflowsRes] = await Promise.all([
@@ -374,8 +375,8 @@ export async function closeCashierSession(
       .eq('session_id', sessionId),
   ])
 
-  if (entriesRes.error) return { error: `Erro ao buscar lançamentos: ${entriesRes.error.message}` }
-  if (outflowsRes.error) return { error: `Erro ao buscar saídas: ${outflowsRes.error.message}` }
+  if (entriesRes.error) return { error: `Erro ao buscar lançamentos: ${mensagemErro(entriesRes.error, 'lib/actions/cashier-sessions.ts')}` }
+  if (outflowsRes.error) return { error: `Erro ao buscar saídas: ${mensagemErro(outflowsRes.error, 'lib/actions/cashier-sessions.ts')}` }
 
   const entries  = entriesRes.data ?? []
   const outflows = outflowsRes.data ?? []
@@ -422,7 +423,7 @@ export async function closeCashierSession(
     .eq('id', sessionId)
     .eq('clinic_id', ctx.clinic_id)
 
-  if (closeErr) return { error: `Erro ao fechar caixa: ${closeErr.message}` }
+  if (closeErr) return { error: `Erro ao fechar caixa: ${mensagemErro(closeErr, 'lib/actions/cashier-sessions.ts')}` }
 
   revalidatePath('/dashboard/cashier')
 
@@ -466,7 +467,7 @@ export async function listClosedSessions(limit = 30): Promise<
     .order('closed_at', { ascending: false })
     .limit(limit)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/cashier-sessions.ts') }
   const sessions = data ?? []
 
   // Resolve nomes dos operadores (abertura/fechamento)
@@ -535,7 +536,7 @@ export async function getOperatorCashierStats(
       .eq('clinic_id', ctx.clinic_id),
   ])
 
-  if (sessionsRes.error) return { error: sessionsRes.error.message }
+  if (sessionsRes.error) return { error: mensagemErro(sessionsRes.error, 'lib/actions/cashier-sessions.ts') }
   const affected = new Set((affectedRes.data ?? []).map(r => r.new_session_id as string))
   const sessions = (sessionsRes.data ?? []).filter(s => !affected.has(s.id as string))
 
@@ -603,7 +604,7 @@ export async function verifyOutflow(outflowId: string): Promise<{ success: true 
     .eq('clinic_id', ctx.clinic_id)
     .is('verified_at', null)
 
-  if (error) return { error: `Erro ao verificar saída: ${error.message}` }
+  if (error) return { error: `Erro ao verificar saída: ${mensagemErro(error, 'lib/actions/cashier-sessions.ts')}` }
 
   revalidatePath('/dashboard/cashier')
   return { success: true }
@@ -624,7 +625,7 @@ export async function getCurrentSession(): Promise<CashierSession | null | { err
     .eq('status', 'open')
     .single()
 
-  if (error && error.code !== 'PGRST116') return { error: error.message }
+  if (error && error.code !== 'PGRST116') return { error: mensagemErro(error, 'lib/actions/cashier-sessions.ts') }
   return data ?? null
 }
 
@@ -691,7 +692,7 @@ export async function registerOutflow(data: {
     .select('id')
     .single()
 
-  if (error) return { error: `Erro ao registrar saída: ${error.message}` }
+  if (error) return { error: `Erro ao registrar saída: ${mensagemErro(error, 'lib/actions/cashier-sessions.ts')}` }
 
   revalidatePath('/dashboard/cashier')
   return { id: result.id }
@@ -725,7 +726,7 @@ export async function listOutflows(filters?: {
   }
 
   const { data, error } = await query.order('created_at', { ascending: false })
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/cashier-sessions.ts') }
   return data ?? []
 }
 
@@ -755,7 +756,7 @@ export async function reverseCashierEntry(
     p_reversed_by: ctx.user_id,
   })
 
-  if (error) return { error: `Erro ao estornar: ${error.message}` }
+  if (error) return { error: `Erro ao estornar: ${mensagemErro(error, 'lib/actions/cashier-sessions.ts')}` }
 
   const result = Array.isArray(data) ? data[0] : data
   if (!result?.success) return { error: result?.message ?? 'Estorno falhou' }
@@ -787,7 +788,7 @@ export async function getCashierDashboard(
     p_date:      targetDate,
   })
 
-  if (error) return { error: `Erro ao buscar dashboard: ${error.message}` }
+  if (error) return { error: `Erro ao buscar dashboard: ${mensagemErro(error, 'lib/actions/cashier-sessions.ts')}` }
 
   const row = Array.isArray(data) ? data[0] : data
   if (!row) return {

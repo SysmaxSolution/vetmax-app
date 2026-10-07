@@ -17,6 +17,7 @@ import { revalidatePath } from 'next/cache'
 import { computeBillingTotal } from '@/lib/billing/compute'
 import { groupServicesByCompany } from '@/lib/billing/nfse-split'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Tipos ──────────────────────────────────────────────────────────────────
 
 export type BillingDocType = 'orcamento' | 'nfse'
@@ -129,7 +130,7 @@ export async function listBillingDocuments(
   if (filters.docNumber)      qb = qb.ilike('doc_number', `%${filters.docNumber.trim()}%`)
 
   const { data, error } = await qb
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/billing-documents.ts') }
 
   let rows = (data ?? []).map((d: any): BillingDocumentRow => ({
     id:                  d.id,
@@ -189,7 +190,7 @@ export async function getBillingDocument(
     .eq('id', id)
     .eq('clinic_id', clinic_id)
     .maybeSingle()
-  if (error)  return { error: error.message }
+  if (error)  return { error: mensagemErro(error, 'lib/actions/billing-documents.ts') }
   if (!d)     return { error: 'Documento não encontrado.' }
 
   const { data: items } = await admin
@@ -262,7 +263,7 @@ export async function createQuotation(
     p_clinic_id: clinic_id,
     p_doc_type:  'orcamento',
   })
-  if (numErr || !numberData) return { error: 'Erro ao gerar número do documento: ' + (numErr?.message ?? '') }
+  if (numErr || !numberData) return { error: 'Erro ao gerar número do documento: ' + ((numErr ? mensagemErro(numErr, 'lib/actions/billing-documents.ts') : '')) }
   const docNumber = numberData as string
 
   // Snapshot imutável para reimpressão fiel
@@ -292,7 +293,7 @@ export async function createQuotation(
     })
     .select('id, doc_number')
     .single()
-  if (docErr || !doc) return { error: 'Erro ao criar orçamento: ' + (docErr?.message ?? '') }
+  if (docErr || !doc) return { error: 'Erro ao criar orçamento: ' + ((docErr ? mensagemErro(docErr, 'lib/actions/billing-documents.ts') : '')) }
 
   const itemRows = cleanItems.map((it, idx) => ({
     clinic_id,
@@ -307,7 +308,7 @@ export async function createQuotation(
   const { error: itemsErr } = await admin.from('billing_document_items').insert(itemRows)
   if (itemsErr) {
     await admin.from('billing_documents').delete().eq('id', doc.id)
-    return { error: 'Erro ao gravar itens: ' + itemsErr.message }
+    return { error: 'Erro ao gravar itens: ' + mensagemErro(itemsErr, 'lib/actions/billing-documents.ts') }
   }
 
   revalidatePath('/dashboard/billing')
@@ -362,7 +363,7 @@ export async function updateQuotation(
       sort_order: idx,
     }))
     const { error: e } = await admin.from('billing_document_items').insert(itemRows)
-    if (e) return { error: 'Erro ao atualizar itens: ' + e.message }
+    if (e) return { error: 'Erro ao atualizar itens: ' + mensagemErro(e, 'lib/actions/billing-documents.ts') }
   }
   if (input.payload) {
     patch.payload = { ...((doc.payload as object) ?? {}), ...input.payload }
@@ -370,7 +371,7 @@ export async function updateQuotation(
 
   if (Object.keys(patch).length > 0) {
     const { error } = await admin.from('billing_documents').update(patch).eq('id', id)
-    if (error) return { error: error.message }
+    if (error) return { error: mensagemErro(error, 'lib/actions/billing-documents.ts') }
   }
   // PDF antigo fica obsoleto após edição
   await admin.from('billing_documents').update({ pdf_path: null }).eq('id', id)
@@ -390,7 +391,7 @@ export async function markQuotationSent(id: string): Promise<{ success: true } |
     .update({ status: 'sent' })
     .eq('id', id).eq('clinic_id', clinic_id)
     .eq('doc_type', 'orcamento').in('status', ['draft', 'sent'])
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/billing-documents.ts') }
   revalidatePath('/dashboard/billing')
   return { success: true }
 }
@@ -406,7 +407,7 @@ export async function cancelBillingDocument(id: string): Promise<{ success: true
   if (doc.status === 'cancelled') return { error: 'Documento já está cancelado.' }
   const { error } = await admin
     .from('billing_documents').update({ status: 'cancelled' }).eq('id', id).eq('clinic_id', clinic_id)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/billing-documents.ts') }
   revalidatePath('/dashboard/billing')
   return { success: true }
 }
@@ -473,14 +474,14 @@ export async function generateBillingDocumentPdf(
       professional: (professional as any) ?? null,
     })
   } catch (e) {
-    return { error: 'Falha ao gerar o PDF: ' + (e instanceof Error ? e.message : 'erro') }
+    return { error: 'Falha ao gerar o PDF: ' + (e instanceof Error ? mensagemErro(e, 'lib/actions/billing-documents.ts') : 'erro') }
   }
 
   const storagePath = `${clinic_id}/billing/${detail.doc_number}.pdf`
   const { error: upErr } = await admin.storage
     .from('clinic-attachments')
     .upload(storagePath, buffer, { contentType: 'application/pdf', upsert: true })
-  if (upErr) return { error: 'Erro ao salvar o PDF: ' + upErr.message }
+  if (upErr) return { error: 'Erro ao salvar o PDF: ' + mensagemErro(upErr, 'lib/actions/billing-documents.ts') }
 
   await admin.from('billing_documents').update({ pdf_path: storagePath }).eq('id', id)
 
@@ -575,7 +576,7 @@ export async function listClinicProfessionals(): Promise<
     .select('id, full_name, role')
     .eq('clinic_id', clinic_id)
     .order('full_name')
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/billing-documents.ts') }
   return (data ?? []).map((p: any) => ({ id: p.id, name: p.full_name ?? '—', role: p.role ?? '' }))
 }
 
@@ -658,7 +659,7 @@ export async function getOpenQuotationsForTutor(
     .eq('is_billed', false)
     .in('status', ['draft', 'sent'])
     .order('issue_date', { ascending: false })
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/billing-documents.ts') }
 
   const ids = (data ?? []).map((d: any) => d.id)
   const counts = await countItemsByDocument(admin, ids)
@@ -691,7 +692,7 @@ export async function getOpenQuotationsForCheckin(
   if (patientId) qb = qb.or(`patient_id.eq.${patientId},patient_id.is.null`)
 
   const { data, error } = await qb
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/billing-documents.ts') }
   const ids = (data ?? []).map((d: any) => d.id)
   const counts = await countItemsByDocument(admin, ids)
   return (data ?? []).map((d: any) => toOpenQuotation(d, counts.get(d.id) ?? 0))
@@ -846,7 +847,7 @@ export async function getConsultationQuotations(
     .eq('doc_type', 'orcamento')
     .neq('status', 'cancelled')
     .order('issue_date', { ascending: true })
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/billing-documents.ts') }
   return (data ?? []).map((d: any) => ({
     id: d.id, doc_number: d.doc_number, status: d.status,
     is_billed: d.is_billed, total_amount: Number(d.total_amount),
@@ -1038,7 +1039,7 @@ export async function createNfseDocumentForConsultation(
   const { data: numberData, error: numErr } = await supabase.rpc('rpc_next_billing_number', {
     p_clinic_id: clinic_id, p_doc_type: 'nfse',
   })
-  if (numErr || !numberData) return { error: 'Erro ao gerar número da NFS-e: ' + (numErr?.message ?? '') }
+  if (numErr || !numberData) return { error: 'Erro ao gerar número da NFS-e: ' + ((numErr ? mensagemErro(numErr, 'lib/actions/billing-documents.ts') : '')) }
   const docNumber = numberData as string
 
   const tutorName   = await nameOf(admin, 'tutors', consult.tutor_id)
@@ -1064,7 +1065,7 @@ export async function createNfseDocumentForConsultation(
     })
     .select('id, doc_number')
     .single()
-  if (docErr || !doc) return { error: 'Erro ao criar NFS-e: ' + (docErr?.message ?? '') }
+  if (docErr || !doc) return { error: 'Erro ao criar NFS-e: ' + ((docErr ? mensagemErro(docErr, 'lib/actions/billing-documents.ts') : '')) }
 
   const itemRows = items.map((it, idx) => ({
     clinic_id, document_id: doc.id, stock_item_id: it.stock_item_id,
@@ -1074,7 +1075,7 @@ export async function createNfseDocumentForConsultation(
   const { error: itemsErr } = await admin.from('billing_document_items').insert(itemRows)
   if (itemsErr) {
     await admin.from('billing_documents').delete().eq('id', doc.id)
-    return { error: 'Erro ao gravar itens da NFS-e: ' + itemsErr.message }
+    return { error: 'Erro ao gravar itens da NFS-e: ' + mensagemErro(itemsErr, 'lib/actions/billing-documents.ts') }
   }
 
   revalidatePath('/dashboard/billing')
@@ -1171,7 +1172,7 @@ export async function createNfseDocumentsForConsultation(
       const { data: n2, error: e2 } = await supabase.rpc('rpc_next_billing_number', {
         p_clinic_id: clinic_id, p_doc_type: 'nfse',
       })
-      if (e2 || !n2) return { error: 'Erro ao gerar número da NFS-e: ' + (e2?.message ?? '') }
+      if (e2 || !n2) return { error: 'Erro ao gerar número da NFS-e: ' + ((e2 ? mensagemErro(e2, 'lib/actions/billing-documents.ts') : '')) }
       docNumber = n2 as string
     }
 
@@ -1195,7 +1196,7 @@ export async function createNfseDocumentsForConsultation(
       })
       .select('id, doc_number')
       .single()
-    if (docErr || !doc) return { error: 'Erro ao criar NFS-e: ' + (docErr?.message ?? '') }
+    if (docErr || !doc) return { error: 'Erro ao criar NFS-e: ' + ((docErr ? mensagemErro(docErr, 'lib/actions/billing-documents.ts') : '')) }
 
     const itemRows = items.map((it, idx) => ({
       clinic_id, document_id: doc.id, stock_item_id: it.stock_item_id,
@@ -1205,7 +1206,7 @@ export async function createNfseDocumentsForConsultation(
     const { error: itemsErr2 } = await admin.from('billing_document_items').insert(itemRows)
     if (itemsErr2) {
       await admin.from('billing_documents').delete().eq('id', doc.id)
-      return { error: 'Erro ao gravar itens da NFS-e: ' + itemsErr2.message }
+      return { error: 'Erro ao gravar itens da NFS-e: ' + mensagemErro(itemsErr2, 'lib/actions/billing-documents.ts') }
     }
 
     out.push({ id: doc.id as string, doc_number: doc.doc_number as string, company_id: companyId, company_name: label })

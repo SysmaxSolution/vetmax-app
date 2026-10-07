@@ -9,6 +9,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 async function getCtx() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -31,7 +32,7 @@ export async function listLabAgents(): Promise<LabAgentRow[] | { error: string }
   const { data, error } = await ctx.admin
     .from('lab_agents').select('id, label, token, is_active, last_seen_at, created_at, last_env, pending_env, pending_set_at')
     .eq('clinic_id', ctx.clinic_id).order('created_at', { ascending: false })
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/lab-agents.ts') }
   return (data ?? []) as LabAgentRow[]
 }
 
@@ -59,7 +60,7 @@ export async function promoteLabAgent(
   const { error } = await ctx.admin.from('lab_agents').update({
     pending_env: environment, pending_url: baseUrl, pending_token: t, pending_set_at: new Date().toISOString(),
   }).eq('id', id).eq('clinic_id', ctx.clinic_id)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/lab-agents.ts') }
   revalidatePath('/dashboard/management')
   return { ok: true }
 }
@@ -84,7 +85,7 @@ export async function createLabAgentToken(label: string): Promise<LabAgentRow | 
     .insert({ clinic_id: ctx.clinic_id, token, label: label?.trim() || 'Agente de laboratório', created_by: ctx.user_id })
     .select('id, label, token, is_active, last_seen_at, created_at')
     .single()
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/lab-agents.ts') }
   revalidatePath('/dashboard/management')
   return data as LabAgentRow
 }
@@ -94,7 +95,7 @@ export async function setLabAgentActive(id: string, active: boolean): Promise<{ 
   if ('error' in ctx) return { error: ctx.error as string }
   if (!['admin', 'owner', 'manager'].includes(ctx.role)) return { error: 'Acesso negado' }
   const { error } = await ctx.admin.from('lab_agents').update({ is_active: active }).eq('id', id).eq('clinic_id', ctx.clinic_id)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/lab-agents.ts') }
   revalidatePath('/dashboard/management')
   return { ok: true }
 }

@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getAsaasWebhookToken } from '@/lib/billing/asaas'
 import { activatePaidSubscription, attemptSuspendSubscription } from '@/lib/billing/provision'
 
+import { limitarPorIp } from '@/lib/api/rate-limit'
 // POST /api/webhooks/asaas
 // Recebe eventos de cobrança do Asaas (Monetização SaaS — Fase 2).
 // Autenticação: header `asaas-access-token` == token do ambiente ativo
@@ -36,6 +37,9 @@ const OVERDUE_EVENTS = new Set(['PAYMENT_OVERDUE'])
 const REVERSAL_EVENTS = new Set(['PAYMENT_CHARGEBACK_REQUESTED', 'PAYMENT_REFUNDED'])
 
 export async function POST(request: NextRequest) {
+  const barrado = await limitarPorIp(request, { escopo: 'wh:asaas', limite: 300 })
+  if (barrado) return barrado
+
   // 1. Autenticação do webhook
   const token = request.headers.get('asaas-access-token') ?? ''
   const expected = getAsaasWebhookToken()

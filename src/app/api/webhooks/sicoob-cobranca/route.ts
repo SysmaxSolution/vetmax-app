@@ -4,6 +4,8 @@ import { settleBoletoPaid } from '@/lib/boleto/settle'
 import { logBoletoEvent } from '@/lib/boleto/events'
 import { extractAccountHints, resolveBoletoCandidate, type BoletoCandidate } from '@/lib/boleto/webhook-resolve'
 
+import { mensagemErro } from '@/lib/errors'
+import { limitarPorIp } from '@/lib/api/rate-limit'
 // Webhook de Cobrança Bancária Sicoob — notificação de pagamento (baixa automática).
 // Registrado em produção (POST /webhooks na API Sicoob) apontando para esta URL
 // com ?key=<SICOOB_WEBHOOK_SECRET>&conta=<token da conta>. Ao receber o pagamento,
@@ -14,6 +16,9 @@ import { extractAccountHints, resolveBoletoCandidate, type BoletoCandidate } fro
 // (caminho recomendado) ou do casamento dos dados de carteira presentes no
 // payload. Havendo mais de um candidato, a rota FALHA (409) em vez de adivinhar.
 export async function POST(req: Request) {
+  const barrado = await limitarPorIp(req, { escopo: 'wh:sicoob', limite: 300 })
+  if (barrado) return barrado
+
   const secret = process.env.SICOOB_WEBHOOK_SECRET
   const reqUrl = new URL(req.url)
   const key = reqUrl.searchParams.get('key')
@@ -50,7 +55,7 @@ export async function POST(req: Request) {
   let q = admin.from('clinic_boletos').select('id, clinic_id, bank_account_id').eq('nosso_numero', nossoNumero)
   if (scopedAccount) q = q.eq('clinic_id', scopedAccount.clinic_id).eq('bank_account_id', scopedAccount.id)
   const { data: rows, error: rowsErr } = await q
-  if (rowsErr) return NextResponse.json({ error: rowsErr.message }, { status: 500 })
+  if (rowsErr) return NextResponse.json({ error: mensagemErro(rowsErr, 'app/api/webhooks/sicoob-cobranca/route.ts') }, { status: 500 })
 
   const list = (rows ?? []) as { id: string; clinic_id: string; bank_account_id: string | null }[]
   if (!list.length) return NextResponse.json({ ok: true, ignored: 'boleto não encontrado' })

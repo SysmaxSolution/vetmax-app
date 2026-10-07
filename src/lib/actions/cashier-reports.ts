@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface CashierReportFilters {
@@ -91,7 +92,7 @@ export async function generateCashierReport(
     p_filters:   rpcFilters,
   })
 
-  if (error) return { error: `Erro ao gerar relatório: ${error.message}` }
+  if (error) return { error: `Erro ao gerar relatório: ${mensagemErro(error, 'lib/actions/cashier-reports.ts')}` }
 
   // "Utilização de crédito" (payment_method='credit_balance') NÃO é dinheiro novo
   // no caixa — o valor entrou quando o adiantamento foi recebido. Excluir do

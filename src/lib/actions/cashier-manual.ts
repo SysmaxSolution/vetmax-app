@@ -3,6 +3,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
+import { valida } from '@/lib/validation/primitivos'
+import { EsquemaEntradaManual } from '@/lib/validation/financeiro'
 type Ctx = { clinic_id: string; user_id: string; role: string } | { error: string }
 
 async function getCtx(): Promise<Ctx> {
@@ -29,6 +32,11 @@ export async function recordManualInflow(input: {
   if ('error' in ctx) return ctx
 
   const supabase = await createClient()
+  // Entrada manual de caixa não validava valor nenhum — ia direto para a RPC.
+  const vEntrada = valida(EsquemaEntradaManual, input)
+  if ('error' in vEntrada) return vEntrada
+  input = vEntrada.dados
+
   const { data, error } = await supabase.rpc('rpc_record_manual_inflow', {
     p_clinic_id:      ctx.clinic_id,
     p_amount:         input.amount,
@@ -37,7 +45,7 @@ export async function recordManualInflow(input: {
     p_payment_method: input.payment_method ?? 'cash',
     p_effective_date: input.effective_date ?? null,
   })
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/cashier-manual.ts') }
 
   revalidatePath('/dashboard/cashier')
   revalidatePath('/dashboard/financial')
@@ -60,7 +68,7 @@ export async function updateCashierEffectiveDate(
     p_effective_date: effectiveDate,
     p_updated_by:     ctx.user_id,
   })
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/cashier-manual.ts') }
 
   revalidatePath('/dashboard/cashier')
   revalidatePath('/dashboard/financial')
@@ -92,7 +100,7 @@ export async function getStaleOpenSession(): Promise<{
     .limit(1)
     .maybeSingle()
 
-  if (error && error.code !== 'PGRST116') return { error: error.message }
+  if (error && error.code !== 'PGRST116') return { error: mensagemErro(error, 'lib/actions/cashier-manual.ts') }
   if (!data) return { has_stale: false }
 
   const openedAt = new Date(data.opened_at)

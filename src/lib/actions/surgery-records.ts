@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
 export type SurgeryStage = 'preop' | 'anesthesia' | 'report'
@@ -49,7 +50,7 @@ export async function listSurgeryRecords(surgeryId: string, stage?: SurgeryStage
     .order('created_at', { ascending: false })
   if (stage) q = q.eq('stage', stage)
   const { data, error } = await q
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/surgery-records.ts') }
   return (data ?? []).map((r: any): SurgeryRecord => ({
     id:          r.id, surgery_id: r.surgery_id, stage: r.stage,
     notes:       r.notes, created_by: r.created_by, created_at: r.created_at, updated_at: r.updated_at,
@@ -69,7 +70,7 @@ export async function createSurgeryRecord(payload: { surgery_id: string; stage: 
   const { data, error } = await admin.from('surgery_records')
     .insert({ clinic_id: ctx.clinicId, surgery_id: payload.surgery_id, stage: payload.stage, notes: payload.notes.trim(), created_by: ctx.userId })
     .select('id').single()
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/surgery-records.ts') }
   revalidatePath('/dashboard/surgery')
   return { id: data.id as string }
 }
@@ -87,7 +88,7 @@ export async function updateSurgeryRecord(id: string, notes: string): Promise<{ 
   if (!(await isSurgeryEditable(admin, rec.surgery_id as string, ctx.clinicId))) return { error: 'Cirurgia finalizada — feed bloqueado.' }
 
   const { error } = await admin.from('surgery_records').update({ notes: notes.trim(), updated_at: new Date().toISOString() }).eq('id', id).eq('clinic_id', ctx.clinicId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/surgery-records.ts') }
   revalidatePath('/dashboard/surgery')
   return { success: true }
 }
@@ -102,7 +103,7 @@ export async function deleteSurgeryRecord(id: string): Promise<{ success: true }
   if (!(await isSurgeryEditable(admin, rec.surgery_id as string, ctx.clinicId))) return { error: 'Cirurgia finalizada — feed bloqueado.' }
 
   const { error } = await admin.from('surgery_records').delete().eq('id', id).eq('clinic_id', ctx.clinicId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/surgery-records.ts') }
   revalidatePath('/dashboard/surgery')
   return { success: true }
 }

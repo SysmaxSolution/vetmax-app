@@ -10,6 +10,7 @@ import type { HL7Graph } from './hl7-parser'
 import { graphTitle } from './hemogram-report'
 import { GRAPH_BUCKET, decodeGraphPayload, graphObjectPath } from './graph-storage'
 
+import { mensagemErro } from '@/lib/errors'
 interface GraphRow {
   clinic_id: string
   consultation_id: string
@@ -99,6 +100,6 @@ export async function persistExamGraphs(
 
   const { error } = await admin.from('exam_result_graphs')
     .upsert(rows, { onConflict: 'consultation_id,code' })
-  if (error) return { saved: 0, uploaded, inlined, bytes, error: error.message }
+  if (error) return { saved: 0, uploaded, inlined, bytes, error: mensagemErro(error, 'lib/lab/persist-graphs.ts') }
   return { saved: rows.length, uploaded, inlined, bytes }
 }

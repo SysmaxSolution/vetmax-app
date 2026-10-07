@@ -17,6 +17,7 @@ import { revalidatePath } from 'next/cache'
 import { addServiceToConsultation } from '@/lib/actions/services'
 import { generateInvoice } from '@/lib/actions/billing'
 
+import { mensagemErro } from '@/lib/errors'
 type Ctx =
   | { admin: ReturnType<typeof createAdminClient>; clinic_id: string; user_id: string }
   | { error: string }
@@ -148,7 +149,7 @@ export async function saveMicrochipAndFinalize(
     })
     .select('id')
     .single()
-  if (recErr || !rec) return { error: 'Erro ao salvar microchip: ' + (recErr?.message ?? '') }
+  if (recErr || !rec) return { error: 'Erro ao salvar microchip: ' + ((recErr ? mensagemErro(recErr, 'lib/actions/microchip.ts') : '')) }
 
   // 4) Atualiza patients.microchip_id (chip ATIVO) — só sobrescreve se tiver número
   if (chipNumber) {
@@ -286,7 +287,7 @@ export async function listMicrochipHistoryForPatient(
     .eq('clinic_id', clinic_id)
     .eq('patient_id', patient_id)
     .order('implanted_at', { ascending: false })
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/microchip.ts') }
 
   return (data ?? []).map((r: any): MicrochipHistoryRow => ({
     id:                r.id,

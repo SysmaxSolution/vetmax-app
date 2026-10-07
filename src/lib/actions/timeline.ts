@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getPetUpcomingAppointments } from '@/lib/actions/appointments'
 import type { ExtractedField } from '@/types'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type TimelineEventType =
@@ -217,7 +218,7 @@ export async function getPetTimeline(
 
     if (cError) {
       console.error('[getPetTimeline] consultations query error:', cError)
-      return { error: 'Erro ao buscar consultas: ' + cError.message }
+      return { error: 'Erro ao buscar consultas: ' + mensagemErro(cError, 'lib/actions/timeline.ts') }
     }
 
     const consultationIds = (consultations ?? []).map(c => c.id)
@@ -828,7 +829,7 @@ export async function getPatientsList(
     }
 
     const { data: patients, error: pError } = await patientsQuery.limit(100)
-    if (pError) return { error: 'Erro ao buscar pacientes: ' + pError.message }
+    if (pError) return { error: 'Erro ao buscar pacientes: ' + mensagemErro(pError, 'lib/actions/timeline.ts') }
     if (!patients?.length) return []
 
     const tutorIds = [...new Set(patients.map(p => p.tutor_id).filter(Boolean))] as string[]

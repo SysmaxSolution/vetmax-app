@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache'
 import { logAudit } from './audit'
 import { createHospitalization } from './hospitalizations'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
 export type SurgeryStatus = 'preparo' | 'sala' | 'rpa' | 'done' | 'canceled'
@@ -84,7 +85,7 @@ export async function getSurgeriesBoard(): Promise<SurgeryBoard | { error: strin
     .in('status', ['preparo', 'sala', 'rpa'])
     .order('created_at', { ascending: true })
 
-  if (error) return { error: 'Erro ao buscar cirurgias: ' + error.message }
+  if (error) return { error: 'Erro ao buscar cirurgias: ' + mensagemErro(error, 'lib/actions/surgeries.ts') }
 
   const board: SurgeryBoard = { preparo: [], sala: [], rpa: [] }
   for (const s of data ?? []) {
@@ -122,7 +123,7 @@ export async function createSurgery(payload: {
     .select('id')
     .single()
 
-  if (error) return { error: 'Erro ao criar cirurgia: ' + error.message }
+  if (error) return { error: 'Erro ao criar cirurgia: ' + mensagemErro(error, 'lib/actions/surgeries.ts') }
   await logAudit({ action: 'CREATE_SURGERY', entity_type: 'surgeries', entity_id: data.id as string, details: { procedure: payload.procedure_name } })
   revalidatePath('/dashboard/surgery')
   return { id: data.id as string }
@@ -141,7 +142,7 @@ export async function updateSurgeryStatus(id: string, status: SurgeryStatus): Pr
 
   const admin = createAdminClient()
   const { error } = await admin.from('surgeries').update(patch).eq('id', id).eq('clinic_id', ctx.clinicId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/surgeries.ts') }
   revalidatePath('/dashboard/surgery')
   return { success: true }
 }
@@ -175,7 +176,7 @@ export async function updateSurgeryChecklist(id: string, checklist: SurgeryCheck
   const { error } = await admin.from('surgeries')
     .update({ checklist, updated_at: new Date().toISOString() })
     .eq('id', id).eq('clinic_id', ctx.clinicId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/surgeries.ts') }
   revalidatePath('/dashboard/surgery')
   return { success: true }
 }
@@ -187,7 +188,7 @@ export async function updateSurgeryReport(id: string, report: string): Promise<{
   const { error } = await admin.from('surgeries')
     .update({ surgical_report: report, updated_at: new Date().toISOString() })
     .eq('id', id).eq('clinic_id', ctx.clinicId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/surgeries.ts') }
   revalidatePath('/dashboard/surgery')
   return { success: true }
 }
@@ -209,7 +210,7 @@ export async function listSurgeryVitals(surgeryId: string): Promise<SurgeryVital
     .select('id, recorded_at, temperature, heart_rate, resp_rate, spo2, blood_pressure, notes')
     .eq('clinic_id', ctx.clinicId).eq('surgery_id', surgeryId)
     .order('recorded_at', { ascending: false }).limit(100)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/surgeries.ts') }
   return (data ?? []).map((r): SurgeryVital => ({
     id: r.id as string, recorded_at: r.recorded_at as string,
     temperature: r.temperature === null ? null : Number(r.temperature),
@@ -237,7 +238,7 @@ export async function recordSurgeryVital(surgeryId: string, payload: {
     spo2: N(payload.spo2), blood_pressure: payload.blood_pressure?.trim() || null,
     notes: payload.notes?.trim() || null, source: 'manual',
   }).select('id').single()
-  if (error) return { error: 'Erro ao registrar sinais vitais: ' + error.message }
+  if (error) return { error: 'Erro ao registrar sinais vitais: ' + mensagemErro(error, 'lib/actions/surgeries.ts') }
   return { id: data.id as string }
 }
 
@@ -297,7 +298,7 @@ export async function sendSurgeryToInternacao(
   const { error } = await admin.from('surgeries')
     .update({ status: 'done', postop_hospitalization_id: hospId, ended_at: new Date().toISOString(), updated_at: new Date().toISOString() })
     .eq('id', surgeryId).eq('clinic_id', ctx.clinicId)
-  if (error) return { error: 'Erro ao encaminhar para internação: ' + error.message }
+  if (error) return { error: 'Erro ao encaminhar para internação: ' + mensagemErro(error, 'lib/actions/surgeries.ts') }
 
   await logAudit({ action: 'SURGERY_TO_HOSPITALIZATION', entity_type: 'surgeries', entity_id: surgeryId, details: { hospitalization_id: hospId } })
   revalidatePath('/dashboard/surgery')

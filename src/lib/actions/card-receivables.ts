@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 export type CardInstallmentStatus = 'pending' | 'settled' | 'reconciled' | 'cancelled'
 
 export interface CardInstallment {
@@ -95,7 +96,7 @@ export async function listCardInstallments(
   if (filter.txn_to)    q = q.lte('transaction_date', filter.txn_to)
 
   const { data, error } = await q.limit(500)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/card-receivables.ts') }
 
   return (data ?? []).map((row: any) => ({
     ...row,
@@ -136,7 +137,7 @@ export async function getCardInstallmentsSummary(filter: {
   if (filter.to_date)   q = q.lte('expected_settlement_date', filter.to_date)
 
   const { data, error } = await q.limit(2000)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/card-receivables.ts') }
 
   const rows = data ?? []
   const pending = rows.filter(r => r.status === 'pending')
@@ -193,7 +194,7 @@ export async function settleCardInstallment(input: {
     p_actual_fee:     input.actual_fee ?? null,
     p_settled_date:   input.settled_date ?? null,
   })
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/card-receivables.ts') }
 
   revalidatePath('/dashboard/financial')
   revalidatePath('/dashboard/financial/cards')
@@ -237,7 +238,7 @@ export async function cancelCardInstallment(
     p_cancelled_by:   ctx.user_id,
     p_reason:         reason.trim(),
   })
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/card-receivables.ts') }
 
   revalidatePath('/dashboard/financial/cards')
   return { success: true }
@@ -275,7 +276,7 @@ export async function updateCardInstallment(input: {
     p_fee_percent:              input.fee_percent ?? null,
     p_expected_settlement_date: input.expected_settlement_date ?? null,
   })
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/card-receivables.ts') }
 
   revalidatePath('/dashboard/financial')
   revalidatePath('/dashboard/financial/cards')

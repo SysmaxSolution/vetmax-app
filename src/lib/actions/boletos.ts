@@ -7,6 +7,7 @@ import type { BoletoInput } from '@/lib/integrations/sicoob-cobranca-map'
 import { logBoletoEvent } from '@/lib/boleto/events'
 import { clinicFlowFlag, routineOffError } from '@/lib/clinic/flow-gate'
 
+import { mensagemErro } from '@/lib/errors'
 type Ctx = { userId: string; clinicId: string; role: string }
 async function ctx(): Promise<Ctx | { error: string }> {
   const supabase = await createClient()
@@ -77,7 +78,7 @@ export async function emitBoleto(input: EmitBoletoInput): Promise<{ ok: true; id
     codigo_barras: res.result.codigoBarras, pix_copia_cola: res.result.pixCopiaECola,
     raw_response: res.raw as any,
   }).select('id').single()
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/boletos.ts') }
   return { ok: true, id: (row as any).id, linhaDigitavel: res.result.linhaDigitavel, codigoBarras: res.result.codigoBarras, nossoNumero: res.result.nossoNumero }
 }
 

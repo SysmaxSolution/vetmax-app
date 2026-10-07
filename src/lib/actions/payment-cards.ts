@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 export type CardType = 'credit' | 'debit' | 'voucher' | 'other'
 
 /**
@@ -107,7 +108,7 @@ export async function listPaymentCards(
   }
 
   const { data, error } = await q.order('name', { ascending: true })
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/payment-cards.ts') }
   return (data ?? []).map(row => mapCardRow(row as any, filter?.card_type === 'debit' ? 'debit' : 'credit'))
 }
 
@@ -166,7 +167,7 @@ export async function createPaymentCard(input: {
     .single()
   if (error) {
     if (error.code === '23505') return { error: 'Já existe um cartão com este apelido na clínica.' }
-    return { error: error.message }
+    return { error: mensagemErro(error, 'lib/actions/payment-cards.ts') }
   }
   revalidatePath('/dashboard/financial')
   revalidatePath('/dashboard/cashier')
@@ -205,7 +206,7 @@ export async function updatePaymentCard(
     .update(updates)
     .eq('id', id)
     .eq('clinic_id', ctx.clinic_id)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/payment-cards.ts') }
   revalidatePath('/dashboard/financial')
   return { success: true }
 }

@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
 export type StockConsumptionSource =
@@ -89,7 +90,7 @@ export async function consumeStockForApplication(
     p_user_id:         user.id,
   })
 
-  if (error) return { error: 'Erro ao baixar estoque: ' + error.message }
+  if (error) return { error: 'Erro ao baixar estoque: ' + mensagemErro(error, 'lib/actions/stock-consumption.ts') }
 
   // RPC retorna setof — em chamada via Supabase JS chega como array de 1.
   const row = Array.isArray(data) ? data[0] : data
@@ -157,7 +158,7 @@ export async function searchStockItems(query: string): Promise<StockItemLite[] |
   }
 
   const { data, error } = await qb
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/stock-consumption.ts') }
 
   return (data ?? []).map((row): StockItemLite => {
     const quantity     = Number(row.quantity ?? 0)
@@ -214,6 +215,6 @@ export async function listStockReconciliationQueue(): Promise<ReconciliationItem
     .order('created_at', { ascending: false })
     .limit(200)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/stock-consumption.ts') }
   return (data ?? []) as ReconciliationItem[]
 }

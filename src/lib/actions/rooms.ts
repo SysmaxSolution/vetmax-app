@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 export type RoomType = 'consultation' | 'surgery' | 'grooming' | 'exam' | 'hospitalization'
 export type RoomOperationalStatus = 'active' | 'maintenance'
 export type RoomCareLevel = 'enfermaria' | 'semi_intensiva' | 'uti' | 'isolamento'
@@ -32,7 +33,7 @@ export async function getRooms(): Promise<Room[] | { error: string }> {
     .select('id, clinic_id, name, type, capacity, active, daily_rate, operational_status, default_care_level, created_at, updated_at')
     .order('name')
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/rooms.ts') }
   return (data ?? []).map((r): Room => ({
     ...(r as Room),
     daily_rate:         Number((r as { daily_rate?: number }).daily_rate ?? 0),
@@ -72,7 +73,7 @@ export async function createRoom(
     .select('id')
     .single()
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/rooms.ts') }
   revalidatePath('/dashboard/registry')
   revalidatePath('/dashboard/management')
   return { id: data.id }
@@ -102,7 +103,7 @@ export async function updateRoom(
     .eq('id', id)
     .eq('clinic_id', profile.clinic_id)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/rooms.ts') }
   revalidatePath('/dashboard/registry')
   revalidatePath('/dashboard/management')
   return { success: true }

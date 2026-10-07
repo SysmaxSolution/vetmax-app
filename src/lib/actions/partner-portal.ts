@@ -12,6 +12,7 @@ import { computeExpiryISO, SESSION_TTL_MS } from '@/lib/portal/access'
 import { getPartnerContext, partnerPortalEnabled, PARTNER_COOKIE } from '@/lib/portal/partner-session'
 import type { PartnerProfessional, PartnerReferredPet, PartnerPetImaging } from '@/lib/portal/partner-types'
 
+import { mensagemErro } from '@/lib/errors'
 async function getOrigin(): Promise<string> {
   const h = await headers()
   const host = h.get('x-forwarded-host') ?? h.get('host')
@@ -40,7 +41,7 @@ export async function listPartnerProfessionals(partnerClinicId: string): Promise
     .select('id, name, crmv, email, phone, is_active, code_secret_hash')
     .eq('clinic_id', ctx.clinicId).eq('partner_clinic_id', partnerClinicId)
     .order('name', { ascending: true })
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/partner-portal.ts') }
   return (data ?? []).map((p: any) => ({
     id: p.id, name: p.name, crmv: p.crmv ?? null, email: p.email ?? null, phone: p.phone ?? null,
     isActive: p.is_active !== false, hasCode: !!p.code_secret_hash,
@@ -60,11 +61,11 @@ export async function savePartnerProfessional(input: {
   }
   if (input.id) {
     const { data, error } = await admin.from('partner_clinic_professionals').update(rec).eq('id', input.id).eq('clinic_id', ctx.clinicId).select('id').single()
-    if (error || !data) return { error: 'Erro ao salvar: ' + (error?.message ?? '') }
+    if (error || !data) return { error: 'Erro ao salvar: ' + ((error ? mensagemErro(error, 'lib/actions/partner-portal.ts') : '')) }
     return { id: data.id as string }
   }
   const { data, error } = await admin.from('partner_clinic_professionals').insert(rec).select('id').single()
-  if (error || !data) return { error: 'Erro ao criar: ' + (error?.message ?? '') }
+  if (error || !data) return { error: 'Erro ao criar: ' + ((error ? mensagemErro(error, 'lib/actions/partner-portal.ts') : '')) }
   return { id: data.id as string }
 }
 
@@ -73,7 +74,7 @@ export async function deletePartnerProfessional(id: string): Promise<{ ok: true 
   if ('error' in ctx) return { error: ctx.error as string }
   const admin = createAdminClient()
   const { error } = await admin.from('partner_clinic_professionals').delete().eq('id', id).eq('clinic_id', ctx.clinicId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/partner-portal.ts') }
   return { ok: true }
 }
 
@@ -99,7 +100,7 @@ export async function generatePartnerProfessionalCode(id: string): Promise<{ cod
     code_public: g.publicPart, code_secret_hash: hashCode(g.secret), code_enc: encryptCode(g.code), code_set_at: new Date().toISOString(),
     code_fail_count: 0, code_locked_until: null,
   }).eq('id', id).eq('clinic_id', ctx.clinicId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/partner-portal.ts') }
   return { code: g.code }
 }
 
@@ -113,7 +114,7 @@ export async function generatePartnerClinicAdminCode(partnerClinicId: string): P
     code_public: g.publicPart, code_secret_hash: hashCode(g.secret), code_enc: encryptCode(g.code), code_set_at: new Date().toISOString(),
     code_fail_count: 0, code_locked_until: null,
   }).eq('id', partnerClinicId).eq('clinic_id', ctx.clinicId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/partner-portal.ts') }
   revalidatePath('/dashboard/registry')
   return { code: g.code }
 }

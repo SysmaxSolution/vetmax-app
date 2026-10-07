@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
+import { mensagemErro } from '@/lib/errors'
 export interface ClinicProfessional {
   id: string
   full_name: string
@@ -28,7 +29,7 @@ export async function checkProfessionalAvailability(
     .eq('professional_id', professionalId)
     .eq('date', date)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/professionals.ts') }
 
   // Sem slots cadastrados = sem restrição configurada, considerar disponível
   if (!slots || slots.length === 0) return { available: true }
@@ -68,6 +69,6 @@ export async function getClinicProfessionals(): Promise<ClinicProfessional[] | {
     .neq('is_active', false)   // inclui NULL e true
     .order('full_name')
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/professionals.ts') }
   return (data ?? []) as ClinicProfessional[]
 }

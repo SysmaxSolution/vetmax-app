@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { usesExamRejectionFlow } from '@/lib/exams/rejection-gate'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type InvoiceStatus  = 'pending' | 'paid_partial' | 'paid' | 'cancelled'
@@ -261,7 +262,7 @@ export async function generateInvoice(
     .select('id')
     .single()
 
-  if (invErr || !invoice) return { error: 'Erro ao criar fatura: ' + (invErr?.message ?? '') }
+  if (invErr || !invoice) return { error: 'Erro ao criar fatura: ' + ((invErr ? mensagemErro(invErr, 'lib/actions/billing.ts') : '')) }
 
   // Inserir itens
   await admin
@@ -329,7 +330,7 @@ export async function getPendingInvoices(): Promise<InvoiceWithDetails[] | { err
     .in('status', ['pending', 'paid_partial'])
     .order('created_at', { ascending: false })
 
-  if (error) return { error: 'Erro ao buscar faturas: ' + error.message }
+  if (error) return { error: 'Erro ao buscar faturas: ' + mensagemErro(error, 'lib/actions/billing.ts') }
 
   return (data ?? []).map((row: any) => ({
     ...row,
@@ -491,7 +492,7 @@ export async function addItemToInvoice(
       .update({ quantity: Number(item.quantity) - qty })
       .eq('id', stockItemId)
       .eq('clinic_id', profile.clinic_id)
-    if (stockErr) return { error: 'Erro ao baixar estoque: ' + stockErr.message }
+    if (stockErr) return { error: 'Erro ao baixar estoque: ' + mensagemErro(stockErr, 'lib/actions/billing.ts') }
   }
 
   const unit  = Number(item.unit_price ?? 0)
@@ -522,7 +523,7 @@ export async function addItemToInvoice(
     if (!item.is_service) {
       await admin.from('stock_items').update({ quantity: Number(item.quantity) }).eq('id', stockItemId)
     }
-    return { error: 'Erro ao adicionar item: ' + (insErr?.message ?? 'falha') }
+    return { error: 'Erro ao adicionar item: ' + ((insErr ? mensagemErro(insErr, 'lib/actions/billing.ts') : 'falha')) }
   }
 
   await admin
@@ -565,7 +566,7 @@ export async function removeItemFromInvoice(
   }
 
   const { error: delErr } = await admin.from('invoice_items').delete().eq('id', invoiceItemId)
-  if (delErr) return { error: 'Erro ao remover item: ' + delErr.message }
+  if (delErr) return { error: 'Erro ao remover item: ' + mensagemErro(delErr, 'lib/actions/billing.ts') }
 
   await admin
     .from('invoices')
@@ -752,7 +753,7 @@ export async function processPayment(
     .eq('id', invoiceId)
     .eq('clinic_id', profile.clinic_id)
 
-  if (error) return { error: 'Erro ao processar pagamento: ' + error.message }
+  if (error) return { error: 'Erro ao processar pagamento: ' + mensagemErro(error, 'lib/actions/billing.ts') }
 
   // ─── Cria duplicata PAID desta baixa (apenas se houver entrada caixa) ────
   // IDs criados nesta operação — usados para rollback se RPC falhar.
@@ -991,7 +992,7 @@ export async function processPayment(
       if (createdEntryIds.length > 0) {
         await adminClient.from('financial_entries').delete().in('id', createdEntryIds)
       }
-      return { error: 'Erro ao registrar no caixa: ' + rpcErr.message + '. Pagamento revertido, tente novamente.' }
+      return { error: 'Erro ao registrar no caixa: ' + mensagemErro(rpcErr, 'lib/actions/billing.ts') + '. Pagamento revertido, tente novamente.' }
     }
   }
 
@@ -1183,7 +1184,7 @@ export async function processSplitPayment(
     p_effective_date: options?.effective_date ?? null,
   })
 
-  if (error) return { error: `Erro ao processar pagamento: ${error.message}` }
+  if (error) return { error: `Erro ao processar pagamento: ${mensagemErro(error, 'lib/actions/billing.ts')}` }
 
   const result = data as { paid_amount: number; total_amount: number; status: string }
 
@@ -1436,7 +1437,7 @@ export async function reversePartialPayment(
     .from('financial_entries')
     .delete()
     .eq('id', entryId)
-  if (delErr) return { error: `Falha ao estornar: ${delErr.message}` }
+  if (delErr) return { error: `Falha ao estornar: ${mensagemErro(delErr, 'lib/actions/billing.ts')}` }
 
   const newPaidAmount = Math.max(0, Number((invoice as { paid_amount?: number }).paid_amount ?? 0) - amount)
   const newBalance    = Math.max(0, Number((invoice as { total_amount?: number }).total_amount ?? 0) - newPaidAmount)
@@ -1544,7 +1545,7 @@ export async function listInvoiceDuplicatas(
     .eq('invoice_id', invoiceId)
     .order('created_at', { ascending: true })
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/billing.ts') }
   return (data ?? []) as InvoiceDuplicata[]
 }
 
@@ -1656,7 +1657,7 @@ export async function generatePartialInvoice(
     .select('id')
     .single()
 
-  if (invErr || !invoice) return { error: 'Erro ao criar fatura parcial: ' + (invErr?.message ?? '') }
+  if (invErr || !invoice) return { error: 'Erro ao criar fatura parcial: ' + ((invErr ? mensagemErro(invErr, 'lib/actions/billing.ts') : '')) }
 
   await admin
     .from('invoice_items')
@@ -1747,7 +1748,7 @@ export async function markInvoiceAsCourtesy(
       })
       .eq('id', invoiceId)
       .eq('clinic_id', profile.clinic_id)
-    if (discErr) return { error: 'Erro ao aplicar desconto: ' + discErr.message }
+    if (discErr) return { error: 'Erro ao aplicar desconto: ' + mensagemErro(discErr, 'lib/actions/billing.ts') }
   }
 
   const { error: updErr } = await admin
@@ -1760,7 +1761,7 @@ export async function markInvoiceAsCourtesy(
     })
     .eq('id', invoiceId)
     .eq('clinic_id', profile.clinic_id)
-  if (updErr) return { error: 'Erro ao baixar fatura: ' + updErr.message }
+  if (updErr) return { error: 'Erro ao baixar fatura: ' + mensagemErro(updErr, 'lib/actions/billing.ts') }
 
   // Baixa o pending do Caixa Central — sem isso o valor original da fatura
   // (antes do desconto/zeramento) fica inflando o "A Receber" para sempre.

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { runAutoFixCycle, clusterizeErrors } from '@/lib/fix-planner'
 
+import { limitarPorIp } from '@/lib/api/rate-limit'
 // POST /api/admin/generate-fix-plan
 // Dispara manualmente o gerador de planos de correção.
 // Body (opcional):
@@ -9,6 +10,9 @@ import { runAutoFixCycle, clusterizeErrors } from '@/lib/fix-planner'
 // Requer role admin ou manager.
 
 export async function POST(request: NextRequest) {
+  const barrado = await limitarPorIp(request, { escopo: 'admin:fixplan', limite: 10 })
+  if (barrado) return barrado
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 })
@@ -47,6 +51,9 @@ export async function POST(request: NextRequest) {
 // GET /api/admin/generate-fix-plan
 // Retorna os clusters elegíveis sem gerar planos (preview).
 export async function GET(request: NextRequest) {
+  const barrado = await limitarPorIp(request, { escopo: 'admin:fixplan', limite: 10 })
+  if (barrado) return barrado
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 })

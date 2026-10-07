@@ -9,6 +9,7 @@ import { updatePatientWeight } from './patient-weight'
 import { getTenantCtx } from '@/lib/data/context'
 import { byUrgencyThenTime } from '@/lib/urgency'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Sprint Animais: campos extras da OS no check-in (aditivo + gateado) ──────
 // Chamado só quando animais_foundation está ligada (o caller já fez o gate).
 // Gera o nº de OS de forma atômica (next_document_number); se a sequência não
@@ -114,7 +115,7 @@ export async function checkInPatientAdvanced(
     .select('id')
     .single()
 
-  if (error || !result) return { error: 'Erro ao fazer check-in: ' + (error?.message ?? '') }
+  if (error || !result) return { error: 'Erro ao fazer check-in: ' + ((error ? mensagemErro(error, 'lib/actions/consultations.ts') : '')) }
 
   await logAudit({ action: 'CHECK_IN', entity_type: 'consultations', entity_id: result.id, details: { patient_id: data.patient_id, visit_reason: data.visit_reason } })
 
@@ -181,7 +182,7 @@ export async function checkInPatientWithContacts(
     })
     .eq('id', data.tutor_id)
 
-  if (tutorErr) return { error: 'Erro ao atualizar dados do tutor: ' + tutorErr.message }
+  if (tutorErr) return { error: 'Erro ao atualizar dados do tutor: ' + mensagemErro(tutorErr, 'lib/actions/consultations.ts') }
 
   // Bloqueia atendimento de pet com óbito registrado ou arquivado.
   const { data: petCheck } = await admin
@@ -237,7 +238,7 @@ export async function checkInPatientWithContacts(
     .select('id')
     .single()
 
-  if (error || !result) return { error: 'Erro ao fazer check-in: ' + (error?.message ?? '') }
+  if (error || !result) return { error: 'Erro ao fazer check-in: ' + ((error ? mensagemErro(error, 'lib/actions/consultations.ts') : '')) }
 
   await logAudit({ action: 'CHECK_IN_WITH_CONTACTS', entity_type: 'consultations', entity_id: result.id, details: { patient_id: data.patient_id } })
 
@@ -288,7 +289,7 @@ export async function updateConsultation(
       .eq('id', updates.tutorId)
       .eq('clinic_id', profile.clinic_id)
 
-    if (tutorErr) return { error: 'Erro ao atualizar tutor: ' + tutorErr.message }
+    if (tutorErr) return { error: 'Erro ao atualizar tutor: ' + mensagemErro(tutorErr, 'lib/actions/consultations.ts') }
   }
 
   // 2. Atualizar consulta (remover campos de tutor da atualização)
@@ -305,7 +306,7 @@ export async function updateConsultation(
     .eq('id', consultationId)
     .eq('clinic_id', profile.clinic_id)
 
-  if (error) return { error: 'Erro ao atualizar: ' + error.message }
+  if (error) return { error: 'Erro ao atualizar: ' + mensagemErro(error, 'lib/actions/consultations.ts') }
 
   await logAudit({ action: 'UPDATE_CONSULTATION', entity_type: 'consultations', entity_id: consultationId, details: { visit_reason: updates.visit_reason, payment_status: updates.payment_status } })
 
@@ -388,7 +389,7 @@ export async function getReceptionQueue(): Promise<ReceptionQueueItem[] | { erro
     .gte('created_at', todayStart.toISOString())
     .order('created_at', { ascending: true })
 
-  if (error) return { error: 'Erro ao buscar fila: ' + error.message }
+  if (error) return { error: 'Erro ao buscar fila: ' + mensagemErro(error, 'lib/actions/consultations.ts') }
 
   // Busca última visita para cada pet
   const patientIds = [...new Set((data ?? []).map((c: any) => c.patients?.id).filter(Boolean))]
@@ -494,7 +495,7 @@ export async function getReceptionHistory(): Promise<ReceptionHistoryItem[] | { 
     .gte('created_at', todayStart.toISOString())
     .order('updated_at', { ascending: false })
 
-  if (error) return { error: 'Erro ao buscar histórico: ' + error.message }
+  if (error) return { error: 'Erro ao buscar histórico: ' + mensagemErro(error, 'lib/actions/consultations.ts') }
 
   return (data ?? []).map((c: any) => ({
     id:             c.id,
@@ -532,7 +533,7 @@ export async function moveToTriage(
     .eq('id', consultationId)
     .eq('clinic_id', ctx.clinicId)
 
-  if (error) return { error: 'Erro ao mover para triagem: ' + error.message }
+  if (error) return { error: 'Erro ao mover para triagem: ' + mensagemErro(error, 'lib/actions/consultations.ts') }
   revalidatePath('/dashboard/reception')
   revalidatePath('/dashboard/triage')
   return null
@@ -552,7 +553,7 @@ export async function moveDirectToVet(
     .eq('id', consultationId)
     .eq('clinic_id', ctx.clinicId)
 
-  if (error) return { error: 'Erro ao enviar ao consultório: ' + error.message }
+  if (error) return { error: 'Erro ao enviar ao consultório: ' + mensagemErro(error, 'lib/actions/consultations.ts') }
   revalidatePath('/dashboard/reception')
   revalidatePath('/dashboard/vet')
   return null
@@ -572,7 +573,7 @@ export async function moveToExams(
     .eq('id', consultationId)
     .eq('clinic_id', ctx.clinicId)
 
-  if (error) return { error: 'Erro ao enviar para exames: ' + error.message }
+  if (error) return { error: 'Erro ao enviar para exames: ' + mensagemErro(error, 'lib/actions/consultations.ts') }
   revalidatePath('/dashboard/reception')
   revalidatePath('/dashboard/exams')
   return null
@@ -616,7 +617,7 @@ export async function rescheduleConsultation(
     .eq('id', consultationId)
     .eq('clinic_id', ctx.clinicId)
 
-  if (error) return { error: 'Erro ao reagendar: ' + error.message }
+  if (error) return { error: 'Erro ao reagendar: ' + mensagemErro(error, 'lib/actions/consultations.ts') }
 
   await logAudit({
     action: 'RESCHEDULE_CONSULTATION',

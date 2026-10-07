@@ -18,6 +18,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { decideServicePricing, type ResolvedPricing } from '@/lib/insurance-pricing-core'
 
+import { mensagemErro } from '@/lib/errors'
 // ATENÇÃO (HF 05/06): NUNCA re-exporte tipos (`export type { X }`) de um
 // arquivo 'use server'. O Turbopack registra TODO export como referência de
 // server action em runtime — o re-export de tipo vira um identificador
@@ -240,7 +241,7 @@ export async function updateConsultationServicePricingSplit(input: {
       updated_at:               new Date().toISOString(),
     })
     .eq('id', line.id)
-  if (csErr) return { error: 'Erro ao salvar snapshot: ' + csErr.message }
+  if (csErr) return { error: 'Erro ao salvar snapshot: ' + mensagemErro(csErr, 'lib/actions/insurance-pricing.ts') }
 
   // 3) UPSERT em patient_custom_prices (próximas consultas)
   const { error: pcpErr } = await admin
@@ -260,7 +261,7 @@ export async function updateConsultationServicePricingSplit(input: {
     }, {
       onConflict: 'clinic_id,patient_id,stock_item_id',
     })
-  if (pcpErr) return { error: 'Erro ao salvar preço do pet: ' + pcpErr.message }
+  if (pcpErr) return { error: 'Erro ao salvar preço do pet: ' + mensagemErro(pcpErr, 'lib/actions/insurance-pricing.ts') }
 
   // 4) Audit em patient_petlove_history (best effort — não bloqueia se falhar)
   try {

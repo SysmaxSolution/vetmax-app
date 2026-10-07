@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 export interface BankIntegration {
   bank_code:   string   // '756' Sicoob, '341' Itaú…
   provider:    string   // 'sicoob'
@@ -72,7 +73,7 @@ export async function updateFinancialIntegrations(payload: FinancialIntegrations
     pix: payload.pix ?? PIX_DEFAULT,
     updated_at: new Date().toISOString(),
   }, { onConflict: 'clinic_id' })
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/financial-integrations.ts') }
   revalidatePath('/dashboard/management')
   revalidatePath('/dashboard/financial')
   revalidatePath('/dashboard/cashier')

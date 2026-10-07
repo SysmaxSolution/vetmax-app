@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type PetInsurance = {
@@ -67,7 +68,7 @@ export async function getPetInsurance(patientId: string): Promise<PetInsurance |
     .eq('clinic_id', clinicId)
     .maybeSingle()
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/pet-insurance.ts') }
   if (!data) return null
 
   const prov = data.insurance_providers as any
@@ -145,7 +146,7 @@ export async function upsertPetInsurance(input: {
       .update(patch)
       .eq('id', existing.id)
 
-    if (error) return { error: error.message }
+    if (error) return { error: mensagemErro(error, 'lib/actions/pet-insurance.ts') }
     // HF2 (05/06): o consultório recebe insuranceCard server-rendered — sem
     // revalidar /dashboard/vet, a carência continuava com a adesão antiga
     // até um reload manual.
@@ -166,7 +167,7 @@ export async function upsertPetInsurance(input: {
     .select('id')
     .single()
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/pet-insurance.ts') }
   revalidatePath('/dashboard/patients')
   revalidatePath('/dashboard/vet')
   revalidatePath('/dashboard/reception')
@@ -228,7 +229,7 @@ export async function removePetInsurance(patientId: string): Promise<{ success: 
     .eq('patient_id', patientId)
     .eq('clinic_id', clinicId)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/pet-insurance.ts') }
   revalidatePath('/dashboard/patients')
   return { success: true }
 }

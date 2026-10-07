@@ -3,6 +3,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 
+import { mensagemErro } from '@/lib/errors'
 export interface QuickReply {
   id: string
   clinic_id: string
@@ -36,7 +37,7 @@ export async function getQuickReplies(): Promise<QuickReply[] | { error: string 
     .order('sort_order', { ascending: true })
     .order('category', { ascending: true, nullsFirst: true })
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/whatsapp-quick-replies.ts') }
   return (data ?? []) as QuickReply[]
 }
 
@@ -63,7 +64,7 @@ export async function createQuickReply(data: {
     .select('id')
     .single()
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/whatsapp-quick-replies.ts') }
   return { id: row.id }
 }
 
@@ -82,7 +83,7 @@ export async function updateQuickReply(
     .eq('id', id)
     .eq('clinic_id', clinic_id)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/whatsapp-quick-replies.ts') }
   return { success: true }
 }
 
@@ -98,7 +99,7 @@ export async function deleteQuickReply(id: string): Promise<{ success: true } | 
     .eq('id', id)
     .eq('clinic_id', clinic_id)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/whatsapp-quick-replies.ts') }
   return { success: true }
 }
 

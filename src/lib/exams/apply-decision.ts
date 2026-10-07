@@ -6,6 +6,7 @@
 import type { createAdminClient } from '@/lib/supabase/admin'
 import { nextExamState, type ExamState, type ExamDecision, type DecisionActorKind } from '@/lib/exams/rejection-flow'
 
+import { mensagemErro } from '@/lib/errors'
 type Admin = ReturnType<typeof createAdminClient>
 
 export interface ApplyDecisionInput {
@@ -62,7 +63,7 @@ export async function applyExamDecision(
       updated_at:            now,
     })
     .eq('id', line.id).eq('clinic_id', clinicId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/exams/apply-decision.ts') }
 
   let newLineId: string | null = null
   if (i.decision === 'recollect') {
@@ -88,7 +89,7 @@ export async function applyExamDecision(
         exam_billing_hold_at:     now,
       })
       .select('id').single()
-    if (insErr) return { error: 'Decisão registrada, mas falhou ao abrir a recoleta: ' + insErr.message }
+    if (insErr) return { error: 'Decisão registrada, mas falhou ao abrir a recoleta: ' + mensagemErro(insErr, 'lib/exams/apply-decision.ts') }
     newLineId = created.id as string
   }
 

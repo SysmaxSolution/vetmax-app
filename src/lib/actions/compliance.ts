@@ -14,6 +14,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type DataAccessEntry = {
@@ -78,7 +79,7 @@ export async function getDataSubjectReport(
     .order('created_at', { ascending: false })
     .limit(100)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/compliance.ts') }
   return (data ?? []) as DataAccessEntry[]
 }
 
@@ -117,7 +118,7 @@ export async function requestDeletion(payload: {
     .select('id')
     .single()
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/compliance.ts') }
   return { id: data.id }
 }
 
@@ -146,7 +147,7 @@ export async function listDeletionRequests(): Promise<
     .eq('clinic_id', profile!.clinic_id)
     .order('requested_at', { ascending: false })
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/compliance.ts') }
   return data ?? []
 }
 
@@ -187,7 +188,7 @@ export async function resolveDeletionRequest(
     .eq('id', requestId)
     .eq('clinic_id', profile!.clinic_id)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/compliance.ts') }
 
   // E6-S1: anonimiza dados de chat do titular quando solicitação aprovada
   if (resolution.status === 'completed' && request?.user_id) {
@@ -231,7 +232,7 @@ export async function updateWhatsAppConsent(
     .eq('id', tutorId)
     .eq('clinic_id', profile.clinic_id)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/compliance.ts') }
   return { success: true }
 }
 
@@ -258,7 +259,7 @@ export async function getRetentionPolicies(): Promise<RetentionPolicy[] | { erro
     .eq('clinic_id', profile!.clinic_id)
     .order('data_type')
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/compliance.ts') }
   return data ?? []
 }
 
@@ -286,7 +287,7 @@ export async function runRetentionAudit(
     p_dry_run:   dryRun,
   })
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/compliance.ts') }
   return data ?? []
 }
 

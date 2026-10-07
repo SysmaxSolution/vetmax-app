@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 /**
  * Grooming module refactored: Finish session and push payment to central_cashier.
  * Replaces old receipt logic with RPC call to rpc_grooming_finish_and_record_payment.
@@ -86,7 +87,7 @@ export async function updateGroomingStatusViaRPC(
   })
 
   if (error) {
-    return { error: error.message || 'Erro ao atualizar status' }
+    return { error: mensagemErro(error, 'lib/actions/grooming-cashier.ts') || 'Erro ao atualizar status' }
   }
 
   if (!data || data.length === 0) {
@@ -141,7 +142,7 @@ export async function getGroomingSessionDetail(sessionId: string): Promise<
     .eq('clinic_id', profile.clinic_id)
     .single()
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/grooming-cashier.ts') }
 
   return data
 }
@@ -182,7 +183,7 @@ export async function getGroomingCashierEntry(sessionId: string): Promise<
 
   if (error && error.code !== 'PGRST116') {
     // PGRST116 = no rows found (ok)
-    return { error: error.message }
+    return { error: mensagemErro(error, 'lib/actions/grooming-cashier.ts') }
   }
 
   return data || null

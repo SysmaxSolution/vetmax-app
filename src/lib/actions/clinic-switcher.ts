@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { cookies } from 'next/headers'
 
+import { mensagemErro } from '@/lib/errors'
 const SYSMAX_EMAIL = 'sysmax@sysmaxsolutions.com'
 
 const ROLE_COOKIE = 'vetmax-role'
@@ -79,7 +80,7 @@ export async function switchClinic(clinicId: string): Promise<{ success: true } 
       is_sysmax: true,
     }, { onConflict: 'id' })
 
-    if (error) return { error: 'Erro ao trocar clínica: ' + error.message }
+    if (error) return { error: 'Erro ao trocar clínica: ' + mensagemErro(error, 'lib/actions/clinic-switcher.ts') }
 
     const cookieStore = await cookies()
     cookieStore.set(ROLE_COOKIE, 'admin', ROLE_COOKIE_OPTIONS)
@@ -101,7 +102,7 @@ export async function switchClinic(clinicId: string): Promise<{ success: true } 
     .update({ clinic_id: clinicId, role: link.role })
     .eq('id', user.id)
 
-  if (error) return { error: 'Erro ao trocar clínica: ' + error.message }
+  if (error) return { error: 'Erro ao trocar clínica: ' + mensagemErro(error, 'lib/actions/clinic-switcher.ts') }
 
   const cookieStore = await cookies()
   cookieStore.set(ROLE_COOKIE, link.role, ROLE_COOKIE_OPTIONS)

@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
+import { mensagemErro } from '@/lib/errors'
 type Ctx = { userId: string; clinicId: string; role: string }
 async function ctx(): Promise<Ctx | { error: string }> {
   const supabase = await createClient()
@@ -34,10 +35,10 @@ export async function upsertAnalyte(input: { id?: string; code: string; name: st
   const rec = { clinic_id: c.clinicId, code: input.code.trim().toUpperCase(), name: input.name.trim(), unit: input.unit?.trim() || null, panel: input.panel?.trim() || null }
   if (input.id) {
     const { error } = await admin.from('exam_analytes').update(rec).eq('id', input.id).eq('clinic_id', c.clinicId)
-    return error ? { error: error.message } : { ok: true }
+    return error ? { error: mensagemErro(error, 'lib/actions/lab-analytes.ts') } : { ok: true }
   }
   const { error } = await admin.from('exam_analytes').upsert(rec, { onConflict: 'clinic_id,code' })
-  return error ? { error: error.message } : { ok: true }
+  return error ? { error: mensagemErro(error, 'lib/actions/lab-analytes.ts') } : { ok: true }
 }
 
 export async function deleteAnalyte(id: string): Promise<{ ok: true } | { error: string }> {
@@ -68,7 +69,7 @@ export async function upsertMapping(input: { deviceCode?: string; deviceName?: s
   const { error } = await admin.from('lab_analyte_mappings').insert({
     clinic_id: c.clinicId, device_code: input.deviceCode?.trim() || null, device_name: input.deviceName?.trim() || null, analyte_id: input.analyteId,
   })
-  return error ? { error: error.message } : { ok: true }
+  return error ? { error: mensagemErro(error, 'lib/actions/lab-analytes.ts') } : { ok: true }
 }
 
 export async function deleteMapping(id: string): Promise<{ ok: true } | { error: string }> {
@@ -111,5 +112,5 @@ export async function seedDefaultAnalytes(): Promise<{ ok: true; created: number
   ]
   const rows = seed.map(([code, name, unit, panel], i) => ({ clinic_id: c.clinicId, code, name, unit, panel, sort_order: i }))
   const { error } = await admin.from('exam_analytes').upsert(rows, { onConflict: 'clinic_id,code', ignoreDuplicates: true })
-  return error ? { error: error.message } : { ok: true, created: rows.length }
+  return error ? { error: mensagemErro(error, 'lib/actions/lab-analytes.ts') } : { ok: true, created: rows.length }
 }

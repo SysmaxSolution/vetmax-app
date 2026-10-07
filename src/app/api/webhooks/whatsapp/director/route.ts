@@ -2,12 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { handleDirectorCommand } from '@/lib/director-commands'
 
+import { limitarPorIp } from '@/lib/api/rate-limit'
 // POST /api/webhooks/whatsapp/director
 // Recebe mensagens da Evolution API para o número do Diretor (P0_ALERT_PHONE).
 // Interpreta "SIM [id]" / "NAO [id]" para aprovar/rejeitar fix_plans.
 // Usado quando P0_ALERT_INSTANCE é uma instância dedicada (não vinculada a nenhuma clínica).
 
 export async function POST(request: NextRequest) {
+  const barrado = await limitarPorIp(request, { escopo: 'wh:director', limite: 60 })
+  if (barrado) return barrado
+
   let body: Record<string, unknown>
   try { body = await request.json() }
   catch { return NextResponse.json({ error: 'Payload inválido.' }, { status: 400 }) }
