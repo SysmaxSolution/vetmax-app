@@ -2246,13 +2246,23 @@ export async function importBankStatementFromSicoob(params: {
   if (!clinicId) return { error: 'Não autenticado.' }
   const admin = createAdminClient()
   const { data: acct } = await admin.from('bank_accounts')
-    .select('account, name').eq('id', params.bank_account_id).eq('clinic_id', clinicId).single()
+    .select('account, name, agency, bank_code').eq('id', params.bank_account_id).eq('clinic_id', clinicId).single()
   if (!acct) return { error: 'Conta bancária não encontrada.' }
   const conta = String((acct as { account?: string }).account ?? '').trim()
   if (!conta) return { error: 'A conta selecionada não tem número cadastrado (necessário para buscar no Sicoob).' }
 
+  // A configuração vem da CLÍNICA (ambiente, client_id, certificado), não de
+  // variável de ambiente — senão "Produção" na tela não significa nada.
+  const { resolverConfigSicoob } = await import('@/lib/integrations/sicoob-config')
+  const resolucao = await resolverConfigSicoob(admin, clinicId, {
+    agency:    (acct as { agency?: string | null }).agency ?? null,
+    account:   (acct as { account?: string | null }).account ?? null,
+    bank_code: (acct as { bank_code?: string | null }).bank_code ?? null,
+  })
+  if ('error' in resolucao) return { error: resolucao.error }
+
   let res: { statements: { date: string; amount: number; description: string; type: 'credit' | 'debit'; external_id?: string }[]; warnings: string[] }
-  try { res = await fetchSicoobExtrato({ conta, start_date: params.start_date, end_date: params.end_date }) }
+  try { res = await fetchSicoobExtrato({ conta, start_date: params.start_date, end_date: params.end_date, config: resolucao.config }) }
   catch (e) { return { error: `Sicoob: ${mensagemErro(e, 'lib/actions/financial.ts')}` } }
   if (!res.statements.length) return { error: `Nenhum lançamento retornado pelo Sicoob no período.${res.warnings.length ? ' (' + res.warnings.join(' · ') + ')' : ''}` }
 
@@ -2260,5 +2270,5 @@ export async function importBankStatementFromSicoob(params: {
   if ('error' in imp) return { error: imp.error }
   const auto = await persistAutoLinks(imp.id)
   const linked = 'error' in auto ? 0 : auto.linked
-  return { ok: true, batch_id: imp.id, imported: res.statements.length, linked, warnings: res.warnings }
+  return { ok: true, batch_id: imp.id, imported: res.statements.length, linked, warnings: [...resolucao.avisos, ...res.warnings] }
 }
