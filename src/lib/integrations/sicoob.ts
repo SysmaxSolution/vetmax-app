@@ -20,6 +20,16 @@ const SANDBOX = {
   token:     '1301865f-c6bc-38f3-9f49-666dbcfc59c3', // access_token fixo do sandbox
 }
 const PROD_BASE  = 'https://api.sicoob.com.br/conta-corrente/v4'
+
+/**
+ * Escopo do token para ler o extrato. MEDIDO contra o Sicoob de producao em
+ * 2026-10-07, nao suposto: `cco_extrato` e `cco_saldo` NAO existem e fazem o
+ * Keycloak recusar a requisicao inteira com invalid_scope, mesmo com o
+ * certificado e o client_id corretos. O escopo de leitura da Conta Corrente e
+ * `cco_consulta` (existe tambem `cco_transferencias`, que nao usamos).
+ * Travado por tests/unit/sicoob-escopos.test.ts.
+ */
+export const ESCOPO_EXTRATO = 'openid cco_consulta'
 const TOKEN_URL  = 'https://auth.sicoob.com.br/auth/realms/cooperado/protocol/openid-connect/token'
 
 /**
@@ -111,7 +121,7 @@ async function getToken(cfg: SicoobConfig): Promise<string> {
     throw new Error('O SICOOB_CLIENT_ID configurado e o client_id publico de SANDBOX. Crie o aplicativo no portal Sicoob Developers e use o client_id de producao.')
   }
   const body = new URLSearchParams({
-    grant_type: 'client_credentials', client_id: clientId, scope: 'openid cco_extrato cco_saldo',
+    grant_type: 'client_credentials', client_id: clientId, scope: ESCOPO_EXTRATO,
   }).toString()
   const r = await requisicaoMtls(TOKEN_URL, cfg, {
     method: 'POST',
@@ -160,9 +170,27 @@ const toDate = (v: unknown): string | null => {
   m = s.match(/(\d{2})\/(\d{2})\/(\d{4})/);   if (m) return `${m[3]}-${m[2]}-${m[1]}`
   return null
 }
-const toNum = (v: unknown): number => {
-  if (typeof v === 'number') return v
-  const n = Number(String(v ?? '').replace(/[R$\s.]/g, m => (m === '.' ? '' : '')).replace(',', '.'))
+/**
+ * Converte valor monetario que chega em DOIS formatos diferentes.
+ *
+ * O SANDBOX devolve numero (1555.05). A PRODUCAO devolve string "1555.05",
+ * com ponto DECIMAL. Mas tambem existe entrada no formato brasileiro,
+ * "R$ 1.555,05", onde o ponto e MILHAR.
+ *
+ * A versao anterior removia todo ponto — correto para o formato brasileiro,
+ * catastrofico para o da API: "1555.05" virava 155505, cem vezes maior. Como
+ * o sandbox devolve numero, o erro nunca aparecia em teste e so entraria em
+ * cena na primeira conciliacao real.
+ *
+ * Regra: tem virgula -> virgula e o decimal e ponto e milhar (pt-BR);
+ * nao tem virgula -> ponto e o decimal (API).
+ */
+export const toNum = (v: unknown): number => {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : NaN
+  let t = String(v ?? '').replace(/[R$\s ]/g, '').trim()
+  if (!t) return NaN
+  if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.')   // pt-BR
+  const n = Number(t)
   return Number.isFinite(n) ? n : NaN
 }
 const inferType = (tipo: unknown, valor: number): 'credit' | 'debit' => {
@@ -188,8 +216,28 @@ async function fetchMonth(cfg: SicoobConfig, conta: string, mes: number, ano: nu
     if (r.status !== 200) throw new Error('Extrato Sicoob ' + mes + '/' + ano + ' falhou (' + r.status + '): ' + r.text.slice(0, 160))
     corpo = r.text
   }
-  const j = JSON.parse(corpo || '{}') as { transacoes?: Array<Record<string, unknown>> }
-  const txs = Array.isArray(j.transacoes) ? j.transacoes : []
+  return extrairTransacoes(corpo)
+}
+
+/**
+ * Transforma o corpo do extrato em lancamentos. Exportada para ser testavel:
+ * foi aqui que a producao passou batido.
+ *
+ * O SANDBOX devolve `{ transacoes: [...] }` no nivel de cima; a PRODUCAO
+ * devolve `{ mensagens, resultado: { saldoAtual, ..., transacoes: [...] } }`.
+ * Ler so o nivel de cima fazia a conciliacao autenticar, receber o extrato
+ * real e importar ZERO lancamento, reclamando "nenhum lancamento no periodo"
+ * — o pior tipo de falha, porque parece problema do banco.
+ */
+export function extrairTransacoes(corpo: string): SicoobTx[] {
+  let j: {
+    transacoes?: Array<Record<string, unknown>>
+    resultado?: { transacoes?: Array<Record<string, unknown>> }
+  }
+  try { j = JSON.parse(corpo || '{}') } catch { return [] }
+
+  const lista = j?.resultado?.transacoes ?? j?.transacoes
+  const txs = Array.isArray(lista) ? lista : []
   const out: SicoobTx[] = []
   for (const t of txs) {
     const valor = toNum(t.valor)
