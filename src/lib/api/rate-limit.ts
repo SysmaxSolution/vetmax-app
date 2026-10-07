@@ -43,9 +43,20 @@ export async function excedeuLimite(
       p_limit: cfg.limite,
       p_window_seconds: cfg.janelaSegundos ?? 60,
     })
-    if (error) return false      // falhou o contador → deixa passar
+    if (error) {
+      // Falha aberta, mas NUNCA em silêncio: um contador quebrado deixa de
+      // limitar e, sem este log, ninguém descobre. Já aconteceu — a primeira
+      // versão engolia o erro e a rota publicada aceitava chamada sem teto.
+      console.error('[rate-limit] contador indisponível, chamada liberada', {
+        escopo: cfg.escopo, code: error.code, message: error.message,
+      })
+      return false
+    }
     return data === true
-  } catch {
+  } catch (e) {
+    console.error('[rate-limit] falha ao consultar o contador, chamada liberada', {
+      escopo: cfg.escopo, message: e instanceof Error ? e.message : String(e),
+    })
     return false
   }
 }
