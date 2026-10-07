@@ -16,7 +16,23 @@
 
 import { carregarPfx, chamarSicoob, ehSandbox, obterTokenProducao, type CredenciaisSicoob } from './sicoob-mtls'
 
-export interface SicoobTx { date: string; amount: number; description: string; type: 'credit' | 'debit'; external_id?: string }
+export interface SicoobTx {
+  date: string
+  amount: number
+  description: string
+  type: 'credit' | 'debit'
+  /** numeroDocumento — serve para casar com titulo, NAO para identificar. */
+  external_id?: string
+  /**
+   * transactionId do Sicoob: identificador UNICO da transacao.
+   *
+   * Existe porque `numeroDocumento` NAO identifica: para Pix ele vem como a
+   * string literal "Pix". Em producao havia 51 linhas com external_id "Pix" e
+   * 43 grupos duplicados — reimportar o periodo duplicava tudo. O
+   * transactionId e o que permite importacao idempotente.
+   */
+  tx_id?: string
+}
 
 const SANDBOX = {
   base:      'https://sandbox.sicoob.com.br/sicoob/sandbox/conta-corrente/v4',
@@ -165,7 +181,9 @@ export function extrairTransacoes(corpo: string): SicoobTx[] {
     if (!date || !Number.isFinite(valor)) continue                       // pula lixo do sandbox (lorem)
     out.push({
       date, amount: Math.abs(valor), description: String(t.descricao ?? 'Lançamento'),
-      type: inferType(t.tipo, valor), external_id: t.numeroDocumento ? String(t.numeroDocumento) : undefined,
+      type: inferType(t.tipo, valor),
+      external_id: t.numeroDocumento ? String(t.numeroDocumento) : undefined,
+      tx_id: t.transactionId ? String(t.transactionId) : undefined,
     })
   }
   return out

@@ -7,6 +7,7 @@ import {
   importStatements, getBBStatement, getStatementsWithLinks, persistAutoLinks, listReconcCandidates,
   linkEntriesToStatement, unlinkEntry, unlinkStatement, reconcileLines, unreconcileLine,
   settleOpenEntryAndLink, insertEntryFromStatement, importBankStatementFromSicoob,
+  getStatementsWithLinksByPeriod,
 } from '@/lib/actions/financial'
 import { parseFile } from '@/lib/parsers/bankStatementParser'
 import {
@@ -56,6 +57,32 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
     return m
   }, [candidates])
 
+  // Carrega o que JA esta importado para a conta no periodo.
+  //
+  // Antes a tela so carregava por `import_batch_id`: ao sair e voltar, `batch`
+  // era nulo e nada aparecia. Parecia que o trabalho tinha sido perdido, e
+  // reimportar duplicava (43 grupos duplicados em producao antes da 0494). O
+  // dado sempre esteve gravado — faltava recarregar.
+  const [jaImportado, setJaImportado] = useState<number | null>(null)
+  useEffect(() => {
+    if (!selectedBank || !apiStart || !apiEnd) { setJaImportado(null); return }
+    let valido = true
+    ;(async () => {
+      const [st, cand] = await Promise.all([
+        getStatementsWithLinksByPeriod({ bank_account_id: selectedBank, start_date: apiStart, end_date: apiEnd }),
+        listReconcCandidates({ bank_account_id: selectedBank, start_date: apiStart, end_date: apiEnd }),
+      ])
+      if (!valido) return                      // troca de conta/periodo no meio: descarta
+      if (!('error' in st)) {
+        setStatements(st)
+        setJaImportado(st.length)
+        if (st.length) setPeriod({ start: apiStart, end: apiEnd })
+      }
+      if (!('error' in cand)) setCandidates(cand)
+    })()
+    return () => { valido = false }
+  }, [selectedBank, apiStart, apiEnd])
+
   async function loadData(batchId: string, start: string, end: string) {
     const [st, cand] = await Promise.all([
       getStatementsWithLinks(batchId),
@@ -64,7 +91,17 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
     if (!('error' in st)) setStatements(st)
     if (!('error' in cand)) setCandidates(cand)
   }
-  async function reload() { if (batch && period) await loadData(batch.id, period.start, period.end) }
+  async function reload() {
+    if (batch && period) { await loadData(batch.id, period.start, period.end); return }
+    // Sem lote na mao (o usuario voltou a tela): recarrega pelo periodo.
+    if (!selectedBank) return
+    const [st, cand] = await Promise.all([
+      getStatementsWithLinksByPeriod({ bank_account_id: selectedBank, start_date: apiStart, end_date: apiEnd }),
+      listReconcCandidates({ bank_account_id: selectedBank, start_date: apiStart, end_date: apiEnd }),
+    ])
+    if (!('error' in st)) setStatements(st)
+    if (!('error' in cand)) setCandidates(cand)
+  }
 
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -118,7 +155,9 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
 
   async function handleSicoobImport() {
     if (!selectedBank || apiLoading) { if (!selectedBank) setErrorMsg('Selecione a conta bancária.'); return }
-    setErrorMsg(null); setSuccessMsg(null); setBatch(null); setStatements([]); setMatchResult(null); setActiveStmt(null); setSelCands(new Set())
+    // NAO limpa `statements` aqui: se a importacao nao trouxer nada novo, o
+    // que ja estava conciliado continua na tela em vez de sumir.
+    setErrorMsg(null); setSuccessMsg(null); setMatchResult(null); setActiveStmt(null); setSelCands(new Set())
     setApiLoading(true)
     const res = await importBankStatementFromSicoob({ bank_account_id: selectedBank, start_date: apiStart, end_date: apiEnd })
     setApiLoading(false)
@@ -128,7 +167,10 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
     setBatch({ id: res.batch_id, clinic_id: '', bank_account_id: selectedBank, source: 'sicoob_api', imported_at: '', total_records: res.imported, matched_count: res.linked, status: 'pending' })
     setMatchResult({ linked: res.linked, unmatched_statements: res.imported - res.linked, unmatched_candidates: 0 })
     await loadData(res.batch_id, apiStart, apiEnd)
-    setSuccessMsg(`${res.imported} lançamentos do Sicoob importados. ${res.linked} vinculados automaticamente.${res.warnings.length ? ' Avisos: ' + res.warnings.join(' · ') : ''}`)
+    const avisos = res.warnings.length ? ' Avisos: ' + res.warnings.join(' · ') : ''
+    setSuccessMsg(res.imported === 0
+      ? `Nada novo no período — o extrato já estava importado.${avisos}`
+      : `${res.imported} lançamento(s) do Sicoob importados. ${res.linked} vinculados automaticamente.${avisos}`)
   }
 
   const active = statements.find(s => s.id === activeStmt) ?? null
