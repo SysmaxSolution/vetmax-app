@@ -3,9 +3,9 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { settleBoletoPaid } from '@/lib/boleto/settle'
 import { logBoletoEvent } from '@/lib/boleto/events'
 import { extractAccountHints, resolveBoletoCandidate, type BoletoCandidate } from '@/lib/boleto/webhook-resolve'
+import { limitarPorIp } from '@/lib/api/rate-limit'
 
 import { mensagemErro } from '@/lib/errors'
-import { limitarPorIp } from '@/lib/api/rate-limit'
 // Webhook de Cobrança Bancária Sicoob — notificação de pagamento (baixa automática).
 // Registrado em produção (POST /webhooks na API Sicoob) apontando para esta URL
 // com ?key=<SICOOB_WEBHOOK_SECRET>&conta=<token da conta>. Ao receber o pagamento,

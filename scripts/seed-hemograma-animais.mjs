@@ -8,14 +8,10 @@
 // NADA é inventado: valores, unidades, faixas de referência, flags H/L e as 7
 // curvas (histogramas/scattergramas em PNG base64) vêm do próprio HL7.
 //
-// Uso (a clínica alvo é OBRIGATÓRIA — nada de default escondido):
-//   node scripts/seed-hemograma-animais.mjs --clinic <uuid>            # rascunho + liberado
-//   node scripts/seed-hemograma-animais.mjs --clinic <uuid> --release  # só o liberado
-//   node scripts/seed-hemograma-animais.mjs --clinic <uuid> --clean    # remove o que foi semeado
-//
-// O cadastro da clínica (nome, logo, endereço, telefone) NÃO é tocado aqui —
-// quem cuida disso é scripts/setup-clinica-animais-dev.mjs. Este script só
-// semeia resultado de exame.
+// Uso:
+//   node scripts/seed-hemograma-animais.mjs            # semeia como RASCUNHO
+//   node scripts/seed-hemograma-animais.mjs --release  # já libera (assinado)
+//   node scripts/seed-hemograma-animais.mjs --clean    # remove o que foi semeado
 //
 // Credenciais: .env.local do worktree (SUPABASE_DEV_DB_PASSWORD). Nunca hardcode.
 
@@ -28,19 +24,14 @@ import { config } from 'dotenv'
 const __d = dirname(fileURLToPath(import.meta.url))
 config({ path: resolve(__d, '../.env.local') })
 
-const argv = process.argv.slice(2)
-const argValue = n => { const i = argv.indexOf(n); return i >= 0 ? (argv[i + 1] ?? null) : null }
-
-const CLINIC_ID = argValue('--clinic') ?? process.env.ANIMAIS_CLINIC_ID ?? null
+let CLINIC_ID = null
 const JSONL = process.env.LAB_JSONL ?? 'C:/SysvetmaxLabAgent/pending-results.jsonl'
 const TAG = '[LAUDO-DEMO]'
 
-const DO_CLEAN = argv.includes('--clean')
-const DO_RELEASE = argv.includes('--release')
+const args = new Set(process.argv.slice(2))
+const DO_CLEAN = args.has('--clean')
+const DO_RELEASE = args.has('--release')
 
-if (!CLINIC_ID || !/^[0-9a-f-]{36}$/i.test(CLINIC_ID)) {
-  console.error('Informe a clínica alvo: --clinic <uuid> (ou ANIMAIS_CLINIC_ID no ambiente).'); process.exit(1)
-}
 if (!process.env.SUPABASE_DEV_DB_PASSWORD) {
   console.error('Falta SUPABASE_DEV_DB_PASSWORD no .env.local'); process.exit(1)
 }
@@ -129,9 +120,36 @@ const GRAPH_TITLES = {
 const graphTitle = c => GRAPH_TITLES[String(c ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '')] ?? c
 
 // ------------------------------------------------------------------- execução
+// Resolve a clínica alvo PELO NOME e confere antes de gravar.
+//
+// Lição de 01/10/2026: estes scripts traziam um UUID fixo como padrão que era,
+// na verdade, o da "Sys Demo". Rodaram sem reclamar e semearam o laudo na
+// clínica errada — do lado de fora pareceu vazamento entre clínicas. UUID solto
+// em script de seed não se valida sozinho; nome, sim.
+async function resolverClinicaAnimais(q) {
+  if (process.env.ANIMAIS_CLINIC_ID) {
+    const { rows } = await q('SELECT id, name FROM clinics WHERE id = $1', [process.env.ANIMAIS_CLINIC_ID])
+    if (!rows[0]) { console.error(`ANIMAIS_CLINIC_ID=${process.env.ANIMAIS_CLINIC_ID} não existe neste banco.`); process.exit(1) }
+    console.log(`clínica alvo: ${rows[0].name} (${rows[0].id}) — via ANIMAIS_CLINIC_ID`)
+    return rows[0].id
+  }
+  const { rows } = await q("SELECT id, name FROM clinics WHERE name ILIKE '%animais%' ORDER BY name")
+  if (rows.length === 0) {
+    console.error('Não achei nenhuma clínica com "Animais" no nome. Informe ANIMAIS_CLINIC_ID.'); process.exit(1)
+  }
+  if (rows.length > 1) {
+    console.error('Mais de uma clínica casa com "Animais" — informe ANIMAIS_CLINIC_ID:')
+    for (const r of rows) console.error(`   ${r.id}  ${r.name}`)
+    process.exit(1)
+  }
+  console.log(`clínica alvo: ${rows[0].name} (${rows[0].id})`)
+  return rows[0].id
+}
+
 async function main() {
   await client.connect()
   const q = (sql, p) => client.query(sql, p)
+  CLINIC_ID = await resolverClinicaAnimais(q)
 
   // 0) Limpeza dos RESULTADOS (idempotente). Os atendimentos NÃO são apagados:
   //    o trigger check_consultation_cfmv_retention (CFMV_RETENTION_5Y) proíbe —
@@ -145,19 +163,7 @@ async function main() {
     await q('DELETE FROM exam_results      WHERE clinic_id=$1 AND consultation_id=$2', [CLINIC_ID, r.id])
   }
   console.log(`limpeza: resultados de ${old.length} atendimento(s) marcado(s) ${TAG} removidos`)
-  if (DO_CLEAN) {
-    // Sem resultado, o atendimento ficaria pendurado na fila do Laboratório para
-    // sempre. Como o atendimento NÃO pode ser apagado (retenção CFMV de 5 anos),
-    // o encerramento honesto é 'cancelled'. Só vale para o que ainda não foi
-    // finalizado-e-revisado — prontuário fechado é imutável (Res. CFMV 1321/2020).
-    const { rowCount } = await q(
-      `UPDATE consultations SET status = 'cancelled'
-        WHERE clinic_id = $1 AND id = ANY($2::uuid[])
-          AND NOT (status = 'completed' AND is_reviewed_by_vet IS TRUE)`,
-      [CLINIC_ID, old.map(r => r.id)])
-    console.log(`limpeza: ${rowCount} atendimento(s) demo marcado(s) como cancelled (não se apaga — retenção CFMV)`)
-    await client.end(); return
-  }
+  if (DO_CLEAN) { await client.end(); return }
 
   // 1) massa real
   if (!existsSync(JSONL)) { console.error(`Arquivo não encontrado: ${JSONL}`); process.exit(1) }
@@ -177,23 +183,23 @@ async function main() {
               SET flow_config = COALESCE(flow_config,'{}'::jsonb) || '{"usa_laboratorio": true}'::jsonb
             WHERE id = $1`, [CLINIC_ID])
 
-  // 2b) O cabeçalho do laudo lê nome/logo/endereço/telefone direto de `clinics`.
-  //     Este script NÃO inventa cadastro: só avisa quando falta o que sai
-  //     impresso. Para popular, use scripts/setup-clinica-animais-dev.mjs.
-  const { rows: cInfo } = await q(
-    'SELECT name, logo_url, address, phone FROM clinics WHERE id = $1', [CLINIC_ID])
-  const faltando = ['logo_url', 'address', 'phone'].filter(k => !cInfo[0]?.[k])
-  console.log(`clínica: ${cInfo[0]?.name ?? '?'} (${CLINIC_ID})`)
-  if (faltando.length) {
-    console.warn(`  ⚠ cabeçalho sairá incompleto — sem ${faltando.join(', ')}.`)
-    console.warn('    rode: node scripts/setup-clinica-animais-dev.mjs --clinic <uuid> --logo <arquivo.png>')
-  }
+  // 2b) Preenche SÓ o que estiver vazio no cadastro da clínica — o cabeçalho do
+  //     laudo lê nome/logo/endereço/telefone direto de `clinics`. Não sobrescreve
+  //     nada que já exista (nem o nome da clínica).
+  await q(`UPDATE clinics SET
+             address = COALESCE(address, 'Rua Garibaldi, 2248'),
+             neighborhood = COALESCE(neighborhood, 'Centro'),
+             city = COALESCE(city, 'Ribeirão Preto'),
+             state = COALESCE(state, 'SP'),
+             cep = COALESCE(cep, '14025-190'),
+             phone = COALESCE(phone, '(16) 99215-5055')
+           WHERE id = $1`, [CLINIC_ID])
 
   // 3) MV para assinar: pega um vet já existente na clínica (não cria usuário).
   const { rows: vets } = await q(
     `SELECT id, full_name, crmv FROM profiles
       WHERE clinic_id=$1 AND role IN ('vet','admin')
-      ORDER BY (crmv IS NOT NULL) DESC, (role = 'vet') DESC, full_name LIMIT 1`, [CLINIC_ID])
+      ORDER BY (crmv IS NOT NULL) DESC, full_name LIMIT 1`, [CLINIC_ID])
   const vet = vets[0] ?? null
   if (vet && !vet.crmv) {
     // Só em DEV e só quando está vazio: sem CRMV o rodapé do laudo sai truncado.

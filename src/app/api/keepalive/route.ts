@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { limitarPorIp } from '@/lib/api/rate-limit'
 
 import { mensagemErro } from '@/lib/errors'
-import { limitarPorIp } from '@/lib/api/rate-limit'
 /**
  * GET /api/keepalive
  * Authorization: Bearer <KEEPALIVE_SECRET>

@@ -2,8 +2,8 @@ import { Anthropic } from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
 import type { ExtractedField } from '@/types'
 import { createClient } from '@/lib/supabase/server'
-
 import { limitarPorIp } from '@/lib/api/rate-limit'
+
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 })

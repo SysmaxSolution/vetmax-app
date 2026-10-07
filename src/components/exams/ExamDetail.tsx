@@ -16,6 +16,7 @@ import { returnToVet, dischargeFromExams, sendExamToPartnerLab } from '@/lib/act
 import { listPartnerClinics, type PartnerClinic } from '@/lib/actions/partner-clinics'
 import ConsultationServicesPanel from '@/components/vet/ConsultationServicesPanel'
 import ExamResultsPanel from '@/components/exams/ExamResultsPanel'
+import SlideEntryPanel from '@/components/exams/SlideEntryPanel'
 import ExamRejectionPanel from '@/components/exams/ExamRejectionPanel'
 import { formatPetAge } from '@/lib/utils/pet-age'
 import { Toast } from '@/components/ui/toast'
@@ -632,6 +633,11 @@ export default function ExamDetail({
         {usaLaboratorio && (
           <ExamResultsPanel consultationId={consultation.id} canRelease={userRole !== 'receptionist' && userRole !== 'assistant'} />
         )}
+
+        {/* Digitação da lâmina: só aparece quando a clínica cadastrou a tabela
+            de referência dela E essa tabela tem linha para digitar (diferencial,
+            texto, correção manual). Sem tabela, o componente não renderiza nada. */}
+        {usaLaboratorio && <SlideEntryPanel consultationId={consultation.id} />}
 
         {/* Serviços/Produtos do exame — painel fixo (como no consultório).
             Permite vincular/visualizar o serviço antes de enviar ao laboratório. */}

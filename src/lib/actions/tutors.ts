@@ -386,3 +386,31 @@ export async function getTutorConsentStatus(
     consentVersion: data.consent_version ?? null,
   }
 }
+
+/**
+ * O cliente avulso da clínica (CONSUMIDOR FINAL), criado pela migration 0495.
+ *
+ * Existe porque o título a receber passou a exigir o dono, e 360 dos 453
+ * títulos de produção vêm de venda no caixa para consumidor avulso — que
+ * legitimamente não tem tutor cadastrado. O endereço dele é o da clínica.
+ *
+ * Não serve para boleto: o CPF 11111111111 é convenção de NF-e para
+ * consumidor anônimo e não passa no dígito verificador. O aviso do pagador
+ * diz isso ao usuário.
+ */
+export async function buscarConsumidorFinal(): Promise<{ id: string; name: string } | null> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+  const { data: profile } = await supabase.from('profiles').select('clinic_id').eq('id', user.id).single()
+  if (!profile?.clinic_id) return null
+
+  const { data } = await supabase
+    .from('tutors')
+    .select('id, name')
+    .eq('clinic_id', profile.clinic_id)
+    .eq('is_walk_in', true)
+    .limit(1)
+    .maybeSingle()
+  return data ? { id: data.id as string, name: data.name as string } : null
+}

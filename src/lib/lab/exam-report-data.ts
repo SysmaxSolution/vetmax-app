@@ -7,8 +7,13 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { parseHL7ORU } from './hl7-parser'
-import { buildHemogramReport, type HemogramReport, type HemogramGraphInput } from './hemogram-report'
-import { GRAPH_BUCKET, GRAPH_SIGNED_TTL, resolveGraphSrc } from './graph-storage'
+import { buildHemogramReport, type HemogramReport } from './hemogram-report'
+import { examKeyOf, summarizeExams, type ExamSummary } from './exam-key'
+import { buildBiochemReport, isBiochemAnalyte, type BiochemReport } from './biochem-report'
+import {
+  applyReferenceSet, pickReferenceSet,
+  type ReferenceSet, type ResolvedReport,
+} from './reference-set'
 
 export interface ReportHeader {
   os_number:   string
@@ -22,6 +27,15 @@ export interface ReportHeader {
 export interface ExamReportData {
   header:      ReportHeader
   report:      HemogramReport
+  /** Blocos de bioquímica (Sérium 200 / BK-200). Vazio quando só veio hemograma. */
+  biochem:     BiochemReport
+  /** Laudo montado pela TABELA DA CLÍNICA. Null quando ela não cadastrou uma —
+   *  aí vale o comportamento antigo, com as faixas do aparelho. */
+  resolved:    ResolvedReport | null
+  /** Todos os exames desta OS, cada um com o seu estado. É a lista da capa. */
+  exams:       ExamSummary[]
+  /** Exame que ESTE laudo representa. Null = a OS inteira (índice). */
+  exam:        ExamSummary | null
   /** 'released' quando o Médico Veterinário já conferiu e liberou. */
   status:      'released' | 'draft' | 'empty'
   released_at: string | null
@@ -30,6 +44,8 @@ export interface ExamReportData {
   device:      string | null
   collected_at: string | null
   sample_id:   string | null
+  /** Tipo de amostra declarado pelo aparelho (OBR-15). Ex.: "soro". */
+  specimen:    string | null
   panel:       string | null
 }
 
@@ -93,64 +109,6 @@ interface ResultRow {
   panel: string | null; raw_hl7: string | null
 }
 
-interface GraphRow {
-  id: string; code: string; title: string | null
-  mime: string | null; encoding: string | null
-  storage_path: string | null; bytes: number | null
-  width: number | null; height: number | null
-}
-
-/**
- * Resolve a imagem de cada curva para o laudo.
- *
- * Caminho novo (0487): uma única chamada `createSignedUrls` devolve as 7 URLs
- * do bucket privado — o HTML do laudo leva links de ~300 B e o NAVEGADOR busca
- * os PNGs direto no Storage do Supabase. Nenhum byte de imagem passa pela
- * função serverless (era isso que queimava o fast origin transfer).
- *
- * Caminho legado: linhas gravadas pela 0485 só têm base64. Aí sim buscamos o
- * `data` — e SÓ dessas linhas — para o laudo antigo continuar renderizando.
- */
-async function resolveReportGraphs(
-  admin: SupabaseClient, clinicId: string, consultationId: string, rows: GraphRow[],
-): Promise<HemogramGraphInput[]> {
-  if (rows.length === 0) return []
-
-  const paths = rows.map(r => r.storage_path).filter((p): p is string => Boolean(p))
-  const signedByPath = new Map<string, string>()
-  if (paths.length > 0) {
-    const { data: signed } = await admin.storage.from(GRAPH_BUCKET)
-      .createSignedUrls(paths, GRAPH_SIGNED_TTL)
-    for (const s of signed ?? []) {
-      if (s?.path && s?.signedUrl) signedByPath.set(s.path, s.signedUrl)
-    }
-  }
-
-  // Legado: só as curvas sem objeto no Storage (ou cuja assinatura falhou).
-  const legacyIds = rows
-    .filter(r => !r.storage_path || !signedByPath.has(r.storage_path))
-    .map(r => r.id)
-  const legacyData = new Map<string, string>()
-  if (legacyIds.length > 0) {
-    const { data: legacy } = await admin.from('exam_result_graphs')
-      .select('id, data')
-      .eq('clinic_id', clinicId).eq('consultation_id', consultationId)
-      .in('id', legacyIds)
-    for (const l of legacy ?? []) {
-      if (l?.data) legacyData.set(l.id as string, l.data as string)
-    }
-  }
-
-  return rows.map(r => ({
-    code: r.code, name: r.title,
-    mime: r.mime, encoding: r.encoding,
-    src: resolveGraphSrc(
-      { storage_path: r.storage_path, mime: r.mime, encoding: r.encoding, data: legacyData.get(r.id) ?? null },
-      signedByPath,
-    ),
-  }))
-}
-
 /**
  * Carrega o laudo da consulta. SEMPRE filtra por clinic_id (o admin client
  * ignora RLS). Prefere os resultados LIBERADOS; só cai no rascunho quando não
@@ -160,6 +118,8 @@ export async function getExamReportData(
   admin: SupabaseClient,
   clinicId: string,
   consultationId: string,
+  /** Qual exame montar. Omitido = devolve só o resumo da OS (para a capa). */
+  examKey?: string | null,
 ): Promise<ExamReportData | null> {
   const { data: cons } = await admin
     .from('consultations')
@@ -172,11 +132,8 @@ export async function getExamReportData(
       .select('analyte_code, analyte_name, value_text, unit, ref_text, ref_low, ref_high, flag, status, source, released_at, panel, raw_hl7')
       .eq('clinic_id', clinicId).eq('consultation_id', consultationId)
       .order('created_at', { ascending: true }),
-    // Curvas: NÃO traz `data` aqui. Desde a 0487 o payload está no Storage e o
-    // que vem do banco são ~150 B de metadado por curva (eram ~6,5 kB de
-    // base64 cada, ~45 kB por hemograma, atravessando a função serverless).
     admin.from('exam_result_graphs')
-      .select('id, code, title, mime, encoding, storage_path, bytes, width, height')
+      .select('code, title, mime, encoding, data')
       .eq('clinic_id', clinicId).eq('consultation_id', consultationId)
       .order('created_at', { ascending: true }),
     admin.from('clinics')
@@ -199,26 +156,80 @@ export async function getExamReportData(
         .eq('clinic_id', clinicId).eq('id', patient.tutor_id).maybeSingle()
     : { data: null }
 
-  const rows = (results ?? []) as ResultRow[]
-  const released = rows.filter(r => r.status === 'released')
-  const use = released.length > 0 ? released : rows
-  const status: ExamReportData['status'] = released.length > 0 ? 'released' : (rows.length > 0 ? 'draft' : 'empty')
+  const todas = (results ?? []) as ResultRow[]
+
+  // Cada exame da OS tem estado próprio. A regra anterior era
+  // `released.length > 0 ? released : rows` — com isso, liberar o hemograma
+  // fazia a bioquímica em rascunho SUMIR do laudo, e o documento saía marcado
+  // como liberado. Exame é a unidade; um não decide pelo outro.
+  const exams = summarizeExams(todas.map(r => ({
+    analyte_code: r.analyte_code, analyte_name: r.analyte_name,
+    status: r.status, released_at: r.released_at,
+  })))
+  const exam = examKey ? (exams.find(e => e.key === examKey) ?? null) : null
+  if (examKey && !exam) return null
+
+  const rows = exam ? todas.filter(r => examKeyOf(r.analyte_code, r.analyte_name).key === exam.key) : todas
+  const use = rows
+  const status: ExamReportData['status'] =
+    rows.length === 0 ? 'empty' : (exam ? exam.status : (exams.every(e => e.status === 'released') ? 'released' : 'draft'))
 
   // Metadados da amostra: vêm do HL7 guardado (versão sem os payloads base64).
   const raw = use.find(r => r.raw_hl7)?.raw_hl7 ?? null
   const meta = raw ? parseHL7ORU(raw) : null
   const hl7 = meta && !('error' in meta) ? meta : null
 
-  const graphInputs = await resolveReportGraphs(admin, clinicId, consultationId, (graphRows ?? []) as GraphRow[])
+  // Um mesmo atendimento pode ter hemograma (URIT) E bioquímica (Sérium 200):
+  // os dois aparelhos escrevem na mesma consulta. Separar antes de montar evita
+  // que os analitos de bioquímica caiam em "Outros parâmetros" do hemograma.
+  const allAnalytes = use.map(r => ({
+    code: r.analyte_code, name: r.analyte_name, value: r.value_text, unit: r.unit,
+    ref_text: r.ref_text, ref_low: r.ref_low, ref_high: r.ref_high,
+    flag: (r.flag as 'H' | 'L' | 'N' | 'A' | null) ?? null,
+  }))
+  const bioAnalytes = allAnalytes.filter(a => isBiochemAnalyte(a.code, a.name))
+  const hemAnalytes = allAnalytes.filter(a => !isBiochemAnalyte(a.code, a.name))
 
   const report = buildHemogramReport(
-    use.map(r => ({
-      code: r.analyte_code, name: r.analyte_name, value: r.value_text, unit: r.unit,
-      ref_text: r.ref_text, ref_low: r.ref_low, ref_high: r.ref_high,
-      flag: (r.flag as 'H' | 'L' | 'N' | 'A' | null) ?? null,
+    hemAnalytes,
+    (graphRows ?? []).map(g => ({
+      code: g.code as string, name: (g.title as string) ?? null,
+      mime: g.mime as string | null, encoding: g.encoding as string | null,
+      source: null, data: g.data as string,
     })),
-    graphInputs,
   )
+
+  // Tabela de referência da clínica. O exame lógico não vem do rótulo que o
+  // aparelho manda (o URIT diz "5190Vet"), e sim do que ele realmente mediu.
+  const panelKey = hemAnalytes.length > 0 ? 'hemograma' : (bioAnalytes.length > 0 ? 'bioquimico' : null)
+  let resolved: ResolvedReport | null = null
+  if (panelKey) {
+    const [{ data: sets }, { data: manuais }] = await Promise.all([
+      admin.from('lab_reference_sets')
+        .select('id, panel_key, species, name, lab_reference_items(id, sort_order, label, analyte_code, section, input_source, unit, ref_text, ref_low, ref_high, ref_abs_text, ref_abs_low, ref_abs_high, is_visible, is_editable, default_text)')
+        .eq('clinic_id', clinicId).eq('panel_key', panelKey).eq('is_active', true),
+      admin.from('exam_manual_entries')
+        .select('label, value_text')
+        .eq('clinic_id', clinicId).eq('consultation_id', consultationId),
+    ])
+
+    const conjuntos: ReferenceSet[] = (sets ?? []).map(s => ({
+      id: s.id as string,
+      panel_key: s.panel_key as string,
+      species: (s.species as string) ?? null,
+      name: s.name as string,
+      items: ((s as { lab_reference_items?: unknown[] }).lab_reference_items ?? []) as ReferenceSet['items'],
+    }))
+
+    const escolhido = pickReferenceSet(conjuntos, panelKey, (patient?.species as string) ?? null)
+    if (escolhido) {
+      const digitado: Record<string, string> = {}
+      for (const m of manuais ?? []) {
+        if ((m as { value_text?: string }).value_text) digitado[(m as { label: string }).label] = (m as { value_text: string }).value_text
+      }
+      resolved = applyReferenceSet(escolhido, allAnalytes, digitado)
+    }
+  }
 
   const addr = [clinic?.address, clinic?.neighborhood].filter(Boolean).join(', ')
   const cityLine = [clinic?.city, clinic?.state].filter(Boolean).join(' / ')
@@ -254,12 +265,18 @@ export async function getExamReportData(
       },
     },
     report,
+    biochem: buildBiochemReport(bioAnalytes),
+    resolved,
+    exams,
+    exam,
     status,
-    released_at: released[0]?.released_at ?? null,
+    released_at: exam ? exam.released_at : (status === 'released' ? (use.find(r => r.released_at)?.released_at ?? null) : null),
     source: use[0]?.source ?? null,
     device: hl7?.device ?? null,
     collected_at: hl7?.observed_at ?? null,
     sample_id: hl7?.sample_id ?? null,
-    panel: use.find(r => r.panel)?.panel ?? hl7?.panel ?? 'Hemograma',
+    specimen: hl7?.specimen ?? null,
+    panel: exam?.title ?? use.find(r => r.panel)?.panel ?? hl7?.panel
+      ?? (hemAnalytes.length === 0 && bioAnalytes.length > 0 ? 'Bioquímico' : 'Hemograma'),
   }
 }

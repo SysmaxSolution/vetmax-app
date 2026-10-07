@@ -16,7 +16,9 @@ import type {
 import { CANVA_DEFAULT_MARGINS, validateContent } from '@/lib/canva/types'
 import { formatClinicDate } from '@/lib/time'
 import type { CanvasState } from '@/lib/canva/canvas-state'
-import { isCanvasState } from '@/lib/canva/canvas-state'
+import { isCanvasState, defaultCanvasState } from '@/lib/canva/canvas-state'
+import { applyIdentityToState, hydrateIdentity } from '@/lib/canva/identity'
+import { generateVerifyCode, hashCanvasDocument } from '@/lib/portal/laudo-verify'
 import type { FillableFieldElement } from '@/lib/canva/elements'
 import type { VitalSigns } from '@/types'
 import type { ResolveContext } from '@/lib/canva/dynamic-tags'
@@ -685,7 +687,7 @@ Responda SOMENTE com o JSON:`
       unfilled_keys,
     }
   } catch (e: any) {
-    return { error: (e ? mensagemErro(e, 'lib/actions/canva-templates.ts') : 'IA indisponível no momento.') }
+    return { error: e ? mensagemErro(e, 'lib/actions/canva-templates.ts') : 'IA indisponível no momento.' }
   }
 }
 
@@ -694,11 +696,13 @@ Responda SOMENTE com o JSON:`
 export interface CreateBlankCanvasTemplateInput {
   name: string
   type: 'laudo' | 'receita' | 'encaminhamento' | 'termo' | 'exame' | 'outro'
+  /** Default true — herda a identidade documental da clínica (0467). */
+  apply_identity?: boolean
 }
 
 export async function createBlankCanvasTemplate(
   input: CreateBlankCanvasTemplateInput,
-): Promise<{ id: string }> {
+): Promise<{ id: string; canvas_state: CanvasState }> {
   const { profile } = await requireClinic()
   if (profile.role !== 'admin') throw new Error('apenas admin pode criar modelos')
 
@@ -707,15 +711,18 @@ export async function createBlankCanvasTemplate(
 
   const admin = createAdminClient()
 
-  const blankCanvasState = {
-    version: 1,
-    page: {
-      size: 'A4',
-      orientation: 'portrait',
-      margins: { top: 2, bottom: 2, left: 2, right: 2 },
-      backgroundImageUrl: null,
-    },
-    elements: [],
+  // Modelos novos HERDAM a identidade documental da clínica (0467) por
+  // padrão: página padrão + cabeçalho/rodapé pinados + assinatura.
+  let canvasState: CanvasState = defaultCanvasState()
+  if (input.apply_identity !== false) {
+    const { data: ident } = await admin
+      .from('clinic_document_identity')
+      .select('config')
+      .eq('clinic_id', profile.clinic_id)
+      .maybeSingle()
+    if (ident?.config) {
+      canvasState = applyIdentityToState(canvasState, hydrateIdentity(ident.config), { adoptPage: true })
+    }
   }
 
   const { data, error } = await admin
@@ -726,12 +733,12 @@ export async function createBlankCanvasTemplate(
       type: input.type,
       file_url: null,
       extracted_fields: [],
-      canvas_state: blankCanvasState,
+      canvas_state: canvasState,
       engine: 'canva-native',
-      margin_top: 2.0,
-      margin_bottom: 2.0,
-      margin_left: 2.0,
-      margin_right: 2.0,
+      margin_top: canvasState.page.margins.top,
+      margin_bottom: canvasState.page.margins.bottom,
+      margin_left: canvasState.page.margins.left,
+      margin_right: canvasState.page.margins.right,
       block_style: 'solid',
     })
     .select('id')
@@ -740,7 +747,7 @@ export async function createBlankCanvasTemplate(
   if (error || !data) throw new Error(error?.message ?? 'falha ao criar modelo')
 
   revalidatePath('/dashboard/management')
-  return { id: data.id }
+  return { id: data.id, canvas_state: canvasState }
 }
 
 // ── Herdar de modelo existente (lista + clonagem dentro da mesma clínica) ───
@@ -973,6 +980,22 @@ export interface CreateCanvaPatientDocumentInput {
 export async function createCanvaPatientDocument(
   input: CreateCanvaPatientDocumentInput,
 ): Promise<{ id: string }> {
+  try {
+    return await createCanvaPatientDocumentInner(input)
+  } catch (e) {
+    // Log com contexto real do erro — evita que uma falha real vire só
+    // "Application error" genérico do Next.js em produção, sem pista alguma
+    // de onde/por quê quebrou (achado 24/09: 500 intermitente sem causa
+    // de código — reproduzido e resolvido por redeploy, mas o log daquele
+    // dia não tinha detalhe nenhum pra confirmar isso rapidamente).
+    console.error('[createCanvaPatientDocument] falhou:', e)
+    throw new Error(e instanceof Error ? e.message : 'falha ao salvar documento')
+  }
+}
+
+async function createCanvaPatientDocumentInner(
+  input: CreateCanvaPatientDocumentInput,
+): Promise<{ id: string }> {
   const { supabase, profile } = await requireClinic()
 
   if (!validateContent(input.content_json)) {
@@ -980,14 +1003,23 @@ export async function createCanvaPatientDocument(
   }
 
   // Lê config do template para snapshot (vet pode imprimir histórico anos depois
-  // mesmo se o admin trocar o papel timbrado no meio do caminho)
+  // mesmo se o admin trocar o papel timbrado — ou o layout inteiro — depois)
   const { data: tpl, error: tplErr } = await supabase
     .from('document_templates')
-    .select('background_image_url, margin_top, margin_bottom, margin_left, margin_right, block_style')
+    .select('background_image_url, margin_top, margin_bottom, margin_left, margin_right, block_style, canvas_state')
     .eq('id', input.template_id)
     .eq('clinic_id', profile.clinic_id)
     .single()
   if (tplErr || !tpl) throw new Error(tplErr?.message ?? 'template não encontrado')
+
+  // Snapshot imutável do layout (migration 0466). Documentos sem snapshot
+  // (antigos) caem no template em loadCanvaPatientDocument.
+  const snapshot = isCanvasState(tpl.canvas_state) ? (tpl.canvas_state as CanvasState) : null
+
+  // Autenticidade (0457): código público + hash SHA-256 do snapshot+conteúdo
+  // + quem emitiu. O QR do rodapé aponta para /public/verificar/<código>.
+  const signer = await loadSigner(supabase, profile.id)
+  const nowIso = new Date().toISOString()
 
   const { data, error } = await supabase
     .from('patient_documents')
@@ -1004,6 +1036,14 @@ export async function createCanvaPatientDocument(
       margin_left: tpl.margin_left ?? CANVA_DEFAULT_MARGINS.left,
       margin_right: tpl.margin_right ?? CANVA_DEFAULT_MARGINS.right,
       block_style: tpl.block_style ?? 'solid',
+      canvas_state_snapshot: snapshot,
+      snapshot_taken_at: snapshot ? nowIso : null,
+      verify_code: generateVerifyCode(),
+      content_hash: hashCanvasDocument(snapshot, input.content_json),
+      signed_by: profile.id,
+      signed_at: nowIso,
+      signer_name: signer.name,
+      signer_crmv: signer.crmv,
     })
     .select('id')
     .single()
@@ -1013,28 +1053,47 @@ export async function createCanvaPatientDocument(
   return { id: data.id }
 }
 
+/** Nome + CRMV de quem emite (para signer_name/signer_crmv — 0457). */
+async function loadSigner(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+): Promise<{ name: string | null; crmv: string | null }> {
+  const { data } = await supabase
+    .from('profiles')
+    .select('full_name, crmv')
+    .eq('id', userId)
+    .maybeSingle()
+  return { name: data?.full_name ?? null, crmv: data?.crmv ?? null }
+}
+
 export async function loadCanvaPatientDocument(documentId: string): Promise<{
   config: CanvaTemplateConfig
   content: CanvaContentJson
   document_name: string
   canvas_state: CanvasState | null
+  /** Autenticidade (0457) — usados pelo print para montar ctx.doc + QR. */
+  verify_code: string | null
+  signed_at: string | null
+  signer_name: string | null
+  signer_crmv: string | null
 }> {
   const { supabase, profile } = await requireClinic()
 
   const { data, error } = await supabase
     .from('patient_documents')
-    .select('document_name, content_json, background_image_url, margin_top, margin_bottom, margin_left, margin_right, block_style, template_id')
+    .select('document_name, content_json, background_image_url, margin_top, margin_bottom, margin_left, margin_right, block_style, template_id, canvas_state_snapshot, verify_code, signed_at, signer_name, signer_crmv')
     .eq('id', documentId)
     .eq('clinic_id', profile.clinic_id)
     .single()
 
   if (error || !data) throw new Error(error?.message ?? 'documento não encontrado')
 
-  // Busca canvas_state do template (motor visual). Snapshot por documento
-  // ainda não é persistido — para histórico fiel, copiar canvas_state em
-  // patient_documents é uma melhoria futura.
+  // Snapshot do documento (migration 0466) tem precedência — histórico fiel.
+  // Fallback: canvas_state ATUAL do template (documentos anteriores ao snapshot).
   let canvas_state: CanvasState | null = null
-  if (data.template_id) {
+  if (isCanvasState(data.canvas_state_snapshot)) {
+    canvas_state = data.canvas_state_snapshot as CanvasState
+  } else if (data.template_id) {
     const { data: tpl } = await supabase
       .from('document_templates')
       .select('canvas_state')
@@ -1050,6 +1109,10 @@ export async function loadCanvaPatientDocument(documentId: string): Promise<{
     document_name: data.document_name,
     content: (data.content_json as CanvaContentJson) ?? { static_fields: {}, dynamic_fields: [] },
     canvas_state,
+    verify_code: data.verify_code ?? null,
+    signed_at: data.signed_at ?? null,
+    signer_name: data.signer_name ?? null,
+    signer_crmv: data.signer_crmv ?? null,
     config: {
       background_image_url: data.background_image_url ?? null,
       margins: {
@@ -1084,12 +1147,48 @@ export async function updateCanvaPatientDocument(
     throw new Error('content_json inválido (esperado static_fields + dynamic_fields[])')
   }
 
+  // Backfill: documento anterior ao snapshot (0466) ganha o snapshot do
+  // template na 1ª edição — a partir daí o layout fica congelado.
+  const { data: existing } = await supabase
+    .from('patient_documents')
+    .select('template_id, canvas_state_snapshot, verify_code')
+    .eq('id', input.document_id)
+    .eq('clinic_id', profile.clinic_id)
+    .maybeSingle()
+  let backfill: { canvas_state_snapshot: CanvasState; snapshot_taken_at: string } | null = null
+  if (existing && !isCanvasState(existing.canvas_state_snapshot) && existing.template_id) {
+    const { data: tpl } = await supabase
+      .from('document_templates')
+      .select('canvas_state')
+      .eq('id', existing.template_id)
+      .eq('clinic_id', profile.clinic_id)
+      .maybeSingle()
+    if (tpl && isCanvasState(tpl.canvas_state)) {
+      backfill = { canvas_state_snapshot: tpl.canvas_state as CanvasState, snapshot_taken_at: new Date().toISOString() }
+    }
+  }
+
+  // Reemissão: recalcula o hash sobre snapshot + conteúdo novo e carimba
+  // quem editou. O verify_code é preservado (o QR já impresso continua
+  // válido); documentos legados sem código ganham um.
+  const effectiveSnapshot = backfill?.canvas_state_snapshot
+    ?? (isCanvasState(existing?.canvas_state_snapshot) ? (existing!.canvas_state_snapshot as CanvasState) : null)
+  const signer = await loadSigner(supabase, profile.id)
+  const nowIso = new Date().toISOString()
+
   const { data, error } = await supabase
     .from('patient_documents')
     .update({
       document_name: input.document_name,
       content_json: input.content_json,
-      updated_at: new Date().toISOString(),
+      updated_at: nowIso,
+      ...(backfill ?? {}),
+      verify_code: existing?.verify_code ?? generateVerifyCode(),
+      content_hash: hashCanvasDocument(effectiveSnapshot, input.content_json),
+      signed_by: profile.id,
+      signed_at: nowIso,
+      signer_name: signer.name,
+      signer_crmv: signer.crmv,
     })
     .eq('id', input.document_id)
     .eq('clinic_id', profile.clinic_id)
@@ -1122,7 +1221,7 @@ export async function deletePatientDocument(documentId: string): Promise<{ id: s
 
 /** Carrega doc Canvas existente no shape CanvasDraftResult (+ document_id)
  *  para reabertura no CanvasDocumentDraftModal em modo edição.
- *  Reutiliza canvas_state ATUAL do template (não snapshot histórico). */
+ *  Usa o snapshot do documento (0466); fallback = canvas_state atual do template. */
 export async function loadCanvaDocumentForEdit(documentId: string): Promise<
   (CanvasDraftResult & { document_id: string; existing_doc_name: string }) | { error: string }
 > {
@@ -1130,7 +1229,7 @@ export async function loadCanvaDocumentForEdit(documentId: string): Promise<
 
   const { data: doc, error: docErr } = await supabase
     .from('patient_documents')
-    .select('id, document_name, content_json, template_id, patient_id, consultation_id, created_at, background_image_url, margin_top, margin_bottom, margin_left, margin_right, block_style')
+    .select('id, document_name, content_json, template_id, patient_id, consultation_id, created_at, background_image_url, margin_top, margin_bottom, margin_left, margin_right, block_style, canvas_state_snapshot')
     .eq('id', documentId)
     .eq('clinic_id', profile.clinic_id)
     .single()
@@ -1146,11 +1245,13 @@ export async function loadCanvaDocumentForEdit(documentId: string): Promise<
     .single()
 
   if (tplErr || !template) return { error: 'Template do documento não encontrado.' }
-  if (!isCanvasState(template.canvas_state)) {
+
+  const snapshotOk = isCanvasState(doc.canvas_state_snapshot)
+  if (!snapshotOk && !isCanvasState(template.canvas_state)) {
     return { error: 'Template não é Canvas Visual — use o motor legado pra editar.' }
   }
 
-  const cs = template.canvas_state as CanvasState
+  const cs = (snapshotOk ? doc.canvas_state_snapshot : template.canvas_state) as CanvasState
   const fillableDefs = cs.elements.filter(
     (e): e is FillableFieldElement => e.kind === 'fillable_field',
   )

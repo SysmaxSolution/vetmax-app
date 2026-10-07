@@ -1,6 +1,6 @@
 import 'server-only'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { generateVerifyCode, sha256Hex } from '@/lib/portal/laudo-verify'
+import { generateVerifyCode, sha256Hex, hashCanvasDocument } from '@/lib/portal/laudo-verify'
 import QRCode from 'qrcode'
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib'
 
@@ -97,7 +97,7 @@ export async function getLaudoVerification(code: string): Promise<LaudoVerificat
   const admin = createAdminClient()
   const { data: doc } = await admin
     .from('patient_documents')
-    .select('id, document_name, generated_pdf_path, content_hash, signer_name, signer_crmv, signed_at, patient_id, clinic_id')
+    .select('id, document_name, generated_pdf_path, content_hash, signer_name, signer_crmv, signed_at, patient_id, clinic_id, canvas_state_snapshot, content_json')
     .eq('verify_code', code).maybeSingle()
   if (!doc) return empty
 
@@ -106,7 +106,9 @@ export async function getLaudoVerification(code: string): Promise<LaudoVerificat
     admin.from('clinics').select('name').eq('id', (doc as any).clinic_id).maybeSingle(),
   ])
 
-  // recomputa o hash do PDF atual e compara com o assinado (integridade)
+  // Integridade: (a) laudo com PDF no storage → hash do arquivo atual;
+  // (b) documento do motor Canvas (print client-side, sem PDF) → hash do
+  //     snapshot do layout + conteúdo preenchido (hashCanvasDocument).
   let integrity: LaudoVerification['integrity'] = 'unknown'
   const path = (doc as any).generated_pdf_path as string | null
   const storedHash = (doc as any).content_hash as string | null
@@ -115,6 +117,9 @@ export async function getLaudoVerification(code: string): Promise<LaudoVerificat
       const { data: file } = await admin.storage.from(BUCKET).download(path)
       if (file) integrity = sha256Hex(new Uint8Array(await file.arrayBuffer())) === storedHash ? 'ok' : 'tampered'
     } catch { integrity = 'unknown' }
+  } else if (storedHash && ((doc as any).canvas_state_snapshot || (doc as any).content_json)) {
+    integrity = hashCanvasDocument((doc as any).canvas_state_snapshot ?? null, (doc as any).content_json ?? null) === storedHash
+      ? 'ok' : 'tampered'
   }
 
   return {

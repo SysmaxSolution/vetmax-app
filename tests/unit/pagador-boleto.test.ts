@@ -111,3 +111,52 @@ describe('pagadorDeTutor', () => {
     expect(f.map(x => x.campo)).toEqual(['bairro', 'cidade', 'cep', 'uf'])
   })
 })
+
+// ── CONSUMIDOR FINAL ─────────────────────────────────────────────────────────
+// O cliente avulso existe para o titulo do PDV ter dono (360 dos 453 titulos
+// de producao vem de venda no caixa). Mas o CPF 11111111111 e convencao de
+// NF-e para consumidor anonimo e NAO passa no digito verificador — de
+// proposito: nao se emite boleto para consumidor anonimo. O aviso tem de
+// dizer o que fazer, nao acusar o digito.
+
+import { CPF_CONSUMIDOR_FINAL } from '@/lib/financial/pagador-boleto'
+
+describe('CONSUMIDOR FINAL (cliente avulso)', () => {
+  const avulso = {
+    nome: 'CONSUMIDOR FINAL', cpfCnpj: CPF_CONSUMIDOR_FINAL,
+    endereco: 'RUA, 1', bairro: 'Campos Elíseos', cidade: 'Ribeirão Preto',
+    cep: '14085-010', uf: 'SP',
+  }
+
+  it('serve como dono do título (endereço completo, vindo da clínica)', () => {
+    const f = pendenciasDoPagador(avulso)
+    // Só o cliente é pendência — o endereço está completo.
+    expect(f.map(x => x.campo)).toEqual(['cpfCnpj'])
+  })
+
+  it('NÃO está pronto para boleto, e a mensagem diz o que fazer', () => {
+    expect(pagadorPronto(avulso)).toBe(false)
+    const f = pendenciasDoPagador(avulso)[0]
+    expect(f.rotulo).toBe('Cliente')
+    expect(f.motivo).toMatch(/CONSUMIDOR FINAL/)
+    expect(f.motivo).toMatch(/informe o tutor real/i)
+  })
+
+  it('não acusa "dígito inválido" — seria confuso, não é erro de digitação', () => {
+    expect(pendenciasDoPagador(avulso)[0].motivo).not.toMatch(/dígito/)
+  })
+
+  it('o aviso da tela nomeia o caso', () => {
+    expect(avisoDoPagador(avulso)).toMatch(/CONSUMIDOR FINAL/)
+  })
+
+  it('a máscara não muda o reconhecimento', () => {
+    const comMascara = { ...avulso, cpfCnpj: '111.111.111-11' }
+    expect(pendenciasDoPagador(comMascara)[0].rotulo).toBe('Cliente')
+  })
+
+  it('CPF repetido diferente segue como dígito inválido (não é o avulso)', () => {
+    const outro = { ...avulso, cpfCnpj: '22222222222' }
+    expect(pendenciasDoPagador(outro)[0].motivo).toMatch(/dígito/)
+  })
+})

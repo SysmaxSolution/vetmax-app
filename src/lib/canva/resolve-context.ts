@@ -278,7 +278,7 @@ export async function buildResolveContext(
       .order('requested_at', { ascending: true })
       .then(r => r.data ?? []),
     supabase.from('patient_vaccines')
-      .select('id, vaccine_name, date_administered, next_due_date')
+      .select('id, vaccine_name, date_administered, next_due_date, manufacturer, lot_number, validity_date, administration_route')
       .eq('patient_id', patientId)
       .order('date_administered', { ascending: false })
       .then(r => r.data ?? []),
@@ -337,6 +337,10 @@ export async function buildResolveContext(
     name: v.vaccine_name,
     date: formatDateBRShort(v.date_administered),
     next: formatDateBRShort(v.next_due_date),
+    manufacturer: v.manufacturer ?? '',
+    lot: v.lot_number ?? '',
+    validity: formatDateBRShort(v.validity_date),
+    route: v.administration_route ?? '',
   }))
 
   const tutor = patient?.tutor_id

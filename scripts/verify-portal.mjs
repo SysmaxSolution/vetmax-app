@@ -13,8 +13,16 @@ if (!BASE) { console.error('Informe a URL base.'); process.exit(1) }
 
 const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
 
-// 2 pets de tutores DIFERENTES
-const { data: pets } = await admin.from('patients').select('id, name, tutor_id, clinic_id').is('deleted_at', null).limit(50)
+// 2 pets de tutores DIFERENTES, numa clínica que USA o Portal.
+// O recorte por `portal_enabled` passou a ser necessário quando o Portal virou
+// rotina opcional (achado F-1): num pet de clínica com a rotina desligada o
+// `getTutorContext` some com o vínculo, e o 404 resultante seria lido como
+// falha de isolamento quando na verdade é o gate funcionando.
+const { data: enabled } = await admin.from('clinics').select('id, flow_config')
+const enabledIds = (enabled ?? []).filter(c => (c.flow_config ?? {}).portal_enabled === true).map(c => c.id)
+if (enabledIds.length === 0) { console.error('Nenhuma clínica com portal_enabled no dev.'); process.exit(1) }
+const { data: pets } = await admin.from('patients').select('id, name, tutor_id, clinic_id')
+  .in('clinic_id', enabledIds).is('deleted_at', null).limit(50)
 const byTutor = {}
 for (const p of pets ?? []) { if (!byTutor[p.tutor_id]) byTutor[p.tutor_id] = p }
 const distinct = Object.values(byTutor)
@@ -31,13 +39,16 @@ const sessionToken = 'ts_' + randomBytes(32).toString('hex')
 await admin.from('tutor_sessions').insert({ tutor_user_id: tu.id, session_token: sessionToken, expires_at: new Date(Date.now()+864e5).toISOString() })
 
 const cookie = `sysvet_tutor=${sessionToken}`
-async function get(path) {
-  const r = await fetch(`${BASE}${path}`, { headers: { cookie, 'user-agent': 'verify' }, redirect: 'manual' })
+async function get(path, follow = false) {
+  const r = await fetch(`${BASE}${path}`, { headers: { cookie, 'user-agent': 'verify' }, redirect: follow ? 'follow' : 'manual' })
   return { status: r.status, html: await r.text() }
 }
 
-// 1) home lista MEU pet e NÃO o alheio
-const home = await get('/portal')
+// 1) home lista MEU pet e NÃO o alheio.
+// `/portal` agora é a porta de entrada SEM contexto: com um único vínculo ela
+// redireciona para `/portal/c/<slug>` (white-label). Seguir o redirect é o que
+// o navegador do tutor faz — a lista é aferida no destino.
+const home = await get('/portal', true)
 const homeOkMine = home.html.includes(mine.name)
 const homeLeakOther = home.html.includes(other.name)
 console.log(`\n/portal → HTTP ${home.status} | mostra meu pet: ${homeOkMine} | VAZA pet alheio: ${homeLeakOther}`)

@@ -5,7 +5,7 @@
 export function SysmaxFooter({ className = '' }: { className?: string }) {
   return (
     <footer
-      className={`w-full pb-safe text-center text-[11px] text-slate-400 select-none ${className}`}
+      className={`w-full pb-safe text-center text-[11px] text-slate-400 select-none print:hidden ${className}`}
       aria-label="Crédito do desenvolvedor"
     >
       <span className="inline-block py-2 px-3 opacity-70 hover:opacity-100 transition-opacity">

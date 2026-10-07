@@ -14,8 +14,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { extractEntitiesFromAnamneseCore } from '@/lib/ai/anamnese-extractor'
-
 import { limitarPorIp } from '@/lib/api/rate-limit'
+
 export async function POST(request: NextRequest) {
   const barrado = await limitarPorIp(request, { escopo: 'ia:anamnese', limite: 20 })
   if (barrado) return barrado

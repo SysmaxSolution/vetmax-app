@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
+import { limitarPorIp } from '@/lib/api/rate-limit'
 
 import { mensagemErro } from '@/lib/errors'
-import { limitarPorIp } from '@/lib/api/rate-limit'
 /**
  * POST /api/transcribe
  * Processa a transcrição com análise veterinária usando Claude AI

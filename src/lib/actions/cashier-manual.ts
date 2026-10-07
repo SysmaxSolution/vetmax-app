@@ -31,6 +31,11 @@ export async function recordManualInflow(input: {
   const ctx = await getCtx()
   if ('error' in ctx) return ctx
 
+  // Entrada manual de caixa não validava valor nenhum — ia direto para a RPC.
+  const v = valida(EsquemaEntradaManual, input)
+  if ('error' in v) return v
+  input = v.dados
+
   const supabase = await createClient()
   // Entrada manual de caixa não validava valor nenhum — ia direto para a RPC.
   const vEntrada = valida(EsquemaEntradaManual, input)

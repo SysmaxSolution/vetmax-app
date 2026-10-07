@@ -76,8 +76,8 @@ export async function upsertCompany(input: CompanyInput): Promise<{ id: string }
   if (name.length < 2) return { error: 'Nome deve ter ao menos 2 caracteres' }
 
   // CNPJ é o documento que vai na NFS-e e no boleto. Sem conferir o dígito
-  // aqui, o erro só aparece como rejeição da prefeitura ou do banco, depois da
-  // nota já numerada. Preserva o formato gravado (produção usa máscara).
+  // aqui, o erro só aparece como rejeição da prefeitura ou do banco, depois
+  // da nota já numerada. Preserva o formato gravado (produção usa máscara).
   const cnpjInformado = input.cnpj?.trim() || null
   if (cnpjInformado) {
     const c = zCpfCnpjPreservandoFormato.safeParse(cnpjInformado)
