@@ -6,7 +6,20 @@
     "skipLibCheck": true,
     "noEmit": true,
     "strict": false,
-    "types": ["jest", "node"]
+    "types": [
+      "jest",
+      "node"
+    ]
   },
-  "include": ["tests/**/*.ts", "tests/**/*.tsx"]
+  "include": [
+    "tests/**/*.ts",
+    "tests/**/*.tsx"
+  ],
+  "exclude": [
+    "node_modules",
+    "vetmax-app",
+    "healthmax-app",
+    "Orion",
+    "Marketing"
+  ]
 }
