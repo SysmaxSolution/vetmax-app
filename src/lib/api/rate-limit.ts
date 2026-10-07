@@ -68,7 +68,7 @@ export async function excedeuLimite(
  * NextResponse e não Response: várias rotas declaram o retorno como
  * `Promise<NextResponse>` e um Response cru não satisfaz esse tipo.
  */
-export function respostaLimiteExcedido(janelaSegundos = 60): NextResponse {
+export function respostaLimiteExcedido(janelaSegundos = 60): NextResponse<{ error: string }> {
   return NextResponse.json(
     { error: 'Muitas requisições. Tente novamente em instantes.' },
     { status: 429, headers: { 'Retry-After': String(janelaSegundos) } },
@@ -85,7 +85,7 @@ export function respostaLimiteExcedido(janelaSegundos = 60): NextResponse {
 export async function limitarPorIp(
   req: Request,
   cfg: LimiteConfig,
-): Promise<NextResponse | null> {
+): Promise<NextResponse<{ error: string }> | null> {
   const excedeu = await excedeuLimite(ipDaRequisicao(req), cfg)
   return excedeu ? respostaLimiteExcedido(cfg.janelaSegundos ?? 60) : null
 }

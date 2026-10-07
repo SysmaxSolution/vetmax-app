@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { logAudit } from './audit'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export type StockItem = {
@@ -310,7 +311,6 @@ export async function deleteStockItem(stockItemId: string): Promise<{ success: t
 // ─── Funções para tabela stock_items ─────────────────────────────────────────
 
 import type { StockCategory } from '@/lib/stock-constants'
-import { mensagemErro } from '@/lib/errors'
 // ATENÇÃO (HF 05/06): NUNCA re-exporte tipos (`export type { X } from ...`)
 // de um arquivo 'use server' — o Turbopack registra todo export como server
 // action em runtime e o re-export vira ReferenceError, derrubando TODAS as
