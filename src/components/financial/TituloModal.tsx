@@ -10,6 +10,7 @@ import {
 } from '@/lib/actions/financial'
 import { getEntrySettler } from '@/lib/actions/client-statement'
 import { searchSalesTutors } from '@/lib/actions/sales'
+import { buscarConsumidorFinal } from '@/lib/actions/tutors'
 import { searchSuppliers } from '@/lib/actions/suppliers'
 import { pendenciasPagadorDoTutor } from '@/lib/actions/boleto-cobranca'
 
@@ -518,6 +519,20 @@ export default function TituloModal({
                       )}
                       {ownerBusca.trim().length >= 2 && ownerOpcoes.length === 0 && (
                         <p className="mt-1 text-xs text-slate-400">Nenhum resultado para “{ownerBusca.trim()}”.</p>
+                      )}
+                      {/* Venda no caixa para consumidor avulso: 360 dos 453
+                          títulos de produção são assim. Sem este atalho, a
+                          obrigatoriedade do dono travaria o PDV. */}
+                      {ehReceber && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const cf = await buscarConsumidorFinal()
+                            if (cf) { setOwnerId(cf.id); setOwnerName(cf.name); setOwnerAberto(false); setOwnerOpcoes([]) }
+                            else setError('Consumidor final não encontrado para esta clínica.')
+                          }}
+                          className="mt-1.5 text-xs font-medium text-teal-600 hover:text-teal-700 hover:underline"
+                        >Usar CONSUMIDOR FINAL (venda avulsa)</button>
                       )}
                     </>
                   )}

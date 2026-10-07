@@ -17,6 +17,14 @@
 
 import { cpfOuCnpjValido, apenasDigitos } from '@/lib/validation/documento'
 
+/**
+ * CPF do CONSUMIDOR FINAL (cliente avulso). Convenção de NF-e para consumidor
+ * anônimo — e sequência repetida, que de propósito NÃO passa no dígito
+ * verificador. Não se emite boleto para consumidor anônimo; o aviso diz isso
+ * com clareza em vez de um genérico "dígito inválido".
+ */
+export const CPF_CONSUMIDOR_FINAL = '11111111111'
+
 export interface DadosPagador {
   nome?: string | null
   cpfCnpj?: string | null
@@ -52,6 +60,13 @@ export function pendenciasDoPagador(p: DadosPagador): PendenciaPagador[] {
 
   if (vazio(p.cpfCnpj)) {
     faltas.push({ campo: 'cpfCnpj', rotulo: 'CPF/CNPJ', motivo: 'não preenchido' })
+  } else if (apenasDigitos(String(p.cpfCnpj)) === CPF_CONSUMIDOR_FINAL) {
+    // Caso próprio: não é erro de digitação, é um cliente que não pode receber
+    // boleto. A mensagem tem de dizer o que fazer, não acusar o dígito.
+    faltas.push({
+      campo: 'cpfCnpj', rotulo: 'Cliente',
+      motivo: 'é o CONSUMIDOR FINAL (avulso) — informe o tutor real para emitir boleto',
+    })
   } else if (!cpfOuCnpjValido(String(p.cpfCnpj))) {
     // Documento errado só apareceria como recusa do banco, depois da nota
     // numerada. Conferir o dígito aqui custa nada.
