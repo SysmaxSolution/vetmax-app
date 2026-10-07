@@ -1,11 +1,15 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
+import { limitarPorIp } from '@/lib/api/rate-limit'
 /**
  * GET /api/get-current-user
  * Retorna dados do usuário logado (UUID + role)
  */
-export async function GET() {
+export async function GET(req: Request) {
+  const barrado = await limitarPorIp(req, { escopo: 'app:user', limite: 120 })
+  if (barrado) return barrado
+
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()

@@ -8,6 +8,7 @@ import { computeLabCost } from '@/lib/labs/commission'
 import { EXAM_QUEUE_STATUSES, examQueueMoveError } from '@/lib/exams/queue-status'
 import { usesExamRejectionFlow } from '@/lib/exams/rejection-gate'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type ExamQueueItem = {
@@ -59,7 +60,7 @@ export async function getExamsQueue(): Promise<ExamQueueItem[] | { error: string
     .in('status', ['waiting_exam', 'awaiting_lab_result'])
     .order('created_at', { ascending: true })
 
-  if (error) return { error: 'Erro ao buscar fila de exames: ' + error.message }
+  if (error) return { error: 'Erro ao buscar fila de exames: ' + mensagemErro(error, 'lib/actions/exams.ts') }
 
   // nomes dos laboratórios (lab_partner_clinic_id não tem FK → busca separada)
   const labIds = [...new Set((data ?? []).map((c: any) => c.lab_partner_clinic_id).filter(Boolean))] as string[]
@@ -143,7 +144,7 @@ export async function getExamsHistory(): Promise<ExamHistoryItem[] | { error: st
     .gte('updated_at', todayStart.toISOString())
     .order('updated_at', { ascending: false })
 
-  if (error) return { error: 'Erro ao buscar histórico de exames: ' + error.message }
+  if (error) return { error: 'Erro ao buscar histórico de exames: ' + mensagemErro(error, 'lib/actions/exams.ts') }
 
   return (data ?? []).map((c: any) => ({
     id:           c.id,
@@ -193,7 +194,7 @@ export async function dischargeFromExams(
     .in('status', EXAM_QUEUE_STATUSES as unknown as string[])
     .select('id')
 
-  if (error) return { error: 'Erro ao dar alta: ' + error.message }
+  if (error) return { error: 'Erro ao dar alta: ' + mensagemErro(error, 'lib/actions/exams.ts') }
   if (!moved?.length) {
     const { data: cur } = await supabase
       .from('consultations').select('status')
@@ -236,7 +237,7 @@ export async function returnToVet(
     .in('status', EXAM_QUEUE_STATUSES as unknown as string[])
     .select('id')
 
-  if (error) return { error: 'Erro ao devolver consulta: ' + error.message }
+  if (error) return { error: 'Erro ao devolver consulta: ' + mensagemErro(error, 'lib/actions/exams.ts') }
   if (!moved?.length) {
     const { data: cur } = await supabase
       .from('consultations').select('status')
@@ -369,7 +370,7 @@ export async function requestExam(params: {
         .from('consultations')
         .update({ status: 'waiting_exam' })
         .eq('id', existing.id)
-      if (upErr) return { error: 'Erro ao transicionar consulta: ' + upErr.message }
+      if (upErr) return { error: 'Erro ao transicionar consulta: ' + mensagemErro(upErr, 'lib/actions/exams.ts') }
     }
     consultationId = existing.id
   } else {
@@ -387,7 +388,7 @@ export async function requestExam(params: {
       .single()
 
     if (consultErr || !consultation) {
-      return { error: 'Erro ao criar consulta de exame: ' + (consultErr?.message ?? '') }
+      return { error: 'Erro ao criar consulta de exame: ' + ((consultErr ? mensagemErro(consultErr, 'lib/actions/exams.ts') : '')) }
     }
     consultationId = consultation.id
   }
@@ -406,7 +407,7 @@ export async function requestExam(params: {
     .select('id')
     .single()
 
-  if (error) return { error: 'Erro ao solicitar exame: ' + error.message }
+  if (error) return { error: 'Erro ao solicitar exame: ' + mensagemErro(error, 'lib/actions/exams.ts') }
   revalidatePath('/dashboard/exams')
   revalidatePath('/dashboard/vet')
   revalidatePath('/dashboard/reception')
@@ -435,7 +436,7 @@ export async function saveExamResult(
     .eq('id', examRequestId)
     .eq('clinic_id', profile.clinic_id)
 
-  if (error) return { error: 'Erro ao salvar resultado: ' + error.message }
+  if (error) return { error: 'Erro ao salvar resultado: ' + mensagemErro(error, 'lib/actions/exams.ts') }
   revalidatePath('/dashboard/exams')
   return { success: true }
 }

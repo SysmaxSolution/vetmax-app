@@ -2,10 +2,14 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
+import { limitarPorIp } from '@/lib/api/rate-limit'
 // GET /api/whatsapp/qrcode
 // v2.x: QR code é salvo no banco pelo webhook QRCODE_UPDATED e lido daqui.
 // Também tenta disparar nova conexão se não houver QR salvo.
-export async function GET() {
+export async function GET(req: Request) {
+  const barrado = await limitarPorIp(req, { escopo: 'wpp:qrcode', limite: 30 })
+  if (barrado) return barrado
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 })

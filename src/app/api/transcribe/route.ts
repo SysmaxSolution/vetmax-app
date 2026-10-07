@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
 
+import { mensagemErro } from '@/lib/errors'
+import { limitarPorIp } from '@/lib/api/rate-limit'
 /**
  * POST /api/transcribe
  * Processa a transcrição com análise veterinária usando Claude AI
@@ -16,6 +18,9 @@ import { createClient } from '@/lib/supabase/server'
  * Este endpoint processa o resultado com Claude para análise veterinária
  */
 export async function POST(request: NextRequest) {
+  const barrado = await limitarPorIp(request, { escopo: 'ia:transcribe', limite: 20 })
+  if (barrado) return barrado
+
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -100,7 +105,7 @@ Do not add any explanations or metadata, just the processed clinical note.`,
     const { logServerError } = await import('@/lib/error-logger')
     await logServerError({ path: '/api/transcribe', error, source: 'api', module: 'triage' })
     return NextResponse.json(
-      { error: `Erro ao processar transcrição: ${error instanceof Error ? error.message : 'Erro desconhecido'}` },
+      { error: `Erro ao processar transcrição: ${error instanceof Error ? mensagemErro(error, 'app/api/transcribe/route.ts') : 'Erro desconhecido'}` },
       { status: 500 }
     )
   }

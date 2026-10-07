@@ -10,6 +10,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 export interface TutorCreditMovement {
   id: string
   amount: number
@@ -54,7 +55,7 @@ export async function getTutorCreditBalance(tutorId: string): Promise<TutorCredi
     .select('amount, company_id')
     .eq('clinic_id', ctx.clinic_id)
     .eq('tutor_id', tutorId)
-  if (error) return { error: `Erro ao carregar crédito: ${error.message}` }
+  if (error) return { error: `Erro ao carregar crédito: ${mensagemErro(error, 'lib/actions/tutor-credits.ts')}` }
 
   const byCompanyMap = new Map<string | null, number>()
   let total = 0
@@ -79,7 +80,7 @@ export async function listTutorCredits(tutorId: string): Promise<TutorCreditMove
     .eq('clinic_id', ctx.clinic_id)
     .eq('tutor_id', tutorId)
     .order('created_at', { ascending: false })
-  if (error) return { error: `Erro ao listar movimentos: ${error.message}` }
+  if (error) return { error: `Erro ao listar movimentos: ${mensagemErro(error, 'lib/actions/tutor-credits.ts')}` }
   return (data ?? []).map((r: any) => ({ ...r, amount: Number(r.amount) })) as TutorCreditMovement[]
 }
 
@@ -113,7 +114,7 @@ export async function getTutorCreditStatement(tutorId: string): Promise<TutorCre
     .eq('clinic_id', ctx.clinic_id).eq('tutor_id', tutorId)
     .in('kind', ['advance', 'usage'])
     .order('created_at', { ascending: false })
-  if (error) return { error: `Erro ao carregar extrato: ${error.message}` }
+  if (error) return { error: `Erro ao carregar extrato: ${mensagemErro(error, 'lib/actions/tutor-credits.ts')}` }
   const movs = (movsRaw ?? []) as any[]
   if (movs.length === 0) return []
 
@@ -204,7 +205,7 @@ export async function listClinicTutorCredits(): Promise<ClinicCreditSummary[] | 
     .from('tutor_credits')
     .select('tutor_id, amount, kind, tutors(name)')
     .eq('clinic_id', ctx.clinic_id)
-  if (error) return { error: `Erro ao carregar créditos: ${error.message}` }
+  if (error) return { error: `Erro ao carregar créditos: ${mensagemErro(error, 'lib/actions/tutor-credits.ts')}` }
 
   const map = new Map<string, ClinicCreditSummary>()
   for (const r of (data ?? []) as any[]) {
@@ -260,7 +261,7 @@ export async function addTutorAdvance(input: {
     p_payment_method: input.payment_method ?? 'cash',
     p_effective_date: null,
   })
-  if (cashErr) return { error: `Erro ao lançar no caixa: ${cashErr.message}` }
+  if (cashErr) return { error: `Erro ao lançar no caixa: ${mensagemErro(cashErr, 'lib/actions/tutor-credits.ts')}` }
 
   // 2) Credita o tutor (razão)
   const { error: credErr } = await admin.from('tutor_credits').insert({
@@ -273,7 +274,7 @@ export async function addTutorAdvance(input: {
     cashier_entry_id: (cashierId as string) ?? null,
     created_by:       ctx.user_id,
   })
-  if (credErr) return { error: `Caixa lançado, mas falhou ao creditar o tutor: ${credErr.message}` }
+  if (credErr) return { error: `Caixa lançado, mas falhou ao creditar o tutor: ${mensagemErro(credErr, 'lib/actions/tutor-credits.ts')}` }
 
   // 3) O adiantamento é um RECEBIMENTO REAL (entrou no caixa/banco AGORA — Dia 1)
   // e deve ser conciliável na data e conta corretas. O trigger já espelhou a
@@ -402,7 +403,7 @@ export async function applyTutorCreditToInvoice(input: {
       invoice_id: input.invoice_id, created_by: ctx.user_id,
     })),
   )
-  if (movErr) return { error: `Falha ao debitar o crédito: ${movErr.message}` }
+  if (movErr) return { error: `Falha ao debitar o crédito: ${mensagemErro(movErr, 'lib/actions/tutor-credits.ts')}` }
 
   // 6b) TRANSFERÊNCIA INTER-CNPJ na MOVIMENTAÇÃO BANCÁRIA (partida dobrada): quando
   // o crédito usado é de outra empresa, o dinheiro precisa "sair" da conta da

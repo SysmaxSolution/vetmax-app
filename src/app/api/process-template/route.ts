@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import type { ExtractedField } from '@/types'
 import { createClient } from '@/lib/supabase/server'
 
+import { limitarPorIp } from '@/lib/api/rate-limit'
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 })
@@ -15,6 +16,9 @@ const anthropic = new Anthropic({
  * Response: { fields: ExtractedField[] } ou { error: string }
  */
 export async function POST(request: NextRequest) {
+  const barrado = await limitarPorIp(request, { escopo: 'ia:template2', limite: 20 })
+  if (barrado) return barrado
+
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()

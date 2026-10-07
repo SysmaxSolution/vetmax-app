@@ -6,6 +6,7 @@ import { getTutorContext } from '@/lib/portal/session'
 import { canAccessPatient } from '@/lib/portal/access'
 import { clinicFlowFlag, routineOffError } from '@/lib/clinic/flow-gate'
 
+import { mensagemErro } from '@/lib/errors'
 export interface PortalMessage {
   id: string
   sender: 'tutor' | 'clinic'
@@ -54,7 +55,7 @@ export async function sendPortalMessage(petId: string, body: string): Promise<{ 
   const { error } = await admin.from('portal_messages').insert({
     clinic_id: pc.clinicId, tutor_user_id: ctx.tutorUserId, patient_id: petId, sender: 'tutor', body: text,
   })
-  return error ? { error: error.message } : { ok: true }
+  return error ? { error: mensagemErro(error, 'lib/actions/portal-chat.ts') } : { ok: true }
 }
 
 export async function getUnreadClinicCount(petId: string): Promise<number> {
@@ -131,7 +132,7 @@ export async function sendClinicMessage(tutorUserId: string, body: string): Prom
   const { error } = await admin.from('portal_messages').insert({
     clinic_id: s.clinicId, tutor_user_id: tutorUserId, sender: 'clinic', sender_profile_id: s.userId, body: text,
   })
-  return error ? { error: error.message } : { ok: true }
+  return error ? { error: mensagemErro(error, 'lib/actions/portal-chat.ts') } : { ok: true }
 }
 
 export async function countUnreadThreads(): Promise<number> {

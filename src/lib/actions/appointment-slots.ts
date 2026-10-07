@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
+import { mensagemErro } from '@/lib/errors'
 export type BookedRange = { start: string; end: string } // 'HH:MM'
 
 export type SlotInfo = {
@@ -118,7 +119,7 @@ export async function getProfessionalSlots(
 
   const [{ data: appts, error }, { data: unavails }] = await Promise.all([query, unavailPromise])
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/appointment-slots.ts') }
 
   const fmt = (total: number) =>
     `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`

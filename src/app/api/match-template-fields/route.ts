@@ -23,6 +23,7 @@ import { Anthropic } from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import type { FieldType } from '@/types'
+import { limitarPorIp } from '@/lib/api/rate-limit'
 import {
   CANONICAL_WHITELIST,
   matchCanonicalLocal,
@@ -180,6 +181,9 @@ function sanitizeMatch(m: any): { match: FieldMatch | null; forced: boolean } {
 // ── POST handler ────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest): Promise<NextResponse<MatchResponse | { error: string }>> {
+  const barrado = await limitarPorIp(req, { escopo: 'ia:template', limite: 20 })
+  if (barrado) return barrado
+
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()

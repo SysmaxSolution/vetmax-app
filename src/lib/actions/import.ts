@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 export type CsvRow = {
   tutor_name: string
   tutor_cpf?: string
@@ -127,6 +128,6 @@ export async function importTutorsAndPets(rows: CsvRow[]): Promise<{ success: bo
     return { success: true, imported: importedCount }
 
   } catch (err: any) {
-    return { error: 'Erro: ' + err.message }
+    return { error: 'Erro: ' + mensagemErro(err, 'lib/actions/import.ts') }
   }
 }

@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 export type AppearanceMode = 'dynamic' | 'color' | 'image'
 
 export interface UiPreferences {
@@ -46,7 +47,7 @@ export async function saveUiPreferences(prefs: UiPreferences): Promise<{ error?:
     .update({ ui_preferences: prefs })
     .eq('id', ctx.clinicId)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/ui-preferences.ts') }
 
   revalidatePath('/dashboard', 'layout')
   return {}
@@ -70,7 +71,7 @@ export async function uploadClinicBackground(formData: FormData): Promise<{ url:
     .from(BRANDING_BUCKET)
     .upload(path, buffer, { contentType: file.type, upsert: true })
 
-  if (upErr) return { error: 'Upload falhou: ' + upErr.message }
+  if (upErr) return { error: 'Upload falhou: ' + mensagemErro(upErr, 'lib/actions/ui-preferences.ts') }
 
   const { data: pub } = admin.storage.from(BRANDING_BUCKET).getPublicUrl(path)
   const publicUrl = pub.publicUrl

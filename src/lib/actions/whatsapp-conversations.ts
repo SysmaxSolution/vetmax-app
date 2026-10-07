@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { evolutionSendText, evolutionSendMedia } from '@/lib/evolution-api-client'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface WppConversation {
@@ -102,7 +103,7 @@ export async function getWhatsappConversations(
   }
 
   const { data, error } = await query
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/whatsapp-conversations.ts') }
   return (data ?? []) as WppConversation[]
 }
 
@@ -131,7 +132,7 @@ export async function getConversationMessages(
     .order('created_at', { ascending: true })
     .limit(200)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/whatsapp-conversations.ts') }
   return (data ?? []) as WppMessage[]
 }
 
@@ -171,7 +172,7 @@ export async function sendHumanMessage(
     .select('id')
     .single()
 
-  if (msgErr) return { error: msgErr.message }
+  if (msgErr) return { error: mensagemErro(msgErr, 'lib/actions/whatsapp-conversations.ts') }
 
   await admin.from('whatsapp_conversations')
     .update({ last_message_at: new Date().toISOString() })
@@ -256,7 +257,7 @@ export async function sendMediaMessage(
     .select('id')
     .single()
 
-  if (msgErr) return { error: msgErr.message }
+  if (msgErr) return { error: mensagemErro(msgErr, 'lib/actions/whatsapp-conversations.ts') }
 
   await admin.from('whatsapp_conversations')
     .update({ last_message_at: new Date().toISOString() })
@@ -305,7 +306,7 @@ export async function takeOverConversation(
     .update({ status: 'human' })
     .eq('id', conversationId)
     .eq('clinic_id', auth.clinicId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/whatsapp-conversations.ts') }
   return { success: true }
 }
 
@@ -320,7 +321,7 @@ export async function returnToBot(
     .update({ status: 'bot' })
     .eq('id', conversationId)
     .eq('clinic_id', auth.clinicId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/whatsapp-conversations.ts') }
   return { success: true }
 }
 
@@ -337,7 +338,7 @@ export async function closeConversation(
     .update({ status: 'closed' })
     .eq('id', conversationId)
     .eq('clinic_id', auth.clinicId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/whatsapp-conversations.ts') }
   return { success: true }
 }
 
@@ -352,7 +353,7 @@ export async function reopenConversation(
     .update({ status: 'bot' })
     .eq('id', conversationId)
     .eq('clinic_id', auth.clinicId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/whatsapp-conversations.ts') }
   return { success: true }
 }
 
@@ -374,7 +375,7 @@ async function bulkUpdateStatus(
     .eq('clinic_id', auth.clinicId)
     .in('id', conversationIds)
     .select('id')
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/whatsapp-conversations.ts') }
   return { updated: (data ?? []).length }
 }
 
@@ -392,7 +393,7 @@ export async function markWppRead(conversationId: string): Promise<{ success: tr
     .update({ unread_count: 0 })
     .eq('id', conversationId)
     .eq('clinic_id', auth.clinicId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/whatsapp-conversations.ts') }
   return { success: true }
 }
 
@@ -405,7 +406,7 @@ export async function markWppUnread(conversationId: string): Promise<{ success: 
     .update({ unread_count: 1 })
     .eq('id', conversationId)
     .eq('clinic_id', auth.clinicId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/whatsapp-conversations.ts') }
   return { success: true }
 }
 
@@ -418,7 +419,7 @@ export async function markAllWppRead(): Promise<{ success: true } | { error: str
     .update({ unread_count: 0 })
     .eq('clinic_id', auth.clinicId)
     .gt('unread_count', 0)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/whatsapp-conversations.ts') }
   return { success: true }
 }
 
@@ -433,7 +434,7 @@ export async function markWppReadBulk(conversationIds: string[]): Promise<{ upda
     .eq('clinic_id', auth.clinicId)
     .in('id', conversationIds)
     .select('id')
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/whatsapp-conversations.ts') }
   return { updated: (data ?? []).length }
 }
 
@@ -448,7 +449,7 @@ export async function markWppUnreadBulk(conversationIds: string[]): Promise<{ up
     .eq('clinic_id', auth.clinicId)
     .in('id', conversationIds)
     .select('id')
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/whatsapp-conversations.ts') }
   return { updated: (data ?? []).length }
 }
 
@@ -473,7 +474,7 @@ export async function toggleWppPin(conversationId: string): Promise<{ success: t
       .update({ pinned_at: null, pin_order: null })
       .eq('id', conversationId)
       .eq('clinic_id', auth.clinicId)
-    if (error) return { error: error.message }
+    if (error) return { error: mensagemErro(error, 'lib/actions/whatsapp-conversations.ts') }
   } else {
     const { data: maxRow } = await admin
       .from('whatsapp_conversations')
@@ -489,7 +490,7 @@ export async function toggleWppPin(conversationId: string): Promise<{ success: t
       .update({ pinned_at: new Date().toISOString(), pin_order: nextOrder })
       .eq('id', conversationId)
       .eq('clinic_id', auth.clinicId)
-    if (error) return { error: error.message }
+    if (error) return { error: mensagemErro(error, 'lib/actions/whatsapp-conversations.ts') }
   }
 
   return { success: true }
@@ -506,7 +507,7 @@ export async function getClinicStaff(): Promise<StaffMember[] | { error: string 
     .select('id, full_name, photo_url')
     .eq('clinic_id', auth.clinicId)
     .order('full_name')
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/whatsapp-conversations.ts') }
   return (data ?? []) as StaffMember[]
 }
 
@@ -522,7 +523,7 @@ export async function assignWppConversation(
     .update({ assigned_to: userId })
     .eq('id', conversationId)
     .eq('clinic_id', auth.clinicId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/whatsapp-conversations.ts') }
   return { success: true }
 }
 
@@ -540,7 +541,7 @@ export async function markWppUrgent(
     .update({ is_urgent: urgent })
     .eq('id', conversationId)
     .eq('clinic_id', auth.clinicId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/whatsapp-conversations.ts') }
   return { success: true }
 }
 
@@ -656,7 +657,7 @@ export async function linkWppMessage(
     note:            note ?? null,
     created_by:      auth.userId,
   })
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/whatsapp-conversations.ts') }
   return { success: true }
 }
 
@@ -703,7 +704,7 @@ export async function getConversationConsultations(
     .order('scheduled_date', { ascending: false })
     .limit(8)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/whatsapp-conversations.ts') }
   return (data ?? []).map((r: Record<string, unknown>) => ({
     id:             r.id as string,
     scheduled_date: r.scheduled_date as string | null,
@@ -817,7 +818,7 @@ export async function addConversationParticipant(
     .select('id')
     .single()
 
-  if (error && !error.message.includes('unique')) return { error: error.message }
+  if (error && !error.message.includes('unique')) return { error: mensagemErro(error, 'lib/actions/whatsapp-conversations.ts') }
   return { success: true }
 }
 
@@ -836,6 +837,6 @@ export async function removeConversationParticipant(
     .eq('profile_id', profileId)
     .eq('clinic_id', auth.clinicId)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/whatsapp-conversations.ts') }
   return { success: true }
 }

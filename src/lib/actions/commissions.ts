@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface UserCommission {
@@ -145,7 +146,7 @@ export async function listUserCommissions(userId?: string): Promise<UserCommissi
   if (userId) query = (query as any).eq('user_id', userId)
 
   const { data, error } = await query
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/commissions.ts') }
 
   return (data ?? []).map((r: any) => ({
     id:          r.id,
@@ -186,7 +187,7 @@ export async function upsertUserCommission(data: {
     ? await admin.from('user_commissions').update(payload).eq('id', data.id).select('id').single()
     : await admin.from('user_commissions').insert(payload).select('id').single()
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/commissions.ts') }
 
   revalidatePath('/dashboard/reports/commissions')
   return { id: result.id }
@@ -204,7 +205,7 @@ export async function deleteUserCommission(id: string): Promise<{ success: true 
     .eq('id', id)
     .eq('clinic_id', ctx.clinic_id)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/commissions.ts') }
 
   revalidatePath('/dashboard/reports/commissions')
   return { success: true }
@@ -238,7 +239,7 @@ export async function searchItemsForCommission(
       .ilike('name', `%${q}%`)
       .order('name')
       .limit(15)
-    if (error) return { error: error.message }
+    if (error) return { error: mensagemErro(error, 'lib/actions/commissions.ts') }
     return (data ?? []).map((p: any) => ({
       id: p.id, name: p.name, price: Number(p.price ?? 0), category: 'package',
     }))
@@ -255,7 +256,7 @@ export async function searchItemsForCommission(
     .order('name')
     .limit(15)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/commissions.ts') }
   return (data ?? []).map((p: any) => ({
     id: p.id, name: p.name, price: Number(p.unit_price ?? 0), category: p.category ?? type,
   }))
@@ -341,7 +342,7 @@ export async function getCommissionsReport(filters?: {
   if (filters?.professional_id) query = (query as any).eq('professional_id', filters.professional_id)
 
   const { data, error } = await query
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/commissions.ts') }
 
   const byProfessional: Record<string, CommissionReport> = {}
 
@@ -401,7 +402,7 @@ export async function payCommissions(params: {
   const { error } = await admin.from('financial_entries')
     .update({ status: 'paid', payment_date: today, updated_at: new Date().toISOString() })
     .in('id', list.map(r => r.id))
-  if (error) return { error: 'Erro ao pagar comissões: ' + error.message }
+  if (error) return { error: 'Erro ao pagar comissões: ' + mensagemErro(error, 'lib/actions/commissions.ts') }
   revalidatePath('/dashboard/reports/commissions')
   revalidatePath('/dashboard/financial')
   return { ok: true, paid: list.length, total }

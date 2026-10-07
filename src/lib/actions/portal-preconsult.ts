@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getTutorContext } from '@/lib/portal/session'
 import { canAccessPatient } from '@/lib/portal/access'
 
+import { mensagemErro } from '@/lib/errors'
 export interface PreconsultInput {
   petId: string
   chiefComplaint: string
@@ -49,7 +50,7 @@ export async function submitPreconsultation(input: PreconsultInput): Promise<{ o
     current_meds: input.currentMeds?.trim() || null,
     notes: input.notes?.trim() || null,
   })
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/portal-preconsult.ts') }
   return { ok: true }
 }
 
@@ -86,6 +87,6 @@ export async function markPreconsultation(id: string, status: 'used' | 'seen' | 
   const { error } = await admin.from('portal_preconsultations')
     .update({ status, seen_at: new Date().toISOString(), seen_by: user.id })
     .eq('id', id).eq('clinic_id', profile.clinic_id)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/portal-preconsult.ts') }
   return { ok: true }
 }

@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
 export type TaskKind = 'exam' | 'procedure' | 'feeding' | 'other'
@@ -71,7 +72,7 @@ export async function listHospitalizationTasks(hospitalizationId?: string): Prom
     .order('created_at', { ascending: false })
   if (hospitalizationId) q = q.eq('hospitalization_id', hospitalizationId)
   const { data, error } = await q
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/hospitalization-tasks.ts') }
   return (data ?? []).map(mapRow)
 }
 
@@ -100,7 +101,7 @@ export async function createHospitalizationTask(payload: CreateTaskPayload): Pro
     })
     .select('id')
     .single()
-  if (error) return { error: 'Erro ao agendar tarefa: ' + error.message }
+  if (error) return { error: 'Erro ao agendar tarefa: ' + mensagemErro(error, 'lib/actions/hospitalization-tasks.ts') }
   revalidatePath('/dashboard/hospitalization')
   return { id: data.id as string }
 }
@@ -115,7 +116,7 @@ export async function markTaskDone(id: string): Promise<{ success: true } | { er
     .from('hospitalization_tasks')
     .update({ last_done_at: new Date().toISOString() })
     .eq('id', id).eq('clinic_id', ctx.clinicId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/hospitalization-tasks.ts') }
   revalidatePath('/dashboard/hospitalization')
   return { success: true }
 }
@@ -128,7 +129,7 @@ export async function updateTaskStatus(id: string, status: TaskStatus): Promise<
     .from('hospitalization_tasks')
     .update({ status })
     .eq('id', id).eq('clinic_id', ctx.clinicId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/hospitalization-tasks.ts') }
   revalidatePath('/dashboard/hospitalization')
   return { success: true }
 }
@@ -157,7 +158,7 @@ export async function updateHospitalizationTask(
     .from('hospitalization_tasks')
     .update(patch)
     .eq('id', id).eq('clinic_id', ctx.clinicId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/hospitalization-tasks.ts') }
   revalidatePath('/dashboard/hospitalization')
   return { success: true }
 }
@@ -171,7 +172,7 @@ export async function deleteHospitalizationTask(id: string): Promise<{ success: 
     .from('hospitalization_tasks')
     .delete()
     .eq('id', id).eq('clinic_id', ctx.clinicId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/hospitalization-tasks.ts') }
   revalidatePath('/dashboard/hospitalization')
   return { success: true }
 }

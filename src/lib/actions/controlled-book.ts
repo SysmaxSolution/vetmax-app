@@ -11,6 +11,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { movementDelta, buildItemLedger } from '@/lib/controlled/ledger'
 
+import { mensagemErro } from '@/lib/errors'
 async function getCtx() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -73,7 +74,7 @@ export async function getControlledBook(params: {
     .select('id, name, unit, substance, concentration, control_class, is_human_use')
     .eq('clinic_id', clinic_id)
     .eq('is_controlled', true)
-  if (itemsErr) return { error: 'Erro ao carregar itens controlados: ' + itemsErr.message }
+  if (itemsErr) return { error: 'Erro ao carregar itens controlados: ' + mensagemErro(itemsErr, 'lib/actions/controlled-book.ts') }
   const items = (itemsRaw ?? []) as any[]
   if (items.length === 0) return { from: params.from, to: params.to, human: [], veterinary: [] }
   const itemIds = items.map(i => i.id)

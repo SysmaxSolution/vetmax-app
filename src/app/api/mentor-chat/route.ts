@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { VETMAX_KNOWLEDGE_BASE } from '@/lib/mentor/knowledge-base'
 import { getRouteContext, serializeRouteContext } from '@/lib/mentor/context-map'
 
+import { limitarPorIp } from '@/lib/api/rate-limit'
 /**
  * POST /api/mentor-chat
  * Body: { question: string, pathname?: string }
@@ -133,6 +134,9 @@ function parseResponse(raw: string): {
 // ─── Route Handler ────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
+  const barrado = await limitarPorIp(req, { escopo: 'ia:mentor', limite: 20 })
+  if (barrado) return barrado
+
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()

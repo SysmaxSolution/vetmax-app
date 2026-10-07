@@ -3,11 +3,16 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logServerError } from '@/lib/error-logger'
 
+import { mensagemErro } from '@/lib/errors'
+import { limitarPorIp } from '@/lib/api/rate-limit'
 /**
  * POST /api/update-clinic
  * Atualiza dados da clínica (admin only)
  */
 export async function POST(request: NextRequest) {
+  const barrado = await limitarPorIp(request, { escopo: 'app:clinica', limite: 30 })
+  if (barrado) return barrado
+
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -65,14 +70,14 @@ export async function POST(request: NextRequest) {
     if (error) {
       await logServerError({
         path:     '/api/update-clinic',
-        error:    error.message,
+        error:    mensagemErro(error, 'app/api/update-clinic/route.ts'),
         source:   'api',
         module:   'management',
         clinicId: profile.clinic_id,
         userId:   user.id,
       })
       return NextResponse.json(
-        { error: `Erro ao atualizar clínica: ${error.message}` },
+        { error: `Erro ao atualizar clínica: ${mensagemErro(error, 'app/api/update-clinic/route.ts')}` },
         { status: 500 }
       )
     }

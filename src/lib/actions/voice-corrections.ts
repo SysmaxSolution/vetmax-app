@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { applyCorrections, type CorrectionRule } from '@/lib/voice/correction-dictionary'
 import { mineCorrections } from '@/lib/voice/correction-mining'
 
+import { mensagemErro } from '@/lib/errors'
 // Nº de observações da mesma correção antes de ela passar a ser aplicada
 // automaticamente (suggested → active). Trava anti-veneno do dicionário local.
 const PROMOTE_AT = 3
@@ -59,7 +60,7 @@ export async function setCorrectionStatus(
     .update({ status, updated_at: new Date().toISOString() })
     .eq('id', id)
     .eq('clinic_id', clinicId)
-  return error ? { error: error.message } : { success: true }
+  return error ? { error: mensagemErro(error, 'lib/actions/voice-corrections.ts') } : { success: true }
 }
 
 // Edita os termos de uma regra (e a reativa).
@@ -82,7 +83,7 @@ export async function updateCorrectionTerms(
     })
     .eq('id', id)
     .eq('clinic_id', clinicId)
-  return error ? { error: error.message } : { success: true }
+  return error ? { error: mensagemErro(error, 'lib/actions/voice-corrections.ts') } : { success: true }
 }
 
 // Adiciona uma regra manual (já ativa).
@@ -108,7 +109,7 @@ export async function addManualCorrection(
       .from('voice_correction_terms')
       .update({ right_term: rightTerm.trim(), status: 'active', source: 'manual', updated_at: new Date().toISOString() })
       .eq('id', existing.id)
-    return error ? { error: error.message } : { success: true }
+    return error ? { error: mensagemErro(error, 'lib/actions/voice-corrections.ts') } : { success: true }
   }
 
   const { error } = await admin
@@ -121,7 +122,7 @@ export async function addManualCorrection(
       status: 'active',
       source: 'manual',
     })
-  return error ? { error: error.message } : { success: true }
+  return error ? { error: mensagemErro(error, 'lib/actions/voice-corrections.ts') } : { success: true }
 }
 
 // Remove uma regra do dicionário da clínica.
@@ -134,7 +135,7 @@ export async function deleteCorrection(id: string): Promise<{ success: true } | 
     .delete()
     .eq('id', id)
     .eq('clinic_id', clinicId)
-  return error ? { error: error.message } : { success: true }
+  return error ? { error: mensagemErro(error, 'lib/actions/voice-corrections.ts') } : { success: true }
 }
 
 // Regras ativas aplicáveis a uma clínica: as próprias + as globais (clinic_id NULL).

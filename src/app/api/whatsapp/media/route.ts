@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
+import { mensagemErro } from '@/lib/errors'
+import { limitarPorIp } from '@/lib/api/rate-limit'
 // POST /api/whatsapp/media
 // Recebe multipart/form-data com:
 //   - file:           File
@@ -22,6 +24,9 @@ const ALLOWED_TYPES = new Set([
 const MAX_SIZE = 50 * 1024 * 1024 // 50 MB
 
 export async function POST(request: NextRequest) {
+  const barrado = await limitarPorIp(request, { escopo: 'wpp:media', limite: 120 })
+  if (barrado) return barrado
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 })
@@ -75,7 +80,7 @@ export async function POST(request: NextRequest) {
 
   if (uploadError) {
     console.error('[WPP Media Upload]', uploadError)
-    return NextResponse.json({ error: uploadError.message }, { status: 500 })
+    return NextResponse.json({ error: mensagemErro(uploadError, 'app/api/whatsapp/media/route.ts') }, { status: 500 })
   }
 
   const { data: urlData } = admin.storage

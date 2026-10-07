@@ -6,10 +6,15 @@ import { persistExamGraphs } from '@/lib/lab/persist-graphs'
 import { resolveAnalyte, normKey, type AnalyteMapping } from '@/lib/lab/analyte-resolve'
 import { readLabRequest } from '@/lib/lab/request-body'
 
+import { mensagemErro } from '@/lib/errors'
+import { limitarPorIp } from '@/lib/api/rate-limit'
 // Recebimento de resultados: o agente repassa o ORU do aparelho. Casa a amostra
 // pelo barcode e grava os analitos em exam_results (rascunho, source='hl7').
 // Idempotente por (consultation, source hl7): reimportar substitui o rascunho hl7.
 export async function POST(req: Request) {
+  const barrado = await limitarPorIp(req, { escopo: 'lab:results', limite: 120 })
+  if (barrado) return barrado
+
   const auth = await authenticateAgent(req)
   if (!auth) return NextResponse.json({ error: 'Token inválido ou Laboratório não ativado para esta clínica.' }, { status: 401 })
   // Aceita o corpo COMPRIMIDO (Content-Encoding: gzip) e, sem o cabeçalho,
@@ -66,7 +71,7 @@ export async function POST(req: Request) {
     raw_hl7: lean.length <= 20000 ? lean : null,
   }))
   const { error } = await admin.from('exam_results').insert(rows)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return NextResponse.json({ error: mensagemErro(error, 'app/api/lab/results/route.ts') }, { status: 500 })
 
   const g = await persistExamGraphs(admin, auth.clinic_id, sample.consultation_id, parsed.graphs)
 

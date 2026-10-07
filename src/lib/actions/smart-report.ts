@@ -11,6 +11,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { groupSum, type GroupRow } from '@/lib/reports/revenue-breakdown'
 import { isRecognizedRevenue, netAmount } from '@/lib/finance/reconciliation'
+import { mensagemErro } from '@/lib/errors'
 import {
   validateSpec, dimensionValue, catalogPromptSummary,
   METRICS, DIMENSIONS, type ReportSpec,
@@ -55,7 +56,7 @@ export async function getSmartReport(rawSpec: any): Promise<SmartReportResult | 
   if (spec.filters?.category)       q = q.eq('category', spec.filters.category)
   if (spec.filters?.payment_method) q = q.eq('payment_method', spec.filters.payment_method)
   const { data, error } = await q.limit(20000)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/smart-report.ts') }
 
   const recognized = ((data ?? []) as any[]).filter(r => isRecognizedRevenue(r))
 
@@ -120,7 +121,7 @@ Use metric e dimension EXATAMENTE com as chaves do catálogo. Se o pedido não i
     if (!m) return { error: 'Não consegui interpretar o pedido. Reformule.' }
     raw = JSON.parse(m[0])
   } catch (e) {
-    return { error: 'Falha ao interpretar o pedido: ' + (e instanceof Error ? e.message : 'erro') }
+    return { error: 'Falha ao interpretar o pedido: ' + (e instanceof Error ? mensagemErro(e, 'lib/actions/smart-report.ts') : 'erro') }
   }
 
   // Defaults de período se a IA omitir

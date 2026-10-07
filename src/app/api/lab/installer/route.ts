@@ -5,9 +5,13 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { AGENT_BUNDLE } from '@/lib/lab/agent-bundle'
 import { clinicFlowFlag } from '@/lib/clinic/flow-gate'
 
+import { limitarPorIp } from '@/lib/api/rate-limit'
 // Gera e devolve o instalador .zip do agente já com o config.json do token.
 // Autenticado por sessão (admin da clínica). Uso: /api/lab/installer?agent=<id>
 export async function GET(req: Request) {
+  const barrado = await limitarPorIp(req, { escopo: 'lab:installer', limite: 10 })
+  if (barrado) return barrado
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 })

@@ -7,6 +7,7 @@
 import { getFinancialIntegrations } from '@/lib/actions/financial-integrations'
 import { createPixCob, getPixCobStatus, type PixConfig } from '@/lib/integrations/sicoob-pix'
 
+import { mensagemErro } from '@/lib/errors'
 async function pixConfig(): Promise<PixConfig | { error: string }> {
   const cfg = await getFinancialIntegrations()
   if (!cfg.pix_enabled) return { error: 'Integração PIX não está ativada (Gestão > Configurações > Financeiro).' }
@@ -27,7 +28,7 @@ export async function createPixCharge(params: {
   try {
     const cob = await createPixCob(cfg, { valor: params.amount, descricao: params.description })
     return { ok: true, txid: cob.txid, brcode: cob.brcode, environment: cfg.environment }
-  } catch (e) { return { error: (e as Error).message } }
+  } catch (e) { return { error: mensagemErro(e, 'lib/actions/pix.ts') } }
 }
 
 export async function checkPixCharge(txid: string): Promise<{ status: string; paid: boolean; e2eid: string | null } | { error: string }> {
@@ -36,5 +37,5 @@ export async function checkPixCharge(txid: string): Promise<{ status: string; pa
   try {
     const st = await getPixCobStatus(cfg, txid)
     return { status: st.status, paid: st.paid, e2eid: st.e2eid }
-  } catch (e) { return { error: (e as Error).message } }
+  } catch (e) { return { error: mensagemErro(e, 'lib/actions/pix.ts') } }
 }

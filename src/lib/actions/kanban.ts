@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type KanbanColumn = 'reception' | 'triage' | 'consultation' | 'billing'
@@ -83,7 +84,7 @@ export async function getKanbanData(): Promise<KanbanItem[] | { error: string }>
     .gte('created_at', todayStart.toISOString())
     .order('created_at', { ascending: true })
 
-  if (error) return { error: 'Erro ao buscar dados do Kanban: ' + error.message }
+  if (error) return { error: 'Erro ao buscar dados do Kanban: ' + mensagemErro(error, 'lib/actions/kanban.ts') }
 
   return (data ?? []).map((c: any) => {
     const rawTags: string[] = Array.isArray(c.patients?.behavior_tags)

@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
 export type ChatKind = 'direct' | 'group' | 'consultation' | 'hospitalization' | 'surgery' | 'channel'
@@ -91,7 +92,7 @@ export async function listMyChats(): Promise<ChatSummary[] | { error: string }> 
     .eq('user_id', ctx.user_id)
     .eq('clinic_id', ctx.clinic_id)
     .is('left_at', null)
-  if (e1) return { error: e1.message }
+  if (e1) return { error: mensagemErro(e1, 'lib/actions/internal-chat.ts') }
 
   const chatIds = (myParts ?? []).map(p => p.chat_id as string)
   if (chatIds.length === 0) return []
@@ -114,7 +115,7 @@ export async function listMyChats(): Promise<ChatSummary[] | { error: string }> 
     .is('archived_at', null)
     .order('last_message_at', { ascending: false })
     .limit(200)
-  if (e2) return { error: e2.message }
+  if (e2) return { error: mensagemErro(e2, 'lib/actions/internal-chat.ts') }
 
   // 2b) Títulos enriquecidos para salas automáticas (E3-S2)
   const entityIds = (chats ?? [])
@@ -249,7 +250,7 @@ export async function listChatMessages(
   if (opts?.before) q = q.lt('created_at', opts.before)
 
   const { data: msgs, error } = await q
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/internal-chat.ts') }
 
   const msgIds = (msgs ?? []).map(m => m.id as string)
   const { data: atts } = msgIds.length > 0
@@ -324,7 +325,7 @@ export async function sendChatMessage(input: {
     })
     .select('id')
     .single()
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/internal-chat.ts') }
 
   return { id: data.id as string }
 }
@@ -339,7 +340,7 @@ export async function markChatRead(chatId: string): Promise<{ success: true } | 
     .update({ last_read_at: new Date().toISOString(), force_unread: false })
     .eq('chat_id', chatId)
     .eq('user_id', ctx.user_id)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/internal-chat.ts') }
   return { success: true }
 }
 
@@ -354,7 +355,7 @@ export async function markAllChatsRead(): Promise<{ success: true } | { error: s
     .eq('user_id', ctx.user_id)
     .eq('clinic_id', ctx.clinic_id)
     .is('left_at', null)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/internal-chat.ts') }
   return { success: true }
 }
 
@@ -376,7 +377,7 @@ export async function searchUsersForChat(query: string): Promise<ChatUserOption[
   if (q.length >= 2) qb = qb.ilike('full_name', `%${q}%`)
 
   const { data, error } = await qb
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/internal-chat.ts') }
   return (data ?? []).map((p: any): ChatUserOption => ({
     user_id:   p.id,
     full_name: p.full_name,
@@ -438,14 +439,14 @@ export async function openOrCreateDirectChat(
     })
     .select('id')
     .single()
-  if (chatErr || !chat) return { error: chatErr?.message ?? 'Falha ao criar chat.' }
+  if (chatErr || !chat) return { error: (chatErr ? mensagemErro(chatErr, 'lib/actions/internal-chat.ts') : 'Falha ao criar chat.') }
 
   const chatId = chat.id as string
   const { error: pErr } = await admin.from('chat_participants').insert([
     { chat_id: chatId, clinic_id: ctx.clinic_id, user_id: ctx.user_id,   role: 'owner'  },
     { chat_id: chatId, clinic_id: ctx.clinic_id, user_id: otherUserId,   role: 'member' },
   ])
-  if (pErr) return { error: pErr.message }
+  if (pErr) return { error: mensagemErro(pErr, 'lib/actions/internal-chat.ts') }
 
   revalidatePath('/dashboard/internal-chat')
   return { chat_id: chatId }
@@ -495,7 +496,7 @@ export async function createGroupChat(input: {
     })
     .select('id')
     .single()
-  if (error || !chat) return { error: error?.message ?? 'Falha ao criar grupo.' }
+  if (error || !chat) return { error: (error ? mensagemErro(error, 'lib/actions/internal-chat.ts') : 'Falha ao criar grupo.') }
 
   const chatId = chat.id as string
   const rows = [
@@ -505,7 +506,7 @@ export async function createGroupChat(input: {
     })),
   ]
   const { error: pErr } = await admin.from('chat_participants').insert(rows)
-  if (pErr) return { error: pErr.message }
+  if (pErr) return { error: mensagemErro(pErr, 'lib/actions/internal-chat.ts') }
 
   // Mensagem system inicial
   await admin.from('chat_messages').insert({
@@ -563,7 +564,7 @@ export async function _attachDocumentToEntityChatInternal(input: {
       .from('chats')
       .insert({ clinic_id: input.clinic_id, kind: input.entity_type, entity_type: input.entity_type, entity_id: input.entity_id, created_by: input.user_id ?? null })
       .select('id').single()
-    if (createErr) return { error: 'Falha ao abrir sala: ' + createErr.message }
+    if (createErr) return { error: 'Falha ao abrir sala: ' + mensagemErro(createErr, 'lib/actions/internal-chat.ts') }
     chat = created
   }
 
@@ -572,7 +573,7 @@ export async function _attachDocumentToEntityChatInternal(input: {
     .from('chat_messages')
     .insert({ chat_id: chatId, clinic_id: input.clinic_id, sent_by: input.user_id ?? null, kind: 'attachment', body: input.body ?? `📎 ${input.title}`, metadata: { source_entity: input.source_entity, source_id: input.source_id ?? null } })
     .select('id').single()
-  if (msgErr || !msg) return { error: 'Falha ao registrar mensagem: ' + (msgErr?.message ?? '') }
+  if (msgErr || !msg) return { error: 'Falha ao registrar mensagem: ' + ((msgErr ? mensagemErro(msgErr, 'lib/actions/internal-chat.ts') : '')) }
 
   const inferredKind: 'pdf' | 'image' | 'file' =
     input.mime_type?.startsWith('image/') ? 'image'
@@ -585,7 +586,7 @@ export async function _attachDocumentToEntityChatInternal(input: {
     mime_type: input.mime_type ?? null, byte_size: input.byte_size ?? null,
     source_entity: input.source_entity, source_id: input.source_id ?? null,
   })
-  if (attErr) return { error: 'Falha ao anexar: ' + attErr.message }
+  if (attErr) return { error: 'Falha ao anexar: ' + mensagemErro(attErr, 'lib/actions/internal-chat.ts') }
 
   return { message_id: msg.id as string, chat_id: chatId }
 }
@@ -663,7 +664,7 @@ export async function uploadChatAttachment(
       contentType: file.type || 'application/octet-stream',
       upsert: false,
     })
-  if (upErr) return { error: 'Falha no upload: ' + upErr.message }
+  if (upErr) return { error: 'Falha no upload: ' + mensagemErro(upErr, 'lib/actions/internal-chat.ts') }
 
   // Signed URL longa (7 dias). Refresh pode ser adicionado depois.
   const { data: signed, error: signErr } = await admin.storage
@@ -671,7 +672,7 @@ export async function uploadChatAttachment(
     .createSignedUrl(path, 60 * 60 * 24 * 7)
   if (signErr || !signed) {
     await admin.storage.from(CHAT_ATT_BUCKET).remove([path])
-    return { error: 'Falha ao gerar URL: ' + (signErr?.message ?? '') }
+    return { error: 'Falha ao gerar URL: ' + ((signErr ? mensagemErro(signErr, 'lib/actions/internal-chat.ts') : '')) }
   }
 
   // chat_messages: portadora do anexo
@@ -689,7 +690,7 @@ export async function uploadChatAttachment(
     .single()
   if (msgErr || !msg) {
     await admin.storage.from(CHAT_ATT_BUCKET).remove([path])
-    return { error: 'Falha ao registrar mensagem: ' + (msgErr?.message ?? '') }
+    return { error: 'Falha ao registrar mensagem: ' + ((msgErr ? mensagemErro(msgErr, 'lib/actions/internal-chat.ts') : '')) }
   }
 
   const inferredKind: 'pdf' | 'image' | 'file' =
@@ -712,7 +713,7 @@ export async function uploadChatAttachment(
       byte_size:    file.size,
       source_entity: 'other',
     })
-  if (attErr) return { error: 'Falha ao anexar: ' + attErr.message }
+  if (attErr) return { error: 'Falha ao anexar: ' + mensagemErro(attErr, 'lib/actions/internal-chat.ts') }
 
   return { message_id: msg.id as string, chat_id: chatId }
 }
@@ -779,7 +780,7 @@ export async function markChatUnread(chatId: string): Promise<{ success: true } 
     .update({ force_unread: true })
     .eq('chat_id', chatId)
     .eq('user_id', ctx.user_id)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/internal-chat.ts') }
   return { success: true }
 }
 
@@ -808,7 +809,7 @@ export async function toggleChatPin(
       : { pinned_at: new Date().toISOString(), pin_order: 0 })
     .eq('chat_id', chatId)
     .eq('user_id', ctx.user_id)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/internal-chat.ts') }
   return { pinned: !isPinned }
 }
 
@@ -828,7 +829,7 @@ export async function reorderPinnedChats(
   )
   const results = await Promise.all(updates)
   const failed = results.find(r => r.error)
-  if (failed?.error) return { error: failed.error.message }
+  if (failed?.error) return { error: mensagemErro(failed.error, 'lib/actions/internal-chat.ts') }
   return { success: true }
 }
 
@@ -872,7 +873,7 @@ export async function addParticipantToChat(
     .from('chat_participants')
     .upsert({ chat_id: chatId, clinic_id: ctx.clinic_id, user_id: userId, role: 'member', left_at: null },
              { onConflict: 'chat_id,user_id', ignoreDuplicates: false })
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/internal-chat.ts') }
 
   await admin.from('chat_messages').insert({
     chat_id:   chatId,
@@ -915,7 +916,7 @@ export async function removeParticipantFromChat(
     .update({ left_at: new Date().toISOString() })
     .eq('chat_id', chatId)
     .eq('user_id', userId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/internal-chat.ts') }
 
   await admin.from('chat_messages').insert({
     chat_id:   chatId,
@@ -958,7 +959,7 @@ export async function editChatMessage(
     .from('chat_messages')
     .update({ body: trimmed, edited_at: new Date().toISOString() })
     .eq('id', messageId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/internal-chat.ts') }
   return { success: true }
 }
 
@@ -997,7 +998,7 @@ export async function deleteChatMessage(
     .from('chat_messages')
     .update({ deleted_at: new Date().toISOString(), body: null })
     .eq('id', messageId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/internal-chat.ts') }
   return { success: true }
 }
 
@@ -1078,7 +1079,7 @@ export async function listChannels(): Promise<ChannelSummary[] | { error: string
     .eq('kind', 'channel')
     .is('archived_at', null)
     .order('title', { ascending: true })
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/internal-chat.ts') }
 
   const chatIds = (chats ?? []).map((c: any) => c.id as string)
   let myIds = new Set<string>()
@@ -1123,7 +1124,7 @@ export async function joinChannel(
     .from('chat_participants')
     .upsert({ chat_id: chatId, clinic_id: ctx.clinic_id, user_id: ctx.user_id, role: 'member', left_at: null },
              { onConflict: 'chat_id,user_id', ignoreDuplicates: false })
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/internal-chat.ts') }
   return { success: true }
 }
 
@@ -1165,7 +1166,7 @@ export async function createChannelChat(input: {
     })
     .select('id')
     .single()
-  if (error || !chat) return { error: error?.message ?? 'Falha ao criar canal.' }
+  if (error || !chat) return { error: (error ? mensagemErro(error, 'lib/actions/internal-chat.ts') : 'Falha ao criar canal.') }
 
   const chatId = (chat as any).id as string
   await admin.from('chat_participants').insert({

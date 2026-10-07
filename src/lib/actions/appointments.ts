@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type AppointmentStatus = 'scheduled' | 'confirmed' | 'cancelled' | 'arrived'
@@ -76,7 +77,7 @@ export async function createAppointment(
     created_by:           auth.userId,
   }).select('id').single()
 
-  if (error) return { error: 'Erro ao criar agendamento: ' + error.message }
+  if (error) return { error: 'Erro ao criar agendamento: ' + mensagemErro(error, 'lib/actions/appointments.ts') }
   revalidatePath('/dashboard/reception')
   revalidatePath('/dashboard/reception/calendar')
   return { success: true, id: data.id }
@@ -101,7 +102,7 @@ export async function getAppointmentsForDate(
       .neq('status', 'cancelled')
       .order('appointment_datetime', { ascending: true })
 
-    if (error) return { error: error.message }
+    if (error) return { error: mensagemErro(error, 'lib/actions/appointments.ts') }
     if (!data?.length) return []
 
     const petIds   = [...new Set(data.map(a => a.pet_id))]
@@ -152,7 +153,7 @@ export async function getMonthAppointmentCounts(
       .lt('appointment_datetime',  `${ny}-${nmp}-01T00:00:00`)
       .neq('status', 'cancelled')
 
-    if (error) return { error: error.message }
+    if (error) return { error: mensagemErro(error, 'lib/actions/appointments.ts') }
 
     const counts: Record<string, number> = {}
     for (const a of data ?? []) {
@@ -202,7 +203,7 @@ export async function getAppointmentById(
     .eq('clinic_id', auth.clinicId)
     .single()
 
-  if (error || !data) return { error: error?.message ?? 'Agendamento não encontrado.' }
+  if (error || !data) return { error: (error ? mensagemErro(error, 'lib/actions/appointments.ts') : 'Agendamento não encontrado.') }
 
   const patient     = (Array.isArray(data.patient)     ? data.patient[0]     : data.patient)     as { id: string; name: string; species: string } | null
   const tutor       = (Array.isArray(data.tutor)       ? data.tutor[0]       : data.tutor)       as { id: string; name: string; phone: string } | null
@@ -253,7 +254,7 @@ export async function updateAppointment(
     .eq('id', id)
     .eq('clinic_id', auth.clinicId)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/appointments.ts') }
 
   revalidatePath('/dashboard/reception')
   revalidatePath('/dashboard/reception/calendar')
@@ -275,7 +276,7 @@ export async function cancelAppointment(
     .eq('id', appointmentId)
     .eq('clinic_id', auth.clinicId)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/appointments.ts') }
   revalidatePath('/dashboard/reception/calendar')
   return { success: true }
 }
@@ -324,7 +325,7 @@ export async function confirmArrival(
         status:         'reception',
       })
 
-    if (cErr) return { error: 'Chegada marcada, mas erro ao criar consulta: ' + cErr.message }
+    if (cErr) return { error: 'Chegada marcada, mas erro ao criar consulta: ' + mensagemErro(cErr, 'lib/actions/appointments.ts') }
 
     revalidatePath('/dashboard/reception')
     revalidatePath('/dashboard/reception/calendar')
@@ -355,7 +356,7 @@ export async function markAppointmentArrived(
       .eq('id', appointmentId)
       .eq('clinic_id', auth.clinicId)
 
-    if (error) return { error: 'Erro ao marcar agendamento como atendido: ' + error.message }
+    if (error) return { error: 'Erro ao marcar agendamento como atendido: ' + mensagemErro(error, 'lib/actions/appointments.ts') }
 
     revalidatePath('/dashboard/reception')
     revalidatePath('/dashboard/reception/calendar')
@@ -390,7 +391,7 @@ export async function getTodayCountsByProfessional(): Promise<ProfessionalCount[
       .not('vet_id', 'is', null)
       .gte('created_at', todayStart.toISOString())
 
-    if (error) return { error: error.message }
+    if (error) return { error: mensagemErro(error, 'lib/actions/appointments.ts') }
     if (!data?.length) return []
 
     // Count by vet_id

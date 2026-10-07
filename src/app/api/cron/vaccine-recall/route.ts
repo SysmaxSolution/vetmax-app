@@ -3,6 +3,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { sendTutorPortalWhatsApp } from '@/lib/actions/tutor-portal'
 import { parseRecallConfig, shouldRunNow, recallWindow, localDateInTimeZone, cronModeFromEnv } from '@/lib/vaccines/recall-schedule'
 
+import { mensagemErro } from '@/lib/errors'
+import { limitarPorIp } from '@/lib/api/rate-limit'
 // GET /api/cron/vaccine-recall
 // Recall proativo de vacina: avisa o Tutor (WhatsApp + link do portal) quando a
 // próxima dose está próxima. Registrado em vercel.json de hora em hora
@@ -30,6 +32,9 @@ import { parseRecallConfig, shouldRunNow, recallWindow, localDateInTimeZone, cro
 const PER_CLINIC_LIMIT = 200
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  const barrado = await limitarPorIp(request, { escopo: 'cron:vacina', limite: 60 })
+  if (barrado) return barrado
+
   const auth = request.headers.get('authorization')
   const secret = process.env.CRON_SECRET ?? process.env.KEEPALIVE_SECRET
   if (!secret || auth !== `Bearer ${secret}`) {
@@ -46,7 +51,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     .from('clinics')
     .select('id, flow_config')
     .contains('flow_config', { vaccine_recall_enabled: true })
-  if (clinicsErr) return NextResponse.json({ error: clinicsErr.message }, { status: 500 })
+  if (clinicsErr) return NextResponse.json({ error: mensagemErro(clinicsErr, 'app/api/cron/vaccine-recall/route.ts') }, { status: 500 })
 
   let sent = 0, skipped = 0, considered = 0
   const ranFor: string[] = []

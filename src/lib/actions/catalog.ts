@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type CatalogItemType = 'consultation' | 'medication' | 'exam' | 'other' | 'grooming'
@@ -70,7 +71,7 @@ export async function getCatalog(): Promise<CatalogItem[] | { error: string }> {
     .order('item_type')
     .order('name')
 
-  if (error) return { error: 'Erro ao buscar catálogo: ' + error.message }
+  if (error) return { error: 'Erro ao buscar catálogo: ' + mensagemErro(error, 'lib/actions/catalog.ts') }
   return (data ?? []) as CatalogItem[]
 }
 
@@ -115,7 +116,7 @@ export async function saveCatalogItem(
       .eq('clinic_id', profile.clinic_id)
       .select(CATALOG_COLS)
       .single()
-    if (error || !data) return { error: 'Erro ao atualizar: ' + (error?.message ?? '') }
+    if (error || !data) return { error: 'Erro ao atualizar: ' + ((error ? mensagemErro(error, 'lib/actions/catalog.ts') : '')) }
     result = data
   } else {
     const { data, error } = await admin
@@ -123,7 +124,7 @@ export async function saveCatalogItem(
       .insert({ ...record, is_active: true })
       .select(CATALOG_COLS)
       .single()
-    if (error || !data) return { error: 'Erro ao criar item: ' + (error?.message ?? '') }
+    if (error || !data) return { error: 'Erro ao criar item: ' + ((error ? mensagemErro(error, 'lib/actions/catalog.ts') : '')) }
     result = data
   }
 
@@ -156,7 +157,7 @@ export async function toggleCatalogItem(
     .eq('id', id)
     .eq('clinic_id', profile.clinic_id)
 
-  if (error) return { error: 'Erro ao atualizar: ' + error.message }
+  if (error) return { error: 'Erro ao atualizar: ' + mensagemErro(error, 'lib/actions/catalog.ts') }
   revalidatePath(REVALIDATE_PATH)
   return { success: true }
 }
@@ -185,7 +186,7 @@ export async function deleteCatalogItem(
     .eq('id', id)
     .eq('clinic_id', profile.clinic_id)
 
-  if (error) return { error: 'Erro ao deletar: ' + error.message }
+  if (error) return { error: 'Erro ao deletar: ' + mensagemErro(error, 'lib/actions/catalog.ts') }
   revalidatePath(REVALIDATE_PATH)
   return { success: true }
 }
@@ -261,6 +262,6 @@ export async function searchGlobalCatalog(
   }
 
   const { data, error } = await q
-  if (error) return { error: 'Erro ao buscar catálogo global: ' + error.message }
+  if (error) return { error: 'Erro ao buscar catálogo global: ' + mensagemErro(error, 'lib/actions/catalog.ts') }
   return (data ?? []) as CatalogSuggestion[]
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
 
+import { limitarPorIp } from '@/lib/api/rate-limit'
 /**
  * POST /api/voice-map-fields
  * Recebe uma transcrição de voz + campos extraídos de um template
@@ -16,6 +17,9 @@ import { createClient } from '@/lib/supabase/server'
  *   - confidence: 'high' | 'medium' | 'low'
  */
 export async function POST(request: NextRequest) {
+  const barrado = await limitarPorIp(request, { escopo: 'ia:voz', limite: 20 })
+  if (barrado) return barrado
+
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()

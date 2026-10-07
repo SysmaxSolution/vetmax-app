@@ -22,6 +22,7 @@ import type { VitalSigns } from '@/types'
 import type { ResolveContext } from '@/lib/canva/dynamic-tags'
 import { buildResolveContext } from '@/lib/canva/resolve-context'
 
+import { mensagemErro } from '@/lib/errors'
 const BG_BUCKET = 'patient-documents-bg'
 
 async function requireClinic() {
@@ -684,7 +685,7 @@ Responda SOMENTE com o JSON:`
       unfilled_keys,
     }
   } catch (e: any) {
-    return { error: e?.message ?? 'IA indisponível no momento.' }
+    return { error: (e ? mensagemErro(e, 'lib/actions/canva-templates.ts') : 'IA indisponível no momento.') }
   }
 }
 

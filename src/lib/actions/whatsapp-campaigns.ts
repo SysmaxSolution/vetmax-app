@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type TriggerType =
@@ -82,7 +83,7 @@ export async function saveCampaign(
       })
       .eq('id', campaign.id)
       .eq('clinic_id', auth.clinicId)
-    if (error) return { error: error.message }
+    if (error) return { error: mensagemErro(error, 'lib/actions/whatsapp-campaigns.ts') }
   } else {
     const { error } = await admin
       .from('whatsapp_campaigns')
@@ -93,7 +94,7 @@ export async function saveCampaign(
         is_active:      campaign.is_active,
         send_hour:      campaign.send_hour,
       })
-    if (error) return { error: error.message }
+    if (error) return { error: mensagemErro(error, 'lib/actions/whatsapp-campaigns.ts') }
   }
 
   return { success: true }

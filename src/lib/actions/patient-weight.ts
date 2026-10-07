@@ -14,6 +14,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 export type WeightSource = 'manual' | 'reception' | 'triage' | 'vet' | 'hospitalization'
 
 type Ctx =
@@ -87,7 +88,7 @@ export async function updatePatientWeight(input: {
     })
     .eq('id', input.patient_id)
     .eq('clinic_id', clinic_id)
-  if (updErr) return { error: 'Erro ao atualizar peso: ' + updErr.message }
+  if (updErr) return { error: 'Erro ao atualizar peso: ' + mensagemErro(updErr, 'lib/actions/patient-weight.ts') }
 
   if (changed) {
     const delta = previous === null
@@ -135,7 +136,7 @@ export async function getLastWeight(
     .eq('id', patientId)
     .eq('clinic_id', clinic_id)
     .maybeSingle()
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/patient-weight.ts') }
   if (!data) return { weight_kg: null, measured_at: null, source: null }
 
   return {

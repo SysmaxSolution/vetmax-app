@@ -5,6 +5,7 @@
 import 'server-only'
 import { mapDdaResponse, buildPagamentoPayload, type DdaBoletoLike, type PagamentoInput } from './sicoob-pagamentos-map'
 
+import { mensagemErro } from '@/lib/errors'
 const SANDBOX = {
   base: 'https://sandbox.sicoob.com.br/sicoob/sandbox/cobranca-bancaria-pagamentos/v3',
   client_id: '9b5e603e428cc477a2841e2683c92d21',
@@ -54,7 +55,7 @@ export async function consultarDDA(cfg: PagamentosRuntime, filtros: { dataInicia
     const raw = await res.json().catch(() => ({}))
     if (!res.ok) return { ok: false, error: (raw as any)?.mensagens?.[0]?.mensagem || `Sicoob retornou ${res.status}` }
     return { ok: true, boletos: mapDdaResponse(raw), raw }
-  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : 'Erro ao consultar DDA.' } }
+  } catch (e) { return { ok: false, error: e instanceof Error ? mensagemErro(e, 'lib/integrations/sicoob-pagamentos.ts') : 'Erro ao consultar DDA.' } }
 }
 
 /** Consulta um boleto antes de pagar — GET /boletos/:codigoBarras (retorna identificadorConsulta). */
@@ -67,7 +68,7 @@ export async function consultarBoletoParaPagar(cfg: PagamentosRuntime, codigoBar
     const raw = await res.json().catch(() => ({}))
     if (!res.ok) return { ok: false, error: (raw as any)?.mensagens?.[0]?.mensagem || `Sicoob retornou ${res.status}` }
     return { ok: true, raw }
-  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : 'Erro ao consultar boleto.' } }
+  } catch (e) { return { ok: false, error: e instanceof Error ? mensagemErro(e, 'lib/integrations/sicoob-pagamentos.ts') : 'Erro ao consultar boleto.' } }
 }
 
 /** Paga/agenda um boleto — POST /boletos/pagamentos/:codigoBarras. */
@@ -82,7 +83,7 @@ export async function pagarBoleto(cfg: PagamentosRuntime, codigoBarras: string, 
     if (!res.ok) return { ok: false, error: (raw as any)?.mensagens?.[0]?.mensagem || `Sicoob retornou ${res.status}` }
     const r = (raw as any)?.resultado ?? raw
     return { ok: true, idPagamento: r?.idPagamento ?? r?.id ?? null, raw }
-  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : 'Erro ao pagar boleto.' } }
+  } catch (e) { return { ok: false, error: e instanceof Error ? mensagemErro(e, 'lib/integrations/sicoob-pagamentos.ts') : 'Erro ao pagar boleto.' } }
 }
 
 /** Comprovante — GET /boletos/pagamentos/:idPagamento/comprovantes. */
@@ -95,7 +96,7 @@ export async function consultarComprovante(cfg: PagamentosRuntime, idPagamento: 
     const raw = await res.json().catch(() => ({}))
     if (!res.ok) return { ok: false, error: `Sicoob retornou ${res.status}` }
     return { ok: true, raw }
-  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : 'Erro ao consultar comprovante.' } }
+  } catch (e) { return { ok: false, error: e instanceof Error ? mensagemErro(e, 'lib/integrations/sicoob-pagamentos.ts') : 'Erro ao consultar comprovante.' } }
 }
 
 /** Cancela um agendamento — DELETE /boletos/pagamentos/agendamentos/:idPagamento. */
@@ -108,5 +109,5 @@ export async function cancelarAgendamento(cfg: PagamentosRuntime, idPagamento: s
     } as RequestInit)
     if (!res.ok) return { ok: false, error: `Sicoob retornou ${res.status}` }
     return { ok: true }
-  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : 'Erro ao cancelar agendamento.' } }
+  } catch (e) { return { ok: false, error: e instanceof Error ? mensagemErro(e, 'lib/integrations/sicoob-pagamentos.ts') : 'Erro ao cancelar agendamento.' } }
 }

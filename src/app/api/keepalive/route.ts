@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
+import { mensagemErro } from '@/lib/errors'
+import { limitarPorIp } from '@/lib/api/rate-limit'
 /**
  * GET /api/keepalive
  * Authorization: Bearer <KEEPALIVE_SECRET>
@@ -10,6 +12,9 @@ import { createAdminClient } from '@/lib/supabase/admin'
  * Chamado pelo Windows Task Scheduler a cada 5 dias.
  */
 export async function GET(req: NextRequest) {
+  const barrado = await limitarPorIp(req, { escopo: 'app:keepalive', limite: 60 })
+  if (barrado) return barrado
+
   const secret = process.env.KEEPALIVE_SECRET
   if (!secret || req.headers.get('authorization') !== `Bearer ${secret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -25,7 +30,7 @@ export async function GET(req: NextRequest) {
 
     if (error) {
       console.error('[keepalive] Supabase error:', error.message)
-      return NextResponse.json({ ok: false, error: error.message }, { status: 502 })
+      return NextResponse.json({ ok: false, error: mensagemErro(error, 'app/api/keepalive/route.ts') }, { status: 502 })
     }
 
     return NextResponse.json({ ok: true })
