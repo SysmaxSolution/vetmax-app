@@ -37,21 +37,36 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_clinic_bank_certificates
 
 ALTER TABLE clinic_bank_certificates ENABLE ROW LEVEL SECURITY;
 
--- Sem policy de leitura para o usuário comum: o certificado só é lido pelo
--- service role, dentro das Server Actions. A tela recebe apenas metadados.
+-- RLS ligada e NENHUMA policy, de propósito.
+--
+-- A versão anterior criava uma policy `FOR ALL` para quem pertence à clínica.
+-- `FOR ALL` inclui SELECT — ou seja, qualquer usuário logado da clínica podia
+-- ler `pfx_encrypted` pelo PostgREST com a chave anônima. O comentário dizia
+-- "sem policy de leitura para o usuário comum" e a policy fazia o contrário.
+--
+-- Não é necessária: TODO acesso à tabela passa pelo service role, dentro das
+-- Server Actions de src/lib/actions/bank-certificates.ts (que leem apenas
+-- bank_code, file_name, subject_cn, cnpj, not_after, created_at para a tela).
+-- O service role ignora RLS. Sem policy, o PostgREST não devolve nada a
+-- `anon` nem a `authenticated`, e a aplicação continua funcionando igual.
+--
+-- Se um dia a tela precisar ler metadados direto, criar uma policy
+-- RESTRITA A SELECT e com lista de colunas via VIEW — nunca `FOR ALL` nesta
+-- tabela, que guarda o certificado da empresa.
 DO $$
 BEGIN
-  IF NOT EXISTS (
+  -- Remove a policy permissiva, caso o banco já a tenha da versão anterior.
+  IF EXISTS (
     SELECT 1 FROM pg_policies
      WHERE schemaname='public' AND tablename='clinic_bank_certificates'
        AND policyname='clinic_bank_certificates_tenant'
   ) THEN
-    CREATE POLICY clinic_bank_certificates_tenant ON clinic_bank_certificates
-      FOR ALL
-      USING      (clinic_id = (SELECT clinic_id FROM profiles WHERE id = auth.uid()))
-      WITH CHECK (clinic_id = (SELECT clinic_id FROM profiles WHERE id = auth.uid()));
+    DROP POLICY clinic_bank_certificates_tenant ON clinic_bank_certificates;
   END IF;
 END $$;
+
+REVOKE ALL ON clinic_bank_certificates FROM anon, authenticated;
+GRANT  ALL ON clinic_bank_certificates TO service_role;
 
 COMMENT ON COLUMN clinic_bank_certificates.pfx_encrypted IS
   'e-CNPJ A1 cifrado com AES-256-GCM. Nunca trafega para o cliente.';
