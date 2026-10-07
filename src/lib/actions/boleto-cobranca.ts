@@ -206,11 +206,35 @@ export async function emitOrReprintBoleto(financialEntryId: string, bankAccountI
   if (!acc || !(acc as any).boleto_enabled) return { error: 'Conta sem carteira bancária habilitada.' }
   const cfg = ((acc as any).boleto_config ?? {}) as BoletoConfig
 
-  // pagador (tutor)
-  let pag = { nome: 'Pagador', cpfCnpj: '', endereco: '', bairro: '', cidade: '', cep: '', uf: '', email: '' }
-  if ((entry as any).tutor_id) {
-    const { data: t } = await admin.from('tutors').select('name, cpf, address, email').eq('id', (entry as any).tutor_id).maybeSingle()
-    if (t) pag = { nome: (t as any).name ?? 'Pagador', cpfCnpj: (t as any).cpf ?? '', endereco: (t as any).address ?? '', bairro: '', cidade: '', cep: '', uf: '', email: (t as any).email ?? '' }
+  // ─── Pagador ──────────────────────────────────────────────────────────────
+  // Antes isto montava um pagador FICTICIO quando o titulo nao tinha tutor:
+  //   { nome: 'Pagador', cpfCnpj: '', endereco: '', bairro: '', ... }
+  // E, mesmo COM tutor, deixava bairro/cidade/cep/uf vazios por codigo fixo,
+  // porque o select buscava so `name, cpf, address, email`. O `tutors` sempre
+  // teve todos os campos — era defeito de fiacao.
+  const { pagadorDeTutor, pendenciasDoPagador } = await import('@/lib/financial/pagador-boleto')
+
+  const tutorId = (entry as { tutor_id?: string | null }).tutor_id
+  if (!tutorId) {
+    return { error: 'Este título não tem Tutor informado, e o banco exige os dados do pagador para registrar o boleto. Informe o cliente no título.' }
+  }
+  const { data: t } = await admin.from('tutors')
+    .select('name, cpf, email, address, address_number, address_complement, neighborhood, city, state, cep')
+    .eq('id', tutorId).maybeSingle()
+  if (!t) return { error: 'Tutor do título não encontrado.' }
+
+  const dados = pagadorDeTutor(t as Parameters<typeof pagadorDeTutor>[0])
+  const faltas = pendenciasDoPagador(dados)
+  if (faltas.length) {
+    // Erro PRECISO: diz o que falta e onde, em vez de repassar o 400 do banco.
+    // O aviso preventivo (informativo) aparece antes, na tela do titulo.
+    return { error: `Cadastro do Tutor incompleto para emitir boleto — ${faltas.map(x => `${x.rotulo} (${x.motivo})`).join(', ')}. Corrija no cadastro do Tutor e tente de novo.` }
+  }
+
+  const pag = {
+    nome: dados.nome ?? '', cpfCnpj: dados.cpfCnpj ?? '', endereco: dados.endereco ?? '',
+    bairro: dados.bairro ?? '', cidade: dados.cidade ?? '', cep: dados.cep ?? '',
+    uf: dados.uf ?? '', email: dados.email ?? '',
   }
 
   // nosso número sequencial (atômico)
@@ -433,4 +457,31 @@ export async function getBoletoEvents(boletoId: string): Promise<{ id: string; c
       actorName: e.actor_name ?? prof?.full_name ?? (e.actor_type === 'bank' ? 'Banco Sicoob' : e.actor_type === 'system' ? 'Sistema' : '—'),
       detail: e.detail ?? null, situacao: e.situacao ?? null }
   })
+}
+
+/**
+ * Pendências do cadastro do Tutor para emitir boleto.
+ *
+ * Serve ao aviso PREVENTIVO na tela do título: informar antes de mandar ao
+ * banco, para a correção já estar em andamento. É informativo de propósito —
+ * não trava o usuário, só evita que ele descubra no 400 do banco.
+ *
+ * Em produção, só 10 de 65 tutores tinham todos os campos do pagador.
+ */
+export async function pendenciasPagadorDoTutor(tutorId: string): Promise<{
+  pendencias: { campo: string; rotulo: string; motivo: string }[]
+  aviso: string | null
+} | { error: string }> {
+  const c = await ctx(); if ('error' in c) return { error: c.error }
+  if (!tutorId) return { pendencias: [], aviso: null }
+
+  const admin = createAdminClient()
+  const { data: t } = await admin.from('tutors')
+    .select('name, cpf, email, address, address_number, address_complement, neighborhood, city, state, cep')
+    .eq('id', tutorId).eq('clinic_id', c.clinicId).maybeSingle()
+  if (!t) return { error: 'Tutor não encontrado.' }
+
+  const { pagadorDeTutor, pendenciasDoPagador, avisoDoPagador } = await import('@/lib/financial/pagador-boleto')
+  const dados = pagadorDeTutor(t as Parameters<typeof pagadorDeTutor>[0])
+  return { pendencias: pendenciasDoPagador(dados), aviso: avisoDoPagador(dados) }
 }
