@@ -30,6 +30,12 @@ export interface FinancialEntry {
   tutor_id:             string | null
   patient_id:           string | null
   beneficiary:          string | null   // fornecedor/favorecido (contas a pagar)
+  /**
+   * Fornecedor do titulo a pagar. A coluna sempre existiu e o ENTRY_SELECT ja
+   * traz ('*'), mas o tipo nao expunha — e por isso a tela nao tinha como
+   * gravar o dono do titulo a pagar.
+   */
+  supplier_id:          string | null
   category:             string | null
   notes:                string | null
   created_by:           string | null
@@ -1825,6 +1831,7 @@ function mapEntry(raw: Record<string, unknown>): FinancialEntry {
     tutor_id:             (raw.tutor_id            as string | null) ?? null,
     patient_id:           (raw.patient_id          as string | null) ?? null,
     beneficiary:          (raw.beneficiary         as string | null) ?? null,
+    supplier_id:          (raw.supplier_id         as string | null) ?? null,
     category:             (raw.category            as string | null) ?? null,
     notes:                (raw.notes               as string | null) ?? null,
     created_by:           (raw.created_by          as string | null) ?? null,

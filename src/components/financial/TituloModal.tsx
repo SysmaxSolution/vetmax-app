@@ -2,6 +2,9 @@
 
 import { useState, useEffect, useTransition } from 'react'
 import { createPortal } from 'react-dom'
+import { searchSalesTutors } from '@/lib/actions/sales'
+import { searchSuppliers } from '@/lib/actions/suppliers'
+import { pendenciasPagadorDoTutor } from '@/lib/actions/boleto-cobranca'
 import { X, Loader2, Trash2, CheckCircle, AlertCircle, RotateCcw, Hash, ShieldCheck } from 'lucide-react'
 import {
   createEntry, updateEntry, deleteEntry, baixarTitulo, reverseFinancialEntry,
@@ -98,6 +101,50 @@ export default function TituloModal({
   const [professionalId,    setProfessionalId]     = useState(entry?.professional_id ?? currentUserId ?? '')
   const [notes,             setNotes]              = useState(entry?.notes ?? '')
 
+  // ─── Dono do título: Cliente (a receber) ou Fornecedor (a pagar) ──────────
+  // Obrigatório porque é ele que diz A QUEM o título pertence — e o banco
+  // exige os dados do pagador para registrar boleto. Antes este bloco só
+  // EXIBIA o tutor quando o título já tinha um; não havia como informar, e o
+  // payload de createEntry saía sem tutor_id nem supplier_id.
+  const [ownerId, setOwnerId]       = useState<string>(entry?.tutor_id ?? entry?.supplier_id ?? '')
+  const [ownerName, setOwnerName]   = useState<string>(entry?.tutor_name ?? entry?.beneficiary ?? '')
+  const [ownerBusca, setOwnerBusca] = useState('')
+  const [ownerOpcoes, setOwnerOpcoes] = useState<{ id: string; name: string; sub?: string }[]>([])
+  const [ownerAberto, setOwnerAberto] = useState(false)
+  // Aviso PREVENTIVO: informativo, não trava. Diz o que falta no cadastro para
+  // emitir boleto, antes de mandar ao banco.
+  const [avisoPagador, setAvisoPagador] = useState<string | null>(null)
+
+  const ehReceber = entryType === 'receivable'
+  const rotuloDono = ehReceber ? 'Cliente (Tutor)' : 'Fornecedor'
+
+  useEffect(() => {
+    const termo = ownerBusca.trim()
+    if (termo.length < 2) { setOwnerOpcoes([]); return }
+    let valido = true
+    const t = setTimeout(async () => {
+      if (ehReceber) {
+        const r = await searchSalesTutors(termo)
+        if (valido) setOwnerOpcoes((r ?? []).map(x => ({ id: x.id, name: x.name, sub: x.phone ?? undefined })))
+      } else {
+        const r = await searchSuppliers(termo)
+        if (valido && !('error' in r)) setOwnerOpcoes(r.map(x => ({ id: x.id, name: x.name, sub: x.document ?? undefined })))
+      }
+    }, 300)
+    return () => { valido = false; clearTimeout(t) }
+  }, [ownerBusca, ehReceber])
+
+  // Checa o cadastro do Tutor escolhido (só a receber: é ele que vira pagador).
+  useEffect(() => {
+    if (!ehReceber || !ownerId) { setAvisoPagador(null); return }
+    let valido = true
+    pendenciasPagadorDoTutor(ownerId).then(r => {
+      if (valido) setAvisoPagador('error' in r ? null : r.aviso)
+    })
+    return () => { valido = false }
+  }, [ownerId, ehReceber])
+
+
   // ── Contexto do entry (info contextual: invoice mestre, valores já recebidos) ──
   const [entryContext, setEntryContext] = useState<EntryContext | null>(null)
   useEffect(() => {
@@ -163,6 +210,9 @@ export default function TituloModal({
     if (amount <= 0)          { setError('Informe um valor válido.'); return }
     if (!dueDate)             { setError('Informe a data de vencimento.'); return }
     if (discount > amount)    { setError('Desconto não pode ser maior que o valor.'); return }
+    // Dono do título: é ele que diz A QUEM o título pertence, e sem ele não dá
+    // para emitir boleto (a receber) nem administrar o DDA (a pagar).
+    if (!ownerId)             { setError(`Informe o ${rotuloDono.toLowerCase()}.`); return }
 
     startTransition(async () => {
       const data = {
@@ -174,6 +224,7 @@ export default function TituloModal({
         issue_date:           issueDate || null,
         category:             category             || undefined,
         notes:                notes                || undefined,
+        ...(ehReceber ? { tutor_id: ownerId } : { supplier_id: ownerId, beneficiary: ownerName || undefined }),
         professional_id:      professionalId       || undefined,
         chart_of_accounts_id: chartAccountsId      || undefined,
       }
@@ -402,17 +453,60 @@ export default function TituloModal({
 
               {/* Pet/Tutor (display only se já vinculado) + Profissional */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {(entry?.tutor_name || entry?.patient_name) && (
-                  <div>
-                    <label className={lc}>Pet / Tutor</label>
-                    <input
-                      readOnly
-                      value={[entry.patient_name, entry.tutor_name].filter(Boolean).join(' · ')}
-                      className={`${fc} cursor-not-allowed bg-slate-100 text-slate-400`}
-                    />
-                  </div>
-                )}
-                <div className={(entry?.tutor_name || entry?.patient_name) ? '' : 'sm:col-span-2'}>
+                <div className="relative">
+                  <label className={lc}>{rotuloDono} <span className="text-rose-500">*</span></label>
+                  {ownerId ? (
+                    <div className="flex items-center gap-2">
+                      <input readOnly value={ownerName} className={`${fc} bg-slate-50`} />
+                      <button
+                        type="button"
+                        onClick={() => { setOwnerId(''); setOwnerName(''); setOwnerBusca(''); setAvisoPagador(null) }}
+                        className="shrink-0 rounded-lg border border-slate-200 px-2.5 py-2 text-xs text-slate-600 hover:bg-slate-50"
+                      >Trocar</button>
+                    </div>
+                  ) : (
+                    <>
+                      <input
+                        value={ownerBusca}
+                        onChange={e => { setOwnerBusca(e.target.value); setOwnerAberto(true) }}
+                        onFocus={() => setOwnerAberto(true)}
+                        placeholder={ehReceber ? 'Busque pelo nome do tutor…' : 'Busque pelo nome do fornecedor…'}
+                        className={fc}
+                      />
+                      {ownerAberto && ownerOpcoes.length > 0 && (
+                        <ul className="absolute z-20 mt-1 max-h-48 w-full overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+                          {ownerOpcoes.map(o => (
+                            <li key={o.id}>
+                              <button
+                                type="button"
+                                onClick={() => { setOwnerId(o.id); setOwnerName(o.name); setOwnerAberto(false); setOwnerOpcoes([]) }}
+                                className="block w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+                              >
+                                {o.name}
+                                {o.sub && <span className="ml-2 text-xs text-slate-400">{o.sub}</span>}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {ownerBusca.trim().length >= 2 && ownerOpcoes.length === 0 && (
+                        <p className="mt-1 text-xs text-slate-400">Nenhum resultado para “{ownerBusca.trim()}”.</p>
+                      )}
+                    </>
+                  )}
+                  {entry?.patient_name && (
+                    <p className="mt-1 text-xs text-slate-400">Pet: {entry.patient_name}</p>
+                  )}
+                  {/* Manutenção preventiva: informa ANTES de mandar ao banco, para
+                      a correção já estar em andamento. NÃO trava o salvamento. */}
+                  {avisoPagador && (
+                    <p className="mt-1.5 flex items-start gap-1.5 rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800">
+                      <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span>{avisoPagador}</span>
+                    </p>
+                  )}
+                </div>
+                <div>
                   <label className={lc}>Profissional Responsável</label>
                   <select value={professionalId} onChange={e => setProfessionalId(e.target.value)} className={fc}>
                     <option value="">— Nenhum —</option>
