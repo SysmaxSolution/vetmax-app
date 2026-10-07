@@ -9,6 +9,7 @@
 // pagamento ou de resultado de exame — o risco de perder um boleto confirmado
 // é maior que o de aceitar algumas chamadas a mais.
 
+import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export interface LimiteConfig {
@@ -61,17 +62,16 @@ export async function excedeuLimite(
   }
 }
 
-/** Resposta padrão de recusa, com o cabeçalho que os clientes esperam. */
-export function respostaLimiteExcedido(janelaSegundos = 60): Response {
-  return new Response(
-    JSON.stringify({ error: 'Muitas requisições. Tente novamente em instantes.' }),
-    {
-      status: 429,
-      headers: {
-        'Content-Type': 'application/json',
-        'Retry-After': String(janelaSegundos),
-      },
-    },
+/**
+ * Resposta padrão de recusa, com o cabeçalho que os clientes esperam.
+ *
+ * NextResponse e não Response: várias rotas declaram o retorno como
+ * `Promise<NextResponse>` e um Response cru não satisfaz esse tipo.
+ */
+export function respostaLimiteExcedido(janelaSegundos = 60): NextResponse {
+  return NextResponse.json(
+    { error: 'Muitas requisições. Tente novamente em instantes.' },
+    { status: 429, headers: { 'Retry-After': String(janelaSegundos) } },
   )
 }
 
@@ -85,7 +85,7 @@ export function respostaLimiteExcedido(janelaSegundos = 60): Response {
 export async function limitarPorIp(
   req: Request,
   cfg: LimiteConfig,
-): Promise<Response | null> {
+): Promise<NextResponse | null> {
   const excedeu = await excedeuLimite(ipDaRequisicao(req), cfg)
   return excedeu ? respostaLimiteExcedido(cfg.janelaSegundos ?? 60) : null
 }

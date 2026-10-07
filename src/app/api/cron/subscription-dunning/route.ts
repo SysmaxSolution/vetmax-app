@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { attemptSuspendSubscription, planDunningTransition } from '@/lib/billing/provision'
 
 import { mensagemErro } from '@/lib/errors'
+import { limitarPorIp } from '@/lib/api/rate-limit'
 // GET /api/cron/subscription-dunning  (Vercel Cron, diário)
 // R7 — máquina de estados da assinatura dirigida por tempo:
 //   • mensal: past_due há ≥7d → tenta suspender (grace se D3 segura);
@@ -15,6 +16,9 @@ import { mensagemErro } from '@/lib/errors'
 // Auth: header `authorization: Bearer ${CRON_SECRET}` (fail-closed).
 
 export async function GET(request: NextRequest) {
+  const barrado = await limitarPorIp(request, { escopo: 'cron:dunning', limite: 60 })
+  if (barrado) return barrado
+
   const secret = process.env.CRON_SECRET
   if (!secret || request.headers.get('authorization') !== `Bearer ${secret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

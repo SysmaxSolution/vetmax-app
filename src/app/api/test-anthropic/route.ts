@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server'
 
+import { limitarPorIp } from '@/lib/api/rate-limit'
 // Endpoint de diagnóstico — disponível SOMENTE em ambiente de desenvolvimento.
 // Em produção retorna 404 para não expor fragmento da ANTHROPIC_API_KEY.
-export async function GET() {
+export async function GET(req: Request) {
+  const barrado = await limitarPorIp(req, { escopo: 'ia:teste', limite: 5 })
+  if (barrado) return barrado
+
   if (process.env.NODE_ENV !== 'development') {
     return NextResponse.json({ error: 'Not Found' }, { status: 404 })
   }

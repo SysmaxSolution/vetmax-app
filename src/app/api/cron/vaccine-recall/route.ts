@@ -4,6 +4,7 @@ import { sendTutorPortalWhatsApp } from '@/lib/actions/tutor-portal'
 import { parseRecallConfig, shouldRunNow, recallWindow, localDateInTimeZone, cronModeFromEnv } from '@/lib/vaccines/recall-schedule'
 
 import { mensagemErro } from '@/lib/errors'
+import { limitarPorIp } from '@/lib/api/rate-limit'
 // GET /api/cron/vaccine-recall
 // Recall proativo de vacina: avisa o Tutor (WhatsApp + link do portal) quando a
 // próxima dose está próxima. Registrado em vercel.json de hora em hora
@@ -31,6 +32,9 @@ import { mensagemErro } from '@/lib/errors'
 const PER_CLINIC_LIMIT = 200
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  const barrado = await limitarPorIp(request, { escopo: 'cron:vacina', limite: 60 })
+  if (barrado) return barrado
+
   const auth = request.headers.get('authorization')
   const secret = process.env.CRON_SECRET ?? process.env.KEEPALIVE_SECRET
   if (!secret || auth !== `Bearer ${secret}`) {

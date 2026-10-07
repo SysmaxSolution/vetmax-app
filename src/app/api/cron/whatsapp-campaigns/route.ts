@@ -4,11 +4,15 @@ import { evolutionSendText } from '@/lib/evolution-api-client'
 import { generateCampaignMessage } from '@/lib/ai/campaign-agent'
 import { getAppUrl } from '@/lib/app-url'
 
+import { limitarPorIp } from '@/lib/api/rate-limit'
 // GET /api/cron/whatsapp-campaigns
 // Invocado pelo Vercel Cron diariamente às 09:00 UTC.
 // Dispara campanhas de reativação para cada clínica com módulo whatsapp_intelligent.
 
 export async function GET(request: NextRequest) {
+  const barrado = await limitarPorIp(request, { escopo: 'cron:campanhas', limite: 60 })
+  if (barrado) return barrado
+
   // ── Auth ───────────────────────────────────────────────────────────────────
   const secret = process.env.CRON_SECRET
   if (!secret || request.headers.get('authorization') !== `Bearer ${secret}`) {

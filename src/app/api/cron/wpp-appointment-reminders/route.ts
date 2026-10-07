@@ -3,11 +3,15 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { evolutionSendText } from '@/lib/evolution-api-client'
 
 import { mensagemErro } from '@/lib/errors'
+import { limitarPorIp } from '@/lib/api/rate-limit'
 // GET /api/cron/wpp-appointment-reminders
 // Cron de confirmação de consultas 24h antes via WhatsApp.
 // Disparar a cada hora — ex.: vercel.json { "path": "/api/cron/wpp-appointment-reminders", "schedule": "0 * * * *" }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  const barrado = await limitarPorIp(request, { escopo: 'cron:lembretes', limite: 60 })
+  if (barrado) return barrado
+
   const secret = process.env.KEEPALIVE_SECRET
   if (!secret || request.headers.get('authorization') !== `Bearer ${secret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

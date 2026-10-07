@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 import { mensagemErro } from '@/lib/errors'
+import { limitarPorIp } from '@/lib/api/rate-limit'
 const CRMV_REGEX = /^[A-Z]{2}[0-9]{4,10}$/
 
 /**
@@ -15,6 +16,9 @@ const CRMV_REGEX = /^[A-Z]{2}[0-9]{4,10}$/
  *   - crmv: string (ex: "SP12345") ou null para limpar
  */
 export async function POST(request: NextRequest) {
+  const barrado = await limitarPorIp(request, { escopo: 'app:crmv', limite: 30 })
+  if (barrado) return barrado
+
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()

@@ -4,10 +4,14 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { evolutionCreateInstance, evolutionGetConnectionState, evolutionSetWebhook } from '@/lib/evolution-api-client'
 
 import { mensagemErro } from '@/lib/errors'
+import { limitarPorIp } from '@/lib/api/rate-limit'
 // POST /api/whatsapp/instance
 // Cria (ou garante existência) de uma instância Evolution API para a clínica autenticada.
 // Salva o nome da instância em clinic_whatsapp_settings.evolution_instance_name.
-export async function POST() {
+export async function POST(req: Request) {
+  const barrado = await limitarPorIp(req, { escopo: 'wpp:instance', limite: 30 })
+  if (barrado) return barrado
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 })

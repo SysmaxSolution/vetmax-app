@@ -41,6 +41,8 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const barrado = await limitarPorIp(req, { escopo: 'lab:update', limite: 30 })
+  if (barrado) return barrado
   const auth = await authenticateAgent(req)
   if (!auth) return NextResponse.json({ error: 'Token inválido ou Laboratório não ativado para esta clínica.' }, { status: 401 })
 

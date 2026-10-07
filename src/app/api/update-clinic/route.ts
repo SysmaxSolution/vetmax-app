@@ -4,11 +4,15 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { logServerError } from '@/lib/error-logger'
 
 import { mensagemErro } from '@/lib/errors'
+import { limitarPorIp } from '@/lib/api/rate-limit'
 /**
  * POST /api/update-clinic
  * Atualiza dados da clínica (admin only)
  */
 export async function POST(request: NextRequest) {
+  const barrado = await limitarPorIp(request, { escopo: 'app:clinica', limite: 30 })
+  if (barrado) return barrado
+
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()

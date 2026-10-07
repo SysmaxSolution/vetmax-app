@@ -4,12 +4,16 @@ import { classifyError } from '@/lib/error-classifier'
 import { runAutoFixCycle } from '@/lib/fix-planner'
 
 import { mensagemErro } from '@/lib/errors'
+import { limitarPorIp } from '@/lib/api/rate-limit'
 // GET /api/cron/classify-errors
 // Invocado pelo Vercel Cron a cada hora.
 // 1. Classifica erros sem module (priority/module ausentes) via Claude Haiku.
 // 2. Após classificar, aciona runAutoFixCycle para P0 e clusters acima do threshold.
 
 export async function GET(request: NextRequest) {
+  const barrado = await limitarPorIp(request, { escopo: 'cron:classify', limite: 60 })
+  if (barrado) return barrado
+
   const secret = process.env.CRON_SECRET
   if (!secret || request.headers.get('authorization') !== `Bearer ${secret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

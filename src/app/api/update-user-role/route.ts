@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 import { mensagemErro } from '@/lib/errors'
+import { limitarPorIp } from '@/lib/api/rate-limit'
 const VALID_ROLES = ['admin', 'vet', 'assistant', 'receptionist', 'pharmacist'] as const
 type Role = typeof VALID_ROLES[number]
 
@@ -15,6 +16,9 @@ type Role = typeof VALID_ROLES[number]
  *   - target_user_id?: string  (omitir = atualiza o próprio perfil, apenas para auto-demoção)
  */
 export async function POST(request: NextRequest) {
+  const barrado = await limitarPorIp(request, { escopo: 'app:papel', limite: 30 })
+  if (barrado) return barrado
+
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()

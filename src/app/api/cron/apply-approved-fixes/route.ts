@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { processAllApprovedPlans, applyApprovedFixPlan } from '@/lib/fix-applier'
 
+import { limitarPorIp } from '@/lib/api/rate-limit'
 // Garante runtime Node.js (não Edge) — precisa de fs/child_process.
 export const runtime = 'nodejs'
 
@@ -29,6 +30,9 @@ async function authorize(request: NextRequest): Promise<boolean> {
 }
 
 export async function POST(request: NextRequest) {
+  const barrado = await limitarPorIp(request, { escopo: 'cron:fixes', limite: 60 })
+  if (barrado) return barrado
+
   if (!(await authorize(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
@@ -64,6 +68,8 @@ export async function POST(request: NextRequest) {
 
 // GET para o Vercel Cron (não aceita POST em alguns triggers)
 export async function GET(request: NextRequest) {
+  const barrado = await limitarPorIp(request, { escopo: 'cron:fixes', limite: 60 })
+  if (barrado) return barrado
   if (!(await authorize(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
