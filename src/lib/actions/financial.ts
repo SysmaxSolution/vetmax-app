@@ -31,9 +31,9 @@ export interface FinancialEntry {
   patient_id:           string | null
   beneficiary:          string | null   // fornecedor/favorecido (contas a pagar)
   /**
-   * Fornecedor do titulo a pagar. A coluna sempre existiu e o ENTRY_SELECT ja
-   * traz ('*'), mas o tipo nao expunha — e por isso a tela nao tinha como
-   * gravar o dono do titulo a pagar.
+   * Fornecedor do titulo a pagar. A coluna sempre existiu e o select ja traz
+   * (ENTRY_SELECT usa '*'), mas o tipo nao expunha — e por isso a tela nao
+   * tinha como informar o dono do titulo.
    */
   supplier_id:          string | null
   category:             string | null
@@ -268,9 +268,9 @@ export async function createEntry(
   // Antes daqui só se conferia description/amount/due_date. Passavam NaN,
   // valor com 3 casas (centavo fantasma no livro), data inexistente, uuid
   // malformado e desconto maior que o título.
-  const vCriar = valida(EsquemaCriarTitulo, data)
-  if ('error' in vCriar) return vCriar
-  data = vCriar.dados as CreateEntryData
+  const v = valida(EsquemaCriarTitulo, data)
+  if ('error' in v) return v
+  data = v.dados as CreateEntryData
 
   const admin = createAdminClient()
   const { data: entry, error } = await admin
@@ -482,11 +482,11 @@ export async function updateEntry(
   const clinicId = await getClinicId()
   if (!clinicId) return { error: 'Não autenticado.' }
 
-
   // Edição não revalidava nada: dava para trocar o valor de um título por NaN.
-  const vEdit = valida(EsquemaAtualizarTitulo, data)
-  if ('error' in vEdit) return vEdit
-  data = vEdit.dados as Partial<CreateEntryData>
+  const v = valida(EsquemaAtualizarTitulo, data)
+  if ('error' in v) return v
+  data = v.dados as Partial<CreateEntryData>
+
   const updates: Record<string, unknown> = {}
   if (data.description          !== undefined) updates.description          = data.description.trim()
   if (data.amount               !== undefined) updates.amount               = data.amount
@@ -638,12 +638,19 @@ export async function baixarTitulo(
   id: string,
   data: BaixarTituloData
 ): Promise<{ error?: string }> {
-  const vBaixa = valida(EsquemaBaixarTitulo, data)
-  if ('error' in vBaixa) return vBaixa
-  data = vBaixa.dados as BaixarTituloData
+  const v = valida(EsquemaBaixarTitulo, data)
+  if ('error' in v) return v
+  data = v.dados as BaixarTituloData
 
   const clinicId = await getClinicId()
   if (!clinicId) return { error: 'Não autenticado.' }
+
+  // Rastreabilidade da baixa (pedido da Bruna, treinamento 18/09/2026): quem
+  // clicou em "baixar" fica gravado no próprio título. Antes da migration 0480
+  // este caminho não deixava ator nenhum — `created_by` é o criador do título,
+  // não quem recebeu. Ver src/lib/reports/client-statement-logic.ts.
+  const actor    = await getAuthUser()
+  const settledAt = new Date().toISOString()
 
   const admin = createAdminClient()
 
@@ -712,6 +719,11 @@ export async function baixarTitulo(
         settlement_bank_id: data.settlement_bank_id || null,
         notes:              `Baixa parcial de ${id}`,
         created_by:         cur.created_by as string | null,
+        // `created_by` segue sendo o criador do título (herdado do pai); quem
+        // recebeu de fato é o `settled_by` — os dois podem ser pessoas
+        // diferentes e o extrato do cliente mostra o segundo.
+        settled_by:         actor?.id ?? null,
+        settled_at:         settledAt,
       })
 
     // Lança crédito no extrato pelo valor parcial
@@ -740,6 +752,8 @@ export async function baixarTitulo(
     settlement_bank_id: data.settlement_bank_id || null,
     interest:           baseInterest,
     discount:           baseDiscount,
+    settled_by:         actor?.id ?? null,
+    settled_at:         settledAt,
   }
 
   const { error } = await admin

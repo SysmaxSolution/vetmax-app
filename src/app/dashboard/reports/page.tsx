@@ -32,6 +32,7 @@ export default async function ReportsPage() {
         dre_company:     true,
         boleto_movement: true,
         exam_rejections: true,
+        client_statement: true,
       }
     : enabledResult
 

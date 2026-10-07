@@ -1172,7 +1172,7 @@ export async function createNfseDocumentsForConsultation(
       const { data: n2, error: e2 } = await supabase.rpc('rpc_next_billing_number', {
         p_clinic_id: clinic_id, p_doc_type: 'nfse',
       })
-      if (e2 || !n2) return { error: 'Erro ao gerar número da NFS-e: ' + ((e2 ? mensagemErro(e2, 'lib/actions/billing-documents.ts') : '')) }
+      if (e2 || !n2) return { error: 'Erro ao gerar número da NFS-e: ' + (e2 ? mensagemErro(e2, 'lib/actions/billing-documents.ts') : '') }
       docNumber = n2 as string
     }
 

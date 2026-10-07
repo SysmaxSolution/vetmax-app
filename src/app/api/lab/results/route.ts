@@ -4,10 +4,9 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { parseHL7ORU, stripEncapsulatedData } from '@/lib/lab/hl7-parser'
 import { persistExamGraphs } from '@/lib/lab/persist-graphs'
 import { resolveAnalyte, normKey, type AnalyteMapping } from '@/lib/lab/analyte-resolve'
-import { readLabRequest } from '@/lib/lab/request-body'
+import { limitarPorIp } from '@/lib/api/rate-limit'
 
 import { mensagemErro } from '@/lib/errors'
-import { limitarPorIp } from '@/lib/api/rate-limit'
 // Recebimento de resultados: o agente repassa o ORU do aparelho. Casa a amostra
 // pelo barcode e grava os analitos em exam_results (rascunho, source='hl7').
 // Idempotente por (consultation, source hl7): reimportar substitui o rascunho hl7.
@@ -17,12 +16,8 @@ export async function POST(req: Request) {
 
   const auth = await authenticateAgent(req)
   if (!auth) return NextResponse.json({ error: 'Token inválido ou Laboratório não ativado para esta clínica.' }, { status: 401 })
-  // Aceita o corpo COMPRIMIDO (Content-Encoding: gzip) e, sem o cabeçalho,
-  // JSON puro — é assim que o agente já instalado na clínica continua
-  // funcionando sem ser atualizado.
-  const read = await readLabRequest<{ hl7?: unknown; barcode?: unknown }>(req)
-  if ('error' in read) return NextResponse.json({ error: read.error }, { status: 400 })
-  const body = read.body
+  let body: any
+  try { body = await req.json() } catch { return NextResponse.json({ error: 'JSON inválido.' }, { status: 400 }) }
 
   const hl7 = String(body?.hl7 ?? '')
   const barcode = String(body?.barcode ?? '').trim()

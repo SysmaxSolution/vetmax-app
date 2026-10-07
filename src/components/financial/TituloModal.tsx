@@ -2,15 +2,17 @@
 
 import { useState, useEffect, useTransition } from 'react'
 import { createPortal } from 'react-dom'
-import { searchSalesTutors } from '@/lib/actions/sales'
-import { searchSuppliers } from '@/lib/actions/suppliers'
-import { pendenciasPagadorDoTutor } from '@/lib/actions/boleto-cobranca'
 import { X, Loader2, Trash2, CheckCircle, AlertCircle, RotateCcw, Hash, ShieldCheck } from 'lucide-react'
 import {
   createEntry, updateEntry, deleteEntry, baixarTitulo, reverseFinancialEntry,
   getEntryContext,
   type FinancialEntry, type EntryType, type BaixarTituloData, type EntryContext,
 } from '@/lib/actions/financial'
+import { getEntrySettler } from '@/lib/actions/client-statement'
+import { searchSalesTutors } from '@/lib/actions/sales'
+import { buscarConsumidorFinal } from '@/lib/actions/tutors'
+import { searchSuppliers } from '@/lib/actions/suppliers'
+import { pendenciasPagadorDoTutor } from '@/lib/actions/boleto-cobranca'
 
 // ─── Static lists ─────────────────────────────────────────────────────────────
 
@@ -100,7 +102,6 @@ export default function TituloModal({
   const [chartAccountsId,   setChartAccountsId]   = useState(entry?.chart_of_accounts_id ?? '')
   const [professionalId,    setProfessionalId]     = useState(entry?.professional_id ?? currentUserId ?? '')
   const [notes,             setNotes]              = useState(entry?.notes ?? '')
-
   // ─── Dono do título: Cliente (a receber) ou Fornecedor (a pagar) ──────────
   // Obrigatório porque é ele que diz A QUEM o título pertence — e o banco
   // exige os dados do pagador para registrar boleto. Antes este bloco só
@@ -156,6 +157,19 @@ export default function TituloModal({
     })
     return () => { cancelled = true }
   }, [entry?.id, innerMode])
+
+  // ── Quem deu baixa (pedido da Bruna, treinamento 18/09/2026) ───────────────
+  // `undefined` = ainda carregando · `null` = título sem baixa / sem ator.
+  const [settler, setSettler] = useState<{ label: string; source: string } | null | undefined>(undefined)
+  useEffect(() => {
+    if (!entry?.id || entry.status !== 'paid' || innerMode !== 'edit') { setSettler(null); return }
+    let cancelled = false
+    getEntrySettler(entry.id).then(res => {
+      if (cancelled) return
+      setSettler(res && 'error' in res ? null : res)
+    }).catch(() => { if (!cancelled) setSettler(null) })
+    return () => { cancelled = true }
+  }, [entry?.id, entry?.status, innerMode])
 
   // ── Campos da baixa ────────────────────────────────────────────────────────
   const [paymentDate,       setPaymentDate]        = useState(entry?.payment_date ?? todayStr())
@@ -428,6 +442,20 @@ export default function TituloModal({
                       />
                     </div>
                   )}
+                  {/* Rastreabilidade da baixa (pedido da Bruna, 18/09/2026):
+                      qual operador deu baixa, sem sair da tela. */}
+                  {entry.status === 'paid' && (
+                    <div className="col-span-2">
+                      <label className={lc}>Baixa feita por</label>
+                      <input
+                        readOnly
+                        value={settler === undefined ? 'Carregando…' : (settler?.label ?? 'Não registrado')}
+                        className={`${fc} cursor-not-allowed bg-slate-100 ${
+                          settler && settler.source !== 'unknown' ? 'text-slate-600' : 'text-slate-400'
+                        }`}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -491,6 +519,20 @@ export default function TituloModal({
                       )}
                       {ownerBusca.trim().length >= 2 && ownerOpcoes.length === 0 && (
                         <p className="mt-1 text-xs text-slate-400">Nenhum resultado para “{ownerBusca.trim()}”.</p>
+                      )}
+                      {/* Venda no caixa para consumidor avulso: 360 dos 453
+                          títulos de produção são assim. Sem este atalho, a
+                          obrigatoriedade do dono travaria o PDV. */}
+                      {ehReceber && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const cf = await buscarConsumidorFinal()
+                            if (cf) { setOwnerId(cf.id); setOwnerName(cf.name); setOwnerAberto(false); setOwnerOpcoes([]) }
+                            else setError('Consumidor final não encontrado para esta clínica.')
+                          }}
+                          className="mt-1.5 text-xs font-medium text-teal-600 hover:text-teal-700 hover:underline"
+                        >Usar CONSUMIDOR FINAL (venda avulsa)</button>
                       )}
                     </>
                   )}

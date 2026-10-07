@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
     if (error) {
       await logServerError({
         path:     '/api/update-clinic',
-        error:    mensagemErro(error, 'app/api/update-clinic/route.ts'),
+        error: mensagemErro(error, 'app/api/update-clinic/route.ts'),
         source:   'api',
         module:   'management',
         clinicId: profile.clinic_id,

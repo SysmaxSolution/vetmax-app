@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getAsaasWebhookToken } from '@/lib/billing/asaas'
 import { activatePaidSubscription, attemptSuspendSubscription } from '@/lib/billing/provision'
+import { limitarPorIp } from '@/lib/api/rate-limit'
 
 import { limitarPorIp } from '@/lib/api/rate-limit'
 // POST /api/webhooks/asaas

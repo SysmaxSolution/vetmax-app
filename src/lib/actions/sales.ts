@@ -168,9 +168,9 @@ export async function createSale(
 
   // Antes só se checava "tem item". Quantidade negativa, preço com 3 casas e
   // desconto maior que o bruto chegavam à RPC e viravam venda torta no caixa.
-  const vVenda = valida(EsquemaCriarVenda, params)
-  if ('error' in vVenda) return vVenda
-  params = vVenda.dados as CreateSaleParams
+  const v = valida(EsquemaCriarVenda, params)
+  if ('error' in v) return v
+  params = v.dados as CreateSaleParams
 
   const { data, error } = await supabase.rpc('rpc_create_sale', {
     p_clinic_id:       params.clinic_id,

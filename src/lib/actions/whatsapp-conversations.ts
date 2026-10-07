@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { evolutionSendText, evolutionSendMedia } from '@/lib/evolution-api-client'
+import { mensagemErro } from '@/lib/errors'
 
 import { mensagemErro } from '@/lib/errors'
 // ─── Types ────────────────────────────────────────────────────────────────────

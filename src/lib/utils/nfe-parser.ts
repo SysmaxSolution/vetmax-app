@@ -130,6 +130,6 @@ export function parseNFeXML(xmlContent: string): ParsedNFe | { error: string } {
       duplicatas,
     }
   } catch (e: any) {
-    return { error: `Erro ao processar XML: ${(e ? mensagemErro(e, 'lib/utils/nfe-parser.ts') : 'desconhecido')}` }
+    return { error: `Erro ao processar XML: ${mensagemErro(e, 'lib/utils/nfe-parser.ts')}` }
   }
 }

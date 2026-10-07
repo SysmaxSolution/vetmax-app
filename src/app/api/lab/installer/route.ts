@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { AGENT_BUNDLE } from '@/lib/lab/agent-bundle'
 import { clinicFlowFlag } from '@/lib/clinic/flow-gate'
+import { limitarPorIp } from '@/lib/api/rate-limit'
 
 import { limitarPorIp } from '@/lib/api/rate-limit'
 // Gera e devolve o instalador .zip do agente já com o config.json do token.

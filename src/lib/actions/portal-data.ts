@@ -12,6 +12,8 @@ import { resolveBookingConfig, portalBookingAllowed } from '@/lib/scheduling/boo
 import { filterPublishedExams } from '@/lib/portal/exam-publish'
 import { buildTrends } from '@/lib/portal/trend'
 import { EXAM_PROCESSING_STATUSES, examStatusLabel, imagingStatusLabel } from '@/lib/portal/processing'
+import { linksForClinic } from '@/lib/portal/clinic-context'
+import { loadPortalBrand } from '@/lib/portal/brand-server'
 
 async function getOrigin(): Promise<string> {
   const h = await headers()
@@ -21,33 +23,42 @@ async function getOrigin(): Promise<string> {
   return process.env.NEXT_PUBLIC_SITE_URL ?? 'https://sysvetmax-dev.vercel.app'
 }
 
-// Marca (white-label) para o cabeçalho do portal: se o tutor pertence a UMA
-// clínica, retorna nome + logo dela; se a várias, retorna genérico (null logo).
-export async function getPortalBranding(): Promise<{ clinicName: string | null; clinicLogo: string | null }> {
+// Marca (white-label) para o cabeçalho do portal.
+//
+// A limitação antiga ("só quando o tutor tem exatamente UMA clínica") caiu: com
+// o contexto de clínica na URL (`/portal/c/<slug>`) a marca é SEMPRE resolvível.
+// `clinicId` é validado contra os vínculos — passar a clínica de outra pessoa
+// não revela nome nem logo.
+export async function getPortalBranding(
+  clinicId?: string,
+): Promise<{ clinicName: string | null; clinicLogo: string | null }> {
   const ctx = await getTutorContext()
   if (!ctx) return { clinicName: null, clinicLogo: null }
   const clinicIds = allowedClinicIds(ctx.links)
-  if (clinicIds.length !== 1) return { clinicName: null, clinicLogo: null }
-  const admin = createAdminClient()
-  const [{ data: clinic }, { data: settings }] = await Promise.all([
-    admin.from('clinics').select('name, logo_url').eq('id', clinicIds[0]).maybeSingle(),
-    admin.from('clinic_settings').select('logo_url').eq('clinic_id', clinicIds[0]).maybeSingle(),
-  ])
-  return {
-    clinicName: (clinic as any)?.name ?? null,
-    clinicLogo: (clinic as any)?.logo_url ?? (settings as any)?.logo_url ?? null,
-  }
+  const target = clinicId ?? (clinicIds.length === 1 ? clinicIds[0] : null)
+  if (!target || !clinicIds.includes(target)) return { clinicName: null, clinicLogo: null }
+  const brand = await loadPortalBrand(target)
+  return { clinicName: brand.clinicName, clinicLogo: brand.clinicLogo }
 }
 
-// Lista os pets do tutor logado, em TODAS as clínicas onde ele é tutor.
-// Isolamento em código: consulta restrita aos (tutor_id ∈ allowed) ∩ (clinic_id ∈ allowed)
-// e depois re-filtrada por canAccessPatient (par exato tutor_id+clinic_id) — defesa em profundidade.
-export async function getPortalPets(): Promise<PortalPet[] | { error: string }> {
+// Lista os pets do tutor logado.
+//
+// Sem `clinicId`, em TODAS as clínicas onde ele é tutor (comportamento antigo,
+// mantido para os links já enviados). Com `clinicId`, SÓ naquela clínica — é o
+// que o contexto de URL usa.
+//
+// Isolamento em código: a consulta é restrita aos (tutor_id ∈ allowed) ∩
+// (clinic_id ∈ allowed) e depois re-filtrada por canAccessPatient (par exato
+// tutor_id+clinic_id) — defesa em profundidade. O `clinicId` do contexto é
+// interseccionado com os vínculos ANTES da consulta: ele só consegue reduzir a
+// lista, nunca ampliá-la.
+export async function getPortalPets(clinicId?: string): Promise<PortalPet[] | { error: string }> {
   const ctx = await getTutorContext()
   if (!ctx) return { error: 'auth' }
 
-  const tutorIds = allowedTutorIds(ctx.links)
-  const clinicIds = allowedClinicIds(ctx.links)
+  const scoped = clinicId ? linksForClinic(ctx.links, clinicId) : ctx.links
+  const tutorIds = allowedTutorIds(scoped)
+  const clinicIds = allowedClinicIds(scoped)
   if (tutorIds.length === 0) return []
 
   const admin = createAdminClient()
@@ -62,7 +73,7 @@ export async function getPortalPets(): Promise<PortalPet[] | { error: string }> 
   if (error) return { error: 'Erro ao carregar pets.' }
 
   return (data ?? [])
-    .filter((p: any) => canAccessPatient(p.tutor_id, p.clinic_id, ctx.links))
+    .filter((p: any) => canAccessPatient(p.tutor_id, p.clinic_id, scoped))
     .map((p: any) => ({
       id: p.id,
       name: p.name,
@@ -81,7 +92,7 @@ export async function getPortalPetDetail(petId: string): Promise<PortalPetDetail
 
   const { data: pet } = await admin
     .from('patients')
-    .select('id, name, species, breed, photo_url, tutor_id, clinic_id, clinics!clinic_id ( name, phone, flow_config )')
+    .select('id, name, species, breed, photo_url, tutor_id, clinic_id, clinics!clinic_id ( name, phone, flow_config, portal_slug )')
     .eq('id', petId).is('deleted_at', null).maybeSingle()
   if (!pet) return { error: 'not_found' }
   if (!canAccessPatient((pet as any).tutor_id, (pet as any).clinic_id, ctx.links)) return { error: 'forbidden' }
@@ -218,6 +229,8 @@ export async function getPortalPetDetail(petId: string): Promise<PortalPetDetail
     id: (pet as any).id, name: (pet as any).name, species: (pet as any).species ?? null,
     breed: (pet as any).breed ?? null, photoUrl: (pet as any).photo_url ?? null,
     clinicName: clinic?.name ?? 'Clínica', clinicPhone: clinic?.phone ?? null,
+    clinicId: (pet as any).clinic_id as string,
+    clinicSlug: (clinic?.portal_slug ?? null) as string | null,
     canBook,
     vaccines, exams, imaging, documents, prescriptions,
     trends, timeline: timeline.slice(0, 40), processing,

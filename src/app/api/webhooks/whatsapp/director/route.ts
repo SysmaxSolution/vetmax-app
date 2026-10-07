@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { handleDirectorCommand } from '@/lib/director-commands'
-
 import { limitarPorIp } from '@/lib/api/rate-limit'
+
 // POST /api/webhooks/whatsapp/director
 // Recebe mensagens da Evolution API para o número do Diretor (P0_ALERT_PHONE).
 // Interpreta "SIM [id]" / "NAO [id]" para aprovar/rejeitar fix_plans.
@@ -11,6 +11,17 @@ import { limitarPorIp } from '@/lib/api/rate-limit'
 export async function POST(request: NextRequest) {
   const barrado = await limitarPorIp(request, { escopo: 'wh:director', limite: 60 })
   if (barrado) return barrado
+
+  // Autenticação do CHAMADOR. Sem isto, a única barreira era o telefone do
+  // remetente — e ele vem DENTRO do corpo, controlado por quem envia. Quem
+  // soubesse o número do Diretor (não é segredo) montava um POST se passando
+  // por ele e aprovava um fix_plan, que o cron apply-approved-fixes aplica no
+  // código com git. Mesmo esquema do webhook da clínica: header apikey.
+  const incomingKey = request.headers.get('apikey')
+  const expectedKey = process.env.EVOLUTION_API_KEY
+  if (expectedKey && incomingKey !== expectedKey) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
 
   let body: Record<string, unknown>
   try { body = await request.json() }

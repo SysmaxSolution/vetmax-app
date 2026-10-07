@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { VETMAX_KNOWLEDGE_BASE } from '@/lib/mentor/knowledge-base'
 import { getRouteContext, serializeRouteContext } from '@/lib/mentor/context-map'
+import { limitarPorIp } from '@/lib/api/rate-limit'
 
 import { limitarPorIp } from '@/lib/api/rate-limit'
 /**

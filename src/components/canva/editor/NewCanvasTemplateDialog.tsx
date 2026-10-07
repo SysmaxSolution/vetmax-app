@@ -47,6 +47,8 @@ export default function NewCanvasTemplateDialog({ onClose, onCreated }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [submitting, startSubmit] = useTransition()
   const [pickerOpen, setPickerOpen] = useState(false)
+  // Herdar identidade documental da clínica (cabeçalho/rodapé/página padrão)
+  const [applyIdentity, setApplyIdentity] = useState(true)
 
   function submit() {
     setError(null)
@@ -57,8 +59,8 @@ export default function NewCanvasTemplateDialog({ onClose, onCreated }: Props) {
     }
     startSubmit(async () => {
       try {
-        const { id } = await createBlankCanvasTemplate({ name: n, type })
-        onCreated(id, n, type)
+        const { id, canvas_state } = await createBlankCanvasTemplate({ name: n, type, apply_identity: applyIdentity })
+        onCreated(id, n, type, canvas_state.elements.length > 0 ? canvas_state : null)
       } catch (e: any) {
         setError(e?.message ?? 'falha ao criar modelo')
       }
@@ -145,8 +147,24 @@ export default function NewCanvasTemplateDialog({ onClose, onCreated }: Props) {
             </div>
           )}
 
+          <label className="flex items-start gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 cursor-pointer hover:border-violet-300">
+            <input
+              type="checkbox"
+              checked={applyIdentity}
+              onChange={e => setApplyIdentity(e.target.checked)}
+              className="mt-0.5 accent-violet-600"
+            />
+            <span>
+              <strong>Aplicar identidade da clínica</strong>
+              <span className="block text-[11px] text-slate-500">
+                Cabeçalho, rodapé (Pág. X de Y + QR de validação), assinatura e página padrão configurados em
+                Gestão &gt; Modelos &gt; Identidade documental.
+              </span>
+            </span>
+          </label>
+
           <div className="rounded-lg bg-violet-50 border border-violet-200 px-3 py-2 text-[11px] text-violet-800 leading-relaxed">
-            <strong>Como funciona:</strong> o modelo começa como uma folha A4 vazia. Você arrasta
+            <strong>Como funciona:</strong> o modelo começa com a página padrão da clínica (ou A4 vazia). Você arrasta
             elementos (texto, imagem, linhas, tags do banco e listas repetíveis) no editor visual.
             Pode subir o papel timbrado da clínica como fundo a qualquer momento.
           </div>

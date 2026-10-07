@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
+import { limitarPorIp } from '@/lib/api/rate-limit'
 
 import { limitarPorIp } from '@/lib/api/rate-limit'
 /**

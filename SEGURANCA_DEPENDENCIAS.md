@@ -52,6 +52,35 @@ Onde usamos: `src/lib/actions/docx-convert.ts`, `src/lib/pdf/docx-to-pdf.ts`,
 `src/app/api/process-template-with-file/route.ts`,
 `src/components/management/ImportTemplateModal.tsx`.
 
+### `node-forge` (1 alta, produção) — só no ramo de integração
+
+Aviso: *RSA PKCS#1 v1.5 signature verification accepts extra nested
+DigestAlgorithm elements* (GHSA-86w9-cpqp-85rv). Faixa vulnerável `*`,
+`fixAvailable: false` — **não existe versão corrigida**.
+
+**Não é alcançável.** Usamos `node-forge` em um único arquivo,
+`src/lib/integrations/bank-certificate.ts`, para ler o `.pfx` do e-CNPJ A1 que
+as certificadoras brasileiras entregam em RC2-40 e reexportá-lo em AES-256
+(o Node recusa o RC2-40 com `ERR_CRYPTO_UNSUPPORTED_OPERATION`).
+
+As únicas APIs chamadas são:
+
+```
+forge.asn1.fromDer / toDer
+forge.pkcs12.Bag / pkcs12FromAsn1 / toPkcs12Asn1
+forge.pki.Certificate / pki.oids.{certBag,keyBag,pkcs8ShroudedKeyBag}
+forge.util.createBuffer
+```
+
+Nenhuma verificação de assinatura (`publicKey.verify`, `pki.rsa.verify`) é
+chamada em lugar nenhum. O selo de integridade do PKCS#12 é HMAC, código
+diferente do da assinatura RSA citada no aviso. E o `.pfx` chega da própria
+clínica, não de fonte não confiável.
+
+Se algum dia usarmos `node-forge` para verificar assinatura — na assinatura
+digital ICP-Brasil do laudo, por exemplo — **esta exceção cai** e o caminho
+tem de ser outro (`node:crypto` ou biblioteca específica de ICP-Brasil).
+
 ### `braces` / `micromatch` / `fast-glob` (5 altas, só dev)
 
 Também faixa `*` ou `>=0.2.0` — **sem versão corrigida publicada**. Nenhum

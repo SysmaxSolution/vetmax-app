@@ -70,7 +70,6 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   const barrado = await limitarPorIp(request, { escopo: 'cron:fixes', limite: 60 })
   if (barrado) return barrado
-
   if (!(await authorize(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }

@@ -98,6 +98,10 @@ export interface PortalPetDetail {
   photoUrl: string | null
   clinicName: string
   clinicPhone: string | null
+  /** Clínica DONA do pet — é o contexto de white-label desta tela. */
+  clinicId: string
+  /** Slug da clínica (`/portal/c/<slug>`); null se a clínica ainda não tem. */
+  clinicSlug: string | null
   canBook: boolean
   vaccines: PortalVaccine[]
   exams: PortalExamResult[]

@@ -32,13 +32,21 @@ export interface HL7Result {
   device:    string | null
   /** OBR-7 (Observation Date/Time) em ISO, quando parseável. */
   observed_at: string | null
+  /** OBR-15 (Specimen Source) — o BK-200 manda "soro". Vira o "Material" do laudo. */
+  specimen: string | null
   analytes:  HL7Analyte[]
   graphs:    HL7Graph[]
 }
 
+/**
+ * Faixa de referencia do OBX-7. Dois separadores no mundo real:
+ * o URIT BH-5100 escreve `6.0-17.0`; o BIOBASE BK-200 (Serium 200) escreve
+ * `0.5~1.5`. Sem o til, toda faixa da bioquimica virava texto solto e o laudo
+ * saia sem valor de referencia.
+ */
 function parseRange(ref: string | undefined): { low: number | null; high: number | null } {
   if (!ref) return { low: null, high: null }
-  const m = ref.match(/^\s*(-?\d+(?:[.,]\d+)?)\s*-\s*(-?\d+(?:[.,]\d+)?)\s*$/)
+  const m = ref.match(/^\s*(-?\d+(?:[.,]\d+)?)\s*[-~]\s*(-?\d+(?:[.,]\d+)?)\s*$/)
   if (!m) return { low: null, high: null }
   return { low: parseFloat(m[1].replace(',', '.')), high: parseFloat(m[2].replace(',', '.')) }
 }
@@ -154,6 +162,7 @@ export function parseHL7ORU(message: string): HL7Result | { error: string } {
   let sample_id: string | null = null
   let device: string | null = null
   let observed_at: string | null = null
+  let specimen: string | null = null
   const analytes: HL7Analyte[] = []
   const graphs: HL7Graph[] = []
 
@@ -171,11 +180,19 @@ export function parseHL7ORU(message: string): HL7Result | { error: string } {
       sample_id = sample_id || ((f[3] ?? '').split('^')[0] || '').trim() || null
       device = ((svc[1] || svc[0] || '').trim() || null) ?? device
       observed_at = observed_at || parseHL7Timestamp(f[7])
+      specimen = specimen || ((f[15] ?? '').split('^')[0] || '').trim() || null
     } else if (type === 'OBX') {
       const valueType = (f[2] ?? '').trim().toUpperCase()
       const obsId = (f[3] ?? '').split('^')
-      const code = obsId[0] || null
-      const name = obsId[1] || obsId[0] || 'Analito'
+      // Dois layouts de fabricante:
+      //  • URIT BH-5100  → OBX-3 = `WBC` (codigo legivel), OBX-4 vazio;
+      //  • BIOBASE BK-200 → OBX-3 = `344` (id interno) e OBX-4 = `CREAT`.
+      // Sem tratar o segundo, o analito entrava no banco como codigo "344",
+      // nao batia com de-para nenhum e a bioquimica saia sem rotulo.
+      const subId = (f[4] ?? '').trim()
+      const usaSubId = /^\d+$/.test(obsId[0] ?? '') && subId !== '' && !/^\d+$/.test(subId)
+      const code = (usaSubId ? subId : obsId[0]) || null
+      const name = (usaSubId ? subId : (obsId[1] || obsId[0])) || 'Analito'
 
       // ED = Encapsulated Data (histograma/scattergram). OBX-5:
       // "sourceApp^typeOfData^dataSubtype^encoding^data" (o formato exato varia
@@ -196,5 +213,5 @@ export function parseHL7ORU(message: string): HL7Result | { error: string } {
     }
   }
 
-  return { panel, sample_id, device, observed_at, analytes, graphs }
+  return { panel, sample_id, device, observed_at, specimen, analytes, graphs }
 }

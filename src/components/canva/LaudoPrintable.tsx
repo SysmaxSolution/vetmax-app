@@ -18,60 +18,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Download, Loader2, Printer } from 'lucide-react'
 import type { CanvaContentJson, CanvaTemplateConfig } from '@/lib/canva/types'
 import type { CanvasState, PageConfig } from '@/lib/canva/canvas-state'
-import { getAllPages } from '@/lib/canva/canvas-state'
-import type { CanvasElement, RepeaterElement } from '@/lib/canva/elements'
+import { pageDimensionsCm, pageDimensionsMm, pageDimensionsPx } from '@/lib/canva/canvas-state'
 import CanvaA4Preview from './CanvaA4Preview'
 import CanvasStage from './editor/CanvasStage'
-import { readRepeaterItems } from './editor/ElementRenderers'
 import type { ResolveContext } from '@/lib/canva/dynamic-tags'
-
-/** Página real ou virtual (gerada por overflow do repeater). */
-interface ExpandedPage {
-  page: PageConfig
-  elements: CanvasElement[]
-  /** Map de repeater id → slice de itens. Quando vazio/undefined, o
-   *  repeater renderiza tudo (comportamento legado). Quando setado,
-   *  cada repeater pega só o intervalo correspondente. */
-  repeaterSlices?: Record<string, { start: number; end: number }>
-  /** Etiqueta opcional pra debug ("1", "1 (cont.)", etc.). */
-  label?: string
-}
-
-/** Expande páginas reais em páginas virtuais quando algum Repeater tem
- *  maxItemsPerPage e mais itens reais que isso. Cada página virtual herda
- *  os MESMOS elementos da página real — assim cabeçalhos, assinaturas e
- *  rodapés aparecem em todas, e o repeater muda apenas seu slice. */
-function expandPagesForRepeaterOverflow(
-  pages: ReturnType<typeof getAllPages>,
-  resolveContext: ResolveContext | undefined,
-): ExpandedPage[] {
-  const out: ExpandedPage[] = []
-  for (const p of pages) {
-    const repeaters = p.elements.filter((el): el is RepeaterElement => el.kind === 'repeater')
-    // Pega o primeiro repeater paginável da página (suporte a múltiplos
-    // repeaters paginados na MESMA página é raro — fica como evolução futura)
-    const paged = repeaters.find(r => r.maxItemsPerPage && r.maxItemsPerPage > 0)
-    if (!paged) {
-      out.push({ page: p.page, elements: p.elements })
-      continue
-    }
-    const items = readRepeaterItems(paged, resolveContext)
-    const effectiveTotal = Math.min(items.length, paged.maxLines ?? items.length)
-    const max = paged.maxItemsPerPage!
-    const slices = Math.max(1, Math.ceil(effectiveTotal / max))
-    for (let s = 0; s < slices; s++) {
-      out.push({
-        page: p.page,
-        elements: p.elements,
-        repeaterSlices: {
-          [paged.id]: { start: s * max, end: Math.min(effectiveTotal, (s + 1) * max) },
-        },
-        label: slices > 1 ? `${p.index + 1}${s > 0 ? ` (cont. ${s + 1}/${slices})` : ''}` : undefined,
-      })
-    }
-  }
-  return out
-}
+import type { ClinicFontFace } from '@/lib/canva/fonts'
+import CanvaFontsScope from './CanvaFontsScope'
+// Paginação (páginas reais → virtuais por overflow do repeater → elementos
+// pinados em todas → numeração) vive em src/lib/canva/pagination.ts (puro).
+import { expandPages, withDocPageContext, type ExpandedPage } from '@/lib/canva/pagination'
 
 interface PatientHeader {
   patient_name?: string
@@ -97,15 +52,26 @@ interface Props {
   canvasState?: CanvasState | null
   /** Contexto para resolver dynamic tags (tutor, pet, consulta, etc.). */
   resolveContext?: ResolveContext
+  /** Fontes da clínica (signed URLs) — injetadas como @font-face. Quando
+   *  omitido, o CanvaFontsScope busca no cliente. */
+  clinicFonts?: ClinicFontFace[]
 }
 
-// A4 portrait em pixels a 96dpi — base do render no DOM e do html2canvas.
-// 21cm × 96 / 2.54 = 793.7 → 794. 29.7cm × 96 / 2.54 = 1122.5 → 1123.
-const A4_W_PX = 794
-const A4_H_PX = 1123
+// Página padrão do motor legado (CanvaA4Preview) — sempre A4 retrato.
+const LEGACY_A4: PageConfig = {
+  size: 'A4', orientation: 'portrait', margins: { top: 2, bottom: 2, left: 2, right: 2 },
+}
+
+/** Gera a regra @page do documento a partir da página 1. Injetada como
+ *  <style> dentro do shell — vem depois do canva-print.css na cascata e
+ *  por isso sobrescreve o `size: A4 portrait` global. */
+export function buildPageCssRule(page: PageConfig): string {
+  const { w, h } = pageDimensionsMm(page)
+  return `@page { size: ${w}mm ${h}mm; margin: 0; }`
+}
 
 export default function LaudoPrintable({
-  documentTitle, config, content, patient, autoPrint, canvasState, resolveContext,
+  documentTitle, config, content, patient, autoPrint, canvasState, resolveContext, clinicFonts,
 }: Props) {
   const printAreaRef = useRef<HTMLDivElement>(null)
   const [busy, setBusy] = useState(false)
@@ -120,7 +86,7 @@ export default function LaudoPrintable({
   // re-calcular slices a cada render do html2canvas.
   const expandedPages = useMemo<ExpandedPage[]>(() => {
     if (!canvasState) return []
-    return expandPagesForRepeaterOverflow(getAllPages(canvasState), resolveContext)
+    return expandPages(canvasState, resolveContext)
   }, [canvasState, resolveContext])
 
   const doDownloadPdf = useCallback(async () => {
@@ -133,32 +99,47 @@ export default function LaudoPrintable({
       ])
 
       const pages = Array.from(printAreaRef.current.querySelectorAll<HTMLElement>('.canva-a4-page'))
-      const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
-      const W = 210, H = 297
+      // Formato de cada página vem do PageConfig correspondente (páginas
+      // virtuais herdam o da página real). Sem canvasState = motor legado A4.
+      const pageConfigs: PageConfig[] = expandedPages.length > 0
+        ? expandedPages.map(p => p.page)
+        : [LEGACY_A4]
+      const cfgAt = (i: number) => pageConfigs[Math.min(i, pageConfigs.length - 1)]
+
+      const first = pageDimensionsMm(cfgAt(0))
+      const pdf = new jsPDF({
+        unit: 'mm',
+        format: [first.w, first.h],
+        orientation: first.w > first.h ? 'landscape' : 'portrait',
+      })
 
       // Para cada página, fixa explicitamente width/height em px e captura
       // com windowWidth/Height idênticos. Garante que html2canvas trabalha
-      // num "viewport sintético" A4 — independe do zoom/scroll do browser.
+      // num "viewport sintético" do tamanho da folha — independe do
+      // zoom/scroll do browser.
       for (let i = 0; i < pages.length; i++) {
         const node = pages[i]
+        const cfg = cfgAt(i)
+        const { w: wMm, h: hMm } = pageDimensionsMm(cfg)
+        const { w: wPx, h: hPx } = pageDimensionsPx(cfg)
 
         // Snapshot dos estilos inline pra restaurar depois da captura
         const orig = {
           width:  node.style.width,
           height: node.style.height,
         }
-        node.style.width  = `${A4_W_PX}px`
-        node.style.height = `${A4_H_PX}px`
+        node.style.width  = `${wPx}px`
+        node.style.height = `${hPx}px`
 
         const canvas = await html2canvas(node, {
           scale: 2,
           useCORS: true,
           backgroundColor: '#ffffff',
           logging: false,
-          width:        A4_W_PX,
-          height:       A4_H_PX,
-          windowWidth:  A4_W_PX,
-          windowHeight: A4_H_PX,
+          width:        wPx,
+          height:       hPx,
+          windowWidth:  wPx,
+          windowHeight: hPx,
         })
 
         // Restaura estilos originais
@@ -166,8 +147,8 @@ export default function LaudoPrintable({
         node.style.height = orig.height
 
         const img = canvas.toDataURL('image/png')
-        if (i > 0) pdf.addPage('a4', 'portrait')
-        pdf.addImage(img, 'PNG', 0, 0, W, H, undefined, 'FAST')
+        if (i > 0) pdf.addPage([wMm, hMm], wMm > hMm ? 'landscape' : 'portrait')
+        pdf.addImage(img, 'PNG', 0, 0, wMm, hMm, undefined, 'FAST')
       }
 
       const safe = documentTitle.replace(/[^\w.-]+/g, '_')
@@ -175,7 +156,15 @@ export default function LaudoPrintable({
     } finally {
       setBusy(false)
     }
-  }, [documentTitle])
+  }, [documentTitle, expandedPages])
+
+  // Página 1 dita o @page do documento e a largura do shell/controles.
+  const docPage: PageConfig = expandedPages[0]?.page ?? canvasState?.page ?? LEGACY_A4
+  const docCm = pageDimensionsCm(docPage)
+  const shellVars = {
+    '--canva-page-w': `${docCm.w}cm`,
+    '--canva-page-h': `${docCm.h}cm`,
+  } as React.CSSProperties
 
   useEffect(() => {
     if (autoPrint) {
@@ -191,8 +180,13 @@ export default function LaudoPrintable({
   }, [])
 
   return (
-    <div className="canva-print-shell min-h-screen bg-slate-100 py-8">
-      <div className="canva-print-controls mx-auto mb-4 flex w-[21cm] items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
+    <CanvaFontsScope clinicFonts={clinicFonts} className="canva-print-shell min-h-screen bg-slate-100 py-8" style={shellVars}>
+      {/* @page dinâmico — tamanho/orientação reais da folha no Ctrl+P */}
+      <style dangerouslySetInnerHTML={{ __html: buildPageCssRule(docPage) }} />
+      <div
+        className="canva-print-controls mx-auto mb-4 flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-2 shadow-sm"
+        style={{ width: `${docCm.w}cm`, maxWidth: '100%' }}
+      >
         <h1 className="text-sm font-semibold text-slate-800 truncate">{documentTitle}</h1>
         <div className="flex items-center gap-2 flex-shrink-0">
           <button
@@ -216,13 +210,13 @@ export default function LaudoPrintable({
         </div>
       </div>
 
-      {/* Render em TAMANHO A4 REAL (21cm) — what-you-see-is-what-you-print.
-          Sem max-w shrink. O CanvasStage internamente usa width: 21cm via
-          mode='print', então é literal 794px @ 96dpi. */}
+      {/* Render em TAMANHO REAL da folha — what-you-see-is-what-you-print.
+          Sem max-w shrink. O CanvasStage internamente usa a largura em cm
+          do PageConfig via mode='print' (A4 = 794px @ 96dpi). */}
       <div
         ref={printAreaRef}
         className="canva-print-area mx-auto"
-        style={{ width: '21cm' }}
+        style={{ width: `${docCm.w}cm` }}
       >
         {canvasState ? (
           // Multi-page: páginas reais (extraPages) + virtuais (overflow do
@@ -237,7 +231,7 @@ export default function LaudoPrintable({
               <CanvasStage
                 state={{ version: 1, page: p.page, elements: p.elements }}
                 mode="print"
-                resolveContext={resolveContext}
+                resolveContext={withDocPageContext(resolveContext, p)}
                 fillableValues={content.fillable_fields}
                 repeaterSlices={p.repeaterSlices}
               />
@@ -256,6 +250,6 @@ export default function LaudoPrintable({
           />
         )}
       </div>
-    </div>
+    </CanvaFontsScope>
   )
 }

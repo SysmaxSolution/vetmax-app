@@ -5,6 +5,7 @@ import { writeFileSync, unlinkSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import { createClient } from '@/lib/supabase/server'
+import { limitarPorIp } from '@/lib/api/rate-limit'
 
 import { limitarPorIp } from '@/lib/api/rate-limit'
 const PDFParser = require('pdf2json')
