@@ -131,14 +131,47 @@ export async function listReceivablesForBoleto(): Promise<ReceivableRow[]> {
 }
 
 // ─── Emissão / reimpressão ────────────────────────────────────────────────────
-function runtimeFromConfig(cfg: BoletoConfig): CobrancaRuntime {
-  const environment = cfg.environment === 'production' ? 'production' : 'sandbox'
-  return {
-    environment,
-    numeroCliente: Number((cfg.codigoCliente ?? '').replace(/\D/g, '')) || (environment === 'sandbox' ? 25546454 : 0),
-    numeroContaCorrente: Number((cfg.conta ?? '').replace(/\D/g, '')) || (environment === 'sandbox' ? 12345 : 0),
+/**
+ * Runtime da cobranca: dados da CARTEIRA (numeroCliente, modalidade, conta)
+ * mais a CREDENCIAL da clinica (client_id + certificado e-CNPJ).
+ *
+ * Antes era sincrona e nao carregava credencial nenhuma — em producao o
+ * transporte caia no stub "pendente de onboarding". A credencial e resolvida
+ * do mesmo jeito que no extrato.
+ */
+async function runtimeFromConfig(
+  admin: ReturnType<typeof createAdminClient>,
+  clinicId: string,
+  cfg: BoletoConfig,
+): Promise<CobrancaRuntime | { error: string }> {
+  const carteira = {
+    numeroCliente: Number((cfg.codigoCliente ?? '').replace(/\D/g, '')),
+    numeroContaCorrente: Number((cfg.conta ?? '').replace(/\D/g, '')),
     codigoModalidade: Number(cfg.modalidade ?? 1) || 1,
   }
+
+  const { resolverConfigSicoob } = await import('@/lib/integrations/sicoob-config')
+  const cred = await resolverConfigSicoob(admin, clinicId, {
+    agency: cfg.agencia ?? null, account: cfg.conta ?? null, bank_code: '756',
+  })
+  if ('error' in cred) return { error: cred.error }
+
+  if (cred.config.environment === 'sandbox') {
+    // Sandbox e mock: numeros de teste quando a carteira ainda nao foi preenchida.
+    return {
+      ...cred.config,
+      numeroCliente: carteira.numeroCliente || 25546454,
+      numeroContaCorrente: carteira.numeroContaCorrente || 12345,
+      codigoModalidade: carteira.codigoModalidade,
+    }
+  }
+  if (!carteira.numeroCliente) {
+    return { error: 'Falta o código do beneficiário (numeroCliente) na carteira bancária — é o número que o Sicoob atribui no convênio de cobrança.' }
+  }
+  if (!carteira.numeroContaCorrente) {
+    return { error: 'Falta o número da conta na carteira bancária.' }
+  }
+  return { ...cred.config, ...carteira }
 }
 
 export async function emitOrReprintBoleto(financialEntryId: string, bankAccountId?: string): Promise<{ ok: true; boletoId: string; reprint: boolean } | { error: string }> {
@@ -198,7 +231,8 @@ export async function emitOrReprintBoleto(financialEntryId: string, bankAccountI
   // chamada ao Sicoob (best-effort; sandbox é mock)
   let linha = local.linhaDigitavel, barras = local.codigoBarras, situacao = 'emitido', errorMsg: string | null = null, raw: unknown = null
   try {
-    const rt = runtimeFromConfig(cfg)
+    const rt = await runtimeFromConfig(admin, c.clinicId, cfg)
+    if ('error' in rt) throw new Error(rt.error)
     const res = await incluirBoleto(rt, {
       seuNumero, valor, dataVencimento: dueISO, especie: cfg.especie,
       multaPercent: cfg.multaPercent, jurosMesPercent: cfg.jurosMesPercent, mensagens: cfg.mensagens,

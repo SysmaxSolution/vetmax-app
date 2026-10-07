@@ -181,16 +181,38 @@ export async function generatePagforRemittance(entry_ids: string[]): Promise<{ c
 
 // ─── Sicoob Pagamentos (API real): varredura DDA + agendar/pagar ─────────────
 async function loadPagamentosRuntime(admin: ReturnType<typeof createAdminClient>, clinicId: string, bankAccountId?: string): Promise<PagamentosRuntime | { error: string }> {
-  let q = admin.from('bank_accounts').select('id, boleto_config, boleto_enabled, is_default').eq('clinic_id', clinicId)
-  q = bankAccountId ? q.eq('id', bankAccountId) : q.eq('boleto_enabled', true).order('is_default', { ascending: false })
+  // O DDA NAO depende da carteira bancaria. Lia conta/agencia/ambiente de
+  // dentro de `boleto_config`, que e a carteira — mas conta e agencia sao
+  // dados da CONTA, e a credencial (client_id + certificado) e da clinica.
+  // Juntar tudo no boleto_config fazia a varredura do DDA exigir carteira
+  // configurada sem necessidade nenhuma.
+  //
+  // A carteira continua obrigatoria para EMITIR boleto (cobranca), onde o
+  // Sicoob precisa saber sob qual carteira registrar o titulo.
+  let q = admin.from('bank_accounts').select('id, agency, account, bank_code, is_default').eq('clinic_id', clinicId)
+  q = bankAccountId ? q.eq('id', bankAccountId) : q.eq('bank_code', '756').order('is_default', { ascending: false })
   const { data: acc } = await q.limit(1).maybeSingle()
-  if (!acc) return { error: 'Configure uma conta com carteira bancária (Cadastros → Bancos → Carteira Bancária).' }
-  const cfg = ((acc as any).boleto_config ?? {}) as { conta?: string; agencia?: string; environment?: 'sandbox' | 'production' }
-  const environment = cfg.environment === 'production' ? 'production' : 'sandbox'
-  const numeroConta = Number((cfg.conta ?? '').replace(/\D/g, '')) || (environment === 'sandbox' ? 12345 : 0)
-  const agencia = Number((cfg.agencia ?? '').replace(/\D/g, '')) || (environment === 'sandbox' ? 4321 : 0)
-  if (environment === 'production' && (!numeroConta || !agencia)) return { error: 'Conta/agência da carteira bancária incompletas.' }
-  return { environment, numeroConta, agencia, clientId: process.env.SICOOB_CLIENT_ID }
+  if (!acc) return { error: 'Nenhuma conta Sicoob cadastrada (Cadastros → Bancos).' }
+  const conta = acc as { agency?: string | null; account?: string | null; bank_code?: string | null }
+
+  // Mesma resolucao usada pelo extrato: ambiente, client_id e certificado vem
+  // da configuracao da CLINICA, nunca de variavel de ambiente.
+  const { resolverConfigSicoob } = await import('@/lib/integrations/sicoob-config')
+  const r = await resolverConfigSicoob(admin, clinicId, {
+    agency: conta.agency ?? null, account: conta.account ?? null, bank_code: conta.bank_code ?? null,
+  })
+  if ('error' in r) return { error: r.error }
+
+  // Numero e agencia como a API quer: so digitos, COM o digito verificador.
+  const numeroConta = Number(String(conta.account ?? '').replace(/\D/g, ''))
+    || (r.config.environment === 'sandbox' ? 12345 : 0)
+  const agencia = Number(String(conta.agency ?? '').replace(/\D/g, ''))
+    || (r.config.environment === 'sandbox' ? 4321 : 0)
+  if (r.config.environment === 'production' && (!numeroConta || !agencia)) {
+    return { error: 'Conta ou agência sem número no cadastro (Cadastros → Bancos).' }
+  }
+
+  return { ...r.config, numeroConta, agencia }
 }
 
 /** Varredura do DDA direto no banco (substitui a importação manual do CSV). */
