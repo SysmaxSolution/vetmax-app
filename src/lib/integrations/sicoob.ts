@@ -10,6 +10,8 @@
 //
 // Retorno normalizado no formato consumido por importStatements (BankStatement).
 
+import https from 'node:https'
+
 export interface SicoobTx { date: string; amount: number; description: string; type: 'credit' | 'debit'; external_id?: string }
 
 const SANDBOX = {
@@ -18,32 +20,147 @@ const SANDBOX = {
   token:     '1301865f-c6bc-38f3-9f49-666dbcfc59c3', // access_token fixo do sandbox
 }
 const PROD_BASE  = 'https://api.sicoob.com.br/conta-corrente/v4'
+
+/**
+ * Escopo do token para ler o extrato. MEDIDO contra o Sicoob de producao em
+ * 2026-10-07, nao suposto: `cco_extrato` e `cco_saldo` NAO existem e fazem o
+ * Keycloak recusar a requisicao inteira com invalid_scope, mesmo com o
+ * certificado e o client_id corretos. O escopo de leitura da Conta Corrente e
+ * `cco_consulta` (existe tambem `cco_transferencias`, que nao usamos).
+ * Travado por tests/unit/sicoob-escopos.test.ts.
+ */
+export const ESCOPO_EXTRATO = 'openid cco_consulta'
 const TOKEN_URL  = 'https://auth.sicoob.com.br/auth/realms/cooperado/protocol/openid-connect/token'
 
-function isSandbox() { return (process.env.SICOOB_ENV ?? 'sandbox') !== 'production' }
-
-// Transporte com certificado mTLS (só produção). No sandbox não há certificado.
-// O transporte com e-CNPJ A1 (undici Agent {connect:{pfx}}) será plugado no
-// onboarding da 1ª clínica — depende do certificado real. Por ora, produção fica
-// gated com aviso claro; o sandbox roda sem certificado.
-async function mtlsDispatcher(): Promise<unknown> {
-  if (isSandbox()) return undefined
-  throw new Error('Produção Sicoob requer o certificado e-CNPJ A1 (mTLS) da clínica — pendente de onboarding.')
+/**
+ * Configuracao da integracao. Vem da CLINICA (tela de Integracoes Financeiras),
+ * nao de variavel de ambiente.
+ *
+ * Antes `isSandbox()` lia `process.env.SICOOB_ENV`, que nunca foi definido ->
+ * dava sandbox sempre. A clinica marcava "Producao" na tela, o client_id dela
+ * era ignorado e a conciliacao trazia os lancamentos ficticios do sandbox como
+ * se fossem do banco. Era o pior tipo de defeito: silencioso e plausivel.
+ */
+export interface SicoobConfig {
+  environment: 'sandbox' | 'production'
+  client_id:   string
+  /** e-CNPJ A1 da empresa. Obrigatorio em producao (mTLS). */
+  pfx?:        Buffer | null
+  passphrase?: string | null
 }
 
-async function getToken(dispatcher: unknown): Promise<string> {
-  if (isSandbox()) return SANDBOX.token
-  const clientId = process.env.SICOOB_CLIENT_ID
-  if (!clientId) throw new Error('SICOOB_CLIENT_ID não configurado.')
-  const body = new URLSearchParams({ grant_type: 'client_credentials', client_id: clientId, scope: 'openid cco_extrato cco_saldo' })
-  const res = await fetch(TOKEN_URL, {
-    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body,
-    ...(dispatcher ? { dispatcher } : {}),
-  } as RequestInit)
-  if (!res.ok) throw new Error(`Falha no token Sicoob (${res.status}).`)
-  const j = await res.json() as { access_token?: string }
+const ehSandbox = (cfg: SicoobConfig) => cfg.environment !== 'production'
+
+
+
+// --- Transporte mTLS (so producao) -----------------------------------------
+// O Sicoob exige TLS mutuo com o e-CNPJ A1 da empresa: nao basta o token, o
+// servidor confere o certificado do cliente no aperto de mao. Usamos
+// `node:https` em vez de undici -- o `dispatcher` do fetch so existe no undici
+// como pacote, que nao esta disponivel aqui; `node:https` sempre esta e aceita
+// pfx direto. Roda em runtime Node (Server Action/route handler), nao em Edge.
+//
+// O certificado NUNCA fica no banco nem no repositorio: vem de variavel de
+// ambiente, em base64, com a senha separada.
+interface Pfx { pfx: Buffer; passphrase: string | undefined }
+
+function carregarPfx(cfg: SicoobConfig): Pfx {
+  if (!cfg.pfx || cfg.pfx.length < 500) {
+    throw new Error('Certificado e-CNPJ A1 nao cadastrado para esta clinica. Envie o arquivo .pfx em Configuracoes > Financeiro.')
+  }
+  return { pfx: cfg.pfx, passphrase: cfg.passphrase || undefined }
+}
+
+/** Requisicao HTTPS com o certificado do cliente apresentado no handshake. */
+function requisicaoMtls(
+  url: string,
+  cfg: SicoobConfig,
+  init: { method?: string; headers?: Record<string, string>; body?: string },
+): Promise<{ status: number; text: string }> {
+  const { pfx, passphrase } = carregarPfx(cfg)
+  const u = new URL(url)
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      {
+        host: u.hostname,
+        port: u.port || 443,
+        path: u.pathname + u.search,
+        method: init.method ?? 'GET',
+        headers: init.headers ?? {},
+        pfx,
+        passphrase,
+        // Validacao do servidor continua ligada -- mTLS e mutuo, nao substitui.
+        rejectUnauthorized: true,
+      },
+      res => {
+        let txt = ''
+        res.setEncoding('utf8')
+        res.on('data', c => { txt += c })
+        res.on('end', () => resolve({ status: res.statusCode ?? 0, text: txt }))
+      },
+    )
+    req.on('error', e => {
+      const code = (e as NodeJS.ErrnoException).code
+      const m = code === 'ERR_OSSL_UNSUPPORTED'
+        ? 'o Node recusou o .pfx (algoritmo legado) -- reexporte o certificado'
+        : e.message
+      reject(new Error('Falha de conexao com o Sicoob: ' + m))
+    })
+    if (init.body) req.write(init.body)
+    req.end()
+  })
+}
+
+async function getToken(cfg: SicoobConfig): Promise<string> {
+  if (ehSandbox(cfg)) return SANDBOX.token
+  const clientId = cfg.client_id?.trim()
+  if (!clientId) throw new Error('Client ID do Sicoob nao preenchido em Configuracoes > Financeiro.')
+  if (clientId === SANDBOX.client_id) {
+    // Erro comum no onboarding: o client_id publico da documentacao e de
+    // sandbox e nao autentica em producao, mesmo com o certificado certo.
+    throw new Error('O SICOOB_CLIENT_ID configurado e o client_id publico de SANDBOX. Crie o aplicativo no portal Sicoob Developers e use o client_id de producao.')
+  }
+  const body = new URLSearchParams({
+    grant_type: 'client_credentials', client_id: clientId, scope: ESCOPO_EXTRATO,
+  }).toString()
+  const r = await requisicaoMtls(TOKEN_URL, cfg, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Content-Length': String(Buffer.byteLength(body)),
+    },
+    body,
+  })
+  if (r.status !== 200) {
+    // Chegar aqui com 401 invalid_client significa que o certificado JÁ passou
+    // (sem ele o gateway responde 403 antes da autenticação). Então o problema
+    // está no cadastro do aplicativo no portal Sicoob, não no nosso lado — e
+    // repassar o erro cru do OAuth não ajuda ninguém a resolver.
+    if (r.status === 401 && /invalid_client/.test(r.text)) {
+      throw new Error(
+        'O Sicoob aceitou o certificado, mas não reconheceu o Client ID. '
+        + 'No portal Sicoob Developers, confira: o aplicativo foi criado em PRODUÇÃO e está ativo; '
+        + 'o certificado da empresa está VINCULADO a esse aplicativo; os escopos cco_extrato e cco_saldo '
+        + 'estão habilitados; e o Client ID foi copiado por inteiro.',
+      )
+    }
+    throw new Error('Falha no token Sicoob (' + r.status + '): ' + r.text.slice(0, 200))
+  }
+  const j = JSON.parse(r.text || '{}') as { access_token?: string }
   if (!j.access_token) throw new Error('Token Sicoob ausente na resposta.')
   return j.access_token
+}
+
+/** Diagnostico de onboarding: aperta a mao com o Sicoob e diz o que falta. */
+export async function testarConexaoSicoob(cfg: SicoobConfig): Promise<{ ok: boolean; etapa: string; detalhe: string }> {
+  if (ehSandbox(cfg)) return { ok: true, etapa: 'sandbox', detalhe: 'Ambiente sandbox -- nao usa certificado nem client_id proprio.' }
+  try { carregarPfx(cfg) } catch (e) { return { ok: false, etapa: 'certificado', detalhe: (e as Error).message } }
+  try {
+    await getToken(cfg)
+    return { ok: true, etapa: 'token', detalhe: 'Certificado aceito e token emitido.' }
+  } catch (e) {
+    return { ok: false, etapa: 'token', detalhe: (e as Error).message }
+  }
 }
 
 const toDate = (v: unknown): string | null => {
@@ -53,9 +170,27 @@ const toDate = (v: unknown): string | null => {
   m = s.match(/(\d{2})\/(\d{2})\/(\d{4})/);   if (m) return `${m[3]}-${m[2]}-${m[1]}`
   return null
 }
-const toNum = (v: unknown): number => {
-  if (typeof v === 'number') return v
-  const n = Number(String(v ?? '').replace(/[R$\s.]/g, m => (m === '.' ? '' : '')).replace(',', '.'))
+/**
+ * Converte valor monetario que chega em DOIS formatos diferentes.
+ *
+ * O SANDBOX devolve numero (1555.05). A PRODUCAO devolve string "1555.05",
+ * com ponto DECIMAL. Mas tambem existe entrada no formato brasileiro,
+ * "R$ 1.555,05", onde o ponto e MILHAR.
+ *
+ * A versao anterior removia todo ponto — correto para o formato brasileiro,
+ * catastrofico para o da API: "1555.05" virava 155505, cem vezes maior. Como
+ * o sandbox devolve numero, o erro nunca aparecia em teste e so entraria em
+ * cena na primeira conciliacao real.
+ *
+ * Regra: tem virgula -> virgula e o decimal e ponto e milhar (pt-BR);
+ * nao tem virgula -> ponto e o decimal (API).
+ */
+export const toNum = (v: unknown): number => {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : NaN
+  let t = String(v ?? '').replace(/[R$\s ]/g, '').trim()
+  if (!t) return NaN
+  if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.')   // pt-BR
+  const n = Number(t)
   return Number.isFinite(n) ? n : NaN
 }
 const inferType = (tipo: unknown, valor: number): 'credit' | 'debit' => {
@@ -66,16 +201,43 @@ const inferType = (tipo: unknown, valor: number): 'credit' | 'debit' => {
 }
 
 // Busca o extrato de UM mês (janela de dias). O Sicoob limita a ~3 meses de histórico.
-async function fetchMonth(conta: string, mes: number, ano: number, diaIni: number, diaFim: number, dispatcher: unknown, token: string, clientId: string): Promise<SicoobTx[]> {
-  const base = isSandbox() ? SANDBOX.base : PROD_BASE
+async function fetchMonth(cfg: SicoobConfig, conta: string, mes: number, ano: number, diaIni: number, diaFim: number, token: string, clientId: string): Promise<SicoobTx[]> {
+  const base = ehSandbox(cfg) ? SANDBOX.base : PROD_BASE
   const url = `${base}/extrato/${mes}/${ano}?diaInicial=${diaIni}&diaFinal=${diaFim}&numeroContaCorrente=${encodeURIComponent(conta)}&agruparCNAB=false`
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}`, client_id: clientId, Accept: 'application/json' },
-    ...(dispatcher ? { dispatcher } : {}),
-  } as RequestInit)
-  if (!res.ok) throw new Error(`Extrato Sicoob ${mes}/${ano} falhou (${res.status}).`)
-  const j = await res.json() as { transacoes?: Array<Record<string, unknown>> }
-  const txs = Array.isArray(j.transacoes) ? j.transacoes : []
+  const headers = { Authorization: 'Bearer ' + token, client_id: clientId, Accept: 'application/json' }
+
+  let corpo: string
+  if (ehSandbox(cfg)) {
+    const res = await fetch(url, { headers })
+    if (!res.ok) throw new Error('Extrato Sicoob ' + mes + '/' + ano + ' falhou (' + res.status + ').')
+    corpo = await res.text()
+  } else {
+    const r = await requisicaoMtls(url, cfg, { headers })
+    if (r.status !== 200) throw new Error('Extrato Sicoob ' + mes + '/' + ano + ' falhou (' + r.status + '): ' + r.text.slice(0, 160))
+    corpo = r.text
+  }
+  return extrairTransacoes(corpo)
+}
+
+/**
+ * Transforma o corpo do extrato em lancamentos. Exportada para ser testavel:
+ * foi aqui que a producao passou batido.
+ *
+ * O SANDBOX devolve `{ transacoes: [...] }` no nivel de cima; a PRODUCAO
+ * devolve `{ mensagens, resultado: { saldoAtual, ..., transacoes: [...] } }`.
+ * Ler so o nivel de cima fazia a conciliacao autenticar, receber o extrato
+ * real e importar ZERO lancamento, reclamando "nenhum lancamento no periodo"
+ * — o pior tipo de falha, porque parece problema do banco.
+ */
+export function extrairTransacoes(corpo: string): SicoobTx[] {
+  let j: {
+    transacoes?: Array<Record<string, unknown>>
+    resultado?: { transacoes?: Array<Record<string, unknown>> }
+  }
+  try { j = JSON.parse(corpo || '{}') } catch { return [] }
+
+  const lista = j?.resultado?.transacoes ?? j?.transacoes
+  const txs = Array.isArray(lista) ? lista : []
   const out: SicoobTx[] = []
   for (const t of txs) {
     const valor = toNum(t.valor)
@@ -91,16 +253,16 @@ async function fetchMonth(conta: string, mes: number, ano: number, diaIni: numbe
 
 // Busca o extrato por PERÍODO (itera os meses do intervalo, respeitando o limite).
 export async function fetchSicoobExtrato(params: {
-  conta: string; start_date: string; end_date: string
+  conta: string; start_date: string; end_date: string; config: SicoobConfig
 }): Promise<{ statements: SicoobTx[]; warnings: string[] }> {
+  const cfg = params.config
   const warnings: string[] = []
   const start = new Date(params.start_date + 'T00:00:00')
   const end   = new Date(params.end_date + 'T00:00:00')
   if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) throw new Error('Período inválido.')
 
-  const dispatcher = await mtlsDispatcher()
-  const clientId = isSandbox() ? SANDBOX.client_id : (process.env.SICOOB_CLIENT_ID ?? '')
-  const token = await getToken(dispatcher)
+  const clientId = ehSandbox(cfg) ? SANDBOX.client_id : (cfg.client_id ?? '')
+  const token = await getToken(cfg)
 
   const statements: SicoobTx[] = []
   const cur = new Date(start.getFullYear(), start.getMonth(), 1)
@@ -110,7 +272,7 @@ export async function fetchSicoobExtrato(params: {
     const diaIni = (cur.getFullYear() === start.getFullYear() && cur.getMonth() === start.getMonth()) ? start.getDate() : 1
     const diaFim = (cur.getFullYear() === end.getFullYear() && cur.getMonth() === end.getMonth()) ? end.getDate() : lastDay
     try {
-      const monthTxs = await fetchMonth(params.conta, mes, ano, diaIni, diaFim, dispatcher, token, clientId)
+      const monthTxs = await fetchMonth(cfg, params.conta, mes, ano, diaIni, diaFim, token, clientId)
       statements.push(...monthTxs)
     } catch (e) {
       warnings.push(`${String(mes).padStart(2, '0')}/${ano}: ${(e as Error).message}`)
@@ -121,7 +283,7 @@ export async function fetchSicoobExtrato(params: {
   // SANDBOX retorna dados fictícios (lorem) que o parser descarta → gera alguns
   // lançamentos de DEMONSTRAÇÃO no período p/ validar o fluxo ponta a ponta. Em
   // produção (com e-CNPJ real) isto nunca roda.
-  if (isSandbox() && statements.length === 0) {
+  if (ehSandbox(cfg) && statements.length === 0) {
     const d0 = params.start_date, d1 = params.end_date
     statements.push(
       { date: d0, amount: 500, description: '[SANDBOX] PIX RECEBIDO', type: 'credit', external_id: 'SBX-1' },
@@ -133,4 +295,4 @@ export async function fetchSicoobExtrato(params: {
   return { statements, warnings }
 }
 
-export function sicoobEnvLabel(): string { return isSandbox() ? 'sandbox (teste)' : 'produção' }
+export const sicoobEnvLabel = (cfg: SicoobConfig): string => (ehSandbox(cfg) ? 'sandbox (teste)' : 'produção')

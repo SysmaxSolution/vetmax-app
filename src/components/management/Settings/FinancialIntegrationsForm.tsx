@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import BankCertificateCard from './BankCertificateCard'
+import { listBankAccounts } from '@/lib/actions/financial'
 import { Landmark, QrCode, ToggleLeft, ToggleRight, Save, Loader2, Plus, Trash2 } from 'lucide-react'
 import {
   getFinancialIntegrations, updateFinancialIntegrations,
@@ -15,6 +17,21 @@ const bankName = (code: string) => BANKS.find(b => b.code === code)?.name ?? cod
 const input = 'w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20'
 
 export default function FinancialIntegrationsForm({ onToast }: { onToast: (t: 'success' | 'error', m: string) => void }) {
+  // As contas bancárias cadastradas, para amarrar o certificado e o teste de
+  // conexão à conta certa (o banco configurado aqui e a conta do financeiro são
+  // cadastros separados).
+  const [contas, setContas] = useState<{ id: string; agency: string | null; account: string | null; bank_code: string | null }[]>([])
+  useEffect(() => {
+    void listBankAccounts().then(r => { if (Array.isArray(r)) setContas(r.map(c => ({ id: c.id, agency: c.agency ?? null, account: c.account ?? null, bank_code: c.bank_code ?? null }))) })
+  }, [])
+  const soDig = (v: unknown) => String(v ?? '').replace(/[^0-9]/g, '')
+  const contaDoBanco = (b: { bank_code: string; agencia: string; conta: string }): string | null => {
+    const porConta = contas.find(c => soDig(c.account) && soDig(c.account) === soDig(b.conta))
+    if (porConta) return porConta.id
+    const doBanco = contas.filter(c => soDig(c.bank_code) === soDig(b.bank_code))
+    return doBanco.length === 1 ? doBanco[0].id : null
+  }
+
   const [cfg, setCfg]     = useState<FinancialIntegrations | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -85,7 +102,14 @@ export default function FinancialIntegrationsForm({ onToast }: { onToast: (t: 's
                     <input value={b.conta} onChange={e => setBank(i, { conta: e.target.value })} className={input} /></label>
                 </div>
                 {b.provider === 'sicoob' && b.environment === 'production' && (
-                  <p className="text-[11px] text-amber-600">Produção exige o certificado e-CNPJ A1 (mTLS) da clínica — configuração no onboarding.</p>
+                  <div className="pt-1">
+                    <BankCertificateCard
+                      bankCode={b.bank_code}
+                      bankLabel={bankName(b.bank_code)}
+                      bankAccountId={contaDoBanco(b)}
+                      onToast={onToast}
+                    />
+                  </div>
                 )}
               </div>
             ))}
