@@ -1435,6 +1435,12 @@ export interface ReconciliationBatch {
   total_records:   number
   matched_count:   number
   status:          'pending' | 'completed'
+  /**
+   * Linhas que o banco devolveu mas que JA estavam importadas, e por isso nao
+   * entraram de novo. A tela usa para dizer "nada novo no periodo" em vez de
+   * fingir que importou.
+   */
+  skipped?:        number
 }
 
 export interface ExtratoFilters {
@@ -1572,25 +1578,101 @@ export async function importStatements(
 
   if (batchError) return { error: 'Erro ao criar lote: ' + mensagemErro(batchError, 'lib/actions/financial.ts') }
 
-  // Insere os lançamentos
-  const rows = data.statements.map(s => ({
-    clinic_id:       clinicId,
-    bank_account_id: data.bank_account_id,
-    external_id:     s.external_id || null,
-    date:            s.date,
-    amount:          Math.abs(s.amount),
-    description:     s.description || '',
-    type:            s.type,
-    import_batch_id: batch.id,
-  }))
+  // Importação IDEMPOTENTE. Antes inseria às cegas: o usuário consultava um
+  // período, vinculava alguns títulos, saía da tela, voltava, reimportava o
+  // mesmo período e ganhava cópias — inclusive de lançamento já conciliado, o
+  // que permitia gerar vários títulos do mesmo movimento. Produção tinha 43
+  // grupos duplicados quando isto foi corrigido.
+  const { digitaisDoLote } = await import('@/lib/financial/extrato-digital')
+  const digitais = digitaisDoLote(data.bank_account_id, data.statements)
 
-  const { error: insertError } = await admin
+  // Quais dessas já estão na conta? (a chave única da 0494 é a rede de
+  // segurança para duas importações simultâneas; aqui é para poder CONTAR.)
+  const jaTem = new Set<string>()
+  for (let i = 0; i < digitais.length; i += 500) {
+    const fatia = digitais.slice(i, i + 500)
+    const { data: achadas } = await admin
+      .from('bank_statements')
+      .select('fingerprint')
+      .eq('bank_account_id', data.bank_account_id)
+      .in('fingerprint', fatia)
+    for (const a of (achadas ?? []) as { fingerprint: string | null }[]) {
+      if (a.fingerprint) jaTem.add(a.fingerprint)
+    }
+  }
+
+  const rows = data.statements
+    .map((s, i) => ({ s, fingerprint: digitais[i] }))
+    .filter(x => !jaTem.has(x.fingerprint))
+    .map(({ s, fingerprint }) => ({
+      clinic_id:       clinicId,
+      bank_account_id: data.bank_account_id,
+      external_id:     s.external_id || null,
+      fingerprint,
+      date:            s.date,
+      amount:          Math.abs(s.amount),
+      description:     s.description || '',
+      type:            s.type,
+      import_batch_id: batch.id,
+    }))
+
+  if (rows.length) {
+    const { error: insertError } = await admin
+      .from('bank_statements')
+      // ignoreDuplicates: se outra importação inserir a mesma digital no meio,
+      // a chave única barra e seguimos sem erro.
+      .upsert(rows, { onConflict: 'bank_account_id,fingerprint', ignoreDuplicates: true })
+    if (insertError) return { error: 'Erro ao inserir lançamentos: ' + mensagemErro(insertError, 'lib/actions/financial.ts') }
+  }
+
+  // O lote registra o que ENTROU, não o que foi consultado.
+  const repetidos = data.statements.length - rows.length
+  if (repetidos > 0) {
+    await admin.from('reconciliation_batches')
+      .update({ total_records: rows.length }).eq('id', batch.id)
+  }
+
+  return { ...(batch as ReconciliationBatch), total_records: rows.length, skipped: repetidos }
+}
+
+/**
+ * O que já está importado para esta conta neste período.
+ *
+ * Existe para a tela de conciliação não precisar reimportar quando o usuário
+ * volta. Antes ela não recarregava nada: parecia que o trabalho tinha sido
+ * perdido, e reimportar duplicava.
+ */
+export async function getImportedStatements(params: {
+  bank_account_id: string; start_date: string; end_date: string
+}): Promise<{
+  statements: Array<{
+    id: string; date: string; amount: number; description: string
+    type: 'credit' | 'debit'; external_id: string | null
+    reconciled_entry_id: string | null; reconciled_at: string | null
+  }>
+  total: number; conciliados: number
+} | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  if (!params.bank_account_id) return { error: 'Conta bancária obrigatória.' }
+
+  const admin = createAdminClient()
+  const { data, error } = await admin
     .from('bank_statements')
-    .insert(rows)
+    .select('id, date, amount, description, type, external_id, reconciled_entry_id, reconciled_at')
+    .eq('clinic_id', clinicId)
+    .eq('bank_account_id', params.bank_account_id)
+    .gte('date', params.start_date)
+    .lte('date', params.end_date)
+    .order('date', { ascending: true })
 
-  if (insertError) return { error: 'Erro ao inserir lançamentos: ' + mensagemErro(insertError, 'lib/actions/financial.ts') }
-
-  return batch as ReconciliationBatch
+  if (error) return { error: mensagemErro(error, 'lib/actions/financial.ts') }
+  const lista = (data ?? []) as Array<{ reconciled_entry_id: string | null }>
+  return {
+    statements: (data ?? []) as never,
+    total: lista.length,
+    conciliados: lista.filter(x => x.reconciled_entry_id != null).length,
+  }
 }
 
 // ─── G-11: reconcileStatements (matching manual) ──────────────────────────────
@@ -1890,7 +1972,41 @@ export async function getStatementsWithLinks(batchId: string): Promise<Statement
     .select('id, date, amount, description, type, reconciled_at')
     .eq('clinic_id', clinicId).eq('import_batch_id', batchId)
     .order('date', { ascending: true })
-  const list = (stmts ?? []) as Record<string, unknown>[]
+  return montarStatementsComVinculos(admin, clinicId, (stmts ?? []) as Record<string, unknown>[])
+}
+
+/**
+ * O extrato JA IMPORTADO da conta no periodo, independente de lote.
+ *
+ * Existe porque a tela carregava so por `import_batch_id`: quando o usuario
+ * saia e voltava, `batch` era nulo e nada aparecia. Parecia que o trabalho
+ * tinha sido perdido — e reimportar duplicava (43 grupos duplicados em
+ * producao antes da 0494). Os dados sempre estiveram gravados; faltava
+ * recarregar.
+ */
+export async function getStatementsWithLinksByPeriod(params: {
+  bank_account_id: string; start_date: string; end_date: string
+}): Promise<StatementWithLinks[] | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  if (!params.bank_account_id) return { error: 'Conta bancária obrigatória.' }
+  const admin = createAdminClient()
+  const { data: stmts, error } = await admin.from('bank_statements')
+    .select('id, date, amount, description, type, reconciled_at')
+    .eq('clinic_id', clinicId)
+    .eq('bank_account_id', params.bank_account_id)
+    .gte('date', params.start_date)
+    .lte('date', params.end_date)
+    .order('date', { ascending: true })
+  if (error) return { error: mensagemErro(error, 'lib/actions/financial.ts') }
+  return montarStatementsComVinculos(admin, clinicId, (stmts ?? []) as Record<string, unknown>[])
+}
+
+async function montarStatementsComVinculos(
+  admin: ReturnType<typeof createAdminClient>,
+  clinicId: string,
+  list: Record<string, unknown>[],
+): Promise<StatementWithLinks[]> {
   const stmtIds = list.map(s => s.id as string)
 
   const linkMap = new Map<string, string[]>()
@@ -2284,5 +2400,15 @@ export async function importBankStatementFromSicoob(params: {
   if ('error' in imp) return { error: imp.error }
   const auto = await persistAutoLinks(imp.id)
   const linked = 'error' in auto ? 0 : auto.linked
-  return { ok: true, batch_id: imp.id, imported: res.statements.length, linked, warnings: [...resolucao.avisos, ...res.warnings] }
+
+  // Diz a verdade sobre o que entrou: reimportar o mesmo periodo agora e
+  // inofensivo, e a tela precisa mostrar isso em vez de "N importados".
+  const repetidos = imp.skipped ?? 0
+  const avisos = [...resolucao.avisos, ...res.warnings]
+  if (repetidos > 0) {
+    avisos.push(repetidos === res.statements.length
+      ? `Nenhum lançamento novo: as ${repetidos} linhas do período já estavam importadas.`
+      : `${repetidos} lançamento(s) do período já estavam importados e não entraram de novo.`)
+  }
+  return { ok: true, batch_id: imp.id, imported: imp.total_records, linked, warnings: avisos }
 }
