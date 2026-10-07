@@ -54,7 +54,7 @@ describe('extrairTransacoes', () => {
     expect(txs).toHaveLength(2)
     expect(txs[0]).toEqual({
       date: '2026-10-01', amount: 1555.05, description: 'CR COMPRAS MAESTRO',
-      type: 'credit', external_id: '1509164849',
+      type: 'credit', external_id: '1509164849', tx_id: '7D0797-2BD7D9',
     })
     expect(txs[1].type).toBe('debit')
     expect(txs[1].amount).toBe(80)
@@ -179,5 +179,38 @@ describe('normalizarConta', () => {
 
   it('número também funciona', () => {
     expect(normalizarConta(86584)).toBe('86584')
+  })
+})
+
+// ── transactionId ────────────────────────────────────────────────────────────
+// Capturar o transactionId e o que permite a importacao idempotente: o
+// `numeroDocumento` nao identifica (para Pix vem a string literal "Pix", e
+// producao tinha 51 linhas com external_id = 'Pix'). Ver
+// src/lib/financial/extrato-digital.ts.
+
+describe('extrairTransacoes — transactionId', () => {
+  it('captura o transactionId de cada transação', () => {
+    const txs = extrairTransacoes(PRODUCAO)
+    expect(txs.map(t => t.tx_id)).toEqual(['7D0797-2BD7D9', 'AA1111-BB2222'])
+  })
+
+  it('o numeroDocumento continua em external_id, para casar com título', () => {
+    expect(extrairTransacoes(PRODUCAO)[0].external_id).toBe('1509164849')
+  })
+
+  it('tx_id fica indefinido quando o banco não manda (sandbox, CSV)', () => {
+    expect(extrairTransacoes(SANDBOX)[0].tx_id).toBeUndefined()
+  })
+
+  it('"Pix" como numeroDocumento não impede distinguir as transações', () => {
+    const corpo = JSON.stringify({ resultado: { transacoes: [
+      { transactionId: 'P1', tipo: 'CREDITO', valor: '50.00', data: '2026-10-03', descricao: 'PIX RECEBIDO', numeroDocumento: 'Pix' },
+      { transactionId: 'P2', tipo: 'CREDITO', valor: '50.00', data: '2026-10-03', descricao: 'PIX RECEBIDO', numeroDocumento: 'Pix' },
+    ] } })
+    const txs = extrairTransacoes(corpo)
+    expect(txs).toHaveLength(2)
+    expect(txs[0].external_id).toBe('Pix')
+    expect(txs[1].external_id).toBe('Pix')
+    expect(txs[0].tx_id).not.toBe(txs[1].tx_id)
   })
 })
