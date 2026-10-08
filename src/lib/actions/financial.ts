@@ -487,6 +487,33 @@ export async function updateEntry(
   if ('error' in v) return v
   data = v.dados as Partial<CreateEntryData>
 
+  // ─── Título baixado é IMUTÁVEL ─────────────────────────────────────────────
+  // Antes daqui não havia filtro nenhum de status: o UPDATE era
+  //   .update(updates).eq('id', id).eq('clinic_id', clinicId)
+  // e alterava valor, vencimento, descrição e tutor de um título JÁ BAIXADO,
+  // sem rastro. Isso muda a data de realização de uma transação que já
+  // aconteceu e desalinha a conciliação bancária.
+  //
+  // O prontuário clínico já tinha imutabilidade (migrations 0411/0412); o
+  // financeiro havia ficado de fora. Para alterar, estorna primeiro — e o
+  // estorno grava a trilha.
+  const admin = createAdminClient()
+  const { data: atual } = await admin
+    .from('financial_entries')
+    .select('status, payment_date, issue_date, due_date')
+    .eq('id', id).eq('clinic_id', clinicId).maybeSingle()
+  if (!atual) return { error: 'Título não encontrado.' }
+  if ((atual as { status?: string }).status === 'paid') {
+    return { error: 'Este título está baixado e não pode ser alterado. Estorne primeiro (Opções → Estornar) — o estorno guarda o histórico e devolve o título para aberto.' }
+  }
+
+  // Vencimento não pode ser anterior à emissão: título não vence antes de existir.
+  const emissao = data.issue_date ?? (atual as { issue_date?: string | null }).issue_date
+  const vence   = data.due_date   ?? (atual as { due_date?: string | null }).due_date
+  if (emissao && vence && String(emissao) > String(vence)) {
+    return { error: 'A data de vencimento não pode ser anterior à data de emissão.' }
+  }
+
   const updates: Record<string, unknown> = {}
   if (data.description          !== undefined) updates.description          = data.description.trim()
   if (data.amount               !== undefined) updates.amount               = data.amount
@@ -501,7 +528,6 @@ export async function updateEntry(
   if (data.professional_id      !== undefined) updates.professional_id      = data.professional_id      || null
   if (data.chart_of_accounts_id !== undefined) updates.chart_of_accounts_id = data.chart_of_accounts_id || null
 
-  const admin = createAdminClient()
   const { error } = await admin
     .from('financial_entries')
     .update(updates)
@@ -581,6 +607,25 @@ export async function reverseFinancialEntry(
     const entryInterest   = Number((entry as unknown as Record<string, unknown>).interest ?? 0)
     const docNumber       = (entry as unknown as Record<string, unknown>).document_number as string | null
 
+    // TRILHA antes de apagar: o estorno zera payment_date, payment_method,
+    // settlement_bank_id e interest. Sem registrar o estado anterior, a
+    // informação de COMO o título foi baixado desaparece — e é justamente ela
+    // que explica a conciliação bancária daquele dia.
+    const { data: antesDoEstorno } = await admin
+      .from('financial_entries')
+      .select('*')
+      .eq('id', id).eq('clinic_id', clinicId).maybeSingle()
+    if (antesDoEstorno) {
+      await admin.from('audit_logs').insert({
+        clinic_id:   clinicId,
+        user_id:     user.id,
+        action:      'reversed',
+        entity_type: 'financial_entry',
+        entity_id:   id,
+        details:     { estado_anterior: antesDoEstorno, motivo: 'estorno de baixa' },
+      })
+    }
+
     const { error: updErr } = await admin
       .from('financial_entries')
       .update({
@@ -657,7 +702,7 @@ export async function baixarTitulo(
   // Lê o título completo (precisamos de mais campos para criar entry filho)
   const { data: current } = await admin
     .from('financial_entries')
-    .select('amount, discount, document_number, type, description, tutor_id, patient_id, category, invoice_id, source, due_date, professional_id, chart_of_accounts_id, created_by, is_clinic_discount')
+    .select('amount, discount, document_number, type, description, tutor_id, patient_id, category, invoice_id, source, due_date, issue_date, professional_id, chart_of_accounts_id, created_by, is_clinic_discount')
     .eq('id', id)
     .eq('clinic_id', clinicId)
     .eq('status', 'pending')
@@ -665,6 +710,13 @@ export async function baixarTitulo(
 
   if (!current) return { error: 'Título não encontrado ou já baixado.' }
   const cur = current as Record<string, unknown>
+
+  // Transação não acontece antes do título existir. Pagar DEPOIS do
+  // vencimento é normal (atraso); antes da EMISSÃO é impossível.
+  const emitidoEm = cur.issue_date ? String(cur.issue_date) : null
+  if (emitidoEm && String(data.payment_date) < emitidoEm) {
+    return { error: `A data de recebimento (${new Date(data.payment_date + 'T12:00:00').toLocaleDateString('pt-BR')}) é anterior à emissão do título (${new Date(emitidoEm + 'T12:00:00').toLocaleDateString('pt-BR')}).` }
+  }
 
   const baseAmount    = Number(cur.amount ?? 0)
   const baseDiscount  = data.discount !== undefined ? data.discount : Number(cur.discount ?? 0)
@@ -2050,6 +2102,51 @@ export async function persistAutoLinks(batchId: string): Promise<AutoLinkResult 
   if (!clinicId) return { error: 'Não autenticado.' }
   const stmtsRes = await listBatchStatements(batchId)
   if ('error' in stmtsRes) return stmtsRes
+  return amarrarAutomatico(clinicId, stmtsRes)
+}
+
+/**
+ * Auto-amarração do PERÍODO, não do lote.
+ *
+ * Existe porque a importação virou idempotente (migration 0494): reimportar o
+ * mesmo período passou a criar ZERO linhas novas, o lote sai vazio e
+ * `persistAutoLinks(batchId)` não tinha o que casar. Resultado: linha já
+ * importada mas sem vínculo nunca mais era avaliada — nem quando o título
+ * correspondente aparecia depois.
+ *
+ * Esta versão olha as linhas SEM VÍNCULO do período, independente de lote. É o
+ * caso real: o extrato chega antes do título ser lançado.
+ */
+export async function persistAutoLinksByPeriod(params: {
+  bank_account_id: string; start_date: string; end_date: string
+}): Promise<AutoLinkResult | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  if (!params.bank_account_id) return { error: 'Conta bancária obrigatória.' }
+
+  const admin = createAdminClient()
+  const { data, error } = await admin.from('bank_statements')
+    .select('id, date, amount, description, type')
+    .eq('clinic_id', clinicId)
+    .eq('bank_account_id', params.bank_account_id)
+    .gte('date', params.start_date)
+    .lte('date', params.end_date)
+    .order('date', { ascending: true })
+  if (error) return { error: mensagemErro(error, 'lib/actions/financial.ts') }
+
+  const lista = (data ?? []).map(r => {
+    const x = r as Record<string, unknown>
+    return { id: x.id as string, date: x.date as string, amount: Number(x.amount),
+             description: (x.description as string) ?? '', type: x.type as 'credit' | 'debit' }
+  })
+  return amarrarAutomatico(clinicId, lista)
+}
+
+/** Miolo compartilhado: casa linha sem vínculo com título já pago. */
+async function amarrarAutomatico(
+  clinicId: string,
+  stmtsRes: { id: string; date: string; amount: number; description: string; type: 'credit' | 'debit' }[],
+): Promise<AutoLinkResult | { error: string }> {
   const admin = createAdminClient()
 
   const { data: existingLinks } = await admin.from('bank_statement_entry_links')
@@ -2076,7 +2173,12 @@ export async function persistAutoLinks(batchId: string): Promise<AutoLinkResult 
     const hit = paid.find(e => {
       if (usedEntry.has(e.id) || e.type !== wantType) return false
       if (Math.abs(e.amount - s.amount) >= 0.01) return false
-      const eDate = new Date((e.payment_date ?? e.due_date)).getTime()
+      // SÓ a data da baixa. O fallback `?? e.due_date` que havia aqui casava
+      // título pago-sem-data com uma transação qualquer pelo vencimento — e há
+      // títulos `paid` com payment_date nulo no banco (3 no de testes). Sem
+      // data de baixa, não há como afirmar que a transação é essa.
+      if (!e.payment_date) return false
+      const eDate = new Date(e.payment_date).getTime()
       return Math.abs(sTime - eDate) / 86400000 <= 2
     })
     if (!hit) continue
@@ -2405,7 +2507,12 @@ export async function importBankStatementFromSicoob(params: {
 
   const imp = await importStatements({ bank_account_id: params.bank_account_id, source: 'sicoob_api', statements: res.statements })
   if ('error' in imp) return { error: imp.error }
-  const auto = await persistAutoLinks(imp.id)
+  // Auto-amarracao do PERIODO, nao do lote: com a importacao idempotente o
+  // lote sai vazio ao reimportar, e a linha antiga sem vinculo nunca mais
+  // seria avaliada — nem quando o titulo aparece depois.
+  const auto = await persistAutoLinksByPeriod({
+    bank_account_id: params.bank_account_id, start_date: params.start_date, end_date: params.end_date,
+  })
   const linked = 'error' in auto ? 0 : auto.linked
 
   // Diz a verdade sobre o que entrou: reimportar o mesmo periodo agora e
