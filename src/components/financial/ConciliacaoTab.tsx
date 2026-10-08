@@ -37,6 +37,26 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
   // lançamento) já existia via selCands; faltava esta direção, que é o caso do
   // título parcelado ou do repasse que o banco quebra em várias linhas.
   const [selStmts, setSelStmts] = useState<Set<string>>(new Set())
+
+  // Filtro por SITUAÇÃO. Com 313 linhas no período, achar as pendentes uma a
+  // uma é inviável — era a reclamação do operador.
+  type Situacao = 'todos' | 'pendente' | 'vinculado' | 'conciliado'
+  const [situacao, setSituacao] = useState<Situacao>('todos')
+
+  const linhasVisiveis = useMemo(() => statements.filter(s => {
+    if (situacao === 'todos')      return true
+    if (situacao === 'conciliado') return s.reconciled
+    if (situacao === 'vinculado')  return s.linked.length > 0 && !s.reconciled
+    return s.linked.length === 0 && !s.reconciled   // pendente
+  }), [statements, situacao])
+
+  const contagem = useMemo(() => ({
+    todos:      statements.length,
+    pendente:   statements.filter(s => s.linked.length === 0 && !s.reconciled).length,
+    vinculado:  statements.filter(s => s.linked.length > 0 && !s.reconciled).length,
+    conciliado: statements.filter(s => s.reconciled).length,
+  }), [statements])
+
   function alternarStmt(id: string) {
     setSelStmts(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n })
   }
@@ -64,6 +84,16 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
     ;[...candidates.paid, ...candidates.open].forEach(c => m.set(c.id, c))
     return m
   }, [candidates])
+
+  // TOTAIS da seleção dos dois lados. É o que permite ver, antes de amarrar,
+  // se o que foi marcado no extrato fecha com o que foi marcado no sistema.
+  const totalSelExtrato = useMemo(
+    () => statements.filter(s => selStmts.has(s.id)).reduce((a, s) => a + s.amount, 0),
+    [statements, selStmts])
+  const totalSelSistema = useMemo(
+    () => [...selCands].reduce((a, id) => a + (candById.get(id)?.amount ?? 0), 0),
+    [selCands, candById])
+  const diferencaSel = Math.round((totalSelExtrato - totalSelSistema) * 100) / 100
 
   // Carrega o que JA esta importado para a conta no periodo.
   //
@@ -386,7 +416,48 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
               <Building2 className="h-4 w-4 text-slate-300" />
             </div>
             <div className="divide-y divide-slate-100 max-h-[560px] overflow-y-auto">
-              {statements.map(s => {
+              {/* Filtro por situação + totais da seleção. Com 313 linhas no
+                  período, achar as pendentes uma a uma era inviável; e sem os
+                  totais o operador amarrava no escuro, sem saber se o que
+                  marcou de um lado fecha com o outro. */}
+              <div className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50/95 px-4 py-2 backdrop-blur">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {([
+                    ['todos', 'Todos'], ['pendente', 'Pendentes'],
+                    ['vinculado', 'Vinculados'], ['conciliado', 'Conciliados'],
+                  ] as const).map(([k, rotulo]) => (
+                    <button key={k} onClick={() => setSituacao(k)}
+                      className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                        situacao === k ? 'bg-teal-600 text-white' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'}`}>
+                      {rotulo} <span className="tabular-nums opacity-70">{contagem[k]}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {(selStmts.size > 0 || selCands.size > 0) && (
+                  <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-white px-2.5 py-1.5 text-[11px]">
+                    <span className="text-slate-500">
+                      Extrato: <strong className="tabular-nums text-slate-800">{selStmts.size}</strong> marcado(s) ·{' '}
+                      <strong className="tabular-nums text-slate-800">{fmt(totalSelExtrato)}</strong>
+                    </span>
+                    <span className="text-slate-500">
+                      Sistema: <strong className="tabular-nums text-slate-800">{selCands.size}</strong> título(s) ·{' '}
+                      <strong className="tabular-nums text-slate-800">{fmt(totalSelSistema)}</strong>
+                    </span>
+                    <span className={Math.abs(diferencaSel) < 0.005 ? 'font-semibold text-emerald-700' : 'font-semibold text-amber-700'}>
+                      {Math.abs(diferencaSel) < 0.005 ? 'Fecha' : `Diferença ${fmt(diferencaSel)}`}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {linhasVisiveis.length === 0 && statements.length > 0 && (
+                <p className="px-4 py-6 text-center text-sm text-slate-400">
+                  Nenhum lançamento {situacao === 'pendente' ? 'pendente' : situacao === 'vinculado' ? 'vinculado' : 'conciliado'} neste período.
+                </p>
+              )}
+
+              {linhasVisiveis.map(s => {
                 const isSel = activeStmt === s.id
                 const hasLink = s.linked.length > 0
                 return (

@@ -116,6 +116,11 @@ export default function TituloModal({
   // emitir boleto, antes de mandar ao banco.
   const [avisoPagador, setAvisoPagador] = useState<string | null>(null)
 
+  // Excedente na baixa: o que fazer com o que passou do valor do título.
+  // Antes a action CORTAVA em silêncio (Math.min com o valor do título) e o
+  // dinheiro a mais desaparecia. Agora o operador decide.
+  const [excedente, setExcedente] = useState<'troco' | 'credito' | null>(null)
+
   const ehReceber = entryType === 'receivable'
   const rotuloDono = ehReceber ? 'Cliente (Tutor)' : 'Fornecedor'
 
@@ -194,6 +199,14 @@ export default function TituloModal({
   const interest   = parseCurrency(interestStr)
   const netAmount  = (entry?.amount ?? faceValue) - discBaixa + interest
 
+  /** Quanto passou do valor do título. Zero quando o campo está vazio. */
+  const sobra = (() => {
+    const t = amountReceivedStr.trim()
+    if (!t) return 0
+    const v = parseCurrency(t)
+    return Math.round(Math.max(0, v - netAmount) * 100) / 100
+  })()
+
   function handleAmountChange(e: React.ChangeEvent<HTMLInputElement>) {
     const raw = e.target.value.replace(/\D/g, '')
     setAmountStr(raw ? fmtCurrency(raw) : '')
@@ -256,6 +269,12 @@ export default function TituloModal({
     setError(null)
     if (!paymentDate)   { setError('Informe a data de recebimento.'); return }
     if (!paymentMethod) { setError('Informe a modalidade de recebimento.'); return }
+    // Pagou mais que o título: o destino da diferença é decisão do operador,
+    // não um corte silencioso.
+    if (sobra > 0.005 && !excedente) {
+      setError(`O valor recebido é R$ ${sobra.toFixed(2).replace('.', ',')} maior que o do título. Escolha abaixo o que fazer com a diferença.`)
+      return
+    }
 
     // Confirmação extra para repasse Petlove
     if (entryContext?.confirm_kind === 'petlove_repass') {
@@ -268,6 +287,7 @@ export default function TituloModal({
       const rawAmount = amountReceivedStr.trim()
       const parsedAmount = rawAmount ? parseCurrency(rawAmount) : undefined
       const data: BaixarTituloData = {
+        ...(excedente ? { excedente } : {}),
         payment_date:        paymentDate,
         payment_method:      paymentMethod,
         settlement_bank_id:  settleBankId || undefined,
@@ -717,6 +737,32 @@ export default function TituloModal({
                     placeholder={netAmount.toFixed(2).replace('.', ',')}
                     className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold font-mono tabular-nums focus:outline-none focus:ring-2 focus:ring-teal-500/30"
                   />
+                    {/* Excedente: antes a action cortava em silencio
+                        (Math.min com o valor do titulo) e o dinheiro a mais
+                        desaparecia. Agora o destino e declarado. */}
+                    {sobra > 0.005 && (
+                      <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5">
+                        <p className="text-xs font-semibold text-amber-900">
+                          Recebido R$ {sobra.toFixed(2).replace('.', ',')} acima do título. O que fazer com a diferença?
+                        </p>
+                        <div className="mt-1.5 flex flex-wrap gap-2">
+                          <button type="button" onClick={() => setExcedente('troco')}
+                            className={`rounded-md px-2.5 py-1 text-xs font-medium ${excedente === 'troco' ? 'bg-amber-600 text-white' : 'bg-white text-amber-800 border border-amber-300 hover:bg-amber-100'}`}>
+                            Dar troco
+                          </button>
+                          <button type="button" onClick={() => setExcedente('credito')}
+                            disabled={!ownerId}
+                            className={`rounded-md px-2.5 py-1 text-xs font-medium disabled:opacity-40 ${excedente === 'credito' ? 'bg-amber-600 text-white' : 'bg-white text-amber-800 border border-amber-300 hover:bg-amber-100'}`}>
+                            Lançar como crédito do cliente
+                          </button>
+                        </div>
+                        {!ownerId && (
+                          <p className="mt-1 text-[11px] text-amber-700">
+                            Crédito exige cliente informado no título — só troco está disponível.
+                          </p>
+                        )}
+                      </div>
+                    )}
                 </div>
                 {amountReceivedStr.trim() && parseCurrency(amountReceivedStr) < netAmount - 0.005 && (
                   <p className="mt-1.5 text-xs px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800">

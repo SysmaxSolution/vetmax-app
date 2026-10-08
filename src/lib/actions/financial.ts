@@ -121,6 +121,18 @@ export interface BaixarTituloData {
    * com amount_received.
    */
   amount_received?:    number
+  /**
+   * O que fazer com o que passou do valor do título.
+   *
+   * Antes daqui o código CORTAVA em silêncio:
+   *   const amountReceived = Math.max(0, Math.min(data.amount_received, netAmount))
+   * e o comentário chamava isso de "segurança". Tutor pagava R$ 200 num título
+   * de R$ 150 e os R$ 50 desapareciam — sem troco, sem crédito, sem rastro.
+   *
+   *   'troco'   → devolvido na hora; o caixa fica com o valor do título.
+   *   'credito' → fica como adiantamento do tutor (tutor_credits, 'advance').
+   */
+  excedente?:          'troco' | 'credito'
 }
 
 // ─── Types G-10 ───────────────────────────────────────────────────────────────
@@ -724,10 +736,24 @@ export async function baixarTitulo(
   const netAmount     = baseAmount - baseDiscount + baseInterest
   const docNumber     = cur.document_number as string | null
 
-  // Limita amount_received ao netAmount (segurança)
-  const amountReceived = data.amount_received !== undefined
-    ? Math.max(0, Math.min(data.amount_received, netAmount))
-    : netAmount
+  // ─── Excedente: pagou mais que o título ───────────────────────────────────
+  // O código cortava em silêncio com Math.min(..., netAmount) e chamava de
+  // "segurança". Era o contrário: escondia dinheiro. Agora o excedente tem de
+  // ter destino declarado — troco ou crédito.
+  const recebido = data.amount_received !== undefined ? Math.max(0, data.amount_received) : netAmount
+  const tutorId  = (cur.tutor_id as string | null) ?? null
+
+  const { decidirExcedente } = await import('@/lib/financial/excedente')
+  const decisao = decidirExcedente({
+    valorTitulo:   netAmount,
+    valorRecebido: recebido,
+    destino:       data.excedente ?? null,
+    temCliente:    !!tutorId,
+  })
+  if (decisao.erro) return { error: decisao.erro }
+
+  const excesso = decisao.excesso
+  const amountReceived = decisao.baixar
 
   const isPartial = amountReceived < netAmount - 0.01
 
@@ -816,6 +842,42 @@ export async function baixarTitulo(
     .eq('status', 'pending')
 
   if (error) return { error: 'Erro ao baixar título: ' + mensagemErro(error, 'lib/actions/financial.ts') }
+
+  // ─── Destino do excedente ─────────────────────────────────────────────────
+  // Agora o dinheiro a mais tem para onde ir, com rastro. Antes era cortado
+  // em silêncio e simplesmente deixava de existir.
+  if (excesso > 0.005) {
+    if (data.excedente === 'credito' && tutorId) {
+      const { error: credErr } = await admin.from('tutor_credits').insert({
+        clinic_id:  clinicId,
+        tutor_id:   tutorId,
+        amount:     excesso,
+        kind:       'advance',   // adiantamento: saldo a favor do tutor
+        reference:  `Excedente da baixa do título ${docNumber ?? id.slice(0, 8)}`,
+        created_by: actor?.id ?? null,
+      })
+      if (credErr) {
+        // O título já foi baixado. Não dá para fingir que o crédito entrou.
+        return { error: `Título baixado, mas a diferença de R$ ${excesso.toFixed(2)} NÃO foi lançada como crédito: ${mensagemErro(credErr, 'lib/actions/financial.ts')} Lance o crédito manualmente em Financeiro > Créditos.` }
+      }
+    }
+    // Troco ou crédito, o fato fica registrado: é o que explica a diferença
+    // entre o que o tutor entregou e o que o título valia.
+    await admin.from('audit_logs').insert({
+      clinic_id:   clinicId,
+      user_id:     actor?.id ?? null,
+      action:      data.excedente === 'credito' ? 'overpayment_to_credit' : 'overpayment_change_given',
+      entity_type: 'financial_entry',
+      entity_id:   id,
+      details: {
+        valor_do_titulo: netAmount,
+        valor_recebido:  recebido,
+        excedente:       excesso,
+        destino:         data.excedente,
+        tutor_id:        tutorId,
+      },
+    })
+  }
 
   // Lança crédito no extrato bancário
   if (data.settlement_bank_id) {
