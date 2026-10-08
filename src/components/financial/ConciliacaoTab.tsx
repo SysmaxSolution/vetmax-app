@@ -8,6 +8,7 @@ import {
   linkEntriesToStatement, unlinkEntry, unlinkStatement, reconcileLines, unreconcileLine,
   settleOpenEntryAndLink, insertEntryFromStatement, importBankStatementFromSicoob,
   getStatementsWithLinksByPeriod, persistAutoLinksByPeriod,
+  linkStatementsToEntry, buscarTitulosParaVincular,
 } from '@/lib/actions/financial'
 import { parseFile } from '@/lib/parsers/bankStatementParser'
 import {
@@ -32,6 +33,13 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
 
   const [activeStmt, setActiveStmt] = useState<string | null>(null)   // linha do extrato selecionada
   const [selCands, setSelCands]   = useState<Set<string>>(new Set())  // candidatos marcados p/ vincular
+  // Multi-seleção de LANÇAMENTOS do extrato. O inverso (vários títulos → um
+  // lançamento) já existia via selCands; faltava esta direção, que é o caso do
+  // título parcelado ou do repasse que o banco quebra em várias linhas.
+  const [selStmts, setSelStmts] = useState<Set<string>>(new Set())
+  function alternarStmt(id: string) {
+    setSelStmts(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n })
+  }
   const [showOpen, setShowOpen]   = useState(false)
   const [search, setSearch]       = useState('')
 
@@ -211,6 +219,45 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
     setSelCands(new Set()); await reload(); setBusy(false)
   }
 
+  // Vincula os LANÇAMENTOS marcados a UM título. Caso do título parcelado ou
+  // do repasse que o banco quebra em várias linhas: um título nosso
+  // corresponde a 3 créditos. Antes o operador escolhia uma linha e deixava as
+  // outras órfãs.
+  async function handleVincularLancamentos(entryId: string) {
+    if (selStmts.size === 0 || busy) return
+    setBusy(true); setErrorMsg(null); setSuccessMsg(null)
+    const r = await linkStatementsToEntry(entryId, [...selStmts])
+    if ('error' in r) setErrorMsg(r.error)
+    else { setSuccessMsg(`${r.linked} lançamento(s) vinculados ao título.`); setSelStmts(new Set()); await reload() }
+    setBusy(false)
+  }
+
+  // Busca nos títulos quando o automático não casou — por descrição, valor e
+  // data da BAIXA (que é a que casa com o extrato, não o vencimento). Antes a
+  // tela listava só os candidatos do período, sem busca: se a baixa foi
+  // lançada com data diferente, o título era inencontrável.
+  const [buscaTitulo, setBuscaTitulo] = useState('')
+  const [achados, setAchados] = useState<ReconcCandidate[]>([])
+  const [buscando, setBuscando] = useState(false)
+  async function buscarTitulos() {
+    const termo = buscaTitulo.trim()
+    if (!termo && !active) return
+    setBuscando(true); setErrorMsg(null)
+    const r = await buscarTitulosParaVincular({
+      termo: termo || undefined,
+      // Com uma linha selecionada, usa o valor dela como âncora e abre margem
+      // para achar o título com juros ou desconto.
+      valor: active ? active.amount : undefined,
+      valor_margem: active ? Math.max(0.01, active.amount * 0.02) : undefined,
+      tipo: active ? (active.type === 'credit' ? 'receivable' : 'payable') : undefined,
+      incluir_abertos: true,
+      limite: 40,
+    })
+    if ('error' in r) setErrorMsg(r.error)
+    else setAchados(r)
+    setBuscando(false)
+  }
+
   async function handleUnlinkEntry(entryId: string) {
     if (!active || busy) return
     setBusy(true); const r = await unlinkEntry(active.id, entryId)
@@ -346,8 +393,23 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
                   <div key={s.id} onClick={() => selectLine(s.id)}
                     className={`px-4 py-2.5 cursor-pointer transition-colors ${isSel ? 'bg-teal-50 border-l-4 border-teal-500' : s.reconciled ? 'bg-sky-50/40 hover:bg-sky-50' : hasLink ? 'bg-emerald-50/30 hover:bg-emerald-50/60' : 'hover:bg-slate-50'}`}>
                     <div className="flex items-center justify-between gap-2">
+                      {/* Marcar vários lançamentos para amarrar a UM título. */}
+                      <input
+                        type="checkbox"
+                        checked={selStmts.has(s.id)}
+                        onClick={e => e.stopPropagation()}
+                        onChange={() => alternarStmt(s.id)}
+                        className="shrink-0"
+                        aria-label={`Selecionar lançamento de ${fmt(s.amount)}`}
+                      />
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium text-slate-700 truncate">{s.description}</p>
+                        {/* DE QUEM é a linha. O banco manda em descInfComplementar
+                            e a gente descartava: o operador só via
+                            "PIX RECEBIDO - OUTRA IF", que não identifica nada. */}
+                        {s.contraparte && (
+                          <p className="truncate text-xs text-slate-500" title={s.contraparte}>{s.contraparte}</p>
+                        )}
                         <p className="text-xs text-slate-400 font-mono tabular-nums">{fmtDate(s.date)}</p>
                       </div>
                       <p className={`text-sm font-bold font-mono tabular-nums shrink-0 ${s.type === 'credit' ? 'text-emerald-700' : 'text-red-700'}`}>
@@ -415,6 +477,54 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
                     <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Filtrar por descrição, tutor, documento…"
                       className="w-full rounded-lg border border-slate-200 bg-white pl-8 pr-3 py-1.5 text-xs focus:border-teal-500 focus:outline-none" />
                   </div>
+
+                  {/* BUSCA no banco, não filtro da lista. O filtro acima só
+                      peneira os candidatos do período; quando o automático não
+                      casou porque a baixa foi lançada com data diferente, o
+                      título não está na lista — e era inencontrável. */}
+                  <div className="mt-2 flex items-center gap-2">
+                    <input
+                      value={buscaTitulo}
+                      onChange={e => setBuscaTitulo(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') buscarTitulos() }}
+                      placeholder="Buscar nos títulos baixados (fora do período)…"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs focus:border-teal-500 focus:outline-none"
+                    />
+                    <button onClick={buscarTitulos} disabled={buscando}
+                      className="shrink-0 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                      {buscando ? '…' : 'Buscar'}
+                    </button>
+                  </div>
+                  {active && (
+                    <p className="mt-1 text-[11px] text-slate-400">
+                      Ancorado em {fmt(active.amount)} (±2%) e no tipo da linha selecionada.
+                    </p>
+                  )}
+                  {achados.length > 0 && (
+                    <div className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-slate-200 bg-white">
+                      <p className="border-b border-slate-100 px-3 py-1.5 text-[11px] font-semibold uppercase text-slate-500">
+                        {achados.length} encontrado(s) na busca
+                      </p>
+                      {achados.map(c => (
+                        <div key={c.id} className="flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-slate-50">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate font-medium text-slate-700">{c.description}</p>
+                            <p className="tabular-nums text-slate-400">
+                              {fmt(c.amount)} · {c.status === 'paid' ? `baixado ${fmtDate(c.payment_date ?? c.due_date)}` : `aberto, venc. ${fmtDate(c.due_date)}`}
+                            </p>
+                          </div>
+                          {selStmts.size > 0 ? (
+                            <button onClick={() => handleVincularLancamentos(c.id)} disabled={busy}
+                              className="shrink-0 rounded-md bg-teal-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-teal-700 disabled:opacity-50">
+                              Vincular {selStmts.size} marcado(s)
+                            </button>
+                          ) : (
+                            <span className="shrink-0 text-[10px] text-slate-400">marque lançamentos à esquerda</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="divide-y divide-slate-100 max-h-[300px] overflow-y-auto flex-1">
                   {rightList.length === 0 && <p className="px-4 py-6 text-center text-sm text-slate-400">Nenhum título candidato{showOpen ? '' : ' pago'} no período.</p>}

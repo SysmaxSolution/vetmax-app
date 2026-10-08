@@ -32,6 +32,12 @@ export interface SicoobTx {
    * transactionId e o que permite importacao idempotente.
    */
   tx_id?: string
+  /**
+   * `descInfComplementar` cru. Para Pix traz o NOME da contraparte e o
+   * documento mascarado; para cartao, a adquirente e a bandeira. Vinha sendo
+   * descartado — o operador so via "PIX RECEBIDO - OUTRA IF".
+   */
+  contraparte?: string
 }
 
 const SANDBOX = {
@@ -184,6 +190,7 @@ export function extrairTransacoes(corpo: string): SicoobTx[] {
       type: inferType(t.tipo, valor),
       external_id: t.numeroDocumento ? String(t.numeroDocumento) : undefined,
       tx_id: t.transactionId ? String(t.transactionId) : undefined,
+      contraparte: t.descInfComplementar ? String(t.descInfComplementar) : undefined,
     })
   }
   return out
