@@ -60,6 +60,14 @@ export const EsquemaCriarTitulo = z.object({
   .refine(d => !d.installment_number || !d.total_installments || d.installment_number <= d.total_installments, {
     message: 'Número da parcela não pode ser maior que o total de parcelas.', path: ['installment_number'],
   })
+  // Título não vence antes de existir. Não havia NENHUMA checagem entre as
+  // datas: dava para gravar vencimento anterior à emissão.
+  //
+  // Atenção ao que NÃO é erro: pagar DEPOIS do vencimento é normal (título em
+  // atraso). A regra é emissão ≤ vencimento, não pagamento ≤ vencimento.
+  .refine(d => !d.issue_date || String(d.issue_date) <= String(d.due_date), {
+    message: 'A data de emissão não pode ser posterior ao vencimento.', path: ['issue_date'],
+  })
 
 /** Edição: mesmos campos, todos opcionais, mas cada um ainda validado. */
 export const EsquemaAtualizarTitulo = z.object({
