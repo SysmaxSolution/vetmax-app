@@ -88,8 +88,12 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
 
   // TOTAIS da seleção dos dois lados. É o que permite ver, antes de amarrar,
   // se o que foi marcado no extrato fecha com o que foi marcado no sistema.
+  // Em MÓDULO, igual a `linkManyToMany`. O extrato traz débito negativo e o
+  // título a pagar positivo: somando com sinal, a diferença de uma conciliação
+  // de despesa virava o dobro do valor e o aviso na tela não batia com o que o
+  // vínculo calculava.
   const totalSelExtrato = useMemo(
-    () => statements.filter(s => selStmts.has(s.id)).reduce((a, s) => a + s.amount, 0),
+    () => statements.filter(s => selStmts.has(s.id)).reduce((a, s) => a + Math.abs(s.amount), 0),
     [statements, selStmts])
   const totalSelSistema = useMemo(
     () => [...selCands].reduce((a, id) => a + (candById.get(id)?.amount ?? 0), 0),
