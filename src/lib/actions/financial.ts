@@ -2050,6 +2050,51 @@ export async function persistAutoLinks(batchId: string): Promise<AutoLinkResult 
   if (!clinicId) return { error: 'Não autenticado.' }
   const stmtsRes = await listBatchStatements(batchId)
   if ('error' in stmtsRes) return stmtsRes
+  return amarrarAutomatico(clinicId, stmtsRes)
+}
+
+/**
+ * Auto-amarração do PERÍODO, não do lote.
+ *
+ * Existe porque a importação virou idempotente (migration 0494): reimportar o
+ * mesmo período passou a criar ZERO linhas novas, o lote sai vazio e
+ * `persistAutoLinks(batchId)` não tinha o que casar. Resultado: linha já
+ * importada mas sem vínculo nunca mais era avaliada — nem quando o título
+ * correspondente aparecia depois.
+ *
+ * Esta versão olha as linhas SEM VÍNCULO do período, independente de lote. É o
+ * caso real: o extrato chega antes do título ser lançado.
+ */
+export async function persistAutoLinksByPeriod(params: {
+  bank_account_id: string; start_date: string; end_date: string
+}): Promise<AutoLinkResult | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  if (!params.bank_account_id) return { error: 'Conta bancária obrigatória.' }
+
+  const admin = createAdminClient()
+  const { data, error } = await admin.from('bank_statements')
+    .select('id, date, amount, description, type')
+    .eq('clinic_id', clinicId)
+    .eq('bank_account_id', params.bank_account_id)
+    .gte('date', params.start_date)
+    .lte('date', params.end_date)
+    .order('date', { ascending: true })
+  if (error) return { error: mensagemErro(error, 'lib/actions/financial.ts') }
+
+  const lista = (data ?? []).map(r => {
+    const x = r as Record<string, unknown>
+    return { id: x.id as string, date: x.date as string, amount: Number(x.amount),
+             description: (x.description as string) ?? '', type: x.type as 'credit' | 'debit' }
+  })
+  return amarrarAutomatico(clinicId, lista)
+}
+
+/** Miolo compartilhado: casa linha sem vínculo com título já pago. */
+async function amarrarAutomatico(
+  clinicId: string,
+  stmtsRes: { id: string; date: string; amount: number; description: string; type: 'credit' | 'debit' }[],
+): Promise<AutoLinkResult | { error: string }> {
   const admin = createAdminClient()
 
   const { data: existingLinks } = await admin.from('bank_statement_entry_links')
@@ -2405,7 +2450,12 @@ export async function importBankStatementFromSicoob(params: {
 
   const imp = await importStatements({ bank_account_id: params.bank_account_id, source: 'sicoob_api', statements: res.statements })
   if ('error' in imp) return { error: imp.error }
-  const auto = await persistAutoLinks(imp.id)
+  // Auto-amarracao do PERIODO, nao do lote: com a importacao idempotente o
+  // lote sai vazio ao reimportar, e a linha antiga sem vinculo nunca mais
+  // seria avaliada — nem quando o titulo aparece depois.
+  const auto = await persistAutoLinksByPeriod({
+    bank_account_id: params.bank_account_id, start_date: params.start_date, end_date: params.end_date,
+  })
   const linked = 'error' in auto ? 0 : auto.linked
 
   // Diz a verdade sobre o que entrou: reimportar o mesmo periodo agora e

@@ -7,7 +7,7 @@ import {
   importStatements, getBBStatement, getStatementsWithLinks, persistAutoLinks, listReconcCandidates,
   linkEntriesToStatement, unlinkEntry, unlinkStatement, reconcileLines, unreconcileLine,
   settleOpenEntryAndLink, insertEntryFromStatement, importBankStatementFromSicoob,
-  getStatementsWithLinksByPeriod,
+  getStatementsWithLinksByPeriod, persistAutoLinksByPeriod,
 } from '@/lib/actions/financial'
 import { parseFile } from '@/lib/parsers/bankStatementParser'
 import {
@@ -82,6 +82,23 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
     })()
     return () => { valido = false }
   }, [selectedBank, apiStart, apiEnd])
+
+  // Amarra o periodo carregado, sem depender de reimportar. O caso real: o
+  // extrato chega antes de o titulo ser lancado, e aí a linha fica orfa.
+  async function amarrarPeriodo() {
+    if (!selectedBank || busy) return
+    setBusy(true); setErrorMsg(null); setSuccessMsg(null)
+    const r = await persistAutoLinksByPeriod({ bank_account_id: selectedBank, start_date: apiStart, end_date: apiEnd })
+    if ('error' in r) setErrorMsg(r.error)
+    else {
+      setMatchResult(r)
+      setSuccessMsg(r.linked > 0
+        ? `${r.linked} lançamento(s) vinculados automaticamente.`
+        : 'Nenhum vínculo novo: as linhas sem título correspondente continuam aguardando.')
+      await reload()
+    }
+    setBusy(false)
+  }
 
   async function loadData(batchId: string, start: string, end: string) {
     const [st, cand] = await Promise.all([
@@ -269,6 +286,14 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
             className="flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-50">
             {apiLoading ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <Building2 className="h-4 w-4" />} Buscar extrato (Sicoob)
           </button>
+          {/* Amarra o periodo ja carregado, sem reimportar. Caso real: o
+              extrato chega antes do titulo ser lancado, e a linha fica orfa. */}
+          {jaImportado !== null && jaImportado > 0 && (
+            <button onClick={amarrarPeriodo} disabled={!selectedBank || busy}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+              <Link2 className="h-4 w-4" /> Vincular automaticamente
+            </button>
+          )}
           <span className="text-[10px] text-sky-600/80 mb-2">API Conta Corrente v4 · sandbox de teste (produção usa o e-CNPJ da clínica)</span>
         </div>
         )}
