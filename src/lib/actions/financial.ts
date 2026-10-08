@@ -2410,6 +2410,133 @@ export async function buscarTitulosParaVincular(params: {
   })
 }
 
+/**
+ * Vinculo N para N: cada lancamento marcado com cada titulo marcado.
+ *
+ * O botao principal da tela chamava `linkEntriesToStatement(active.id, ...)`
+ * — amarrava os titulos ao lancamento ATIVO e ignorava a multi-selecao de
+ * lancamentos. Marcando 3 linhas e 2 titulos, uma linha ficava de fora.
+ *
+ * Aqui os dois lados sao plurais, e a conferencia de clinica cobre os dois.
+ */
+export async function linkManyToMany(params: {
+  statement_ids: string[]
+  entry_ids:     string[]
+}): Promise<{ ok: true; linked: number; total_extrato: number; total_sistema: number; diferenca: number } | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  if (!params.statement_ids.length) return { error: 'Selecione ao menos um lançamento do extrato.' }
+  if (!params.entry_ids.length)     return { error: 'Selecione ao menos um título.' }
+
+  const admin = createAdminClient()
+
+  const { data: ss } = await admin.from('bank_statements')
+    .select('id, amount').eq('clinic_id', clinicId).in('id', params.statement_ids)
+  const { data: ee } = await admin.from('financial_entries')
+    .select('id, amount, discount, interest, status').eq('clinic_id', clinicId).in('id', params.entry_ids)
+
+  const linhas  = (ss ?? []) as { id: string; amount: number }[]
+  const titulos = (ee ?? []) as { id: string; amount: number; discount: number | null; interest: number | null; status: string }[]
+  if (!linhas.length)  return { error: 'Nenhum lançamento válido para vincular.' }
+  if (!titulos.length) return { error: 'Nenhum título válido para vincular.' }
+
+  const cent = (v: number) => Math.round(v * 100) / 100
+  const totalExtrato = cent(linhas.reduce((a, x) => a + Math.abs(Number(x.amount)), 0))
+  const totalSistema = cent(titulos.reduce((a, x) => a + (Number(x.amount) - Number(x.discount ?? 0) + Number(x.interest ?? 0)), 0))
+
+  // Produto cartesiano: e o que N para N significa. O upsert ignora o que ja
+  // existe, entao repetir a operacao nao duplica.
+  const rows = linhas.flatMap(l => titulos.map(t => ({
+    clinic_id: clinicId, statement_id: l.id, entry_id: t.id,
+  })))
+  const { error } = await admin.from('bank_statement_entry_links')
+    .upsert(rows, { onConflict: 'statement_id,entry_id', ignoreDuplicates: true })
+  if (error) return { error: 'Erro ao vincular: ' + mensagemErro(error, 'lib/actions/financial.ts') }
+
+  return {
+    ok: true, linked: rows.length,
+    total_extrato: totalExtrato, total_sistema: totalSistema,
+    diferenca: cent(totalExtrato - totalSistema),
+  }
+}
+
+/**
+ * Cria um titulo para a DIFERENCA de uma conciliacao que nao fecha, e o amarra
+ * aos mesmos lancamentos.
+ *
+ * Existe porque o extrato e o sistema nem sempre fecham: tarifa que o banco
+ * cobrou e ninguem lancou, juros recebido, desconto concedido na boca do
+ * caixa. Antes o operador tinha de sair da tela, lancar o titulo a mao,
+ * voltar, procurar e vincular — ou deixava a linha sem conciliar.
+ *
+ * O SINAL decide o tipo: sobrou dinheiro no extrato (entrou mais do que os
+ * titulos somam) -> a receber; faltou -> a pagar.
+ */
+export async function criarTituloDaDiferenca(params: {
+  statement_ids: string[]
+  valor:         number
+  description:   string
+  tipo?:         EntryType
+  due_date?:     string
+  category?:     string
+  tutor_id?:     string
+  supplier_id?:  string
+  chart_of_accounts_id?: string
+  notes?:        string
+}): Promise<{ ok: true; entry_id: string } | { error: string }> {
+  const clinicId = await getClinicId()
+  if (!clinicId) return { error: 'Não autenticado.' }
+  const user = await getAuthUser()
+  if (!user) return { error: 'Não autenticado.' }
+  if (!params.statement_ids.length) return { error: 'Selecione os lançamentos da conciliação.' }
+
+  const valor = Math.round(Math.abs(params.valor) * 100) / 100
+  if (!(valor > 0)) return { error: 'A diferença precisa ser maior que zero.' }
+  if (!params.description?.trim()) return { error: 'Informe a descrição do título da diferença.' }
+
+  const admin = createAdminClient()
+  const { data: ss } = await admin.from('bank_statements')
+    .select('id, date').eq('clinic_id', clinicId).in('id', params.statement_ids).order('date')
+  const linhas = (ss ?? []) as { id: string; date: string }[]
+  if (!linhas.length) return { error: 'Nenhum lançamento válido.' }
+
+  // Data do titulo acompanha a transacao, nao o dia de hoje: e ela que explica
+  // a conciliacao daquele dia.
+  const dataTransacao = linhas[linhas.length - 1].date
+  const tipo: EntryType = params.tipo ?? (params.valor >= 0 ? 'receivable' : 'payable')
+
+  const { data: nova, error } = await admin.from('financial_entries').insert({
+    clinic_id:  clinicId,
+    type:       tipo,
+    description: params.description.trim(),
+    amount:     valor,
+    discount:   0,
+    interest:   0,
+    issue_date: dataTransacao,
+    due_date:   params.due_date || dataTransacao,
+    category:   params.category || null,
+    notes:      params.notes || 'Título gerado pela conciliação bancária (diferença entre extrato e sistema).',
+    tutor_id:   params.tutor_id || null,
+    supplier_id: params.supplier_id || null,
+    chart_of_accounts_id: params.chart_of_accounts_id || null,
+    created_by: user.id,
+    status:     'pending',
+    source:     'manual',
+  }).select('id').single()
+  if (error || !nova) return { error: 'Erro ao criar o título da diferença: ' + mensagemErro(error, 'lib/actions/financial.ts') }
+
+  const entryId = (nova as { id: string }).id
+  const { error: linkErr } = await admin.from('bank_statement_entry_links')
+    .upsert(linhas.map(l => ({ clinic_id: clinicId, statement_id: l.id, entry_id: entryId })),
+            { onConflict: 'statement_id,entry_id', ignoreDuplicates: true })
+  if (linkErr) {
+    // O titulo existe. Nao da para fingir que o vinculo entrou.
+    return { error: `Título da diferença criado, mas NÃO foi vinculado: ${mensagemErro(linkErr, 'lib/actions/financial.ts')} Vincule manualmente.` }
+  }
+
+  return { ok: true, entry_id: entryId }
+}
+
 export async function reconcileLines(statementIds: string[]): Promise<{ ok: true; reconciled: number } | { error: string }> {
   const clinicId = await getClinicId()
   if (!clinicId) return { error: 'Não autenticado.' }
