@@ -8,9 +8,10 @@ import {
   linkEntriesToStatement, unlinkEntry, unlinkStatement, reconcileLines, unreconcileLine,
   settleOpenEntryAndLink, insertEntryFromStatement, importBankStatementFromSicoob,
   getStatementsWithLinksByPeriod, persistAutoLinksByPeriod,
-  linkStatementsToEntry, buscarTitulosParaVincular,
+  linkStatementsToEntry, buscarTitulosParaVincular, linkManyToMany,
 } from '@/lib/actions/financial'
 import { parseFile } from '@/lib/parsers/bankStatementParser'
+import DiferencaModal from './DiferencaModal'
 import {
   Upload, RefreshCcw, CheckCircle2, Circle, Link2, Link2Off, Building2, FileText,
   PlusCircle, Search, Undo2, Sparkles,
@@ -235,18 +236,64 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
   }
   function selectLine(id: string) { setActiveStmt(prev => prev === id ? null : id); setSelCands(new Set()); setSearch('') }
 
+  /**
+   * Lançamentos que o Vincular vai amarrar.
+   *
+   * As caixas de seleção (`selStmts`) MANDAM quando há alguma marcada. Antes
+   * daqui o botão amarrava só em `active.id` — a linha aberta — e ignorava a
+   * multi-seleção: marcando 3 linhas e 2 títulos, uma linha ficava de fora e o
+   * operador não tinha como saber qual.
+   *
+   * Sem nada marcado vale a linha aberta, que é o caso de 1 para 1.
+   */
+  const alvosExtrato = useMemo(() => {
+    if (selStmts.size > 0) return statements.filter(s => selStmts.has(s.id))
+    return active ? [active] : []
+  }, [selStmts, statements, active])
+
+  const [diferencaAberta, setDiferencaAberta] = useState<
+    { statementIds: string[]; diferenca: number; totalExtrato: number; totalSistema: number } | null
+  >(null)
+
   async function handleLink() {
-    if (!active || selCands.size === 0 || busy) return
-    setBusy(true); setErrorMsg(null)
+    if (alvosExtrato.length === 0 || selCands.size === 0 || busy) return
+    setBusy(true); setErrorMsg(null); setSuccessMsg(null)
+
+    const idsExtrato = alvosExtrato.map(s => s.id)
     const chosen = [...selCands]
-    const paidIds = chosen.filter(id => candById.get(id)?.status === 'paid')
     const openIds = chosen.filter(id => candById.get(id)?.status === 'pending')
-    if (paidIds.length) { const r = await linkEntriesToStatement(active.id, paidIds); if ('error' in r) { setErrorMsg(r.error); setBusy(false); return } }
+
+    // A baixa do título aberto usa a data da ÚLTIMA transação marcada: é o dia
+    // em que o dinheiro terminou de entrar.
+    const dataBaixa = [...alvosExtrato].sort((a, b) => a.date.localeCompare(b.date)).slice(-1)[0].date
+
     for (const id of openIds) {
-      const r = await settleOpenEntryAndLink({ entry_id: id, statement_id: active.id, bank_account_id: selectedBank, payment_date: active.date })
+      const r = await settleOpenEntryAndLink({
+        entry_id: id, statement_id: idsExtrato[0],
+        bank_account_id: selectedBank, payment_date: dataBaixa,
+      })
       if (r.error) { setErrorMsg(r.error); setBusy(false); return }
     }
-    setSelCands(new Set()); await reload(); setBusy(false)
+
+    // Um único passo cobre o produto cartesiano, inclusive o vínculo que a
+    // baixa acima já criou (o upsert ignora o repetido).
+    const r = await linkManyToMany({ statement_ids: idsExtrato, entry_ids: chosen })
+    if ('error' in r) { setErrorMsg(r.error); setBusy(false); return }
+
+    setSelCands(new Set()); setSelStmts(new Set())
+    await reload()
+    setBusy(false)
+
+    if (Math.abs(r.diferenca) >= 0.005) {
+      // Não fechou. Em vez de deixar a linha pendente para sempre, perguntar
+      // onde lançar a sobra.
+      setDiferencaAberta({
+        statementIds: idsExtrato, diferenca: r.diferenca,
+        totalExtrato: r.total_extrato, totalSistema: r.total_sistema,
+      })
+    } else {
+      setSuccessMsg(`${idsExtrato.length} lançamento(s) e ${chosen.length} título(s) vinculados. Conciliação fecha.`)
+    }
   }
 
   // Vincula os LANÇAMENTOS marcados a UM título. Caso do título parcelado ou
@@ -447,6 +494,18 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
                     <span className={Math.abs(diferencaSel) < 0.005 ? 'font-semibold text-emerald-700' : 'font-semibold text-amber-700'}>
                       {Math.abs(diferencaSel) < 0.005 ? 'Fecha' : `Diferença ${fmt(diferencaSel)}`}
                     </span>
+                    {Math.abs(diferencaSel) >= 0.005 && selStmts.size > 0 && selCands.size > 0 && (
+                      <button
+                        onClick={() => setDiferencaAberta({
+                          statementIds: [...selStmts],
+                          diferenca: diferencaSel,
+                          totalExtrato: totalSelExtrato,
+                          totalSistema: totalSelSistema,
+                        })}
+                        className="rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800 hover:bg-amber-100">
+                        Lançar diferença
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -621,9 +680,10 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
 
                 {/* ações da linha ativa */}
                 <div className="px-4 py-3 border-t border-slate-100 bg-slate-50 flex flex-wrap items-center gap-2">
-                  <button onClick={handleLink} disabled={busy || selCands.size === 0}
+                  <button onClick={handleLink} disabled={busy || selCands.size === 0 || alvosExtrato.length === 0}
                     className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50 flex items-center gap-2">
-                    {busy ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />} Vincular ({selCands.size})
+                    {busy ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
+                    Vincular {alvosExtrato.length} x {selCands.size}
                   </button>
                   <button onClick={handleInsertNew} disabled={busy} className="rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50 disabled:opacity-50 flex items-center gap-1.5"><PlusCircle className="h-4 w-4" /> Inserir título</button>
                   {active.linked.length > 0 && !active.reconciled && (
@@ -661,6 +721,17 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
           <p className="text-sm font-semibold text-slate-400">Selecione uma conta e importe um extrato para iniciar a conciliação.</p>
           <p className="text-xs text-slate-400 mt-1">Formatos: OFX, CSV, TXT (Bradesco/Itaú), XLSX · vários títulos podem compor uma linha</p>
         </div>
+      )}
+
+      {diferencaAberta && (
+        <DiferencaModal
+          statementIds={diferencaAberta.statementIds}
+          diferenca={diferencaAberta.diferenca}
+          totalExtrato={diferencaAberta.totalExtrato}
+          totalSistema={diferencaAberta.totalSistema}
+          onClose={() => setDiferencaAberta(null)}
+          onCriado={async (msg) => { setDiferencaAberta(null); setSuccessMsg(msg); await reload() }}
+        />
       )}
     </div>
   )

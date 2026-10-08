@@ -205,9 +205,14 @@ function EntryRow({
         )}
       </td>
 
-      {/* Cadastro */}
-      <td className="py-3 px-4 text-xs text-slate-400 whitespace-nowrap hidden lg:table-cell font-mono tabular-nums">
-        {fmtDate(entry.created_at.split('T')[0])}
+      {/* Transacao: quando a operacao aconteceu de fato */}
+      <td className="py-3 px-4 text-xs whitespace-nowrap hidden lg:table-cell font-mono tabular-nums"
+          title={`Cadastrado no sistema em ${fmtDate(entry.created_at.split('T')[0])}`}>
+        {entry.payment_date
+          ? <span className="text-slate-600">{fmtDate(entry.payment_date)}</span>
+          : entry.issue_date
+            ? <span className="text-slate-400">{fmtDate(entry.issue_date)}</span>
+            : <span className="text-slate-300">&mdash;</span>}
       </td>
 
       {/* Vencimento */}
@@ -454,8 +459,12 @@ export default function FinancialWorkspace({
         (e.patient_name ?? '').toLowerCase().includes(q)
       )
     }
-    if (launchFrom) list = list.filter(e => e.created_at.split('T')[0] >= launchFrom)
-    if (launchTo)   list = list.filter(e => e.created_at.split('T')[0] <= launchTo)
+    // Filtra pela MESMA data que a coluna mostra. Antes filtrava por
+    // `created_at`: com o seed inteiro cadastrado hoje, "de 01/09 a 30/09"
+    // devolvia vazio e a tela parecia quebrada.
+    const dataRealizada = (e: FinancialEntry) => e.payment_date ?? e.issue_date ?? ''
+    if (launchFrom) list = list.filter(e => { const d = dataRealizada(e); return d !== '' && d >= launchFrom })
+    if (launchTo)   list = list.filter(e => { const d = dataRealizada(e); return d !== '' && d <= launchTo })
     const vMin = parseFloat(valorMin.replace(',', '.'))
     const vMax = parseFloat(valorMax.replace(',', '.'))
     if (Number.isFinite(vMin)) list = list.filter(e => (e.amount - (e.discount ?? 0)) >= vMin)
@@ -704,12 +713,12 @@ export default function FinancialWorkspace({
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">Lançamento — De</label>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">Transação — De</label>
                     <input type="date" value={launchFrom} onChange={e => setLaunchFrom(e.target.value)}
                       className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20" />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">Lançamento — Até</label>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">Transação — Até</label>
                     <input type="date" value={launchTo} onChange={e => setLaunchTo(e.target.value)}
                       className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20" />
                   </div>
@@ -791,7 +800,7 @@ export default function FinancialWorkspace({
                       </th>
                       <th className="py-3 px-3 text-left text-xs font-bold text-slate-500 uppercase whitespace-nowrap hidden sm:table-cell">Nº</th>
                       <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase">Descrição</th>
-                      <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase whitespace-nowrap hidden lg:table-cell">Cadastro</th>
+                      <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase whitespace-nowrap hidden lg:table-cell" title="Data da baixa quando o título foi liquidado; data de emissão enquanto estiver aberto">Transação</th>
                       <th className="py-3 px-4 text-left text-xs font-bold text-slate-500 uppercase whitespace-nowrap hidden sm:table-cell">Vencimento</th>
                       <th className="py-3 px-4 text-right text-xs font-bold text-slate-500 uppercase">Valor</th>
                       <th className="py-3 px-3 text-left text-xs font-bold text-slate-500 uppercase">Status</th>
