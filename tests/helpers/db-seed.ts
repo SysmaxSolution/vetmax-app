@@ -1,6 +1,7 @@
 import { createAdminClient } from './supabase-test-client';
 import fixtures from '../fixtures/test-data.json';
 import { createTestUser, deleteTestUser } from './supabase-test-client';
+import { senhaDeTeste } from './senha-teste';
 
 const admin = createAdminClient();
 
@@ -53,7 +54,7 @@ export async function seedUsers(): Promise<Record<string, string>> {
       // Find-or-update: preserva o mesmo UUID entre runs para evitar eventual consistency do Supabase auth
       const id = await createTestUser({
         email:     user.email,
-        password:  user.password,
+        password:  senhaDeTeste(),
         role:      user.role,
         clinic_id: user.clinic_id,
         full_name: user.full_name,

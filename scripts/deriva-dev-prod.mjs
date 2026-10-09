@@ -35,10 +35,15 @@ async function ler(conn) {
     out[k] = new Set(rows.map(r => Object.values(r)[0]))
   }
   // definicao das funcoes, para pegar corpo diferente com mesmo nome
+  // Chave inclui a ASSINATURA. Indexar só por `proname` dá falso positivo em
+  // funcao com overload: `rpc_create_sale` tem duas versoes nos dois bancos, e
+  // o Map guardava a ultima de cada lado — comparando a assinatura A de um
+  // contra a B do outro, acusava diferenca onde nao havia.
   const { rows: fd } = await c.query(`
-    select p.proname, md5(pg_get_functiondef(p.oid)) h from pg_proc p
-     join pg_namespace n on n.oid=p.pronamespace where n.nspname='public'`)
-  out._corpoFuncao = new Map(fd.map(r => [r.proname, r.h]))
+    select p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')' chave,
+           md5(pg_get_functiondef(p.oid)) h
+      from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public'`)
+  out._corpoFuncao = new Map(fd.map(r => [r.chave, r.h]))
   await c.query('COMMIT'); await c.end()
   return out
 }
