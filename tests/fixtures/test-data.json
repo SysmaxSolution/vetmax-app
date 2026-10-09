@@ -12,21 +12,21 @@
   "users": {
     "adminA": {
       "email": "admin@clinica-alfa.test",
-      "password": "TestPassword@123",
+      "password": "DEFINIDA_EM_TEST_USER_PASSWORD",
       "role": "admin",
       "clinic_id": "11111111-1111-1111-1111-111111111111",
       "full_name": "Admin Alfa"
     },
     "accountantA": {
       "email": "contador@clinica-alfa.test",
-      "password": "TestPassword@123",
+      "password": "DEFINIDA_EM_TEST_USER_PASSWORD",
       "role": "admin",
       "clinic_id": "11111111-1111-1111-1111-111111111111",
       "full_name": "Contador Alfa"
     },
     "vetA": {
       "email": "vet@clinica-alfa.test",
-      "password": "TestPassword@123",
+      "password": "DEFINIDA_EM_TEST_USER_PASSWORD",
       "role": "vet",
       "clinic_id": "11111111-1111-1111-1111-111111111111",
       "full_name": "Dr. Vet Alfa",
@@ -34,21 +34,21 @@
     },
     "assistantA": {
       "email": "assistente@clinica-alfa.test",
-      "password": "TestPassword@123",
+      "password": "DEFINIDA_EM_TEST_USER_PASSWORD",
       "role": "assistant",
       "clinic_id": "11111111-1111-1111-1111-111111111111",
       "full_name": "Assistente Alfa"
     },
     "receptionistA": {
       "email": "recepcao@clinica-alfa.test",
-      "password": "TestPassword@123",
+      "password": "DEFINIDA_EM_TEST_USER_PASSWORD",
       "role": "receptionist",
       "clinic_id": "11111111-1111-1111-1111-111111111111",
       "full_name": "Recepcionista Alfa"
     },
     "adminB": {
       "email": "admin@clinica-beta.test",
-      "password": "TestPassword@123",
+      "password": "DEFINIDA_EM_TEST_USER_PASSWORD",
       "role": "admin",
       "clinic_id": "22222222-2222-2222-2222-222222222222",
       "full_name": "Admin Beta"
@@ -81,21 +81,21 @@
       "clinic_id": "11111111-1111-1111-1111-111111111111",
       "name": "Banho Completo",
       "item_type": "grooming",
-      "price": 85.00,
+      "price": 85.0,
       "is_active": true
     },
     "groomingTosa": {
       "clinic_id": "11111111-1111-1111-1111-111111111111",
       "name": "Tosa Higiênica",
       "item_type": "grooming",
-      "price": 60.00,
+      "price": 60.0,
       "is_active": true
     },
     "clinicBPrice": {
       "clinic_id": "22222222-2222-2222-2222-222222222222",
       "name": "Banho Simples",
       "item_type": "grooming",
-      "price": 70.00,
+      "price": 70.0,
       "is_active": true
     }
   },
@@ -105,15 +105,24 @@
       "clinic_id": "11111111-1111-1111-1111-111111111111",
       "patient_id": "bbbb1111-0000-0000-0000-000000000001",
       "tutor_id": "aaaa1111-0000-0000-0000-000000000001",
-      "services_requested": ["Banho Completo", "Tosa Higiênica"],
+      "services_requested": [
+        "Banho Completo",
+        "Tosa Higiênica"
+      ],
       "status": "waiting_pickup",
       "current_status": "waiting_pickup",
       "scheduled_at": null,
-      "price_total": 145.00,
+      "price_total": 145.0,
       "payment_status": "pending",
       "service_prices": [
-        { "name": "Banho Completo", "price": 85.00 },
-        { "name": "Tosa Higiênica", "price": 60.00 }
+        {
+          "name": "Banho Completo",
+          "price": 85.0
+        },
+        {
+          "name": "Tosa Higiênica",
+          "price": 60.0
+        }
       ]
     }
   },
@@ -121,15 +130,40 @@
     "clinicA": {
       "clinic_id": "11111111-1111-1111-1111-111111111111",
       "business_hours": {
-        "monday": { "open": "08:00", "close": "18:00" },
-        "tuesday": { "open": "08:00", "close": "18:00" },
-        "wednesday": { "open": "08:00", "close": "18:00" },
-        "thursday": { "open": "08:00", "close": "18:00" },
-        "friday": { "open": "08:00", "close": "18:00" },
-        "saturday": { "open": "08:00", "close": "12:00" },
+        "monday": {
+          "open": "08:00",
+          "close": "18:00"
+        },
+        "tuesday": {
+          "open": "08:00",
+          "close": "18:00"
+        },
+        "wednesday": {
+          "open": "08:00",
+          "close": "18:00"
+        },
+        "thursday": {
+          "open": "08:00",
+          "close": "18:00"
+        },
+        "friday": {
+          "open": "08:00",
+          "close": "18:00"
+        },
+        "saturday": {
+          "open": "08:00",
+          "close": "12:00"
+        },
         "sunday": null
       },
-      "working_days": [1, 2, 3, 4, 5, 6],
+      "working_days": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
       "holiday_work": false
     }
   },

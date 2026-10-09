@@ -9,6 +9,7 @@ import ManagementWorkspace from '@/components/management/ManagementWorkspace'
 import { Suspense } from 'react'
 import type { DocumentTemplate } from '@/types'
 
+import { urlAssinatura, type PerfilComAssinatura } from '@/lib/storage/assinatura'
 export const metadata = { title: 'Gestão | SysVetMax' }
 
 export default async function ManagementPage() {
@@ -38,7 +39,7 @@ export default async function ManagementPage() {
       .single(),
     admin
       .from('profiles')
-      .select('id, full_name, last_name, role, crmv, mapa_code, phone, specialties, nickname, photo_url, address, is_active, room, electronic_signature_url, appointment_interval_minutes')
+      .select('id, full_name, last_name, role, crmv, mapa_code, phone, specialties, nickname, photo_url, address, is_active, room, electronic_signature_url, electronic_signature_path, appointment_interval_minutes')
       .eq('clinic_id', profile.clinic_id)
       .eq('is_sysmax', false)
       .order('full_name'),
@@ -69,7 +70,12 @@ export default async function ManagementPage() {
 
   const templates: DocumentTemplate[] = 'error' in templatesResult ? [] : templatesResult
   const clinicData = clinicResult.data ?? null
-  const users = usersResult.data ?? []
+  // Bucket privado desde a 0499: a tela mostra a assinatura por URL assinada de
+  // vida curta, nao mais por URL publica permanente.
+  const users = await Promise.all((usersResult.data ?? []).map(async u => ({
+    ...u,
+    electronic_signature_url: await urlAssinatura(u as PerfilComAssinatura),
+  })))
   const invitations = invitationsResult
   const userLimit: number = clinicData?.user_limit ?? 10
   const activeModules: string[] = (clinicData?.active_modules as string[] | null) ?? []
