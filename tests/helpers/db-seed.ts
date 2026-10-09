@@ -69,6 +69,29 @@ export async function seedUsers(): Promise<Record<string, string>> {
   return ids
 }
 
+/**
+ * Vinculo multi-clinica do adminA, para a TROCA DE CLINICA ser testavel.
+ *
+ * O seletor do topo (src/lib/actions/clinic-switcher.ts) lista, para usuario
+ * normal, o que estiver em `user_clinics` com a clinica `active`. Sem duas
+ * linhas aqui, nenhum teste consegue exercitar a troca — foi o que impediu de
+ * reproduzir a issue #29 (erro React #310) por conta propria, dependendo da
+ * conta de suporte compartilhada.
+ *
+ * `createTestUser` nao escreve em `user_clinics` (so em `profiles`), entao o
+ * vinculo tem de vir daqui. Idempotente.
+ */
+export async function seedMultiClinicAccess(): Promise<void> {
+  const ids = await seedUsers()
+  const adminA = ids.adminA
+  if (!adminA) return
+
+  await admin.from('user_clinics').upsert([
+    { user_id: adminA, clinic_id: fixtures.clinics.clinicA.id, role: 'admin' },
+    { user_id: adminA, clinic_id: fixtures.clinics.clinicB.id, role: 'admin' },
+  ], { onConflict: 'user_id,clinic_id', ignoreDuplicates: true })
+}
+
 export async function seedTutorsAndPets(): Promise<void> {
   // Ensure clinics exist (may have been cleaned up by previous teardown)
   await seedClinics();

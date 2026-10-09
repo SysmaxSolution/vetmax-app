@@ -1,6 +1,6 @@
 import * as dotenv from 'dotenv';
 import path from 'path';
-import { seedClinics, seedUsers, seedTutorsAndPets, seedProductPrices } from './helpers/db-seed';
+import { seedClinics, seedUsers, seedTutorsAndPets, seedProductPrices, seedMultiClinicAccess } from './helpers/db-seed';
 import { exigirBancoDeTestes, consertarNullsDoAuth } from './helpers/auth-repair';
 
 // Roda uma vez antes de toda a suíte. A ordem aqui não é estética:
@@ -23,6 +23,7 @@ module.exports = async () => {
 
   await seedClinics();
   await seedUsers();
+  await seedMultiClinicAccess();
   await seedTutorsAndPets();
   await seedProductPrices();
 };
