@@ -96,6 +96,42 @@ de config de cobertura). Existe versão corrigida de cada um, mas forçar
 `js-yaml` 3 → 5 quebra a API que o istanbul espera — risco real, benefício
 zero em produção. O Jest já foi para a 30, que foi o que derrubou 32 altas.
 
+## Revisão de 2026-10-09 — os 2 alertas do Dependabot
+
+O Dependabot acusa 2 abertos na branch padrão. Nenhum dos dois tem correção
+aplicável; segue a evidência medida, não presumida.
+
+**`node-forge` 1.4.0 — ALTA, sem versão corrigida.** O aviso é
+*"RSA PKCS#1 v1.5 signature verification accepts extra data"*. `npm view
+node-forge versions` mostra que **1.4.0 é a última publicada** — não existe
+release com o patch, então não há para onde subir. E o caminho vulnerável não é
+o nosso: o único arquivo que importa node-forge é
+`src/lib/integrations/bank-certificate.ts`, e ele chama apenas
+`pkcs12.pkcs12FromAsn1` e `pkcs12.toPkcs12Asn1` — leitura e reescrita de
+PKCS#12 para normalizar o `.pfx` do Sicoob (RC2-40 → AES-256). Não chamamos
+verificação de assinatura em lugar nenhum. Verificado por varredura em `src/`.
+
+Também não dá para tirar do runtime: o arquivo é código de aplicação (a clínica
+sobe o certificado pela tela), então mover para `devDependencies` quebraria
+produção. Fica aceito e vigiado — **reavaliar quando sair node-forge > 1.4.0**,
+que é a mesma janela do vencimento do certificado Sicoob em 11/12/2026.
+
+**`sprintf-js` 1.0.3 — MODERADA, correção = regressão maior.** Chega por dois
+caminhos, ambos via `argparse` 1.0.10: `mammoth` → `argparse` (runtime, import
+de `.docx`) e `ts-jest` → `js-yaml` 3 → `argparse` (só teste). O `npm audit`
+oferece como conserto `mammoth@0.3.29` — de 1.13.0 para 0.3.x, dez anos de
+regressão na única biblioteca que lê `.docx`. Recusado pelo mesmo critério da
+cadeia mammoth já documentada acima.
+
+**`handlebars` 4.7.9 — CRÍTICA que NÃO é de produção.** O `npm audit` completo
+acusa, mas a cadeia é `@capacitor/assets` → `@trapezedev/project` →
+`conventional-changelog` → `handlebars`: devDependency de geração de ícones
+mobile, nunca empacotada. `npm audit --omit=dev` não a lista.
+
+**Piso medido em 2026-10-09** — `npm audit --omit=dev` (o que realmente vai a
+produção): **1 alta + 3 moderadas**, sendo a alta o node-forge acima e as
+moderadas a cadeia mammoth/argparse. Zero críticas.
+
 ## Histórico
 
 - **2026-10-07** — `next` 16.2.12 → 16.4.0 (3 críticas), `sharp` → 0.35.5,

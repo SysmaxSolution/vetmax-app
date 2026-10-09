@@ -14,6 +14,7 @@ import {
   applyReferenceSet, pickReferenceSet,
   type ReferenceSet, type ResolvedReport,
 } from './reference-set'
+import { urlAssinatura, type PerfilComAssinatura } from '@/lib/storage/assinatura'
 
 export interface ReportHeader {
   os_number:   string
@@ -146,7 +147,7 @@ export async function getExamReportData(
       .select('name, species, breed, gender, neutered, birth_date, tutor_id')
       .eq('clinic_id', clinicId).eq('id', cons.patient_id).maybeSingle(),
     cons.vet_id
-      ? admin.from('profiles').select('full_name, crmv, electronic_signature_url')
+      ? admin.from('profiles').select('full_name, crmv, electronic_signature_url, electronic_signature_path')
           .eq('clinic_id', clinicId).eq('id', cons.vet_id).maybeSingle()
       : Promise.resolve({ data: null }),
   ])
@@ -261,7 +262,8 @@ export async function getExamReportData(
       vet: {
         name: (vet?.full_name as string) ?? null,
         crmv: (vet?.crmv as string) ?? null,
-        signature_url: (vet?.electronic_signature_url as string) ?? null,
+        // Bucket privado desde a 0499: assina na hora, nao guarda URL.
+        signature_url: await urlAssinatura(vet as PerfilComAssinatura | null),
       },
     },
     report,
