@@ -42,6 +42,7 @@ export default function CreateStudyModal({ partners, services = [], onClose, onS
   const [vetEmail, setVetEmail] = useState('')
   const [vetCrmv, setVetCrmv] = useState('')
   const [notes, setNotes] = useState('')
+  const [accession, setAccession] = useState('')
 
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -79,6 +80,7 @@ export default function CreateStudyModal({ partners, services = [], onClose, onS
       modality,
       title: title.trim() || null,
       notes: notes.trim() || null,
+      accessionNumber: accession.trim() || null,
       referringVetName: vetName.trim() || null,
       referringVetEmail: vetEmail.trim() || null,
       referringVetCrmv: vetCrmv.trim() || null,
@@ -154,6 +156,18 @@ export default function CreateStudyModal({ partners, services = [], onClose, onS
                      placeholder="Ex.: Tórax 2 incidências"
                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
             </div>
+          </div>
+
+          {/* Accession — chave que casa a imagem do PACS (Ambra) com este estudo */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 mb-1">Accession (nº do exame no aparelho)</label>
+            <input value={accession} onChange={e => setAccession(e.target.value)}
+                   placeholder="opcional — pode ser informado depois"
+                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            <p className="text-[11px] text-slate-400 mt-1">
+              Digite o mesmo número usado no aparelho: é por ele que a imagem enviada à Ambra encontra
+              este estudo.
+            </p>
           </div>
 
           {/* Serviço do catálogo (define publicação no portal) */}

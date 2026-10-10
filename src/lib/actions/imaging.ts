@@ -110,6 +110,7 @@ export async function createImagingStudy(
       partner_clinic_id: input.partnerClinicId ?? null,
       catalog_item_id: input.catalogItemId ?? null,
       referring_professional_id: input.referringProfessionalId ?? null,
+      accession_number: input.accessionNumber?.trim() || null,
       created_by: ctx.userId,
     })
     .select('id').single()
@@ -486,6 +487,11 @@ export async function getStudyDetail(studyId: string): Promise<StaffStudyDetail 
     id: s.id, patient_id: s.patient_id, patient_name: (pet as any)?.name ?? null,
     os_number: (cons as any)?.os_number ?? null,
     modality: s.modality, title: s.title, notes: s.notes,
+    accession_number: s.accession_number ?? null,
+    ambra_study_uuid: s.ambra_study_uuid ?? null,
+    ambra_link_url: s.ambra_link_url ?? null,
+    ambra_link_expires_at: s.ambra_link_expires_at ?? null,
+    ambra_synced_at: s.ambra_synced_at ?? null,
     referring_vet_name: s.referring_vet_name, referring_vet_email: s.referring_vet_email,
     referring_vet_crmv: s.referring_vet_crmv,
     status: s.status, images_uploaded_at: s.images_uploaded_at,
@@ -502,6 +508,30 @@ export async function getStudyDetail(studyId: string): Promise<StaffStudyDetail 
       revoked: !!l.revoked_at, views: l.view_count ?? 0, expires_at: l.expires_at,
     })),
   }
+}
+
+// ─── Accession do exame (chave de casamento com a Ambra) ──────────────────────
+//
+// Fica aqui, e não em actions/ambra.ts, de propósito: gravar o accession não
+// depende de credencial da Ambra nenhuma. A clínica precisa poder registrar o
+// número do exame no aparelho desde já — o vínculo com o PACS vem depois.
+export async function setStudyAccession(
+  studyId: string,
+  accession: string,
+): Promise<{ ok: true } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return { error: ctx.error as string }
+  const valor = accession.trim()
+  if (valor.length > 64) return { error: 'Accession muito longo (máximo 64 caracteres).' }
+
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('imaging_studies')
+    .update({ accession_number: valor || null })
+    .eq('id', studyId).eq('clinic_id', ctx.clinicId)
+  if (error) return { error: 'Erro ao salvar o accession: ' + mensagemErro(error, 'lib/actions/imaging.ts') }
+  revalidatePath('/dashboard/imaging')
+  return { ok: true }
 }
 
 // ─── Documentos do pet que podem ser anexados como laudo (têm PDF gerado) ─────

@@ -32,6 +32,12 @@ export interface CreateStudyInput {
   partnerClinicId?: string | null
   catalogItemId?: string | null    // serviço do catálogo (define publish_to_portal)
   referringProfessionalId?: string | null  // MV da clínica parceira que encaminhou
+  /**
+   * Accession do exame no aparelho. É a chave que casa a imagem que sobe para a
+   * Ambra com este estudo; enquanto a worklist ASL (3.1) não existir, é digitado
+   * pelo operador no aparelho e repetido aqui.
+   */
+  accessionNumber?: string | null
 }
 
 export interface PublicStudyFile { name: string; kind: string; url: string; contentType: string | null }
@@ -53,6 +59,12 @@ export interface PublicStudyView {
 
 export interface StaffStudyDetail extends ImagingStudyRow {
   notes: string | null
+  /** Accession que amarra este estudo ao estudo na Ambra (item 3.5). */
+  accession_number: string | null
+  ambra_study_uuid: string | null
+  ambra_link_url: string | null
+  ambra_link_expires_at: string | null
+  ambra_synced_at: string | null
   referring_vet_crmv: string | null
   laudo_document_id: string | null
   files: PublicStudyFile[]
