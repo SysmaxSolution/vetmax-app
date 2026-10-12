@@ -102,6 +102,7 @@ async function ensureClinicCreated(user: User): Promise<void> {
   void sendFreeSignupAlert({
     clinicName: clinicName,
     adminName:  fullName,
+    email:      user.email ?? null,
     phone:      pending?.phone ?? null,
     cnpj:       (insertData.cnpj as string | undefined) ?? null,
   })
