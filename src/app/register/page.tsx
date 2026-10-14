@@ -11,6 +11,16 @@ import { signUpWithClinic } from '@/lib/actions/auth'
 import { recordAttribution } from '@/lib/actions/attribution'
 import type { BusinessType } from '@/types'
 
+// Espelha a política de senha configurada no projeto Supabase: mínimo 8
+// caracteres, com minúscula, MAIÚSCULA e dígito. Validar na tela evita o
+// cadastro falhar no servidor sem o usuário entender o motivo.
+const REGRAS_SENHA = [
+  { ok: (v: string) => v.length >= 8,   label: 'mínimo 8 caracteres' },
+  { ok: (v: string) => /[a-z]/.test(v), label: 'uma letra minúscula' },
+  { ok: (v: string) => /[A-Z]/.test(v), label: 'uma letra MAIÚSCULA' },
+  { ok: (v: string) => /[0-9]/.test(v), label: 'um número' },
+]
+
 // ─── Formatadores ─────────────────────────────────────────────────────────────
 
 function formatCNPJ(value: string): string {
@@ -187,6 +197,22 @@ export default function RegisterPage() {
 
   const fieldClass = "w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none transition-all"
   const labelClass = "block text-xs font-bold text-slate-500 uppercase mb-2 ml-1"
+
+  // Tudo que impede o envio, em texto. Alimenta o aviso e o disabled do botao,
+  // para os dois nunca discordarem.
+  const pendencias: string[] = [
+    ...(clinicMode === 'new' && !businessType
+      ? ['escolher o segmento (Clínica Veterinária ou Centro de Estética)'] : []),
+    ...(clinicMode === 'new' && !clinicName.trim()
+      ? ['informar o nome da clínica'] : []),
+    ...(clinicMode === 'existing' && joinCode.trim().length < 4
+      ? ['informar o código de acesso da clínica (peça ao administrador dela)'] : []),
+    ...(!fullName.trim() ? ['informar seu nome completo'] : []),
+    ...(!email.trim()    ? ['informar o e-mail'] : []),
+    ...(REGRAS_SENHA.some(r => !r.ok(password))
+      ? ['uma senha com ' + REGRAS_SENHA.filter(r => !r.ok(password)).map(r => r.label).join(', ')] : []),
+    ...(!termsAccepted ? ['aceitar os Termos de Uso, a Política de Privacidade e o DPA'] : []),
+  ]
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4 py-12">
@@ -455,7 +481,7 @@ export default function RegisterPage() {
                 required
                 minLength={8}
                 className={`${fieldClass} pr-10`}
-                placeholder="Mínimo 8 caracteres"
+                placeholder="Ex.: Clinica2026"
               />
               <button
                 type="button"
@@ -466,6 +492,20 @@ export default function RegisterPage() {
                 {showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
+            <ul className="mt-2 ml-1 flex flex-wrap gap-x-3 gap-y-1">
+              {REGRAS_SENHA.map(r => {
+                const atendida = r.ok(password)
+                return (
+                  <li key={r.label}
+                      className={`text-[11px] flex items-center gap-1 ${
+                        atendida ? 'text-teal-600' : password ? 'text-slate-400' : 'text-slate-400'
+                      }`}>
+                    <span className={`inline-block h-1.5 w-1.5 rounded-full ${atendida ? 'bg-teal-500' : 'bg-slate-300'}`} />
+                    {r.label}
+                  </li>
+                )
+              })}
+            </ul>
           </div>
 
           {/* ── Aceite de Termos ──────────────────────────────────────────── */}
@@ -518,15 +558,25 @@ export default function RegisterPage() {
             </div>
           )}
 
+          {/* O que falta — o botao desabilitado sozinho nao diz o motivo */}
+          {pendencias.length > 0 && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+              <p className="text-xs font-semibold text-amber-900">Para criar a conta, falta:</p>
+              <ul className="mt-1 space-y-0.5">
+                {pendencias.map(p => (
+                  <li key={p} className="text-xs text-amber-800 flex items-start gap-1.5">
+                    <span className="mt-1.5 inline-block h-1 w-1 rounded-full bg-amber-500 flex-shrink-0" />
+                    {p}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {/* Submit */}
           <button
             type="submit"
-            disabled={
-              loading ||
-              !termsAccepted ||
-              (clinicMode === 'existing' && joinCode.trim().length < 4) ||
-              (clinicMode === 'new' && !businessType)
-            }
+            disabled={loading || pendencias.length > 0}
             className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-teal-100 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : null}

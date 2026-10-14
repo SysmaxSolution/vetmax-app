@@ -6,7 +6,7 @@ import { redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
 
 
-import { mensagemErro } from '@/lib/errors'
+import { mensagemErro, mensagemErroCadastro } from '@/lib/errors'
 export type AuthState = { error: string } | { selectClinic: true; clinics: { id: string; name: string; role: string }[] } | null
 
 // E-mail do superadmin SysMax — acesso interno a qualquer clínica
@@ -284,7 +284,7 @@ export async function signUpWithClinic(
   })
 
   if (signUpError) {
-    return { error: 'Erro ao criar conta: ' + mensagemErro(signUpError, 'lib/actions/auth.ts') }
+    return { error: mensagemErroCadastro(signUpError) }
   }
 
   // Captura IP para evidência legal do aceite (persistido em legal_acceptances no callback)
