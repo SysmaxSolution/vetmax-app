@@ -87,3 +87,46 @@ export function mensagemErro(erro: unknown, contexto?: string): string {
 export function erro(e: unknown, contexto?: string): { error: string } {
   return { error: mensagemErro(e, contexto) }
 }
+
+/**
+ * Traduz o erro do GoTrue para algo que o usuário consiga agir.
+ *
+ * `mensagemErro` devolve a mensagem genérica para qualquer erro que tenha
+ * `code` — regra certa para erro de banco, errada aqui: o GoTrue usa o código
+ * justamente para dizer o que o usuário precisa corrigir. Sem esta tradução, a
+ * pessoa lê "não foi possível concluir a operação" e não tem como saber que o
+ * problema é a senha. Já custou um cadastro perdido na frente do cliente
+ * (AVA, 13/10/2026).
+ *
+ * A política de senha é do projeto Supabase, não do nosso código:
+ * mínimo 8 caracteres, exigindo minúscula + MAIÚSCULA + dígito, e recusa de
+ * senha que apareça em vazamentos conhecidos (HIBP).
+ */
+export function mensagemErroCadastro(erro: unknown): string {
+  const e = (erro ?? {}) as { code?: string; message?: string; status?: number }
+  const code = String(e.code ?? '')
+  const msg  = String(e.message ?? '')
+
+  if (code === 'weak_password' || /weak|password should contain/i.test(msg)) {
+    const vazada = /pwned|known to be weak|easy to guess/i.test(msg)
+    return vazada
+      ? 'Senha recusada: além de precisar de letra minúscula, letra MAIÚSCULA e número (mínimo 8 caracteres), esta senha aparece em vazamentos públicos conhecidos. Escolha outra.'
+      : 'A senha precisa ter no mínimo 8 caracteres, com ao menos uma letra minúscula, uma letra MAIÚSCULA e um número.'
+  }
+  if (code === 'email_exists' || code === 'user_already_exists') {
+    return 'Este e-mail já possui uma conta. Acesse a página de login ou redefina sua senha.'
+  }
+  if (code === 'email_address_invalid' || code === 'validation_failed') {
+    return 'E-mail inválido. Confira se está digitado corretamente.'
+  }
+  if (code === 'over_email_send_rate_limit' || code === 'over_request_rate_limit') {
+    return 'Muitas tentativas em pouco tempo. Aguarde alguns minutos e tente novamente.'
+  }
+  if (code === 'signup_disabled') {
+    return 'O cadastro está temporariamente desativado. Acione o suporte.'
+  }
+  if (code === 'unexpected_failure' && /database error/i.test(msg)) {
+    return 'Falha no cadastro deste e-mail. Acione o suporte informando o e-mail usado.'
+  }
+  return mensagemErro(erro, 'lib/errors.ts')
+}
