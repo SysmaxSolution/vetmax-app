@@ -44,7 +44,7 @@ export async function classifyError(opts: {
     ].filter(Boolean).join('\n')
 
     const response = await client.messages.create({
-      model:     'claude-haiku-4-5-20251001',
+      model:     'claude-haiku-4-5',
       max_tokens: 120,
       system:     SYSTEM_PROMPT,
       messages:  [{ role: 'user', content: userContent }],

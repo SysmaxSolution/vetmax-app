@@ -112,7 +112,7 @@ async function logDrift(input: string, rawOutput: string, reason: string): Promi
         user_journey:  {
           input_snippet: input.slice(0, 800),
           output_raw:    rawOutput.slice(0, 800),
-          model:         'claude-haiku-4-5-20251001',
+          model:         'claude-haiku-4-5',
           timestamp:     new Date().toISOString(),
         },
         severity:      'warn',
@@ -145,7 +145,7 @@ export async function extractCoverageCore(
   try {
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
     const response = await client.messages.create({
-      model:      'claude-haiku-4-5-20251001',
+      model:      'claude-haiku-4-5',
       max_tokens: 80,
       // System como array com cache_control habilita prompt cache da Anthropic
       // — o prompt é estável, paga 1x e fica em cache por 5 min em chamadas

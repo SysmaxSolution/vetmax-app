@@ -20,7 +20,7 @@ export async function GET() {
   try {
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
     const message = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+      model: 'claude-haiku-4-5',
       max_tokens: 100,
       messages: [{ role: 'user', content: 'Responda: {"test":"ok"}' }],
     })

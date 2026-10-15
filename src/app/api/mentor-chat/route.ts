@@ -168,7 +168,7 @@ export async function POST(req: NextRequest) {
 
     // ── Primeira chamada ──────────────────────────────────────────────────────
     const firstResponse = await client.messages.create({
-      model:      'claude-haiku-4-5-20251001',
+      model:      'claude-haiku-4-5',
       max_tokens: 700,
       system:     systemPrompt,
       tools:      TOOLS,
@@ -213,7 +213,7 @@ export async function POST(req: NextRequest) {
 
     // ── Segunda chamada: gera resposta após tool result ───────────────────────
     const secondResponse = await client.messages.create({
-      model:      'claude-haiku-4-5-20251001',
+      model:      'claude-haiku-4-5',
       max_tokens: 400,
       system:     systemPrompt,
       tools:      TOOLS,
