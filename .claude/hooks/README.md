@@ -1,0 +1,91 @@
+# Hooks do Claude Code — VetMax
+
+As regras do `CLAUDE.md` são orientação que o agente interpreta. As que não podem
+falhar estão aqui, como código. Instrução em prompt é sugestão; `exit 2` é contrato.
+
+Registrados em `.claude/settings.json` (versionado — vale para toda a equipe).
+
+## Por que Node e não bash + jq
+
+`jq` **não está instalado nesta máquina**. Todo exemplo de hook que circula por aí
+usa `jq` para ler o payload do stdin e falharia silenciosamente aqui. Os guardas são
+Node puro: um processo, sem dependência externa, mesmo comportamento em Git Bash,
+PowerShell e CI.
+
+## Por que `_lib.mjs` existe
+
+O payload do hook traz a **linha de comando inteira, heredoc incluído**. Na primeira
+execução real, um `git commit` cuja *mensagem* mencionava "git push" e "--force" foi
+bloqueado pelo `guard-main-push`: o guarda reagia à menção, não à ação.
+
+`_lib.mjs` resolve a causa:
+
+- `execPart(cmd)` — devolve só o trecho executável, cortando no primeiro heredoc
+- `invokesGit(cmd, verb)` — exige `git <verb>` em **posição de comando** (início de
+  linha, `;`, `&&`, `||`, `|`, ou após prefixo `VAR=valor`), então `echo git push`
+  e texto de mensagem não disparam nada
+- `sentinelFresh(path, min)` — janela de validade das sentinelas
+- `readPayload()` — payload ilegível nunca bloqueia o fluxo
+
+## Por que nenhum usa o campo `if`
+
+O campo `if` filtra por sintaxe de regra de permissão, que casa por **prefixo**.
+`if: "Bash(git add *)"` não casaria `cd /c/SysMax && git add -A` — exatamente a forma
+do comando que já causou incidente. Cada script faz a própria triagem por regex em
+qualquer posição da linha e retorna em ~50 ms quando não se aplica.
+
+## Os guardas
+
+| Script | Evento | Bloqueia | Origem |
+|---|---|---|---|
+| `guard-git-add.mjs` | PreToolUse/Bash | `git add -A`, `git add .`, `--all` | `git add -A` levou ~35k arquivos, com segredos, ao stage |
+| `guard-staged-secrets.mjs` | PreToolUse/Bash | commit com chave Anthropic, JWT Supabase, token GitHub, chave AWS, chave privada, connection string com senha | par do anterior: pega o segredo que passou em arquivo legítimo |
+| `guard-main-push.mjs` | PreToolUse/Bash | push para `main`/`master` e qualquer `--force` | push na main exige OK explícito do Diretor |
+| `guard-tsc-before-push.mjs` | PreToolUse/Bash | push com erro de tipo em código fonte | o tsc incremental mascara erro cross-file; o cache é descartado antes de medir |
+| `guard-use-server-types.mjs` | PostToolUse/Write\|Edit | `export type`/`export interface` em arquivo `'use server'` | derruba a server action com 500 em runtime, sem erro de compilação |
+| hook `prompt` (Haiku 4.5) | PostToolUse/Write\|Edit | query nova sem `clinic_id`; `SELECT *` em tabela operacional | regra de multi-tenancy é semântica — regex não resolve |
+
+Infraestrutura: `_lib.mjs` (utilitários) e `test-guards.sh` (suite de regressão).
+
+Um falso positivo já corrigido, registrado para não voltar: o padrão isolado
+`/service_role/i` acusava a simples **menção** da palavra — que aparece em código
+legítimo. A chave `service_role` real é um JWT, já coberta pelo padrão de JWT, e a
+forma `SERVICE_ROLE_KEY=<valor>` pelo padrão de atribuição. O padrão fraco foi
+removido sem perda de cobertura.
+
+## Sentinelas de escape
+
+Concessões temporárias. **Só o Diretor cria**, no terminal, com o prefixo `!`.
+O agente nunca cria sentinela por conta própria — isso anularia a guarda.
+
+```
+! touch .claude/.allow-main-push      # 60 min
+! touch .claude/.allow-secret-commit  # 15 min
+! touch .claude/.skip-tsc-gate        # 60 min
+```
+
+Todas em `.gitignore`.
+
+## tsconfig.gate.json
+
+O gate de tipos usa `tsconfig.gate.json` (raiz), que herda o `tsconfig.json` e
+exclui:
+
+- **`.next/`** — tipos gerados pelo build. Um `.next` produzido em outra branch
+  acusa "Cannot find module .../page.js" para páginas que não existem na branch
+  atual. É artefato, não defeito.
+- **`tests/`** — dívida pré-existente de `TS2393 Duplicate function implementation`
+  (arquivos de teste tratados como escopo global). Os testes têm ciclo próprio via
+  `qa-agent`. **Pendência aberta**, não decisão definitiva.
+
+## Verificar
+
+```bash
+# cada guarda isolado, com payload sintético
+printf '%s' '{"tool_name":"Bash","tool_input":{"command":"git add -A"}}' \
+  | node .claude/hooks/guard-git-add.mjs; echo "exit=$?"   # espera 2
+```
+
+Depois de editar `settings.json`, abra `/hooks` uma vez para o Claude Code
+recarregar a configuração (o watcher só observa diretórios que já tinham arquivo
+de settings no início da sessão).

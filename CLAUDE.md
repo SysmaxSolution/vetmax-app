@@ -31,21 +31,28 @@ Leia sempre `vetmax-docs.md` e `.clauderules`.
 
 ```
 src/app/                    ← App Router (pages e layouts)
-src/app/(auth)/             ← Login, registro
-src/app/(dashboard)/        ← Área protegida
-src/app/(dashboard)/reception/   ← Módulo Recepção
-src/app/(dashboard)/triage/      ← Módulo Triagem
-src/app/(dashboard)/vet/         ← Módulo Médico Veterinário
-src/app/(dashboard)/exams/       ← Módulo Exames
-src/app/(dashboard)/pharmacy/    ← Módulo Farmácia
+src/app/login|register|auth/     ← Autenticação
+src/app/dashboard/          ← Área protegida (23 módulos)
+src/app/dashboard/reception/     ← Módulo Recepção
+src/app/dashboard/triage/        ← Módulo Triagem
+src/app/dashboard/vet/           ← Módulo Médico Veterinário
+src/app/dashboard/exams/         ← Módulo Exames
+src/app/dashboard/pharmacy/      ← Módulo Farmácia
+src/app/dashboard/cashier|financial|billing|sales|purchases/
+src/app/dashboard/hospitalization|surgery|grooming|laudos/
+src/app/dashboard/appointments|patients|registry|reports|management/
+src/app/api/                ← Route handlers
 src/components/ui/          ← Componentes UI genéricos
-src/components/tutor/       ← Componentes do Tutor
 src/components/pet/         ← Componentes do Pet
 src/components/consultation/ ← Componentes de Consulta
 src/lib/supabase/           ← Clientes Supabase (server/client/admin)
 src/lib/actions/            ← Server Actions
 src/types/                  ← TypeScript interfaces
+supabase/migrations/        ← Migrations (numeração sequencial)
 ```
+
+Não há route group com parênteses: o caminho real é `src/app/dashboard/`, não
+`src/app/(dashboard)/`.
 
 ## Fluxo de Trabalho — Issues + PRs (obrigatório para qualquer agente/modelo)
 Todo desenvolvimento segue este padrão, independente do agente ou modelo de IA utilizado:
@@ -55,6 +62,31 @@ Todo desenvolvimento segue este padrão, independente do agente ou modelo de IA 
    - Branch de trabalho a partir de `dev` → PR para `dev` → merge → deploy manual no ambiente de testes (`npx.cmd vercel --prod` de `C:\sysvetmax-dev`, projeto Vercel `sysvetmax-dev`).
    - Validação do Diretor no dev → PR `dev` → `main` → merge → push no remote `vetmax` → deploy em produção.
 4. **Banco de testes**: o ambiente dev usa o Supabase `claqxwckiihknclhmzvf` (credenciais em `.env.dev.local`); NUNCA aponte testes para o banco de produção.
+
+## Enforcement — o que é contrato e o que é orientação
+As regras acima são orientação que o agente interpreta. As que **não podem falhar**
+estão enforçadas por hooks em `.claude/settings.json` (versionado, vale para toda
+a equipe). Instrução em prompt é sugestão; hook com `exit 2` é contrato.
+
+| Guarda | Evento | Bloqueia |
+|---|---|---|
+| `guard-git-add.mjs` | PreToolUse/Bash | `git add -A`, `git add .`, `--all` |
+| `guard-staged-secrets.mjs` | PreToolUse/Bash | commit com chave/JWT/token no stage |
+| `guard-main-push.mjs` | PreToolUse/Bash | push na `main` e `--force` sem autorização |
+| `guard-tsc-before-push.mjs` | PreToolUse/Bash | push com `tsc` sujo (cache descartado) |
+| `guard-use-server-types.mjs` | PostToolUse/Write\|Edit | `export type` em `'use server'` |
+| hook `prompt` (Haiku) | PostToolUse/Write\|Edit | query nova sem `clinic_id`; `SELECT *` |
+
+**Sentinelas de escape** — só o Diretor cria, sempre no terminal com `!`:
+`.claude/.allow-main-push` (60 min) · `.claude/.allow-secret-commit` (15 min) ·
+`.claude/.skip-tsc-gate` (60 min). O agente nunca cria sentinela por conta própria.
+
+**Agents especializados** em `.claude/agents/`: `vetmax-reviewer` (somente leitura),
+`qa-agent` (testes), `migration-agent` (schema aditivo).
+
+**Contexto por módulo** — detalhamento e armadilhas ficam junto do código, não aqui:
+`src/lib/actions/CLAUDE.md` · `src/components/CLAUDE.md` ·
+`src/app/dashboard/vet/CLAUDE.md` · `supabase/migrations/CLAUDE.md`.
 
 ## Protocolo de Erro
 - Cole apenas as 10 linhas relevantes do Stack Trace.

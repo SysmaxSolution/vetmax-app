@@ -214,7 +214,7 @@ Gere o plano técnico de correção completo para este erro de produção.`
 
   try {
     const response = await client.messages.create({
-      model:       'claude-sonnet-4-6',
+      model:       'claude-sonnet-5',
       max_tokens:   3000,
       system:       PLANNER_SYSTEM,
       messages:    [{ role: 'user', content: userPrompt }],

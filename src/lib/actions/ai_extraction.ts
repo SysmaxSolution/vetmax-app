@@ -45,7 +45,7 @@ export async function extractPatientDataFromTranscript(
 
   try {
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5',
       max_tokens: 1024,
       messages: [{
         role: 'user',
@@ -89,7 +89,7 @@ export async function extractAdmissionReason(transcript: string): Promise<string
 
   try {
     const message = await anthropic.messages.create({
-      model:      'claude-sonnet-4-6',
+      model:      'claude-sonnet-5',
       max_tokens: 256,
       messages: [{
         role:    'user',
@@ -129,7 +129,7 @@ export async function extractUnifiedClinicalVoice(
   if (!transcript || transcript.trim().length < 2) return { error: 'Transcrição vazia.' }
   try {
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5',
       max_tokens: 1500,
       messages: [{ role: 'user', content: buildUnifiedPrompt(transcript, context) }],
     })
@@ -227,7 +227,7 @@ Responda SOMENTE com JSON válido, sem markdown, sem explicações externas:
 
   try {
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5',
       max_tokens: 1500,
       messages: [{ role: 'user', content: prompt }],
     })
@@ -423,7 +423,7 @@ AVISO: Esta resposta é apoio técnico ao MV responsável (CFMV Res. 1.138/2016)
 
   try {
     const message = await anthropic.messages.create({
-      model:      'claude-sonnet-4-6',
+      model:      'claude-sonnet-5',
       max_tokens: 400,
       messages:   [{ role: 'user', content: prompt }],
     })

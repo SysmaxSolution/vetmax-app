@@ -197,7 +197,7 @@ export async function POST(request: NextRequest) {
 
       // Extract fields with coordinates using Vision
       const visionResponse = await anthropic.messages.create({
-        model: 'claude-sonnet-4-6',
+        model: 'claude-sonnet-5',
         max_tokens: 8192,
         messages: [{
           role: 'user',
@@ -246,7 +246,7 @@ export async function POST(request: NextRequest) {
             const pageMediaType = pageImagesRaw[p].includes('image/png') ? 'image/png' as const : 'image/jpeg' as const
 
             const pageResponse = await anthropic.messages.create({
-              model: 'claude-sonnet-4-6',
+              model: 'claude-sonnet-5',
               max_tokens: 8192,
               messages: [{
                 role: 'user',
@@ -296,7 +296,7 @@ export async function POST(request: NextRequest) {
       const dataUrl = `data:${mediaType};base64,${base64}`
 
       const visionResponse = await anthropic.messages.create({
-        model: 'claude-sonnet-4-6',
+        model: 'claude-sonnet-5',
         max_tokens: 8192,
         messages: [{
           role: 'user',
@@ -342,7 +342,7 @@ export async function POST(request: NextRequest) {
       }
 
       const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-6',
+        model: 'claude-sonnet-5',
         max_tokens: 4096,
         messages: [{
           role: 'user',
@@ -381,7 +381,7 @@ export async function POST(request: NextRequest) {
       }
 
       const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-6',
+        model: 'claude-sonnet-5',
         max_tokens: 4096,
         messages: [{
           role: 'user',

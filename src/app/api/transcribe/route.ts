@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
 
     // Usar Claude para enriquecer e estruturar a transcrição veterinária
     const message = await anthropic.messages.create({
-      model: 'claude-opus-4-6',
+      model: 'claude-opus-5',
       max_tokens: 400,
       messages: [
         {

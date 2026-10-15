@@ -1,0 +1,14 @@
+{
+  "//": "Usado so pelo gate de pre-push (.claude/hooks/guard-tsc-before-push.mjs).",
+  "//2": "Herda o tsconfig principal mas exclui .next/ (tipos gerados pelo build; um .next de outra branch produz erros falsos) e tests/ (divida pre-existente de TS2393 -- os testes tem seu proprio ciclo via Jest/Playwright).",
+  "extends": "./tsconfig.json",
+  "exclude": [
+    "node_modules",
+    "vetmax-app",
+    "healthmax-app",
+    "Orion",
+    "Marketing",
+    ".next",
+    "tests"
+  ]
+}
