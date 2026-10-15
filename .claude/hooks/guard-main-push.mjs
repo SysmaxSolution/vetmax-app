@@ -15,8 +15,12 @@ if (!cmd || !invokesGit(cmd, "push")) process.exit(0);
 const exec = execPart(cmd);
 const forced = /\s(--force|--force-with-lease|-f)(\s|$)/.test(exec);
 
+// Separa tambem por parenteses, chaves e aspas: em `time (git push vetmax main)`
+// o `)` colaria no nome do branch e `main)` nao casaria a lista de protegidas.
 const after = exec.split(/git\s+push\s*/)[1] ?? "";
-const tokens = after.split(/[\s;&|]+/).filter((t) => t && !t.startsWith("-"));
+const tokens = after
+  .split(/[\s;&|(){}'"]+/)
+  .filter((t) => t && !t.startsWith("-"));
 
 let target = null;
 if (tokens.length >= 2) {

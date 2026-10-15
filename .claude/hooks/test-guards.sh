@@ -68,6 +68,17 @@ guard-main-push: push na main e --force exigem OK
 EOF"                                                       0 "ignora mencao dentro de heredoc"
 chk guard-main-push.mjs "echo $PUSH origin main"          0 "ignora dentro de echo"
 
+# Regressao de falso NEGATIVO: envelopes de comando. `time (git push ...)` passou
+# por um push real sem acionar o gate porque "(" nao contava como separador.
+echo "guard-main-push -- envelopes de comando"
+chk guard-main-push.mjs "time $PUSH vetmax main"          2 "detecta sob time"
+chk guard-main-push.mjs "time ($PUSH vetmax main)"        2 "detecta sob time e parenteses"
+chk guard-main-push.mjs "($PUSH vetmax main)"             2 "detecta entre parenteses"
+chk guard-main-push.mjs "{ $PUSH vetmax main; }"          2 "detecta em bloco"
+chk guard-main-push.mjs "sudo $PUSH vetmax main"          2 "detecta sob sudo"
+chk guard-main-push.mjs "cd /x && time ($PUSH origin main | tail -5)"  2 "detecta em pipeline composto"
+chk guard-git-add.mjs   "time ($ADD -A)"                  2 "git add sob time e parenteses"
+
 echo "guard-staged-secrets (triagem)"
 chk guard-staged-secrets.mjs "git status"                 0 "nao dispara fora de commit"
 chk guard-staged-secrets.mjs "echo $COMMIT"               0 "ignora dentro de echo"

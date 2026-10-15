@@ -29,11 +29,20 @@ export function execPart(cmd) {
 
 /**
  * O comando invoca `git <verb>` em posicao de comando?
- * Cobre inicio da linha, `;`, `&&`, `||`, `|` e prefixo de variavel de ambiente.
+ *
+ * Separadores cobertos: inicio, nova linha, `;`, `|`, `&`, `(` e `{`.
+ * O parentese entrou depois de um falso NEGATIVO real: `time (git push ...)` nao
+ * acionava o gate porque `(` nao estava na classe. Em guarda de seguranca, falso
+ * negativo e pior que falso positivo -- ele passa calado.
+ *
+ * Prefixos tolerados antes do `git`: atribuicao de variavel de ambiente e os
+ * envelopes comuns (`time`, `sudo`, `nohup`, `env`, `command`, `exec`).
  */
 export function invokesGit(cmd, verb) {
   const re = new RegExp(
-    String.raw`(?:^|[\n;|&])\s*(?:[A-Za-z_]\w*=\S*\s+)*git\s+(?:-[^\s]+\s+)*` +
+    String.raw`(?:^|[\n;|&({])\s*` +
+      String.raw`(?:(?:[A-Za-z_]\w*=\S*|time|sudo|nohup|env|command|exec)\s+)*` +
+      String.raw`git\s+(?:-[^\s]+\s+)*` +
       verb +
       String.raw`\b`
   );

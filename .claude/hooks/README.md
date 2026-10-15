@@ -47,11 +47,20 @@ qualquer posição da linha e retorna em ~50 ms quando não se aplica.
 
 Infraestrutura: `_lib.mjs` (utilitários) e `test-guards.sh` (suite de regressão).
 
-Um falso positivo já corrigido, registrado para não voltar: o padrão isolado
-`/service_role/i` acusava a simples **menção** da palavra — que aparece em código
-legítimo. A chave `service_role` real é um JWT, já coberta pelo padrão de JWT, e a
-forma `SERVICE_ROLE_KEY=<valor>` pelo padrão de atribuição. O padrão fraco foi
-removido sem perda de cobertura.
+Três falhas encontradas em uso real, corrigidas e cobertas por teste — ficam
+registradas porque cada uma é uma classe de erro, não um caso isolado:
+
+1. **Falso positivo — padrão fraco.** `/service_role/i` acusava a simples *menção*
+   da palavra, que aparece em código legítimo. A chave real é um JWT (coberta pelo
+   padrão de JWT) e a forma `SERVICE_ROLE_KEY=<valor>` pelo padrão de atribuição.
+   O padrão isolado foi removido sem perda de cobertura.
+2. **Falso positivo — menção vs. ação.** Um `git commit` cuja mensagem citava as
+   operações protegidas era bloqueado. Resolvido por `execPart`/`invokesGit`.
+3. **Falso NEGATIVO — envelope de comando.** `time (git push ...)` passou por um
+   push real **sem acionar o gate**: `(` não contava como separador e o `)` de
+   fechamento colava no nome do branch (`main)` não casava `/^main$/`). O mais
+   grave dos três, porque falha em silêncio. Resolvido ampliando separadores e
+   terminadores; seis casos de envelope entraram na suite.
 
 ## Sentinelas de escape
 

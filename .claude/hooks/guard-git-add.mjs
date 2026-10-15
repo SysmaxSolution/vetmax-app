@@ -8,7 +8,10 @@ const cmd = (await readPayload())?.tool_input?.command ?? "";
 if (!cmd || !invokesGit(cmd, "add")) process.exit(0);
 
 // -A / -Av / --all / . / -- .  entre os argumentos do `git add`
-const MASS = /git\s+add\s+(?:[^\n;&|]*\s)?(?:-[A-Za-z]*A[A-Za-z]*|--all|--\s+\.|\.)(?:\s|$)/;
+// O terminador inclui `)` e `}`: em `time (git add -A)` o parentese de
+// fechamento cola no argumento e um terminador so-de-espaco deixaria passar.
+const MASS =
+  /git\s+add\s+(?:[^\n;&|)}]*\s)?(?:-[A-Za-z]*A[A-Za-z]*|--all|--\s+\.|\.)(?:[\s;&|)}]|$)/;
 if (!MASS.test(execPart(cmd))) process.exit(0);
 
 process.stderr.write(
