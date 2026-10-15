@@ -95,6 +95,34 @@ printf '%s' '{"tool_name":"Bash","tool_input":{"command":"git add -A"}}' \
   | node .claude/hooks/guard-git-add.mjs; echo "exit=$?"   # espera 2
 ```
 
-Depois de editar `settings.json`, abra `/hooks` uma vez para o Claude Code
-recarregar a configuração (o watcher só observa diretórios que já tinham arquivo
-de settings no início da sessão).
+## Estado de validação
+
+| Guarda | Suite | Provado ativo em sessão real |
+|---|---|---|
+| `guard-git-add` | ✅ 8 casos | ✅ bloqueou `git add --all --dry-run` |
+| `guard-staged-secrets` | ✅ 2 casos + 4 de padrão | ✅ bloqueou um commit (falso positivo que originou a correção nº 1) |
+| `guard-main-push` | ✅ 13 casos | ✅ bloqueou um commit (falso positivo nº 2) |
+| `guard-use-server-types` | ✅ 3 casos | ✅ via payload sintético |
+| `guard-tsc-before-push` | ✅ triagem | ⚠️ **não provado em sessão** — ver abaixo |
+| hook `prompt` (multi-tenancy) | — | ⚠️ não exercitado |
+
+### Pendência: validar o gate de tsc
+
+O gate **funciona** quando invocado direto: 1m27s, descarta o cache e reporta erro
+real de código fonte (verificado). O que não foi possível provar nesta sessão é que
+o Claude Code o **invoca** num push — ele não registrou execução.
+
+Causa: o `settings.json` nasceu durante a sessão, e o watcher de configuração só
+observa diretórios que já tinham arquivo de settings quando a sessão começou. O que
+está em vigor é a versão capturada na primeira detecção; edições posteriores (mover
+o hook para grupo próprio, reduzir o timeout de 420 para 300) não tiveram efeito.
+
+**Para validar**, numa sessão nova (ou após abrir `/hooks` uma vez):
+
+```bash
+git push --dry-run <remote> <sua-branch>
+```
+
+Deve levar ~90 s em vez de ~3 s. Se continuar instantâneo, o gate não está sendo
+invocado — suspeite primeiro do `timeout` (era 420 s; reduzido para 300 s) e tente
+200 s.

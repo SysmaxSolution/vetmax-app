@@ -40,11 +40,16 @@
             "command": "node .claude/hooks/guard-main-push.mjs",
             "timeout": 15,
             "statusMessage": "Verificando autorizacao de push..."
-          },
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
           {
             "type": "command",
             "command": "node .claude/hooks/guard-tsc-before-push.mjs",
-            "timeout": 420,
+            "timeout": 300,
             "statusMessage": "Gate de tipos antes do push (tsc sem cache)..."
           }
         ]
