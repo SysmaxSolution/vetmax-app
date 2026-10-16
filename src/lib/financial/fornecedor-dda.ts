@@ -165,3 +165,74 @@ export async function resolverFornecedor(
              erro: e instanceof Error ? e.message : 'falha ao resolver fornecedor' }
   }
 }
+
+/**
+ * O nome veio truncado do banco?
+ *
+ * O DDA corta a razão social em 40 caracteres. Medido nos fornecedores reais
+ * da Clínica Animais: 5 dos 11 chegaram no limite, cortados no meio da
+ * palavra ("...ASSESSORIA E P"). Não há campo que avise — o corte só se
+ * reconhece pelo comprimento.
+ */
+export function pareceTruncado(nome: string | null | undefined): boolean {
+  const n = (nome ?? '').trim()
+  return n.length >= 39
+}
+
+/** Falta dado que a consulta pública preencheria? */
+export function precisaEnriquecer(s: { name?: string | null; address?: string | null; phone?: string | null }): boolean {
+  return pareceTruncado(s.name) || (!s.address && !s.phone)
+}
+
+/**
+ * Completa um fornecedor já cadastrado com os dados da Receita.
+ *
+ * Existe porque **a consulta pública estrangula**: medido contra os CNPJs
+ * reais da clínica, as duas fontes (`publica.cnpj.ws` e BrasilAPI) devolvem
+ * HTTP 429 a partir da 5ª ou 6ª chamada seguida, mesmo com 1,2 s de intervalo.
+ * Consultar 11 fornecedores no clique de "lançar" não funciona — e travar o
+ * lançamento do título à espera disso seria pior ainda.
+ *
+ * Então o cadastro nasce com o nome que o banco deu (ainda que truncado), a
+ * amarração pelo CNPJ é feita na hora — que é a parte que importa e nunca
+ * falha — e o nome bom entra depois, por aqui. Como a chave é o documento,
+ * renomear depois é seguro.
+ */
+export async function enriquecerFornecedor(
+  admin:    SupabaseClient,
+  clinicId: string,
+  fornecedor: { id: string; name: string; document: string | null; address?: string | null; phone?: string | null },
+): Promise<{ ok: true; alterado: boolean; nome?: string } | { ok: false; motivo: 'sem_documento' | 'nao_encontrado' | 'limite' | 'erro' }> {
+  const doc = apenasDigitos(fornecedor.document)
+  if (doc.length !== 14) return { ok: false, motivo: 'sem_documento' }
+
+  try {
+    const r = await lookupCnpj(doc)
+    if (!r.ok) return { ok: false, motivo: r.reason === 'network' ? 'limite' : 'nao_encontrado' }
+
+    const patch: Record<string, unknown> = {}
+    // Só troca o nome se o atual parece cortado e o novo é mais completo —
+    // nunca sobrescreve um nome que a clínica ajustou à mão.
+    if (r.razao_social && pareceTruncado(fornecedor.name) && r.razao_social.length > fornecedor.name.length) {
+      patch.name = r.razao_social
+    }
+    if (!fornecedor.address && r.address) patch.address = r.address
+    if (!fornecedor.phone && r.phone)     patch.phone = r.phone
+
+    if (!Object.keys(patch).length) return { ok: true, alterado: false }
+
+    const { error } = await admin.from('suppliers').update(patch).eq('id', fornecedor.id).eq('clinic_id', clinicId)
+    if (error) {
+      // Colisão com a trava por nome: outro cadastro já usa a razão social
+      // completa. Mantém o nome atual e grava só o resto.
+      delete patch.name
+      if (!Object.keys(patch).length) return { ok: true, alterado: false }
+      const { error: e2 } = await admin.from('suppliers').update(patch).eq('id', fornecedor.id).eq('clinic_id', clinicId)
+      if (e2) return { ok: false, motivo: 'erro' }
+      return { ok: true, alterado: true }
+    }
+    return { ok: true, alterado: true, nome: patch.name as string | undefined }
+  } catch {
+    return { ok: false, motivo: 'erro' }
+  }
+}

@@ -2,7 +2,7 @@
 // CNPJ da clínica. v1: CSV genérico com aliases PT (cada banco/portal exporta com
 // nomes próprios). CNAB/varredura DDA específicos plugam depois. Client-side.
 
-import type { DdaBoleto } from '@/lib/actions/pagfor'
+import type { DdaBoleto } from '@/types/pagfor'
 
 type Field = Exclude<keyof DdaBoleto, 'raw'>
 
