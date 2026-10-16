@@ -16,8 +16,10 @@ import {
   precisaEnriquecer, enriquecerFornecedor,
 } from '@/lib/financial/fornecedor-dda'
 import { lookupCnpj } from '@/lib/cnpj'
+import { digitalDoBoleto } from '@/lib/financial/dda-digital'
+import { mensagemErro } from '@/lib/errors'
 import type {
-  DdaBoleto, DdaMatchRow, DdaMatchResult, PreviaFornecedorDda,
+  DdaBoleto, DdaMatchRow, DdaMatchResult, PreviaFornecedorDda, DdaBoletoPersistido,
 } from '@/types/pagfor'
 import {
   consultarDDA, consultarBoletoParaPagar, pagarBoleto, consultarComprovante, cancelarAgendamento,
@@ -140,7 +142,7 @@ export async function insertPayablesFromDda(
       if (supplierId) vinculados++
     }
 
-    const { error } = await admin.from('financial_entries').insert({
+    const { data: novo, error } = await admin.from('financial_entries').insert({
       clinic_id: c.clinicId, type: 'payable',
       // Com fornecedor resolvido a descrição usa o nome BOM (da consulta
       // pública), não o truncado em 40 caracteres que o banco devolve.
@@ -152,8 +154,22 @@ export async function insertPayablesFromDda(
       issue_date: new Date().toISOString().slice(0, 10),
       status: 'pending', source: 'manual', category: 'Fornecedores',
       created_by: uid,
-    })
-    if (!error) inserted++
+    }).select('id').single()
+
+    if (!error && novo) {
+      inserted++
+      // Carimba o boleto guardado como LANÇADO. É isto que faz a tela saber,
+      // na próxima consulta do período, que este já foi resolvido — sem isso
+      // o operador interrompido reencontraria tudo como se fosse novo.
+      await admin.from('dda_boletos')
+        .update({
+          entry_id: (novo as { id: string }).id,
+          launched_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('clinic_id', c.clinicId)
+        .eq('fingerprint', digitalDoBoleto(c.clinicId, b))
+    }
   }
   revalidatePath('/dashboard/financial')
   return { ok: true, inserted, fornecedores_criados: criados, fornecedores_vinculados: vinculados }
@@ -270,6 +286,181 @@ export async function enriquecerFornecedoresDda(
     atualizados,
     restantes: Math.max(0, candidatos.length - atualizados),
   }
+}
+
+// ─── Persistência do DDA ─────────────────────────────────────────────────────
+// Mesma regra da conciliação bancária: ao escolher o período, lê o que já está
+// guardado e complementa com o que o banco trouxer. Sem isso, quem é
+// interrompido no meio da rotina perde o trabalho e precisa recomeçar.
+
+/** Grava (ou atualiza) os boletos do período, sem duplicar. */
+async function guardarBoletos(
+  admin: ReturnType<typeof createAdminClient>,
+  clinicId: string,
+  boletos: DdaBoleto[],
+  bankAccountId?: string | null,
+): Promise<number> {
+  if (!boletos.length) return 0
+  const linhas = boletos.map(b => {
+    let cru: unknown = {}
+    try { cru = JSON.parse(b.raw) } catch { cru = {} }
+    const r = cru as Record<string, unknown>
+    return {
+      clinic_id:       clinicId,
+      bank_account_id: bankAccountId ?? null,
+      fingerprint:     digitalDoBoleto(clinicId, b),
+      barcode:         b.barcode,
+      document:        b.document,
+      beneficiary:     b.beneficiary,
+      beneficiary_doc: b.beneficiary_doc,
+      amount:          b.amount,
+      due_date:        b.due_date,
+      issue_date:      (r.dataEmissao as string) ?? null,
+      situacao:        (r.descricaoSituacaoBoleto as string) ?? null,
+      raw:             r,
+      imported_at:     new Date().toISOString(),
+    }
+  })
+  // ignoreDuplicates: reimportar o mesmo período NÃO pode sobrescrever o
+  // estado do trabalho (lançado, ignorado) que já está gravado na linha.
+  const { error } = await admin.from('dda_boletos')
+    .upsert(linhas, { onConflict: 'clinic_id,fingerprint', ignoreDuplicates: true })
+  if (error) return 0
+  return linhas.length
+}
+
+function paraDdaBoleto(r: Record<string, unknown>): DdaBoleto {
+  return {
+    barcode:         (r.barcode as string) ?? null,
+    beneficiary:     (r.beneficiary as string) ?? null,
+    beneficiary_doc: (r.beneficiary_doc as string) ?? null,
+    amount:          r.amount != null ? Number(r.amount) : null,
+    due_date:        (r.due_date as string) ?? null,
+    document:        (r.document as string) ?? null,
+    raw:             JSON.stringify(r.raw ?? {}),
+  }
+}
+
+function montarPersistido(r: Record<string, unknown>): DdaBoletoPersistido {
+  return {
+    id:               r.id as string,
+    fingerprint:      r.fingerprint as string,
+    boleto:           paraDdaBoleto(r),
+    situacao:         (r.situacao as string) ?? null,
+    entry_id:         (r.entry_id as string) ?? null,
+    launched_at:      (r.launched_at as string) ?? null,
+    dismissed_at:     (r.dismissed_at as string) ?? null,
+    dismissed_reason: (r.dismissed_reason as string) ?? null,
+    imported_at:      (r.imported_at as string) ?? null,
+  }
+}
+
+/**
+ * Carrega os boletos do DDA de um período.
+ *
+ * Ordem, que é a regra pedida pelo Diretor:
+ *  1. lê o que já está guardado na janela;
+ *  2. se não há NADA guardado, consulta o banco e guarda;
+ *  3. se há, devolve o guardado — e `consultarBanco: true` força buscar de
+ *     novo e complementar, sem perder o que o operador já resolveu.
+ *
+ * Boleto já lançado ou marcado para ignorar volta junto, com o estado, para a
+ * tela saber o que não deve pedir de novo.
+ */
+export async function carregarDdaDoPeriodo(params: {
+  dataInicial: string
+  dataFinal: string
+  bankAccountId?: string
+  consultarBanco?: boolean
+}): Promise<{
+  ok: true
+  boletos: DdaBoletoPersistido[]
+  do_banco: number
+  guardados: number
+  consultou_banco: boolean
+} | { error: string }> {
+  const c = await ctx()
+  if (!c) return { error: 'Não autenticado.' }
+  if (!['admin', 'owner', 'manager'].includes(c.role)) return { error: 'Sem permissão.' }
+  const admin = createAdminClient()
+
+  const ler = async () => {
+    const { data } = await admin
+      .from('dda_boletos')
+      .select('id, fingerprint, barcode, document, beneficiary, beneficiary_doc, amount, due_date, situacao, raw, entry_id, launched_at, dismissed_at, dismissed_reason, imported_at')
+      .eq('clinic_id', c.clinicId)
+      .gte('due_date', params.dataInicial)
+      .lte('due_date', params.dataFinal)
+      .order('due_date', { ascending: true })
+    return (data ?? []) as Record<string, unknown>[]
+  }
+
+  let guardados = await ler()
+  let doBanco = 0
+  let consultou = false
+
+  // Consulta o banco quando não há nada guardado, ou quando o operador pediu
+  // explicitamente para atualizar.
+  if (!guardados.length || params.consultarBanco) {
+    const res = await fetchDdaFromBank({
+      bankAccountId: params.bankAccountId,
+      dataInicial: params.dataInicial,
+      dataFinal: params.dataFinal,
+    })
+    if ('error' in res) {
+      // Falhou a consulta mas já havia dado guardado: entrega o guardado em
+      // vez de deixar a tela vazia — o trabalho anterior continua acessível.
+      if (guardados.length) {
+        return { ok: true, boletos: guardados.map(montarPersistido), do_banco: 0,
+                 guardados: guardados.length, consultou_banco: true }
+      }
+      return { error: res.error }
+    }
+    consultou = true
+    doBanco = res.boletos.length
+    await guardarBoletos(admin, c.clinicId, res.boletos, params.bankAccountId ?? null)
+    guardados = await ler()
+  }
+
+  return {
+    ok: true,
+    boletos: guardados.map(montarPersistido),
+    do_banco: doBanco,
+    guardados: guardados.length,
+    consultou_banco: consultou,
+  }
+}
+
+/** Marca para ignorar — persistente, não some ao recarregar a tela. */
+export async function ignorarBoletoDda(
+  id: string,
+  motivo?: string,
+): Promise<{ ok: true } | { error: string }> {
+  const c = await ctx()
+  if (!c) return { error: 'Não autenticado.' }
+  if (!['admin', 'owner', 'manager'].includes(c.role)) return { error: 'Sem permissão.' }
+  const admin = createAdminClient()
+  const { error } = await admin.from('dda_boletos')
+    .update({ dismissed_at: new Date().toISOString(), dismissed_reason: motivo ?? null,
+              updated_at: new Date().toISOString() })
+    .eq('id', id).eq('clinic_id', c.clinicId)
+  if (error) return { error: mensagemErro(error, 'lib/actions/pagfor.ts') }
+  revalidatePath('/dashboard/financial')
+  return { ok: true }
+}
+
+/** Desfaz o ignorar. */
+export async function reativarBoletoDda(id: string): Promise<{ ok: true } | { error: string }> {
+  const c = await ctx()
+  if (!c) return { error: 'Não autenticado.' }
+  if (!['admin', 'owner', 'manager'].includes(c.role)) return { error: 'Sem permissão.' }
+  const admin = createAdminClient()
+  const { error } = await admin.from('dda_boletos')
+    .update({ dismissed_at: null, dismissed_reason: null, updated_at: new Date().toISOString() })
+    .eq('id', id).eq('clinic_id', c.clinicId)
+  if (error) return { error: mensagemErro(error, 'lib/actions/pagfor.ts') }
+  revalidatePath('/dashboard/financial')
+  return { ok: true }
 }
 
 // Agenda o pagamento (no vencimento de cada título, ou numa data X).

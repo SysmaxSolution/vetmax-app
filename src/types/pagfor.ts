@@ -40,3 +40,22 @@ export interface PreviaFornecedorDda {
   boletos:          number
   valor_total:      number
 }
+
+/**
+ * Boleto do DDA como ele fica GUARDADO, com o estado do trabalho junto.
+ *
+ * O estado mora na linha, não na sessão: antes, "ignorar" era local à tela e
+ * sumia ao recarregar, fazendo o mesmo boleto voltar a pedir atenção todo dia.
+ */
+export interface DdaBoletoPersistido {
+  id:               string
+  fingerprint:      string
+  boleto:           DdaBoleto
+  situacao:         string | null
+  /** Preenchido quando já virou título a pagar. */
+  entry_id:         string | null
+  launched_at:      string | null
+  dismissed_at:     string | null
+  dismissed_reason: string | null
+  imported_at:      string | null
+}
