@@ -1,12 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-import { Loader2, Upload, CheckCircle2, XCircle, PlusCircle, CalendarClock, FileDown, Landmark, Banknote } from 'lucide-react'
+import { Loader2, Upload, CheckCircle2, XCircle, PlusCircle, CalendarClock, FileDown, Landmark, Banknote, EyeOff, RotateCcw, Sparkles, Database } from 'lucide-react'
 import { parseDdaCsv } from '@/lib/parsers/ddaParser'
-import type { DdaBoleto, DdaMatchResult } from '@/types/pagfor'
+import type { DdaBoleto, DdaMatchResult, DdaBoletoPersistido } from '@/types/pagfor'
+import PreviaFornecedoresModal from './PreviaFornecedoresModal'
 import {
   matchDdaBoletos, insertPayablesFromDda, schedulePayments, generatePagforRemittance,
   fetchDdaFromBank, payBoletosViaBank,
+  carregarDdaDoPeriodo, ignorarBoletoDda, reativarBoletoDda, enriquecerFornecedoresDda,
 } from '@/lib/actions/pagfor'
 
 const BRL = (v: number | null) => (v == null ? '—' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }))
@@ -24,17 +26,68 @@ export default function PagforTab() {
   const today = new Date().toISOString().slice(0, 10)
   const [ddaFrom, setDdaFrom] = useState(today)
   const [ddaTo, setDdaTo]     = useState(today)
+  // Linhas guardadas, na MESMA ordem de `parsed` — é assim que cada linha da
+  // tabela sabe se já foi lançada ou ignorada numa sessão anterior.
+  const [persistidos, setPersistidos] = useState<DdaBoletoPersistido[]>([])
+  const [previaAberta, setPreviaAberta] = useState(false)
 
-  async function handleFetchDda() {
+  /**
+   * Abre o período: lê o que já está guardado e completa com o banco.
+   *
+   * `forcar` manda consultar o banco mesmo havendo dado guardado — é o
+   * "Atualizar do banco". Sem ele, voltar à tela NÃO refaz a consulta: o
+   * trabalho de quem parou no meio continua exatamente onde estava.
+   */
+  async function handleFetchDda(forcar = false) {
     setError(null); setDone(null); setResult(null); setLoading(true)
     try {
-      const res = await fetchDdaFromBank({ dataInicial: ddaFrom, dataFinal: ddaTo })
+      const res = await carregarDdaDoPeriodo({
+        dataInicial: ddaFrom, dataFinal: ddaTo, consultarBanco: forcar,
+      })
       if ('error' in res) { setError(res.error); return }
-      if (!res.boletos.length) { setError('Nenhum boleto no DDA para o período (ou sandbox sem dados).'); return }
-      setParsed(res.boletos)
-      await runMatch(res.boletos)
+      if (!res.boletos.length) { setError('Nenhum boleto no DDA para o período.'); return }
+
+      setPersistidos(res.boletos)
+      const lista = res.boletos.map(p => p.boleto)
+      setParsed(lista)
+      await runMatch(lista)
+
+      const tratados = res.boletos.filter(p => p.entry_id || p.dismissed_at).length
+      setDone(
+        res.consultou_banco
+          ? `${res.guardados} boleto(s) no período${res.do_banco ? ` · ${res.do_banco} vindos do banco agora` : ''}` +
+            (tratados ? ` · ${tratados} já tratado(s) antes` : '')
+          : `${res.guardados} boleto(s) recuperados do que já estava guardado` +
+            (tratados ? ` · ${tratados} já tratado(s)` : '') + '. Use "Atualizar do banco" para buscar novos.',
+      )
     } catch (e) { setError(`Falha ao buscar DDA: ${(e as Error).message}`) }
     finally { setLoading(false) }
+  }
+
+  /** Completa os fornecedores que entraram com o nome cortado do banco. */
+  async function handleCompletarFornecedores() {
+    setBusy('enrich'); setError(null)
+    const res = await enriquecerFornecedoresDda(4)
+    setBusy(null)
+    if ('error' in res) { setError(res.error); return }
+    setDone(
+      res.atualizados
+        ? `${res.atualizados} fornecedor(es) completado(s) com os dados da Receita.` +
+          (res.restantes ? ` Faltam ${res.restantes} — clique de novo em instantes (a consulta pública limita chamadas).` : '')
+        : res.restantes
+          ? `A consulta pública recusou agora (limite de chamadas). Faltam ${res.restantes} — tente de novo em um minuto.`
+          : 'Todos os fornecedores já estão completos.',
+    )
+  }
+
+  async function handleIgnorar(i: number) {
+    const p = persistidos[i]; if (!p) return
+    setBusy('ignore'); setError(null)
+    const res = p.dismissed_at ? await reativarBoletoDda(p.id) : await ignorarBoletoDda(p.id)
+    setBusy(null)
+    if ('error' in res) { setError(res.error); return }
+    setPersistidos(prev => prev.map((x, j) =>
+      j === i ? { ...x, dismissed_at: p.dismissed_at ? null : new Date().toISOString() } : x))
   }
 
   async function handleBankPay() {
@@ -75,14 +128,19 @@ export default function PagforTab() {
   const selRed = () => selRows().filter(r => r.status === 'not_in_system')
   const selGreenIds = () => selRows().filter(r => r.entry_id).map(r => r.entry_id!) as string[]
 
-  async function handleInsert() {
+  async function handleInsert(cadastrarFornecedor: boolean) {
     const red = selRed(); if (!red.length) return
     setBusy('insert'); setError(null)
-    const res = await insertPayablesFromDda(red.map(r => r.boleto))
+    const res = await insertPayablesFromDda(red.map(r => r.boleto), { cadastrarFornecedor })
     setBusy(null)
     if ('error' in res) { setError(res.error); return }
-    setDone(`${res.inserted} título(s) lançado(s) em contas a pagar.`)
-    await runMatch(parsed)
+    setPreviaAberta(false)
+    const forn = res.fornecedores_criados
+      ? ` ${res.fornecedores_criados} fornecedor(es) cadastrado(s), ${res.fornecedores_vinculados} vinculado(s).`
+      : res.fornecedores_vinculados ? ` ${res.fornecedores_vinculados} vinculado(s) a fornecedor já cadastrado.` : ''
+    setDone(`${res.inserted} título(s) lançado(s) em contas a pagar.${forn}`)
+    // Recarrega do guardado para as linhas já virem marcadas como lançadas.
+    await handleFetchDda(false)
   }
 
   async function handleSchedule() {
@@ -115,14 +173,18 @@ export default function PagforTab() {
           <Landmark className="h-4 w-4 text-indigo-600" />
           <div>
             <p className="text-sm font-semibold text-indigo-800">Buscar DDA no banco (Sicoob)</p>
-            <p className="text-[11px] text-indigo-500">Varredura automática dos boletos a pagar do CNPJ. Produção exige o certificado e-CNPJ A1.</p>
+            <p className="text-[11px] text-indigo-500">Os boletos ficam guardados: se você parar no meio, ao voltar o período reabre com o que já foi tratado.</p>
           </div>
         </div>
         <div className="flex items-end gap-2">
           <div><label className="block text-[10px] text-slate-500">De</label><input type="date" value={ddaFrom} onChange={e => setDdaFrom(e.target.value)} className="rounded-lg border border-slate-200 px-2 py-1 text-xs" /></div>
           <div><label className="block text-[10px] text-slate-500">Até</label><input type="date" value={ddaTo} onChange={e => setDdaTo(e.target.value)} className="rounded-lg border border-slate-200 px-2 py-1 text-xs" /></div>
-          <button onClick={handleFetchDda} disabled={loading} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2">
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Landmark className="h-4 w-4" />}Buscar DDA
+          <button onClick={() => handleFetchDda(false)} disabled={loading} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2">
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}Abrir período
+          </button>
+          <button onClick={() => handleFetchDda(true)} disabled={loading} title="Consulta o banco de novo e acrescenta o que houver de novo, sem perder o que já foi tratado"
+            className="rounded-lg border border-indigo-300 bg-white px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50 disabled:opacity-50 flex items-center gap-2">
+            <Landmark className="h-4 w-4" />Atualizar do banco
           </button>
         </div>
       </div>
@@ -168,13 +230,15 @@ export default function PagforTab() {
                     <th className="text-right px-3 py-2">Valor</th>
                     <th className="text-left px-3 py-2">Vencimento</th>
                     <th className="text-left px-3 py-2">Situação</th>
+                    <th className="px-3 py-2 w-8"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {result.rows.map((r, i) => {
                     const green = r.status === 'in_system'
+                    const ignorado = !!persistidos[i]?.dismissed_at
                     return (
-                      <tr key={i} className={green ? 'bg-emerald-50/40' : 'bg-rose-50/40'}>
+                      <tr key={i} className={ignorado ? 'bg-slate-50 opacity-60' : green ? 'bg-emerald-50/40' : 'bg-rose-50/40'}>
                         <td className="px-3 py-2"><input type="checkbox" checked={selected.has(i)} onChange={() => toggle(i)} /></td>
                         <td className="px-3 py-2 font-medium text-slate-700">{r.boleto.beneficiary ?? '—'}</td>
                         <td className="px-3 py-2 text-slate-500">{r.boleto.document ?? '—'}</td>
@@ -182,9 +246,20 @@ export default function PagforTab() {
                         <td className="px-3 py-2 text-right tabular-nums font-semibold text-slate-700">{BRL(r.boleto.amount)}</td>
                         <td className="px-3 py-2 font-mono">{fmtD(r.boleto.due_date)}</td>
                         <td className="px-3 py-2">
-                          {green
-                            ? <span className="inline-flex items-center gap-1 text-emerald-700"><CheckCircle2 className="h-3 w-3" /> no sistema{r.entry_scheduled ? ` · agendado ${fmtD(r.entry_scheduled)}` : ''}</span>
-                            : <span className="inline-flex items-center gap-1 text-rose-700"><XCircle className="h-3 w-3" /> não lançado</span>}
+                          {ignorado
+                            ? <span className="inline-flex items-center gap-1 text-slate-400"><EyeOff className="h-3 w-3" /> ignorado</span>
+                            : green
+                              ? <span className="inline-flex items-center gap-1 text-emerald-700"><CheckCircle2 className="h-3 w-3" /> no sistema{r.entry_scheduled ? ` · agendado ${fmtD(r.entry_scheduled)}` : ''}</span>
+                              : <span className="inline-flex items-center gap-1 text-rose-700"><XCircle className="h-3 w-3" /> não lançado</span>}
+                        </td>
+                        <td className="px-3 py-2">
+                          {persistidos[i] && (
+                            <button onClick={() => handleIgnorar(i)} disabled={busy !== null}
+                              title={ignorado ? 'Voltar a considerar' : 'Ignorar este boleto (fica guardado)'}
+                              className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-40">
+                              {ignorado ? <RotateCcw className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                            </button>
+                          )}
                         </td>
                       </tr>
                     )
@@ -203,7 +278,7 @@ export default function PagforTab() {
               <span className="text-[10px] text-slate-400">(vazio = no vencimento)</span>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <button onClick={handleInsert} disabled={busy !== null || selRed().length === 0}
+              <button onClick={() => setPreviaAberta(true)} disabled={busy !== null || selRed().length === 0}
                 className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50 flex items-center gap-2">
                 {busy === 'insert' ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />} Lançar selecionados
               </button>
@@ -215,6 +290,11 @@ export default function PagforTab() {
                 className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2">
                 {busy === 'bankpay' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Banknote className="h-4 w-4" />} Pagar no banco (Sicoob)
               </button>
+              <button onClick={handleCompletarFornecedores} disabled={busy !== null}
+                title="Busca na Receita a razão social completa dos fornecedores que entraram com o nome cortado pelo banco"
+                className="rounded-lg border border-emerald-300 px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 flex items-center gap-2">
+                {busy === 'enrich' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} Completar cadastros
+              </button>
               <button onClick={handleRemittance} disabled={busy !== null || selGreenIds().length === 0}
                 className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50 flex items-center gap-2">
                 {busy === 'remit' ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />} Gerar remessa
@@ -222,6 +302,15 @@ export default function PagforTab() {
             </div>
           </div>
         </>
+      )}
+
+      {previaAberta && (
+        <PreviaFornecedoresModal
+          boletos={selRed().map(r => r.boleto)}
+          lancando={busy === 'insert'}
+          onClose={() => setPreviaAberta(false)}
+          onConfirmar={handleInsert}
+        />
       )}
     </div>
   )
