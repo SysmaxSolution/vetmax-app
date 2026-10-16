@@ -12,6 +12,10 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getTenantCtx } from '@/lib/data/context'
 import { revalidatePath } from 'next/cache'
 import {
+  resolverFornecedor, apenasDigitos, documentoValido, formatarCnpj,
+} from '@/lib/financial/fornecedor-dda'
+import { lookupCnpj } from '@/lib/cnpj'
+import {
   consultarDDA, consultarBoletoParaPagar, pagarBoleto, consultarComprovante, cancelarAgendamento,
   type PagamentosRuntime,
 } from '@/lib/integrations/sicoob-pagamentos'
@@ -102,20 +106,53 @@ export async function matchDdaBoletos(boletos: DdaBoleto[]): Promise<DdaMatchRes
 }
 
 // Lança no sistema (contas a pagar) os boletos que não estavam — mantendo os dados.
-export async function insertPayablesFromDda(boletos: DdaBoleto[]): Promise<{ ok: true; inserted: number } | { error: string }> {
+export async function insertPayablesFromDda(
+  boletos: DdaBoleto[],
+  opcoes: { cadastrarFornecedor?: boolean } = {},
+): Promise<{ ok: true; inserted: number; fornecedores_criados: number; fornecedores_vinculados: number } | { error: string }> {
   const c = await ctx()
   if (!c) return { error: 'Não autenticado.' }
   if (!['admin', 'owner', 'manager'].includes(c.role)) return { error: 'Sem permissão.' }
   const admin = createAdminClient()
   const uid = await userId()
-  let inserted = 0
+  const cadastrar = opcoes.cadastrarFornecedor !== false
+
+  // Um fornecedor por CNPJ, não por boleto: o mesmo beneficiário costuma
+  // aparecer várias vezes no período (no teste da Animais, 13 boletos para 11
+  // fornecedores). Sem este cache seriam 13 consultas públicas e 13 tentativas
+  // de inserir a mesma empresa.
+  const porDocumento = new Map<string, string | null>()
+  let criados = 0, vinculados = 0, inserted = 0
+
   for (const b of boletos) {
     const amount = b.amount ?? 0
     if (amount <= 0) continue
+
+    let supplierId: string | null = null
+    let nomeFornecedor: string | null = b.beneficiary ?? null
+    const doc = apenasDigitos(b.beneficiary_doc)
+
+    if (cadastrar && documentoValido(doc)) {
+      if (porDocumento.has(doc)) {
+        supplierId = porDocumento.get(doc) ?? null
+      } else {
+        const r = await resolverFornecedor(admin, c.clinicId, b, { userId: uid })
+        supplierId = r.supplier_id
+        if (r.nome) nomeFornecedor = r.nome
+        if (r.origem === 'criado') criados++
+        porDocumento.set(doc, supplierId)
+      }
+      if (supplierId) vinculados++
+    }
+
     const { error } = await admin.from('financial_entries').insert({
       clinic_id: c.clinicId, type: 'payable',
-      description: b.beneficiary || b.document || 'Boleto (DDA)',
-      beneficiary: b.beneficiary ?? null, barcode: b.barcode ?? null,
+      // Com fornecedor resolvido a descrição usa o nome BOM (da consulta
+      // pública), não o truncado em 40 caracteres que o banco devolve.
+      description: nomeFornecedor || b.document || 'Boleto (DDA)',
+      beneficiary: nomeFornecedor ?? b.beneficiary ?? null,
+      supplier_id: supplierId,
+      barcode: b.barcode ?? null,
       amount, due_date: b.due_date ?? new Date().toISOString().slice(0, 10),
       issue_date: new Date().toISOString().slice(0, 10),
       status: 'pending', source: 'manual', category: 'Fornecedores',
@@ -124,7 +161,77 @@ export async function insertPayablesFromDda(boletos: DdaBoleto[]): Promise<{ ok:
     if (!error) inserted++
   }
   revalidatePath('/dashboard/financial')
-  return { ok: true, inserted }
+  return { ok: true, inserted, fornecedores_criados: criados, fornecedores_vinculados: vinculados }
+}
+
+export interface PreviaFornecedorDda {
+  documento:        string
+  documento_fmt:    string
+  nome_no_banco:    string | null
+  nome_final:       string | null
+  ja_cadastrado:    boolean
+  nome_enriquecido: boolean
+  boletos:          number
+  valor_total:      number
+}
+
+/**
+ * Mostra, ANTES de lançar, quais fornecedores serão criados e com que nome.
+ *
+ * Existe porque consulta pública erra: CNPJ baixado, razão social
+ * desatualizada, empresa que mudou de nome. Criar cadastro em silêncio é como
+ * o sistema se enche de lixo que ninguém assume — a operadora confere e decide.
+ *
+ * Somente leitura: não cria nada.
+ */
+export async function previewFornecedoresDda(
+  boletos: DdaBoleto[],
+): Promise<PreviaFornecedorDda[] | { error: string }> {
+  const c = await ctx()
+  if (!c) return { error: 'Não autenticado.' }
+  if (!['admin', 'owner', 'manager'].includes(c.role)) return { error: 'Sem permissão.' }
+  const admin = createAdminClient()
+
+  // Agrupa por documento primeiro: é o fornecedor que interessa, não o boleto.
+  const porDoc = new Map<string, { nome: string | null; boletos: number; total: number }>()
+  for (const b of boletos) {
+    const doc = apenasDigitos(b.beneficiary_doc)
+    if (!documentoValido(doc)) continue
+    const atual = porDoc.get(doc) ?? { nome: b.beneficiary ?? null, boletos: 0, total: 0 }
+    atual.boletos += 1
+    atual.total += b.amount ?? 0
+    porDoc.set(doc, atual)
+  }
+  if (!porDoc.size) return []
+
+  const { data: existentes } = await admin
+    .from('suppliers').select('id, name, document')
+    .eq('clinic_id', c.clinicId).not('document', 'is', null)
+  const cadastrados = new Set((existentes ?? []).map(s => apenasDigitos((s as { document: string }).document)))
+
+  const saida: PreviaFornecedorDda[] = []
+  for (const [doc, info] of porDoc) {
+    const ja = cadastrados.has(doc)
+    let nomeFinal = info.nome
+    let enriquecido = false
+    // Só consulta quem vai mesmo ser criado: a API pública tem limite de taxa,
+    // e para quem já está cadastrado o nome certo é o que a clínica mantém.
+    if (!ja && doc.length === 14) {
+      const cn = await lookupCnpj(doc)
+      if (cn.ok && cn.razao_social) { nomeFinal = cn.razao_social; enriquecido = true }
+    }
+    saida.push({
+      documento: doc,
+      documento_fmt: formatarCnpj(doc),
+      nome_no_banco: info.nome,
+      nome_final: nomeFinal,
+      ja_cadastrado: ja,
+      nome_enriquecido: enriquecido,
+      boletos: info.boletos,
+      valor_total: Math.round(info.total * 100) / 100,
+    })
+  }
+  return saida.sort((a, b) => Number(a.ja_cadastrado) - Number(b.ja_cadastrado) || b.valor_total - a.valor_total)
 }
 
 // Agenda o pagamento (no vencimento de cada título, ou numa data X).
