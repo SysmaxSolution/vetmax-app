@@ -3,10 +3,10 @@
 import { useState } from 'react'
 import { Loader2, Upload, CheckCircle2, XCircle, PlusCircle, CalendarClock, FileDown, Landmark, Banknote } from 'lucide-react'
 import { parseDdaCsv } from '@/lib/parsers/ddaParser'
+import type { DdaBoleto, DdaMatchResult } from '@/types/pagfor'
 import {
   matchDdaBoletos, insertPayablesFromDda, schedulePayments, generatePagforRemittance,
   fetchDdaFromBank, payBoletosViaBank,
-  type DdaBoleto, type DdaMatchResult,
 } from '@/lib/actions/pagfor'
 
 const BRL = (v: number | null) => (v == null ? '—' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }))
