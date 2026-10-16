@@ -139,6 +139,13 @@ export default function PagforTab() {
       ? ` ${res.fornecedores_criados} fornecedor(es) cadastrado(s), ${res.fornecedores_vinculados} vinculado(s).`
       : res.fornecedores_vinculados ? ` ${res.fornecedores_vinculados} vinculado(s) a fornecedor já cadastrado.` : ''
     setDone(`${res.inserted} título(s) lançado(s) em contas a pagar.${forn}`)
+    // O título entrou de qualquer jeito; o que falhou foi o cadastro do
+    // fornecedor. Mostrar é o que faltou na primeira versão — ela lançou 4
+    // títulos sem criar nenhum fornecedor e não avisou nada.
+    if (res.fornecedores_falharam.length) {
+      setError(`Os títulos entraram, mas ${res.fornecedores_falharam.length} fornecedor(es) não puderam ser cadastrados: `
+        + res.fornecedores_falharam.join(' · '))
+    }
     // Recarrega do guardado para as linhas já virem marcadas como lançadas.
     await handleFetchDda(false)
   }
