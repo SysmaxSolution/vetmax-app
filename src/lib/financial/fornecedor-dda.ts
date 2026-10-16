@@ -146,7 +146,17 @@ export async function resolverFornecedor(
       clinic_id: clinicId,
       name:      nomeFinal,
       document:  formatarCnpj(doc),
-      category:  'Fornecedores',
+      // NÃO informar `category`. A coluna tem CHECK com lista fechada
+      // ('medicamentos','alimentos','equipamentos','servicos','limpeza',
+      // 'escritorio','outros') e default 'outros'. A primeira versão deste
+      // código gravava 'Fornecedores', o insert era recusado pelo CHECK e,
+      // como o erro é engolido para não derrubar o lançamento do título,
+      // falhava EM SILÊNCIO: em produção foram 4 títulos lançados e zero
+      // fornecedores criados, sem nenhum aviso na tela.
+      //
+      // Deixar o default valer também protege de mudanças futuras na lista:
+      // o boleto não diz a categoria do fornecedor, então 'outros' é a
+      // resposta honesta — quem souber classifica depois, pela tela.
       is_active: true,
       phone:     extras.phone ?? null,
       email:     extras.email ?? null,

@@ -96,7 +96,8 @@ export async function matchDdaBoletos(boletos: DdaBoleto[]): Promise<DdaMatchRes
 export async function insertPayablesFromDda(
   boletos: DdaBoleto[],
   opcoes: { cadastrarFornecedor?: boolean } = {},
-): Promise<{ ok: true; inserted: number; fornecedores_criados: number; fornecedores_vinculados: number } | { error: string }> {
+): Promise<{ ok: true; inserted: number; fornecedores_criados: number; fornecedores_vinculados: number;
+            fornecedores_falharam: string[] } | { error: string }> {
   const c = await ctx()
   if (!c) return { error: 'Não autenticado.' }
   if (!['admin', 'owner', 'manager'].includes(c.role)) return { error: 'Sem permissão.' }
@@ -110,6 +111,11 @@ export async function insertPayablesFromDda(
   // de inserir a mesma empresa.
   const porDocumento = new Map<string, string | null>()
   let criados = 0, vinculados = 0, inserted = 0, consultasUsadas = 0
+  // Falhas ao cadastrar fornecedor NÃO derrubam o lançamento do título — mas
+  // precisam aparecer. A primeira versão só engolia: em produção foram 4
+  // títulos lançados e zero fornecedores criados (CHECK de `category`), e a
+  // tela não deu um único sinal. Erro silencioso é pior que erro.
+  const falhasFornecedor: string[] = []
 
   for (const b of boletos) {
     const amount = b.amount ?? 0
@@ -137,6 +143,9 @@ export async function insertPayablesFromDda(
         supplierId = r.supplier_id
         if (r.nome) nomeFornecedor = r.nome
         if (r.origem === 'criado') criados++
+        if (r.origem === 'erro' && falhasFornecedor.length < 3) {
+          falhasFornecedor.push(`${formatarCnpj(doc)}: ${r.erro ?? 'falha ao cadastrar'}`)
+        }
         porDocumento.set(doc, supplierId)
       }
       if (supplierId) vinculados++
@@ -172,7 +181,8 @@ export async function insertPayablesFromDda(
     }
   }
   revalidatePath('/dashboard/financial')
-  return { ok: true, inserted, fornecedores_criados: criados, fornecedores_vinculados: vinculados }
+  return { ok: true, inserted, fornecedores_criados: criados, fornecedores_vinculados: vinculados,
+           fornecedores_falharam: falhasFornecedor }
 }
 
 /**

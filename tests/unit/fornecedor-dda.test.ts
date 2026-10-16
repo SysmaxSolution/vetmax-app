@@ -105,6 +105,18 @@ describe('resolução', () => {
     expect(ins.dados.phone).toBe('1633334444')
   })
 
+  it('NÃO informa `category` — a coluna tem CHECK com lista fechada', async () => {
+    // Regressão de produção (16/10): o insert gravava category 'Fornecedores',
+    // que não está em ('medicamentos','alimentos','equipamentos','servicos',
+    // 'limpeza','escritorio','outros'). O CHECK recusava, o erro era engolido
+    // para não derrubar o título, e o resultado foi 4 títulos lançados com
+    // ZERO fornecedores criados — sem nenhum aviso na tela.
+    const { api, gravados } = fakeAdmin({ suppliers: [] })
+    await resolverFornecedor(api, 'cli-1', { beneficiary: TRUNCADO, beneficiary_doc: CNPJ })
+    const ins = gravados.find(g => g.acao === 'insert')!
+    expect(ins.dados).not.toHaveProperty('category')
+  })
+
   it('cai para o nome do banco quando a consulta pública falha', async () => {
     mockLookup.mockResolvedValue({ ok: false, reason: 'network' })
     const { api, gravados } = fakeAdmin({ suppliers: [] })
