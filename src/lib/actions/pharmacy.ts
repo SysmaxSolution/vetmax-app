@@ -4,45 +4,27 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { logAudit } from './audit'
-import { deductStockForMedication } from './stock'
 import { correctTranscript } from './voice-corrections'
+import { consumeStockForApplication, returnStockConsumption } from './stock-consumption'
+import { usaCobrancaDeInsumoAplicado } from './consultation-stock'
+import { addServiceToConsultation, cancelConsultationService } from './services'
+import { resumirBaixa, deveCobrarAplicacao, formatarQuantidade } from '@/lib/stock/aplicacao'
+import type { StatusBaixaEstoque } from '@/lib/stock/aplicacao'
+import type {
+  AppliedMedication,
+  AppliedMedicationResult,
+  Referral,
+  ExtractedClinicalActions,
+} from '@/types/pharmacy'
+import type { VoiceExtractionResult, FlowConfigInput } from '@/types/pharmacy-voice'
 
 import { mensagemErro } from '@/lib/errors'
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export type AppliedMedication = {
-  id: string
-  consultation_id: string
-  medication_name: string
-  dosage: string | null
-  route: string | null
-  notes: string | null
-  is_controlled: boolean
-  created_at: string
-}
-
-export type Referral = {
-  id: string
-  consultation_id: string
-  type: 'exam_internal' | 'exam_external' | 'prescription_external'
-  description: string
-  doctor_notes: string | null
-  created_at: string
-}
-
-export type ExtractedClinicalActions = {
-  medications: Array<{
-    medication_name: string
-    dosage: string | null
-    route: string | null
-    notes: string | null
-  }>
-  referrals: Array<{
-    type: 'exam_internal' | 'exam_external' | 'prescription_external'
-    description: string
-    doctor_notes: string | null
-  }>
-}
+// Colunas lidas em toda consulta de medicacao aplicada: as clinicas mais o
+// vinculo de estoque/cobranca da migration 0505.
+const COLUNAS_MEDICACAO =
+  'id, consultation_id, medication_name, dosage, route, notes, is_controlled, created_at, stock_item_id, quantity, unit, stock_movement_id, stock_status, consultation_service_id, prescription_notification'
 
 // ─── Medicações Aplicadas ─────────────────────────────────────────────────────
 
@@ -63,7 +45,7 @@ export async function getAppliedMedications(
 
   const { data, error } = await supabase
     .from('applied_medications')
-    .select('id, consultation_id, medication_name, dosage, route, notes, is_controlled, created_at')
+    .select(COLUNAS_MEDICACAO)
     .eq('consultation_id', consultationId)
     .eq('clinic_id', profile.clinic_id)
     .order('created_at', { ascending: true })
@@ -79,10 +61,18 @@ export async function addAppliedMedication(data: {
   route?: string
   notes?: string
   is_controlled?: boolean
-}): Promise<AppliedMedication | { error: string }> {
+  /** Item escolhido no estoque. Ausente = registro em texto livre. */
+  stock_item_id?: string | null
+  /** Quantidade aplicada, na unidade do item. Padrao 1. */
+  quantity?: number | null
+  /** No da notificacao de receita, exigido no controlado (Portaria 344/1998). */
+  prescription_notification?: string | null
+  /** Registro clinico sem efeito de estoque — ex.: medicacao trazida pelo tutor. */
+  sem_baixa?: boolean
+}): Promise<AppliedMedicationResult | { error: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Não autenticado.' }
+  if (!user) return { error: 'Nao autenticado.' }
 
   const { data: profile } = await supabase
     .from('profiles')
@@ -90,54 +80,168 @@ export async function addAppliedMedication(data: {
     .eq('id', user.id)
     .single()
 
-  if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
+  if (!profile?.clinic_id) return { error: 'Perfil sem clinica.' }
 
   const admin = createAdminClient()
+  const nome = data.medication_name.trim()
+  if (!nome) return { error: 'Informe o medicamento ou insumo aplicado.' }
+
+  const quantidade = Number(data.quantity ?? 1)
+  if (!(quantidade > 0)) return { error: 'A quantidade aplicada deve ser maior que zero.' }
+
+  // --- Item do estoque (quando o MV escolheu do catalogo) -------------------
+  // Tipo local, nao exportado: 'use server' nao pode exportar tipo (a guarda
+  // guard-use-server-types bloqueia, e em producao viraria 500).
+  type ItemAplicado = { id: string; name: string; unit: string | null; is_service: boolean; is_controlled: boolean }
+  let item: ItemAplicado | null = null
+  if (data.stock_item_id) {
+    const { data: encontrado } = await admin
+      .from('stock_items')
+      .select('id, name, unit, is_service, is_controlled')
+      .eq('id', data.stock_item_id)
+      .eq('clinic_id', profile.clinic_id)
+      .maybeSingle()
+    if (!encontrado) return { error: 'Item nao encontrado no estoque desta clinica.' }
+    item = encontrado as unknown as ItemAplicado
+  }
+
+  // Controlado nao e opiniao de quem digita: quando o item vem do estoque, quem
+  // manda e o cadastro. No texto livre fica o que a tela inferiu pela DCB.
+  const ehControlado = item ? Boolean(item.is_controlled) : Boolean(data.is_controlled)
 
   const { data: result, error } = await admin
     .from('applied_medications')
     .insert({
-      clinic_id:       profile.clinic_id,
-      consultation_id: data.consultation_id,
-      medication_name: data.medication_name,
-      dosage:          data.dosage ?? null,
-      route:           data.route ?? null,
-      notes:           data.notes ?? null,
-      is_controlled:   data.is_controlled ?? false,
-      administered_by: user.id,
+      clinic_id:                 profile.clinic_id,
+      consultation_id:           data.consultation_id,
+      medication_name:           nome,
+      dosage:                    data.dosage ?? null,
+      route:                     data.route ?? null,
+      notes:                     data.notes ?? null,
+      is_controlled:             ehControlado,
+      administered_by:           user.id,
+      stock_item_id:             item?.id ?? null,
+      quantity:                  quantidade,
+      unit:                      item?.unit ?? null,
+      prescription_notification: data.prescription_notification?.trim() || null,
     })
-    .select('id, consultation_id, medication_name, dosage, route, notes, is_controlled, created_at')
+    .select(COLUNAS_MEDICACAO)
     .single()
 
-  if (error || !result) return { error: 'Erro ao registrar medicação: ' + ((error ? mensagemErro(error, 'lib/actions/pharmacy.ts') : '')) }
+  if (error || !result) return { error: 'Erro ao registrar medicacao: ' + ((error ? mensagemErro(error, 'lib/actions/pharmacy.ts') : '')) }
+
+  // --- Baixa do estoque -----------------------------------------------------
+  // Nunca trava o registro clinico (seguranca do paciente > controle de
+  // estoque), mas o resultado SEMPRE volta para a tela: item fora do estoque e
+  // saldo negativo viram divergencia visivel, nao silencio.
+  let resumo: AppliedMedicationResult['stock'] = null
+  let movementId: string | null = null
+
+  if (data.sem_baixa) {
+    resumo = resumirBaixa({ resultado: null, nome, quantidade, unidade: item?.unit ?? null })
+  } else {
+    // Contexto que vai no movimento e aparece no Livro de Controlados.
+    const { data: consulta } = await admin
+      .from('consultations')
+      .select('os_number, patient:patients(name)')
+      .eq('id', data.consultation_id)
+      .eq('clinic_id', profile.clinic_id)
+      .maybeSingle()
+    const pet = (consulta as { patient?: { name?: string } | { name?: string }[] } | null)?.patient
+    const petNome = Array.isArray(pet) ? pet[0]?.name : pet?.name
+    const osNumero = (consulta as { os_number?: string | number } | null)?.os_number
+    const contexto = ['Consulta', osNumero ? 'OS ' + osNumero : null, petNome ?? null]
+      .filter(Boolean).join(' - ')
+
+    const baixa = await consumeStockForApplication({
+      stock_item_id:   item?.id ?? null,
+      medication_name: nome,
+      quantity:        quantidade,
+      source:          'CONSULTATION',
+      reference_id:    result.id as string,
+      notes:           contexto,
+    })
+
+    if ('error' in baixa) {
+      resumo = resumirBaixa({ resultado: null, nome, quantidade, unidade: item?.unit ?? null, erro: baixa.error })
+    } else {
+      movementId = baixa.movement_id
+      resumo = resumirBaixa({ resultado: baixa, nome, quantidade, unidade: item?.unit ?? null })
+    }
+  }
+
+  // --- Cobranca automatica na conta da OS (item 0.7, sob flag) -------------
+  let serviceId: string | null = null
+  let avisoCobranca: string | null = null
+
+  const cobrancaAutomatica = await usaCobrancaDeInsumoAplicado()
+  if (item && deveCobrarAplicacao({
+    cobrancaAutomatica,
+    stockItemId:   item.id,
+    itemEhServico: Boolean(item.is_service),
+    status:        resumo?.status ?? 'sem_baixa',
+  })) {
+    const lancado = await addServiceToConsultation({
+      consultation_id: data.consultation_id,
+      stock_item_id:   item.id,
+      quantity:        quantidade,
+      added_at_stage:  'vet',
+    })
+    if ('error' in lancado) {
+      avisoCobranca = 'O item nao entrou na conta da OS: ' + lancado.error
+    } else {
+      serviceId = lancado.id
+    }
+  }
+
+  // Grava o que aconteceu no proprio registro — e o que a tela rele depois.
+  await admin
+    .from('applied_medications')
+    .update({
+      stock_movement_id:       movementId,
+      stock_status:            resumo?.status ?? null,
+      consultation_service_id: serviceId,
+    })
+    .eq('id', result.id)
+    .eq('clinic_id', profile.clinic_id)
 
   await logAudit({
     action: 'ADD_MEDICATION',
     entity_type: 'applied_medications',
     entity_id: result.id,
-    details: { medication_name: data.medication_name, is_controlled: data.is_controlled ?? false, consultation_id: data.consultation_id },
+    details: {
+      medication_name: nome,
+      is_controlled:   ehControlado,
+      consultation_id: data.consultation_id,
+      stock_item_id:   item?.id ?? null,
+      quantity:        quantidade,
+      stock_status:    resumo?.status ?? null,
+      movement_id:     movementId,
+      service_id:      serviceId,
+    },
   })
 
-  // Abatimento automático de estoque (falha silenciosa — não bloqueia o fluxo clínico)
-  await deductStockForMedication({
-    clinicId:       profile.clinic_id,
-    userId:         user.id,
-    medicationName: data.medication_name,
-    source:         'CONSULTATION',
-    referenceId:    data.consultation_id,
-  })
+  revalidatePath('/dashboard/vet/' + data.consultation_id)
 
-  revalidatePath(`/dashboard/vet/${data.consultation_id}`)
-  return result as AppliedMedication
+  return {
+    medication: {
+      ...(result as unknown as AppliedMedication),
+      stock_movement_id:       movementId,
+      stock_status:            (resumo?.status ?? null) as StatusBaixaEstoque | null,
+      consultation_service_id: serviceId,
+    },
+    stock: resumo,
+    avisoCobranca,
+  }
 }
 
 export async function deleteAppliedMedication(
   id: string,
   consultationId: string
-): Promise<{ success: true } | { error: string }> {
+): Promise<{ success: true; mensagem?: string; aviso?: string } | { error: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Não autenticado.' }
+  if (!user) return { error: 'Nao autenticado.' }
 
   const { data: profile } = await supabase
     .from('profiles')
@@ -145,36 +249,97 @@ export async function deleteAppliedMedication(
     .eq('id', user.id)
     .single()
 
-  if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
+  if (!profile?.clinic_id) return { error: 'Perfil sem clinica.' }
 
-  const { error } = await supabase
+  const admin = createAdminClient()
+
+  // Le o registro ANTES de apagar: e dele que saem o movimento a devolver e a
+  // linha de cobranca a cancelar.
+  const { data: registro } = await admin
+    .from('applied_medications')
+    .select(COLUNAS_MEDICACAO)
+    .eq('id', id)
+    .eq('clinic_id', profile.clinic_id)
+    .maybeSingle()
+
+  if (!registro) return { error: 'Medicacao nao encontrada nesta clinica.' }
+
+  const medicacao = registro as unknown as AppliedMedication
+  const avisos: string[] = []
+  const feitos: string[] = []
+
+  // --- 1. devolve ao estoque -----------------------------------------------
+  if (medicacao.stock_movement_id && medicacao.stock_status !== 'devolvido') {
+    const devolucao = await returnStockConsumption(
+      medicacao.stock_movement_id,
+      'Devolucao: medicacao removida do prontuario da consulta ' + consultationId,
+    )
+    if ('error' in devolucao) {
+      avisos.push('o estoque NAO foi devolvido (' + devolucao.error + ')')
+    } else {
+      feitos.push(
+        formatarQuantidade(devolucao.returned, medicacao.unit) + ' devolvido(s) ao estoque'
+      )
+    }
+  }
+
+  // --- 2. cancela a cobranca que a aplicacao gerou --------------------------
+  if (medicacao.consultation_service_id) {
+    const cancelado = await cancelConsultationService(
+      medicacao.consultation_service_id,
+      'Medicacao removida do prontuario',
+    )
+    if ('error' in cancelado) {
+      avisos.push('o item continua na conta da OS (' + cancelado.error + ')')
+    } else {
+      feitos.push('item retirado da conta da OS')
+    }
+  }
+
+  // --- 3. apaga o registro clinico -----------------------------------------
+  const { error } = await admin
     .from('applied_medications')
     .delete()
     .eq('id', id)
     .eq('clinic_id', profile.clinic_id)
 
-  if (error) return { error: 'Erro ao remover medicação: ' + mensagemErro(error, 'lib/actions/pharmacy.ts') }
+  if (error) return { error: 'Erro ao remover medicacao: ' + mensagemErro(error, 'lib/actions/pharmacy.ts') }
 
-  // 1. PRIMEIRO LOGAMOS A AUDITORIA (Usando 'id' em vez de 'medicationId')
   await logAudit({
     action: 'DELETE_MEDICATION',
     entity_type: 'applied_medications',
-    entity_id: id, 
-    details: { 
-      consultation_id: consultationId,
-      reason: 'Removido manualmente pelo painel' 
-    }
+    entity_id: id,
+    details: {
+      consultation_id:  consultationId,
+      medication_name:  medicacao.medication_name,
+      stock_item_id:    medicacao.stock_item_id,
+      quantity:         medicacao.quantity,
+      movimento_origem: medicacao.stock_movement_id,
+      servico_cancelado: medicacao.consultation_service_id,
+      efeitos:          feitos,
+      falhas:           avisos,
+      reason: 'Removido manualmente pelo painel',
+    },
   })
 
-  // 2. DEPOIS RETORNAMOS O SUCESSO
-  revalidatePath(`/dashboard/vet/${consultationId}`)
-  return { success: true }
+  revalidatePath('/dashboard/vet/' + consultationId)
+
+  // Falha secundaria nao derruba a remocao, mas tambem nao se esconde: volta
+  // para a tela de quem removeu.
+  return {
+    success: true,
+    mensagem: feitos.length > 0 ? feitos.join(' - ') : undefined,
+    aviso:    avisos.length > 0 ? 'Medicacao removida, mas ' + avisos.join(' e ') + '.' : undefined,
+  }
 }
 
 export async function updateAppliedMedication(
   id: string,
   consultationId: string,
-  data: { medication_name: string; dosage?: string; route?: string; notes?: string; is_controlled?: boolean }
+  // Quantidade e item de estoque NAO se editam aqui de proposito: mexer neles
+  // exigiria refazer a baixa. Para corrigir o que saiu do estoque, remova a
+  // medicacao (o que devolve ao lote de origem) e lance de novo.
+  data: { medication_name: string; dosage?: string; route?: string; notes?: string; is_controlled?: boolean; prescription_notification?: string | null }
 ): Promise<AppliedMedication | { error: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -196,10 +361,11 @@ export async function updateAppliedMedication(
       route:           data.route  ?? null,
       notes:           data.notes  ?? null,
       ...(data.is_controlled !== undefined && { is_controlled: data.is_controlled }),
+      ...(data.prescription_notification !== undefined && { prescription_notification: data.prescription_notification?.trim() || null }),
     })
     .eq('id', id)
     .eq('clinic_id', profile.clinic_id)
-    .select('id, consultation_id, medication_name, dosage, route, notes, is_controlled, created_at')
+    .select(COLUNAS_MEDICACAO)
     .single()
 
   if (error || !result) return { error: 'Erro ao atualizar medicação: ' + ((error ? mensagemErro(error, 'lib/actions/pharmacy.ts') : '')) }
@@ -311,54 +477,6 @@ export async function deleteReferral(
 
 // ─── Extração Completa via Voz (Single Voice Engine) ─────────────────────────
 
-export type VoiceExtractionResult = {
-  notas_clinicas: string
-  transcript_corrected?: string  // Frente 2: transcrição após o dicionário de correção
-  medicacoes_aplicadas: Array<{
-    medication_name: string
-    dosage: string | null
-    route: 'IV' | 'IM' | 'SC' | 'oral' | 'topical' | 'other' | null
-    notes: string | null
-    is_controlled?: boolean
-  }>
-  documentos_sugeridos: Array<{
-    tipo: 'receita' | 'encaminhamento' | 'exame' | 'laudo'
-    motivo: string
-    title: string
-    summary: string
-    is_controlled?: boolean
-  }>
-  agendamentos_sugeridos: Array<{
-    data_sugerida: string   // YYYY-MM-DD
-    motivo: string          // "Retorno" | "Consulta" | "Exame" | "Vacinação" | "Cirurgia"
-  }>
-  sinais_vitais?: {
-    weight?:           number | null
-    temperature?:      number | null
-    heart_rate?:       number | null
-    respiratory_rate?: number | null
-    chief_complaint?:  string | null
-  }
-  laudo_exame?: string
-  vaccines_applied?: Array<{
-    vaccine_name:  string
-    next_due_date: string | null
-    notes:         string | null
-  }>
-  // NOVO: Cadastro Vivo
-  pet_profile_updates?: {
-    medical_history?: string | null
-    reproductive_status?: string | null
-    coat_color?: string | null
-    behavior_tags?: string[]
-  }
-  // NOVO: Roteamento por Voz
-  suggested_routing?: 'discharge' | 'hospitalization' | 'exams' | 'waiting_exam' | null
-
-}
-export type FlowConfigInput = {
-  vet_merged_modules: Array<'triage' | 'exams'>
-}
 
 export async function extractFullVoice(
   transcript: string,

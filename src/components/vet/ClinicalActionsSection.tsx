@@ -2,8 +2,11 @@
 
 import { useState } from 'react'
 import { Syringe, Plus, Trash2, Loader2, Check, ChevronDown, Pencil, AlertTriangle } from 'lucide-react'
-import type { AppliedMedication } from '@/lib/actions/pharmacy'
+import type { AppliedMedication } from '@/types/pharmacy'
+import type { StockItemLite } from '@/types/stock-consumption'
 import CoverageChipClient from '@/components/pet/CoverageChipClient'
+import StockItemSelector from '@/components/stock/StockItemSelector'
+import { formatarQuantidade, ROTULO_STATUS_BAIXA } from '@/lib/stock/aplicacao'
 
 // ─── DCBs Controlados (CFMV — Receita de Controle Especial) ──────────────────
 // Lista B1/B2 (psicotrópicos) e Lista A (entorpecentes)
@@ -40,6 +43,10 @@ interface Props {
     route?: string
     notes?: string
     is_controlled?: boolean
+    stock_item_id?: string | null
+    quantity?: number | null
+    prescription_notification?: string | null
+    sem_baixa?: boolean
   }) => Promise<void>
   onDelete: (id: string) => Promise<void>
   onUpdate?: (id: string, data: {
@@ -48,6 +55,7 @@ interface Props {
     route?: string
     notes?: string
     is_controlled?: boolean
+    prescription_notification?: string | null
   }) => Promise<void>
 }
 
@@ -71,15 +79,25 @@ export default function ClinicalActionsSection({
   const [calcLoading,    setCalcLoading]    = useState(false)
   const [calcSuggestion, setCalcSuggestion] = useState<string | null>(null)
 
+  // Vinculo com o estoque (item 1.7): item escolhido, quanto saiu, notificacao
+  // de receita do controlado e a saida que nao deve baixar nada.
+  const [medItem,         setMedItem]         = useState<StockItemLite | null>(null)
+  const [medQtd,          setMedQtd]          = useState('1')
+  const [medNotificacao,  setMedNotificacao]  = useState('')
+  const [medSemBaixa,     setMedSemBaixa]     = useState(false)
+
   // Edit state
   const [editingId,  setEditingId]  = useState<string | null>(null)
   const [editName,   setEditName]   = useState('')
   const [editDosage, setEditDosage] = useState('')
   const [editRoute,  setEditRoute]  = useState('')
   const [editNotes,  setEditNotes]  = useState('')
+  const [editNotificacao, setEditNotificacao] = useState('')
   const [isUpdating, setIsUpdating] = useState(false)
 
-  const medIsControlled   = medName.trim().length > 2 && isControlledDrug(medName)
+  const medIsControlled   = medItem
+    ? medItem.is_controlled
+    : (medName.trim().length > 2 && isControlledDrug(medName))
   const editIsControlled  = editName.trim().length > 2 && isControlledDrug(editName)
 
   function startEdit(med: AppliedMedication) {
@@ -88,6 +106,22 @@ export default function ClinicalActionsSection({
     setEditDosage(med.dosage ?? '')
     setEditRoute(med.route ?? '')
     setEditNotes(med.notes ?? '')
+    setEditNotificacao(med.prescription_notification ?? '')
+  }
+
+  /** Item escolhido no estoque preenche o nome e a unidade da quantidade. */
+  function handlePickStockItem(item: StockItemLite | null) {
+    setMedItem(item)
+    if (item) {
+      setMedName(item.name)
+      setCalcSuggestion(null)
+    }
+  }
+
+  function limparFormulario() {
+    setMedName(''); setMedDosage(''); setMedRoute(''); setMedNotes('')
+    setMedItem(null); setMedQtd('1'); setMedNotificacao(''); setMedSemBaixa(false)
+    setCalcSuggestion(null)
   }
 
   async function handleUpdate() {
@@ -99,13 +133,19 @@ export default function ClinicalActionsSection({
       route:           editRoute  || undefined,
       notes:           editNotes.trim() || undefined,
       is_controlled:   editIsControlled,
+      prescription_notification: editNotificacao.trim() || null,
     })
     setIsUpdating(false)
     setEditingId(null)
   }
 
+  const quantidadeValida = (() => {
+    const n = Number(String(medQtd).replace(',', '.'))
+    return Number.isFinite(n) && n > 0 ? n : null
+  })()
+
   const handleAdd = async () => {
-    if (!medName.trim()) return
+    if (!medName.trim() || quantidadeValida === null) return
     setIsSaving(true)
     await onAdd({
       medication_name: medName.trim(),
@@ -113,10 +153,13 @@ export default function ClinicalActionsSection({
       route:           medRoute  || undefined,
       notes:           medNotes.trim() || undefined,
       is_controlled:   medIsControlled,
+      stock_item_id:   medItem?.id ?? null,
+      quantity:        quantidadeValida,
+      prescription_notification: medNotificacao.trim() || null,
+      sem_baixa:       medSemBaixa,
     })
     setIsSaving(false)
-    setMedName(''); setMedDosage(''); setMedRoute(''); setMedNotes('')
-    setCalcSuggestion(null)
+    limparFormulario()
     setShowForm(false)
   }
 
@@ -181,8 +224,8 @@ export default function ClinicalActionsSection({
             <Syringe className="h-4 w-4 text-emerald-600" />
           </div>
           <div>
-            <h3 className="text-base font-semibold text-slate-900">Medicações Aplicadas</h3>
-            <p className="text-xs text-slate-500">Administradas no animal durante esta consulta</p>
+            <h3 className="text-base font-semibold text-slate-900">Medicações e insumos aplicados</h3>
+            <p className="text-xs text-slate-500">Aplicados no animal nesta consulta — saem do estoque</p>
           </div>
         </div>
         {!isFinalized && (
@@ -191,7 +234,7 @@ export default function ClinicalActionsSection({
             className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-medium hover:bg-emerald-100 transition-all"
           >
             <Plus className="w-3.5 h-3.5" />
-            + Medicação
+            + Aplicação
           </button>
         )}
       </div>
@@ -199,9 +242,21 @@ export default function ClinicalActionsSection({
       {/* Formulário Manual */}
       {showForm && (
         <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 space-y-3">
+          {/* Item do estoque: o que foi escolhido aqui e o que sai do estoque e,
+              quando a clinica usa cobranca automatica, o que entra na conta. */}
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Item do estoque</label>
+            <StockItemSelector value={medItem?.id ?? null} onChange={handlePickStockItem} />
+            <p className="mt-1 text-[11px] text-slate-400">
+              {medItem
+                ? `Sai do estoque em ${medItem.unit}. Saldo atual: ${formatarQuantidade(medItem.quantity, medItem.unit)}.`
+                : 'Sem item selecionado, o registro vale como texto livre e a saída fica pendente de conferência no estoque.'}
+            </p>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Medicamento *</label>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Medicamento / insumo *</label>
               <input
                 type="text"
                 value={medName}
@@ -278,17 +333,65 @@ export default function ClinicalActionsSection({
               />
             </div>
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">
+                Quantidade aplicada *
+                {medItem && <span className="ml-1 text-slate-400">({medItem.unit})</span>}
+              </label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={medQtd}
+                onChange={e => setMedQtd(e.target.value)}
+                placeholder="Ex: 2"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400"
+              />
+              {quantidadeValida === null && medQtd.trim() !== '' && (
+                <p className="mt-1 text-xs text-rose-600">Informe um número maior que zero.</p>
+              )}
+            </div>
+            {medIsControlled && (
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  Nº da notificação de receita
+                </label>
+                <input
+                  type="text"
+                  value={medNotificacao}
+                  onChange={e => setMedNotificacao(e.target.value)}
+                  placeholder="Portaria 344/98"
+                  className="w-full px-3 py-2 border border-blue-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                />
+                <p className="mt-1 text-[11px] text-slate-400">Vai ao Livro de Controlados como documento da saída.</p>
+              </div>
+            )}
+          </div>
+
+          <label className="flex items-start gap-2 text-xs text-slate-600 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={medSemBaixa}
+              onChange={e => setMedSemBaixa(e.target.checked)}
+              className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500/30"
+            />
+            <span>
+              Não baixar do estoque
+              <span className="text-slate-400"> — medicação trazida pelo tutor ou já debitada em outro setor</span>
+            </span>
+          </label>
+
           <div className="flex gap-2 pt-1">
             <button
               onClick={handleAdd}
-              disabled={isSaving || !medName.trim()}
+              disabled={isSaving || !medName.trim() || quantidadeValida === null}
               className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition-all disabled:opacity-50"
             >
               {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
               Salvar
             </button>
             <button
-              onClick={() => { setShowForm(false); setMedName(''); setMedDosage(''); setMedRoute(''); setMedNotes(''); setCalcSuggestion(null) }}
+              onClick={() => { setShowForm(false); limparFormulario() }}
               className="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg text-sm font-medium hover:bg-slate-50 transition-all"
             >
               Cancelar
@@ -366,7 +469,19 @@ export default function ClinicalActionsSection({
                         placeholder="Opcional"
                         className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400" />
                     </div>
+                    {editIsControlled && (
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600 mb-1">Nº da notificação de receita</label>
+                        <input type="text" value={editNotificacao} onChange={e => setEditNotificacao(e.target.value)}
+                          placeholder="Portaria 344/98"
+                          className="w-full px-3 py-2 border border-blue-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400" />
+                      </div>
+                    )}
                   </div>
+                  <p className="text-[11px] text-slate-400">
+                    Quantidade e item de estoque não se editam aqui: para corrigir o que saiu do estoque,
+                    remova a aplicação (o insumo volta ao lote de origem) e lance de novo.
+                  </p>
                   <div className="flex gap-2">
                     <button onClick={handleUpdate} disabled={isUpdating || !editName.trim()}
                       className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition-all disabled:opacity-50">
@@ -394,12 +509,27 @@ export default function ClinicalActionsSection({
                             Controle Especial
                           </span>
                         )}
+                        {/* O que aconteceu com o estoque fica na linha: divergencia
+                            nao pode depender de o MV ter visto o toast. */}
+                        {med.stock_status && (
+                          <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded border uppercase tracking-wide ${
+                            med.stock_status === 'baixado'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : med.stock_status === 'sem_baixa' || med.stock_status === 'devolvido'
+                                ? 'bg-slate-100 text-slate-500 border-slate-200'
+                                : 'bg-rose-50 text-rose-700 border-rose-200'
+                          }`}>
+                            {ROTULO_STATUS_BAIXA[med.stock_status]}
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs text-slate-500">
                         {[
+                          med.quantity ? formatarQuantidade(med.quantity, med.unit) : null,
                           med.dosage,
                           med.route ? (ROUTE_LABELS[med.route] ?? med.route) : null,
                           med.notes,
+                          med.prescription_notification ? `Notificação ${med.prescription_notification}` : null,
                         ].filter(Boolean).join(' · ') || 'Sem detalhes'}
                       </p>
                     </div>

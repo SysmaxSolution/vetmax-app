@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useContext } from 'react'
-import type { AiTranscriptionMode } from '@/lib/actions/clinic-settings'
+import type { AiTranscriptionMode } from '@/types/clinic-settings'
 
 interface ClinicConfig {
   aiTranscriptionMode: AiTranscriptionMode

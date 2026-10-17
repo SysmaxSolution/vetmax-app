@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { Clock, Save, Loader2, ToggleLeft, ToggleRight, Sun } from 'lucide-react'
-import { updateClinicConfig, type BusinessHours, type ClinicConfig } from '@/lib/actions/clinic-settings'
+import { updateClinicConfig } from '@/lib/actions/clinic-settings'
+import type { BusinessHours, ClinicConfig } from '@/types/clinic-settings'
 import { TimePicker } from '@/components/ui/DatePicker'
 
 // ─── Constants ────────────────────────────────────────────────────────────────

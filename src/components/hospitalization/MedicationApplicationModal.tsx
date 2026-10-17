@@ -16,8 +16,8 @@ import {
 } from '@/lib/actions/hospitalization-prescriptions'
 import { useMedicationScheduler, type MedicationAlert } from '@/hooks/useMedicationScheduler'
 import { medicationTickStore } from '@/lib/medication-tick'
-import StockItemSelector from './StockItemSelector'
-import type { StockItemLite } from '@/lib/actions/stock-consumption'
+import StockItemSelector from '@/components/stock/StockItemSelector'
+import type { StockItemLite } from '@/types/stock-consumption'
 
 /**
  * Modal de controle de medicação do paciente internado.

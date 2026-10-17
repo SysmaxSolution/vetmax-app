@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { requireModuleAccess } from '@/lib/server/require-module'
 import { getDailySales } from '@/lib/actions/sales'
 import SalesWorkspace from '@/components/sales/SalesWorkspace'
-import type { FlowConfig } from '@/lib/actions/clinic-settings'
+import type { FlowConfig } from '@/types/clinic-settings'
 
 export const metadata = { title: 'Vendas — SysVetMax' }
 

@@ -9,7 +9,7 @@ import { getAttachments } from '@/lib/actions/attachments'
 import { getPatientVaccines } from '@/lib/actions/vaccines'
 import { getInsuranceCard } from '@/lib/actions/insurance-coverage'
 import ConsultationDetail from '@/components/vet/ConsultationDetail'
-import type { FlowConfig } from '@/lib/actions/clinic-settings'
+import type { FlowConfig } from '@/types/clinic-settings'
 
 export const metadata = { title: 'Consultório | SysVetMax' }
 

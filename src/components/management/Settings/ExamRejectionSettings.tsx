@@ -7,7 +7,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { ToggleLeft, ToggleRight, Save, Loader2, FlaskConical, Plus, Trash2, Pencil, X, RotateCcw } from 'lucide-react'
-import type { ClinicConfig, FlowConfig } from '@/lib/actions/clinic-settings'
+import type { ClinicConfig, FlowConfig } from '@/types/clinic-settings'
 import { updateClinicConfig, getClinicConfig } from '@/lib/actions/clinic-settings'
 import {
   listRejectionReasons, saveRejectionReason, deleteRejectionReason,
