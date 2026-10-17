@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { Shield, Plus, Trash2, ChevronRight, AlertTriangle, Info, XCircle, Loader2, X } from 'lucide-react'
-import {
-  getInsuranceProviders, createInsuranceProvider, deleteInsuranceProvider,
-  type InsuranceProvider, type ReceiptMode,
-} from '@/lib/actions/insurance-providers'
+import { getInsuranceProviders, createInsuranceProvider, deleteInsuranceProvider } from '@/lib/actions/insurance-providers'
+import type { InsuranceProvider, ReceiptMode } from '@/types/insurance-providers'
+import { ROTULO_CICLO, type CicloRepasse } from '@/lib/insurance/ciclo'
+import { ROTULO_MODO_COPAY, descreverRegraCopay, type ModoCopay } from '@/lib/insurance/copay'
 import {
   getInsuranceRules, createInsuranceRule, deleteInsuranceRule,
   type InsuranceRule, type RuleType, type RuleSeverity,
@@ -59,6 +59,13 @@ export default function ConveniosTab({ onToast }: Props) {
   const [pPhone, setPPhone]         = useState('')
   const [pEmail, setPEmail]         = useState('')
   const [pReceipt, setPReceipt]     = useState<ReceiptMode>('convenio_repasse')
+  // Ciclo de fechamento e valor intermediario (item 1.9): a regra do convenio
+  // vira configuracao, em vez de ficar escrita no codigo.
+  const [pCiclo, setPCiclo]         = useState<CicloRepasse>('monthly')
+  const [pCicloDia, setPCicloDia]   = useState('')
+  const [pCopayModo, setPCopayModo] = useState<ModoCopay>('per_item')
+  const [pCopayPct, setPCopayPct]   = useState('')
+  const [pCopayFixo, setPCopayFixo] = useState('')
   const [savingProvider, setSavingProvider] = useState(false)
 
   // Rule form
@@ -96,6 +103,13 @@ export default function ConveniosTab({ onToast }: Props) {
       portal_url: pPortal || undefined,
       contact_info: { phone: pPhone || undefined, email: pEmail || undefined },
       receipt_mode: pReceipt,
+      repass_cycle:     pCiclo,
+      repass_cycle_day: (pCiclo === 'weekly' || pCiclo === 'monthly') && pCicloDia.trim() !== ''
+        ? Number(pCicloDia)
+        : null,
+      copay_mode:    pCopayModo,
+      copay_percent: pCopayModo === 'percent' ? Number(String(pCopayPct).replace(',', '.')) || 0 : null,
+      copay_fixed:   pCopayModo === 'fixed'   ? Number(String(pCopayFixo).replace(',', '.')) || 0 : null,
     })
     setSavingProvider(false)
     if ('error' in res) return onToast('error', res.error)
@@ -103,6 +117,7 @@ export default function ConveniosTab({ onToast }: Props) {
     if (!('error' in fresh)) setProviders(fresh)
     onToast('success', `Convênio "${pName}" cadastrado.`)
     setPName(''); setPPlans(''); setPPortal(''); setPPhone(''); setPEmail(''); setPReceipt('convenio_repasse')
+    setPCiclo('monthly'); setPCicloDia(''); setPCopayModo('per_item'); setPCopayPct(''); setPCopayFixo('')
     setShowProviderForm(false)
   }
 
@@ -191,6 +206,66 @@ export default function ConveniosTab({ onToast }: Props) {
                   {(Object.entries(RECEIPT_MODE_LABELS) as [ReceiptMode, string][]).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                 </select>
               </div>
+              {/* Ciclo de fechamento — alimenta o seletor de periodo da conferencia */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-500 mb-1">A cada quanto tempo fecha com o convênio?</label>
+                  <select className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-teal-500"
+                    value={pCiclo} onChange={e => { setPCiclo(e.target.value as CicloRepasse); setPCicloDia('') }}>
+                    {(Object.entries(ROTULO_CICLO) as [CicloRepasse, string][]).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                  </select>
+                </div>
+                {pCiclo === 'weekly' && (
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-500 mb-1">Começa em</label>
+                    <select className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-teal-500"
+                      value={pCicloDia} onChange={e => setPCicloDia(e.target.value)}>
+                      <option value="">Domingo</option>
+                      {['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'].map((d, i) => (
+                        <option key={i} value={String(i)}>{d}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {pCiclo === 'monthly' && (
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-500 mb-1">Dia do corte</label>
+                    <input type="text" inputMode="numeric" placeholder="1 = mês civil"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-teal-500"
+                      value={pCicloDia} onChange={e => setPCicloDia(e.target.value)} />
+                    <p className="mt-1 text-[10px] text-slate-400">Ex.: 15 fecha do dia 15 ao dia 14 do mês seguinte.</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Valor intermediario: o que o tutor paga quando o pet e conveniado */}
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-500 mb-1">Quanto o tutor paga no balcão?</label>
+                  <select className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-teal-500"
+                    value={pCopayModo} onChange={e => setPCopayModo(e.target.value as ModoCopay)}>
+                    {(Object.entries(ROTULO_MODO_COPAY) as [ModoCopay, string][]).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                  </select>
+                </div>
+                {pCopayModo === 'percent' && (
+                  <input type="text" inputMode="decimal" placeholder="Percentual que fica com o tutor (ex.: 20)"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-teal-500"
+                    value={pCopayPct} onChange={e => setPCopayPct(e.target.value)} />
+                )}
+                {pCopayModo === 'fixed' && (
+                  <input type="text" inputMode="decimal" placeholder="Valor fixo por item, em R$ (ex.: 10,00)"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-teal-500"
+                    value={pCopayFixo} onChange={e => setPCopayFixo(e.target.value)} />
+                )}
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  {descreverRegraCopay({
+                    modo:    pCopayModo,
+                    percent: Number(String(pCopayPct).replace(',', '.')) || 0,
+                    fixed:   Number(String(pCopayFixo).replace(',', '.')) || 0,
+                  })}
+                </p>
+              </div>
+
               <input className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-teal-500"
                 placeholder="URL do portal (opcional)" value={pPortal} onChange={e => setPPortal(e.target.value)} />
               <div className="grid grid-cols-2 gap-2">
