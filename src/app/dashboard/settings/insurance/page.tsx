@@ -3,13 +3,8 @@
 import { useState, useEffect, useTransition } from 'react'
 import { createPortal } from 'react-dom'
 import { Plus, Pencil, Trash2, Shield, FileText, ChevronRight, X, Loader2, Check, AlertTriangle, Ban, Info } from 'lucide-react'
-import {
-  getInsuranceProviders,
-  createInsuranceProvider,
-  updateInsuranceProvider,
-  deleteInsuranceProvider,
-  type InsuranceProvider,
-} from '@/lib/actions/insurance-providers'
+import { getInsuranceProviders, createInsuranceProvider, updateInsuranceProvider, deleteInsuranceProvider } from '@/lib/actions/insurance-providers'
+import type { InsuranceProvider } from '@/types/insurance-providers'
 import {
   getInsuranceRules,
   createInsuranceRule,

@@ -9,7 +9,8 @@
 
 import { useState } from 'react'
 import { Syringe, ToggleLeft, ToggleRight, Save, Loader2, AlertTriangle } from 'lucide-react'
-import { updateClinicConfig, getClinicConfig, type ClinicConfig, type FlowConfig } from '@/lib/actions/clinic-settings'
+import { updateClinicConfig, getClinicConfig } from '@/lib/actions/clinic-settings'
+import type { ClinicConfig, FlowConfig } from '@/types/clinic-settings'
 import { DEFAULT_RECALL_HOUR, DEFAULT_RECALL_DAYS, DEFAULT_RECALL_TZ } from '@/lib/vaccines/recall-schedule'
 
 const TIME_ZONES = [

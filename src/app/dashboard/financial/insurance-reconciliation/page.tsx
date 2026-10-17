@@ -6,6 +6,7 @@ import { ArrowLeft, FileSpreadsheet } from 'lucide-react'
 import { listImportedRemittances } from '@/lib/actions/petlove-import'
 import PetloveReconciliationClient from '@/components/financial/insurance/PetloveReconciliationClient'
 import ConvenioImportButton from '@/components/financial/insurance/ConvenioImportButton'
+import InsuranceClosingPanel from '@/components/financial/insurance/InsuranceClosingPanel'
 
 export const metadata = { title: 'Conciliação de Convênios | SysVetMax' }
 
@@ -56,6 +57,11 @@ export default async function InsuranceReconciliationPage() {
           </div>
           <ConvenioImportButton />
         </header>
+
+        {/* Espelho do periodo (item 1.9) — o que o convenio deve, apurado das OS.
+            Vem ANTES da lista de remessas de proposito: primeiro se sabe quanto
+            deveria vir, depois se confere o que veio. */}
+        <InsuranceClosingPanel />
 
         <PetloveReconciliationClient initialRemittances={initialList} />
       </main>
