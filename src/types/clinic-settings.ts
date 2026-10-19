@@ -111,6 +111,12 @@ export type FlowConfig = {
   /** Rejeitar exame JÁ FATURADO estorna a fatura automaticamente?
    *  FALSE (padrão) = recusa a rejeição e orienta estorno manual no Financeiro. */
   estorna_exame_faturado_na_recusa?: boolean
+  /** Exigências do pré-anestésico que IMPEDEM a cirurgia de ir para a sala
+   *  (Fase 4 · item 4.2). Lista vazia ou ausente = nada trava, só avisa, que é
+   *  o padrão: uma clínica em operação não pode descobrir numa terça-feira que o
+   *  sistema passou a barrar a cirurgia que ela sempre conseguiu fazer.
+   *  Valores: 'jejum' | 'exames_preop' | 'consentimento' | 'asa'. */
+  gate_pre_anestesico?: Array<'jejum' | 'exames_preop' | 'consentimento' | 'asa'>
 }
 
 export type BusinessHourEntry = { open: string; close: string } | null

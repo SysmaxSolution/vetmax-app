@@ -20,6 +20,7 @@ import LabAgentSettings from './LabAgentSettings'
 import ReferenceSetsPanel from './ReferenceSetsPanel'
 import AnalyteMappingPanel from './AnalyteMappingPanel'
 import ExamRejectionSettings from './ExamRejectionSettings'
+import GatePreAnestesicoSettings from './GatePreAnestesicoSettings'
 import FlowFlagCard from './FlowFlagCard'
 import VaccineRecallSettings from './VaccineRecallSettings'
 import PricingTab from '@/components/registry/pricing/PricingTab'
@@ -189,6 +190,8 @@ export default function SettingsWorkspace({
               successMessage="Cobrança do insumo aplicado configurada!"
             />
             <VaccineRecallSettings initialConfig={initialClinicConfig} onToast={onToast} />
+
+            <GatePreAnestesicoSettings initialConfig={initialClinicConfig} onToast={onToast} />
 
             <ExamRejectionSettings initialConfig={initialClinicConfig} onToast={onToast} />
             <FlowFlagCard
