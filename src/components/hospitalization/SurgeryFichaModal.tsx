@@ -17,10 +17,10 @@ import {
   listSurgeryVitals, recordSurgeryVital, sendSurgeryToInternacao,
   type SurgeryDetail, type SurgeryChecklist, type SurgeryVital,
 } from '@/lib/actions/surgeries'
-import {
-  listServiceKits, applyKitToSurgery, getSurgeryAccount,
-  type ServiceKitSummary, type SurgeryAccount,
-} from '@/lib/actions/surgery-kits'
+import { listServiceKits, applyKitToSurgery, getSurgeryAccount } from '@/lib/actions/surgery-kits'
+import type { ServiceKitSummary, SurgeryAccount, KitApplicationRow } from '@/types/surgery-kits'
+import { listKitApplications } from '@/lib/actions/surgery-kits'
+import KitConferenciaPanel from '@/components/surgery/KitConferenciaPanel'
 
 /**
  * SurgeryFichaModal — ficha cirúrgica em ACORDEÃO VERTICAL (single-page, SEM abas).
@@ -81,6 +81,9 @@ export default function SurgeryFichaModal({ surgeryId, onClose, onChanged }: Pro
   const [account, setAccount] = useState<SurgeryAccount | null>(null)
   const [busyKit, setBusyKit] = useState<string | null>(null)
   const [kitToast, setKitToast] = useState<string | null>(null)
+  const [kitErro, setKitErro] = useState<string | null>(null)
+  // Kits ja aplicados a esta cirurgia, para conferir a devolucao (item 4.1).
+  const [aplicacoes, setAplicacoes] = useState<KitApplicationRow[]>([])
   // Pós-op
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -96,6 +99,7 @@ export default function SurgeryFichaModal({ surgeryId, onClose, onChanged }: Pro
 
   useEffect(() => {
     let cancelled = false
+    listKitApplications(surgeryId).then(r => { if (Array.isArray(r)) setAplicacoes(r) })
     Promise.all([getSurgery(surgeryId), listServiceKits()]).then(([s, k]) => {
       if (cancelled) return
       if (!('error' in s)) { setSurgery(s); setChecklist(s.checklist ?? {}); setReport(s.surgical_report ?? '') }
@@ -152,7 +156,9 @@ export default function SurgeryFichaModal({ surgeryId, onClose, onChanged }: Pro
     const res = await applyKitToSurgery(kitId, surgeryId)
     setBusyKit(null)
     if ('error' in res) { setError(res.error); return }
-    setKitToast(`Kit aplicado: ${fmtBRL(res.charged)} lançado · ${res.consumed} insumo(s) baixado(s)${res.reconciliation ? ` · ${res.reconciliation} p/ conciliação` : ''}.`)
+    setKitToast(`Kit aplicado: ${fmtBRL(res.charged)} lançado · ${res.consumed} insumo(s) baixado(s)${res.reconciliation ? ` · ${res.reconciliation} p/ conciliação` : ''}${res.sem_vinculo ? ` · ${res.sem_vinculo} sem vínculo com estoque` : ''}.`)
+    const apps = await listKitApplications(surgeryId)
+    if (Array.isArray(apps)) setAplicacoes(apps)
     await reloadAccount()
     setTimeout(() => setKitToast(null), 4000)
   }
@@ -325,6 +331,26 @@ export default function SurgeryFichaModal({ surgeryId, onClose, onChanged }: Pro
               <Section id="kits" icon={<FileStack className="h-5 w-5" />} title="Kits Cirúrgicos & Fatura" subtitle={account ? `Total: ${fmtBRL(account.total)}` : 'Insumos e faturamento'} open={openSet.has('kits')} onToggle={() => toggle('kits')} accentClass="bg-indigo-50 text-indigo-600">
                 <div className="pt-2 space-y-3">
                   {kitToast && <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-700">{kitToast}</div>}
+                  {kitErro && <div className="rounded-lg bg-rose-50 border border-rose-200 px-3 py-2 text-xs text-rose-700">{kitErro}</div>}
+
+                  {/* Conferencia da devolucao do nao-usado (item 4.1): o que
+                      voltou fechado volta ao lote de origem e sai da conta. */}
+                  <KitConferenciaPanel
+                    aplicacoes={aplicacoes}
+                    onConferido={async () => {
+                      const [apps, conta] = await Promise.all([
+                        listKitApplications(surgeryId),
+                        getSurgeryAccount(surgeryId),
+                      ])
+                      if (Array.isArray(apps)) setAplicacoes(apps)
+                      if (conta && !('error' in conta)) setAccount(conta)
+                    }}
+                    onToast={(tipo, msg) => {
+                      if (tipo === 'ok') { setKitErro(null); setKitToast(msg) }
+                      else { setKitToast(null); setKitErro(msg) }
+                      setTimeout(() => { setKitToast(null); setKitErro(null) }, 6000)
+                    }}
+                  />
                   {kits.length === 0 ? (
                     <p className="text-xs text-slate-400">Nenhum kit cadastrado. Cadastre kits no catálogo para aplicar com 1 clique.</p>
                   ) : (
