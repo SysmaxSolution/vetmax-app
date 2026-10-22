@@ -217,3 +217,64 @@ export const STATUS_TERMINAL: Record<string, { rotulo: string; pode_cobrar: bool
     explicacao: 'O aparelho é de versão antiga (anterior à 4.0) e não informa o próprio estado. Tente cobrar; se não chegar, use outra maquininha.',
   },
 }
+
+// ─── Interpretação de status — medida no sandbox, não suposta ───────────────
+
+export type SituacaoCobranca =
+  | 'aguardando'   // criada, ninguém pagou ainda
+  | 'aprovada'     // dinheiro garantido
+  | 'recusada'     // o cartão negou; o tutor pode tentar de novo
+  | 'cancelada'    // o link foi cancelado
+  | 'desconhecida'
+
+export interface LeituraDeStatus {
+  situacao:  SituacaoCobranca
+  rotulo:    string
+  /** O que a recepção faz agora. */
+  orientacao: string
+}
+
+/**
+ * Traduz o estado real de uma cobrança.
+ *
+ * ⚠️ ARMADILHA MEDIDA EM 22/10/2026: quando o cartão é recusado, a transação
+ * fica `DISAPPROVED` mas **a ORDER continua `PENDING`**. Olhar só o status da
+ * order faria uma recusa parecer "ainda esperando pagamento" — e o caixa
+ * liberaria o atendimento achando que o tutor ainda vai pagar.
+ *
+ * Por isso a leitura considera os DOIS: o status da transação manda quando
+ * existe; o da order só vale quando não houve tentativa nenhuma.
+ *
+ * Também: `PENDING` e `CANCELED` (com um L) são status REAIS que não constam da
+ * tabela publicada — a doc lista `CANCELLED`, com dois.
+ */
+export function lerSituacao(
+  statusOrder: string | null | undefined,
+  statusTransacao?: string | null,
+): LeituraDeStatus {
+  const t = String(statusTransacao ?? '').toUpperCase()
+  const o = String(statusOrder ?? '').toUpperCase()
+
+  if (t === 'APPROVED' || t === 'COMPLETE') {
+    return { situacao: 'aprovada', rotulo: 'Pago',
+      orientacao: 'Pagamento aprovado. O valor entra conforme a data de cada parcela.' }
+  }
+  if (t === 'DISAPPROVED' || t === 'ABORTED' || t === 'ABORTED_BY_MERCHANT') {
+    return { situacao: 'recusada', rotulo: 'Recusado',
+      orientacao: 'O cartão não autorizou. O tutor pode tentar outro cartão pelo mesmo link.' }
+  }
+  if (t === 'CANCELLED' || t === 'CANCELED' || o === 'CANCELLED' || o === 'CANCELED') {
+    return { situacao: 'cancelada', rotulo: 'Cancelado',
+      orientacao: 'Esta cobrança foi cancelada e o link não aceita mais pagamento.' }
+  }
+  if (o === 'APPROVED' || o === 'COMPLETE') {
+    return { situacao: 'aprovada', rotulo: 'Pago',
+      orientacao: 'Pagamento aprovado. O valor entra conforme a data de cada parcela.' }
+  }
+  if (o === 'PENDING' || o === 'PRE_APPROVED' || o === 'INCOMPLETE' || o === '') {
+    return { situacao: 'aguardando', rotulo: 'Aguardando pagamento',
+      orientacao: 'O link foi gerado e ainda não foi pago.' }
+  }
+  return { situacao: 'desconhecida', rotulo: `Situação ${o || t}`,
+    orientacao: 'Situação não reconhecida — confira no portal da operadora.' }
+}

@@ -489,6 +489,58 @@ export async function consultarOrder(c: CredenciaisEvolu, uuid: string): Promise
   }
 }
 
+export interface MetodoDePagamento {
+  /** 'CREDIT' ou recorrente. Débito NÃO aparece: o Link não faz débito. */
+  tipo:        string
+  maxParcelas: number
+  /** Bandeiras HABILITADAS para este estabelecimento — não a tabela inteira. */
+  bandeiras:   string[]
+}
+
+/**
+ * Formas de pagamento disponíveis para o estabelecimento e o valor.
+ *
+ * ⚠️ Os nomes dos parâmetros de query são **literais e com ponto**:
+ * `paymentMethods.amount` e `paymentMethods.merchantCode`. Medido em
+ * 22/10/2026 — `amount`/`merchantCode` simples devolvem `INVALID_PARAMETER`,
+ * e o suporte deles chegou a indicar a forma simples, que também não funciona.
+ *
+ * Vale a chamada porque a resposta diz as bandeiras REALMENTE habilitadas para
+ * aquele estabelecimento, que são menos que a tabela publicada. Oferecer na
+ * tela uma bandeira não habilitada gera `INVALID_PAYMENT_BRAND` na frente do
+ * tutor.
+ */
+export async function consultarMetodosDePagamento(
+  c: CredenciaisEvolu,
+  valorReais: number,
+): Promise<Resultado<MetodoDePagamento[]>> {
+  const q = new URLSearchParams({
+    'paymentMethods.amount':       valorParaLink(valorReais),
+    'paymentMethods.merchantCode': c.merchantId,
+  })
+  const { http, json } = await requisitar(`${c.base}/api/payment-methods?${q}`, { headers: headerBasic(c) })
+  const obj = (json && !Array.isArray(json) ? json : null) as Record<string, unknown> | null
+  if (http >= 400 || !obj) return { ok: false, erro: traduzirErro(codigoDoErro(json), http) }
+
+  const lista = Array.isArray(obj.paymentMethods) ? obj.paymentMethods : []
+  return {
+    ok: true,
+    dados: lista.map((m: Record<string, unknown>) => {
+      // `options` chega como objeto único, não lista, apesar do nome plural.
+      const o = (Array.isArray(m.options) ? m.options[0] : m.options) as Record<string, unknown> | null
+      const marcas = o?.paymentBrands
+      return {
+        tipo:        String(m.type ?? ''),
+        maxParcelas: Number(o?.maxInstallments ?? 1),
+        bandeiras:   Array.isArray(marcas) ? marcas.map(String)
+                     : (marcas && typeof marcas === 'object' && Array.isArray((marcas as Record<string, unknown>).value)
+                        ? ((marcas as Record<string, unknown>).value as unknown[]).map(String)
+                        : []),
+      }
+    }),
+  }
+}
+
 /** Cancela um link ainda não pago. Não estorna transação aprovada — para isso
  *  não existe endpoint, e o cancelamento tem de ser feito no portal deles. */
 export async function cancelarLink(c: CredenciaisEvolu, uuid: string): Promise<Resultado<{ cancelado: true }>> {

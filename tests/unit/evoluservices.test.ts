@@ -13,6 +13,7 @@ import {
 } from '@/lib/integrations/evoluservices-valores'
 import {
   traduzirErro,
+  lerSituacao,
   BANDEIRAS,
   STATUS_TERMINAL,
 } from '@/lib/integrations/evoluservices-erros'
@@ -268,5 +269,45 @@ describe('o campo `error` vem preenchido NO SUCESSO — medido no sandbox', () =
 
   it('a tradução do genérico preserva o código para o log', () => {
     expect(traduzirErro('QUALQUER_COISA', 500).codigo).toBe('QUALQUER_COISA')
+  })
+})
+
+describe('situação da cobrança — a armadilha do status da order', () => {
+  // Medido no sandbox: cartão recusado deixa a TRANSAÇÃO em DISAPPROVED mas a
+  // ORDER continua PENDING. Ler só a order faria a recusa parecer "ainda vai
+  // pagar", e o caixa liberaria o atendimento.
+  it('transação recusada manda, mesmo com a order em PENDING', () => {
+    const r = lerSituacao('PENDING', 'DISAPPROVED')
+    expect(r.situacao).toBe('recusada')
+    expect(r.orientacao).toContain('tentar outro cartão')
+  })
+
+  it('order PENDING sem transação nenhuma é só aguardando', () => {
+    expect(lerSituacao('PENDING', null).situacao).toBe('aguardando')
+    expect(lerSituacao('PENDING').situacao).toBe('aguardando')
+  })
+
+  it('transação aprovada é pagamento garantido', () => {
+    expect(lerSituacao('PENDING', 'APPROVED').situacao).toBe('aprovada')
+    expect(lerSituacao('APPROVED', 'APPROVED').situacao).toBe('aprovada')
+  })
+
+  it('CANCELED com um L (o que o sandbox devolve) é reconhecido', () => {
+    // A tabela publicada só tem CANCELLED, com dois L.
+    expect(lerSituacao('CANCELED').situacao).toBe('cancelada')
+    expect(lerSituacao('CANCELLED').situacao).toBe('cancelada')
+  })
+
+  it('status desconhecido não é tratado como aprovado', () => {
+    const r = lerSituacao('ALGO_NOVO')
+    expect(r.situacao).toBe('desconhecida')
+    expect(r.situacao).not.toBe('aprovada')
+  })
+
+  it('toda situação traz orientação para quem está no balcão', () => {
+    for (const [o, t] of [['PENDING', null], ['PENDING', 'DISAPPROVED'],
+                          ['APPROVED', 'APPROVED'], ['CANCELED', null]] as const) {
+      expect(lerSituacao(o, t).orientacao.length).toBeGreaterThan(20)
+    }
   })
 })
