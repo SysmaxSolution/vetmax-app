@@ -101,3 +101,22 @@ export interface LinhaExtratoCartao {
     beneficiario: string | null
   }>
 }
+
+/**
+ * Andamento de uma cobrança na maquininha, do ponto de vista do caixa.
+ *
+ * Não consulta a operadora: a Transação Remota não tem endpoint de consulta —
+ * quem traz o desfecho é o callback. Isto é a leitura do que já chegou.
+ */
+export interface AndamentoCobranca {
+  status:        string | null
+  /** Interpretação pronta para a tela, já em português. */
+  rotulo:        string
+  concluida:     boolean
+  nsu:           string | null
+  autorizacao:   string | null
+  bandeira:      string | null
+  parcelas:      number | null
+  /** Quantas vezes a operadora já nos chamou — 0 significa que ainda não veio. */
+  callbacks:     number
+}

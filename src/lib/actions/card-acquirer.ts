@@ -29,7 +29,7 @@ import { STATUS_TERMINAL, BANDEIRAS, lerSituacao } from '@/lib/integrations/evol
 import { validarSplit, comissaoEmValor } from '@/lib/integrations/evoluservices-valores'
 import type {
   ConfigAdquirente, TerminalDisponivel, BeneficiarioDisponivel,
-  OpcoesDeCobranca, CobrancaCriada, LinhaExtratoCartao,
+  OpcoesDeCobranca, CobrancaCriada, LinhaExtratoCartao, AndamentoCobranca,
 } from '@/types/card-acquirer'
 
 async function getCtx() {
@@ -755,6 +755,41 @@ export async function cancelarCobrancaMaquininha(cardTransactionId: string): Pro
 
   revalidatePath('/dashboard/cashier')
   return { ok: true }
+}
+
+/**
+ * Le o andamento da cobranca na maquininha.
+ *
+ * Nao chama a operadora: a Transacao Remota nao tem endpoint de consulta — o
+ * desfecho so chega pelo callback. Enquanto ele nao vem, a recepcao digita o
+ * NSU do comprovante como sempre fez; quando vem, a tela preenche sozinha.
+ */
+export async function acompanharCobrancaMaquininha(
+  cardTransactionId: string,
+): Promise<AndamentoCobranca | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return { error: ctx.error as string }
+
+  const { data: tx } = await ctx.admin
+    .from('card_transactions')
+    .select('status, nsu, authorization_number, payment_brand, installments, callback_count')
+    .eq('id', cardTransactionId).eq('clinic_id', ctx.clinicId).maybeSingle()
+  if (!tx) return { error: 'Cobranca nao encontrada.' }
+
+  const status = (tx.status as string | null) ?? null
+  const leitura = lerSituacao(status ?? 'PENDING')
+
+  return {
+    status,
+    rotulo:      leitura.rotulo,
+    // So e desfecho quando ha NSU: a operadora manda callback intermediario.
+    concluida:   Boolean(tx.nsu) || leitura.situacao === 'recusada',
+    nsu:         (tx.nsu as string | null) ?? null,
+    autorizacao: (tx.authorization_number as string | null) ?? null,
+    bandeira:    (tx.payment_brand as string | null) ?? null,
+    parcelas:    (tx.installments as number | null) ?? null,
+    callbacks:   (tx.callback_count as number | null) ?? 0,
+  }
 }
 
 // --- Extrato ---─────────────────────────────────────────────────────────────

@@ -70,6 +70,9 @@ interface Props {
     interest_full: number
     percent:       number
   } | null
+  /** A quem a cobrança se refere — repassado à cobrança integrada na maquininha. */
+  consultationId?: string | null
+  tutorId?:        string | null
   /** Crédito/adiantamento disponível do tutor (Sprint Animais 1.6). Exibido no topo. */
   creditBalance?: number
   /** Permite lançar a sobra como crédito do tutor (só onde há tutor vinculado). */
@@ -78,7 +81,7 @@ interface Props {
   onConfirm:  (splits: PaymentSplit[], extras?: { copay_interest?: number; overpayment?: { amount: number; as: 'change' | 'credit' } }) => Promise<void> | void
 }
 
-export default function PaymentMethodModal({ totalDue, subject, disableSplit, copayInterest, creditBalance, allowCredit, onCancel, onConfirm }: Props) {
+export default function PaymentMethodModal({ totalDue, subject, disableSplit, copayInterest, creditBalance, allowCredit, consultationId, tutorId, onCancel, onConfirm }: Props) {
   const [splits,        setSplits]        = useState<PaymentSplit[]>([])
   const [pendingMethod, setPendingMethod] = useState<PaymentMethodKey | null>(null)
   const [pendingAmount, setPendingAmount] = useState<string>('')
@@ -556,6 +559,8 @@ export default function PaymentMethodModal({ totalDue, subject, disableSplit, co
           suggestedAmount={hasInterestConfig
             ? planCharge
             : Math.min(parseFloat(pendingAmount.replace(',', '.')) || remaining, remaining)}
+          consultationId={consultationId}
+          tutorId={tutorId}
           onCancel={() => { setShowCardModal(null); setPendingMethod(null) }}
           onConfirm={handleCardConfirm}
         />
