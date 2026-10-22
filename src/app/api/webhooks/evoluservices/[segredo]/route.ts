@@ -101,6 +101,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ segredo: strin
 
   const transactionNumber = texto(corpo.transactionNumber)
   const orderUuid = texto(corpo.orderUuid) ?? texto(corpo.uuid)
+  // O id que NOS devolveram quando criamos a transacao remota. E por ele que
+  // a cobranca disparada pelo caixa se reconhece no primeiro callback — o
+  // `transactionNumber` so nasce quando a venda acontece na maquina.
+  const remoteId = texto(corpo.remoteTransactionId)
 
   if (!transactionNumber && !orderUuid) {
     return NextResponse.json({ error: 'sem transactionNumber nem uuid' }, { status: 400 })
@@ -123,6 +127,16 @@ export async function POST(req: Request, ctx: { params: Promise<{ segredo: strin
       .select('id, kind, order_uuid, amount')
       .eq('clinic_id', cfg.clinic_id)
       .eq('transaction_number', transactionNumber)
+      .maybeSingle()
+    registro = (data as unknown as Cobranca | null) ?? null
+  }
+  if (!registro && remoteId) {
+    // Cobranca que SAIU do nosso caixa: gravamos o transaction_id ao criar.
+    const { data } = await admin
+      .from('card_transactions')
+      .select('id, kind, order_uuid, amount')
+      .eq('clinic_id', cfg.clinic_id)
+      .eq('transaction_id', remoteId)
       .maybeSingle()
     registro = (data as unknown as Cobranca | null) ?? null
   }
@@ -192,6 +206,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ segredo: strin
     terminal_id:          texto(corpo.terminalId),
     nsu:                  texto(corpo.NSU) ?? texto(corpo.nsu),
     authorization_number: texto(corpo.authorizationNumber),
+    installments:         Number(texto(corpo.paymentQuantity) ?? '') || null,
     last_callback:        corpo,
     updated_at:           new Date().toISOString(),
   }
@@ -248,7 +263,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ segredo: strin
       status:              texto(item.status),
       pay_date:            paraDataISO(item.date),
       recipient_name:      texto(item.recipientName),
-      recipient_document:  texto(item.recipientDocument),
+      // Nunca nulo: o indice unico e por coluna (migration 0510), e NULL nunca
+      // conflita com NULL — cada reentrega criaria uma linha nova.
+      recipient_document:  texto(item.recipientDocument) ?? '',
     })
   }
 
@@ -261,7 +278,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ segredo: strin
       linhas.push({
         clinic_id: cfg.clinic_id, card_transaction_id: idRegistro, kind: 'merchant',
         number: p.numero, amount: p.valor, status: p.status, pay_date: p.data,
-        recipient_name: null, recipient_document: null,
+        recipient_name: null, recipient_document: '',
       })
     }
   }

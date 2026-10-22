@@ -568,7 +568,10 @@ export async function atualizarCobranca(cardTransactionId: string): Promise<{
     await ctx.admin.from('card_transaction_payments').upsert(
       transacao.pagamentos.map(p => ({
         clinic_id: ctx.clinicId, card_transaction_id: cardTransactionId,
-        kind: 'merchant' as const, number: p.numero, amount: p.valor,
+        // Documento vazio, nunca nulo: o indice unico e por coluna (0510) e
+        // NULL nao conflita com NULL — cada consulta criaria linha nova.
+        kind: 'merchant' as const, recipient_document: '',
+        number: p.numero, amount: p.valor,
         status: p.status, pay_date: p.dataPrevista
           ? (p.dataPrevista.includes('/')
              ? p.dataPrevista.split('/').reverse().join('-')
