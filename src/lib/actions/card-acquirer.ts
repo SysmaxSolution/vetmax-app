@@ -22,6 +22,7 @@ import { encryptSecret, decryptSecret } from '@/lib/integrations/bank-certificat
 import {
   baseDoAmbiente, obterToken, listarTerminais, listarBeneficiarios,
   criarLink, consultarOrder, consultarMetodosDePagamento,
+  criarTransacaoRemota, cancelarTransacaoRemota,
   type CredenciaisEvolu,
 } from '@/lib/integrations/evoluservices'
 import { STATUS_TERMINAL, BANDEIRAS, lerSituacao } from '@/lib/integrations/evoluservices-erros'
@@ -582,7 +583,181 @@ export async function atualizarCobranca(cardTransactionId: string): Promise<{
   return { ok: true, situacao: situacao.situacao, rotulo: situacao.rotulo, orientacao: situacao.orientacao }
 }
 
-// ─── Extrato ────────────────────────────────────────────────────────────────
+/**
+ * Cobra na MAQUININHA.
+ *
+ * O `terminalId` vai sempre que conhecido: sem ele, a cobranca vira "notificacao
+ * nos aparelhos habilitados", o que nao serve para pinpad de cabo — ele nao tem
+ * menu para alguem abrir.
+ *
+ * O caixa fecha OTIMISTA. O retorno da operadora leva de 10 a 15 minutos no POS,
+ * e a recepcao nao pode segurar o tutor esperando: a cobranca nasce aguardando e
+ * o callback concilia depois.
+ *
+ * ⚠️ ARMADILHA MEDIDA EM 22/10/2026, no pinpad de cabo da Animais: a ordem
+ * chega ao programa Windows por fila SQS em ~1 segundo, mas ele so aciona a
+ * leitora se a tela dele estiver LIVRE. Qualquer caixa de dialogo aberta segura
+ * a venda no `RemoteTransactionBuffer` e a maquininha nao acende — sem erro
+ * nenhum do lado da API, que ja respondeu sucesso. No sandbox isso acontece
+ * sempre, porque `/v2/pix-service/merchantConfig` devolve corpo invalido e o
+ * programa abre "Nao foi possivel recuperar seu plano pix". Dispensado o
+ * dialogo, o fluxo anda em 3 segundos. Por isso o aviso de tela livre vai no
+ * retorno: sem ele a recepcao fica olhando para uma maquininha apagada.
+ */
+export async function cobrarNaMaquininha(input: {
+  companyId:       string
+  valor:           number
+  /** Define credito x debito. Debito nao aceita parcelamento. */
+  bandeira:        string
+  parcelas?:       number
+  terminalId?:     string | null
+  consultationId?: string | null
+  tutorId?:        string | null
+  comSplit?:       boolean
+}): Promise<CobrancaCriada | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return { error: ctx.error as string }
+  if (!(input.valor > 0)) return { error: 'O valor da cobranca deve ser maior que zero.' }
+
+  const info = BANDEIRAS[input.bandeira]
+  if (!info) return { error: 'Bandeira nao reconhecida.' }
+  const parcelas = input.parcelas ?? 1
+  // Barrar aqui da mensagem em portugues; deixar passar devolveria
+  // INSTALLMENTS_INVALID_FOR_DEBIT em HTTP 500 na frente do tutor.
+  if (info.tipo === 'debito' && parcelas > 1) {
+    return { error: 'Debito nao pode ser parcelado. Use credito ou cobre em uma parcela.' }
+  }
+
+  const c = await credenciaisDaEmpresa(ctx.admin, ctx.clinicId, input.companyId)
+  if ('error' in c) return c
+
+  const avisos: string[] = []
+
+  // Terminal: o escolhido, ou o padrao da empresa. A doc manda conferir o
+  // status ANTES — num pinpad de cabo, OFFLINE normalmente significa que o
+  // computador da recepcao esta sem o programa aberto.
+  const { data: cfg } = await ctx.admin
+    .from('company_card_acquirer')
+    .select('default_terminal_id, webhook_secret')
+    .eq('company_id', input.companyId).maybeSingle()
+
+  let terminalId = input.terminalId ?? (cfg?.default_terminal_id as string | null) ?? null
+  const term = await listarTerminais(c.cred, c.token)
+  if (term.tokenNovo) await guardarToken(ctx.admin, input.companyId, term.tokenNovo.token, term.tokenNovo.expiraEm)
+  if (term.ok) {
+    const alvo = terminalId
+      ? term.dados.find(t => t.terminalId === terminalId)
+      : term.dados.find(t => /^ONLINE/.test(t.terminalStatus))
+    if (!alvo) {
+      return { error: terminalId
+        ? 'A maquininha escolhida nao aparece mais na operadora. Escolha outra.'
+        : 'Nenhuma maquininha disponivel. Verifique se ela esta ligada e, se for de cabo, se o computador dela esta com o programa aberto.' }
+    }
+    const st = STATUS_TERMINAL[alvo.terminalStatus]
+    if (st && !st.pode_cobrar) return { error: st.explicacao }
+    terminalId = alvo.terminalId
+  }
+
+  let splits: Array<{ code: string; valor: number }> = []
+  if (input.comSplit) {
+    const m = await montarSplit(ctx.admin, ctx.clinicId, input.consultationId ?? null, input.valor)
+    splits = m.splits.map(x => ({ code: x.code, valor: x.valor }))
+    avisos.push(...m.avisos)
+  }
+
+  let nomeTutor = 'Cliente'
+  let doc: string | null = null
+  if (input.tutorId) {
+    const { data: t } = await ctx.admin
+      .from('tutors').select('name, cpf').eq('id', input.tutorId).eq('clinic_id', ctx.clinicId).maybeSingle()
+    if (t) { nomeTutor = (t.name as string) ?? nomeTutor; doc = (t.cpf as string | null) ?? null }
+  }
+
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://sysvetmax-dev.vercel.app'
+  const referencia = `SYSVET-${Date.now().toString(36).toUpperCase()}`
+
+  const r = await criarTransacaoRemota(c.cred, {
+    valor:            input.valor,
+    terminalId,
+    parcelas,
+    bandeira:         input.bandeira,
+    callbackUrl:      cfg?.webhook_secret ? `${baseUrl}/api/webhooks/evoluservices/${cfg.webhook_secret}` : null,
+    clienteNome:      nomeTutor,
+    clienteDocumento: doc,
+    permiteAlterar:   false,
+    splits:           splits.length ? splits : undefined,
+  }, c.token)
+  if (r.tokenNovo) await guardarToken(ctx.admin, input.companyId, r.tokenNovo.token, r.tokenNovo.expiraEm)
+  if (!r.ok) return { error: r.erro.mensagem }
+
+  const { data: nova, error } = await ctx.admin.from('card_transactions').insert({
+    clinic_id:  ctx.clinicId,
+    company_id: input.companyId,
+    kind:       'remote',
+    reference:  referencia,
+    transaction_id: r.dados.transactionId,
+    amount:     input.valor,
+    installments: parcelas,
+    payment_brand: input.bandeira,
+    terminal_id: terminalId,
+    consultation_id: input.consultationId ?? null,
+    tutor_id:   input.tutorId ?? null,
+    created_by: ctx.userId,
+  }).select('id').single()
+
+  if (error) {
+    // A maquina JA acendeu: a cobranca existe do lado deles.
+    return {
+      card_transaction_id: '',
+      transaction_id: r.dados.transactionId,
+      mensagem: 'A maquininha foi acionada, mas a cobranca nao foi registrada no sistema. Anote o comprovante.',
+      avisos: [...avisos, mensagemErro(error, 'lib/actions/card-acquirer.ts')],
+    }
+  }
+
+  revalidatePath('/dashboard/cashier')
+  return {
+    card_transaction_id: (nova as unknown as { id: string }).id,
+    transaction_id: r.dados.transactionId,
+    mensagem: `Maquininha acionada — peca o cartao ao tutor.${splits.length ? ' O repasse do profissional sai automatico.' : ''}`,
+    avisos: [
+      ...avisos,
+      'Se a maquininha nao acender, veja se o programa da operadora esta com alguma janela de aviso aberta: ela segura a cobranca.',
+      'O comprovante da operadora pode levar alguns minutos para chegar ao sistema; o atendimento nao precisa esperar.',
+    ],
+  }
+}
+
+/** Cancela uma cobranca que a maquininha ainda nao processou. */
+export async function cancelarCobrancaMaquininha(cardTransactionId: string): Promise<{ ok: true } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return { error: ctx.error as string }
+
+  const { data: tx } = await ctx.admin
+    .from('card_transactions')
+    .select('id, company_id, transaction_id, kind')
+    .eq('id', cardTransactionId).eq('clinic_id', ctx.clinicId).maybeSingle()
+  if (!tx) return { error: 'Cobranca nao encontrada.' }
+  if (tx.kind !== 'remote' || !tx.transaction_id) {
+    return { error: 'Esta cobranca nao e da maquininha.' }
+  }
+
+  const c = await credenciaisDaEmpresa(ctx.admin, ctx.clinicId, tx.company_id as string)
+  if ('error' in c) return c
+
+  const r = await cancelarTransacaoRemota(c.cred, tx.transaction_id as string, c.token)
+  if (r.tokenNovo) await guardarToken(ctx.admin, tx.company_id as string, r.tokenNovo.token, r.tokenNovo.expiraEm)
+  if (!r.ok) return { error: r.erro.mensagem }
+
+  await ctx.admin.from('card_transactions')
+    .update({ status: 'CANCELLED', updated_at: new Date().toISOString() })
+    .eq('id', cardTransactionId).eq('clinic_id', ctx.clinicId)
+
+  revalidatePath('/dashboard/cashier')
+  return { ok: true }
+}
+
+// --- Extrato ---─────────────────────────────────────────────────────────────
 
 /**
  * Extrato de cartão com o split separado.
