@@ -3,7 +3,7 @@ import { TrendingUp, User, AlertCircle, BadgeDollarSign } from 'lucide-react'
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   pending:   { label: 'Pendente', color: 'text-amber-600 bg-amber-50 border-amber-200' },
-  paid:      { label: 'Pago',     color: 'text-green-600 bg-green-50 border-green-200' },
+  paid:      { label: 'Pago',     color: 'text-emerald-600 bg-emerald-50 border-emerald-200' },
   cancelled: { label: 'Cancelado', color: 'text-slate-400 bg-slate-50 border-slate-200' },
 }
 
@@ -17,15 +17,15 @@ export default async function CommissionsReportPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <main className="mx-auto max-w-5xl px-4 sm:px-6 py-8 space-y-6">
+      <main className="mx-auto max-w-5xl px-4 sm:px-6 py-8 space-y-6 animate-enter">
 
         {/* Header */}
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900 flex items-center gap-2">
-            <TrendingUp className="h-6 w-6 text-blue-600" />
+          <h1 className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-violet-600" />
             Relatório de Comissões
           </h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-slate-600">
             Lançamentos automáticos em Contas a Pagar gerados pelas regras de comissão
           </p>
         </div>
@@ -43,15 +43,15 @@ export default async function CommissionsReportPage() {
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
               <p className="text-xs text-slate-500 mb-1">Total em Comissões</p>
-              <p className="text-2xl font-bold text-slate-900">R$ {totalAll.toFixed(2)}</p>
+              <p className="text-2xl font-bold text-slate-900 font-mono tabular-nums">R$ {totalAll.toFixed(2)}</p>
             </div>
             <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
               <p className="text-xs text-slate-500 mb-1">Pendente de Pagamento</p>
-              <p className="text-2xl font-bold text-amber-600">R$ {pendingAll.toFixed(2)}</p>
+              <p className="text-2xl font-bold text-amber-600 font-mono tabular-nums">R$ {pendingAll.toFixed(2)}</p>
             </div>
             <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm col-span-2 sm:col-span-1">
               <p className="text-xs text-slate-500 mb-1">Profissionais com Comissão</p>
-              <p className="text-2xl font-bold text-blue-600">{reports.length}</p>
+              <p className="text-2xl font-bold text-teal-600 font-mono tabular-nums">{reports.length}</p>
             </div>
           </div>
         )}
@@ -78,9 +78,9 @@ export default async function CommissionsReportPage() {
                 <span className="text-xs text-slate-400">({prof.entry_count} lançamento{prof.entry_count !== 1 ? 's' : ''})</span>
               </div>
               <div className="text-right">
-                <p className="text-sm font-bold text-slate-900">R$ {prof.total_amount.toFixed(2)}</p>
+                <p className="text-sm font-bold text-slate-900 font-mono tabular-nums">R$ {prof.total_amount.toFixed(2)}</p>
                 {prof.pending_amount > 0 && (
-                  <p className="text-xs text-amber-600">R$ {prof.pending_amount.toFixed(2)} pendente</p>
+                  <p className="text-xs text-amber-600 font-mono tabular-nums">R$ {prof.pending_amount.toFixed(2)} pendente</p>
                 )}
               </div>
             </div>
@@ -93,7 +93,7 @@ export default async function CommissionsReportPage() {
                   <div key={entry.id} className="flex items-start justify-between gap-4 px-5 py-3">
                     <div className="min-w-0 flex-1">
                       <p className="text-sm text-slate-700 truncate">{entry.description}</p>
-                      <p className="text-xs text-slate-400 mt-0.5">
+                      <p className="text-xs text-slate-400 mt-0.5 font-mono tabular-nums">
                         Vencimento: {new Date(entry.due_date).toLocaleDateString('pt-BR')}
                       </p>
                     </div>
@@ -101,7 +101,7 @@ export default async function CommissionsReportPage() {
                       <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${s.color}`}>
                         {s.label}
                       </span>
-                      <span className="text-sm font-semibold text-slate-900">
+                      <span className="text-sm font-semibold text-slate-900 font-mono tabular-nums">
                         R$ {entry.amount.toFixed(2)}
                       </span>
                     </div>

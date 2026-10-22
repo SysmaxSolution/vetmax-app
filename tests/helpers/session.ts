@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test'
 import path from 'path'
 import fs from 'fs'
 
+import { senhaDeTeste } from './senha-teste'
 const BASE_URL = process.env.TEST_BASE_URL ?? 'http://localhost:4000'
 
 const AUTH_DIR = path.resolve(process.cwd(), 'tests/.auth')
@@ -35,8 +36,15 @@ function isStorageStateExpired(cookies: Record<string, unknown>[]): boolean {
 export async function injectFreshSession(
   page: Page,
   email: string,
-  password: string,
+  /**
+   * Ignorado. As 77 specs passam `fixtures.users.X.password`, que hoje e um
+   * marcador — a senha real vem de TEST_USER_PASSWORD (ver senha-teste.ts).
+   * O parametro fica por compatibilidade: mudar a assinatura obrigaria a
+   * reescrever todas as chamadas sem ganho nenhum.
+   */
+  _password?: string,
 ): Promise<void> {
+  const password = senhaDeTeste()
   await page.goto(`${BASE_URL}/login`, { waitUntil: 'domcontentloaded', timeout: 45_000 })
   await page.locator('#email').waitFor({ state: 'visible', timeout: 30_000 })
   await page.fill('#email', email)

@@ -7,6 +7,7 @@ import { revalidatePath } from 'next/cache'
 import { evolutionSendText, evolutionSendMedia, evolutionGetConnectionState } from '@/lib/evolution-api-client'
 import { TRIGGER_MODULE, TRIGGER_MODULE_LABELS } from '@/lib/whatsapp-triggers'
 
+import { mensagemErro } from '@/lib/errors'
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -476,7 +477,7 @@ export async function generateWhatsAppMessage(
     if (!text) return { error: 'Resposta vazia do modelo.' }
     return { message: text }
   } catch (err: any) {
-    return { error: 'Erro ao gerar mensagem: ' + (err?.message ?? String(err)) }
+    return { error: 'Erro ao gerar mensagem: ' + (mensagemErro(err, 'lib/actions/whatsapp.ts') ?? String(err)) }
   }
 }
 
@@ -578,7 +579,7 @@ export async function setTriggerModulesConfig(
     .from('clinic_whatsapp_settings')
     .update({ disabled_trigger_modules: clean, updated_at: new Date().toISOString() })
     .eq('clinic_id', profile.clinic_id)
-  if (error) return { error: 'Erro ao salvar gatilhos: ' + error.message }
+  if (error) return { error: 'Erro ao salvar gatilhos: ' + mensagemErro(error, 'lib/actions/whatsapp.ts') }
 
   revalidatePath('/dashboard/management')
   return { success: true }
@@ -690,7 +691,7 @@ export async function sendWhatsAppMessage(params: {
       : { success: true }
   } catch (err: any) {
     console.error('[WhatsApp/Evolution] Erro:', err)
-    return { error: 'Erro Evolution API: ' + (err?.message ?? String(err)) }
+    return { error: 'Erro Evolution API: ' + (mensagemErro(err, 'lib/actions/whatsapp.ts') ?? String(err)) }
   }
 }
 

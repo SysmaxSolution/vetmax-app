@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
 export type FluidDirection = 'in' | 'out'
@@ -60,7 +61,7 @@ export async function getFluidBalance(hospitalizationId: string): Promise<FluidB
     .order('recorded_at', { ascending: false })
     .limit(300)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/hospitalization-fluids.ts') }
 
   const entries = (data ?? []).map((r): FluidEntry => ({
     id:          r.id as string,
@@ -106,7 +107,7 @@ export async function recordFluid(payload: RecordFluidPayload): Promise<{ id: st
     .select('id')
     .single()
 
-  if (error) return { error: 'Erro ao registrar fluido: ' + error.message }
+  if (error) return { error: 'Erro ao registrar fluido: ' + mensagemErro(error, 'lib/actions/hospitalization-fluids.ts') }
   revalidatePath('/dashboard/hospitalization')
   return { id: data.id as string }
 }
@@ -122,7 +123,7 @@ export async function deleteFluidEntry(id: string): Promise<{ success: true } | 
     .delete()
     .eq('id', id)
     .eq('clinic_id', ctx.clinicId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/hospitalization-fluids.ts') }
   revalidatePath('/dashboard/hospitalization')
   return { success: true }
 }

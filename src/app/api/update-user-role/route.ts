@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
+import { mensagemErro } from '@/lib/errors'
+import { limitarPorIp } from '@/lib/api/rate-limit'
 const VALID_ROLES = ['admin', 'vet', 'assistant', 'receptionist', 'pharmacist'] as const
 type Role = typeof VALID_ROLES[number]
 
@@ -14,6 +16,9 @@ type Role = typeof VALID_ROLES[number]
  *   - target_user_id?: string  (omitir = atualiza o próprio perfil, apenas para auto-demoção)
  */
 export async function POST(request: NextRequest) {
+  const barrado = await limitarPorIp(request, { escopo: 'app:papel', limite: 30 })
+  if (barrado) return barrado
+
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -67,7 +72,7 @@ export async function POST(request: NextRequest) {
       .eq('clinic_id', callerProfile.clinic_id)
 
     if (error) {
-      return NextResponse.json({ error: `Erro ao atualizar role: ${error.message}` }, { status: 500 })
+      return NextResponse.json({ error: `Erro ao atualizar role: ${mensagemErro(error, 'app/api/update-user-role/route.ts')}` }, { status: 500 })
     }
 
     return NextResponse.json({ success: true, user_id: targetId, new_role: role })

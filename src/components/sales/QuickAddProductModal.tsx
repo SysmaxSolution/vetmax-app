@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Sparkles, Loader2, AlertCircle, Plus, Search, BookOpen, ChevronRight } from 'lucide-react'
 import { addStockItemV2 } from '@/lib/actions/stock'
 import { searchProductByEAN, enrichProductFromNCM } from '@/lib/actions/purchases'
@@ -177,7 +178,9 @@ export default function QuickAddProductModal({ query, onClose, onAdded, activeMo
     })
   }
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-md rounded-2xl bg-white shadow-xl flex flex-col max-h-[90vh] animate-scale-in">
 
@@ -353,6 +356,7 @@ export default function QuickAddProductModal({ query, onClose, onAdded, activeMo
           </>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

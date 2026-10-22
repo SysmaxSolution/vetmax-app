@@ -12,24 +12,30 @@ import type {
   CanvasElement, TextElement, ImageElement, LineElement,
   DynamicTagElement, CompositeTagElement,
   DynamicImageElement, RepeaterElement, RepeaterItemLine, BrushStrokeElement,
-  FillableFieldElement,
+  FillableFieldElement, QrValidationElement,
   TypographyStyle, BlockStyle,
 } from '@/lib/canva/elements'
 import {
-  resolveTagValue, resolveImageTagUrl, findImageTag,
+  resolveTagValue, resolveImageTagUrl, findImageTag, resolveInlineTags,
   type ResolveContext,
 } from '@/lib/canva/dynamic-tags'
 import { MOCK_REPEATER_DATA } from '@/lib/canva/mock-data'
+import { readRepeaterItems } from '@/lib/canva/repeater-data'
+// Re-export para compatibilidade (LaudoPrintable e outros importavam daqui).
+export { readRepeaterSource, readRepeaterItems } from '@/lib/canva/repeater-data'
 import {
   parseInlineMarkdown, getListPrefix, splitIntoTopics,
 } from '@/lib/canva/text-format'
+import { fontFamilyCss } from '@/lib/canva/fonts'
 
 // ── Estilo helpers ───────────────────────────────────────────────────────────
 
 export function typographyToCss(t?: TypographyStyle): CSSProperties {
   if (!t) return {}
   return {
-    fontFamily: t.fontFamily,
+    // Fallback stack + CSS var das Google Fonts embutidas (CanvaFontsScope).
+    // Fontes da clínica resolvem pelo @font-face injetado no mesmo scope.
+    fontFamily: t.fontFamily ? fontFamilyCss(t.fontFamily) : undefined,
     fontSize: t.fontSize != null ? `${t.fontSize}pt` : undefined,
     fontWeight: t.fontWeight,
     fontStyle: t.fontStyle,
@@ -82,7 +88,7 @@ interface RenderProps {
 
 export function ElementRenderer({ element, ctx, isPrint, fillableValues, repeaterItemSlice }: RenderProps) {
   switch (element.kind) {
-    case 'text':            return <TextRenderer           e={element} isPrint={isPrint} />
+    case 'text':            return <TextRenderer           e={element} ctx={ctx} isPrint={isPrint} />
     case 'image':           return <ImageRenderer          e={element} isPrint={isPrint} />
     case 'line':            return <LineRenderer           e={element} />
     case 'dynamic_tag':     return <DynamicTagRenderer     e={element} ctx={ctx} isPrint={isPrint} />
@@ -91,7 +97,44 @@ export function ElementRenderer({ element, ctx, isPrint, fillableValues, repeate
     case 'repeater':        return <RepeaterRenderer       e={element} ctx={ctx} isPrint={isPrint} itemSlice={repeaterItemSlice} />
     case 'brush_stroke':    return <BrushStrokeFallback    e={element} />
     case 'fillable_field':  return <FillableFieldRenderer  e={element} value={fillableValues?.[element.fieldKey]} isPrint={isPrint} />
+    case 'qr_validation':   return <QrValidationRenderer   e={element} ctx={ctx} isPrint={isPrint} />
   }
+}
+
+/** QR de autenticidade. Usa ctx.doc.qr_svg (gerado no servidor na emissão)
+ *  + ctx.doc.verify_code_fmt. Sem código (editor/preview de modelo) mostra
+ *  placeholder; no print de documento não assinado, fica vazio. */
+function QrValidationRenderer({ e, ctx, isPrint }: { e: QrValidationElement; ctx?: ResolveContext; isPrint?: boolean }) {
+  const doc = (ctx?.doc ?? {}) as Record<string, unknown>
+  const svg = typeof doc.qr_svg === 'string' ? doc.qr_svg : null
+  const code = typeof doc.verify_code_fmt === 'string' ? doc.verify_code_fmt : ''
+  const showCode = e.showCode !== false
+  const typ = typographyToCss(e.typography)
+
+  const wrapper: CSSProperties = {
+    width: '100%', height: '100%',
+    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start',
+    gap: 2, overflow: 'hidden', ...blockToCss(e.block),
+  }
+  // Quadrado do QR: ocupa a largura e o que sobrar de altura para legenda
+  const square: CSSProperties = { width: '100%', aspectRatio: '1 / 1', maxHeight: showCode || e.caption ? '72%' : '100%' }
+
+  if (svg) {
+    return (
+      <div style={wrapper}>
+        <div style={square} dangerouslySetInnerHTML={{ __html: svg }} />
+        {showCode && code && <span style={{ ...typ, fontFamily: 'monospace', lineHeight: 1 }}>{code}</span>}
+        {e.caption && <span style={{ ...typ, lineHeight: 1.1 }}>{e.caption}</span>}
+      </div>
+    )
+  }
+  if (isPrint) return <div style={{ width: '100%', height: '100%' }} />
+  return (
+    <div style={{ ...wrapper, justifyContent: 'center', background: 'rgba(124,58,237,0.06)', border: '1px dashed rgba(124,58,237,0.5)', borderRadius: 4, color: '#7c3aed' }}>
+      <div style={{ ...square, maxHeight: '60%', display: 'grid', placeItems: 'center', fontSize: 9, fontWeight: 700 }}>QR</div>
+      <span style={{ fontSize: 7, textAlign: 'center', lineHeight: 1.1, padding: '0 2px' }}>validação gerada na emissão</span>
+    </div>
+  )
 }
 
 function FillableFieldRenderer({
@@ -199,9 +242,11 @@ function BrushStrokeFallback({ e }: { e: BrushStrokeElement }) {
   )
 }
 
-function TextRenderer({ e, isPrint }: { e: TextElement; isPrint?: boolean }) {
+function TextRenderer({ e, ctx, isPrint }: { e: TextElement; ctx?: ResolveContext; isPrint?: boolean }) {
   const fallback = isPrint ? '' : 'Texto livre'
-  const raw = e.content || fallback
+  // Tokens {{tag.id}} no texto livre (ex.: "Pág. {{doc.page}} de {{doc.total_pages}}")
+  // resolvem quando há contexto; no editor ficam visíveis como token.
+  const raw = resolveInlineTags(e.content || fallback, ctx)
 
   const vAlign = e.typography.vAlign ?? 'top'
   const needsVerticalFlex = vAlign === 'middle' || vAlign === 'bottom'
@@ -350,7 +395,7 @@ function LineRenderer({ e }: { e: LineElement }) {
 }
 
 function DynamicTagRenderer({ e, ctx, isPrint }: { e: DynamicTagElement; ctx?: ResolveContext; isPrint?: boolean }) {
-  const resolved = ctx ? resolveTagValue(e.tagId, ctx) : ''
+  const resolved = ctx ? resolveTagValue(e.tagId, ctx, e.formatOverride) : ''
   const display = resolved || e.fallback || (isPrint ? '' : `{{${e.tagId}}}`)
   const text = `${e.prefix ?? ''}${display}${e.suffix ?? ''}`
 
@@ -685,24 +730,8 @@ const PRESCRIPTION_GROUP_LABEL: Record<string, string> = {
 }
 
 // ── Repeater data helpers ────────────────────────────────────────────────────
-
-export function readRepeaterSource(source: RepeaterElement['source'], ctx?: ResolveContext): Record<string, unknown>[] {
-  if (!ctx) return []
-  const consultation = ctx.consultation as Record<string, unknown> | undefined
-  if (!consultation) return []
-  const list = consultation[source]
-  return Array.isArray(list) ? (list as Record<string, unknown>[]) : []
-}
-
-/** Fonte + filtro do elemento. DEVE ser usado tanto pelo RepeaterRenderer
- *  quanto pela paginação (expandPagesForRepeaterOverflow) — senão os slices
- *  de página são calculados sobre uma lista diferente da renderizada. */
-export function readRepeaterItems(e: RepeaterElement, ctx?: ResolveContext): Record<string, unknown>[] {
-  const items = readRepeaterSource(e.source, ctx)
-  if (!e.filter?.field) return items
-  const { field, equals, negate } = e.filter
-  return items.filter(item => (item[field] === equals) !== Boolean(negate))
-}
+// readRepeaterSource/readRepeaterItems vivem em src/lib/canva/repeater-data.ts
+// (puro) — compartilhados com a paginação (src/lib/canva/pagination.ts).
 
 function applyItemTemplate(template: string, item: Record<string, unknown>): string {
   // 1. Substitui {{key}} pelo valor (string vazia se ausente).

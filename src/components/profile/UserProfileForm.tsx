@@ -107,7 +107,7 @@ export default function UserProfileForm({ profile, email }: Props) {
             {(photoPreview ?? photoUrl) ? (
               <img src={photoPreview ?? photoUrl!} alt="Foto de perfil" className="h-full w-full object-cover" />
             ) : (
-              <div className="h-full w-full flex items-center justify-center bg-blue-600">
+              <div className="h-full w-full flex items-center justify-center bg-teal-600">
                 <span className="text-2xl font-bold text-white">{fullName[0]?.toUpperCase() ?? '?'}</span>
               </div>
             )}
@@ -140,7 +140,7 @@ export default function UserProfileForm({ profile, email }: Props) {
             <input
               value={fullName}
               onChange={e => setFullName(e.target.value)}
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
           <div>
@@ -149,7 +149,7 @@ export default function UserProfileForm({ profile, email }: Props) {
               value={nickname}
               onChange={e => setNickname(e.target.value)}
               placeholder="Ex: Dr. Carlos"
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
           <div>
@@ -158,7 +158,7 @@ export default function UserProfileForm({ profile, email }: Props) {
               value={phone}
               onChange={e => setPhone(e.target.value)}
               placeholder="(11) 99999-0000"
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
         </div>
@@ -177,7 +177,7 @@ export default function UserProfileForm({ profile, email }: Props) {
               value={crmv}
               onChange={e => setCrmv(e.target.value.toUpperCase())}
               placeholder="SP12345"
-              className={`w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              className={`w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-teal-500 ${
                 crmv && !crmvValid ? 'border-red-400 bg-red-50' : 'border-slate-300'
               }`}
             />
@@ -196,8 +196,8 @@ export default function UserProfileForm({ profile, email }: Props) {
                   onClick={() => toggleSpecialty(s)}
                   className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-colors ${
                     specialties.includes(s)
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'bg-white text-slate-600 border-slate-300 hover:border-blue-400'
+                      ? 'bg-teal-600 text-white border-teal-600'
+                      : 'bg-white text-slate-600 border-slate-300 hover:border-teal-400'
                   }`}
                 >
                   {s}
@@ -216,7 +216,7 @@ export default function UserProfileForm({ profile, email }: Props) {
           </p>
         )}
         {saved && !error && (
-          <p className="text-sm text-green-600 flex items-center gap-1.5">
+          <p className="text-sm text-emerald-600 flex items-center gap-1.5">
             <CheckCircle2 className="h-4 w-4" />Perfil atualizado!
           </p>
         )}
@@ -225,7 +225,7 @@ export default function UserProfileForm({ profile, email }: Props) {
           type="button"
           onClick={handleSave}
           disabled={isPending || uploading}
-          className="flex items-center gap-2 bg-blue-600 text-white rounded-xl px-6 py-2.5 text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50"
+          className="flex items-center gap-2 bg-teal-600 text-white rounded-lg px-6 py-2.5 text-sm font-semibold shadow-sm hover:bg-teal-700 transition-colors disabled:opacity-60"
         >
           {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
           {isPending ? 'Salvando...' : 'Salvar Perfil'}

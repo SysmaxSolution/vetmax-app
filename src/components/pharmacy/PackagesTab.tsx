@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useTransition, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import {
   Plus, Gift, Pencil, Trash2, ToggleLeft, ToggleRight,
   Search, X, Loader2, Check, Package, Stethoscope,
@@ -405,7 +406,9 @@ function PackageFormModal({ mode, pkg, stock, onClose, onSaved }: {
     onSaved(saved)
   }
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-white w-full max-w-lg rounded-t-2xl sm:rounded-2xl shadow-xl overflow-hidden animate-scale-in flex flex-col max-h-[90vh]">
@@ -644,6 +647,7 @@ function PackageFormModal({ mode, pkg, stock, onClose, onSaved }: {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

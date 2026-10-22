@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useRef, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { Upload, FileSpreadsheet, Loader2, CheckCircle2, AlertCircle, Clock, ArrowRight, Trash2 } from 'lucide-react'
 import { uploadAndStagePetloveRemittance, type ImportedRemittanceSummary } from '@/lib/actions/petlove-import'
@@ -193,7 +194,7 @@ export default function PetloveReconciliationClient({
                 <Upload className="h-7 w-7 text-purple-600" />
               </div>
               <p className="text-base font-semibold text-purple-900">
-                Arraste a planilha da Petlove aqui
+                Arraste a planilha da remessa do convênio aqui
               </p>
               <p className="text-sm text-purple-600">
                 ou clique para selecionar (.xlsx, .xlsm ou .xls — até 10 MB)
@@ -358,7 +359,7 @@ export default function PetloveReconciliationClient({
       </section>
 
       {/* Modal de Confirmação de Exclusão */}
-      {deleteRequest && (
+      {deleteRequest && typeof document !== 'undefined' && createPortal(
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4"
           onClick={() => !deletingId && setDeleteRequest(null)}
@@ -423,7 +424,8 @@ export default function PetloveReconciliationClient({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )

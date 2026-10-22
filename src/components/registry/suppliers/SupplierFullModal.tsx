@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Save, Loader2, Building2, Trash2, RefreshCcw } from 'lucide-react'
 import {
   upsertSupplier, deactivateSupplier, reactivateSupplier,
@@ -106,13 +107,13 @@ export default function SupplierFullModal({ supplier, prefillName, onClose, onSu
     })
   }
 
-  return (
+  return typeof globalThis.document !== 'undefined' ? createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col rounded-2xl bg-white shadow-2xl"
+        className="w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col rounded-2xl bg-white shadow-xl animate-scale-in"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -298,6 +299,7 @@ export default function SupplierFullModal({ supplier, prefillName, onClose, onSu
           </div>
         </div>
       </div>
-    </div>
-  )
+    </div>,
+    globalThis.document.body,
+  ) : null
 }

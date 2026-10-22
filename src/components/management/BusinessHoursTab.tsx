@@ -223,7 +223,7 @@ export default function BusinessHoursTab({ initialConfig, onToast }: Props) {
         data-testid="btn-save-business-hours"
         onClick={handleSave}
         disabled={saving}
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 transition-colors disabled:opacity-50"
+        className="flex w-full items-center justify-center gap-2 rounded-lg bg-teal-600 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-teal-800 transition-colors disabled:opacity-50"
       >
         {saving
           ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando...</>

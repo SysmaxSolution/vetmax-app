@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache'
 import type { VitalSigns } from '@/types'
 import { logAudit } from './audit'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Fila de Triagem (consultations com status = 'triage' — chamados pela recepção) ────
 export type TriageQueueItem = {
   id: string
@@ -54,7 +55,7 @@ export async function getTriageQueue(): Promise<TriageQueueItem[] | { error: str
     .in('status', ['triage'])
     .order('created_at', { ascending: true })
 
-  if (error) return { error: 'Erro ao buscar fila de triagem: ' + error.message }
+  if (error) return { error: 'Erro ao buscar fila de triagem: ' + mensagemErro(error, 'lib/actions/triage.ts') }
 
   return (data ?? []).map((c: any) => ({
     id: c.id,
@@ -142,7 +143,7 @@ export async function getTriageConsultation(
   })
 
   if (rawError || !rawConsult) {
-    return { error: `Step1 falhou: ${rawError?.message ?? 'ID ou clinic_id não encontrado no banco.'}` }
+    return { error: `Step1 falhou: ${(rawError ? mensagemErro(rawError, 'lib/actions/triage.ts') : 'ID ou clinic_id não encontrado no banco.')}` }
   }
 
   // Step 2: busca patient
@@ -159,7 +160,7 @@ export async function getTriageConsultation(
   })
 
   if (patientError || !rawPatient) {
-    return { error: `Step2 falhou: ${patientError?.message ?? 'patient_id=' + rawConsult.patient_id + ' não encontrado'}` }
+    return { error: `Step2 falhou: ${(patientError ? mensagemErro(patientError, 'lib/actions/triage.ts') : 'patient_id=') + rawConsult.patient_id + ' não encontrado'}` }
   }
 
   // Step 3: busca tutor
@@ -176,7 +177,7 @@ export async function getTriageConsultation(
   })
 
   if (tutorError || !rawTutor) {
-    return { error: `Step3 falhou: ${tutorError?.message ?? 'tutor_id=' + rawPatient.tutor_id + ' não encontrado'}` }
+    return { error: `Step3 falhou: ${(tutorError ? mensagemErro(tutorError, 'lib/actions/triage.ts') : 'tutor_id=') + rawPatient.tutor_id + ' não encontrado'}` }
   }
 
   // Reconstrói VitalSigns a partir das colunas antigas do schema
@@ -277,7 +278,7 @@ export async function getTriageHistory(): Promise<TriageHistoryItem[] | { error:
     .gte('updated_at', todayStart.toISOString())
     .order('updated_at', { ascending: false })
 
-  if (error) return { error: 'Erro ao buscar histórico de triagens: ' + error.message }
+  if (error) return { error: 'Erro ao buscar histórico de triagens: ' + mensagemErro(error, 'lib/actions/triage.ts') }
 
   return (data ?? []).map((c: any) => {
     // Reconstrói VitalSigns das colunas antigas
@@ -394,7 +395,7 @@ export async function submitTriageAndMoveToDoctor(
     .eq('id', consultationId)
     .eq('clinic_id', profile.clinic_id)
 
-  if (error) return { error: 'Erro ao salvar triagem: ' + error.message }
+  if (error) return { error: 'Erro ao salvar triagem: ' + mensagemErro(error, 'lib/actions/triage.ts') }
 
   // Fallback: se não atualizou nenhuma consulta (ID é de triage_records), atualiza triage_records
   if (count === 0 || !current) {
@@ -579,7 +580,7 @@ export async function addToTriageQueue(
       })
       .select('id')
       .single()
-    if (error) return { error: 'Erro ao adicionar à fila: ' + error.message }
+    if (error) return { error: 'Erro ao adicionar à fila: ' + mensagemErro(error, 'lib/actions/triage.ts') }
     revalidatePath('/dashboard/triage')
     return { id: data.id }
   }
@@ -602,7 +603,7 @@ export async function addToTriageQueue(
     .select('id')
     .single()
 
-  if (error) return { error: 'Erro ao adicionar à fila: ' + error.message }
+  if (error) return { error: 'Erro ao adicionar à fila: ' + mensagemErro(error, 'lib/actions/triage.ts') }
 
   revalidatePath('/dashboard/triage')
   return { id: data.id }
@@ -632,7 +633,7 @@ export async function forwardTriageRecord(
     .eq('id', triageRecordId)
     .eq('clinic_id', profile.clinic_id)
 
-  if (error) return { error: 'Erro ao encaminhar triagem: ' + error.message }
+  if (error) return { error: 'Erro ao encaminhar triagem: ' + mensagemErro(error, 'lib/actions/triage.ts') }
 
   revalidatePath('/dashboard/triage')
   return { success: true }
@@ -670,7 +671,7 @@ export async function getTriageRecordById(
       .eq('clinic_id', profile.clinic_id)
       .single()
 
-    if (error || !data) return { error: `Registro de triagem não encontrado: ${error?.message}` }
+    if (error || !data) return { error: `Registro de triagem não encontrado: ${mensagemErro(error, 'lib/actions/triage.ts')}` }
 
     const r = data as any
     let vital_signs: VitalSigns | null = null
@@ -714,7 +715,7 @@ export async function getTriageRecordById(
       vital_signs,
     }
   } catch (e: any) {
-    return { error: `Erro inesperado: ${e?.message}` }
+    return { error: `Erro inesperado: ${mensagemErro(e, 'lib/actions/triage.ts')}` }
   }
 }
 
@@ -813,7 +814,7 @@ export async function updateTriageVitalSigns(
     .eq('id', consultationId)
     .eq('clinic_id', profile.clinic_id)
 
-  if (error) return { error: 'Erro ao atualizar triagem: ' + error.message }
+  if (error) return { error: 'Erro ao atualizar triagem: ' + mensagemErro(error, 'lib/actions/triage.ts') }
 
   // Fallback: se não atualizou consulta (ID é de triage_records), atualiza triage_records
   if (count === 0) {
@@ -947,7 +948,7 @@ export async function updatePatientReproductiveStatus(
     .update({ reproductive_status: status || null })
     .eq('id', patientId)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/triage.ts') }
   revalidatePath('/dashboard/triage')
   return { success: true }
 }

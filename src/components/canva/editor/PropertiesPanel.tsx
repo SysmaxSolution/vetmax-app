@@ -19,7 +19,7 @@ import type {
   CanvasElement, TextElement, ImageElement, LineElement,
   DynamicTagElement, CompositeTagElement,
   DynamicImageElement, RepeaterElement, RepeaterItemLine, BrushStrokeElement,
-  FillableFieldElement, FillableInputType, ElementPin,
+  FillableFieldElement, FillableInputType, ElementPin, QrValidationElement,
   TypographyStyle,
 } from '@/lib/canva/elements'
 import { findImageTag, findTag } from '@/lib/canva/dynamic-tags'
@@ -27,6 +27,8 @@ import { wrapTextareaSelection } from '@/lib/canva/text-format'
 import type { TextListStyle } from '@/lib/canva/elements'
 import EmojiPicker from './EmojiPicker'
 import { Strikethrough } from 'lucide-react'
+import { useCanvaFonts } from '@/components/canva/CanvaFontsScope'
+import { fontOptions } from '@/lib/canva/fonts'
 
 interface Props {
   element: CanvasElement | null
@@ -78,6 +80,7 @@ export default function PropertiesPanel({ element, onPatch, onDelete, onMoveZ }:
       {element.kind === 'repeater' && <RepeaterSection element={element} onPatch={onPatch} />}
       {element.kind === 'image' && <ImageSection element={element} onPatch={onPatch} />}
       {element.kind === 'line' && <LineSection element={element} onPatch={onPatch} />}
+      {element.kind === 'qr_validation' && <QrValidationSection element={element} onPatch={onPatch} />}
       {element.kind === 'brush_stroke' && <BrushStrokeSection element={element} onPatch={onPatch} />}
       {element.kind === 'fillable_field' && <FillableFieldSection element={element} onPatch={onPatch} />}
 
@@ -598,6 +601,24 @@ function DynamicTagSection({ element, onPatch }: { element: DynamicTagElement; o
           onChange={e => onPatch({ fallback: e.target.value } as Partial<CanvasElement>)}
         />
       </label>
+      {(element.tagId === 'pet.age' || element.tagId === 'pet.age_amd') && (
+        <label className="block mt-2">
+          <span className="text-[10px] text-slate-600">Formato da idade</span>
+          <select
+            className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
+            value={element.formatOverride === 'age_amd' || element.tagId === 'pet.age_amd' ? 'age_amd' : 'default'}
+            onChange={e => {
+              const v = e.target.value
+              // pet.age_amd é sempre A M D; para pet.age o override alterna
+              onPatch({ formatOverride: v === 'age_amd' ? 'age_amd' : undefined } as Partial<CanvasElement>)
+            }}
+            disabled={element.tagId === 'pet.age_amd'}
+          >
+            <option value="default">Padrão — "4 anos" / "7 meses"</option>
+            <option value="age_amd">Anos/Meses/Dias — "9 A 3 M 30 D"</option>
+          </select>
+        </label>
+      )}
       <TypographyControls element={element} onPatch={onPatch} />
     </Section>
   )
@@ -981,6 +1002,10 @@ const REPEATER_FIELDS_BY_SOURCE: Record<RepeaterElement['source'], Array<{ field
     { field: 'name', label: 'Vacina' },
     { field: 'date', label: 'Data' },
     { field: 'next', label: 'Próxima' },
+    { field: 'manufacturer', label: 'Fabricante' },
+    { field: 'lot', label: 'Lote' },
+    { field: 'validity', label: 'Validade' },
+    { field: 'route', label: 'Via de Administração' },
   ],
   dynamic_fields: [
     { field: 'name', label: 'Nome' },
@@ -1000,6 +1025,13 @@ function TypographyEditor({
 }) {
   const t = value ?? {}
   const patch = (partial: Partial<TypographyStyle>) => onChange({ ...t, ...partial })
+  const { clinicFonts } = useCanvaFonts()
+  const options = fontOptions(clinicFonts)
+  const clinicOpts = options.filter(o => o.source === 'clinica')
+  const stdOpts = options.filter(o => o.source === 'padrao')
+  // Fonte salva que não está mais na lista (removida) — mantém visível
+  const current = t.fontFamily ?? 'Inter'
+  const unknownCurrent = !options.some(o => o.family.toLowerCase() === current.toLowerCase())
 
   return (
     <div className="space-y-2">
@@ -1008,16 +1040,18 @@ function TypographyEditor({
           <span className="text-[10px] text-slate-600">Fonte</span>
           <select
             className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
-            value={t.fontFamily ?? 'Inter'}
+            value={current}
             onChange={e => patch({ fontFamily: e.target.value })}
           >
-            <option value="Inter">Inter</option>
-            <option value="Times New Roman">Times New Roman</option>
-            <option value="Georgia">Georgia</option>
-            <option value="Arial">Arial</option>
-            <option value="Helvetica">Helvetica</option>
-            <option value="Courier New">Courier New</option>
-            <option value="Roboto">Roboto</option>
+            {unknownCurrent && <option value={current}>{current} (não encontrada)</option>}
+            {clinicOpts.length > 0 && (
+              <optgroup label="Da clínica">
+                {clinicOpts.map(o => <option key={o.family} value={o.family}>{o.family}</option>)}
+              </optgroup>
+            )}
+            <optgroup label="Padrão">
+              {stdOpts.map(o => <option key={o.family} value={o.family}>{o.family}</option>)}
+            </optgroup>
           </select>
         </label>
         <NumField label="Tamanho (pt)" value={t.fontSize ?? 11} step={0.5}
@@ -1394,5 +1428,40 @@ function kindLabel(k: CanvasElement['kind']): string {
     case 'repeater':       return 'Lista Repetível'
     case 'brush_stroke':   return 'Pincel'
     case 'fillable_field': return 'Campo Preenchível'
+    case 'qr_validation':  return 'QR de Validação'
   }
+}
+
+// ── Section: QR de validação ─────────────────────────────────────────────────
+
+function QrValidationSection({ element, onPatch }: { element: QrValidationElement; onPatch: Props['onPatch'] }) {
+  return (
+    <Section title="QR de Validação">
+      <p className="text-[11px] text-slate-500 leading-snug">
+        Gerado na emissão do documento (código + hash SHA-256, migration 0457). Aponta para
+        <code className="text-violet-700"> /public/verificar/&lt;código&gt;</code>. No editor aparece um placeholder.
+      </p>
+      <label className="mt-2 flex items-center gap-1.5 text-xs text-slate-700">
+        <input type="checkbox" checked={element.showCode !== false}
+          onChange={e => onPatch({ showCode: e.target.checked } as Partial<CanvasElement>)} />
+        Mostrar código abaixo do QR
+      </label>
+      <label className="block mt-2">
+        <span className="text-[10px] text-slate-600">Legenda</span>
+        <input
+          className="w-full rounded border border-slate-300 px-2 py-1 text-xs"
+          value={element.caption ?? ''}
+          placeholder="ex: Verifique a autenticidade"
+          onChange={e => onPatch({ caption: e.target.value } as Partial<CanvasElement>)}
+        />
+      </label>
+      <div className="mt-3 border-t border-slate-200 pt-3">
+        <TypographyEditor
+          compact
+          value={element.typography}
+          onChange={next => onPatch({ typography: next } as Partial<CanvasElement>)}
+        />
+      </div>
+    </Section>
+  )
 }

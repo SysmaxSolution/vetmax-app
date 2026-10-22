@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
 export type CareLevel = 'enfermaria' | 'semi_intensiva' | 'uti' | 'isolamento'
@@ -62,7 +63,7 @@ export async function listDailyRates(): Promise<DailyRate[] | { error: string }>
     .eq('clinic_id', ctx.clinicId)
     .order('category', { ascending: true })
     .order('created_at', { ascending: false })
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/hospitalization-rates.ts') }
   return (data ?? []).map(mapRow)
 }
 
@@ -84,7 +85,7 @@ export async function createDailyRate(payload: CreateDailyRatePayload): Promise<
       active:    true,
     })
     .select('id').single()
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/hospitalization-rates.ts') }
   revalidatePath('/dashboard/registry')
   return { id: data.id as string }
 }
@@ -115,7 +116,7 @@ export async function updateDailyRate(
   const { error } = await admin.from('hospitalization_daily_rates')
     .update(update)
     .eq('id', id).eq('clinic_id', ctx.clinicId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/hospitalization-rates.ts') }
   revalidatePath('/dashboard/registry')
   return { success: true }
 }
@@ -126,7 +127,7 @@ export async function deleteDailyRate(id: string): Promise<{ success: true } | {
   const admin = createAdminClient()
   const { error } = await admin.from('hospitalization_daily_rates')
     .delete().eq('id', id).eq('clinic_id', ctx.clinicId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/hospitalization-rates.ts') }
   revalidatePath('/dashboard/registry')
   return { success: true }
 }

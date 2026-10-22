@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { evolutionSendText } from '@/lib/evolution-api-client'
 import type { AppointmentRequest } from '@/types'
 
+import { mensagemErro } from '@/lib/errors'
 async function getClinicId(): Promise<string | null> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -36,7 +37,7 @@ export async function getAppointmentRequests(
   }
 
   const { data, error } = await q
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/appointment-requests.ts') }
 
   return (data ?? []).map((row: Record<string, unknown>) => {
     const tutor = (Array.isArray(row.tutor) ? row.tutor[0] : row.tutor) as Record<string, string> | null
@@ -84,13 +85,15 @@ export async function approveAppointmentRequest(
       appointment_datetime: datetime,
       reason:               req.visit_reason ?? 'consultation',
       status:               'scheduled',
-      source:               'whatsapp',
-      vet_id:               opts.vetId ?? req.vet_id ?? null,
+      source:               req.source ?? 'whatsapp',
+      // appointments tem professional_id (não vet_id). O vet sugerido na
+      // solicitação (req.vet_id) é o profissional do agendamento.
+      professional_id:      opts.vetId ?? req.vet_id ?? null,
     })
     .select('id')
     .single()
 
-  if (apptErr || !appt) return { error: apptErr?.message ?? 'Erro ao criar agendamento.' }
+  if (apptErr || !appt) return { error: (apptErr ? mensagemErro(apptErr, 'lib/actions/appointment-requests.ts') : 'Erro ao criar agendamento.') }
 
   await admin
     .from('appointment_requests')

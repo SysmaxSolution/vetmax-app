@@ -12,7 +12,12 @@ import { useClinicalVoiceAssistant } from '@/hooks/useClinicalVoiceAssistant'
 import { useNativeKeepAwake } from '@/hooks/useNativeKeepAwake'
 import { getClinicVoiceTriggers, updateClinicVoiceTriggers } from '@/lib/actions/clinic-settings'
 import { useAiTranscriptionMode } from '@/components/providers/ClinicConfigProvider'
-import { returnToVet, dischargeFromExams } from '@/lib/actions/exams'
+import { returnToVet, dischargeFromExams, sendExamToPartnerLab } from '@/lib/actions/exams'
+import { listPartnerClinics, type PartnerClinic } from '@/lib/actions/partner-clinics'
+import ConsultationServicesPanel from '@/components/vet/ConsultationServicesPanel'
+import ExamResultsPanel from '@/components/exams/ExamResultsPanel'
+import SlideEntryPanel from '@/components/exams/SlideEntryPanel'
+import ExamRejectionPanel from '@/components/exams/ExamRejectionPanel'
 import { formatPetAge } from '@/lib/utils/pet-age'
 import { Toast } from '@/components/ui/toast'
 import { PetAvatar } from '@/components/ui/PetAvatar'
@@ -26,6 +31,7 @@ import type { VetConsultationDetail } from '@/lib/actions/vet'
 import type { DocumentTemplate } from '@/types'
 import type { PatientDocument } from '@/lib/actions/documents'
 import type { Attachment } from '@/lib/actions/attachments'
+import { useUsaLaboratorio } from '@/components/providers/ClinicConfigProvider'
 
 // ─── Labels ──────────────────────────────────────────────────────────────────
 
@@ -52,6 +58,8 @@ interface Props {
   initialAttachments?: Attachment[]
   userRole?:           string
   insuranceCard?:      import('@/lib/actions/insurance-coverage').InsuranceCardData | null
+  /** flow_config.usa_fluxo_rejeicao_exame — liga o painel de realização/rejeição. */
+  usesExamRejection?:  boolean
 }
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
@@ -72,10 +80,17 @@ export default function ExamDetail({
   initialAttachments = [],
   userRole,
   insuranceCard,
+  usesExamRejection = false,
 }: Props) {
   const router = useRouter()
   const aiMode = useAiTranscriptionMode()
+  // Tarefa 0 — painel de laboratório (analitos/HL7/liberação) só para quem
+  // ativou a rotina (flow_config.usa_laboratorio, padrão desligado).
+  const usaLaboratorio = useUsaLaboratorio()
   const { patient, tutor, vital_signs } = consultation
+  // Já enviado a laboratório parceiro (aguardando resultado) — não reofertar o
+  // envio (evita dupla cobrança); o exame já foi cobrado no caixa.
+  const alreadySentToLab = consultation.status === 'awaiting_lab_result'
 
   // Registra contexto de chat para este exame (mesma sala da consulta)
 
@@ -88,6 +103,13 @@ export default function ExamDetail({
   const [showRemoveModal,  setShowRemoveModal]  = useState(false)
   const [showAdmitModal,   setShowAdmitModal]   = useState(false)
   const [isDischargingExam, setIsDischargingExam] = useState(false)
+
+  // Enviar para laboratório parceiro (F2)
+  const [showLabModal,  setShowLabModal]  = useState(false)
+  const [labs,          setLabs]          = useState<PartnerClinic[]>([])
+  const [selectedLabId, setSelectedLabId] = useState('')
+  const [labDeadline,   setLabDeadline]   = useState('')
+  const [isSendingLab,  setIsSendingLab]  = useState(false)
 
   // Document suggestions from voice dictation
   const [examSuggestions, setExamSuggestions] = useState<Array<{ tipo: string; motivo: string; title: string; summary: string }>>([])
@@ -165,6 +187,12 @@ export default function ExamDetail({
     return () => window.removeEventListener('afterprint', handleAfterPrint)
   }, [])
 
+  // Isola a folha na impressão (classe no body — ver globals.css @media print).
+  useEffect(() => {
+    document.body.classList.toggle('print-mode-isolate', !!printData)
+    return () => document.body.classList.remove('print-mode-isolate')
+  }, [printData])
+
   const handlePrint = (data: PrintState) => {
     setPrintData(data)
     setTimeout(() => window.print(), 500)
@@ -195,6 +223,30 @@ export default function ExamDetail({
     setIsDischargingExam(false)
     if ('error' in res) { setToast({ type: 'error', message: res.error }); return }
     setToast({ type: 'success', message: `Alta de ${patient.name} concluída.` })
+    setTimeout(() => router.push('/dashboard/exams'), 1200)
+  }
+
+  // ─── Enviar para laboratório parceiro (F2) ────────────────────────────────
+  const openLabModal = async () => {
+    setShowLabModal(true)
+    if (labs.length === 0) {
+      const res = await listPartnerClinics({ is_active: true })
+      if (!('error' in res)) setLabs(res)
+    }
+  }
+
+  const handleSendToLab = async () => {
+    if (!selectedLabId) return
+    setIsSendingLab(true)
+    const res = await sendExamToPartnerLab({
+      consultation_id: consultation.id,
+      partner_clinic_id: selectedLabId,
+      return_deadline: labDeadline || null,
+    })
+    setIsSendingLab(false)
+    if ('error' in res) { setToast({ type: 'error', message: res.error }); return }
+    setShowLabModal(false)
+    setToast({ type: 'success', message: `Exame de ${patient.name} enviado ao laboratório parceiro. Valor lançado no caixa.` })
     setTimeout(() => router.push('/dashboard/exams'), 1200)
   }
 
@@ -272,7 +324,7 @@ export default function ExamDetail({
       />
 
       {/* Modal de confirmação */}
-      {showConfirm && (
+      {showConfirm && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 animate-scale-in">
             <h2 className="text-base font-bold text-slate-900">Devolver ao Médico?</h2>
@@ -294,7 +346,8 @@ export default function ExamDetail({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       <div className="space-y-5">
@@ -553,6 +606,47 @@ export default function ExamDetail({
           </div>
         </div>
 
+        {alreadySentToLab && (
+          <div className="flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-800">
+            <FlaskConical className="h-4 w-4 flex-shrink-0" />
+            <span>
+              Exame <strong>enviado a laboratório parceiro</strong> — aguardando o resultado.{' '}
+              {usesExamRejection
+                ? 'A cobrança fica retida até o exame ser liberado: exame não realizado não é cobrado.'
+                : 'O valor já foi lançado no caixa.'}{' '}
+              Quando o laudo voltar, anexe o resultado e escolha o desfecho abaixo (alta ou devolver ao médico).
+            </span>
+          </div>
+        )}
+
+        {/* Fluxo de Rejeição de Exame (opt-in por clínica) — realizado × não realizado */}
+        {usesExamRejection && (
+          <ExamRejectionPanel
+            consultationId={consultation.id}
+            onToast={(type, message) => setToast({ type, message })}
+          />
+        )}
+
+        {/* Resultados do exame (Fase 2): entrada/import + conferência e liberação (2.4).
+            Tarefa 0 — só existe para quem ativou a rotina de Laboratório
+            (flow_config.usa_laboratorio, padrão desligado). */}
+        {usaLaboratorio && (
+          <ExamResultsPanel consultationId={consultation.id} canRelease={userRole !== 'receptionist' && userRole !== 'assistant'} />
+        )}
+
+        {/* Digitação da lâmina: só aparece quando a clínica cadastrou a tabela
+            de referência dela E essa tabela tem linha para digitar (diferencial,
+            texto, correção manual). Sem tabela, o componente não renderiza nada. */}
+        {usaLaboratorio && <SlideEntryPanel consultationId={consultation.id} />}
+
+        {/* Serviços/Produtos do exame — painel fixo (como no consultório).
+            Permite vincular/visualizar o serviço antes de enviar ao laboratório. */}
+        <ConsultationServicesPanel
+          consultationId={consultation.id}
+          isFinalized={false}
+          petHasInsurance={!!insuranceCard}
+        />
+
         {/* Botões de Desfecho */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200">
           <div className="p-6">
@@ -575,6 +669,16 @@ export default function ExamDetail({
                 <BedDouble className="w-4 h-4" />
                 Internar
               </button>
+              {!alreadySentToLab && (
+                <button
+                  onClick={openLabModal}
+                  disabled={isDischargingExam || isReturning || isSendingLab}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-violet-300 text-violet-700 text-sm font-semibold hover:bg-violet-50 disabled:opacity-50 transition-colors"
+                >
+                  <FlaskConical className="w-4 h-4" />
+                  Enviar para laboratório parceiro
+                </button>
+              )}
               <button
                 onClick={() => setShowConfirm(true)}
                 disabled={isReturning || isDischargingExam}
@@ -602,6 +706,64 @@ export default function ExamDetail({
         />
       )}
 
+      {/* Modal: Enviar para laboratório parceiro (F2) */}
+      {showLabModal && createPortal(
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={() => !isSendingLab && setShowLabModal(false)}>
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2 border-b border-slate-100 px-6 py-4">
+              <FlaskConical className="h-5 w-5 text-violet-600" />
+              <h2 className="text-base font-bold text-slate-900">Enviar para laboratório parceiro</h2>
+            </div>
+            <div className="space-y-4 px-6 py-5">
+              <p className="text-xs text-slate-500">
+                O valor do exame será lançado no caixa para cobrança do tutor e o exame ficará com status
+                <span className="font-medium text-slate-700"> “Aguardando resultado de laboratório parceiro”</span>.
+              </p>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-600">Laboratório / clínica parceira</label>
+                <select
+                  value={selectedLabId}
+                  onChange={e => setSelectedLabId(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-500/20"
+                >
+                  <option value="">Selecione…</option>
+                  {labs.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                </select>
+                {labs.length === 0 && (
+                  <p className="mt-1 text-xs text-amber-600">Nenhuma clínica parceira ativa. Cadastre em Cadastros › Clínicas Parceiras.</p>
+                )}
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-600">Prazo de retorno do resultado <span className="font-normal text-slate-400">(opcional)</span></label>
+                <input
+                  type="date"
+                  value={labDeadline}
+                  onChange={e => setLabDeadline(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-500/20"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 border-t border-slate-100 px-6 py-4">
+              <button
+                onClick={() => setShowLabModal(false)}
+                disabled={isSendingLab}
+                className="flex-1 rounded-lg border border-slate-300 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSendToLab}
+                disabled={isSendingLab || !selectedLabId}
+                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-violet-600 py-2.5 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50"
+              >
+                {isSendingLab ? <><Loader2 className="h-4 w-4 animate-spin" />Enviando…</> : <>Confirmar envio</>}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+
       {showAdmitModal && (
         <AdmitPetModal
           patientId={patient.id}
@@ -617,7 +779,7 @@ export default function ExamDetail({
       )}
 
       {/* Modal de Configurações de Voz */}
-      {voiceConfigOpen && (
+      {voiceConfigOpen && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5 animate-scale-in">
             <div className="flex items-center justify-between">
@@ -674,7 +836,8 @@ export default function ExamDetail({
               {configSaving ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando…</> : <><Save className="h-4 w-4" /> Salvar Configurações</>}
             </button>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
 

@@ -27,6 +27,7 @@ import * as path from 'node:path'
 import { execFile as _execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 
+import { mensagemErro } from '@/lib/errors'
 const execFile = promisify(_execFile)
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -269,7 +270,7 @@ async function gitCommitAndPush(
     try {
       await execFile('git', ['push', '-u', 'origin', branchName], opts)
     } catch (e) {
-      return { pushed: false, localOnly: true, error: 'git push falhou: ' + (e as Error).message }
+      return { pushed: false, localOnly: true, error: 'git push falhou: ' + mensagemErro(e, 'lib/fix-applier.ts') }
     }
 
     try {
@@ -286,10 +287,10 @@ async function gitCommitAndPush(
       const urlMatch = stdout.match(/https:\/\/[^\s]+/)
       return { pushed: true, prUrl: urlMatch?.[0], localOnly: false }
     } catch (e) {
-      return { pushed: true, localOnly: false, error: 'gh pr create falhou: ' + (e as Error).message }
+      return { pushed: true, localOnly: false, error: 'gh pr create falhou: ' + mensagemErro(e, 'lib/fix-applier.ts') }
     }
   } catch (e) {
-    return { pushed: false, localOnly: true, error: (e as Error).message }
+    return { pushed: false, localOnly: true, error: mensagemErro(e, 'lib/fix-applier.ts') }
   }
 }
 
@@ -308,7 +309,7 @@ export async function applyApprovedFixPlan(
     .maybeSingle()
 
   if (readErr || !plan) {
-    return { planId, status: 'fix_failed', patches: [], error: `Plano não encontrado: ${readErr?.message ?? 'n/a'}` }
+    return { planId, status: 'fix_failed', patches: [], error: `Plano não encontrado: ${(readErr ? mensagemErro(readErr, 'lib/fix-applier.ts') : 'n/a')}` }
   }
 
   if (plan.status !== 'approved') {
@@ -323,7 +324,7 @@ export async function applyApprovedFixPlan(
     .eq('status', 'approved')
 
   if (lockErr) {
-    return { planId, status: 'fix_failed', patches: [], error: 'Falha ao lockear plano: ' + lockErr.message }
+    return { planId, status: 'fix_failed', patches: [], error: 'Falha ao lockear plano: ' + mensagemErro(lockErr, 'lib/fix-applier.ts') }
   }
 
   try {

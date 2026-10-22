@@ -2,12 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { evolutionSendText } from '@/lib/evolution-api-client'
 
+import { limitarPorIp } from '@/lib/api/rate-limit'
 // GET /api/cron/daily-schedule-alert
 // Vercel Cron — executa a cada hora (0 * * * *).
 // Filtra clínicas cujo daily_schedule_alert_time corresponde à hora atual (UTC),
 // agrupa agendamentos do dia por profissional e dispara WhatsApp.
 
 export async function GET(request: NextRequest) {
+  const barrado = await limitarPorIp(request, { escopo: 'cron:agenda', limite: 60 })
+  if (barrado) return barrado
+
   const secret = process.env.CRON_SECRET
   if (!secret || request.headers.get('authorization') !== `Bearer ${secret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type CatalogPackage = {
@@ -105,7 +106,7 @@ export async function listCatalogPackages(): Promise<CatalogPackage[] | { error:
     .eq('clinic_id', ctx.clinic_id)
     .order('name', { ascending: true })
 
-  if (error) return { error: 'Erro ao listar pacotes: ' + error.message }
+  if (error) return { error: 'Erro ao listar pacotes: ' + mensagemErro(error, 'lib/actions/packages.ts') }
   return (data ?? []) as unknown as CatalogPackage[]
 }
 
@@ -148,7 +149,7 @@ export async function upsertCatalogPackage(
       .update(pkgData)
       .eq('id', payload.id!)
       .eq('clinic_id', ctx.clinic_id)
-    if (error) return { error: 'Erro ao atualizar pacote: ' + error.message }
+    if (error) return { error: 'Erro ao atualizar pacote: ' + mensagemErro(error, 'lib/actions/packages.ts') }
     pkgId = payload.id!
     // Redelete items e recria
     await ctx.supabase.from('package_items').delete().eq('package_id', pkgId)
@@ -158,7 +159,7 @@ export async function upsertCatalogPackage(
       .insert(pkgData)
       .select('id')
       .single()
-    if (error) return { error: 'Erro ao criar pacote: ' + error.message }
+    if (error) return { error: 'Erro ao criar pacote: ' + mensagemErro(error, 'lib/actions/packages.ts') }
     pkgId = data.id
   }
 
@@ -173,7 +174,7 @@ export async function upsertCatalogPackage(
           quantity:   item.quantity,
         }))
       )
-    if (itemsError) return { error: 'Erro ao salvar itens: ' + itemsError.message }
+    if (itemsError) return { error: 'Erro ao salvar itens: ' + mensagemErro(itemsError, 'lib/actions/packages.ts') }
   }
 
   revalidatePath('/dashboard/pharmacy')
@@ -199,7 +200,7 @@ export async function togglePackageActive(id: string): Promise<{ ok: true } | { 
     .eq('id', id)
     .eq('clinic_id', ctx.clinic_id)
 
-  if (error) return { error: 'Erro ao alterar status: ' + error.message }
+  if (error) return { error: 'Erro ao alterar status: ' + mensagemErro(error, 'lib/actions/packages.ts') }
   revalidatePath('/dashboard/pharmacy')
   return { ok: true }
 }
@@ -214,7 +215,7 @@ export async function deleteCatalogPackage(id: string): Promise<{ ok: true } | {
     .eq('id', id)
     .eq('clinic_id', ctx.clinic_id)
 
-  if (error) return { error: 'Erro ao excluir pacote: ' + error.message }
+  if (error) return { error: 'Erro ao excluir pacote: ' + mensagemErro(error, 'lib/actions/packages.ts') }
   revalidatePath('/dashboard/pharmacy')
   return { ok: true }
 }
@@ -250,7 +251,7 @@ export async function sellPackageToPet(payload: {
     .select('id')
     .single()
 
-  if (error) return { error: 'Erro ao criar contrato: ' + error.message }
+  if (error) return { error: 'Erro ao criar contrato: ' + mensagemErro(error, 'lib/actions/packages.ts') }
 
   // Gera sessões individuais (pending)
   if (totalSessions > 0) {
@@ -285,7 +286,7 @@ export async function getPetActivePackages(
     .eq('clinic_id', ctx.clinic_id)
     .eq('status', 'active')
 
-  if (error) return { error: 'Erro ao buscar pacotes do pet: ' + error.message }
+  if (error) return { error: 'Erro ao buscar pacotes do pet: ' + mensagemErro(error, 'lib/actions/packages.ts') }
 
   const result = (data ?? []) as unknown as PatientActivePackage[]
   return result.map(pap => {
@@ -321,7 +322,7 @@ export async function usePackageSession(
     .update({ status: 'used', used_at: new Date().toISOString(), appointment_id: appointmentId ?? null })
     .eq('id', sessionId)
 
-  if (error) return { error: 'Erro ao registrar sessão: ' + error.message }
+  if (error) return { error: 'Erro ao registrar sessão: ' + mensagemErro(error, 'lib/actions/packages.ts') }
 
   // Conta restantes
   const { count: remaining } = await ctx.supabase
@@ -383,7 +384,7 @@ export async function schedulePackageSession(payload: {
     })
     .eq('id', session.id)
 
-  if (error) return { error: 'Erro ao agendar sessão: ' + error.message }
+  if (error) return { error: 'Erro ao agendar sessão: ' + mensagemErro(error, 'lib/actions/packages.ts') }
 
   // Verifica se foi a última
   const { count: remaining } = await ctx.supabase
@@ -454,7 +455,7 @@ export async function linkSessionToAppointment(
     .update({ appointment_id: appointmentId })
     .eq('id', session.id)
 
-  if (error) return { error: 'Erro ao vincular sessão: ' + error.message }
+  if (error) return { error: 'Erro ao vincular sessão: ' + mensagemErro(error, 'lib/actions/packages.ts') }
   return { ok: true }
 }
 
@@ -479,7 +480,7 @@ export async function getPetPackageSummary(
     .order('started_at', { ascending: false })
     .limit(10)
 
-  if (error) return { error: 'Erro ao buscar resumo de pacotes: ' + error.message }
+  if (error) return { error: 'Erro ao buscar resumo de pacotes: ' + mensagemErro(error, 'lib/actions/packages.ts') }
 
   const result = (data ?? []) as unknown as (PatientActivePackage & { sessions: (PackageSession & { appointment_id: string | null })[] })[]
   return result.map(pap => {

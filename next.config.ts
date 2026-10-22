@@ -39,7 +39,7 @@ const nextConfig: NextConfig = {
               "font-src 'self'",
               `img-src 'self' data: blob: ${supabaseHost ? `https://${supabaseHost}` : ''}`,
               `connect-src 'self' ${supabaseUrl} ${supabaseUrl.replace('https://', 'wss://')} https://api.anthropic.com`,
-              "media-src 'self'",
+              `media-src 'self' blob: ${supabaseHost ? `https://${supabaseHost}` : ''}`,
               "worker-src 'self' blob:",
               "frame-ancestors 'none'",
               "object-src 'none'",

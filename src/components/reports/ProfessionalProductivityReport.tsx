@@ -32,12 +32,12 @@ function ProfRow({ r, rank }: { r: ProfessionalProductivityRow; rank: number }) 
   const specs = r.specialties?.join(', ') || '—'
   const total = r.consult_total + r.exam_total + r.prescription_total
   return (
-    <tr className="hover:bg-violet-50/40 transition-colors">
+    <tr className="hover:bg-slate-50 transition-colors">
       <td className="px-4 py-3 text-xs text-slate-400 font-mono w-8">{rank}</td>
       <td className="px-4 py-3">
         <div className="flex items-center gap-2">
-          <div className="h-7 w-7 rounded-full bg-violet-100 flex items-center justify-center shrink-0">
-            <User className="h-3.5 w-3.5 text-violet-600" />
+          <div className="h-7 w-7 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+            <User className="h-3.5 w-3.5 text-teal-600" />
           </div>
           <div>
             <p className="text-sm font-semibold text-slate-800">{r.user_name}</p>
@@ -46,13 +46,13 @@ function ProfRow({ r, rank }: { r: ProfessionalProductivityRow; rank: number }) 
         </div>
       </td>
       <td className="px-4 py-3">
-        <span className="inline-block rounded-full bg-violet-100 text-violet-700 text-xs font-semibold px-2 py-0.5">
+        <span className="inline-block rounded-full bg-slate-100 text-slate-600 text-xs font-semibold px-2 py-0.5">
           {ROLE_LABEL[r.role] ?? r.role}
         </span>
       </td>
       <td className="px-4 py-3 text-xs text-slate-500 max-w-[160px] truncate" title={specs}>{specs}</td>
       <td className="px-4 py-3 text-center">
-        <span className="text-sm font-bold text-violet-700">{r.consult_total}</span>
+        <span className="text-sm font-bold text-teal-700 font-mono tabular-nums">{r.consult_total}</span>
       </td>
       <td className="px-4 py-3 text-center">
         <span className="text-sm font-semibold text-blue-600">{r.exam_total}</span>
@@ -97,15 +97,15 @@ export default function ProfessionalProductivityReport() {
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">De</label>
           <input type="date" value={from} onChange={e => setFrom(e.target.value)}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Até</label>
           <input type="date" value={to} onChange={e => setTo(e.target.value)}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
         </div>
         <button onClick={run} disabled={pending}
-          className="rounded-lg bg-violet-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50 transition-colors">
+          className="rounded-lg bg-teal-600 px-4 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 disabled:opacity-60 transition-colors">
           {pending ? 'Carregando…' : 'Gerar'}
         </button>
       </div>
@@ -115,7 +115,7 @@ export default function ProfessionalProductivityReport() {
       )}
 
       {result === null && !pending && (
-        <div className="rounded-lg bg-violet-50 border border-violet-100 px-4 py-10 text-center text-sm text-violet-500">
+        <div className="rounded-xl bg-slate-50 border border-slate-200 px-4 py-10 text-center text-sm text-slate-500">
           Selecione o período e clique em Gerar.
         </div>
       )}
@@ -125,10 +125,10 @@ export default function ProfessionalProductivityReport() {
           {/* Cards de totais */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <StatCard
-              icon={<Stethoscope className="h-5 w-5 text-violet-600" />}
+              icon={<Stethoscope className="h-5 w-5 text-teal-600" />}
               label="Consultas realizadas"
               value={result.totals.consult_total}
-              color="bg-violet-50 border-violet-100 text-violet-900"
+              color="bg-teal-50 border-teal-100 text-teal-900"
             />
             <StatCard
               icon={<FlaskConical className="h-5 w-5 text-blue-600" />}
@@ -147,10 +147,10 @@ export default function ProfessionalProductivityReport() {
           {/* Tabela por profissional */}
           <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
             <table className="w-full text-sm">
-              <thead className="bg-violet-50 border-b border-violet-100">
+              <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
                   {['#', 'Profissional', 'Função', 'Especialidade', 'Consultas', 'Exames', 'Receitas', 'Total'].map(h => (
-                    <th key={h} className="px-4 py-3 text-left font-semibold text-violet-800 text-xs uppercase tracking-wide whitespace-nowrap">
+                    <th key={h} className="px-4 py-3 text-left font-semibold text-slate-500 text-xs uppercase tracking-wide whitespace-nowrap">
                       {h}
                     </th>
                   ))}
@@ -176,7 +176,7 @@ export default function ProfessionalProductivityReport() {
                         Total geral
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-center text-sm font-bold text-violet-700">{result.totals.consult_total}</td>
+                    <td className="px-4 py-3 text-center text-sm font-bold text-teal-700 font-mono tabular-nums">{result.totals.consult_total}</td>
                     <td className="px-4 py-3 text-center text-sm font-bold text-blue-600">{result.totals.exam_total}</td>
                     <td className="px-4 py-3 text-center text-sm font-bold text-emerald-600">{result.totals.prescription_total}</td>
                     <td className="px-4 py-3 text-center text-sm font-bold text-slate-800">

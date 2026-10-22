@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Filter, X } from 'lucide-react'
 import { DatePicker } from '@/components/ui/DatePicker'
 import type { TimelineEvent, TimelineEventType } from '@/lib/actions/timeline'
@@ -748,7 +749,7 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
 function EventDetailModal({ event, onClose, patientId }: { event: TimelineEvent; onClose: () => void; patientId?: string }) {
   const typeLabel = EVENT_TYPE_LABELS[event.type] ?? event.type
 
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"
       onClick={onClose}
@@ -1057,8 +1058,9 @@ function EventDetailModal({ event, onClose, patientId }: { event: TimelineEvent;
 
         </div>
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }
 
 export default function PetTimeline({ events, packageMap = {}, onPrint, onEdit, onEditAppointment, patientId }: Props) {

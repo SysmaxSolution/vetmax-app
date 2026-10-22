@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache'
 import { logAudit } from './audit'
 import type { PatientSpecies } from '@/types'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Cadastro Atômico: Pet + Tutor + Vacinas + Convênio ───────────────────────
 
 export type CreateFullPatientInput = {
@@ -80,7 +81,7 @@ export async function createFullPatient(
       .select('id')
       .single()
 
-    if (tutorErr || !tutor) return { error: 'Erro ao salvar Tutor: ' + (tutorErr?.message ?? '') }
+    if (tutorErr || !tutor) return { error: 'Erro ao salvar Tutor: ' + ((tutorErr ? mensagemErro(tutorErr, 'lib/actions/pets.ts') : '')) }
     tutorId = tutor.id
   }
 
@@ -99,7 +100,7 @@ export async function createFullPatient(
     .select('id')
     .single()
 
-  if (petErr || !pet) return { error: 'Erro ao salvar Pet: ' + (petErr?.message ?? '') }
+  if (petErr || !pet) return { error: 'Erro ao salvar Pet: ' + ((petErr ? mensagemErro(petErr, 'lib/actions/pets.ts') : '')) }
   const patientId = pet.id
 
   // 3. Inserir vacinas (se houver)
@@ -113,7 +114,7 @@ export async function createFullPatient(
       notes:             v.notes ?? null,
     }))
     const { error: vaccErr } = await admin.from('patient_vaccines').insert(vaccineRows)
-    if (vaccErr) return { error: 'Erro ao registrar vacinas: ' + vaccErr.message }
+    if (vaccErr) return { error: 'Erro ao registrar vacinas: ' + mensagemErro(vaccErr, 'lib/actions/pets.ts') }
   }
 
   // 4. Inserir convênio (se houver)
@@ -130,7 +131,7 @@ export async function createFullPatient(
       },
       { onConflict: 'clinic_id,patient_id' }
     )
-    if (insErr) return { error: 'Erro ao registrar convênio: ' + insErr.message }
+    if (insErr) return { error: 'Erro ao registrar convênio: ' + mensagemErro(insErr, 'lib/actions/pets.ts') }
   }
 
   await logAudit({
@@ -191,7 +192,7 @@ export async function updatePetProfile(
       .eq('id', petId)
       .eq('clinic_id', profile.clinic_id)
 
-    if (error) return { error: 'Erro ao atualizar cadastro: ' + error.message }
+    if (error) return { error: 'Erro ao atualizar cadastro: ' + mensagemErro(error, 'lib/actions/pets.ts') }
 
     await logAudit({ action: 'UPDATE_PET', entity_type: 'patients', entity_id: petId, details: data })
 
@@ -241,7 +242,7 @@ export async function updatePatientFromLiveReg(
         .eq('id', petId)
         .eq('clinic_id', profile.clinic_id)
 
-      if (tagErr) return { error: 'Erro ao atualizar comportamento: ' + tagErr.message }
+      if (tagErr) return { error: 'Erro ao atualizar comportamento: ' + mensagemErro(tagErr, 'lib/actions/pets.ts') }
 
       await logAudit({ action: 'UPDATE_PET_LIVE_REG', entity_type: 'patients', entity_id: petId, details: { behavior_tags: data.behavior, consultation_id: consultationId } })
     }
@@ -257,7 +258,7 @@ export async function updatePatientFromLiveReg(
           vaccine_name:      v.name,
           date_administered: v.date || new Date().toISOString().split('T')[0],
         })
-      if (vaccErr) return { error: 'Erro ao inserir vacina: ' + vaccErr.message }
+      if (vaccErr) return { error: 'Erro ao inserir vacina: ' + mensagemErro(vaccErr, 'lib/actions/pets.ts') }
     }
 
     revalidatePath('/dashboard/vet')
@@ -305,7 +306,7 @@ export async function uploadPetPhoto(
     .from('clinic-attachments')
     .upload(storagePath, buffer, { contentType: file.type, upsert: true })
 
-  if (uploadErr) return { error: 'Erro no upload: ' + uploadErr.message }
+  if (uploadErr) return { error: 'Erro no upload: ' + mensagemErro(uploadErr, 'lib/actions/pets.ts') }
 
   // Gerar URL pública assinada (1 ano = 31536000s)
   const { data: signed } = await supabase.storage
@@ -321,7 +322,7 @@ export async function uploadPetPhoto(
     .eq('id', petId)
     .eq('clinic_id', profile.clinic_id)
 
-  if (dbErr) return { error: 'Erro ao salvar URL da foto: ' + dbErr.message }
+  if (dbErr) return { error: 'Erro ao salvar URL da foto: ' + mensagemErro(dbErr, 'lib/actions/pets.ts') }
 
   revalidatePath('/dashboard/patients')
   return { url: signed.signedUrl }
@@ -382,7 +383,7 @@ export async function softDeletePatient(
     .eq('clinic_id', profile.clinic_id)
     .is('deleted_at', null)
 
-  if (error) return { error: 'Erro ao arquivar pet: ' + error.message }
+  if (error) return { error: 'Erro ao arquivar pet: ' + mensagemErro(error, 'lib/actions/pets.ts') }
 
   await logAudit({
     action:      'SOFT_DELETE_PATIENT',
@@ -420,7 +421,7 @@ export async function reactivatePatient(
     .eq('clinic_id', profile.clinic_id)
     .not('deleted_at', 'is', null)
 
-  if (error) return { error: 'Erro ao reativar pet: ' + error.message }
+  if (error) return { error: 'Erro ao reativar pet: ' + mensagemErro(error, 'lib/actions/pets.ts') }
 
   await logAudit({
     action:      'REACTIVATE_PATIENT',

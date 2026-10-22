@@ -1,12 +1,18 @@
 'use client'
 
 import { useState, useEffect, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Loader2, Trash2, CheckCircle, AlertCircle, RotateCcw, Hash, ShieldCheck } from 'lucide-react'
 import {
   createEntry, updateEntry, deleteEntry, baixarTitulo, reverseFinancialEntry,
   getEntryContext,
   type FinancialEntry, type EntryType, type BaixarTituloData, type EntryContext,
 } from '@/lib/actions/financial'
+import { getEntrySettler } from '@/lib/actions/client-statement'
+import { searchSalesTutors } from '@/lib/actions/sales'
+import { buscarConsumidorFinal } from '@/lib/actions/tutors'
+import { searchSuppliers } from '@/lib/actions/suppliers'
+import { pendenciasPagadorDoTutor } from '@/lib/actions/boleto-cobranca'
 
 // ─── Static lists ─────────────────────────────────────────────────────────────
 
@@ -96,6 +102,54 @@ export default function TituloModal({
   const [chartAccountsId,   setChartAccountsId]   = useState(entry?.chart_of_accounts_id ?? '')
   const [professionalId,    setProfessionalId]     = useState(entry?.professional_id ?? currentUserId ?? '')
   const [notes,             setNotes]              = useState(entry?.notes ?? '')
+  // ─── Dono do título: Cliente (a receber) ou Fornecedor (a pagar) ──────────
+  // Obrigatório porque é ele que diz A QUEM o título pertence — e o banco
+  // exige os dados do pagador para registrar boleto. Antes este bloco só
+  // EXIBIA o tutor quando o título já tinha um; não havia como informar, e o
+  // payload de createEntry saía sem tutor_id nem supplier_id.
+  const [ownerId, setOwnerId]       = useState<string>(entry?.tutor_id ?? entry?.supplier_id ?? '')
+  const [ownerName, setOwnerName]   = useState<string>(entry?.tutor_name ?? entry?.beneficiary ?? '')
+  const [ownerBusca, setOwnerBusca] = useState('')
+  const [ownerOpcoes, setOwnerOpcoes] = useState<{ id: string; name: string; sub?: string }[]>([])
+  const [ownerAberto, setOwnerAberto] = useState(false)
+  // Aviso PREVENTIVO: informativo, não trava. Diz o que falta no cadastro para
+  // emitir boleto, antes de mandar ao banco.
+  const [avisoPagador, setAvisoPagador] = useState<string | null>(null)
+
+  // Excedente na baixa: o que fazer com o que passou do valor do título.
+  // Antes a action CORTAVA em silêncio (Math.min com o valor do título) e o
+  // dinheiro a mais desaparecia. Agora o operador decide.
+  const [excedente, setExcedente] = useState<'troco' | 'credito' | null>(null)
+
+  const ehReceber = entryType === 'receivable'
+  const rotuloDono = ehReceber ? 'Cliente (Tutor)' : 'Fornecedor'
+
+  useEffect(() => {
+    const termo = ownerBusca.trim()
+    if (termo.length < 2) { setOwnerOpcoes([]); return }
+    let valido = true
+    const t = setTimeout(async () => {
+      if (ehReceber) {
+        const r = await searchSalesTutors(termo)
+        if (valido) setOwnerOpcoes((r ?? []).map(x => ({ id: x.id, name: x.name, sub: x.phone ?? undefined })))
+      } else {
+        const r = await searchSuppliers(termo)
+        if (valido && !('error' in r)) setOwnerOpcoes(r.map(x => ({ id: x.id, name: x.name, sub: x.document ?? undefined })))
+      }
+    }, 300)
+    return () => { valido = false; clearTimeout(t) }
+  }, [ownerBusca, ehReceber])
+
+  // Checa o cadastro do Tutor escolhido (só a receber: é ele que vira pagador).
+  useEffect(() => {
+    if (!ehReceber || !ownerId) { setAvisoPagador(null); return }
+    let valido = true
+    pendenciasPagadorDoTutor(ownerId).then(r => {
+      if (valido) setAvisoPagador('error' in r ? null : r.aviso)
+    })
+    return () => { valido = false }
+  }, [ownerId, ehReceber])
+
 
   // ── Contexto do entry (info contextual: invoice mestre, valores já recebidos) ──
   const [entryContext, setEntryContext] = useState<EntryContext | null>(null)
@@ -108,6 +162,19 @@ export default function TituloModal({
     })
     return () => { cancelled = true }
   }, [entry?.id, innerMode])
+
+  // ── Quem deu baixa (pedido da Bruna, treinamento 18/09/2026) ───────────────
+  // `undefined` = ainda carregando · `null` = título sem baixa / sem ator.
+  const [settler, setSettler] = useState<{ label: string; source: string } | null | undefined>(undefined)
+  useEffect(() => {
+    if (!entry?.id || entry.status !== 'paid' || innerMode !== 'edit') { setSettler(null); return }
+    let cancelled = false
+    getEntrySettler(entry.id).then(res => {
+      if (cancelled) return
+      setSettler(res && 'error' in res ? null : res)
+    }).catch(() => { if (!cancelled) setSettler(null) })
+    return () => { cancelled = true }
+  }, [entry?.id, entry?.status, innerMode])
 
   // ── Campos da baixa ────────────────────────────────────────────────────────
   const [paymentDate,       setPaymentDate]        = useState(entry?.payment_date ?? todayStr())
@@ -131,6 +198,14 @@ export default function TituloModal({
   const discBaixa  = parseCurrency(discountBaixaStr)
   const interest   = parseCurrency(interestStr)
   const netAmount  = (entry?.amount ?? faceValue) - discBaixa + interest
+
+  /** Quanto passou do valor do título. Zero quando o campo está vazio. */
+  const sobra = (() => {
+    const t = amountReceivedStr.trim()
+    if (!t) return 0
+    const v = parseCurrency(t)
+    return Math.round(Math.max(0, v - netAmount) * 100) / 100
+  })()
 
   function handleAmountChange(e: React.ChangeEvent<HTMLInputElement>) {
     const raw = e.target.value.replace(/\D/g, '')
@@ -162,6 +237,9 @@ export default function TituloModal({
     if (amount <= 0)          { setError('Informe um valor válido.'); return }
     if (!dueDate)             { setError('Informe a data de vencimento.'); return }
     if (discount > amount)    { setError('Desconto não pode ser maior que o valor.'); return }
+    // Dono do título: é ele que diz A QUEM o título pertence, e sem ele não dá
+    // para emitir boleto (a receber) nem administrar o DDA (a pagar).
+    if (!ownerId)             { setError(`Informe o ${rotuloDono.toLowerCase()}.`); return }
 
     startTransition(async () => {
       const data = {
@@ -173,6 +251,7 @@ export default function TituloModal({
         issue_date:           issueDate || null,
         category:             category             || undefined,
         notes:                notes                || undefined,
+        ...(ehReceber ? { tutor_id: ownerId } : { supplier_id: ownerId, beneficiary: ownerName || undefined }),
         professional_id:      professionalId       || undefined,
         chart_of_accounts_id: chartAccountsId      || undefined,
       }
@@ -190,6 +269,12 @@ export default function TituloModal({
     setError(null)
     if (!paymentDate)   { setError('Informe a data de recebimento.'); return }
     if (!paymentMethod) { setError('Informe a modalidade de recebimento.'); return }
+    // Pagou mais que o título: o destino da diferença é decisão do operador,
+    // não um corte silencioso.
+    if (sobra > 0.005 && !excedente) {
+      setError(`O valor recebido é R$ ${sobra.toFixed(2).replace('.', ',')} maior que o do título. Escolha abaixo o que fazer com a diferença.`)
+      return
+    }
 
     // Confirmação extra para repasse Petlove
     if (entryContext?.confirm_kind === 'petlove_repass') {
@@ -202,6 +287,7 @@ export default function TituloModal({
       const rawAmount = amountReceivedStr.trim()
       const parsedAmount = rawAmount ? parseCurrency(rawAmount) : undefined
       const data: BaixarTituloData = {
+        ...(excedente ? { excedente } : {}),
         payment_date:        paymentDate,
         payment_method:      paymentMethod,
         settlement_bank_id:  settleBankId || undefined,
@@ -254,7 +340,7 @@ export default function TituloModal({
   const fc  = 'w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20'
   const lc  = 'block text-xs font-semibold text-slate-500 uppercase mb-1.5'
 
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
@@ -376,6 +462,20 @@ export default function TituloModal({
                       />
                     </div>
                   )}
+                  {/* Rastreabilidade da baixa (pedido da Bruna, 18/09/2026):
+                      qual operador deu baixa, sem sair da tela. */}
+                  {entry.status === 'paid' && (
+                    <div className="col-span-2">
+                      <label className={lc}>Baixa feita por</label>
+                      <input
+                        readOnly
+                        value={settler === undefined ? 'Carregando…' : (settler?.label ?? 'Não registrado')}
+                        className={`${fc} cursor-not-allowed bg-slate-100 ${
+                          settler && settler.source !== 'unknown' ? 'text-slate-600' : 'text-slate-400'
+                        }`}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -401,17 +501,74 @@ export default function TituloModal({
 
               {/* Pet/Tutor (display only se já vinculado) + Profissional */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {(entry?.tutor_name || entry?.patient_name) && (
-                  <div>
-                    <label className={lc}>Pet / Tutor</label>
-                    <input
-                      readOnly
-                      value={[entry.patient_name, entry.tutor_name].filter(Boolean).join(' · ')}
-                      className={`${fc} cursor-not-allowed bg-slate-100 text-slate-400`}
-                    />
-                  </div>
-                )}
-                <div className={(entry?.tutor_name || entry?.patient_name) ? '' : 'sm:col-span-2'}>
+                <div className="relative">
+                  <label className={lc}>{rotuloDono} <span className="text-rose-500">*</span></label>
+                  {ownerId ? (
+                    <div className="flex items-center gap-2">
+                      <input readOnly value={ownerName} className={`${fc} bg-slate-50`} />
+                      <button
+                        type="button"
+                        onClick={() => { setOwnerId(''); setOwnerName(''); setOwnerBusca(''); setAvisoPagador(null) }}
+                        className="shrink-0 rounded-lg border border-slate-200 px-2.5 py-2 text-xs text-slate-600 hover:bg-slate-50"
+                      >Trocar</button>
+                    </div>
+                  ) : (
+                    <>
+                      <input
+                        value={ownerBusca}
+                        onChange={e => { setOwnerBusca(e.target.value); setOwnerAberto(true) }}
+                        onFocus={() => setOwnerAberto(true)}
+                        placeholder={ehReceber ? 'Busque pelo nome do tutor…' : 'Busque pelo nome do fornecedor…'}
+                        className={fc}
+                      />
+                      {ownerAberto && ownerOpcoes.length > 0 && (
+                        <ul className="absolute z-20 mt-1 max-h-48 w-full overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+                          {ownerOpcoes.map(o => (
+                            <li key={o.id}>
+                              <button
+                                type="button"
+                                onClick={() => { setOwnerId(o.id); setOwnerName(o.name); setOwnerAberto(false); setOwnerOpcoes([]) }}
+                                className="block w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+                              >
+                                {o.name}
+                                {o.sub && <span className="ml-2 text-xs text-slate-400">{o.sub}</span>}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {ownerBusca.trim().length >= 2 && ownerOpcoes.length === 0 && (
+                        <p className="mt-1 text-xs text-slate-400">Nenhum resultado para “{ownerBusca.trim()}”.</p>
+                      )}
+                      {/* Venda no caixa para consumidor avulso: 360 dos 453
+                          títulos de produção são assim. Sem este atalho, a
+                          obrigatoriedade do dono travaria o PDV. */}
+                      {ehReceber && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const cf = await buscarConsumidorFinal()
+                            if (cf) { setOwnerId(cf.id); setOwnerName(cf.name); setOwnerAberto(false); setOwnerOpcoes([]) }
+                            else setError('Consumidor final não encontrado para esta clínica.')
+                          }}
+                          className="mt-1.5 text-xs font-medium text-teal-600 hover:text-teal-700 hover:underline"
+                        >Usar CONSUMIDOR FINAL (venda avulsa)</button>
+                      )}
+                    </>
+                  )}
+                  {entry?.patient_name && (
+                    <p className="mt-1 text-xs text-slate-400">Pet: {entry.patient_name}</p>
+                  )}
+                  {/* Manutenção preventiva: informa ANTES de mandar ao banco, para
+                      a correção já estar em andamento. NÃO trava o salvamento. */}
+                  {avisoPagador && (
+                    <p className="mt-1.5 flex items-start gap-1.5 rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800">
+                      <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span>{avisoPagador}</span>
+                    </p>
+                  )}
+                </div>
+                <div>
                   <label className={lc}>Profissional Responsável</label>
                   <select value={professionalId} onChange={e => setProfessionalId(e.target.value)} className={fc}>
                     <option value="">— Nenhum —</option>
@@ -580,6 +737,32 @@ export default function TituloModal({
                     placeholder={netAmount.toFixed(2).replace('.', ',')}
                     className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold font-mono tabular-nums focus:outline-none focus:ring-2 focus:ring-teal-500/30"
                   />
+                    {/* Excedente: antes a action cortava em silencio
+                        (Math.min com o valor do titulo) e o dinheiro a mais
+                        desaparecia. Agora o destino e declarado. */}
+                    {sobra > 0.005 && (
+                      <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5">
+                        <p className="text-xs font-semibold text-amber-900">
+                          Recebido R$ {sobra.toFixed(2).replace('.', ',')} acima do título. O que fazer com a diferença?
+                        </p>
+                        <div className="mt-1.5 flex flex-wrap gap-2">
+                          <button type="button" onClick={() => setExcedente('troco')}
+                            className={`rounded-md px-2.5 py-1 text-xs font-medium ${excedente === 'troco' ? 'bg-amber-600 text-white' : 'bg-white text-amber-800 border border-amber-300 hover:bg-amber-100'}`}>
+                            Dar troco
+                          </button>
+                          <button type="button" onClick={() => setExcedente('credito')}
+                            disabled={!ownerId}
+                            className={`rounded-md px-2.5 py-1 text-xs font-medium disabled:opacity-40 ${excedente === 'credito' ? 'bg-amber-600 text-white' : 'bg-white text-amber-800 border border-amber-300 hover:bg-amber-100'}`}>
+                            Lançar como crédito do cliente
+                          </button>
+                        </div>
+                        {!ownerId && (
+                          <p className="mt-1 text-[11px] text-amber-700">
+                            Crédito exige cliente informado no título — só troco está disponível.
+                          </p>
+                        )}
+                      </div>
+                    )}
                 </div>
                 {amountReceivedStr.trim() && parseCurrency(amountReceivedStr) < netAmount - 0.005 && (
                   <p className="mt-1.5 text-xs px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800">
@@ -750,6 +933,7 @@ export default function TituloModal({
           </div>
         )}
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }

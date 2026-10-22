@@ -2,11 +2,13 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { clinicFlowFlag, routineOffError } from '@/lib/clinic/flow-gate'
 import { revalidatePath } from 'next/cache'
 import { runMatchEngine, bulkCreatePatientsFromPetlove } from '@/lib/actions/petlove-matching'
 import { learnCoverageFromRemittance } from '@/lib/actions/insurance-coverage'
 import { normalizeServiceName, buildNormalizedNameIndex } from '@/lib/service-name-normalize'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface ApplyReconciliationResult {
@@ -73,6 +75,11 @@ async function getCtx(): Promise<ClinicCtx | { error: string }> {
   const { data: profile } = await admin
     .from('profiles').select('clinic_id').eq('id', user.id).single()
   if (!profile?.clinic_id) return { error: 'Perfil sem clínica vinculada.' }
+  // Gate da rotina (F-4): a tela já checa flow_config.usa_convenios; a action
+  // também precisa checar, senão uma chamada direta contorna o gate.
+  if (!(await clinicFlowFlag(admin, profile.clinic_id as string, 'usa_convenios'))) {
+    return routineOffError('A conciliação de convênios')
+  }
   return { supabase: admin, clinicId: profile.clinic_id, userId: user.id }
 }
 
@@ -206,7 +213,7 @@ export async function deleteRemittance(
     .delete()
     .eq('clinic_id', clinicId)
     .eq('id', remittanceId)
-  if (delRemErr) return { error: `Falha ao excluir remessa: ${delRemErr.message}` }
+  if (delRemErr) return { error: `Falha ao excluir remessa: ${mensagemErro(delRemErr, 'lib/actions/petlove-reconciliation.ts')}` }
 
   revalidatePath('/dashboard/financial/insurance-reconciliation')
   revalidatePath('/dashboard/financial')
@@ -311,7 +318,7 @@ export async function applyReconciliation(
     .select('id, match_status, matched_invoice_item_id, matched_patient_id, matched_tutor_id, repass_value, coparticipation_value, procedure_name_raw, plan_name_raw, service_date, external_appointment_id, microchip_raw, pet_name_raw, tutor_name_raw')
     .eq('clinic_id', clinicId)
     .eq('remittance_id', remittanceId)
-  if (linesErr) return { error: linesErr.message }
+  if (linesErr) return { error: mensagemErro(linesErr, 'lib/actions/petlove-reconciliation.ts') }
   if (!lines || lines.length === 0) return { error: 'Remessa sem linhas para conciliar.' }
 
   // Log de auto-criação de pets (issue 3: histórico no perfil)

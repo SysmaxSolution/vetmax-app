@@ -7,7 +7,7 @@ import {
   Home, Stethoscope, TestTubes, Users, BarChart3, PawPrint,
   BedDouble, Package, Scissors, Banknote, FolderKanban, MessageCircle,
   MessageSquare, ShoppingCart, ClipboardList, DollarSign, FileBarChart2,
-  FileText, Syringe,
+  FileText, Syringe, ScanLine, GraduationCap,
 } from 'lucide-react'
 import type { UserRole } from '@/types'
 import type { UpgradeFeatureKey } from '@/components/upgrade/UpgradeModal'
@@ -51,6 +51,7 @@ export const NAV_LINKS: NavLink[] = [
   { label: 'Triagem',      href: '/dashboard/triage',          icon: Users,         roles: ['assistant','admin'],                      moduleKey: 'triage'          },
   { label: 'Consultório',  href: '/dashboard/vet',             icon: Stethoscope,   roles: ['vet','admin'],                            moduleKey: 'consultation'    },
   { label: 'Exames',       href: '/dashboard/exams',           icon: TestTubes,     roles: ['assistant','vet','admin'],                moduleKey: 'exams'           },
+  { label: 'Imagem',       href: '/dashboard/imaging',         icon: ScanLine,      roles: ['assistant','vet','admin'],                moduleKey: 'exams'           },
   { label: 'Internação',   href: '/dashboard/hospitalization', icon: BedDouble,     roles: ['vet','admin','assistant'],                moduleKey: 'hospitalization' },
   { label: 'Centro Cirúrgico', href: '/dashboard/surgery',     icon: Syringe,       roles: ['vet','admin','assistant'],                moduleKey: 'surgery'         },
   { label: 'Banho e Tosa', href: '/dashboard/grooming',        icon: Scissors,      roles: ['receptionist','admin','assistant'],       moduleKey: 'grooming'        },
@@ -64,6 +65,8 @@ export const NAV_LINKS: NavLink[] = [
   { label: 'Gestão',       href: '/dashboard/management',      icon: BarChart3,     roles: ['admin']                                                                },
   { label: 'WhatsApp',     href: '/dashboard/whatsapp',        icon: MessageCircle, roles: ['receptionist','admin','vet','assistant'], moduleKey: 'whatsapp_intelligent' },
   { label: 'Chat Interno', href: '/dashboard/internal-chat',   icon: MessageSquare, roles: ['receptionist','admin','vet','assistant'], moduleKey: 'internal_chat' },
+  { label: 'Portal (Tutores)', href: '/dashboard/portal-mensagens', icon: MessageCircle, roles: ['receptionist','admin','vet','assistant'], moduleKey: 'reception' },
+  { label: 'Treinamento',  href: '/dashboard/treinamento',     icon: GraduationCap, roles: ['receptionist','admin','vet','assistant'], id: 'nav-treinamento' },
 ]
 
 // ─── Regras de visibilidade/lock ─────────────────────────────────────────────
@@ -76,6 +79,12 @@ export interface NavContext {
   isSysmax:        boolean
   centroCirurgico: boolean
   pdvUnified:      boolean
+  /** flow_config.usa_treinamento — liga a Academia de Treinamento no menu. */
+  usaTreinamento:  boolean
+  /** flow_config.usa_imagem — liga o módulo de Imagem/DICOM no menu. Padrão: false. */
+  usaImagem?:      boolean
+  /** flow_config.portal_enabled — liga o Portal (Tutores) no menu. Padrão: false. */
+  portalEnabled?:  boolean
 }
 
 /**
@@ -94,6 +103,17 @@ export function getVisibleNavLinks(ctx: NavContext): NavLink[] {
     // Centro Cirúrgico é gated pela feature flag flow_config.centro_cirurgico,
     // não por active_modules — só aparece quando a clínica o ativou.
     if (link.href === '/dashboard/surgery') return ctx.centroCirurgico
+    // Treinamento é gated pela flag flow_config.usa_treinamento (Gestão >
+    // Configurações). SysMax (suporte) sempre vê. Só aparece quando ativado.
+    if (link.href === '/dashboard/treinamento') return ctx.usaTreinamento || ctx.isSysmax
+    // Tarefa 0 — rotinas novas têm flag PRÓPRIA (flow_config), não herdam mais
+    // 'exams'/'reception'. Padrão desligado: some do menu até a Sysmax ativar.
+    // Imagem continua exigindo o módulo pago Exames ALÉM da flag.
+    if (link.href === '/dashboard/imaging') {
+      if (!ctx.usaImagem) return false
+      return !ctx.activeModules || ctx.activeModules.includes('exams')
+    }
+    if (link.href === '/dashboard/portal-mensagens') return ctx.portalEnabled === true
     // Épico B (04/06, Q4): PDV unificado ao Caixa — módulo some do menu;
     // a venda avulsa vive em Caixa > Recebimentos.
     if (link.href === '/dashboard/sales' && ctx.pdvUnified) return false

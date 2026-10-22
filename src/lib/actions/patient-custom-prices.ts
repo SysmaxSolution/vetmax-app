@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface PatientCustomPrice {
@@ -93,7 +94,7 @@ export async function getPetlovePatientHistory(
     .order('created_at', { ascending: false })
     .limit(50)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/patient-custom-prices.ts') }
   return (data ?? []).map(r => ({
     id:          r.id,
     event_type:  r.event_type as PetlovePatientHistoryEvent['event_type'],
@@ -127,7 +128,7 @@ export async function getCustomPricesForPatient(
     .eq('patient_id', patientId)
     .order('last_seen_at', { ascending: false })
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/patient-custom-prices.ts') }
 
   return (data ?? []).map(row => {
     const stockItems = row.stock_items as unknown as { name: string } | null
@@ -198,7 +199,7 @@ export async function upsertPatientCustomPrice(input: {
     .select('id')
     .single()
 
-  if (error || !data) return { error: 'Erro ao salvar preço: ' + (error?.message ?? '') }
+  if (error || !data) return { error: 'Erro ao salvar preço: ' + ((error ? mensagemErro(error, 'lib/actions/patient-custom-prices.ts') : '')) }
 
   try {
     await supabase.from('patient_petlove_history').insert({
@@ -234,7 +235,7 @@ export async function deletePatientCustomPrice(
     .eq('id', customPriceId)
     .eq('clinic_id', clinicId)
 
-  if (error) return { error: 'Erro ao remover preço: ' + error.message }
+  if (error) return { error: 'Erro ao remover preço: ' + mensagemErro(error, 'lib/actions/patient-custom-prices.ts') }
   return { success: true }
 }
 
@@ -275,7 +276,7 @@ export async function listClinicServicesForCustomPricing(): Promise<CatalogServi
       .eq('is_service', true)
       .is('archived_at', null)
       .order('name', { ascending: true })
-    if (err2 || !fb) return { error: err2?.message ?? error.message }
+    if (err2 || !fb) return { error: mensagemErro(err2, 'lib/actions/patient-custom-prices.ts') ?? mensagemErro(error, 'lib/actions/patient-custom-prices.ts') }
     return fb.map((r: any) => ({
       id:                      r.id,
       name:                    r.name,
@@ -317,7 +318,7 @@ export async function suggestPriceForPatientItem(
     .eq('stock_item_id', stockItemId)
     .maybeSingle()
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/patient-custom-prices.ts') }
   if (!data) return null
 
   const provider = data.insurance_providers as unknown as { name: string } | null

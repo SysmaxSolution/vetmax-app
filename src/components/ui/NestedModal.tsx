@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 
 /**
@@ -47,9 +48,9 @@ export default function NestedModal({ open, onClose, title, children, maxWidth =
     }
   }, [open, onClose])
 
-  if (!open) return null
+  if (!open || typeof document === 'undefined') return null
 
-  return (
+  return createPortal(
     <div
       role="dialog" aria-modal="true" data-testid={testId}
       className="fixed inset-0 z-[10100] flex items-center justify-center bg-slate-900/55 backdrop-blur-sm p-3"
@@ -64,6 +65,7 @@ export default function NestedModal({ open, onClose, title, children, maxWidth =
         </div>
         <div className="flex-1 overflow-y-auto p-4">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

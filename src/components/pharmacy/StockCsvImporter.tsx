@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { Upload, Download, X, AlertTriangle, Check, Loader2, FileText } from 'lucide-react'
 import { bulkImportStockItems, type BulkImportRow } from '@/lib/actions/stock'
 import { PRODUCT_CATEGORIES, SERVICE_CATEGORIES, type StockCategory } from '@/lib/stock-constants'
@@ -201,7 +202,9 @@ export default function StockCsvImporter({ mode, onDone, onClose }: Props) {
     onDone(res.inserted)
   }
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="w-full max-w-2xl bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh] animate-scale-in">
@@ -338,6 +341,7 @@ export default function StockCsvImporter({ mode, onDone, onClose }: Props) {
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

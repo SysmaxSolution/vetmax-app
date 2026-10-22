@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Loader2, Plus, Trash2, PackagePlus } from 'lucide-react'
 import { createManualPurchaseOrder, type ManualPurchaseItem, type PurchaseOrder } from '@/lib/actions/purchases'
 import type { Supplier } from '@/lib/actions/suppliers'
@@ -91,7 +92,9 @@ export default function ManualEntryModal({ suppliers, onClose, onSuccess }: Prop
     })
   }
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -265,6 +268,7 @@ export default function ManualEntryModal({ suppliers, onClose, onSuccess }: Prop
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

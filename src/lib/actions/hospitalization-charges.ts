@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { logAudit } from './audit'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
 export type ChargeKind = 'daily' | 'medication' | 'kit' | 'procedure' | 'exam' | 'other'
@@ -68,7 +69,7 @@ export async function getHospitalizationAccount(hospitalizationId: string): Prom
     .neq('status', 'void')
     .order('charged_at', { ascending: false })
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/hospitalization-charges.ts') }
 
   const charges = (data ?? []).map((r): HospCharge => ({
     id:          r.id as string,
@@ -104,7 +105,7 @@ export async function getOpenBalances(hospitalizationIds: string[]): Promise<Rec
     .eq('status', 'open')
     .in('hospitalization_id', hospitalizationIds)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/hospitalization-charges.ts') }
   const map: Record<string, number> = {}
   for (const id of hospitalizationIds) map[id] = 0
   for (const r of data ?? []) {
@@ -148,7 +149,7 @@ export async function addManualCharge(payload: {
     .select('id')
     .single()
 
-  if (error) return { error: 'Erro ao lançar item: ' + error.message }
+  if (error) return { error: 'Erro ao lançar item: ' + mensagemErro(error, 'lib/actions/hospitalization-charges.ts') }
   revalidatePath('/dashboard/hospitalization')
   return { id: data.id as string }
 }
@@ -162,7 +163,7 @@ export async function voidCharge(id: string): Promise<{ success: true } | { erro
     .update({ status: 'void' })
     .eq('id', id)
     .eq('clinic_id', ctx.clinicId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/hospitalization-charges.ts') }
   revalidatePath('/dashboard/hospitalization')
   return { success: true }
 }
@@ -196,7 +197,7 @@ export async function settleHospitalizationAccount(
     .eq('status', 'open')
     .select('id, amount')
 
-  if (error) return { error: 'Erro ao liquidar conta: ' + error.message }
+  if (error) return { error: 'Erro ao liquidar conta: ' + mensagemErro(error, 'lib/actions/hospitalization-charges.ts') }
 
   const settled = data ?? []
   const totalAmount = settled.reduce((sum, r) => sum + Number(r.amount ?? 0), 0)
@@ -272,7 +273,7 @@ export async function giveMedicalDischarge(hospitalizationId: string): Promise<{
     .eq('id', hospitalizationId)
     .eq('clinic_id', ctx.clinicId)
 
-  if (error) return { error: 'Erro ao dar alta médica: ' + error.message }
+  if (error) return { error: 'Erro ao dar alta médica: ' + mensagemErro(error, 'lib/actions/hospitalization-charges.ts') }
 
   await admin.from('hospitalization_records').insert({
     hospitalization_id: hospitalizationId,

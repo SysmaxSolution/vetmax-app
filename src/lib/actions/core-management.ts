@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type CentralCashierEntry = {
@@ -91,7 +92,7 @@ export async function recordCashierEntry(data: {
     .select('id')
     .single()
 
-  if (error) return { error: `Erro ao registrar: ${error.message}` }
+  if (error) return { error: `Erro ao registrar: ${mensagemErro(error, 'lib/actions/core-management.ts')}` }
 
   revalidatePath('/dashboard/cashier')
   return { id: result.id }
@@ -132,7 +133,7 @@ export async function listCashierEntries(filters?: {
 
   const { data, error } = await query.order('created_at', { ascending: false }).limit(500)
 
-  if (error) return { error: `Erro ao listar: ${error.message}` }
+  if (error) return { error: `Erro ao listar: ${mensagemErro(error, 'lib/actions/core-management.ts')}` }
 
   return data || []
 }
@@ -170,8 +171,8 @@ export async function getCashierSummary(period: {
       .lte('created_at', toEnd),
   ])
 
-  if (entriesRes.error) return { error: `Erro ao buscar: ${entriesRes.error.message}` }
-  if (outflowsRes.error) return { error: `Erro ao buscar saídas: ${outflowsRes.error.message}` }
+  if (entriesRes.error) return { error: `Erro ao buscar: ${mensagemErro(entriesRes.error, 'lib/actions/core-management.ts')}` }
+  if (outflowsRes.error) return { error: `Erro ao buscar saídas: ${mensagemErro(outflowsRes.error, 'lib/actions/core-management.ts')}` }
 
   const entries  = entriesRes.data || []
   const outflows = outflowsRes.data || []
@@ -222,7 +223,7 @@ export async function verifyCashierEntry(entryId: string): Promise<{ success: tr
     .eq('id', entryId)
     .eq('clinic_id', ctx.clinic_id)
 
-  if (error) return { error: `Erro ao verificar: ${error.message}` }
+  if (error) return { error: `Erro ao verificar: ${mensagemErro(error, 'lib/actions/core-management.ts')}` }
 
   revalidatePath('/dashboard/cashier')
   return { success: true }
@@ -257,7 +258,7 @@ export async function receiveCashierEntry(
     .eq('clinic_id', ctx.clinic_id)
     .eq('status', 'pending')
 
-  if (error) return { error: `Erro ao receber: ${error.message}` }
+  if (error) return { error: `Erro ao receber: ${mensagemErro(error, 'lib/actions/core-management.ts')}` }
 
   revalidatePath('/dashboard/cashier')
   return { success: true }
@@ -284,7 +285,7 @@ export async function listPendingHospCashier(): Promise<CentralCashierEntry[] | 
     .in('source_module', ['hospitalization', 'surgery'])
     .order('created_at', { ascending: false })
 
-  if (error) return { error: `Erro ao listar: ${error.message}` }
+  if (error) return { error: `Erro ao listar: ${mensagemErro(error, 'lib/actions/core-management.ts')}` }
   return data || []
 }
 
@@ -306,7 +307,7 @@ export async function archiveCashierEntry(entryId: string): Promise<{ success: t
     .eq('id', entryId)
     .eq('clinic_id', ctx.clinic_id)
 
-  if (error) return { error: `Erro ao arquivar: ${error.message}` }
+  if (error) return { error: `Erro ao arquivar: ${mensagemErro(error, 'lib/actions/core-management.ts')}` }
 
   revalidatePath('/dashboard/cashier')
   return { success: true }

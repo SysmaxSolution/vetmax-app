@@ -97,6 +97,11 @@ export default function PetTimelineModal({
     return () => window.removeEventListener('afterprint', handler)
   }, [])
 
+  useEffect(() => {
+    document.body.classList.toggle('print-mode-isolate', !!printData)
+    return () => document.body.classList.remove('print-mode-isolate')
+  }, [printData])
+
   // Aciona impressão
   const handlePrint = (data: PrintState) => {
     setPrintData(data)
@@ -267,6 +272,7 @@ export default function PetTimelineModal({
       {printPortal}
 
       {/* Backdrop */}
+      {typeof document !== 'undefined' && createPortal(
       <div
         className="fixed inset-0 z-50 bg-black/50 flex items-start justify-center pt-4 pb-4 px-4 overflow-y-auto overflow-x-hidden"
         onClick={e => { if (e.target === e.currentTarget) onClose() }}
@@ -356,7 +362,9 @@ export default function PetTimelineModal({
             )}
           </div>
         </div>
-      </div>
+      </div>,
+      document.body,
+      )}
 
       {/* Novo Agendamento */}
       {showSchedule && (

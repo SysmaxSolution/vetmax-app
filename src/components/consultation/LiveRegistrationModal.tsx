@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { ExtractedData, ExtractedVaccine } from '@/lib/actions/ai_extraction'
 
 interface Props {
@@ -42,7 +43,7 @@ export function LiveRegistrationModal({ extractedData, onSave, onClose }: Props)
 
   const hasSelection = selectedVaccines.size > 0 || selectedBehaviors.size > 0
 
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 animate-scale-in">
         {/* Header */}
@@ -136,6 +137,7 @@ export function LiveRegistrationModal({ extractedData, onSave, onClose }: Props)
           </button>
         </div>
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }

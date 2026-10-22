@@ -11,6 +11,7 @@
  */
 
 import { useEffect, useMemo, useState, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import { ArrowLeft, FileText, Image as ImageIcon, Layers, Loader2, Search, Sparkles, X } from 'lucide-react'
 import {
   createCanvasTemplateFromExisting,
@@ -87,7 +88,9 @@ export default function InheritTemplatePicker({ name, type, onBack, onClose, onC
     })
   }
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-6 backdrop-blur-sm">
       <div className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-2xl bg-white shadow-2xl" onClick={e => e.stopPropagation()}>
         <header className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
@@ -244,6 +247,7 @@ export default function InheritTemplatePicker({ name, type, onBack, onClose, onC
           </div>
         </footer>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

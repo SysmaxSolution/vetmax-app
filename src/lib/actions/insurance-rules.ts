@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type RuleType =
@@ -55,7 +56,7 @@ export async function getInsuranceRules(providerId: string): Promise<InsuranceRu
     .eq('clinic_id', clinicId)
     .order('procedure_name')
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/insurance-rules.ts') }
   return data ?? []
 }
 
@@ -88,7 +89,7 @@ export async function createInsuranceRule(input: {
     .select('id')
     .single()
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/insurance-rules.ts') }
   revalidatePath('/dashboard/settings/insurance')
   return { id: data.id }
 }
@@ -113,7 +114,7 @@ export async function updateInsuranceRule(
     .update({ ...input, updated_at: new Date().toISOString() })
     .eq('id', id)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/insurance-rules.ts') }
   revalidatePath('/dashboard/settings/insurance')
   return { success: true }
 }
@@ -128,7 +129,7 @@ export async function deleteInsuranceRule(id: string): Promise<{ success: true }
     .delete()
     .eq('id', id)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/insurance-rules.ts') }
   revalidatePath('/dashboard/settings/insurance')
   return { success: true }
 }

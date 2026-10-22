@@ -1,0 +1,17 @@
+# Nunca publicar o runtime do agente de laboratório.
+#
+# `public/lab-agent/node.exe` (~80 MB) era baixado pelos instaladores a partir
+# do NOSSO deploy — cada instalação queimava 80 MB de transferência e ajudou a
+# estourar o limite da conta (FAIR_USE_LIMITS_EXCEEDED / fastOriginTransfer).
+# O install.ps1 passou a baixar da fonte oficial (nodejs.org). Este ignore é a
+# garantia de que o binário não volta ao bundle nem por engano — vale mesmo
+# que alguém crie a pasta localmente (ela já está no .gitignore).
+public/lab-agent/
+public/lab-agent
+
+# Artefatos locais que não têm por que subir no deploy.
+anexos/
+maintenance/logs/
+integracoes/
+playwright-report/
+test-results/

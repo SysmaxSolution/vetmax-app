@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { CONSENT_VERSION, isConsentStale } from '@/lib/consent-version'
 import type { CreateTutorPayload, CreatePatientPayload } from '@/types'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Busca inteligente: CPF do Tutor, Nome do Tutor ou Nome do Pet ────────────
 export type SearchResult = {
   type: 'tutor_with_patients'
@@ -93,7 +94,7 @@ export async function searchTutorsAndPatients(
     .in('id', tutorIds)
     .order('name')
 
-  if (error || !tutors) return { error: 'Erro na busca: ' + error?.message }
+  if (error || !tutors) return { error: 'Erro na busca: ' + mensagemErro(error, 'lib/actions/tutors.ts') }
 
   const { data: allPatients } = await admin
     .from('patients')
@@ -233,7 +234,7 @@ export async function registerTutorAndPet(
       .upsert(tutorRow, { onConflict: 'clinic_id,cpf' })
       .select('id')
       .single()
-    if (tutorErr || !data) return { error: 'Erro ao salvar Tutor: ' + (tutorErr?.message ?? '') }
+    if (tutorErr || !data) return { error: 'Erro ao salvar Tutor: ' + ((tutorErr ? mensagemErro(tutorErr, 'lib/actions/tutors.ts') : '')) }
     tutor = data
   } else {
     const { data, error: tutorErr } = await admin
@@ -241,7 +242,7 @@ export async function registerTutorAndPet(
       .insert(tutorRow)
       .select('id')
       .single()
-    if (tutorErr || !data) return { error: 'Erro ao salvar Tutor: ' + (tutorErr?.message ?? '') }
+    if (tutorErr || !data) return { error: 'Erro ao salvar Tutor: ' + ((tutorErr ? mensagemErro(tutorErr, 'lib/actions/tutors.ts') : '')) }
     tutor = data
   }
 
@@ -271,7 +272,7 @@ export async function registerTutorAndPet(
     .select('id')
     .single()
 
-  if (patErr || !patient) return { error: 'Erro ao salvar Pet: ' + (patErr?.message ?? '') }
+  if (patErr || !patient) return { error: 'Erro ao salvar Pet: ' + ((patErr ? mensagemErro(patErr, 'lib/actions/tutors.ts') : '')) }
 
   return { tutorId: tutor.id, patientId: patient.id }
 }
@@ -319,7 +320,7 @@ export async function addPatientToTutor(
     .select('id')
     .single()
 
-  if (error || !patient) return { error: 'Erro ao adicionar Pet: ' + (error?.message ?? '') }
+  if (error || !patient) return { error: 'Erro ao adicionar Pet: ' + ((error ? mensagemErro(error, 'lib/actions/tutors.ts') : '')) }
   return { id: patient.id }
 }
 
@@ -348,7 +349,7 @@ export async function recordConsent(
     p_consent_version: CONSENT_VERSION,
   })
 
-  if (error) return { error: 'Erro ao registrar consentimento: ' + error.message }
+  if (error) return { error: 'Erro ao registrar consentimento: ' + mensagemErro(error, 'lib/actions/tutors.ts') }
   return { success: true, historyId: data?.history_id ?? '' }
 }
 
@@ -384,4 +385,32 @@ export async function getTutorConsentStatus(
     consentGiven: !!data.consent_given,
     consentVersion: data.consent_version ?? null,
   }
+}
+
+/**
+ * O cliente avulso da clínica (CONSUMIDOR FINAL), criado pela migration 0495.
+ *
+ * Existe porque o título a receber passou a exigir o dono, e 360 dos 453
+ * títulos de produção vêm de venda no caixa para consumidor avulso — que
+ * legitimamente não tem tutor cadastrado. O endereço dele é o da clínica.
+ *
+ * Não serve para boleto: o CPF 11111111111 é convenção de NF-e para
+ * consumidor anônimo e não passa no dígito verificador. O aviso do pagador
+ * diz isso ao usuário.
+ */
+export async function buscarConsumidorFinal(): Promise<{ id: string; name: string } | null> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+  const { data: profile } = await supabase.from('profiles').select('clinic_id').eq('id', user.id).single()
+  if (!profile?.clinic_id) return null
+
+  const { data } = await supabase
+    .from('tutors')
+    .select('id, name')
+    .eq('clinic_id', profile.clinic_id)
+    .eq('is_walk_in', true)
+    .limit(1)
+    .maybeSingle()
+  return data ? { id: data.id as string, name: data.name as string } : null
 }

@@ -65,32 +65,32 @@ export default function PetFrequencyReport() {
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">De</label>
           <input type="date" value={from} onChange={e => setFrom(e.target.value)}
-            className="w-full sm:w-auto rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            className="w-full sm:w-auto rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Até</label>
           <input type="date" value={to} onChange={e => setTo(e.target.value)}
-            className="w-full sm:w-auto rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            className="w-full sm:w-auto rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Espécie</label>
           <select value={species} onChange={e => setSpecies(e.target.value)}
-            className="w-full sm:w-auto rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+            className="w-full sm:w-auto rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
             {SPECIES_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Raça</label>
           <input type="text" placeholder="Todas" value={breed} onChange={e => setBreed(e.target.value)}
-            className="w-full sm:w-36 rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            className="w-full sm:w-36 rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
         </div>
         <button onClick={run} disabled={pending}
-          className="rounded-lg bg-violet-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50 transition-colors">
+          className="rounded-lg bg-teal-600 px-4 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 disabled:opacity-60 transition-colors">
           {pending ? 'Carregando…' : 'Gerar'}
         </button>
         {rows && rows.length > 0 && (
           <button onClick={() => exportCSV(rows)}
-            className="rounded-lg border border-violet-200 px-4 py-1.5 text-sm font-medium text-violet-700 hover:bg-violet-50 transition-colors">
+            className="rounded-lg border border-slate-200 px-4 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
             Exportar CSV
           </button>
         )}
@@ -101,7 +101,7 @@ export default function PetFrequencyReport() {
       )}
 
       {rows === null && !pending && (
-        <div className="rounded-lg bg-violet-50 border border-violet-100 px-4 py-8 text-center text-sm text-violet-500">
+        <div className="rounded-xl bg-slate-50 border border-slate-200 px-4 py-8 text-center text-sm text-slate-500">
           Selecione o período e clique em Gerar para visualizar o relatório.
         </div>
       )}
@@ -109,10 +109,10 @@ export default function PetFrequencyReport() {
       {rows !== null && (
         <div className="overflow-x-auto rounded-xl border border-slate-200">
           <table className="w-full text-sm">
-            <thead className="bg-violet-50">
+            <thead className="bg-slate-50">
               <tr>
                 {['Pet', 'Espécie', 'Raça', 'Tutor', 'Telefone', 'Consultas', 'Última Visita'].map(h => (
-                  <th key={h} className="px-4 py-3 text-left font-semibold text-violet-800 text-xs uppercase tracking-wide">{h}</th>
+                  <th key={h} className="px-4 py-3 text-left font-semibold text-slate-500 text-xs uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -122,18 +122,18 @@ export default function PetFrequencyReport() {
                   <td colSpan={7} className="px-4 py-8 text-center text-slate-400">Nenhum dado encontrado para o período.</td>
                 </tr>
               ) : rows.map(r => (
-                <tr key={r.pet_id} className="hover:bg-violet-50/40 transition-colors">
+                <tr key={r.pet_id} className="hover:bg-slate-50 transition-colors">
                   <td className="px-4 py-2.5 font-medium text-slate-800">{r.pet_name}</td>
                   <td className="px-4 py-2.5 text-slate-600">{speciesLabel(r.species)}</td>
                   <td className="px-4 py-2.5 text-slate-600">{r.breed ?? '—'}</td>
                   <td className="px-4 py-2.5 text-slate-700">{r.tutor_name}</td>
-                  <td className="px-4 py-2.5 text-slate-600">{r.tutor_phone ?? '—'}</td>
+                  <td className="px-4 py-2.5 text-slate-600 font-mono tabular-nums">{r.tutor_phone ?? '—'}</td>
                   <td className="px-4 py-2.5">
-                    <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-violet-100 text-violet-800 font-bold text-sm">
+                    <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-teal-100 text-teal-700 font-bold text-sm font-mono tabular-nums">
                       {r.consult_count}
                     </span>
                   </td>
-                  <td className="px-4 py-2.5 text-slate-600">{fmtDate(r.last_visit)}</td>
+                  <td className="px-4 py-2.5 text-slate-600 font-mono tabular-nums">{fmtDate(r.last_visit)}</td>
                 </tr>
               ))}
             </tbody>

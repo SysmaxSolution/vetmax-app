@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Loader2, Plus, Trash2, FileStack, Zap, ChevronLeft } from 'lucide-react'
 import {
   listPrescriptionTemplates, createPrescriptionTemplate, deletePrescriptionTemplate,
@@ -117,7 +118,7 @@ export default function ProtocolPicker({ hospitalizationId, onClose, onApplied }
     await reload()
   }
 
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div
       role="dialog" aria-modal="true"
       className="fixed inset-0 z-[10001] flex items-center justify-center bg-slate-900/65 p-3 sm:p-4 overflow-y-auto"
@@ -250,6 +251,7 @@ export default function ProtocolPicker({ hospitalizationId, onClose, onApplied }
           <button onClick={onClose} className="ml-auto rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">Fechar</button>
         </div>
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }

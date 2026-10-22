@@ -1,6 +1,7 @@
 ﻿'use client'
 
 import { useState, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import {
   ToggleLeft, ToggleRight, Loader2, Save, Shield, AlertTriangle, Eye, EyeOff,
   Lock, CheckCircle2,
@@ -62,7 +63,7 @@ const MODULES: ModuleDef[] = [
   { key: 'sales',                label: 'Vendas (PDV)',               desc: 'Ponto de venda, carrinho e recibos',                                       icon: <ShoppingCart   className="h-5 w-5" />, color: 'text-emerald-600 bg-emerald-50' },
   { key: 'financial',            label: 'Financeiro',                 desc: 'Contas a pagar e receber, extrato e conciliação bancária',                  icon: <DollarSign     className="h-5 w-5" />, color: 'text-teal-600 bg-teal-50'      },
   { key: 'billing',              label: 'Faturamento',                desc: 'Orçamentos de serviços e NFS-e (documentos comerciais)',                    icon: <FileText       className="h-5 w-5" />, color: 'text-green-600 bg-green-50'    },
-  { key: 'petlove_reconciliation', label: 'Conciliação Petlove',      desc: 'Importação de remessas Petlove, conciliação ativa e bulk register de pets', icon: <PawPrint       className="h-5 w-5" />, color: 'text-purple-600 bg-purple-50'  },
+  { key: 'petlove_reconciliation', label: 'Conciliação de Convênios',  desc: 'Importação de remessas de convênios, conciliação de repasses e cadastro de pets em massa', icon: <PawPrint       className="h-5 w-5" />, color: 'text-purple-600 bg-purple-50'  },
   { key: 'reports',              label: 'Relatórios',                 desc: 'DRE, Curva ABC, produtividade e relatórios operacionais',                   icon: <FileBarChart2  className="h-5 w-5" />, color: 'text-violet-600 bg-violet-50'  },
   { key: 'whatsapp',             label: 'WhatsApp',                   desc: 'Notificações e mensagens via WhatsApp',                                     icon: <MessageCircle  className="h-5 w-5" />, color: 'text-green-600 bg-green-50'    },
   { key: 'whatsapp_intelligent', label: 'WhatsApp Inteligente (Bot)', desc: 'Bot IA responde, agenda consultas e faz campanhas de reativação',          icon: <Bot            className="h-5 w-5" />, color: 'text-emerald-600 bg-emerald-50' },
@@ -206,7 +207,7 @@ export default function ModulesTab({
   return (
     <div className="space-y-4">
       {/* Master Key Modal */}
-      {pendingToggle && pendingMod && (
+      {pendingToggle && pendingMod && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div
             id="master-key-dialog"
@@ -214,7 +215,7 @@ export default function ModulesTab({
             role="dialog"
             aria-modal="true"
             aria-label="Alteração com Master Key"
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6"
+            className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 animate-scale-in"
           >
             <div className="flex items-center gap-3 mb-4">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100">
@@ -281,7 +282,8 @@ export default function ModulesTab({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {/* Modules grid */}
@@ -364,7 +366,7 @@ export default function ModulesTab({
                     id={`module-toggle-${mod.key}`}
                     data-testid={`module-toggle-${mod.key}`}
                     onClick={() => requestToggle(mod)}
-                    className="flex-shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-violet-600 hover:bg-violet-700 px-3 py-1.5 text-xs font-bold text-white transition-colors shadow-sm"
+                    className="flex-shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 px-3 py-1.5 text-xs font-bold text-white transition-colors shadow-sm"
                     title="Disponível no Plano Pro — clique para falar com a Sysmax Solutions"
                   >
                     <Lock className="h-3 w-3" /> Ativar

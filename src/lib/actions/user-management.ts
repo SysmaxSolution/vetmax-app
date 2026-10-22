@@ -4,6 +4,8 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
+import { urlAssinatura, caminhoAssinatura, BUCKET_ASSINATURAS } from '@/lib/storage/assinatura'
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
 export interface ClinicUserFull {
@@ -21,6 +23,7 @@ export interface ClinicUserFull {
   is_active:                   boolean | null
   room:                        string | null
   electronic_signature_url:    string | null
+  electronic_signature_path?:   string | null
   appointment_interval_minutes: number | null
 }
 
@@ -83,7 +86,7 @@ export async function adminUpdateUser(
     .eq('id', userId)
     .eq('clinic_id', profile.clinic_id)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/user-management.ts') }
   revalidatePath('/dashboard/management')
   return { success: true }
 }
@@ -118,7 +121,7 @@ export async function adminChangePassword(
   if (!targetProfile) return { error: 'Usuário não encontrado nesta clínica.' }
 
   const { error } = await admin.auth.admin.updateUserById(targetUserId, { password: newPassword })
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/user-management.ts') }
   return { success: true }
 }
 
@@ -145,19 +148,26 @@ export async function uploadUserSignature(
   if (file.size > 2 * 1024 * 1024) return { error: 'Arquivo muito grande (máx 2MB).' }
 
   const ext = file.name.split('.').pop()?.toLowerCase() ?? 'png'
-  const path = `${profile.clinic_id}/${userId}/signature.${ext}`
+  const path = caminhoAssinatura(profile.clinic_id as string, userId, ext)
 
   const admin = createAdminClient()
   const { error: upErr } = await admin.storage
-    .from('user-signatures')
+    .from(BUCKET_ASSINATURAS)
     .upload(path, file, { upsert: true, contentType: file.type })
-  if (upErr) return { error: upErr.message }
+  if (upErr) return { error: mensagemErro(upErr, 'lib/actions/user-management.ts') }
 
-  const { data: { publicUrl } } = admin.storage.from('user-signatures').getPublicUrl(path)
+  // Grava o CAMINHO, nao a URL. O bucket e privado desde a 0499: `getPublicUrl`
+  // devolvia um endereco permanente e adivinhavel para a assinatura do MV.
+  // A URL legada e limpa para nao sobrar endereco morto apontando para o bucket.
+  await admin.from('profiles')
+    .update({ electronic_signature_path: path, electronic_signature_url: null })
+    .eq('id', userId)
 
-  await admin.from('profiles').update({ electronic_signature_url: publicUrl }).eq('id', userId)
   revalidatePath('/dashboard/management')
-  return { url: publicUrl }
+
+  const url = await urlAssinatura({ electronic_signature_path: path })
+  if (!url) return { error: 'Assinatura salva, mas nao foi possivel gerar o link de exibicao. Recarregue a tela.' }
+  return { url }
 }
 
 // ─── RBAC por Módulo (G-08) ───────────────────────────────────────────────────
@@ -188,7 +198,7 @@ export async function getUserModuleAccess(
     .eq('clinic_id', profile.clinic_id)
     .eq('user_id', targetUserId)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/user-management.ts') }
   return (data ?? []) as UserModuleAccessRow[]
 }
 
@@ -217,7 +227,7 @@ export async function setUserModuleAccess(
       { onConflict: 'clinic_id,user_id,module_name' }
     )
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/user-management.ts') }
   revalidatePath('/dashboard/management')
   return { success: true }
 }
@@ -248,7 +258,7 @@ export async function updateUserPhone(
     .eq('id', userId)
     .eq('clinic_id', profile.clinic_id)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/user-management.ts') }
   revalidatePath('/dashboard/management')
   return { success: true }
 }
@@ -277,7 +287,7 @@ export async function updateUserSpecialties(
     .eq('id', userId)
     .eq('clinic_id', profile.clinic_id)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/user-management.ts') }
   revalidatePath('/dashboard/management')
   return { success: true }
 }
@@ -303,7 +313,7 @@ export async function updateOwnProfile(data: {
   if ('photo_url' in data)            patch.photo_url   = data.photo_url
 
   const { error } = await supabase.from('profiles').update(patch).eq('id', user.id)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/user-management.ts') }
   revalidatePath('/dashboard/profile')
   revalidatePath('/dashboard')
   return { success: true }
@@ -332,7 +342,7 @@ export async function updateUserNickname(
     .eq('id', userId)
     .eq('clinic_id', profile.clinic_id)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/user-management.ts') }
   revalidatePath('/dashboard/management')
   return { success: true }
 }

@@ -110,7 +110,7 @@ export default function FixPlanSlideOver({ plan, actionId, onClose, onApprove, o
                   <button
                     onClick={() => onApprove(plan.id)}
                     disabled={isBusy}
-                    className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                    className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold rounded-lg bg-teal-600 text-white shadow-sm hover:bg-teal-700 disabled:opacity-60 transition-colors"
                   >
                     {isBusy
                       ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />

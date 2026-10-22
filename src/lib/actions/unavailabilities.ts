@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type Recurrence = 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly'
@@ -73,7 +74,7 @@ export async function createUnavailabilities(
 
   const supabase = await createClient()
   const { error } = await supabase.from('professional_unavailabilities').insert(rows)
-  if (error) return { error: 'Erro ao salvar evento: ' + error.message }
+  if (error) return { error: 'Erro ao salvar evento: ' + mensagemErro(error, 'lib/actions/unavailabilities.ts') }
 
   revalidatePath('/dashboard/appointments')
   revalidatePath('/dashboard/reception')
@@ -92,7 +93,7 @@ export async function deleteUnavailability(id: string): Promise<{ success: true 
     .delete()
     .eq('id', id)
     .eq('clinic_id', auth.clinicId)
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/unavailabilities.ts') }
   revalidatePath('/dashboard/appointments')
   return { success: true }
 }
@@ -146,7 +147,7 @@ export async function listUnavailabilitiesInRange(
     .eq('clinic_id', auth.clinicId)
     .or(`and(recurrence.eq.none,ends_at.gte.${startUtc},starts_at.lte.${endUtc}),and(recurrence.neq.none,starts_at.lte.${endUtc})`)
 
-  if (error) return { error: error.message }
+  if (error) return { error: mensagemErro(error, 'lib/actions/unavailabilities.ts') }
   if (!data) return []
 
   const result: ExpandedOccurrence[] = []

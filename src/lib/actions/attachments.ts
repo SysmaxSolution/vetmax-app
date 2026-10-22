@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type Attachment = {
@@ -76,7 +77,7 @@ export async function uploadAttachment(
     .from('clinic-attachments')
     .upload(storagePath, buffer, { contentType: file.type, upsert: false })
 
-  if (uploadErr) return { error: 'Erro no upload: ' + uploadErr.message }
+  if (uploadErr) return { error: 'Erro no upload: ' + mensagemErro(uploadErr, 'lib/actions/attachments.ts') }
 
   // Inserir metadados
   const { data: record, error: dbErr } = await admin
@@ -99,7 +100,7 @@ export async function uploadAttachment(
   if (dbErr || !record) {
     // Rollback do storage em caso de erro no DB
     await admin.storage.from('clinic-attachments').remove([storagePath])
-    return { error: 'Erro ao salvar metadados: ' + (dbErr?.message ?? '') }
+    return { error: 'Erro ao salvar metadados: ' + ((dbErr ? mensagemErro(dbErr, 'lib/actions/attachments.ts') : '')) }
   }
 
   // Gerar URL assinada para exibição imediata
@@ -153,7 +154,7 @@ export async function getAttachments(
     .eq('patient_id', patientId)
     .eq('clinic_id', profile.clinic_id)
     .order('created_at', { ascending: false })
-  if (error) return { error: 'Erro ao buscar anexos: ' + error.message }
+  if (error) return { error: 'Erro ao buscar anexos: ' + mensagemErro(error, 'lib/actions/attachments.ts') }
 
   const rows = data ?? []
 
@@ -206,7 +207,7 @@ export async function uploadDocumentPdf(params: {
     .from('clinic-attachments')
     .upload(storagePath, buffer, { contentType: 'application/pdf', upsert: false })
 
-  if (uploadErr) return { error: 'Erro no upload do PDF: ' + uploadErr.message }
+  if (uploadErr) return { error: 'Erro no upload do PDF: ' + mensagemErro(uploadErr, 'lib/actions/attachments.ts') }
 
   const displayName = params.fileName.endsWith('.pdf') ? params.fileName : params.fileName + '.pdf'
 
@@ -226,7 +227,7 @@ export async function uploadDocumentPdf(params: {
 
   if (dbErr || !record) {
     await admin.storage.from('clinic-attachments').remove([storagePath])
-    return { error: 'Erro ao registrar PDF: ' + (dbErr?.message ?? '') }
+    return { error: 'Erro ao registrar PDF: ' + ((dbErr ? mensagemErro(dbErr, 'lib/actions/attachments.ts') : '')) }
   }
 
   const { data: signed } = await admin.storage
@@ -275,7 +276,7 @@ export async function updateAttachmentMetadata(
     .eq('id', id)
     .eq('clinic_id', profile.clinic_id)
 
-  if (error) return { error: 'Erro ao atualizar metadados: ' + error.message }
+  if (error) return { error: 'Erro ao atualizar metadados: ' + mensagemErro(error, 'lib/actions/attachments.ts') }
   return { success: true }
 }
 
@@ -317,7 +318,7 @@ export async function deleteAttachment(
     .eq('id', id)
     .eq('clinic_id', profile.clinic_id)
 
-  if (error) return { error: 'Erro ao deletar: ' + error.message }
+  if (error) return { error: 'Erro ao deletar: ' + mensagemErro(error, 'lib/actions/attachments.ts') }
 
   revalidatePath(`/dashboard/vet/${record.consultation_id ?? ''}`)
   revalidatePath(`/dashboard/exams/${record.consultation_id ?? ''}`)

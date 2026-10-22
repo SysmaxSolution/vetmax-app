@@ -347,12 +347,13 @@ body.capacitor-native .native-hidden { display: none !important; }
     overflow: visible !important;
     background: white !important;
   }
-  /* Esconde tudo que está na raiz do body — exceto o portal de impressão
-     OU uma árvore que contenha o shell do Canva (.canva-print-shell). Sem
-     a exceção :has(), o root do Next era ocultado e o LaudoPrintable
-     desaparecia da impressão (PDF em branco). A regra do canva-print.css
-     usa visibility:hidden/visible para isolar a folha A4 dentro do shell. */
-  body:not(:has(.canva-print-shell)) > *:not(.vetmax-print-root) {
+  /* Isola a folha SÓ quando um componente de impressão portalou um
+     .vetmax-print-root E ativou a classe body.print-mode-isolate.
+     NÃO usar :has() aqui: :has() NÃO é avaliado no pipeline de impressão real
+     do Chromium (só na tela), então a regra saía em branco no PDF. A classe no
+     body é confiável. Páginas comuns (boleto, histórico do portal) não ativam
+     a classe → imprimem normalmente. */
+  body.print-mode-isolate > *:not(.vetmax-print-root) {
     display: none !important;
   }
   /* O portal ocupa a folha inteira */

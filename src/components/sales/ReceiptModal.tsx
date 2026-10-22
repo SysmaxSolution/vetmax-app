@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Printer, CheckCircle2, MessageCircle, Check } from 'lucide-react'
 import { PAYMENT_LABELS } from './SalesCart'
 import { sendSaleReceipt } from '@/lib/actions/sales'
@@ -23,7 +24,9 @@ export default function ReceiptModal({ sale, clinicName, tutor, onClose }: Recei
     hour: '2-digit', minute: '2-digit',
   })
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm print:bg-white">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 overflow-hidden animate-scale-in print:shadow-none print:rounded-none print:max-w-full">
         {/* Header — oculto na impressão */}
@@ -146,6 +149,7 @@ export default function ReceiptModal({ sale, clinicName, tutor, onClose }: Recei
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

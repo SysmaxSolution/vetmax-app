@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
+import { mensagemErro } from '@/lib/errors'
 const SYSMAX_EMAIL = 'sysmax@sysmaxsolutions.com'
 
 export type ClinicStatus = 'pending' | 'active' | 'suspended'
@@ -25,6 +26,6 @@ export async function updateClinicStatus(
     .update({ status })
     .eq('id', clinicId)
 
-  if (error) return { error: 'Erro ao atualizar status: ' + error.message }
+  if (error) return { error: 'Erro ao atualizar status: ' + mensagemErro(error, 'lib/actions/clinic-status.ts') }
   return {}
 }

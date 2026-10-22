@@ -9,6 +9,7 @@ import {
 } from '@/lib/voice/unified-extraction'
 import { formatClinicDate, formatClinicDateTime } from '@/lib/time'
 
+import { mensagemErro } from '@/lib/errors'
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -171,7 +172,7 @@ export async function generateClinicalSummary(
     .order('created_at', { ascending: false })
     .limit(5)
 
-  if (recErr) return { error: 'Erro ao buscar evoluções: ' + recErr.message }
+  if (recErr) return { error: 'Erro ao buscar evoluções: ' + mensagemErro(recErr, 'lib/actions/ai_extraction.ts') }
 
   // Buscar documentos anexados (apenas metadados, sem conteúdo)
   const { data: docs } = await admin

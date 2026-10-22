@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
+import { createPortal } from 'react-dom'
+import { useAutoRefresh } from '@/hooks/useAutoRefresh'
 import {
   DollarSign, CheckCircle2, Archive, RefreshCw, Filter,
   TrendingUp, AlertCircle, Clock, BadgeCheck, RotateCcw, Minus, Plus,
@@ -46,6 +48,7 @@ const PAYMENT_METHOD_LABEL: Record<string, { label: string; icon: React.Componen
   debit:     { label: 'Débito',      icon: CreditCard  },
   cash:      { label: 'Dinheiro',    icon: Banknote    },
   voucher:   { label: 'Vale',        icon: Wallet      },
+  credit_balance: { label: 'Utilização de crédito', icon: Wallet },
   convenio:  { label: 'Convênio',    icon: Wallet      },
   transfer:  { label: 'Transf.',     icon: Building2   },
   courtesy:  { label: 'Cortesia',    icon: Receipt     },
@@ -158,6 +161,8 @@ export default function CentralCashierWorkspace({
     void refresh()
   }
 
+  useAutoRefresh(() => { void refresh() })   // auto-refresh a cada 15s
+
   const handleArchive = async (id: string) => {
     if (!confirm('Arquivar esta entrada? Ela não aparecerá mais no caixa ativo.')) return
     setActionId(id)
@@ -235,7 +240,7 @@ export default function CentralCashierWorkspace({
       )}
 
       {/* Modal inline: receber pagamento de entrada pendente */}
-      {receivingEntry && (
+      {receivingEntry && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4 animate-scale-in">
             <div className="flex items-start justify-between gap-3">
@@ -276,7 +281,8 @@ export default function CentralCashierWorkspace({
               Cancelar
             </button>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {/* Header */}

@@ -14,6 +14,7 @@ const PAYMENT_LABELS: Record<string, string> = {
   cash:          'Dinheiro',
   convenio:      'Convênio',
   courtesy:      'Cortesia',
+  credit_balance:'Utilização de crédito',
   other:         'Outro',
   nao_informado: 'Não informado',
 }

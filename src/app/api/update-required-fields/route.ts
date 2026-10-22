@@ -2,7 +2,12 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 
+import { mensagemErro } from '@/lib/errors'
+import { limitarPorIp } from '@/lib/api/rate-limit'
 export async function POST(request: Request) {
+  const barrado = await limitarPorIp(request, { escopo: 'app:campos', limite: 30 })
+  if (barrado) return barrado
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 })
@@ -30,7 +35,7 @@ export async function POST(request: Request) {
       triage_required_fields: triage_required_fields ?? ['weight', 'temperature', 'chief_complaint'],
     }, { onConflict: 'clinic_id' })
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return NextResponse.json({ error: mensagemErro(error, 'app/api/update-required-fields/route.ts') }, { status: 500 })
 
   return NextResponse.json({ success: true })
 }

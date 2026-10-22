@@ -6,6 +6,7 @@ import {
   FileText, Shield, Building2, Users, Settings, LayoutGrid, Palette, Activity, Lock, CreditCard,
 } from 'lucide-react'
 import { MANAGEMENT_TAB_BLOCKED_ON_FREE } from '@/config/access-matrix'
+import { useUsaConvenios } from '@/components/providers/ClinicConfigProvider'
 
 const TABS = [
   { label: 'Modelos',           href: '/dashboard/management',                      icon: FileText,   exact: true,  tab: 'templates' },
@@ -31,6 +32,7 @@ export default function ManagementNav({ showMonitoramento = false, planName = 's
   const searchParams = useSearchParams()
   const currentTab   = searchParams.get('tab')
   const isFreePlan   = planName === 'free'
+  const usaConvenios = useUsaConvenios()
 
   function isActive(tab: typeof TABS[number]) {
     if (tab.kanban) return pathname.startsWith('/dashboard/management/kanban')
@@ -45,6 +47,7 @@ export default function ManagementNav({ showMonitoramento = false, planName = 's
   const visibleTabs = TABS.filter(tab => {
     if (tab.tab === 'monitoramento') return showMonitoramento
     if (tab.tab === 'assinatura')    return showAssinatura
+    if (tab.tab === 'convenios')     return usaConvenios   // gate: só quando a clínica usa convênios
     return true
   })
 
@@ -58,9 +61,9 @@ export default function ManagementNav({ showMonitoramento = false, planName = 's
             key={tab.href}
             href={tab.href}
             title={locked ? 'Disponível no Plano Premium — clique para saber mais' : tab.label}
-            className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
-              active ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
-            } ${tab.kanban ? 'text-violet-700 bg-violet-50 hover:bg-violet-100' : ''} ${tab.kanban && active ? 'bg-slate-900 text-white' : ''} ${
+            className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+              active ? 'bg-teal-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+            } ${tab.kanban ? 'text-violet-700 bg-violet-50 hover:bg-violet-100' : ''} ${tab.kanban && active ? 'bg-teal-600 text-white' : ''} ${
               locked && !active ? 'opacity-60' : ''
             }`}
           >

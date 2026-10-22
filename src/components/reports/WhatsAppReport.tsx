@@ -13,10 +13,10 @@ const TRIGGER_LABELS: Record<string, string> = {
 
 function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
-    <div className="rounded-xl bg-violet-50 border border-violet-100 p-4">
-      <p className="text-xs font-medium text-violet-600 uppercase tracking-wide mb-1">{label}</p>
-      <p className="text-2xl font-bold text-violet-900">{value}</p>
-      {sub && <p className="text-xs text-violet-500 mt-0.5">{sub}</p>}
+    <div className="rounded-xl bg-white border border-slate-200 p-4 shadow-sm">
+      <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">{label}</p>
+      <p className="text-2xl font-bold text-slate-900 font-mono tabular-nums">{value}</p>
+      {sub && <p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
     </div>
   )
 }
@@ -47,15 +47,15 @@ export default function WhatsAppReport() {
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">De</label>
           <input type="date" value={from} onChange={e => setFrom(e.target.value)}
-            className="w-full sm:w-auto rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            className="w-full sm:w-auto rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Até</label>
           <input type="date" value={to} onChange={e => setTo(e.target.value)}
-            className="w-full sm:w-auto rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
+            className="w-full sm:w-auto rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
         </div>
         <button onClick={run} disabled={pending}
-          className="rounded-lg bg-violet-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50 transition-colors">
+          className="rounded-lg bg-teal-600 px-4 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 disabled:opacity-60 transition-colors">
           {pending ? 'Carregando…' : 'Gerar'}
         </button>
       </div>
@@ -95,8 +95,8 @@ export default function WhatsAppReport() {
               {/* By trigger */}
               {Object.keys(result.by_trigger).length > 0 && (
                 <div className="rounded-xl border border-slate-200 overflow-hidden">
-                  <div className="px-4 py-3 bg-violet-50 border-b border-violet-100">
-                    <p className="text-xs font-semibold text-violet-700 uppercase tracking-wide">Mensagens por Campanha</p>
+                  <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Mensagens por Campanha</p>
                   </div>
                   <div className="divide-y divide-slate-100">
                     {Object.entries(result.by_trigger).map(([trigger, count]) => {
@@ -107,7 +107,7 @@ export default function WhatsAppReport() {
                             {TRIGGER_LABELS[trigger] ?? trigger}
                           </span>
                           <div className="flex-1 bg-slate-100 rounded-full h-2">
-                            <div className="bg-violet-500 h-2 rounded-full" style={{ width: `${Math.min(100, pct)}%` }} />
+                            <div className="bg-teal-500 h-2 rounded-full" style={{ width: `${Math.min(100, pct)}%` }} />
                           </div>
                           <span className="text-sm font-semibold text-slate-700 w-12 text-right">{count}</span>
                         </div>

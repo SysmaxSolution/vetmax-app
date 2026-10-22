@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { senhaDeTeste } from './senha-teste';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -12,11 +13,14 @@ export function createAdminClient(): SupabaseClient {
 }
 
 /** RLS-enforced client authenticated as a specific user via service role impersonation. */
-export async function createUserClient(email: string, password: string): Promise<SupabaseClient> {
+export async function createUserClient(email: string, _password?: string): Promise<SupabaseClient> {
   const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: { persistSession: false },
   });
-  const { error } = await client.auth.signInWithPassword({ email, password });
+  // A senha vem de TEST_USER_PASSWORD, nao do que o teste passou — a das
+  // fixtures e so um marcador desde que saiu do repositorio. Parametro mantido
+  // por compatibilidade com as chamadas existentes.
+  const { error } = await client.auth.signInWithPassword({ email, password: senhaDeTeste() });
   if (error) throw new Error(`Auth failed for ${email}: ${error.message}`);
   return client;
 }
@@ -35,7 +39,7 @@ export async function getAccessToken(email: string, password: string): Promise<s
   });
   const { data: session, error: signInError } = await anonClient.auth.signInWithPassword({
     email,
-    password,
+    password: senhaDeTeste(),
   });
   if (signInError) throw signInError;
   return session.session!.access_token;

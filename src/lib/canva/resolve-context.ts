@@ -12,6 +12,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ResolveContext } from './dynamic-tags'
 import { MOCK_PATIENT, MOCK_TUTOR, buildMockConsultation } from './mock-data'
 import { extractEntitiesFromAnamneseCore } from '@/lib/ai/anamnese-extractor'
+import { urlAssinatura, type PerfilComAssinatura } from '@/lib/storage/assinatura'
 
 const ROLE_LABELS: Record<string, string> = {
   admin:        'Administrador',
@@ -154,7 +155,7 @@ export async function buildPreviewContext(
       .eq('id', clinicId).single()
       .then(r => r.data),
     supabase.from('profiles')
-      .select('id, full_name, nickname, role, crmv, specialty, specialties, phone, photo_url, electronic_signature_url, mapa_code, username')
+      .select('id, full_name, nickname, role, crmv, specialty, specialties, phone, photo_url, electronic_signature_url, electronic_signature_path, mapa_code, username')
       .eq('id', userId).single()
       .then(r => r.data),
   ])
@@ -182,6 +183,9 @@ export async function buildPreviewContext(
     })() : {},
     vet: vet ? {
       ...vet,
+      // Bucket privado desde a 0499: a tag `vet.signature` aponta para
+      // electronic_signature_url, que agora vem assinada na hora.
+      electronic_signature_url: await urlAssinatura(vet as PerfilComAssinatura | null),
       role_label: ROLE_LABELS[vet.role] ?? vet.role,
       specialty: vet.specialty ?? (Array.isArray(vet.specialties) ? vet.specialties.join(', ') : ''),
     } : {},
@@ -278,7 +282,7 @@ export async function buildResolveContext(
       .order('requested_at', { ascending: true })
       .then(r => r.data ?? []),
     supabase.from('patient_vaccines')
-      .select('id, vaccine_name, date_administered, next_due_date')
+      .select('id, vaccine_name, date_administered, next_due_date, manufacturer, lot_number, validity_date, administration_route')
       .eq('patient_id', patientId)
       .order('date_administered', { ascending: false })
       .then(r => r.data ?? []),
@@ -337,6 +341,10 @@ export async function buildResolveContext(
     name: v.vaccine_name,
     date: formatDateBRShort(v.date_administered),
     next: formatDateBRShort(v.next_due_date),
+    manufacturer: v.manufacturer ?? '',
+    lot: v.lot_number ?? '',
+    validity: formatDateBRShort(v.validity_date),
+    route: v.administration_route ?? '',
   }))
 
   const tutor = patient?.tutor_id
@@ -352,7 +360,7 @@ export async function buildResolveContext(
     ?? (consultation as Record<string, unknown> | null)?.professional_id
   const vet = vetUserId
     ? await supabase.from('profiles')
-        .select('id, full_name, nickname, role, crmv, specialty, specialties, phone, photo_url, electronic_signature_url, mapa_code, username')
+        .select('id, full_name, nickname, role, crmv, specialty, specialties, phone, photo_url, electronic_signature_url, electronic_signature_path, mapa_code, username')
         .eq('id', vetUserId as string).single()
         .then(r => r.data)
     : null
@@ -418,6 +426,9 @@ export async function buildResolveContext(
 
     vet: vet ? {
       ...vet,
+      // Bucket privado desde a 0499: a tag `vet.signature` aponta para
+      // electronic_signature_url, que agora vem assinada na hora.
+      electronic_signature_url: await urlAssinatura(vet as PerfilComAssinatura | null),
       role_label: ROLE_LABELS[vet.role] ?? vet.role,
       specialty: vet.specialty ?? (Array.isArray(vet.specialties) ? vet.specialties.join(', ') : ''),
     } : {},

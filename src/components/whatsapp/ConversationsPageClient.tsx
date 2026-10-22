@@ -42,6 +42,7 @@ import {
 } from '@/lib/actions/whatsapp-conversations'
 import ClinicalContextPanel from './ClinicalContextPanel'
 import QuickRepliesPanel from './QuickRepliesPanel'
+import { Spinner } from '@/components/ui/Spinner'
 import type { ClinicalContext, WppConsultationLink } from '@/types/whatsapp'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -677,8 +678,8 @@ export default function ConversationsPageClient({
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900">WhatsApp — Atendimento</h1>
-            <p className="text-sm text-slate-500 mt-0.5">
+            <h1 className="text-xl font-bold tracking-tight text-slate-900">WhatsApp — Atendimento</h1>
+            <p className="text-sm text-slate-600 mt-0.5">
               {humanCount > 0
                 ? `${humanCount} conversa${humanCount !== 1 ? 's' : ''} aguardando atendimento humano`
                 : 'Sem conversas aguardando atendimento humano'}
@@ -712,7 +713,7 @@ export default function ConversationsPageClient({
                   key={val}
                   onClick={() => setFilter(val)}
                   className={`relative px-2.5 py-1 text-xs font-semibold rounded-lg transition-colors ${
-                    filter === val ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-100'
+                    filter === val ? 'bg-teal-600 text-white' : 'text-slate-500 hover:bg-slate-100'
                   }`}
                 >
                   {label}
@@ -1059,7 +1060,7 @@ export default function ConversationsPageClient({
                 <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2" style={{ maxHeight: '380px' }}>
                   {loadingMsgs ? (
                     <div className="flex items-center justify-center py-10">
-                      <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600" />
+                      <Spinner size="lg" className="text-slate-500" />
                     </div>
                   ) : messages.length === 0 ? (
                     <p className="text-center text-xs text-slate-400 py-8">Nenhuma mensagem</p>
@@ -1092,7 +1093,7 @@ export default function ConversationsPageClient({
                             <div className={`flex items-center gap-1 mt-1 ${out ? 'text-white/60' : 'text-slate-400'} justify-end`}>
                               {isHuman && !msg.sender_name && <User className="h-2.5 w-2.5" />}
                               {isBot   && <Bot  className="h-2.5 w-2.5" />}
-                              <span className="text-[10px]">{timeLabel(msg.created_at)}</span>
+                              <span className="text-[10px] font-mono tabular-nums">{timeLabel(msg.created_at)}</span>
                               {/* Check azul / cinza para mensagens enviadas por nós */}
                               {out && <AckIcon ack={msg.ack} />}
                               {selectedConv.status === 'human' && (
@@ -1132,7 +1133,7 @@ export default function ConversationsPageClient({
                     <button
                       onClick={() => setShowQuickReplies(v => !v)}
                       title="Respostas Rápidas"
-                      className={`flex-shrink-0 h-10 w-10 rounded-xl flex items-center justify-center transition-colors ${
+                      className={`flex-shrink-0 h-10 w-10 rounded-lg flex items-center justify-center transition-colors ${
                         showQuickReplies ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                       }`}
                     >
@@ -1144,14 +1145,14 @@ export default function ConversationsPageClient({
                       onClick={() => fileInputRef.current?.click()}
                       disabled={uploadingFile}
                       title="Enviar arquivo (imagem, vídeo, áudio, PDF…)"
-                      className={`flex-shrink-0 h-10 w-10 rounded-xl flex items-center justify-center transition-colors ${
+                      className={`flex-shrink-0 h-10 w-10 rounded-lg flex items-center justify-center transition-colors ${
                         uploadingFile
                           ? 'bg-slate-100 text-slate-300 cursor-wait'
                           : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                       }`}
                     >
                       {uploadingFile
-                        ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-500" />
+                        ? <Spinner className="text-slate-500" />
                         : <Paperclip className="h-4 w-4" />
                       }
                     </button>
@@ -1164,12 +1165,12 @@ export default function ConversationsPageClient({
                       }}
                       placeholder="Digite sua mensagem… (Enter para enviar, Shift+Enter para nova linha)"
                       rows={2}
-                      className="flex-1 resize-none rounded-xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                      className="flex-1 resize-none rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                     />
                     <button
                       onClick={handleSend}
                       disabled={!replyText.trim() || isPending}
-                      className="flex-shrink-0 h-10 w-10 rounded-xl bg-teal-600 flex items-center justify-center text-white hover:bg-teal-700 disabled:opacity-50 transition-colors"
+                      className="flex-shrink-0 h-10 w-10 rounded-lg bg-teal-600 flex items-center justify-center text-white hover:bg-teal-700 disabled:opacity-50 transition-colors"
                     >
                       <Send className="h-4 w-4" />
                     </button>
@@ -1230,7 +1231,7 @@ export default function ConversationsPageClient({
             </div>
             {linkLoading ? (
               <div className="flex items-center justify-center py-4">
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-teal-600" />
+                <Spinner className="text-teal-600" />
               </div>
             ) : linkConsultations.length === 0 ? (
               <p className="text-xs text-slate-400 px-3 py-3">Nenhuma consulta encontrada para este tutor.</p>

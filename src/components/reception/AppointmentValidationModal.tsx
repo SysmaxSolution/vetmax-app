@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Check, AlertCircle, XCircle, CalendarClock, PawPrint, Clock } from 'lucide-react'
 import {
   approveAppointmentRequest,
@@ -55,7 +56,7 @@ export default function AppointmentValidationModal({
     })
   }
 
-  return (
+  return typeof document === 'undefined' ? null : createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
         {/* Header */}
@@ -214,6 +215,7 @@ export default function AppointmentValidationModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

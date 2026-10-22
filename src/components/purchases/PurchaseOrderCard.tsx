@@ -4,11 +4,11 @@ import { useState, useTransition } from 'react'
 import { ChevronDown, ChevronUp, CheckCircle2, XCircle, Clock, Package, Link2, Loader2 } from 'lucide-react'
 import type { PurchaseOrder, PurchaseOrderItem } from '@/lib/actions/purchases'
 import {
-  confirmPurchaseReceipt,
   cancelPurchaseOrder,
   getPurchaseOrder,
 } from '@/lib/actions/purchases'
 import { ItemMatchingPanel } from './ItemMatchingPanel'
+import ConfirmReceiptModal from './ConfirmReceiptModal'
 
 interface Props {
   order:          PurchaseOrder
@@ -27,6 +27,7 @@ export function PurchaseOrderCard({ order, onStatusChange }: Props) {
   const [matchingItem, setMatchingItem] = useState<PurchaseOrderItem | null>(null)
   const [isPending, startTransition]  = useTransition()
   const [msg, setMsg]                 = useState<string | null>(null)
+  const [showConfirm, setShowConfirm] = useState(false)
 
   const status = STATUS_CONFIG[order.status]
   const StatusIcon = status.icon
@@ -37,15 +38,6 @@ export function PurchaseOrderCard({ order, onStatusChange }: Props) {
     startTransition(async () => {
       const res = await getPurchaseOrder(order.id)
       if (!('error' in res)) setFullOrder(res)
-    })
-  }
-
-  function handleConfirm() {
-    startTransition(async () => {
-      setMsg(null)
-      const res = await confirmPurchaseReceipt(order.id)
-      if ('error' in res) { setMsg(res.error); return }
-      onStatusChange()
     })
   }
 
@@ -96,11 +88,11 @@ export function PurchaseOrderCard({ order, onStatusChange }: Props) {
             {order.status === 'pending' && (
               <>
                 <button
-                  onClick={handleConfirm}
+                  onClick={() => setShowConfirm(true)}
                   disabled={isPending}
                   className="flex items-center gap-1 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-teal-700 disabled:opacity-50"
                 >
-                  {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+                  <CheckCircle2 className="h-3 w-3" />
                   Confirmar
                 </button>
                 <button
@@ -188,6 +180,14 @@ export function PurchaseOrderCard({ order, onStatusChange }: Props) {
               if (!('error' in res)) setFullOrder(res)
             })
           }}
+        />
+      )}
+
+      {showConfirm && (
+        <ConfirmReceiptModal
+          order={fullOrder ?? order}
+          onClose={() => setShowConfirm(false)}
+          onDone={() => { setShowConfirm(false); onStatusChange() }}
         />
       )}
     </>

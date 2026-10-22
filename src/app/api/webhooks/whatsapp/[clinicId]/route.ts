@@ -4,6 +4,7 @@ import { runWhatsappAgent } from '@/lib/ai/whatsapp-agent'
 import { evolutionSendText, evolutionFetchContactByLid } from '@/lib/evolution-api-client'
 import { handleDirectorCommand } from '@/lib/director-commands'
 import { isWithinWindow, isWithinBusinessHours, type WeeklyBusinessHours } from '@/lib/time'
+import { limitarPorIp } from '@/lib/api/rate-limit'
 
 // POST /api/webhooks/whatsapp/[clinicId]
 // Normaliza nomes de eventos (uppercase/lowercase) para compatibilidade com v1.8.4 e v2.x.
@@ -92,6 +93,9 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ clinicId: string }> }
 ) {
+  const barrado = await limitarPorIp(request, { escopo: 'wh:wpp', limite: 600 })
+  if (barrado) return barrado
+
   // Valida que a requisição vem do servidor Evolution API (envia apikey no header)
   const incomingKey = request.headers.get('apikey')
   const expectedKey = process.env.EVOLUTION_API_KEY

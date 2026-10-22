@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
+import { mensagemErro } from '@/lib/errors'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type MatchStatus =
@@ -219,7 +220,7 @@ export async function runMatchEngine(remittanceId: string): Promise<{ updated: n
     .eq('clinic_id', clinicId)
     .eq('remittance_id', remittanceId)
 
-  if (linesErr) return { error: linesErr.message }
+  if (linesErr) return { error: mensagemErro(linesErr, 'lib/actions/petlove-matching.ts') }
   if (!lines || lines.length === 0) return { updated: 0, matched: 0, partial: 0, orphan: 0, missing: 0, errors: [] }
 
   // ─── Carregar lookup tables em memória (uma vez por execução) ───────────────
@@ -504,7 +505,7 @@ export async function getReviewBundle(remittanceId: string): Promise<ReviewBundl
     .eq('clinic_id', clinicId)
     .eq('remittance_id', remittanceId)
     .order('service_date')
-  if (linesErr) return { error: linesErr.message }
+  if (linesErr) return { error: mensagemErro(linesErr, 'lib/actions/petlove-matching.ts') }
 
   const all = (lines ?? []) as RemittanceLineRow[]
   const matched = all.filter(l => l.match_status === 'matched')
@@ -623,7 +624,7 @@ export async function bulkCreatePatientsFromPetlove(
     .select('id, remittance_id, tutor_name_raw, pet_name_raw, species_raw, breed_raw, microchip_raw, plan_name_raw, membership_id_raw, match_status')
     .in('id', lineIds)
     .eq('clinic_id', clinicId)
-  if (linesErr) return { error: linesErr.message }
+  if (linesErr) return { error: mensagemErro(linesErr, 'lib/actions/petlove-matching.ts') }
   if (!lines || lines.length === 0) return { error: 'Nenhuma linha encontrada para os IDs informados.' }
 
   // Garante existência do provider Petlove

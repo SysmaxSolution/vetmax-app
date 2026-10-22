@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { Syringe, Plus, X, Loader2, Activity } from 'lucide-react'
 import { useRealtimeSync } from '@/hooks/useRealtimeSync'
@@ -235,7 +236,7 @@ function AdmitSurgeryModal({ onClose, onSuccess }: { onClose: () => void; onSucc
     onSuccess()
   }
 
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
         <div className="flex items-start justify-between gap-4">
@@ -277,6 +278,7 @@ function AdmitSurgeryModal({ onClose, onSuccess }: { onClose: () => void; onSucc
           </button>
         </div>
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }

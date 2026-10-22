@@ -1,12 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { CreditCard, X, Check, Loader2, ExternalLink, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 import {
   listPaymentCards,
   type PaymentCard,
 } from '@/lib/actions/payment-cards'
+import CobrarNaMaquininhaPanel from './CobrarNaMaquininhaPanel'
 
 export interface CardPaymentResult {
   card:               PaymentCard
@@ -21,6 +23,9 @@ export interface CardPaymentResult {
 
 interface Props {
   paymentMethod:     'credit' | 'debit'
+  /** A quem a cobrança se refere — só para amarrar a transação da maquininha. */
+  consultationId?:   string | null
+  tutorId?:          string | null
   /** Saldo máximo permitido para este split (default = saldo restante). */
   maxAmount:         number
   /** Valor sugerido inicial. */
@@ -34,7 +39,7 @@ function fmt(v: number) {
 }
 
 export default function CardSelectionModal({
-  paymentMethod, maxAmount, suggestedAmount, onCancel, onConfirm,
+  paymentMethod, maxAmount, suggestedAmount, consultationId, tutorId, onCancel, onConfirm,
 }: Props) {
   const [cards,         setCards]         = useState<PaymentCard[]>([])
   const [loading,       setLoading]       = useState(true)
@@ -99,7 +104,9 @@ export default function CardSelectionModal({
     })
   }
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -255,6 +262,22 @@ export default function CardSelectionModal({
                 </div>
               )}
 
+              {/* Cobrança integrada: só aparece se a clínica tem adquirente ativa.
+                  Preenche NSU e liberação abaixo quando o comprovante chega. */}
+              {selectedCard && (
+                <CobrarNaMaquininhaPanel
+                  paymentMethod={paymentMethod}
+                  valor={parseFloat(amount.replace(',', '.')) || 0}
+                  parcelas={installments}
+                  consultationId={consultationId}
+                  tutorId={tutorId}
+                  onComprovante={dados => {
+                    setNsu(dados.nsu)
+                    setAuthorization(dados.autorizacao)
+                  }}
+                />
+              )}
+
               {/* NSU + Liberação — obrigatórios apenas quando credit_cards.requires_nsu=true */}
               {selectedCard && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -326,6 +349,7 @@ export default function CardSelectionModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

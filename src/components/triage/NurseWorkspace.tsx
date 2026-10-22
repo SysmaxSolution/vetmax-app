@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { AlertCircle, Clock, CheckCircle2, ChevronRight, Stethoscope, History, Pencil, Plus, ArrowRight } from 'lucide-react'
 import type { TriageQueueItem, TriageHistoryItem } from '@/lib/actions/triage'
@@ -9,6 +10,7 @@ import { searchPatientsForTriage, type TriagePatientSearchResult } from '@/lib/a
 import { useRealtimeSync } from '@/hooks/useRealtimeSync'
 import { BehaviorTagsBadges } from '@/components/ui/BehaviorTagsBadges'
 import AttendanceCardMenu from '@/components/shared/AttendanceCardMenu'
+import ReceptionWaitingPanel from '@/components/shared/ReceptionWaitingPanel'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -80,6 +82,9 @@ export default function NurseWorkspace({ queue, history, clinicId }: NurseWorksp
           <h1 className="text-xl font-bold tracking-tight text-slate-900">Triagem Veterinária</h1>
           <p className="mt-0.5 text-sm text-slate-600">Coleta de sinais vitais e avaliação inicial do paciente</p>
         </div>
+
+        {/* Aguardando na recepção — chamar para a triagem */}
+        <ReceptionWaitingPanel mode="triage" />
 
         {/* Tab Switcher */}
         <div className="flex gap-1 rounded-xl bg-slate-100 p-1 w-fit">
@@ -321,7 +326,7 @@ export default function NurseWorkspace({ queue, history, clinicId }: NurseWorksp
       </main>
 
       {/* Modal: Adicionar à Fila de Triagem */}
-      {showAddModal && (
+      {showAddModal && typeof document !== 'undefined' && createPortal(
         <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4 animate-scale-in">
             <h2 className="text-base font-semibold text-slate-900">Registrar na Fila de Triagem</h2>
@@ -421,7 +426,8 @@ export default function NurseWorkspace({ queue, history, clinicId }: NurseWorksp
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )

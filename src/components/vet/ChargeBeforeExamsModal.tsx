@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Receipt, FlaskConical, Loader2, AlertCircle } from 'lucide-react'
 import { generatePartialInvoice } from '@/lib/actions/billing'
 
@@ -34,7 +35,7 @@ export default function ChargeBeforeExamsModal({ consultationId, patientName, on
     onProceed(null)
   }
 
-  return (
+  return typeof document !== 'undefined' ? createPortal(
     <div className="fixed inset-0 z-[10050] flex items-center justify-center bg-slate-900/50 p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
@@ -90,6 +91,7 @@ export default function ChargeBeforeExamsModal({ consultationId, patientName, on
           </button>
         </div>
       </div>
-    </div>
-  )
+    </div>,
+    document.body,
+  ) : null
 }
