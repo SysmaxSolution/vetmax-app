@@ -587,6 +587,23 @@ export async function atualizarCobranca(cardTransactionId: string): Promise<{
 }
 
 /**
+ * Telefone no formato E.164 que eles validam (`^\+[1-9]\d{1,14}$`).
+ *
+ * Devolve null em vez de chutar: telefone invalido derruba a cobranca inteira
+ * com `CLIENT_PHONE_INVALID`, e perder a venda por causa de um cadastro velho
+ * seria desproporcional.
+ */
+function formatarTelefoneE164(bruto: string | null | undefined): string | null {
+  const digitos = (bruto ?? '').replace(/\D/g, '')
+  if (!digitos) return null
+  // Celular brasileiro: 11 digitos com DDD. Fixo: 10.
+  if (digitos.length === 10 || digitos.length === 11) return `+55${digitos}`
+  // Ja veio com o 55 na frente.
+  if ((digitos.length === 12 || digitos.length === 13) && digitos.startsWith('55')) return `+${digitos}`
+  return null
+}
+
+/**
  * Cobra na MAQUININHA.
  *
  * O `terminalId` vai sempre que conhecido: sem ele, a cobranca vira "notificacao
@@ -670,10 +687,22 @@ export async function cobrarNaMaquininha(input: {
 
   let nomeTutor = 'Cliente'
   let doc: string | null = null
+  let email: string | null = null
+  let telefone: string | null = null
   if (input.tutorId) {
     const { data: t } = await ctx.admin
-      .from('tutors').select('name, cpf').eq('id', input.tutorId).eq('clinic_id', ctx.clinicId).maybeSingle()
-    if (t) { nomeTutor = (t.name as string) ?? nomeTutor; doc = (t.cpf as string | null) ?? null }
+      .from('tutors').select('name, cpf, email, phone')
+      .eq('id', input.tutorId).eq('clinic_id', ctx.clinicId).maybeSingle()
+    if (t) {
+      nomeTutor = (t.name as string) ?? nomeTutor
+      doc = (t.cpf as string | null) ?? null
+      // Medido em 22/10/2026: mandar o e-mail aqui NAO elimina a pergunta "Como
+      // gostaria do comprovante?" no programa da operadora, mas deixa o campo
+      // JA PREENCHIDO na tela de envio — a recepcao clica, nao digita. E o
+      // comprovante vai para o tutor, que e quem deveria te-lo.
+      email = (t.email as string | null)?.trim() || null
+      telefone = formatarTelefoneE164(t.phone as string | null)
+    }
   }
 
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://sysvetmax-dev.vercel.app'
@@ -687,6 +716,8 @@ export async function cobrarNaMaquininha(input: {
     callbackUrl:      cfg?.webhook_secret ? `${baseUrl}/api/webhooks/evoluservices/${cfg.webhook_secret}` : null,
     clienteNome:      nomeTutor,
     clienteDocumento: doc,
+    clienteEmail:     email,
+    clienteTelefone:  telefone,
     permiteAlterar:   false,
     splits:           splits.length ? splits : undefined,
   }, c.token)
