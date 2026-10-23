@@ -1,5 +1,5 @@
 import { gzipSync } from 'node:zlib'
-import { lerResposta, lerDadosDaNota } from '@/lib/fiscal/sefaz-dfe'
+import { lerResposta, lerDadosDaNota, codigoDaUf, UF_IBGE } from '@/lib/fiscal/sefaz-dfe'
 
 /** Monta um docZip como a SEFAZ manda: XML em gzip, depois base64. */
 function docZip(nsu: string, xml: string): string {
@@ -139,5 +139,42 @@ describe('lerDadosDaNota', () => {
   it('valor ausente não vira zero — zero seria mentira', () => {
     const d = lerDadosDaNota(`<resNFe><chNFe>${CHAVE}</chNFe></resNFe>`)!
     expect(d.valor).toBeNull()
+  })
+})
+
+describe('codigoDaUf', () => {
+  // Este teste existe por causa de um erro real: a primeira consulta de
+  // produção foi enviada com cUFAutor=91 — o código do Ambiente Nacional, que
+  // vale para o cOrgao do EVENTO, não para a consulta. A Receita respondeu
+  // "nenhum documento localizado", que parecia CNPJ sem notas e era
+  // requisição malformada.
+  it('91 NÃO é UF válida — é o Ambiente Nacional', () => {
+    expect(codigoDaUf('91')).toBeNull()
+  })
+
+  it('converte a sigla no código do IBGE', () => {
+    expect(codigoDaUf('SP')).toBe('35')
+    expect(codigoDaUf('sp')).toBe('35')
+    expect(codigoDaUf(' MG ')).toBe('31')
+  })
+
+  it('aceita o código já pronto', () => {
+    expect(codigoDaUf('35')).toBe('35')
+  })
+
+  it('recusa o que não é UF, em vez de inventar', () => {
+    expect(codigoDaUf('XX')).toBeNull()
+    expect(codigoDaUf('99')).toBeNull()
+    expect(codigoDaUf('')).toBeNull()
+    expect(codigoDaUf(null)).toBeNull()
+    expect(codigoDaUf(undefined)).toBeNull()
+  })
+
+  it('cobre os 27 estados', () => {
+    expect(Object.keys(UF_IBGE)).toHaveLength(27)
+    for (const [sigla, codigo] of Object.entries(UF_IBGE)) {
+      expect(codigoDaUf(sigla)).toBe(codigo)
+      expect(codigo).toMatch(/^\d{2}$/)
+    }
   })
 })

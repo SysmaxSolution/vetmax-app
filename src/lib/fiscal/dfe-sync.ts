@@ -28,6 +28,13 @@ export async function credencialDaEmpresa(
   const cnpj = String((emp as { cnpj?: string } | null)?.cnpj ?? '').replace(/\D/g, '')
   if (!cnpj) return { error: 'A empresa não tem CNPJ cadastrado.' }
 
+  // A UF de quem consulta vai no `cUFAutor`. Sem ela a requisição é
+  // malformada — e a Receita não diz isso: responde "nenhum documento".
+  const { data: cli } = await admin
+    .from('clinics').select('state').eq('id', clinicId).maybeSingle()
+  const uf = (cli as { state?: string | null } | null)?.state ?? null
+  if (!uf) return { error: 'O estado da clínica não está preenchido no cadastro.' }
+
   // O certificado da empresa; na falta dele, o geral da clínica.
   const base = () => admin.from('clinic_bank_certificates')
     .select('pfx_encrypted, passphrase_encrypted, not_after').eq('clinic_id', clinicId)
@@ -49,6 +56,7 @@ export async function credencialDaEmpresa(
     pfx,
     passphrase: senha ? senha.toString('utf8') : null,
     cnpj,
+    cUF: uf,
   }
 }
 

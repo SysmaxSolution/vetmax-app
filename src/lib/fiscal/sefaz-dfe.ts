@@ -44,8 +44,31 @@ export interface CredencialSefaz {
   passphrase: string | null
   /** CNPJ do interessado, só dígitos. */
   cnpj:       string
-  /** UF do autor da consulta (código IBGE). 91 = Ambiente Nacional. */
+  /**
+   * UF do autor da consulta — sigla ('SP') ou código IBGE ('35').
+   *
+   * ⚠️ NÃO é 91. O 91 identifica o Ambiente Nacional e vale para o `cOrgao`
+   * do EVENTO de manifestação; na consulta de distribuição, `cUFAutor` é o
+   * código IBGE do estado de quem consulta. Mandar 91 aqui fez a primeira
+   * consulta real voltar vazia, com cStat 137 e maxNSU=0 — o que parecia
+   * "CNPJ sem notas" e na verdade era requisição malformada.
+   */
   cUF?:       string
+}
+
+/** Código IBGE por sigla de UF — é o que `cUFAutor` espera. */
+export const UF_IBGE: Record<string, string> = {
+  RO: '11', AC: '12', AM: '13', RR: '14', PA: '15', AP: '16', TO: '17',
+  MA: '21', PI: '22', CE: '23', RN: '24', PB: '25', PE: '26', AL: '27',
+  SE: '28', BA: '29', MG: '31', ES: '32', RJ: '33', SP: '35', PR: '41',
+  SC: '42', RS: '43', MS: '50', MT: '51', GO: '52', DF: '53',
+}
+
+/** Aceita 'SP' ou '35' e devolve sempre o código. Sem UF, não dá para montar. */
+export function codigoDaUf(uf: string | null | undefined): string | null {
+  const v = String(uf ?? '').trim().toUpperCase()
+  if (/^\d{2}$/.test(v)) return Object.values(UF_IBGE).includes(v) ? v : null
+  return UF_IBGE[v] ?? null
 }
 
 /** Um documento do lote, já descompactado e identificado. */
@@ -252,9 +275,13 @@ export function lerDadosDaNota(xml: string, chaveConhecida?: string | null): Dad
 // ─── As duas consultas ───────────────────────────────────────────────────────
 
 function corpo(cred: CredencialSefaz, miolo: string): string {
+  const uf = codigoDaUf(cred.cUF)
+  if (!uf) {
+    throw new Error('UF do autor da consulta não definida — confira o estado no cadastro da clínica.')
+  }
   return '<distDFeInt xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.01">'
     + `<tpAmb>${TP_AMB[cred.ambiente]}</tpAmb>`
-    + `<cUFAutor>${cred.cUF ?? '91'}</cUFAutor>`
+    + `<cUFAutor>${uf}</cUFAutor>`
     + `<CNPJ>${cred.cnpj.replace(/\D/g, '')}</CNPJ>`
     + miolo
     + '</distDFeInt>'
