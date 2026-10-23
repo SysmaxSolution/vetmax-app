@@ -194,7 +194,18 @@ export default function PagforTab() {
         <div className="flex items-end gap-2">
           <SeletorDeConta
             value={contaId}
-            onChange={id => setContaId(id)}
+            onChange={id => {
+              if (id === contaId) return
+              setContaId(id)
+              // Limpa o que esta na tela: sao os boletos da conta ANTERIOR, e
+              // deixar na tela e convite a lancar o boleto de um CNPJ no
+              // outro. Nao recarrega sozinho de proposito — abrir o periodo
+              // pode significar consultar o banco, e isso e escolha de quem
+              // opera, nao efeito colateral de mexer num seletor.
+              setParsed([]); setResult(null); setPersistidos([])
+              setSelected(new Set()); setError(null)
+              setDone('Conta alterada — clique em "Abrir período" para ver os boletos dela.')
+            }}
             bankCode="756"
             label="Conta que opera"
             className="min-w-[220px]"
