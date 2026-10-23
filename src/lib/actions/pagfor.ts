@@ -336,6 +336,18 @@ async function guardarBoletos(
   const { error } = await admin.from('dda_boletos')
     .upsert(linhas, { onConflict: 'clinic_id,fingerprint', ignoreDuplicates: true })
   if (error) return 0
+
+  // Quem já estava guardado SEM dono passa a ser desta conta — o banco acabou
+  // de confirmar que o boleto é dela. `ignoreDuplicates` protege o estado do
+  // trabalho, mas por isso mesmo não corrige a linha antiga: sem este passo, o
+  // boleto lançado antes do seletor existir ficaria invisível em toda conta.
+  if (bankAccountId) {
+    await admin.from('dda_boletos')
+      .update({ bank_account_id: bankAccountId })
+      .eq('clinic_id', clinicId)
+      .is('bank_account_id', null)
+      .in('fingerprint', linhas.map(l => l.fingerprint))
+  }
   return linhas.length
 }
 
@@ -394,14 +406,18 @@ export async function carregarDdaDoPeriodo(params: {
   if (!['admin', 'owner', 'manager'].includes(c.role)) return { error: 'Sem permissão.' }
   const admin = createAdminClient()
 
+  // O DDA e POR CONTA: cada CNPJ ve os boletos emitidos contra ele. Ler so por
+  // clinica e periodo fazia o PAGFOR mostrar o mesmo conjunto em qualquer conta
+  // escolhida — e, como ja havia dado guardado, nem consultava o banco de novo.
   const ler = async () => {
-    const { data } = await admin
+    let q = admin
       .from('dda_boletos')
       .select('id, fingerprint, barcode, document, beneficiary, beneficiary_doc, amount, due_date, situacao, raw, entry_id, launched_at, dismissed_at, dismissed_reason, imported_at')
       .eq('clinic_id', c.clinicId)
       .gte('due_date', params.dataInicial)
       .lte('due_date', params.dataFinal)
-      .order('due_date', { ascending: true })
+    if (params.bankAccountId) q = q.eq('bank_account_id', params.bankAccountId)
+    const { data } = await q.order('due_date', { ascending: true })
     return (data ?? []) as Record<string, unknown>[]
   }
 
