@@ -1,17 +1,18 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Loader2, Upload, CheckCircle2, XCircle, PlusCircle, CalendarClock, FileDown, Landmark, Banknote, EyeOff, RotateCcw, Sparkles, Database } from 'lucide-react'
+import { Loader2, Upload, CheckCircle2, XCircle, PlusCircle, CalendarClock, FileDown, Landmark, Banknote, EyeOff, RotateCcw, Sparkles, Database, Link2, Unlink } from 'lucide-react'
 import { parseDdaCsv } from '@/lib/parsers/ddaParser'
 import type { DdaBoleto, DdaMatchResult, DdaBoletoPersistido } from '@/types/pagfor'
 import PreviaFornecedoresModal from './PreviaFornecedoresModal'
 import SeletorDeConta from './SeletorDeConta'
 import { textoParaTela } from '@/lib/financial/mensagens-operador'
+import VincularBoletoModal from './VincularBoletoModal'
 import {
   matchDdaBoletos, insertPayablesFromDda, schedulePayments, generatePagforRemittance,
   fetchDdaFromBank, payBoletosViaBank,
   carregarDdaDoPeriodo, ignorarBoletoDda, reativarBoletoDda, enriquecerFornecedoresDda,
-  estadoDaVarredura,
+  estadoDaVarredura, desvincularBoleto,
 } from '@/lib/actions/pagfor'
 
 const BRL = (v: number | null) => (v == null ? '—' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }))
@@ -42,6 +43,8 @@ export default function PagforTab() {
   const [contaId, setContaId] = useState<string | null>(null)
   // Frase pronta sobre o frescor da lista. Nunca carrega detalhe tecnico.
   const [frescor, setFrescor] = useState<{ texto: string; tom: 'ok' | 'atencao' | 'alerta' } | null>(null)
+  // Boleto que o operador escolheu amarrar a um titulo a mao.
+  const [vincular, setVincular] = useState<number | null>(null)
 
   /**
    * Abre o período: lê o que já está guardado e completa com o banco.
@@ -147,6 +150,17 @@ export default function PagforTab() {
     const falhas = res.falhas.length ? ` ${res.falhas.length} falharam.` : ''
     setDone(`${res.agendados} pagamento(s) agendado(s) no Sicoob para ${fmtD(scheduleDate || today)}.${falhas}`)
     await runMatch(parsed)
+  }
+
+  async function handleDesvincular(i: number) {
+    const fp = persistidos[i]?.fingerprint
+    if (!fp) return
+    setBusy('unlink'); setError(null)
+    const res = await desvincularBoleto(fp)
+    setBusy(null)
+    if ('error' in res) { setError(textoParaTela(res.error)); return }
+    await runMatch(parsed)
+    if (contaId) await carregarGuardado(contaId)
   }
 
   async function runMatch(boletos: DdaBoleto[]) {
@@ -334,13 +348,30 @@ export default function PagforTab() {
                               : <span className="inline-flex items-center gap-1 text-rose-700"><XCircle className="h-3 w-3" /> não lançado</span>}
                         </td>
                         <td className="px-3 py-2">
-                          {persistidos[i] && (
-                            <button onClick={() => handleIgnorar(i)} disabled={busy !== null}
-                              title={ignorado ? 'Voltar a considerar' : 'Ignorar este boleto (fica guardado)'}
-                              className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-40">
-                              {ignorado ? <RotateCcw className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-                            </button>
-                          )}
+                          <div className="flex items-center justify-end gap-1">
+                            {/* Vincular a mao: para o que nenhuma regra pegou. */}
+                            {!ignorado && !green && persistidos[i] && (
+                              <button onClick={() => setVincular(i)} disabled={busy !== null}
+                                title="Vincular a um título já lançado"
+                                className="rounded p-1 text-indigo-500 hover:bg-indigo-50 disabled:opacity-40">
+                                <Link2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                            {!ignorado && green && persistidos[i]?.entry_id && (
+                              <button onClick={() => void handleDesvincular(i)} disabled={busy !== null}
+                                title="Desfazer o vínculo com o título"
+                                className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-rose-600 disabled:opacity-40">
+                                <Unlink className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                            {persistidos[i] && (
+                              <button onClick={() => handleIgnorar(i)} disabled={busy !== null}
+                                title={ignorado ? 'Voltar a considerar' : 'Ignorar este boleto (fica guardado)'}
+                                className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-40">
+                                {ignorado ? <RotateCcw className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     )
@@ -383,6 +414,19 @@ export default function PagforTab() {
             </div>
           </div>
         </>
+      )}
+
+      {vincular !== null && persistidos[vincular] && (
+        <VincularBoletoModal
+          fingerprint={persistidos[vincular].fingerprint}
+          boleto={result?.rows[vincular]?.boleto ?? {}}
+          onClose={() => setVincular(null)}
+          onVinculado={async () => {
+            await runMatch(parsed)
+            if (contaId) await carregarGuardado(contaId)
+            setDone('Boleto vinculado ao título.')
+          }}
+        />
       )}
 
       {previaAberta && (
