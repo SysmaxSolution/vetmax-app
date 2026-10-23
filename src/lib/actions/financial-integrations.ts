@@ -9,30 +9,9 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
 import { mensagemErro } from '@/lib/errors'
-export interface BankIntegration {
-  bank_code:   string   // '756' Sicoob, '341' Itaú…
-  provider:    string   // 'sicoob'
-  environment: 'sandbox' | 'production'
-  client_id:   string
-  agencia:     string
-  conta:       string
-}
-export interface PixIntegration {
-  enabled:       boolean
-  provider:      string   // 'sicoob'
-  environment:   'sandbox' | 'production'
-  client_id:     string
-  client_secret: string
-  token:         string
-  pix_key:       string   // chave PIX estática (recebimento estático)
-}
-export interface FinancialIntegrations {
-  bank_enabled: boolean
-  banks:        BankIntegration[]
-  pix_enabled:  boolean
-  pix:          PixIntegration
-}
-
+import type {
+  BankIntegration, PixIntegration, FinancialIntegrations,
+} from '@/types/financial-integrations'
 const PIX_DEFAULT: PixIntegration = { enabled: false, provider: 'sicoob', environment: 'sandbox', client_id: '', client_secret: '', token: '', pix_key: '' }
 const DEFAULTS: FinancialIntegrations = { bank_enabled: false, banks: [], pix_enabled: false, pix: PIX_DEFAULT }
 

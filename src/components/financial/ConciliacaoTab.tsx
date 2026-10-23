@@ -385,7 +385,7 @@ export default function ConciliacaoTab({ bankAccounts }: Props) {
             <select value={selectedBank} onChange={e => setSelectedBank(e.target.value)}
               className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20">
               <option value="">Selecione uma conta</option>
-              {bankAccounts.map(b => <option key={b.id} value={b.id}>{b.name}{b.bank_name ? ` — ${b.bank_name}` : ''}</option>)}
+              {bankAccounts.map(b => <option key={b.id} value={b.id}>{b.name}{b.company_name ? ` · ${b.company_name}` : ''}{b.bank_name ? ` — ${b.bank_name}` : ''}</option>)}
             </select>
           </div>
           <div>

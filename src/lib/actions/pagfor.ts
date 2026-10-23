@@ -535,17 +535,18 @@ async function loadPagamentosRuntime(admin: ReturnType<typeof createAdminClient>
   //
   // A carteira continua obrigatoria para EMITIR boleto (cobranca), onde o
   // Sicoob precisa saber sob qual carteira registrar o titulo.
-  let q = admin.from('bank_accounts').select('id, agency, account, bank_code, is_default').eq('clinic_id', clinicId)
+  let q = admin.from('bank_accounts').select('id, agency, account, bank_code, is_default, company_id').eq('clinic_id', clinicId)
   q = bankAccountId ? q.eq('id', bankAccountId) : q.eq('bank_code', '756').order('is_default', { ascending: false })
   const { data: acc } = await q.limit(1).maybeSingle()
   if (!acc) return { error: 'Nenhuma conta Sicoob cadastrada (Cadastros → Bancos).' }
-  const conta = acc as { agency?: string | null; account?: string | null; bank_code?: string | null }
+  const conta = acc as { id?: string; agency?: string | null; account?: string | null; bank_code?: string | null; company_id?: string | null }
 
   // Mesma resolucao usada pelo extrato: ambiente, client_id e certificado vem
   // da configuracao da CLINICA, nunca de variavel de ambiente.
   const { resolverConfigSicoob } = await import('@/lib/integrations/sicoob-config')
   const r = await resolverConfigSicoob(admin, clinicId, {
-    agency: conta.agency ?? null, account: conta.account ?? null, bank_code: conta.bank_code ?? null,
+    id: conta.id ?? null, agency: conta.agency ?? null, account: conta.account ?? null,
+    bank_code: conta.bank_code ?? null, company_id: conta.company_id ?? null,
   })
   if ('error' in r) return { error: r.error }
 

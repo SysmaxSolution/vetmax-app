@@ -22,28 +22,60 @@ async function ctx(): Promise<Ctx | { error: string }> {
   return { userId: user.id, clinicId: profile.clinic_id as string, role: (profile.role as string) ?? '' }
 }
 
-// Lê a config de cobrança da clínica (bloco `cobranca` em clinic_bank_integrations).
-async function loadCobrancaConfig(clinicId: string): Promise<CobrancaRuntime | { error: string }> {
+// Le a config de cobranca da clinica (bloco `cobranca` em clinic_bank_integrations).
+//
+// A credencial e o certificado dependem da CONTA: a clinica pode ter varios
+// CNPJs no mesmo banco, cada um com seu e-CNPJ. Antes isto pegava o PRIMEIRO
+// banco com provider 'sicoob' no JSONB e ignorava de qual empresa era — o que
+// numa clinica com tres CNPJs apresentava o certificado errado ao banco.
+async function loadCobrancaConfig(
+  clinicId: string,
+  conta?: { bankAccountId?: string | null; companyId?: string | null },
+): Promise<CobrancaRuntime | { error: string }> {
   const admin = createAdminClient()
   const { data } = await admin.from('clinic_bank_integrations').select('cobranca, banks').eq('clinic_id', clinicId).maybeSingle()
   const cob = (data as any)?.cobranca ?? {}
-  const bank = ((data as any)?.banks ?? []).find((b: any) => b.provider === 'sicoob') ?? {}
-  const environment: 'sandbox' | 'production' = (cob.environment ?? bank.environment ?? 'sandbox') === 'production' ? 'production' : 'sandbox'
+
+  // A conta: a pedida, ou a conta Sicoob padrao da clinica. Nunca "a primeira
+  // do JSONB", que nao tem dono nem dona.
+  let q = admin.from('bank_accounts')
+    .select('id, agency, account, bank_code, company_id, is_default')
+    .eq('clinic_id', clinicId)
+  q = conta?.bankAccountId
+    ? q.eq('id', conta.bankAccountId)
+    : q.eq('bank_code', '756').order('is_default', { ascending: false })
+  const { data: acc } = await q.limit(1).maybeSingle()
+  const contaBanco = (acc ?? null) as {
+    id?: string; agency?: string | null; account?: string | null
+    bank_code?: string | null; company_id?: string | null
+  } | null
+
+  const bancos = ((data as any)?.banks ?? []) as any[]
+  const { escolherBanco } = await import('@/lib/integrations/sicoob-config')
+  const bank = (contaBanco
+    ? escolherBanco(bancos, {
+        id: contaBanco.id ?? null, agency: contaBanco.agency ?? null,
+        account: contaBanco.account ?? null, bank_code: contaBanco.bank_code ?? '756',
+      })
+    : null) ?? bancos.find((b: any) => b.provider === 'sicoob') ?? {}
+
+  const environment: 'sandbox' | 'production' = (cob.environment ?? (bank as any).environment ?? 'sandbox') === 'production' ? 'production' : 'sandbox'
   const numeroCliente = Number(cob.numeroCliente ?? 0)
-  const numeroContaCorrente = Number(cob.numeroContaCorrente ?? bank.conta ?? 0)
+  const numeroContaCorrente = Number(cob.numeroContaCorrente ?? contaBanco?.account ?? (bank as any).conta ?? 0)
   const codigoModalidade = Number(cob.codigoModalidade ?? 1)
   if (environment === 'sandbox') {
-    // sandbox: usa números de teste caso não configurados
+    // sandbox: usa numeros de teste caso nao configurados
     return { environment, numeroCliente: numeroCliente || 25546454, numeroContaCorrente: numeroContaCorrente || 12345, codigoModalidade: codigoModalidade || 1 }
   }
   if (!numeroCliente || !numeroContaCorrente) return { error: 'Configure numeroCliente e conta corrente da cobrança Sicoob.' }
 
-  // A credencial (client_id + certificado e-CNPJ) vem da configuracao da
-  // CLINICA, igual ao extrato — nao de variavel de ambiente nem do bloco da
-  // carteira. Sem isto, producao caia no stub "pendente de onboarding".
   const { resolverConfigSicoob } = await import('@/lib/integrations/sicoob-config')
   const cred = await resolverConfigSicoob(admin, clinicId, {
-    agency: bank.agencia ?? null, account: bank.conta ?? null, bank_code: bank.bank_code ?? '756',
+    id:         contaBanco?.id ?? null,
+    company_id: conta?.companyId ?? contaBanco?.company_id ?? null,
+    agency:     contaBanco?.agency ?? (bank as any).agencia ?? null,
+    account:    contaBanco?.account ?? (bank as any).conta ?? null,
+    bank_code:  contaBanco?.bank_code ?? (bank as any).bank_code ?? '756',
   })
   if ('error' in cred) return { error: cred.error }
 
@@ -54,6 +86,8 @@ export interface EmitBoletoInput extends BoletoInput {
   consultationId?: string
   tutorId?: string
   companyId?: string
+  /** Conta de onde o boleto sai — define a credencial e o certificado. */
+  bankAccountId?: string
 }
 
 /** Emite um boleto e persiste o resultado. */
@@ -64,7 +98,9 @@ export async function emitBoleto(input: EmitBoletoInput): Promise<{ ok: true; id
   if (!(input.valor > 0)) return { error: 'Valor inválido.' }
   if (!input.pagador?.nome || !input.pagador?.cpfCnpj) return { error: 'Informe o pagador (nome e CPF/CNPJ).' }
 
-  const cfg = await loadCobrancaConfig(c.clinicId)
+  const cfg = await loadCobrancaConfig(c.clinicId, {
+    bankAccountId: input.bankAccountId ?? null, companyId: input.companyId ?? null,
+  })
   if ('error' in cfg) return { error: cfg.error }
 
   const today = new Date().toISOString().slice(0, 10)
@@ -118,9 +154,14 @@ export async function refreshBoletoStatus(id: string): Promise<{ ok: true; situa
   const c = await ctx()
   if ('error' in c) return { error: c.error }
   const admin = createAdminClient()
-  const { data: b } = await admin.from('clinic_boletos').select('nosso_numero').eq('id', id).eq('clinic_id', c.clinicId).maybeSingle()
+  const { data: b } = await admin.from('clinic_boletos')
+    .select('nosso_numero, bank_account_id, company_id').eq('id', id).eq('clinic_id', c.clinicId).maybeSingle()
   if (!b || !(b as any).nosso_numero) return { error: 'Boleto sem nosso número para consulta.' }
-  const cfg = await loadCobrancaConfig(c.clinicId)
+  // Com a credencial de QUEM EMITIU: consultar o boleto de uma empresa com o
+  // certificado de outra é recusado pelo banco.
+  const cfg = await loadCobrancaConfig(c.clinicId, {
+    bankAccountId: (b as any).bank_account_id ?? null, companyId: (b as any).company_id ?? null,
+  })
   if ('error' in cfg) return { error: cfg.error }
   const res = await consultarBoleto(cfg, (b as any).nosso_numero)
   if (!res.ok) return { error: res.error }
@@ -147,9 +188,12 @@ export async function cancelBoleto(id: string): Promise<{ ok: true } | { error: 
   if ('error' in c) return { error: c.error }
   if (!['admin', 'owner', 'manager'].includes(c.role)) return { error: 'Sem permissão.' }
   const admin = createAdminClient()
-  const { data: b } = await admin.from('clinic_boletos').select('nosso_numero').eq('id', id).eq('clinic_id', c.clinicId).maybeSingle()
+  const { data: b } = await admin.from('clinic_boletos')
+    .select('nosso_numero, bank_account_id, company_id').eq('id', id).eq('clinic_id', c.clinicId).maybeSingle()
   if (!b || !(b as any).nosso_numero) return { error: 'Boleto sem nosso número.' }
-  const cfg = await loadCobrancaConfig(c.clinicId)
+  const cfg = await loadCobrancaConfig(c.clinicId, {
+    bankAccountId: (b as any).bank_account_id ?? null, companyId: (b as any).company_id ?? null,
+  })
   if ('error' in cfg) return { error: cfg.error }
   const res = await baixarBoleto(cfg, (b as any).nosso_numero)
   if (!res.ok) return { error: res.error }
