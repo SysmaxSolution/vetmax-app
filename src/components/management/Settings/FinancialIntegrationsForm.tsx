@@ -3,11 +3,12 @@
 import { useState, useEffect } from 'react'
 import BankCertificateCard from './BankCertificateCard'
 import { listBankAccounts } from '@/lib/actions/financial'
+import { listCompanies } from '@/lib/actions/companies'
 import { Landmark, QrCode, ToggleLeft, ToggleRight, Save, Loader2, Plus, Trash2 } from 'lucide-react'
 import {
   getFinancialIntegrations, updateFinancialIntegrations,
-  type FinancialIntegrations, type BankIntegration,
 } from '@/lib/actions/financial-integrations'
+import type { FinancialIntegrations, BankIntegration } from '@/types/financial-integrations'
 
 const BANKS = [
   { code: '756', name: 'Sicoob' }, { code: '748', name: 'Sicredi' }, { code: '001', name: 'Banco do Brasil' },
@@ -20,17 +21,35 @@ export default function FinancialIntegrationsForm({ onToast }: { onToast: (t: 's
   // As contas bancárias cadastradas, para amarrar o certificado e o teste de
   // conexão à conta certa (o banco configurado aqui e a conta do financeiro são
   // cadastros separados).
-  const [contas, setContas] = useState<{ id: string; agency: string | null; account: string | null; bank_code: string | null }[]>([])
+  type Conta = {
+    id: string; name: string; agency: string | null; account: string | null
+    bank_code: string | null; company_id: string | null
+  }
+  const [contas, setContas] = useState<Conta[]>([])
+  const [empresas, setEmpresas] = useState<{ id: string; name: string; cnpj: string | null }[]>([])
   useEffect(() => {
-    void listBankAccounts().then(r => { if (Array.isArray(r)) setContas(r.map(c => ({ id: c.id, agency: c.agency ?? null, account: c.account ?? null, bank_code: c.bank_code ?? null }))) })
+    void listBankAccounts().then(r => {
+      if (Array.isArray(r)) setContas(r.map(c => ({
+        id: c.id, name: c.name, agency: c.agency ?? null, account: c.account ?? null,
+        bank_code: c.bank_code ?? null, company_id: (c as { company_id?: string | null }).company_id ?? null,
+      })))
+    })
+    void listCompanies().then(r => { if (Array.isArray(r)) setEmpresas(r.map(e => ({ id: e.id, name: e.name, cnpj: e.cnpj }))) })
   }, [])
   const soDig = (v: unknown) => String(v ?? '').replace(/[^0-9]/g, '')
-  const contaDoBanco = (b: { bank_code: string; agencia: string; conta: string }): string | null => {
+
+  /**
+   * A conta desta credencial. O vínculo explícito manda; o casamento por
+   * número fica só para o que já estava configurado antes deste campo existir.
+   */
+  const contaDoBanco = (b: BankIntegration): Conta | null => {
+    if (b.bank_account_id) return contas.find(c => c.id === b.bank_account_id) ?? null
     const porConta = contas.find(c => soDig(c.account) && soDig(c.account) === soDig(b.conta))
-    if (porConta) return porConta.id
+    if (porConta) return porConta
     const doBanco = contas.filter(c => soDig(c.bank_code) === soDig(b.bank_code))
-    return doBanco.length === 1 ? doBanco[0].id : null
+    return doBanco.length === 1 ? doBanco[0] : null
   }
+  const empresaDe = (c: Conta | null) => c?.company_id ? empresas.find(e => e.id === c.company_id) ?? null : null
 
   const [cfg, setCfg]     = useState<FinancialIntegrations | null>(null)
   const [saving, setSaving] = useState(false)
@@ -41,7 +60,7 @@ export default function FinancialIntegrationsForm({ onToast }: { onToast: (t: 's
   const set = (patch: Partial<FinancialIntegrations>) => setCfg(c => c ? { ...c, ...patch } : c)
   const setBank = (i: number, patch: Partial<BankIntegration>) =>
     set({ banks: cfg.banks.map((b, j) => j === i ? { ...b, ...patch } : b) })
-  const addBank = () => set({ banks: [...cfg.banks, { bank_code: '756', provider: 'sicoob', environment: 'sandbox', client_id: '', agencia: '', conta: '' }] })
+  const addBank = () => set({ banks: [...cfg.banks, { bank_code: '756', provider: 'sicoob', environment: 'sandbox', client_id: '', agencia: '', conta: '', bank_account_id: null }] })
   const removeBank = (i: number) => set({ banks: cfg.banks.filter((_, j) => j !== i) })
 
   async function save() {
@@ -76,9 +95,43 @@ export default function FinancialIntegrationsForm({ onToast }: { onToast: (t: 's
             {cfg.banks.map((b, i) => (
               <div key={i} className="rounded-xl border border-slate-200 p-3 space-y-2 bg-slate-50/40">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-700">{bankName(b.bank_code)}</span>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-xs font-bold text-slate-700">{bankName(b.bank_code)}</span>
+                    {(() => {
+                      const emp = empresaDe(contaDoBanco(b))
+                      return emp
+                        ? <span className="text-[10px] font-semibold text-teal-700">{emp.name}</span>
+                        : <span className="text-[10px] text-amber-700">sem empresa vinculada</span>
+                    })()}
+                  </div>
                   <button onClick={() => removeBank(i)} className="text-rose-500 hover:text-rose-700"><Trash2 className="h-4 w-4" /></button>
                 </div>
+                <label className="block"><span className="text-[10px] font-semibold text-slate-500 uppercase">Conta desta credencial</span>
+                  <select
+                    value={b.bank_account_id ?? contaDoBanco(b)?.id ?? ''}
+                    onChange={e => {
+                      const c = contas.find(x => x.id === e.target.value) ?? null
+                      // Preenche agência e conta a partir do cadastro: digitar de
+                      // novo é onde nascia a divergência que fazia a credencial
+                      // não casar com conta nenhuma.
+                      setBank(i, c
+                        ? { bank_account_id: c.id, agencia: c.agency ?? '', conta: c.account ?? '', bank_code: c.bank_code ?? b.bank_code }
+                        : { bank_account_id: null })
+                    }}
+                    className={input}
+                  >
+                    <option value="">Selecione a conta cadastrada…</option>
+                    {contas.map(c => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}{c.company_id ? ` · ${empresas.find(e => e.id === c.company_id)?.name ?? 'empresa'}` : ' · sem empresa'}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="mt-1 block text-[10px] text-slate-500">
+                    A empresa da conta define qual certificado e-CNPJ é apresentado ao banco.
+                  </span>
+                </label>
+
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   <label className="block"><span className="text-[10px] font-semibold text-slate-500 uppercase">Banco</span>
                     <select value={b.bank_code} onChange={e => setBank(i, { bank_code: e.target.value })} className={input}>
@@ -106,7 +159,9 @@ export default function FinancialIntegrationsForm({ onToast }: { onToast: (t: 's
                     <BankCertificateCard
                       bankCode={b.bank_code}
                       bankLabel={bankName(b.bank_code)}
-                      bankAccountId={contaDoBanco(b)}
+                      bankAccountId={contaDoBanco(b)?.id ?? null}
+                      companyId={contaDoBanco(b)?.company_id ?? null}
+                      companyName={empresaDe(contaDoBanco(b))?.name ?? null}
                       onToast={onToast}
                     />
                   </div>

@@ -20,6 +20,16 @@ interface BancoConfigurado {
   client_id?:   string
   agencia?:     string
   conta?:       string
+  /**
+   * Conta bancária cadastrada a que esta configuração pertence.
+   *
+   * Nasceu porque casar por agência+conta é frágil: com três CNPJs no mesmo
+   * banco, um dígito digitado diferente joga a cobrança na credencial errada,
+   * e quando nada casa a função devolvia `null` sem dizer por quê. Quando o
+   * id está presente ele manda; o casamento por número continua como
+   * compatibilidade para o que já estava configurado.
+   */
+  bank_account_id?: string | null
 }
 
 const soDigitos = (v: unknown) => String(v ?? '').replace(/\D/g, '')
@@ -30,8 +40,12 @@ const soDigitos = (v: unknown) => String(v ?? '').replace(/\D/g, '')
  */
 export function escolherBanco(
   bancos: BancoConfigurado[],
-  conta: { agency?: string | null; account?: string | null; bank_code?: string | null },
+  conta: { id?: string | null; agency?: string | null; account?: string | null; bank_code?: string | null },
 ): BancoConfigurado | null {
+  if (conta.id) {
+    const porId = bancos.find(b => b.bank_account_id && b.bank_account_id === conta.id)
+    if (porId) return porId
+  }
   const porConta = bancos.find(b =>
     soDigitos(b.conta) && soDigitos(b.conta) === soDigitos(conta.account) &&
     (!soDigitos(b.agencia) || soDigitos(b.agencia) === soDigitos(conta.agency)))
@@ -49,7 +63,19 @@ export interface ResolucaoSicoob {
 export async function resolverConfigSicoob(
   admin: SupabaseClient,
   clinicId: string,
-  conta: { agency?: string | null; account?: string | null; bank_code?: string | null },
+  conta: {
+    id?: string | null
+    agency?: string | null
+    account?: string | null
+    bank_code?: string | null
+    /**
+     * Empresa faturante dona da conta. É ela que define QUAL certificado
+     * e-CNPJ vai ao banco: a Animais opera três CNPJs no mesmo Sicoob, e
+     * apresentar o certificado de um na conta do outro faz o handshake TLS
+     * ser recusado.
+     */
+    company_id?: string | null
+  },
 ): Promise<ResolucaoSicoob | { error: string }> {
   const avisos: string[] = []
 
@@ -88,15 +114,33 @@ export async function resolverConfigSicoob(
   }
 
   if (environment === 'production') {
-    const { data: cert } = await admin
+    const bankCode = soDigitos(banco.bank_code) || '756'
+
+    // O certificado DA EMPRESA da conta; na falta dele, o certificado geral da
+    // clínica (company_id nulo), que é o que existia antes de haver empresas
+    // faturantes. Buscar só pelo banco, como antes, pegava o certificado de
+    // outro CNPJ quando a clínica tinha mais de um.
+    const base = () => admin
       .from('clinic_bank_certificates')
-      .select('pfx_encrypted, passphrase_encrypted, not_after')
+      .select('pfx_encrypted, passphrase_encrypted, not_after, cnpj')
       .eq('clinic_id', clinicId)
-      .eq('bank_code', soDigitos(banco.bank_code) || '756')
-      .maybeSingle()
+      .eq('bank_code', bankCode)
+
+    let cert: Record<string, unknown> | null = null
+    if (conta.company_id) {
+      const { data } = await base().eq('company_id', conta.company_id).maybeSingle()
+      cert = (data as Record<string, unknown> | null) ?? null
+    }
+    if (!cert) {
+      const { data } = await base().is('company_id', null).maybeSingle()
+      cert = (data as Record<string, unknown> | null) ?? null
+      if (cert && conta.company_id) {
+        avisos.push('Esta conta está usando o certificado geral da clínica — envie o e-CNPJ da própria empresa em Configurações > Financeiro.')
+      }
+    }
 
     if (!cert) {
-      return { error: 'Produção exige o certificado e-CNPJ A1 da empresa. Envie o arquivo .pfx em Configurações > Financeiro.' }
+      return { error: 'Produção exige o certificado e-CNPJ A1 da empresa desta conta. Envie o arquivo .pfx em Configurações > Financeiro.' }
     }
     cfg.pfx = decryptSecret((cert as { pfx_encrypted: string }).pfx_encrypted)
     const senha = decryptSecret((cert as { passphrase_encrypted: string | null }).passphrase_encrypted)

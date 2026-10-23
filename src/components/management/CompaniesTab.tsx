@@ -4,12 +4,15 @@
 // CRUD das entidades de faturamento (Emp 001/002/003) dentro de uma clínica.
 
 import { useState, useEffect } from 'react'
-import { Loader2, Plus, Pencil, Building2, Check, X, Star, FileCheck2 } from 'lucide-react'
+import { Loader2, Plus, Pencil, Building2, Check, X, Star, FileCheck2, CreditCard } from 'lucide-react'
 import {
   listCompanies, upsertCompany, setCompanyActive, type Company,
 } from '@/lib/actions/companies'
 import { listCompanyFiscalConfigs, type CompanyFiscalConfig } from '@/lib/actions/nfse'
 import CompanyFiscalModal from './CompanyFiscalModal'
+import CompanyCardAcquirerModal from './CompanyCardAcquirerModal'
+import { listarConfigAdquirente } from '@/lib/actions/card-acquirer'
+import type { ConfigAdquirente } from '@/types/card-acquirer'
 import { Toast } from '@/components/ui/toast'
 
 interface Props { userRole?: string }
@@ -44,13 +47,18 @@ export default function CompaniesTab({ userRole = 'admin' }: Props) {
   const [toast, setToast]         = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [fiscalConfigs, setFiscalConfigs] = useState<CompanyFiscalConfig[]>([])
   const [fiscalFor, setFiscalFor] = useState<Company | null>(null)
+  // Adquirente de cartao por empresa: na Animais a Develey usa FinPet e as
+  // outras duas usam Sipag, entao a configuracao e por CNPJ.
+  const [cardConfigs, setCardConfigs] = useState<ConfigAdquirente[]>([])
+  const [cardFor, setCardFor] = useState<ConfigAdquirente | null>(null)
 
   async function reload() {
     try {
-      const [res, fc] = await Promise.all([listCompanies(), listCompanyFiscalConfigs()])
+      const [res, fc, cc] = await Promise.all([listCompanies(), listCompanyFiscalConfigs(), listarConfigAdquirente()])
       if (!('error' in res)) setCompanies(res)
       else setToast({ type: 'error', message: res.error })
       if (!('error' in fc)) setFiscalConfigs(fc)
+      if (Array.isArray(cc)) setCardConfigs(cc)
     } catch {
       setToast({ type: 'error', message: 'Erro ao carregar empresas.' })
     } finally {
@@ -202,6 +210,9 @@ export default function CompaniesTab({ userRole = 'admin' }: Props) {
               </div>
               {canManage && (
                 <div className="flex items-center gap-2">
+                  {cardConfigs.find(x => x.company_id === c.id)?.enabled && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold rounded-full px-2 py-0.5 bg-teal-100 text-teal-700"><CreditCard className="h-3 w-3" /> Cartão</span>
+                  )}
                   {fiscalConfigs.find(f => f.company_id === c.id)?.emits_nfse && (
                     <span className="inline-flex items-center gap-1 text-[11px] font-semibold rounded-full px-2 py-0.5 bg-blue-100 text-blue-700"><FileCheck2 className="h-3 w-3" /> NFS-e</span>
                   )}
@@ -213,6 +224,12 @@ export default function CompaniesTab({ userRole = 'admin' }: Props) {
                     className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-50 transition-colors">
                     <FileCheck2 className="h-3.5 w-3.5" /> Fiscal
                   </button>
+                  <button type="button"
+                    onClick={() => setCardFor(cardConfigs.find(x => x.company_id === c.id) ?? null)}
+                    disabled={!cardConfigs.some(x => x.company_id === c.id)}
+                    className="flex items-center gap-1.5 rounded-lg border border-teal-200 bg-white px-3 py-2 text-xs font-semibold text-teal-700 hover:bg-teal-50 transition-colors disabled:opacity-40">
+                    <CreditCard className="h-3.5 w-3.5" /> Cartão
+                  </button>
                   <button type="button" onClick={() => editDraft(c)}
                     className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-colors">
                     <Pencil className="h-3.5 w-3.5" /> Editar
@@ -222,6 +239,14 @@ export default function CompaniesTab({ userRole = 'admin' }: Props) {
             </div>
           ))}
         </div>
+      )}
+
+      {cardFor && (
+        <CompanyCardAcquirerModal
+          config={cardFor}
+          onClose={() => setCardFor(null)}
+          onSaved={reload}
+        />
       )}
 
       {fiscalFor && (

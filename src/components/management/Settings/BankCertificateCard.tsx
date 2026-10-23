@@ -10,8 +10,8 @@ import { useEffect, useState, useCallback } from 'react'
 import { ShieldCheck, Upload, Trash2, Loader2, AlertTriangle, PlugZap, CheckCircle2, XCircle } from 'lucide-react'
 import {
   listarCertificados, enviarCertificado, removerCertificado, testarIntegracaoBancaria,
-  type CertificadoInfo,
 } from '@/lib/actions/bank-certificates'
+import type { CertificadoInfo } from '@/types/bank-certificates'
 
 type Aviso = { tipo: 'ok' | 'erro'; titulo: string; texto: string } | null
 
@@ -19,11 +19,16 @@ export default function BankCertificateCard({
   bankCode = '756',
   bankLabel = 'Sicoob',
   bankAccountId = null,
+  companyId = null,
+  companyName = null,
   onToast,
 }: {
   bankCode?: string
   bankLabel?: string
   bankAccountId?: string | null
+  /** Empresa faturante dona deste certificado. Nulo = certificado da clínica. */
+  companyId?: string | null
+  companyName?: string | null
   onToast: (type: 'success' | 'error', msg: string) => void
 }) {
   const [atual, setAtual]  = useState<CertificadoInfo | null>(null)
@@ -35,9 +40,15 @@ export default function BankCertificateCard({
 
   const carregar = useCallback(async () => {
     const lista = await listarCertificados()
-    setAtual(lista.find(c => c.bank_code === bankCode) ?? null)
+    // O da empresa; na falta dele, o da clínica (herdado), que é o que a
+    // integração também vai usar — a tela não pode dizer "sem certificado"
+    // quando existe um válido herdado.
+    setAtual(
+      lista.find(c => c.bank_code === bankCode && c.company_id === companyId)
+      ?? (companyId ? lista.find(c => c.bank_code === bankCode && c.company_id === null) ?? null : null),
+    )
     setLoad(false)
-  }, [bankCode])
+  }, [bankCode, companyId])
   useEffect(() => { void carregar() }, [carregar])
 
   /** Trocar arquivo ou senha limpa o resultado anterior — senão o usuário lê
@@ -54,7 +65,7 @@ export default function BankCertificateCard({
     for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i])
 
     const res = await enviarCertificado({
-      bank_code: bankCode, file_name: arquivo.name,
+      bank_code: bankCode, company_id: companyId, file_name: arquivo.name,
       pfx_base64: btoa(bin), passphrase: senha,
     })
     setBusy(false)
@@ -67,7 +78,10 @@ export default function BankCertificateCard({
     // tela evita subir o certificado da empresa errada sem perceber.
     const quem = [res.subject_cn, res.not_after ? `vence em ${new Date(res.not_after).toLocaleDateString('pt-BR')}` : null]
       .filter(Boolean).join(' · ')
-    setAviso({ tipo: 'ok', titulo: 'Certificado guardado', texto: `${quem}. Agora use "Testar conexão com o banco" para confirmar ponta a ponta.` })
+    const onde = companyName ? ` Guardado em "${companyName}".` : ''
+    setAviso(res.avisos.length
+      ? { tipo: 'erro', titulo: 'Certificado guardado, mas confira', texto: `${quem}.${onde} ${res.avisos.join(' ')}` }
+      : { tipo: 'ok', titulo: 'Certificado guardado', texto: `${quem}.${onde} Agora use "Testar conexão com o banco" para confirmar ponta a ponta.` })
     onToast('success', 'Certificado guardado com segurança.')
     setArq(null); setSenha('')
     void carregar()
@@ -76,7 +90,7 @@ export default function BankCertificateCard({
   async function remover() {
     if (!confirm(`Remover o certificado do ${bankLabel}?\n\nA busca automática de extrato para de funcionar até enviar outro.`)) return
     setBusy(true); setAviso(null)
-    const res = await removerCertificado(bankCode)
+    const res = await removerCertificado(bankCode, atual?.company_id ?? companyId)
     setBusy(false)
     if ('error' in res) return setAviso({ tipo: 'erro', titulo: 'Não foi possível remover', texto: res.error })
     setAtual(null)
@@ -103,14 +117,24 @@ export default function BankCertificateCard({
   const rot = 'text-[10px] font-semibold uppercase text-slate-500'
   const vencendo = atual?.dias !== null && atual?.dias !== undefined && atual.dias <= 30
 
+  // Herdado = a empresa não tem certificado próprio e está usando o geral da
+  // clínica. Mostrar "enviado" aqui faria parecer que o e-CNPJ desta empresa
+  // já está no sistema — e só o banco diria o contrário, recusando a conexão.
+  const herdado = Boolean(atual && companyId && atual.company_id !== companyId)
+
   return (
     <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
       <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50/60 px-4 py-2.5">
         <ShieldCheck className="h-4 w-4 flex-shrink-0 text-sky-600" />
-        <span className="flex-1 text-xs font-bold text-slate-700">Certificado e-CNPJ A1 — {bankLabel}</span>
-        {atual
-          ? <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">enviado</span>
-          : <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">pendente</span>}
+        <span className="flex-1 text-xs font-bold text-slate-700">
+          Certificado e-CNPJ A1 — {bankLabel}
+          {companyName && <span className="ml-1 font-semibold text-teal-700">· {companyName}</span>}
+        </span>
+        {herdado
+          ? <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">herdado da clínica</span>
+          : atual
+            ? <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">enviado</span>
+            : <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">pendente</span>}
       </div>
 
       <div className="space-y-3 p-4">
@@ -126,11 +150,19 @@ export default function BankCertificateCard({
                     : 'vencimento não informado'}
                 </span>
               </span>
-              <button onClick={remover} disabled={busy}
-                className="inline-flex items-center gap-1 rounded-lg border border-rose-200 px-2 py-1 text-[11px] font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-50">
-                <Trash2 className="h-3 w-3" /> Remover
-              </button>
+              {!herdado && (
+                <button onClick={remover} disabled={busy}
+                  className="inline-flex items-center gap-1 rounded-lg border border-rose-200 px-2 py-1 text-[11px] font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-50">
+                  <Trash2 className="h-3 w-3" /> Remover
+                </button>
+              )}
             </div>
+            {herdado && (
+              <p className="mt-1.5 text-[11px] text-amber-800">
+                Este é o certificado geral da clínica, não o de {companyName ?? 'desta empresa'}.
+                Envie o e-CNPJ da própria empresa — o banco recusa a conexão quando o CNPJ não confere.
+              </p>
+            )}
             {vencendo && (
               <p className="mt-1.5 flex items-center gap-1.5 text-[11px] font-medium text-amber-700">
                 <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />

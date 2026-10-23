@@ -8,6 +8,7 @@ import {
   listPaymentCards,
   type PaymentCard,
 } from '@/lib/actions/payment-cards'
+import CobrarNaMaquininhaPanel from './CobrarNaMaquininhaPanel'
 
 export interface CardPaymentResult {
   card:               PaymentCard
@@ -22,6 +23,9 @@ export interface CardPaymentResult {
 
 interface Props {
   paymentMethod:     'credit' | 'debit'
+  /** A quem a cobrança se refere — só para amarrar a transação da maquininha. */
+  consultationId?:   string | null
+  tutorId?:          string | null
   /** Saldo máximo permitido para este split (default = saldo restante). */
   maxAmount:         number
   /** Valor sugerido inicial. */
@@ -35,7 +39,7 @@ function fmt(v: number) {
 }
 
 export default function CardSelectionModal({
-  paymentMethod, maxAmount, suggestedAmount, onCancel, onConfirm,
+  paymentMethod, maxAmount, suggestedAmount, consultationId, tutorId, onCancel, onConfirm,
 }: Props) {
   const [cards,         setCards]         = useState<PaymentCard[]>([])
   const [loading,       setLoading]       = useState(true)
@@ -256,6 +260,22 @@ export default function CardSelectionModal({
                     })}
                   </select>
                 </div>
+              )}
+
+              {/* Cobrança integrada: só aparece se a clínica tem adquirente ativa.
+                  Preenche NSU e liberação abaixo quando o comprovante chega. */}
+              {selectedCard && (
+                <CobrarNaMaquininhaPanel
+                  paymentMethod={paymentMethod}
+                  valor={parseFloat(amount.replace(',', '.')) || 0}
+                  parcelas={installments}
+                  consultationId={consultationId}
+                  tutorId={tutorId}
+                  onComprovante={dados => {
+                    setNsu(dados.nsu)
+                    setAuthorization(dados.autorizacao)
+                  }}
+                />
               )}
 
               {/* NSU + Liberação — obrigatórios apenas quando credit_cards.requires_nsu=true */}

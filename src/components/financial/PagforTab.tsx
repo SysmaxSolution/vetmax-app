@@ -5,6 +5,7 @@ import { Loader2, Upload, CheckCircle2, XCircle, PlusCircle, CalendarClock, File
 import { parseDdaCsv } from '@/lib/parsers/ddaParser'
 import type { DdaBoleto, DdaMatchResult, DdaBoletoPersistido } from '@/types/pagfor'
 import PreviaFornecedoresModal from './PreviaFornecedoresModal'
+import SeletorDeConta from './SeletorDeConta'
 import {
   matchDdaBoletos, insertPayablesFromDda, schedulePayments, generatePagforRemittance,
   fetchDdaFromBank, payBoletosViaBank,
@@ -30,6 +31,10 @@ export default function PagforTab() {
   // tabela sabe se já foi lançada ou ignorada numa sessão anterior.
   const [persistidos, setPersistidos] = useState<DdaBoletoPersistido[]>([])
   const [previaAberta, setPreviaAberta] = useState(false)
+  // A conta que opera: define a credencial e o certificado e-CNPJ usados no
+  // banco. Numa clinica com varios CNPJs, buscar o DDA de uma empresa e pagar
+  // pela outra seria erro silencioso.
+  const [contaId, setContaId] = useState<string | null>(null)
 
   /**
    * Abre o período: lê o que já está guardado e completa com o banco.
@@ -43,6 +48,7 @@ export default function PagforTab() {
     try {
       const res = await carregarDdaDoPeriodo({
         dataInicial: ddaFrom, dataFinal: ddaTo, consultarBanco: forcar,
+        bankAccountId: contaId ?? undefined,
       })
       if ('error' in res) { setError(res.error); return }
       if (!res.boletos.length) { setError('Nenhum boleto no DDA para o período.'); return }
@@ -93,7 +99,9 @@ export default function PagforTab() {
   async function handleBankPay() {
     const ids = selGreenIds(); if (!ids.length) { setError('Selecione títulos já lançados (verdes) para pagar/agendar no banco.'); return }
     setBusy('bankpay'); setError(null)
-    const res = await payBoletosViaBank({ entry_ids: ids, dataPagamento: scheduleDate || today })
+    const res = await payBoletosViaBank({
+      entry_ids: ids, dataPagamento: scheduleDate || today, bankAccountId: contaId ?? undefined,
+    })
     setBusy(null)
     if ('error' in res) { setError(res.error); return }
     const falhas = res.falhas.length ? ` ${res.falhas.length} falharam.` : ''
@@ -184,6 +192,13 @@ export default function PagforTab() {
           </div>
         </div>
         <div className="flex items-end gap-2">
+          <SeletorDeConta
+            value={contaId}
+            onChange={id => setContaId(id)}
+            bankCode="756"
+            label="Conta que opera"
+            className="min-w-[220px]"
+          />
           <div><label className="block text-[10px] text-slate-500">De</label><input type="date" value={ddaFrom} onChange={e => setDdaFrom(e.target.value)} className="rounded-lg border border-slate-200 px-2 py-1 text-xs" /></div>
           <div><label className="block text-[10px] text-slate-500">Até</label><input type="date" value={ddaTo} onChange={e => setDdaTo(e.target.value)} className="rounded-lg border border-slate-200 px-2 py-1 text-xs" /></div>
           <button onClick={() => handleFetchDda(false)} disabled={loading} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2">

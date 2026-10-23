@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
+import { listCompanies } from '@/lib/actions/companies'
 import { createPortal } from 'react-dom'
 import {
   listBankAccounts, createBankAccount, updateBankAccount, deleteBankAccount,
@@ -42,7 +43,7 @@ interface Props {
 }
 
 const emptyForm = (): CreateBankAccountData => ({
-  name: '', bank_name: '', bank_code: '', ispb: '',
+  name: '', company_id: null, bank_name: '', bank_code: '', ispb: '',
   agency: '', account: '', pix_key: '', is_default: false, initial_balance: 0,
 })
 
@@ -65,7 +66,8 @@ function AccountModal({
   const [form, setForm] = useState<CreateBankAccountData>(
     account
       ? {
-          name: account.name, bank_name: account.bank_name ?? '',
+          name: account.name, company_id: account.company_id ?? null,
+          bank_name: account.bank_name ?? '',
           bank_code: account.bank_code ?? '', ispb: account.ispb ?? '',
           agency: account.agency ?? '', account: account.account ?? '',
           pix_key: account.pix_key ?? '', is_default: account.is_default,
@@ -74,6 +76,12 @@ function AccountModal({
       : emptyForm()
   )
   const [error, setError] = useState<string | null>(null)
+  const [empresas, setEmpresas] = useState<{ id: string; name: string; cnpj: string | null }[]>([])
+  useEffect(() => {
+    void listCompanies().then(r => {
+      if (Array.isArray(r)) setEmpresas(r.map(e => ({ id: e.id, name: e.name, cnpj: e.cnpj })))
+    })
+  }, [])
   const [isPending, startTransition] = useTransition()
   const [confirmDel, setConfirmDel] = useState(false)
   const [tab, setTab] = useState<'dados' | 'carteira'>('dados')
@@ -143,6 +151,26 @@ function AccountModal({
             <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
               className={fieldClass} placeholder="Ex: Conta Corrente Principal" />
           </div>
+
+          {empresas.length > 0 && (
+            <div>
+              <label className={labelClass}>Empresa faturante</label>
+              <select
+                value={form.company_id ?? ''}
+                onChange={e => setForm(f => ({ ...f, company_id: e.target.value || null }))}
+                className={fieldClass}
+              >
+                <option value="">Nenhuma (conta da clínica)</option>
+                {empresas.map(e => (
+                  <option key={e.id} value={e.id}>{e.name}{e.cnpj ? ` · ${e.cnpj}` : ''}</option>
+                ))}
+              </select>
+              <p className="mt-1 text-[11px] text-slate-500">
+                É o CNPJ desta conta. Define qual certificado e-CNPJ o sistema apresenta ao banco
+                na conciliação, no PAGFOR e nos boletos.
+              </p>
+            </div>
+          )}
 
           <div>
             <label className={labelClass}>Banco</label>

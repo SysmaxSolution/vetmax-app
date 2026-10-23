@@ -141,6 +141,9 @@ export interface BankAccount {
   id:              string
   clinic_id:       string
   name:            string
+  /** Empresa faturante dona da conta — define a credencial e o certificado. */
+  company_id:      string | null
+  company_name:    string | null
   bank_name:       string | null
   bank_code:       string | null
   ispb:            string | null
@@ -155,6 +158,14 @@ export interface BankAccount {
 
 export interface CreateBankAccountData {
   name:            string
+  /**
+   * Empresa faturante dona da conta.
+   *
+   * A coluna existia desde a 0421, mas nenhuma tela preenchia — e é ela que
+   * diz QUAL certificado e-CNPJ vai ao banco. Sem isso, uma clínica com três
+   * CNPJs no mesmo Sicoob apresentava sempre o mesmo certificado.
+   */
+  company_id?:     string | null
   bank_name?:      string
   bank_code?:      string
   ispb?:           string
@@ -991,13 +1002,22 @@ export async function listBankAccounts(): Promise<BankAccount[] | { error: strin
   const admin = createAdminClient()
   const { data, error } = await admin
     .from('bank_accounts')
-    .select('id, clinic_id, name, bank_name, bank_code, ispb, agency, account, pix_key, is_default, balance, initial_balance, created_at')
+    .select('id, clinic_id, name, company_id, bank_name, bank_code, ispb, agency, account, pix_key, is_default, balance, initial_balance, created_at, companies:company_id ( name )')
     .eq('clinic_id', clinicId)
     .order('is_default', { ascending: false })
     .order('name')
 
   if (error) return { error: 'Erro ao buscar contas: ' + mensagemErro(error, 'lib/actions/financial.ts') }
-  return (data ?? []) as BankAccount[]
+  // O join devolve `companies` aninhado; a tela quer o nome achatado.
+  return (data ?? []).map(linha => {
+    const r = linha as Record<string, unknown>
+    const emp = r.companies as { name?: string } | { name?: string }[] | null
+    const { companies: _ignorado, ...resto } = r
+    return {
+      ...resto,
+      company_name: (Array.isArray(emp) ? emp[0]?.name : emp?.name) ?? null,
+    } as BankAccount
+  })
 }
 
 export async function createBankAccount(
@@ -1013,6 +1033,7 @@ export async function createBankAccount(
     .insert({
       clinic_id:       clinicId,
       name:            data.name.trim(),
+      company_id:      data.company_id      || null,
       bank_name:       data.bank_name       || null,
       bank_code:       data.bank_code       || null,
       ispb:            data.ispb            || null,
@@ -1022,7 +1043,7 @@ export async function createBankAccount(
       is_default:      data.is_default      ?? false,
       initial_balance: data.initial_balance ?? 0,
     })
-    .select('id, clinic_id, name, bank_name, bank_code, ispb, agency, account, pix_key, is_default, balance, initial_balance, created_at')
+    .select('id, clinic_id, name, company_id, bank_name, bank_code, ispb, agency, account, pix_key, is_default, balance, initial_balance, created_at')
     .single()
 
   if (error) return { error: 'Erro ao criar conta: ' + mensagemErro(error, 'lib/actions/financial.ts') }
@@ -1038,6 +1059,7 @@ export async function updateBankAccount(
 
   const updates: Record<string, unknown> = {}
   if (data.name            !== undefined) updates.name            = data.name?.trim()
+  if (data.company_id      !== undefined) updates.company_id      = data.company_id      || null
   if (data.bank_name       !== undefined) updates.bank_name       = data.bank_name       || null
   if (data.bank_code       !== undefined) updates.bank_code       = data.bank_code       || null
   if (data.ispb            !== undefined) updates.ispb            = data.ispb            || null
@@ -2791,7 +2813,7 @@ export async function importBankStatementFromSicoob(params: {
   if (!clinicId) return { error: 'Não autenticado.' }
   const admin = createAdminClient()
   const { data: acct } = await admin.from('bank_accounts')
-    .select('account, name, agency, bank_code').eq('id', params.bank_account_id).eq('clinic_id', clinicId).single()
+    .select('account, name, agency, bank_code, company_id').eq('id', params.bank_account_id).eq('clinic_id', clinicId).single()
   if (!acct) return { error: 'Conta bancária não encontrada.' }
   const conta = String((acct as { account?: string }).account ?? '').trim()
   if (!conta) return { error: 'A conta selecionada não tem número cadastrado (necessário para buscar no Sicoob).' }
@@ -2800,9 +2822,11 @@ export async function importBankStatementFromSicoob(params: {
   // variável de ambiente — senão "Produção" na tela não significa nada.
   const { resolverConfigSicoob } = await import('@/lib/integrations/sicoob-config')
   const resolucao = await resolverConfigSicoob(admin, clinicId, {
-    agency:    (acct as { agency?: string | null }).agency ?? null,
-    account:   (acct as { account?: string | null }).account ?? null,
-    bank_code: (acct as { bank_code?: string | null }).bank_code ?? null,
+    id:         params.bank_account_id,
+    agency:     (acct as { agency?: string | null }).agency ?? null,
+    account:    (acct as { account?: string | null }).account ?? null,
+    bank_code:  (acct as { bank_code?: string | null }).bank_code ?? null,
+    company_id: (acct as { company_id?: string | null }).company_id ?? null,
   })
   if ('error' in resolucao) return { error: resolucao.error }
 

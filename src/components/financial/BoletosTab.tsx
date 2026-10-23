@@ -83,7 +83,7 @@ export default function BoletosTab() {
           {accounts.length === 0
             ? <span className="text-xs text-amber-600 flex items-center gap-1"><Settings className="h-3.5 w-3.5" />nenhuma carteira habilitada</span>
             : <select value={accountId} onChange={e => setAccountId(e.target.value)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm">
-                {accounts.map(a => <option key={a.id} value={a.id}>{a.name}{a.config.environment === 'production' ? '' : ' (sandbox)'}</option>)}
+                {accounts.map(a => <option key={a.id} value={a.id}>{a.name}{a.companyName ? ` · ${a.companyName}` : ''}{a.config.environment === 'production' ? '' : ' (sandbox)'}</option>)}
               </select>}
         </div>
       </div>

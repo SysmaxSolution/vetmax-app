@@ -832,6 +832,8 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
             percent:       copayInterestPreview.percent,
           } : null}
           creditBalance={creditBalance}
+          consultationId={invoice.consultation_id}
+          tutorId={invoice.tutor_id}
           allowCredit
           onCancel={() => setShowPaymentModal(false)}
           onConfirm={handlePaymentConfirm}

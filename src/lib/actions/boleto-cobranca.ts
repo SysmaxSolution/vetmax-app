@@ -48,16 +48,20 @@ export interface BoletoConfig {
   beneficiarioNome?: string; beneficiarioDoc?: string; beneficiarioEndereco?: string
   environment?: 'sandbox' | 'production'
 }
-export interface BankAccountBoleto { id: string; name: string; bankName: string | null; enabled: boolean; nextNossoNumero: number; config: BoletoConfig; webhookToken: string | null }
+export interface BankAccountBoleto { id: string; name: string; bankName: string | null; companyName: string | null; enabled: boolean; nextNossoNumero: number; config: BoletoConfig; webhookToken: string | null }
 
 export async function listBoletoAccounts(): Promise<BankAccountBoleto[]> {
   const c = await ctx(); if ('error' in c) return []
   const admin = createAdminClient()
   const { data } = await admin.from('bank_accounts')
-    .select('id, name, bank_name, boleto_enabled, next_nosso_numero, boleto_config, boleto_webhook_token')
+    .select('id, name, bank_name, boleto_enabled, next_nosso_numero, boleto_config, boleto_webhook_token, companies:company_id ( name )')
     .eq('clinic_id', c.clinicId).order('is_default', { ascending: false }).order('name')
   return (data ?? []).map((a: any) => ({
-    id: a.id, name: a.name, bankName: a.bank_name ?? null, enabled: !!a.boleto_enabled,
+    id: a.id, name: a.name, bankName: a.bank_name ?? null,
+    // Por qual CNPJ o boleto sai — com varias empresas, o nome da conta sozinho
+    // nao diz quem esta emitindo.
+    companyName: (Array.isArray(a.companies) ? a.companies[0]?.name : a.companies?.name) ?? null,
+    enabled: !!a.boleto_enabled,
     nextNossoNumero: Number(a.next_nosso_numero ?? 1), config: (a.boleto_config ?? {}) as BoletoConfig,
     webhookToken: (a.boleto_webhook_token as string | null) ?? null,
   }))
@@ -143,6 +147,12 @@ async function runtimeFromConfig(
   admin: ReturnType<typeof createAdminClient>,
   clinicId: string,
   cfg: BoletoConfig,
+  /**
+   * Conta de onde a carteira veio. Sem ela, o certificado e-CNPJ era escolhido
+   * só pelo banco — e numa clínica com vários CNPJs no mesmo Sicoob isso
+   * apresenta o certificado de uma empresa na conta de outra.
+   */
+  conta?: { id?: string | null; company_id?: string | null },
 ): Promise<CobrancaRuntime | { error: string }> {
   const carteira = {
     numeroCliente: Number((cfg.codigoCliente ?? '').replace(/\D/g, '')),
@@ -152,6 +162,7 @@ async function runtimeFromConfig(
 
   const { resolverConfigSicoob } = await import('@/lib/integrations/sicoob-config')
   const cred = await resolverConfigSicoob(admin, clinicId, {
+    id: conta?.id ?? null, company_id: conta?.company_id ?? null,
     agency: cfg.agencia ?? null, account: cfg.conta ?? null, bank_code: '756',
   })
   if ('error' in cred) return { error: cred.error }
@@ -202,7 +213,7 @@ export async function emitOrReprintBoleto(financialEntryId: string, bankAccountI
     accountId = (def as any)?.id
   }
   if (!accountId) return { error: 'Configure uma conta com carteira bancária (aba Carteira Bancária no cadastro da conta).' }
-  const { data: acc } = await admin.from('bank_accounts').select('id, boleto_config, boleto_enabled').eq('id', accountId).eq('clinic_id', c.clinicId).maybeSingle()
+  const { data: acc } = await admin.from('bank_accounts').select('id, boleto_config, boleto_enabled, company_id').eq('id', accountId).eq('clinic_id', c.clinicId).maybeSingle()
   if (!acc || !(acc as any).boleto_enabled) return { error: 'Conta sem carteira bancária habilitada.' }
   const cfg = ((acc as any).boleto_config ?? {}) as BoletoConfig
 
@@ -255,7 +266,9 @@ export async function emitOrReprintBoleto(financialEntryId: string, bankAccountI
   // chamada ao Sicoob (best-effort; sandbox é mock)
   let linha = local.linhaDigitavel, barras = local.codigoBarras, situacao = 'emitido', errorMsg: string | null = null, raw: unknown = null
   try {
-    const rt = await runtimeFromConfig(admin, c.clinicId, cfg)
+    const rt = await runtimeFromConfig(admin, c.clinicId, cfg, {
+      id: accountId, company_id: (acc as { company_id?: string | null }).company_id ?? null,
+    })
     if ('error' in rt) throw new Error(rt.error)
     const res = await incluirBoleto(rt, {
       seuNumero, valor, dataVencimento: dueISO, especie: cfg.especie,
