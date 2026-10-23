@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import {
   listarNotasDisponiveis, verificarNfsDisponiveis, consultarNfePorChave,
-  obterXmlDaNota, listarConfiguracaoDfe,
+  consultarNfesPorChaves, obterXmlDaNota, listarConfiguracaoDfe,
 } from '@/lib/actions/dfe'
 import type { NotaDisponivel, ConfiguracaoDfe } from '@/types/dfe'
 
@@ -46,6 +46,7 @@ export default function NotasDisponiveisModal({ onClose, onEntrada }: Props) {
   const [erro, setErro]           = useState<string | null>(null)
   const [aviso, setAviso]         = useState<string | null>(null)
   const [marcadas, setMarcadas]   = useState<Set<string>>(new Set())
+  const [varias, setVarias]       = useState(false)
 
   const hoje = new Date().toISOString().slice(0, 10)
   const trinta = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
@@ -90,14 +91,16 @@ export default function NotasDisponiveisModal({ onClose, onEntrada }: Props) {
   }
 
   async function buscarPorChave() {
-    const limpa = chave.replace(/\D/g, '')
-    if (limpa.length !== 44) {
-      setErro('A chave deve ter 44 números. Ela fica no rodapé do DANFE.')
-      return
-    }
     if (!empresaId) return
     setBuscando(true); setErro(null); setAviso(null)
-    const r = await consultarNfePorChave(empresaId, limpa)
+
+    // Uma chave ou um lote: o mesmo campo serve aos dois, porque a diferença
+    // é só quantas linhas o operador colou.
+    const digitos = chave.match(/\d{44}/g) ?? []
+    const r = digitos.length > 1
+      ? await consultarNfesPorChaves(empresaId, chave)
+      : await consultarNfePorChave(empresaId, chave.replace(/\D/g, ''))
+
     setBuscando(false)
     if ('error' in r) { setErro(r.error); return }
     setAviso(r.mensagem)
@@ -198,15 +201,31 @@ export default function NotasDisponiveisModal({ onClose, onEntrada }: Props) {
 
               <div className="flex items-end gap-1.5">
                 <label className="block">
-                  <span className="text-[10px] font-semibold uppercase text-slate-500">Chave do DANFE</span>
-                  <input
-                    value={chave}
-                    onChange={e => setChave(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') void buscarPorChave() }}
-                    placeholder="44 números"
-                    inputMode="numeric"
-                    className="w-[260px] rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm"
-                  />
+                  <span className="flex items-center gap-2 text-[10px] font-semibold uppercase text-slate-500">
+                    Chave do DANFE
+                    <button type="button" onClick={() => setVarias(v => !v)}
+                      className="font-semibold normal-case text-teal-700 hover:underline">
+                      {varias ? 'uma chave' : 'várias de uma vez'}
+                    </button>
+                  </span>
+                  {varias ? (
+                    <textarea
+                      value={chave}
+                      onChange={e => setChave(e.target.value)}
+                      rows={3}
+                      placeholder={'Cole as chaves — uma por linha'}
+                      className="w-[300px] rounded-lg border border-slate-300 px-3 py-2 font-mono text-xs"
+                    />
+                  ) : (
+                    <input
+                      value={chave}
+                      onChange={e => setChave(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') void buscarPorChave() }}
+                      placeholder="44 números"
+                      inputMode="numeric"
+                      className="w-[260px] rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm"
+                    />
+                  )}
                 </label>
                 <button
                   onClick={() => void buscarPorChave()}
@@ -345,10 +364,17 @@ export default function NotasDisponiveisModal({ onClose, onEntrada }: Props) {
             )}
           </div>
 
-          <p className="text-[11px] text-slate-400">
-            “Aguardando liberação” significa que a Receita ainda não disponibilizou o arquivo da nota.
-            Assim que liberar, o botão de lançar aparece.
-          </p>
+          <div className="space-y-1 text-[11px] text-slate-400">
+            <p>
+              “Aguardando liberação” significa que a Receita ainda não disponibilizou o arquivo da nota.
+              Assim que liberar, o botão de lançar aparece.
+            </p>
+            <p>
+              A busca automática só traz notas emitidas <strong>a partir do dia em que a rotina foi
+              ativada</strong> — a Receita não entrega o histórico por esse caminho. Para notas
+              anteriores, use a busca por chave.
+            </p>
+          </div>
         </div>
       </div>
     </div>

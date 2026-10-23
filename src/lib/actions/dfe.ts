@@ -134,6 +134,65 @@ export async function consultarNfePorChave(
   }
 }
 
+/**
+ * Várias chaves de uma vez — o caminho para o HISTÓRICO.
+ *
+ * A Receita não gera NSU retroativo: para um CNPJ que nunca usou a
+ * distribuição, a sequência começa no primeiro acesso e as notas anteriores
+ * NÃO entram. Elas existem e continuam acessíveis por 90 dias, mas só pela
+ * chave — daí este lote.
+ *
+ * O limite de 20 consultas por hora é da Receita e vale por chave. Parar no
+ * teto e dizer quantas faltam é melhor do que gastar o limite e deixar o CNPJ
+ * bloqueado no meio do trabalho.
+ */
+export async function consultarNfesPorChaves(
+  companyId: string, texto: string,
+): Promise<{ processadas: number; encontradas: number; restantes: number; invalidas: number; mensagem: string } | { error: string }> {
+  const c = await ctx(); if ('error' in c) return { error: c.error }
+  if (!PODE_OPERAR.includes(c.role)) return { error: 'Seu usuário não tem permissão para esta operação.' }
+
+  // Aceita o que o operador tiver: uma por linha, separadas por vírgula, ou
+  // coladas de uma planilha. O que importa são sequências de 44 dígitos.
+  const todas = [...new Set((texto.match(/\d{44}/g) ?? []))]
+  const invalidas = (texto.split(/[\s,;]+/).filter(Boolean).length) - todas.length
+
+  if (!todas.length) {
+    return { error: 'Nenhuma chave válida encontrada. Cada chave tem 44 números.' }
+  }
+
+  const TETO = 18   // margem sob o limite de 20/hora da Receita
+  const lote = todas.slice(0, TETO)
+
+  const cred = await credencialDaEmpresa(c.admin, c.clinicId, companyId)
+  if ('error' in cred) return cred
+
+  let encontradas = 0
+  for (const chave of lote) {
+    try {
+      const r = await consultarPorChave(cred, chave)
+      if (r.documentos.length) {
+        await guardarDocumentos(c.admin, c.clinicId, companyId, 'chave', r.documentos)
+        encontradas++
+      }
+    } catch {
+      // Uma chave que falha não interrompe o lote.
+    }
+  }
+
+  const restantes = todas.length - lote.length
+  revalidatePath('/dashboard/purchases')
+
+  const partes = [`${encontradas} de ${lote.length} nota(s) encontrada(s)`]
+  if (restantes) partes.push(`${restantes} ficaram para a próxima hora (limite da Receita)`)
+  if (invalidas > 0) partes.push(`${invalidas} linha(s) ignorada(s) por não ter 44 números`)
+
+  return {
+    processadas: lote.length, encontradas, restantes, invalidas: Math.max(0, invalidas),
+    mensagem: partes.join(' · ') + '.',
+  }
+}
+
 // ─── Leitura para a tela ─────────────────────────────────────────────────────
 
 export async function listarNotasDisponiveis(filtro?: {
