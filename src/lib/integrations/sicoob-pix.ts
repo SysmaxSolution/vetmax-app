@@ -1,9 +1,44 @@
-// Integração Sicoob — API Pix v2 (cobrança dinâmica). Cria uma cobrança imediata
-// (cob), retorna o "copia e cola" (brcode) para gerar o QR, e consulta o status
-// para a baixa automática. Sandbox usa credenciais públicas; produção usa o
-// client_id + token da clínica + mTLS e-CNPJ (plugado no onboarding).
+// Integração Sicoob — API Pix v2 (cobrança dinâmica).
+//
+// Cria uma cobrança imediata (`cob`), devolve o "copia e cola" para o QR e
+// consulta o status para a baixa automática.
+//
+// ⚠️ Esta era a última integração Sicoob que falava por `fetch` comum e
+// esperava um token COLADO À MÃO na tela. Nenhuma das duas coisas funciona em
+// produção:
+//
+//   * O Pix v2 exige TLS MÚTUO — não é exigência do Sicoob, é do BACEN, e vale
+//     para todos os bancos. Sem o certificado no aperto de mão, o servidor
+//     recusa antes de olhar o token.
+//   * O token do Sicoob é OAuth2 `client_credentials`, obtido com o Client ID
+//     MAIS o certificado, e expira. Um token fixo num campo de formulário
+//     funciona até o dia seguinte, quando para de funcionar sem ninguém mexer
+//     em nada.
+//
+// Agora usa o mesmo transporte dos outros produtos (extrato, cobrança,
+// pagamentos): `sicoob-mtls`. O sandbox continua por `fetch`, porque lá não há
+// certificado nem token de verdade.
+//
+// Server-only.
 
-export interface PixConfig { environment: 'sandbox' | 'production'; client_id: string; token: string; chave: string }
+import {
+  chamarSicoob, ehSandbox, obterTokenProducao, comoJson,
+  type CredenciaisSicoob,
+} from './sicoob-mtls'
+
+/**
+ * Escopos do Pix. Não são palpite: `cob.write`/`cob.read` criam e leem a
+ * cobrança imediata e `pix.read` lê os Pix recebidos. Escopo errado faz o
+ * Keycloak recusar a requisição inteira com `invalid_scope`, antes mesmo de
+ * chegar à API.
+ */
+export const ESCOPO_PIX = 'cob.write cob.read pix.read'
+
+export interface PixConfig extends CredenciaisSicoob {
+  /** Chave Pix que recebe — é o destino do dinheiro. */
+  chave: string
+}
+
 export interface PixCob { txid: string; brcode: string; location: string | null }
 export interface PixStatus { status: string; paid: boolean; e2eid: string | null; valor: number | null }
 
@@ -14,55 +49,78 @@ const SANDBOX = {
 }
 const PROD_BASE = 'https://api.sicoob.com.br/pix/api/v2'
 
-function resolve(cfg: PixConfig) {
-  const sandbox = cfg.environment !== 'production'
+const base = (c: PixConfig) => (ehSandbox(c) ? SANDBOX.base : PROD_BASE)
+
+/** Token do ambiente: fixo no sandbox, OAuth com certificado em produção. */
+async function token(c: PixConfig): Promise<string> {
+  if (ehSandbox(c)) return SANDBOX.token
+  return obterTokenProducao(c, ESCOPO_PIX)
+}
+
+function cabecalho(c: PixConfig, t: string): Record<string, string> {
   return {
-    sandbox,
-    base:      sandbox ? SANDBOX.base : PROD_BASE,
-    client_id: sandbox ? SANDBOX.client_id : cfg.client_id,
-    token:     sandbox ? SANDBOX.token : cfg.token,
+    Authorization: `Bearer ${t}`,
+    client_id: ehSandbox(c) ? SANDBOX.client_id : (c.client_id ?? '').trim(),
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
   }
 }
 
-// Cria uma cobrança imediata e retorna o brcode (copia e cola) p/ o QR.
-export async function createPixCob(cfg: PixConfig, params: { valor: number; descricao?: string; expiracao?: number }): Promise<PixCob> {
-  const r = resolve(cfg)
-  if (!r.sandbox && !r.token) throw new Error('Credenciais de PIX de produção não configuradas.')
+/** Cria a cobrança imediata e devolve o copia-e-cola para o QR. */
+export async function createPixCob(
+  cfg: PixConfig,
+  params: { valor: number; descricao?: string; expiracao?: number },
+): Promise<PixCob> {
+  if (!ehSandbox(cfg) && !cfg.chave) {
+    throw new Error('Chave Pix não cadastrada — é para ela que o dinheiro vai.')
+  }
+
+  const t = await token(cfg)
   const body = JSON.stringify({
     calendario: { expiracao: params.expiracao ?? 3600 },
     valor: { original: params.valor.toFixed(2) },
     chave: cfg.chave || 'sandbox@sicoob.com.br',
     solicitacaoPagador: (params.descricao ?? 'Recebimento').slice(0, 140),
   })
-  const res = await fetch(`${r.base}/cob`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${r.token}`, client_id: r.client_id, 'Content-Type': 'application/json', Accept: 'application/json' },
-    body,
+
+  const r = await chamarSicoob(`${base(cfg)}/cob`, cfg, {
+    method: 'POST', headers: cabecalho(cfg, t), body,
   })
-  if (!res.ok && res.status !== 201) throw new Error(`Falha ao criar cobrança PIX (${res.status}).`)
-  const j = await res.json() as Record<string, unknown>
+  if (r.status !== 200 && r.status !== 201) {
+    throw new Error(`Falha ao criar cobrança PIX (${r.status}): ${r.text.slice(0, 200)}`)
+  }
+
+  const j = comoJson<Record<string, unknown>>(r)
   const loc = (j.loc ?? {}) as Record<string, unknown>
-  const brcode = String(j.brcode ?? j.pixCopiaECola ?? loc.brcode ?? '')
   const txid = String(j.txid ?? loc.txid ?? '')
   if (!txid) throw new Error('Cobrança PIX sem txid na resposta.')
-  return { txid, brcode, location: (j.location as string) ?? (loc.location as string) ?? null }
+
+  return {
+    txid,
+    // O nome do campo varia conforme a versão: aceitar os dois evita um QR
+    // vazio que só apareceria na frente do cliente.
+    brcode: String(j.brcode ?? j.pixCopiaECola ?? loc.brcode ?? ''),
+    location: (j.location as string) ?? (loc.location as string) ?? null,
+  }
 }
 
-// Consulta o status da cobrança (CONCLUIDA = paga).
+/** Consulta o status da cobrança. CONCLUIDA = paga. */
 export async function getPixCobStatus(cfg: PixConfig, txid: string): Promise<PixStatus> {
-  const r = resolve(cfg)
-  const res = await fetch(`${r.base}/cob/${encodeURIComponent(txid)}`, {
-    headers: { Authorization: `Bearer ${r.token}`, client_id: r.client_id, Accept: 'application/json' },
+  const t = await token(cfg)
+  const r = await chamarSicoob(`${base(cfg)}/cob/${encodeURIComponent(txid)}`, cfg, {
+    headers: cabecalho(cfg, t),
   })
-  if (!res.ok) throw new Error(`Falha ao consultar PIX (${res.status}).`)
-  const j = await res.json() as { status?: string; pix?: Array<Record<string, unknown>> }
+  if (r.status !== 200) throw new Error(`Falha ao consultar PIX (${r.status}).`)
+
+  const j = comoJson<{ status?: string; pix?: Array<Record<string, unknown>> }>(r)
   const status = String(j.status ?? 'ATIVA')
-  const pixArr = Array.isArray(j.pix) ? j.pix : []
-  const first = pixArr[0]
+  const pagos = Array.isArray(j.pix) ? j.pix : []
+  const primeiro = pagos[0]
+
   return {
     status,
-    paid: status === 'CONCLUIDA' || pixArr.length > 0,
-    e2eid: first ? String(first.endToEndId ?? '') || null : null,
-    valor: first ? Number(first.valor) || null : null,
+    paid: status === 'CONCLUIDA' || pagos.length > 0,
+    e2eid: primeiro ? String(primeiro.endToEndId ?? '') || null : null,
+    valor: primeiro ? Number(primeiro.valor) || null : null,
   }
 }
