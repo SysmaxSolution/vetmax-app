@@ -46,7 +46,14 @@ export interface ParsedNFe {
 
 export function parseNFeXML(xmlContent: string): ParsedNFe | { error: string } {
   try {
-    const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_', parseTagValue: true })
+    // `parseTagValue: false` NÃO é detalhe de configuração: com a conversão
+    // automática ligada, todo campo que parece número vira número — e perde os
+    // zeros à esquerda. O CNPJ 04852370000108 era gravado como 4852370000108,
+    // e aí a conciliação bancária deixava de reconhecer o fornecedor (medido
+    // em produção, 23/10/2026). Vale igual para NCM, EAN, CFOP, CEP e número
+    // da nota. Os campos realmente numéricos já são convertidos à mão, logo
+    // abaixo, com `parseFloat`.
+    const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_', parseTagValue: false })
     const obj = parser.parse(xmlContent)
 
     const nfe = obj?.nfeProc?.NFe ?? obj?.NFe

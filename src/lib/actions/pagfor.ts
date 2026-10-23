@@ -50,37 +50,51 @@ export async function matchDdaBoletos(boletos: DdaBoleto[]): Promise<DdaMatchRes
   const c = await ctx()
   if (!c) return { error: 'Não autenticado.' }
   const admin = createAdminClient()
+
+  // O CNPJ do fornecedor vem junto: é por ele que o casamento acontece.
+  // Antes a comparação era de NOME, e nomes divergem — "L.P.S. AGROFARMA
+  // LTDA" no XML contra "LPS AGROFARMA LTDA EPP" no banco. Valor e vencimento
+  // batiam, e mesmo assim o boleto aparecia como "não está no sistema".
   const { data: payablesRaw } = await admin
     .from('financial_entries')
-    .select('id, amount, due_date, description, beneficiary, barcode, scheduled_payment_date')
+    .select('id, amount, due_date, description, beneficiary, barcode, scheduled_payment_date, suppliers:supplier_id ( document )')
     .eq('clinic_id', c.clinicId).eq('type', 'payable').eq('status', 'pending')
-  const payables = (payablesRaw ?? []) as Array<Record<string, unknown>>
 
-  const used = new Set<string>()
-  const rows: DdaMatchRow[] = boletos.map(b => {
-    const bDigits = onlyDigits(b.barcode)
-    const bName = (b.beneficiary ?? '').toLowerCase().trim()
-    const hit = payables.find(p => {
-      if (used.has(p.id as string)) return false
-      // 1) casa por código de barras (forte)
-      if (bDigits && onlyDigits(p.barcode as string) === bDigits) return true
-      // 2) casa por valor + vencimento (±2d) + beneficiário aproximado
-      if (!eqAmt(b.amount, Number(p.amount))) return false
-      if (b.due_date && p.due_date) {
-        const dd = Math.abs(new Date(b.due_date).getTime() - new Date(p.due_date as string).getTime()) / 86400000
-        if (dd > 2) return false
-      }
-      if (bName) {
-        const pName = String(p.beneficiary ?? p.description ?? '').toLowerCase()
-        if (!pName.includes(bName) && !bName.includes(pName.slice(0, 8))) return false
-      }
-      return true
-    })
-    if (hit) {
-      used.add(hit.id as string)
-      return { boleto: b, status: 'in_system', entry_id: hit.id as string, entry_scheduled: (hit.scheduled_payment_date as string) ?? null }
+  const titulos = (payablesRaw ?? []).map(linha => {
+    const r = linha as Record<string, unknown>
+    // O CNPJ do fornecedor mora em `document` — não em `cnpj`, que não existe.
+    const forn = r.suppliers as { document?: string } | { document?: string }[] | null
+    return {
+      id:            r.id as string,
+      amount:        Number(r.amount),
+      due_date:      (r.due_date as string | null) ?? null,
+      description:   (r.description as string | null) ?? null,
+      beneficiary:   (r.beneficiary as string | null) ?? null,
+      barcode:       (r.barcode as string | null) ?? null,
+      supplier_cnpj: (Array.isArray(forn) ? forn[0]?.document : forn?.document) ?? null,
+      agendado:      (r.scheduled_payment_date as string | null) ?? null,
     }
-    return { boleto: b, status: 'not_in_system', entry_id: null, entry_scheduled: null }
+  })
+
+  const { casarBoleto } = await import('@/lib/financial/conciliacao-dda')
+  const usados = new Set<string>()
+
+  const rows: DdaMatchRow[] = boletos.map(b => {
+    const { titulo } = casarBoleto(
+      {
+        barcode: b.barcode, beneficiary: b.beneficiary,
+        beneficiary_doc: b.beneficiary_doc, amount: b.amount, due_date: b.due_date,
+      },
+      titulos, usados,
+    )
+    if (!titulo) return { boleto: b, status: 'not_in_system', entry_id: null, entry_scheduled: null }
+
+    usados.add(titulo.id)
+    const original = titulos.find(t => t.id === titulo.id)
+    return {
+      boleto: b, status: 'in_system', entry_id: titulo.id,
+      entry_scheduled: original?.agendado ?? null,
+    }
   })
 
   return {
