@@ -201,10 +201,11 @@ export default function FinancialIntegrationsForm({ onToast }: { onToast: (t: 's
               <input value={cfg.pix.pix_key} onChange={e => set({ pix: { ...cfg.pix, pix_key: e.target.value } })} className={input} placeholder="CNPJ, e-mail, aleatória…" /></label>
             <label className="block"><span className="text-[10px] font-semibold text-slate-500 uppercase">Client ID</span>
               <input value={cfg.pix.client_id} onChange={e => set({ pix: { ...cfg.pix, client_id: e.target.value } })} className={input} /></label>
-            <label className="block"><span className="text-[10px] font-semibold text-slate-500 uppercase">Client Secret</span>
-              <input type="password" value={cfg.pix.client_secret} onChange={e => set({ pix: { ...cfg.pix, client_secret: e.target.value } })} className={input} /></label>
-            <label className="block"><span className="text-[10px] font-semibold text-slate-500 uppercase">Token</span>
-              <input type="password" value={cfg.pix.token} onChange={e => set({ pix: { ...cfg.pix, token: e.target.value } })} className={input} /></label>
+            <div className="sm:col-span-3 rounded-lg bg-slate-50 p-2.5 text-[11px] text-slate-600">
+              O PIX usa o <strong>mesmo certificado digital</strong> da integração bancária acima —
+              não é preciso cadastrar nada aqui. O acesso é renovado sozinho a cada cobrança;
+              não existe token para colar.
+            </div>
           </div>
         )}
       </div>

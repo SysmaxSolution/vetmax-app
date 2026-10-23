@@ -52,6 +52,20 @@ export function requisicaoMtls(
 ): Promise<RespostaSicoob> {
   const { pfx, passphrase } = carregarPfx(c)
   const u = new URL(url)
+
+  // `Content-Length` explícito em toda requisição com corpo.
+  //
+  // Sem ele o Node envia `Transfer-Encoding: chunked`, e o gateway do Sicoob
+  // recusa com `500 {"moreInformation":"Invalid request type"}` — uma
+  // mensagem que não diz nada sobre o que está errado. Medido em 23/10/2026
+  // no POST de cobrança Pix; vale para TODO POST por este transporte
+  // (cobrança, pagamentos, Pix). `obterTokenProducao` já passava o cabeçalho
+  // à mão, o que era o sintoma de que o lugar certo era aqui.
+  const headers: Record<string, string> = { ...(init.headers ?? {}) }
+  if (init.body !== undefined && headers['Content-Length'] === undefined) {
+    headers['Content-Length'] = String(Buffer.byteLength(init.body))
+  }
+
   return new Promise((resolve, reject) => {
     const req = https.request(
       {
@@ -59,7 +73,7 @@ export function requisicaoMtls(
         port: u.port || 443,
         path: u.pathname + u.search,
         method: init.method ?? 'GET',
-        headers: init.headers ?? {},
+        headers,
         pfx,
         passphrase,
         // Validação do servidor continua ligada — mTLS é mútuo, não substitui.
