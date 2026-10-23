@@ -4,13 +4,16 @@
 // CRUD das entidades de faturamento (Emp 001/002/003) dentro de uma clínica.
 
 import { useState, useEffect } from 'react'
-import { Loader2, Plus, Pencil, Building2, Check, X, Star, FileCheck2, CreditCard } from 'lucide-react'
+import { Loader2, Plus, Pencil, Building2, Check, X, Star, FileCheck2, CreditCard, FileSearch } from 'lucide-react'
 import {
   listCompanies, upsertCompany, setCompanyActive, type Company,
 } from '@/lib/actions/companies'
 import { listCompanyFiscalConfigs, type CompanyFiscalConfig } from '@/lib/actions/nfse'
 import CompanyFiscalModal from './CompanyFiscalModal'
 import CompanyCardAcquirerModal from './CompanyCardAcquirerModal'
+import CompanyDfeModal from './CompanyDfeModal'
+import { listarConfiguracaoDfe } from '@/lib/actions/dfe'
+import type { ConfiguracaoDfe } from '@/types/dfe'
 import { listarConfigAdquirente } from '@/lib/actions/card-acquirer'
 import type { ConfigAdquirente } from '@/types/card-acquirer'
 import { Toast } from '@/components/ui/toast'
@@ -47,6 +50,8 @@ export default function CompaniesTab({ userRole = 'admin' }: Props) {
   const [toast, setToast]         = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [fiscalConfigs, setFiscalConfigs] = useState<CompanyFiscalConfig[]>([])
   const [fiscalFor, setFiscalFor] = useState<Company | null>(null)
+  const [dfeConfigs, setDfeConfigs] = useState<ConfiguracaoDfe[]>([])
+  const [dfeFor, setDfeFor] = useState<ConfiguracaoDfe | null>(null)
   // Adquirente de cartao por empresa: na Animais a Develey usa FinPet e as
   // outras duas usam Sipag, entao a configuracao e por CNPJ.
   const [cardConfigs, setCardConfigs] = useState<ConfigAdquirente[]>([])
@@ -54,7 +59,10 @@ export default function CompaniesTab({ userRole = 'admin' }: Props) {
 
   async function reload() {
     try {
-      const [res, fc, cc] = await Promise.all([listCompanies(), listCompanyFiscalConfigs(), listarConfigAdquirente()])
+      const [res, fc, cc, df] = await Promise.all([
+        listCompanies(), listCompanyFiscalConfigs(), listarConfigAdquirente(), listarConfiguracaoDfe(),
+      ])
+      if (!('error' in df)) setDfeConfigs(df)
       if (!('error' in res)) setCompanies(res)
       else setToast({ type: 'error', message: res.error })
       if (!('error' in fc)) setFiscalConfigs(fc)
@@ -213,6 +221,9 @@ export default function CompaniesTab({ userRole = 'admin' }: Props) {
                   {cardConfigs.find(x => x.company_id === c.id)?.enabled && (
                     <span className="inline-flex items-center gap-1 text-[11px] font-semibold rounded-full px-2 py-0.5 bg-teal-100 text-teal-700"><CreditCard className="h-3 w-3" /> Cartão</span>
                   )}
+                  {dfeConfigs.find(x => x.company_id === c.id)?.enabled && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold rounded-full px-2 py-0.5 bg-indigo-100 text-indigo-700"><FileSearch className="h-3 w-3" /> Notas</span>
+                  )}
                   {fiscalConfigs.find(f => f.company_id === c.id)?.emits_nfse && (
                     <span className="inline-flex items-center gap-1 text-[11px] font-semibold rounded-full px-2 py-0.5 bg-blue-100 text-blue-700"><FileCheck2 className="h-3 w-3" /> NFS-e</span>
                   )}
@@ -230,6 +241,18 @@ export default function CompaniesTab({ userRole = 'admin' }: Props) {
                     className="flex items-center gap-1.5 rounded-lg border border-teal-200 bg-white px-3 py-2 text-xs font-semibold text-teal-700 hover:bg-teal-50 transition-colors disabled:opacity-40">
                     <CreditCard className="h-3.5 w-3.5" /> Cartão
                   </button>
+                  <button type="button"
+                    onClick={() => setDfeFor(
+                      dfeConfigs.find(x => x.company_id === c.id)
+                      // Empresa ainda sem configuração: abre no estado inicial,
+                      // que é desligado — não há por que exigir um passo antes.
+                      ?? { company_id: c.id, company_name: c.name, company_cnpj: c.cnpj ?? null,
+                           enabled: false, auto_ciencia: false, emDia: true,
+                           ultimoSucesso: null, conflito: false },
+                    )}
+                    className="flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-50 transition-colors">
+                    <FileSearch className="h-3.5 w-3.5" /> Notas
+                  </button>
                   <button type="button" onClick={() => editDraft(c)}
                     className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-colors">
                     <Pencil className="h-3.5 w-3.5" /> Editar
@@ -245,6 +268,14 @@ export default function CompaniesTab({ userRole = 'admin' }: Props) {
         <CompanyCardAcquirerModal
           config={cardFor}
           onClose={() => setCardFor(null)}
+          onSaved={reload}
+        />
+      )}
+
+      {dfeFor && (
+        <CompanyDfeModal
+          config={dfeFor}
+          onClose={() => setDfeFor(null)}
           onSaved={reload}
         />
       )}

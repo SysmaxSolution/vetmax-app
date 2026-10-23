@@ -19,6 +19,14 @@
     {
       "path": "/api/cron/vaccine-recall",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/dda-sweep",
+      "schedule": "17 6 * * *"
+    },
+    {
+      "path": "/api/cron/dfe-sweep",
+      "schedule": "17 3 * * *"
     }
   ]
 }

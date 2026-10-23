@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useTransition } from 'react'
+import { useState, useCallback, useEffect, useTransition } from 'react'
 import { createPortal } from 'react-dom'
 import { Upload, X, FileText, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
 import { importNFeXML, enrichProductFromNCM } from '@/lib/actions/purchases'
@@ -12,11 +12,19 @@ import { NFXMLPreview } from './NFXMLPreview'
 interface Props {
   onClose:    () => void
   onImported: (order: PurchaseOrder) => void
+  /**
+   * XML já em mãos, vindo da SEFAZ em vez de arquivo.
+   *
+   * O caminho do upload continua igual; este é o atalho para a nota que o
+   * sistema baixou sozinho — pular a etapa de "escolher arquivo" é o ponto
+   * inteiro da integração.
+   */
+  xmlInicial?: string | null
 }
 
 type Step = 'upload' | 'preview' | 'importing' | 'success' | 'error'
 
-export function NFXMLImporter({ onClose, onImported }: Props) {
+export function NFXMLImporter({ onClose, onImported, xmlInicial = null }: Props) {
   const [step, setStep]         = useState<Step>('upload')
   const [dragging, setDragging] = useState(false)
   const [xmlContent, setXmlContent] = useState<string | null>(null)
@@ -44,6 +52,16 @@ export function NFXMLImporter({ onClose, onImported }: Props) {
     }
     reader.readAsText(file, 'UTF-8')
   }, [])
+
+  // Veio com XML pronto: vai direto à conferência, sem passar pelo upload.
+  useEffect(() => {
+    if (!xmlInicial) return
+    const result = parseNFeXML(xmlInicial)
+    if ('error' in result) { setErrorMsg(result.error); setStep('error'); return }
+    setXmlContent(xmlInicial)
+    setParsed(result)
+    setStep('preview')
+  }, [xmlInicial])
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()

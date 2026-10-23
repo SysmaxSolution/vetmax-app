@@ -4,13 +4,14 @@ import { useState, useTransition } from 'react'
 import type { PurchaseOrder } from '@/lib/actions/purchases'
 import type { Supplier } from '@/lib/actions/suppliers'
 import { NFXMLImporter } from './NFXMLImporter'
+import NotasDisponiveisModal from './NotasDisponiveisModal'
 import { PurchaseOrderCard } from './PurchaseOrderCard'
 import { SupplierFormModal } from './SupplierFormModal'
 import { ExportXmlModal } from './ExportXmlModal'
 import ManualEntryModal from './ManualEntryModal'
 import { listSuppliers } from '@/lib/actions/suppliers'
 import { listPurchaseOrders } from '@/lib/actions/purchases'
-import { Package, Upload, Users, RefreshCcw, Archive, PackagePlus } from 'lucide-react'
+import { Package, Upload, Users, RefreshCcw, Archive, PackagePlus, FileSearch } from 'lucide-react'
 
 type Tab = 'entradas' | 'fornecedores'
 
@@ -24,6 +25,9 @@ export default function PurchasesWorkspace({ initialOrders, initialSuppliers }: 
   const [orders, setOrders]         = useState<PurchaseOrder[]>(initialOrders)
   const [suppliers, setSuppliers]   = useState<Supplier[]>(initialSuppliers)
   const [showImporter, setShowImporter] = useState(false)
+  const [showNotasSefaz, setShowNotasSefaz] = useState(false)
+  // XML vindo da Receita: entra no mesmo conferidor do upload.
+  const [xmlDaSefaz, setXmlDaSefaz] = useState<string | null>(null)
   const [showManualEntry, setShowManualEntry] = useState(false)
   const [showSupplierForm, setShowSupplierForm] = useState(false)
   const [showExportModal, setShowExportModal]   = useState(false)
@@ -91,6 +95,14 @@ export default function PurchasesWorkspace({ initialOrders, initialSuppliers }: 
                 >
                   <PackagePlus className="h-4 w-4" />
                   Entrada Manual
+                </button>
+                <button
+                  onClick={() => setShowNotasSefaz(true)}
+                  className="flex items-center gap-1.5 rounded-lg border border-teal-300 bg-white px-3 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-50"
+                  title="Notas emitidas contra o CNPJ, direto da Receita"
+                >
+                  <FileSearch className="h-4 w-4" />
+                  Verificar NFs disponíveis
                 </button>
                 <button
                   onClick={() => setShowImporter(true)}
@@ -215,8 +227,21 @@ export default function PurchasesWorkspace({ initialOrders, initialSuppliers }: 
       {/* Modals */}
       {showImporter && (
         <NFXMLImporter
-          onClose={() => setShowImporter(false)}
+          onClose={() => { setShowImporter(false); setXmlDaSefaz(null) }}
           onImported={onOrderImported}
+          xmlInicial={xmlDaSefaz}
+        />
+      )}
+
+      {showNotasSefaz && (
+        <NotasDisponiveisModal
+          onClose={() => setShowNotasSefaz(false)}
+          onEntrada={xml => {
+            // Fecha a lista e abre a conferência com a nota escolhida.
+            setShowNotasSefaz(false)
+            setXmlDaSefaz(xml)
+            setShowImporter(true)
+          }}
         />
       )}
 
