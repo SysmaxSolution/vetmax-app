@@ -86,6 +86,16 @@ export interface ProximoEstado {
   contarBloqueio: boolean
   /** Se vale consultar de novo já, dentro da mesma execução. */
   continuar:     boolean
+  /**
+   * Prova de que OUTRO software consome este CNPJ.
+   *
+   * Quando a rejeição 656 vem com um `ultNSU` MAIOR do que o nosso, a Receita
+   * está dizendo que já entregou até ali — e não foi a nós. Isso é evidência
+   * direta, não estatística: basta uma ocorrência. Medido em 23/10/2026, com
+   * a Receita informando ultNSU 977 para um CNPJ cujo ponteiro, do nosso
+   * lado, estava em zero.
+   */
+  outroConsumidor: boolean
 }
 
 /**
@@ -108,24 +118,35 @@ export function aplicarResposta(
   const max = Math.max(estado.max_nsu, Number(resposta.maxNSU ?? 0) || 0)
 
   if (resposta.cStat === CSTAT.CONSUMO_INDEVIDO) {
-    return { ult_nsu: ult, max_nsu: max, bloqueado_ate: esperar(), contarBloqueio: true, continuar: false }
+    // A rejeição carrega o ponto onde a sequência está. Adotá-lo é o que nos
+    // põe em dia sem ficar tentando às cegas — e é a única forma de voltar a
+    // receber quando outro software avançou o ponteiro.
+    const informado = Number(resposta.ultNSU ?? 0) || 0
+    return {
+      ult_nsu: Math.max(ult, informado),
+      max_nsu: max,
+      bloqueado_ate: esperar(),
+      contarBloqueio: true,
+      continuar: false,
+      outroConsumidor: informado > estado.ult_nsu,
+    }
   }
 
   if (resposta.cStat === CSTAT.SEM_DOCUMENTO) {
     // Nada novo: a norma manda esperar uma hora antes de voltar.
-    return { ult_nsu: ult, max_nsu: max, bloqueado_ate: esperar(), contarBloqueio: false, continuar: false }
+    return { ult_nsu: ult, max_nsu: max, bloqueado_ate: esperar(), contarBloqueio: false, continuar: false, outroConsumidor: false }
   }
 
   if (resposta.cStat === CSTAT.COM_DOCUMENTO) {
     // Lote cheio e ainda há NSU adiante: segue na mesma execução, que é o
     // comportamento esperado — o bloqueio é para quem insiste SEM documento.
     const faltam = max > ult
-    return { ult_nsu: ult, max_nsu: max, bloqueado_ate: null, contarBloqueio: false, continuar: faltam }
+    return { ult_nsu: ult, max_nsu: max, bloqueado_ate: null, contarBloqueio: false, continuar: faltam, outroConsumidor: false }
   }
 
   // Qualquer outro código: não avança e espera, por precaução. Melhor um ciclo
   // perdido do que um bloqueio de uma hora sobre o CNPJ.
-  return { ult_nsu: estado.ult_nsu, max_nsu: max, bloqueado_ate: esperar(), contarBloqueio: false, continuar: false }
+  return { ult_nsu: estado.ult_nsu, max_nsu: max, bloqueado_ate: esperar(), contarBloqueio: false, continuar: false, outroConsumidor: false }
 }
 
 /**

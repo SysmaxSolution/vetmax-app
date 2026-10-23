@@ -214,6 +214,9 @@ export async function sincronizarEmpresa(
       agora)
     nsu = proximo.ult_nsu
     if (proximo.contarBloqueio) bloqueios++
+    // Prova direta de outro consumidor vale por tres ocorrencias: e o que
+    // faz a tela avisar ja na primeira vez, em vez de esperar o padrao.
+    if (proximo.outroConsumidor) bloqueios = Math.max(bloqueios, 3)
 
     await admin.from('company_dfe').update({
       ult_nsu: proximo.ult_nsu, max_nsu: proximo.max_nsu,

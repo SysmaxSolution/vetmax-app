@@ -129,3 +129,42 @@ describe('suspeitaDeOutroConsumidor', () => {
     expect(suspeitaDeOutroConsumidor(3)).toBe(true)
   })
 })
+
+describe('realinhamento pelo 656 (caso real de 23/10/2026)', () => {
+  // A Receita respondeu 656 com ultNSU=977 para um CNPJ cujo ponteiro, do
+  // nosso lado, estava em zero. Isso significa que ela já entregou até ali —
+  // e não foi a nós. Adotar o 977 é o que nos põe de volta na sequência.
+  const zerado = { ult_nsu: 0, max_nsu: 0, bloqueado_ate: null, enabled: true }
+
+  it('adota o ultNSU que a rejeição informa', () => {
+    const r = aplicarResposta(zerado, { cStat: CSTAT.CONSUMO_INDEVIDO, ultNSU: 977 }, AGORA)
+    expect(r.ult_nsu).toBe(977)
+  })
+
+  it('reconhece a prova de que há outro consumidor', () => {
+    const r = aplicarResposta(zerado, { cStat: CSTAT.CONSUMO_INDEVIDO, ultNSU: 977 }, AGORA)
+    expect(r.outroConsumidor).toBe(true)
+  })
+
+  it('656 sem ultNSU adiante NÃO acusa outro consumidor', () => {
+    // Aqui o 656 é só excesso de consultas nossas — não há evidência de
+    // terceiro, e acusar a contabilidade sem prova seria pior que não avisar.
+    const r = aplicarResposta({ ...zerado, ult_nsu: 500 }, { cStat: CSTAT.CONSUMO_INDEVIDO, ultNSU: 500 }, AGORA)
+    expect(r.outroConsumidor).toBe(false)
+  })
+
+  it('depois de adotar, a consulta seguinte parte do ponto certo', () => {
+    const r = aplicarResposta(zerado, { cStat: CSTAT.CONSUMO_INDEVIDO, ultNSU: 977 }, AGORA)
+    const depois = { ...zerado, ult_nsu: r.ult_nsu, bloqueado_ate: r.bloqueado_ate }
+    // Ainda bloqueado agora…
+    expect(decidirConsulta(depois, AGORA)).toMatchObject({ consultar: false, motivo: 'bloqueado' })
+    // …e, cumprida a espera, parte de 977 e não de zero.
+    expect(decidirConsulta(depois, '2026-10-23T14:00:00.000Z')).toEqual({ consultar: true, aPartirDe: 977 })
+  })
+
+  it('o 656 nunca faz o ponteiro retroceder', () => {
+    const adiantado = { ...zerado, ult_nsu: 1200 }
+    const r = aplicarResposta(adiantado, { cStat: CSTAT.CONSUMO_INDEVIDO, ultNSU: 977 }, AGORA)
+    expect(r.ult_nsu).toBe(1200)
+  })
+})
