@@ -1,15 +1,17 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Loader2, Upload, CheckCircle2, XCircle, PlusCircle, CalendarClock, FileDown, Landmark, Banknote, EyeOff, RotateCcw, Sparkles, Database } from 'lucide-react'
 import { parseDdaCsv } from '@/lib/parsers/ddaParser'
 import type { DdaBoleto, DdaMatchResult, DdaBoletoPersistido } from '@/types/pagfor'
 import PreviaFornecedoresModal from './PreviaFornecedoresModal'
 import SeletorDeConta from './SeletorDeConta'
+import { textoParaTela } from '@/lib/financial/mensagens-operador'
 import {
   matchDdaBoletos, insertPayablesFromDda, schedulePayments, generatePagforRemittance,
   fetchDdaFromBank, payBoletosViaBank,
   carregarDdaDoPeriodo, ignorarBoletoDda, reativarBoletoDda, enriquecerFornecedoresDda,
+  estadoDaVarredura,
 } from '@/lib/actions/pagfor'
 
 const BRL = (v: number | null) => (v == null ? '—' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }))
@@ -25,8 +27,11 @@ export default function PagforTab() {
   const [error, setError]     = useState<string | null>(null)
   const [done, setDone]       = useState<string | null>(null)
   const today = new Date().toISOString().slice(0, 10)
-  const [ddaFrom, setDdaFrom] = useState(today)
-  const [ddaTo, setDdaTo]     = useState(today)
+  const emDias = (n: number) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10)
+  // O padrao e a mesma faixa que a varredura automatica cobre — abrir a tela
+  // num periodo diferente do que a rotina traz faria a lista parecer vazia.
+  const [ddaFrom, setDdaFrom] = useState(emDias(-30))
+  const [ddaTo, setDdaTo]     = useState(emDias(60))
   // Linhas guardadas, na MESMA ordem de `parsed` — é assim que cada linha da
   // tabela sabe se já foi lançada ou ignorada numa sessão anterior.
   const [persistidos, setPersistidos] = useState<DdaBoletoPersistido[]>([])
@@ -35,6 +40,8 @@ export default function PagforTab() {
   // banco. Numa clinica com varios CNPJs, buscar o DDA de uma empresa e pagar
   // pela outra seria erro silencioso.
   const [contaId, setContaId] = useState<string | null>(null)
+  // Frase pronta sobre o frescor da lista. Nunca carrega detalhe tecnico.
+  const [frescor, setFrescor] = useState<{ texto: string; tom: 'ok' | 'atencao' | 'alerta' } | null>(null)
 
   /**
    * Abre o período: lê o que já está guardado e completa com o banco.
@@ -43,6 +50,36 @@ export default function PagforTab() {
    * "Atualizar do banco". Sem ele, voltar à tela NÃO refaz a consulta: o
    * trabalho de quem parou no meio continua exatamente onde estava.
    */
+  /**
+   * Abre a lista com o que a varredura automatica ja trouxe.
+   *
+   * Nao fala com o banco: entrar na aba nao pode disparar chamada externa, e
+   * a rotina da madrugada ja fez esse trabalho.
+   */
+  const carregarGuardado = useCallback(async (conta: string) => {
+    setLoading(true)
+    const [res, est] = await Promise.all([
+      carregarDdaDoPeriodo({
+        dataInicial: ddaFrom, dataFinal: ddaTo,
+        bankAccountId: conta, somenteGuardado: true,
+      }),
+      estadoDaVarredura(conta),
+    ])
+    setLoading(false)
+    setFrescor(est.texto ? est : null)
+    if ('error' in res) return
+    setPersistidos(res.boletos)
+    const lista = res.boletos.map(p => p.boleto)
+    setParsed(lista)
+    if (lista.length) await runMatch(lista)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ddaFrom, ddaTo])
+
+  useEffect(() => {
+    if (contaId) void carregarGuardado(contaId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contaId])
+
   async function handleFetchDda(forcar = false) {
     setError(null); setDone(null); setResult(null); setLoading(true)
     try {
@@ -50,7 +87,7 @@ export default function PagforTab() {
         dataInicial: ddaFrom, dataFinal: ddaTo, consultarBanco: forcar,
         bankAccountId: contaId ?? undefined,
       })
-      if ('error' in res) { setError(res.error); return }
+      if ('error' in res) { setError(textoParaTela(res.error)); return }
       if (!res.boletos.length) { setError('Nenhum boleto no DDA para o período.'); return }
 
       setPersistidos(res.boletos)
@@ -58,15 +95,18 @@ export default function PagforTab() {
       setParsed(lista)
       await runMatch(lista)
 
+      // O operador precisa saber QUANTOS boletos tem e quantos faltam tratar.
+      // De onde vieram e como ficam guardados e assunto nosso, nao dele.
       const tratados = res.boletos.filter(p => p.entry_id || p.dismissed_at).length
+      const pendentes = res.guardados - tratados
       setDone(
-        res.consultou_banco
-          ? `${res.guardados} boleto(s) no período${res.do_banco ? ` · ${res.do_banco} vindos do banco agora` : ''}` +
-            (tratados ? ` · ${tratados} já tratado(s) antes` : '')
-          : `${res.guardados} boleto(s) recuperados do que já estava guardado` +
-            (tratados ? ` · ${tratados} já tratado(s)` : '') + '. Use "Atualizar do banco" para buscar novos.',
+        pendentes > 0
+          ? `${pendentes} boleto(s) aguardando lançamento${tratados ? ` · ${tratados} já tratado(s)` : ''}.`
+          : res.guardados > 0
+            ? `Tudo tratado: ${res.guardados} boleto(s) no período.`
+            : 'Nenhum boleto no período.',
       )
-    } catch (e) { setError(`Falha ao buscar DDA: ${(e as Error).message}`) }
+    } catch { setError('Não foi possível atualizar os boletos agora. Tente de novo em alguns minutos.') }
     finally { setLoading(false) }
   }
 
@@ -75,7 +115,7 @@ export default function PagforTab() {
     setBusy('enrich'); setError(null)
     const res = await enriquecerFornecedoresDda(4)
     setBusy(null)
-    if ('error' in res) { setError(res.error); return }
+    if ('error' in res) { setError(textoParaTela(res.error)); return }
     setDone(
       res.atualizados
         ? `${res.atualizados} fornecedor(es) completado(s) com os dados da Receita.` +
@@ -91,7 +131,7 @@ export default function PagforTab() {
     setBusy('ignore'); setError(null)
     const res = p.dismissed_at ? await reativarBoletoDda(p.id) : await ignorarBoletoDda(p.id)
     setBusy(null)
-    if ('error' in res) { setError(res.error); return }
+    if ('error' in res) { setError(textoParaTela(res.error)); return }
     setPersistidos(prev => prev.map((x, j) =>
       j === i ? { ...x, dismissed_at: p.dismissed_at ? null : new Date().toISOString() } : x))
   }
@@ -103,7 +143,7 @@ export default function PagforTab() {
       entry_ids: ids, dataPagamento: scheduleDate || today, bankAccountId: contaId ?? undefined,
     })
     setBusy(null)
-    if ('error' in res) { setError(res.error); return }
+    if ('error' in res) { setError(textoParaTela(res.error)); return }
     const falhas = res.falhas.length ? ` ${res.falhas.length} falharam.` : ''
     setDone(`${res.agendados} pagamento(s) agendado(s) no Sicoob para ${fmtD(scheduleDate || today)}.${falhas}`)
     await runMatch(parsed)
@@ -111,7 +151,7 @@ export default function PagforTab() {
 
   async function runMatch(boletos: DdaBoleto[]) {
     const res = await matchDdaBoletos(boletos)
-    if ('error' in res) { setError(res.error); return }
+    if ('error' in res) { setError(textoParaTela(res.error)); return }
     setResult(res); setSelected(new Set())
   }
 
@@ -141,7 +181,7 @@ export default function PagforTab() {
     setBusy('insert'); setError(null)
     const res = await insertPayablesFromDda(red.map(r => r.boleto), { cadastrarFornecedor })
     setBusy(null)
-    if ('error' in res) { setError(res.error); return }
+    if ('error' in res) { setError(textoParaTela(res.error)); return }
     setPreviaAberta(false)
     const forn = res.fornecedores_criados
       ? ` ${res.fornecedores_criados} fornecedor(es) cadastrado(s), ${res.fornecedores_vinculados} vinculado(s).`
@@ -163,7 +203,7 @@ export default function PagforTab() {
     setBusy('schedule'); setError(null)
     const res = await schedulePayments({ entry_ids: ids, scheduled_date: scheduleDate || null })
     setBusy(null)
-    if ('error' in res) { setError(res.error); return }
+    if ('error' in res) { setError(textoParaTela(res.error)); return }
     setDone(`${res.scheduled} pagamento(s) agendado(s)${scheduleDate ? ` para ${fmtD(scheduleDate)}` : ' no vencimento'}.`)
     await runMatch(parsed)
   }
@@ -173,7 +213,7 @@ export default function PagforTab() {
     setBusy('remit'); setError(null)
     const res = await generatePagforRemittance(ids)
     setBusy(null)
-    if ('error' in res) { setError(res.error); return }
+    if ('error' in res) { setError(textoParaTela(res.error)); return }
     const blob = new Blob([res.content], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a'); a.href = url; a.download = res.filename; a.click(); URL.revokeObjectURL(url)
@@ -187,8 +227,15 @@ export default function PagforTab() {
         <div className="flex items-center gap-2">
           <Landmark className="h-4 w-4 text-indigo-600" />
           <div>
-            <p className="text-sm font-semibold text-indigo-800">Buscar DDA no banco (Sicoob)</p>
-            <p className="text-[11px] text-indigo-500">Os boletos ficam guardados: se você parar no meio, ao voltar o período reabre com o que já foi tratado.</p>
+            <p className="text-sm font-semibold text-indigo-800">Boletos a pagar</p>
+            {frescor && (
+              <p className={`text-[11px] ${
+                frescor.tom === 'alerta'  ? 'font-medium text-rose-700'
+                : frescor.tom === 'atencao' ? 'text-amber-700'
+                : 'text-indigo-500'}`}>
+                {frescor.texto}
+              </p>
+            )}
           </div>
         </div>
         <div className="flex items-end gap-2">
@@ -203,8 +250,9 @@ export default function PagforTab() {
               // pode significar consultar o banco, e isso e escolha de quem
               // opera, nao efeito colateral de mexer num seletor.
               setParsed([]); setResult(null); setPersistidos([])
-              setSelected(new Set()); setError(null)
-              setDone('Conta alterada — clique em "Abrir período" para ver os boletos dela.')
+              setSelected(new Set()); setError(null); setDone(null)
+              // O efeito de `contaId` recarrega o que esta guardado desta
+              // conta — sem chamar o banco.
             }}
             bankCode="756"
             label="Conta que opera"
@@ -213,7 +261,7 @@ export default function PagforTab() {
           <div><label className="block text-[10px] text-slate-500">De</label><input type="date" value={ddaFrom} onChange={e => setDdaFrom(e.target.value)} className="rounded-lg border border-slate-200 px-2 py-1 text-xs" /></div>
           <div><label className="block text-[10px] text-slate-500">Até</label><input type="date" value={ddaTo} onChange={e => setDdaTo(e.target.value)} className="rounded-lg border border-slate-200 px-2 py-1 text-xs" /></div>
           <button onClick={() => handleFetchDda(false)} disabled={loading} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2">
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}Abrir período
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}Aplicar período
           </button>
           <button onClick={() => handleFetchDda(true)} disabled={loading} title="Consulta o banco de novo e acrescenta o que houver de novo, sem perder o que já foi tratado"
             className="rounded-lg border border-indigo-300 bg-white px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50 disabled:opacity-50 flex items-center gap-2">
