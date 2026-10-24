@@ -10,7 +10,8 @@ import { CheckInModal } from './CheckInModal'
 import PetTimelineModal from '@/components/pet/PetTimelineModal'
 import NewAppointmentModal from './NewAppointmentModal'
 import AgendaKanban from './AgendaKanban'
-import { getAgendaBoard, type AgendaColumn } from '@/lib/actions/agenda'
+import { getAgendaBoard } from '@/lib/actions/agenda'
+import type { AgendaColumn } from '@/types/agenda'
 import ReceptionSubNav from './ReceptionSubNav'
 import WhatsAppNotificationModal from '@/components/whatsapp/WhatsAppNotificationModal'
 import { BehaviorTagsBadges } from '@/components/ui/BehaviorTagsBadges'
@@ -531,12 +532,16 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
   // Debounced search (300ms)
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current)
-    if (query.trim().length < 2) { setSearchResults([]); return }
+    if (query.trim().length < 2) { setSearchResults([]); setSelectedTutorId(null); return }
     setSearching(true)
     searchTimer.current = setTimeout(async () => {
       const res = await searchTutorsAndPatients(query)
       setSearching(false)
-      if (!('error' in res)) setSearchResults(res)
+      if ('error' in res) return
+      setSearchResults(res)
+      // Um único tutor encontrado = era ele que a recepção procurava: abre o
+      // perfil direto, sem exigir mais um clique na lista de um item só.
+      setSelectedTutorId(res.length === 1 ? res[0].tutor.id : null)
     }, 300)
     return () => { if (searchTimer.current) clearTimeout(searchTimer.current) }
   }, [query])
@@ -835,7 +840,12 @@ export function ReceptionWorkspace({ initialQueue, initialHistory, clinicName, u
             <input
               data-mentor-step="reception-search-input"
               value={query}
-              onChange={e => setQuery(e.target.value)}
+              onChange={e => {
+                setQuery(e.target.value)
+                // Digitar de novo é começar outra busca: o perfil que estava
+                // aberto era da busca anterior e não pode continuar na tela.
+                if (selectedTutorId) setSelectedTutorId(null)
+              }}
               placeholder="CPF, nome do tutor ou nome do pet..."
               className="w-full rounded-lg border border-slate-200 bg-white py-3.5 pl-11 pr-4 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
             />

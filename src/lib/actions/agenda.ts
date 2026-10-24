@@ -7,34 +7,12 @@ import type { ConsultationStatus } from '@/types'
 import { byUrgencyThenTime } from '@/lib/urgency'
 
 import { mensagemErro } from '@/lib/errors'
-export interface AgendaCard {
-  id: string
-  status: ConsultationStatus
-  visit_reason: string
-  created_at: string
-  scheduled_date: string | null
-  patient: {
-    id: string
-    name: string
-    species: string
-    photo_url: string | null
-  }
-  tutor: {
-    id: string
-    name: string
-  }
-  vet: {
-    id: string
-    full_name: string
-  } | null
-  urgency: 'green' | 'yellow' | 'red' | null
-}
+import type { AgendaCard, AgendaColumn } from '@/types/agenda'
 
-export type AgendaColumn = {
-  key: ConsultationStatus
-  label: string
-  cards: AgendaCard[]
-}
+/** Etapas em que o pet está DENTRO da clínica — entram no painel sem filtro de dia. */
+const OPEN_STATUSES: ConsultationStatus[] = [
+  'reception', 'triage', 'in_progress', 'waiting_exam', 'medication', 'awaiting_review',
+]
 
 const KANBAN_COLUMNS: { key: ConsultationStatus; label: string }[] = [
   { key: 'scheduled',    label: 'Agendados' },
@@ -76,9 +54,15 @@ export async function getAgendaBoard(date?: string): Promise<AgendaColumn[] | { 
       vet:profiles!vet_id ( id, full_name )
     `)
     .eq('clinic_id', profile.clinic_id)
-    .in('status', KANBAN_COLUMNS.map(c => c.key))
-    .gte('created_at', startIso)
-    .lte('created_at', endIso)
+    // Quem está em atendimento não tem data: o pet que deu entrada ontem e
+    // ainda aguarda exame continua no painel até sair do fluxo. O dia só
+    // delimita as pontas — o que ainda vai acontecer (Agendados, pela data
+    // marcada) e o que já acabou (Finalizado).
+    .or([
+      `status.in.(${OPEN_STATUSES.join(',')})`,
+      `and(status.eq.scheduled,or(and(scheduled_date.gte.${startIso},scheduled_date.lte.${endIso}),and(scheduled_date.is.null,created_at.gte.${startIso},created_at.lte.${endIso})))`,
+      `and(status.eq.completed,updated_at.gte.${startIso},updated_at.lte.${endIso})`,
+    ].join(','))
     .order('created_at', { ascending: true })
 
   if (error) return { error: 'Erro ao buscar agenda: ' + mensagemErro(error, 'lib/actions/agenda.ts') }

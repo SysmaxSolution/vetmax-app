@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react'
 import { Clock, CheckCircle2, Stethoscope, Users, Calendar, AlertCircle, TestTubes, Pill, Receipt } from 'lucide-react'
 import { PetAvatar } from '@/components/ui/PetAvatar'
-import { moveAgendaCard, type AgendaColumn, type AgendaCard } from '@/lib/actions/agenda'
+import { moveAgendaCard } from '@/lib/actions/agenda'
+import type { AgendaColumn, AgendaCard } from '@/types/agenda'
 import type { ConsultationStatus } from '@/types'
 
 // ─── Column Config ───────────────────────────────────────────────────────────
