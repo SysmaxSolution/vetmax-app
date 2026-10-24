@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { parseNFeXML } from '@/lib/utils/nfe-parser'
 import type { ParsedNFe } from '@/lib/utils/nfe-parser'
+import type { AjustesDaEntrada } from '@/types/entrada-mercadoria'
 
 import { mensagemErro } from '@/lib/errors'
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -80,6 +81,15 @@ async function getCtx() {
 
 export async function importNFeXML(
   xmlContent: string,
+  /**
+   * O que o operador corrigiu antes de confirmar.
+   *
+   * O XML NÃO é tocado — ele é o documento fiscal e continua registrando o que
+   * o fornecedor emitiu. Os ajustes valem para o que entra no sistema: a
+   * quantidade realmente recebida, a descrição que vai para o estoque, o
+   * vencimento combinado por fora.
+   */
+  ajustes?: AjustesDaEntrada,
 ): Promise<PurchaseOrder | { error: string }> {
   const ctx = await getCtx()
   if ('error' in ctx) return { error: ctx.error as string }
@@ -88,8 +98,16 @@ export async function importNFeXML(
     return { error: 'Apenas administradores podem importar NF-e.' }
   }
 
-  const parsed = parseNFeXML(xmlContent)
-  if ('error' in parsed) return parsed
+  const lido = parseNFeXML(xmlContent)
+  if ('error' in lido) return lido
+
+  const { aplicarAjustes, resumirAjustes } = await import('@/lib/financial/ajustes-entrada')
+  const parsed = aplicarAjustes(lido, ajustes)
+  const oQueMudou = resumirAjustes(lido, parsed)
+
+  if (!parsed.items.length) {
+    return { error: 'Nenhum item para dar entrada — todos foram removidos.' }
+  }
 
   const admin = createAdminClient()
 
@@ -144,8 +162,14 @@ export async function importNFeXML(
       issue_date:  parsed.issue_date || null,
       total_value: parsed.total_value,
       status:      'pending',
+      // O XML guardado é o ORIGINAL, sempre: é o documento fiscal, e os
+      // ajustes do operador valem para o que entrou, não para o que o
+      // fornecedor emitiu.
       xml_content: xmlContent,
       duplicatas:  parsed.duplicatas ?? [],
+      // Fica registrado o que foi corrigido na conferência — sem isso,
+      // quem olhar depois vê um total diferente do XML e não sabe por quê.
+      notes:       oQueMudou ? `Conferência: ${oQueMudou}` : null,
       created_by:  ctx.user_id,
     })
     .select('id')

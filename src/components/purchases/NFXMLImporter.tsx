@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useTransition } from 'react'
 import { createPortal } from 'react-dom'
+import type { AjustesDaEntrada } from '@/types/entrada-mercadoria'
 import { Upload, X, FileText, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
 import { importNFeXML, enrichProductFromNCM } from '@/lib/actions/purchases'
 import type { PurchaseOrder } from '@/lib/actions/purchases'
@@ -30,6 +31,8 @@ export function NFXMLImporter({ onClose, onImported, xmlInicial = null }: Props)
   const [xmlContent, setXmlContent] = useState<string | null>(null)
   const [parsed, setParsed]     = useState<ParsedNFe | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  // O que o operador corrigiu na conferencia. Vazio = entra como veio no XML.
+  const [ajustes, setAjustes] = useState<AjustesDaEntrada>({})
   const [isPending, startTransition] = useTransition()
 
   const processFile = useCallback((file: File) => {
@@ -79,7 +82,7 @@ export function NFXMLImporter({ onClose, onImported, xmlInicial = null }: Props)
     if (!xmlContent) return
     setStep('importing')
     startTransition(async () => {
-      const result = await importNFeXML(xmlContent)
+      const result = await importNFeXML(xmlContent, ajustes)
       if ('error' in result) {
         setErrorMsg(result.error)
         setStep('error')
@@ -133,7 +136,7 @@ export function NFXMLImporter({ onClose, onImported, xmlInicial = null }: Props)
           )}
 
           {step === 'preview' && parsed && (
-            <NFXMLPreview parsed={parsed} />
+            <NFXMLPreview parsed={parsed} ajustes={ajustes} onAjustar={setAjustes} />
           )}
 
           {step === 'importing' && (

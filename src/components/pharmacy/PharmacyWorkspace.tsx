@@ -102,7 +102,7 @@ interface Props {
 
 export interface ItemForm {
   name: string; category: StockCategory; quantity: string; unit: string
-  min_quantity: string; unit_price: string; is_controlled: boolean
+  min_quantity: string; unit_price: string; is_controlled: boolean; is_sellable: boolean
   substance: string; concentration: string; control_class: string; is_human_use: boolean
   brand: string; sku: string; barcode: string; batch_number: string
   expiry_date: string; supplier: string
@@ -130,7 +130,7 @@ export interface ItemForm {
 
 const EMPTY_PRODUCT_FORM: ItemForm = {
   name: '', category: 'medication', quantity: '0', unit: 'un',
-  min_quantity: '0', unit_price: '0', is_controlled: false,
+  min_quantity: '0', unit_price: '0', is_controlled: false, is_sellable: true,
   substance: '', concentration: '', control_class: '', is_human_use: false,
   brand: '', sku: '', barcode: '', batch_number: '', expiry_date: '', supplier: '',
   default_insurance_price: '',
@@ -144,7 +144,7 @@ const EMPTY_PRODUCT_FORM: ItemForm = {
 
 const EMPTY_SERVICE_FORM: ItemForm = {
   name: '', category: 'service', quantity: '0', unit: 'un',
-  min_quantity: '0', unit_price: '0', is_controlled: false,
+  min_quantity: '0', unit_price: '0', is_controlled: false, is_sellable: true,
   substance: '', concentration: '', control_class: '', is_human_use: false,
   brand: '', sku: '', barcode: '', batch_number: '', expiry_date: '', supplier: '',
   default_insurance_price: '',
@@ -162,6 +162,9 @@ function formFromItem(item: StockItemV2): ItemForm {
     quantity: String(item.quantity), unit: item.unit,
     min_quantity: String(item.min_quantity), unit_price: String(item.unit_price),
     is_controlled: item.is_controlled,
+    // Item antigo, de antes do campo existir, continua vendável — era o
+    // comportamento que a clínica já tinha.
+    is_sellable: (item as { is_sellable?: boolean }).is_sellable !== false,
     substance: item.substance ?? '', concentration: item.concentration ?? '',
     control_class: item.control_class ?? '', is_human_use: Boolean(item.is_human_use),
     brand: item.brand ?? '', sku: item.sku ?? '',
@@ -1105,6 +1108,7 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
       min_quantity:  isService ? 0 : Number(form.min_quantity),
       unit_price:    Number(form.unit_price),
       is_controlled: form.is_controlled,
+      is_sellable:   isService ? true : form.is_sellable,
       substance:     form.is_controlled ? (form.substance || null) : null,
       concentration: form.is_controlled ? (form.concentration || null) : null,
       control_class: form.is_controlled ? (form.control_class || null) : null,
@@ -1449,6 +1453,26 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
                 </div>
               )}
             </div>
+          )}
+
+          {/* Vende ou só usa? (apenas produtos — serviço é para cobrar) */}
+          {!isService && (
+            <label className="flex items-center gap-3 cursor-pointer select-none">
+              <div
+                onClick={() => set('is_sellable', !form.is_sellable)}
+                className={`relative h-5 w-9 rounded-full transition-colors ${form.is_sellable ? 'bg-teal-500' : 'bg-slate-300'}`}
+              >
+                <div className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${form.is_sellable ? 'translate-x-4' : 'translate-x-0.5'}`} />
+              </div>
+              <div>
+                <span className="text-sm font-semibold text-slate-700">Produto de venda</span>
+                <p className="text-[11px] text-slate-400">
+                  {form.is_sellable
+                    ? 'Aparece no PDV, no Caixa e no Faturamento.'
+                    : 'Insumo ou uso e consumo — não aparece nas telas de venda.'}
+                </p>
+              </div>
+            </label>
           )}
 
           {/* Toggle controlado (apenas produtos) */}

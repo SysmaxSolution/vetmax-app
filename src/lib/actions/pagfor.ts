@@ -50,37 +50,51 @@ export async function matchDdaBoletos(boletos: DdaBoleto[]): Promise<DdaMatchRes
   const c = await ctx()
   if (!c) return { error: 'Não autenticado.' }
   const admin = createAdminClient()
+
+  // O CNPJ do fornecedor vem junto: é por ele que o casamento acontece.
+  // Antes a comparação era de NOME, e nomes divergem — "L.P.S. AGROFARMA
+  // LTDA" no XML contra "LPS AGROFARMA LTDA EPP" no banco. Valor e vencimento
+  // batiam, e mesmo assim o boleto aparecia como "não está no sistema".
   const { data: payablesRaw } = await admin
     .from('financial_entries')
-    .select('id, amount, due_date, description, beneficiary, barcode, scheduled_payment_date')
+    .select('id, amount, due_date, description, beneficiary, barcode, scheduled_payment_date, suppliers:supplier_id ( document )')
     .eq('clinic_id', c.clinicId).eq('type', 'payable').eq('status', 'pending')
-  const payables = (payablesRaw ?? []) as Array<Record<string, unknown>>
 
-  const used = new Set<string>()
-  const rows: DdaMatchRow[] = boletos.map(b => {
-    const bDigits = onlyDigits(b.barcode)
-    const bName = (b.beneficiary ?? '').toLowerCase().trim()
-    const hit = payables.find(p => {
-      if (used.has(p.id as string)) return false
-      // 1) casa por código de barras (forte)
-      if (bDigits && onlyDigits(p.barcode as string) === bDigits) return true
-      // 2) casa por valor + vencimento (±2d) + beneficiário aproximado
-      if (!eqAmt(b.amount, Number(p.amount))) return false
-      if (b.due_date && p.due_date) {
-        const dd = Math.abs(new Date(b.due_date).getTime() - new Date(p.due_date as string).getTime()) / 86400000
-        if (dd > 2) return false
-      }
-      if (bName) {
-        const pName = String(p.beneficiary ?? p.description ?? '').toLowerCase()
-        if (!pName.includes(bName) && !bName.includes(pName.slice(0, 8))) return false
-      }
-      return true
-    })
-    if (hit) {
-      used.add(hit.id as string)
-      return { boleto: b, status: 'in_system', entry_id: hit.id as string, entry_scheduled: (hit.scheduled_payment_date as string) ?? null }
+  const titulos = (payablesRaw ?? []).map(linha => {
+    const r = linha as Record<string, unknown>
+    // O CNPJ do fornecedor mora em `document` — não em `cnpj`, que não existe.
+    const forn = r.suppliers as { document?: string } | { document?: string }[] | null
+    return {
+      id:            r.id as string,
+      amount:        Number(r.amount),
+      due_date:      (r.due_date as string | null) ?? null,
+      description:   (r.description as string | null) ?? null,
+      beneficiary:   (r.beneficiary as string | null) ?? null,
+      barcode:       (r.barcode as string | null) ?? null,
+      supplier_cnpj: (Array.isArray(forn) ? forn[0]?.document : forn?.document) ?? null,
+      agendado:      (r.scheduled_payment_date as string | null) ?? null,
     }
-    return { boleto: b, status: 'not_in_system', entry_id: null, entry_scheduled: null }
+  })
+
+  const { casarBoleto } = await import('@/lib/financial/conciliacao-dda')
+  const usados = new Set<string>()
+
+  const rows: DdaMatchRow[] = boletos.map(b => {
+    const { titulo } = casarBoleto(
+      {
+        barcode: b.barcode, beneficiary: b.beneficiary,
+        beneficiary_doc: b.beneficiary_doc, amount: b.amount, due_date: b.due_date,
+      },
+      titulos, usados,
+    )
+    if (!titulo) return { boleto: b, status: 'not_in_system', entry_id: null, entry_scheduled: null }
+
+    usados.add(titulo.id)
+    const original = titulos.find(t => t.id === titulo.id)
+    return {
+      boleto: b, status: 'in_system', entry_id: titulo.id,
+      entry_scheduled: original?.agendado ?? null,
+    }
   })
 
   return {
@@ -528,6 +542,138 @@ export async function estadoDaVarredura(
     (data as { situacao?: string | null } | null)?.situacao ?? null,
     new Date().toISOString(),
   )
+}
+
+/**
+ * Títulos candidatos a receber o vínculo manual de um boleto.
+ *
+ * Nenhuma regra automática pega tudo: fornecedor cadastrado com outro CNPJ,
+ * valor que mudou entre a nota e o boleto, vencimento renegociado. Sem uma
+ * saída manual, o operador fica olhando para um boleto que ele SABE que já
+ * está lançado e sem nada a fazer — ou lança a duplicata.
+ *
+ * Os mais parecidos vêm primeiro, mas a lista não esconde os demais: quem
+ * está na tela sabe coisas que o sistema não sabe.
+ */
+export async function titulosParaVincular(filtro?: {
+  valor?: number
+  busca?: string
+}): Promise<Array<{
+  id: string; amount: number; due_date: string | null
+  descricao: string; fornecedor: string | null; ja_vinculado: boolean
+}> | { error: string }> {
+  const c = await ctx()
+  if (!c) return { error: 'Sua sessão expirou. Entre de novo para continuar.' }
+  const admin = createAdminClient()
+
+  let q = admin.from('financial_entries')
+    .select('id, amount, due_date, description, beneficiary, suppliers:supplier_id ( name )')
+    .eq('clinic_id', c.clinicId).eq('type', 'payable').eq('status', 'pending')
+
+  if (filtro?.busca?.trim()) {
+    const t = filtro.busca.trim()
+    q = q.or(`description.ilike.%${t}%,beneficiary.ilike.%${t}%`)
+  }
+
+  const { data } = await q.order('due_date', { ascending: true }).limit(200)
+
+  // Quais já estão presos a algum boleto — vincular duas vezes seria pagar duas.
+  const { data: presos } = await admin.from('dda_boletos')
+    .select('entry_id').eq('clinic_id', c.clinicId).not('entry_id', 'is', null)
+  const usados = new Set((presos ?? []).map(x => (x as { entry_id: string }).entry_id))
+
+  const linhas = (data ?? []).map(l => {
+    const r = l as Record<string, unknown>
+    const forn = r.suppliers as { name?: string } | { name?: string }[] | null
+    return {
+      id:           r.id as string,
+      amount:       Number(r.amount),
+      due_date:     (r.due_date as string | null) ?? null,
+      descricao:    String(r.description ?? ''),
+      fornecedor:   (Array.isArray(forn) ? forn[0]?.name : forn?.name)
+                      ?? (r.beneficiary as string | null) ?? null,
+      ja_vinculado: usados.has(r.id as string),
+    }
+  })
+
+  // Mesmo valor primeiro: é o que o operador procura em 9 de cada 10 casos.
+  if (filtro?.valor) {
+    const alvo = Math.round(filtro.valor * 100)
+    linhas.sort((a, b) => {
+      const da = Math.abs(Math.round(a.amount * 100) - alvo)
+      const db = Math.abs(Math.round(b.amount * 100) - alvo)
+      return da - db
+    })
+  }
+  return linhas
+}
+
+/**
+ * Amarra à mão um boleto do banco a um título já lançado.
+ *
+ * Grava também o código de barras no título: da próxima vez o casamento é
+ * automático, pela prova mais forte que existe. Corrigir à mão uma vez deve
+ * ensinar o sistema, não virar rotina.
+ */
+export async function vincularBoletoATitulo(
+  fingerprint: string, entryId: string,
+): Promise<{ ok: true } | { error: string }> {
+  const c = await ctx()
+  if (!c) return { error: 'Sua sessão expirou. Entre de novo para continuar.' }
+  if (!['admin', 'owner', 'manager'].includes(c.role)) {
+    return { error: 'Seu usuário não tem permissão para esta operação.' }
+  }
+  const admin = createAdminClient()
+
+  const { data: boleto } = await admin.from('dda_boletos')
+    .select('id, barcode, amount, entry_id')
+    .eq('clinic_id', c.clinicId).eq('fingerprint', fingerprint).maybeSingle()
+  if (!boleto) return { error: 'Boleto não encontrado.' }
+
+  const { data: titulo } = await admin.from('financial_entries')
+    .select('id, status, barcode')
+    .eq('id', entryId).eq('clinic_id', c.clinicId).eq('type', 'payable').maybeSingle()
+  if (!titulo) return { error: 'Título não encontrado.' }
+  if ((titulo as { status: string }).status !== 'pending') {
+    return { error: 'Este título já foi pago ou cancelado.' }
+  }
+
+  // Um título por boleto: dois boletos no mesmo título viram pagamento dobrado.
+  const { data: outro } = await admin.from('dda_boletos')
+    .select('id').eq('clinic_id', c.clinicId).eq('entry_id', entryId)
+    .neq('id', (boleto as { id: string }).id).maybeSingle()
+  if (outro) return { error: 'Este título já está vinculado a outro boleto.' }
+
+  await admin.from('dda_boletos')
+    .update({ entry_id: entryId, updated_at: new Date().toISOString() })
+    .eq('id', (boleto as { id: string }).id)
+
+  // O código de barras no título é o que faz a próxima conciliação acertar
+  // sozinha — e é também o que o pagamento usa.
+  const codigo = (boleto as { barcode?: string | null }).barcode
+  if (codigo && !(titulo as { barcode?: string | null }).barcode) {
+    await admin.from('financial_entries')
+      .update({ barcode: codigo, updated_at: new Date().toISOString() })
+      .eq('id', entryId).eq('clinic_id', c.clinicId)
+  }
+
+  revalidatePath('/dashboard/financial')
+  return { ok: true }
+}
+
+/** Desfaz o vínculo — sem apagar o título nem o boleto. */
+export async function desvincularBoleto(fingerprint: string): Promise<{ ok: true } | { error: string }> {
+  const c = await ctx()
+  if (!c) return { error: 'Sua sessão expirou. Entre de novo para continuar.' }
+  if (!['admin', 'owner', 'manager'].includes(c.role)) {
+    return { error: 'Seu usuário não tem permissão para esta operação.' }
+  }
+  const admin = createAdminClient()
+  await admin.from('dda_boletos')
+    .update({ entry_id: null, updated_at: new Date().toISOString() })
+    .eq('clinic_id', c.clinicId).eq('fingerprint', fingerprint)
+  revalidatePath('/dashboard/financial')
+  return { ok: true }
 }
 
 /** Varredura do DDA direto no banco (substitui a importação manual do CSV). */

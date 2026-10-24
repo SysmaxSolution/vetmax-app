@@ -125,6 +125,10 @@ export async function searchSalesProducts(query: string): Promise<StockProduct[]
       .from('stock_items')
       .select('id, name, category, unit_price, quantity, unit')
       .eq('clinic_id', profile.clinic_id)
+      // Insumo e uso-e-consumo ficam de fora da venda: o que não é para
+      // vender não pode estar a um clique de ser vendido.
+      .eq('is_sellable', true)
+      .is('archived_at', null)
       .eq('barcode', q)
       .limit(5)
     if (byBarcode && byBarcode.length > 0) {
@@ -143,6 +147,8 @@ export async function searchSalesProducts(query: string): Promise<StockProduct[]
     .from('stock_items')
     .select('id, name, category, unit_price, quantity, unit')
     .eq('clinic_id', profile.clinic_id)
+    .eq('is_sellable', true)
+    .is('archived_at', null)
     .ilike('name', `%${q}%`)
     .order('name')
     .limit(20)
