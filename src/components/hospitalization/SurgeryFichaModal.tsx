@@ -12,11 +12,8 @@ import VoiceReviewPanel from './VoiceReviewPanel'
 import SurgeryStageFeed from './SurgeryStageFeed'
 import ConsultationQuotationBadge from '@/components/billing/ConsultationQuotationBadge'
 import { formatClinicTime } from '@/lib/time'
-import {
-  getSurgery, updateSurgeryChecklist, updateSurgeryReport,
-  listSurgeryVitals, recordSurgeryVital, sendSurgeryToInternacao,
-  type SurgeryDetail, type SurgeryChecklist, type SurgeryVital,
-} from '@/lib/actions/surgeries'
+import { getSurgery, updateSurgeryChecklist, updateSurgeryReport, listSurgeryVitals, recordSurgeryVital, sendSurgeryToInternacao } from '@/lib/actions/surgeries'
+import type { SurgeryDetail, SurgeryChecklist, SurgeryVital } from '@/types/surgeries'
 import {
   listServiceKits, applyKitToSurgery, getSurgeryAccount,
   type ServiceKitSummary, type SurgeryAccount,
@@ -256,6 +253,24 @@ export default function SurgeryFichaModal({ surgeryId, onClose, onChanged }: Pro
                       </label>
                     )
                   })}
+                  {/* Checagens próprias do SERVIÇO (0518): cada procedimento exige o seu preparo. */}
+                  {(surgery?.service_preop_checklist?.length ?? 0) > 0 && (
+                    <div className="pt-2 space-y-2">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase">Exigido por este procedimento</p>
+                      {surgery!.service_preop_checklist.map(label => {
+                        const checked = !!checklist.custom?.[label]
+                        return (
+                          <label key={label} className="flex items-center gap-3 rounded-xl border border-slate-200 px-3 py-2.5 cursor-pointer hover:bg-slate-50"
+                            onClick={() => saveChecklist({ ...checklist, custom: { ...(checklist.custom ?? {}), [label]: !checked } })}>
+                            <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${checked ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300'}`}>
+                              {checked && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
+                            </div>
+                            <span className={`text-sm ${checked ? 'text-slate-900 font-medium' : 'text-slate-600'}`}>{label}</span>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  )}
                   {!checklist.consent_signed && (
                     <p className="flex items-center gap-1.5 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                       <ShieldAlert className="h-3.5 w-3.5" /> Termo de consentimento pendente — obrigatório antes do procedimento (CFMV).
@@ -329,15 +344,25 @@ export default function SurgeryFichaModal({ surgeryId, onClose, onChanged }: Pro
                     <p className="text-xs text-slate-400">Nenhum kit cadastrado. Cadastre kits no catálogo para aplicar com 1 clique.</p>
                   ) : (
                     <div className="space-y-1.5">
-                      {kits.map(k => (
-                        <div key={k.id} className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2">
-                          <div className="flex-1 min-w-0"><p className="text-sm font-semibold text-slate-800 truncate">{k.name}</p><p className="text-[11px] text-slate-500">{k.item_count} insumo(s)</p></div>
-                          <button onClick={() => handleApplyKit(k.id)} disabled={busyKit !== null} data-testid="surgery-kit-apply"
-                            className="flex items-center gap-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50">
-                            {busyKit === k.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />} Aplicar
-                          </button>
-                        </div>
-                      ))}
+                      {/* O kit do serviço vem primeiro e destacado: é o que este procedimento consome. Os outros continuam disponíveis. */}
+                      {[...kits].sort((a, b) => (a.id === surgery?.service_default_kit_id ? -1 : b.id === surgery?.service_default_kit_id ? 1 : 0)).map(k => {
+                        const doServico = !!surgery?.service_default_kit_id && k.id === surgery.service_default_kit_id
+                        return (
+                          <div key={k.id} className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${doServico ? 'border-indigo-300 bg-indigo-50/60' : 'border-slate-200'}`}>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold text-slate-800 truncate">
+                                {k.name}
+                                {doServico && <span className="ml-2 rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] font-bold uppercase text-white">kit do serviço</span>}
+                              </p>
+                              <p className="text-[11px] text-slate-500">{k.item_count} insumo(s)</p>
+                            </div>
+                            <button onClick={() => handleApplyKit(k.id)} disabled={busyKit !== null} data-testid="surgery-kit-apply"
+                              className="flex items-center gap-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50">
+                              {busyKit === k.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />} {doServico ? 'Aplicar kit do serviço' : 'Aplicar'}
+                            </button>
+                          </div>
+                        )
+                      })}
                     </div>
                   )}
                   {account && account.charges.length > 0 && (
