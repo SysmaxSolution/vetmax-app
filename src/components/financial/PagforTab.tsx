@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Loader2, Upload, CheckCircle2, XCircle, PlusCircle, CalendarClock, FileDown, Landmark, Banknote, EyeOff, RotateCcw, Sparkles, Database, Link2, Unlink } from 'lucide-react'
+import { Loader2, Upload, CheckCircle2, XCircle, PlusCircle, CalendarClock, FileDown, Landmark, Banknote, EyeOff, RotateCcw, Sparkles, Database, Link2, Unlink, Ban } from 'lucide-react'
 import { parseDdaCsv } from '@/lib/parsers/ddaParser'
 import type { DdaBoleto, DdaMatchResult, DdaBoletoPersistido } from '@/types/pagfor'
 import PreviaFornecedoresModal from './PreviaFornecedoresModal'
@@ -12,7 +12,7 @@ import {
   matchDdaBoletos, insertPayablesFromDda, schedulePayments, generatePagforRemittance,
   fetchDdaFromBank, payBoletosViaBank,
   carregarDdaDoPeriodo, ignorarBoletoDda, reativarBoletoDda, enriquecerFornecedoresDda,
-  estadoDaVarredura, desvincularBoleto,
+  estadoDaVarredura, desvincularBoleto, cancelarAgendamentoDoTitulo,
 } from '@/lib/actions/pagfor'
 
 const BRL = (v: number | null) => (v == null ? '—' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }))
@@ -186,7 +186,25 @@ export default function PagforTab() {
     setSelected(prev => { const n = new Set(prev); n.has(i) ? n.delete(i) : n.add(i); return n })
   }
 
-  const selRows = () => [...selected].map(i => result?.rows[i]).filter(Boolean) as NonNullable<DdaMatchResult['rows'][number]>[]
+  // Boleto ignorado nunca entra numa ação em lote, mesmo que tenha ficado
+  // marcado antes de ser ignorado.
+  const selRows = () => [...selected]
+    .filter(i => !persistidos[i]?.dismissed_at)
+    .map(i => result?.rows[i]).filter(Boolean) as NonNullable<DdaMatchResult['rows'][number]>[]
+
+  async function handleCancelarAgendamento(i: number) {
+    const r = result?.rows[i]; if (!r?.entry_id) return
+    if (!confirm('Cancelar o agendamento deste pagamento no banco? O título volta a ficar pendente, sem data programada.')) return
+    setBusy('cancel'); setError(null)
+    const res = await cancelarAgendamentoDoTitulo(r.entry_id)
+    setBusy(null)
+    if ('error' in res) { setError(textoParaTela(res.error)); return }
+    setDone('Agendamento cancelado no banco. O título continua lançado, agora sem data programada.')
+    setResult(prev => prev ? {
+      ...prev,
+      rows: prev.rows.map((x, j) => j === i ? { ...x, entry_scheduled: null, entry_bank_payment_id: null } : x),
+    } : prev)
+  }
   const selRed = () => selRows().filter(r => r.status === 'not_in_system')
   const selGreenIds = () => selRows().filter(r => r.entry_id).map(r => r.entry_id!) as string[]
 
@@ -334,7 +352,10 @@ export default function PagforTab() {
                     const ignorado = !!persistidos[i]?.dismissed_at
                     return (
                       <tr key={i} className={ignorado ? 'bg-slate-50 opacity-60' : green ? 'bg-emerald-50/40' : 'bg-rose-50/40'}>
-                        <td className="px-3 py-2"><input type="checkbox" checked={selected.has(i)} onChange={() => toggle(i)} /></td>
+                        <td className="px-3 py-2">
+                          <input type="checkbox" checked={!ignorado && selected.has(i)} disabled={ignorado} onChange={() => toggle(i)}
+                            title={ignorado ? 'Boleto ignorado — volte a considerá-lo para poder selecionar' : undefined} />
+                        </td>
                         <td className="px-3 py-2 font-medium text-slate-700">{r.boleto.beneficiary ?? '—'}</td>
                         <td className="px-3 py-2 text-slate-500">{r.boleto.document ?? '—'}</td>
                         <td className="px-3 py-2 font-mono text-slate-400">{r.boleto.barcode ? r.boleto.barcode.replace(/\D/g, '').slice(0, 12) + '…' : '—'}</td>
@@ -355,6 +376,14 @@ export default function PagforTab() {
                                 title="Vincular a um título já lançado"
                                 className="rounded p-1 text-indigo-500 hover:bg-indigo-50 disabled:opacity-40">
                                 <Link2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                            {/* Agendado no banco por engano: cancela no Sicoob e limpa a data. */}
+                            {!ignorado && green && r.entry_bank_payment_id && (
+                              <button onClick={() => void handleCancelarAgendamento(i)} disabled={busy !== null}
+                                title="Cancelar o agendamento deste pagamento no banco"
+                                className="rounded p-1 text-amber-600 hover:bg-amber-50 disabled:opacity-40">
+                                <Ban className="h-3.5 w-3.5" />
                               </button>
                             )}
                             {!ignorado && green && persistidos[i]?.entry_id && (

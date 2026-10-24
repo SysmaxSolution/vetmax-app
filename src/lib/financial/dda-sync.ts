@@ -50,7 +50,7 @@ export async function loadPagamentosRuntime(admin: ReturnType<typeof createAdmin
     return { error: 'Conta ou agência sem número no cadastro (Cadastros → Bancos).' }
   }
 
-  return { ...r.config, numeroConta, agencia }
+  return { ...r.config, numeroConta, agencia, bankAccountId: conta.id ?? null }
 }
 
 export async function guardarBoletos(

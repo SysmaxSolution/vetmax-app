@@ -34,6 +34,8 @@ export const ESCOPO_PAGAMENTOS = 'pagamentos_inclusao pagamentos_consulta pagame
 export interface PagamentosRuntime extends CredenciaisSicoob {
   numeroConta: number
   agencia: number
+  /** Conta bancária (bank_accounts.id) de onde saíram estas credenciais — gravada no título ao agendar. */
+  bankAccountId?: string | null
 }
 
 async function token(cfg: PagamentosRuntime): Promise<string> {
