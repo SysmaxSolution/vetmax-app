@@ -4,10 +4,11 @@ import { useState, useEffect, useTransition } from 'react'
 import { createPortal } from 'react-dom'
 import { X, Loader2, Trash2, CheckCircle, AlertCircle, RotateCcw, Hash, ShieldCheck } from 'lucide-react'
 import {
-  createEntry, updateEntry, deleteEntry, baixarTitulo, reverseFinancialEntry,
+  createEntry, updateEntry, deleteEntry, baixarTitulo,
   getEntryContext,
   type FinancialEntry, type EntryType, type BaixarTituloData, type EntryContext,
 } from '@/lib/actions/financial'
+import { estornarTituloFinanceiro } from '@/lib/actions/estorno-credito'
 import { getEntrySettler } from '@/lib/actions/client-statement'
 import { searchSalesTutors } from '@/lib/actions/sales'
 import { buscarConsumidorFinal } from '@/lib/actions/tutors'
@@ -313,9 +314,11 @@ export default function TituloModal({
     setDeleteStep('confirm_reversal_only')
   }
 
+  // `estornarTituloFinanceiro` devolve o crédito ao tutor quando a baixa foi
+  // por crédito; nos demais casos é o estorno de sempre.
   function handleReversalOnly() {
     startTransition(async () => {
-      const res = await reverseFinancialEntry(entry!.id)
+      const res = await estornarTituloFinanceiro(entry!.id)
       if ('error' in res) { setError(res.error); return }
       onSuccess()
     })
@@ -323,7 +326,7 @@ export default function TituloModal({
 
   function handleReversalBeforeDelete() {
     startTransition(async () => {
-      const res = await reverseFinancialEntry(entry!.id)
+      const res = await estornarTituloFinanceiro(entry!.id)
       if ('error' in res) { setError(res.error); return }
       setDeleteStep('confirm_delete')
     })
