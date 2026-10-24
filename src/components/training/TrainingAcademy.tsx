@@ -140,12 +140,17 @@ export default function TrainingAcademy({ user, videos }: { user: UserT; videos:
         />
       )}
 
-      {/* Botão flutuante: pedir vídeo */}
-      {!active && !reportFor && (
+      {/* Botão flutuante: pedir vídeo / reportar.
+          Vai para o body via portal: o shell do dashboard anima com transform,
+          e um ancestral com transform transforma `position: fixed` em
+          "absoluto" — o botão descia junto com a página e só aparecia no fim.
+          Some quando um vídeo está aberto ou o formulário já está na tela. */}
+      {!active && !reportFor && typeof document !== 'undefined' && createPortal(
         <button onClick={() => setReportFor('general')}
-          className="fixed bottom-6 right-6 z-30 flex items-center gap-2 px-4 py-3 rounded-full bg-slate-800 text-white text-sm font-semibold shadow-lg hover:bg-slate-700">
+          className="fixed bottom-6 right-6 z-40 flex items-center gap-2 px-4 py-3 rounded-full bg-slate-800 text-white text-sm font-semibold shadow-lg hover:bg-slate-700">
           <Flag className="w-4 h-4" /> Pedir vídeo / Reportar
-        </button>
+        </button>,
+        document.body,
       )}
     </div>
   )

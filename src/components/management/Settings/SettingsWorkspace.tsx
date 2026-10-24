@@ -5,7 +5,7 @@ import {
   Building2, Shield, MessageCircle, Calculator,
   BarChart3, Wrench, ToggleLeft, ToggleRight, Save, Loader2,
   HelpCircle, Tags, Hash, Building, Landmark, FlaskConical, GraduationCap,
-  ScanLine, Barcode, Syringe,
+  ScanLine, Barcode, Syringe, ClipboardList, Globe, Sparkles
 } from 'lucide-react'
 import FinancialIntegrationsForm from './FinancialIntegrationsForm'
 import type { ClinicConfig, ClinicSettingsConfig, FlowConfig } from '@/lib/actions/clinic-settings'
@@ -34,7 +34,7 @@ import { Lock, ArrowUpRight } from 'lucide-react'
 
 // Categoria 'ia' removida em 2026-05-26 (cleanup de drift): IA mode e Fluxo
 // Contínuo agora são exclusivos da categoria 'acesso' (ClinicSettingsTab).
-type Category = 'geral' | 'acesso' | 'whatsapp' | 'contabil' | 'financeiro' | 'empresas' | 'precos' | 'numeracao' | 'laboratorio' | 'relatorios' | 'utilitarios'
+type Category = 'geral' | 'atendimento' | 'portal' | 'ia' | 'acesso' | 'whatsapp' | 'financeiro' | 'empresas' | 'precos' | 'numeracao' | 'laboratorio' | 'relatorios' | 'utilitarios'
 
 interface CategoryDef {
   key: Category
@@ -45,10 +45,15 @@ interface CategoryDef {
 
 const CATEGORIES: CategoryDef[] = [
   { key: 'geral',        label: 'Geral',       icon: <Building2    className="h-4 w-4" />, description: 'Horário e dados operacionais'        },
-  { key: 'acesso',       label: 'Acesso',      icon: <Shield       className="h-4 w-4" />, description: 'Módulos, IA e fluxo contínuo'        },
+  // "Acesso" concentrava módulos, check-in, campos obrigatórios, fluxo, IA e
+  // portal — tudo junto. Cada assunto agora tem a sua categoria; Acesso é só
+  // o que o nome diz.
+  { key: 'atendimento',  label: 'Atendimento', icon: <ClipboardList className="h-4 w-4" />, description: 'Check-in, campos obrigatórios e fluxo' },
+  { key: 'portal',       label: 'Portal do Tutor', icon: <Globe    className="h-4 w-4" />, description: 'Agendamento online e identidade'     },
+  { key: 'ia',           label: 'Inteligência Artificial', icon: <Sparkles className="h-4 w-4" />, description: 'Transcrição e assistente'   },
+  { key: 'acesso',       label: 'Acesso',      icon: <Shield       className="h-4 w-4" />, description: 'Módulos ativos da clínica'           },
   { key: 'whatsapp',     label: 'WhatsApp',    icon: <MessageCircle className="h-4 w-4" />, description: 'Evolution API e notificações'        },
-  { key: 'contabil',     label: 'Contábil',    icon: <Calculator   className="h-4 w-4" />, description: 'Plano de contas e dados fiscais'     },
-  { key: 'financeiro',   label: 'Financeiro',  icon: <Landmark     className="h-4 w-4" />, description: 'Integração bancária e PIX'           },
+  { key: 'financeiro',   label: 'Financeiro',  icon: <Landmark     className="h-4 w-4" />, description: 'Bancos, PIX, plano de contas e fiscal' },
   { key: 'empresas',     label: 'Empresas',    icon: <Building     className="h-4 w-4" />, description: 'Empresas faturantes (multi-CNPJ)'   },
   { key: 'precos',       label: 'Preços',      icon: <Tags         className="h-4 w-4" />, description: 'Tabelas de preço e composição'      },
   { key: 'numeracao',    label: 'Numeração',   icon: <Hash         className="h-4 w-4" />, description: 'Nº de OS, RPS, NFS-e…'              },
@@ -206,20 +211,55 @@ export default function SettingsWorkspace({
           </div>
         )}
 
-        {activeCategory === 'acesso' && (
+        {activeCategory === 'atendimento' && (
           <div className="space-y-6">
-            <SectionHeader icon={<Shield className="h-5 w-5 text-slate-600" />} title="Controle de Acesso" description="Módulos ativos e campos obrigatórios de check-in e triagem" />
-            <ModulesTab
-              initialConfig={initialClinicConfig}
-              isSysmax={isSysmax}
-              businessType={businessType}
-              onToast={onToast}
-            />
+            <SectionHeader icon={<ClipboardList className="h-5 w-5 text-slate-600" />} title="Atendimento" description="Protocolo de check-in, campos obrigatórios da recepção e da triagem, e fluxo contínuo do consultório" />
             <ClinicSettingsTab
               initialConfig={initialClinicConfig}
               initialChecklist={initialChecklist}
               initialSettingsConfig={initialSettingsConfig}
               isSysmax={isSysmax}
+              sections={['checkin', 'obrigatorios', 'fluxo']}
+              onToast={onToast}
+            />
+          </div>
+        )}
+
+        {activeCategory === 'portal' && (
+          <div className="space-y-6">
+            <SectionHeader icon={<Globe className="h-5 w-5 text-slate-600" />} title="Portal do Tutor" description="Portal do tutor e do parceiro, agendamento online e identidade visual" />
+            <ClinicSettingsTab
+              initialConfig={initialClinicConfig}
+              initialChecklist={initialChecklist}
+              initialSettingsConfig={initialSettingsConfig}
+              isSysmax={isSysmax}
+              sections={['portal']}
+              onToast={onToast}
+            />
+          </div>
+        )}
+
+        {activeCategory === 'ia' && (
+          <div className="space-y-6">
+            <SectionHeader icon={<Sparkles className="h-5 w-5 text-slate-600" />} title="Inteligência Artificial" description="Como o sistema processa o áudio ditado nas telas clínicas" />
+            <ClinicSettingsTab
+              initialConfig={initialClinicConfig}
+              initialChecklist={initialChecklist}
+              initialSettingsConfig={initialSettingsConfig}
+              isSysmax={isSysmax}
+              sections={['ia']}
+              onToast={onToast}
+            />
+          </div>
+        )}
+
+        {activeCategory === 'acesso' && (
+          <div className="space-y-6">
+            <SectionHeader icon={<Shield className="h-5 w-5 text-slate-600" />} title="Controle de Acesso" description="Quais módulos esta clínica usa" />
+            <ModulesTab
+              initialConfig={initialClinicConfig}
+              isSysmax={isSysmax}
+              businessType={businessType}
               onToast={onToast}
             />
           </div>
@@ -242,17 +282,16 @@ export default function SettingsWorkspace({
           </div>
         )}
 
-        {activeCategory === 'contabil' && (
-          <div className="space-y-6">
-            <SectionHeader icon={<Calculator className="h-5 w-5 text-slate-600" />} title="Configurações Contábeis" description="Plano de contas e integração fiscal" />
-            <AccountingSettings initialConfig={initialClinicConfig} onToast={onToast} />
-          </div>
-        )}
-
         {activeCategory === 'financeiro' && (
           <div className="space-y-6">
             <SectionHeader icon={<Landmark className="h-5 w-5 text-slate-600" />} title="Integrações Financeiras" description="Integração bancária (extrato/conciliação) e PIX — cada uma condicional à ativação" />
             <FinancialIntegrationsForm onToast={onToast} />
+            {/* A antiga aba "Contábil" repetia os dados fiscais que já ficam em
+                Empresas (multi-CNPJ). O que ela tinha de próprio — o plano de
+                contas — mora aqui; os dados fiscais só aparecem para a clínica
+                de UM CNPJ, que não tem a aba Empresas. */}
+            <SectionHeader icon={<Calculator className="h-5 w-5 text-slate-600" />} title="Contabilidade" description={animaisFoundation ? 'Plano de contas (os dados fiscais de cada CNPJ ficam em Empresas)' : 'Plano de contas e dados fiscais da clínica (NFS-e)'} />
+            <AccountingSettings initialConfig={initialClinicConfig} onToast={onToast} showFiscal={!animaisFoundation} />
           </div>
         )}
 
@@ -610,9 +649,11 @@ function TreinamentoSettings({ initialConfig, onToast }: {
 
 // ─── AccountingSettings ───────────────────────────────────────────────────────
 
-function AccountingSettings({ initialConfig, onToast }: {
+function AccountingSettings({ initialConfig, onToast, showFiscal = true }: {
   initialConfig: ClinicConfig | null
   onToast: (type: 'success' | 'error', msg: string) => void
+  /** Falso quando a clínica tem a aba Empresas — lá é que ficam os dados fiscais por CNPJ. */
+  showFiscal?: boolean
 }) {
   // Persist use_accounting_chart inside flow_config JSONB (no migration needed)
   const flowConfigRaw = initialConfig?.flow_config as (FlowConfig & { use_accounting_chart?: boolean }) | undefined
@@ -674,7 +715,7 @@ function AccountingSettings({ initialConfig, onToast }: {
       </div>
 
       {/* Dados Fiscais e NFS-e (Faturamento Fase 3 — Focus NFe) */}
-      <FiscalConfigForm onToast={onToast} />
+      {showFiscal && <FiscalConfigForm onToast={onToast} />}
 
       <button
         onClick={handleSave}

@@ -37,12 +37,17 @@ const TRIAGE_FIELD_OPTIONS = [
   { key: 'crt',               label: 'TPC (CRT)' },
 ]
 
+/** Blocos desta aba — a tela de Configurações distribui cada um numa categoria. */
+export type ClinicSettingsSection = 'portal' | 'checkin' | 'ia' | 'fluxo' | 'obrigatorios'
+
 interface Props {
   initialConfig:          ClinicConfig | null
   initialChecklist?:      string[]
   initialSettingsConfig?: ClinicSettingsConfig | null
   /** SysMax mantém UX completa (sem paywall). Free vê paywall no Fluxo Contínuo. */
   isSysmax?:              boolean
+  /** Quais blocos renderizar. Ausente = todos (compatibilidade). */
+  sections?:              ClinicSettingsSection[]
   onToast: (type: 'success' | 'error', msg: string) => void
 }
 
@@ -51,9 +56,11 @@ interface Props {
 export default function ClinicSettingsTab({
   initialConfig, initialChecklist = [], initialSettingsConfig,
   isSysmax = false,
+  sections,
   onToast,
 }: Props) {
   const { open: openUpgrade } = useUpgradeModal()
+  const show = (sec: ClinicSettingsSection) => !sections || sections.includes(sec)
   const [continuousFlow,      setContinuousFlow]      = useState(initialConfig?.continuous_flow ?? false)
   const [mergedModules,       setMergedModules]       = useState<Array<'triage'|'exams'>>(
     initialConfig?.flow_config?.vet_merged_modules ?? []
@@ -133,12 +140,15 @@ export default function ClinicSettingsTab({
   return (
     <div className="space-y-6">
 
+      {show('portal') && (<>
       {/* ── Portal do Tutor & Agendamento Online ─────────────────────────────── */}
       <PortalBookingSettings initialConfig={initialConfig} onToast={onToast} />
 
       {/* ── Identidade visual do Portal do Tutor (white-label) ───────────────── */}
       <PortalThemeSettings onToast={onToast} />
 
+      </>)}
+      {show('checkin') && (<>
       {/* ── Sessão 1: Protocolo de Check-in ──────────────────────────────────── */}
       <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
         <div className="border-b border-slate-100 px-6 py-4 flex items-center gap-3">
@@ -207,6 +217,8 @@ export default function ClinicSettingsTab({
         </div>
       </div>
 
+      </>)}
+      {show('ia') && (<>
       {/* ── Sessão 2: Comportamento da IA ────────────────────────────────────── */}
       <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
         <div className="border-b border-slate-100 px-6 py-4 flex items-center gap-3">
@@ -303,6 +315,8 @@ export default function ClinicSettingsTab({
         </div>
       </div>
 
+      </>)}
+      {show('fluxo') && (<>
       {/* ── Sessão 3: Fluxo Contínuo ──────────────────────────────────────────── */}
       {!isSysmax ? (
         <div className="rounded-2xl border-2 border-dashed border-violet-200 bg-gradient-to-br from-violet-50 to-indigo-50 p-6">
@@ -425,8 +439,11 @@ export default function ClinicSettingsTab({
       </div>
       )}
 
+      </>)}
+      {show('obrigatorios') && (<>
       {/* ── Required Fields Config ── */}
       <RequiredFieldsConfig initialSettingsConfig={initialSettingsConfig ?? null} onToast={onToast} />
+      </>)}
     </div>
   )
 }
