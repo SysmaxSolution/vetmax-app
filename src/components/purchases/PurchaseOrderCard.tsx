@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { ChevronDown, ChevronUp, CheckCircle2, XCircle, Clock, Package, Link2, Loader2 } from 'lucide-react'
-import type { PurchaseOrder, PurchaseOrderItem } from '@/lib/actions/purchases'
+import type { PurchaseOrder, PurchaseOrderItem } from '@/types/purchases'
 import {
   cancelPurchaseOrder,
   getPurchaseOrder,

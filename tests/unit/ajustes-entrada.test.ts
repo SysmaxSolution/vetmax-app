@@ -9,7 +9,7 @@ const NOTA: ParsedNFe = {
   total_value: 1310.25,
   supplier: { cnpj: '04852370000108', name: 'L.P.S. AGROFARMA LTDA' },
   items: [
-    { description: 'VERMIFUGO 10ML', ncm: '01012100', ean: '07891234567895', quantity: 10, unit: 'UN', unit_price: 43.675, total_price: 436.75 },
+    { description: 'VERMIFUGO 10ML', ncm: '01012100', ean: '07891234567895', quantity: 10, unit: 'UN', unit_price: 43.675, total_price: 436.75, cfop: '5102', cst: '000', tax_icms: 18, icms_base: 436.75, icms_value: 78.62 },
     { description: 'SERINGA 5ML',    ncm: '90183119', ean: undefined,        quantity: 20, unit: 'UN', unit_price: 2.50,   total_price: 50.00 },
     { description: 'LUVA NITRILICA', ncm: '40151900', ean: undefined,        quantity: 5,  unit: 'CX', unit_price: 164.70, total_price: 823.50 },
   ],
@@ -25,20 +25,39 @@ describe('aplicarAjustes', () => {
     expect(aplicarAjustes(NOTA, {})).toMatchObject({ items: NOTA.items })
   })
 
-  it('corrige a quantidade e recalcula o total do item', () => {
-    // Chegaram 8 das 10 unidades.
-    const r = aplicarAjustes(NOTA, { itens: [{ indice: 0, quantity: 8 }] })
-    expect(r.items[0].quantity).toBe(8)
-    expect(r.items[0].total_price).toBe(349.4)   // 8 × 43,675
+  it('reembalagem: mudar só a quantidade mantém o total e recalcula o unitário', () => {
+    // 5 caixas de R$164,70 eram, na verdade, 10 unidades: o fornecedor cobrou
+    // os mesmos R$823,50 — o que muda é quanto custa cada unidade.
+    const r = aplicarAjustes(NOTA, { itens: [{ indice: 2, quantity: 10 }] })
+    expect(r.items[2].quantity).toBe(10)
+    expect(r.items[2].unit_price).toBe(82.35)
+    expect(r.items[2].total_price).toBe(823.5)
+    expect(r.total_value).toBe(NOTA.total_value)   // a nota não encolhe nem cresce
   })
 
-  it('o total da nota acompanha o que entrou', () => {
-    const r = aplicarAjustes(NOTA, { itens: [{ indice: 0, quantity: 8 }] })
+  it('50 caixas com 2 viram 100 unidades pela metade do preço', () => {
+    const nota = { ...NOTA, items: [{ ...NOTA.items[1], quantity: 50, unit_price: 10, total_price: 500 }] } as ParsedNFe
+    const r = aplicarAjustes(nota, { itens: [{ indice: 0, quantity: 100 }] })
+    expect(r.items[0].unit_price).toBe(5)
+    expect(r.items[0].total_price).toBe(500)
+  })
+
+  it('recebeu menos: informar o unitário junto da quantidade recalcula o total', () => {
+    // Chegaram 8 das 10 unidades, ao mesmo preço unitário.
+    const r = aplicarAjustes(NOTA, { itens: [{ indice: 0, quantity: 8, unit_price: 43.675 }] })
+    expect(r.items[0].quantity).toBe(8)
+    expect(r.items[0].total_price).toBe(349.4)   // 8 × 43,675
     expect(r.total_value).toBe(Number((349.4 + 50 + 823.5).toFixed(2)))
   })
 
-  it('respeita o total informado à mão, sem recalcular por cima', () => {
-    const r = aplicarAjustes(NOTA, { itens: [{ indice: 0, quantity: 8, total_price: 350 }] })
+  it('informar o total recalcula o unitário', () => {
+    const r = aplicarAjustes(NOTA, { itens: [{ indice: 1, total_price: 40 }] })
+    expect(r.items[1].total_price).toBe(40)
+    expect(r.items[1].unit_price).toBe(2)          // 40 / 20
+  })
+
+  it('respeita o total informado à mão junto do unitário, sem recalcular por cima', () => {
+    const r = aplicarAjustes(NOTA, { itens: [{ indice: 0, quantity: 8, unit_price: 43.675, total_price: 350 }] })
     expect(r.items[0].total_price).toBe(350)
   })
 
@@ -53,6 +72,16 @@ describe('aplicarAjustes', () => {
     const r = aplicarAjustes(NOTA, { itens: [{ indice: 0, description: 'Vermífugo 10ml — cães' }] })
     expect(r.items[0].description).toBe('Vermífugo 10ml — cães')
     expect(r.items[0].ncm).toBe('01012100')   // o resto fica como estava
+  })
+
+  it('corrige os impostos do item sem mexer no preço', () => {
+    const r = aplicarAjustes(NOTA, { itens: [{ indice: 0, cfop: '1102', cst: '060', tax_icms: 0, icms_value: 0 }] })
+    expect(r.items[0].cfop).toBe('1102')
+    expect(r.items[0].cst).toBe('060')
+    expect(r.items[0].tax_icms).toBe(0)
+    expect(r.items[0].icms_value).toBe(0)
+    expect(r.items[0].icms_base).toBe(436.75)   // o que não foi tocado permanece
+    expect(r.items[0].total_price).toBe(436.75)
   })
 
   it('ajusta o vencimento combinado por fora', () => {
@@ -71,6 +100,7 @@ describe('valor inválido é ignorado, não vira zero', () => {
   it('quantidade vazia mantém a original', () => {
     const r = aplicarAjustes(NOTA, { itens: [{ indice: 0, quantity: undefined }] })
     expect(r.items[0].quantity).toBe(10)
+    expect(r.items[0].unit_price).toBe(43.675)
   })
 
   it('valor negativo não passa', () => {
@@ -97,7 +127,7 @@ describe('resumirAjustes', () => {
 
   it('conta o que mudou, para o histórico da compra', () => {
     const r = aplicarAjustes(NOTA, {
-      itens: [{ indice: 0, quantity: 8 }, { indice: 1, excluir: true }],
+      itens: [{ indice: 0, quantity: 8, unit_price: 43.675 }, { indice: 1, excluir: true }],
     })
     const texto = resumirAjustes(NOTA, r)!
     expect(texto).toMatch(/1 item\(ns\) removido/)

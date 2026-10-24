@@ -8,57 +8,8 @@ import type { ParsedNFe } from '@/lib/utils/nfe-parser'
 import type { AjustesDaEntrada } from '@/types/entrada-mercadoria'
 
 import { mensagemErro } from '@/lib/errors'
+import type { PurchaseOrder, PurchaseOrderItem, NCMData, PublicProduct, ManualPurchaseItem, ManualPurchasePayload, PurchaseInstallmentInput, StockMatchSuggestion } from '@/types/purchases'
 // ─── Types ────────────────────────────────────────────────────────────────────
-
-export interface PurchaseOrder {
-  id:           string
-  clinic_id:    string
-  supplier_id:  string | null
-  nfe_key:      string | null
-  nfe_number:   string | null
-  nfe_series:   string | null
-  issue_date:   string | null
-  total_value:  number | null
-  status:       'pending' | 'received' | 'cancelled'
-  notes:        string | null
-  created_at:   string
-  updated_at:   string
-  duplicatas?:  { numero: string; vencimento: string; valor: number }[]
-  supplier?:    { id: string; name: string; document: string | null } | null
-  items?:       PurchaseOrderItem[]
-}
-
-export interface PurchaseOrderItem {
-  id:                 string
-  purchase_order_id:  string
-  stock_item_id:      string | null
-  description:        string
-  ncm:                string | null
-  ean:                string | null
-  cfop:               string | null
-  quantity:           number
-  unit:               string | null
-  unit_price:         number
-  total_price:        number
-  tax_icms:           number | null
-  tax_pis:            number | null
-  tax_cofins:         number | null
-  is_matched:         boolean
-}
-
-export interface NCMData {
-  code:        string
-  description: string
-  chapter?:    string
-}
-
-export interface PublicProduct {
-  description: string
-  ncm?:        string
-  brand?:      string
-  unit?:       string
-  source:      string
-}
 
 // ─── Auth helper ──────────────────────────────────────────────────────────────
 
@@ -111,6 +62,22 @@ export async function importNFeXML(
 
   const admin = createAdminClient()
 
+  // A mesma nota não entra duas vezes: seria estoque em dobro e título a pagar
+  // em dobro, e os dois só apareceriam na conferência. A chave de acesso
+  // identifica a nota; o índice único da 0519 é a garantia no banco, mas a
+  // mensagem para quem opera precisa vir daqui, antes de criar qualquer coisa.
+  const nfeKey = parsed.nfe_key || null
+  if (nfeKey) {
+    const { data: repetida } = await admin
+      .from('purchase_orders')
+      .select('id, nfe_number, nfe_series, created_at')
+      .eq('clinic_id', ctx.clinic_id)
+      .eq('nfe_key', nfeKey)
+      .limit(1)
+      .maybeSingle()
+    if (repetida) return { error: mensagemDeNotaRepetida(repetida) }
+  }
+
   // Upsert fornecedor por CNPJ
   let supplier_id: string | null = null
   if (parsed.supplier.cnpj) {
@@ -148,6 +115,21 @@ export async function importNFeXML(
       }).select('id').single()
       supplier_id = created?.id ?? null
     }
+  }
+
+  // Sem chave de acesso (XML antigo/incompleto), o que identifica a nota é
+  // número + série do mesmo fornecedor.
+  if (!nfeKey && parsed.nfe_number && supplier_id) {
+    const { data: repetida } = await admin
+      .from('purchase_orders')
+      .select('id, nfe_number, nfe_series, created_at')
+      .eq('clinic_id', ctx.clinic_id)
+      .eq('supplier_id', supplier_id)
+      .eq('nfe_number', parsed.nfe_number)
+      .eq('nfe_series', parsed.nfe_series || '')
+      .limit(1)
+      .maybeSingle()
+    if (repetida) return { error: mensagemDeNotaRepetida(repetida) }
   }
 
   // Criar purchase_order
@@ -218,6 +200,15 @@ export async function importNFeXML(
       tax_icms:     item.tax_icms   ?? null,
       tax_pis:      item.tax_pis    ?? null,
       tax_cofins:   item.tax_cofins ?? null,
+      // Impostos por item (0519): como vieram no XML ou corrigidos na conferência.
+      cst:           item.cst           ?? null,
+      icms_origin:   item.icms_origin   ?? null,
+      icms_base:     item.icms_base     ?? null,
+      icms_value:    item.icms_value    ?? null,
+      icms_st_value: item.icms_st_value ?? null,
+      ipi_value:     item.ipi_value     ?? null,
+      pis_value:     item.pis_value     ?? null,
+      cofins_value:  item.cofins_value  ?? null,
       is_matched,
     })
   }
@@ -226,23 +217,16 @@ export async function importNFeXML(
   return getOrderWithItems(order.id, ctx.clinic_id)
 }
 
+/** Frase para quem tentou importar uma nota que já está no sistema. */
+function mensagemDeNotaRepetida(compra: { nfe_number?: string | null; nfe_series?: string | null; created_at?: string | null }): string {
+  const numero = compra.nfe_number ? `nº ${compra.nfe_number}${compra.nfe_series ? ` série ${compra.nfe_series}` : ''}` : 'com esta chave'
+  const quando = compra.created_at
+    ? ` em ${new Date(compra.created_at).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`
+    : ''
+  return `Esta nota (${numero}) já foi lançada${quando}. Para corrigir a entrada, abra a compra que já existe em vez de importar o XML de novo.`
+}
+
 // ─── Entrada manual (sem XML) ─────────────────────────────────────────────────
-
-export interface ManualPurchaseItem {
-  description: string
-  quantity:    number
-  unit_price:  number
-  unit?:       string | null
-  ean?:        string | null
-  ncm?:        string | null
-}
-
-export interface ManualPurchasePayload {
-  supplier_id: string | null
-  issue_date:  string | null   // 'YYYY-MM-DD'
-  notes?:      string | null
-  items:       ManualPurchaseItem[]
-}
 
 export async function createManualPurchaseOrder(
   payload: ManualPurchasePayload,
@@ -501,12 +485,6 @@ export async function confirmPurchaseReceipt(
 // fornecedor, ordem de compra, nº do documento, espécie e parcela. Idempotente
 // por ordem (não relança se já houver títulos desta compra).
 
-export interface PurchaseInstallmentInput {
-  due_date: string
-  amount:   number
-  especie?: string | null
-}
-
 export async function launchPayablesFromPurchase(
   orderId: string,
   input: { installments: PurchaseInstallmentInput[]; category?: string; chart_of_accounts_id?: string | null },
@@ -581,15 +559,6 @@ export async function matchItemToStock(
 }
 
 // ─── M13(a): sugestão inteligente de vínculo ──────────────────────────────────
-
-export interface StockMatchSuggestion {
-  id:         string
-  name:       string
-  category:   string
-  unit_price: number
-  score:      number
-  reason:     string
-}
 
 /**
  * Sugere itens do estoque que podem corresponder a um item da nota, rankeados:

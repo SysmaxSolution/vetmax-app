@@ -7,7 +7,8 @@
 import { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Loader2, X, Plus, Trash2, CheckCircle2, Wallet } from 'lucide-react'
-import { confirmPurchaseReceipt, launchPayablesFromPurchase, type PurchaseOrder } from '@/lib/actions/purchases'
+import { confirmPurchaseReceipt, launchPayablesFromPurchase } from '@/lib/actions/purchases'
+import type { PurchaseOrder } from '@/types/purchases'
 import { generateEqualInstallments } from '@/lib/purchases/installments'
 
 const BRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
