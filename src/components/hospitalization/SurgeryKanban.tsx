@@ -7,10 +7,10 @@ import { Syringe, Plus, X, Loader2, Activity } from 'lucide-react'
 import { useRealtimeSync } from '@/hooks/useRealtimeSync'
 import { PetAvatar } from '@/components/ui/PetAvatar'
 import { searchPatientsForTriage, type TriagePatientSearchResult } from '@/lib/actions/triage'
-import {
-  createSurgery, updateSurgeryStatus,
-  type SurgeryBoard, type SurgeryCard, type SurgeryStatus,
-} from '@/lib/actions/surgeries'
+import { createSurgery, updateSurgeryStatus } from '@/lib/actions/surgeries'
+import type { SurgeryBoard, SurgeryCard, SurgeryStatus } from '@/types/surgeries'
+import { listSurgicalServices } from '@/lib/actions/service-surgery-config'
+import type { SurgicalServiceOption } from '@/types/service-surgery'
 import SurgeryFichaModal from './SurgeryFichaModal'
 import AttendanceCardMenu from '@/components/shared/AttendanceCardMenu'
 
@@ -219,6 +219,17 @@ function AdmitSurgeryModal({ onClose, onSuccess }: { onClose: () => void; onSucc
   const [asa, setAsa] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  // Serviço do catálogo (0518): escolhendo-o, a ficha já nasce com o
+  // checklist e o kit daquele procedimento.
+  const [services, setServices] = useState<SurgicalServiceOption[]>([])
+  const [serviceId, setServiceId] = useState('')
+  useEffect(() => { listSurgicalServices().then(r => { if (Array.isArray(r)) setServices(r) }) }, [])
+  function chooseService(id: string) {
+    setServiceId(id)
+    const s = services.find(x => x.id === id)
+    if (s) setProcedure(s.name)
+  }
+  const chosen = services.find(x => x.id === serviceId)
 
   async function handleSearch(q: string) {
     setSearch(q); setSelected(null)
@@ -230,7 +241,7 @@ function AdmitSurgeryModal({ onClose, onSuccess }: { onClose: () => void; onSucc
   async function handleConfirm() {
     if (!selected || !procedure.trim()) return
     setLoading(true); setError('')
-    const res = await createSurgery({ patient_id: selected.id, procedure_name: procedure.trim(), asa_risk: asa || null })
+    const res = await createSurgery({ patient_id: selected.id, procedure_name: procedure.trim(), asa_risk: asa || null, service_id: serviceId || null })
     setLoading(false)
     if ('error' in res) { setError(res.error); return }
     onSuccess()
@@ -261,6 +272,22 @@ function AdmitSurgeryModal({ onClose, onSuccess }: { onClose: () => void; onSucc
             </div>
           )}
         </div>
+        {services.length > 0 && (
+          <div>
+            <label className="text-[10px] font-bold text-slate-500 uppercase">Serviço do catálogo</label>
+            <select value={serviceId} onChange={e => chooseService(e.target.value)}
+              className="mt-0.5 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-red-500">
+              <option value="">— escolher (preenche o procedimento) —</option>
+              {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+            {chosen && (
+              <p className="mt-1 text-[11px] text-slate-500">
+                {chosen.preop_checklist.length ? `${chosen.preop_checklist.length} checagem(ns) pré-operatória(s) deste procedimento` : 'Sem checklist próprio'}
+                {chosen.default_kit_name ? ` · kit: ${chosen.default_kit_name}` : ''}
+              </p>
+            )}
+          </div>
+        )}
         <input type="text" placeholder="Procedimento (ex.: Castração, OSH)" value={procedure} onChange={e => setProcedure(e.target.value)}
           className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
         <div>

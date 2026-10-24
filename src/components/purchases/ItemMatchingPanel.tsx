@@ -3,7 +3,7 @@
 import { useState, useTransition, useCallback, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { X, Search, Plus, Link2, Loader2, AlertCircle, Sparkles } from 'lucide-react'
-import type { PurchaseOrderItem, StockMatchSuggestion } from '@/lib/actions/purchases'
+import type { PurchaseOrderItem, StockMatchSuggestion } from '@/types/purchases'
 import { matchItemToStock, autoCreateStockFromItem, enrichProductFromNCM, searchProductByEAN, searchStockMatchesForPurchaseItem } from '@/lib/actions/purchases'
 import { createClient } from '@/lib/supabase/client'
 

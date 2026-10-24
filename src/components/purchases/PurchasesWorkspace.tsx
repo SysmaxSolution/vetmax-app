@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import type { PurchaseOrder } from '@/lib/actions/purchases'
+import type { PurchaseOrder } from '@/types/purchases'
 import type { Supplier } from '@/lib/actions/suppliers'
 import { NFXMLImporter } from './NFXMLImporter'
 import NotasDisponiveisModal from './NotasDisponiveisModal'

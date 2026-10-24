@@ -25,7 +25,7 @@ describe('parseNFeXML — duplicatas', () => {
     if ('error' in res) return
     expect(res.duplicatas).toHaveLength(2)
     // nDup "001" é normalizado pelo parser numérico → "1" (informativo)
-    expect(res.duplicatas[0]).toEqual({ numero: '1', vencimento: '2026-10-01', valor: 150 })
+    expect(res.duplicatas[0]).toEqual({ numero: '001', vencimento: '2026-10-01', valor: 150 })
     expect(res.duplicatas[1].valor).toBe(150)
   })
 

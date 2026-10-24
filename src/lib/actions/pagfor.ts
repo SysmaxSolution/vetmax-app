@@ -57,7 +57,7 @@ export async function matchDdaBoletos(boletos: DdaBoleto[]): Promise<DdaMatchRes
   // batiam, e mesmo assim o boleto aparecia como "não está no sistema".
   const { data: payablesRaw } = await admin
     .from('financial_entries')
-    .select('id, amount, due_date, description, beneficiary, barcode, scheduled_payment_date, suppliers:supplier_id ( document )')
+    .select('id, amount, due_date, description, beneficiary, barcode, scheduled_payment_date, bank_payment_id, suppliers:supplier_id ( document )')
     .eq('clinic_id', c.clinicId).eq('type', 'payable').eq('status', 'pending')
 
   const titulos = (payablesRaw ?? []).map(linha => {
@@ -73,6 +73,7 @@ export async function matchDdaBoletos(boletos: DdaBoleto[]): Promise<DdaMatchRes
       barcode:       (r.barcode as string | null) ?? null,
       supplier_cnpj: (Array.isArray(forn) ? forn[0]?.document : forn?.document) ?? null,
       agendado:      (r.scheduled_payment_date as string | null) ?? null,
+      bank_payment_id: (r.bank_payment_id as string | null) ?? null,
     }
   })
 
@@ -87,13 +88,14 @@ export async function matchDdaBoletos(boletos: DdaBoleto[]): Promise<DdaMatchRes
       },
       titulos, usados,
     )
-    if (!titulo) return { boleto: b, status: 'not_in_system', entry_id: null, entry_scheduled: null }
+    if (!titulo) return { boleto: b, status: 'not_in_system', entry_id: null, entry_scheduled: null, entry_bank_payment_id: null }
 
     usados.add(titulo.id)
     const original = titulos.find(t => t.id === titulo.id)
     return {
       boleto: b, status: 'in_system', entry_id: titulo.id,
       entry_scheduled: original?.agendado ?? null,
+      entry_bank_payment_id: original?.bank_payment_id ?? null,
     }
   })
 
@@ -132,9 +134,17 @@ export async function insertPayablesFromDda(
   // tela não deu um único sinal. Erro silencioso é pior que erro.
   const falhasFornecedor: string[] = []
 
+  // Boleto que o operador mandou ignorar não entra, mesmo que a tela tenha
+  // deixado marcar: "ignorado" é decisão registrada, e a guarda fica aqui
+  // para não depender de a interface acertar.
+  const { data: ignoradosRaw } = await admin.from('dda_boletos')
+    .select('fingerprint').eq('clinic_id', c.clinicId).not('dismissed_at', 'is', null)
+  const ignorados = new Set(((ignoradosRaw ?? []) as { fingerprint: string }[]).map(r => r.fingerprint))
+
   for (const b of boletos) {
     const amount = b.amount ?? 0
     if (amount <= 0) continue
+    if (ignorados.has(digitalDoBoleto(c.clinicId, b))) continue
 
     let supplierId: string | null = null
     let nomeFornecedor: string | null = b.beneficiary ?? null
@@ -725,6 +735,10 @@ export async function payBoletosViaBank(params: { entry_ids: string[]; bankAccou
     const nota = `Pagamento agendado no Sicoob para ${params.dataPagamento.split('-').reverse().join('/')} (idPagamento ${pay.idPagamento ?? '—'}).`
     await admin.from('financial_entries').update({
       scheduled_payment_date: params.dataPagamento,
+      // O id do agendamento fica em coluna própria (0520): é ele que permite
+      // cancelar depois, e precisa da MESMA conta que agendou.
+      bank_payment_id:         pay.idPagamento ? String(pay.idPagamento) : null,
+      bank_payment_account_id: rt.bankAccountId ?? null,
       notes: [(e as any).notes, nota].filter(Boolean).join('\n'),
       updated_at: new Date().toISOString(),
     }).eq('id', id).eq('clinic_id', c.clinicId)
@@ -743,6 +757,44 @@ export async function getPagforComprovante(idPagamento: string, bankAccountId?: 
   if ('error' in rt) return { error: rt.error }
   const res = await consultarComprovante(rt, idPagamento)
   return res.ok ? { ok: true, raw: res.raw } : { error: res.error }
+}
+
+/**
+ * Cancela, no banco, o agendamento de um título — e deixa o título como
+ * estava antes de agendar (pendente, sem data programada).
+ *
+ * Usa a conta que fez o agendamento: cancelar pela credencial de outro CNPJ
+ * o banco recusa, e a mensagem que volta não ajuda ninguém.
+ */
+export async function cancelarAgendamentoDoTitulo(entryId: string): Promise<{ ok: true } | { error: string }> {
+  const c = await ctx()
+  if (!c) return { error: 'Não autenticado.' }
+  if (!['admin', 'owner', 'manager'].includes(c.role)) return { error: 'Sem permissão.' }
+  const admin = createAdminClient()
+  const { data: e } = await admin.from('financial_entries')
+    .select('id, notes, status, bank_payment_id, bank_payment_account_id, scheduled_payment_date')
+    .eq('id', entryId).eq('clinic_id', c.clinicId).eq('type', 'payable').maybeSingle()
+  if (!e) return { error: 'Título não encontrado.' }
+  const idPagamento = (e as { bank_payment_id?: string | null }).bank_payment_id
+  if (!idPagamento) return { error: 'Este título não tem agendamento registrado no banco.' }
+  if ((e as { status?: string }).status === 'paid') return { error: 'Este título já foi pago — não há agendamento para cancelar.' }
+
+  const rt = await loadPagamentosRuntime(admin, c.clinicId, (e as { bank_payment_account_id?: string | null }).bank_payment_account_id ?? undefined)
+  if ('error' in rt) return { error: rt.error }
+  const res = await cancelarAgendamento(rt, idPagamento)
+  if (!res.ok) return { error: res.error }
+
+  const quando = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' }).format(new Date())
+  const nota = `Agendamento no Sicoob cancelado em ${quando} (idPagamento ${idPagamento}).`
+  await admin.from('financial_entries').update({
+    scheduled_payment_date:  null,
+    bank_payment_id:         null,
+    bank_payment_account_id: null,
+    notes: [(e as { notes?: string | null }).notes, nota].filter(Boolean).join('\n'),
+    updated_at: new Date().toISOString(),
+  }).eq('id', entryId).eq('clinic_id', c.clinicId)
+  revalidatePath('/dashboard/financial')
+  return { ok: true }
 }
 
 /** Cancela um pagamento agendado no banco. */

@@ -7,44 +7,8 @@ import { logAudit } from './audit'
 import { createHospitalization } from './hospitalizations'
 
 import { mensagemErro } from '@/lib/errors'
+import type { SurgeryStatus, SurgeryChecklist, SurgeryCard, SurgeryBoard, SurgeryDetail, SurgeryVital } from '@/types/surgeries'
 // ─── Tipos ───────────────────────────────────────────────────────────────────
-
-export type SurgeryStatus = 'preparo' | 'sala' | 'rpa' | 'done' | 'canceled'
-
-export interface SurgeryChecklist {
-  fasting_confirmed?: boolean
-  preop_exams_ok?:    boolean
-  consent_signed?:    boolean
-  consent_doc_id?:    string | null
-}
-
-export interface SurgeryCard {
-  id:              string
-  clinic_id:       string
-  patient_id:      string
-  procedure_name:  string
-  status:          SurgeryStatus
-  asa_risk:        string | null
-  isolation_required?: boolean
-  postop_hospitalization_id: string | null
-  patient: {
-    id: string; name: string; species: string; breed: string | null; photo_url: string | null
-  }
-  tutor: { name: string } | null
-}
-
-export interface SurgeryBoard {
-  preparo: SurgeryCard[]
-  sala:    SurgeryCard[]
-  rpa:     SurgeryCard[]
-}
-
-export interface SurgeryDetail extends SurgeryCard {
-  consultation_id: string | null
-  checklist:       SurgeryChecklist
-  surgical_report: string | null
-  notes:           string | null
-}
 
 async function getCtx(): Promise<{ clinicId: string; userId: string } | { error: string }> {
   const supabase = await createClient()
@@ -102,6 +66,8 @@ export async function createSurgery(payload: {
   procedure_name:  string
   consultation_id?: string | null
   asa_risk?:       string | null
+  /** Serviço do catálogo que originou a cirurgia — traz checklist e kit padrão (0518). */
+  service_id?:     string | null
 }): Promise<{ id: string } | { error: string }> {
   const ctx = await getCtx()
   if ('error' in ctx) return ctx
@@ -109,6 +75,13 @@ export async function createSurgery(payload: {
   if (!payload.procedure_name?.trim()) return { error: 'Procedimento é obrigatório.' }
 
   const admin = createAdminClient()
+  // O serviço vem do navegador: tem de ser desta clínica e ser serviço.
+  let serviceId: string | null = null
+  if (payload.service_id) {
+    const { data: svc } = await admin.from('stock_items').select('id')
+      .eq('id', payload.service_id).eq('clinic_id', ctx.clinicId).eq('is_service', true).maybeSingle()
+    serviceId = (svc?.id as string | undefined) ?? null
+  }
   const { data, error } = await admin
     .from('surgeries')
     .insert({
@@ -117,6 +90,7 @@ export async function createSurgery(payload: {
       procedure_name:  payload.procedure_name.trim(),
       consultation_id: payload.consultation_id ?? null,
       asa_risk:        payload.asa_risk ?? null,
+      service_id:      serviceId,
       status:          'preparo',
       created_by:      ctx.userId,
     })
@@ -155,15 +129,20 @@ export async function getSurgery(id: string): Promise<SurgeryDetail | { error: s
   const admin = createAdminClient()
   const { data: s, error } = await admin
     .from('surgeries')
-    .select('id, clinic_id, patient_id, consultation_id, procedure_name, status, asa_risk, checklist, surgical_report, notes, postop_hospitalization_id, patients ( id, name, species, breed, photo_url, tutors ( name ) )')
+    .select('id, clinic_id, patient_id, consultation_id, procedure_name, status, asa_risk, checklist, surgical_report, notes, postop_hospitalization_id, service_id, service:stock_items!service_id ( name, preop_checklist, default_kit_id ), patients ( id, name, species, breed, photo_url, tutors ( name ) )')
     .eq('id', id).eq('clinic_id', ctx.clinicId).single()
   if (error || !s) return { error: 'Cirurgia não encontrada.' }
+  const svcRaw = (s as any).service
+  const svc = (Array.isArray(svcRaw) ? svcRaw[0] : svcRaw) as { name?: string; preop_checklist?: unknown; default_kit_id?: string | null } | null
   return {
     ...toCard(s),
     consultation_id: (s as any).consultation_id ?? null,
     checklist:       ((s as any).checklist ?? {}) as SurgeryChecklist,
     surgical_report: (s as any).surgical_report ?? null,
     notes:           (s as any).notes ?? null,
+    service_id:      (s as any).service_id ?? null,
+    service_preop_checklist: Array.isArray(svc?.preop_checklist) ? (svc!.preop_checklist as unknown[]).map(x => String(x)) : [],
+    service_default_kit_id:  svc?.default_kit_id ?? null,
   }
 }
 
@@ -194,12 +173,6 @@ export async function updateSurgeryReport(id: string, report: string): Promise<{
 }
 
 // ─── Ficha anestésica — vitais (clinical_vitals com surgery_id) ──────────────
-
-export interface SurgeryVital {
-  id: string; recorded_at: string
-  temperature: number | null; heart_rate: number | null; resp_rate: number | null
-  spo2: number | null; blood_pressure: string | null; notes: string | null
-}
 
 export async function listSurgeryVitals(surgeryId: string): Promise<SurgeryVital[] | { error: string }> {
   const ctx = await getCtx()

@@ -6,7 +6,7 @@ import {
   Package, Plus, AlertTriangle, RefreshCw, Trash2, Pencil,
   ArrowDownToLine, Search, X, Loader2, Check, Calendar,
   Shield, ShoppingBag, Scissors, Sparkles, FlaskConical, Pill,
-  Upload, Stethoscope, Gift, Activity, FileText,
+  Upload, Stethoscope, Gift, Activity, FileText, Syringe
 } from 'lucide-react'
 import type { StockItemV2 } from '@/lib/actions/stock'
 import type { StockCategory } from '@/lib/stock-constants'
@@ -26,6 +26,9 @@ import { searchGlobalCatalog } from '@/lib/actions/catalog'
 import { suggestDefaultInsurancePrice } from '@/lib/actions/insurance-pricing'
 import { getInsuranceProviders, getProvidersForStockItem, setProvidersForStockItem, type InsuranceProvider } from '@/lib/actions/insurance-providers'
 import { clinicEmitsNfse } from '@/lib/actions/billing-documents'
+import { listServiceKits, type ServiceKitSummary } from '@/lib/actions/surgery-kits'
+import { getServiceSurgeryConfig, saveServiceSurgeryConfig } from '@/lib/actions/service-surgery-config'
+import { linhasParaChecklist } from '@/types/service-surgery'
 import StockCsvImporter from './StockCsvImporter'
 import { EnrichNcmModal } from './EnrichNcmModal'
 import PharmacyCatalogQuickAdd from './PharmacyCatalogQuickAdd'
@@ -1089,6 +1092,22 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
     }
   }, [animaisFoundation, item?.id])
 
+  // Centro cirúrgico (0518): checklist pré-operatório e kit padrão DESTE serviço.
+  const [kitsCirurgicos, setKitsCirurgicos] = useState<ServiceKitSummary[]>([])
+  const [preopTexto, setPreopTexto] = useState('')
+  const [defaultKitId, setDefaultKitId] = useState('')
+  useEffect(() => {
+    if (!isService) return
+    listServiceKits().then(r => { if (Array.isArray(r)) setKitsCirurgicos(r) })
+    if (item?.id) {
+      getServiceSurgeryConfig(item.id).then(r => {
+        if ('error' in r) return
+        setPreopTexto(r.preop_checklist.join('\n'))
+        setDefaultKitId(r.default_kit_id ?? '')
+      })
+    }
+  }, [isService, item?.id])
+
   function toggleProvider(id: string) {
     setAcceptedProviderIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
   }
@@ -1164,6 +1183,9 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
       if (animaisFoundation && priceEntries.length > 0) {
         await setItemPrices(res.id, priceEntries)
       }
+      if (isService) {
+        await saveServiceSurgeryConfig(res.id, { preop_checklist: linhasParaChecklist(preopTexto), default_kit_id: defaultKitId || null })
+      }
       setSaving(false)
       onSaved(res, true)
     } else {
@@ -1174,6 +1196,9 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
       }
       if (animaisFoundation && priceEntries.length > 0) {
         await setItemPrices(item!.id, priceEntries)
+      }
+      if (isService) {
+        await saveServiceSurgeryConfig(item!.id, { preop_checklist: linhasParaChecklist(preopTexto), default_kit_id: defaultKitId || null })
       }
       setSaving(false)
       onSaved(res, false)
@@ -1367,6 +1392,31 @@ function ItemFormModal({ mode, item, serviceMode, onClose, onSaved }: {
                   </p>
                 </div>
               )}
+
+              {/* Centro cirúrgico (0518): o que ESTE procedimento exige antes de operar e o kit que consome.
+                  A ficha da cirurgia lê os dois quando a cirurgia nasce deste serviço. */}
+              <div className="rounded-xl border border-red-100 bg-red-50/40 p-4 space-y-3">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-red-600 flex items-center gap-1.5">
+                  <Syringe className="h-3.5 w-3.5" /> Centro cirúrgico (se for procedimento cirúrgico)
+                </p>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Checklist pré-operatório — uma checagem por linha</label>
+                    <textarea value={preopTexto} onChange={e => setPreopTexto(e.target.value)} rows={4}
+                      placeholder={'Jejum de 12h confirmado\nTricotomia feita\nAcesso venoso\nExames pré-anestésicos avaliados'}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Kit cirúrgico padrão</label>
+                    <select value={defaultKitId} onChange={e => setDefaultKitId(e.target.value)}
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500">
+                      <option value="">— nenhum —</option>
+                      {kitsCirurgicos.map(k => <option key={k.id} value={k.id}>{k.name} ({k.item_count} insumo{k.item_count === 1 ? '' : 's'})</option>)}
+                    </select>
+                    <p className="mt-1 text-[10px] text-slate-400">Os kits são cadastrados em Cadastros → Kits. A ficha sugere este kit e aplica com um clique.</p>
+                  </div>
+                </div>
+              </div>
 
               {/* Item B (2026-06-02): convênios que aceitam este serviço */}
               {providers.length > 0 && (

@@ -3,7 +3,8 @@
 import { useState, useTransition } from 'react'
 import { createPortal } from 'react-dom'
 import { X, Loader2, Plus, Trash2, PackagePlus } from 'lucide-react'
-import { createManualPurchaseOrder, type ManualPurchaseItem, type PurchaseOrder } from '@/lib/actions/purchases'
+import { createManualPurchaseOrder } from '@/lib/actions/purchases'
+import type { ManualPurchaseItem, PurchaseOrder } from '@/types/purchases'
 import type { Supplier } from '@/lib/actions/suppliers'
 
 /**

@@ -34,20 +34,46 @@ export function aplicarAjustes(parsed: ParsedNFe, ajustes?: AjustesDaEntrada): P
       if (!a || a.excluir) return a?.excluir ? null : item
 
       const quantidade = numeroValido(a.quantity) ?? item.quantity
-      const unitario = numeroValido(a.unit_price) ?? item.unit_price
+      const totalInformado = numeroValido(a.total_price)
+      const unitInformado = numeroValido(a.unit_price)
+
+      // Regra do dinheiro: o que o fornecedor cobrou está no TOTAL do item.
+      // Mudar a quantidade sem mexer no preço é reembalagem (50 caixas de 2
+      // viram 100 unidades) — o total continua o mesmo e o unitário é
+      // recalculado. Quem recebeu menos corrige o total ou o unitário, e aí
+      // o sistema respeita o que foi digitado.
+      let unitario: number
+      let total: number
+      if (unitInformado !== null) {
+        unitario = unitInformado
+        total = totalInformado ?? Number((quantidade * unitario).toFixed(2))
+      } else if (totalInformado !== null) {
+        total = totalInformado
+        unitario = quantidade > 0 ? Number((total / quantidade).toFixed(4)) : item.unit_price
+      } else if (quantidade !== item.quantity && quantidade > 0) {
+        total = item.total_price
+        unitario = Number((total / quantidade).toFixed(4))
+      } else {
+        unitario = item.unit_price
+        total = item.total_price
+      }
 
       return {
         ...item,
         description: textoValido(a.description) ?? item.description,
         ncm:         textoValido(a.ncm) ?? item.ncm,
         ean:         textoValido(a.ean) ?? item.ean,
+        cfop:        textoValido(a.cfop) ?? item.cfop,
+        cst:         textoValido(a.cst) ?? item.cst,
         quantity:    quantidade,
         unit_price:  unitario,
-        // O total segue quantidade × unitário quando o operador não o informa:
-        // deixar o total antigo com a quantidade nova seria incoerente, e é o
-        // tipo de erro que só aparece na conferência do estoque.
-        total_price: numeroValido(a.total_price)
-          ?? Number((quantidade * unitario).toFixed(2)),
+        total_price: total,
+        tax_icms:     numeroValido(a.tax_icms)     ?? item.tax_icms,
+        icms_base:    numeroValido(a.icms_base)    ?? item.icms_base,
+        icms_value:   numeroValido(a.icms_value)   ?? item.icms_value,
+        ipi_value:    numeroValido(a.ipi_value)    ?? item.ipi_value,
+        pis_value:    numeroValido(a.pis_value)    ?? item.pis_value,
+        cofins_value: numeroValido(a.cofins_value) ?? item.cofins_value,
       }
     })
     .filter((x): x is ParsedNFeItem => x !== null)

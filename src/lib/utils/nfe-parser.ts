@@ -25,6 +25,16 @@ export interface ParsedNFeItem {
   tax_icms?:   number
   tax_pis?:    number
   tax_cofins?: number
+  // Impostos por item (valores, não só alíquotas): é o que o contador pede
+  // e o que o operador corrige na conferência da entrada.
+  cst?:           string   // CST (regime normal) ou CSOSN (Simples)
+  icms_origin?:   string   // campo orig do ICMS
+  icms_base?:     number   // vBC
+  icms_value?:    number   // vICMS
+  icms_st_value?: number   // vICMSST
+  ipi_value?:     number   // vIPI
+  pis_value?:     number   // vPIS
+  cofins_value?:  number   // vCOFINS
 }
 
 export interface ParsedDuplicata {
@@ -95,6 +105,17 @@ export function parseNFeXML(xmlContent: string): ParsedNFe | { error: string } {
       const icmsEntry   = imposto.ICMS   ? Object.values(imposto.ICMS   as Record<string, any>)[0] : null
       const pisEntry    = imposto.PIS    ? Object.values(imposto.PIS    as Record<string, any>)[0] : null
       const cofinsEntry = imposto.COFINS ? Object.values(imposto.COFINS as Record<string, any>)[0] : null
+      // IPI vem como <IPI><IPITrib>…</IPITrib></IPI> (tributado) ou <IPINT> (não tributado).
+      const ipiEntry    = imposto.IPI?.IPITrib ?? null
+      const num = (v: unknown): number | undefined => {
+        if (v === undefined || v === null || v === '') return undefined
+        const n = parseFloat(String(v))
+        return Number.isFinite(n) ? n : undefined
+      }
+      const texto = (v: unknown): string | undefined => {
+        const t = v === undefined || v === null ? '' : String(v).trim()
+        return t ? t : undefined
+      }
 
       const ean = String(prod.cEAN ?? '').replace(/\D/g, '').length >= 8
         ? String(prod.cEAN ?? '')
@@ -112,6 +133,14 @@ export function parseNFeXML(xmlContent: string): ParsedNFe | { error: string } {
         tax_icms:    icmsEntry?.pICMS     ? parseFloat(String(icmsEntry.pICMS))     : undefined,
         tax_pis:     pisEntry?.pPIS       ? parseFloat(String(pisEntry.pPIS))       : undefined,
         tax_cofins:  cofinsEntry?.pCOFINS ? parseFloat(String(cofinsEntry.pCOFINS)) : undefined,
+        cst:           texto(icmsEntry?.CSOSN ?? icmsEntry?.CST),
+        icms_origin:   texto(icmsEntry?.orig),
+        icms_base:     num(icmsEntry?.vBC),
+        icms_value:    num(icmsEntry?.vICMS),
+        icms_st_value: num(icmsEntry?.vICMSST),
+        ipi_value:     num(ipiEntry?.vIPI),
+        pis_value:     num(pisEntry?.vPIS),
+        cofins_value:  num(cofinsEntry?.vCOFINS),
       }
     })
 

@@ -18,6 +18,15 @@ export interface AjusteDeItem {
   total_price?: number
   /** Deixar de fora da entrada (item que não chegou, por exemplo). */
   excluir?:     boolean
+  // Impostos — o operador pode corrigir o que o fornecedor mandou errado.
+  cfop?:          string
+  cst?:           string
+  tax_icms?:      number   // alíquota %
+  icms_base?:     number
+  icms_value?:    number
+  ipi_value?:     number
+  pis_value?:     number
+  cofins_value?:  number
 }
 
 export interface AjusteDeDuplicata {

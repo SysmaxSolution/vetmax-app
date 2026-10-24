@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { X, AlertTriangle } from 'lucide-react'
 import { Spinner } from '@/components/ui/Spinner'
-import { reverseCashierEntry } from '@/lib/actions/cashier-sessions'
+import { estornarLancamentoDoCaixa } from '@/lib/actions/estorno-credito'
 import type { CentralCashierEntry } from '@/lib/actions/core-management'
 
 function fmt(v: number) {
@@ -30,7 +30,9 @@ export default function CashierReversalModal({ entry, onClose, onSuccess, onToas
     }
 
     setLoading(true)
-    const res = await reverseCashierEntry(entry.id, reason.trim())
+    // Se o lançamento foi uma utilização de crédito, o estorno devolve o
+    // saldo ao tutor e reabre a fatura; senão, é o estorno comum do caixa.
+    const res = await estornarLancamentoDoCaixa(entry.id, reason.trim())
     setLoading(false)
 
     if ('error' in res) { onToast(res.error, 'error'); return }

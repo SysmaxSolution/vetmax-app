@@ -22,6 +22,8 @@ export interface DdaMatchRow {
   status:   'in_system' | 'not_in_system'   // verde | vermelho
   entry_id: string | null
   entry_scheduled: string | null            // scheduled_payment_date do título casado
+  /** idPagamento do agendamento no banco — presente = dá para cancelar no Sicoob. */
+  entry_bank_payment_id: string | null
 }
 
 export interface DdaMatchResult {
