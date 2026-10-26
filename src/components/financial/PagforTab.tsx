@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Loader2, Upload, CheckCircle2, XCircle, PlusCircle, CalendarClock, FileDown, Landmark, Banknote, EyeOff, RotateCcw, Sparkles, Database, Link2, Unlink, Ban } from 'lucide-react'
+import { Loader2, Upload, CheckCircle2, XCircle, PlusCircle, CalendarClock, FileDown, Landmark, Banknote, EyeOff, RotateCcw, Sparkles, Database, Link2, Unlink, Ban, Search, FilterX } from 'lucide-react'
+import { filtrarBoletos, filtroAtivo, documentoFormatado, FILTRO_VAZIO, type FiltroPagfor } from '@/lib/financial/pagfor-filtro'
 import { parseDdaCsv } from '@/lib/parsers/ddaParser'
 import type { DdaBoleto, DdaMatchResult, DdaBoletoPersistido } from '@/types/pagfor'
 import PreviaFornecedoresModal from './PreviaFornecedoresModal'
@@ -22,6 +23,9 @@ export default function PagforTab() {
   const [parsed, setParsed]   = useState<DdaBoleto[]>([])
   const [result, setResult]   = useState<DdaMatchResult | null>(null)
   const [selected, setSelected] = useState<Set<number>>(new Set())
+  // Filtro da lista (roda no navegador). As linhas continuam identificadas
+  // pelo índice original — é ele que amarra seleção, ignorar e vínculo.
+  const [filtro, setFiltro] = useState<FiltroPagfor>(FILTRO_VAZIO)
   const [scheduleDate, setScheduleDate] = useState('')
   const [loading, setLoading] = useState(false)
   const [busy, setBusy]       = useState<string | null>(null)
@@ -330,14 +334,91 @@ export default function PagforTab() {
             </div>
           </div>
 
+          {/* filtro — para achar o boleto no meio dos 90 dias que o banco devolve */}
+          {(() => {
+            const visiveis = filtrarBoletos(result.rows, persistidos, filtro)
+            const ativo = filtroAtivo(filtro)
+            const set = (patch: Partial<FiltroPagfor>) => setFiltro(prev => ({ ...prev, ...patch }))
+            const campo = 'rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs focus:border-teal-500 focus:outline-none'
+            const selecionaveis = visiveis.filter(i => !persistidos[i]?.dismissed_at)
+            const todosVisiveisMarcados = selecionaveis.length > 0 && selecionaveis.every(i => selected.has(i))
+            function marcarVisiveis() {
+              setSelected(prev => {
+                const n = new Set(prev)
+                if (todosVisiveisMarcados) selecionaveis.forEach(i => n.delete(i))
+                else selecionaveis.forEach(i => n.add(i))
+                return n
+              })
+            }
+            return (
+              <>
+                <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                  <div className="flex flex-wrap items-end gap-2">
+                    <label className="flex-1 min-w-[220px]">
+                      <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-500">Nome, nº do documento ou código de barras</span>
+                      <div className="relative">
+                        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                        <input value={filtro.texto} onChange={e => set({ texto: e.target.value })} placeholder="Ex.: agrofarma, 202142…"
+                          className={`${campo} w-full pl-8`} />
+                      </div>
+                    </label>
+                    <label className="w-44">
+                      <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-500">CNPJ / CPF</span>
+                      <input value={filtro.cnpj} onChange={e => set({ cnpj: e.target.value })} placeholder="só números, pode ser parte" inputMode="numeric"
+                        className={`${campo} w-full`} />
+                    </label>
+                    <label>
+                      <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-500">Vence de</span>
+                      <input type="date" value={filtro.vencDe} onChange={e => set({ vencDe: e.target.value })} className={campo} />
+                    </label>
+                    <label>
+                      <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-500">até</span>
+                      <input type="date" value={filtro.vencAte} onChange={e => set({ vencAte: e.target.value })} className={campo} />
+                    </label>
+                    <label className="w-24">
+                      <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-500">Valor mín.</span>
+                      <input value={filtro.valorMin} onChange={e => set({ valorMin: e.target.value })} placeholder="0,00" inputMode="decimal" className={`${campo} w-full text-right`} />
+                    </label>
+                    <label className="w-24">
+                      <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-500">Valor máx.</span>
+                      <input value={filtro.valorMax} onChange={e => set({ valorMax: e.target.value })} placeholder="0,00" inputMode="decimal" className={`${campo} w-full text-right`} />
+                    </label>
+                    <label>
+                      <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-500">Situação</span>
+                      <select value={filtro.situacao} onChange={e => set({ situacao: e.target.value as FiltroPagfor['situacao'] })} className={`${campo} bg-white`}>
+                        <option value="todos">Todos</option>
+                        <option value="nao_lancados">Não lançados</option>
+                        <option value="lancados">Já no sistema</option>
+                        <option value="agendados">Agendados</option>
+                        <option value="ignorados">Ignorados</option>
+                      </select>
+                    </label>
+                    {ativo && (
+                      <button type="button" onClick={() => setFiltro(FILTRO_VAZIO)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50">
+                        <FilterX className="h-3.5 w-3.5" /> Limpar
+                      </button>
+                    )}
+                  </div>
+                  <p className="mt-2 text-[11px] text-slate-500">
+                    {ativo
+                      ? <>Mostrando <strong>{visiveis.length}</strong> de {result.rows.length} boleto(s){selected.size ? ` · ${selected.size} selecionado(s) no total` : ''}.</>
+                      : <>{result.rows.length} boleto(s) no período{selected.size ? ` · ${selected.size} selecionado(s)` : ''}.</>}
+                  </p>
+                </div>
+
           {/* tabela */}
           <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead className="bg-slate-50 text-[10px] text-slate-500 uppercase">
                   <tr>
-                    <th className="px-3 py-2 w-8"></th>
+                    <th className="px-3 py-2 w-8">
+                      <input type="checkbox" checked={todosVisiveisMarcados} disabled={selecionaveis.length === 0} onChange={marcarVisiveis}
+                        title={todosVisiveisMarcados ? 'Desmarcar os boletos visíveis' : 'Marcar os boletos visíveis'} />
+                    </th>
                     <th className="text-left px-3 py-2">Beneficiário</th>
+                    <th className="text-left px-3 py-2">CNPJ / CPF</th>
                     <th className="text-left px-3 py-2">Documento</th>
                     <th className="text-left px-3 py-2">Código de barras</th>
                     <th className="text-right px-3 py-2">Valor</th>
@@ -347,7 +428,11 @@ export default function PagforTab() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {result.rows.map((r, i) => {
+                  {visiveis.length === 0 && (
+                    <tr><td colSpan={9} className="px-3 py-6 text-center text-slate-400">Nenhum boleto corresponde ao filtro.</td></tr>
+                  )}
+                  {visiveis.map(i => {
+                    const r = result.rows[i]
                     const green = r.status === 'in_system'
                     const ignorado = !!persistidos[i]?.dismissed_at
                     return (
@@ -357,6 +442,7 @@ export default function PagforTab() {
                             title={ignorado ? 'Boleto ignorado — volte a considerá-lo para poder selecionar' : undefined} />
                         </td>
                         <td className="px-3 py-2 font-medium text-slate-700">{r.boleto.beneficiary ?? '—'}</td>
+                        <td className="px-3 py-2 font-mono text-slate-500 whitespace-nowrap">{documentoFormatado(r.boleto.beneficiary_doc) || '—'}</td>
                         <td className="px-3 py-2 text-slate-500">{r.boleto.document ?? '—'}</td>
                         <td className="px-3 py-2 font-mono text-slate-400">{r.boleto.barcode ? r.boleto.barcode.replace(/\D/g, '').slice(0, 12) + '…' : '—'}</td>
                         <td className="px-3 py-2 text-right tabular-nums font-semibold text-slate-700">{BRL(r.boleto.amount)}</td>
@@ -409,6 +495,9 @@ export default function PagforTab() {
               </table>
             </div>
           </div>
+              </>
+            )
+          })()}
 
           {/* ações */}
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
