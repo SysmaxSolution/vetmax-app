@@ -3,11 +3,8 @@
 import { useState, useEffect, useTransition } from 'react'
 import { createPortal } from 'react-dom'
 import { X, Loader2, Trash2, CheckCircle, AlertCircle, RotateCcw, Hash, ShieldCheck } from 'lucide-react'
-import {
-  createEntry, updateEntry, deleteEntry, baixarTitulo,
-  getEntryContext,
-  type FinancialEntry, type EntryType, type BaixarTituloData, type EntryContext,
-} from '@/lib/actions/financial'
+import { createEntry, updateEntry, deleteEntry, baixarTitulo, getEntryContext } from '@/lib/actions/financial'
+import type { FinancialEntry, EntryType, BaixarTituloData, EntryContext } from '@/types/financial'
 import { estornarTituloFinanceiro } from '@/lib/actions/estorno-credito'
 import { getEntrySettler } from '@/lib/actions/client-statement'
 import { searchSalesTutors } from '@/lib/actions/sales'

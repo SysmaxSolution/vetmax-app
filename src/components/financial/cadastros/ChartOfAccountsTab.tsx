@@ -2,11 +2,8 @@
 
 import { useState, useTransition, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import {
-  listChartOfAccounts, createChartOfAccount, deleteChartOfAccount,
-  updateChartOfAccount, replicateDefaultChartOfAccounts,
-  type ChartOfAccount, type CreateChartOfAccountData,
-} from '@/lib/actions/financial'
+import { listChartOfAccounts, createChartOfAccount, deleteChartOfAccount, updateChartOfAccount, replicateDefaultChartOfAccounts } from '@/lib/actions/financial'
+import type { ChartOfAccount, CreateChartOfAccountData } from '@/types/financial'
 import { Plus, Trash2, X, Loader2, AlertCircle, BookOpen, ChevronRight, Pencil, Sparkles } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────

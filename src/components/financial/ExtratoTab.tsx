@@ -1,9 +1,8 @@
 'use client'
 
 import { useState, useTransition, useEffect } from 'react'
-import {
-  BankAccount, EffectiveExtratoResult, ExtratoMovement, getEffectiveExtrato,
-} from '@/lib/actions/financial'
+import { getEffectiveExtrato } from '@/lib/actions/financial'
+import type { BankAccount, EffectiveExtratoResult, ExtratoMovement } from '@/types/financial'
 import { TrendingUp, TrendingDown, ChevronsUpDown, RefreshCcw, Calendar, Wallet, CheckCircle2, Link2, Circle } from 'lucide-react'
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })

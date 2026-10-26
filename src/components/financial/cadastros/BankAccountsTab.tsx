@@ -3,10 +3,8 @@
 import { useState, useTransition, useEffect } from 'react'
 import { listCompanies } from '@/lib/actions/companies'
 import { createPortal } from 'react-dom'
-import {
-  listBankAccounts, createBankAccount, updateBankAccount, deleteBankAccount,
-  type BankAccount, type CreateBankAccountData,
-} from '@/lib/actions/financial'
+import { listBankAccounts, createBankAccount, updateBankAccount, deleteBankAccount } from '@/lib/actions/financial'
+import type { BankAccount, CreateBankAccountData } from '@/types/financial'
 import { Plus, Search, Pencil, Trash2, Star, X, Loader2, AlertCircle, Building2 } from 'lucide-react'
 import BoletoCarteiraPanel from './BoletoCarteiraPanel'
 import { useUsaBoleto } from '@/components/providers/ClinicConfigProvider'

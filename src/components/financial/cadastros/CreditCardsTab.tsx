@@ -2,10 +2,8 @@
 
 import { useState, useTransition } from 'react'
 import { createPortal } from 'react-dom'
-import {
-  listCreditCards, createCreditCard, updateCreditCard, deleteCreditCard,
-  type CreditCard, type CreateCreditCardData,
-} from '@/lib/actions/financial'
+import { listCreditCards, createCreditCard, updateCreditCard, deleteCreditCard } from '@/lib/actions/financial'
+import type { CreditCard, CreateCreditCardData } from '@/types/financial'
 import { Plus, Pencil, Trash2, X, Loader2, AlertCircle, CreditCard as CardIcon, ToggleLeft, ToggleRight } from 'lucide-react'
 
 // ─── Constants ────────────────────────────────────────────────────────────────

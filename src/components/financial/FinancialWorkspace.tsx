@@ -3,11 +3,9 @@
 import { useState, useTransition, useMemo, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useAutoRefresh } from '@/hooks/useAutoRefresh'
-import {
-  listEntries, getFinancialSummary, baixarTitulosBulk,
-  type FinancialEntry, type EntryType, type FinancialSummary,
-  type BankAccount, type ChartOfAccount, type CreditCard, type Employee,
-} from '@/lib/actions/financial'
+import { listEntries, getFinancialSummary, baixarTitulosBulk } from '@/lib/actions/financial'
+import type { FinancialEntry, EntryType, FinancialSummary, BankAccount, ChartOfAccount, CreditCard, Employee } from '@/types/financial'
+import { tituloCombina, donoCombina } from '@/lib/financial/busca-titulo'
 import TituloModal, { type TituloModalProps } from './TituloModal'
 import BankAccountsTab    from './cadastros/BankAccountsTab'
 import ChartOfAccountsTab from './cadastros/ChartOfAccountsTab'
@@ -420,15 +418,8 @@ export default function FinancialWorkspace({
   const filtered = useMemo(() => {
     if (!isTitulos) return []
     let list = entries
-    if (search.trim()) {
-      const q = search.trim().toLowerCase()
-      list = list.filter(e =>
-        e.description.toLowerCase().includes(q) ||
-        (e.tutor_name   ?? '').toLowerCase().includes(q) ||
-        (e.patient_name ?? '').toLowerCase().includes(q) ||
-        (e.beneficiary  ?? '').toLowerCase().includes(q)
-      )
-    }
+    // Nome, pet, descrição OU documento (CNPJ do fornecedor / CPF do tutor), sem acento.
+    if (search.trim()) list = list.filter(e => tituloCombina(e, search))
     if (filterStatus !== 'all') {
       if (filterStatus === 'pending') {
         // "Pendentes" = todos os títulos não baixados e não cancelados.
@@ -451,14 +442,7 @@ export default function FinancialWorkspace({
         (e.os_number ?? '').toLowerCase().includes(q)
       )
     }
-    if (nameFilter.trim()) {
-      const q = nameFilter.trim().toLowerCase()
-      list = list.filter(e =>
-        (e.tutor_name  ?? '').toLowerCase().includes(q) ||
-        (e.beneficiary ?? '').toLowerCase().includes(q) ||
-        (e.patient_name ?? '').toLowerCase().includes(q)
-      )
-    }
+    if (nameFilter.trim()) list = list.filter(e => donoCombina(e, nameFilter))
     // Filtra pela MESMA data que a coluna mostra. Antes filtrava por
     // `created_at`: com o seed inteiro cadastrado hoje, "de 01/09 a 30/09"
     // devolvia vazio e a tela parecia quebrada.
@@ -656,7 +640,7 @@ export default function FinancialWorkspace({
                 <input
                   value={search}
                   onChange={e => setSearch(e.target.value)}
-                  placeholder={activeTab === 'payable' ? 'Buscar por descrição, fornecedor ou pet...' : 'Buscar por descrição, cliente ou pet...'}
+                  placeholder={activeTab === 'payable' ? 'Buscar por fornecedor, CNPJ, descrição ou pet...' : 'Buscar por cliente, CPF, descrição ou pet...'}
                   className="w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 py-2 text-sm placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
                 />
               </div>
@@ -702,7 +686,7 @@ export default function FinancialWorkspace({
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-500 mb-1.5">{activeTab === 'payable' ? 'Fornecedor' : 'Cliente'}</label>
-                    <input value={nameFilter} onChange={e => setNameFilter(e.target.value)} placeholder="Nome…"
+                    <input value={nameFilter} onChange={e => setNameFilter(e.target.value)} placeholder={activeTab === 'payable' ? 'Nome ou CNPJ…' : 'Nome ou CPF…'}
                       className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20" />
                   </div>
                   <div>
