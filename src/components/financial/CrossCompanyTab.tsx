@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useTransition, useEffect } from 'react'
-import { getCrossCompanyOverview, type CompanyOverview } from '@/lib/actions/financial'
+import { getCrossCompanyOverview } from '@/lib/actions/financial'
+import type { CompanyOverview } from '@/types/financial'
 import { Building2, RefreshCcw, Calendar } from 'lucide-react'
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })

@@ -2,14 +2,8 @@
 
 import { useState, useRef, useTransition, useMemo, useEffect } from 'react'
 import { isBankIntegrationEnabled } from '@/lib/actions/financial-integrations'
-import {
-  BankAccount, ReconciliationBatch, StatementWithLinks, ReconcCandidate, AutoLinkResult,
-  importStatements, getBBStatement, getStatementsWithLinks, persistAutoLinks, listReconcCandidates,
-  linkEntriesToStatement, unlinkEntry, unlinkStatement, reconcileLines, unreconcileLine,
-  settleOpenEntryAndLink, insertEntryFromStatement, importBankStatementFromSicoob,
-  getStatementsWithLinksByPeriod, persistAutoLinksByPeriod,
-  linkStatementsToEntry, buscarTitulosParaVincular, linkManyToMany,
-} from '@/lib/actions/financial'
+import { importStatements, getBBStatement, getStatementsWithLinks, persistAutoLinks, listReconcCandidates, linkEntriesToStatement, unlinkEntry, unlinkStatement, reconcileLines, unreconcileLine, settleOpenEntryAndLink, insertEntryFromStatement, importBankStatementFromSicoob, getStatementsWithLinksByPeriod, persistAutoLinksByPeriod, linkStatementsToEntry, buscarTitulosParaVincular, linkManyToMany } from '@/lib/actions/financial'
+import type { BankAccount, ReconciliationBatch, StatementWithLinks, ReconcCandidate, AutoLinkResult } from '@/types/financial'
 import { parseFile } from '@/lib/parsers/bankStatementParser'
 import DiferencaModal from './DiferencaModal'
 import {
