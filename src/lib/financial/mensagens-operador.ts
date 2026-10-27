@@ -49,6 +49,11 @@ export function mensagemParaOperador(bruto: string | null | undefined): Mensagem
     return { texto: 'Esta conta ainda não está ligada ao banco.', chamarAdmin: true }
   }
 
+  // Limites do banco que o operador consegue contornar sozinho.
+  if (e.includes('período de consulta') || e.includes('periodo de consulta') || e.includes('10320')) {
+    return { texto: 'O banco só aceita consultas de até 60 dias por vez. Reduza o período.', chamarAdmin: false }
+  }
+
   // Vazio é diferente de desconhecido: não inventa falha onde não houve.
   if (!e.trim()) return { texto: '', chamarAdmin: false }
 
