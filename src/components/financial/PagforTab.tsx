@@ -76,6 +76,7 @@ export default function PagforTab() {
     setFrescor(est.texto ? est : null)
     if ('error' in res) return
     setPersistidos(res.boletos)
+      if (res.aviso) setError(res.aviso)   // banco recusou/falhou em parte: a lista pode estar velha ou incompleta
     const lista = res.boletos.map(p => p.boleto)
     setParsed(lista)
     if (lista.length) await runMatch(lista)
@@ -98,6 +99,7 @@ export default function PagforTab() {
       if (!res.boletos.length) { setError('Nenhum boleto no DDA para o período.'); return }
 
       setPersistidos(res.boletos)
+      if (res.aviso) setError(res.aviso)   // banco recusou/falhou em parte: a lista pode estar velha ou incompleta
       const lista = res.boletos.map(p => p.boleto)
       setParsed(lista)
       await runMatch(lista)

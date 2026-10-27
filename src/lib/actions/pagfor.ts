@@ -19,6 +19,7 @@ import { lookupCnpj } from '@/lib/cnpj'
 import { digitalDoBoleto } from '@/lib/financial/dda-digital'
 import { loadPagamentosRuntime, guardarBoletos } from '@/lib/financial/dda-sync'
 import { mensagemErro } from '@/lib/errors'
+import { textoParaTela } from '@/lib/financial/mensagens-operador'
 import type {
   DdaBoleto, DdaMatchRow, DdaMatchResult, PreviaFornecedorDda, DdaBoletoPersistido,
 } from '@/types/pagfor'
@@ -385,6 +386,8 @@ export async function carregarDdaDoPeriodo(params: {
   do_banco: number
   guardados: number
   consultou_banco: boolean
+  /** Frase para a tela quando a consulta ao banco falhou ou veio incompleta — nunca silenciar isso. */
+  aviso?: string
 } | { error: string }> {
   const c = await ctx()
   if (!c) return { error: 'Não autenticado.' }
@@ -409,6 +412,7 @@ export async function carregarDdaDoPeriodo(params: {
   let guardados = await ler()
   let doBanco = 0
   let consultou = false
+  let avisoDoBanco: string | undefined
 
   // Consulta o banco quando não há nada guardado, ou quando o operador pediu
   // explicitamente para atualizar.
@@ -420,15 +424,19 @@ export async function carregarDdaDoPeriodo(params: {
     })
     if ('error' in res) {
       // Falhou a consulta mas já havia dado guardado: entrega o guardado em
-      // vez de deixar a tela vazia — o trabalho anterior continua acessível.
+      // vez de deixar a tela vazia — mas DIZENDO que não atualizou. Entregar
+      // calado fazia a lista velha parecer fresca e escondeu por semanas que
+      // o banco recusava o período de 90 dias.
       if (guardados.length) {
         return { ok: true, boletos: guardados.map(montarPersistido), do_banco: 0,
-                 guardados: guardados.length, consultou_banco: true }
+                 guardados: guardados.length, consultou_banco: true,
+                 aviso: `Não foi possível atualizar do banco agora — mostrando o que já estava guardado. (${textoParaTela(res.error)})` }
       }
       return { error: res.error }
     }
     consultou = true
     doBanco = res.boletos.length
+    avisoDoBanco = res.aviso
     await guardarBoletos(admin, c.clinicId, res.boletos, params.bankAccountId ?? null)
     guardados = await ler()
   }
@@ -439,6 +447,7 @@ export async function carregarDdaDoPeriodo(params: {
     do_banco: doBanco,
     guardados: guardados.length,
     consultou_banco: consultou,
+    aviso: avisoDoBanco,
   }
 }
 
@@ -687,17 +696,33 @@ export async function desvincularBoleto(fingerprint: string): Promise<{ ok: true
 }
 
 /** Varredura do DDA direto no banco (substitui a importação manual do CSV). */
-export async function fetchDdaFromBank(params: { bankAccountId?: string; dataInicial: string; dataFinal: string; situacao?: number; tipoData?: number }): Promise<{ ok: true; boletos: DdaBoleto[] } | { error: string }> {
+export async function fetchDdaFromBank(params: { bankAccountId?: string; dataInicial: string; dataFinal: string; situacao?: number; tipoData?: number }): Promise<{ ok: true; boletos: DdaBoleto[]; aviso?: string } | { error: string }> {
   const c = await ctx()
   if (!c) return { error: 'Não autenticado.' }
   if (!['admin', 'owner', 'manager'].includes(c.role)) return { error: 'Sem permissão.' }
   const admin = createAdminClient()
   const rt = await loadPagamentosRuntime(admin, c.clinicId, params.bankAccountId)
   if ('error' in rt) return { error: rt.error }
-  // situacao e tipoData são obrigatórios na API (default: 1 = a pagar / por vencimento).
-  const res = await consultarDDA(rt, { dataInicial: params.dataInicial, dataFinal: params.dataFinal, situacao: params.situacao ?? 1, tipoData: params.tipoData ?? 1 })
-  if (!res.ok) return { error: res.error }
-  return { ok: true, boletos: res.boletos as DdaBoleto[] }
+
+  // O banco recusa consulta acima de 60 dias (10320). A tela pede 90 de uma
+  // vez: fatiar aqui, e não na tela, para que qualquer chamador fique certo.
+  const { dividirEmJanelas } = await import('@/lib/financial/dda-varredura')
+  const janelas = dividirEmJanelas(params.dataInicial, params.dataFinal)
+  if (!janelas.length) return { error: 'Período inválido: a data final vem antes da inicial.' }
+
+  const boletos: DdaBoleto[] = []
+  const falhas: string[] = []
+  for (const j of janelas) {
+    // situacao e tipoData são obrigatórios na API (default: 1 = a pagar / por vencimento).
+    const res = await consultarDDA(rt, { dataInicial: j.dataInicial, dataFinal: j.dataFinal, situacao: params.situacao ?? 1, tipoData: params.tipoData ?? 1 })
+    if (!res.ok) { falhas.push(`${j.dataInicial}..${j.dataFinal}: ${res.error}`); continue }
+    boletos.push(...(res.boletos as DdaBoleto[]))
+  }
+  if (falhas.length === janelas.length) return { error: falhas.join(' · ') }
+  return {
+    ok: true, boletos,
+    aviso: falhas.length ? 'Uma parte do período não pôde ser consultada no banco agora; a lista pode estar incompleta.' : undefined,
+  }
 }
 
 /**

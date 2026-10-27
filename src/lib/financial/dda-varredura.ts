@@ -31,6 +31,28 @@ export const DIAS_PARA_TRAS = 30
 export const DIAS_PARA_FRENTE = 60
 
 /**
+ * Divide um período qualquer em janelas de no máximo `maxDias` dias, porque o
+ * banco recusa consulta maior que isso (código 10320: "O período de consulta
+ * deve ser de até 60 dias"). A tela do PAGFOR pede 90 dias de uma vez; a
+ * recusa chegava como erro genérico — e, nas contas que já tinham boleto
+ * guardado, nem chegava: a tela mostrava o guardado e parecia atualizado.
+ */
+export function dividirEmJanelas(dataInicial: string, dataFinal: string, maxDias = DIAS_PARA_FRENTE): { dataInicial: string; dataFinal: string }[] {
+  const ini = paraDiaSerial(dataInicial)
+  const fim = paraDiaSerial(dataFinal)
+  if (!Number.isFinite(ini) || !Number.isFinite(fim) || fim < ini) return []
+  const janelas: { dataInicial: string; dataFinal: string }[] = []
+  let de = ini
+  while (de <= fim) {
+    // "até 60 dias" conta as duas pontas: de D a D+59 são 60 dias.
+    const ate = Math.min(fim, de + maxDias - 1)
+    janelas.push({ dataInicial: deDiaSerial(de), dataFinal: deDiaSerial(ate) })
+    de = ate + 1
+  }
+  return janelas
+}
+
+/**
  * As duas janelas da varredura, a partir de uma data de referência (hoje).
  *
  * Nenhuma delas passa de 60 dias, porque o banco recusa o período maior — e a
