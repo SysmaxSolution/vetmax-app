@@ -12,30 +12,8 @@ import { revalidatePath } from 'next/cache'
 
 import { mensagemErro } from '@/lib/errors'
 import { zCpfCnpjPreservandoFormato } from '@/lib/validation/primitivos'
-export interface Company {
-  id: string
-  clinic_id: string
-  code: string
-  name: string
-  legal_name: string | null
-  cnpj: string | null
-  municipal_registration: string | null
-  is_default: boolean
-  is_active: boolean
-  created_at: string
-  updated_at: string
-}
-
-export interface CompanyInput {
-  id?: string
-  code: string
-  name: string
-  legal_name?: string | null
-  cnpj?: string | null
-  municipal_registration?: string | null
-  is_default?: boolean
-  is_active?: boolean
-}
+import { variantesCnpj } from '@/lib/clinics/grupo-empresas'
+import type { Company, CompanyInput } from '@/types/companies'
 
 async function getCtx() {
   const supabase = await createClient()
@@ -43,11 +21,11 @@ async function getCtx() {
   if (!user) return { error: 'Não autenticado' as const }
   const { data: profile } = await supabase
     .from('profiles')
-    .select('clinic_id, role')
+    .select('clinic_id, role, is_sysmax')
     .eq('id', user.id)
     .single()
   if (!profile?.clinic_id) return { error: 'Perfil sem clínica' as const }
-  return { clinic_id: profile.clinic_id as string, role: profile.role as string }
+  return { clinic_id: profile.clinic_id as string, role: profile.role as string, is_sysmax: profile.is_sysmax === true }
 }
 
 const CAN_MANAGE = ['admin', 'owner', 'manager']
@@ -85,6 +63,21 @@ export async function upsertCompany(input: CompanyInput): Promise<{ id: string }
   }
 
   const admin = createAdminClient()
+
+  // Empresa com CNPJ de OUTRA clínica do SYSVETMAX liga as duas num grupo e
+  // permite ao admin daqui dar acesso de usuários lá (src/lib/clinics/grupo-empresas.ts).
+  // Por isso só o suporte SysMax cadastra esse tipo de empresa — senão qualquer
+  // admin entraria em tenant alheio digitando um CNPJ.
+  if (cnpjInformado && !ctx.is_sysmax) {
+    const variantes = variantesCnpj(cnpjInformado)
+    if (variantes.length) {
+      // Leitura entre tenants de propósito e só para existência: não devolve
+      // nome nem id da outra clínica, para o admin não enumerar quem usa o sistema.
+      const { count } = await admin.from('clinics').select('id', { count: 'exact', head: true })
+        .in('cnpj', variantes).neq('id', ctx.clinic_id)
+      if ((count ?? 0) > 0) return { error: 'Este CNPJ pertence a outra clínica cadastrada no SYSVETMAX. Para ligar as duas empresas num grupo, peça ao suporte SysMax.' }
+    }
+  }
 
   // Só uma empresa padrão por clínica: se marcar esta como padrão, desmarca as outras.
   if (input.is_default) {

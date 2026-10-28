@@ -8,10 +8,8 @@ import {
   Eye, EyeOff, Check, AlertTriangle, Lock,
   Percent, Plus, Trash2, Search, Package, Wrench, ShoppingBag,
 } from 'lucide-react'
-import {
-  adminUpdateUser, adminChangePassword, uploadUserSignature,
-  type ClinicUserFull,
-} from '@/lib/actions/user-management'
+import { adminUpdateUser, adminChangePassword, uploadUserSignature } from '@/lib/actions/user-management'
+import type { ClinicUserFull } from '@/types/user-management'
 import {
   listUserCommissions, upsertUserCommission, deleteUserCommission,
   searchItemsForCommission,
@@ -19,6 +17,8 @@ import {
 } from '@/lib/actions/commissions'
 import type { Room } from '@/lib/actions/rooms'
 import type { UserRole } from '@/types'
+import { listarAcessoDoUsuarioNoGrupo, definirAcessoDoUsuarioNaClinica } from '@/lib/actions/clinic-group-access'
+import type { AcessoClinicaDoGrupo } from '@/types/clinic-group'
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -129,6 +129,31 @@ export default function UserManagementModal({
   const [savingItemComm,  setSavingItemComm]  = useState(false)
 
   const [, startTransition] = useTransition()
+
+  // ── Clínicas do grupo (Empresas ligadas por CNPJ) ──────────────────────────
+  const [grupo,        setGrupo]        = useState<AcessoClinicaDoGrupo[]>([])
+  const [mudandoGrupo, setMudandoGrupo] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (isNew || !user) return
+    listarAcessoDoUsuarioNoGrupo(user.id).then(res => {
+      if (!('error' in res)) setGrupo(res.clinicas)
+    })
+  }, [isNew, user?.id])
+
+  async function alternarClinicaDoGrupo(c: AcessoClinicaDoGrupo) {
+    if (!user || mudandoGrupo) return
+    setMudandoGrupo(c.id); setError(null)
+    const res = await definirAcessoDoUsuarioNaClinica(user.id, c.id, !c.vinculado)
+    if ('error' in res) {
+      setError(res.error)
+    } else {
+      setGrupo(prev => prev.map(x => x.id === c.id ? { ...x, vinculado: !c.vinculado } : x))
+      setSuccess(!c.vinculado ? `Acesso liberado em ${c.name}.` : `Acesso removido de ${c.name}.`)
+      setTimeout(() => setSuccess(null), 2000)
+    }
+    setMudandoGrupo(null)
+  }
 
   // useEffect da aba "acessos" foi removido — funcionalidade migrada para o
   // modal UserAccessRightsModal (botão "Direitos de Acesso").
@@ -540,6 +565,38 @@ export default function UserManagementModal({
                   <p className="text-[10px] text-slate-400 mt-1">
                     Será usada como carimbo em documentos gerados pelo sistema. Máx 2MB.
                   </p>
+                </div>
+              )}
+
+              {/* Clínicas do grupo — só aparece quando a clínica tem Empresas ligadas a outras clínicas */}
+              {!isNew && grupo.length > 1 && (
+                <div className="border border-slate-200 rounded-xl p-4">
+                  <p className="text-xs font-semibold text-slate-700 mb-1">Acesso às clínicas do grupo</p>
+                  <p className="text-[11px] text-slate-500 mb-3">
+                    Marque em quais empresas do grupo esta pessoa pode entrar. Ela escolhe a clínica ao fazer login ou troca pelo seletor no menu.
+                  </p>
+                  <div className="space-y-2">
+                    {grupo.map(c => {
+                      const travada = c.atual && user?.id === currentUserId
+                      return (
+                        <label key={c.id} className={`flex items-center gap-3 rounded-lg border px-3 py-2 text-sm ${c.vinculado ? 'border-teal-200 bg-teal-50/60' : 'border-slate-200'} ${travada ? 'opacity-70' : 'cursor-pointer'}`}>
+                          <input
+                            type="checkbox"
+                            checked={c.vinculado}
+                            disabled={travada || mudandoGrupo !== null}
+                            onChange={() => alternarClinicaDoGrupo(c)}
+                            className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                          />
+                          <span className="flex-1">
+                            <span className="font-medium text-slate-800">{c.name}</span>
+                            {c.cnpj && <span className="ml-2 text-xs text-slate-400">{c.cnpj}</span>}
+                            {c.atual && <span className="ml-2 text-[10px] uppercase tracking-wide text-teal-700">esta clínica</span>}
+                          </span>
+                          {mudandoGrupo === c.id && <Loader2 className="h-4 w-4 animate-spin text-teal-600" />}
+                        </label>
+                      )
+                    })}
+                  </div>
                 </div>
               )}
 
