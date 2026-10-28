@@ -12,6 +12,26 @@ import type { DocumentTemplate } from '@/types'
 import { urlAssinatura, type PerfilComAssinatura } from '@/lib/storage/assinatura'
 export const metadata = { title: 'Gestão | SysVetMax' }
 
+const COLUNAS_USUARIO = 'id, full_name, last_name, role, crmv, mapa_code, phone, specialties, nickname, photo_url, address, is_active, room, electronic_signature_url, electronic_signature_path, appointment_interval_minutes'
+
+// Quem pertence à clínica = quem tem vínculo em user_clinics OU está com ela
+// como clínica ativa. Filtrar só por profiles.clinic_id escondia quem tem
+// acesso a mais de uma clínica assim que a pessoa trocava para a outra.
+async function listarUsuariosDaClinica(admin: ReturnType<typeof createAdminClient>, clinicId: string) {
+  const [{ data: porAtiva }, { data: vinculos }] = await Promise.all([
+    admin.from('profiles').select(COLUNAS_USUARIO).eq('clinic_id', clinicId).eq('is_sysmax', false),
+    admin.from('user_clinics').select('user_id').eq('clinic_id', clinicId),
+  ])
+  const vistos = new Set((porAtiva ?? []).map(u => u.id))
+  const faltam = (vinculos ?? []).map(v => v.user_id).filter(id => !vistos.has(id))
+  const { data: porVinculo } = faltam.length
+    ? await admin.from('profiles').select(COLUNAS_USUARIO).in('id', faltam).eq('is_sysmax', false)
+    : { data: [] as NonNullable<typeof porAtiva> }
+  const todos = [...(porAtiva ?? []), ...(porVinculo ?? [])]
+  todos.sort((a, b) => (a.full_name ?? '').localeCompare(b.full_name ?? '', 'pt-BR'))
+  return { data: todos }
+}
+
 export default async function ManagementPage() {
   const supabase = await createClient()
 
@@ -37,12 +57,7 @@ export default async function ManagementPage() {
       .select('id, name, cnpj, address, phone, reception_checklist, user_limit, logo_url, active_modules, continuous_flow, flow_config, business_hours, working_days, holiday_work, business_type, layout_version')
       .eq('id', profile.clinic_id)
       .single(),
-    admin
-      .from('profiles')
-      .select('id, full_name, last_name, role, crmv, mapa_code, phone, specialties, nickname, photo_url, address, is_active, room, electronic_signature_url, electronic_signature_path, appointment_interval_minutes')
-      .eq('clinic_id', profile.clinic_id)
-      .eq('is_sysmax', false)
-      .order('full_name'),
+    listarUsuariosDaClinica(admin, profile.clinic_id),
     getClinicInvitations(),
     getClinicConfig(),
     getRooms(),

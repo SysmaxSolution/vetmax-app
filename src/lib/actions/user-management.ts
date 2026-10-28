@@ -6,44 +6,8 @@ import { revalidatePath } from 'next/cache'
 
 import { mensagemErro } from '@/lib/errors'
 import { urlAssinatura, caminhoAssinatura, BUCKET_ASSINATURAS } from '@/lib/storage/assinatura'
+import type { ClinicUserFull, AdminUpdateUserPayload, UserModuleAccessRow } from '@/types/user-management'
 // ─── Tipos ────────────────────────────────────────────────────────────────────
-
-export interface ClinicUserFull {
-  id:                          string
-  full_name:                   string
-  last_name:                   string | null
-  role:                        string
-  crmv:                        string | null
-  mapa_code:                   string | null
-  phone:                       string | null
-  specialties:                 string[] | null
-  nickname:                    string | null
-  photo_url:                   string | null
-  address:                     string | null
-  is_active:                   boolean | null
-  room:                        string | null
-  electronic_signature_url:    string | null
-  electronic_signature_path?:   string | null
-  appointment_interval_minutes: number | null
-}
-
-export interface AdminUpdateUserPayload {
-  userId:                       string
-  full_name?:                   string
-  last_name?:                   string | null
-  role?:                        string
-  crmv?:                        string | null
-  mapa_code?:                   string | null
-  phone?:                       string | null
-  specialties?:                 string[]
-  nickname?:                    string | null
-  address?:                     string | null
-  is_active?:                   boolean
-  room?:                        string | null
-  photo_url?:                   string | null
-  electronic_signature_url?:    string | null
-  appointment_interval_minutes?: number | null
-}
 
 // ─── Admin: atualizar perfil completo de qualquer usuário ─────────────────────
 
@@ -80,13 +44,31 @@ export async function adminUpdateUser(
   if ('appointment_interval_minutes' in fields) patch.appointment_interval_minutes = fields.appointment_interval_minutes
 
   const admin = createAdminClient()
+
+  // Pertence à clínica quem a tem como ativa OU tem vínculo em user_clinics.
+  // Filtrar o UPDATE só por profiles.clinic_id fazia o salvar "funcionar" sem
+  // gravar nada quando a pessoa estava, naquele momento, em outra clínica do grupo.
+  const { data: alvo } = await admin.from('profiles').select('id, clinic_id').eq('id', userId).maybeSingle()
+  if (!alvo) return { error: 'Usuário não encontrado.' }
+  if (alvo.clinic_id !== profile.clinic_id) {
+    const { data: vinculo } = await admin.from('user_clinics').select('id')
+      .eq('user_id', userId).eq('clinic_id', profile.clinic_id).maybeSingle()
+    if (!vinculo) return { error: 'Usuário não pertence a esta clínica.' }
+  }
+
   const { error } = await admin
     .from('profiles')
     .update(patch)
     .eq('id', userId)
-    .eq('clinic_id', profile.clinic_id)
 
   if (error) return { error: mensagemErro(error, 'lib/actions/user-management.ts') }
+
+  // O papel vale por clínica: grava também no vínculo desta clínica, que é o que
+  // o seletor de clínicas e o login usam ao entrar aqui.
+  if (fields.role !== undefined) {
+    await admin.from('user_clinics').update({ role: fields.role })
+      .eq('user_id', userId).eq('clinic_id', profile.clinic_id)
+  }
   revalidatePath('/dashboard/management')
   return { success: true }
 }
@@ -171,11 +153,6 @@ export async function uploadUserSignature(
 }
 
 // ─── RBAC por Módulo (G-08) ───────────────────────────────────────────────────
-
-export type UserModuleAccessRow = {
-  module_name: string
-  enabled:     boolean
-}
 
 export async function getUserModuleAccess(
   targetUserId: string

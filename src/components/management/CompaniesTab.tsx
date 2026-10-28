@@ -5,9 +5,8 @@
 
 import { useState, useEffect } from 'react'
 import { Loader2, Plus, Pencil, Building2, Check, X, Star, FileCheck2, CreditCard, FileSearch } from 'lucide-react'
-import {
-  listCompanies, upsertCompany, setCompanyActive, type Company,
-} from '@/lib/actions/companies'
+import { listCompanies, upsertCompany, setCompanyActive } from '@/lib/actions/companies'
+import type { Company } from '@/types/companies'
 import { listCompanyFiscalConfigs, type CompanyFiscalConfig } from '@/lib/actions/nfse'
 import CompanyFiscalModal from './CompanyFiscalModal'
 import CompanyCardAcquirerModal from './CompanyCardAcquirerModal'
