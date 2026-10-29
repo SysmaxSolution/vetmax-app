@@ -1,0 +1,85 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(**/*.pem)",
+      "Read(**/*.key)",
+      "Read(**/*.p12)",
+      "Read(**/*.keystore)",
+      "Read(**/id_rsa*)",
+      "Read(**/id_ed25519*)",
+      "Read(**/service-account*.json)",
+      "Edit(.env)",
+      "Edit(.env.*)",
+      "Edit(**/.env)",
+      "Edit(**/.env.*)",
+      "Bash(git add -A*)",
+      "Bash(git add --all*)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/guard-git-add.mjs",
+            "timeout": 15,
+            "statusMessage": "Verificando staging seletivo..."
+          },
+          {
+            "type": "command",
+            "command": "node .claude/hooks/guard-staged-secrets.mjs",
+            "timeout": 60,
+            "statusMessage": "Varrendo staging por segredos..."
+          },
+          {
+            "type": "command",
+            "command": "node .claude/hooks/guard-main-push.mjs",
+            "timeout": 15,
+            "statusMessage": "Verificando autorizacao de push..."
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/guard-tsc-before-push.mjs",
+            "timeout": 300,
+            "statusMessage": "Gate de tipos antes do push (tsc sem cache)..."
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/guard-use-server-types.mjs",
+            "timeout": 15,
+            "statusMessage": "Verificando 'use server'..."
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "prompt",
+            "model": "claude-haiku-4-5",
+            "timeout": 45,
+            "continueOnBlock": true,
+            "statusMessage": "Verificando multi-tenancy e SELECT *...",
+            "prompt": "Voce revisa UMA edicao de arquivo do VetMax, sistema veterinario multi-tenant.\n\nVerifique APENAS estas duas regras do projeto:\n\n1. MULTI-TENANCY: toda consulta a tabela de dados de clinica deve filtrar por clinic_id -- `.eq('clinic_id', ...)` no Supabase, ou `WHERE clinic_id` em SQL.\n   Excecoes legitimas, NAO reporte: tabelas globais de catalogo (cbhpm, ncm, cid, species, breeds, plans, precos padrao, templates padrao); consultas feitas pela conta de suporte super-admin; a tabela invoice_items, que por design nao tem clinic_id e isola via invoice_id (join invoices!inner); migrations e seeds; codigo que apenas repassa um clinic_id recebido por parametro.\n\n2. SELECT * EM TABELA OPERACIONAL: proibido. Conta `select('*')` no Supabase e `SELECT *` em SQL. Excecoes: count/exists, tabelas de catalogo, scripts de diagnostico pontual.\n\nEdicao a revisar:\n$ARGUMENTS\n\nResponda ok=false SOMENTE se tiver ALTA confianca de que esta edicao introduz uma consulta NOVA que viola a regra 1 ou a regra 2, citando o trecho exato. Em qualquer duvida, responda ok=true. Nao comente estilo, nomenclatura, performance, tipos, nem qualquer coisa fora dessas duas regras -- outro revisor cuida disso."
+          }
+        ]
+      }
+    ]
+  }
+}

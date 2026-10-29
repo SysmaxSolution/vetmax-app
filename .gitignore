@@ -139,3 +139,12 @@ ios/.gitignore_local
 android/keystore.properties
 android/app/sysvetmax-release.keystore
 .migration/
+
+# ids de titulos semeados para teste (nunca versionar)
+scripts/.seed-conciliacao-ids.json
+
+# sentinelas de autorizacao dos hooks do Claude Code (nunca versionar:
+# sao concessoes temporarias do Diretor, validas por minutos)
+.claude/.allow-main-push
+.claude/.allow-secret-commit
+.claude/.skip-tsc-gate
