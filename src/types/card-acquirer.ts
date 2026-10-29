@@ -18,6 +18,10 @@ export interface ConfigAdquirente {
   /** Idem. */
   tem_webhook_secret: boolean
   default_terminal_id: string | null
+  /** Manda o split do profissional responsável pela OS junto com a cobrança. */
+  split_enabled:    boolean
+  /** chargeFees da operadora: a taxa incide também na parte do beneficiário. */
+  split_charge_fees: boolean
   /** URL completa que deve ser cadastrada no portal deles. */
   webhook_url:      string | null
   token_expires_at: string | null
@@ -67,6 +71,10 @@ export interface CobrancaCriada {
   pay_url?: string | null
   /** Preenchido quando é na maquininha. */
   transaction_id?: string | null
+  /** Se a cobrança saiu com o split do profissional. */
+  com_split?: boolean
+  /** Se a cobrança saiu com o split do profissional. */
+  com_split?: boolean
   /** Mensagem para a tela: o que acontece agora. */
   mensagem: string
   /** Avisos que não impedem a cobrança mas precisam aparecer. */
@@ -87,6 +95,19 @@ export interface LinhaExtratoCartao {
   created_at:    string
   os_number:     string | null
   tutor_nome:    string | null
+  company_name:  string | null
+  nsu:           string | null
+  invoice_id:    string | null
+  /** Situação lida do status cru (src/lib/financial/cobranca-maquininha.ts). */
+  situacao:      'aguardando' | 'aprovada' | 'recusada' | 'cancelada' | 'desconhecida'
+  /** Rótulo do título: baixado, em aberto, estornado… */
+  titulo:        string
+  settled_at:    string | null
+  reversed_at:   string | null
+  cancel_requested_at: string | null
+  pode_baixar:   boolean
+  pode_cancelar: boolean
+  pode_estornar: boolean
   /** Quanto fica com a clínica. */
   total_clinica: number
   /** Quanto vai direto ao profissional pelo split. */
@@ -119,4 +140,16 @@ export interface AndamentoCobranca {
   parcelas:      number | null
   /** Quantas vezes a operadora já nos chamou — 0 significa que ainda não veio. */
   callbacks:     number
+  /** Fatura amarrada à cobrança e se o título já foi baixado com ela. */
+  invoice_id:    string | null
+  baixado:       boolean
+}
+
+/** Profissional da clínica e seu vínculo com o beneficiário de split na operadora. */
+export interface ProfissionalParaSplit {
+  id:        string
+  full_name: string
+  role:      string
+  acquirer_recipient_code:     string | null
+  acquirer_recipient_document: string | null
 }

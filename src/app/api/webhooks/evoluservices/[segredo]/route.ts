@@ -5,6 +5,8 @@ import { decryptSecret } from '@/lib/integrations/bank-certificate'
 import { lerValorDeles } from '@/lib/integrations/evoluservices-valores'
 import { consultarOrder, baseDoAmbiente, type CredenciaisEvolu } from '@/lib/integrations/evoluservices'
 import { mensagemErro } from '@/lib/errors'
+import { estornarSplitDeCartao } from '@/lib/server/estorno-split-cartao'
+import { situacaoDaCobranca, normalizarNsu } from '@/lib/financial/cobranca-maquininha'
 
 // Webhook da EvoluServices / FinPet — retorno das transações de cartão.
 //
@@ -244,6 +246,44 @@ export async function POST(req: Request, ctx: { params: Promise<{ segredo: strin
     idRegistro = (nova as unknown as { id: string }).id
   }
 
+  // ─── 4b. título: amarra a baixa do caixa (por NSU) ou desfaz no cancelamento ─
+  //
+  // Aprovada e com fatura: se o caixa já baixou o título com este NSU, só
+  // amarra (o estorno e o extrato precisam do elo). Cancelada no portal: desfaz
+  // a baixa uma vez só — o callback repete.
+  {
+    const { data: txRow } = await admin.from('card_transactions')
+      .select('invoice_id, nsu, settled_split_id, reversed_at, cancel_requested_at')
+      .eq('id', idRegistro).eq('clinic_id', cfg.clinic_id).maybeSingle()
+    const tx = txRow as unknown as { invoice_id: string | null; nsu: string | null; settled_split_id: string | null; reversed_at: string | null } | null
+    const situacao = situacaoDaCobranca(statusFinal)
+    const agoraIso = new Date().toISOString()
+    if (tx?.invoice_id && situacao === 'aprovada' && !tx.settled_split_id && tx.nsu) {
+      const chave = normalizarNsu(tx.nsu)
+      const { data: splits } = await admin.from('invoice_payment_splits').select('id, card_nsu')
+        .eq('clinic_id', cfg.clinic_id).eq('invoice_id', tx.invoice_id).in('payment_method', ['credit', 'debit'])
+      const achado = ((splits ?? []) as Array<{ id: string; card_nsu: string | null }>).find(s => normalizarNsu(s.card_nsu) === chave)
+      if (achado) {
+        await admin.from('card_transactions')
+          .update({ settled_split_id: achado.id, settled_at: agoraIso, updated_at: agoraIso })
+          .eq('id', idRegistro).eq('clinic_id', cfg.clinic_id)
+      }
+    }
+    if (tx && situacao === 'cancelada' && tx.settled_split_id && !tx.reversed_at) {
+      const r = await estornarSplitDeCartao(admin, {
+        clinicId: cfg.clinic_id, splitId: tx.settled_split_id,
+        motivo: 'Cancelamento confirmado pela operadora (callback)', userId: null,
+      })
+      await admin.from('card_transactions').update({
+        reversed_at:   'error' in r ? null : agoraIso,
+        reversal_note: 'error' in r
+          ? `Cancelado na operadora, mas a baixa NAO foi desfeita: ${r.error}`
+          : 'Cancelamento confirmado pela operadora; baixa do titulo desfeita.',
+        updated_at: agoraIso,
+      }).eq('id', idRegistro).eq('clinic_id', cfg.clinic_id)
+    }
+  }
+
   // ─── 5. parcelas e splits, parcela a parcela ──────────────────────────────
   //
   // É o que faz o contábil refletir a realidade: a parte do profissional vai
@@ -299,17 +339,21 @@ export async function POST(req: Request, ctx: { params: Promise<{ segredo: strin
 
   // Amarra o split ao profissional pelo código de beneficiário, quando der.
   if (linhas.some(l => l.kind === 'split')) {
-    const { data: profs } = await admin
+    const { data: profsRaw } = await admin
       .from('profiles')
-      .select('id, acquirer_recipient_code, full_name')
+      .select('id, acquirer_recipient_code, acquirer_recipient_document, full_name')
       .eq('clinic_id', cfg.clinic_id)
       .not('acquirer_recipient_code', 'is', null)
-    // O callback traz nome e documento do beneficiário, não o código — então o
-    // vínculo é pelo documento quando houver, que é o dado estável.
+    const profs = (profsRaw ?? []) as unknown as Array<{ id: string; acquirer_recipient_code: string | null; acquirer_recipient_document: string | null }>
+    // O callback traz nome e documento do beneficiário, não o código — o vínculo
+    // é pelo DOCUMENTO gravado ao vincular (migration 0525); o código fica de
+    // reserva para vínculos antigos feitos por SQL com o próprio documento.
     for (const l of linhas.filter(x => x.kind === 'split')) {
       const doc = String(l.recipient_document ?? '').replace(/\D/g, '')
       if (!doc) continue
-      const achado = (profs ?? []).find(p => String(p.acquirer_recipient_code ?? '').replace(/\D/g, '') === doc)
+      const achado = profs.find(p =>
+        String(p.acquirer_recipient_document ?? '').replace(/\D/g, '') === doc
+        || String(p.acquirer_recipient_code ?? '').replace(/\D/g, '') === doc)
       if (achado) {
         await admin.from('card_transaction_payments')
           .update({ professional_id: achado.id })

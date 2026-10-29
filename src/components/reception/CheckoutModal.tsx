@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { vincularCobrancaAoTitulo } from '@/lib/actions/card-acquirer'
 import { createPortal } from 'react-dom'
 import { X, Loader2, Receipt, AlertCircle, Gift, Plus, Search, Trash2, CheckCircle2 } from 'lucide-react'
 import {
@@ -355,6 +356,14 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
       }
     )
     if ('error' in res) { setError(res.error); throw new Error(res.error) }
+
+    // Cobrança feita pela maquininha integrada (FinPet): amarra a transação ao
+    // split que acabou de baixar o título — o estorno e o extrato usam esse elo.
+    for (const s of splits) {
+      if (!s.card_transaction_id) continue
+      const v = await vincularCobrancaAoTitulo({ cardTransactionId: s.card_transaction_id, invoiceId: invoice.id, nsu: s.card_nsu })
+      if ('error' in v) setError(`Pagamento OK, mas a cobrança da maquininha não foi amarrada ao título: ${v.error}`)
+    }
 
     // Sprint Animais 1.6: sobra do pagamento lançada como crédito do tutor.
     if (extras?.overpayment && extras.overpayment.as === 'credit' && extras.overpayment.amount > 0.005) {
@@ -834,6 +843,7 @@ export default function CheckoutModal({ invoiceId, operatorView = false, onClose
           creditBalance={creditBalance}
           consultationId={invoice.consultation_id}
           tutorId={invoice.tutor_id}
+          invoiceId={invoice.id}
           allowCredit
           onCancel={() => setShowPaymentModal(false)}
           onConfirm={handlePaymentConfirm}

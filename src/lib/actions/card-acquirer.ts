@@ -27,9 +27,15 @@ import {
 } from '@/lib/integrations/evoluservices'
 import { STATUS_TERMINAL, BANDEIRAS, lerSituacao } from '@/lib/integrations/evoluservices-erros'
 import { validarSplit, comissaoEmValor } from '@/lib/integrations/evoluservices-valores'
+import { estornarSplitDeCartao } from '@/lib/server/estorno-split-cartao'
+import {
+  situacaoDaCobranca, metodoDaBandeira, normalizarNsu,
+  podeBaixarTitulo, podeCancelarAntesDaCaptura, podeEstornar, rotuloDoTitulo,
+  type EstadoCobranca,
+} from '@/lib/financial/cobranca-maquininha'
 import type {
   ConfigAdquirente, TerminalDisponivel, BeneficiarioDisponivel,
-  OpcoesDeCobranca, CobrancaCriada, LinhaExtratoCartao, AndamentoCobranca,
+  OpcoesDeCobranca, CobrancaCriada, LinhaExtratoCartao, AndamentoCobranca, ProfissionalParaSplit,
 } from '@/types/card-acquirer'
 
 async function getCtx() {
@@ -113,10 +119,10 @@ export async function listarConfigAdquirente(): Promise<ConfigAdquirente[] | { e
 
   const { data: cfgs } = await ctx.admin
     .from('company_card_acquirer')
-    .select('company_id, acquirer, enabled, environment, merchant_id, api_username, api_key_encrypted, webhook_secret, default_terminal_id, token_expires_at')
+    .select('company_id, acquirer, enabled, environment, merchant_id, api_username, api_key_encrypted, webhook_secret, default_terminal_id, token_expires_at, split_enabled, split_charge_fees')
     .eq('clinic_id', ctx.clinicId)
 
-  const porEmpresa = new Map((cfgs ?? []).map(c => [c.company_id as string, c]))
+  const porEmpresa = new Map(((cfgs ?? []) as unknown as Record<string, unknown>[]).map(c => [c.company_id as string, c]))
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://sysvetmax-dev.vercel.app'
 
   return (empresas ?? []).map((e): ConfigAdquirente => {
@@ -134,6 +140,8 @@ export async function listarConfigAdquirente(): Promise<ConfigAdquirente[] | { e
       tem_api_key:  Boolean(c?.api_key_encrypted),
       tem_webhook_secret: Boolean(segredo),
       default_terminal_id: (c?.default_terminal_id as string | null) ?? null,
+      split_enabled:     c?.split_enabled === true,
+      split_charge_fees: c?.split_charge_fees !== false,
       webhook_url:  segredo ? `${baseUrl}/api/webhooks/evoluservices/${segredo}` : null,
       token_expires_at: (c?.token_expires_at as string | null) ?? null,
     }
@@ -158,6 +166,10 @@ export async function salvarConfigAdquirente(input: {
   apiKey?:      string | null
   basicAuth?:   string | null
   defaultTerminalId?: string | null
+  /** Split do profissional por padrão nas cobranças desta empresa. */
+  splitEnabled?:    boolean
+  /** chargeFees da operadora (taxa também sobre a parte do beneficiário). */
+  splitChargeFees?: boolean
 }): Promise<{ ok: true; webhook_url: string | null } | { error: string }> {
   const ctx = await getCtx()
   if ('error' in ctx) return { error: ctx.error as string }
@@ -188,6 +200,8 @@ export async function salvarConfigAdquirente(input: {
   if (input.merchantId !== undefined)  patch.merchant_id = input.merchantId?.trim() || null
   if (input.apiUsername !== undefined) patch.api_username = input.apiUsername?.trim() || null
   if (input.defaultTerminalId !== undefined) patch.default_terminal_id = input.defaultTerminalId?.trim() || null
+  if (input.splitEnabled !== undefined)      patch.split_enabled = input.splitEnabled
+  if (input.splitChargeFees !== undefined)   patch.split_charge_fees = input.splitChargeFees
   // Em branco = manter. Trocar de ambiente invalida o token em cache.
   if (input.apiKey?.trim())    { patch.api_key_encrypted = encryptSecret(input.apiKey.trim()); patch.token_cache = null; patch.token_expires_at = null }
   if (input.basicAuth?.trim()) patch.basic_auth_encrypted = encryptSecret(input.basicAuth.trim())
@@ -307,6 +321,8 @@ export async function listarBeneficiariosDaEmpresa(companyId: string): Promise<B
 export async function vincularBeneficiario(input: {
   professionalId: string
   code: string | null
+  /** CPF/CNPJ do beneficiário na operadora: é por ele que o callback do split volta ao profissional. */
+  document?: string | null
 }): Promise<{ ok: true } | { error: string }> {
   const ctx = await getCtx()
   if ('error' in ctx) return { error: ctx.error as string }
@@ -314,7 +330,10 @@ export async function vincularBeneficiario(input: {
 
   const { error } = await ctx.admin
     .from('profiles')
-    .update({ acquirer_recipient_code: input.code?.trim() || null })
+    .update({
+      acquirer_recipient_code:     input.code?.trim() || null,
+      acquirer_recipient_document: input.code ? (input.document?.replace(/\D/g, '') || null) : null,
+    })
     .eq('id', input.professionalId)
     .eq('clinic_id', ctx.clinicId)
   if (error) return { error: 'Erro ao vincular: ' + mensagemErro(error, 'lib/actions/card-acquirer.ts') }
@@ -633,7 +652,11 @@ export async function cobrarNaMaquininha(input: {
   terminalId?:     string | null
   consultationId?: string | null
   tutorId?:        string | null
+  /** Omitido = segue a configuração da empresa (split_enabled). */
   comSplit?:       boolean
+  /** Título que esta cobrança vai baixar — é o elo para a baixa, o estorno e o extrato. */
+  invoiceId?:      string | null
+  saleId?:         string | null
 }): Promise<CobrancaCriada | { error: string }> {
   const ctx = await getCtx()
   if ('error' in ctx) return { error: ctx.error as string }
@@ -656,10 +679,11 @@ export async function cobrarNaMaquininha(input: {
   // Terminal: o escolhido, ou o padrao da empresa. A doc manda conferir o
   // status ANTES — num pinpad de cabo, OFFLINE normalmente significa que o
   // computador da recepcao esta sem o programa aberto.
-  const { data: cfg } = await ctx.admin
+  const { data: cfgRow } = await ctx.admin
     .from('company_card_acquirer')
-    .select('default_terminal_id, webhook_secret')
-    .eq('company_id', input.companyId).maybeSingle()
+    .select('default_terminal_id, webhook_secret, split_enabled, split_charge_fees')
+    .eq('company_id', input.companyId).eq('clinic_id', ctx.clinicId).maybeSingle()
+  const cfg = cfgRow as unknown as { default_terminal_id: string | null; webhook_secret: string | null; split_enabled: boolean | null; split_charge_fees: boolean | null } | null
 
   let terminalId = input.terminalId ?? (cfg?.default_terminal_id as string | null) ?? null
   const term = await listarTerminais(c.cred, c.token)
@@ -678,11 +702,17 @@ export async function cobrarNaMaquininha(input: {
     terminalId = alvo.terminalId
   }
 
-  let splits: Array<{ code: string; valor: number }> = []
-  if (input.comSplit) {
+  // Split: o que a tela pedir ou, por padrão, a configuração da empresa.
+  const comSplit = input.comSplit ?? (cfg?.split_enabled === true)
+  const chargeFees = cfg?.split_charge_fees !== false
+  let splits: Array<{ code: string; valor: number; chargeFees?: boolean }> = []
+  if (comSplit) {
     const m = await montarSplit(ctx.admin, ctx.clinicId, input.consultationId ?? null, input.valor)
-    splits = m.splits.map(x => ({ code: x.code, valor: x.valor }))
+    splits = m.splits.map(x => ({ code: x.code, valor: x.valor, chargeFees }))
     avisos.push(...m.avisos)
+    if (!splits.length && !m.avisos.length) {
+      avisos.push('Sem repasse nesta cobranca: o profissional da OS nao tem beneficiario vinculado ou comissao cadastrada.')
+    }
   }
 
   let nomeTutor = 'Cliente'
@@ -736,6 +766,9 @@ export async function cobrarNaMaquininha(input: {
     terminal_id: terminalId,
     consultation_id: input.consultationId ?? null,
     tutor_id:   input.tutorId ?? null,
+    invoice_id: input.invoiceId ?? null,
+    sale_id:    input.saleId ?? null,
+    split_requested: splits.length > 0,
     created_by: ctx.userId,
   }).select('id').single()
 
@@ -753,6 +786,7 @@ export async function cobrarNaMaquininha(input: {
   return {
     card_transaction_id: (nova as unknown as { id: string }).id,
     transaction_id: r.dados.transactionId,
+    com_split: splits.length > 0,
     mensagem: `Maquininha acionada — peca o cartao ao tutor.${splits.length ? ' O repasse do profissional sai automatico.' : ''}`,
     avisos: [
       ...avisos,
@@ -804,10 +838,11 @@ export async function acompanharCobrancaMaquininha(
   const ctx = await getCtx()
   if ('error' in ctx) return { error: ctx.error as string }
 
-  const { data: tx } = await ctx.admin
+  const { data: txRow } = await ctx.admin
     .from('card_transactions')
-    .select('status, nsu, authorization_number, payment_brand, installments, callback_count')
+    .select('status, nsu, authorization_number, payment_brand, installments, callback_count, invoice_id, settled_split_id')
     .eq('id', cardTransactionId).eq('clinic_id', ctx.clinicId).maybeSingle()
+  const tx = txRow as unknown as Record<string, unknown> | null
   if (!tx) return { error: 'Cobranca nao encontrada.' }
 
   const status = (tx.status as string | null) ?? null
@@ -823,6 +858,8 @@ export async function acompanharCobrancaMaquininha(
     bandeira:    (tx.payment_brand as string | null) ?? null,
     parcelas:    (tx.installments as number | null) ?? null,
     callbacks:   (tx.callback_count as number | null) ?? 0,
+    invoice_id:  (tx.invoice_id as string | null) ?? null,
+    baixado:     Boolean(tx.settled_split_id),
   }
 }
 
@@ -850,8 +887,10 @@ export async function getExtratoCartao(input: {
     .from('card_transactions')
     .select(`
       id, kind, reference, status, amount, installments, payment_brand, created_at,
+      nsu, invoice_id, settled_split_id, settled_at, reversed_at, cancel_requested_at,
       consulta:consultations ( os_number ),
-      tutor:tutors ( name )
+      tutor:tutors ( name ),
+      empresa:companies ( name )
     `)
     .eq('clinic_id', ctx.clinicId)
     .order('created_at', { ascending: false })
@@ -887,9 +926,15 @@ export async function getExtratoCartao(input: {
       ?? (o as { name?: string } | null)?.name ?? null
   }
 
-  return linhas.map((l): LinhaExtratoCartao => {
+  return linhas.map((linha): LinhaExtratoCartao => {
+    const l = linha as unknown as Record<string, unknown>
     const ps = porTx.get(l.id as string) ?? []
     const situacao = lerSituacao(l.status as string)
+    const estado: EstadoCobranca = {
+      status: (l.status as string | null) ?? null, nsu: (l.nsu as string | null) ?? null,
+      invoice_id: (l.invoice_id as string | null) ?? null, settled_split_id: (l.settled_split_id as string | null) ?? null,
+      reversed_at: (l.reversed_at as string | null) ?? null, cancel_requested_at: (l.cancel_requested_at as string | null) ?? null,
+    }
     return {
       id: l.id as string,
       kind: l.kind as 'remote' | 'link',
@@ -900,8 +945,19 @@ export async function getExtratoCartao(input: {
       installments: l.installments === null ? null : Number(l.installments),
       payment_brand: (l.payment_brand as string | null) ?? null,
       created_at: l.created_at as string,
-      os_number: um((l as Record<string, unknown>).consulta),
-      tutor_nome: um((l as Record<string, unknown>).tutor),
+      os_number: um(l.consulta),
+      tutor_nome: um(l.tutor),
+      company_name: um(l.empresa),
+      nsu: estado.nsu,
+      invoice_id: estado.invoice_id,
+      situacao: situacaoDaCobranca(estado.status),
+      titulo: rotuloDoTitulo(estado),
+      settled_at: (l.settled_at as string | null) ?? null,
+      reversed_at: estado.reversed_at,
+      cancel_requested_at: estado.cancel_requested_at,
+      pode_baixar: podeBaixarTitulo(estado),
+      pode_cancelar: l.kind === 'remote' && podeCancelarAntesDaCaptura(estado),
+      pode_estornar: podeEstornar(estado),
       total_clinica: ps.filter(p => p.kind === 'merchant').reduce((s, p) => s + Number(p.amount ?? 0), 0),
       total_split:   ps.filter(p => p.kind === 'split').reduce((s, p) => s + Number(p.amount ?? 0), 0),
       parcelas: ps.map(p => ({
@@ -914,4 +970,222 @@ export async function getExtratoCartao(input: {
       })),
     }
   })
+}
+
+// ─── Título ↔ cobrança (FinPet) ──────────────────────────────────────────────
+
+/** Acha, na fatura, o split de pagamento em cartão que casa com o NSU da transação. */
+async function acharSplitPorNsu(
+  admin: ReturnType<typeof createAdminClient>, clinicId: string, invoiceId: string, nsu: string | null,
+): Promise<string | null> {
+  const chave = normalizarNsu(nsu)
+  if (!chave) return null
+  const { data } = await admin.from('invoice_payment_splits')
+    .select('id, card_nsu')
+    .eq('clinic_id', clinicId).eq('invoice_id', invoiceId).in('payment_method', ['credit', 'debit'])
+  const achado = ((data ?? []) as Array<{ id: string; card_nsu: string | null }>).find(s => normalizarNsu(s.card_nsu) === chave)
+  return achado?.id ?? null
+}
+
+interface TxTitulo {
+  id: string; kind: string; company_id: string | null; transaction_id: string | null; status: string | null
+  nsu: string | null; authorization_number: string | null; amount: number; installments: number | null
+  payment_brand: string | null; invoice_id: string | null; settled_split_id: string | null
+  reversed_at: string | null; cancel_requested_at: string | null; created_at: string
+}
+
+async function lerTransacao(admin: ReturnType<typeof createAdminClient>, clinicId: string, id: string): Promise<TxTitulo | null> {
+  const { data } = await admin.from('card_transactions')
+    .select('id, kind, company_id, transaction_id, status, nsu, authorization_number, amount, installments, payment_brand, invoice_id, settled_split_id, reversed_at, cancel_requested_at, created_at')
+    .eq('id', id).eq('clinic_id', clinicId).maybeSingle()
+  return (data as unknown as TxTitulo | null) ?? null
+}
+
+const estadoDe = (tx: TxTitulo): EstadoCobranca => ({
+  status: tx.status, nsu: tx.nsu, invoice_id: tx.invoice_id, settled_split_id: tx.settled_split_id,
+  reversed_at: tx.reversed_at, cancel_requested_at: tx.cancel_requested_at,
+})
+
+/**
+ * Amarra a cobrança da maquininha ao título que o caixa acabou de baixar.
+ * Chamado pelo checkout depois de processSplitPayment, com o NSU do
+ * comprovante — assim o estorno e o extrato sabem qual split desfazer.
+ */
+export async function vincularCobrancaAoTitulo(input: {
+  cardTransactionId: string
+  invoiceId: string
+  nsu?: string | null
+}): Promise<{ ok: true; vinculado: boolean } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return { error: ctx.error as string }
+  const tx = await lerTransacao(ctx.admin, ctx.clinicId, input.cardTransactionId)
+  if (!tx) return { error: 'Cobranca nao encontrada.' }
+
+  const agora = new Date().toISOString()
+  const patch: Record<string, unknown> = { updated_at: agora }
+  if (!tx.invoice_id) patch.invoice_id = input.invoiceId
+  let vinculado = Boolean(tx.settled_split_id)
+  if (!tx.settled_split_id) {
+    const splitId = await acharSplitPorNsu(ctx.admin, ctx.clinicId, input.invoiceId, input.nsu ?? tx.nsu)
+    if (splitId) { patch.settled_split_id = splitId; patch.settled_at = agora; patch.settled_by = ctx.userId; vinculado = true }
+  }
+  await ctx.admin.from('card_transactions').update(patch).eq('id', input.cardTransactionId).eq('clinic_id', ctx.clinicId)
+  return { ok: true, vinculado }
+}
+
+/**
+ * Baixa o título com uma cobrança já APROVADA cujo caixa foi fechado antes de o
+ * comprovante chegar (no POS o callback leva 10–15 min). Usa a MESMA RPC do
+ * caixa, então o resultado é idêntico ao da confirmação manual: split, parcelas
+ * em "A receber de cartão" e linha no caixa central. Nunca cobra duas vezes: se
+ * já existe baixa com o mesmo NSU, só amarra.
+ */
+export async function baixarTituloComCobranca(cardTransactionId: string): Promise<{ ok: true; invoice_status: string } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return { error: ctx.error as string }
+  if (!['admin', 'owner', 'manager', 'receptionist', 'accountant'].includes(ctx.role)) return { error: 'Sem permissao para baixar titulos.' }
+
+  const tx = await lerTransacao(ctx.admin, ctx.clinicId, cardTransactionId)
+  if (!tx) return { error: 'Cobranca nao encontrada.' }
+  if (!podeBaixarTitulo(estadoDe(tx)) || !tx.invoice_id) {
+    return { error: 'Esta cobranca nao esta aprovada, nao tem fatura vinculada ou ja baixou o titulo.' }
+  }
+  const agora = new Date().toISOString()
+
+  const jaExiste = await acharSplitPorNsu(ctx.admin, ctx.clinicId, tx.invoice_id, tx.nsu)
+  if (jaExiste) {
+    await ctx.admin.from('card_transactions')
+      .update({ settled_split_id: jaExiste, settled_at: agora, settled_by: ctx.userId, updated_at: agora })
+      .eq('id', cardTransactionId).eq('clinic_id', ctx.clinicId)
+    return { ok: true, invoice_status: 'ja_baixado' }
+  }
+
+  const { data: invRow } = await ctx.admin.from('invoices')
+    .select('id, status, total_amount, paid_amount, patients ( name ), tutors ( name )')
+    .eq('id', tx.invoice_id).eq('clinic_id', ctx.clinicId).maybeSingle()
+  const inv = invRow as unknown as { id: string; status: string; total_amount: number; paid_amount: number | null; patients: unknown; tutors: unknown } | null
+  if (!inv) return { error: 'Fatura nao encontrada.' }
+  if (inv.status === 'paid' || inv.status === 'cancelled') return { error: `A fatura ja esta ${inv.status === 'paid' ? 'paga' : 'cancelada'}.` }
+  const saldo = Number(inv.total_amount ?? 0) - Number(inv.paid_amount ?? 0)
+  const valor = Number(tx.amount)
+  if (valor > saldo + 0.005) return { error: `A cobranca (R$ ${valor.toFixed(2)}) e maior que o saldo da fatura (R$ ${saldo.toFixed(2)}).` }
+
+  // Cartão do caixa que representa a operadora integrada (taxa e prazo vêm dele).
+  const { data: cartoes } = await ctx.admin.from('credit_cards')
+    .select('id, administrator, name').eq('clinic_id', ctx.clinicId).eq('is_active', true)
+  const cartao = ((cartoes ?? []) as Array<{ id: string; administrator: string | null; name: string | null }>)
+    .find(c => /evolu|finpet/i.test(`${c.administrator ?? ''} ${c.name ?? ''}`)) ?? null
+
+  const um = (v: unknown) => { const o = Array.isArray(v) ? v[0] : v; return (o as { name?: string } | null)?.name ?? null }
+  const bandeira = tx.payment_brand
+  const { data, error } = await ctx.admin.rpc('rpc_record_split_payment', {
+    p_clinic_id:    ctx.clinicId,
+    p_invoice_id:   tx.invoice_id,
+    p_recorded_by:  ctx.userId,
+    p_patient_name: um(inv.patients),
+    p_tutor_name:   um(inv.tutors),
+    p_splits: [{
+      amount:             valor,
+      payment_method:     metodoDaBandeira(bandeira),
+      payment_card_id:    cartao?.id ?? null,
+      installments:       Number(tx.installments ?? 1) || 1,
+      card_acquirer:      'FinPet',
+      card_brand:         bandeira ? (BANDEIRAS[bandeira]?.rotulo ?? bandeira) : null,
+      card_nsu:           tx.nsu,
+      card_authorization: tx.authorization_number,
+      transaction_date:   String(tx.created_at).slice(0, 10),
+    }],
+    p_effective_date: null,
+  })
+  if (error) return { error: 'Erro ao baixar o titulo: ' + mensagemErro(error, 'lib/actions/card-acquirer.ts') }
+  const resultado = data as { status?: string } | null
+
+  const splitId = await acharSplitPorNsu(ctx.admin, ctx.clinicId, tx.invoice_id, tx.nsu)
+  await ctx.admin.from('card_transactions')
+    .update({ settled_split_id: splitId, settled_at: agora, settled_by: ctx.userId, updated_at: agora })
+    .eq('id', cardTransactionId).eq('clinic_id', ctx.clinicId)
+
+  await logAudit({
+    action: 'CARD_TRANSACTION_SETTLE', entity_type: 'card_transactions', entity_id: cardTransactionId,
+    details: { invoice_id: tx.invoice_id, nsu: tx.nsu, valor },
+  })
+  revalidatePath('/dashboard/cashier'); revalidatePath('/dashboard/financial')
+  return { ok: true, invoice_status: resultado?.status ?? 'paid' }
+}
+
+/**
+ * Estorno/cancelamento de uma cobrança da maquininha.
+ *  • ainda não processada → remove na operadora (DELETE /remote/{id});
+ *  • aprovada → a operadora não tem endpoint: o cancelamento é feito no portal
+ *    FinPet. Aqui registramos o pedido, desfazemos a baixa do título (se houve)
+ *    e o callback CANCELLED fecha o ciclo.
+ */
+export async function estornarCobranca(input: {
+  cardTransactionId: string
+  motivo: string
+}): Promise<{ ok: true; mensagem: string } | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return { error: ctx.error as string }
+  if (!EH_GESTAO(ctx.role)) return { error: 'So a gestao pode estornar cobrancas de cartao.' }
+  const motivo = input.motivo.trim()
+  if (!motivo) return { error: 'Informe o motivo do estorno.' }
+
+  const tx = await lerTransacao(ctx.admin, ctx.clinicId, input.cardTransactionId)
+  if (!tx) return { error: 'Cobranca nao encontrada.' }
+  const estado = estadoDe(tx)
+  const agora = new Date().toISOString()
+
+  if (podeCancelarAntesDaCaptura(estado)) {
+    if (tx.kind !== 'remote' || !tx.transaction_id || !tx.company_id) return { error: 'Esta cobranca nao e da maquininha.' }
+    const c = await credenciaisDaEmpresa(ctx.admin, ctx.clinicId, tx.company_id)
+    if ('error' in c) return c
+    const r = await cancelarTransacaoRemota(c.cred, tx.transaction_id, c.token)
+    if (r.tokenNovo) await guardarToken(ctx.admin, tx.company_id, r.tokenNovo.token, r.tokenNovo.expiraEm)
+    if (!r.ok) return { error: r.erro.mensagem }
+    await ctx.admin.from('card_transactions')
+      .update({ status: 'CANCELLED', reversed_at: agora, reversal_note: motivo, updated_at: agora })
+      .eq('id', tx.id).eq('clinic_id', ctx.clinicId)
+    revalidatePath('/dashboard/financial/cards')
+    return { ok: true, mensagem: 'Cobranca removida na operadora antes de ser processada.' }
+  }
+
+  if (!podeEstornar(estado)) return { error: 'Esta cobranca nao esta aprovada ou ja tem estorno registrado.' }
+
+  let desfeita = false
+  if (tx.settled_split_id) {
+    const r = await estornarSplitDeCartao(ctx.admin, {
+      clinicId: ctx.clinicId, splitId: tx.settled_split_id, motivo: `Estorno FinPet: ${motivo}`, userId: ctx.userId,
+    })
+    if ('error' in r) return r
+    desfeita = true
+  }
+  await ctx.admin.from('card_transactions').update({
+    cancel_requested_at: agora, reversed_at: desfeita ? agora : null, reversal_note: motivo,
+    status: 'CANCEL_REQUESTED', updated_at: agora,
+  }).eq('id', tx.id).eq('clinic_id', ctx.clinicId)
+  await logAudit({
+    action: 'CARD_TRANSACTION_REVERSAL', entity_type: 'card_transactions', entity_id: tx.id,
+    details: { motivo, titulo_desfeito: desfeita, nsu: tx.nsu },
+  })
+  revalidatePath('/dashboard/cashier'); revalidatePath('/dashboard/financial'); revalidatePath('/dashboard/financial/cards')
+  return { ok: true, mensagem: desfeita
+    ? 'Baixa do titulo desfeita. Agora cancele a venda no portal FinPet — quando o retorno chegar, a cobranca fica como Cancelada.'
+    : 'Estorno registrado. Cancele a venda no portal FinPet — quando o retorno chegar, a cobranca fica como Cancelada.' }
+}
+
+/** Profissionais da clínica com o vínculo de beneficiário, para a tela da adquirente. */
+export async function listarProfissionaisParaSplit(): Promise<ProfissionalParaSplit[] | { error: string }> {
+  const ctx = await getCtx()
+  if ('error' in ctx) return { error: ctx.error as string }
+  if (!EH_GESTAO(ctx.role)) return { error: 'Acesso restrito a gestao da clinica.' }
+  const { data } = await ctx.admin.from('profiles')
+    .select('id, full_name, role, acquirer_recipient_code, acquirer_recipient_document')
+    .eq('clinic_id', ctx.clinicId).not('is_sysmax', 'is', true).order('full_name')
+  return ((data ?? []) as unknown as Record<string, unknown>[]).map(p => ({
+    id: p.id as string,
+    full_name: (p.full_name as string) ?? '',
+    role: (p.role as string) ?? '',
+    acquirer_recipient_code: (p.acquirer_recipient_code as string | null) ?? null,
+    acquirer_recipient_document: (p.acquirer_recipient_document as string | null) ?? null,
+  }))
 }

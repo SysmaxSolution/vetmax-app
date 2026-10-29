@@ -14,8 +14,9 @@ import {
 } from 'lucide-react'
 import {
   salvarConfigAdquirente, testarConexaoAdquirente, listarTerminaisDaEmpresa,
+  listarBeneficiariosDaEmpresa, vincularBeneficiario, listarProfissionaisParaSplit,
 } from '@/lib/actions/card-acquirer'
-import type { ConfigAdquirente, TerminalDisponivel } from '@/types/card-acquirer'
+import type { ConfigAdquirente, TerminalDisponivel, BeneficiarioDisponivel, ProfissionalParaSplit } from '@/types/card-acquirer'
 
 interface Props {
   config:  ConfigAdquirente
@@ -32,6 +33,12 @@ export default function CompanyCardAcquirerModal({ config, onClose, onSaved }: P
   const [chave, setChave]             = useState('')
   const [verChave, setVerChave]       = useState(false)
   const [terminalPadrao, setTerminal] = useState(config.default_terminal_id ?? '')
+  // Split do profissional (por empresa) e vínculo beneficiário ↔ profissional.
+  const [splitEnabled, setSplitEnabled]       = useState(config.split_enabled)
+  const [splitChargeFees, setSplitChargeFees] = useState(config.split_charge_fees)
+  const [beneficiarios, setBeneficiarios]     = useState<BeneficiarioDisponivel[]>([])
+  const [profissionais, setProfissionais]     = useState<ProfissionalParaSplit[]>([])
+  const [vinculando, setVinculando]           = useState<string | null>(null)
 
   const [salvando, setSalvando]   = useState(false)
   const [testando, setTestando]   = useState(false)
@@ -50,6 +57,30 @@ export default function CompanyCardAcquirerModal({ config, onClose, onSaved }: P
 
   useEffect(() => { void carregarTerminais() }, [carregarTerminais])
 
+  const carregarBeneficiarios = useCallback(async () => {
+    if (!config.enabled) return
+    const [b, p] = await Promise.all([listarBeneficiariosDaEmpresa(config.company_id), listarProfissionaisParaSplit()])
+    if (Array.isArray(b)) setBeneficiarios(b)
+    if (Array.isArray(p)) setProfissionais(p)
+  }, [config.company_id, config.enabled])
+  useEffect(() => { void carregarBeneficiarios() }, [carregarBeneficiarios])
+
+  async function vincular(b: BeneficiarioDisponivel, professionalId: string | null) {
+    setVinculando(b.code); setErro(null)
+    // Quem tinha este código perde o vínculo; o escolhido recebe código + documento.
+    const anterior = beneficiarios.find(x => x.code === b.code)?.professional_id ?? null
+    if (anterior && anterior !== professionalId) {
+      const r0 = await vincularBeneficiario({ professionalId: anterior, code: null, document: null })
+      if ('error' in r0) setErro(r0.error)
+    }
+    if (professionalId) {
+      const r = await vincularBeneficiario({ professionalId, code: b.code, document: b.document })
+      if ('error' in r) setErro(r.error)
+    }
+    setVinculando(null)
+    await carregarBeneficiarios()
+  }
+
   async function salvar() {
     setSalvando(true); setErro(null); setOk(null)
     const r = await salvarConfigAdquirente({
@@ -59,6 +90,7 @@ export default function CompanyCardAcquirerModal({ config, onClose, onSaved }: P
       apiUsername: usuario.trim() || null,
       apiKey: chave.trim() || null,          // em branco = manter a atual
       defaultTerminalId: terminalPadrao.trim() || null,
+      splitEnabled, splitChargeFees,
     })
     setSalvando(false)
     if ('error' in r) { setErro(r.error); return }
@@ -257,6 +289,51 @@ export default function CompanyCardAcquirerModal({ config, onClose, onSaved }: P
               </div>
             </>
           )}
+
+          {/* Split do profissional — por empresa: na Animais a Develey repassa, as outras não. */}
+          <div className="rounded-xl border border-slate-200 p-3 space-y-2">
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input type="checkbox" checked={splitEnabled} onChange={e => setSplitEnabled(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500/30" />
+              <span className="text-sm text-slate-700">
+                Repassar a comissão do profissional pela operadora (split)
+                <span className="block text-[11px] text-slate-400">
+                  Vai junto com a cobrança o valor da comissão genérica do profissional responsável pela OS,
+                  para o beneficiário vinculado abaixo. Sem vínculo ou sem comissão, a cobrança sai sem repasse.
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 cursor-pointer pl-6">
+              <input type="checkbox" checked={splitChargeFees} disabled={!splitEnabled} onChange={e => setSplitChargeFees(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500/30 disabled:opacity-50" />
+              <span className="text-sm text-slate-700">
+                A taxa da operadora incide também na parte do profissional
+                <span className="block text-[11px] text-slate-400">Desmarcado, a taxa fica toda com o estabelecimento.</span>
+              </span>
+            </label>
+            {config.enabled && (
+              <div className="pl-6 pt-1">
+                <p className="text-xs font-semibold text-slate-600 mb-1">Beneficiários de repasse na operadora</p>
+                {beneficiarios.length === 0 ? (
+                  <p className="text-[11px] text-slate-400">
+                    Nenhum beneficiário cadastrado na operadora para este estabelecimento. O cadastro é feito pela
+                    FinPet (formulário e consentimento do profissional).
+                  </p>
+                ) : beneficiarios.map(b => (
+                  <div key={b.code} className="flex flex-wrap items-center gap-2 py-1 text-sm">
+                    <span className="font-medium text-slate-800">{b.name}</span>
+                    <span className="text-[11px] text-slate-400">{b.document} · cód. {b.code}</span>
+                    <select value={b.professional_id ?? ''} disabled={vinculando === b.code}
+                      onChange={e => void vincular(b, e.target.value || null)}
+                      className="ml-auto rounded-lg border border-slate-200 px-2 py-1 text-xs disabled:opacity-50">
+                      <option value="">— sem profissional —</option>
+                      {profissionais.map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           <label className="flex items-start gap-2 cursor-pointer">
             <input type="checkbox" checked={ativo} onChange={e => setAtivo(e.target.checked)}
