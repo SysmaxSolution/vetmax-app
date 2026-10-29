@@ -32,3 +32,12 @@ export function moduleKeyFromPath(pathname: string): string | null {
   if (!seg) return null
   return PATH_SEGMENT_TO_MODULE[seg] ?? null
 }
+
+/** Rota canônica de um módulo (inverso de PATH_SEGMENT_TO_MODULE; a primeira
+ *  entrada vence: 'reception' → /dashboard/reception, não /appointments). */
+export function pathForModule(moduleKey: string): string {
+  for (const [seg, key] of Object.entries(PATH_SEGMENT_TO_MODULE)) {
+    if (key === moduleKey) return `/dashboard/${seg}`
+  }
+  return `/dashboard/${moduleKey}`
+}

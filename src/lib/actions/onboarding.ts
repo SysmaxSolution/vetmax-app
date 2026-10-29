@@ -96,7 +96,9 @@ export async function completeOnboarding(
     const presetAccess = Array.isArray(invitation.module_access)
       ? (invitation.module_access as Array<{ module_name: string; enabled: boolean }>)
       : []
-    if (presetAccess.length > 0) {
+    // Admin nunca recebe bloqueio por módulo (convites antigos ainda trazem a
+    // grade preenchida com enabled=false → gerava loop no primeiro login).
+    if (presetAccess.length > 0 && role !== 'admin') {
       const rows = presetAccess
         .filter(p => p && typeof p.module_name === 'string')
         .map(p => ({

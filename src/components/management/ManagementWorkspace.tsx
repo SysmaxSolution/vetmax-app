@@ -324,6 +324,8 @@ export default function ManagementWorkspace({
   // Acessos pré-configurados do convite (Module → true/false). Aplicados em
   // user_module_access no momento que o convidado completa o onboarding.
   const [inviteModuleAccess, setInviteModuleAccess] = useState<Record<string, boolean>>({})
+  // Papel escolhido no convite: admin não tem grade de acessos (vê tudo).
+  const [inviteRole, setInviteRole] = useState<InvitationRole>(INVITE_ROLE_OPTIONS[0].value)
 
   // Invite state
   const [invitations, setInvitations] = useState<Invitation[]>(initialInvitations)
@@ -849,6 +851,8 @@ export default function ManagementWorkspace({
                     className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                   />
                   <select name="role" required
+                    value={inviteRole}
+                    onChange={e => setInviteRole(e.target.value as InvitationRole)}
                     className="px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white">
                     {INVITE_ROLE_OPTIONS.map(o => (
                       <option key={o.value} value={o.value}>{o.label}</option>
@@ -857,7 +861,17 @@ export default function ManagementWorkspace({
                 </div>
 
                 {/* Acessos pré-configurados — admin define ANTES de gerar o link.
-                    Aplicados em user_module_access quando o convidado completa o onboarding. */}
+                    Aplicados em user_module_access quando o convidado completa o onboarding.
+                    Convite de admin não tem grade: admin enxerga todos os módulos ativos
+                    (gravar enabled=false para ele gerava loop de redirecionamento). */}
+                {inviteRole === 'admin' ? (
+                  <>
+                    <input type="hidden" name="module_access" value="[]" />
+                    <p className="rounded-xl border border-indigo-200 bg-indigo-50/40 p-3 text-[11px] text-indigo-800">
+                      Administradores enxergam todos os módulos ativos da clínica — não há acessos a marcar.
+                    </p>
+                  </>
+                ) : (
                 <div className="rounded-xl border border-indigo-200 bg-indigo-50/40 p-3">
                   <div className="flex items-center justify-between mb-2">
                     <div>
@@ -923,6 +937,7 @@ export default function ManagementWorkspace({
                     })}
                   </div>
                 </div>
+                )}
 
                 <div className="flex gap-2">
                   <button
