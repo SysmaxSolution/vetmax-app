@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMedicationScheduler } from '@/hooks/useMedicationScheduler'
-import type { HospPrescription } from '@/lib/actions/hospitalization-prescriptions'
+import type { HospPrescription } from '@/types/hospitalization-prescriptions'
 
 /**
  * Alertas Ativos de Enfermagem (Internação Completa).

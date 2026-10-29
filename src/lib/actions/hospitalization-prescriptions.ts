@@ -8,54 +8,8 @@ import type { StockConsumptionResult } from '@/types/stock-consumption'
 import { formatClinicTime } from '@/lib/time'
 
 import { mensagemErro } from '@/lib/errors'
+import type { PrescriptionStatus, HospPrescription, CreatePrescriptionPayload, ApplyDoseOptions, ApplyDoseResult } from '@/types/hospitalization-prescriptions'
 // ─── Tipos ───────────────────────────────────────────────────────────────────
-
-export type PrescriptionStatus = 'active' | 'paused' | 'finished'
-
-/**
- * Prescrição de internação com a última administração já resolvida.
- * Forma consumida pelo useMedicationScheduler (cálculo de next_dose_at é
- * client-side: lastAppliedAt ?? startedAt + frequencyHours).
- */
-export interface HospPrescription {
-  id:                 string
-  hospitalization_id: string
-  medication_name:    string
-  dose:               string | null
-  route:              string | null
-  frequency_hours:    number | null
-  started_at:         string                 // ISO
-  duration_hours:     number | null
-  status:             PrescriptionStatus
-  notes:              string | null
-  prescribed_by:      string | null
-  created_at:         string
-  /** ISO da última administração (vem de hospitalization_dose_administrations). */
-  last_applied_at:    string | null
-  /** Número de doses já aplicadas (auditoria rápida). */
-  doses_applied:      number
-  /** Vínculo com stock_items — quando preenchido, applyDose baixa estoque. */
-  stock_item_id:      string | null
-  /** Unidades consumidas do estoque por dose aplicada. */
-  quantity_per_dose:  number | null
-}
-
-export interface CreatePrescriptionPayload {
-  hospitalization_id: string
-  medication_name:    string
-  dose?:              string | null
-  route?:             string | null
-  /** Vem do dropdown — 4/6/8/12/24, ou null para dose única (SOS). */
-  frequency_hours?:   number | null
-  duration_hours?:    number | null
-  /** Quando começa o ciclo. Default = now() (banco). */
-  started_at?:        string | null
-  notes?:             string | null
-  /** Vínculo opcional com stock_items para baixa automática. */
-  stock_item_id?:     string | null
-  /** Quantidade do estoque consumida por dose (obrigatório quando stock_item_id setado). */
-  quantity_per_dose?: number | null
-}
 
 // ─── Auth helper ─────────────────────────────────────────────────────────────
 
@@ -199,20 +153,6 @@ export async function createHospitalizationPrescription(
 
 // ─── Apply dose (registrar administração) ────────────────────────────────────
 
-export interface ApplyDoseOptions {
-  /** Quando a dose foi aplicada. Default = now(). */
-  applied_at?:    string
-  /** Quando ESTAVA programada — preencher se a aplicação foi registrada atrasada. */
-  scheduled_for?: string
-  notes?:         string
-}
-
-export interface ApplyDoseResult {
-  id:    string
-  /** Resultado da baixa de estoque — null quando a prescrição não tem vínculo. */
-  stock: StockConsumptionResult | { error: string } | null
-}
-
 export async function applyHospitalizationDose(
   prescriptionId: string,
   opts: ApplyDoseOptions = {},
@@ -270,6 +210,19 @@ export async function applyHospitalizationDose(
   let stock: StockConsumptionResult | { error: string } | null = null
   const qty = presc.quantity_per_dose === null ? null : Number(presc.quantity_per_dose)
   if (presc.stock_item_id && qty && qty > 0) {
+    // HISTÓRICO do Livro de Controlados: pet e tutor da internação, OS da consulta de origem.
+    const { data: hosp } = await admin
+      .from('hospitalizations')
+      .select('consultation_id, patients ( name ), tutors ( name )')
+      .eq('id', presc.hospitalization_id as string)
+      .eq('clinic_id', ctx.clinicId)
+      .maybeSingle()
+    const um = <T,>(v: T | T[] | null | undefined): T | null => (Array.isArray(v) ? (v[0] ?? null) : (v ?? null))
+    let osNumero: string | null = null
+    if (hosp?.consultation_id) {
+      const { data: cons } = await admin.from('consultations').select('os_number').eq('id', hosp.consultation_id as string).eq('clinic_id', ctx.clinicId).maybeSingle()
+      osNumero = cons?.os_number == null ? null : String(cons.os_number)
+    }
     const consumption = await consumeStockForApplication({
       stock_item_id:   presc.stock_item_id as string,
       medication_name: (presc.medication_name as string) ?? 'Medicação',
@@ -277,6 +230,12 @@ export async function applyHospitalizationDose(
       source:          'HOSPITALIZATION',
       reference_id:    administrationId,
       notes:           opts.notes?.trim() || null,
+      book: {
+        os_number:      osNumero,
+        patient_name:   um((hosp as { patients?: { name?: string } | { name?: string }[] } | null)?.patients)?.name ?? null,
+        tutor_name:     um((hosp as { tutors?: { name?: string } | { name?: string }[] } | null)?.tutors)?.name ?? null,
+        procedure_name: `Internação — ${(presc.medication_name as string) ?? 'Medicação'}${presc.dose ? ` ${presc.dose}` : ''}${presc.route ? ` (${presc.route})` : ''}`,
+      },
     })
     stock = consumption
   }

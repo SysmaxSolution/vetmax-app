@@ -12,7 +12,7 @@ import {
   listCatalogPackages, upsertCatalogPackage,
   togglePackageActive, deleteCatalogPackage,
 } from '@/lib/actions/packages'
-import type { StockItemV2 } from '@/lib/actions/stock'
+import type { StockItemV2 } from '@/types/stock'
 import { getPharmacyStockV2 } from '@/lib/actions/stock'
 import { getClinicProfessionals, type ClinicProfessional } from '@/lib/actions/professionals'
 

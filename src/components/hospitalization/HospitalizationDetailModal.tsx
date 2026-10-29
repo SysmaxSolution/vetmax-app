@@ -49,7 +49,8 @@ import MedicationApplicationModal from './MedicationApplicationModal'
 import ContaTab from './ContaTab'
 import DadosClinicosTab from './DadosClinicosTab'
 import TarefasTab from './TarefasTab'
-import { listHospitalizationPrescriptions, type HospPrescription } from '@/lib/actions/hospitalization-prescriptions'
+import { listHospitalizationPrescriptions } from '@/lib/actions/hospitalization-prescriptions'
+import type { HospPrescription } from '@/types/hospitalization-prescriptions'
 
 interface Props {
   card:             HospitalizationCard

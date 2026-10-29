@@ -143,13 +143,15 @@ export async function addAppliedMedication(data: {
     // Contexto que vai no movimento e aparece no Livro de Controlados.
     const { data: consulta } = await admin
       .from('consultations')
-      .select('os_number, patient:patients(name)')
+      .select('os_number, reason, patient:patients(name), tutor:tutors(name)')
       .eq('id', data.consultation_id)
       .eq('clinic_id', profile.clinic_id)
       .maybeSingle()
-    const pet = (consulta as { patient?: { name?: string } | { name?: string }[] } | null)?.patient
-    const petNome = Array.isArray(pet) ? pet[0]?.name : pet?.name
-    const osNumero = (consulta as { os_number?: string | number } | null)?.os_number
+    const um = <T,>(v: T | T[] | null | undefined): T | null => (Array.isArray(v) ? (v[0] ?? null) : (v ?? null))
+    const petNome = um((consulta as { patient?: { name?: string } | { name?: string }[] } | null)?.patient)?.name ?? null
+    const tutorNome = um((consulta as { tutor?: { name?: string } | { name?: string }[] } | null)?.tutor)?.name ?? null
+    const osNumero = (consulta as { os_number?: string | number | null } | null)?.os_number
+    const motivo = (consulta as { reason?: string | null } | null)?.reason ?? null
     const contexto = ['Consulta', osNumero ? 'OS ' + osNumero : null, petNome ?? null]
       .filter(Boolean).join(' - ')
 
@@ -160,6 +162,14 @@ export async function addAppliedMedication(data: {
       source:          'CONSULTATION',
       reference_id:    result.id as string,
       notes:           contexto,
+      // HISTÓRICO da folha do Livro de Controlados.
+      book: {
+        os_number:       osNumero == null ? null : String(osNumero),
+        patient_name:    petNome,
+        tutor_name:      tutorNome,
+        procedure_name:  motivo ? `Consulta — ${motivo}` : 'Consulta',
+        document_number: data.prescription_notification?.trim() || null,
+      },
     })
 
     if ('error' in baixa) {

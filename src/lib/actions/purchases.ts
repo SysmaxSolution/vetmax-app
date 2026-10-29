@@ -394,7 +394,7 @@ export async function confirmPurchaseReceipt(
 
   const { data: order } = await admin
     .from('purchase_orders')
-    .select('id, status, clinic_id, items:purchase_order_items(*)')
+    .select('id, status, clinic_id, supplier_id, nfe_number, items:purchase_order_items(*)')
     .eq('id', orderId)
     .eq('clinic_id', ctx.clinic_id)
     .single()
@@ -404,6 +404,14 @@ export async function confirmPurchaseReceipt(
   if (order.status === 'cancelled') return { error: 'Ordem cancelada não pode ser recebida.' }
 
   const items = (order as any).items as PurchaseOrderItem[]
+
+  // Fornecedor e nº da NF-e vão para o HISTÓRICO do Livro de Controlados.
+  let fornecedorNome: string | null = null
+  if (order.supplier_id) {
+    const { data: sup } = await admin.from('suppliers').select('name').eq('id', order.supplier_id as string).eq('clinic_id', ctx.clinic_id).maybeSingle()
+    fornecedorNome = (sup?.name as string | undefined) ?? null
+  }
+  const nfeNumero = (order.nfe_number as string | null) ?? null
 
   for (const item of items) {
     if (!item.stock_item_id) continue
@@ -457,17 +465,32 @@ export async function confirmPurchaseReceipt(
       updated_at:   new Date().toISOString(),
     }).eq('id', item.stock_item_id)
 
-    // Registrar movimento de estoque (em itens-base)
-    await admin.from('stock_movements').insert({
-      clinic_id:     ctx.clinic_id,
-      stock_item_id: item.stock_item_id,
-      type:          'CREDIT',
-      quantity:      creditQty,
-      reason:        upp > 1
+    // Registrar movimento de estoque (em itens-base). Antes este insert usava
+    // colunas que não existem (type/quantity/reason) e falhava em silêncio:
+    // a entrada por NF-e nunca chegava ao Livro de Controlados.
+    const { error: movErr } = await admin.from('stock_movements').insert({
+      clinic_id:       ctx.clinic_id,
+      stock_item_id:   item.stock_item_id,
+      medication_name: item.description ?? 'Item da NF-e',
+      movement_type:   'CREDIT',
+      quantity_change: creditQty,
+      quantity_before: qtyBefore,
+      quantity_after:  newQty,
+      source:          'RESTOCK',
+      reference_id:    orderId,
+      notes:           upp > 1
         ? `Recebimento NF-e — Ordem #${orderId.substring(0, 8)} (${item.quantity}×${upp} = ${creditQty})`
         : `Recebimento NF-e — Ordem #${orderId.substring(0, 8)}`,
-      created_by:    ctx.user_id,
+      created_by:      ctx.user_id,
+      // HISTÓRICO do Livro de Controlados
+      counterparty:    fornecedorNome,
+      document_number: nfeNumero,
+      batch_number:    (item as { batch_number?: string | null }).batch_number ?? null,
+      expires_at:      (item as { expiry_date?: string | null }).expiry_date ?? null,
     })
+    if (movErr) {
+      return { error: `Entrada no estoque gravada, mas o movimento do item "${item.description ?? ''}" não foi registrado: ${mensagemErro(movErr, 'lib/actions/purchases.ts')}` }
+    }
   }
 
   await admin.from('purchase_orders').update({

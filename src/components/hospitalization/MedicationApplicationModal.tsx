@@ -7,13 +7,8 @@ import {
 } from 'lucide-react'
 import ProtocolPicker from './ProtocolPicker'
 import { formatClinicTime, nowLocalInputValue, echoLocalInput } from '@/lib/time'
-import {
-  applyHospitalizationDose,
-  createHospitalizationPrescription,
-  updateHospitalizationPrescriptionStatus,
-  type HospPrescription,
-  type PrescriptionStatus,
-} from '@/lib/actions/hospitalization-prescriptions'
+import { applyHospitalizationDose, createHospitalizationPrescription, updateHospitalizationPrescriptionStatus } from '@/lib/actions/hospitalization-prescriptions'
+import type { HospPrescription, PrescriptionStatus } from '@/types/hospitalization-prescriptions'
 import { useMedicationScheduler, type MedicationAlert } from '@/hooks/useMedicationScheduler'
 import { medicationTickStore } from '@/lib/medication-tick'
 import StockItemSelector from '@/components/stock/StockItemSelector'

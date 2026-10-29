@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import { createPortal } from 'react-dom'
 import { X, Sparkles, Loader2, AlertCircle, Check } from 'lucide-react'
-import type { StockItemV2 } from '@/lib/actions/stock'
+import type { StockItemV2 } from '@/types/stock'
 import { updateStockItemV2 } from '@/lib/actions/stock'
 import { enrichProductFromNCM } from '@/lib/actions/purchases'
 

@@ -1,6 +1,9 @@
 // Núcleo puro do Livro de Controlados: dado o conjunto de eventos sinalizados de
 // um item, calcula saldo inicial (eventos antes de `from`), a razão do período
 // com saldo corrente, e os totais de entrada/saída/perda. SEM I/O.
+//
+// Genérico sobre o evento: os campos extras (OS, pet, tutor, lote…) passam
+// intactos para a linha, para a folha fiscal não precisar reprocessar nada.
 
 export type ControlledKind = 'entrada' | 'saida' | 'perda' | 'ajuste'
 
@@ -10,23 +13,18 @@ export interface LedgerEvent {
   kind:      ControlledKind
   origin?:   string
   reference?: string | null
-  /** Numero do documento da saida/entrada — ex.: notificacao de receita do controlado. */
-  document?: string | null
 }
 
-export interface LedgerLine {
-  date:     string
-  kind:     ControlledKind
+export type LedgerLine<E extends LedgerEvent = LedgerEvent> = E & {
   quantity: number
   balance:  number
   origin:   string
   reference: string | null
-  document: string | null
 }
 
-export interface LedgerResult {
+export interface LedgerResult<E extends LedgerEvent = LedgerEvent> {
   opening:   number
-  entries:   LedgerLine[]
+  entries:   LedgerLine<E>[]
   total_in:  number
   total_out: number
   total_loss: number
@@ -47,7 +45,7 @@ export function movementDelta(movement_type: string, quantity_change: number, qu
   return { delta: r3(delta), kind }
 }
 
-export function buildItemLedger(events: LedgerEvent[], from: string): LedgerResult {
+export function buildItemLedger<E extends LedgerEvent>(events: E[], from: string): LedgerResult<E> {
   const sorted = [...events].sort((a, b) => a.date.localeCompare(b.date))
   let opening = 0
   for (const e of sorted) if (e.date < from) opening += e.delta
@@ -55,14 +53,14 @@ export function buildItemLedger(events: LedgerEvent[], from: string): LedgerResu
 
   let balance = opening
   let total_in = 0, total_out = 0, total_loss = 0
-  const entries: LedgerLine[] = []
+  const entries: LedgerLine<E>[] = []
   for (const e of sorted) {
     if (e.date < from) continue
     balance = r3(balance + e.delta)
     if (e.kind === 'entrada' || (e.kind === 'ajuste' && e.delta > 0)) total_in += e.delta
     else if (e.kind === 'perda') total_loss += -e.delta
     else total_out += -e.delta
-    entries.push({ date: e.date, kind: e.kind, quantity: e.delta, balance, origin: e.origin ?? '', reference: e.reference ?? null, document: e.document ?? null })
+    entries.push({ ...e, quantity: e.delta, balance, origin: e.origin ?? '', reference: e.reference ?? null })
   }
   return { opening, entries, total_in: r3(total_in), total_out: r3(total_out), total_loss: r3(total_loss), closing: balance }
 }
