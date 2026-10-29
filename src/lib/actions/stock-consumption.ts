@@ -86,14 +86,19 @@ export async function consumeStockForApplication(
  * Devolve ao estoque uma baixa já aplicada, repondo nos lotes exatos de onde ela
  * saiu (rastro de `stock_movement_batches`, migration 0505).
  *
- * Usada quando a medicação é removida do prontuário e, adiante, pelo kit
- * cirúrgico que devolve o não-usado (item 4.1). A idempotência é do banco, não
- * daqui: `reversed_movement_id` tem índice único, então devolver a mesma baixa
- * duas vezes falha na segunda — e o erro volta para quem chamou.
+ * Sem `quantity`, devolve tudo o que ainda não voltou — o caso da medicação
+ * removida do prontuário. Com `quantity`, devolve parcialmente, rateando sobre
+ * os lotes de origem: é o kit cirúrgico, de onde saíram 10 compressas e voltaram
+ * 4 (item 4.1).
+ *
+ * A trava é do banco, não daqui: a soma das devoluções de uma baixa nunca passa
+ * do que saiu, e o excesso volta como erro para quem chamou.
  */
 export async function returnStockConsumption(
   movementId: string,
   notes?: string | null,
+  /** Quanto devolver. Omitido = tudo o que ainda não voltou desta baixa. */
+  quantity?: number | null,
 ): Promise<StockReturnResult | { error: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -112,6 +117,7 @@ export async function returnStockConsumption(
     p_movement_id: movementId,
     p_user_id:     user.id,
     p_notes:       notes?.trim() || null,
+    p_quantity:    quantity && quantity > 0 ? quantity : null,
   })
 
   if (error) return { error: 'Erro ao devolver ao estoque: ' + mensagemErro(error, 'lib/actions/stock-consumption.ts') }

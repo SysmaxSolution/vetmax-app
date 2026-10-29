@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { avaliarGate, lerConfigGate, ROTULO_EXIGENCIA } from '@/lib/surgery/gate-preanestesico'
 import { revalidatePath } from 'next/cache'
 import { logAudit } from './audit'
 import { createHospitalization } from './hospitalizations'
@@ -109,13 +110,58 @@ export async function updateSurgeryStatus(id: string, status: SurgeryStatus): Pr
   const ctx = await getCtx()
   if ('error' in ctx) return ctx
 
+  const admin0 = createAdminClient()
+
+  // ─── Gate do pre-anestesico (Fase 4 · item 4.2) ───────────────────────────
+  //
+  // So a ENTRADA EM SALA passa pelo gate. Voltar para preparo, ir para RPA ou
+  // encerrar nunca sao barrados: prender um animal anestesiado numa regra de
+  // software seria pior do que o problema que o gate resolve.
+  //
+  // O padrao da clinica e "nada trava" — ligar a trava e ato de configuracao
+  // (clinics.flow_config.gate_pre_anestesico). Com a trava ligada e exigencia em
+  // falta, e preciso liberar com motivo (surgery_gate_overrides), e a liberacao
+  // ja registrada vale para esta transicao.
+  if (status === 'sala') {
+    const { data: atual } = await admin0
+      .from('surgeries')
+      .select('checklist, asa_risk')
+      .eq('id', id).eq('clinic_id', ctx.clinicId)
+      .maybeSingle()
+
+    const { data: clinic } = await admin0
+      .from('clinics').select('flow_config').eq('id', ctx.clinicId).single()
+    const config = lerConfigGate((clinic?.flow_config ?? {}) as Record<string, unknown>)
+
+    const avaliacao = avaliarGate({
+      checklist: (atual?.checklist ?? {}) as Record<string, boolean | null | undefined>,
+      asaRisk:   (atual?.asa_risk as string | null) ?? null,
+      config,
+    })
+
+    if (!avaliacao.liberado) {
+      const { data: liberacao } = await admin0
+        .from('surgery_gate_overrides')
+        .select('id')
+        .eq('clinic_id', ctx.clinicId)
+        .eq('surgery_id', id)
+        .eq('target_status', 'sala')
+        .limit(1)
+        .maybeSingle()
+
+      if (!liberacao) {
+        const faltam = avaliacao.bloqueios.map(b => ROTULO_EXIGENCIA[b]).join(', ')
+        return { error: `Pre-anestesico incompleto: ${faltam}. Libere com motivo para seguir para a sala.` }
+      }
+    }
+  }
+
   const patch: Record<string, unknown> = { status, updated_at: new Date().toISOString() }
   // Marca os marcos temporais ao entrar na sala / sair para RPA.
   if (status === 'sala') patch.started_at = new Date().toISOString()
   if (status === 'rpa')  patch.ended_at   = new Date().toISOString()
 
-  const admin = createAdminClient()
-  const { error } = await admin.from('surgeries').update(patch).eq('id', id).eq('clinic_id', ctx.clinicId)
+  const { error } = await admin0.from('surgeries').update(patch).eq('id', id).eq('clinic_id', ctx.clinicId)
   if (error) return { error: mensagemErro(error, 'lib/actions/surgeries.ts') }
   revalidatePath('/dashboard/surgery')
   return { success: true }
