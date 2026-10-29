@@ -6,7 +6,7 @@ import {
   Package, Plus, AlertTriangle, RefreshCw, Trash2, Pencil,
   ArrowDownToLine, Search, X, Loader2, Check, Calendar,
   Shield, ShoppingBag, Scissors, Sparkles, FlaskConical, Pill,
-  Upload, Stethoscope, Gift, Activity, FileText, Syringe
+  Upload, Stethoscope, Gift, Activity, FileText, Syringe, ShoppingCart,
 } from 'lucide-react'
 import type { StockItemV2 } from '@/lib/actions/stock'
 import type { StockCategory } from '@/lib/stock-constants'
@@ -24,9 +24,12 @@ import AnimaisPricingSection from './AnimaisPricingSection'
 import type { GlobalCatalogSuggestion } from '@/lib/actions/catalog'
 import { searchGlobalCatalog } from '@/lib/actions/catalog'
 import { suggestDefaultInsurancePrice } from '@/lib/actions/insurance-pricing'
-import { getInsuranceProviders, getProvidersForStockItem, setProvidersForStockItem, type InsuranceProvider } from '@/lib/actions/insurance-providers'
+import { getInsuranceProviders, getProvidersForStockItem, setProvidersForStockItem } from '@/lib/actions/insurance-providers'
+import ReposicaoPanel from '@/components/pharmacy/ReposicaoPanel'
+import type { InsuranceProvider } from '@/types/insurance-providers'
 import { clinicEmitsNfse } from '@/lib/actions/billing-documents'
-import { listServiceKits, type ServiceKitSummary } from '@/lib/actions/surgery-kits'
+import { listServiceKits } from '@/lib/actions/surgery-kits'
+import type { ServiceKitSummary } from '@/types/surgery-kits'
 import { getServiceSurgeryConfig, saveServiceSurgeryConfig } from '@/lib/actions/service-surgery-config'
 import { linhasParaChecklist } from '@/types/service-surgery'
 import StockCsvImporter from './StockCsvImporter'
@@ -197,7 +200,7 @@ function formFromItem(item: StockItemV2): ItemForm {
 
 export default function PharmacyWorkspace({ stock: initialStock, userRole, activeModules = [] }: Props) {
   const [stock, setStock]   = useState<StockItemV2[]>(initialStock)
-  const [view, setView]     = useState<'products' | 'services' | 'packages'>('products')
+  const [view, setView]     = useState<'products' | 'services' | 'packages' | 'reposicao'>('products')
   const [catTab, setCatTab] = useState<string>('all')
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'critical' | 'ok'>('all')
@@ -408,6 +411,14 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole, activ
               >
                 <Gift className="h-3.5 w-3.5" /> Pacotes e Planos
               </button>
+              <button
+                onClick={() => setView('reposicao')}
+                className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-semibold transition-colors border-l border-slate-200 ${
+                  view === 'reposicao' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <ShoppingCart className="h-3.5 w-3.5" /> Reposição
+              </button>
             </div>
           </div>
         </div>
@@ -501,7 +512,9 @@ export default function PharmacyWorkspace({ stock: initialStock, userRole, activ
         </div>}
 
         {/* Conteúdo principal */}
-        {view === 'packages'
+        {view === 'reposicao'
+          ? <ReposicaoPanel />
+          : view === 'packages'
           ? <PackagesTab userRole={userRole} />
           : isServiceView
           ? <ServicesTable

@@ -6,11 +6,8 @@ import {
   Save, Loader2, CheckCircle2, ClipboardList, Plus, Sparkles, FileText,
   Lock, ArrowUpRight,
 } from 'lucide-react'
-import {
-  updateClinicConfig,
-  updateRequiredFields,
-  type FlowConfig, type ClinicConfig, type ClinicSettingsConfig, type AiTranscriptionMode,
-} from '@/lib/actions/clinic-settings'
+import { updateClinicConfig, updateRequiredFields } from '@/lib/actions/clinic-settings'
+import type { FlowConfig, ClinicConfig, ClinicSettingsConfig, AiTranscriptionMode } from '@/types/clinic-settings'
 import { useUpgradeModal } from '@/components/upgrade/UpgradeProvider'
 import PortalBookingSettings from '@/components/management/PortalBookingSettings'
 import PortalThemeSettings from '@/components/management/PortalThemeSettings'

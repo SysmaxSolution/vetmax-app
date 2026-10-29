@@ -1,26 +1,14 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import type { ReceiptMode, InsuranceProvider } from '@/types/insurance-providers'
+import type { CicloRepasse } from '@/lib/insurance/ciclo'
+import type { ModoCopay } from '@/lib/insurance/copay'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
 import { mensagemErro } from '@/lib/errors'
 // ─── Types ────────────────────────────────────────────────────────────────────
-
-export type ReceiptMode = 'convenio_repasse' | 'ong_guia' | 'particular_desconto'
-
-export type InsuranceProvider = {
-  id:           string
-  clinic_id:    string
-  name:         string
-  plan_types:   string[]
-  portal_url:   string | null
-  contact_info: { phone?: string; email?: string; contact_name?: string }
-  receipt_mode: ReceiptMode
-  config:       Record<string, unknown>
-  is_active:    boolean
-  created_at:   string
-}
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
@@ -45,7 +33,7 @@ export async function getInsuranceProviders(): Promise<InsuranceProvider[] | { e
 
   const { data, error } = await supabase
     .from('insurance_providers')
-    .select('id, clinic_id, name, plan_types, portal_url, contact_info, receipt_mode, config, is_active, created_at')
+    .select('id, clinic_id, name, plan_types, portal_url, contact_info, receipt_mode, config, is_active, created_at, repass_cycle, repass_cycle_day, copay_mode, copay_percent, copay_fixed')
     .eq('clinic_id', clinicId)
     .order('name')
 
@@ -56,6 +44,11 @@ export async function getInsuranceProviders(): Promise<InsuranceProvider[] | { e
     contact_info: (r.contact_info && typeof r.contact_info === 'object') ? r.contact_info as InsuranceProvider['contact_info'] : {},
     receipt_mode: (r.receipt_mode as ReceiptMode) ?? 'convenio_repasse',
     config:       (r.config && typeof r.config === 'object') ? r.config as Record<string, unknown> : {},
+    repass_cycle:     ((r.repass_cycle as string) ?? 'monthly') as CicloRepasse,
+    repass_cycle_day: r.repass_cycle_day === null || r.repass_cycle_day === undefined ? null : Number(r.repass_cycle_day),
+    copay_mode:       ((r.copay_mode as string) ?? 'per_item') as ModoCopay,
+    copay_percent:    r.copay_percent === null || r.copay_percent === undefined ? null : Number(r.copay_percent),
+    copay_fixed:      r.copay_fixed   === null || r.copay_fixed   === undefined ? null : Number(r.copay_fixed),
   }))
 }
 
@@ -66,6 +59,11 @@ export async function createInsuranceProvider(input: {
   contact_info?: { phone?: string; email?: string; contact_name?: string }
   receipt_mode?: ReceiptMode
   config?:       Record<string, unknown>
+  repass_cycle?:     CicloRepasse
+  repass_cycle_day?: number | null
+  copay_mode?:       ModoCopay
+  copay_percent?:    number | null
+  copay_fixed?:      number | null
 }): Promise<{ id: string } | { error: string }> {
   const ctx = await getCtx()
   if ('error' in ctx) return ctx
@@ -82,6 +80,11 @@ export async function createInsuranceProvider(input: {
       portal_url:   input.portal_url?.trim() || null,
       contact_info: input.contact_info ?? {},
       receipt_mode: input.receipt_mode ?? 'convenio_repasse',
+      repass_cycle:     input.repass_cycle ?? 'monthly',
+      repass_cycle_day: input.repass_cycle_day ?? null,
+      copay_mode:       input.copay_mode ?? 'per_item',
+      copay_percent:    input.copay_mode === 'percent' ? (input.copay_percent ?? 0) : null,
+      copay_fixed:      input.copay_mode === 'fixed'   ? (input.copay_fixed   ?? 0) : null,
       config:       input.config ?? {},
     })
     .select('id')
@@ -102,15 +105,29 @@ export async function updateInsuranceProvider(
     receipt_mode: ReceiptMode
     config:       Record<string, unknown>
     is_active:    boolean
+    repass_cycle:     CicloRepasse
+    repass_cycle_day: number | null
+    copay_mode:       ModoCopay
+    copay_percent:    number | null
+    copay_fixed:      number | null
   }>
 ): Promise<{ success: true } | { error: string }> {
   const ctx = await getCtx()
   if ('error' in ctx) return ctx
   const { supabase } = ctx
 
+  const patch: Record<string, unknown> = { ...input, updated_at: new Date().toISOString() }
+  if (input.copay_mode !== undefined) {
+    patch.copay_percent = input.copay_mode === 'percent' ? (input.copay_percent ?? 0) : null
+    patch.copay_fixed   = input.copay_mode === 'fixed'   ? (input.copay_fixed   ?? 0) : null
+  }
+  if (input.repass_cycle !== undefined && (input.repass_cycle === 'daily' || input.repass_cycle === 'custom')) {
+    patch.repass_cycle_day = null
+  }
+
   const { error } = await supabase
     .from('insurance_providers')
-    .update({ ...input, updated_at: new Date().toISOString() })
+    .update(patch)
     .eq('id', id)
 
   if (error) return { error: mensagemErro(error, 'lib/actions/insurance-providers.ts') }

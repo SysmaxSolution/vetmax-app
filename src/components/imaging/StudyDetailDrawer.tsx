@@ -4,11 +4,13 @@ import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import {
   X, Loader2, Upload, Link2, Copy, Send, Ban, FileText, FileImage, UserCheck, Clock, CheckCircle2,
+  ScanSearch, ExternalLink, RefreshCw, Save,
 } from 'lucide-react'
 import {
   getStudyDetail, uploadImagingFile, attachLaudoToStudy, releaseStudyToTutor,
-  resendReferringVetLink, revokeShareLink, listLaudoCandidates,
+  resendReferringVetLink, revokeShareLink, listLaudoCandidates, setStudyAccession,
 } from '@/lib/actions/imaging'
+import { vincularEstudoAmbra } from '@/lib/actions/ambra'
 import type { StaffStudyDetail } from '@/lib/imaging/types'
 import { STUDY_STATUS_LABELS, type StudyStatus } from '@/lib/imaging/study-status'
 
@@ -35,11 +37,14 @@ export default function StudyDetailDrawer({ studyId, role, onClose, onChanged, n
   const [selectedLaudo, setSelectedLaudo] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const canReleaseLaudo = ['vet', 'admin'].includes(role)
+  const [accession, setAccession] = useState('')
+  const [ambraBusy, setAmbraBusy] = useState<'salvar' | 'buscar' | null>(null)
 
   async function reload() {
     const res = await getStudyDetail(studyId)
     if ('error' in res) { notify('error', res.error); return }
     setDetail(res)
+    setAccession(res.accession_number ?? '')
     if (canReleaseLaudo) {
       const l = await listLaudoCandidates(res.patient_id)
       if (Array.isArray(l)) setLaudos(l)
@@ -104,6 +109,27 @@ export default function StudyDetailDrawer({ studyId, role, onClose, onChanged, n
     if ('error' in res) { notify('error', res.error); return }
     notify('success', 'Link revogado.')
     await reload()
+  }
+
+  async function handleSalvarAccession() {
+    setAmbraBusy('salvar')
+    const res = await setStudyAccession(studyId, accession)
+    setAmbraBusy(null)
+    if ('error' in res) { notify('error', res.error); return }
+    notify('success', 'Accession salvo.')
+    await reload(); onChanged()
+  }
+
+  // Busca o estudo na Ambra pelo accession e gera o link do visualizador. É o
+  // caminho de exceção: no fluxo normal o webhook da Ambra faz isso sozinho
+  // quando a primeira imagem chega.
+  async function handleAmbra() {
+    setAmbraBusy('buscar')
+    const res = await vincularEstudoAmbra(studyId, accession.trim() || undefined)
+    setAmbraBusy(null)
+    if ('error' in res) { notify('error', res.error); return }
+    notify('success', 'Estudo vinculado à Ambra — link do visualizador gerado.')
+    await reload(); onChanged()
   }
 
   function copy(url: string) {
@@ -181,6 +207,62 @@ export default function StudyDetailDrawer({ studyId, role, onClose, onChanged, n
                     </a>
                   ))}
                 </div>
+              )}
+            </div>
+
+            {/* Ambra (PACS) */}
+            <div className="rounded-xl border border-slate-200 p-4">
+              <h4 className="text-sm font-semibold text-slate-700 flex items-center gap-2 mb-1">
+                <ScanSearch className="h-4 w-4 text-slate-400" />Imagens na Ambra (PACS)
+              </h4>
+              <p className="text-[11px] text-slate-400 mb-3">
+                O accession é o número do exame digitado no aparelho — é ele que casa a imagem que
+                sobe para a Ambra com este estudo. Quando a imagem chega, a Ambra avisa e o link é
+                gerado sozinho; use o botão abaixo só quando o aviso não veio.
+              </p>
+
+              <div className="flex items-center gap-2">
+                <input
+                  value={accession}
+                  onChange={e => setAccession(e.target.value)}
+                  placeholder="Accession do exame no aparelho"
+                  className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+                />
+                <button onClick={handleSalvarAccession}
+                        disabled={ambraBusy !== null || accession.trim() === (detail.accession_number ?? '')}
+                        className="text-xs font-medium text-slate-700 border border-slate-200 rounded-lg px-2.5 py-2 flex items-center gap-1 hover:bg-slate-50 disabled:opacity-50 whitespace-nowrap">
+                  {ambraBusy === 'salvar' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}Salvar
+                </button>
+                <button onClick={handleAmbra} disabled={ambraBusy !== null || !accession.trim()}
+                        title="Procura o estudo na Ambra por este accession e gera o link do visualizador"
+                        className="text-xs font-semibold text-white bg-teal-600 rounded-lg px-3 py-2 flex items-center gap-1 hover:bg-teal-700 disabled:opacity-50 whitespace-nowrap">
+                  {ambraBusy === 'buscar'
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : detail.ambra_link_url ? <RefreshCw className="h-3.5 w-3.5" /> : <ScanSearch className="h-3.5 w-3.5" />}
+                  {detail.ambra_link_url ? 'Renovar link' : 'Buscar na Ambra'}
+                </button>
+              </div>
+
+              {detail.ambra_link_url ? (
+                <div className="mt-3 flex items-center gap-2 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2">
+                  <a href={detail.ambra_link_url} target="_blank" rel="noopener noreferrer"
+                     className="text-xs font-semibold text-teal-800 hover:underline flex items-center gap-1 flex-shrink-0">
+                    <ExternalLink className="h-3.5 w-3.5" />Abrir visualizador
+                  </a>
+                  <span className="text-[11px] text-teal-700 truncate flex-1">
+                    {detail.ambra_link_expires_at
+                      ? `vale até ${new Date(detail.ambra_link_expires_at).toLocaleString('pt-BR')}`
+                      : 'sem prazo informado'}
+                  </span>
+                  <button onClick={() => copy(detail.ambra_link_url!)}
+                          className="text-teal-600 hover:text-teal-800 flex-shrink-0" title="Copiar link">
+                    <Copy className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <p className="mt-3 text-[11px] text-slate-400 flex items-center gap-1">
+                  <Clock className="h-3.5 w-3.5" />Nenhum estudo da Ambra vinculado a este exame ainda.
+                </p>
               )}
             </div>
 

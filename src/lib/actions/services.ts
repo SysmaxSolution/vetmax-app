@@ -154,6 +154,21 @@ export async function addServiceToConsultation(
   let insurance_total_snapshot: number | null = null
   let copay_snapshot:           number | null = null
   let repass_snapshot:          number | null = null
+  // Convenio vigente para o pet no momento do lancamento (item 1.9). Snapshot:
+  // se o pet trocar de convenio depois, o fechamento de um periodo ja fechado
+  // nao muda de resultado.
+  let insurance_provider_id:    string | null = null
+  if (consult?.patient_id) {
+    const { data: vinculo } = await admin
+      .from('pet_insurance')
+      .select('provider_id')
+      .eq('clinic_id', ctx.clinicId)
+      .eq('patient_id', consult.patient_id)
+      .eq('coverage_status', 'active')
+      .order('created_at', { ascending: false })
+      .limit(1)
+    insurance_provider_id = (vinculo?.[0]?.provider_id as string | undefined) ?? null
+  }
 
   if (payload.price_override !== undefined && payload.price_override !== null) {
     price = payload.price_override
@@ -197,6 +212,7 @@ export async function addServiceToConsultation(
       repass_snapshot,
       // Sprint Animais: serviço herda a empresa faturante da OS (multi-CNPJ).
       company_id:               (consult as any)?.billing_company_id ?? null,
+      insurance_provider_id,
     })
     .select('id')
     .single()

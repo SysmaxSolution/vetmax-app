@@ -5,6 +5,7 @@ import { isCentroCirurgico } from '@/lib/actions/clinic-settings'
 import { getSurgeriesBoard } from '@/lib/actions/surgeries'
 import SurgeryKanban from '@/components/hospitalization/SurgeryKanban'
 import AutoRefresh from '@/components/shared/AutoRefresh'
+import MapaDoDiaPanel from '@/components/surgery/MapaDoDiaPanel'
 
 export const metadata = { title: 'Centro Cirúrgico | SysVetMax' }
 
@@ -27,6 +28,13 @@ export default async function SurgeryPage() {
     <main className="max-w-[1400px] mx-auto px-4 py-6 sm:px-6 animate-enter">
       <AutoRefresh />
       <SurgeryKanban initialBoard={initialBoard} clinicId={profile.clinic_id as string} />
+
+      {/* Mapa do dia (item 4.3): substitui o quadro mantido a mao. Vem DEPOIS do
+          kanban de proposito — o kanban e o trabalho de agora, o mapa e a visao
+          do dia inteiro, incluindo o que ainda nao comecou. */}
+      <div className="mt-6">
+        <MapaDoDiaPanel />
+      </div>
     </main>
   )
 }

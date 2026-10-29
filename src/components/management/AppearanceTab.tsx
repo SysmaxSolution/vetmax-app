@@ -10,7 +10,8 @@ import {
   type UiPreferences,
   type AppearanceMode,
 } from '@/lib/actions/ui-preferences'
-import { updateLayoutVersion, type LayoutVersion } from '@/lib/actions/clinic-settings'
+import { updateLayoutVersion } from '@/lib/actions/clinic-settings'
+import type { LayoutVersion } from '@/types/clinic-settings'
 import { Toast } from '@/components/ui/toast'
 import { BackgroundImageAdjuster } from './BackgroundImageAdjuster'
 

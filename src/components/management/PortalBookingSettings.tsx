@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { Smartphone, Loader2, Save } from 'lucide-react'
-import { updateClinicConfig, getClinicConfig, type FlowConfig } from '@/lib/actions/clinic-settings'
+import { updateClinicConfig, getClinicConfig } from '@/lib/actions/clinic-settings'
+import type { FlowConfig } from '@/types/clinic-settings'
 
 type Mode = 'off' | 'reception' | 'direct'
 

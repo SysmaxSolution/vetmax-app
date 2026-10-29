@@ -16,7 +16,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
-import { decideServicePricing, type ResolvedPricing } from '@/lib/insurance-pricing-core'
+import { decideServicePricing } from '@/lib/insurance-pricing-core'
+import type { ResolvedPricing } from '@/lib/insurance-pricing-core'
+import type { RegraCopay } from '@/lib/insurance/copay'
 
 import { mensagemErro } from '@/lib/errors'
 // ATENÇÃO (HF 05/06): NUNCA re-exporte tipos (`export type { X }`) de um
@@ -47,6 +49,26 @@ async function getCtx(): Promise<Ctx> {
  * Calcula o preço a aplicar quando o serviço for adicionado a uma consulta.
  * Não persiste nada — apenas resolve. O caller decide o que fazer.
  */
+/**
+ * Extrai a regra de coparticipação do convênio vinculado ao pet (item 1.9).
+ * Retorna null quando não há convênio — e `per_item` quando a clínica não
+ * configurou regra fixa, que é o padrão e mantém a hierarquia histórica.
+ */
+function regraDoConvenio(insurance: unknown): RegraCopay | null {
+  const vinculo = insurance as { insurance_providers?: unknown } | null
+  if (!vinculo) return null
+  const prov = Array.isArray(vinculo.insurance_providers)
+    ? vinculo.insurance_providers[0]
+    : vinculo.insurance_providers
+  const p = prov as { copay_mode?: string; copay_percent?: number | null; copay_fixed?: number | null } | null
+  if (!p?.copay_mode) return null
+  return {
+    modo:    p.copay_mode as RegraCopay['modo'],
+    percent: p.copay_percent === null || p.copay_percent === undefined ? null : Number(p.copay_percent),
+    fixed:   p.copay_fixed   === null || p.copay_fixed   === undefined ? null : Number(p.copay_fixed),
+  }
+}
+
 export async function resolveServicePricing(
   patient_id: string,
   stock_item_id: string,
@@ -75,7 +97,7 @@ export async function resolveServicePricing(
   //    e o pet era tratado silenciosamente como particular (valor cheio).
   const { data: insuranceRows } = await admin
     .from('pet_insurance')
-    .select('id, provider_id, insurance_providers(name)')
+    .select('id, provider_id, insurance_providers(name, copay_mode, copay_percent, copay_fixed)')
     .eq('clinic_id', clinic_id)
     .eq('patient_id', patient_id)
     .eq('coverage_status', 'active')
@@ -107,6 +129,7 @@ export async function resolveServicePricing(
     has_active_insurance: insurance !== null,
     provider_name,
     custom,
+    regra_convenio: regraDoConvenio(insurance),
   })
 }
 
@@ -188,6 +211,7 @@ export async function resolveConsultationServicesPricing(
       has_active_insurance:     insurance !== null,
       provider_name,
       custom:                   customByItem.get(item.id as string) ?? null,
+      regra_convenio:           regraDoConvenio(insurance),
     })
   }
   return out

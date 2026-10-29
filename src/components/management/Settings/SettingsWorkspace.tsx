@@ -5,10 +5,10 @@ import {
   Building2, Shield, MessageCircle, Calculator,
   BarChart3, Wrench, ToggleLeft, ToggleRight, Save, Loader2,
   HelpCircle, Tags, Hash, Building, Landmark, FlaskConical, GraduationCap,
-  ScanLine, Barcode, Syringe, ClipboardList, Globe, Sparkles
+  ScanLine, Barcode, Syringe, ClipboardList, Globe, Sparkles, FileImage,
 } from 'lucide-react'
 import FinancialIntegrationsForm from './FinancialIntegrationsForm'
-import type { ClinicConfig, ClinicSettingsConfig, FlowConfig } from '@/lib/actions/clinic-settings'
+import type { ClinicConfig, ClinicSettingsConfig, FlowConfig } from '@/types/clinic-settings'
 import { updateClinicConfig, getClinicConfig } from '@/lib/actions/clinic-settings'
 import ModulesTab from '../ModulesTab'
 import ClinicSettingsTab from '../ClinicSettingsTab'
@@ -17,15 +17,17 @@ import WhatsappIntelligentSetup from './WhatsappIntelligentSetup'
 import WhatsappTriggerModules from './WhatsappTriggerModules'
 import FiscalConfigForm from './FiscalConfigForm'
 import LabAgentSettings from './LabAgentSettings'
+import AmbraSettings from './AmbraSettings'
 import ReferenceSetsPanel from './ReferenceSetsPanel'
 import AnalyteMappingPanel from './AnalyteMappingPanel'
 import ExamRejectionSettings from './ExamRejectionSettings'
+import GatePreAnestesicoSettings from './GatePreAnestesicoSettings'
 import FlowFlagCard from './FlowFlagCard'
 import VaccineRecallSettings from './VaccineRecallSettings'
 import PricingTab from '@/components/registry/pricing/PricingTab'
 import DocumentNumberingTab from '../DocumentNumberingTab'
 import CompaniesTab from '../CompaniesTab'
-import { useAnimaisFoundation } from '@/components/providers/ClinicConfigProvider'
+import { useAnimaisFoundation, useUsaImagem } from '@/components/providers/ClinicConfigProvider'
 import { useUpgradeModal } from '@/components/upgrade/UpgradeProvider'
 import type { UpgradeFeatureKey } from '@/components/upgrade/UpgradeModal'
 import { Lock, ArrowUpRight } from 'lucide-react'
@@ -34,7 +36,7 @@ import { Lock, ArrowUpRight } from 'lucide-react'
 
 // Categoria 'ia' removida em 2026-05-26 (cleanup de drift): IA mode e Fluxo
 // Contínuo agora são exclusivos da categoria 'acesso' (ClinicSettingsTab).
-type Category = 'geral' | 'atendimento' | 'portal' | 'ia' | 'acesso' | 'whatsapp' | 'financeiro' | 'empresas' | 'precos' | 'numeracao' | 'laboratorio' | 'relatorios' | 'utilitarios'
+type Category = 'geral' | 'atendimento' | 'portal' | 'ia' | 'acesso' | 'whatsapp' | 'financeiro' | 'empresas' | 'precos' | 'numeracao' | 'laboratorio' | 'imagem' | 'relatorios' | 'utilitarios'
 
 interface CategoryDef {
   key: Category
@@ -58,6 +60,7 @@ const CATEGORIES: CategoryDef[] = [
   { key: 'precos',       label: 'Preços',      icon: <Tags         className="h-4 w-4" />, description: 'Tabelas de preço e composição'      },
   { key: 'numeracao',    label: 'Numeração',   icon: <Hash         className="h-4 w-4" />, description: 'Nº de OS, RPS, NFS-e…'              },
   { key: 'laboratorio',  label: 'Laboratório', icon: <FlaskConical className="h-4 w-4" />, description: 'Agentes-ponte dos aparelhos'         },
+  { key: 'imagem',       label: 'Imagem',      icon: <FileImage    className="h-4 w-4" />, description: 'Ambra (PACS) e links de laudo'      },
   { key: 'relatorios',   label: 'Relatórios',  icon: <BarChart3    className="h-4 w-4" />, description: 'Relatórios disponíveis'              },
   { key: 'utilitarios',  label: 'Utilitários', icon: <Wrench       className="h-4 w-4" />, description: 'Exportação e importação de dados'    },
 ]
@@ -88,10 +91,17 @@ export default function SettingsWorkspace({
   const [activeCategory, setActiveCategory] = useState<Category>('geral')
   const { open: openUpgrade } = useUpgradeModal()
   const animaisFoundation = useAnimaisFoundation()
+  const usaImagem = useUsaImagem()
 
   // A seção "Preços" (Sprint Animais) só aparece na clínica com a flag ligada.
   const animaisOnly = new Set(['precos', 'numeracao', 'empresas', 'laboratorio'])
-  const visibleCategories = CATEGORIES.filter(c => !animaisOnly.has(c.key) || animaisFoundation)
+  const visibleCategories = CATEGORIES.filter(c => {
+    // A aba Imagem acompanha o módulo de Imagem (flag usa_imagem), não a
+    // fundação Animais: a captura da Ambra serve qualquer clínica que faça
+    // diagnóstico por imagem.
+    if (c.key === 'imagem') return usaImagem
+    return !animaisOnly.has(c.key) || animaisFoundation
+  })
 
   // SysMax nunca vê paywall — segue operando direto sobre o setup real,
   // independentemente do que está em active_modules da clínica visualizada.
@@ -183,7 +193,19 @@ export default function SettingsWorkspace({
               whenOff="Quando desativado, a aba Boletos some do Financeiro, a carteira bancária some do cadastro da conta e emitir/enviar boleto é recusado."
               successMessage="Boletos configurados!"
             />
+            <FlowFlagCard
+              initialConfig={initialClinicConfig} onToast={onToast}
+              flag="cobra_insumo_aplicado"
+              icon={<Syringe className="h-4 w-4 text-teal-600" />}
+              title="Medicação e insumo aplicados na consulta entram na conta sozinhos?"
+              subtitle="O que o Médico Veterinário aplica no animal vira item da conta da OS"
+              whenOn="Cada medicação ou insumo aplicado no consultório é lançado na conta da OS com o preço da tabela, na hora. Use quando a consulta é cobrada separada do que foi aplicado."
+              whenOff="Padrão. O insumo aplicado sai do estoque e vai ao Livro de Controlados, mas NÃO entra na conta — use se a medicação já está embutida no preço da consulta, senão o tutor pagaria duas vezes."
+              successMessage="Cobrança do insumo aplicado configurada!"
+            />
             <VaccineRecallSettings initialConfig={initialClinicConfig} onToast={onToast} />
+
+            <GatePreAnestesicoSettings initialConfig={initialClinicConfig} onToast={onToast} />
 
             <ExamRejectionSettings initialConfig={initialClinicConfig} onToast={onToast} />
             <FlowFlagCard
@@ -303,6 +325,13 @@ export default function SettingsWorkspace({
             <AnalyteMappingPanel />
             <SectionHeader icon={<FlaskConical className="h-5 w-5 text-slate-600" />} title="Tabela de Referência do Laudo" description="Quais linhas saem no laudo, em que ordem, com que faixa e de onde vem cada valor (aparelho, lâmina ou texto) — por exame e por espécie" />
             <ReferenceSetsPanel onToast={onToast} />
+          </div>
+        )}
+
+        {activeCategory === 'imagem' && usaImagem && (
+          <div className="space-y-6">
+            <SectionHeader icon={<FileImage className="h-5 w-5 text-slate-600" />} title="Imagem — Ambra (PACS)" description="Credencial do usuário de integração, validade do link do visualizador e aviso automático quando a imagem chega" />
+            <AmbraSettings onToast={onToast} />
           </div>
         )}
 

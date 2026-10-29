@@ -16,34 +16,13 @@
 //    nunca volta para o navegador: é a credencial que autentica a empresa no
 //    banco.
 
-import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypto'
+// (a cifra mora em @/lib/crypto/segredo — ver reexport abaixo)
 import forge from 'node-forge'
 
-function key(): Buffer {
-  const secret = process.env.BANK_CERT_SECRET
-    || process.env.SUPABASE_SERVICE_ROLE_KEY
-    || 'sysvet-dev-fallback'
-  return scryptSync(secret, 'sysvet-bankcert-v1', 32)
-}
-
-/** base64( iv | tag | ciphertext ) */
-export function encryptSecret(plain: Buffer | string): string {
-  const iv = randomBytes(12)
-  const c = createCipheriv('aes-256-gcm', key(), iv)
-  const data = typeof plain === 'string' ? Buffer.from(plain, 'utf8') : plain
-  const ct = Buffer.concat([c.update(data), c.final()])
-  return Buffer.concat([iv, c.getAuthTag(), ct]).toString('base64')
-}
-
-export function decryptSecret(enc: string | null | undefined): Buffer | null {
-  if (!enc) return null
-  try {
-    const buf = Buffer.from(enc, 'base64')
-    const d = createDecipheriv('aes-256-gcm', key(), buf.subarray(0, 12))
-    d.setAuthTag(buf.subarray(12, 28))
-    return Buffer.concat([d.update(buf.subarray(28)), d.final()])
-  } catch { return null }
-}
+// A cifra saiu daqui para `@/lib/crypto/segredo`: este arquivo importa
+// node-forge no topo, e quem precisava apenas cifrar um segredo arrastava o
+// forge inteiro junto. Reexportado para não quebrar nada que já importava daqui.
+export { encryptSecret, decryptSecret } from '@/lib/crypto/segredo'
 
 export interface CertificadoLido {
   ok: true

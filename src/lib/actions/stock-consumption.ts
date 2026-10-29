@@ -5,42 +5,13 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
 import { mensagemErro } from '@/lib/errors'
-// ─── Tipos ───────────────────────────────────────────────────────────────────
-
-export type StockConsumptionSource =
-  | 'CONSULTATION'
-  | 'HOSPITALIZATION'
-  | 'MANUAL_ADJUSTMENT'
-  | 'INITIAL_STOCK'
-  | 'RESTOCK'
-
-export interface ConsumeStockPayload {
-  /** UUID do stock_item. null/omitido = item não foi reconhecido → audit-only com requires_reconciliation=TRUE. */
-  stock_item_id?:   string | null
-  /** Nome textual do medicamento (sempre obrigatório — auditoria). */
-  medication_name:  string
-  /** Quantidade a debitar. Sempre positiva; a RPC inverte para movement DEBIT. */
-  quantity:         number
-  /** Contexto operacional — bate com o CHECK do stock_movements. */
-  source:           StockConsumptionSource
-  /** UUID do registro de origem (ex.: hospitalization_dose_administrations.id). */
-  reference_id?:    string | null
-  notes?:           string | null
-}
-
-export interface StockConsumptionResult {
-  movement_id:              string
-  /** TRUE se a baixa cruzou com um stock_item real (decremento aplicado). */
-  matched:                  boolean
-  /** Quantidade ANTES da baixa (null se unmatched). */
-  quantity_before:          number | null
-  /** Quantidade APÓS a baixa (pode ser negativa em estoque insuficiente). */
-  quantity_after:           number | null
-  /** Resultado caiu ≤ min_quantity mas ainda positivo — toast amber. */
-  below_minimum:            boolean
-  /** TRUE quando: unmatched OU resultou em quantity_after < 0. Toast rose/cinza. */
-  requires_reconciliation:  boolean
-}
+import type {
+  ConsumeStockPayload,
+  StockConsumptionResult,
+  StockReturnResult,
+  StockItemLite,
+  ReconciliationItem,
+} from '@/types/stock-consumption'
 
 // ─── Action ──────────────────────────────────────────────────────────────────
 
@@ -109,21 +80,63 @@ export async function consumeStockForApplication(
   }
 }
 
-// ─── Busca de stock_items para o dropdown da prescrição ─────────────────────
+// ─── Devolução de uma baixa já aplicada ─────────────────────────────────────
 
-export interface StockItemLite {
-  id:            string
-  name:          string
-  sku:           string | null
-  barcode:       string | null
-  category:      string
-  unit:          string
-  quantity:      number
-  min_quantity:  number
-  is_controlled: boolean
-  /** Marcador derivado: quantity <= min_quantity (badge "estoque baixo" no UI). */
-  is_below_min:  boolean
+/**
+ * Devolve ao estoque uma baixa já aplicada, repondo nos lotes exatos de onde ela
+ * saiu (rastro de `stock_movement_batches`, migration 0505).
+ *
+ * Sem `quantity`, devolve tudo o que ainda não voltou — o caso da medicação
+ * removida do prontuário. Com `quantity`, devolve parcialmente, rateando sobre
+ * os lotes de origem: é o kit cirúrgico, de onde saíram 10 compressas e voltaram
+ * 4 (item 4.1).
+ *
+ * A trava é do banco, não daqui: a soma das devoluções de uma baixa nunca passa
+ * do que saiu, e o excesso volta como erro para quem chamou.
+ */
+export async function returnStockConsumption(
+  movementId: string,
+  notes?: string | null,
+  /** Quanto devolver. Omitido = tudo o que ainda não voltou desta baixa. */
+  quantity?: number | null,
+): Promise<StockReturnResult | { error: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Não autenticado.' }
+
+  const admin = createAdminClient()
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('clinic_id')
+    .eq('id', user.id)
+    .single()
+  if (!profile?.clinic_id) return { error: 'Perfil sem clínica.' }
+
+  const { data, error } = await admin.rpc('rpc_return_stock_consumption', {
+    p_clinic_id:   profile.clinic_id,
+    p_movement_id: movementId,
+    p_user_id:     user.id,
+    p_notes:       notes?.trim() || null,
+    p_quantity:    quantity && quantity > 0 ? quantity : null,
+  })
+
+  if (error) return { error: 'Erro ao devolver ao estoque: ' + mensagemErro(error, 'lib/actions/stock-consumption.ts') }
+
+  const row = Array.isArray(data) ? data[0] : data
+  if (!row) return { error: 'RPC de devolução não retornou linha (estado inconsistente).' }
+
+  revalidatePath('/dashboard/pharmacy')
+  revalidatePath('/dashboard/vet')
+
+  return {
+    movement_id:     row.movement_id as string,
+    returned:        Number(row.returned ?? 0),
+    quantity_before: row.quantity_before === null ? null : Number(row.quantity_before),
+    quantity_after:  row.quantity_after  === null ? null : Number(row.quantity_after),
+  }
 }
+
+// ─── Busca de stock_items para o dropdown da prescrição ─────────────────────
 
 /**
  * Busca stock_items por nome, SKU ou barcode (ILIKE).
@@ -179,20 +192,6 @@ export async function searchStockItems(query: string): Promise<StockItemLite[] |
 }
 
 // ─── Listagem de divergências (consumido por futura tela de Gestão) ─────────
-
-export interface ReconciliationItem {
-  id:                    string
-  stock_item_id:         string | null
-  medication_name:       string
-  quantity_change:       number
-  quantity_before:       number | null
-  quantity_after:        number | null
-  source:                string
-  reference_id:          string | null
-  notes:                 string | null
-  created_at:            string
-  created_by:            string | null
-}
 
 export async function listStockReconciliationQueue(): Promise<ReconciliationItem[] | { error: string }> {
   const supabase = await createClient()

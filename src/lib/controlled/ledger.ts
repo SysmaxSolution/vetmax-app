@@ -10,6 +10,8 @@ export interface LedgerEvent {
   kind:      ControlledKind
   origin?:   string
   reference?: string | null
+  /** Numero do documento da saida/entrada — ex.: notificacao de receita do controlado. */
+  document?: string | null
 }
 
 export interface LedgerLine {
@@ -19,6 +21,7 @@ export interface LedgerLine {
   balance:  number
   origin:   string
   reference: string | null
+  document: string | null
 }
 
 export interface LedgerResult {
@@ -59,7 +62,7 @@ export function buildItemLedger(events: LedgerEvent[], from: string): LedgerResu
     if (e.kind === 'entrada' || (e.kind === 'ajuste' && e.delta > 0)) total_in += e.delta
     else if (e.kind === 'perda') total_loss += -e.delta
     else total_out += -e.delta
-    entries.push({ date: e.date, kind: e.kind, quantity: e.delta, balance, origin: e.origin ?? '', reference: e.reference ?? null })
+    entries.push({ date: e.date, kind: e.kind, quantity: e.delta, balance, origin: e.origin ?? '', reference: e.reference ?? null, document: e.document ?? null })
   }
   return { opening, entries, total_in: r3(total_in), total_out: r3(total_out), total_loss: r3(total_loss), closing: balance }
 }
