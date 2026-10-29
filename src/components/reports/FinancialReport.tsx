@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { useEmpresasFiltro } from './EmpresasFiltroContext'
 import { getFinancialReport, type FinancialReportSummary } from '@/lib/actions/reports-g13'
 
 const fmt = (v: number) =>
@@ -67,11 +68,12 @@ export default function FinancialReport() {
   const [result,  setResult]  = useState<FinancialReportSummary | null>(null)
   const [error,   setError]   = useState<string | null>(null)
   const [pending, startT]     = useTransition()
+  const empresas = useEmpresasFiltro()
 
   function run() {
     startT(async () => {
       setError(null)
-      const res = await getFinancialReport({ from, to, category: cat || undefined, payment_method: method || undefined })
+      const res = await getFinancialReport({ from, to, category: cat || undefined, payment_method: method || undefined, company_ids: empresas.length ? empresas : undefined })
       if ('error' in res) { setError(res.error); return }
       setResult(res)
     })

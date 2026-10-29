@@ -46,6 +46,9 @@ export type FlowConfig = {
   /** Sprint Animais — liga a fundação (multi-CNPJ, clínicas parceiras, tabelas
    *  de preço, OS/urgência/origem no check-in). Por clínica. */
   animais_foundation?:      boolean
+  /** Como as empresas faturantes do grupo operam: 'conjunto' (matriz e filiais
+   *  dentro desta clínica) ou 'separado' (cada CNPJ é uma clínica). Padrão: separado. */
+  empresas_modo?:           'conjunto' | 'separado'
   /** Exige selecionar o profissional responsável no check-in. Off (padrão) =
    *  atendimento pode ir aos departamentos sem responsável pré-definido. */
   require_attending_vet?:   boolean

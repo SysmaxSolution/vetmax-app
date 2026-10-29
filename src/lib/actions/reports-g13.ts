@@ -12,6 +12,8 @@ import { summarizeClients, type ClientRow, type ClientsSummary } from '@/lib/rep
 import { isIntercompany, isCreditBalance, isRecognizedRevenue, netAmount } from '@/lib/finance/reconciliation'
 
 import { mensagemErro } from '@/lib/errors'
+import { clausulaDeEmpresas, carregarMapaDeEmpresas } from '@/lib/server/mapa-de-empresas'
+import { empresaDoTitulo, normalizarSelecao } from '@/lib/financial/empresas-filtro'
 // ─── Auth helper ──────────────────────────────────────────────────────────────
 
 async function getCtx(): Promise<{ error: string } | { clinic_id: string; role: string }> {
@@ -310,6 +312,7 @@ export async function getFinancialReport(params: {
   to:              string
   category?:       string
   payment_method?: string
+  company_ids?:    string[]
 }): Promise<FinancialReportSummary | { error: string }> {
   const ctx = await getCtx()
   if ('error' in ctx) return { error: ctx.error }
@@ -320,12 +323,14 @@ export async function getFinancialReport(params: {
   const admin = createAdminClient()
   const SEL = 'id, type, amount, description, category, payment_method, status, due_date, payment_date, created_at, is_intercompany'
   const toEnd = params.to + 'T23:59:59'
+  const porEmpresa = await clausulaDeEmpresas(admin, ctx.clinic_id, params.company_ids)
 
   // Janela correta (PONTA 3): pagos pela data de pagamento; pendentes pelo
   // vencimento — não por created_at.
   const applyFilters = (qq: any) => {
     if (params.category)       qq = qq.eq('category',       params.category)
     if (params.payment_method) qq = qq.eq('payment_method', params.payment_method)
+    if (porEmpresa)            qq = qq.or(porEmpresa)
     return qq
   }
   const [paidRes, pendRes] = await Promise.all([
@@ -390,6 +395,7 @@ export async function getFinancialReport(params: {
 export async function getDREReport(params: {
   from: string
   to:   string
+  company_ids?: string[]
 }): Promise<DRELine[] | { error: string }> {
   const ctx = await getCtx()
   if ('error' in ctx) return { error: ctx.error }
@@ -398,15 +404,19 @@ export async function getDREReport(params: {
   }
 
   const admin = createAdminClient()
-  const [{ data, error }, cmv] = await Promise.all([
-    admin
+  const porEmpresa = await clausulaDeEmpresas(admin, ctx.clinic_id, params.company_ids)
+  let qDre = admin
       .from('financial_entries')
       .select('type, amount, category, status, payment_date, is_intercompany, purchase_order_id')
       .eq('clinic_id', ctx.clinic_id)
       .eq('status', 'paid')
       .gte('payment_date', params.from)
-      .lte('payment_date', params.to + 'T23:59:59'),
-    computeCMVFromConsumption(admin, ctx.clinic_id, params.from, params.to),
+      .lte('payment_date', params.to + 'T23:59:59')
+  if (porEmpresa) qDre = qDre.or(porEmpresa)
+  const [{ data, error }, cmv] = await Promise.all([
+    qDre,
+    // CMV por consumo não tem empresa: com filtro de empresa fica de fora (não há como ratear).
+    porEmpresa ? Promise.resolve(0) : computeCMVFromConsumption(admin, ctx.clinic_id, params.from, params.to),
   ])
 
   if (error) return { error: mensagemErro(error, 'lib/actions/reports-g13.ts') }
@@ -838,6 +848,7 @@ export interface AgingReport {
 export async function getAgingReport(params: {
   type:  'receivable' | 'payable'
   as_of?: string
+  company_ids?: string[]
 }): Promise<AgingReport | { error: string }> {
   const ctx = await getCtx()
   if ('error' in ctx) return { error: ctx.error }
@@ -845,13 +856,16 @@ export async function getAgingReport(params: {
 
   const asOf = params.as_of ?? new Date().toISOString().slice(0, 10)
   const admin = createAdminClient()
-  const { data, error } = await admin
+  const porEmpresa = await clausulaDeEmpresas(admin, ctx.clinic_id, params.company_ids)
+  let qAging = admin
     .from('financial_entries')
     .select('id, type, amount, discount, description, due_date, document_number, beneficiary, is_intercompany, is_clinic_discount, tutors(name), consultation:consultations!consultation_id(os_number)')
     .eq('clinic_id', ctx.clinic_id)
     .eq('type', params.type)
     .eq('status', 'pending')
     .eq('is_clinic_discount', false)
+  if (porEmpresa) qAging = qAging.or(porEmpresa)
+  const { data, error } = await qAging
     .order('due_date', { ascending: true })
     .limit(5000)
   if (error) return { error: mensagemErro(error, 'lib/actions/reports-g13.ts') }
@@ -885,17 +899,18 @@ export async function getAgingReport(params: {
 // ─── Fluxo de Caixa Projetado (realizado × a realizar) ────────────────────────
 export interface CashflowReport { from: string; to: string; periods: CashPeriod[]; totals: { realizado_in: number; realizado_out: number; previsto_in: number; previsto_out: number } }
 
-export async function getCashflowProjection(params: { from: string; to: string }): Promise<CashflowReport | { error: string }> {
+export async function getCashflowProjection(params: { from: string; to: string; company_ids?: string[] }): Promise<CashflowReport | { error: string }> {
   const ctx = await getCtx()
   if ('error' in ctx) return { error: ctx.error }
   if (!['admin', 'owner', 'manager', 'accountant'].includes(ctx.role)) return { error: 'Acesso negado' }
   const admin = createAdminClient()
   const toEnd = params.to + 'T23:59:59'
   const SEL = 'type, amount, discount, status, payment_date, due_date, payment_method, is_intercompany, is_clinic_discount'
-  const [paidRes, pendRes] = await Promise.all([
-    admin.from('financial_entries').select(SEL).eq('clinic_id', ctx.clinic_id).eq('is_clinic_discount', false).eq('status', 'paid').gte('payment_date', params.from).lte('payment_date', toEnd),
-    admin.from('financial_entries').select(SEL).eq('clinic_id', ctx.clinic_id).eq('is_clinic_discount', false).eq('status', 'pending').gte('due_date', params.from).lte('due_date', params.to),
-  ])
+  const porEmpresa = await clausulaDeEmpresas(admin, ctx.clinic_id, params.company_ids)
+  let qPaid = admin.from('financial_entries').select(SEL).eq('clinic_id', ctx.clinic_id).eq('is_clinic_discount', false).eq('status', 'paid').gte('payment_date', params.from).lte('payment_date', toEnd)
+  let qPend = admin.from('financial_entries').select(SEL).eq('clinic_id', ctx.clinic_id).eq('is_clinic_discount', false).eq('status', 'pending').gte('due_date', params.from).lte('due_date', params.to)
+  if (porEmpresa) { qPaid = qPaid.or(porEmpresa); qPend = qPend.or(porEmpresa) }
+  const [paidRes, pendRes] = await Promise.all([qPaid, qPend])
   if (paidRes.error) return { error: mensagemErro(paidRes.error, 'lib/actions/reports-g13.ts') }
   if (pendRes.error) return { error: mensagemErro(pendRes.error, 'lib/actions/reports-g13.ts') }
 
@@ -922,18 +937,21 @@ export interface RevenueBreakdownReport { from: string; to: string; dimension: R
 
 const PM_LABEL: Record<string, string> = { cash: 'Dinheiro', pix: 'PIX', credit: 'Cartão de crédito', debit: 'Cartão de débito', credit_balance: 'Crédito do cliente', transfer: 'Transferência', boleto: 'Boleto', voucher: 'Voucher', convenio: 'Convênio', other: 'Outro' }
 
-export async function getRevenueBreakdown(params: { from: string; to: string; dimension: RevenueDimension }): Promise<RevenueBreakdownReport | { error: string }> {
+export async function getRevenueBreakdown(params: { from: string; to: string; dimension: RevenueDimension; company_ids?: string[] }): Promise<RevenueBreakdownReport | { error: string }> {
   const ctx = await getCtx()
   if ('error' in ctx) return { error: ctx.error }
   if (!['admin', 'owner', 'manager', 'accountant'].includes(ctx.role)) return { error: 'Acesso negado' }
   const admin = createAdminClient()
   const toEnd = params.to + 'T23:59:59'
-  const { data, error } = await admin
+  const porEmpresa = await clausulaDeEmpresas(admin, ctx.clinic_id, params.company_ids)
+  let qRev = admin
     .from('financial_entries')
     .select('type, amount, discount, status, payment_date, category, payment_method, company_id, is_intercompany, is_clinic_discount')
     .eq('clinic_id', ctx.clinic_id).eq('is_clinic_discount', false)
     .eq('type', 'receivable').eq('status', 'paid')
     .gte('payment_date', params.from).lte('payment_date', toEnd)
+  if (porEmpresa) qRev = qRev.or(porEmpresa)
+  const { data, error } = await qRev
   if (error) return { error: mensagemErro(error, 'lib/actions/reports-g13.ts') }
 
   const companyName = new Map<string, string>()
@@ -979,7 +997,7 @@ export async function getStockReport(params: { as_of?: string; expiry_days?: num
 // ─── Clientes: novos × recorrentes + ticket médio ─────────────────────────────
 export interface ClientsReport { from: string; to: string; summary: ClientsSummary; rows: ClientRow[] }
 
-export async function getClientsReport(params: { from: string; to: string }): Promise<ClientsReport | { error: string }> {
+export async function getClientsReport(params: { from: string; to: string; company_ids?: string[] }): Promise<ClientsReport | { error: string }> {
   const ctx = await getCtx()
   if ('error' in ctx) return { error: ctx.error }
   if (!['admin', 'owner', 'manager', 'accountant'].includes(ctx.role)) return { error: 'Acesso negado' }
@@ -1000,10 +1018,13 @@ export async function getClientsReport(params: { from: string; to: string }): Pr
   if (tutorIds.length === 0) return { from: params.from, to: params.to, summary: summarizeClients([]), rows: [] }
 
   // Primeiro atendimento de sempre (para novo × recorrente) + nomes + faturamento
+  const porEmpresa = await clausulaDeEmpresas(admin, ctx.clinic_id, params.company_ids)
+  let qRev = admin.from('financial_entries').select('tutor_id, amount, discount, type, status, category, is_intercompany').eq('clinic_id', ctx.clinic_id).eq('type', 'receivable').eq('status', 'paid').gte('payment_date', params.from).lte('payment_date', toEnd).in('tutor_id', tutorIds)
+  if (porEmpresa) qRev = qRev.or(porEmpresa)
   const [firstRes, nameRes, revRes] = await Promise.all([
     admin.from('consultations').select('tutor_id, created_at').eq('clinic_id', ctx.clinic_id).in('tutor_id', tutorIds).order('created_at', { ascending: true }),
     admin.from('tutors').select('id, name').eq('clinic_id', ctx.clinic_id).in('id', tutorIds),
-    admin.from('financial_entries').select('tutor_id, amount, discount, type, status, category, is_intercompany').eq('clinic_id', ctx.clinic_id).eq('type', 'receivable').eq('status', 'paid').gte('payment_date', params.from).lte('payment_date', toEnd).in('tutor_id', tutorIds),
+    qRev,
   ])
   const firstSeen = new Map<string, string>()
   for (const c of (firstRes.data ?? []) as any[]) if (!firstSeen.has(c.tutor_id)) firstSeen.set(c.tutor_id, c.created_at)
@@ -1029,27 +1050,28 @@ export async function getClientsReport(params: { from: string; to: string }): Pr
 export interface DREByCompanyRow { company_id: string | null; company_name: string; receita: number; deducoes: number; despesas: number; resultado: number }
 export interface DREByCompanyReport { from: string; to: string; rows: DREByCompanyRow[] }
 
-export async function getDREByCompany(params: { from: string; to: string }): Promise<DREByCompanyReport | { error: string }> {
+export async function getDREByCompany(params: { from: string; to: string; company_ids?: string[] }): Promise<DREByCompanyReport | { error: string }> {
   const ctx = await getCtx()
   if ('error' in ctx) return { error: ctx.error }
   if (!['admin', 'owner', 'manager', 'accountant'].includes(ctx.role)) return { error: 'Acesso negado' }
   const admin = createAdminClient()
   const toEnd = params.to + 'T23:59:59'
 
-  const [entRes, acctRes, compRes] = await Promise.all([
-    admin.from('financial_entries').select('type, amount, category, status, settlement_bank_id, is_intercompany, purchase_order_id, is_clinic_discount').eq('clinic_id', ctx.clinic_id).eq('is_clinic_discount', false).eq('status', 'paid').gte('payment_date', params.from).lte('payment_date', toEnd),
-    admin.from('bank_accounts').select('id, company_id').eq('clinic_id', ctx.clinic_id),
-    admin.from('companies').select('id, name').eq('clinic_id', ctx.clinic_id),
+  const [entRes, mapa] = await Promise.all([
+    admin.from('financial_entries').select('type, amount, category, status, settlement_bank_id, company_id, is_intercompany, purchase_order_id, is_clinic_discount').eq('clinic_id', ctx.clinic_id).eq('is_clinic_discount', false).eq('status', 'paid').gte('payment_date', params.from).lte('payment_date', toEnd),
+    carregarMapaDeEmpresas(admin, ctx.clinic_id),
   ])
   if (entRes.error) return { error: mensagemErro(entRes.error, 'lib/actions/reports-g13.ts') }
-  const acctCompany = new Map<string, string | null>()
-  for (const a of (acctRes.data ?? []) as any[]) acctCompany.set(a.id, a.company_id ?? null)
-  const compName = new Map<string, string>()
-  for (const c of (compRes.data ?? []) as any[]) compName.set(c.id, c.name)
+  const compName = mapa.nomes
+  const selecao = normalizarSelecao(params.company_ids, mapa.ativas)
 
+  // Mesma atribuição do filtro de empresas: company_id do título → empresa da
+  // conta de liquidação → empresa padrão (antes só a conta contava, e o título
+  // marcado na OS caía em "Sem empresa/conta").
   const byCompany = new Map<string | null, EntryLike[]>()
   for (const e of (entRes.data ?? []) as any[]) {
-    const cid = e.settlement_bank_id ? (acctCompany.get(e.settlement_bank_id) ?? null) : null
+    const cid = empresaDoTitulo(e, mapa)
+    if (selecao.length && (cid == null || !selecao.includes(cid))) continue
     if (!byCompany.has(cid)) byCompany.set(cid, [])
     byCompany.get(cid)!.push(e)
   }

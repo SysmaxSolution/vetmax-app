@@ -4,6 +4,7 @@
 // empresa (CNPJ) ou mês. Sintético com participação (%).
 
 import { useState, useTransition } from 'react'
+import { useEmpresasFiltro } from './EmpresasFiltroContext'
 import { getRevenueBreakdown, type RevenueBreakdownReport as Data, type RevenueDimension } from '@/lib/actions/reports-g13'
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -23,11 +24,12 @@ export default function RevenueBreakdownReport() {
   const [data, setData] = useState<Data | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [pending, startT] = useTransition()
+  const empresas = useEmpresasFiltro()
 
   function run(dim = dimension) {
     startT(async () => {
       setError(null)
-      const res = await getRevenueBreakdown({ from, to, dimension: dim })
+      const res = await getRevenueBreakdown({ from, to, dimension: dim, company_ids: empresas.length ? empresas : undefined })
       if ('error' in res) { setError(res.error); return }
       setData(res)
     })

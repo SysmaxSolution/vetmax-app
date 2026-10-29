@@ -3,6 +3,7 @@
 // Fluxo de Caixa (realizado × projetado), por mês, com saldo acumulado.
 
 import { useState, useTransition } from 'react'
+import { useEmpresasFiltro } from './EmpresasFiltroContext'
 import { getCashflowProjection, type CashflowReport } from '@/lib/actions/reports-g13'
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -17,11 +18,12 @@ export default function CashflowProjectionReport() {
   const [data, setData] = useState<CashflowReport | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [pending, startT] = useTransition()
+  const empresas = useEmpresasFiltro()
 
   function run() {
     startT(async () => {
       setError(null)
-      const res = await getCashflowProjection({ from, to })
+      const res = await getCashflowProjection({ from, to, company_ids: empresas.length ? empresas : undefined })
       if ('error' in res) { setError(res.error); return }
       setData(res)
     })

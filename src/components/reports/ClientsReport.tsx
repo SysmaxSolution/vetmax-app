@@ -3,6 +3,7 @@
 // Clientes: novos × recorrentes, ticket médio e faturamento por cliente.
 
 import { useState, useTransition } from 'react'
+import { useEmpresasFiltro } from './EmpresasFiltroContext'
 import { getClientsReport, type ClientsReport as Data } from '@/lib/actions/reports-g13'
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -14,11 +15,12 @@ export default function ClientsReport() {
   const [data, setData] = useState<Data | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [pending, startT] = useTransition()
+  const empresas = useEmpresasFiltro()
 
   function run() {
     startT(async () => {
       setError(null)
-      const res = await getClientsReport({ from, to })
+      const res = await getClientsReport({ from, to, company_ids: empresas.length ? empresas : undefined })
       if ('error' in res) { setError(res.error); return }
       setData(res)
     })

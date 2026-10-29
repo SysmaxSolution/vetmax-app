@@ -4,6 +4,9 @@ import { useState, useTransition, useMemo, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useAutoRefresh } from '@/hooks/useAutoRefresh'
 import { listEntries, getFinancialSummary, baixarTitulosBulk } from '@/lib/actions/financial'
+import { listActiveCompanies } from '@/lib/actions/companies'
+import { contasDasEmpresas } from '@/lib/financial/empresas-filtro'
+import FiltroDeEmpresas, { lerFiltroDeEmpresasSalvo, salvarFiltroDeEmpresas, type EmpresaOpcao } from './FiltroDeEmpresas'
 import type { FinancialEntry, EntryType, FinancialSummary, BankAccount, ChartOfAccount, CreditCard, Employee } from '@/types/financial'
 import { tituloCombina, donoCombina } from '@/lib/financial/busca-titulo'
 import TituloModal, { type TituloModalProps } from './TituloModal'
@@ -377,6 +380,9 @@ export default function FinancialWorkspace({
 }: Props) {
 
   const [activeTab,    setActiveTab]    = useState<MainTab>('receivable')
+  // Filtro por empresa faturante (multi-CNPJ): vale para todas as abas. [] = todas.
+  const [empresas,    setEmpresas]    = useState<EmpresaOpcao[]>([])
+  const [empresasSel, setEmpresasSel] = useState<string[]>([])
   const [cadastrosTab, setCadastrosTab] = useState<CadastrosSubTab>('bancos')
 
   const [receivable, setReceivable] = useState<FinancialEntry[]>(initialReceivable)
@@ -484,13 +490,16 @@ export default function FinancialWorkspace({
     })
   }
 
-  function refresh() {
+  function refresh(sel?: unknown) {
+    // Chamado também por onClick (recebe o evento) e pelo auto-refresh (sem argumento).
+    const lista = Array.isArray(sel) ? (sel as string[]) : empresasSel
+    const ids = lista.length ? lista : undefined
     startTransition(async () => {
       const [recRes, payRes, recSum, paySum] = await Promise.all([
-        listEntries({ type: 'receivable', status: 'all' }),
-        listEntries({ type: 'payable',   status: 'all' }),
-        getFinancialSummary('receivable'),
-        getFinancialSummary('payable'),
+        listEntries({ type: 'receivable', status: 'all', company_ids: ids }),
+        listEntries({ type: 'payable',   status: 'all', company_ids: ids }),
+        getFinancialSummary('receivable', ids),
+        getFinancialSummary('payable', ids),
       ])
       if (Array.isArray(recRes)) setReceivable(recRes)
       if (Array.isArray(payRes)) setPayable(payRes)
@@ -498,6 +507,30 @@ export default function FinancialWorkspace({
       if (!('error' in paySum))  setPaySummary(paySum)
     })
   }
+
+  // Empresas ativas da clínica + seleção guardada no navegador. A carga inicial
+  // (servidor) vem sem filtro: com seleção guardada, recarrega já filtrado.
+  useEffect(() => {
+    let vivo = true
+    listActiveCompanies().then(lista => {
+      if (!vivo) return
+      setEmpresas(lista)
+      const salva = lerFiltroDeEmpresasSalvo().filter(id => lista.some(e => e.id === id))
+      if (salva.length && salva.length < lista.length) { setEmpresasSel(salva); refresh(salva) }
+    })
+    return () => { vivo = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  function mudarEmpresas(ids: string[]) {
+    setEmpresasSel(ids); salvarFiltroDeEmpresas(ids); refresh(ids)
+  }
+  const padraoId = empresas.find(e => e.is_default)?.id ?? null
+  // Contas das empresas selecionadas (conta sem empresa acompanha a padrão) —
+  // alimenta Extrato e Conciliação, que continuam com o filtro de conta.
+  const contasVisiveis = useMemo(
+    () => contasDasEmpresas(initialBankAccounts, empresasSel, padraoId),
+    [initialBankAccounts, empresasSel, padraoId],
+  )
 
   function onModalSuccess() {
     setModal(null)
@@ -571,10 +604,11 @@ export default function FinancialWorkspace({
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <FiltroDeEmpresas empresas={empresas} value={empresasSel} onChange={mudarEmpresas} />
             {isTitulos && (
               <>
                 <button
-                  onClick={refresh}
+                  onClick={() => refresh()}
                   disabled={isPending}
                   className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
                 >
@@ -868,22 +902,22 @@ export default function FinancialWorkspace({
 
         {/* ── Extrato Bancário ───────────────────────────────────────────── */}
         {isExtrato && (
-          <ExtratoTab bankAccounts={initialBankAccounts} />
+          <ExtratoTab bankAccounts={contasVisiveis} empresas={empresasSel} />
         )}
 
         {/* ── Conciliação ────────────────────────────────────────────────── */}
         {isConciliacao && (
-          <ConciliacaoTab bankAccounts={initialBankAccounts} />
+          <ConciliacaoTab bankAccounts={contasVisiveis} />
         )}
 
         {/* ── Créditos de clientes ───────────────────────────────────────── */}
         {isCreditos && <CreditsTab />}
 
         {/* ── PAGFOR — Pagamento a Fornecedores ──────────────────────────── */}
-        {isPagfor && <PagforTab />}
+        {isPagfor && <PagforTab empresas={empresasSel} />}
 
         {/* ── Boletos (Cobrança Bancária Sicoob) ─────────────────────────── */}
-        {isBoletos && <BoletosTab />}
+        {isBoletos && <BoletosTab empresas={empresasSel} padraoId={padraoId} />}
 
         {/* ── Visão cruzada por CNPJ (1.4) ───────────────────────────────── */}
         {isCnpjs && <CrossCompanyTab />}

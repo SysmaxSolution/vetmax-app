@@ -6,6 +6,7 @@ import { getTenantCtx } from '@/lib/data/context'
 import { fetchSicoobExtrato } from '@/lib/integrations/sicoob'
 
 import { mensagemErro } from '@/lib/errors'
+import { clausulaDeEmpresas } from '@/lib/server/mapa-de-empresas'
 import { valida } from '@/lib/validation/primitivos'
 import { EsquemaCriarTitulo, EsquemaAtualizarTitulo, EsquemaBaixarTitulo } from '@/lib/validation/financeiro'
 import type { EntryType, EntryStatus, EntrySource, FinancialEntry, FinancialSummary, ListEntriesFilters, CreateEntryData, BaixarTituloData, BankAccount, CreateBankAccountData, ChartOfAccount, CreateChartOfAccountData, CreditCard, CreateCreditCardData, Employee, CreateEmployeeData, EntryContext, BankStatement, ReconciliationBatch, ExtratoFilters, ExtratoResult, MatchedPair, AutoMatchResult, ImportStatementsData, ReconcCandidate, StatementWithLinks, AutoLinkResult, ExtratoMovement, EffectiveExtratoResult, CompanyOverview } from '@/types/financial'
@@ -116,6 +117,9 @@ export async function listEntries(
   if (filters.due_to)   query = query.lte('due_date', filters.due_to)
   if (filters.paid_from) query = query.gte('payment_date', filters.paid_from)
   if (filters.paid_to)   query = query.lte('payment_date', filters.paid_to)
+  // Filtro por empresa faturante (multi-CNPJ) — no banco, antes do limit(500).
+  const porEmpresa = await clausulaDeEmpresas(admin, clinicId, filters.company_ids)
+  if (porEmpresa) query = query.or(porEmpresa)
 
   const { data, error } = await query.limit(500)
   if (error) return { error: 'Erro ao buscar títulos: ' + mensagemErro(error, 'lib/actions/financial.ts') }
@@ -657,7 +661,8 @@ export async function baixarTitulosBulk(
 // ─── getFinancialSummary ──────────────────────────────────────────────────────
 
 export async function getFinancialSummary(
-  type: EntryType
+  type: EntryType,
+  companyIds?: string[],
 ): Promise<FinancialSummary | { error: string }> {
   const clinicId = await getClinicId()
   if (!clinicId) return { error: 'Não autenticado.' }
@@ -669,22 +674,23 @@ export async function getFinancialSummary(
 
   const admin = createAdminClient()
 
-  const [pendingRes, paidRes] = await Promise.all([
-    admin
+  const porEmpresa = await clausulaDeEmpresas(admin, clinicId, companyIds)
+  let qPend = admin
       .from('financial_entries')
       .select('amount, due_date')
       .eq('clinic_id', clinicId)
       .eq('type', type)
-      .eq('status', 'pending'),
-    admin
+      .eq('status', 'pending')
+  let qPaid = admin
       .from('financial_entries')
       .select('amount, payment_date')
       .eq('clinic_id', clinicId)
       .eq('type', type)
       .eq('status', 'paid')
       .gte('payment_date', startOfMonth)
-      .lte('payment_date', endOfMonth),
-  ])
+      .lte('payment_date', endOfMonth)
+  if (porEmpresa) { qPend = qPend.or(porEmpresa); qPaid = qPaid.or(porEmpresa) }
+  const [pendingRes, paidRes] = await Promise.all([qPend, qPaid])
 
   const pending = pendingRes.data ?? []
   const paid    = paidRes.data    ?? []
@@ -1656,6 +1662,7 @@ function mapEntry(raw: Record<string, unknown>): FinancialEntry {
     professional_id:      (raw.professional_id     as string | null) ?? null,
     chart_of_accounts_id: (raw.chart_of_accounts_id as string | null) ?? null,
     settlement_bank_id:   (raw.settlement_bank_id  as string | null) ?? null,
+    company_id:           (raw.company_id          as string | null) ?? null,
     tutor_name:           tutors?.name             ?? null,
     tutor_document:       tutors?.cpf              ?? null,
     supplier_document:    supplier?.document       ?? null,
@@ -2296,14 +2303,14 @@ export async function insertEntryFromStatement(params: {
 }
 
 export async function getEffectiveExtrato(params: {
-  start_date: string; end_date: string; bank_account_id?: string
+  start_date: string; end_date: string; bank_account_id?: string; company_ids?: string[]
 }): Promise<EffectiveExtratoResult | { error: string }> {
   const clinicId = await getClinicId()
   if (!clinicId) return { error: 'Não autenticado.' }
   const admin = createAdminClient()
 
   const types: EntryType[] = ['receivable', 'payable']
-  const lists = await Promise.all(types.map(t => listEntries({ type: t, status: 'paid', paid_from: params.start_date, paid_to: params.end_date })))
+  const lists = await Promise.all(types.map(t => listEntries({ type: t, status: 'paid', paid_from: params.start_date, paid_to: params.end_date, company_ids: params.company_ids })))
   let entries = lists.flatMap(r => Array.isArray(r) ? r : [])
   if (params.bank_account_id) entries = entries.filter(e => e.settlement_bank_id === params.bank_account_id)
 

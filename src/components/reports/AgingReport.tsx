@@ -4,6 +4,7 @@
 // Analítico: títulos, com dias de atraso e cliente/fornecedor. Filtro por faixa.
 
 import { useState, useTransition } from 'react'
+import { useEmpresasFiltro } from './EmpresasFiltroContext'
 import { getAgingReport, type AgingReport as AgingData } from '@/lib/actions/reports-g13'
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -21,11 +22,12 @@ export default function AgingReport() {
   const [sel, setSel]   = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [pending, startT] = useTransition()
+  const empresas = useEmpresasFiltro()
 
   function run(t = type) {
     startT(async () => {
       setError(null); setSel(null)
-      const res = await getAgingReport({ type: t, as_of: asOf })
+      const res = await getAgingReport({ type: t, as_of: asOf, company_ids: empresas.length ? empresas : undefined })
       if ('error' in res) { setError(res.error); return }
       setData(res)
     })

@@ -5,8 +5,8 @@
 
 import { useState, useEffect } from 'react'
 import { Loader2, Plus, Pencil, Building2, Check, X, Star, FileCheck2, CreditCard, FileSearch } from 'lucide-react'
-import { listCompanies, upsertCompany, setCompanyActive } from '@/lib/actions/companies'
-import type { Company } from '@/types/companies'
+import { listCompanies, upsertCompany, setCompanyActive, lerModoDasEmpresas, definirModoDasEmpresas } from '@/lib/actions/companies'
+import type { Company, EmpresasModo } from '@/types/companies'
 import { listCompanyFiscalConfigs, type CompanyFiscalConfig } from '@/lib/actions/nfse'
 import CompanyFiscalModal from './CompanyFiscalModal'
 import CompanyCardAcquirerModal from './CompanyCardAcquirerModal'
@@ -55,12 +55,16 @@ export default function CompaniesTab({ userRole = 'admin' }: Props) {
   // outras duas usam Sipag, entao a configuracao e por CNPJ.
   const [cardConfigs, setCardConfigs] = useState<ConfigAdquirente[]>([])
   const [cardFor, setCardFor] = useState<ConfigAdquirente | null>(null)
+  // Como as empresas do grupo operam (flow_config.empresas_modo).
+  const [modo, setModo] = useState<EmpresasModo>('separado')
+  const [salvandoModo, setSalvandoModo] = useState(false)
 
   async function reload() {
     try {
-      const [res, fc, cc, df] = await Promise.all([
-        listCompanies(), listCompanyFiscalConfigs(), listarConfigAdquirente(), listarConfiguracaoDfe(),
+      const [res, fc, cc, df, md] = await Promise.all([
+        listCompanies(), listCompanyFiscalConfigs(), listarConfigAdquirente(), listarConfiguracaoDfe(), lerModoDasEmpresas(),
       ])
+      if (!('error' in md)) setModo(md.modo)
       if (!('error' in df)) setDfeConfigs(df)
       if (!('error' in res)) setCompanies(res)
       else setToast({ type: 'error', message: res.error })
@@ -113,6 +117,18 @@ export default function CompaniesTab({ userRole = 'admin' }: Props) {
     void reload()
   }
 
+  async function mudarModo(novo: EmpresasModo) {
+    if (novo === modo || salvandoModo) return
+    setSalvandoModo(true)
+    const res = await definirModoDasEmpresas(novo)
+    setSalvandoModo(false)
+    if ('error' in res) { setToast({ type: 'error', message: res.error }); return }
+    setModo(novo)
+    setToast({ type: 'success', message: novo === 'conjunto'
+      ? 'Grupo definido como conjunto: matriz e filiais operam dentro desta clínica.'
+      : 'Grupo definido como separado: cada CNPJ é uma clínica própria.' })
+  }
+
   if (loading) {
     return <div className="flex items-center justify-center py-16 text-slate-400"><Loader2 className="h-6 w-6 animate-spin" /></div>
   }
@@ -132,6 +148,30 @@ export default function CompaniesTab({ userRole = 'admin' }: Props) {
             Nova empresa
           </button>
         )}
+      </div>
+
+      {/* Como as empresas do grupo operam: decide se as outras clínicas do grupo
+          aparecem (separado) ou se tudo vive dentro desta clínica (conjunto). */}
+      <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4">
+        <p className="text-xs font-semibold text-slate-700">Como as empresas deste grupo operam</p>
+        <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {([
+            { v: 'conjunto', t: 'Conjunto (matriz e filiais)', d: 'Todas as empresas operam dentro desta clínica. Contas bancárias, boletos, notas e relatórios separam por CNPJ; as outras clínicas do grupo não aparecem.' },
+            { v: 'separado', t: 'Separado (uma clínica por CNPJ)', d: 'Cada CNPJ é uma clínica própria no SYSVETMAX. A empresa com o CNPJ de outra clínica liga as duas num grupo e libera acesso cruzado de usuários.' },
+          ] as { v: EmpresasModo; t: string; d: string }[]).map(o => (
+            <button key={o.v} type="button" disabled={!canManage || salvandoModo} onClick={() => mudarModo(o.v)}
+              aria-pressed={modo === o.v}
+              className={`rounded-xl border p-3 text-left transition-colors disabled:cursor-default ${modo === o.v ? 'border-teal-400 bg-teal-50' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+              <span className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                <span className={`flex h-4 w-4 items-center justify-center rounded-full border ${modo === o.v ? 'border-teal-600 bg-teal-600' : 'border-slate-300'}`}>
+                  {modo === o.v && <Check className="h-3 w-3 text-white" />}
+                </span>
+                {o.t}
+              </span>
+              <span className="mt-1 block text-[11px] leading-snug text-slate-500">{o.d}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {draft && (

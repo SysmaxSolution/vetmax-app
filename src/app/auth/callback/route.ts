@@ -160,13 +160,10 @@ async function routeOAuthUser(user: User, origin: string): Promise<NextResponse>
   const cookieStore = await cookies()
   cookieStore.set(ROLE_COOKIE, profile.role, ROLE_COOKIE_OPTIONS)
 
-  const destinations: Record<string, string> = {
-    receptionist: '/dashboard/reception',
-    vet:          '/dashboard/vet',
-    assistant:    '/dashboard/triage',
-    pharmacist:   '/dashboard/pharmacy',
-  }
-  return NextResponse.redirect(`${origin}${destinations[profile.role] ?? '/dashboard'}`)
+  // /dashboard escolhe o primeiro módulo liberado ao usuário
+  // (src/lib/dashboard/modulo-inicial.ts); destino fixo por papel podia cair
+  // num módulo bloqueado e virar loop de redirecionamento.
+  return NextResponse.redirect(`${origin}/dashboard`)
 }
 
 // ─── GET /auth/callback ───────────────────────────────────────────────────────

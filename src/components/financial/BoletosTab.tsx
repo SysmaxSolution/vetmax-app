@@ -21,7 +21,7 @@ const SIT: Record<string, { label: string; cls: string }> = {
   erro: { label: 'Erro', cls: 'bg-rose-100 text-rose-700' },
 }
 
-export default function BoletosTab() {
+export default function BoletosTab({ empresas = [], padraoId = null }: { empresas?: string[]; padraoId?: string | null } = {}) {
   const [receivables, setReceivables] = useState<ReceivableRow[]>([])
   const [boletos, setBoletos] = useState<BoletoRow[]>([])
   const [accounts, setAccounts] = useState<BankAccountBoleto[]>([])
@@ -35,12 +35,14 @@ export default function BoletosTab() {
   async function reload() {
     const [r, b, a] = await Promise.all([listReceivablesForBoleto(), listBoletos(), listBoletoAccounts()])
     setReceivables(r); setBoletos(b)
-    const enabled = a.filter(x => x.enabled)
+    // Filtro de empresas do Financeiro: só carteiras das empresas escolhidas
+    // (conta sem empresa acompanha a padrão).
+    const enabled = a.filter(x => x.enabled && (!empresas.length || empresas.includes(x.companyId ?? padraoId ?? '')))
     setAccounts(enabled)
-    if (!accountId && enabled[0]) setAccountId(enabled[0].id)
+    if ((!accountId || !enabled.some(x => x.id === accountId)) && enabled[0]) setAccountId(enabled[0].id)
     setLoading(false)
   }
-  useEffect(() => { reload() }, []) // eslint-disable-line
+  useEffect(() => { reload() }, [empresas.join(','), padraoId]) // eslint-disable-line
 
   function flash(type: 'ok' | 'err', text: string) { setMsg({ type, text }); setTimeout(() => setMsg(null), 4000) }
 
