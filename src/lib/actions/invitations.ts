@@ -33,6 +33,10 @@ export async function createInvitation(
   if (!['admin', 'vet', 'assistant', 'receptionist', 'pharmacist'].includes(role)) {
     return { error: 'Role inválida.' }
   }
+  // Admin enxerga todos os módulos ativos da clínica (layout do dashboard):
+  // gravar enabled=false para ele não escondia nada no menu e ainda barrava
+  // o acesso no proxy → loop de redirecionamento (Animais, 29/10/2026).
+  if (role === 'admin') moduleAccess = []
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

@@ -128,5 +128,10 @@ export function mensagemErroCadastro(erro: unknown): string {
   if (code === 'unexpected_failure' && /database error/i.test(msg)) {
     return 'Falha no cadastro deste e-mail. Acione o suporte informando o e-mail usado.'
   }
+  // SMTP do Auth fora do ar (29/10/2026: chave da Resend revogada derrubou o
+  // cadastro por 2 semanas com a mensagem genérica). Dizer o que houve.
+  if (/confirmation email|sending.*email|smtp/i.test(msg)) {
+    return 'Não conseguimos enviar o e-mail de confirmação do cadastro. Acione o suporte — o problema é no envio de e-mail, não nos seus dados.'
+  }
   return mensagemErro(erro, 'lib/errors.ts')
 }

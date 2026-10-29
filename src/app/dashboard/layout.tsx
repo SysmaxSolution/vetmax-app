@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { getModuleFromPath } from '@/lib/module-theme'
+import { pathForModule } from '@/config/path-modules'
 import { Lock, AlertCircle } from 'lucide-react'
 import { getLowStockCount } from '@/lib/actions/stock'
 import type { UserClinicInfo } from '@/lib/actions/clinic-switcher'
@@ -188,9 +189,12 @@ export default async function DashboardLayout({
     const pathname = hdrs.get('x-pathname') ?? ''
     const requestedModule = getModuleFromPath(pathname)
     if (requestedModule && userDisabled.has(requestedModule)) {
-      // Escolhe primeiro módulo disponível na ordem natural do menu
-      const fallback = activeModules[0] ?? 'patients'
-      redirect(`/dashboard/${fallback}`)
+      // Escolhe primeiro módulo disponível na ordem natural do menu.
+      // activeModules guarda keys ('consultation'), não segmentos ('vet'):
+      // converter, senão o redirect caía em 404. Sem nada liberado, /dashboard
+      // mostra a orientação (nunca redireciona para módulo bloqueado).
+      const fallback = activeModules[0]
+      redirect(fallback ? pathForModule(fallback) : '/dashboard')
     }
   }
 
